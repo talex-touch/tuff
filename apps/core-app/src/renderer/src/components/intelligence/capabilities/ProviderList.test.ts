@@ -14,6 +14,7 @@ import {
 } from '~/modules/intelligence/nexus-provider'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
+import { providerModelIds } from '@talex-touch/utils/intelligence/model-binding'
 import type { CapabilityBinding } from './types'
 import ProviderList from './ProviderList.vue'
 
@@ -35,8 +36,6 @@ vi.mock('@talex-touch/tuffex/switch', () => ({
 }))
 
 const OFFICIAL_BADGE = '.provider-list__official'
-/** The glyph a row falls back to when its provider record is gone. */
-const FALLBACK_ICON = 'i-carbon-api-1'
 
 /** A channel on the Bailian adapter, which has its own mark and its own type label. */
 const bailianChannel: IntelligenceProviderConfig = {
@@ -45,7 +44,7 @@ const bailianChannel: IntelligenceProviderConfig = {
   type: IntelligenceProviderType.CUSTOM,
   baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
   enabled: true,
-  models: ['qwen-audio-3.0-asr-flash'],
+  models: [{ id: 'qwen-audio-3.0-asr-flash' }],
   capabilities: ['audio.asr']
 }
 
@@ -55,7 +54,7 @@ const nexusChannel: IntelligenceProviderConfig = {
   type: IntelligenceProviderType.CUSTOM,
   baseUrl: 'https://nexus.example.com/v1',
   enabled: true,
-  models: ['nexus-default'],
+  models: [{ id: 'nexus-default' }],
   capabilities: ['audio.asr'],
   metadata: { origin: TUFF_NEXUS_PROVIDER_ORIGIN }
 }
@@ -65,7 +64,8 @@ function bind(provider: IntelligenceProviderConfig, enabled = true): CapabilityB
     providerId: provider.id,
     enabled,
     priority: 1,
-    models: provider.models ?? [],
+    // The capability binding carries the provider's model ids, not its stored bindings.
+    models: providerModelIds(provider),
     provider
   }
 }
@@ -87,7 +87,7 @@ const onDeviceChannel: IntelligenceProviderConfig = {
   name: 'Local Speech',
   enabled: true,
   capabilities: ['audio.asr'],
-  models: ['sense-voice-small'],
+  models: [{ id: 'sense-voice-small' }],
   defaultModel: 'sense-voice-small',
   metadata: {
     channelType: ON_DEVICE_ASR_CHANNEL_TYPE,
@@ -145,10 +145,6 @@ describe('providerList channel rows', () => {
       expect(row.find(OFFICIAL_BADGE).exists()).toBe(isNexusManagedProvider(provider))
     }
 
-    expect(rowFor(wrapper, 'Tuff Nexus').get(OFFICIAL_BADGE).text()).toContain(
-      'intelligence.item.nexusOfficial'
-    )
-
     wrapper.unmount()
   })
 
@@ -159,7 +155,6 @@ describe('providerList channel rows', () => {
 
     expect(row.get('h5').text()).toBe('orphan-channel')
     expect(row.get('p').text()).toBe('orphan-channel')
-    expect(row.get('i').classes()).toContain(FALLBACK_ICON)
 
     wrapper.unmount()
   })

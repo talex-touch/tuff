@@ -371,6 +371,67 @@ describe('ordinary privacy category export', () => {
     expect(syncCalls).toBe(2)
   })
 
+  it('accepts the search-history execute-event and foreground-activity record kinds', async () => {
+    const { target } = await fixturePath()
+    const exporter = createPrivacyCategoryExporter({
+      showSaveDialog: vi.fn(async () => ({ canceled: false, filePath: target })),
+      now: () => 1_700_000_000_000,
+      createReportId: () => 'report_export_search_kinds'
+    })
+    // What the search retention owner emits for these two tables: never the event id, the item id
+    // or the app key. Before the allowlist knew these kinds, the first such row failed the export.
+    const records = [
+      { kind: 'usage-execute-event', sourceType: 'application', executedAt: 1_699_999_000 },
+      { kind: 'app-foreground-activity', lastActiveAt: 1_699_999_500 }
+    ]
+    const registry = createPrivacyDataOwnerRegistry([
+      definePrivacyDataOwner(exportOwner('search-history', records))
+    ])
+
+    const result = await exporter.exportCategories({
+      categories: ['search-history'],
+      policy: DEFAULT_PRIVACY_RETENTION_POLICY,
+      ownerRegistry: registry,
+      signal: new AbortController().signal
+    })
+    const document = JSON.parse(await fs.readFile(target, 'utf8')) as {
+      categories: Array<{ category: string; records: unknown[] }>
+    }
+    expect(result).toMatchObject({ cancelled: false, itemCount: 2 })
+    expect(document.categories).toMatchObject([{ category: 'search-history', records }])
+  })
+
+  it('rejects a search-history execute event that still carries its item id', async () => {
+    const { root, target } = await fixturePath()
+    const exporter = createPrivacyCategoryExporter({
+      showSaveDialog: vi.fn(async () => ({ canceled: false, filePath: target })),
+      now: () => 1_700_000_000_000,
+      createReportId: () => 'report_export_search_event_id'
+    })
+    const registry = createPrivacyDataOwnerRegistry([
+      definePrivacyDataOwner(
+        exportOwner('search-history', [
+          {
+            kind: 'usage-execute-event',
+            itemId: 'safari',
+            sourceType: 'application',
+            executedAt: 1_699_999_000
+          }
+        ])
+      )
+    ])
+
+    await expect(
+      exporter.exportCategories({
+        categories: ['search-history'],
+        policy: DEFAULT_PRIVACY_RETENTION_POLICY,
+        ownerRegistry: registry,
+        signal: new AbortController().signal
+      })
+    ).rejects.toThrow('PRIVACY_EXPORT_RECORD_INVALID')
+    expect(await fs.readdir(root)).toEqual([])
+  })
+
   it('removes temporary output on owner failure or cancellation', async () => {
     const { root, target } = await fixturePath()
     const exporter = createPrivacyCategoryExporter({

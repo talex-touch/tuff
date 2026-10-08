@@ -1,4 +1,0 @@
-{"file": ".trellis/tasks/09-29-stream-element/prd.md", "reason": "parent acceptance criteria and decisions to verify against"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "quality gates"}
-{"file": ".trellis/spec/frontend/nexus-docs-templates.md", "reason": "template registration chain, page contract, verification"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "virtual-list keys and height caches"}

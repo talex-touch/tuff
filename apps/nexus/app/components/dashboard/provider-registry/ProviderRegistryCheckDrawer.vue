@@ -7,7 +7,6 @@ import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { computed, useId } from 'vue'
 import AdminFormField from '~/components/admin/AdminFormField.vue'
-import { vAdminControlId } from '~/composables/useAdminFieldControl'
 import { ADMIN_FORMAT_EMPTY } from '~/composables/useAdminFormat'
 
 const props = defineProps<{
@@ -68,8 +67,8 @@ function providerModel(item: ProviderCapabilityRecord): string {
       <section class="RegistryForm-Grid">
         <AdminFormField :label="t('dashboard.providerRegistry.fields.capability', 'Capability')" :for="`${idBase}-capability`">
           <TuffSelect
+            :id="`${idBase}-capability`"
             v-model="capability"
-            v-admin-control-id="`${idBase}-capability`"
             class="RegistryForm-Control"
             searchable
             :search-placeholder="t('dashboard.providerRegistry.providers.capabilitySearchPlaceholder', 'Search capabilities...')"

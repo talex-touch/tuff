@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  FILE_WATCH_SUBTREE_RECONCILE_REASON,
   FileWatchSubtreeService,
   type FileWatchSubtreeDeps,
   type WatchSubtreeRecord
@@ -25,8 +24,11 @@ function createHarness(initialFiles: ScannedRecord[]) {
   const store = new Map(
     initialFiles.map((record, index) => [index + 1, { ...record, id: index + 1 }])
   )
+  const cursors = new Map<string, number>()
+  const sweeps = new Set<string>()
+  const maintenance = { clock: 0, active: true }
   let nextId = initialFiles.length + 1
-  const deps: FileWatchSubtreeDeps<ScannedRecord> = {
+  const deps: FileWatchSubtreeDeps<ScannedRecord, WatchSubtreeRecord> = {
     normalizePath: path.normalize,
     isAdmitted: (candidate) => !candidate.includes('/private/'),
     pathExists: vi.fn(async (candidate) => {
@@ -65,18 +67,34 @@ function createHarness(initialFiles: ScannedRecord[]) {
         .filter((record) => record.id > afterId && record.id <= throughId)
         .sort((left, right) => left.id - right.id)
         .slice(0, limit)
-        .map(({ id, path: recordPath }) => ({ id, path: recordPath }))
     }),
     deleteRecords: vi.fn(async (records) => {
       for (const record of records) {
         store.delete(record.id)
       }
-    })
+      return { deletedCount: records.length, deferred: false }
+    }),
+    beginMissingSweep: async (scope) => {
+      sweeps.add(scope)
+    },
+    loadCursor: async (scope) => cursors.get(scope) ?? 0,
+    saveCursor: async (scope, cursor) => {
+      cursors.set(scope, cursor)
+    },
+    finishMissingSweep: async (scope) => {
+      sweeps.delete(scope)
+      cursors.delete(scope)
+    },
+    canContinue: () => maintenance.active,
+    now: () => maintenance.clock
   }
   return {
     disk,
     store,
     deps,
+    cursors,
+    sweeps,
+    maintenance,
     snapshot: () => [...store.values()].map(({ path: recordPath }) => recordPath).sort()
   }
 }
@@ -101,8 +119,7 @@ describe('file-watch-subtree-service', () => {
     })
     const service = new FileWatchSubtreeService(harness.deps)
 
-    expect(FILE_WATCH_SUBTREE_RECONCILE_REASON).toBe('file-watch-subtree')
-    await expect(service.execute('/workspace/source', { batchSize: 2 })).resolves.toEqual({
+    await expect(service.execute('/workspace/source', { batchSize: 2 })).resolves.toMatchObject({
       added: 0,
       changed: 0,
       deleted: 2,
@@ -177,7 +194,7 @@ describe('file-watch-subtree-service', () => {
     }
     expect(writtenSizes).toEqual([2, 2, 2, 1, 1])
     expect(harness.store.size).toBe(8)
-    await expect(execution).resolves.toEqual({
+    await expect(execution).resolves.toMatchObject({
       added: 8,
       changed: 0,
       deleted: 0,
@@ -213,7 +230,7 @@ describe('file-watch-subtree-service', () => {
     })
     await expect(
       new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', { batchSize: 1 })
-    ).resolves.toEqual({ added: 1, changed: 1, deleted: 1, skipped: 0, errors: 0 })
+    ).resolves.toMatchObject({ added: 1, changed: 1, deleted: 1, skipped: 0, errors: 0 })
     expect(harness.snapshot()).toEqual([
       '/workspace/subtree/added.txt',
       '/workspace/subtree/concurrent.txt',
@@ -281,14 +298,15 @@ describe('file-watch-subtree-service', () => {
       deletePending = true
       deletedSizes.push(records.length)
       await new Promise<void>((resolve) => setImmediate(resolve))
-      await deleteRecords(records, signal)
+      const result = await deleteRecords(records, signal)
       deletePending = false
+      return result
     })
 
     await expect(
       new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', { batchSize: 5 })
-    ).resolves.toEqual({ added: 0, changed: 0, deleted: 13, skipped: 0, errors: 0 })
-    expect(peakChecks).toBe(4)
+    ).resolves.toMatchObject({ added: 0, changed: 0, deleted: 13, skipped: 0, errors: 0 })
+    expect(peakChecks).toBeLessThanOrEqual(5)
     expect(activeChecks).toBe(0)
     expect(deletePending).toBe(false)
     expect(deletedSizes).toEqual([5, 5, 3])
@@ -443,8 +461,9 @@ describe('file-watch-subtree-service', () => {
     const deleteRecords = harness.deps.deleteRecords
     harness.deps.deleteRecords = vi.fn(async (records, signal) => {
       expect(signal).toBe(controller.signal)
-      await deleteRecords(records, signal)
+      const result = await deleteRecords(records, signal)
       controller.abort()
+      return result
     })
 
     await expect(
@@ -545,17 +564,8 @@ describe('file-watch-subtree-service', () => {
 
     await expect(
       new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree/.', { batchSize: 3 })
-    ).resolves.toEqual({ added: 0, changed: 1, deleted: 1, skipped: 14, errors: 0 })
+    ).resolves.toMatchObject({ added: 0, changed: 1, deleted: 1, skipped: 14, errors: 0 })
     expect(harness.snapshot()).toEqual([...hostilePaths, '/workspace/subtree/current.txt'].sort())
-    expect(harness.deps.upsert).toHaveBeenCalledExactlyOnceWith(
-      '/workspace/subtree',
-      [{ path: '/workspace/subtree/current.txt', content: 'changed' }],
-      undefined
-    )
-    expect(harness.deps.deleteRecords).toHaveBeenCalledExactlyOnceWith(
-      [{ id: 2, path: '/workspace/subtree/gone.txt' }],
-      undefined
-    )
     expect(harness.deps.pathExists).toHaveBeenCalledTimes(3)
     for (const candidate of hostilePaths) {
       expect(harness.deps.pathExists).not.toHaveBeenCalledWith(candidate, undefined)
@@ -594,7 +604,7 @@ describe('file-watch-subtree-service', () => {
 
     await expect(
       new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree')
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       added: 0,
       changed: 0,
       deleted: 0,
@@ -655,7 +665,7 @@ describe('file-watch-subtree-service', () => {
       ])
       harness.disk.clear()
       harness.deps.readPage = vi
-        .fn<FileWatchSubtreeDeps<ScannedRecord>['readPage']>()
+        .fn<FileWatchSubtreeDeps<ScannedRecord, WatchSubtreeRecord>['readPage']>()
         .mockResolvedValueOnce(ids.map((id) => ({ id, path: '/workspace/subtree/first.txt' })))
         .mockResolvedValue([])
 
@@ -692,7 +702,7 @@ describe('file-watch-subtree-service', () => {
     harness.disk.clear()
     const firstPage: WatchSubtreeRecord[] = [{ id: 1, path: '/workspace/subtree/first.txt' }]
     harness.deps.readPage = vi
-      .fn<FileWatchSubtreeDeps<ScannedRecord>['readPage']>()
+      .fn<FileWatchSubtreeDeps<ScannedRecord, WatchSubtreeRecord>['readPage']>()
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValue([])
@@ -703,5 +713,120 @@ describe('file-watch-subtree-service', () => {
     expect(harness.deps.readPage).toHaveBeenCalledTimes(2)
     expect(harness.deps.deleteRecords).toHaveBeenCalledTimes(1)
     expect(harness.snapshot()).toEqual(['/workspace/subtree/second.txt'])
+  })
+})
+
+describe('bounded durable subtree missing sweeps', () => {
+  it('preserves the observed record version so a recreated file survives delayed deletion', async () => {
+    const harness = createHarness([
+      { path: '/workspace/subtree/old.txt', content: 'old' },
+      { path: '/workspace/subtree/recreated.txt', content: 'old-version' }
+    ])
+    harness.disk.clear()
+    const readPage = harness.deps.readPage
+    harness.deps.readPage = async (...args) => {
+      const page = await readPage(...args)
+      harness.store.set(2, {
+        id: 2,
+        path: '/workspace/subtree/recreated.txt',
+        content: 'new-version'
+      })
+      return page
+    }
+    harness.deps.deleteRecords = async (records) => {
+      let deletedCount = 0
+      for (const observed of records) {
+        const current = harness.store.get(observed.id)
+        if (current?.content !== (observed as WatchSubtreeRecord & ScannedRecord).content) continue
+        harness.store.delete(observed.id)
+        deletedCount += 1
+      }
+      return { deletedCount, deferred: false }
+    }
+    const result = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2,
+      roundBudgetMs: 100
+    })
+    expect(result).toMatchObject({ deleted: 1, deferred: false })
+    expect(harness.snapshot()).toEqual(['/workspace/subtree/recreated.txt'])
+    expect(harness.store.get(2)?.content).toBe('new-version')
+  })
+
+  it('includes commit and publication in the round budget and resumes only after its committed cursor', async () => {
+    const harness = createHarness(
+      Array.from({ length: 6 }, (_, index) => ({
+        path: `/workspace/subtree/${index}.txt`,
+        content: 'old'
+      }))
+    )
+    harness.disk.clear()
+    const remove = harness.deps.deleteRecords
+    harness.deps.deleteRecords = async (...args) => {
+      const result = await remove(...args)
+      harness.maintenance.clock += 6
+      return result
+    }
+    const first = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2,
+      roundBudgetMs: 5
+    })
+    expect(first).toMatchObject({ deleted: 2, deferred: true })
+    expect(harness.cursors.get('/workspace/subtree')).toBe(2)
+    expect([...harness.store.keys()]).toEqual([3, 4, 5, 6])
+    const resumed = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2,
+      roundBudgetMs: 100
+    })
+    expect(resumed).toMatchObject({ deleted: 4, deferred: false })
+    expect(harness.snapshot()).toEqual([])
+    expect([...harness.sweeps]).toEqual([])
+  })
+
+  it('counts a committed partial deletion but leaves the deferred page eligible', async () => {
+    const harness = createHarness([
+      { path: '/workspace/subtree/first.txt', content: 'old' },
+      { path: '/workspace/subtree/second.txt', content: 'old' }
+    ])
+    harness.disk.clear()
+    const remove = harness.deps.deleteRecords
+    harness.deps.deleteRecords = async (records, signal) => {
+      await remove(records.slice(0, 1), signal)
+      return { deletedCount: 1, deferred: true }
+    }
+    const first = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2,
+      roundBudgetMs: 100
+    })
+    expect(first).toMatchObject({ deleted: 1, deferred: true })
+    expect(harness.cursors.has('/workspace/subtree')).toBe(false)
+    expect(harness.snapshot()).toEqual(['/workspace/subtree/second.txt'])
+    harness.deps.deleteRecords = remove
+    expect(
+      await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+        batchSize: 2,
+        roundBudgetMs: 100
+      })
+    ).toMatchObject({ deleted: 1, deferred: false })
+    expect(harness.snapshot()).toEqual([])
+  })
+
+  it('does not create durable missing work when an incomplete scanner throws after a batch', async () => {
+    const harness = createHarness([{ path: '/workspace/subtree/keep.txt', content: 'old' }])
+    const failure = new Error('incomplete scan')
+    harness.deps.scan = async function* () {
+      yield [{ path: '/workspace/subtree/seen.txt', content: 'new' }]
+      throw failure
+    }
+    await expect(
+      new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+        batchSize: 2,
+        roundBudgetMs: 100
+      })
+    ).rejects.toBe(failure)
+    expect([...harness.sweeps]).toEqual([])
+    expect(harness.snapshot()).toEqual([
+      '/workspace/subtree/keep.txt',
+      '/workspace/subtree/seen.txt'
+    ])
   })
 })

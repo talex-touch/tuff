@@ -4,51 +4,71 @@ import { nextTick } from 'vue'
 import TxTextMorph from '../src/TxTextMorph.vue'
 
 function stubReducedMotion(matches: boolean) {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    configurable: true,
-    value: (query: string) => ({
-      matches,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  })
+  const events = new EventTarget()
+  window.matchMedia = (query: string) => ({
+    get matches() { return matches },
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
+  } as MediaQueryList)
+
+  return (value: boolean) => {
+    matches = value
+    events.dispatchEvent(Object.assign(new Event('change'), { matches }))
+  }
 }
 
-function readableText(root: Element): string {
-  return root.querySelector('[tx-morph-sr]')?.textContent ?? ''
+function readableText(root: Node): string {
+  if (root instanceof Element && root.getAttribute('aria-hidden') === 'true')
+    return ''
+  if (root.nodeType === Node.TEXT_NODE)
+    return root.textContent ?? ''
+  return Array.from(root.childNodes).map(readableText).join('')
 }
 
-function segmentText(root: Element): string {
-  return Array.from(root.querySelectorAll('[tx-morph-item]'))
-    .map(item => item.textContent ?? '')
-    .join('')
-}
+let originalMatchMedia: typeof window.matchMedia
 
 beforeEach(() => {
+  originalMatchMedia = window.matchMedia
   stubReducedMotion(false)
 })
 
 afterEach(() => {
-  stubReducedMotion(false)
+  window.matchMedia = originalMatchMedia
 })
 
 describe('txTextMorph', () => {
-  it('takes the value over from the server-rendered text on mount', async () => {
-    const wrapper = mount(TxTextMorph, { props: { text: 'Ready' }, attachTo: document.body })
-    await nextTick()
+  it('preserves the original fragments and one accessible value through consecutive prop updates', async () => {
+    const values = [
+      '  👩🏽‍💻 e\u0301  $1,204.50 \n\n',
+      '\n  👩🏽‍💻 e\u0301\u00A0$1,318.50  \n',
+      '\t👨‍👩‍👧‍👦 o\u0308 $1,318.50\t ',
+    ]
+    const wrapper = mount(TxTextMorph, {
+      props: { text: values[0]!, locale: 'en', numbers: true, respectReducedMotion: true },
+      attachTo: document.body,
+    })
 
-    expect(wrapper.element.tagName).toBe('SPAN')
-    expect(wrapper.classes()).toContain('tx-text-morph')
-    expect(wrapper.element.hasAttribute('tx-morph-root')).toBe(true)
-    expect(readableText(wrapper.element)).toBe('Ready')
+    try {
+      await nextTick()
+      for (const [index, value] of values.entries()) {
+        if (index > 0)
+          await wrapper.setProps({ text: value })
 
-    wrapper.unmount()
+        // Observe current BRs and nested number slots, not a simulated clipboard.
+        const current = Array.from(wrapper.element.querySelectorAll('[tx-morph-item]:not([tx-morph-exiting])'))
+        expect(current.map(item => item.tagName === 'BR' ? '\n' : item.textContent).join('')).toBe(value)
+        expect(readableText(wrapper.element)).toBe(value)
+        expect(wrapper.element.querySelectorAll('[tx-morph-sr]')).toHaveLength(1)
+      }
+    }
+    finally {
+      wrapper.unmount()
+    }
   })
 
   it('uses the requested root tag', async () => {
@@ -56,23 +76,6 @@ describe('txTextMorph', () => {
     await nextTick()
 
     expect(wrapper.element.tagName).toBe('STRONG')
-
-    wrapper.unmount()
-  })
-
-  it('rebuilds the segments when the value changes', async () => {
-    const wrapper = mount(TxTextMorph, { props: { text: 'one' }, attachTo: document.body })
-    await nextTick()
-
-    expect(segmentText(wrapper.element)).toBe('one')
-
-    await wrapper.setProps({ text: 'two' })
-    await nextTick()
-
-    expect(readableText(wrapper.element)).toBe('two')
-    // jsdom has no WAAPI, so exiting segments are removed rather than faded out —
-    // what is left is exactly the new value.
-    expect(segmentText(wrapper.element)).toBe('two')
 
     wrapper.unmount()
   })
@@ -100,16 +103,39 @@ describe('txTextMorph', () => {
     wrapper.unmount()
   })
 
-  it('respects prefers-reduced-motion by default', async () => {
-    stubReducedMotion(true)
+  it('keeps exact text when reduced motion is enabled and restores morphing without stale fragments', async () => {
+    const setReducedMotion = stubReducedMotion(false)
+    const wrapper = mount(TxTextMorph, {
+      props: { text: '  Before\u00A0👩🏽‍💻 e\u0301\n ', locale: 'en', respectReducedMotion: true },
+      attachTo: document.body,
+    })
 
-    const wrapper = mount(TxTextMorph, { props: { text: 'Quiet' }, attachTo: document.body })
-    await nextTick()
+    try {
+      await nextTick()
+      await wrapper.setProps({ text: '  Moving\u00A0👩🏽‍💻 e\u0301\n ' })
 
-    expect(wrapper.element.querySelector('[tx-morph-item]')).toBeNull()
-    expect(wrapper.element.textContent?.trim()).toBe('Quiet')
+      setReducedMotion(true)
+      const quiet = '\tQuiet\u00A0e\u0301\n\n  '
+      await wrapper.setProps({ text: quiet })
 
-    wrapper.unmount()
+      expect(wrapper.element.textContent).toBe(quiet)
+      expect(readableText(wrapper.element)).toBe(quiet)
+      expect(wrapper.element.querySelector('[tx-morph-item]')).toBeNull()
+      expect(wrapper.element.querySelector('[tx-morph-sr]')).toBeNull()
+
+      setReducedMotion(false)
+      const resumed = '\n  Back 👨‍👩‍👧‍👦 o\u0308\u00A0$1,318.50  '
+      await wrapper.setProps({ text: resumed })
+
+      const current = Array.from(wrapper.element.querySelectorAll('[tx-morph-item]:not([tx-morph-exiting])'))
+      expect(current.map(item => item.tagName === 'BR' ? '\n' : item.textContent).join('')).toBe(resumed)
+      expect(readableText(wrapper.element)).toBe(resumed)
+      expect(wrapper.element.querySelectorAll('[tx-morph-sr]')).toHaveLength(1)
+      expect(wrapper.element.querySelector('[tx-morph-exiting]')).toBeNull()
+    }
+    finally {
+      wrapper.unmount()
+    }
   })
 
   it('animates anyway when respectReducedMotion is off', async () => {

@@ -42,6 +42,7 @@ const REQUIRED_IDS = new Set([
   'voice-insights',
   'ocr-history-and-assets',
   'search-history-and-usage',
+  'search-index-maintenance',
   'intelligence-audit-context-memory',
   'analytics-telemetry-diagnostics',
   'home-conversation-content',

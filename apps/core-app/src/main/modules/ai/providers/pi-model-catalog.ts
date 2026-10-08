@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import YAML from 'yaml'
+import type { IntelligenceModelCatalogEntry } from '@talex-touch/utils/intelligence/model-binding'
 import { createLogger } from '../../../utils/logger'
 
 const catalogLog = createLogger('Intelligence').child('CliModelCatalog')
@@ -56,6 +57,8 @@ export function resetCliModelCatalogCache(): void {
   ompCache = null
   codexCache = null
   claudeCache = null
+  piEntryCache = null
+  ompEntryCache = null
   warned = false
 }
 
@@ -65,6 +68,87 @@ export function resetPiModelCatalogCache(): void {
 
 let cache: { signature: string; patterns: string[] } | null = null
 let warned = false
+
+type CatalogEntries = ReadonlyMap<string, IntelligenceModelCatalogEntry>
+let piEntryCache: { signature: string; entries: CatalogEntries } | null = null
+let ompEntryCache: { signature: string; entries: CatalogEntries } | null = null
+
+/**
+ * The capability fields `pi` publishes per model (`contextWindow`, `maxTokens`, `reasoning`,
+ * `input`, `thinkingLevelMap`), keyed by the same `<provider>/<id>` pattern the menu lists. This is
+ * the catalog a model binding's `catalog` provenance follows. Same secret boundary as the pattern
+ * list: only those numeric/boolean/level fields leave, never a provider record.
+ */
+export function readPiCliModelCatalog(): CatalogEntries {
+  const dir = piAgentDir()
+  const customPath = join(dir, 'models.json')
+  const storePath = join(dir, 'models-store.json')
+  const signature = `${fileSignature(customPath)}|${fileSignature(storePath)}`
+  if (piEntryCache && piEntryCache.signature === signature) return piEntryCache.entries
+
+  const custom = readJsonRecord(customPath)?.providers
+  const store = readJsonRecord(storePath)
+  // The user's own definition wins a collision, exactly as in `listPiCliModels`.
+  const entries = new Map([...providerCatalogEntries(store), ...providerCatalogEntries(custom)])
+  piEntryCache = { signature, entries }
+  return entries
+}
+
+/** `omp` keeps pi's per-model record shape under `models.yml` / `models.json` `providers`. */
+export function readOmpCliModelCatalog(): CatalogEntries {
+  const dir = ompAgentDir()
+  const ymlPath = join(dir, 'models.yml')
+  const yamlPath = join(dir, 'models.yaml')
+  const jsonPath = join(dir, 'models.json')
+  const signature = `${fileSignature(ymlPath)}|${fileSignature(yamlPath)}|${fileSignature(jsonPath)}`
+  if (ompEntryCache && ompEntryCache.signature === signature) return ompEntryCache.entries
+
+  const record = readYamlRecord(ymlPath) ?? readYamlRecord(yamlPath) ?? readJsonRecord(jsonPath)
+  const entries = providerCatalogEntries(record?.providers)
+  ompEntryCache = { signature, entries }
+  return entries
+}
+
+const CATALOG_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function catalogEntry(record: Record<string, unknown>): IntelligenceModelCatalogEntry {
+  const entry: IntelligenceModelCatalogEntry = {}
+  if (typeof record.contextWindow === 'number') entry.contextWindow = record.contextWindow
+  if (typeof record.maxTokens === 'number') entry.maxTokens = record.maxTokens
+  if (typeof record.reasoning === 'boolean') entry.reasoning = record.reasoning
+  if (Array.isArray(record.input)) {
+    entry.input = record.input.filter((value): value is string => typeof value === 'string')
+  }
+  const levelMap = record.thinkingLevelMap
+  if (isPlainRecord(levelMap)) {
+    const map: NonNullable<IntelligenceModelCatalogEntry['thinkingLevelMap']> = {}
+    for (const level of CATALOG_THINKING_LEVELS) {
+      const value = levelMap[level]
+      if (value === null || typeof value === 'string') map[level] = value
+    }
+    entry.thinkingLevelMap = map
+  }
+  return entry
+}
+
+function providerCatalogEntries(providers: unknown): Map<string, IntelligenceModelCatalogEntry> {
+  const entries = new Map<string, IntelligenceModelCatalogEntry>()
+  if (!isPlainRecord(providers)) return entries
+  for (const [providerName, config] of Object.entries(providers)) {
+    if (!providerName.trim() || !isPlainRecord(config) || !Array.isArray(config.models)) continue
+    for (const model of config.models) {
+      if (!isPlainRecord(model) || typeof model.id !== 'string' || !model.id.trim()) continue
+      const pattern = `${providerName.trim()}/${model.id.trim()}`
+      if (isUnusablePattern(pattern)) continue
+      entries.set(pattern, catalogEntry(model))
+    }
+  }
+  return entries
+}
 
 function ompAgentDir(): string {
   return process.env.TUFF_OMP_AGENT_DIR || join(homedir(), '.omp', 'agent')

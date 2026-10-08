@@ -142,11 +142,33 @@ describe('privacy owner ordinary export projections', () => {
           }
         ]
       }
+      if (sql.includes('FROM usage_execute_events')) {
+        return [
+          {
+            event_id: 'evt-canary',
+            source_id: 'app-provider',
+            item_id: FORBIDDEN_CANARIES[0],
+            source_type: 'application',
+            timestamp: 30
+          }
+        ]
+      }
+      if (sql.includes('FROM app_foreground_activity')) {
+        return [{ app_key: 'com.apple.safari', last_active_at: 40 }]
+      }
       return []
     })
     const owner = createSearchRetentionOwner({ coreClient: client, auxiliaryClient: client })
     const records = await exportCategory(owner, 'search-history')
-    expect(records).toHaveLength(2)
+    expect(records).toHaveLength(4)
+    expect(records).toContainEqual({
+      kind: 'usage-execute-event',
+      sourceType: 'application',
+      executedAt: 30
+    })
+    expect(records).toContainEqual({ kind: 'app-foreground-activity', lastActiveAt: 40 })
+    expect(JSON.stringify(records)).not.toContain('com.apple.safari')
+    expect(JSON.stringify(records)).not.toContain('evt-canary')
     expect(records).toContainEqual(
       expect.objectContaining({ kind: 'search-usage', action: null, sourceType: null })
     )

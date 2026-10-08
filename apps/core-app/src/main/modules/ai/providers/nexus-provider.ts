@@ -341,7 +341,8 @@ export class NexusProvider extends IntelligenceProvider {
     return {
       result: invocation.result,
       usage: normalizeUsage(invocation.usage),
-      model: invocation.model || this.config.defaultModel || this.config.models?.[0] || 'nexus',
+      usageReported: Boolean(invocation.usage),
+      model: invocation.model || this.config.defaultModel || this.config.models?.[0]?.id || 'nexus',
       latency: invocation.latency ?? Date.now() - startedAt,
       traceId: invocation.traceId || this.generateTraceId(),
       provider: invocation.provider || this.config.id,
@@ -402,7 +403,7 @@ export class NexusProvider extends IntelligenceProvider {
     let usage = normalizeUsage()
     let traceId = this.generateTraceId()
     let provider = this.config.id
-    let model = this.config.defaultModel || this.config.models?.[0] || 'nexus'
+    let model = this.config.defaultModel || this.config.models?.[0]?.id || 'nexus'
     let latency = 0
     let ended = false
     // Only ever set by the server; a server that predates the field sends none, and main keeps its
@@ -574,7 +575,7 @@ export class NexusProvider extends IntelligenceProvider {
         overlay: translated.overlay
       },
       usage: normalizeUsage(),
-      model: this.config.defaultModel || this.config.models?.[0] || 'nexus-image-translate',
+      model: this.config.defaultModel || this.config.models?.[0]?.id || 'nexus-image-translate',
       latency: Date.now() - startedAt,
       traceId: typeof run?.runId === 'string' ? run.runId : this.generateTraceId(),
       provider: this.config.id

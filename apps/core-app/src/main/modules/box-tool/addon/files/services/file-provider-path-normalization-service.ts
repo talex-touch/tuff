@@ -156,8 +156,8 @@ export interface FileProviderPathNormalizationDeps {
   loadRowsByPaths: (paths: string[]) => Promise<FilePathNormalizationRow[]>
   /** UPDATE files SET path — must route to whichever home owns the table. */
   rewritePath: (rewrite: FilePathNormalizationRewrite) => Promise<void>
-  /** Existing removal API (item id = path): drops the row and its index entry. */
-  removeIndexedFile: (path: string) => Promise<void>
+  /** Fences the observed loser against the current keeper in its normalization group. */
+  removeIndexedFile: (deletion: FilePathNormalizationDeletion) => Promise<boolean>
   /** Drops the index entry keyed by a path that no longer identifies the row. */
   removeIndexEntry: (path: string) => Promise<void>
   /** Re-index the rewritten rows so they get an index entry under the new id. */
@@ -218,8 +218,7 @@ export class FileProviderPathNormalizationService {
       // `files.path` is unique.
       for (const deletion of plan.deletions) {
         try {
-          await this.deps.removeIndexedFile(deletion.path)
-          deleted += 1
+          if (await this.deps.removeIndexedFile(deletion)) deleted += 1
         } catch (error) {
           failed += 1
           this.deps.logWarn('Failed to merge a duplicate path row', error, {

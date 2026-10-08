@@ -48,6 +48,10 @@ const mocks = vi.hoisted(() => ({
   enterUIMode: vi.fn(),
   exitUIMode: vi.fn(),
   detachUIViewToDivisionBox: vi.fn(),
+  focusSummonId: vi.fn((): string | undefined => undefined),
+  focusFromRenderer: vi.fn(() => false),
+  receiveFocusProbe: vi.fn(),
+  recordRendererFocusFailure: vi.fn(),
   getBoxItemManager: vi.fn(() => ({
     clear: vi.fn()
   })),
@@ -56,12 +60,13 @@ const mocks = vi.hoisted(() => ({
   executeMetaOverlayAction: vi.fn(),
   ownsMetaOverlayRenderer: vi.fn((_senderId: number) => false),
   showMetaOverlay: vi.fn(),
+  changeMetaOverlayPage: vi.fn(),
   getMetaOverlayPluginActions: vi.fn((): unknown[] => []),
   isCollapsed: false,
   currentWindow: null as null | {
     isDestroyed: () => boolean
     isVisible: () => boolean
-    webContents: { id: number }
+    webContents: { id: number; isDestroyed: () => boolean; isFocused: () => boolean }
   },
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
@@ -78,13 +83,15 @@ const mocks = vi.hoisted(() => ({
     info: vi.fn(),
     debug: vi.fn(),
     success: vi.fn(),
-    child: vi.fn(() => ({
-      warn: vi.fn(),
-      error: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      success: vi.fn()
-    }))
+    // One child for every caller, so a test can read what the IPC layer logged.
+    child: vi.fn(() => mocks.childLogger)
+  },
+  childLogger: {
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    success: vi.fn()
   }
 }))
 
@@ -170,6 +177,7 @@ vi.mock('./meta-overlay', () => ({
   metaOverlayManager: {
     getPluginActions: mocks.getMetaOverlayPluginActions,
     show: mocks.showMetaOverlay,
+    changePage: mocks.changeMetaOverlayPage,
     hide: vi.fn(),
     getVisible: vi.fn(() => false),
     ownsRenderer: mocks.ownsMetaOverlayRenderer,
@@ -193,12 +201,17 @@ vi.mock('./window', () => ({
     setPinned: mocks.setPinned,
     isPinned: mocks.isPinned,
     setHeight: vi.fn(),
-    setPositionOffset: vi.fn()
+    setPositionOffset: vi.fn(),
+    focusFromRenderer: mocks.focusFromRenderer,
+    focusSummonId: mocks.focusSummonId,
+    receiveFocusProbe: mocks.receiveFocusProbe,
+    recordRendererFocusFailure: mocks.recordRendererFocusFailure
   }
 }))
 
 vi.mock('../../../../shared/events/corebox-scenes', () => ({
-  coreBoxImageTranslateEvent: 'core-box:image-translate'
+  coreBoxImageTranslateEvent: 'core-box:image-translate',
+  COREBOX_FLOW_TRANSFER_ACTION_ID: 'flow-transfer'
 }))
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -271,7 +284,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 71 }
+      webContents: { id: 71, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.uiMode.detach)
     const detachRegistrations = mocks.on.mock.calls.filter(([event]) => {
@@ -293,7 +306,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 71 }
+      webContents: { id: 71, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.uiMode.detach)
 
@@ -528,17 +541,29 @@ describe('CoreBox IPC hide transport', () => {
     ['no CoreBox window', null, { visible: false }],
     [
       'destroyed CoreBox window',
-      { isDestroyed: () => true, isVisible: () => true, webContents: { id: 41 } },
+      {
+        isDestroyed: () => true,
+        isVisible: () => true,
+        webContents: { id: 41, isDestroyed: () => true, isFocused: () => false }
+      },
       { visible: false }
     ],
     [
       'hidden live CoreBox window',
-      { isDestroyed: () => false, isVisible: () => false, webContents: { id: 41 } },
+      {
+        isDestroyed: () => false,
+        isVisible: () => false,
+        webContents: { id: 41, isDestroyed: () => false, isFocused: () => false }
+      },
       { visible: false }
     ],
     [
       'visible live CoreBox window',
-      { isDestroyed: () => false, isVisible: () => true, webContents: { id: 41 } },
+      {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        webContents: { id: 41, isDestroyed: () => false, isFocused: () => true }
+      },
       { visible: true }
     ]
   ])('answers native visibility from the current %s', (_case, currentWindow, expected) => {
@@ -588,7 +613,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 41 }
+      webContents: { id: 41, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.ui.expand)
 
@@ -652,7 +677,12 @@ describe('CoreBox IPC hide transport', () => {
 
     expect(handler).toBeTypeOf('function')
     await handler?.({ actionId: 'copy-answer', item }, { sender: { id: 71 } })
-    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
+    // No Flow selection came with it, so none goes on.
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith(
+      'copy-answer',
+      item,
+      undefined
+    )
 
     await expect(
       handler?.({ actionId: 'copy-answer', item }, { sender: { id: 72 } })
@@ -662,5 +692,164 @@ describe('CoreBox IPC hide transport', () => {
       error: 'Unauthorized MetaOverlay sender'
     })
     expect(mocks.executeMetaOverlayAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('sizes a card opening on its Flow page for its targets, without the plugin actions', () => {
+    mocks.getMetaOverlayPluginActions.mockReturnValue([
+      { id: 'share-a', render: { basic: { title: 'share-a' } } }
+    ])
+    const handler = soleHandler(MetaOverlayEvents.ui.show)
+    const request = (page: 'actions' | 'flow') => ({
+      item: { id: 'item-1', kind: 'app' },
+      builtinActions: [],
+      anchor: 'corner',
+      desiredPanelHeight: 200,
+      page,
+      flowTargets: []
+    })
+
+    handler?.(request('actions'))
+    handler?.(request('flow'))
+
+    // The action list gains the plugin section (4 + 24 + 32); the Flow page never shows it.
+    expect(mocks.showMetaOverlay.mock.calls.map(([shown]) => shown.desiredPanelHeight)).toEqual([
+      260, 200
+    ])
+  })
+
+  it('follows the card to each page the overlay reports', () => {
+    const handler = soleHandler(MetaOverlayEvents.ui.page)
+    mocks.ownsMetaOverlayRenderer.mockImplementation((senderId: number) => senderId === 71)
+
+    handler?.({ page: 'flow', canGoBack: true, desiredPanelHeight: 300 }, { sender: { id: 71 } })
+    handler?.(
+      { page: 'flow-confirm', canGoBack: true, desiredPanelHeight: 232 },
+      { sender: { id: 71 } }
+    )
+    handler?.({ page: 'actions', canGoBack: false }, { sender: { id: 71 } })
+
+    expect(mocks.changeMetaOverlayPage.mock.calls).toStrictEqual([
+      [{ page: 'flow', canGoBack: true, desiredPanelHeight: 300 }],
+      [{ page: 'flow-confirm', canGoBack: true, desiredPanelHeight: 232 }],
+      [{ page: 'actions', canGoBack: false }]
+    ])
+  })
+
+  it('takes page changes only from the active MetaOverlay renderer', () => {
+    const handler = soleHandler(MetaOverlayEvents.ui.page)
+    mocks.ownsMetaOverlayRenderer.mockImplementation((senderId: number) => senderId === 71)
+
+    handler?.({ page: 'flow', canGoBack: true }, { sender: { id: 72 } })
+    handler?.({ page: 'flow', canGoBack: true })
+
+    expect(mocks.changeMetaOverlayPage).not.toHaveBeenCalled()
+    // Logged by sender alone.
+    expect(mocks.childLogger.warn.mock.calls).toEqual([
+      ['Rejected ui.page from non-overlay renderer', { meta: { senderId: 72 } }],
+      ['Rejected ui.page from non-overlay renderer', { meta: { senderId: null } }]
+    ])
+  })
+
+  it.each([
+    ['no payload', undefined],
+    ['a page main does not know', { page: 'settings', canGoBack: false }],
+    ['no page', { canGoBack: false }],
+    ['a canGoBack that is not a boolean', { page: 'flow', canGoBack: 'yes' }],
+    ['no canGoBack', { page: 'flow' }],
+    ['a zero height', { page: 'flow', canGoBack: true, desiredPanelHeight: 0 }],
+    ['a negative height', { page: 'flow', canGoBack: true, desiredPanelHeight: -10 }],
+    ['a NaN height', { page: 'flow', canGoBack: true, desiredPanelHeight: Number.NaN }],
+    [
+      'an infinite height',
+      { page: 'flow', canGoBack: true, desiredPanelHeight: Number.POSITIVE_INFINITY }
+    ],
+    ['a height in a string', { page: 'flow', canGoBack: true, desiredPanelHeight: '300' }],
+    ['a null height', { page: 'flow', canGoBack: true, desiredPanelHeight: null }]
+  ])('drops a whole page change with %s', (_label, payload) => {
+    const handler = soleHandler(MetaOverlayEvents.ui.page)
+    mocks.ownsMetaOverlayRenderer.mockReturnValue(true)
+
+    handler?.(payload, { sender: { id: 71 } })
+
+    expect(mocks.changeMetaOverlayPage).not.toHaveBeenCalled()
+  })
+
+  describe('a Flow selection on action.execute', () => {
+    const item = { id: 'item-1', kind: 'app' }
+    const selection = {
+      targetId: 'com.example.notes.append',
+      consentToken: 'consent-token-1',
+      confirmationToken: 'confirmation-token-1'
+    }
+
+    async function execute(request: Record<string, unknown>): Promise<void> {
+      mocks.ownsMetaOverlayRenderer.mockReturnValue(true)
+      await soleHandler(MetaOverlayEvents.action.execute)?.(
+        { itemId: 'item-1', item, ...request },
+        { sender: { id: 71 } }
+      )
+    }
+
+    it('reaches the manager with the transfer action, rebuilt from its known fields', async () => {
+      await execute({ actionId: 'flow-transfer', flow: { ...selection, note: 'not relayed' } })
+      await execute({ actionId: 'flow-transfer', flow: { targetId: selection.targetId } })
+
+      expect(mocks.executeMetaOverlayAction.mock.calls).toStrictEqual([
+        ['flow-transfer', item, selection],
+        ['flow-transfer', item, { targetId: selection.targetId }]
+      ])
+    })
+
+    it.each([
+      ['another action', { actionId: 'copy-title', flow: selection }],
+      ['no target', { actionId: 'flow-transfer', flow: { consentToken: 'consent-token-1' } }],
+      ['an empty target', { actionId: 'flow-transfer', flow: { targetId: '' } }],
+      ['a target that is not a string', { actionId: 'flow-transfer', flow: { targetId: 42 } }],
+      [
+        'a token that is not a string',
+        { actionId: 'flow-transfer', flow: { targetId: 'a.b', consentToken: 42 } }
+      ],
+      [
+        'a null token',
+        { actionId: 'flow-transfer', flow: { targetId: 'a.b', confirmationToken: null } }
+      ],
+      ['a selection that is not an object', { actionId: 'flow-transfer', flow: 'a.b' }],
+      ['a null selection', { actionId: 'flow-transfer', flow: null }]
+    ])('runs the action without a selection that has %s', async (_label, request) => {
+      await execute(request)
+
+      // A transfer without a selection dispatches nothing in CoreBox; the panel still closes.
+      expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith(
+        request.actionId,
+        item,
+        undefined
+      )
+    })
+
+    it('logs whether a dropped selection had a target and tokens, never what they were', async () => {
+      await execute({ actionId: 'copy-title', flow: selection })
+      await execute({ actionId: 'flow-transfer', flow: { ...selection, consentToken: 42 } })
+      await execute({ actionId: 'flow-transfer', flow: selection })
+
+      expect(mocks.childLogger.warn).toHaveBeenCalledWith(
+        'Dropped a malformed Flow selection from action.execute',
+        {
+          meta: {
+            actionId: 'copy-title',
+            hasTargetId: true,
+            hasConsentToken: true,
+            hasConfirmationToken: true
+          }
+        }
+      )
+      const logged = JSON.stringify(Object.values(mocks.childLogger).map((log) => log.mock.calls))
+      for (const secret of [
+        selection.targetId,
+        selection.consentToken,
+        selection.confirmationToken
+      ]) {
+        expect(logged).not.toContain(secret)
+      }
+    })
   })
 })

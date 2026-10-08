@@ -686,6 +686,14 @@ export interface ITuffTransportMain {
     payload: TReq,
   ) => Promise<TRes>
 
+  /** Notify one concrete recipient without an RPC acknowledgement. Stale plugin owners drop. */
+  notifyTo: <TReq>(
+    webContents: ElectronWebContents,
+    event: TuffEvent<TReq, void>,
+    payload: TReq,
+    plugin?: PluginSecurityContext,
+  ) => boolean
+
   /**
    * Sends a message to a plugin's renderer.
    *

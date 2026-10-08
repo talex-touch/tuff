@@ -68,9 +68,11 @@ export class FileSystemWatcherModule extends BaseModule {
   private pendingPaths: Map<string, PendingPath> = new Map()
   private pendingAdditions: Set<string> = new Set()
   private destroyed = false
+  private closeWatchersPromise: Promise<void> | null = null
 
   // Bound so the same reference is used for both on() and off().
   private readonly handlePermissionsRefreshed = (): Promise<string[]> => this.tryPendingPaths()
+  private readonly handleBeforeQuitStopWatchers = (): Promise<void> => this.closeWatchers()
 
   constructor() {
     super(FileSystemWatcherModule.key, {
@@ -324,6 +326,12 @@ export class FileSystemWatcherModule extends BaseModule {
     // permission page refreshed — instead of waiting for the periodic poll.
     touchEventBus.on(TalexEvents.PERMISSIONS_REFRESHED, this.handlePermissionsRefreshed)
 
+    // The quit flow stops native streams before renderer quiesce and module unload; this module
+    // is a deferred one, so by the time unloadAll reached it the before-quit budget or the dev
+    // force-exit had usually already won, and the still-running FSEvents streams aborted the
+    // process during environment teardown.
+    touchEventBus.on(TalexEvents.BEFORE_QUIT_STOP_WATCHERS, this.handleBeforeQuitStopWatchers)
+
     // Start periodic permission checking for pending paths
     // Check every 30 seconds for permission changes
     pollingService.register(
@@ -344,18 +352,32 @@ export class FileSystemWatcherModule extends BaseModule {
     fileSystemWatcherLog.info('Destroying...')
 
     touchEventBus.off(TalexEvents.PERMISSIONS_REFRESHED, this.handlePermissionsRefreshed)
+    touchEventBus.off(TalexEvents.BEFORE_QUIT_STOP_WATCHERS, this.handleBeforeQuitStopWatchers)
 
     // Unregister polling task
     pollingService.unregister('filesystem-watcher-permission-check')
 
-    // Clear pending paths
-    this.pendingPaths.clear()
+    await this.closeWatchers()
+  }
 
-    // Close all watchers
-    await Promise.all(Array.from(this.watchers.values(), (watcher) => watcher.close()))
+  /**
+   * Stops intake, then closes every native stream and awaits it. Shared by onDestroy and the
+   * quit flow's BEFORE_QUIT_STOP_WATCHERS step; a second call joins the first instead of
+   * closing twice.
+   */
+  private closeWatchers(): Promise<void> {
+    if (this.closeWatchersPromise) return this.closeWatchersPromise
+    this.destroyed = true
+    this.pendingPaths.clear()
+    const watchers = Array.from(this.watchers.values())
     this.watchers.clear()
-    this.watchedPaths.clear()
-    this.pendingAdditions.clear()
+    this.closeWatchersPromise = (async () => {
+      await Promise.all(watchers.map((watcher) => watcher.close()))
+      this.watchedPaths.clear()
+      this.pendingAdditions.clear()
+      fileSystemWatcherLog.info(`Closed ${watchers.length} native watcher(s)`)
+    })()
+    return this.closeWatchersPromise
   }
 }
 

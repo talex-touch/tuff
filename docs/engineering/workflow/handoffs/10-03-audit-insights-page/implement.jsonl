@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §5 page structure and §1.5/§3.5 data contracts"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "requirements R-D1–R-D10, R-E3, R-B5; decisions D3/D7/D11/D13; page background anchors"}
+{"file": ".trellis/tasks/10-03-insights-shell-kit/design.md", "reason": "shared insights components the page must use"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/audit-data-layer.md", "reason": "caller and provider naming rules for labels"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "loading-state skeleton rules, semantic controls, i18n"}
+{"file": ".trellis/spec/frontend/tuffex-charts-package.md", "reason": "chart theming and component conventions for TxTimeseriesChart"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "type, spacing and colour token rules"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "SDK subscriptions and host data mirrors in composables"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "CDP instance ownership for real-app screenshots"}

@@ -1,9 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
-import { ChatAnthropic } from '@langchain/anthropic'
+import type {
+  IntelligenceChatPayload,
+  IntelligenceInvokeOptions,
+  IntelligenceProviderConfig
+} from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import { planChatModelRequest } from '../model-request-plan'
 import { planProviderReasoning, withReasoningPlan } from '../reasoning-effort-runtime'
 import { AnthropicProvider } from './anthropic-provider'
 
@@ -18,6 +23,9 @@ import { AnthropicProvider } from './anthropic-provider'
  */
 const bodies: Array<Record<string, unknown>> = []
 let baseUrl = ''
+const thinkingSchema = z
+  .object({ type: z.string(), budget_tokens: z.number().optional() })
+  .optional()
 let closeServer: (() => Promise<void>) | null = null
 
 function sse(events: Array<Record<string, unknown>>): string {
@@ -132,6 +140,51 @@ function plannedOptions(model: string, reasoningEffort?: 'low' | 'medium' | 'hig
   return withReasoningPlan(options, planProviderReasoning(options, config(), model))
 }
 
+interface CappedRequest {
+  provider: AnthropicProvider
+  payload: IntelligenceChatPayload
+  options: IntelligenceInvokeOptions
+}
+
+function cappedRequest(
+  model: string,
+  callerCap?: number,
+  bindingCap?: number,
+  effort?: 'low'
+): CappedRequest {
+  const provider = {
+    ...config(),
+    models: [
+      {
+        id: model,
+        ...(bindingCap === undefined
+          ? {}
+          : { maxTokens: bindingCap, maxTokensSource: 'user' as const })
+      }
+    ]
+  }
+  const request = planChatModelRequest(
+    { ...turn, ...(callerCap === undefined ? {} : { maxTokens: callerCap }) },
+    { modelPreference: [model], ...(effort ? { reasoningEffort: effort } : {}) },
+    provider
+  )
+  return {
+    provider: new AnthropicProvider(provider),
+    payload: request.payload,
+    options: withReasoningPlan(
+      request.options,
+      planProviderReasoning(request.options, provider, model)
+    )
+  }
+}
+
+async function invokeCapped(request: CappedRequest, streaming: boolean) {
+  if (!streaming) return (await request.provider.chat(request.payload, request.options)).result
+  let answer = ''
+  for await (const chunk of request.provider.chatStream(request.payload, request.options))
+    answer += chunk.delta ?? ''
+  return answer
+}
 const turn = { messages: [{ role: 'user' as const, content: 'hi' }] }
 
 async function streamed(model: string, reasoningEffort?: 'low' | 'medium' | 'high' | 'max') {
@@ -146,21 +199,15 @@ async function streamed(model: string, reasoningEffort?: 'low' | 'medium' | 'hig
 }
 
 describe('Anthropic reasoning on the wire', () => {
-  it("leaves an auto turn exactly as before, LangChain's disabled thinking included", async () => {
-    await streamed('claude-opus-4-8')
+  it('auto does not enable thinking or attach an effort to an explicitly capped turn', async () => {
+    await new AnthropicProvider(config()).chat(
+      { ...turn, maxTokens: 96, temperature: 0.3 },
+      plannedOptions('claude-opus-4-8')
+    )
 
-    // The whole body, not only the absence of the new fields: auto must not change a byte. The
-    // sampling knobs are LangChain 0.3.34's own defaults, sent before this setting existed too.
-    expect(bodies[0]).toEqual({
-      model: 'claude-opus-4-8',
-      max_tokens: 1024,
-      temperature: 0.7,
-      top_k: -1,
-      top_p: -1,
-      thinking: { type: 'disabled' },
-      stream: true,
-      messages: [{ role: 'user', content: 'hi' }]
-    })
+    expect(bodies[0]).toMatchObject({ max_tokens: 96, temperature: 0.3 })
+    expect(['enabled', 'adaptive']).not.toContain(thinkingSchema.parse(bodies[0].thinking)?.type)
+    expect(bodies[0]).not.toHaveProperty('output_config')
   })
 
   it('switches an adaptive model to adaptive thinking with an effort, and no sampling knobs', async () => {
@@ -170,8 +217,7 @@ describe('Anthropic reasoning on the wire', () => {
       model: 'claude-opus-4-8',
       stream: true,
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'max' },
-      max_tokens: 1024 + 32768
+      output_config: { effort: 'max' }
     })
     for (const knob of ['temperature', 'top_k', 'top_p']) expect(bodies[0]).not.toHaveProperty(knob)
     // The thinking deltas are dropped, not shown as answer text (D11-f: no reasoning display).
@@ -183,11 +229,11 @@ describe('Anthropic reasoning on the wire', () => {
 
     expect(bodies[0]).toMatchObject({
       model: 'claude-sonnet-4-5',
-      thinking: { type: 'enabled', budget_tokens: 8192 },
-      max_tokens: 1024 + 8192
+      thinking: { type: 'enabled', budget_tokens: 8192 }
     })
     expect(bodies[0]).not.toHaveProperty('temperature')
     expect(bodies[0]).not.toHaveProperty('output_config')
+    expect(bodies[0].max_tokens).toBeGreaterThan(8192)
     expect(deltas).toEqual(['answer'])
   })
 
@@ -212,39 +258,73 @@ describe('Anthropic reasoning on the wire', () => {
     await streamed('claude-legacy-sonnet', 'high')
     await streamed('claude-legacy-sonnet')
 
-    expect(bodies[0]).toMatchObject({
-      thinking: { type: 'disabled' },
-      temperature: 0.7,
-      max_tokens: 1024
-    })
+    expect(['enabled', 'adaptive']).not.toContain(thinkingSchema.parse(bodies[0].thinking)?.type)
     expect(bodies[0]).not.toHaveProperty('output_config')
     // A plan with nothing to send builds exactly the request auto builds.
     expect(bodies[0]).toEqual(bodies[1])
   })
 })
 
-describe('ChatAnthropic.invocationParams under a plan', () => {
-  it('validates the thinking branch LangChain would otherwise reject', () => {
-    // Built the way the provider builds it, then asked for its params directly: LangChain throws on
-    // a thinking config with a temperature other than 1, which is why the provider pins it.
-    const model = new ChatAnthropic({
-      anthropicApiKey: 'test-only-key',
-      model: 'claude-opus-4-7',
-      temperature: 1,
-      maxTokens: 5120,
-      thinking: { type: 'enabled', budget_tokens: 1024 },
-      invocationKwargs: { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } }
-    })
-    const params = model.invocationParams({}) as unknown as Record<string, unknown>
+describe.each([false, true])('Anthropic explicit output ceilings (streaming=%s)', (streaming) => {
+  it.each([
+    { name: 'caller 96', callerCap: 96, bindingCap: undefined },
+    { name: 'caller 1024', callerCap: 1024, bindingCap: undefined },
+    { name: 'binding 96', callerCap: undefined, bindingCap: 96 },
+    { name: 'binding 1024', callerCap: undefined, bindingCap: 1024 },
+    { name: 'caller below larger binding', callerCap: 96, bindingCap: 8192 },
+    { name: 'binding below larger caller', callerCap: 8192, bindingCap: 1024 }
+  ])(
+    '$name rejects legacy thinking before network instead of raising or disabling the cap',
+    async ({ callerCap, bindingCap }) => {
+      const request = cappedRequest('claude-sonnet-4-5', callerCap, bindingCap, 'low')
+      await expect(invokeCapped(request, streaming)).rejects.toMatchObject({
+        code: 'MODEL_UNSUPPORTED',
+        reason: 'MODEL_REASONING_OUTPUT_BUDGET',
+        message: expect.stringContaining('MODEL_REASONING_OUTPUT_BUDGET')
+      })
+      expect(bodies).toEqual([])
+    }
+  )
 
-    expect(params).toMatchObject({
-      model: 'claude-opus-4-7',
-      max_tokens: 5120,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'low' }
-    })
-    expect(params).not.toHaveProperty('temperature')
-    expect(params).not.toHaveProperty('top_k')
-    expect(params).not.toHaveProperty('top_p')
-  })
+  it.each([
+    { name: 'caller boundary', callerCap: 1025, bindingCap: undefined, cap: 1025 },
+    { name: 'binding boundary', callerCap: 8192, bindingCap: 1025, cap: 1025 },
+    { name: 'larger caller ceiling', callerCap: 4096, bindingCap: 8192, cap: 4096 }
+  ])(
+    '$name permits a valid legacy budget strictly below the actual ceiling',
+    async ({ callerCap, bindingCap, cap }) => {
+      expect(
+        await invokeCapped(
+          cappedRequest('claude-sonnet-4-5', callerCap, bindingCap, 'low'),
+          streaming
+        )
+      ).toBe('answer')
+      expect(bodies[0]).toMatchObject({ max_tokens: cap, thinking: { type: 'enabled' } })
+      const thinking = thinkingSchema.parse(bodies[0].thinking)
+      expect(thinking?.budget_tokens).toBeGreaterThanOrEqual(1024)
+      expect(thinking?.budget_tokens).toBeLessThan(cap)
+      expect(bodies[0]).not.toHaveProperty('temperature')
+    }
+  )
+
+  it.each([
+    { name: 'caller', callerCap: 96, bindingCap: 8192 },
+    { name: 'binding', callerCap: 8192, bindingCap: 96 }
+  ])(
+    'adaptive thinking allows a small $name ceiling through the installed SDK',
+    async ({ callerCap, bindingCap }) => {
+      expect(
+        await invokeCapped(
+          cappedRequest('claude-opus-4-8', callerCap, bindingCap, 'low'),
+          streaming
+        )
+      ).toBe('answer')
+      expect(bodies[0]).toMatchObject({
+        max_tokens: 96,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'low' }
+      })
+      expect(bodies[0]).not.toHaveProperty('temperature')
+    }
+  )
 })

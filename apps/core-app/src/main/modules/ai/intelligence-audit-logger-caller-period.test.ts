@@ -1,11 +1,25 @@
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   aggregateUsageStatsByCallerAndPeriod,
   IntelligenceAuditLogger,
   sanitizeIntelligenceAuditEntry
 } from './intelligence-audit-logger'
 import './intelligence-test-harness'
+import modelsDevFixture from './pricing/__fixtures__/models-dev-subset.json'
+import {
+  compactModelsDevCatalog,
+  primePricingCatalogForTest,
+  resetPricingCatalogForTest
+} from './pricing/models-dev-catalog'
+
+// The flush loads pricing, which reads live channel configs through the SDK. This suite only
+// needs "no provider manager yet"; the stub keeps that import from pulling in the whole SDK graph.
+vi.mock('./intelligence-sdk', () => ({
+  getIntelligenceProviderManager: () => {
+    throw new Error('[Intelligence] Provider manager not initialized')
+  }
+}))
 
 const logs: IntelligenceAuditLogEntry[] = [
   {
@@ -71,7 +85,12 @@ const logs: IntelligenceAuditLogEntry[] = [
 ]
 
 describe('usage aggregation by caller and period', () => {
-  it('prefers explicit and provider-reported cost before model estimation', async () => {
+  it('prefers explicit and provider-reported cost before catalog pricing', async () => {
+    // Anchor basis changed 2026-10-03: the retired fixed table priced gpt-4o at $0.005 / $0.015
+    // per 1K tokens (0.02 here). Costs now come from the models.dev catalog at flush time; the
+    // fixture cut lists openai gpt-4o at $2.5 / $10 per 1M tokens, so 1000 + 1000 tokens cost
+    // 0.0125. `test-provider` matches no channel, so the model family (gpt → openai) prices it.
+    primePricingCatalogForTest(compactModelsDevCatalog(modelsDevFixture))
     const logger = new IntelligenceAuditLogger()
     const baseEntry: IntelligenceAuditLogEntry = {
       traceId: 'cost-base',
@@ -84,31 +103,51 @@ describe('usage aggregation by caller and period', () => {
       success: true
     }
 
-    await logger.log({
-      ...baseEntry,
-      traceId: 'cost-local-zero',
-      model: 'smollm2:135m',
-      usage: { promptTokens: 83, completionTokens: 32, totalTokens: 115, cost: 0 }
-    })
-    await logger.log({
-      ...baseEntry,
-      traceId: 'cost-provider-nonzero',
-      usage: { ...baseEntry.usage, cost: 0.123 }
-    })
-    await logger.log({ ...baseEntry, traceId: 'cost-model-estimate' })
-    await logger.log({
-      ...baseEntry,
-      traceId: 'cost-explicit-override',
-      estimatedCost: 0.5,
-      usage: { ...baseEntry.usage, cost: 0.123 }
-    })
+    try {
+      await logger.log({
+        ...baseEntry,
+        traceId: 'cost-local-zero',
+        model: 'smollm2:135m',
+        usage: { promptTokens: 83, completionTokens: 32, totalTokens: 115, cost: 0 }
+      })
+      await logger.log({
+        ...baseEntry,
+        traceId: 'cost-provider-nonzero',
+        usage: { ...baseEntry.usage, cost: 0.123 }
+      })
+      await logger.log({ ...baseEntry, traceId: 'cost-model-estimate' })
+      await logger.log({
+        ...baseEntry,
+        traceId: 'cost-explicit-override',
+        estimatedCost: 0.5,
+        usage: { ...baseEntry.usage, cost: 0.123 }
+      })
 
-    expect(logger.getRecentLogs(4).map((entry) => [entry.traceId, entry.estimatedCost])).toEqual([
-      ['cost-local-zero', 0],
-      ['cost-provider-nonzero', 0.123],
-      ['cost-model-estimate', 0.02],
-      ['cost-explicit-override', 0.5]
-    ])
+      // Nothing but an explicit cost is settled on the log() path.
+      expect(logger.getRecentLogs(4).map((entry) => entry.estimatedCost)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+        0.5
+      ])
+
+      // Priced when the batch leaves the queue, before the (stubbed) write transaction.
+      const internals = logger as unknown as {
+        flushBatch: (logs: IntelligenceAuditLogEntry[]) => Promise<boolean>
+      }
+      internals.flushBatch = vi.fn(async () => true)
+      await logger.flushToDB()
+
+      expect(logger.getRecentLogs(4).map((entry) => [entry.traceId, entry.estimatedCost])).toEqual([
+        ['cost-local-zero', 0],
+        ['cost-provider-nonzero', 0.123],
+        ['cost-model-estimate', 0.0125],
+        ['cost-explicit-override', 0.5]
+      ])
+    } finally {
+      await logger.destroy()
+      resetPricingCatalogForTest()
+    }
   })
 
   it('drops prompt, response, path, SQL, Secret, and native-error detail at audit ingress', () => {

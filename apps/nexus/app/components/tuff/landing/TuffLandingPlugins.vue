@@ -1,71 +1,87 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import type { Component } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
+import type { HairlineFigureName } from './TuffLandingHairline.vue'
+import { computed, h } from 'vue'
 import AppleCard from '../carousel/apple/AppleCard.vue'
 import AppleCardCarousel from '../carousel/apple/AppleCardCarousel.vue'
 import AppleCarouselItem from '../carousel/apple/AppleCarouselItem.vue'
 import PluginCardCalendar from './plugins/cards/PluginCardCalendar.vue'
 import PluginCardFigma from './plugins/cards/PluginCardFigma.vue'
 import PluginCardGithub from './plugins/cards/PluginCardGithub.vue'
+import PluginCardHairline from './plugins/cards/PluginCardHairline.vue'
 import PluginCardNotion from './plugins/cards/PluginCardNotion.vue'
 import PluginCardSpotify from './plugins/cards/PluginCardSpotify.vue'
-import PluginCardTranslate from './plugins/cards/PluginCardTranslate.vue'
 import PluginCardVSCode from './plugins/cards/PluginCardVSCode.vue'
 import TuffLandingSection from './TuffLandingSection.vue'
+
+// Two runs of cards. The illustrated integration cards lead, as before; after
+// them come plugins that exist today, each with the word its manifest answers
+// to. JSON Formatter and Browser Open are listed in the store; the other four
+// ship pre-installed and have no store page, so they open the plugins guide.
+
+type ShowcaseKey = 'notion' | 'figma' | 'github' | 'vscode' | 'calendar' | 'spotify'
+type PluginKey = 'json' | 'browser' | 'vscodeProjects' | 'image' | 'hosts' | 'aiSessions'
 
 const { t } = useI18n()
 const router = useRouter()
 
-const capabilityKeys = ['notion', 'figma', 'github', 'vscode', 'calendar', 'spotify'] as const
-const capabilityIcons = {
-  notion: 'i-carbon-logo-notion',
-  figma: 'i-carbon-logo-figma',
-  github: 'i-carbon-logo-github',
-  vscode: 'i-carbon-logo-vscode',
-  calendar: 'i-carbon-calendar',
-  spotify: 'i-carbon-logo-spotify',
-} as const
+const PLUGINS_GUIDE = '/docs/guide/features/plugins'
+
+const SHOWCASE: { key: ShowcaseKey, component: Component }[] = [
+  { key: 'notion', component: PluginCardNotion },
+  { key: 'figma', component: PluginCardFigma },
+  { key: 'github', component: PluginCardGithub },
+  { key: 'vscode', component: PluginCardVSCode },
+  { key: 'calendar', component: PluginCardCalendar },
+  { key: 'spotify', component: PluginCardSpotify },
+]
+
+const PLUGINS: { key: PluginKey, figure: HairlineFigureName, to: RouteLocationRaw }[] = [
+  { key: 'json', figure: 'sieve', to: { path: '/store', query: { query: 'JSON' } } },
+  { key: 'browser', figure: 'router', to: { path: '/store', query: { query: 'browser' } } },
+  { key: 'vscodeProjects', figure: 'laptop', to: PLUGINS_GUIDE },
+  { key: 'image', figure: 'loupe', to: PLUGINS_GUIDE },
+  { key: 'hosts', figure: 'padlock', to: PLUGINS_GUIDE },
+  { key: 'aiSessions', figure: 'branches', to: PLUGINS_GUIDE },
+]
 
 const plugins = computed(() => ({
   eyebrow: t('landing.os.plugins.eyebrow'),
   headline: t('landing.os.plugins.headline'),
   subheadline: t('landing.os.plugins.subheadline'),
-  extensions: capabilityKeys.map(key => ({
-    id: key,
-    icon: capabilityIcons[key],
-    name: t(`landing.os.plugins.extensions.${key}.name`),
-    description: t(`landing.os.plugins.extensions.${key}.description`),
-  })),
 }))
 
-const components = [
-  PluginCardNotion,
-  PluginCardFigma,
-  PluginCardGithub,
-  PluginCardVSCode,
-  PluginCardCalendar,
-  PluginCardSpotify,
-  PluginCardTranslate,
-]
-
-const cards = computed(() => (plugins.value.extensions ?? []).map((item, index) => ({
-  id: item.id,
-  src: '',
-  icon: item.icon,
-  category: item.name,
-  title: item.description,
-  component: index < 5 ? components[index] : components[5],
-})))
+const cards = computed(() => [
+  ...SHOWCASE.map(item => ({
+    id: item.key,
+    src: '',
+    category: t(`landing.os.plugins.extensions.${item.key}.name`),
+    title: t(`landing.os.plugins.extensions.${item.key}.description`),
+    to: { path: '/store', query: { query: item.key } } as RouteLocationRaw,
+    component: item.component,
+  })),
+  ...PLUGINS.map((plugin) => {
+    const base = `landing.os.plugins.extensions.${plugin.key}`
+    const face = {
+      figure: plugin.figure,
+      summon: t(`${base}.summon`),
+      label: t(`${base}.label`),
+    }
+    return {
+      id: plugin.key,
+      src: '',
+      category: t(`${base}.name`),
+      title: t(`${base}.description`),
+      to: plugin.to,
+      component: () => h(PluginCardHairline, face),
+    }
+  }),
+])
 
 function handleCardClick(card: Record<string, unknown>, _index: number) {
-  const id = typeof card.id === 'string' ? card.id : ''
-  if (!id)
-    return
-  router.push({
-    path: '/store',
-    query: {
-      query: id,
-    },
-  })
+  if (card.to)
+    router.push(card.to as RouteLocationRaw)
 }
 </script>
 
@@ -88,7 +104,7 @@ function handleCardClick(card: Record<string, unknown>, _index: number) {
     }"
   >
     <div class="TuffLandingPlugins-Main">
-      <AppleCardCarousel>
+      <AppleCardCarousel :prev-label="t('landing.os.plugins.prev')" :next-label="t('landing.os.plugins.next')">
         <AppleCarouselItem
           v-for="(card, index) in cards"
           :key="index"
@@ -99,30 +115,7 @@ function handleCardClick(card: Record<string, unknown>, _index: number) {
             :index="index"
             :layout="true"
             :on-card-click="handleCardClick"
-          >
-            <div
-              :key="`dummy-content${index}`"
-              class="mb-4 rounded-3xl bg-[#F5F5F7] p-8 dark:bg-neutral-800 md:p-14"
-            >
-              <p
-                class="mx-auto max-w-3xl text-base text-neutral-600 font-sans md:text-2xl dark:text-neutral-400"
-              >
-                <span class="text-neutral-700 font-bold dark:text-neutral-200">
-                  The first rule of Apple club is that you boast about Apple club.
-                </span>
-                Keep a journal, quickly jot down a grocery list, and take amazing class notes. Want to
-                convert those notes to text? No problem. Langotiya jeetu ka mara hua yaar is ready to
-                capture every thought.
-              </p>
-              <img
-                src="https://assets.aceternity.com/macbook.png"
-                alt="Macbook mockup from Aceternity UI"
-                height="500"
-                width="500"
-                class="mx-auto size-full object-contain md:size-1/2"
-              >
-            </div>
-          </AppleCard>
+          />
         </AppleCarouselItem>
       </AppleCardCarousel>
     </div>
@@ -160,6 +153,14 @@ function handleCardClick(card: Record<string, unknown>, _index: number) {
   -webkit-mask-size: 100% 100%;
   mask-repeat: no-repeat;
   -webkit-mask-repeat: no-repeat;
+}
+
+/* Cards keep their 40rem height where it fits; on a 900px screen that left the
+   row running under the eyebrow pill, so they give up what the section needs. */
+@media (min-width: 768px) {
+  .TuffLandingPlugins-Main :deep(.apple-card) {
+    height: min(40rem, calc(100dvh - 22rem));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

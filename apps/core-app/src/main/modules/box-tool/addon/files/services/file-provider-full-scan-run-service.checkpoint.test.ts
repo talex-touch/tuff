@@ -1,116 +1,133 @@
 import type { ScannedFileInfo } from '../types'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { FileProviderFullScanCheckpointService } from './file-provider-full-scan-checkpoint-service'
 import { FileProviderFullScanRunService } from './file-provider-full-scan-run-service'
+import type { FileProviderFullScanRunDeps } from './file-provider-full-scan-run-service'
 
-function scannedFile(path: string): ScannedFileInfo {
-  return {
-    path,
-    name: path.split('/').pop() ?? path,
-    extension: '.txt',
-    size: 1,
-    ctime: new Date(1000),
-    mtime: new Date(2000)
-  }
-}
-
-interface Harness {
-  service: FileProviderFullScanRunService<{ signal?: AbortSignal }>
-  scanDirectory: ReturnType<typeof vi.fn>
-  recordCompleted: ReturnType<typeof vi.fn>
-  clearCompleted: ReturnType<typeof vi.fn>
-  emitProgress: ReturnType<typeof vi.fn>
-}
-
-function createHarness(input: {
-  children: Record<string, string[]>
-  completed?: string[]
-  /** Throws once the walk reaches this directory: a restart in the middle of a root. */
+function checkpointHarness(input: {
+  completed: Set<string>
+  quality?: Record<string, 'error' | 'unknown'>
   abortAt?: string
-}): Harness {
-  const recordCompleted = vi.fn(async () => undefined)
-  const clearCompleted = vi.fn(async () => undefined)
-  const emitProgress = vi.fn()
+  entered?: { resolve: () => void }
+  publication?: Promise<void>
+}) {
+  const persisted: string[] = []
+  const disk = ['/h/a/one.txt', '/h/b/one.txt', '/h/c/one.txt', '/h/root.txt', '/h/db.sqlite']
   const checkpoints = new FileProviderFullScanCheckpointService({
-    listChildDirectories: async (rootPath) => input.children[rootPath] ?? [],
-    getCompletedPaths: async (paths) =>
-      new Set(paths.filter((path) => (input.completed ?? []).includes(path))),
-    recordCompleted,
-    clearCompleted
+    listChildDirectories: async () => ['/h/a', '/h/b', '/h/c'],
+    getCompletedPaths: async (paths) => new Set(paths.filter((path) => input.completed.has(path))),
+    recordCompleted: async (path) => {
+      input.completed.add(path)
+    },
+    clearCompleted: async (paths) => {
+      for (const path of paths) input.completed.delete(path)
+    }
   })
-  const scanDirectory = vi.fn(async function* (scanPath: string) {
-    if (input.abortAt === scanPath) throw new Error('scan aborted')
-    yield [scannedFile(`${scanPath}/one.txt`)]
-  })
-  const service = new FileProviderFullScanRunService<{ signal?: AbortSignal }>({
-    enterPerfContext: vi.fn(() => vi.fn()),
-    scanDirectory,
-    insertRecords: vi.fn(async (_rootPath, records) => ({ insertedCount: records.length })),
-    emitProgress,
-    yieldAfterScan: vi.fn(async () => {}),
+  const deps: FileProviderFullScanRunDeps<undefined> = {
+    enterPerfContext: () => () => undefined,
+    checkpoints,
+    scanDirectory: async function* (scope, excluded, _context, onStats) {
+      if (input.abortAt === scope) throw new Error('scan aborted')
+      const paths = disk.filter(
+        (path) =>
+          path.startsWith(`${scope}/`) &&
+          ![...(excluded ?? [])].some(
+            (excludedPath) => path === excludedPath || path.startsWith(`${excludedPath}/`)
+          )
+      )
+      const files: ScannedFileInfo[] = paths.map((path) => ({
+        path,
+        name: path.split('/').at(-1)!,
+        extension: '.txt',
+        size: 1,
+        ctime: new Date(1000),
+        mtime: new Date(2000)
+      }))
+      yield files
+      if (input.quality?.[scope] !== 'unknown') {
+        onStats({
+          entryCount: files.length,
+          errorCount: input.quality?.[scope] === 'error' ? 1 : 0
+        })
+      }
+    },
+    insertRecords: async (_root, records) => {
+      persisted.push(...records.map((record) => record.path))
+      if (records.some((record) => record.path === '/h/a/one.txt') && input.publication) {
+        input.entered?.resolve()
+        await input.publication
+      }
+      return { insertedCount: records.length }
+    },
+    emitProgress: () => undefined,
+    yieldAfterScan: async () => undefined,
     now: () => 0,
-    formatDuration: (durationMs) => `${durationMs}ms`,
-    logDebug: vi.fn(),
-    checkpoints
-  })
-  return { service, scanDirectory, recordCompleted, clearCompleted, emitProgress }
+    formatDuration: (duration) => `${duration}ms`,
+    logDebug: () => undefined
+  }
+  return { service: new FileProviderFullScanRunService(deps), persisted, checkpoints }
 }
 
-/**
- * A root used to be one unit of work: no record until the whole tree was walked, so every restart
- * started the home directory over. With checkpoints each top-level child is a unit, the root's
- * own files come last, and the child records are handed back to be cleared once the root's own
- * record exists.
- */
-describe('FileProviderFullScanRunService with checkpoints', () => {
-  it('skips children a previous run completed and walks the rest, then the root alone', async () => {
-    const harness = createHarness({
-      children: { '/h': ['/h/a', '/h/b', '/h/c'] },
-      completed: ['/h/b']
-    })
-    const excludePathsSet = new Set(['/h/db.sqlite'])
-    const result = await harness.service.execute(['/h'], {}, { excludePathsSet })
-
-    const scanned = harness.scanDirectory.mock.calls.map((call) => call[0])
-    expect(scanned).toEqual(['/h/a', '/h/c', '/h'])
-    // The root-only walk excludes every child, so the walker descends into none of them.
-    const rootOnlyExcludes = harness.scanDirectory.mock.calls[2]![1] as Set<string>
-    expect([...rootOnlyExcludes].sort()).toEqual(['/h/a', '/h/b', '/h/c', '/h/db.sqlite'])
-    expect(excludePathsSet.size).toBe(1)
-
-    expect(harness.recordCompleted.mock.calls.map((call) => call[0])).toEqual(['/h/a', '/h/c'])
+describe('fullscan resumable checkpoint state', () => {
+  it('skips previously completed children and root-only traversal does not reinsert their descendants', async () => {
+    const completed = new Set(['/h/b'])
+    const harness = checkpointHarness({ completed })
+    const excluded = new Set(['/h/db.sqlite'])
+    const result = await harness.service.execute(['/h'], undefined, { excludePathsSet: excluded })
+    expect(harness.persisted).toEqual(['/h/a/one.txt', '/h/c/one.txt', '/h/root.txt'])
+    expect([...completed].sort()).toEqual(['/h/a', '/h/b', '/h/c'])
+    expect(result.added).toBe(3)
     expect(result.completedPaths).toEqual(['/h'])
     expect(result.checkpointsToClear.get('/h')).toEqual(['/h/a', '/h/b', '/h/c'])
-    expect(result.added).toBe(3)
+    expect([...excluded]).toEqual(['/h/db.sqlite'])
   })
 
-  it('writes a child checkpoint only after that child is inserted, and keeps them on abort', async () => {
-    const harness = createHarness({
-      children: { '/h': ['/h/a', '/h/b', '/h/c'] },
-      abortAt: '/h/b'
+  it.each(['error', 'unknown'] as const)(
+    'does not checkpoint a child or finish its root after %s scan quality',
+    async (quality) => {
+      const completed = new Set<string>()
+      const harness = checkpointHarness({ completed, quality: { '/h/b': quality } })
+      const result = await harness.service.execute(['/h'], undefined, {
+        excludePathsSet: new Set(['/h/db.sqlite'])
+      })
+      expect([...completed].sort()).toEqual(['/h/a', '/h/c'])
+      expect(result.completedPaths).toEqual([])
+      expect(harness.persisted).toEqual([
+        '/h/a/one.txt',
+        '/h/b/one.txt',
+        '/h/c/one.txt',
+        '/h/root.txt'
+      ])
+      expect(result.added).toBe(4)
+    }
+  )
+
+  it('keeps earlier committed child checkpoints when a later scanner aborts', async () => {
+    const completed = new Set<string>()
+    const harness = checkpointHarness({ completed, abortAt: '/h/b' })
+    await expect(harness.service.execute(['/h'], undefined)).rejects.toThrow('scan aborted')
+    expect([...completed]).toEqual(['/h/a'])
+    expect(harness.persisted).toEqual(['/h/a/one.txt'])
+  })
+
+  it('does not checkpoint an inserted child until its commit publication finishes', async () => {
+    const completed = new Set<string>()
+    const entered = Promise.withResolvers<void>()
+    const publication = Promise.withResolvers<void>()
+    const harness = checkpointHarness({ completed, entered, publication: publication.promise })
+    const operation = harness.service.execute(['/h'], undefined, {
+      excludePathsSet: new Set(['/h/db.sqlite'])
     })
-    await expect(harness.service.execute(['/h'], {})).rejects.toThrow('scan aborted')
-    expect(harness.recordCompleted.mock.calls.map((call) => call[0])).toEqual(['/h/a'])
-    expect(harness.clearCompleted).not.toHaveBeenCalled()
-  })
-
-  it('reports progress per child so a resumed root does not start from zero', async () => {
-    const harness = createHarness({
-      children: { '/h': ['/h/a', '/h/b'] },
-      completed: ['/h/a']
-    })
-    await harness.service.execute(['/h'], {})
-    // 3 units: two children plus the root itself; one child was already done.
-    expect(harness.emitProgress.mock.calls).toContainEqual([1, 3])
-    expect(harness.emitProgress.mock.calls).toContainEqual([2, 3])
-  })
-
-  it('walks a root whole when it has no children to checkpoint', async () => {
-    const harness = createHarness({ children: {} })
-    const result = await harness.service.execute(['/flat'], {})
-    expect(harness.scanDirectory.mock.calls.map((call) => call[0])).toEqual(['/flat'])
-    expect(harness.recordCompleted).not.toHaveBeenCalled()
-    expect(result.checkpointsToClear.size).toBe(0)
-    expect(result.completedPaths).toEqual(['/flat'])
+    try {
+      await entered.promise
+      expect([...completed]).toEqual([])
+      expect(harness.persisted).toEqual(['/h/a/one.txt'])
+      publication.resolve()
+      expect((await operation).completedPaths).toEqual(['/h'])
+      expect([...completed].sort()).toEqual(['/h/a', '/h/b', '/h/c'])
+    } finally {
+      publication.resolve()
+      await operation
+    }
   })
 })

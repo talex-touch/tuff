@@ -37,7 +37,7 @@ export class ReconcileEngine {
     request: Partial<IndexedSourceReconcileRequest> = {}
   ): Promise<IndexedSourceReconcileResult> {
     const sourceId = source.descriptor.id
-    return await this.sourceMutationGate.run(sourceId, async (lease) => {
+    const execute = async (lease?: { id: string }): Promise<IndexedSourceReconcileResult> => {
       if (!source.reconcile) {
         return buildUnsupportedResult(sourceId, request)
       }
@@ -50,7 +50,7 @@ export class ReconcileEngine {
         const result = await source.reconcile({
           ...request,
           sourceId,
-          mutationLeaseId: lease.id,
+          mutationLeaseId: lease?.id,
           onRecordBatch: store
             ? async (batch) => {
                 if (batch.sourceId !== sourceId) {
@@ -58,7 +58,26 @@ export class ReconcileEngine {
                     `Indexed source '${sourceId}' yielded batch for '${batch.sourceId}'`
                   )
                 }
-                await store.applyBatch({ ...batch, mutationLeaseId: lease.id })
+                if (!lease && batch.committedRecordCount !== undefined) {
+                  if (batch.records.length > 0)
+                    throw new Error(`INDEXED_SOURCE_COMMIT_ACK_INVALID:${sourceId}`)
+                  return
+                }
+                const activeLeaseId = lease?.id ?? batch.mutationLeaseId
+                if (activeLeaseId) {
+                  await this.sourceMutationGate.runWithinLease(
+                    sourceId,
+                    activeLeaseId,
+                    async () => await store.applyBatch({ ...batch, mutationLeaseId: activeLeaseId })
+                  )
+                } else {
+                  await this.sourceMutationGate.runWhenIdle(
+                    sourceId,
+                    async (slice) =>
+                      await store.applyBatch({ ...batch, mutationLeaseId: slice.id }),
+                    request.signal
+                  )
+                }
               }
             : request.onRecordBatch,
           onDelta: store
@@ -68,13 +87,34 @@ export class ReconcileEngine {
                     `Indexed source '${sourceId}' yielded delta for '${delta.sourceId}'`
                   )
                 }
-                const summary = await store.applyDelta({ ...delta, mutationLeaseId: lease.id })
+                const activeLeaseId = lease?.id ?? delta.mutationLeaseId
+                const summary = activeLeaseId
+                  ? await this.sourceMutationGate.runWithinLease(
+                      sourceId,
+                      activeLeaseId,
+                      async () =>
+                        await store.applyDelta({ ...delta, mutationLeaseId: activeLeaseId })
+                    )
+                  : await this.sourceMutationGate.runWhenIdle(
+                      sourceId,
+                      async (slice) =>
+                        await store.applyDelta({ ...delta, mutationLeaseId: slice.id }),
+                      request.signal
+                    )
                 if (isSkippedDeltaSummary(summary)) streamedSkippedDeltas += 1
                 else streamedAppliedDeltas += 1
               }
             : request.onDelta
         })
-        let applied = await this.applyReconcileDeltas(result, lease.id)
+        let applied = lease
+          ? await this.applyReconcileDeltas(result, lease.id)
+          : Array.isArray(result.deltas) && result.deltas.length > 0
+            ? await this.sourceMutationGate.runWhenIdle(
+                sourceId,
+                async (slice) => await this.applyReconcileDeltas(result, slice.id),
+                request.signal
+              )
+            : result
         if (streamedAppliedDeltas > 0 || streamedSkippedDeltas > 0) {
           applied = {
             ...applied,
@@ -82,13 +122,13 @@ export class ReconcileEngine {
             skippedDeltas: (applied.skippedDeltas ?? 0) + streamedSkippedDeltas
           }
         }
-        if (source.drainMutations) {
+        if (lease && source.drainMutations) {
           drainAttempted = true
           await source.drainMutations({ leaseId: lease.id, reason: 'reconcile' })
         }
         return { ...applied, completedAt: Date.now() }
       } catch (error) {
-        if (source.drainMutations && !drainAttempted) {
+        if (lease && source.drainMutations && !drainAttempted) {
           drainAttempted = true
           await source
             .drainMutations({ leaseId: lease.id, reason: 'reconcile' })
@@ -96,7 +136,10 @@ export class ReconcileEngine {
         }
         throw error
       }
-    })
+    }
+    return source.mutationScheduling?.reconcile === 'sliced'
+      ? await execute()
+      : await this.sourceMutationGate.run(sourceId, execute, request.signal)
   }
 
   async reconcileSources(sources: IndexedSource[]): Promise<IndexedSourceReconcileResult[]> {

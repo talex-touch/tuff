@@ -1,23 +1,19 @@
 // @vitest-environment jsdom
-import { mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMPOSER_MOTION } from './composer-motion'
 import ComposerChip from './ComposerChip.vue'
 
 let calls = 0
-let reduced = false
 
 beforeEach(() => {
   calls = 0
-  reduced = false
   vi.useFakeTimers()
   Element.prototype.animate = function () {
     calls += 1
     return { cancel: vi.fn(), onfinish: null } as unknown as Animation
   }
   window.matchMedia = ((query: string) => ({
-    matches: reduced && query.includes('reduce'),
+    matches: false,
     media: query
   })) as unknown as typeof window.matchMedia
 })
@@ -28,57 +24,47 @@ afterEach(() => {
   delete Element.prototype.animate
 })
 
-function currentLabel(wrapper: VueWrapper): string {
-  return wrapper.get('.ComposerChip-Label .tx-text-transformer__layer--current').text()
-}
-
 describe('ComposerChip', () => {
-  it('renders prefix, value and suffix in its tone, and swallows a disabled click', async () => {
+  it('renders icon, label and suffix, and swallows a disabled click', async () => {
     const wrapper = mount(ComposerChip, {
-      props: {
-        prefix: '权限 ·',
-        label: '完全允许',
-        suffix: '',
-        tone: 'danger',
-        icon: 'i-ri-shield-flash-line'
-      }
+      props: { label: 'gpt-5.6-luna', suffix: '高', icon: 'i-ri-shield-line' }
     })
-    expect(wrapper.classes()).toEqual(expect.arrayContaining(['is-danger', 'has-icon']))
-    expect(wrapper.get('.ComposerChip-Prefix').text()).toBe('权限 ·')
-    expect(currentLabel(wrapper)).toBe('完全允许')
-    expect(wrapper.find('.ComposerChip-Suffix').exists()).toBe(false)
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['ComposerChip', 'has-icon']))
+    expect(wrapper.get('.ComposerChip-Icon span').classes()).toContain('i-ri-shield-line')
+    expect(wrapper.get('.ComposerChip-Label').text()).toBe('gpt-5.6-luna')
+    expect(wrapper.get('.ComposerChip-Suffix').text()).toBe('· 高')
+
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('click')).toHaveLength(1)
 
     await wrapper.setProps({ disabled: true })
     expect(wrapper.attributes('aria-disabled')).toBe('true')
     await wrapper.trigger('click')
-    expect(wrapper.emitted('click')).toBeUndefined()
+    expect(wrapper.emitted('click')).toHaveLength(1)
   })
 
-  it('lets the icon lead: the label swaps 50ms later, and colour eases only while it morphs', async () => {
-    const wrapper = mount(ComposerChip, { props: { label: 'Tuff 智能', tone: 'muted' } })
-    await wrapper.setProps({ label: 'Claude Opus', suffix: '高' })
-    expect(wrapper.classes()).toContain('is-morphing')
-    expect(currentLabel(wrapper)).toBe('Tuff 智能')
+  it('has no prefix, tint or ring of its own: danger and open are the only states it wears', async () => {
+    const wrapper = mount(ComposerChip, { props: { label: '自动审阅' } })
+    expect(wrapper.find('.ComposerChip-Prefix').exists()).toBe(false)
+    expect(wrapper.classes()).not.toContain('is-danger')
+    expect(wrapper.classes()).not.toContain('is-open')
 
-    vi.advanceTimersByTime(COMPOSER_MOTION.chip.labelDelayMs)
-    await nextTick()
-    expect(currentLabel(wrapper)).toBe('Claude Opus')
-    expect(wrapper.get('.ComposerChip-Suffix').text()).toContain('高')
-
-    const { labelDelayMs, labelFadeMs, widthMs } = COMPOSER_MOTION.chip
-    vi.advanceTimersByTime(Math.max(labelFadeMs, widthMs))
-    await nextTick()
-    expect(wrapper.classes()).not.toContain('is-morphing')
-    expect(labelDelayMs).toBe(50)
+    await wrapper.setProps({ label: '完全允许', danger: true, open: true })
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['is-danger', 'is-open']))
   })
 
-  it('lands a change at once under reduced motion', async () => {
-    reduced = true
-    const wrapper = mount(ComposerChip, { props: { label: '禁用', tone: 'muted' } })
-    await wrapper.setProps({ label: '自动审阅', tone: 'info' })
+  it('lands a new value in the same frame: nothing waits on a timer and nothing tweens', async () => {
+    const wrapper = mount(ComposerChip, {
+      props: { label: '自动审阅', icon: 'i-ri-shield-check-line' }
+    })
+
+    await wrapper.setProps({ label: '禁用', icon: 'i-ri-shield-line' })
+
+    expect(wrapper.get('.ComposerChip-Label').text()).toBe('禁用')
+    expect(wrapper.get('.ComposerChip-Icon span').classes()).toContain('i-ri-shield-line')
+    expect(wrapper.findAll('.ComposerChip-Icon span')).toHaveLength(1)
     expect(wrapper.classes()).not.toContain('is-morphing')
-    expect(wrapper.classes()).toContain('is-info')
-    expect(currentLabel(wrapper)).toBe('自动审阅')
+    expect(vi.getTimerCount()).toBe(0)
     expect(calls).toBe(0)
   })
 })

@@ -4,7 +4,7 @@
 The docs sidebar (app/components/DocsSidebar.vue) groups component pages purely by
 this field, so it is the single source of truth for sidebar structure.
 
-Categories roll up into seven suites via DocsSidebar's CATEGORY_SUITE_MAP:
+Categories roll up into eight suites via app/utils/docs-suites.ts:
 
 - concepts 理念: Foundations (index — doubles as the Concepts overview —, foundations, utils)
 - templates 模板: TemplateApp, TemplateContent, TemplateAi, TemplateData
@@ -13,8 +13,11 @@ Categories roll up into seven suites via DocsSidebar's CATEGORY_SUITE_MAP:
 - ai   AI 套件:  AiSuite, AiChat, AiAgent, AiReasoning, AiContext
 - data 数据:     DataSuite, Charts, Visualization
 - flow 流程:     FlowSuite, Flow
+- motion 动效: MotionSuite, MotionButtons, MotionCards, MotionCarousels,
+  MotionLoaders, MotionCharts, MotionText, MotionPhysics, MotionInteraction,
+  MotionToggles, MotionTransitions
 
-The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
+The suite assignment originated in retired task 08-30-docs-suite-split (see the frozen task index);
 keep this file, DocsSidebar.vue and app/utils/docs-suites.ts in sync — a doc on
 disk with no entry here makes this script exit with an error. The tuffex entry
 barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits (Visualization
@@ -74,6 +77,7 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     "TemplateAi": [
         "template-agent-chat",
+        "template-ai-answer",
         "template-research",
     ],
     "TemplateData": [
@@ -205,8 +209,12 @@ TAXONOMY: dict[str, list[str]] = {
         "search-panel",
         "markdown-editor",
         "code-editor",
+        "terminal",
         "virtual-list",
         "version-capsule",
+        "motion-form",
+        "motion-control",
+        "motion-metric",
     ],
     "Effects": [
         "glass-surface",
@@ -301,6 +309,7 @@ TAXONOMY: dict[str, list[str]] = {
         "echart-charts",
         "timeseries-chart",
         "maps",
+        "mono-chart",
         "sankey-chart",
         "custom-chart",
     ],
@@ -315,6 +324,42 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     "Flow": [
         "flowchart",
+    ],
+    # ── suite: motion 动效 ────────────────────────────────────────────────
+    "MotionSuite": [
+        "motion-suite",
+    ],
+    "MotionButtons": [
+        "motion-button",
+    ],
+    "MotionCards": [
+        "card-spread",
+    ],
+    "MotionCarousels": [
+        "carousel-3d",
+        "flip-book",
+    ],
+    "MotionLoaders": [
+        "motion-loader",
+    ],
+    "MotionCharts": [
+        "dither-chart",
+    ],
+    "MotionText": [
+        "motion-text",
+    ],
+    "MotionPhysics": [
+        "physics-motion",
+    ],
+    "MotionInteraction": [
+        "motion-dock",
+        "motion",
+    ],
+    "MotionToggles": [
+        "motion-toggle",
+    ],
+    "MotionTransitions": [
+        "motion-transition",
     ],
 }
 

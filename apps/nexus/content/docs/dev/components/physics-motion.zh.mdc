@@ -1,0 +1,192 @@
+---
+title: "物理动效"
+description: "保留 61 种独立的折叠、笔画、堆叠和机械运动结构。"
+category: MotionPhysics
+status: beta
+since: 0.6.3
+tags: [motion, physics, geometry]
+syncStatus: reviewed
+verified: false
+---
+
+## 概述
+
+`TxPhysicsMotion` 为每个非加载器 whimsical 来源保留独立场景。纸张使用真实铰链和裁切，笔画保留原始 SVG 坐标。机械结构各自保留支点、运动向量、缩放顺序和错时节奏。调用方数据驱动的 Dock 由 `TxMotionDock` 承载。CSS 加载器与 UI Kit 控件在各自组件页中说明。
+
+每个场景都声明可读的静止终态。暂停、禁用、离开可见区域、隐藏页面、KeepAlive 停用或减少动态效果时，组件取消原生动画和计时器，并显示这个终态。装饰播放不会播报或模拟业务完成。
+
+## 用法
+
+### 完整目录
+
+演示呈现全部 61 种具名场景，可以按原始 ID 或来源名称筛选。每个画面都有可用键盘操作的重放按钮。所选场景还提供触发、循环、速度、内容和重放控制。
+
+:::TuffDemoWrapper{demo="PhysicsMotionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  const replayKey = ref(0)
+  </script>
+
+  <template>
+    <TxButton @click="replayKey++">重放</TxButton>
+    <TxPhysicsMotion
+      variant="anim-origami-envelope"
+      trigger="click"
+      :loop="false"
+      :replay-key="replayKey"
+      :labels="{ replay: '重放信封', content: '预览' }"
+    >
+      信封预览
+    </TxPhysicsMotion>
+  </template>
+---
+:::
+
+### 播放和触发
+
+`auto` 在画面进入可见范围时启动。`hover` 支持指针进入和键盘聚焦重放。`click` 使用原生按钮，支持 Enter 和空格。`manual` 只接受 `replay()` 或变化的 `replayKey`。重放直接替换旧动画，不强制读取布局来重启动画。
+
+`loop=true` 保留上游自动循环预览，包括 hover 和 click 场景。只需输入触发的单次动画时，设置 `loop=false`。各场景按原始 `useLoopFlg` 节奏重启；内部轨迹保留不同的时长，例如 1 秒的节拍器和 4 秒的齿轮轨迹。单次播放在最长轨迹结束后显示静止终态。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `PhysicsMotionVariant` | `'anim-card-peel'` | 下方来源映射中的准确 ID。 |
+| `trigger` | `'auto' \| 'hover' \| 'click' \| 'manual'` | `'auto'` | 可见时自动播放、输入重放或仅 API 播放。 |
+| `loop` | `boolean` | `true` | 使用场景自身的重启节奏和内部轨迹时长。 |
+| `paused` | `boolean` | `false` | 取消播放并显示静止终态。已排队的重放可在恢复后启动。 |
+| `disabled` | `boolean` | `false` | 停止动画，并禁用原生交互按钮。 |
+| `replayKey` | `string \| number` | — | 修改此值可在不重新挂载组件时重放。 |
+| `speed` | `number` | `1` | 播放倍率，限制在 0.1～5；非有限值按 1 处理。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 96、128、160 或 192 px 的舞台，几何按比例缩放。 |
+| `ariaLabel` | `string` | 来源名称或 `labels.replay` | 可访问名称。hover/click 场景是原生按钮，其余场景是图像。 |
+| `labels` | `Partial<PhysicsMotionLabels>` | 见下表 | 本地化操作文案和画面内容。 |
+
+#### 文案
+
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `replay` | `'Replay animation'` | 交互舞台的默认可访问名称。 |
+| `content` | `'Open'` | 闸门和水平滑门实际揭示的文本。 |
+| `north` | `'N'` | 磁极北端方块标签。 |
+| `south` | `'S'` | 磁极南端方块标签。 |
+
+### 事件
+
+| 事件 | 载荷 | 说明 |
+| --- | --- | --- |
+| `play` | `PhysicsMotionVariant` | 原生播放或来源循环重启实际开始。 |
+| `finish` | `PhysicsMotionVariant` | 最长单次轨迹结束，显示静止终态。循环和取消不触发此事件。 |
+| `covered` | `PhysicsMotionVariant` | Tsumiki 来源在 1400 ms 的实际覆盖节点，按速度调整。它不代表保存、导航或网络成功。 |
+
+### 插槽和方法
+
+| 项目 | 契约 |
+| --- | --- |
+| `default` 插槽 | 可选说明文字，位于交互舞台外，使用稳定的 Vue ID 关联。 |
+| `replay()` | 替换当前播放。失活时保留请求，等恢复后执行；减少动态效果时保持静止终态。 |
+| `reset()` | 取消全部轨迹和排队请求，显示静止终态。 |
+| `playing` | 暴露的布尔值，表示实例当前是否持有正在播放的原生轨迹。 |
+
+### 导出
+
+`@talex-touch/tuffex/physics-motion` 导出 `TxPhysicsMotion`、可安装的 `PhysicsMotion`、`TxPhysicsMotionInstance`、`PhysicsMotionProps`、`PhysicsMotionEmits`、`PhysicsMotionLabels`、`PhysicsMotionTrigger`、`PhysicsMotionVariant` 和 `PhysicsMotionSource`。
+
+`PHYSICS_MOTION_VARIANTS` 是完整的只读 ID 元组。`PHYSICS_MOTION_SOURCES` 为每个变体提供真实映射，包含 `variant`、`symbol`、`file`、`period` 和 `behavior`。`PHYSICS_MOTION_DEFAULT_LABELS` 提供上表默认文案。
+
+### CSS 变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `--tx-physics-accent` | 可选强调色，默认使用 `--tx-color-primary`。关联色调与宿主表面和文字 token 混合生成。 |
+| `--tx-physics-size` / `--tx-physics-scale` | 舞台边长和无量纲画面倍率，由 `size` 同时驱动。 |
+
+纸张、线条、底色和文字都使用宿主的 `--tx-*` token。悬停颜色立即变化。
+
+## 来源映射
+
+下表记录来源的整场重启间隔，不用统一时长替代各条轨迹。全部链接固定到上游提交 `43c29ce9cdd16459e3eab4992381b8d35b38776a`。
+
+| 变体 | 原始名称 | 重启间隔 | 独立结构和轨迹 | 固定版本实现 |
+| --- | --- | --- | --- | --- |
+| `anim-card-peel` | CardStackPeel | 3000 ms | 顶层卡片向下剥离 24 px，并绕顶边透视翻转 25°，露出底卡。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-bookmark-corner` | BookmarkCornerPeel | 3000 ms | 右上角沿折线裁开，折角从右上方滑入。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-elastic-tag` | ElasticTagSnap | 3000 ms | 行李牌向下拉伸，再向上回弹并衰减到挂点。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `bookmark-stamp-drop` | BookmarkStampDrop | 3000 ms | 印章吊牌从上方落下，按正负角度交替摆动并收敛。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-split-gate` | SplitGateReveal | 3000 ms | 上下两块闸门分别沿纵轴移开，露出调用方文本。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-shutter-slide` | ShutterSlide | 3000 ms | 左右半幅面板沿横轴移开自身宽度的 95%。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `diagonal-drape` | DiagonalDrape | 3000 ms | 布面沿对角线裁开，露出底色，拉绳销保持在右上角。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-origami-envelope` | OrigamiEnvelopeUnfold | 3000 ms | 三角信封盖绕顶部铰链翻转 180°。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-card-dispenser` | SmartCardDispenser | 3000 ms | 证件卡从设备槽后向上弹出 38 px。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-sticky-note` | StickyNotePeel | 3000 ms | 便签从装订顶边抬起，翻转到 90° 时离开画面。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-receipt-tape` | ReceiptTapePrint | 3000 ms | 收据按四级打印节奏向下送纸，停留后收回。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-roller-blind` | RollerBlindDrop | 3000 ms | 卷帘从固定横杆向下展开，再回卷。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-scroll-canvas` | ScrollCanvasUnroll | 3000 ms | 卷轴画布从中间向两侧展开，左右滚轴随边缘移动。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `flag-pennant-unfurl` | FlagPennantUnfurl | 3000 ms | 三角旗从固定旗杆向右展开。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `anim-ribbon-banner` | RibbonBannerSlide | 3000 ms | 胶囊横幅从中间向两侧展开，保留两个内部标记。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-page-turn` | PageTurnCurl | 3000 ms | 纸页向上升起 60 px，底角逐渐展开，45° 倾斜回到平面。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `area1` | Area1 | 2200 ms | 悬挂布面在两根滚轴之间展开，展开和收起都带高度过冲。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Area1.tsx) |
+| `tissue` | Tissue | 3000 ms | 前一张纸巾向上抽走，下一张从盒口推出。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Tissue.tsx) |
+| `curtain` | Curtain | 3200 ms | 中心拉链上行，两侧镜像布面弯曲让开，拉环随移动摆动。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Curtain.tsx) |
+| `anim-tension-capsule` | KineticTensionCapsule | 2800 ms | 橡胶胶囊横向拉长、纵向压缩再回弹，内部两个节点随张力分离。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/KineticTensionCapsule.tsx) |
+| `area6` | Area6 | 1400 ms | 单色胶囊先加宽，再缩过静止宽度，并二次回弹。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Area6.tsx) |
+| `anim-droplet-squish` | DropletSquish | 2400 ms | 液滴在扁平和拉长轮廓之间变形，上下端圆角独立变化。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-segmented-link` | SegmentedLinkStretch | 2400 ms | 三个胶囊关节的两端各向外移动 14 px，再回到链条位置。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-blind-pull` | BlindPull | 2800 ms | 五片百叶沿纵轴逐片分离，拉绳和拉头一起下移。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-rotating-louvers` | RotatingLouvers | 3000 ms | 四片百叶以不同延迟各自翻转 75°。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-iris-shutter` | GeometricIrisShutter | 3000 ms | 方形快门围绕圆形中心旋转 60° 并展开。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `radial-aperture` | RadialAperture | 3000 ms | 圆形外框内的圆角方形光圈旋转 90° 并放大。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-bubble-level` | PendulumBubbleLevel | 3000 ms | 水平仪气泡穿过中心刻线，左右过冲并逐步减幅。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-kinetic-metronome` | KineticTickingMetronome | 2000 ms | 带配重的节拍器杆绕底部支点往复摆动 ±35°。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `newtons-cradle` | NewtonsCradle | 2400 ms | 牛顿摆左右端球在周期的前后半段交替摆动。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-orbital-gimbal` | NestedOrbitalGimbal | 3000 ms | 外方环按 4 秒顺时针、内圆环按 2 秒反向的轨迹转动；整体按来源每 3 秒重启。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `gyroscope-rings` | GyroscopeRings | 3000 ms | 圆环绕固定核心完成 X 轴整周、Y 轴半周透视旋转。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-slinky-coil` | SlinkyCoil | 2400 ms | 五层横向弹簧线圈从底部锚点向上伸展并压缩。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-squash-sphere` | SquashStretchSphere | 2200 ms | 橡胶球落地压扁，反弹拉长，再回到发射高度。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-gelatin-wobble` | GelatinWobble | 2200 ms | 方形果冻落地后，按六级衰减节奏上下移动并改变宽高比。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-domino-chain` | DominoChain | 3000 ms | 五张骨牌依次绕右下角翻倒 72°，随后复位。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-card-cascade` | CardDeckCascade | 3000 ms | 三张牌绕底部向两侧扇开 ±22°，同时横向移动 ±24 px。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `fan-fold` | FanFold | 2800 ms | 五根扇骨围绕共同铆钉展开，最外两根达到 ±40°。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-gear-step` | GearToothStep | 3000 ms | 两个带齿圆环按 4 秒轨迹同步反向转动；整体按来源每 3 秒重启。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-magnetic-disks` | MagneticDisks | 2400 ms | 两个圆盘伸长相吸，接触时压缩，再回弹分离。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-dual-magnet` | DualMagnetDipole | 2400 ms | 标有南北极的方块将间距从 28 px 收到 4 px，整体同时放大。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-compass-deflect` | CompassNeedleDeflect | 2600 ms | 双色罗盘指针先偏转 65°，再过冲到 −45° 并回正。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `balance-scale` | BalanceScale | 3200 ms | 左右砝码错时落下，天平横杆产生衰减倾斜。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-sudden-brake` | SuddenBrake | 2800 ms | 车辆从右侧减速进场，随后绕左轮向后倾斜并收敛。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-rolling-tumble` | RollingTumble | 2600 ms | 立方体以 2200 ms 轨迹逐步翻滚，按来源每 2600 ms 重启。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-inertia-skid` | InertiaSkidStop | 2800 ms | 滑块在落点两侧过冲，剪切角随摩擦反向并归零。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-circuit-trace` | CircuitTraceDraw | 3000 ms | 折线 PCB 轨迹在两个固定端点之间绘制，再逐段擦除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-hex-lattice` | HexagonLatticeDraw | 3000 ms | 六边形线框沿周长绘制并擦除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-stroke-waveform` | StrokeWaveform | 3000 ms | 原始心电波形从左向右绘制，再逐步擦除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `stroke-spiral` | StrokeSpiral | 3000 ms | 环形笔迹绘制时旋转 180°，后半周旋转时擦除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `kakikaki` | Kakikaki | 3000 ms | 原始七点书法折线沿完整笔画绘制并擦除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Kakikaki.tsx) |
+| `anim-neon-sign` | NeonSignDraw | 2800 ms | 另一条霓虹脉冲折线在 240 ms 内画出，停留后用 1200 ms 清除。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-prism-stack` | PrismBlockStack | 3000 ms | 三层棱块从宽底座到窄顶层错时落下并堆叠。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-modular-tile` | ModularTileSnap | 3000 ms | 两个旋转模块依次就位，分别带圆形和方形嵌件。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-pyramid-build` | PyramidBlockBuild | 3000 ms | 三、二、一块的金字塔从底层到顶层错时放大组装。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `tetris-block-settle` | TetrisBlockSettle | 3000 ms | 真正的三格 L 形积木落在固定的三格底座上。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `anim-shutter-blocks` | ShutterStepBlocks | 2800 ms | 四条横向片层从左向右展开，每层延迟 80 ms。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `magnetic-orbit-particle` | MagneticOrbitParticle | 3000 ms | 卫星节点以 2600 ms 轨迹绕磁芯转动，按来源每 3000 ms 重启。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `magnetic-grid-repel` | MagneticGridRepel | 2600 ms | 四个磁场节点沿各自对角线向外散开并返回。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `tsumiki` | Tsumiki | 3000 ms | 五根积木条以交替角度落下，在 1400 ms 覆盖完成，再按反向顺序离场。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Tsumiki.tsx) |
+| `bookmark` | Bookmark | 3600 ms | 缺口书签层分批透视落下和抬升；圆形底色和四个星光依次出现。 | [源码](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Bookmark.tsx) |
+
+## 最佳实践
+
+- 按交互选择几何结构。纸张揭示、机械转轴和笔画绘制保留不同载体；修改 `variant` 会改变真实结构。
+- 提供本地化 `labels` 和符合上下文的 `ariaLabel`。业务内容放在说明插槽或调用方界面中。
+- 输入反馈使用 `loop=false`。只有明确需要装饰预览时才自动循环。
+- 业务状态由真实数据驱动。`finish` 和 `covered` 只表示画面的时间节点。
+- 可见性和减少动态效果由组件管理。调用方无需再建计时器重放来源节奏。
+- 目录直接使用 `PHYSICS_MOTION_SOURCES`，不维护另一份 ID 列表。
+
+## 技术实现
+
+组件使用原生 HTML/SVG 和 Web Animations。每个来源保留自身关键帧、裁切和嵌套支点。弹性段复用 liquid 的 `resolveTransition` 编译器，没有第二套积分器。宽高揭示通过裁切和边缘平移保持内部标记不被拉伸。共享 `useMotionActivity` 控制全部动画和场景计时器。组件不需要 SVG defs 或全局计数器；说明文字的标识使用 Vue `useId`。
+
+按 MIT 许可改编。Copyright (c) 2026 SYED  SUBHAN UDDIN。本页记录实现契约，不声称浏览器或包级验证已完成。

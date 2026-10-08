@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 const { locale } = useI18n()
 
 const value = ref(30)
+const playgroundActive = ref(true)
 
 type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
 
@@ -211,7 +212,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
+  <div v-if="locale === 'zh'" class="not-prose">
       <div style="display: flex; flex-direction: column; gap: 12px; width: 560px;">
         <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -547,8 +548,13 @@ watch(
             Playground
           </div>
 
+          <label style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+            <input v-model="playgroundActive" type="checkbox">
+            观测与动效活动（暂停后原生值仍可输入）
+          </label>
           <TxSlider
             v-model="value"
+            :active="playgroundActive"
             :min="0"
             :max="100"
             :step="1"
@@ -576,7 +582,7 @@ watch(
         </div>
       </div>
   </div>
-  <div v-else>
+  <div v-else class="not-prose">
       <div style="display: flex; flex-direction: column; gap: 12px; width: 560px;">
         <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -912,8 +918,13 @@ watch(
             Playground
           </div>
 
+          <label style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+            <input v-model="playgroundActive" type="checkbox">
+            Observers and motion active (native value input remains available)
+          </label>
           <TxSlider
             v-model="value"
+            :active="playgroundActive"
             :min="0"
             :max="100"
             :step="1"

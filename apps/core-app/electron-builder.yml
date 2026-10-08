@@ -12,6 +12,7 @@ asarUnpack:
   - '**/*.dylib'
   - '**/*.dll'
   - '**/*.so'
+  - '**/tuff-native-translation'
   - '**/node_modules/sharp/**'
   - '**/node_modules/@img/**'
   - '**/node_modules/ffmpeg-static/**'
@@ -23,6 +24,8 @@ directories:
   output: dist
 files:
   - out/**
+  # LGPL delivery for @talex-touch/pi-desktop-reuse ships as a resource (see extraResources).
+  - '!out/legal/**'
   - resources/**
   - '!resources/licenses/**'
   - package.json
@@ -89,6 +92,13 @@ extraResources:
     to: licenses/fd-LICENSE-MIT.txt
   - from: resources/licenses/fd-LICENSE-APACHE.txt
     to: licenses/fd-LICENSE-APACHE.txt
+  # LGPL 4(d)(0) delivery produced by the electron-vite build (scripts/legal/pi-desktop-reuse-legal.cjs);
+  # beforePack refuses to pack when it is missing or stale, afterPack checks the packaged copy.
+  - from: out/legal/pi-desktop-reuse
+    to: legal/pi-desktop-reuse
+    filter:
+      - '**/*'
+      - '!.tuff-legal-owned'
 
 win:
   target:
@@ -181,4 +191,5 @@ publish:
   provider: github
   owner: talex-touch
   repo: tuff
+beforePack: scripts/build-target/before-pack.js
 afterPack: scripts/build-target/after-pack.js

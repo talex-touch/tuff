@@ -1,0 +1,116 @@
+---
+title: "MotionToggle"
+description: "Twelve controlled switch/action styles with real models, icon feedback and caller-owned counters."
+category: MotionToggles
+status: beta
+since: 0.6.3
+tags: [motion, toggle, action, accessibility]
+verified: false
+---
+
+## Usage
+
+### Controlled actions
+
+Every directory variant has a real controlled model. Like and repost actions also emit reversible counter changes. The demo shows all twelve directory IDs plus the registry's `classic-toggle`, external model reset, sizes, disabled behavior, caller-owned tab panels and optional haptic results.
+
+:::TuffDemoWrapper{demo="MotionToggleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionToggle } from '@talex-touch/tuffex/motion-toggle'
+  const liked = ref(false)
+  const likes = ref(42)
+  const period = ref('daily')
+  const periods = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+  ]
+  </script>
+
+  <template>
+    <TxMotionToggle v-model="liked" v-model:count="likes" variant="t-like" label="Like" />
+    <output>{{ liked }} · {{ likes }}</output>
+    <TxMotionToggle v-model="period" variant="t-pill" :options="periods" label="Reporting period" />
+    <output>{{ period }}</output>
+  </template>
+---
+:::
+
+### Named variants
+
+| ID | Independent feedback |
+| --- | --- |
+| `t-bounce` | A moving thumb with two overshoot rebounds after the first actual change. |
+| `t-solid` | Contrasting solid track and a crisp 150ms thumb translation. |
+| `t-rect` | Squarish track/thumb with a 500 stiffness / 30 damping spring. |
+| `t-circle` | Larger circular pill with 450 stiffness / 25 damping momentum. |
+| `t-bookmark` | Filled bookmark, spring pop and caller-provided off/on labels. |
+| `t-like` | Filled heart, spring burst, radial particles and reversible count update. |
+| `t-dislike` | Highlighted thumb-down state with a brief −15° shake. |
+| `t-repost` | A 180° icon rotation and reversible count update. |
+| `t-pill` | Caller-provided options with a measured sliding spring indicator and keyboard selection. |
+| `t-morph` | Lock/unlock icon swap and 180° rotating thumb. |
+| `t-check` | SVG checkmark path draw after moving the thumb. |
+| `t-theme` | Sun/moon swap with a 360° thumb turn and state-driven background change. It does not mutate the document theme. |
+| `classic-toggle` | Registry-only 64×36px pill at `md`, 28px travel and 500 stiffness / 30 damping spring. |
+
+### Best Practices
+
+- Use boolean `v-model` for switches and actions; use a string/number model with matching `options` for `t-pill`.
+- Supply `label`. Icon-only switches have a native `button` root with switch semantics; action buttons use `aria-pressed`. Enter and Space activate the same native click path.
+- Use `v-model:count` for like/repost when displaying counts. Activating adds one; undoing subtracts one. The caller owns the starting value and persistence. No timer pretends the action was saved remotely.
+- `t-pill` uses a tablist, roving focus, Arrow keys and Home/End. Disabled options are skipped. If the caller renders tab panels, give options their matching `panelId`; keep panel content and data fetching outside this primitive.
+- `enabled=false` disables only motion. It does not disable model operations. Use `disabled` to block activation.
+- Reduced motion preserves the final thumb/icon/checkmark and model changes, with no decorative burst. All motion resources are cancelled when inactive.
+- Haptics are opt-in. An accepted browser request is not proof of physical vibration; unsupported desktop browsers report their actual capability.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `modelValue` | `boolean \| string \| number` | `false` | Controlled state. `t-pill` selects matching string/number option values. |
+| `variant` | `MotionToggleVariant` | `'t-bounce'` | All IDs above; exported as `MOTION_TOGGLE_VARIANTS`. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Component size. Native source geometry is retained at `md`. |
+| `disabled` | `boolean` | `false` | Blocks pointer and keyboard activation. |
+| `label` | `string` | Required | Accessible name. Also the action-label fallback when off/on labels are omitted. |
+| `onLabel` | `string` | `label` | Active action text. |
+| `offLabel` | `string` | `label` | Inactive action text. |
+| `count` | `number` | — | Caller-owned displayed count for like/repost; enables `update:count`. |
+| `options` | `MotionToggleOption[]` | `[]` | `{ value: string \| number, label: string, disabled?: boolean, panelId?: string }`. No business labels are hard-coded. |
+| `enabled` | `boolean` | `true` | Enables animations, independently of model operation. |
+| `haptic` | `false \| MotionHapticType` | `false` | Optional light/medium/heavy/success/warning/error request. |
+| `transition` | `Transition` | Source-specific shared spring | Overrides thumb and tab-indicator transition through the existing Liquid spring compiler. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `update:modelValue` | `MotionToggleValue` | Next boolean or selected option value. |
+| `update:count` | `number` | Like/repost count after +1 on activation or −1 on undo. Only emitted when a count is supplied. |
+| `change` | `MotionToggleValue` | Same new model after an actual activation. Unchanged option selection emits nothing. |
+| `activate` | `MotionToggleActivation` | `{ value, previous, variant, count? }`; no implied remote success. |
+| `haptic` | `MotionHapticResult` | `{ supported, accepted }` after an opt-in request. `accepted` reflects the browser return value only. |
+
+### Slots
+
+| Name | Scope | Description |
+| --- | --- | --- |
+| `default` | `{ active: boolean, count?: number }` | Action content; replaces the default text/count, not the model operation. |
+| `icon` | `{ active: boolean }` | Replaces bookmark/heart/dislike/repost or lock/theme icons. |
+| `thumb` | `{ active: boolean }` | Content inside switches without lock/theme/checkmark icons. |
+| `option` | `{ option, index, active }` | Caller-rendered tab label. Keep it non-interactive inside the native tab button. |
+
+## Overview
+
+All operations are controlled. External changes update thumb, icon and tab state; the component never stores a second business model. Switches use `role="switch"` and `aria-checked`; actions use native pressed-button semantics; tabs expose `aria-selected` and their caller-supplied panel relationship. Like/repost counts are derived only from an actual state toggle.
+
+The internal IconSwap is shared with `TxMotion`, preserving keyed scale/blur/opacity transitions. All spring configuration is resolved by the existing Liquid engine. WAAPI feedback and particle work are cancelled on suspension; tab measurement observers and resize listeners follow lifecycle. Haptic requests reuse the existing vibration utility and do not promise macOS desktop vibration.
+
+## Technologies
+
+Adapted from Amicro's MIT `AnimatedToggle`, the twelve toggle catalog entries, IconSwap and the registry's classic-toggle source. Copyright (c) 2026 SYED  SUBHAN UDDIN. Native Vue/browser controls replace React/Motion. The upstream double-bounce CSS class has no supplied stylesheet; this port supplies explicit two-rebound keyframes instead of preserving an inert class. Final integration checks and real-browser acceptance are owned by the build coordinator, not claimed by this page.

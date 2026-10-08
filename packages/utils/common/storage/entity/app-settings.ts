@@ -219,9 +219,15 @@ const _appSettingOriginData = {
   assistant: {
     enabled: false,
   },
+  betaFeatures: {
+    screenshot: false,
+    voiceDictation: false,
+    voiceQuickEdit: false,
+    omniPanel: false,
+  },
   omniPanel: {
     enableShortcut: false,
-    enableMouseLongPress: true,
+    enableMouseLongPress: false,
     mouseLongPressDurationMs: 600,
     autoMountFirstFeatureOnPluginInstall: true,
     featureHub: {

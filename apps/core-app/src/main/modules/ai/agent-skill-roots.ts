@@ -33,8 +33,8 @@ interface AgentSkillRootSpec {
 }
 
 /**
- * Deliberately the layout each agent documents for itself, not a guess: these are the same
- * directories the platform table in `.agents/skills/trellis-meta` writes into per platform.
+ * Deliberately the layout each agent documents for itself, not a guess: platform-native
+ * configuration roots and shared Skill discovery roots are represented separately.
  */
 const AGENT_SKILL_ROOT_SPECS: readonly AgentSkillRootSpec[] = [
   { id: 'codex', segments: ['.codex', 'skills'], envVar: 'CODEX_HOME' },

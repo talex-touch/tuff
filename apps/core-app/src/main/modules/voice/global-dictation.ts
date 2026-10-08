@@ -41,9 +41,9 @@ type VoiceGesture = 'dictation' | 'quickEdit'
  * Global voice gestures: system-wide shortcuts that drive the canonical Voice Session.
  *
  * The session owner performs transcription, polish or rewrite, target validation and main-owned
- * delivery for the frontmost app. Both shortcuts stay disabled until the user enables them in the
- * shortcut settings — a global microphone shortcut is invasive, and Quick Edit also reads the
- * current selection, so neither of them may arm itself.
+ * delivery for the frontmost app. Both require explicit Beta opt-in in Advanced Settings and an
+ * enabled shortcut — global microphone capture is invasive, and Quick Edit also reads the current
+ * selection, so neither may arm itself.
  */
 export class GlobalDictationController {
   private activeSessionId: string | null = null

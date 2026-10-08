@@ -31,6 +31,7 @@ import type {
   AiDelegationNode,
   AiDelegationPlan
 } from '@talex-touch/utils/types/ai-orchestrator'
+import type { PiWorkspaceAuthority } from './pi-agent-runtime-host'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
@@ -50,13 +51,15 @@ import {
   sanitizeToolOutputForRuntime
 } from './pi-agent-runtime-host'
 import {
+  AI_RUN_USAGE_LIMIT_REACHED,
   approvalRequirementFromControlError,
   createApprovalRequiredError,
   createRunInterruptedError,
   INTERRUPTED_TOOL_CALL_PREFIX,
   isInterruptedToolCallControlError,
   isRunCancelledControlError,
-  isRunInterruptedControlError
+  isRunInterruptedControlError,
+  isRunUsageLimitedError
 } from './pi-agent-runtime-control-error'
 import { formatStableToolError, projectToolErrorCode } from './tool-error-projection'
 
@@ -323,6 +326,7 @@ const RUN_METADATA_KEYS = [
   'allowedToolRefs',
   'requestInputPresent',
   'requestInputDigest',
+  'workspaceExecution',
   'profileAuthorityVersion',
   'profileAuthorityDigest',
   'automationPolicyVersion',
@@ -479,8 +483,10 @@ export class AiCliOrchestrator {
   private readonly trustedAllowedToolIds = new Map<string, readonly string[]>()
   private readonly trustedAutomationPolicies = new Map<string, AiAutomationPolicy>()
   private readonly agentTaskRunIds = new Map<string, string>()
+  private readonly workspaceAuthorities = new Map<string, PiWorkspaceAuthority>()
   private readonly runtimeHost = new PiAgentRuntimeHost({
     onEvent: async (event) => {
+      await this.workspaceAuthorities.get(event.runId)?.onEvent?.(event)
       const payload = projectPiEvent(event.type, event.payload)
       if (!payload) return
       await this.withRunWriteLease(event.runId, async () => {
@@ -881,12 +887,14 @@ export class AiCliOrchestrator {
     this.volatileRunInputs.delete(runId)
     this.trustedAllowedToolIds.delete(runId)
     this.trustedAutomationPolicies.delete(runId)
+    this.workspaceAuthorities.delete(runId)
   }
 
   private async interruptPendingRun(
     run: AiOrchestratorRunRecord,
     publicError: string
   ): Promise<AiOrchestratorRunRecord> {
+    const workspace = this.workspaceAuthorities.get(run.id)
     const interruptedAt = Date.now()
     const metadata = projectPersistedRunMetadata(run.metadata)
     delete metadata.pendingApprovalFingerprint
@@ -916,6 +924,7 @@ export class AiCliOrchestrator {
       )
     })
     this.clearVolatileRunState(run.id)
+    await workspace?.onRunResult?.(interrupted)
     return interrupted
   }
 
@@ -926,6 +935,11 @@ export class AiCliOrchestrator {
     input?: unknown
   }> {
     const metadata = toRecord(run.metadata)
+    if (metadata.workspaceExecution === true) {
+      const workspace = this.workspaceAuthorities.get(run.id)
+      if (!workspace) throw new Error(AI_RUN_AUTHORITY_CHANGED)
+      await workspace.assertAuthority()
+    }
     const profile = await aiOrchestratorStore.getProfile(run.profileId)
     if (!profile || !profile.enabled) throw new Error(AI_RUN_AUTHORITY_CHANGED)
     const allowedToolIds = resolvePersistedAllowedToolIds(metadata, profile)
@@ -998,6 +1012,26 @@ export class AiCliOrchestrator {
     return { profile, allowedToolIds, automationPolicy, input }
   }
 
+  /** Workspace authority is supplied only by the Main conversation controller. */
+  executeWorkspace(
+    request: AiOrchestratorExecuteRequest,
+    workspace: PiWorkspaceAuthority
+  ): Promise<AiOrchestratorRunRecord> {
+    if (request.sessionId && request.sessionId !== workspace.conversationId) {
+      throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    }
+    return this.trackExecution(() =>
+      this.executeWithAuthority(
+        { ...request, sessionId: workspace.conversationId },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        workspace
+      )
+    )
+  }
+
   execute(
     request: AiOrchestratorExecuteRequest,
     automationId?: string
@@ -1037,7 +1071,8 @@ export class AiCliOrchestrator {
     automationId?: string,
     automationPolicy?: AiAutomationPolicy,
     automationAuthorityVersion?: number,
-    admittedRunId?: string
+    admittedRunId?: string,
+    workspace?: PiWorkspaceAuthority
   ): Promise<AiOrchestratorRunRecord> {
     if (this.closing) throw createRunInterruptedError()
     if (!this.initialized) throw new Error('AI CLI orchestrator is not initialized')
@@ -1047,6 +1082,7 @@ export class AiCliOrchestrator {
     if (!profile || !profile.enabled) {
       throw new Error(`Agent profile ${request.profileId || DEFAULT_PROFILE_ID} is unavailable`)
     }
+    await workspace?.assertAuthority()
     const runtimeProvider = profile.runtimeProvider
     const authorityToolIds = automationPolicy
       ? intersectTools(automationPolicy.allowedToolIds, request.allowedToolIds)
@@ -1073,6 +1109,7 @@ export class AiCliOrchestrator {
       status: 'queued',
       metadata: {
         schemaVersion: AI_RUN_METADATA_SCHEMA_VERSION,
+        ...(workspace ? { workspaceExecution: true } : {}),
         executionBudget: budget,
         allowedToolRefs: toAllowedToolRefs(allowedToolIds),
         requestInputPresent,
@@ -1096,6 +1133,7 @@ export class AiCliOrchestrator {
     }
     this.trustedAllowedToolIds.set(run.id, Object.freeze([...allowedToolIds]))
     if (automationPolicy) this.trustedAutomationPolicies.set(run.id, automationPolicy)
+    if (workspace) this.workspaceAuthorities.set(run.id, workspace)
     await this.withRunWriteLease(run.id, async () => {
       try {
         await aiOrchestratorStore.createOrchestratorRun(run)
@@ -1109,8 +1147,9 @@ export class AiCliOrchestrator {
         automationId
       })
     })
+    await workspace?.onRunCreated?.(run)
 
-    return await this.executePreparedRun(
+    const result = await this.executePreparedRun(
       run,
       {
         ...request,
@@ -1125,6 +1164,8 @@ export class AiCliOrchestrator {
       allowedToolIds,
       budget
     )
+    await workspace?.onRunResult?.(result)
+    return result
   }
 
   approveRun(runId: string): Promise<AiOrchestratorRunRecord> {
@@ -1136,6 +1177,7 @@ export class AiCliOrchestrator {
     if (!run) throw new Error(`Orchestrator run ${runId} not found`)
     if (run.status !== 'pending_approval')
       throw new Error(`Orchestrator run ${runId} is not pending approval`)
+    const workspace = this.workspaceAuthorities.get(runId)
     let authority: {
       profile: AiAgentProfile
       allowedToolIds: string[]
@@ -1194,7 +1236,7 @@ export class AiCliOrchestrator {
         delegationPlanId: approvedRun.delegationPlan?.planId
       })
     })
-    return await this.executePreparedRun(
+    const result = await this.executePreparedRun(
       approvedRun,
       {
         objective: run.objective,
@@ -1215,6 +1257,8 @@ export class AiCliOrchestrator {
       allowedToolIds,
       budget
     )
+    await workspace?.onRunResult?.(result)
+    return result
   }
 
   private async executePreparedRun(
@@ -1226,6 +1270,7 @@ export class AiCliOrchestrator {
   ): Promise<AiOrchestratorRunRecord> {
     const releaseWriteLease = this.acquireRunWriteLease(run.id)
     try {
+      const workspace = this.workspaceAuthorities.get(run.id)
       const startedAt = Date.now()
       try {
         await aiOrchestratorStore.updateOrchestratorRun(run.id, {
@@ -1236,7 +1281,10 @@ export class AiCliOrchestrator {
         })
         await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.started')
 
-        const history = await aiOrchestratorStore.listSessionHistory(run.sessionId, run.id)
+        await workspace?.assertAuthority()
+        const history =
+          workspace?.history ??
+          (await aiOrchestratorStore.listSessionHistory(run.sessionId, run.id))
         const importedSystemPrompt = await aiImportedConfigRuntime.buildSystemPrompt(
           profile,
           run.cwd,
@@ -1247,14 +1295,17 @@ export class AiCliOrchestrator {
           systemPrompt: [profile.systemPrompt, importedSystemPrompt].filter(Boolean).join('\n\n')
         }
         if (this.closing) throw createRunInterruptedError()
-        const result = await this.runtimeHost.execute({
-          run: { ...run, status: 'running', startedAt, updatedAt: startedAt },
-          request,
-          profile: runtimeProfile,
-          tools: resolvePiRuntimeToolSpecs(allowedToolIds),
-          history,
-          budget
-        })
+        const result = await this.runtimeHost.execute(
+          {
+            run: { ...run, status: 'running', startedAt, updatedAt: startedAt },
+            request,
+            profile: runtimeProfile,
+            tools: resolvePiRuntimeToolSpecs(allowedToolIds),
+            history,
+            budget
+          },
+          workspace
+        )
         const completedAt = Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
@@ -1298,7 +1349,9 @@ export class AiCliOrchestrator {
             ? AI_RUN_CANCELLED
             : status === 'interrupted'
               ? AI_RUN_INTERRUPTED
-              : AI_RUN_FAILED
+              : isRunUsageLimitedError(error)
+                ? AI_RUN_USAGE_LIMIT_REACHED
+                : AI_RUN_FAILED
         const completedAt = status === 'pending_approval' ? undefined : Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
@@ -1373,6 +1426,7 @@ export class AiCliOrchestrator {
     if (visited.has(runId)) return false
     visited.add(runId)
     const run = await aiOrchestratorStore.getOrchestratorRun(runId)
+    const workspace = this.workspaceAuthorities.get(runId)
     if (!run) return false
     const descendants = (await this.listRuns({ limit: 200 })).filter(
       (candidate) => candidate.parentRunId === runId
@@ -1397,6 +1451,12 @@ export class AiCliOrchestrator {
       )
     })
     this.clearVolatileRunState(runId)
+    await workspace?.onRunResult?.({
+      ...run,
+      status: 'cancelled',
+      completedAt: now,
+      updatedAt: now
+    })
     return true
   }
 

@@ -20,8 +20,8 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
 } satisfies Record<keyof ModeChipProps, unknown>)
 
-// Timings follow the measured reference, `.trellis/tasks/09-23-composer-motion-reference/
-// research/reference-motion.md` › Motion 3: the icon swaps first, the old label is gone in
+// Timings follow the measured reference from retired task 09-23-composer-motion-reference,
+// reference-motion.md › Motion 3: the icon swaps first, the old label is gone in
 // ~80ms (the `__layer--prev` rule below), and the new one sharpens over ~280ms, ~370ms in all.
 const LABEL_DELAY_MS = 50
 const LABEL_FADE_MS = 280

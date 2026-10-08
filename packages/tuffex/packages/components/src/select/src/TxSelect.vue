@@ -1,6 +1,7 @@
 <script lang="ts" setup>
+import type { StyleValue } from 'vue'
 import type { TxSelectModelValue, TxSelectOption, TxSelectOptionGroup, TxSelectOptionId, TxSelectOptionLike, TxSelectProps, TxSelectValue } from './types'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useAttrs, useId, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
@@ -10,6 +11,7 @@ import { SELECT_KEY } from './types'
 
 defineOptions({
   name: 'TuffSelect',
+  inheritAttrs: false,
 })
 
 const props = withDefaults(
@@ -52,6 +54,13 @@ const emit = defineEmits<{
   'search': [query: string]
   'create': [option: TxSelectOption]
 }>()
+
+const attrs = useAttrs()
+
+function triggerAttrs() {
+  const { class: _class, style: _style, ...controlAttrs } = attrs
+  return controlAttrs
+}
 
 const isOpen = ref(false)
 const listDomId = `${useId() ?? 'tuff-select'}-list`
@@ -710,7 +719,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="tuff-select" :class="[
+    class="tuff-select" :class="[attrs.class,
       {
         'is-open': isOpen,
         'is-disabled': disabled,
@@ -718,6 +727,8 @@ onBeforeUnmount(() => {
         'is-status-warning': status === 'warning',
       },
     ]"
+    :style="attrs.style as StyleValue"
+    :data-testid="attrs['data-testid'] as string"
   >
     <TxPopover
       v-model="isOpen"
@@ -744,6 +755,7 @@ onBeforeUnmount(() => {
           <div
             v-if="multiple"
             ref="multiTriggerRef"
+            v-bind="triggerAttrs()"
             class="tuff-select__multi-trigger"
             :class="{ 'is-disabled': disabled }"
             :style="multiTriggerHeight != null ? { height: `${multiTriggerHeight}px` } : undefined"
@@ -819,6 +831,7 @@ onBeforeUnmount(() => {
             v-else
             ref="triggerInputRef"
             v-model="triggerText"
+            v-bind="triggerAttrs()"
             :placeholder="placeholder"
             :readonly="!isEditable"
             :disabled="disabled"

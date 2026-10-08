@@ -1,5 +1,7 @@
 import type { IntelligenceErrorCode as SharedIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+import type { UsageLimitInfo } from './usage-ledger/usage-limits'
 import { homedir } from 'node:os'
+import { readUsageLimitInfo, USAGE_LIMIT_REACHED_CODE } from './usage-ledger/usage-limits'
 
 export type IntelligenceErrorCode = SharedIntelligenceErrorCode
 
@@ -14,6 +16,38 @@ export interface NormalizedIntelligenceError {
 function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message || error.name
   return String(error)
+}
+
+const USAGE_LIMIT_PREFIX = /^\[USAGE_LIMIT_REACHED(?::[^\]]*)?\]\s*/
+const USAGE_LIMIT_RESETS_AT = /resets at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** `YYYY-MM-DD HH:mm` in the main process's local time. */
+function formatLocalDateTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(
+    date.getHours()
+  )}:${pad2(date.getMinutes())}`
+}
+
+/**
+ * Which limit refused the call and when it resets, from the structured `usageLimit` or, failing
+ * that, the reset time in the message (`… resets at <ISO>`).
+ */
+function describeUsageLimit(error: unknown, message: string): string {
+  const info: Partial<UsageLimitInfo> = readUsageLimitInfo(error) ?? {}
+  const resetsAt =
+    info.resetsAt ?? Date.parse(USAGE_LIMIT_RESETS_AT.exec(message)?.[1] ?? 'invalid')
+  const limit =
+    info.key === undefined
+      ? 'The usage limit you set is reached'
+      : `The usage limit you set is reached (${info.key}: ${info.used} / ${info.max})`
+  return Number.isFinite(resetsAt)
+    ? `${limit}; it resets at ${formatLocalDateTime(resetsAt)} local time (${new Date(resetsAt).toISOString()}).`
+    : `${limit}.`
 }
 
 export function normalizeIntelligenceError(
@@ -33,6 +67,20 @@ export function normalizeIntelligenceError(
       message,
       reason: 'Nexus provider requires a signed-in account.',
       recovery: 'Sign in to Nexus or switch to another enabled provider.',
+      capabilityId: options.capabilityId
+    }
+  }
+
+  // The user's own global limit, ahead of every quota rule: it is not Nexus credits, a team quota
+  // or a provider 429, and must not be reported as one.
+  if (explicitCode === USAGE_LIMIT_REACHED_CODE || lower.includes('usage_limit_reached')) {
+    return {
+      code: USAGE_LIMIT_REACHED_CODE,
+      // The SDK's message already carries `[USAGE_LIMIT_REACHED:<capability>]`; the wrapper adds it.
+      message: message.replace(USAGE_LIMIT_PREFIX, ''),
+      reason: describeUsageLimit(error, message),
+      recovery:
+        'Wait until the limit resets, or raise or clear it in Settings › Intelligence › Audit.',
       capabilityId: options.capabilityId
     }
   }
@@ -182,6 +230,11 @@ export function toNormalizedIntelligenceError(
   wrapped.recovery = normalized.recovery
   wrapped.capabilityId = normalized.capabilityId
   wrapped.cause = error
+  if (normalized.code === USAGE_LIMIT_REACHED_CODE) {
+    // Main-side callers (background services) read which limit and when it resets from here.
+    const usageLimit = readUsageLimitInfo(error)
+    if (usageLimit) Object.assign(wrapped, { usageLimit })
+  }
   return wrapped
 }
 
@@ -238,13 +291,115 @@ export function redactProviderDetail(text: string, home = homedir()): string {
  * conversation parses (`conversation-error-display.ts`) — so a CLI's 「invalid API key」 reaches the
  * failed bubble instead of a bare UNKNOWN. A plugin gets the code alone: a provider's words can name
  * the user's own endpoints and accounts.
+ *
+ * A call refused by the user's global usage limit carries our own sentence instead — which limit and
+ * when it resets — so the host renderer can name the reset time; it holds nothing user-specific.
  */
 export function toStreamFailure(
   code: string,
   error: unknown,
   options: { host: boolean }
 ): Error & { code: string } {
+  const usageLimit =
+    options.host && code === USAGE_LIMIT_REACHED_CODE ? readUsageLimitInfo(error) : null
+  if (usageLimit) {
+    const resetsAt = new Date(usageLimit.resetsAt).toISOString()
+    return Object.assign(
+      new Error(`[${code}] Usage limit reached: ${usageLimit.key}; resets at ${resetsAt}`),
+      { code }
+    )
+  }
   const raw = options.host ? readProviderDetail(error) : null
   const detail = raw ? redactProviderDetail(raw) : ''
   return Object.assign(new Error(detail ? `[${code}] ${detail}` : code), { code })
+}
+
+/** A capability id fit for the `[CODE:capability]` prefix: lower-case dotted, nothing else. */
+const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)*$/
+const CAPABILITY_PREFIX = /^\[[A-Z][A-Z0-9_]*:([^\]\s]+)\]/
+
+/**
+ * Which capability failed: the normalizer's wrapper carries it, an SDK error only in its own
+ * `[CODE:capability]` prefix. `undefined` for anything that is not a plain capability id.
+ */
+function readCapabilityId(error: unknown): string | undefined {
+  const explicit =
+    error && typeof error === 'object' ? (error as { capabilityId?: unknown }).capabilityId : null
+  const candidate =
+    typeof explicit === 'string' ? explicit : CAPABILITY_PREFIX.exec(messageOf(error))?.[1]
+  return candidate && CAPABILITY_ID_PATTERN.test(candidate) ? candidate : undefined
+}
+
+/**
+ * The reason {@link toNormalizedIntelligenceError} already wrote for this code. Normalizing the
+ * wrapper again would classify its rewritten message, which can land on another rule than the
+ * code it carries.
+ */
+function readNormalizedReason(error: unknown, code: string): string | null {
+  if (!error || typeof error !== 'object') return null
+  const wrapped = error as { code?: unknown; reason?: unknown; recovery?: unknown }
+  return wrapped.code === code &&
+    typeof wrapped.reason === 'string' &&
+    wrapped.reason.trim() &&
+    typeof wrapped.recovery === 'string'
+    ? wrapped.reason
+    : null
+}
+
+/**
+ * What a failed capability call (`invoke`, context `execute`, …) answers — the request/response
+ * sibling of {@link toStreamFailure}, under the same rule. A plugin gets the stable code alone. The
+ * app's own renderer gets `[CODE:capability] reason`, the prefix the renderer already parses: the
+ * normalizer's own sentence for the code — for a call the usage limit refused, which limit, how
+ * much of it is used and when it resets in local time — or, where the provider itself said why (a
+ * local CLI's run), those words redacted. Never the raw provider message: it can carry endpoints,
+ * accounts and response bodies.
+ */
+export function toApiFailure(
+  code: string,
+  error: unknown,
+  options: { host: boolean }
+): { error: string; code?: string } {
+  if (!options.host) return { error: code }
+  const capabilityId = readCapabilityId(error)
+  const prefix = `[${code}${capabilityId ? `:${capabilityId}` : ''}]`
+  const said = code === USAGE_LIMIT_REACHED_CODE ? null : readProviderDetail(error)
+  const reason =
+    said ??
+    readNormalizedReason(error, code) ??
+    normalizeIntelligenceError(error, { capabilityId }).reason
+  return { error: `${prefix} ${redactProviderDetail(reason)}`, code }
+}
+
+/** Whether `error` is the usage-limit refusal: by its info anywhere in its causes, or its code. */
+function isUsageLimitRefusal(error: unknown): boolean {
+  if (readUsageLimitInfo(error)) return true
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    (error as { code?: unknown }).code === USAGE_LIMIT_REACHED_CODE
+  )
+}
+
+/**
+ * The usage-limit refusal alone, for channels whose every other failure keeps the public sentence
+ * (the voice channels): `toApiFailure`'s answer for it, `undefined` for anything else.
+ */
+export function projectUsageLimitFailure(
+  error: unknown,
+  options: { host: boolean }
+): { error: string; code?: string } | undefined {
+  return isUsageLimitRefusal(error)
+    ? toApiFailure(USAGE_LIMIT_REACHED_CODE, error, options)
+    : undefined
+}
+
+/**
+ * The stream sibling of {@link projectUsageLimitFailure}: the refusal in `toStreamFailure`'s shape,
+ * anything else returned as it came.
+ */
+export function toUsageLimitStreamFailure(error: unknown, options: { host: boolean }): unknown {
+  return isUsageLimitRefusal(error)
+    ? toStreamFailure(USAGE_LIMIT_REACHED_CODE, error, options)
+    : error
 }

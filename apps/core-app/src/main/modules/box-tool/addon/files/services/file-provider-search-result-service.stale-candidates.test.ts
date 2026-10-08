@@ -1,4 +1,5 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils'
+import type { Mock } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import {
   FileProviderSearchResultService,
@@ -15,9 +16,15 @@ interface FakeRow {
  * Search over a fixed candidate set: `candidateIds` is what the index returns,
  * `rows` is what the files table actually holds for them.
  */
-function makeService(opts: { candidateIds: string[]; rows: FakeRow[] }): {
+function makeService(opts: {
+  candidateIds: string[]
+  rows: FakeRow[]
+  isPathAdmitted?: (path: string) => boolean
+  rowsReady?: Promise<void>
+  onRowsQuery?: () => void
+}): {
   service: FileProviderSearchResultService
-  cleanupStaleCandidates: ReturnType<typeof vi.fn>
+  cleanupStaleCandidates: Mock
 } {
   const dbRows = opts.rows.map((row) => ({
     file: {
@@ -37,7 +44,11 @@ function makeService(opts: { candidateIds: string[]; rows: FakeRow[] }): {
     select: () => ({
       from: () => ({
         leftJoin: () => ({
-          where: () => Promise.resolve(dbRows)
+          where: async () => {
+            opts.onRowsQuery?.()
+            await opts.rowsReady
+            return dbRows
+          }
         })
       })
     })
@@ -49,6 +60,9 @@ function makeService(opts: { candidateIds: string[]; rows: FakeRow[] }): {
     providerId: 'files',
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
     isContentIndexingEnabled: () => false,
+    isPathAdmitted:
+      opts.isPathAdmitted ??
+      ((path) => path.startsWith('/home/me/') && !path.includes('/.config/')),
     getSearchIndex: () =>
       ({
         lookupByKeywords: async (_providerId: string, terms: string[]) =>
@@ -109,5 +123,57 @@ describe('FileProviderSearchResultService stale candidates', () => {
 
     expect(cleanupStaleCandidates).toHaveBeenCalledTimes(1)
     expect(cleanupStaleCandidates).toHaveBeenCalledWith(['/home/me/dropped.txt'])
+  })
+})
+
+describe('file search current watch-root admission', () => {
+  it('omits a still-indexed out-of-scope path without treating configuration exclusion as physical absence', async () => {
+    const kept = '/home/me/current/report.txt'
+    const withdrawn = '/home/me/withdrawn/report.txt'
+    const { service, cleanupStaleCandidates } = makeService({
+      candidateIds: [kept, withdrawn],
+      rows: [
+        { id: 1, path: kept },
+        { id: 2, path: withdrawn }
+      ],
+      isPathAdmitted: (path) => path.startsWith('/home/me/current/')
+    })
+    const result = await service.search(
+      { text: 'report' } as TuffQuery,
+      new AbortController().signal
+    )
+    expect(result.items.map((item) => item.id)).toEqual([kept])
+    expect(cleanupStaleCandidates).not.toHaveBeenCalled()
+  })
+
+  it('rechecks current roots after an in-flight catalog read instead of publishing its old-scope result', async () => {
+    const indexed = '/home/me/current/report.txt'
+    const rowsEntered = Promise.withResolvers<void>()
+    const rowsReleased = Promise.withResolvers<void>()
+    let admitted = true
+    const { service, cleanupStaleCandidates } = makeService({
+      candidateIds: [indexed],
+      rows: [{ id: 1, path: indexed }],
+      isPathAdmitted: (path) => admitted && path.startsWith('/home/me/current/'),
+      onRowsQuery: () => rowsEntered.resolve(),
+      rowsReady: rowsReleased.promise
+    })
+    const operation = service.search({ text: 'report' } as TuffQuery, new AbortController().signal)
+    try {
+      await rowsEntered.promise
+      admitted = false
+      rowsReleased.resolve()
+      expect((await operation).items).toEqual([])
+      expect(cleanupStaleCandidates).not.toHaveBeenCalled()
+      admitted = true
+      expect(
+        (
+          await service.search({ text: 'report' } as TuffQuery, new AbortController().signal)
+        ).items.map((item) => item.id)
+      ).toEqual([indexed])
+    } finally {
+      rowsReleased.resolve()
+      await operation
+    }
   })
 })

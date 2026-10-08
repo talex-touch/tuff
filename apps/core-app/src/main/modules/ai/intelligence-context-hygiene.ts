@@ -1703,6 +1703,20 @@ export class ContextHygieneService {
     }
   }
 
+  /** Context evidence follows its Main-owned conversation, never another context session. */
+  async cleanupWorkspaceConversation(conversationId: string): Promise<void> {
+    const client = this.requireClient()
+    await this.withDbWrite('intelligence.context.workspace.cleanup', () =>
+      client.execute({
+        sql: `DELETE FROM intelligence_context_sessions
+        WHERE owner = 'assistant'
+          AND json_extract(metadata, '$.workspaceConversationId') = ?
+          AND json_extract(metadata, '$.contextActorId') = ?`,
+        args: [conversationId, `workspace:${conversationId}`]
+      })
+    )
+  }
+
   async appendAssistantTurn(input: {
     sessionId: string
     content: string

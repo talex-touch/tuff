@@ -396,8 +396,10 @@ export class SearchUsageService {
       scoring: item.scoring,
       ent: resolvedEntryPoint,
       eventId,
-      ...(options?.previousApp
-        ? { prevApp: options.previousApp }
+      ...(options.previousApp !== undefined
+        ? options.previousApp
+          ? { prevApp: options.previousApp }
+          : {}
         : await resolvePreviousAppContext())
     })
 

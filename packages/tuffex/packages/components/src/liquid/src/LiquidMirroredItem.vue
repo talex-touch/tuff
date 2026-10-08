@@ -2,10 +2,11 @@
 import type { BlobBox, CornerRadii } from './geometry'
 import type { Transition } from './spring'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { resolveCssEase } from '../../../../utils/animation/easing'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { useLiquidContext } from './context'
 import { measureRadius, normalizeRadius, offsetTo, roundedRectPath } from './geometry'
-import { easingFunction, resolveTransition } from './spring'
-import { useReducedMotion } from './use-reduced-motion'
+import { resolveTransition } from './spring'
 
 // Internal: mirrored mode of liquid-gooey's GooeyItem. The item declares
 // x/y/scale and the library animates the wrapper and its blob from ONE JS
@@ -148,7 +149,7 @@ function runTransition(): void {
     return
   }
   const f = { ...from }
-  const ease = easingFunction(easing)
+  const ease = resolveCssEase(easing)
   const start = performance.now() + props.delay
   const tick = (now: number): void => {
     const p = Math.min(1, Math.max(0, (now - start) / duration))

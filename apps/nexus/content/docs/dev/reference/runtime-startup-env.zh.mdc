@@ -1,6 +1,6 @@
 # Core App 启动链路与运行时变量参考
 
-> 更新时间：2026-07-13
+> 更新时间：2026-10-07
 > 范围：`apps/core-app/src` 中 `process.env` / `import.meta.env` 的实际引用
 
 ## 启动与回退现状
@@ -56,29 +56,51 @@
 
 ### A. 业务开关 / 可配置项
 
-| 变量                                   | 作用                                                                   | 主要读取位置                                                             |
-| -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ELECTRON_RENDERER_URL`                | dev 模式渲染入口 URL（主窗口/CoreBox/OmniPanel/MetaOverlay 等）        | `src/main/core/touch-app.ts`、`src/main/utils/renderer-url.ts`           |
-| `NODE_ENV`                             | dev/test/prod 行为判断（日志、分析、store API）                        | 多处（analytics/logger/sentry/store）                                    |
-| `BUILD_TYPE`                           | 构建类型（Sentry environment/release 等）                              | `src/main/modules/sentry/*`、`app-provider.ts`                           |
-| `TUFF_ENABLE_RENDERER_OVERRIDE`        | 是否允许 renderer override 包生效                                      | `src/main/core/touch-app.ts`、`src/main/modules/update/update-system.ts` |
-| `TUFF_NEXUS_BASE_URL`                  | Core App 运行时 Nexus API 基地址显式覆盖；优先级高于设置页 server mode | `packages/utils/env`、Core App Nexus runtime resolver                    |
-| `TUFF_DISABLE_NATIVE_OCR`              | 关闭本地 OCR provider                                                  | `src/main/modules/ai/intelligence-config.ts`                             |
-| `TUFF_RELEASE_API_URL`                 | 构建验签元数据 API 基地址覆盖                                          | `src/main/modules/build-verification/index.ts`                           |
-| `TUFF_BUILD_SIGNATURE_URL`             | 构建验签签名文件 URL 强制覆盖                                          | `src/main/modules/build-verification/index.ts`                           |
-| `TUFF_BUILD_SIGNATURE_KEY_URL`         | 构建验签公钥 URL 强制覆盖                                              | `src/main/modules/build-verification/index.ts`                           |
-| `TUFF_UPDATE_SIGNATURE_KEY_URL`        | 更新包验签公钥 URL（优先）                                             | `src/main/utils/release-signature.ts`                                    |
-| `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL` | 更新包验签公钥 URL（兼容别名）                                         | `src/main/utils/release-signature.ts`                                    |
-| `TALEX_EVERYTHING_SDK_PATH`            | Windows Everything SDK addon 自定义路径                                | `src/main/modules/box-tool/addon/files/everything-provider.ts`           |
-| `TALEX_FILE_PROVIDER_EXTRACT_ICONS`    | FileProvider 图标提取开关（默认开）                                    | `src/main/modules/box-tool/addon/files/file-provider.ts`                 |
+布尔开关统一走 `@talex-touch/utils/env` 的 `parseBooleanFlag` / `getBooleanEnv`：`1` / `true` / `yes` / `on` 为开，`0` / `false` / `no` / `off` 为关，其余取各项注明的默认值。
+
+| 变量                                                                                      | 作用                                                                                   | 主要读取位置                                                                    |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `ELECTRON_RENDERER_URL`                                                                   | dev 模式渲染入口 URL（主窗口/CoreBox/OmniPanel/MetaOverlay 等）                        | `src/main/core/touch-app.ts`、`src/main/utils/renderer-url.ts`                  |
+| `NODE_ENV`                                                                                | dev/test/prod 行为判断（日志、分析、store API）                                        | 多处（analytics/logger/sentry/store）                                           |
+| `BUILD_TYPE`                                                                              | 构建类型（Sentry environment/release 等）                                              | `src/main/modules/sentry/*`、`app-provider.ts`                                  |
+| `TUFF_ENABLE_RENDERER_OVERRIDE`                                                           | 是否允许 renderer override 包生效                                                      | `src/main/core/touch-app.ts`、`src/main/modules/update/update-system.ts`        |
+| `TUFF_NEXUS_BASE_URL`                                                                     | Core App 运行时 Nexus API 基地址显式覆盖；优先级高于设置页 server mode                 | `packages/utils/env`、Core App Nexus runtime resolver                           |
+| `TUFF_DISABLE_NATIVE_OCR`                                                                 | 关闭本地 OCR provider                                                                  | `src/main/modules/ai/intelligence-config.ts`、`packages/tuff-native/index.js`   |
+| `TUFF_DISABLE_NATIVE_AUDIO`                                                               | 关闭原生录音 addon（听写界面会提示被环境变量关闭）                                     | `packages/tuff-native/audio.js`                                                 |
+| `TUFF_DISABLE_NATIVE_SCREENSHOT`                                                          | 关闭原生截图后端                                                                       | `packages/tuff-native/screenshot-protocol.js`                                   |
+| `TUFF_DISABLE_GLOBAL_SHORTCUTS`                                                           | `1` 时跳过全局快捷键注册                                                               | `src/main/modules/global-shortcon.ts`                                           |
+| `TUFF_OPAQUE_WINDOWS`                                                                     | 强制不透明窗口（关掉 vibrancy / Mica），特效把启动器弄坏时的恢复开关                   | `src/main/core/window-effects.ts`                                               |
+| `TUFF_CLIPBOARD_NATIVE_WATCH`                                                             | 用原生剪贴板变更监听代替轮询                                                           | `src/main/modules/clipboard/clipboard-service.ts`                               |
+| `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS`                                                     | 覆盖文件 provider 的基础监听根目录                                                     | `src/main/modules/box-tool/addon/files/file-provider.ts`                        |
+| `TUFF_DB_AUX_ENABLED`                                                                     | 辅助库（推荐 / 遥测）开关，默认开                                                      | `src/main/db/runtime-flags.ts`                                                  |
+| `TUFF_DB_SEARCH_SPLIT_ENABLED`                                                            | 搜索索引独立为 `search-index.db`，默认开；`0` 是回退到共享文件的急停开关               | `src/main/db/runtime-flags.ts`                                                  |
+| `TUFF_DB_QOS_ENABLED`                                                                     | 数据库写入 QoS 调度，默认开                                                            | `src/main/db/runtime-flags.ts`                                                  |
+| `TUFF_STARTUP_DEGRADE_ENABLED`                                                            | 启动后 120 s 写入降级窗口，默认开                                                      | `src/main/db/runtime-flags.ts`                                                  |
+| `TUFF_STARTUP_ANALYTICS_ENABLED`                                                          | 启动分析采集，默认开                                                                   | `src/main/modules/analytics/startup-analytics.ts`                               |
+| `TUFF_RECO_TIME_STATS_REBUILD`                                                            | `1` 时从 usage logs 重建推荐时间统计                                                   | `src/main/modules/box-tool/search-engine/time-stats-aggregator.ts`              |
+| `TUFF_INTELLIGENCE_CONTEXT_COREBOX_ONLY`                                                  | `1` 时拒绝非 CoreBox 持有的智能上下文会话                                              | `src/main/modules/ai/intelligence-context-hygiene.ts`                           |
+| `TUFF_AGENT_TOOL_CONFIRM_TIMEOUT_MS`                                                      | agent 工具确认超时（最小 250）                                                         | `src/main/modules/tool-gateway/index.ts`                                        |
+| `TUFF_SENTRY_TRACES_SAMPLE_RATE`                                                          | 覆盖 Sentry traces 采样率                                                              | `src/main/modules/sentry/sentry-service.ts`                                     |
+| `TUFF_PERF_STARTUP_LAG_GRACE_MS`                                                          | 启动后事件循环卡顿的宽限期（默认 2500）                                                | `src/main/utils/perf-monitor.ts`                                                |
+| `TUFF_V8_JITLESS`                                                                         | `1` 时以 `--jitless` 启动 V8（macOS Tahoe 崩溃规避，JS 变慢）                          | `src/main/core/precore.ts`                                                      |
+| `TUFF_TRACE_DEPRECATION`                                                                  | `1` 时打开 Node 弃用告警堆栈                                                           | `src/main/core/precore.ts`                                                      |
+| `TUFF_PLUGIN_TRUST_ROOTS_JSON`                                                            | 替换内置插件签名信任根                                                                 | `src/main/modules/plugin/signature-verifier.ts`                                 |
+| `TUFF_PLUGIN_REVOKED_PUBLISHER_KEYS_JSON`                                                 | 已吊销的插件发布者 key id                                                              | `src/main/modules/plugin/signature-verifier.ts`                                 |
+| `TUFF_PI_CLI_PATH` / `TUFF_OMP_CLI_PATH` / `TUFF_CODEX_CLI_PATH` / `TUFF_CLAUDE_CLI_PATH` | 钉死对应本地 AI CLI 的可执行文件路径                                                   | `src/main/modules/ai/providers/pi-cli-runtime.ts`                               |
+| `TUFF_OMP_AGENT_DIR`                                                                      | omp agent 目录（默认 `~/.omp/agent`）                                                  | `src/main/modules/ai/providers/pi-model-catalog.ts`                             |
+| `TUFF_DEV_SERVER_HOST` / `TUFF_DEV_SERVER_PORT`                                           | dev 渲染服务器绑定地址                                                                 | `electron.vite.config.ts`                                                       |
+| `TUFF_DEV_PARENT_PID`                                                                     | dev wrapper 写入；该进程消失时应用自行退出                                             | `src/main/utils/dev-process-manager.ts`                                         |
+| `TALEX_CONFIG_STORAGE_BACKEND`                                                            | 应用配置后端：`sqlite`（默认）或 `legacy`                                              | `src/main/modules/storage/app-config-repository.ts`                             |
+| `TALEX_EVERYTHING_SDK_PATH`                                                               | Windows Everything SDK addon 自定义路径                                                | `src/main/modules/box-tool/addon/files/everything-backend-service.ts`           |
+| `TALEX_EVERYTHING_DLL_PATH`                                                               | Windows `Everything64.dll` 路径，供原生 addon 读取（CI 设置；provider 运行时也会写入） | `packages/tuff-native/native/src/everything/addon.cc`、`everything-provider.ts` |
+| `TALEX_FILE_PROVIDER_EXTRACT_ICONS`                                                       | FileProvider 图标提取开关（默认开）                                                    | `src/main/modules/box-tool/addon/files/file-provider.ts`                        |
+| `TALEX_PLUGIN_LOG_STDOUT`                                                                 | 插件日志同时输出到 stdout                                                              | `packages/utils/plugin/node/logger.ts`                                          |
 
 ### B. 启动期内部注入变量（非外部配置）
 
 | 变量                                 | 作用                                       | 写入位置                |
 | ------------------------------------ | ------------------------------------------ | ----------------------- |
 | `APP_VERSION`                        | 运行时版本号（缺省时从 package.json 注入） | `src/main/polyfills.ts` |
-| `DIST`                               | 主进程运行目录                             | `src/main/polyfills.ts` |
-| `PUBLIC`                             | 公共资源目录（packaged/dev 分流）          | `src/main/polyfills.ts` |
 | `DEBUG`                              | debug.talex 文件触发的日志调试开关         | `src/main/polyfills.ts` |
 | `ELECTRON_DISABLE_SECURITY_WARNINGS` | 关闭 Electron 安全警告输出                 | `src/main/polyfills.ts` |
 | `WS_NO_UTF_8_VALIDATE`               | 禁用 `ws` 可选 `utf-8-validate` addon      | `src/main/index.ts`     |
@@ -106,6 +128,20 @@
 | `import.meta.env.DEV`  | 前端 dev 分支（日志/调试 UI）   | `renderer/src/utils/dev-log.ts` 等                  |
 | `import.meta.env.MODE` | 前端模式判断（如 about 页显示） | `renderer/src/views/base/settings/SettingAbout.vue` |
 
+### E. 验收 / 基准测试钩子（仅 harness 使用）
+
+由 `scripts/coreapp-packaged-*.ts` 为单次启动设置，正常启动一个都没有。生产代码通过 `src/main/core/acceptance-mode.ts`（`isStartupBenchmarkMode`、`resolveStartupBenchmarkUserDataDir`、`isIsolatedAcceptanceMode`、`isVisibleEvidenceHookEnabled`）读取这些门槛，不再各自直读 `process.env`。
+
+| 变量                                                                                       | 作用                                             |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `TUFF_STARTUP_BENCHMARK_ONCE`                                                              | 计时基准启动，跑完自行退出；同时解锁可见证据钩子 |
+| `TUFF_STARTUP_BENCHMARK_USER_DATA_DIR`                                                     | 该次启动的隔离 userData / sessionData 根目录     |
+| `TUFF_STARTUP_BENCHMARK_DIAG_PATH`                                                         | precore 写 userData 诊断 JSON 的位置             |
+| `TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS`                                                     | 基准启动退出前的延迟（默认 1200）                |
+| `TUFF_PACKAGED_ACCEPTANCE_ISOLATED`                                                        | 隔离验收 profile 下跳过单实例锁                  |
+| `TUFF_VISIBLE_EVIDENCE_AUTH*` / `TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE*`         | 可见证据截图用的脚本化登录与图片翻译结果         |
+| `TUFF_MCP_SMOKE*`、`TUFF_PRIVACY_SMOKE_EXPECTED_ENTRYPOINT`、`TUFF_STUB_*`、`TUFF_PROBE_*` | 冒烟测试入口与 CLI 桩                            |
+
 ## 可清理变量候选（先列出，不直接删除）
 
 当前暂无待清理候选（前述高/中/低优先项已全部完成收敛）。
@@ -127,3 +163,11 @@
 - `TUFF_OMNIPANEL_SMOKE`：已移除启动期 OmniPanel 冒烟探针 env gate 与对应逻辑（2026-03-23）。
 - `USE_LOCAL_NEXUS`：已移除 PluginStoreService 的本地 Nexus env 特判，统一走 `getTpexApiBase()`（2026-03-23）。
 - `VITE_NEXUS_URL` / `NEXUS_API_BASE` / `NEXUS_API_BASE_LOCAL` / `TPEX_API_BASE` / `AUTH_ORIGIN` / `TUFF_LOCAL_BASE_URL`：已停止作为 Core App runtime API 地址解析输入，统一迁移到 `TUFF_NEXUS_BASE_URL`（2026-05-12）。
+- `DIST` / `PUBLIC`：已从 `src/main/polyfills.ts` 移除运行时写入，全仓没有读者（2026-10-07）。
+- `TUFF_ENCRYPTION_KEY`：已从发布 workflow 移除 secret 注入与「official build」提示，代码里没有读者（2026-10-07）。
+- `ELECTRON_PLATFORM` / `ELECTRON_ARCH`：已从 `scripts/build-target.js` 移除，仓库与 electron-builder 都不读（2026-10-07）。
+- `BUILD_MAC_LSUIELEMENT`：别名已删，只认 `TUFF_MAC_LSUIELEMENT`（2026-10-07）。
+- `TUFF_RELEASE_API_URL` / `TUFF_BUILD_SIGNATURE_URL` / `TUFF_BUILD_SIGNATURE_KEY_URL` / `TUFF_UPDATE_SIGNATURE_KEY_URL` / `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL`：已从上表移除，`apps/core-app/src` 中已无读者（2026-10-07）。
+- `smoke:omnipanel` 脚本：已删除，它只设置早已移除的 `TUFF_OMNIPANEL_SMOKE`（2026-10-07）。
+- `apps/core-app/.env`（`VITE_CLERK_PUBLISHABLE_KEY`、`VITE_NEXUS_URL`）：已删除，两个键都没有读者（2026-10-07）。
+- 布尔开关解析：十份本地拷贝已收敛到 `@talex-touch/utils/env`（2026-10-07）。

@@ -88,6 +88,11 @@ export interface ProviderRegistrySnapshot {
   quotaLists: Record<string, ProviderQuotaRecord[]>
 }
 
+interface PreparedProviderCapabilities {
+  removedIds: Set<string>
+  inputs: Array<Pick<ProviderCapabilityRecord, 'capability' | 'schemaRef' | 'metering' | 'constraints' | 'metadata'> & { id?: string }>
+}
+
 /**
  * The provider registry page's data and actions.
  *
@@ -450,7 +455,7 @@ export function useProviderRegistryAdmin() {
     return parseCommaList(sceneForm.requiredCapabilitiesText)
   }
 
-  async function syncProviderCapabilities(provider: ProviderRegistryRecord, panel: ProviderEditPanelState) {
+  function prepareProviderCapabilities(panel: ProviderEditPanelState): PreparedProviderCapabilities {
     const blankedExistingCapabilityIds = panel.capabilities
       .filter(row => row.id && !row.capability.trim())
       .map(row => row.id as string)
@@ -482,11 +487,20 @@ export function useProviderRegistryAdmin() {
       }))
 
     ensureUniqueCapabilities(capabilityInputs)
+    return {
+      removedIds: new Set([...panel.removedCapabilityIds, ...blankedExistingCapabilityIds]),
+      inputs: capabilityInputs,
+    }
+  }
 
-    for (const capabilityId of new Set([...panel.removedCapabilityIds, ...blankedExistingCapabilityIds]))
+  async function syncProviderCapabilities(
+    provider: ProviderRegistryRecord,
+    prepared: PreparedProviderCapabilities,
+  ) {
+    for (const capabilityId of prepared.removedIds)
       await providerService.deleteCapability(provider.id, capabilityId)
 
-    for (const capability of capabilityInputs) {
+    for (const capability of prepared.inputs) {
       if (capability.id) {
         await providerService.updateCapability(provider.id, capability.id, {
           capability: capability.capability,
@@ -786,9 +800,10 @@ export function useProviderRegistryAdmin() {
           },
         ),
       }
+      const capabilities = prepareProviderCapabilities(panel)
 
       await providerService.updateProvider(provider.id, body)
-      await syncProviderCapabilities(provider, panel)
+      await syncProviderCapabilities(provider, capabilities)
       toast.success(t('dashboard.providerRegistry.providers.updated', 'Provider updated.'))
       // Unless the drawer was reopened while this saved: that editor is the operator's now.
       if (providerEditPanels[provider.id] === panel)
@@ -975,8 +990,10 @@ export function useProviderRegistryAdmin() {
     const pendingKey = `scene:${scene.id}:run:${dryRun ? 'dry' : 'execute'}`
     actionPending.value = pendingKey
     panel.error = null
+    let requestStarted = false
     try {
       const input = parseOptionalJson(panel.inputText)
+      requestStarted = true
       const result = await sceneObservabilityService.runScene(scene.id, {
         input,
         capability: panel.capability.trim() || undefined,
@@ -994,7 +1011,6 @@ export function useProviderRegistryAdmin() {
           ? t('dashboard.providerRegistry.scenes.dryRunCompleted', 'Scene dry run completed.')
           : t('dashboard.providerRegistry.scenes.runCompleted', 'Scene run completed.'))
       }
-      await refresh()
     }
     catch (err) {
       const failedRun = extractFailedSceneRun(err)
@@ -1003,6 +1019,8 @@ export function useProviderRegistryAdmin() {
       panel.error = failure(err, 'dashboard.providerRegistry.errors.runSceneFailed', 'Failed to run scene.')
     }
     finally {
+      if (requestStarted)
+        await refresh()
       actionPending.value = null
     }
   }

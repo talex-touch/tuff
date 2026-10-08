@@ -1,0 +1,142 @@
+---
+title: "Motion 通用交互"
+description: "由调用方内容、指针和滚动位置驱动的入场、悬停与可见性效果。"
+category: MotionInteraction
+status: beta
+since: 0.6.3
+tags: [motion, pointer, scroll, accessibility]
+verified: false
+---
+
+## 用法
+
+### Registry 交互
+
+`TxMotion` 提供 7 种入场、4 种悬停、3 种指针和 3 种滚动效果。演示逐项展示全部变体、实际指针坐标、滚动进度、固定内容，以及图标状态切换和视口挂载。
+
+:::TuffDemoWrapper{demo="MotionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotion } from '@talex-touch/tuffex/motion'
+  const replay = ref(0)
+  const runs = ref(0)
+  const items = [
+    { id: 'draft', title: '草稿', description: '整理内容。' },
+    { id: 'review', title: '复核', description: '检查输入。' },
+  ]
+  </script>
+
+  <template>
+    <button type="button" @click="replay++">回放</button>
+    <TxMotion variant="fade-up" :state-key="replay">调用方内容</TxMotion>
+    <TxMotion variant="card-hover" :items="items" @select="item => console.log(item.id)" />
+    <TxMotion variant="magnetic-button" label="增加次数" @click="runs++">增加次数</TxMotion>
+    <output>{{ runs }}</output>
+  </template>
+---
+:::
+
+### 命名变体
+
+| 分组 | ID 与行为 |
+| --- | --- |
+| 入场 | `fade-in` 改变透明度；`fade-up` / `fade-down` 使用垂直偏移；`slide-left` / `slide-right` 使用水平偏移；`scale-in` 从 0.92 缩放并回弹；`zoom-in` 从 0.85 缩放并消除 12px 模糊。 |
+| 悬停 | `card-hover` 在调用方条目之间移动共用背景；`tilt-card` 将归一化指针坐标映射为三维旋转；`magnetic-button` 在距离阈值内磁吸；`glow-button` 将 120px 径向光移到指针位置。 |
+| 指针 | `cursor-trail` 使用逐渐缩小、各有 spring 参数的圆点；`spotlight` 在内容上移动 250px 聚光；`mouse-follow` 用 spring 跟随指针，并提供 `cursor` 插槽。 |
+| 滚动 | `scroll-reveal` 进入配置的视口后揭示内容；`progress-indicator` 用 spring 跟随实际滚动进度；`sticky-reveal` 将目标相对滚动进度映射为当前条目与固定画面。 |
+| 支持组件 | `icon-swap` 承载 IconSwap / IconSwapItem，按 key 切换缩放、模糊和透明度；`in-view` 承载 InViewRender，在接近视口时挂载插槽。 |
+
+### 最佳实践
+
+- 由调用方提供内容、条目和操作处理。组件不执行导航、复制或发布，也不制造业务成功状态。
+- 原生磁吸按钮、发光按钮和进度条应提供 `label`。卡片条目有 `href` 时渲染原生链接，否则渲染原生按钮并发出 `select`。
+- 默认将指针效果限定在当前组件内。`global` 将全局指针层和顶部进度条 Teleport 到 `body`，避免祖先 transform 改变固定定位。装饰指针不向辅助技术朗读。
+- 嵌套滚动应把实际元素传给 `scrollContainer`。未传时读取文档滚动。固定揭示舞台与步骤按该容器的可见高度布置并监听尺寸变化，不把文档 `vh` 当作嵌套容器高度；调用方仍须保留有效滚动范围。
+- 修改 `stateKey` 或调用暴露的 `replay()` 回放入场。`icon-swap` 的 key 应随真实状态更新，插槽同时提供对应图标。
+- `enabled=false` 暂停动画及输入资源，保留可读内容。减少动态效果时，语义滚动进度继续更新，内容与图标立即显示最终状态。
+- `in-view` 的宿主应保留稳定尺寸，避免布局跳动。`once=true` 在首次进入后保留挂载内容；`once=false` 在离开视口时卸载内容。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `MotionVariant` | `'fade-in'` | 上表所有命名变体；枚举导出为 `MOTION_VARIANTS`。 |
+| `as` | `string` | 磁吸/发光为原生 `button`，其余为 `div` | 根元素。原生按钮属性与事件透传。 |
+| `enabled` | `boolean` | `true` | 启用动态效果和输入追踪。 |
+| `disabled` | `boolean` | `false` | 禁用原生按钮和输入驱动效果。 |
+| `label` | `string` | — | 无障碍名称；图标按钮与进度条应提供。 |
+| `duration` | `number` | 入场依变体为 500 / 600 / 700ms；图标为 300ms | 持续时间，单位毫秒。 |
+| `delay` | `number` | `0` | 入场延迟，单位毫秒。 |
+| `xOffset` | `number` | 向左为 `40`，向右为 `-40`，其余为 `0` | 入场起始 x 坐标。 |
+| `yOffset` | `number` | 向上为 `20`，向下为 `-20`，滚动揭示为 `30`，其余为 `0` | 入场起始 y 坐标。 |
+| `initialScale` | `number` | scale 为 `0.92`，zoom 为 `0.85`，滚动揭示为 `0.95`，其余为 `1` | 起始缩放。 |
+| `initialBlur` | `number` | `12` | Zoom 的起始模糊半径，单位像素。 |
+| `maxTilt` | `number` | `15` | 指针到边缘时的最大旋转角。 |
+| `range` | `number` | `45` | 磁吸中心距离阈值，单位像素。 |
+| `strength` | `number` | `0.35` | 磁吸坐标倍率。 |
+| `spring` | `SpringConfig` | 各来源参数 | 覆盖指针、拖尾与进度的 stiffness、damping 和 mass；使用共用 spring 积分器。 |
+| `glowColor` | `string` | `'var(--tx-color-primary)'` | 聚光、指针与进度颜色，建议传主题 token。 |
+| `glowSize` | `number` | 发光按钮 `120`；聚光 `250` | 径向效果半径，单位像素。 |
+| `cursorSize` | `number` | `8` | 拖尾首点直径；跟随指针的轮廓至少为 24px。 |
+| `cursorCount` | `number` | `6` | 拖尾圆点数量，限制为 1～64。各点独立缩小并使用不同 spring。 |
+| `global` | `boolean` | `false` | 全局指针坐标与 Teleport；固定顶部进度条。 |
+| `scrollContainer` | `HTMLElement \| null` | 文档 | 观察视口与进度的滚动容器。 |
+| `progressHeight` | `number` | `4` | 进度条高度，单位像素。 |
+| `stickyTop` | `number` | `20` | 固定画面的顶部偏移，单位像素。 |
+| `items` | `MotionItem[]` | `[]` | 卡片/固定揭示内容：`{ id, title, description?, href?, disabled? }`。 |
+| `once` | `boolean` | `true` | 保留首次入场或可见性挂载。 |
+| `rootMargin` | `string` | 揭示 `'-15%'`；in-view `'200px'` | IntersectionObserver 边距。 |
+| `stateKey` | `string \| number \| boolean` | `0` | 入场回放标识或图标身份。 |
+| `transition` | `Transition` | 来源入场缓动 / 共用 `'smooth'` | 覆盖入场与卡片背景运动的共用转场参数。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `complete` | — | 入场动画正常完成。暂停时取消动画，不报告完成。 |
+| `progress` | `number` | 0～1 的实际滚动进度。 |
+| `active-change` | `number` | 当前固定揭示条目索引。 |
+| `select` | `(item: MotionItem, index: number)` | 可用卡片通过指针或键盘激活。 |
+| `visible-change` | `boolean` | 揭示/in-view 交集改变。 |
+
+### 插槽与暴露状态
+
+| 名称 | 参数 / 类型 | 说明 |
+| --- | --- | --- |
+| `default` | 通用效果为 `{ pointer, progress, active }` | 调用方内容；`icon-swap` 应传入与 `stateKey` 一致的图标。 |
+| `item` | `{ item, index, active }` | 卡片条目或固定揭示文字。 |
+| `visual` | `{ item, index, active }` | 固定画面。非当前层使用 `inert`，并对辅助技术隐藏。 |
+| `cursor` | — | 跟随指针装饰。 |
+| `replay()` | `() => void` | 动态效果活跃时回放入场。 |
+| `progress` | `number` | 实际滚动进度；Vue 对内部只读 ref 自动解包。 |
+| `activeIndex` | `number` | 固定揭示选择；Vue 对内部 computed ref 自动解包。 |
+
+### Vue 辅助 API
+
+从 `@talex-touch/tuffex/motion` 导入以下能力，不改用 utils barrel。浏览器资源遵循挂载、KeepAlive 与文档可见性。SSR 不访问浏览器 API。
+
+| 导出 | 输入 | 实际输出 |
+| --- | --- | --- |
+| `useMousePosition` | 可选目标 ref、启用 getter、全局 getter | 只读 ref：`{ x, y, elementX, elementY, width, height, inside }`，来自原生指针坐标。触摸不生成悬停装饰。 |
+| `useScrollProgress` | 容器 getter、启用 getter、可选目标 getter | 只读 0～1 ref。未传目标时为 scrollTop / 滚动范围；传目标时为 start-start 到 end-end 的相对进度。 |
+| `useStagger` | 数量 getter、`{ baseDelay?, staggerDelay?, from? }` getter | 毫秒延迟数组。默认起始 0ms、步长 50ms、从首项开始；支持末项、中心和数值起点。 |
+| `useReducedMotion` | — | 既有共用响应式偏好，不另建媒体查询实现。 |
+| `useScreenSize` | 可选启用 getter | 只读视口宽高，SSR 初值为 0/0。 |
+| `useIsMobile` | 断点 getter，默认 `768` | 只读媒体查询结果。屏幕宽度不被当作用户的减少动态效果偏好。 |
+| `useLoopFlag` | 目标 ref、启用 getter、间隔 getter（`2000ms`） | 只读递增标记。离屏、隐藏、禁用、减少动态效果和停用时暂停。 |
+| `useWebHaptics` | 可选启用 getter | `{ supported, trigger(type) }`。触发返回 `{ supported, accepted }`；类型为 light、medium、heavy、success、warning 和 error。复用既有震动工具。 |
+| `useCanvasSetup` | Canvas ref、启用 getter | 缓存逻辑尺寸 `{ width, height, dpr }`，更新实际像素尺寸，并返回 `active`、`visible`、`reduced`。DPR 最大为 2，绘制由调用方负责。 |
+
+`accepted=true` 只表示浏览器接受了 Vibration API 请求，不能证明设备实际震动。不支持该 API 的 macOS 桌面浏览器返回 `supported=false`，组件不宣称设备已产生反馈。
+
+## 概述
+
+共用 spring 驱动倾斜、磁吸、各个拖尾圆点、鼠标跟随和滚动进度。逐帧工作静止后停止，失活时取消。页面隐藏、离屏、KeepAlive 停用或卸载时，WAAPI 入场与图标转场取消。观察器、尺寸/指针/滚动监听、循环定时器和震动归属由 Vue 生命周期释放。没有 IntersectionObserver 时，仍提供可读内容。
+
+## 技术实现
+
+来源为 Amicro 的 MIT 入场、悬停、指针和滚动 registry，以及 IconSwap、InViewRender 与辅助 hooks。Copyright (c) 2026 SYED  SUBHAN UDDIN。实现使用 Vue、既有 motion-activity、Liquid spring 和震动工具，不加入 React、Motion 或 Tailwind 运行时。验证由负责集成的 Build 执行，本页不宣称已经完成浏览器验收。

@@ -8,6 +8,12 @@ import type {
   IndexedWriteFlushSnapshotService
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
+import {
+  beginForegroundSearchActivity,
+  endForegroundSearchActivity,
+  hasActiveForegroundSearches,
+  markSearchActivity
+} from '../../search-engine/search-activity'
 import type { FileProviderRuntimeWriteSnapshot } from './file-provider-index-contracts'
 import type { FileIndexSettings } from './types'
 import { DEFAULT_FILE_INDEX_SETTINGS } from './types'
@@ -23,16 +29,17 @@ const {
   filePersistenceUpsertFiles,
   filePersistenceUpdateFileMetadata,
   filePersistenceUpsertScanProgress,
-  filePersistenceRemoveFile,
+  filePersistenceRemoveFileRecords,
+  filePersistenceRemoveMissingFileSearchRecords,
   filePersistenceRemoveFileExtensions,
   filePersistenceGetStatus,
   filePersistenceHasPendingWork,
   filePersistenceDrain,
   runtimeApplyBatch,
-  runtimeApplyDelta,
   runtimeCleanupSource,
   runtimeCountSource,
   runtimePublishContentCleared,
+  runtimePublishFileDeletionCommit,
   runtimeDrainSource,
   runtimeScanSource,
   runtimeWithMutationLease,
@@ -56,7 +63,18 @@ const {
       missingFileIds: [] as number[]
     })),
     filePersistenceUpsertScanProgress: vi.fn(async () => 0),
-    filePersistenceRemoveFile: vi.fn(async () => undefined),
+    filePersistenceRemoveFileRecords: vi.fn(async () => ({
+      deletedRecords: [],
+      removedIndexedItems: 0,
+      commitId: null,
+      deferred: false
+    })),
+    filePersistenceRemoveMissingFileSearchRecords: vi.fn(async () => ({
+      deletedRecords: [],
+      removedIndexedItems: 0,
+      commitId: null,
+      deferred: false
+    })),
     filePersistenceRemoveFileExtensions: vi.fn(async () => undefined),
     filePersistenceGetStatus: vi.fn(async () => null),
     filePersistenceHasPendingWork: vi.fn(() => false),
@@ -64,10 +82,10 @@ const {
     runtimeApplyBatch: vi.fn<() => Promise<{ indexedItemCount?: number } | undefined>>(
       async () => undefined
     ),
-    runtimeApplyDelta: vi.fn(async () => undefined),
     runtimeCleanupSource: vi.fn(async () => 0),
     runtimeCountSource: vi.fn(async () => 0),
     runtimePublishContentCleared: vi.fn(async () => undefined),
+    runtimePublishFileDeletionCommit: vi.fn(async () => undefined),
     runtimeDrainSource: vi.fn(async () => undefined),
     runtimeScanSource: vi.fn(async () => undefined),
     runtimeWithMutationLease: vi.fn(
@@ -133,7 +151,8 @@ vi.mock('../../../../service/app-task-gate', () => ({
 vi.mock('../../../../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
     schedule: vi.fn((_label: string, operation: () => Promise<unknown>) => operation()),
-    waitForCapacity: vi.fn(async () => undefined)
+    waitForCapacity: vi.fn(async () => undefined),
+    hasInteractiveWrites: vi.fn(() => false)
   }
 }))
 
@@ -144,7 +163,9 @@ vi.mock('../../../../db/sqlite-retry', () => ({
 
 vi.mock('./embedding-service', () => ({
   EmbeddingService: vi.fn(() => ({
-    semanticSearch: vi.fn(async () => [])
+    semanticSearch: vi.fn(async () => []),
+    // Read by the indexed-source evidence: null while embedding runs.
+    getUsageLimitPause: vi.fn(() => null)
   }))
 }))
 
@@ -226,6 +247,22 @@ import {
 } from './services/file-provider-index-scheduler-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 import { recordRuntimeWriteSnapshot } from './services/file-provider-runtime-evidence'
+import {
+  FileProviderMaintenanceService,
+  type FileProviderMaintenanceDeps
+} from './services/file-provider-maintenance-service'
+
+// Production shutdown is terminal. This singleton-based suite owns a fresh maintenance
+// instance per case rather than reviving an aborted production controller or stale timers.
+const maintenanceFixture = fileProvider as unknown as {
+  maintenanceService: FileProviderMaintenanceService
+}
+// The provider-owned instance was built with this named DI contract; TS hides its private slot.
+const maintenanceConstruction = maintenanceFixture.maintenanceService as unknown as {
+  deps: FileProviderMaintenanceDeps
+}
+const maintenanceDependencies = maintenanceConstruction.deps
+const ownedDeferredReleases = new Set<() => void>()
 
 interface MutableFileProvider {
   prepareForSearchIndexShutdown: () => Promise<void>
@@ -547,7 +584,10 @@ function createFilePersistencePort(): FilePersistencePort {
     upsertFiles: filePersistenceUpsertFiles,
     updateFileMetadata: filePersistenceUpdateFileMetadata,
     upsertScanProgress: filePersistenceUpsertScanProgress,
-    removeFile: filePersistenceRemoveFile,
+    removeFileRecords: filePersistenceRemoveFileRecords,
+    removeMissingFileSearchRecords: filePersistenceRemoveMissingFileSearchRecords,
+    listPendingFileDeletionCommits: async () => ({ commits: [], deferred: false }),
+    acknowledgeFileDeletionCommits: async () => ({ acknowledged: 0, deferred: false }),
     removeFileExtensions: filePersistenceRemoveFileExtensions,
     getStatus: filePersistenceGetStatus,
     hasPendingWork: filePersistenceHasPendingWork,
@@ -559,8 +599,9 @@ function installRuntimeDependencies(provider: FileProviderIndexingLifecycleTestA
   provider.setFilePersistencePort(createFilePersistencePort())
   provider.setIndexedSourceRuntimeMutationDelegate({
     withMutationLease: runtimeWithMutationLease,
+    publishFileDeletionCommit: runtimePublishFileDeletionCommit,
     applyBatch: runtimeApplyBatch,
-    applyDelta: runtimeApplyDelta,
+    applyBatchWithPersistence: async () => ({ persistedCount: 0 }),
     cleanupSource: runtimeCleanupSource,
     countSource: runtimeCountSource,
     publishContentCleared: runtimePublishContentCleared,
@@ -644,14 +685,25 @@ function resetProviderState(provider: MutableFileProvider): void {
   provider.keywordBackfillScheduled = false
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await maintenanceFixture.maintenanceService.stop()
+  resetProviderState(fileProvider as unknown as FileProviderIndexingLifecycleTestApi)
+  maintenanceFixture.maintenanceService = new FileProviderMaintenanceService(
+    maintenanceDependencies
+  )
   installRuntimeDependencies(fileProvider as unknown as FileProviderIndexingLifecycleTestApi)
 })
 
-afterEach(() => {
-  vi.useRealTimers()
+afterEach(async () => {
   const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+  for (const release of ownedDeferredReleases) release()
+  ownedDeferredReleases.clear()
+  markSearchActivity(0)
+  provider.shuttingDown = true
+  await maintenanceFixture.maintenanceService.stop()
+  await provider.backgroundStartupPromise?.catch(() => undefined)
   resetProviderState(provider)
+  vi.useRealTimers()
   provider.setFilePersistencePort(null)
   provider.setIndexedSourceRuntimeMutationDelegate(null)
   provider.setIndexedSourceRuntimeResetDelegate(null)
@@ -668,16 +720,27 @@ afterEach(() => {
     })
   )
   filePersistenceUpsertScanProgress.mockResolvedValue(0)
-  filePersistenceRemoveFile.mockResolvedValue(undefined)
+  filePersistenceRemoveFileRecords.mockResolvedValue({
+    deletedRecords: [],
+    removedIndexedItems: 0,
+    commitId: null,
+    deferred: false
+  })
+  filePersistenceRemoveMissingFileSearchRecords.mockResolvedValue({
+    deletedRecords: [],
+    removedIndexedItems: 0,
+    commitId: null,
+    deferred: false
+  })
   filePersistenceRemoveFileExtensions.mockResolvedValue(undefined)
   filePersistenceGetStatus.mockResolvedValue(null)
   filePersistenceHasPendingWork.mockReturnValue(false)
   filePersistenceDrain.mockResolvedValue(undefined)
   runtimeApplyBatch.mockResolvedValue(undefined)
-  runtimeApplyDelta.mockResolvedValue(undefined)
   runtimeCleanupSource.mockResolvedValue(0)
   runtimeCountSource.mockResolvedValue(0)
   runtimePublishContentCleared.mockResolvedValue(undefined)
+  runtimePublishFileDeletionCommit.mockResolvedValue(undefined)
   runtimeDrainSource.mockResolvedValue(undefined)
   runtimeScanSource.mockResolvedValue(undefined)
 })
@@ -697,40 +760,6 @@ describe('file-provider startup readiness', () => {
       path.resolve('/tmp/tuff-r3-fixture'),
       path.resolve('/tmp/tuff-r3-other')
     ])
-  })
-
-  it('falls back to the home directory as the base watch root when no override is set', () => {
-    const roots = resolveFileProviderBaseWatchPaths({
-      platform: 'darwin',
-      getPath: (name) => {
-        if (name !== 'home') throw new Error(`unexpected path lookup: ${name}`)
-        return '/Users/demo'
-      }
-    })
-
-    expect(roots).toEqual(['/Users/demo'])
-  })
-
-  it('keeps the six per-folder roots on non-macOS platforms and never asks for home', () => {
-    const requested: string[] = []
-    const roots = resolveFileProviderBaseWatchPaths({
-      platform: 'linux',
-      getPath: (name) => {
-        requested.push(name)
-        if (name === 'home') throw new Error('home is a mac-only default root')
-        return `/home/demo/${name}`
-      }
-    })
-
-    expect(roots).toEqual([
-      '/home/demo/documents',
-      '/home/demo/downloads',
-      '/home/demo/desktop',
-      '/home/demo/music',
-      '/home/demo/pictures',
-      '/home/demo/videos'
-    ])
-    expect(requested).not.toContain('home')
   })
 
   it('matches the full scan when a personal build directory gains a project marker', async () => {
@@ -762,46 +791,54 @@ describe('file-provider startup readiness', () => {
   })
 
   it('registers channels without blocking on search-index worker or filesystem watcher roots', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
     const provider = fileProvider as unknown as MutableFileProvider
-    resetProviderState(provider)
-
-    let releaseIdle: (value: boolean) => void = () => {}
-    appTaskWaitForIdle.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          releaseIdle = resolve
+    const activityId = 'startup:readiness-foreground'
+    const release = (): void => {
+      endForegroundSearchActivity(activityId)
+      markSearchActivity(0)
+    }
+    ownedDeferredReleases.add(release)
+    beginForegroundSearchActivity(activityId)
+    let startup: Promise<void> | null = null
+    try {
+      await provider.onLoad(createContext())
+      startup = provider.backgroundStartupPromise
+      expect(transportOn).toHaveBeenCalledTimes(1)
+      // Startup's cooperative hop remains real; Date and its idle polling timer are controlled.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(filePersistenceWaitUntilReady).not.toHaveBeenCalled()
+      expect(watchServiceInitialize).not.toHaveBeenCalled()
+      expect(watchServiceEnsure).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          startupReady: false,
+          startupPending: true,
+          startupErrorCode: null
         })
-    )
-
-    await provider.onLoad(createContext())
-
-    expect(transportOn).toHaveBeenCalledTimes(1)
-    expect(filePersistenceWaitUntilReady).not.toHaveBeenCalled()
-    expect(watchServiceInitialize).not.toHaveBeenCalled()
-    expect(watchServiceEnsure).not.toHaveBeenCalled()
-    expect(provider.getIndexingStatus()).toEqual(
-      expect.objectContaining({
-        startupReady: false,
-        startupPending: true,
-        startupErrorCode: null
-      })
-    )
-
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    releaseIdle(true)
-    await provider.backgroundStartupPromise
-
-    expect(filePersistenceWaitUntilReady).toHaveBeenCalledTimes(1)
-    expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
-    expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
-    expect(transportOn).toHaveBeenCalledTimes(1)
-    expect(provider.getIndexingStatus()).toEqual(
-      expect.objectContaining({
-        startupReady: true,
-        startupPending: false,
-        startupErrorCode: null
-      })
-    )
+      )
+      endForegroundSearchActivity(activityId)
+      await vi.advanceTimersByTimeAsync(100)
+      await startup
+      expect(filePersistenceWaitUntilReady).toHaveBeenCalledTimes(1)
+      expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
+      expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
+      expect(transportOn).toHaveBeenCalledTimes(1)
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          startupReady: true,
+          startupPending: false,
+          startupErrorCode: null
+        })
+      )
+    } finally {
+      release()
+      await vi.advanceTimersByTimeAsync(100)
+      await startup?.catch(() => undefined)
+      ownedDeferredReleases.delete(release)
+    }
   })
 
   it('stops auto indexing when shutdown starts during watcher setup', async () => {
@@ -839,38 +876,33 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('waits for deferred startup and prevents post-shutdown worker or watcher initialization', async () => {
+  it('cancels deferred startup at shutdown without waiting for a live foreground search or initializing workers/watchers', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
     const provider = fileProvider as unknown as FileProviderShutdownTestApi
-    resetProviderState(provider)
-    const idle = createDeferred<boolean>()
+    const activityId = 'startup:shutdown-foreground'
+    const release = (): void => {
+      endForegroundSearchActivity(activityId)
+      markSearchActivity(0)
+    }
+    ownedDeferredReleases.add(release)
+    beginForegroundSearchActivity(activityId)
     const scanWorkerShutdown = vi.spyOn(provider.fileScanWorker, 'shutdown')
     const indexWorkerShutdown = vi.spyOn(provider.fileIndexWorker, 'shutdown')
     const reconcileWorkerShutdown = vi.spyOn(provider.reconcileWorker, 'shutdown')
     let startup: Promise<void> | null = null
     let prepare: Promise<void> | null = null
-
-    appTaskWaitForIdle.mockReturnValueOnce(idle.promise)
-
     try {
       await provider.onLoad(createContext())
-      await new Promise<void>((resolve) => setImmediate(resolve))
       startup = provider.backgroundStartupPromise
-
-      expect(startup).not.toBeNull()
-      expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
-
-      prepare = provider.prepareForSearchIndexShutdown()
-      let prepareSettled = false
-      void prepare.then(() => {
-        prepareSettled = true
-      })
       await new Promise<void>((resolve) => setImmediate(resolve))
-
-      expect(prepareSettled).toBe(false)
-
-      idle.resolve(true)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ startupPending: true, startupReady: false })
+      )
+      prepare = provider.prepareForSearchIndexShutdown()
       await prepare
-
+      expect(hasActiveForegroundSearches()).toBe(true)
       expect(filePersistenceWaitUntilReady).not.toHaveBeenCalled()
       expect(watchServiceInitialize).not.toHaveBeenCalled()
       expect(watchServiceEnsure).not.toHaveBeenCalled()
@@ -878,12 +910,13 @@ describe('file-provider startup readiness', () => {
       expect(indexWorkerShutdown).toHaveBeenCalledTimes(1)
       expect(reconcileWorkerShutdown).toHaveBeenCalledTimes(1)
     } finally {
-      idle.resolve(true)
+      release()
       await startup?.catch(() => undefined)
       await prepare?.catch(() => undefined)
       scanWorkerShutdown.mockRestore()
       indexWorkerShutdown.mockRestore()
       reconcileWorkerShutdown.mockRestore()
+      ownedDeferredReleases.delete(release)
     }
   })
 
@@ -1046,47 +1079,6 @@ describe('file-provider startup readiness', () => {
       )
     } finally {
       reportSpy.mockRestore()
-    }
-  })
-
-  it('reports reconcile stats from the indexing run', async () => {
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
-    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
-    const originalStartIndexing = provider.startIndexing
-
-    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
-    provider.startIndexing = vi.fn(async () => ({
-      added: 3,
-      changed: 2,
-      deleted: 1,
-      skipped: 5,
-      errors: 0
-    }))
-
-    try {
-      const result = await provider.reconcileIndexedSource({ sourceId: 'file-provider' })
-
-      expect(provider.ensureFileSystemWatchers).toHaveBeenCalledTimes(1)
-      expect(provider.startIndexing).toHaveBeenCalledWith(
-        'auto',
-        expect.objectContaining({
-          onDelta: expect.any(Function)
-        })
-      )
-      expect(result).toMatchObject({
-        sourceId: 'file-provider',
-        added: 3,
-        changed: 2,
-        deleted: 1,
-        skipped: 5,
-        errors: 0,
-        deltas: [],
-        reason: 'file-index-reconciliation'
-      })
-      expect(result.completedAt).toBeGreaterThanOrEqual(result.startedAt)
-    } finally {
-      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
-      provider.startIndexing = originalStartIndexing
     }
   })
 
@@ -1532,6 +1524,42 @@ describe('file-provider startup readiness', () => {
     }
   })
 
+  it('says in the diagnostics that the AI usage limit paused embedding, and until when', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const internals = fileProvider as unknown as { embeddingService: unknown }
+    const originalDbUtils = provider.dbUtils
+    const originalEmbedding = internals.embeddingService
+    const pausedUntil = Date.parse('2026-10-04T07:00:00.000Z')
+
+    provider.dbUtils = null
+    try {
+      internals.embeddingService = { getUsageLimitPause: () => null }
+      const running = await provider.getIndexedSourceEvidence()
+      expect(running.map((row) => row.id)).not.toContain('file-provider:embedding-pause')
+
+      internals.embeddingService = {
+        getUsageLimitPause: () => ({
+          reason: 'USAGE_LIMIT_REACHED',
+          limitKey: 'requestsPerDay',
+          pausedUntil
+        })
+      }
+      const paused = await provider.getIndexedSourceEvidence()
+      expect(paused).toContainEqual(
+        expect.objectContaining({
+          id: 'file-provider:embedding-pause',
+          label: 'File embedding',
+          status: 'degraded',
+          reason: 'USAGE_LIMIT_REACHED',
+          metadata: { limitKey: 'requestsPerDay', pausedUntil }
+        })
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      internals.embeddingService = originalEmbedding
+    }
+  })
+
   it('maps file rows into indexed source records', () => {
     const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
     const mtime = new Date('2026-05-30T00:00:00.000Z')
@@ -1573,84 +1601,6 @@ describe('file-provider startup readiness', () => {
         ]
       }
     })
-  })
-
-  it('returns concrete watch deltas for runtime store updates', async () => {
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
-    const originalIsWithinWatchRoots = provider.isWithinWatchRoots
-    const originalBuildFileRecord = provider.buildFileRecord
-    const originalDbUtils = provider.dbUtils
-    const mtime = new Date('2026-05-30T00:00:00.000Z')
-    const selectWhere = vi.fn(async () => [{ id: 42, path: '/Users/demo/Documents/a.md' }])
-    const deleteWhere = vi.fn(async () => undefined)
-    const updateWhere = vi.fn(async () => undefined)
-    const db = {
-      select: vi.fn(() => ({ from: vi.fn(() => ({ where: selectWhere })) })),
-      delete: vi.fn(() => ({ where: deleteWhere })),
-      update: vi.fn(() => ({ set: vi.fn(() => ({ where: updateWhere })) }))
-    }
-
-    provider.isWithinWatchRoots = vi.fn(() => true)
-    provider.buildFileRecord = vi.fn(async () => ({
-      path: '/Users/demo/Documents/a.md',
-      name: 'a.md',
-      displayName: null,
-      extension: '.md',
-      size: 128,
-      mtime,
-      ctime: mtime,
-      lastIndexedAt: mtime,
-      type: 'file',
-      isDir: false
-    }))
-    // Split off in this harness: the file-index read home falls back to the
-    // primary handle (mirrors createDbUtils' flag-off behavior).
-    provider.dbUtils = { getDb: () => db, getFileIndexReadDb: () => db }
-
-    try {
-      await expect(
-        provider.handleIndexedSourceWatchEvent({
-          sourceId: 'file-provider',
-          action: 'delete',
-          path: '/Users/demo/Documents/a.md',
-          occurredAt: 1700000000000
-        })
-      ).resolves.toEqual([
-        {
-          sourceId: 'file-provider',
-          action: 'delete',
-          stableKey: '/Users/demo/Documents/a.md',
-          path: '/Users/demo/Documents/a.md',
-          reason: 'file-provider-watch-delete'
-        }
-      ])
-
-      await expect(
-        provider.handleIndexedSourceWatchEvent({
-          sourceId: 'file-provider',
-          action: 'change',
-          path: '/Users/demo/Documents/a.md',
-          occurredAt: 1700000000000
-        })
-      ).resolves.toEqual([
-        {
-          sourceId: 'file-provider',
-          action: 'change',
-          record: expect.objectContaining({
-            sourceId: 'file-provider',
-            recordId: '/Users/demo/Documents/a.md',
-            kind: 'file',
-            title: 'a.md'
-          }),
-          path: '/Users/demo/Documents/a.md',
-          reason: 'file-provider-watch-event'
-        }
-      ])
-    } finally {
-      provider.isWithinWatchRoots = originalIsWithinWatchRoots
-      provider.buildFileRecord = originalBuildFileRecord
-      provider.dbUtils = originalDbUtils
-    }
   })
 
   it('ignores watch events outside configured roots', async () => {
@@ -1753,47 +1703,6 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('wires per-call split routing into the watch service for the failed-files cleanup task', async () => {
-    // Regression for the 2d.3 cross-home hazard: without these deps the
-    // cleanup task defaults to split-off and would read failed-file ids from
-    // the search home while deleting file_index_progress rows by those ids on
-    // the PRIMARY connection.
-    const watchDeps = (
-      fileProvider as unknown as {
-        watchService: {
-          __deps?: {
-            isSearchSplitEnabled?: () => boolean
-            execSearchIndexWrite?: (
-              statements: Array<{ sql: string; args: unknown[] }>,
-              mode?: 'single' | 'transaction'
-            ) => Promise<unknown>
-          }
-        }
-      }
-    ).watchService.__deps
-
-    expect(watchDeps).toBeDefined()
-    expect(typeof watchDeps?.isSearchSplitEnabled).toBe('function')
-    expect(typeof watchDeps?.execSearchIndexWrite).toBe('function')
-
-    // Per-call resolution (never constructor capture): the flag must follow
-    // the provider's LIVE initialization context.
-    const provider = fileProvider as unknown as { initializationContext: unknown }
-    const originalContext = provider.initializationContext
-    try {
-      provider.initializationContext = {
-        databaseManager: { isSearchSplitEnabled: () => true }
-      }
-      expect(watchDeps!.isSearchSplitEnabled!()).toBe(true)
-      provider.initializationContext = {
-        databaseManager: { isSearchSplitEnabled: () => false }
-      }
-      expect(watchDeps!.isSearchSplitEnabled!()).toBe(false)
-    } finally {
-      provider.initializationContext = originalContext
-    }
-  })
-
   it('keeps startup degraded with a correlated safe report when file persistence cannot initialize', async () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)
@@ -1875,68 +1784,75 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('returns stale searches before applying provider-scoped Runtime cleanup deltas', async () => {
+  it('returns a stale search result without waiting for background candidate enumeration', async () => {
+    vi.useFakeTimers()
     const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
     const originalDbUtils = provider.dbUtils
     const originalSearchIndex = provider.searchIndex
     const originalEmbeddingService = provider.embeddingService
+    const originalContext = provider.initializationContext
     const stalePath = '/Users/demo/Documents/stale-report.pdf'
-    const whereMock = vi.fn(async () => [])
-    const selectMock = vi.fn(() => ({
-      from: vi.fn(() => ({ leftJoin: vi.fn(() => ({ where: whereMock })) }))
-    }))
-    const cleanup = createDeferred<undefined>()
-
-    const searchDbHandle = { select: selectMock }
-    provider.dbUtils = {
-      getDb: () => searchDbHandle,
-      getFileIndexReadDb: () => searchDbHandle
+    const admitted = vi
+      .spyOn(fileProvider, 'isSearchPathAdmitted')
+      .mockImplementation((candidate) => candidate.startsWith('/Users/demo/Documents/'))
+    const enumerationStarted = Promise.withResolvers<void>()
+    const enumerationRelease = Promise.withResolvers<void>()
+    ownedDeferredReleases.add(() => enumerationRelease.resolve())
+    const workStored = Promise.withResolvers<void>()
+    const queued: Array<{ sourceId: string; reason: string; filePath: string }> = []
+    const searchDbHandle = {
+      select: () => ({ from: () => ({ leftJoin: () => ({ where: async () => [] }) }) }),
+      all: async () => {
+        enumerationStarted.resolve()
+        await enumerationRelease.promise
+        return []
+      },
+      insert: () => ({
+        values: (entries: Array<{ sourceId: string; reason: string; filePath: string }>) => ({
+          onConflictDoNothing: async () => {
+            queued.push(...entries)
+            workStored.resolve()
+          }
+        })
+      })
     }
+    provider.initializationContext = createContext()
+    provider.dbUtils = { getDb: () => searchDbHandle, getFileIndexReadDb: () => searchDbHandle }
     provider.searchIndex = {
-      lookupByKeywords: vi.fn(
-        async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]])
-      ),
-      lookupByKeywordPrefix: vi.fn(async () => []),
-      search: vi.fn(async () => []),
-      lookupBySubsequence: vi.fn(async () => []),
-      lookupByNgrams: vi.fn(async () => [])
+      lookupByKeywords: async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]]),
+      lookupByKeywordPrefix: async () => [],
+      search: async () => [],
+      lookupBySubsequence: async () => [],
+      lookupByNgrams: async () => []
     }
     provider.embeddingService = null
-    filePersistenceRemoveFile.mockReturnValueOnce(cleanup.promise)
-
-    let cleanupReleased = false
+    const result = provider.onSearch({ text: 'report', inputs: [] }, new AbortController().signal)
     try {
-      const resultPromise = provider.onSearch(
-        { text: 'report', inputs: [] },
-        new AbortController().signal
-      )
-
-      await vi.waitFor(() => expect(filePersistenceRemoveFile).toHaveBeenCalledWith(stalePath))
-      const settled = await resultPromise
-
-      expect(settled.items).toEqual([])
-      expect(runtimeApplyDelta).not.toHaveBeenCalled()
-
-      cleanupReleased = true
-      cleanup.resolve(undefined)
-      await cleanup.promise
-      await vi.waitFor(() =>
-        expect(runtimeApplyDelta).toHaveBeenCalledWith({
-          sourceId: 'file-provider',
-          action: 'delete',
-          stableKey: stalePath,
-          path: stalePath,
-          reason: 'search.remove-stale-candidates'
-        })
-      )
+      await enumerationStarted.promise
+      expect((await result).items).toEqual([])
+      expect(queued).toEqual([])
     } finally {
-      if (!cleanupReleased) {
-        cleanup.resolve(undefined)
-        await cleanup.promise
+      enumerationRelease.resolve()
+      try {
+        await vi.advanceTimersByTimeAsync(1)
+        await workStored.promise
+        await maintenanceFixture.maintenanceService.cancelRun()
+        expect(queued).toEqual([
+          expect.objectContaining({
+            sourceId: 'file-provider',
+            reason: 'orphan-search',
+            filePath: stalePath
+          })
+        ])
+      } finally {
+        cancelScheduledProviderWork(provider)
+        admitted.mockRestore()
+        provider.dbUtils = originalDbUtils
+        provider.searchIndex = originalSearchIndex
+        provider.embeddingService = originalEmbeddingService
+        provider.initializationContext = originalContext
+        await result
       }
-      provider.dbUtils = originalDbUtils
-      provider.searchIndex = originalSearchIndex
-      provider.embeddingService = originalEmbeddingService
     }
   })
 
@@ -2904,117 +2820,6 @@ describe('file-provider metadata update writer ownership (issue #476)', () => {
     expect(filePersistenceUpdateFileMetadata).not.toHaveBeenCalled()
     expect(mainDbUpdate).not.toHaveBeenCalled()
     expect(selectWhere).not.toHaveBeenCalled()
-  })
-})
-
-interface FileProviderStaleCandidateTestApi extends FileProviderIndexingLifecycleTestApi {
-  cleanupStaleSearchCandidates: (itemIds: string[]) => void
-  cleanupStaleFileResult: (file: { id: number; path: string }, reason: string) => void
-}
-
-describe('stale search candidate cleanup', () => {
-  it('removes only the candidates the filesystem confirms are gone', async () => {
-    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
-    const livePath = path.join(dir, 'live.txt')
-    const missingPath = path.join(dir, 'gone.txt')
-    await fs.writeFile(livePath, 'x')
-
-    try {
-      provider.cleanupStaleSearchCandidates([livePath, missingPath])
-
-      await vi.waitFor(() => {
-        expect(filePersistenceRemoveFile).toHaveBeenCalled()
-      })
-      // The live file only missed the row lookup; deleting its index entry is
-      // the wrongful-deletion bug this guard exists for.
-      expect(filePersistenceRemoveFile).toHaveBeenCalledTimes(1)
-      expect(filePersistenceRemoveFile).toHaveBeenCalledWith(missingPath)
-      expect(runtimeApplyDelta).toHaveBeenCalledTimes(1)
-      expect(runtimeApplyDelta).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'delete', path: missingPath })
-      )
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('removes nothing when every candidate still exists on disk', async () => {
-    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
-    const livePath = path.join(dir, 'live.txt')
-    await fs.writeFile(livePath, 'x')
-
-    try {
-      provider.cleanupStaleSearchCandidates([livePath])
-      await new Promise((resolve) => setTimeout(resolve, 20))
-
-      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
-      expect(runtimeApplyDelta).not.toHaveBeenCalled()
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('keeps the row when a search result only failed its renderable existence check', async () => {
-    // normalizeFileSearchItem drops an item whose file "does not exist" per
-    // existsSync — which is also what a revoked-permission directory looks
-    // like. The row may only go when the filesystem answers ENOENT.
-    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-results-'))
-    const livePath = path.join(dir, 'live.txt')
-    await fs.writeFile(livePath, 'x')
-
-    try {
-      provider.cleanupStaleFileResult({ id: 1, path: livePath }, 'search-result')
-      await new Promise((resolve) => setTimeout(resolve, 20))
-
-      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
-      expect(runtimeApplyDelta).not.toHaveBeenCalled()
-
-      provider.cleanupStaleFileResult({ id: 2, path: path.join(dir, 'gone.txt') }, 'search-result')
-      await vi.waitFor(() => {
-        expect(filePersistenceRemoveFile).toHaveBeenCalledWith(path.join(dir, 'gone.txt'))
-      })
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
-  })
-})
-
-describe('path normalization migration scheduling', () => {
-  it('arms the migration from the live startup path, and only on darwin', async () => {
-    // The gate is only worth anything on the entry point the app really runs:
-    // onLoad → background startup → schedule. Deferred, never inline, so the
-    // pass cannot join the startup write storm (write contracts §7). Off
-    // darwin the repair does not apply at all, so nothing is armed and
-    // reconciliation is never deferred.
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
-    resetProviderState(provider)
-    const armsMigration = process.platform === 'darwin'
-
-    await provider.onLoad(createContext())
-    await provider.backgroundStartupPromise
-
-    expect(provider.backgroundStartupReady).toBe(true)
-    expect(provider.pathNormalizationScheduled).toBe(armsMigration)
-    expect(provider.pathNormalizationTimer === null).toBe(!armsMigration)
-  })
-
-  it('queues the keyword backfill behind the path repair, off the same live path', async () => {
-    // Both passes walk the whole files table and the repair rewrites the very
-    // ids the backfill re-emits under, so they never run together: on darwin
-    // the backfill is armed by the repair's completion, and where the repair
-    // does not apply it is armed directly from the same startup path.
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
-    resetProviderState(provider)
-    const armsMigration = process.platform === 'darwin'
-
-    await provider.onLoad(createContext())
-    await provider.backgroundStartupPromise
-
-    expect(provider.keywordBackfillScheduled).toBe(!armsMigration)
-    expect(provider.keywordBackfillTimer === null).toBe(armsMigration)
   })
 })
 

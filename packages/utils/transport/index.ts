@@ -82,6 +82,8 @@ export {
   createTuffRendererTransport,
   useTuffTransport,
 } from './sdk'
+export { createTerminalSdk } from './sdk/domains/terminal'
+export type { TerminalSdk, TerminalSessionHandle, TerminalSessionHandlers } from './sdk/domains/terminal'
 
 export type {
   // Batch types

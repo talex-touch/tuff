@@ -1,0 +1,193 @@
+---
+title: MonoChart
+description: "30 种圆角单色图表与真实数据驱动的 GitHub 活动日历。"
+category: Charts
+status: beta
+since: 0.6.3
+tags: [chart, mono, svg, activity]
+syncStatus: reviewed
+verified: false
+---
+
+## 概述
+
+`TxMonoChart` 使用原生 SVG、现有图表比例尺、d3 曲线、Sankey 布局与 `--tx-chart-*` 主题。没有 React、Recharts 或 ECharts 运行时。所有数值由 `data` 提供；缺少输入时呈现空状态，不生成虚构业务数据。活动矩阵保留绿色、蓝色、紫色强调色，其余图形跟随宿主单色墨色。
+
+悬停图形即可读取真实数值。聚焦 SVG 后，用方向键、Home、End 检查数据，Enter 或空格触发 `select`，Escape 清除读数。环图与径向图例也支持键盘。仓库展开使用原生按钮、`aria-expanded` 和收起时的 inert 列表。中心值优先显示当前悬停片段，否则显示调用方指标或数据计算值。
+
+## 用法
+
+### 目录变体与数据契约
+
+演示逐个渲染原始目录 ID，切换实际传入的数据集，并提供来源已有的全部控件。筛选只改变展示的示例，不把不同类型映射为同一幅图。
+
+:::TuffDemoWrapper{demo="MonoChartDemo" code-lang="vue" title="完整 Mono 图表目录" description="30 个原始变体、仓库展开、真实来源加载、配色控件与日期筛选。"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxMonoChart } from '@talex-touch/tuffex/charts'
+  import type { MonoChartData } from '@talex-touch/tuffex/charts'
+
+  const data: MonoChartData = {
+    categories: ['一月', '二月', '三月'],
+    series: [
+      { name: '产出', data: [{ x: '一月', value: 24 }, { x: '二月', value: 45 }, { x: '三月', value: 38 }] },
+      { name: '基线', data: [{ x: '一月', value: 18 }, { x: '二月', value: 32 }, { x: '三月', value: 29 }] },
+    ],
+  }
+  </script>
+
+  <template>
+    <TxMonoChart variant="mono-rounded-line" :data="data" :width="560" aria-label="每月产出" />
+  </template>
+---
+:::
+
+| 原始变体 ID | 输入字段 | 独立渲染与交互 |
+| --- | --- | --- |
+| `mono-activity-green` | `contributions` | 绿色七日列、月份标题、强度刻度与每日读数。 |
+| `mono-activity-blue` | `contributions` | 蓝色活动强调色，使用同一真实日历契约。 |
+| `mono-activity-purple` | `contributions` | 紫色活动强调色，使用同一真实日历契约。 |
+| `mono-rounded-line` | `series`、`categories?` | 单调样条、圆端帽、节点、次级虚线；单组/双组切换。 |
+| `mono-rounded-bar` | `series`、`categories?` | 分组圆角列柱或水平行条；列/行切换。 |
+| `mono-rounded-area` | `series`、`categories?` | 渐变面积与圆角边界；单调/自然曲线切换。 |
+| `mono-rounded-donut` | `items` | 按数值比例分段的环、端帽间隙、图例与悬停中心值。 |
+| `mono-rounded-composed` | `series`、`categories?` | 第一组渲染圆角柱，后续组叠加曲线；曲线开关。 |
+| `mono-rounded-scatter` | `points` | 独立数值 X/Y 坐标、Z 加权实心节点与悬停虚线十字。 |
+| `mono-rounded-candlestick` | `candles` | 真实 OHLC 范围、圆端帽最高/最低影线、上涨实心与下跌空心实体。 |
+| `mono-rounded-kpi` | `series`、`metric?`、`metricLabel?`、`change?` | 调用方指标与变化文案，内嵌渐变微曲线。 |
+| `mono-rounded-pyramid` | `items` | 居中圆角层级、数值比例宽度与透明度层次。 |
+| `mono-rounded-radial-group` | `items` | 多层同心 180 度进度弧与圆端帽。 |
+| `mono-rounded-gauge-arc` | `items[0]` | 240 度仪表、剩余轨道与中心值。 |
+| `mono-rounded-bullet` | `items` | 实际值圆条、最大值轨道与独立目标标记。 |
+| `mono-rounded-sankey` | `nodes`、`links` | d3 计算路由、流量加权圆角通道与节点读数。 |
+| `mono-rounded-step` | `series`、`categories?` | 后阶梯路径、圆角连接与级别节点。 |
+| `mono-rounded-stacked-bar` | `series`、`categories?` | 正负值堆叠、单色透明度分层与圆角外端。 |
+| `mono-rounded-radar` | `items` | 数值多边形网、各轴指标、圆角连接与节点读数。 |
+| `mono-rounded-radial-gauge` | `items` | 从左侧开始的完整同心利用率环。 |
+| `mono-rounded-funnel` | `items` | 按输入顺序排列的水平阶段圆条，长度按值缩放。 |
+| `mono-rounded-heatmap` | `matrix`、`categories?` | 圆角矩阵单元格、真实密度着色与单元格读数。 |
+| `mono-rounded-sparkline` | `series` | 独立遥测行、微型曲线与每组指标文本。 |
+| `mono-rounded-bubble` | `points` | 数值分布、按 Z 缩放的圆面积与空心/半透明气泡。 |
+| `mono-rounded-treemap` | `tree` 或 `items` | 加权二分分配块、嵌套子节点、圆角留白与块读数。 |
+| `mono-rounded-stream` | `series`、`categories?` | 独立叠加的自然曲线渐变流波，不是柱图/折线别名。 |
+| `mono-rounded-meter` | `items[0]` | 180 度仪表、独立轨道与中心值。 |
+| `mono-rounded-waterfall` | `waterfall` | 顺序正负增量、可选显式基线/合计柱与连接水平线。 |
+| `mono-rounded-polar` | `items` | 从顶部开始的 360 度圆角径向带。 |
+| `mono-rounded-range` | `ranges` | 真实最小/最大值浮动范围带与上下曲线边界。 |
+
+### 来源额外能力
+
+`github-activity` 保留额外的 `GitHubActivity` 日历：按宽度适配最近列、可调单元格尺寸与月份窗口、月份标题、单色或四/五级强度色、年份信息、叠放仓库头像，以及受控/非受控仓库展开。传入 `data.contributions` 与 `data.repos` 即可使用自己的来源；显式空数组保持为空。
+
+需要真实公开数据时传入 `username`。缺少的活动/仓库字段通过共享网络客户端从上游公开日历接口与 GitHub 公开事件 API 加载，沿用同一个取消信号，不嵌入凭据。`activityLoader(username, signal)` 可替换为代理或认证来源。失败触发 `error` 并显示可配置重试状态，不回退为生成数据。来源改变、离屏暂停、失活和卸载都会取消请求，旧响应不能覆盖新来源。
+
+`periods` 可以选择 `periodData` 数据集（与 `data` 浅合并），也可以指定包含边界的数值/ISO 日期范围。范围筛选系列点、类别、蜡烛、范围带和贡献日期。只有标签、没有对应数据或范围的周期只发出选择事件，不会凭空创造时间窗口。演示中的日期筛选真正移除数据点，数据源切换则替换全部图表类型的实际输入值。
+
+### 最佳实践
+
+- 按目录表提供对应字段；`series` 不是蜡烛、流图节点、矩阵或树分配的替代数据。
+- 类别点的 `x` 应与 `categories` 一致，或省略类别以从数据推导顺序。主动决定阶段/层级的输入顺序。`points.z` 控制圆面积，不直接控制半径。
+- 非百分比径向指标请设置 `max`，默认上限是 100。环图根据实际正值总和归一化，不固定为 100。
+- 仓库链接和名称由来源提供；使用自定义加载器，不把私有凭据暴露到浏览器。网络请求仅在日历客户端可见后开始。
+- SSR 提供显式 `width` 与一致的 `locale`。渐变与仓库面板 ID 使用 Vue `useId`，多个实例在 hydration 时不会冲突。
+- 本地化 `title`、`ariaLabel`、数据标签与 `labels`。通过主题 token 调整外观，不覆盖 SVG 几何。减少动态效果模式保留完整静态图表。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `MonoChartVariant` | `'mono-rounded-line'` | 上述 30 个 ID 或 `'github-activity'`。`MONO_CHART_VARIANTS` 导出原始 30 个 ID。 |
+| `data` | `MonoChartData` | `{}` | 调用方的系列、指标、矩阵、日历、财务或流图数据。 |
+| `width` | `number` | `560` | 确定性 SVG 坐标宽度，CSS 按容器缩放，最小 180。 |
+| `height` | `number` | `210` / 紧凑 `150` | SVG 坐标高度，最小 100。 |
+| `title` | `string` | — | 可选标题。 |
+| `ariaLabel` | `string` | `'Mono chart'` | SVG 无障碍名称。 |
+| `compact` | `boolean` | `false` | 缩小内边距、圆角与默认图表高度。 |
+| `seriesMode` | `'single' \| 'dual'` | 本地 `'dual'` | `v-model:series-mode`；single 使用第一组，dual 包含全部传入组。 |
+| `layout` | `'col' \| 'row'` | 本地 `'col'` | `v-model:layout`；分组/堆叠柱图方向。 |
+| `curve` | `'monotone' \| 'natural'` | 本地 `'monotone'` | `v-model:curve`；线、面积、范围、微曲线形态。流图始终自然曲线，阶梯图始终后阶梯。 |
+| `showLine` | `boolean` | 本地 `true` | `v-model:show-line`；组合图曲线可见性。 |
+| `controls` | `boolean` | `true` | 显示来源中的线、柱、面积或组合图控件。 |
+| `periods` | `MonoChartPeriod[]` | — | `{value,label,range?}` 周期按钮。 |
+| `period` | `string` | 首个周期 | `v-model:period`；当前数据集/范围。 |
+| `periodData` | `Record<string, MonoChartData>` | — | 以周期值索引的真实数据集。 |
+| `centerMetric` | `string \| number` | 由数据计算 | 无悬停片段时的中心值。 |
+| `centerLabel` | `string` | `data.metricLabel` | 中心默认标签。 |
+| `showTooltip` | `boolean` | `true` | 显示读数；关闭后仍触发 `hover`。 |
+| `showLegend` | `boolean` | `true` | 环图/径向指标图例。 |
+| `showMonths` | `boolean` | `true` | 活动日历月份标题。 |
+| `months` | `number` | `12` | 最近活动月份窗口上限，同时按宽度适配。 |
+| `cellSize` | `number` | `11` | 活动单元格坐标尺寸，自适应间隙，最小 3。 |
+| `accent` | `string \| string[]` | 变体配色 | 活动单色或四/五级强度色；四级色自动补透明零级。 |
+| `accentColor` | `'green' \| 'blue' \| 'purple' \| 'mono'` | 从变体推导 | 未显式设置 accent 时覆盖活动配色。 |
+| `open` | `boolean` | 本地状态 | `v-model:open`；GitHub 仓库展开。 |
+| `defaultOpen` | `boolean` | `false` | 非受控展开初始状态。 |
+| `year` | `number` | 最后一条贡献年份 | 覆盖 GitHub 标题年份信息，不生成/筛选数据。 |
+| `username` | `string` | — | 缺失日历/仓库字段的公开 GitHub 来源。 |
+| `activityLoader` | `MonoChartActivityLoader` | `loadGitHubActivity` | `(username, AbortSignal) => Promise<{contributions?,repos?}>`。 |
+| `labels` | `MonoChartLabels` | 英文默认值 | 来源控件、状态、展开及提示字段名称。 |
+| `locale` | `string` | `'en-US'` | 月份标题语言，服务端与客户端需一致。 |
+| `formatValue` | `(number) => string` | `String(value)` | 数值指标、图例与提示格式化。 |
+
+### 数据类型
+
+全部类型从 `@talex-touch/tuffex/charts` 导出。
+
+| `MonoChartData` 字段 | 结构 |
+| --- | --- |
+| `categories` | `(string \| number)[]`，类别顺序。 |
+| `series` | `{id?,name,data:{x:string\|number,value:number}[],metric?:string\|number,opacity?:number}[]`。 |
+| `items` | `{label,value,max?,target?,opacity?}[]`，分段/层级/轴/环输入。 |
+| `points` | `{label,x:number,y:number,z?:number}[]`，独立数值轴与面积权重。 |
+| `candles` | `{x,open,high,low,close}[]`，OHLC 数值。 |
+| `ranges` | `{x,min,max}[]`，范围上下界。 |
+| `waterfall` | `{label,delta,base?,total?}[]`；省略 base 时累加，`total` 将该柱基线归零。 |
+| `matrix` | `{label,values:number[]}[]`，各行列数可不同。 |
+| `contributions` | `{date:'YYYY-MM-DD',count:number,level:0\|1\|2\|3\|4}[]`。 |
+| `repos` | `{name,count,href?,logo?}[]`，logo 为图片 URL。 |
+| `nodes` / `links` | 现有 `SankeyNodeData[]` / `SankeyLinkData[]`，边用数值来源/目标索引。 |
+| `tree` | `{label,value?,children?:MonoChartTreeNode[]}[]`，内部节点面积由子节点总和决定。 |
+| `metric` / `metricLabel` / `change` | 可选调用方标题指标、单位/标签与变化文案。 |
+
+### 标签
+
+`labels` 为部分对象，省略的键保留英文默认值：`single='Single'`、`dual='Dual'`、`col='Col'`、`row='Row'`、`monotone='Monotone'`、`natural='Natural'`、`showLine='Spline on'`、`hideLine='Spline off'`、`repositories='Top contributions in'`、`expand='Show repositories'`、`collapse='Hide repositories'`、`empty='No data'`、`loading='Loading activity'`、`error='Activity could not be loaded'`、`retry='Retry'`、`less='Less'`、`more='More'`、`target='Target'`、`open='Open'`、`high='High'`、`low='Low'`、`close='Close'`、`x='X'`、`y='Y'`、`z='Z'`、`min='Min'`、`max='Max'`、`delta='Delta'`、`balance='Balance'`。
+
+### 事件
+
+| 事件 | 载荷 | 含义 |
+| --- | --- | --- |
+| `update:seriesMode`、`update:layout`、`update:curve`、`update:showLine`、`update:period`、`update:open` | 对应属性值 | 受控切换/展开变化；无 model 时使用本地状态。 |
+| `hover` | `MonoChartHit \| null` | `{key,label,rows:[{name,value}],value?,x,y}`，坐标使用 SVG viewBox；null 清除检查。 |
+| `select` | `MonoChartHit` | 指针点击、图例激活、Enter 或空格，不模拟业务操作。 |
+| `load` | `{contributions?,repos?}` | 当前请求真正接收的来源数据。 |
+| `error` | `Error` | 当前加载器/响应失败，取消或过期请求不发成功/错误事件。 |
+
+### 插槽
+
+| 插槽 | 作用域 | 替换内容 |
+| --- | --- | --- |
+| `header` | `{metric,data}` | 指标/标题摘要，控件独立保留。 |
+| `tooltip` | `{hit}` | 提示内容。 |
+| `center` | `{value,label,hit}` | 环图/仪表中心内容。 |
+| `repository` | `{repo}` | 每个已展开仓库行。 |
+| `avatar` | `{repo,collapsed}` | 收起头像堆叠与展开仓库行的头像，支持任意 VNode。 |
+| `footer` | `{data}` | 图表下方内容。 |
+
+### CSS 变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `--tx-mono-ink` | 单色描边与填充，默认 `--tx-text-color-primary`。 |
+| `--tx-mono-track` | 仪表/子弹轨道，默认 `--tx-fill-color`。 |
+| `--tx-mono-accent` | 根活动强调色，由配色或显式输入决定。 |
+| `--tx-chart-grid-line`、`--tx-chart-text-primary` | 现有图表网格与坐标轴 token。 |
+| `--tx-chart-semantic-success`、`--tx-chart-categorical-1`、`--tx-chart-categorical-4` | 绿色/蓝色/紫色活动配色与基准标记。 |
+| `--tx-bg-color`、`--tx-fill-color*`、`--tx-border-color*`、`--tx-text-color*` | 宿主表面、轮廓与界面文案。 |
+
+## 技术实现
+
+实现迁移 Amicro `src/components/mono-charts` 全部 29 个文件的独立渲染契约及其 30 行目录。`GitHubActivity` 是额外变体，不是活动配色别名。几何计算纯粹由输入驱动，复用现有比例尺、曲线、提示定位与 Sankey helper。分配块按输入权重计算，而非复刻来源演示的固定 CSS 网格。请求取消与版本所有权阻止旧响应更新，公共 motion activity helper 负责可见性/KeepAlive 清理。仓库展开过渡仅在活跃且没有减少动态效果偏好时运行。SVG SSR 不访问浏览器 API；最终构建、浏览器与生命周期验收由集成负责人统一执行。

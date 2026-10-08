@@ -101,7 +101,7 @@ code: |
 | `closeDelay` | `number` | From the `layer` preset (`120` for `hint`) | Delay before closing in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
 | `maxHeight` | `number` | `320` | Panel max height in pixels. `<= 0` disables the max height. Content slot defaults to no max height at `320`. |
 | `referenceFullWidth` | `boolean` | `false` | Makes the reference wrapper take `width: 100%`. |
-| `interactive` | `boolean` | `false` | Keeps hover tooltips open while the pointer is inside the floating panel. |
+| `interactive` | `boolean` | `false` | In hover mode, the pointer can move into the floating panel without closing it. Brings the hover bridge and the safe triangle; see Overview. |
 | `keepAliveContent` | `boolean` | `false` | Passes through to `TxBaseAnchor` to keep floating content mounted after close. |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Overrides outside-click close behavior. Anchor config is used next, then click mode defaults to `true`. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Overrides reference click toggle behavior. Anchor config is used next, then click mode defaults to `true`. |
@@ -197,7 +197,8 @@ code: |
 
 - Hover and focus triggers use `openDelay` / `closeDelay`; click trigger delegates toggling and outside-click handling to `TxBaseAnchor`.
 - `disabled=true` clears pending timers and forces the resolved open state to `false`.
-- `interactive=true` only affects hover mode; entering the floating panel clears the close timer until the pointer leaves.
+- `interactive=true` only affects hover mode. The hover zone is the whole floating layer: the panel box, card padding included, plus the hover bridge between the reference and the panel. Entering it clears the close timer (and any parent panel's); leaving the whole layer schedules the close again.
+- A pointer that leaves the reference towards the panel is in transit. While it stays inside the triangle from its exit point to the panel's facing edge (the safe triangle) and keeps moving, the panel does not close on `closeDelay`, a parent panel does not close because the path crossed out of it, and no other hover trigger along the way opens. A stop longer than 100ms, or a step out of the triangle, gives the trip up: the panel closes on its usual `closeDelay`, and the trigger the pointer stopped on opens. Leaving through the edge facing away from the panel is not a trip and closes on the delay as before. Plain hints (not `interactive`) are unchanged.
 - Tooltip sets `role="tooltip"` on the floating body and exposes `data-side` for placement-aware styling.
 - The default anchor animation is `{ type: 'boom' }` (a symmetric focus zoom in and out); an `anchor.animation` override replaces it entirely.
 
@@ -205,7 +206,10 @@ code: |
 
 - **Open-state contract:** `TxTooltip` is controlled when `modelValue` is boolean, otherwise it owns `internalOpen`. Opening/closing emits `update:modelValue` plus `open` or `close`, unless `disabled` prevents opening.
 - **Anchor contract:** Click trigger defaults `closeOnClickOutside` and `toggleOnReferenceClick` to `true`; other triggers leave those behaviors off unless props or `anchor` override them.
-- **Verified coverage:** `tooltip.test.ts` covers keep-alive defaults, the boom default and animation forwarding, content slot `side` context, and click outside override behavior.
+- **Transit:** geometry and transit state live in `packages/tuffex/packages/utils/hover-intent.ts`, which listens to `pointermove` only during a trip. Parent panels are held by the anchor-delay service's `holdChain` / `releaseChain`: a close that comes due during the trip is deferred, runs at once if the pointer gives up, and is dropped if it arrives.
+- Rejected design: binding the panel's hover handlers to the content inside the card. The card's padding (8px in DropdownMenu) became a dead ring: reaching the first row meant crossing the `offset` plus the padding, about 18px, within 100ms, and resting on the panel's edge closed it.
+- Rejected design: forgiving the trip with a longer `closeDelay` (FlatDropdown's 600ms default was hiding the problem). No delay stops a diagonal path: with a menu already open the menu layer's `openDelay` is 0, so the neighbouring trigger opens on the frame the pointer crosses it and preempts the panel.
+- **Verified coverage:** `tooltip.test.ts` covers keep-alive defaults, the boom default and animation forwarding, content slot `side` context, and click outside override behavior. `tooltip-hover-intent.test.ts` drives the real Popover → Tooltip chain over faked layout: only interactive hover panels get a bridge; a pointer heading for the panel stays open past `closeDelay` and closes as usual once off course; a trigger crossed on the way does not open, and takes over only when the pointer stops on it; arriving at the panel cancels the close; leaving through the far edge closes as usual.
 
 - Component source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`.
 - Types: `packages/tuffex/packages/components/src/tooltip/src/types.ts`.

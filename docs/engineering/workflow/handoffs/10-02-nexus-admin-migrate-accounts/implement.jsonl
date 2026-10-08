@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Parent contracts: frozen kit API (section 2.2), nav end state (section 3), page migration definition of done (section 4), test strategy (section 5)"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-kit/design.md", "reason": "Signatures of the admin kit components and composables this page must use instead of local copies"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/page-inventory.md", "reason": "Per-page inventory, split boundaries and the tests that pin current structure"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/visual-baseline-2026-10-02.md", "reason": "Real-browser defects of the pages in scope"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Admin shell contract and Loading States rules"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands, SSR-safety, admin drawer request-generation rule"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/orphan-api-contracts.md", "reason": "Section 2.2: suspected credit subtract revert to reproduce and report"}

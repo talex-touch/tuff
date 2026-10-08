@@ -23,12 +23,16 @@ import type {
   KnowledgeSearchInput
 } from '@talex-touch/utils/types/intelligence'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import type { ApiResponse } from '../../utils/safe-handler'
+import type { ApiErrorProjection, ApiResponse, SafeHandlerOptions } from '../../utils/safe-handler'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
 import {
   IntelligenceCapabilityType,
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
+import {
+  closeSystemTranslation,
+  getSystemTranslationStatus
+} from '@talex-touch/tuff-native/translation'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import {
@@ -63,16 +67,21 @@ import { intelligenceContextExecutionService } from './intelligence-context-exec
 import { contextHygieneService } from './intelligence-context-hygiene'
 import {
   normalizeIntelligenceError,
+  toApiFailure,
   toNormalizedIntelligenceError,
   toStreamFailure
 } from './intelligence-error-normalizer'
 import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
+import { markHomeChatInvoke, resolveHomeChatOrigin } from './intelligence-invoke-purpose'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
+import { projectAiImportError } from './ai-import-error-projection'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
+import { projectMemoryReplaceError } from './memory-error-projection'
 import { registerMcpServerAdminChannels } from './mcp-server-admin-runtime'
 import { registerSkillLocalChannels } from './skill-local-runtime'
+import { registerMcpInventoryChannels } from './resource-inventory/mcp-inventory-runtime'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
 import {
   setIntelligenceAutonomousRuntimeAdapter,
@@ -98,7 +107,16 @@ import { DeepSeekProvider } from './providers/deepseek-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
+import {
+  startPricingCatalogSchedule,
+  stopPricingCatalogSchedule
+} from './pricing/models-dev-catalog'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
+import { queryAuditLogPage } from './usage-ledger/audit-log-query'
+import { HOST_CHAT_DEFAULT_CALLER, HOST_TTS_DEFAULT_CALLER } from './usage-ledger/constants'
+import { withHostDefaultCaller } from './usage-ledger/host-callers'
+import { getUsageInsights } from './usage-ledger/usage-insights'
+import { USAGE_LIMIT_REACHED_CODE } from './usage-ledger/usage-limits'
 
 const intelligenceLog = createLogger('Intelligence')
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
@@ -342,7 +360,11 @@ function formatAsrCapabilityTestFailure(error: unknown): {
   const code = rawCode || messageCode || normalized.code || 'UNKNOWN'
   let message = `实时语音识别测试失败（${code}）`
 
-  if (code === 'VOICE_ASR_NOT_CONFIGURED') {
+  if (code === USAGE_LIMIT_REACHED_CODE) {
+    // The limit the user set in Audit, in the shape every refusal takes for the app's own renderer,
+    // so the test result names it and its reset time in the interface language.
+    message = toApiFailure(code, error, { host: true }).error
+  } else if (code === 'VOICE_ASR_NOT_CONFIGURED') {
     message = '实时语音识别测试失败：请先保存 audio.asr 的百炼渠道和模型绑定。'
   } else if (code === 'VOICE_ASR_PROVIDER_UNAVAILABLE') {
     message =
@@ -407,6 +429,36 @@ function toStableIntelligenceErrorCode(error: unknown): string {
 /** A plugin gets the stable code alone; the app's own renderer also what the provider said. */
 function toIntelligenceStreamError(error: unknown, options: { host: boolean }): Error {
   return toStreamFailure(toStableIntelligenceErrorCode(error), error, options)
+}
+
+/**
+ * What a failed capability call answers, by the rule a failed stream follows: a plugin gets the
+ * stable code alone, the app's own renderer `[CODE:capability] reason` (see `toApiFailure`).
+ * Without it `safeApiHandler` answered every failure with one public sentence, so a refusal such
+ * as `USAGE_LIMIT_REACHED` never reached the page that acts on it.
+ */
+function projectIntelligenceCallFailure(
+  error: unknown,
+  context: Pick<HandlerContext, 'plugin'>
+): ApiErrorProjection {
+  return toApiFailure(toStableIntelligenceErrorCode(error), error, { host: !context.plugin })
+}
+
+/**
+ * `projectError` options under `toApiFailure`'s rule, for the channels that run a capability, the
+ * capability test, and the usage-limits control plane.
+ */
+const CAPABILITY_CALL_FAILURES: Pick<SafeHandlerOptions<unknown>, 'projectError'> = {
+  projectError: (error, _payload, context) => projectIntelligenceCallFailure(error, context)
+}
+
+/**
+ * `registerProtectedSafe` options for the memory replace channel: its compare-and-swap conflict is
+ * the one memory failure the memory page acts on (`memory-error-projection.ts`).
+ */
+const MEMORY_REPLACE_FAILURES: Pick<SafeHandlerOptions<unknown>, 'projectError'> = {
+  projectError: (error, _payload, context) =>
+    projectMemoryReplaceError(error, { host: !context.plugin })
 }
 
 function resolveContextActor(context: Pick<HandlerContext, 'plugin'>) {
@@ -522,6 +574,18 @@ function bindPluginInvokeCaller(
   delete metadata.approvalGranted
   delete metadata.approvedAt
   return { ...scoped, metadata }
+}
+
+/**
+ * Marks the options as a genuine Home chat turn when Main can prove it is one; otherwise returns
+ * them unchanged (model-only). The marker is never read from the request itself.
+ */
+async function withHomeChatPurpose(
+  options: IntelligenceInvokeOptions | undefined,
+  context: Pick<HandlerContext, 'plugin'>
+): Promise<IntelligenceInvokeOptions | undefined> {
+  const origin = await resolveHomeChatOrigin(options, context)
+  return origin && options ? markHomeChatInvoke(options, origin) : options
 }
 
 const AUTONOMOUS_INTELLIGENCE_CAPABILITIES: Record<string, true> = {
@@ -712,6 +776,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private agentChannelsCleanup: (() => void) | null = null
   private mcpServerAdminCleanup: (() => void) | null = null
   private skillLocalCleanup: (() => void) | null = null
+  private mcpInventoryCleanup: (() => void) | null = null
   private agentRuntimePromise: Promise<void> | null = null
 
   constructor() {
@@ -758,7 +823,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 必须在首次应用配置之前 settle：provider 列表的组装是同步的，探测未完成时 pi provider 会被
     // 当成不存在而整轮缺席，直到下一次配置变更才补上。
-    await this.probeLocalCliProviders()
+    await Promise.all([
+      this.probeLocalCliProviders(),
+      getSystemTranslationStatus({ timeoutMs: 5_000 }).catch((error) => {
+        intelligenceLog.warn('Native translation probe failed; keeping existing providers', {
+          error
+        })
+      })
+    ])
 
     // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
@@ -768,11 +840,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     this.startAgentRuntime()
 
+    // models.dev 定价目录在后台检查：首检至少 30 秒后且越过启动写入窗口，之后每小时复查，
+    // 超过 24 小时才真正拉取；不阻塞初始化，也不阻塞任何调用。
+    startPricingCatalogSchedule()
+
     intelligenceLog.success('Intelligence module initialized')
   }
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
+    closeSystemTranslation()
+    stopPricingCatalogSchedule()
     // Only wait for a runtime that was actually started. waitForAgentRuntime() starts one on
     // demand -- which is what the request paths at agent.run, workflow.execute and the agent
     // channels rely on -- but at teardown that means registering builtin tools and agents and
@@ -796,6 +874,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     if (this.skillLocalCleanup) {
       this.skillLocalCleanup()
       this.skillLocalCleanup = null
+    }
+    if (this.mcpInventoryCleanup) {
+      this.mcpInventoryCleanup()
+      this.mcpInventoryCleanup = null
     }
     await Promise.all([agentManager.shutdown(), aiCliOrchestrator.shutdown()])
     await intelligenceMcpRegistry.closeAll()
@@ -1274,6 +1356,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerAiCliOrchestratorChannels(registerSafe)
     this.mcpServerAdminCleanup ??= registerMcpServerAdminChannels(this.transport)
     this.skillLocalCleanup ??= registerSkillLocalChannels(this.transport)
+    this.mcpInventoryCleanup ??= registerMcpInventoryChannels(this.transport)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerHostOnlySafe)
     this.registerWorkflowChannels(registerHostOnlySafe)
@@ -1291,15 +1374,21 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     }
 
+    /**
+     * `projectError` lets one channel name the failures its page acts on; every other failure keeps
+     * `safeApiHandler`'s public sentence.
+     */
     const registerSafe = <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options: Pick<SafeHandlerOptions<TReq>, 'projectError'> = {}
     ) => {
       transport.on(
         event,
         safeApiHandler(handler, {
-          onError: (error) => createErrorLogger(action)(error)
+          onError: (error) => createErrorLogger(action)(error),
+          projectError: options.projectError
         })
       )
     }
@@ -1319,11 +1408,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options: Pick<SafeHandlerOptions<TReq>, 'projectError'> = {}
     ) => {
       const guardPlugin = createPluginIntelligencePermissionGuard<TReq>(permissionId)
       const safeHandler = safeApiHandler(handler, {
-        onError: (error) => createErrorLogger(action)(error)
+        onError: (error) => createErrorLogger(action)(error),
+        projectError: options.projectError
       })
       transport.on(event, async (payload, context) => {
         if (context.plugin) {
@@ -1372,7 +1463,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => void,
     registerProtectedStream: <TReq, TChunk>(
       event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
@@ -1391,7 +1483,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
-        const scopedOptions = bindPluginInvokeCaller(options, context)
+        const scopedOptions = await withHomeChatPurpose(
+          bindPluginInvokeCaller(options, context),
+          context
+        )
         await assertAutonomousIntelligencePermission(capabilityId, data, context)
         ensureIntelligenceConfigLoaded()
         if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
@@ -1416,7 +1511,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
         return result
-      }
+      },
+      CAPABILITY_CALL_FAILURES
     )
 
     registerProtectedStream(
@@ -1429,7 +1525,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
-        const scopedOptions = bindPluginInvokeCaller(options, streamContext)
+        const scopedOptions = await withHomeChatPurpose(
+          bindPluginInvokeCaller(options, streamContext),
+          streamContext
+        )
         await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
         const streamPayload = await applyHomeConversationInjection(
@@ -1464,7 +1563,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
         return intelligenceContextExecutionService.invoke(data, resolveContextActor(context))
-      }
+      },
+      CAPABILITY_CALL_FAILURES
     )
 
     registerProtectedStream(
@@ -1493,8 +1593,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'intelligence.basic',
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
-        return await intelligenceTtsService.speak(bindPluginMetadataCaller(data, context))
-      }
+        return await intelligenceTtsService.speak(
+          withHostDefaultCaller(
+            bindPluginMetadataCaller(data, context),
+            Boolean(context.plugin),
+            HOST_TTS_DEFAULT_CALLER
+          )
+        )
+      },
+      CAPABILITY_CALL_FAILURES
     )
 
     registerProtectedSafe(
@@ -1506,7 +1613,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Invalid chat payload')
         }
 
-        const scopedData = bindPluginMetadataCaller(data, context)
+        const scopedData = withHostDefaultCaller(
+          bindPluginMetadataCaller(data, context),
+          Boolean(context.plugin),
+          HOST_CHAT_DEFAULT_CALLER
+        )
         const { messages, providerId, model, promptTemplate, promptVariables, metadata } =
           scopedData
 
@@ -1527,7 +1638,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         )
 
         return result
-      }
+      },
+      CAPABILITY_CALL_FAILURES
     )
   }
 
@@ -1578,7 +1690,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => void
   ): void {
     registerProtectedSafe(
@@ -1675,7 +1788,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.replaceMemory(data)
-      }
+      },
+      MEMORY_REPLACE_FAILURES
     )
 
     registerProtectedSafe(
@@ -1703,7 +1817,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => void,
     registerProtectedSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
@@ -1812,7 +1927,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(intelligenceApiEvents.testCapability, 'Capability test', async (data, context) => {
+    /**
+     * A capability test is a capability call: a refusal such as the usage limit answers with its
+     * code and reason (`CAPABILITY_CALL_FAILURES`), so the test result can name the limit and its
+     * reset time instead of the one public sentence every failure used to get.
+     */
+    const runCapabilityTest = async (data: Record<string, unknown>, context: HandlerContext) => {
       assertHostOwnedIntelligenceControlPlane(context)
       if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid capability test payload')
@@ -1890,7 +2010,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       )
 
       return formattedResult
-    })
+    }
+    registerSafe(
+      intelligenceApiEvents.testCapability,
+      'Capability test',
+      runCapabilityTest,
+      CAPABILITY_CALL_FAILURES
+    )
 
     registerSafe(
       intelligenceApiEvents.fetchModels,
@@ -1922,7 +2048,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => void
   ): void {
     registerSafe(intelligenceApiEvents.getAuditLogs, 'Get audit logs', async (data, context) => {
@@ -1951,6 +2078,48 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const { callerId, periodType, startPeriod, endPeriod } = data
       return await tuffIntelligence.getUsageStats(callerId, periodType, startPeriod, endPeriod)
     })
+
+    registerSafe(
+      intelligenceApiEvents.getUsageInsights,
+      'Get usage insights',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await getUsageInsights(data)
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.queryAuditLogs,
+      'Query audit logs',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await queryAuditLogPage(data)
+      }
+    )
+
+    // Both answer a refusal by `toApiFailure`'s rule: the limits drawer is told `INVALID_REQUEST`
+    // and which field was refused, a plugin (stopped at the host-only check) a stable code.
+    registerSafe(
+      intelligenceApiEvents.getUsageLimits,
+      'Get usage limits',
+      async (_data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const { getUsageLimits } = await import('./usage-ledger/usage-limits')
+        return await getUsageLimits()
+      },
+      CAPABILITY_CALL_FAILURES
+    )
+
+    registerSafe(
+      intelligenceApiEvents.setUsageLimits,
+      'Set usage limits',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const { setUsageLimits } = await import('./usage-ledger/usage-limits')
+        return await setUsageLimits(data)
+      },
+      CAPABILITY_CALL_FAILURES
+    )
   }
 
   private registerEnvironmentChannels(
@@ -1974,18 +2143,25 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => void
   ): void {
     const registerHostOwned = <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      operation: (payload: TReq) => Promise<TRes> | TRes
+      operation: (payload: TReq) => Promise<TRes> | TRes,
+      options?: Pick<SafeHandlerOptions<TReq>, 'projectError'>
     ) => {
-      registerSafe(event, action, async (payload, context) => {
-        assertHostOwnedIntelligenceControlPlane(context)
-        return await operation(payload)
-      })
+      registerSafe(
+        event,
+        action,
+        async (payload, context) => {
+          assertHostOwnedIntelligenceControlPlane(context)
+          return await operation(payload)
+        },
+        options
+      )
     }
 
     registerHostOwned(
@@ -1998,10 +2174,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'Preview AI configuration import',
       (payload) => aiCliOrchestrator.previewImport(payload)
     )
+    // The MCP page acts on why an import failed: confirm credentials, explain re-authentication,
+    // or scan again. Only those reasons are named, as bare codes; a plugin never gets this far.
     registerHostOwned(
       intelligenceOrchestratorEvents.applyImport,
       'Apply AI configuration import',
-      (payload) => aiCliOrchestrator.applyImport(payload)
+      (payload) => aiCliOrchestrator.applyImport(payload),
+      {
+        projectError: (error, _payload, context) =>
+          context.plugin ? undefined : projectAiImportError(error)
+      }
     )
     registerHostOwned(
       intelligenceOrchestratorEvents.setImportedItemActive,

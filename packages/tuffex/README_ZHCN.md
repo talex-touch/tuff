@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**167**。
+当前源码导出模块总数：**182**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -111,10 +111,16 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 高级交互、可视化、视觉效果与底层原语，从 `@talex-touch/tuffex/pro` 引入。
 
-- `高级交互 (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
+- `高级交互 (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
+- `动效复合控件 (3)`: `motion-control`, `motion-form`, `motion-metric`
 - `可视化 (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
 - `视觉效果 (23)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
+- `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 - `底层原语 (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
+
+Nexus 为 Motion 提供独立文档章节，包含 Buttons、Card Spreads、3D Carousels、Loaders、Dither Charts，以及文字、物理、指针、滚动、开关和转场能力。安装仍使用 `pro` 或单组件子路径，不增加第四套安装器。`TxMonoChart` 与 `TxDitherChart` 沿用现有 `@talex-touch/tuffex/charts` SVG/d3 入口；Mono 文档位于 Data，Dither 位于 Motion。
+
+内容、图表数据与业务状态均由调用方提供。变化文本复用 TextMorph，弹簧复用已有编译器与积分器。`/utils` 导出的 `useMotionActivity` 按可见性、页面活动、KeepAlive 与减少动态效果偏好控制播放；暂停时保留静态内容。
 
 ### ai AI 套件
 
@@ -172,3 +178,7 @@ TuffEx 是 [Tuff](https://tuff.tagzxia.com) 桌面应用的 UI 基础库。核�
 ## 许可证
 
 [MIT License](LICENSE) &copy; 2025 TalexDreamSoul
+
+Amicro 移植部分保留[上游 MIT 许可与版权](AMICRO-LICENSE)，固定来源提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`，许可声明随包分发。不包含上游网站素材与外部字体。
+
+上游 `DitherBook.tsx` 与 `SimpleCompExtracted.tsx` 明确声明文件级 Apache-2.0，衍生实现保留该许可和 Vue/TuffEx 修改说明，并随包提供[完整 Apache 许可](AMICRO-APACHE-LICENSE)。保留的 Lucide 0.546.0 图标数据携带[ISC 与 Feather 衍生部分的 MIT 声明](LUCIDE-LICENSE)，不引入 React/Lucide 运行时。包元数据明确记录这些组合义务，不把全部衍生代码重新标为 MIT。

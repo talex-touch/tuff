@@ -267,7 +267,7 @@ describe('coreApp shared intelligence resolver contract', () => {
     })
     setIntelligenceProviderManager(
       new FakeProviderManager([
-        createChatProvider({ id: 'local-chat', models: ['llama3.1'] }, chat)
+        createChatProvider({ id: 'local-chat', models: [{ id: 'llama3.1' }] }, chat)
       ])
     )
 
@@ -312,7 +312,7 @@ describe('coreApp shared intelligence resolver contract', () => {
     })
     setIntelligenceProviderManager(
       new FakeProviderManager([
-        createChatProvider({ id: 'local-chat', models: ['llama3.1'] }, chat)
+        createChatProvider({ id: 'local-chat', models: [{ id: 'llama3.1' }] }, chat)
       ])
     )
 

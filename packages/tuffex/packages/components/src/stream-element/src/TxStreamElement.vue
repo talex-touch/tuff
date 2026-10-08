@@ -6,7 +6,7 @@ import type { PlanCache, PlanNode } from './plan'
 import type { StreamElementEmits, StreamElementProps, StreamPart } from './types'
 import { computed, h, nextTick, onMounted, shallowRef, toRaw, watch } from 'vue'
 import TxCodeStream from '../../code-stream/src/TxCodeStream.vue'
-import { useReducedMotion } from '../../liquid/src/use-reduced-motion'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import TxStreamMarkdown from '../../stream-markdown/src/TxStreamMarkdown.vue'
 import { sliceStreamContent } from '../../stream-text/src/model'
 import { streamRevealDuration } from '../../stream-text/src/presets'
@@ -419,13 +419,22 @@ defineExpose({
     }
 
     &.is-task {
+      position: relative;
       list-style: none;
     }
   }
 
+  // In the marker's place, centred on the item's first line. The item's text is
+  // a block of its own, so an inline box would sit on a line by itself; the
+  // inherited font makes `em` and `lh` measure that text, not the control font.
   .tx-stream-element__task {
-    margin: 0 0.45em 0 -1.35em;
-    vertical-align: -0.12em;
+    position: absolute;
+    top: calc(0.5lh - 0.5em);
+    left: -1.4em;
+    width: 1em;
+    height: 1em;
+    margin: 0;
+    font: inherit;
   }
 
   .tx-stream-element__quote {

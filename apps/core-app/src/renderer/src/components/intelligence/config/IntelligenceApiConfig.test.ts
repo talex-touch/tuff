@@ -79,7 +79,7 @@ function createReactiveProvider(): IntelligenceProviderConfig {
     enabled: true,
     priority: 1,
     baseUrl: 'http://127.0.0.1:11434/v1',
-    models: ['smollm2:135m'],
+    models: [{ id: 'smollm2:135m' }],
     capabilities: ['text.chat'],
     rateLimit: { requestsPerMinute: 10, tokensPerMinute: 1_000 },
     metadata: {
@@ -138,7 +138,7 @@ describe('IntelligenceApiConfig credential persistence', () => {
     expect(request.provider).not.toHaveProperty('apiKey')
     expect(request.provider).toMatchObject({
       id: 'acceptance-ollama',
-      models: ['smollm2:135m'],
+      models: [{ id: 'smollm2:135m' }],
       capabilities: ['text.chat'],
       rateLimit: { requestsPerMinute: 10, tokensPerMinute: 1_000 },
       metadata: {

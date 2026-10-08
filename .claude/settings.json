@@ -1,0 +1,10 @@
+{
+  "env": {
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1"
+  },
+  "enabledPlugins": {},
+  "statusLine": {
+    "type": "command",
+    "command": "python3 .claude/hooks/statusline.py"
+  }
+}

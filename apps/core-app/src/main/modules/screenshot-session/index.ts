@@ -7,6 +7,9 @@ import {
 } from '@talex-touch/utils/transport/events/screenshot-session'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { BrowserWindow, dialog, screen, webContents } from 'electron'
+import { StorageList } from '@talex-touch/utils'
+import { isBetaFeatureEnabled } from '../../../shared/beta-features'
+import { getMainConfig } from '../storage'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
@@ -158,7 +161,7 @@ export class ScreenshotSessionModule extends BaseModule {
         })
       },
       {
-        enabled: true,
+        enabled: false,
         owner: SCREENSHOT_SHORTCUT_OWNER,
         legacyDefaultAccelerators: SCREENSHOT_LEGACY_DEFAULT_ACCELERATORS
       }
@@ -179,6 +182,11 @@ export class ScreenshotSessionModule extends BaseModule {
     entrypoint: ScreenshotSessionEntrypoint,
     delayMs: 0 | 3000 | 5000 = 0
   ): Promise<void> {
+    if (!isBetaFeatureEnabled(getMainConfig(StorageList.APP_SETTING), 'screenshot')) {
+      const error = new Error('Screenshot Beta feature is disabled') as CodedError
+      error.code = 'SCREENSHOT_FEATURE_DISABLED'
+      throw error
+    }
     const manager = this.requireManager()
     await manager.start({
       entrypoint,

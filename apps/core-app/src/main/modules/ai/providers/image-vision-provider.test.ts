@@ -40,7 +40,7 @@ function createProvider() {
     apiKey: 'test-api-key',
     baseUrl: 'https://openai.example.test/v1',
     defaultModel: 'gpt-4o',
-    models: ['gpt-4o'],
+    models: [{ id: 'gpt-4o' }],
     capabilities: ['image.caption', 'image.analyze'],
     priority: 1
   })

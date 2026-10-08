@@ -1,5 +1,45 @@
 # TouchX UI 更新日志
 
+## [Unreleased]
+
+### 📦 组件变动 (Components)
+
+- **更新组件**: `base-anchor`, `charts`, `liquid`, `transition`
+- **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
+
+### ✨ 组件增强
+
+- 新增 `TxTransitionPush` 推入翻页过渡，用于层级导航（进入子页、返回上一页）：key 变化时新旧两页同时横向推入推出，`direction` 为 `forward` 时新页从行内结束方向进入、`back` 时反向，RTL 容器自动镜像；容器高度只在切换那一刻从旧页过渡到新页，结束后回到 `auto`；离场页固定在原位并设为 `inert`；中途打断从当前绘制的位置继续；`duration` 为 `0` 时直接替换，`prefers-reduced-motion: reduce` 时改为 120ms 原位淡入淡出、高度直接落定。新增 `before-enter`/`after-enter`/`after-leave` 事件与 `TransitionPushDirection`、`TxTransitionPushProps` 类型。
+- `TxBaseAnchor` 的箭头有了自己的动画：箭头挂到面板内容层上，跟着面板的位移、缩放、模糊和透明度一起动，面板开始运动之前、收起之后都随面板隐藏（此前会在面板动起来前先完整闪出两三帧，关闭的第一帧就消失）；`expand` 下箭头等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回再折叠面板；`opacity` 的箭头只随面板淡入淡出。
+- `TxBaseAnchor` 的 `transfer` / `boom` / `opacity` 现在和 `expand` 一样解析 `animation.ease` / `closeEase` 里的 `spring(omega, zeta)` 与 `cubic-bezier(...)`；此前原样交给 GSAP，被静默换成 GSAP 的默认缓动。GSAP 自己的缓动名照旧透传。
+- `TxLiquid` 的 `cornerEase` 接受任意 CSS 缓动，包括全部关键字与 `linear(...)` 列表；此前只认 `cubic-bezier(...)` 与 `ease-in-out`，其余按线性处理。
+- `charts` 新增 `TxMonoChart` 与 `TxDitherChart`；`liquid` 复用共享的减少动态效果偏好，并在 KeepAlive 停用时清理动态任务。
+- 融合 Amicro 固定来源的按钮、卡片展开、三维轮播与书页、命名加载器、文字、物理、指针与滚动、开关和内容转场；Nexus 新增独立 Motion 文档章节，Mono Charts 位于 Data，复合表单、控件和指标位于 Pro。安装边界仍为 base/pro/ai，图表沿用现有 SVG/d3 入口。
+- 内容、数据、模型、上传选择与业务结果由调用方驱动；动效复用已有 spring 与 TextMorph。新增 `useMotionActivity` 统一视口、页面活动、KeepAlive 与减少动态效果边界，npm 分发清单保留 `AMICRO-LICENSE`、`AMICRO-APACHE-LICENSE` 和 `LUCIDE-LICENSE`。
+
+### 🐛 组件修复
+
+- `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
+- `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。
+- `TxMotionLoader` 将保留的 React SVG 描边属性转换为标准 SVG 属性，恢复来源中的线宽、端帽、连接和虚线参数；`viewBox` 与滤镜大小写保持不变，SSR 与客户端遵循相同几何。
+
+### 🧩 组件导出
+
+- `@talex-touch/tuffex/utils`（根入口同步）新增缓动工具：`resolveGsapEase`、`resolveCssEase`、`createSpringEase`、`parseSpringEase`、`createCubicBezier`、`parseCubicBezier`。
+
+### 🧪 内部
+
+- 缓动实现收拢到 `utils/animation/easing.ts`，各处副本删除：`TxBaseAnchor` 的弹簧与贝塞尔构件、`TxLiquid` 的两份 CSS 缓动求值（`spring.ts` 的 `easingFunction` 与 observer 的圆角时间线）、`TxTextMorph` 借用的那份，以及图表入口的 `cubicBezier`（名字保留，改用共享求解器）。
+- 共享工具的发布模块输出到稳定的 `utils/internal` 路径，不再把构建机的绝对工作区目录带进按需入口；公开组件与工具子路径保持不变。
+
+### 组件修复
+
+- `TxBubbleMap` 开启 `roam` 后仍可点击气泡并返回对应数据行。气泡按下不再触发底图的指针捕获，底图拖拽和滚轮缩放保持可用。
+
+### 按需样式
+
+- 动态组件导入在激活时加载完整 CSS 依赖，不提前加入首屏静态样式。静态导入继续展开依赖闭包；显式样式去重只识别真实导入，不把注释或字符串误当成已加载样式。
+
 ## [0.6.3] - 2026-10-01
 
 本版本为当前源码及客户端 beta 内的组件版本，尚未独立发布 npm；已发布的 0.6.2 历史记录保持不变。
@@ -13,7 +53,7 @@
 
 - 新增 `TxDescriptions` / `TxDescriptionsItem` 描述列表组件：以语义 `<dl>` 渲染只读的标签/值对；`columns` 控制每行列数，容器窄于 480px 时退为单列；`layout` 支持 `horizontal`（同一列的标签共用一条 subgrid 轨道，值自动对齐，`labelWidth` 可固定标签宽度）与 `vertical`，`size` 支持 `sm` / `md`；`span` 跨列且不超过 `columns`；值不渲染任何内容（无插槽、仅空白或 `v-if` 为假）时显示 `emptyText`（默认 `—`，`0` 不算空）；`label` 插槽可替换标签。
 - 新增 `TxStreamElement` 流式回答组件：把一整段回答（Markdown 或结构化 `parts`）放在同一个匀速时钟上逐词显影，标题、段落、列表、引用与代码严格按顺序出现；`[n]` 按 `sources` 解析为引用 chip（代码与链接文字中不解析）；表格、公式、mermaid、原始 HTML 与图片整体委托给 `TxStreamMarkdown` 并逐行显影；支持 `reserve` 回放、`replay()`/`skip()`，`caret`/`citation`/`inline`/`code`/`part-<name>`/`footer` 插槽与 `state-change`/`done`/`cite` 事件。
-- 新增 `TxStreamText` 流式文字组件：逐词匀速放出流式到达的文字，突发内容不会让显示落后源头超过 `maxLagMs`，源头结束后在 `drainMs` 内放完；每个词从轻微模糊中析出并扫过蓝紫粉色带（默认 `aurora`，另有 `hue`/`blur`/`languid`/`none` 预设）；支持行内引用与自定义片段、取材自 Tuff logo 的光标、`caret`/`citation`/`inline` 插槽、`state-change`/`done` 事件与 `replay()`/`skip()`；遵循减少动态效果偏好。新增 `appear` 属性（挂载时已有的内容也播放进场）；关闭 `caret` 时光标立即移除，只有流结束时才收起；修复引用 chip 后紧跟的空格被吞掉。
+- 新增 `TxStreamText` 流式文字组件：逐词匀速放出流式到达的文字，突发内容不会让显示落后源头超过 `maxLagMs`，源头结束后在 `drainMs` 内放完；每个词从轻微模糊中析出并扫过蓝紫粉色带（默认 `aurora`，另有 `hue`/`blur`/`languid`/`none` 预设）；支持行内引用与自定义片段、取材自 Tuff logo 的光标、`caret`/`citation`/`inline` 插槽、`state-change`/`done` 事件与 `replay()`/`skip()`；遵循减少动态效果偏好。新增 `appear` 属性（挂载时已有的内容也播放进场）；关闭 `caret` 时光标立即移除，只有流结束时才收起；修复引用 chip 后紧跟的空格被吞掉，以及行内代码、链接后的空格落进代码框或链接下划线。
 - `TxCodeStream` 新增流式模式（设置 `streaming` 即启用）：把目前收到的代码传给 `code`，组件逐词匀速放出，默认每个词在自己的语法颜色里从轻微模糊中析出（`reveal` 可换预设）；增长中的代码按 120ms 合并重新高亮，Tuff 光标跟随正在书写的那一行且换行不重挂载；新增 `reveal`/`wordMs`/`maxLagMs`/`drainMs`/`pauseMs`/`reserve` 属性、`state-change`/`done` 事件、`caret` 插槽与 `state`/`replay()`/`skip()`；并以 `TxStreamCode` 别名导出；另有 `paced`（由父组件统一控制节奏时关闭）与 `appear` 属性；关闭 `caret` 时流式光标立即移除，只有流结束时才收起。`revealedLines` 与 diff 模式行为不变，整个组件的动效统一只在未减弱动效时声明。
 - `TxStreamMarkdown` 换上流式家族的动效：新流入的字符使用 `TxStreamText` 的显影预设（默认 `aurora`，新增可选 `reveal` 属性），新块改用共享的模糊淡入；尾部的渐变光球换成 Tuff 光标，全组件只保留一个、用 `translate` 属性定位（新增可选 `caret` 属性，关闭时光标立即移除，流结束时才收起），段落写到哪里跟到哪里，列表/表格/围栏下方单独一行，换元素不重新挂载；整个组件的动效统一只在未减弱动效时声明（遮罩过渡与表格复制按钮的过渡此前在减弱动效下仍会播放）。
 - `TxDropdownMenu` 与 `TxContextMenu` 的关闭型菜单项新增统一确认反馈：先清空高亮 90ms、再复用 active 选中态确认 90ms，然后触发 `select` 并关闭；支持菜单/Panel/单项 `activationFeedback` 覆盖，`closeOnSelect=false` 与减少动态效果保持即时路径。
@@ -390,10 +430,13 @@ const handleClick = () => {
 | `base-surface` | pro | **0.3.4** |
 | `blank-slate` | base | **0.3.4** |
 | `border-beam` | pro | **0.3.9** |
+| `bot-avatar` | ai | **0.6.2** |
 | `breadcrumb` | base | **0.3.4** |
 | `button` | base | **0.3.4** |
 | `card` | base | **0.3.4** |
 | `card-item` | base | **0.3.4** |
+| `card-spread` | pro | **0.6.3（未独立发布）** |
+| `carousel-3d` | pro | **0.6.3（未独立发布）** |
 | `cascader` | base | **0.3.4** |
 | `cell-link` | base | **0.3.9** |
 | `chain-of-thought` | ai | **0.3.9** |
@@ -413,6 +456,7 @@ const handleClick = () => {
 | `corner-overlay` | pro | **0.3.4** |
 | `data-table` | base | **0.3.4** |
 | `date-picker` | base | **0.3.4** |
+| `descriptions` | base | **0.6.3** |
 | `dialog` | base | **0.3.4** |
 | `diff-table` | pro | **0.3.9** |
 | `divider` | base | **0.3.7** |
@@ -430,6 +474,7 @@ const handleClick = () => {
 | `flat-radio` | base | **0.3.4** |
 | `flat-select` | base | **0.3.4** |
 | `flex` | base | **0.3.4** |
+| `flip-book` | pro | **0.6.3（未独立发布）** |
 | `flip-overlay` | pro | **0.3.4** |
 | `floating` | pro | **0.3.4** |
 | `flowchart` | ai | **0.6.0** |
@@ -449,6 +494,7 @@ const handleClick = () => {
 | `icon-morph` | pro | **0.6.0** |
 | `icon-picker` | base | **0.6.0** |
 | `image-gallery` | base | **0.3.4** |
+| `image-generation` | pro | **0.6.2** |
 | `image-uploader` | base | **0.3.4** |
 | `inline-citation` | ai | **0.3.9** |
 | `input` | base | **0.3.4** |
@@ -462,8 +508,19 @@ const handleClick = () => {
 | `markdown-editor` | pro | **0.3.9** |
 | `markdown-view` | base | **0.3.4** |
 | `message-actions` | ai | **0.3.9** |
+| `metal-fx` | pro | **0.6.2** |
 | `modal` | base | **0.3.4** |
 | `mode-chip` | ai | **0.6.0** |
+| `motion` | pro | **0.6.3（未独立发布）** |
+| `motion-button` | pro | **0.6.3（未独立发布）** |
+| `motion-control` | pro | **0.6.3（未独立发布）** |
+| `motion-dock` | pro | **0.6.3（未独立发布）** |
+| `motion-form` | pro | **0.6.3（未独立发布）** |
+| `motion-loader` | pro | **0.6.3（未独立发布）** |
+| `motion-metric` | pro | **0.6.3（未独立发布）** |
+| `motion-text` | pro | **0.6.3（未独立发布）** |
+| `motion-toggle` | pro | **0.6.3（未独立发布）** |
+| `motion-transition` | pro | **0.6.3（未独立发布）** |
 | `nav-bar` | base | **0.3.4** |
 | `no-data` | base | **0.3.4** |
 | `no-selection` | base | **0.3.4** |
@@ -472,6 +529,7 @@ const handleClick = () => {
 | `outline-border` | pro | **0.3.4** |
 | `pagination` | base | **0.3.4** |
 | `permission-state` | base | **0.3.4** |
+| `physics-motion` | pro | **0.6.3（未独立发布）** |
 | `picker` | base | **0.3.4** |
 | `popover` | base | **0.3.4** |
 | `prism-glow` | pro | **0.6.0** |
@@ -518,6 +576,7 @@ const handleClick = () => {
 | `tag` | base | **0.3.4** |
 | `tag-input` | base | **0.3.4** |
 | `task-rows` | ai | **0.3.9** |
+| `terminal` | pro | **0.6.3** |
 | `text-morph` | pro | **0.6.0** |
 | `text-transformer` | pro | **0.3.4** |
 | `textarea` | base | **0.3.7** |
@@ -536,4 +595,5 @@ const handleClick = () => {
 | `tuff-logo-stroke` | pro | **0.3.4** |
 | `version-capsule` | pro | **0.3.9** |
 | `virtual-list` | pro | **0.3.4** |
+| `voice-beam` | pro | **0.6.2** |
 | `working-indicator` | ai | **0.3.9** |

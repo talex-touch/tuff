@@ -32,7 +32,11 @@ const intelligenceSdkMocks = vi.hoisted(() => ({
 }))
 const adminOperationMocks = vi.hoisted(() => ({
   fetchProviderModels: vi.fn(),
-  getIntelligenceLocalEnvironment: vi.fn()
+  getIntelligenceLocalEnvironment: vi.fn(),
+  getUsageInsights: vi.fn(),
+  queryAuditLogPage: vi.fn(),
+  getUsageLimits: vi.fn(),
+  setUsageLimits: vi.fn()
 }))
 const discoveryMocks = vi.hoisted(() => ({
   getCapabilityTestMeta: vi.fn((): unknown => undefined),
@@ -95,6 +99,18 @@ vi.mock('./provider-models', () => ({
 }))
 vi.mock('./intelligence-local-environment', () => ({
   getIntelligenceLocalEnvironment: adminOperationMocks.getIntelligenceLocalEnvironment
+}))
+vi.mock('./usage-ledger/usage-insights', () => ({
+  getUsageInsights: adminOperationMocks.getUsageInsights
+}))
+vi.mock('./usage-ledger/audit-log-query', () => ({
+  queryAuditLogPage: adminOperationMocks.queryAuditLogPage
+}))
+vi.mock('./usage-ledger/usage-limits', async (importOriginal) => ({
+  // The normalizer imports the real error helpers from here; only the two host handlers are stubbed.
+  ...(await importOriginal<typeof import('./usage-ledger/usage-limits')>()),
+  getUsageLimits: adminOperationMocks.getUsageLimits,
+  setUsageLimits: adminOperationMocks.setUsageLimits
 }))
 vi.mock('./capability-testers', () => ({
   AsrCapabilityTester: capabilityTesterMocks.AsrCapabilityTester,
@@ -230,6 +246,37 @@ describe('intelligenceModule admin surface boundary', () => {
       operation: intelligenceSdkMocks.getUsageStats
     },
     {
+      name: 'global usage insights',
+      eventKey: 'getUsageInsights',
+      payload: { range: '30d' },
+      operation: adminOperationMocks.getUsageInsights
+    },
+    {
+      name: 'paged cross-caller audit log query',
+      eventKey: 'queryAuditLogs',
+      payload: { caller: 'plugin:other-plugin', limit: 200 },
+      operation: adminOperationMocks.queryAuditLogPage
+    },
+    {
+      name: 'global usage limits read',
+      eventKey: 'getUsageLimits',
+      payload: undefined,
+      operation: adminOperationMocks.getUsageLimits
+    },
+    {
+      name: 'global usage limits replacement',
+      eventKey: 'setUsageLimits',
+      payload: {
+        requestsPerDay: 1_000_000,
+        requestsPerMonth: null,
+        tokensPerDay: null,
+        tokensPerMonth: null,
+        costUsdPerDay: null,
+        costUsdPerMonth: null
+      },
+      operation: adminOperationMocks.setUsageLimits
+    },
+    {
       name: 'local environment inspection',
       eventKey: 'getLocalEnvironment',
       payload: undefined,
@@ -317,5 +364,47 @@ describe('intelligenceModule admin surface boundary', () => {
 
     await expect(handler(null, {} as HandlerContext)).rejects.toThrow('Invalid payload')
     expect(intelligenceSdkMocks.getUsageStats).not.toHaveBeenCalled()
+  })
+
+  it('serves usage insights and the paged audit log to the host renderer', async () => {
+    // Positive control for the two rejections above: the same handlers do reach their work.
+    const handlers = captureAdminHandlers()
+    const insights = { timezone: 'UTC' }
+    const page = { rows: [], total: 0 }
+    adminOperationMocks.getUsageInsights.mockResolvedValueOnce(insights)
+    adminOperationMocks.queryAuditLogPage.mockResolvedValueOnce(page)
+
+    await expect(
+      getHandler(handlers, 'getUsageInsights')({ range: '7d' }, {} as HandlerContext)
+    ).resolves.toBe(insights)
+    await expect(
+      getHandler(handlers, 'queryAuditLogs')({ caller: null }, {} as HandlerContext)
+    ).resolves.toBe(page)
+    expect(adminOperationMocks.getUsageInsights).toHaveBeenCalledWith({ range: '7d' })
+    expect(adminOperationMocks.queryAuditLogPage).toHaveBeenCalledWith({ caller: null })
+  })
+
+  it('serves the global usage limits to the host renderer', async () => {
+    // Positive control for the two limit rejections above.
+    const handlers = captureAdminHandlers()
+    const limits = {
+      requestsPerDay: 3,
+      requestsPerMonth: null,
+      tokensPerDay: null,
+      tokensPerMonth: null,
+      costUsdPerDay: null,
+      costUsdPerMonth: null
+    }
+    adminOperationMocks.getUsageLimits.mockResolvedValueOnce(limits)
+    adminOperationMocks.setUsageLimits.mockResolvedValueOnce(limits)
+
+    await expect(
+      getHandler(handlers, 'getUsageLimits')(undefined, {} as HandlerContext)
+    ).resolves.toBe(limits)
+    await expect(
+      getHandler(handlers, 'setUsageLimits')(limits, {} as HandlerContext)
+    ).resolves.toBe(limits)
+    expect(adminOperationMocks.getUsageLimits).toHaveBeenCalledOnce()
+    expect(adminOperationMocks.setUsageLimits).toHaveBeenCalledWith(limits)
   })
 })

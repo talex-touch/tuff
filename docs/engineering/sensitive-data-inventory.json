@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-09-08",
+  "updatedAt": "2026-10-07",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -175,20 +175,50 @@
       "id": "search-history-and-usage",
       "classification": "behavioral-metadata",
       "owner": "SearchPrivacyDataOwner",
-      "storageLocations": ["primary/auxiliary database search detail tables including usage_execute_events", "in-memory search detail caches"],
-      "writers": ["Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID"],
-      "readers": ["Search ranking, local recommendation behavior windows, and diagnostics"],
+      "storageLocations": [
+        "primary/auxiliary database search detail tables including usage_execute_events and app_foreground_activity",
+        "in-memory search detail caches"
+      ],
+      "writers": [
+        "Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID",
+        "macOS foreground tracker: latest per-app frontmost instant from NSWorkspace activations, coalesced and gated by the recommendation switches"
+      ],
+      "readers": [
+        "Search ranking, local recommendation behavior windows, recommendation recency and last-used evidence, and diagnostics"
+      ],
       "exportPolicy": "ordinary bounded allowlisted metadata export",
       "deletionPolicy": "typed category delete/retention; pins, source index, static embeddings, config, and task state survive",
-      "retentionPolicy": "user policy with strict cutoff and keyset paging; accepted execution dates expire with usage detail without lowering cumulative counts",
-      "rendererExposure": "search UI receives same-item counts and bounded recommendation facts, never other-source raw execution history; bounded Privacy export omits execution event IDs",
+      "retentionPolicy": "user policy with strict cutoff and keyset paging; accepted execution dates expire with usage detail without lowering cumulative counts; foreground last-active instants expire under the same cutoff",
+      "rendererExposure": "search UI receives same-item counts and bounded recommendation facts, never other-source raw execution history; bounded Privacy export omits execution event IDs and item IDs",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
         "apps/core-app/src/main/modules/privacy/owners/search-retention-owner.ts#symbol=createSearchRetentionOwner",
         "apps/core-app/src/main/db/utils.ts#symbol=recordExecuteTransaction",
         "apps/core-app/src/main/db/utils.ts#symbol=getUsageBehaviorBatch",
-        ".trellis/tasks/archive/2026-07/07-27-sensitive-data-lifecycle-301/research/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+        "apps/core-app/src/main/modules/system/foreground-app-activity.ts#symbol=ForegroundAppActivityTracker",
+        "docs/engineering/reports/sensitive-data-lifecycle-301/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+      ]
+    },
+    {
+      "id": "search-index-maintenance",
+      "classification": "sensitive-device-metadata",
+      "owner": "FileProvider/IndexMaintenanceRunner/SearchIndexService",
+      "storageLocations": [
+        "current file-index home: search_index_meta, search_index_maintenance_progress, search_index_file_maintenance, search_index_pending_commits"
+      ],
+      "writers": ["existing worker sole writer when split-on; existing primary scheduler when split-off"],
+      "readers": ["bounded index maintenance and publication replay; current-scope file search admission"],
+      "exportPolicy": "local derived work only; never portable, synced or ordinary-exported; raw paths and expected-record payloads never included in telemetry",
+      "deletionPolicy": "source clear/index-data reset removes queued candidates and publication receipts through the same owner; acknowledged actual commits delete their exact receipt; physical replay never deletes files or a new document version",
+      "retentionPolicy": "until the current validated task commits and publishes, or explicit source/index-data reset; cursors advance only at committed boundaries",
+      "rendererExposure": "only existing committed-index and bounded diagnostics DTOs; no task payload, fingerprint or native path authority",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/box-tool/search-engine/search-index-document-store.ts#symbol=SearchIndexDocumentStore",
+        "apps/core-app/src/main/modules/box-tool/search-engine/index-maintenance-runner.ts#symbol=IndexMaintenanceRunner",
+        "apps/core-app/src/main/modules/box-tool/search-engine/file-index-persistence-repository.ts#symbol=removeFileRecordsInTransaction"
       ]
     },
     {
@@ -198,16 +228,22 @@
       "storageLocations": [
         "primary database: intelligence audit/context/memory tables",
         "primary database: ai_orchestrator_runs/events objective, cwd, output, usage, and allowlisted redacted metadata",
-        "process memory: volatile raw orchestrator request input, reconstructed authority, and bounded ten-second local AI-session metadata cache"
+        "process memory: volatile raw orchestrator request input, reconstructed authority, and bounded ten-second local AI-session metadata cache",
+        "primary database: intelligence_usage_stats usage counters per caller (UTC day/month) and for all callers under the reserved __global__ caller (local day/month), plus the system_config intelligence.usage.global-backfill marker"
       ],
-      "writers": ["Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections"],
+      "writers": [
+        "Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections",
+        "IntelligenceAuditLogger counts every Intelligence call into the per-caller and __global__ usage buckets whether or not audit detail is enabled; enableAudit only decides whether a metadata-only detail row is also written",
+        "one-shot global usage backfill sums retained detail rows into the __global__ bucket"
+      ],
       "readers": [
-        "Intelligence runtime, Pi orchestrator, typed run handlers, audit UI, and main-owned bounded local AI-session metadata reader"
+        "Intelligence runtime, Pi orchestrator, typed run handlers, audit UI, and main-owned bounded local AI-session metadata reader",
+        "host-only getUsageInsights and queryAuditLogs for the audit page, and per-caller quota checks"
       ],
       "exportPolicy": "ordinary audit export is bounded metadata only; owner-visible typed run DTO may expose objective, cwd, and output; raw request input, tool arguments, credentials, endpoints, native errors, and stacks forbidden",
-      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected",
-      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected; the local AI-session projection is process-only, expires after ten seconds, and is never cached after cancellation",
-      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; plugin AI-session DTOs expose only a hashed id, platform, safe project basename, timestamp, state, and turn count; raw request input, transcripts, prompts, stored objective/cwd/output/error/usage/metadata, event payloads, credentials, paths, and raw tool records are excluded",
+      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected; audit detail deletion never reduces the usage counters, which hold counts, tokens, latency, and estimated cost only",
+      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected; the local AI-session projection is process-only, expires after ten seconds, and is never cached after cancellation; usage counters are retained aggregates without prompts, responses, or metadata, written even while audit detail is off and for calls whose detail falls below a retention floor",
+      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; plugin AI-session DTOs expose only a hashed id, platform, safe project basename, timestamp, state, and turn count; raw request input, transcripts, prompts, stored objective/cwd/output/error/usage/metadata, event payloads, credentials, paths, and raw tool records are excluded; host-only usage insights expose aggregate counts, tokens, latency, estimated cost, channel/model/capability/caller keys, and allowlisted audit metadata only",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
@@ -221,7 +257,12 @@
         "apps/core-app/src/main/modules/ai/pi-agent-runtime-host.ts#symbol=sanitizeToolOutputForRuntime",
         "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.ts#symbol=createLocalAiSessionMetadataReader",
         "apps/core-app/src/main/modules/plugin/host/plugin-ai-sessions-capabilities.ts#symbol=createFixedPluginAiSessionsService",
-        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.test.ts#test=rejects cancellation after the final header read without caching fallback metadata"
+        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.test.ts#test=rejects cancellation after the final header read without caching fallback metadata",
+        "apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts#symbol=IntelligenceAuditLogger",
+        "apps/core-app/src/main/modules/ai/usage-ledger/global-backfill.ts#symbol=runGlobalUsageBackfill",
+        "apps/core-app/src/main/modules/ai/usage-ledger/usage-ledger.integration.test.ts#test=audit off: no detail row, but the global and per-caller buckets both count the call",
+        "apps/core-app/src/main/modules/ai/usage-ledger/usage-ledger.integration.test.ts#test=a call that started before a privacy delete is counted but keeps no detail row",
+        "apps/core-app/src/main/modules/ai/usage-ledger/global-backfill.integration.test.ts#test=leaves nothing behind when the transaction fails, and repeats with the same cutoff"
       ]
     },
     {
@@ -249,22 +290,33 @@
     {
       "id": "home-conversation-content",
       "classification": "user-content",
-      "owner": "ConversationModule/SyncModule",
+      "owner": "ConversationModule/ConversationWorkspaceService/FileReviewService/SyncModule",
       "storageLocations": [
         "database.db: conversations/conversation_messages",
         "database.db: conversation_sync_state (opaque ids, dirty revisions, and deletion timestamps only)",
+        "database.db local-only: conversation_workspaces, conversation_queued_inputs, conversation_workspace_receipts, conversation_attachments, conversation_message_attachments, conversation_file_reviews",
+        "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies; original user files excluded",
         "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
       ],
-      "writers": ["typed Conversation SDK", "main-owned encrypted sync apply"],
+      "writers": [
+        "host-only typed Conversation/Agent Workspace/Review SDKs",
+        "Main queue admission and bounded canonical message projection",
+        "authorized file tool before/after review lifecycle",
+        "main-owned encrypted sync apply"
+      ],
       "readers": ["host conversation UI", "main-owned encrypted sync collector"],
-      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation payloads; never plaintext logs, analytics, ordinary config, or plugin storage",
-      "deletionPolicy": "local delete transaction writes a durable tombstone; sync acknowledgement clears the local marker after the encrypted remote delete is accepted",
-      "retentionPolicy": "until explicit conversation deletion or app-data reset; tombstones persist only until sync acknowledgement",
-      "rendererExposure": "typed conversation list/detail DTOs to host renderer only; plugins are rejected at the transport boundary",
+      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots and credentials; local workspace/review tables never portable or ordinary-exported; no plaintext logs, analytics, config or plugin storage",
+      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and regular UUID images; original project files, parent/other sessions and external native JSONL files are never deleted",
+      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
+      "rendererExposure": "host-only typed public conversation/workspace/review DTOs and owned tfile image descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins rejected at every transport boundary",
       "portable": false,
-      "migrationStatus": "encrypted-per-conversation-sync-with-durable-tombstones",
+      "migrationStatus": "additive-0052-primary-owned; no auxiliary copy or second SQLite writer; encrypted public conversation sync unchanged",
       "evidence": [
         "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=applyConversationSyncSnapshot",
+        "apps/core-app/src/main/modules/conversation/workspace-service.ts#symbol=ConversationWorkspaceService",
+        "apps/core-app/src/main/modules/conversation/workspace-runner.ts#symbol=ConversationWorkspaceRunner",
+        "apps/core-app/src/main/modules/conversation/file-review-service.ts#symbol=FileReviewService",
+        "apps/core-app/src/main/modules/conversation/workspace-attachments.ts#symbol=WorkspaceAttachmentStore",
         "apps/core-app/src/main/modules/sync/index.ts#symbol=collectStorageSnapshots"
       ]
     },

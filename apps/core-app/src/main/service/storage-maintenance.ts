@@ -32,6 +32,9 @@ import {
   recommendationCache,
   scanProgress,
   searchIndexMeta,
+  searchIndexMaintenanceProgress,
+  searchIndexPendingCommits,
+  searchIndexFileMaintenance,
   telemetryUploadStats,
   usageLogs,
   usageSummary,
@@ -160,6 +163,12 @@ export async function cleanupFileIndex(
   )
   await removeScoped(files, fileRows)
   await removeAll(scanProgress)
+  await db
+    .delete(searchIndexPendingCommits)
+    .where(eq(searchIndexPendingCommits.sourceId, 'file-provider'))
+  await db
+    .delete(searchIndexFileMaintenance)
+    .where(eq(searchIndexFileMaintenance.sourceId, 'file-provider'))
 
   if (options?.includeEmbeddings) {
     await db.delete(embeddings).where(eq(embeddings.sourceType, 'file'))
@@ -185,6 +194,9 @@ export async function cleanupFileIndex(
     // documents that are gone (the app health count reads them) and hold keyword hashes for
     // mappings deleted just above.
     await db.delete(searchIndexMeta)
+    await db.delete(searchIndexMaintenanceProgress)
+    await db.delete(searchIndexPendingCommits)
+    await db.delete(searchIndexFileMaintenance)
     await db.delete(queryCompletions)
   }
 

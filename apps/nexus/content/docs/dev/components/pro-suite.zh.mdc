@@ -18,4 +18,16 @@ verified: false
 
 ## 概述
 
-进阶套件承载重交互与视觉表达：**高级交互**是命令面板、搜索面板、双编辑器与虚拟列表这类完整交互件；**视觉效果**是玻璃拟态、流光边框、渐变模糊、文本动效与液态流体这类表达层；**底层原语**（BaseSurface、BaseAnchor、Floating、AutoSizer、ResizeBox）是其余组件搭在其上的地基，业务侧极少直接使用。全部经 `@talex-touch/tuffex/pro` 分类入口引入。数据可视化与图表族已拆至**数据**套件，见《[数据套件](/docs/dev/components/data-suite)》。
+进阶套件承载重交互与视觉表达：**高级交互**是命令面板、搜索面板、双编辑器、终端显示与虚拟列表这类完整交互件；**视觉效果**是玻璃拟态、流光边框、渐变模糊、文本动效与液态流体这类表达层；**底层原语**（BaseSurface、BaseAnchor、Floating、AutoSizer、ResizeBox）是其余组件搭在其上的地基，业务侧极少直接使用。全部经 `@talex-touch/tuffex/pro` 分类入口引入。数据可视化与图表族已拆至**数据**套件，见《[数据套件](/docs/dev/components/data-suite)》。
+
+### 复合控件与指标
+
+- [MotionForm 动效表单](./motion-form.zh.mdc) 提供真实受控输入、选择、文件操作、校验和提交请求。状态与错误由调用方提供，动画不表示提交成功。
+- [MotionControl 复合控件](./motion-control.zh.mdc) 将来源控件绑定到调用方模型、选项、计数和导航动作。
+- [MotionMetric 复合指标](./motion-metric.zh.mdc) 展示传入的指标和序列，时间范围、筛选和拖动控件改变实际数据展示。
+
+### Motion 与 Data 边界
+
+[动效套件](./motion-suite.zh.mdc) 独立组织按钮、卡片展开、3D 轮播、加载动效、抖动图表、文字、物理动效、悬停/指针/滚动、切换控件和转场。非图表组件仍从 `/pro` 安装；`/motion` 是 `TxMotion` 的单组件子路径，不是第四套安装 barrel。[数据套件](./data-suite.zh.mdc) 保留 MonoChart 和现有图表族。MonoChart 与 DitherChart 都从 `@talex-touch/tuffex/charts` 引入。
+
+新家族在当前源码中标记 `since: 0.6.3`，随 Tuff beta 测试，尚未独立发布 npm。

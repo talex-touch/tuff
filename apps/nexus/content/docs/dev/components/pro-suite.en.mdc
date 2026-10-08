@@ -18,4 +18,16 @@ Every cell is a live, interactive component; click the name in the top-left corn
 
 ## Overview
 
-The Pro suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Data Suite](/docs/dev/components/data-suite).
+The Pro suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors, terminal display and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Data Suite](/docs/dev/components/data-suite).
+
+### Composite controls and metrics
+
+- [MotionForm](./motion-form.en.mdc) exposes real controlled inputs, selections, file interactions, validation and submit requests. The caller supplies status and errors; an animation does not claim a successful submission.
+- [MotionControl](./motion-control.en.mdc) binds the source control catalog to caller models, options, counts and navigation actions.
+- [MotionMetric](./motion-metric.en.mdc) renders caller-provided metrics and series, with real period selection, filtering and scrubber controls.
+
+### Motion and Data boundaries
+
+[Motion](./motion-suite.en.mdc) groups buttons, card spreads, 3D carousels, loaders, dither charts, text, physics, hover/cursor/scroll, toggles and transitions in its own documentation suite. Its non-chart components still install through `/pro`; `/motion` is the single-component subpath for `TxMotion`, not a fourth suite barrel. [Data](./data-suite.en.mdc) keeps MonoChart and the existing chart family. Both MonoChart and DitherChart import from `@talex-touch/tuffex/charts`.
+
+The new families have `since: 0.6.3` in the current source. They are included in Tuff beta testing and have not been independently published to npm.

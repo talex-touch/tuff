@@ -1,0 +1,11 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §1 (ledger) and §1.5 / §3.2 / §3.5 contract types to pin first"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "requirements R-A1–R-A10, R-G1/R-G2, decisions D2/D8/D9/D10, background anchors"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/audit-data-layer.md", "reason": "schema, caller values per call site, provider column semantics, flush buffering, contract tests to update"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/quota-system.md", "reason": "counter semantics shared with quota checks, enableAudit coupling, callerType rules"}
+{"file": ".trellis/tasks/10-03-modelsdev-pricing/design.md", "reason": "pricing functions and since marker the ledger consumes"}
+{"file": ".trellis/spec/main-process/database-write-contracts.md", "reason": "flush and backfill transactions on the single primary writer"}
+{"file": ".trellis/spec/main-process/pi-provider-contracts.md", "reason": "counter/audit integer consistency contract to amend"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "retention/deletion keep aggregates; amend for always-on counting"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "host-only intelligence control plane and plugin caller binding"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "typed transport payloads and SDK domain changes"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "change spans SDK, logger, transport, renderer call sites"}

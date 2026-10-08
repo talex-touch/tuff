@@ -788,6 +788,9 @@ export class StorageModule extends BaseModule {
 
     try {
       this.frequencyMonitor.trackSave(name)
+      if (!this.cache.has(name)) {
+        this.getConfig(name)
+      }
 
       if (clear) {
         const newVersion = this.cache.set(name, {}, true, '{}')

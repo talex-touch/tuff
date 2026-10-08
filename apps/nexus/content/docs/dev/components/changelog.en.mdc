@@ -6,23 +6,33 @@ status: beta
 since: 0.3.4
 tags: [changelog, versions, lifecycle, since, tuffex]
 syncStatus: reviewed
-verified: true
+verified: false
 ---
 
 # Component Changelog & Lifecycle
 
-All 167 components exported by the current source have an explicit Since version. The `audit:changelog` gate checks the component inventory, change notes, and introduction versions for every version change.
+All 181 component modules exported by the current source have an explicit Since version. The existing charts aggregate now also exports MonoChart and DitherChart; they are chart components within that module, not two additional root modules. The `audit:changelog` gate checks the component inventory, change notes and introduction versions for every version change.
 
 ## Overview
 
-The current source version is **v0.6.3**, included for testing with Tuff beta and not yet published independently to npm. The latest npm release remains **v0.6.2**. The current source exports **167** components.
+The current source version is **v0.6.3**, included for testing with Tuff beta and not yet published independently to npm. The latest npm release remains **v0.6.2**. The current source exports **181** component modules.
 
 - **Base Suite**: 94 general, form, layout, and navigation components
-- **Pro Suite**: 39 advanced interaction, effect, and primitive components
+- **Pro Suite**: 53 advanced interaction, effect, motion and primitive modules
 - **AI Suite**: 34 AI chat, agent, reasoning, and context components
 - **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
 
 ## Release History
+
+### Unreleased
+
+Source version remains 0.6.3; the additions below are not an independent npm release.
+
+- **Motion documentation suite**: eight-suite navigation now includes [Motion](./motion-suite.en.mdc), with live, individually resettable gallery specimens and bilingual category, sidebar, overview and demo registration.
+- **New component modules (14)**: [motion-button](./motion-button.en.mdc), [card-spread](./card-spread.en.mdc), [carousel-3d](./carousel-3d.en.mdc), [flip-book](./flip-book.en.mdc), [motion-loader](./motion-loader.en.mdc), [motion-text](./motion-text.en.mdc), [physics-motion](./physics-motion.en.mdc), [motion-dock](./motion-dock.en.mdc), [motion](./motion.en.mdc), [motion-toggle](./motion-toggle.en.mdc), [motion-transition](./motion-transition.en.mdc), [motion-form](./motion-form.en.mdc), [motion-control](./motion-control.en.mdc), [motion-metric](./motion-metric.en.mdc).
+- **Existing charts module additions**: [dither-chart](./dither-chart.en.mdc) in Motion and [mono-chart](./mono-chart.en.mdc) in Data, both exported through `@talex-touch/tuffex/charts`.
+- **Installation boundaries**: the three Base, Pro and AI suite barrels remain unchanged. Motion is a documentation suite; the legal `/motion` component subpath imports `TxMotion`, not a fourth suite barrel. Composite forms, controls and metrics stay in Pro. Existing documentation entries remain accessible.
+- **Source behavior**: caller-owned labels, content, items, models and data drive the original named presentations and interactions. Continuous effects share visibility, reduced-motion and cleanup handling; springs and changing text values reuse the existing TuffEx engines. Adaptations retain Amicro's MIT attribution and source-file Apache-2.0 notices. The 46 preserved Lucide glyphs retain ISC and applicable Feather-MIT notices, without a React or Lucide runtime dependency.
 
 ### Source version 0.6.3 (2026-10-01)
 
@@ -122,9 +132,9 @@ Initial standalone package baseline.
 
 ## Component Since Index
 
-The following table lists introduction versions and suites for all 167 modules in the current source; 0.6.3 is a source version not yet published independently to npm.
+The following table lists introduction versions and installation barrels for all 181 modules in the current source. Documentation suites are listed separately in the [component hub](./index.en.mdc); 0.6.3 is a source version not yet published independently to npm.
 
-| Component (Slug) | Suite | Since Version | Documentation |
+| Component (Slug) | Installation barrel | Since Version | Documentation |
 |---|---|---|---|
 | `agent-screen` | ai | **0.6.0** | [Read Docs](./agent-screen.en.mdc) |
 | `agent-trace` | ai | **0.3.9** | [Read Docs](./agent-trace.en.mdc) |
@@ -146,6 +156,8 @@ The following table lists introduction versions and suites for all 167 modules i
 | `button` | base | **0.3.4** | [Read Docs](./button.en.mdc) |
 | `card` | base | **0.3.4** | [Read Docs](./card.en.mdc) |
 | `card-item` | base | **0.3.4** | [Read Docs](./card-item.en.mdc) |
+| `card-spread` | pro | **0.6.3** | [Read Docs](./card-spread.en.mdc) |
+| `carousel-3d` | pro | **0.6.3** | [Read Docs](./carousel-3d.en.mdc) |
 | `cascader` | base | **0.3.4** | [Read Docs](./cascader.en.mdc) |
 | `cell-link` | base | **0.3.9** | [Read Docs](./cell-link.en.mdc) |
 | `chain-of-thought` | ai | **0.3.9** | [Read Docs](./chain-of-thought.en.mdc) |
@@ -183,6 +195,7 @@ The following table lists introduction versions and suites for all 167 modules i
 | `flat-radio` | base | **0.3.4** | [Read Docs](./flat-radio.en.mdc) |
 | `flat-select` | base | **0.3.4** | [Read Docs](./flat-select.en.mdc) |
 | `flex` | base | **0.3.4** | [Read Docs](./flex.en.mdc) |
+| `flip-book` | pro | **0.6.3** | [Read Docs](./flip-book.en.mdc) |
 | `flip-overlay` | pro | **0.3.4** | [Read Docs](./flip-overlay.en.mdc) |
 | `floating` | pro | **0.3.4** | [Read Docs](./floating.en.mdc) |
 | `flowchart` | ai | **0.6.0** | [Read Docs](./flowchart.en.mdc) |
@@ -219,6 +232,16 @@ The following table lists introduction versions and suites for all 167 modules i
 | `metal-fx` | pro | **0.6.2** | [Read Docs](./metal-fx.en.mdc) |
 | `modal` | base | **0.3.4** | [Read Docs](./modal.en.mdc) |
 | `mode-chip` | ai | **0.6.0** | [Read Docs](./mode-chip.en.mdc) |
+| `motion` | pro | **0.6.3** | [Read Docs](./motion.en.mdc) |
+| `motion-button` | pro | **0.6.3** | [Read Docs](./motion-button.en.mdc) |
+| `motion-control` | pro | **0.6.3** | [Read Docs](./motion-control.en.mdc) |
+| `motion-dock` | pro | **0.6.3** | [Read Docs](./motion-dock.en.mdc) |
+| `motion-form` | pro | **0.6.3** | [Read Docs](./motion-form.en.mdc) |
+| `motion-loader` | pro | **0.6.3** | [Read Docs](./motion-loader.en.mdc) |
+| `motion-metric` | pro | **0.6.3** | [Read Docs](./motion-metric.en.mdc) |
+| `motion-text` | pro | **0.6.3** | [Read Docs](./motion-text.en.mdc) |
+| `motion-toggle` | pro | **0.6.3** | [Read Docs](./motion-toggle.en.mdc) |
+| `motion-transition` | pro | **0.6.3** | [Read Docs](./motion-transition.en.mdc) |
 | `nav-bar` | base | **0.3.4** | [Read Docs](./nav-bar.en.mdc) |
 | `no-data` | base | **0.3.4** | [Read Docs](./no-data.en.mdc) |
 | `no-selection` | base | **0.3.4** | [Read Docs](./no-selection.en.mdc) |
@@ -227,6 +250,7 @@ The following table lists introduction versions and suites for all 167 modules i
 | `outline-border` | pro | **0.3.4** | [Read Docs](./outline-border.en.mdc) |
 | `pagination` | base | **0.3.4** | [Read Docs](./pagination.en.mdc) |
 | `permission-state` | base | **0.3.4** | [Read Docs](./permission-state.en.mdc) |
+| `physics-motion` | pro | **0.6.3** | [Read Docs](./physics-motion.en.mdc) |
 | `picker` | base | **0.3.4** | [Read Docs](./picker.en.mdc) |
 | `popover` | base | **0.3.4** | [Read Docs](./popover.en.mdc) |
 | `prism-glow` | pro | **0.6.0** | [Read Docs](./prism-glow.en.mdc) |
@@ -293,6 +317,15 @@ The following table lists introduction versions and suites for all 167 modules i
 | `virtual-list` | pro | **0.3.4** | [Read Docs](./virtual-list.en.mdc) |
 | `voice-beam` | pro | **0.6.2** | [Read Docs](./voice-beam.en.mdc) |
 | `working-indicator` | ai | **0.3.9** | [Read Docs](./working-indicator.en.mdc) |
+
+### Charts module additions
+
+These public chart components are introduced within the existing `charts` aggregate and use the `@talex-touch/tuffex/charts` entry. They do not increase the root module count.
+
+| Chart component | Documentation suite | Since Version | Documentation |
+| --- | --- | --- | --- |
+| `dither-chart` | Motion | **0.6.3** | [Read Docs](./dither-chart.en.mdc) |
+| `mono-chart` | Data | **0.6.3** | [Read Docs](./mono-chart.en.mdc) |
 
 ## Version Gate and Standards
 

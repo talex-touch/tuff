@@ -43,6 +43,7 @@ import {
   recordAcceptedExecute,
   resolveExecuteEventId
 } from './box-tool/search-engine/execute-recorder'
+import { resolvePreviousAppContext } from './box-tool/search-engine/app-launch-recorder'
 import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger, type LogOptions } from '../utils/logger'
@@ -1348,12 +1349,17 @@ export class ClipboardModule extends BaseModule {
     request: ClipboardApplyRequest,
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
+    const sourceContext = await resolvePreviousAppContext()
     const result = await this.autopasteAutomation.handleApplyRequest(request, context)
     // The item write to the clipboard/system succeeded: that is a real use of the history record.
     // Ordinary capture after this write is a clipboard change, not an apply, so it cannot count
     // twice; a failed apply leaves the count untouched.
     if (result.success) {
-      await this.recordClipboardHistoryUse(request.id, request.eventId)
+      await this.recordClipboardHistoryUse(
+        request.id,
+        request.eventId,
+        sourceContext.prevApp ?? null
+      )
     }
     return result
   }
@@ -1369,7 +1375,11 @@ export class ClipboardModule extends BaseModule {
    * stamps — and the display row and its count share one row. Failure is logged, never surfaced:
    * the paste already happened.
    */
-  private async recordClipboardHistoryUse(recordIdValue: number, eventId?: string): Promise<void> {
+  private async recordClipboardHistoryUse(
+    recordIdValue: number,
+    eventId: string | undefined,
+    previousApp: string | null
+  ): Promise<void> {
     if (!Number.isFinite(recordIdValue)) return
     const item: TuffItem = {
       id: `clipboard-${recordIdValue}`,
@@ -1387,7 +1397,8 @@ export class ClipboardModule extends BaseModule {
         item,
         sessionId: null,
         entryPoint: 'core-box',
-        eventId: resolveExecuteEventId(eventId)
+        eventId: resolveExecuteEventId(eventId),
+        previousApp
       })
     } catch (error) {
       clipboardLog.warn('Failed to record clipboard history usage', { error })

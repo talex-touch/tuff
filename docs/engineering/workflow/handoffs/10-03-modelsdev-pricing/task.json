@@ -1,0 +1,30 @@
+{
+  "id": "modelsdev-pricing",
+  "name": "modelsdev-pricing",
+  "title": "models.dev 定价接入",
+  "description": "R-B1–R-B4：定价目录拉取缓存、解析、费用计算，替换 MODEL_COSTS",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "task/chore/live-work-1003",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-audit-rebuild",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "None for the code. One check is still open: a real network fetch inside a dev instance (only an offline smoke against the real 226-provider catalog was run). Commit is handled by the coordinator.",
+    "evidence": "Implementer: AC-A1–AC-A6 pass, 4 mutation negative controls, tsc node 0 errors, 108 files / 1199 tests in modules/ai+privacy. Main session re-verified 2026-10-03 06:32 PDT: vitest 7 files / 49 tests pass, eslint 0 problems with a live positive control, MODEL_COSTS 0 hits (control estimateCostUsd 19). Notes in implementation-notes.md.",
+    "nextAction": "Run the real models.dev fetch in the integration dev instance, then let the ledger task consume resolveModelPricing / estimateCostUsd via dynamic import only."
+  }
+}

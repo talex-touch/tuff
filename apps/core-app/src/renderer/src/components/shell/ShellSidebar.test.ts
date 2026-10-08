@@ -14,10 +14,14 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => route
+  useRoute: () => route,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), resolve: vi.fn() })
 }))
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send: vi.fn(async () => undefined) })
+  useTuffTransport: () => ({
+    send: vi.fn(async () => undefined),
+    on: vi.fn(() => () => {})
+  })
 }))
 vi.mock('~/modules/shortcuts/useCoreBoxShortcut', () => ({
   useCoreBoxShortcut: () => ({ effectiveLabel: coreBoxShortcutLabel })

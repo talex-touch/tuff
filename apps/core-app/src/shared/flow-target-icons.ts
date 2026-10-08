@@ -3,9 +3,9 @@
  *
  * Main declares each target's icon as `ri:<name>`: QuickOps in `main/modules/quick-ops/index.ts`,
  * the native share targets in `main/modules/flow-bus/native-share.ts`, and the `pluginIcon` each
- * registers under, there and in `main/modules/flow-bus/module.ts`. FlowSelector draws them through
- * `normalizeCoreBoxIcon`, which turns `ri:<name>` into the class `i-ri-<name>`. UnoCSS extracts
- * classes from `.vue` sources but never from `.ts` modules, and these names exist only in
+ * registers under, there and in `main/modules/flow-bus/module.ts`. The ⌘K card's Flow page draws
+ * them through `normalizeCoreBoxIcon`, which turns `ri:<name>` into the class `i-ri-<name>`. UnoCSS
+ * extracts classes from `.vue` sources but never from `.ts` modules, and these names exist only in
  * main-process code, so a class is generated only if it is listed here; otherwise the target's
  * row draws an empty box.
  *

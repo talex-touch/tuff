@@ -13,9 +13,28 @@ import type {
 import { VoiceProviderError } from '@talex-touch/tuff-voice'
 import { Buffer } from 'node:buffer'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
+import { readUsageLimitInfo } from '../ai/usage-ledger/usage-limits'
 
 export const BUFFERED_STT_MAX_PCM_BYTES = 10 * 1024 * 1024
 const DEFAULT_SAMPLE_RATE = 16_000
+
+/**
+ * A failed buffered recognition, which keeps the SDK's own error when the usage limit refused it.
+ * The voice session hands that on, so the app's renderer can still say which limit and when it
+ * resets; `code` and `message` stay what every other consumer reads. No other failure is kept: a
+ * provider's error can carry endpoints and response bodies.
+ */
+export type BufferedSttErrorEvent = Extract<VoiceProviderEvent, { type: 'error' }> & {
+  readonly cause?: unknown
+}
+
+/** The usage-limit refusal behind a provider error event, if that is what it was. */
+export function readUsageLimitCause(
+  event: Extract<VoiceProviderEvent, { type: 'error' }>
+): unknown {
+  const cause = (event as BufferedSttErrorEvent).cause
+  return readUsageLimitInfo(cause) ? cause : undefined
+}
 
 type SttInvoker = (
   payload: IntelligenceSTTPayload,
@@ -296,13 +315,15 @@ class BufferedSttConnection implements VoiceStreamConnection {
     } catch (error) {
       if (!this.aborted) {
         const code = readErrorCode(error)
-        this.queue.push({
+        const event: BufferedSttErrorEvent = {
           type: 'error',
           code: /^[A-Z0-9_:-]{3,120}$/.test(code) ? code : 'VOICE_STT_FAILED',
           message: 'Buffered speech recognition failed.',
           retryable: code !== 'VOICE_ASR_AUTHORITY_CHANGED',
-          requestId: this.request.requestId
-        })
+          requestId: this.request.requestId,
+          ...(readUsageLimitInfo(error) ? { cause: error } : {})
+        }
+        this.queue.push(event)
       }
     } finally {
       this.chunks.length = 0

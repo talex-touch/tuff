@@ -1,0 +1,170 @@
+---
+title: MotionTransition
+description: 受控内容转场，支持门、液体波、光圈、翻转和分层帘
+category: MotionTransitions
+status: beta
+since: 0.6.3
+tags: [motion, transition, overlay]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+`TxMotionTransition` 为调用方提供的内容播放转场。`modelValue` 标识请求显示的视图。默认插槽应使用作用域中的 `key`：遮挡完成前，它仍指向离场内容。组件不创建路由、页面数据或业务成功状态。
+
+:::TuffDemoWrapper{demo="MotionTransitionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const view = ref('overview')
+  const open = ref(false)
+  const pages = {
+    overview: { title: '项目概览', body: '需求与负责人。' },
+    delivery: { title: '交付清单', body: '组件与文档。' },
+  }
+  </script>
+
+  <template>
+    <TxButton @click="view = view === 'overview' ? 'delivery' : 'overview'">
+      替换内容
+    </TxButton>
+    <TxMotionTransition :model-value="view" variant="spatial-door-portal" mode="card">
+      <template #default="{ key }">
+        <h3>{{ pages[key].title }}</h3>
+        <p>{{ pages[key].body }}</p>
+      </template>
+    </TxMotionTransition>
+    <TxButton @click="open = true">打开全屏</TxButton>
+    <TxMotionTransition v-model:open="open" :model-value="view" mode="overlay" title="预览">
+      <template #default="{ key }"><p>{{ pages[key].body }}</p></template>
+      <template #footer="{ close, replay }">
+        <TxButton @click="replay">重复播放</TxButton>
+        <TxButton @click="close">关闭</TxButton>
+      </template>
+    </TxMotionTransition>
+  </template>
+---
+:::
+
+### 效果与承载模式
+
+| 变体 | 独立结构与轨迹 |
+| --- | --- |
+| `spatial-door-portal` | 两片门以外侧为铰链，透视旋转 ±85°，横向移动 ±10%。先合拢遮挡旧内容，再打开呈现新内容。 |
+| `french-doors-3d` | 两片门以中缝为铰链，旋转 ±90°，包含内嵌门板和透明度变化。铰链方向与空间双门不同。 |
+| `obsidian-liquid-wave` | 三层三次贝塞尔波，每层有 14 个独立延迟的控制点。前沿上升遮挡，后沿上升揭示。 |
+| `radial-iris-mask` | 中央圆形遮罩从 0% 扩展至 150%，然后收回。 |
+| `perspective-flip-stage` | 真实内容绕 X 轴翻出，在侧立时替换，再翻入。缩放从 0.85 回到 1，并同步透明度。 |
+| `staggered-glass-curtain` | 五列磨砂帘依次下落，继续向下离场，揭示新内容。 |
+| `double-stairs` | 五列从上下两侧交错进入，依次遮挡，再从相反方向离场。 |
+| `liquid-wave` | Registry 的三层波，每层有 12 个独立延迟的贝塞尔控制点。 |
+| `cross-fade` | 旧内容先淡出，新内容再淡入。Registry 的通用透明度行为只保留一个公共名称。 |
+
+`inline` 提供无外框的内容舞台。`card` 增加使用主题令牌的表面、头部和底部。`modal` 居中显示限宽弹窗，`overlay` 填满可见视口。两种弹层模式都 Teleport 到 `body`，复用共享叠层分配器并限制焦点范围。演示用卡片展示全部九种效果，也支持为行内、弹窗和全屏选择任意效果。输入框里的文字直接进入插槽，完成标签读取真实事件。
+
+### 最佳实践
+
+- 用插槽的 `key` 选择内容，不要直接读取正在变化的外部模型。内容标识放在 `modelValue`，显示状态放在 `v-model:open`。
+- 关闭时保持组件挂载。设置 `open=false`，不要给 `TxMotionTransition` 外层加 `v-if`。关闭会提交待显示内容并恢复焦点，弹层容器保留淡出、缩放与下移离场；离场节点立即退出焦点与最上层弹窗判断。减少动态效果或显式立即提交时不延迟移除。
+- 连续修改模型会打断上一轮，最终显示最新请求。`replay()`、`replayKey` 和修改 `variant` 都能在内容标识不变时重播。
+- 如果交互允许打断，不要在播放时禁用触发按钮。运动中的内容子树会暂时设为 inert，头部和底部操作仍可用。
+- 来源卡片的悬停预览用原生 `@mouseenter` 更新调用方内容模型。演示在播放时忽略悬停，同时提供可用键盘操作的按钮。
+- 为 `title`、`ariaLabel` 和 `closeLabel` 提供本地化文案。自定义头部时，弹窗用 `ariaLabel` 作为可访问名称。
+- 尊重系统的减少动态效果偏好。`disabled=true` 或 `duration=0` 提供显式立即提交路径，不延迟内容状态，也不伪造业务成功。
+
+## API 参考
+
+### 属性
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `modelValue` | `string \| number` | 必填 | 请求显示的内容标识，不是弹窗显示状态。 |
+| `variant` | `MotionTransitionVariant` | `'spatial-door-portal'` | 上述九个 ID 之一。`MOTION_TRANSITION_VARIANTS` 导出完整列表。 |
+| `mode` | `'inline' \| 'card' \| 'modal' \| 'overlay'` | `'inline'` | 内容承载模式。 |
+| `open` | `boolean` | `false` | modal/overlay 的受控显示状态，inline/card 忽略此属性。 |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig \| { duration: number; ease?: string }` | `'smooth'` | 已有 liquid 共享弹簧或时序定义。 |
+| `duration` | `number` | 共享弹簧时长 | 离场与进场的总时长，单位为毫秒。零表示立即提交。 |
+| `speed` | `number` | `1` | 播放速率，`2` 将总时长减半。 |
+| `replayKey` | `string \| number` | — | 修改后重播当前内容转场。 |
+| `disabled` | `boolean` | `false` | 立即提交，不播放动画。 |
+| `title` | `string` | `''` | 默认头部标题及弹窗可访问标题。 |
+| `ariaLabel` | `string` | `'Content transition'` | 无默认标题或使用自定义头部时的弹窗名称。 |
+| `closeLabel` | `string` | `'Close'` | 关闭按钮的可访问标签。 |
+| `closable` | `boolean` | `true` | 显示弹窗关闭按钮，不阻止 API 或 Escape 关闭。 |
+| `maskClosable` | `boolean` | `true` | 点击弹窗背景时关闭。 |
+| `escapeClosable` | `boolean` | `true` | 允许最上层弹窗响应 Escape。 |
+| `width` | `string` | `'640px'` | modal 宽度，最大不超过视口。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 头部、内容和底部的间距。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `update:open` | `boolean` | 用 `false` 请求关闭受控弹窗。 |
+| `start` | `{ from, to, variant, reason }` | 每个接受的内容转场一次。`reason` 为 `change`、`replay` 或 `open`。 |
+| `completed` | `{ from, to, variant, reason, status }` | 内容子树提交后发出一次。状态为 `finished`、`interrupted`、`reduced`、`inactive` 或 `closed`。 |
+| `interrupted` | 相同完成对象 | 新请求替换上一轮时，在 `completed` 前发出。 |
+| `close` | `'button' \| 'escape' \| 'mask' \| 'api'` | 弹窗关闭请求，调用方须同步 `open`。 |
+
+`inactive` 包含显式禁用、零时长、内容移出可见区域、文档隐藏和 KeepAlive 停用。打断时先提交上一轮目标，再开始新请求，最后请求决定最终画面。完成事件只表示界面转场，不表示网络、保存或导航操作成功。卸载会取消待执行回调，不从已销毁组件发出事件。
+
+### 插槽与方法
+
+| 插槽 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | `{ key, phase, running, close, replay }` | 真实内容，`phase` 为 `idle`、`leave` 或 `enter`。 |
+| `header` | 相同作用域 | 自定义头部，内置关闭按钮仍单独保留。 |
+| `footer` | 相同作用域 | 常驻操作和完成状态，位于暂时 inert 的内容子树外。 |
+
+| 暴露方法 | 说明 |
+| --- | --- |
+| `replay()` | 使用当前模型和变体重播。 |
+| `finish()` | 提交当前目标，发出状态为 `finished` 的 `completed`。 |
+| `close()` | 提交待显示内容，并请求关闭受控弹窗。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--tx-motion-transition-surface` | `--tx-bg-color-overlay` | 门、光圈和最上层波的实色表面。 |
+| `--tx-motion-transition-pad` | 随 size 变化，md 为 `16px` | 内容、头部和底部间距。 |
+| `--tx-motion-transition-radius` | 随 size 变化，md 为 `16px` | card/modal 圆角。 |
+| `--tx-motion-transition-width` | 弹层模式的 `width` 属性 | modal 宽度。弹层优先用属性设置。 |
+
+## 概述
+
+离场阶段保留旧插槽子树。遮挡完成后，移除旧子树并挂载请求的内容。进场揭示新内容，Vue 提交后再发出 `completed`。液体波保留分层控制点延迟，门保留各自的铰链结构。翻转和淡化直接作用于真实视图，不使用品牌占位图。
+
+内容内的操作触发替换时，焦点先移至舞台，完成后移至新内容的首个可聚焦元素。打开弹窗时焦点进入弹窗。只有最上层弹窗处理 Tab 和 Escape。关闭后，焦点回到仍连接文档的打开按钮，不滚动页面。减少动态效果或失活会停止唯一 RAF，并提交目标。停用或卸载时释放监听器、观察器和待执行帧。`useId` 提供稳定的舞台、标题 ID 和确定性的波延迟种子，兼容服务端渲染与 hydration。
+
+## 技术实现
+
+来源为 [Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。`src/data/transitions.ts:23～199` 提供六个目录实现。`src/components/PageTransitionOverlay.tsx:25～196` 提供 14 点预览波、门的铰链、光圈、翻转和帘结构。`PageTransitionCard.tsx` 对应 card 预览与重播。`PageTransitionModal.tsx` 对应弹窗预览、重复触发和播放速率。`PageTransitionOverlay.tsx` 对应可复用舞台。品牌文案、源码复制展示和路由归属不属于组件业务能力。
+
+Registry 文件 `registry/ui/transitions/page-transition.tsx:4～22` 声明了 18 个名称，但第 88～135 行只实现阶梯和液体波。第 137～143 行为其他名称提供同一透明度兜底。以下逐项映射保留来源覆盖，不宣称 16 个独立效果，也不导出旧名称别名：
+
+| 上游声明名 | 真实源码行为 | 公共映射 |
+| --- | --- | --- |
+| `double-stairs` | 五列交错阶梯，第 88～120 行 | `double-stairs` |
+| `shutter-stairs` | 上游只有透明度 fallback | `cross-fade` |
+| `split-stairs` | 上游只有透明度 fallback | `cross-fade` |
+| `horizontal-split` | 上游只有透明度 fallback | `cross-fade` |
+| `vertical-split` | 上游只有透明度 fallback | `cross-fade` |
+| `slash` | 上游只有透明度 fallback | `cross-fade` |
+| `lattice` | 上游只有透明度 fallback | `cross-fade` |
+| `curtain-shred` | 上游只有透明度 fallback | `cross-fade` |
+| `pixel` | 上游只有透明度 fallback | `cross-fade` |
+| `pixel-wave` | 上游只有透明度 fallback | `cross-fade` |
+| `pixel-spiral` | 上游只有透明度 fallback | `cross-fade` |
+| `vortex` | 上游只有透明度 fallback | `cross-fade` |
+| `cross-fade` | 上游只有透明度 fallback | `cross-fade` |
+| `expand-grow` | 上游只有透明度 fallback | `cross-fade` |
+| `push-slide` | 上游只有透明度 fallback | `cross-fade` |
+| `pop-over` | 上游只有透明度 fallback | `cross-fade` |
+| `depth-forward` | 上游只有透明度 fallback | `cross-fade` |
+| `liquid-wave` | 三层 12 点贝塞尔波，第 39～84 和 123～135 行 | `liquid-wave` |
+
+实现复用已有 `resolveTransition`、`easingFunction` 共享弹簧和 `useMotionActivity`，不引入 React、Framer Motion 或 Tailwind 运行时。真实遮挡中点和动画结束替代来源中固定 380/850 ms 的内容切换定时器。构建、自动化测试和真实浏览器验收由集成阶段执行，本页不宣称这些检查已通过。

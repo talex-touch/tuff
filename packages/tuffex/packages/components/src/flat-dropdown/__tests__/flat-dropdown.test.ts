@@ -220,3 +220,66 @@ describe('txFlatDropdown', () => {
     expect(component).toHaveBeenCalledWith('TxFlatDropdown', FlatDropdown)
   })
 })
+
+/** floating-ui positions asynchronously; its result lands a few microtasks later. */
+async function settlePosition(wrapper: ReturnType<typeof mountDropdown>) {
+  for (let i = 0; i < 100; i++)
+    await Promise.resolve()
+  await wrapper.vm.$nextTick()
+}
+
+async function hoverOpen(wrapper: ReturnType<typeof mountDropdown>) {
+  await wrapper.trigger('mouseenter')
+  vi.advanceTimersByTime(0)
+  await wrapper.vm.$nextTick()
+  await settlePosition(wrapper)
+}
+
+describe('txFlatDropdown hover bridge', () => {
+  it('fills the gap to the panel while a hover dropdown is open', async () => {
+    const wrapper = mountDropdown()
+    await hoverOpen(wrapper)
+
+    const bridge = wrapper.find('.tx-flat-dropdown__bridge')
+    expect(bridge.exists()).toBe(true)
+    // A sibling of the panel in its containing block, not a child: the panel's
+    // transform belongs to its scale animation.
+    expect(wrapper.find('.tx-flat-dropdown__panel').element.contains(bridge.element)).toBe(false)
+    expect((bridge.element as HTMLElement).style.position).toBe('fixed')
+  })
+
+  it('keeps the dropdown open while the pointer is on the bridge', async () => {
+    const wrapper = mountDropdown({ closeDelay: 100 })
+    await hoverOpen(wrapper)
+
+    await wrapper.trigger('mouseleave')
+    const bridge = wrapper.find('.tx-flat-dropdown__bridge')
+    await bridge.trigger('mouseenter')
+    vi.advanceTimersByTime(100)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(true)
+
+    await bridge.trigger('mouseleave')
+    vi.advanceTimersByTime(100)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(false)
+  })
+
+  it('does not count a press on the bridge as an outside click', async () => {
+    const wrapper = mountDropdown()
+    await hoverOpen(wrapper)
+
+    wrapper.find('.tx-flat-dropdown__bridge').element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('has no bridge for a click dropdown', async () => {
+    const wrapper = mountDropdown({ trigger: 'click' })
+    await wrapper.trigger('click')
+    await settlePosition(wrapper)
+
+    expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(true)
+    expect(wrapper.find('.tx-flat-dropdown__bridge').exists()).toBe(false)
+  })
+})

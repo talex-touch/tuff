@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   normalizeIntelligenceError,
   PROVIDER_DETAIL_MAX_CHARS,
   readProviderDetail,
   redactProviderDetail,
+  toApiFailure,
   toNormalizedIntelligenceError,
   toStreamFailure
 } from './intelligence-error-normalizer'
+import { createUsageLimitError } from './usage-ledger/usage-limits'
 
 describe('intelligence error normalization', () => {
   it('maps known stable failure modes to explicit codes and recovery text', () => {
@@ -135,5 +137,150 @@ describe('what the provider said, on a failed stream', () => {
     const long = redactProviderDetail('错'.repeat(PROVIDER_DETAIL_MAX_CHARS + 50), '/Users/me')
     expect([...long]).toHaveLength(PROVIDER_DETAIL_MAX_CHARS)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('the global usage limit (USAGE_LIMIT_REACHED)', () => {
+  const originalTimeZone = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'Asia/Shanghai'
+  })
+  afterEach(() => {
+    if (originalTimeZone === undefined) delete process.env.TZ
+    else process.env.TZ = originalTimeZone
+  })
+
+  /** Local midnight that starts 2026-10-04 in Shanghai. */
+  const resetsAt = Date.parse('2026-10-03T16:00:00.000Z')
+  const refusal = () =>
+    createUsageLimitError('text.chat', { key: 'requestsPerDay', used: 3, max: 3, resetsAt })
+
+  it('is recognised by its explicit code, ahead of the quota rules', () => {
+    expect(normalizeIntelligenceError(refusal(), { capabilityId: 'text.chat' })).toEqual({
+      code: 'USAGE_LIMIT_REACHED',
+      message: 'Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z',
+      reason:
+        'The usage limit you set is reached (requestsPerDay: 3 / 3); it resets at 2026-10-04 00:00 local time (2026-10-03T16:00:00.000Z).',
+      recovery:
+        'Wait until the limit resets, or raise or clear it in Settings › Intelligence › Audit.',
+      capabilityId: 'text.chat'
+    })
+  })
+
+  it('is recognised by its message token alone, still ahead of the quota rules', () => {
+    // A message that also trips the quota substring rule: the usage-limit token decides.
+    const normalized = normalizeIntelligenceError(
+      new Error(
+        '[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: tokensPerMonth; resets at 2026-10-31T16:00:00.000Z (quota exceeded)'
+      )
+    )
+    expect(normalized.code).toBe('USAGE_LIMIT_REACHED')
+    expect(normalized.reason).toBe(
+      'The usage limit you set is reached; it resets at 2026-11-01 00:00 local time (2026-10-31T16:00:00.000Z).'
+    )
+    // Without the token the same sentence is the quota rule's, as before.
+    expect(normalizeIntelligenceError(new Error('Usage limit reached (quota exceeded)')).code).toBe(
+      'QUOTA_EXHAUSTED'
+    )
+  })
+
+  it('never puts quota, credit or throttle words in what it reports', () => {
+    const normalized = normalizeIntelligenceError(refusal())
+    for (const text of [normalized.message, normalized.reason, normalized.recovery]) {
+      expect(text.toLowerCase()).not.toMatch(/quota|credit|rate limit|too many requests/)
+    }
+  })
+
+  it('wraps once for transport and keeps the structured limit on the wrapper', () => {
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+
+    expect(wrapped.message).toBe(
+      '[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+    )
+    expect(wrapped.code).toBe('USAGE_LIMIT_REACHED')
+    expect(wrapped).toMatchObject({
+      usageLimit: { key: 'requestsPerDay', used: 3, max: 3, resetsAt }
+    })
+  })
+
+  it('tells the app which limit and when it resets on a failed stream; a plugin gets the code', () => {
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+
+    const host = toStreamFailure('USAGE_LIMIT_REACHED', wrapped, { host: true })
+    expect(host.message).toBe(
+      '[USAGE_LIMIT_REACHED] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+    )
+    expect(host.code).toBe('USAGE_LIMIT_REACHED')
+    const plugin = toStreamFailure('USAGE_LIMIT_REACHED', wrapped, { host: false })
+    expect(plugin.message).toBe('USAGE_LIMIT_REACHED')
+    expect(plugin.code).toBe('USAGE_LIMIT_REACHED')
+  })
+
+  it('answers a refused call with the code and its reason for the app, the code for a plugin', () => {
+    const reason =
+      'The usage limit you set is reached (requestsPerDay: 3 / 3); it resets at 2026-10-04 00:00 local time (2026-10-03T16:00:00.000Z).'
+    // The module boundary's wrapper, and the SDK's own error that a Context execution rethrows.
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+    for (const error of [wrapped, refusal()]) {
+      expect(toApiFailure('USAGE_LIMIT_REACHED', error, { host: true })).toEqual({
+        error: `[USAGE_LIMIT_REACHED:text.chat] ${reason}`,
+        code: 'USAGE_LIMIT_REACHED'
+      })
+      expect(toApiFailure('USAGE_LIMIT_REACHED', error, { host: false })).toEqual({
+        error: 'USAGE_LIMIT_REACHED'
+      })
+    }
+  })
+})
+
+describe('what a failed capability call answers (toApiFailure)', () => {
+  it('gives the app the reason for the code, never the provider message', () => {
+    const leaky = new Error(
+      '401 Unauthorized at https://gateway.example.test/v1?key=sk-secret-123456'
+    )
+    const wrapped = toNormalizedIntelligenceError(leaky, { capabilityId: 'text.chat' })
+    const host = toApiFailure('UNKNOWN', wrapped, { host: true })
+    expect(host).toEqual({
+      error: '[UNKNOWN:text.chat] The intelligence request failed with an unclassified error.',
+      code: 'UNKNOWN'
+    })
+    expect(toApiFailure('UNKNOWN', wrapped, { host: false })).toEqual({ error: 'UNKNOWN' })
+  })
+
+  it('takes the reason the normalizer wrapped in, and no `reason` a provider error brought', () => {
+    const wrapped = toNormalizedIntelligenceError(new Error('quota exceeded'), {
+      capabilityId: 'text.chat'
+    })
+    expect(wrapped.code).toBe('QUOTA_EXHAUSTED')
+    expect(toApiFailure('QUOTA_EXHAUSTED', wrapped, { host: true }).error).toBe(
+      '[QUOTA_EXHAUSTED:text.chat] The caller has exhausted its request, token, or cost quota.'
+    )
+    // A provider's own error object can carry a `reason` of its own; only the wrapper's is ours.
+    const foreign = Object.assign(new Error('boom'), {
+      code: 'UNKNOWN',
+      reason: 'account acme-corp suspended'
+    })
+    expect(toApiFailure('UNKNOWN', foreign, { host: true }).error).toBe(
+      '[UNKNOWN] The intelligence request failed with an unclassified error.'
+    )
+  })
+
+  it('passes on what a local CLI said, redacted, as a failed stream does', () => {
+    const said = 'auth failed: api_key=hunter22 rejected'
+    const cliError = Object.assign(new Error(`[CodexCliProvider] run failed: ${said}`), {
+      providerDetail: said
+    })
+    const wrapped = toNormalizedIntelligenceError(cliError, { capabilityId: 'text.chat' })
+    expect(toApiFailure('UNKNOWN', wrapped, { host: true }).error).toBe(
+      '[UNKNOWN:text.chat] auth failed: api_key=… rejected'
+    )
+  })
+
+  it('names the capability only when it is a plain capability id', () => {
+    expect(toApiFailure('UNKNOWN', new Error('boom'), { host: true }).error).toBe(
+      '[UNKNOWN] The intelligence request failed with an unclassified error.'
+    )
+    const odd = Object.assign(new Error('boom'), { capabilityId: 'text.chat] [FAKE' })
+    expect(toApiFailure('UNKNOWN', odd, { host: true }).error.startsWith('[UNKNOWN] ')).toBe(true)
   })
 })

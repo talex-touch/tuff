@@ -16,6 +16,7 @@ import type {
   TuffSearchResult,
 } from '../../../core-box/tuff/tuff-dsl'
 import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
+import type { MetaFlowSelection } from './meta-overlay'
 
 export interface CoreBoxImageTranslateRouteStage {
   capability: string
@@ -113,7 +114,13 @@ export interface FocusWindowResponse {
    * Whether the window was successfully focused.
    */
   focused: boolean
+  /**
+   * The current focus diagnostic summon ID, if any, allowing the renderer to correlate
+   * subsequent probe results with the in-flight focus session.
+   */
+  summonId?: string
 }
+
 
 export interface CoreBoxHideRequest {
   /** Hide BrowserWindow synchronously instead of waiting for the normal delayed hide path. */
@@ -168,6 +175,7 @@ export interface CoreBoxGetBoundsResponse {
 export interface CoreBoxTriggerPayload {
   id?: number
   show?: boolean
+  summonId?: string
   type?: string
   sessionId?: string
   config?: unknown
@@ -785,6 +793,12 @@ export interface CoreBoxMetaOverlayActionExecutedPayload {
 export interface CoreBoxMetaOverlayItemActionPayload {
   actionId: string
   item: TuffItem
+  /**
+   * The Flow target picked on the ⌘K card's Flow page, present only on the transfer action
+   * (`flow-transfer`) that ends there. CoreBox dispatches the item to it; without it the transfer
+   * action dispatches nothing.
+   */
+  flow?: MetaFlowSelection
 }
 
 export interface CoreBoxMetaOverlayFlowTransferPayload {
@@ -795,7 +809,8 @@ export interface CoreBoxMetaOverlayFlowTransferPayload {
  * The ⌘K action panel's state as the CoreBox window hosting it sees it. Main publishes it to that
  * window's renderer on every change: while main has the window grown for the panel, CoreBox paints
  * the space the growth added, which otherwise shows the window material — a blur of the desktop
- * behind CoreBox. Host-only: a main → CoreBox broadcast with no handler and no plugin surface.
+ * behind CoreBox; while the card shows a Flow page, CoreBox blurs its own content under it.
+ * Host-only: a main → CoreBox broadcast with no handler and no plugin surface.
  */
 export interface CoreBoxMetaOverlayPanelStatePayload {
   /** The panel is on screen. */
@@ -806,6 +821,12 @@ export interface CoreBoxMetaOverlayPanelStatePayload {
    * outlasts `visible` by up to the animation.
    */
   grown: boolean
+  /**
+   * The card is showing a Flow page (`flow` or `flow-confirm`), and CoreBox blurs its own content
+   * under it. Never `true` while `visible` is `false`. Main always sends it; a reader treats
+   * anything but `true` as `false`, so a payload without it reads as not blurred.
+   */
+  blur: boolean
 }
 
 export interface CoreBoxUiResumePayload {

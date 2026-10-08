@@ -5,7 +5,7 @@ import { formatCompactAccountLabel } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 
 const LazyDashboardSparklineChart = defineAsyncComponent(() => import('~/components/dashboard/DashboardSparklineChart.client.vue'))
-const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
+const LazyGeoBubbleMap = defineAsyncComponent(() => import('~/components/dashboard/GeoBubbleMap.client.vue'))
 
 defineI18nRoute(false)
 
@@ -694,8 +694,8 @@ function isCurrentDevice(device: DeviceItem) {
             </div>
           </div>
 
-          <div v-if="recentLoginMapPoints.length" class="rounded-2xl border border-black/[0.05] bg-black/[0.03] p-2 dark:border-white/[0.08] dark:bg-white/[0.04]">
-            <LazyGeoLeafletMap
+          <div class="rounded-2xl border border-black/[0.05] bg-black/[0.03] p-2 dark:border-white/[0.08] dark:bg-white/[0.04]">
+            <LazyGeoBubbleMap
               :height="220"
               :points="recentLoginMapPoints"
             />

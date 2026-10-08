@@ -1,243 +1,297 @@
-import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType } from '../src/types'
-import { describe, expect, it, vi } from 'vitest'
-import { computed, ref } from 'vue'
-import { useBaseAnchorMotion } from '../src/base-anchor-motion'
+import type { BaseAnchorAnimationOptions } from '../src/types'
+import type { VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import gsap from 'gsap'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, nextTick } from 'vue'
+import { EXPAND_BOUNCE_PX, expandBounceBudget, expandSpringFor } from '../src/base-anchor-motion'
+import TxBaseAnchor from '../src/TxBaseAnchor.vue'
 
-/**
- * Drive the motion composable directly — it only needs `computed`, and jsdom has
- * no layout, so DOM-level timing assertions would be meaningless anyway.
- */
-function createMotion(animation: BaseAnchorAnimationOptions) {
-  return useBaseAnchorMotion({
-    clipRef: ref(null),
-    contentRef: ref(null),
-    arrowRef: ref(null),
-    side: computed(() => 'bottom' as const),
-    alignment: computed(() => 'center' as const),
-    arrowSize: computed(() => 10),
-    showArrow: computed(() => false),
-    animation: computed(() => animation),
-    panelBackground: computed(() => 'refraction'),
-    useCard: computed(() => true),
-    keepAliveContent: computed(() => false),
-    isOpen: computed(() => false),
-    isCurrentRun: () => true,
-    setMounted: () => {},
-    setPanelSurfaceMoving: () => {},
-    pulsePanelSurfaceMoving: () => {},
-    prepareLiquid: () => false,
-    applyLiquidFrame: () => {},
-    settleLiquid: () => {},
-    prefersReducedMotion: () => false,
+const CardStub = defineComponent({ name: 'TxCard', template: '<div><slot /></div>' })
+const mountedAnchors: VueWrapper[] = []
+const timelines: gsap.core.Timeline[] = []
+const frames = new Map<number, FrameRequestCallback>()
+let frameId = 0
+let now = 1000
+
+interface AnchorFixture {
+  wrapper: VueWrapper
+  root: HTMLElement
+  content: HTMLElement
+  clip: HTMLElement
+}
+
+function rect(x: number, y: number, width: number, height: number): DOMRect {
+  return { x, y, width, height, left: x, top: y, right: x + width, bottom: y + height, toJSON: () => ({}) } as DOMRect
+}
+
+async function drain() {
+  await nextTick()
+  await flushPromises()
+  await nextTick()
+}
+
+async function frame(elapsed = 16) {
+  now += elapsed
+  vi.advanceTimersByTime(elapsed)
+  for (const [id, callback] of [...frames.entries()]) {
+    if (frames.delete(id))
+      callback(now)
+  }
+  await drain()
+}
+
+async function until(predicate: () => boolean) {
+  await vi.dynamicImportSettled()
+  await drain()
+  for (let index = 0; index < 20 && !predicate(); index++)
+    await frame()
+  expect(predicate(), 'anchor did not reach the requested rendered state').toBe(true)
+}
+
+function mountAnchor(animation: BaseAnchorAnimationOptions): AnchorFixture {
+  const wrapper = mount(TxBaseAnchor, {
+    attachTo: document.body,
+    props: {
+      modelValue: false,
+      eager: true,
+      keepAliveContent: true,
+      width: 480,
+      placement: 'bottom',
+      disableFlip: true,
+      showArrow: false,
+      panelBackground: 'pure',
+      virtualReference: { getBoundingClientRect: () => rect(40, 100, 200, 40) },
+      animation,
+    },
+    slots: { reference: '<button>Reference</button>', default: '<button class="panel-action">Panel action</button>' },
+    global: { stubs: { TxCard: CardStub } },
   })
+  mountedAnchors.push(wrapper)
+  const root = document.body.querySelector<HTMLElement>('.tx-base-anchor')!
+  const content = root.querySelector<HTMLElement>('.tx-base-anchor__content')!
+  const clip = root.querySelector<HTMLElement>('.tx-base-anchor__clip')!
+  const body = root.querySelector<HTMLElement>('.tx-base-anchor__body')
+  for (const element of [root, content, body].filter(Boolean) as HTMLElement[]) {
+    Object.defineProperty(element, 'offsetWidth', { configurable: true, get: () => 480 })
+    Object.defineProperty(element, 'offsetHeight', { configurable: true, get: () => 146 })
+  }
+  vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => rect(40, 148, 480, 146))
+  return { wrapper, root, content, clip }
 }
 
-function resolve(animation: BaseAnchorAnimationOptions) {
-  return createMotion(animation).resolvedAnimation.value
+async function openTimeline(anchor: AnchorFixture) {
+  const count = timelines.length
+  await anchor.wrapper.setProps({ modelValue: true })
+  await until(() => timelines.length > count)
+  return { timeline: timelines.at(-1)! }
 }
 
-const ALL_TYPES: BaseAnchorAnimationType[] = [
-  'transfer',
-  'boom',
-  'opacity',
-  'none',
-  'drip',
-  'bead',
-  'expand',
-]
-
-/** Fields every type shares, whatever its own table says. */
-const LIQUID_TAIL = {
-  gooBlur: 4.5,
-  gooThreshold: 20,
-  gooThresholdOffset: -9,
-  seedHeight: 12,
-  beadPinch: 60,
-  beadVelocityRef: 4,
-  itemSelector: '[data-liquid-item]',
+async function closeTimeline(anchor: AnchorFixture) {
+  const count = timelines.length
+  await anchor.wrapper.setProps({ modelValue: false })
+  await until(() => timelines.length > count)
+  return { timeline: timelines.at(-1)! }
 }
 
-const CLASSIC_ERA = {
-  duration: 432,
-  closeDuration: 194.4,
-  ease: 'back.out(2)',
-  closeEase: 'power3.in',
-  distance: 30,
-  scale: 1.08,
-  blur: 12,
-  opacity: 0,
-  ...LIQUID_TAIL,
-}
+beforeEach(() => {
+  now = 1000
+  frameId = 0
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    const id = ++frameId
+    frames.set(id, callback)
+    return id
+  })
+  vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => { frames.delete(id) })
+  vi.spyOn(window, 'matchMedia').mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }))
+  const realTimeline = gsap.timeline.bind(gsap)
+  vi.spyOn(gsap, 'timeline').mockImplementation((options) => {
+    const timeline = realTimeline({ ...options, paused: true })
+    timelines.push(timeline)
+    return timeline
+  })
+})
 
-const LIQUID_ERA = {
-  duration: 260,
-  closeDuration: 150,
-  ease: 'linear',
-  closeEase: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-  distance: 30,
-  scale: 1.08,
-  blur: 12,
-  opacity: 0,
-  ...LIQUID_TAIL,
-}
-
-const EXPAND_ERA = {
-  duration: 400,
-  closeDuration: 240,
-  ease: 'spring(10, 0.6)',
-  closeEase: 'power2.in',
-  distance: 12,
-  scale: 0.88,
-  blur: 12,
-  opacity: 0,
-  ...LIQUID_TAIL,
-}
-
-/**
- * Captured from the implementation *before* open/close resolution was split by
- * phase, so it cannot be self-confirming: if the refactor shifts any field for
- * any type, this table disagrees.
- *
- * The point is narrow and load-bearing — the anchor's motion was tuned frame by
- * frame against a reference capture, so "adds a capability" must mean the
- * existing output is untouched, not merely that it still looks plausible.
- */
-const FROZEN_BASELINE: Record<string, Record<string, unknown>> = {
-  // `transfer` deliberately left the shared classic table too: it now slides
-  // in slightly small and lets its back ease swing it past full — the scale
-  // bounce is a requested change, not refactor drift.
-  transfer: { type: 'transfer', ...CLASSIC_ERA, scale: 0.92 },
-  // `boom` deliberately left the shared classic table: it now seeds below 1 so
-  // the panel scales *up* out of the blur instead of being pushed away.
-  boom: { type: 'boom', ...CLASSIC_ERA, scale: 0.94 },
-  opacity: { type: 'opacity', ...CLASSIC_ERA },
-  none: { type: 'none', ...CLASSIC_ERA },
-  drip: { type: 'drip', ...LIQUID_ERA },
-  bead: { type: 'bead', ...LIQUID_ERA },
-  expand: { type: 'expand', ...EXPAND_ERA },
-}
+afterEach(() => {
+  while (mountedAnchors.length)
+    mountedAnchors.pop()?.unmount()
+  for (const timeline of timelines)
+    timeline.kill()
+  timelines.length = 0
+  frames.clear()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  document.body.innerHTML = ''
+})
 
 describe('base anchor animation phases', () => {
-  describe('equivalence with the pre-split resolver', () => {
-    it.each(ALL_TYPES)('resolves %s exactly as before', (type) => {
-      const resolved = resolve({ type })
-      const expected = FROZEN_BASELINE[type]!
+  it('opens as boom but closes as a measured expand box on the separately authored clock', async () => {
+    const anchor = mountAnchor({ type: 'boom', closeType: 'expand', duration: 400, closeDuration: 240, ease: 'none', closeEase: 'none', scale: 0.8, blur: 10, opacity: 0 })
+    const { timeline: open } = await openTimeline(anchor)
+    open.time(0.2)
+    expect(Number(gsap.getProperty(anchor.content, 'scaleX'))).toBeCloseTo(0.9)
+    expect(anchor.content.style.filter).toBe('blur(5px)')
+    expect(anchor.clip.style.height).toBe('')
+    open.progress(1)
+    await drain()
 
-      for (const [field, value] of Object.entries(expected))
-        expect({ field, value: resolved[field as keyof typeof resolved] }).toEqual({ field, value })
-    })
-
-    it('makes the untyped default symmetric spring expand', () => {
-      // Decision reversed 08-15: only the tooltip zooms with boom (it pins the
-      // type itself); everything untyped expands both ways.
-      const resolved = resolve({})
-      expect(resolved.type).toBe('expand')
-      expect(resolved.closeType).toBe('expand')
-      expect(resolved.closeDuration).toBe(EXPAND_ERA.closeDuration)
-      expect(resolved.closeEase).toBe(EXPAND_ERA.closeEase)
-    })
-
-    it('keeps an explicit type symmetric', () => {
-      // Pinning a type must stay predictable: `type: 'boom'` closes as boom
-      // unless the caller also names a `closeType`.
-      expect(resolve({ type: 'boom' }).closeType).toBe('boom')
-      expect(resolve({ type: 'transfer' }).closeType).toBe('transfer')
-    })
-
-    it('still lets an explicit option beat the type table', () => {
-      const resolved = resolve({ type: 'expand', duration: 300, scale: 0.9 })
-      expect(resolved.duration).toBe(300)
-      expect(resolved.scale).toBe(0.9)
-      // Untouched fields keep the expand table rather than falling back to the
-      // legacy transfer-era props.
-      expect(resolved.closeDuration).toBe(EXPAND_ERA.closeDuration)
-      expect(resolved.ease).toBe(EXPAND_ERA.ease)
-    })
+    const { timeline: close } = await closeTimeline(anchor)
+    close.time(0.12)
+    expect(Number.parseFloat(anchor.clip.style.height)).toBeCloseTo(73)
+    expect(anchor.clip.style.visibility).toBe('visible')
+    close.time(0.24)
+    await drain()
+    expect(getComputedStyle(anchor.root).visibility).toBe('hidden')
+    expect(anchor.root.querySelector('.panel-action')?.textContent).toBe('Panel action')
   })
 
-  describe('closeType', () => {
-    it('defaults to the open type, so omitting it changes nothing', () => {
-      for (const type of ALL_TYPES)
-        expect(resolve({ type }).closeType).toBe(type)
-    })
-
-    it('drives the close phase from its own type table', () => {
-      // boom in, expand out: the close timing has to come from expand's table,
-      // not from boom's transfer-era one.
-      const resolved = resolve({ type: 'boom', closeType: 'expand' })
-
-      expect(resolved.type).toBe('boom')
-      expect(resolved.closeType).toBe('expand')
-      expect(resolved.duration).toBe(CLASSIC_ERA.duration)
-      expect(resolved.ease).toBe(CLASSIC_ERA.ease)
-      expect(resolved.closeDuration).toBe(EXPAND_ERA.closeDuration)
-      expect(resolved.closeEase).toBe(EXPAND_ERA.closeEase)
-    })
-
-    it('lets an explicit closeDuration beat the closeType table', () => {
-      const resolved = resolve({ type: 'boom', closeType: 'expand', closeDuration: 90 })
-      expect(resolved.closeDuration).toBe(90)
-    })
+  it.each([
+    { name: 'partial exit keeps the explicitly shared blur and opacity', exit: { scale: 0.6 }, blur: 5, opacity: 0.6 },
+    { name: 'named exit fields beat the explicitly shared fields', exit: { scale: 0.6, blur: 4, opacity: 0.4 }, blur: 2, opacity: 0.7 },
+  ])('$name without changing the opening geometry', async ({ exit, blur, opacity }) => {
+    const anchor = mountAnchor({ type: 'boom', closeType: 'boom', duration: 400, closeDuration: 240, ease: 'none', closeEase: 'none', scale: 0.8, blur: 10, opacity: 0.2, exit })
+    const { timeline: open } = await openTimeline(anchor)
+    open.time(0.2)
+    expect(Number(gsap.getProperty(anchor.content, 'scaleX'))).toBeCloseTo(0.9)
+    expect(anchor.content.style.filter).toBe('blur(5px)')
+    expect(Number.parseFloat(anchor.content.style.opacity)).toBeCloseTo(0.6)
+    open.progress(1)
+    await drain()
+    const { timeline: close } = await closeTimeline(anchor)
+    close.time(0.12)
+    expect(Number(gsap.getProperty(anchor.content, 'scaleX'))).toBeCloseTo(0.8)
+    expect(Number.parseFloat(anchor.content.style.filter.match(/blur\(([-\d.]+)px\)/)![1]!)).toBeCloseTo(blur)
+    expect(Number.parseFloat(anchor.content.style.opacity)).toBeCloseTo(opacity)
   })
 
-  describe('exit geometry', () => {
-    it('falls back to the shared fields when absent', () => {
-      const resolved = resolve({ type: 'boom', scale: 0.94, blur: 8 })
-      expect(resolved.exit.scale).toBe(0.94)
-      expect(resolved.exit.blur).toBe(8)
-    })
-
-    it('overrides only the fields it names', () => {
-      // `scale` means opposite things per type — boom starts at 1.08 and shrinks
-      // in, expand starts below 1 and grows — so a composite that shares one
-      // value is wrong at one end by construction.
-      const resolved = resolve({
-        type: 'boom',
-        scale: 0.94,
-        blur: 8,
-        closeType: 'expand',
-        exit: { scale: 0.97 },
-      })
-
-      expect(resolved.scale).toBe(0.94)
-      expect(resolved.exit.scale).toBe(0.97)
-      expect(resolved.exit.blur).toBe(8)
-    })
-
-    it('clamps exit values like the shared ones', () => {
-      const resolved = resolve({ type: 'boom', exit: { scale: -5, blur: -3, opacity: 4 } })
-      expect(resolved.exit.scale).toBeGreaterThan(0)
-      expect(resolved.exit.blur).toBe(0)
-      expect(resolved.exit.opacity).toBe(1)
-    })
+  it('keeps invalid exit geometry from mirroring the panel, blurring below zero or prematurely hiding it', async () => {
+    const anchor = mountAnchor({ type: 'boom', closeType: 'boom', duration: 400, closeDuration: 240, ease: 'none', closeEase: 'none', exit: { scale: -5, blur: -3, opacity: -2 } })
+    const { timeline: open } = await openTimeline(anchor)
+    open.progress(1)
+    await drain()
+    const { timeline: close } = await closeTimeline(anchor)
+    close.time(0.12)
+    const scale = Number(gsap.getProperty(anchor.content, 'scaleX'))
+    expect(scale).toBeGreaterThan(0)
+    expect(scale).toBeLessThan(1)
+    expect(anchor.content.style.filter).toBe('blur(0px)')
+    expect(Number.parseFloat(anchor.content.style.opacity)).toBeCloseTo(0.5)
   })
 
-  describe('liquid types cannot be mixed across phases', () => {
-    // drip/bead share one measured stage between the two directions — including
-    // `usesBeadMotion`, which the template reads — so a half-liquid composite
-    // would strand it mid-run, and drip-into-bead would need the stage geometry
-    // to change direction while it is live.
-    it('falls back to a symmetric run when only the open type is liquid', () => {
-      const resolved = resolve({ type: 'drip', closeType: 'expand' })
-      expect(resolved.closeType).toBe('drip')
-    })
+  it.each([
+    { type: 'drip', closeType: 'expand' },
+    { type: 'boom', closeType: 'bead' },
+    { type: 'drip', closeType: 'bead' },
+  ] as const)('rejects $type/$closeType with a diagnostic and a complete symmetric rendered close', async ({ type, closeType }) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const anchor = mountAnchor({ type, closeType, duration: 400, closeDuration: 240, ease: 'linear', closeEase: 'linear', scale: 0.8, blur: 10, opacity: 0 })
+    if (type === 'boom') {
+      const { timeline: open } = await openTimeline(anchor)
+      open.progress(1)
+      await drain()
+      const { timeline: close } = await closeTimeline(anchor)
+      close.progress(0.5)
+      expect(anchor.clip.style.height).toBe('')
+      expect(Number(gsap.getProperty(anchor.content, 'scaleX'))).toBeLessThan(1)
+      close.progress(1)
+      await drain()
+    }
+    else {
+      const stage = anchor.root.querySelector<HTMLElement>('.tx-base-anchor__liquid')!
+      const panel = anchor.root.querySelector<SVGRectElement>('.tx-base-anchor__liquid-goo defs g rect:nth-of-type(2)')!
+      await anchor.wrapper.setProps({ modelValue: true })
+      await until(() => stage.style.visibility === 'visible')
+      await frame(400)
+      expect(Number(panel.getAttribute('height'))).toBe(146)
+      await anchor.wrapper.setProps({ modelValue: false })
+      await frame(120)
+      expect(stage.style.visibility).toBe('visible')
+      expect(Number(panel.getAttribute('height'))).toBeGreaterThan(0)
+      expect(Number(panel.getAttribute('height'))).toBeLessThan(146)
+      await frame(120)
+      expect(stage.style.visibility).toBe('hidden')
+    }
+    expect(getComputedStyle(anchor.root).visibility).toBe('hidden')
+    expect(anchor.clip.style.visibility).toBe('hidden')
+    expect(warn.mock.calls.map(([message]) => String(message)).join('\n')).toContain(`animation.closeType "${closeType}" cannot pair with type "${type}"`)
+  })
+})
 
-    it('falls back to a symmetric run when only the close type is liquid', () => {
-      const resolved = resolve({ type: 'boom', closeType: 'bead' })
-      expect(resolved.closeType).toBe('boom')
-    })
+/** Steps an open timeline and reads the box: its tallest frame, and when it first reaches full size. */
+function sampleBox(anchor: AnchorFixture, open: gsap.core.Timeline, natural: number) {
+  let peak = 0
+  let firstFull = Number.POSITIVE_INFINITY
+  for (let ms = 0; ms <= 400; ms += 2) {
+    open.time(ms / 1000)
+    const height = Number.parseFloat(anchor.clip.style.height)
+    // The last frame completes the run, and settling clears the inline box.
+    if (!Number.isFinite(height))
+      continue
+    peak = Math.max(peak, height)
+    if (height >= natural && firstFull === Number.POSITIVE_INFINITY)
+      firstFull = ms
+  }
+  return { overshoot: peak - natural, firstFull }
+}
 
-    it('rejects drip paired with bead as well', () => {
-      const resolved = resolve({ type: 'drip', closeType: 'bead' })
-      expect(resolved.closeType).toBe('drip')
-    })
+describe('expand bounce budget', () => {
+  it('keeps the base spring where its overshoot already fits the budget', () => {
+    expect(expandSpringFor(48)).toEqual({ omega: 10, zeta: 0.6 })
+    expect(expandSpringFor(0)).toEqual({ omega: 10, zeta: 0.6 })
+  })
 
-    it('warns in dev so the silent downgrade is discoverable', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      resolve({ type: 'boom', closeType: 'drip' })
-      expect(warn).toHaveBeenCalledOnce()
-      expect(warn.mock.calls[0]![0]).toContain('closeType')
-      warn.mockRestore()
-    })
+  it('holds the budget flat up to three rows and grows it with the square root past them', () => {
+    expect(expandBounceBudget(48)).toBe(EXPAND_BOUNCE_PX)
+    expect(expandBounceBudget(130)).toBe(EXPAND_BOUNCE_PX)
+    // Five rows and ten rows of the docs harness menu.
+    expect(expandBounceBudget(206)).toBeCloseTo(7.55, 2)
+    expect(expandBounceBudget(394)).toBeCloseTo(10.45, 2)
+    // Still nowhere near the proportional ~10% it replaced (20px and 38px).
+    expect(expandBounceBudget(394) / 394).toBeLessThan(0.03)
+  })
+
+  it('damps taller panels down to the budget and keeps the crossing time', () => {
+    const crossing = ({ omega, zeta }: { omega: number, zeta: number }) =>
+      (Math.PI - Math.acos(zeta)) / (omega * Math.sqrt(1 - zeta * zeta))
+    const base = crossing(expandSpringFor(48))
+
+    for (const height of [130, 260, 420]) {
+      const spring = expandSpringFor(height)
+      const overshoot = Math.exp(-spring.zeta * Math.PI / Math.sqrt(1 - spring.zeta ** 2))
+      expect(overshoot * height).toBeCloseTo(expandBounceBudget(height), 5)
+      expect(crossing(spring)).toBeCloseTo(base, 5)
+    }
+  })
+
+  it('stretches a tall default panel by the budget, reaching full size on the same beat', async () => {
+    const anchor = mountAnchor({ type: 'expand' })
+    const { timeline: open } = await openTimeline(anchor)
+    const { overshoot, firstFull } = sampleBox(anchor, open, 146)
+
+    // One bounce still — just not ~10% of the panel (14px here).
+    expect(overshoot).toBeGreaterThan(expandBounceBudget(146) - 0.5)
+    expect(overshoot).toBeLessThan(expandBounceBudget(146) + 0.5)
+    // spring(10, 0.6) first reaches its target at ~111ms of 400.
+    expect(firstFull).toBeGreaterThanOrEqual(104)
+    expect(firstFull).toBeLessThanOrEqual(118)
+  })
+
+  it('runs a pinned ease as written', async () => {
+    const anchor = mountAnchor({ type: 'expand', ease: 'spring(10, 0.6)' })
+    const { timeline: open } = await openTimeline(anchor)
+    const { overshoot } = sampleBox(anchor, open, 146)
+
+    expect(overshoot).toBeGreaterThan(13)
   })
 })

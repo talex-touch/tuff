@@ -34,7 +34,9 @@ const BaseAnchorStub = defineComponent({
     'toggleOnReferenceClick',
     'referenceClass',
   ],
-  emits: ['update:modelValue'],
+  // The real anchor reports pointer enter/leave for its whole floating layer
+  // (panel box and hover bridge), not for the content inside the card.
+  emits: ['update:modelValue', 'floating-enter', 'floating-leave'],
   setup(props, { slots, emit }) {
     return () => h('div', { class: 'base-anchor-stub' }, [
       h('button', {
@@ -43,7 +45,11 @@ const BaseAnchorStub = defineComponent({
       }, 'toggle'),
       slots.reference?.(),
       props.modelValue
-        ? h('div', { class: 'anchor-content' }, slots.default?.({ side: 'bottom' }))
+        ? h('div', {
+            class: 'anchor-content',
+            onMouseenter: (event: MouseEvent) => emit('floating-enter', event),
+            onMouseleave: (event: MouseEvent) => emit('floating-leave', event),
+          }, slots.default?.({ side: 'bottom' }))
         : null,
     ])
   },
@@ -149,7 +155,7 @@ describe('txPopover', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('keeps hover popover open while pointer is over floating content', async () => {
+  it('keeps hover popover open while pointer is over the floating layer', async () => {
     const wrapper = mountPopover({
       trigger: 'hover',
       openDelay: 0,
@@ -161,15 +167,23 @@ describe('txPopover', () => {
     vi.runOnlyPendingTimers()
     await wrapper.vm.$nextTick()
 
-    const content = wrapper.find('[role="none"]')
+    const floating = wrapper.find('.anchor-content')
     await reference.trigger('mouseleave')
-    await content.trigger('mouseenter')
+    await floating.trigger('mouseenter')
     vi.advanceTimersByTime(20)
     await wrapper.vm.$nextTick()
 
     expect(wrapper.findComponent(BaseAnchorStub).props('modelValue')).toBe(true)
 
-    await content.trigger('mouseleave')
+    // The content sits inside the card's padding. Leaving it for that padding
+    // is still being on the panel — it used to start the close timer.
+    await wrapper.find('[role="none"]').trigger('mouseleave')
+    vi.advanceTimersByTime(20)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findComponent(BaseAnchorStub).props('modelValue')).toBe(true)
+
+    await floating.trigger('mouseleave')
     vi.advanceTimersByTime(20)
     await wrapper.vm.$nextTick()
 

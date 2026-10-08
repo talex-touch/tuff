@@ -65,6 +65,21 @@ export interface ManualImportedItemInput {
   fingerprint: string
 }
 
+/** What an apply that adds servers to an imported MCP file needs its commit to honour. */
+export interface AiPreparedImportCommitOptions {
+  /**
+   * Candidates whose stored item comes out switched on, whatever its switch said before: a server
+   * picked from a file that was off as a whole can only run if the file's item runs.
+   */
+  activate?: ReadonlySet<string>
+  /**
+   * By candidate id, the current item the pick was merged with, or `null` when there was none. The
+   * commit is refused when that item changed in the meantime: a server switched on or off between
+   * that read and this write would otherwise be silently undone.
+   */
+  basedOn?: ReadonlyMap<string, { itemId: string; updatedAt: number; active: boolean } | null>
+}
+
 export interface AiOrchestratorRunPrivacySnapshot {
   runId: string
   status: AiOrchestratorRunStatus
@@ -633,7 +648,8 @@ export class AiOrchestratorStore {
 
   async applyPreparedImportScan(
     scanId: string,
-    preparedItems: AiPreparedImportItem[]
+    preparedItems: AiPreparedImportItem[],
+    options: AiPreparedImportCommitOptions = {}
   ): Promise<AiImportApplyResult> {
     const scan = await this.getImportScan(scanId)
     if (!scan) throw new Error(`Import scan ${scanId} not found`)
@@ -666,6 +682,18 @@ export class AiOrchestratorStore {
               .from(aiImportItems)
               .where(eq(aiImportItems.current, true))
             currentByCandidate = new Map(currentRows.map((row) => [row.candidateId, row]))
+            for (const [candidateId, base] of options.basedOn ?? []) {
+              const current = currentByCandidate.get(candidateId)
+              const unchangedSinceRead = base
+                ? current?.id === base.itemId &&
+                  current.updatedAt === base.updatedAt &&
+                  current.active === base.active
+                : !current
+              if (!unchangedSinceRead)
+                throw new Error(
+                  `Import candidate ${candidateId} changed while it was being imported; try again`
+                )
+            }
             changed = preparedItems.filter((item) => {
               const current = currentByCandidate.get(item.candidate.id)
               const state = item.secrets.some((secret) => secret.reauthRequired)
@@ -790,12 +818,23 @@ export class AiOrchestratorStore {
                       : 'active',
                     revisionId,
                     current: true,
-                    active: current?.active ?? true,
+                    active: options.activate?.has(candidate.id) ? true : (current?.active ?? true),
                     createdAt: now,
                     updatedAt: now
                   }
                 })
               )
+            }
+            // Nothing to re-import, but the pick still turns a server on: the item has to run.
+            const switchedOn = unchanged.flatMap((item) => {
+              const row = currentByCandidate.get(item.candidate.id)
+              return row && !row.active && options.activate?.has(row.candidateId) ? [row.id] : []
+            })
+            if (switchedOn.length > 0) {
+              await tx
+                .update(aiImportItems)
+                .set({ active: true, updatedAt: now })
+                .where(inArray(aiImportItems.id, switchedOn))
             }
             if (sourceMissingRows.length > 0) {
               await tx.insert(aiImportItems).values(
@@ -929,6 +968,68 @@ export class AiOrchestratorStore {
         .update(aiImportItems)
         .set({ active, updatedAt: Date.now() })
         .where(and(eq(aiImportItems.id, itemId), eq(aiImportItems.current, true)))
+    })
+    const item = await this.getImportedItem(itemId)
+    if (!item) throw new Error(`Imported item ${itemId} not found`)
+    return item
+  }
+
+  /**
+   * Switches one server of an imported MCP item on or off, in one write.
+   *
+   * The per-server switch is the profile's `enabled`, which every consumer of a projection already
+   * honours; the item switch keeps meaning "some server of this file runs". So switching a server on
+   * in an item that was off as a whole turns the item on with that server alone — its neighbours do
+   * not start because the user picked one of them — and switching the last running server off turns
+   * the item off. Neighbours of an item that was already on are left exactly as they were. A server
+   * whose credentials have to be re-entered cannot be switched on: it has nothing to run with.
+   */
+  async setImportedMcpProfileEnabled(
+    itemId: string,
+    profileId: string,
+    enabled: boolean
+  ): Promise<AiImportedConfigItem> {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+    const db = databaseModule.getDb()
+    await scheduleDbWrite('ai-import.item.mcp-profile-toggle', async () => {
+      await db.transaction(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(aiImportItems)
+          .where(and(eq(aiImportItems.id, itemId), eq(aiImportItems.current, true)))
+          .limit(1)
+        const row = rows[0]
+        if (!row || row.kind !== 'mcp') throw new Error(`Imported MCP item ${itemId} not found`)
+        const projection = parseJson<unknown>(row.projection, null)
+        const profiles =
+          isRecord(projection) && Array.isArray(projection.mcpProfiles)
+            ? (projection.mcpProfiles as unknown[])
+            : []
+        const target = profiles.find((profile) => isRecord(profile) && profile.id === profileId)
+        if (!isRecord(projection) || !isRecord(target))
+          throw new Error(`Imported MCP item ${itemId} has no server ${profileId}`)
+        if (enabled && isRecord(target.metadata) && target.metadata.reauthRequired === true)
+          throw new Error(`MCP server ${profileId} needs its credentials re-entered before it runs`)
+
+        const nextProfiles = profiles.map((profile) => {
+          if (!isRecord(profile)) return profile
+          if (profile.id === profileId) return { ...profile, enabled }
+          return enabled && !row.active ? { ...profile, enabled: false } : profile
+        })
+        const active = enabled
+          ? true
+          : row.active &&
+            nextProfiles.some((profile) => isRecord(profile) && profile.enabled !== false)
+        await tx
+          .update(aiImportItems)
+          .set({
+            projection: JSON.stringify({ ...projection, mcpProfiles: nextProfiles }),
+            active,
+            updatedAt: Date.now()
+          })
+          .where(and(eq(aiImportItems.id, itemId), eq(aiImportItems.current, true)))
+      })
     })
     const item = await this.getImportedItem(itemId)
     if (!item) throw new Error(`Imported item ${itemId} not found`)

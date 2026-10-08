@@ -1,0 +1,142 @@
+---
+title: "Motion"
+description: "Caller-driven entrance, pointer, hover, scroll and visibility interactions."
+category: MotionInteraction
+status: beta
+since: 0.6.3
+tags: [motion, pointer, scroll, accessibility]
+verified: false
+---
+
+## Usage
+
+### Registry interactions
+
+`TxMotion` preserves seven entrances, four hover interactions, three cursor effects and three scroll interactions. The demo renders every named variant, actual pointer coordinates, scroll progress, sticky content and the keyed icon and visibility helpers.
+
+:::TuffDemoWrapper{demo="MotionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotion } from '@talex-touch/tuffex/motion'
+  const replay = ref(0)
+  const runs = ref(0)
+  const items = [
+    { id: 'draft', title: 'Draft', description: 'Arrange the content.' },
+    { id: 'review', title: 'Review', description: 'Check the inputs.' },
+  ]
+  </script>
+
+  <template>
+    <button type="button" @click="replay++">Replay</button>
+    <TxMotion variant="fade-up" :state-key="replay">Your content</TxMotion>
+    <TxMotion variant="card-hover" :items="items" @select="item => console.log(item.id)" />
+    <TxMotion variant="magnetic-button" label="Increment count" @click="runs++">Increment count</TxMotion>
+    <output>{{ runs }}</output>
+  </template>
+---
+:::
+
+### Named variants
+
+| Group | IDs and behavior |
+| --- | --- |
+| Entrance | `fade-in` (opacity); `fade-up` / `fade-down` (vertical offset); `slide-left` / `slide-right` (horizontal offset); `scale-in` (0.92 scale with overshoot); `zoom-in` (0.85 scale plus 12px blur). |
+| Hover | `card-hover` shares a moving background between caller-supplied items; `tilt-card` maps normalized pointer coordinates to 3D rotation; `magnetic-button` pulls inside a distance threshold; `glow-button` moves a 120px radial glow under the pointer. |
+| Cursor | `cursor-trail` has shrinking dots with distinct springs; `spotlight` moves a 250px radial highlight over content; `mouse-follow` spring-follows the pointer and accepts a `cursor` slot. |
+| Scroll | `scroll-reveal` reveals content when intersecting the configured viewport; `progress-indicator` spring-follows actual scroll progress; `sticky-reveal` maps target-relative progress to the current item and sticky visual. |
+| Supporting components | `icon-swap` implements IconSwap / IconSwapItem with keyed scale, blur and opacity transitions; `in-view` implements InViewRender by mounting the slot near the viewport. |
+
+### Best Practices
+
+- Supply content, items and action handlers. The component does not navigate, copy, publish or fabricate business success.
+- Use `label` for native magnetic/glow buttons and progress indicators. Card items are native links when `href` is present; otherwise they are native buttons with `select` events.
+- Keep cursor effects local by default. `global` teleports cursor layers and a global progress bar to `body`, so transformed ancestors cannot trap fixed positioning. Decorative cursor content is hidden from assistive technology.
+- Pass the actual element to `scrollContainer` for nested scrolling. Without it, progress reads the document. Sticky visuals and steps use that viewport's measured height and resize updates rather than document `vh`; the caller still supplies a meaningful scroll range.
+- Change `stateKey` or call the exposed `replay()` to replay entrances. For `icon-swap`, change the key with the actual state and provide the corresponding icon.
+- `enabled=false` suspends animation and its input resources while leaving content readable. Reduced motion keeps semantic scroll progress and immediately displays the final content/icon state.
+- For `in-view`, keep a stable wrapper size to avoid layout shifts. `once=true` retains mounted content after the first intersection; `once=false` unmounts it when it leaves.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `MotionVariant` | `'fade-in'` | Any named variant listed above; exported as `MOTION_VARIANTS`. |
+| `as` | `string` | Native `button` for magnetic/glow, otherwise `div` | Root element. Native-button attributes and events fall through. |
+| `enabled` | `boolean` | `true` | Enables motion and input tracking. |
+| `disabled` | `boolean` | `false` | Disables native buttons and input-driven effects. |
+| `label` | `string` | — | Accessible name; supply it for icon-only controls and progress. |
+| `duration` | `number` | 500 / 600 / 700ms by entrance; 300ms for icon swap | Duration in milliseconds. |
+| `delay` | `number` | `0` | Entrance delay in milliseconds. |
+| `xOffset` | `number` | `40` for left, `-40` for right, otherwise `0` | Entrance starting x coordinate. |
+| `yOffset` | `number` | `20` up, `-20` down, `30` scroll reveal, otherwise `0` | Entrance starting y coordinate. |
+| `initialScale` | `number` | `0.92` scale, `0.85` zoom, `0.95` scroll reveal, otherwise `1` | Starting scale. |
+| `initialBlur` | `number` | `12` | Zoom blur radius in pixels. |
+| `maxTilt` | `number` | `15` | Maximum rotation at the pointer edges, in degrees. |
+| `range` | `number` | `45` | Magnetic pull radius from the center, in pixels. |
+| `strength` | `number` | `0.35` | Magnetic coordinate multiplier. |
+| `spring` | `SpringConfig` | Source-specific | Overrides pointer/trail/progress stiffness, damping and mass; uses the shared spring integrator. |
+| `glowColor` | `string` | `'var(--tx-color-primary)'` | Accent for glows, cursors and progress. Prefer theme tokens. |
+| `glowSize` | `number` | `120` glow button; `250` spotlight | Radial effect radius in pixels. |
+| `cursorSize` | `number` | `8` | Trail head diameter; the follower has a minimum 24px outline. |
+| `cursorCount` | `number` | `6` | Trail dot count, clamped to 1–64. Each dot shrinks and has its own spring. |
+| `global` | `boolean` | `false` | Global cursor coordinates/teleport; fixed top progress bar. |
+| `scrollContainer` | `HTMLElement \| null` | Document | Viewport and progress scroller. |
+| `progressHeight` | `number` | `4` | Progress bar height in pixels. |
+| `stickyTop` | `number` | `20` | Sticky visual top inset in pixels. |
+| `items` | `MotionItem[]` | `[]` | Card/sticky content: `{ id, title, description?, href?, disabled? }`. |
+| `once` | `boolean` | `true` | Retains first entrance / visibility mount. |
+| `rootMargin` | `string` | `'-15%'` reveal; `'200px'` in-view | IntersectionObserver margin. |
+| `stateKey` | `string \| number \| boolean` | `0` | Entrance replay / icon identity. |
+| `transition` | `Transition` | Source entrance easing / shared `'smooth'` | Shared transition override for entrances and card-background motion. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `complete` | — | An entrance animation finished normally. Suspension cancels it without claiming completion. |
+| `progress` | `number` | Actual progress from 0 to 1. |
+| `active-change` | `number` | Current sticky-item index. |
+| `select` | `(item: MotionItem, index: number)` | Enabled card action activated with pointer or keyboard. |
+| `visible-change` | `boolean` | Reveal/in-view intersection changed. |
+
+### Slots and exposed state
+
+| Name | Scope / Type | Description |
+| --- | --- | --- |
+| `default` | `{ pointer, progress, active }` for generic effects | Caller content. For `icon-swap`, supply the icon associated with `stateKey`. |
+| `item` | `{ item, index, active }` | Card item / sticky text. |
+| `visual` | `{ item, index, active }` | Sticky visuals. Inactive layers are `inert` and hidden from assistive technology. |
+| `cursor` | — | Follower decoration. |
+| `replay()` | `() => void` | Replays an entrance when motion is active. |
+| `progress` | `number` | Exposed actual scroll progress; Vue unwraps the internal readonly ref. |
+| `activeIndex` | `number` | Exposed sticky selection; Vue unwraps the internal computed ref. |
+
+### Vue supporting APIs
+
+Import these from `@talex-touch/tuffex/motion`, not the utils barrel. All browser resources follow mount, KeepAlive and document visibility; browser APIs are not accessed during SSR.
+
+| Export | Inputs | Actual output |
+| --- | --- | --- |
+| `useMousePosition` | Optional target ref, enabled getter, global getter | Readonly ref `{ x, y, elementX, elementY, width, height, inside }`; native pointer coordinates. Touch does not create hover decorations. |
+| `useScrollProgress` | Container getter, enabled getter, optional target getter | Readonly 0–1 ref. Without target: scrollTop / scroll range. With target: start-start to end-end target progress. |
+| `useStagger` | Count getter, `{ baseDelay?, staggerDelay?, from? }` getter | Computed delay array in milliseconds. Defaults: 0ms base, 50ms step, first; supports last, center and numeric origin. |
+| `useReducedMotion` | — | Existing shared reactive preference, not a second media-query implementation. |
+| `useScreenSize` | Optional enabled getter | Readonly viewport width/height; SSR starts at 0/0. |
+| `useIsMobile` | Breakpoint getter, default `768` | Readonly media-query result. Width is not treated as a user's reduced-motion preference. |
+| `useLoopFlag` | Target ref, enabled getter, interval getter (`2000ms`) | Readonly incrementing flag. Pauses offscreen, hidden, disabled, reduced and deactivated. |
+| `useWebHaptics` | Optional enabled getter | `{ supported, trigger(type) }`, where trigger returns `{ supported, accepted }`. Types: light, medium, heavy, success, warning, error. Uses the existing vibration utility. |
+| `useCanvasSetup` | Canvas ref, enabled getter | Cached logical `{ width, height, dpr }`, actual pixel-size updates, `active`, `visible`, `reduced`; DPR is capped at 2. The caller owns drawing. |
+
+`accepted=true` means the browser accepted a Vibration API request. It does not prove physical vibration. Unsupported macOS desktop browsers return `supported=false`; no device-feedback claim is made.
+
+## Overview
+
+Shared spring physics drives tilt, magnetism, independent trail dots, mouse following and scroll progress. Frame work stops at rest and is cancelled on suspension. WAAPI entrances and icon transitions are cancelled on hidden/offscreen/deactivated/unmounted scopes. Observers, resize/pointer/scroll listeners, loop timers and vibration ownership are released by their Vue lifecycle owners. Without IntersectionObserver, meaningful content remains available.
+
+## Technologies
+
+The source is adapted from Amicro's MIT-licensed entrance/hover/cursor/scroll registry, IconSwap, InViewRender and support hooks. Copyright (c) 2026 SYED  SUBHAN UDDIN. The port uses Vue, the existing motion-activity helper, shared Liquid spring and vibration utilities; it adds no React, Motion or Tailwind runtime. Validation of this integration is performed by the owning build; this page does not claim a completed browser acceptance run.

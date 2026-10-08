@@ -387,6 +387,66 @@ describe('useHomeConversation', () => {
     expect(conversation.isStreaming.value).toBe(false)
   })
 
+  it('does not run a refused turn again without streaming, and keeps the reset time', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    double
+      .emit()
+      .onError?.(
+        new Error(
+          '[USAGE_LIMIT_REACHED] Usage limit reached: requestsPerDay; resets at 2026-10-04T07:00:00.000Z'
+        )
+      )
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value[1]).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'USAGE_LIMIT_REACHED',
+        resetsAt: Date.parse('2026-10-04T07:00:00.000Z')
+      }
+    })
+  })
+
+  it('reports a stream that never started as refused, without a second request', async () => {
+    const double = createSdkDouble({
+      startStream: () =>
+        Promise.reject(Object.assign(new Error('QUOTA_EXHAUSTED'), { code: 'QUOTA_EXHAUSTED' }))
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    await conversation.send('hello')
+
+    expect(double.chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value[1]).toMatchObject({ status: 'failed' })
+  })
+
+  it('carries the limit the fallback was refused by, now that a failed call says so', async () => {
+    // What main answers a host invoke the usage limit refused (`toApiFailure`).
+    const refused =
+      '[USAGE_LIMIT_REACHED:text.chat] The usage limit you set is reached (requestsPerDay: 2 / 2); it resets at 2026-10-04 00:00 local time (2026-10-04T07:00:00.000Z).'
+    const double = createSdkDouble({ chat: () => Promise.reject(new Error(refused)) })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    double.emit().onError?.(new Error('[UNKNOWN:text.chat] stream broke'))
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(1)
+    expect(conversation.messages.value[1]).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'USAGE_LIMIT_REACHED',
+        resetsAt: Date.parse('2026-10-04T07:00:00.000Z')
+      }
+    })
+  })
+
   it('marks an empty reply as failed instead of leaving a blank bubble', async () => {
     const double = createSdkDouble()
     const conversation = useHomeConversation({ sdk: double.sdk })

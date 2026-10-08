@@ -12,6 +12,7 @@ import { createDbUtils, type DbUtils } from '../../../db/utils'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { SearchUsageService } from './search-usage-service'
 import { toUsageEntryPoint } from './usage-entry-point'
+import { withPreviousAppContext } from './app-launch-recorder'
 
 const schemaMigrationUrls = [
   new URL('../../../../../resources/db/migrations/0000_whole_mister_fear.sql', import.meta.url),
@@ -86,6 +87,148 @@ async function executeCount(client: Client, itemId: string): Promise<number> {
   return Number(rows[0]?.executeCount ?? 0)
 }
 
+describe('recommendation accepted history', () => {
+  it('reads only admitted events in the inclusive thirty-day window and joins origin by event id', async () => {
+    await withDatabase(async ({ client, dbUtils }) => {
+      const now = new Date(2026, 9, 6, 9, 30).getTime()
+      const cutoff = now - 30 * 86_400_000
+      const accepted = [
+        {
+          eventId: 'lower-edge',
+          itemId: 'target',
+          timestamp: cutoff,
+          context: JSON.stringify({ prevApp: 'com.example.editor', prevAppName: 'Editor' })
+        },
+        {
+          eventId: 'upper-edge',
+          itemId: 'target',
+          timestamp: now,
+          context: JSON.stringify({ prevApp: 'com.example.browser', prevAppName: 'Browser' })
+        },
+        {
+          eventId: 'malformed-context',
+          itemId: 'malformed',
+          timestamp: now - 1_000,
+          context: '{broken'
+        },
+        // These Date-backed columns persist whole seconds; use the first representable instant
+        // outside each edge rather than a sub-second value that rounds onto the boundary.
+        { eventId: 'expired', itemId: 'expired', timestamp: cutoff - 1_000, context: '{}' },
+        { eventId: 'future', itemId: 'future', timestamp: now + 1_000, context: '{}' }
+      ]
+      for (const row of accepted) {
+        await dbUtils.recordExecuteTransaction({
+          ...row,
+          sourceId: 'application-provider',
+          sourceType: 'application',
+          sessionId: 'history-session',
+          timestamp: new Date(row.timestamp)
+        })
+      }
+      // Same target/time but no admission: neither a legacy log nor an unrelated event may
+      // supply the origin for the accepted row or create a second recommendation execution.
+      await client.execute({
+        sql: `INSERT INTO usage_logs (session_id, item_id, source, action, timestamp, event_id, context)
+              VALUES ('legacy', 'target', 'application-provider', 'execute', ?, NULL, ?),
+                     ('unaccepted', 'target', 'application-provider', 'execute', ?, 'unaccepted-id', ?)`,
+        args: [
+          now / 1_000,
+          JSON.stringify({ prevApp: 'wrong.legacy' }),
+          now / 1_000,
+          JSON.stringify({ prevApp: 'wrong.unaccepted' })
+        ]
+      })
+      await client.execute({
+        sql: `INSERT INTO usage_execute_events (event_id, source_id, item_id, source_type, timestamp, day)
+              VALUES ('missing-log', 'another-provider', 'orphan-target', 'plugin', ?, ?)`,
+        args: [(now - 2_000) / 1_000, Math.floor(now / 86_400_000)]
+      })
+
+      const events = await dbUtils.getRecommendationHistory(now)
+      expect(events).toHaveLength(4)
+      expect(events).toEqual(
+        expect.arrayContaining([
+          {
+            sourceId: 'application-provider',
+            itemId: 'target',
+            sourceType: 'application',
+            timestamp: cutoff,
+            previousApp: 'com.example.editor',
+            previousAppName: 'Editor'
+          },
+          {
+            sourceId: 'another-provider',
+            itemId: 'orphan-target',
+            sourceType: 'plugin',
+            timestamp: now - 2_000,
+            previousApp: null,
+            previousAppName: null
+          },
+          {
+            sourceId: 'application-provider',
+            itemId: 'malformed',
+            sourceType: 'application',
+            timestamp: now - 1_000,
+            previousApp: null,
+            previousAppName: null
+          },
+          {
+            sourceId: 'application-provider',
+            itemId: 'target',
+            sourceType: 'application',
+            timestamp: now,
+            previousApp: 'com.example.browser',
+            previousAppName: 'Browser'
+          }
+        ])
+      )
+    })
+  })
+
+  it('declines an incomplete history rather than calculating preferences from a truncated sample', async () => {
+    await withDatabase(async ({ client, dbUtils }) => {
+      const now = new Date(2026, 9, 6, 9, 30).getTime()
+      await client.execute({
+        sql: `WITH RECURSIVE events(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM events WHERE n < 10001)
+              INSERT INTO usage_execute_events (event_id, source_id, item_id, source_type, timestamp, day)
+              SELECT 'overflow-' || n, 'application-provider', 'target', 'application', ?, ? FROM events`,
+        args: [now / 1_000, Math.floor(now / 86_400_000)]
+      })
+
+      expect(await dbUtils.getRecommendationHistory(now)).toEqual([])
+    })
+  })
+})
+
+describe('SearchUsageService execution origin', () => {
+  it('keeps explicit unknown attribution unknown but resolves an omitted origin from execution scope', async () => {
+    await withDatabase(async ({ client, usageService }) => {
+      await withPreviousAppContext(
+        { prevApp: 'com.example.editor', prevAppName: 'Editor' },
+        async () => {
+          await usageService.recordExecute('source-session', item, item.id, {
+            eventId: 'explicit-unknown',
+            previousApp: null
+          })
+          await usageService.recordExecute('source-session', item, item.id, {
+            eventId: 'scope-origin'
+          })
+        }
+      )
+      const { rows } = await client.execute('SELECT event_id, context FROM usage_logs ORDER BY id')
+      const contexts = rows.map((row) => [row.event_id, JSON.parse(String(row.context))])
+
+      expect(contexts).toEqual([
+        ['explicit-unknown', expect.not.objectContaining({ prevApp: expect.anything() })],
+        [
+          'scope-origin',
+          expect.objectContaining({ prevApp: 'com.example.editor', prevAppName: 'Editor' })
+        ]
+      ])
+      expect(await executeCount(client, item.id)).toBe(2)
+    })
+  })
+})
 describe('SearchUsageService execution persistence', () => {
   it('commits the log, aggregate, summary and trend together and keeps them across maintenance', async () => {
     await withDatabase(async ({ client, usageService }) => {

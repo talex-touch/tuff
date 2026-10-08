@@ -365,6 +365,27 @@
       "when": 1786838400000,
       "tag": "0051_usage_execute_events",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786924800000,
+      "tag": "0052_conversation_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1787011200000,
+      "tag": "0053_search_index_document_locators",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1787097600000,
+      "tag": "0054_app_foreground_activity",
+      "breakpoints": true
     }
   ]
 }

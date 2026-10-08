@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SettingTools from './SettingTools.vue'
+
+enableAutoUnmount(afterEach)
 
 const settingState = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof import('vue')
   return {
+    shortcutChangeListeners: new Set<() => void>(),
     appSettingMock: reactive({
       coreBox: {
         customPlaceholder: ''
@@ -57,7 +60,11 @@ vi.mock('~/utils/renderer-log', () => ({
 
 vi.mock('~/modules/channel/main/shortcon', () => ({
   shortconApi: {
-    getAll: vi.fn(async () => [])
+    getAll: vi.fn(async () => []),
+    onChanged: (listener: () => void) => {
+      settingState.shortcutChangeListeners.add(listener)
+      return () => settingState.shortcutChangeListeners.delete(listener)
+    }
   }
 }))
 
@@ -94,28 +101,26 @@ const settingToolsStubs = {
 
 describe('settingTools home recommendations switch', () => {
   beforeEach(() => {
+    settingState.appSettingMock.dev.advancedSettings = true
     settingState.appSettingMock.tools.homeRecommendations = false
     settingState.appSettingMock.tools.homeAiOpening = false
   })
 
-  it('defaults to off and hides the AI opening line toggle', async () => {
+  it('hides both Beta recommendation controls without advanced settings even when opted in', async () => {
+    settingState.appSettingMock.dev.advancedSettings = false
+    settingState.appSettingMock.tools.homeRecommendations = true
+    settingState.appSettingMock.tools.homeAiOpening = true
     const wrapper = mount(SettingTools, {
       props: { advancedOnly: false },
       global: { stubs: settingToolsStubs }
     })
     await nextTick()
-
-    const recSwitch = wrapper.find('[data-title="settingTools.homeRecommendations"]')
-    expect(recSwitch.exists()).toBe(true)
-    expect(recSwitch.find('input').element.checked).toBe(false)
-    expect(recSwitch.find('.mock-beta-tag').exists()).toBe(true)
-
-    // Sub-toggle for model-written AI opening line is hidden when home recommendations is off
-    const aiOpeningSwitch = wrapper.find('[data-title="settingTools.homeAiOpening"]')
-    expect(aiOpeningSwitch.exists()).toBe(false)
+    expect(wrapper.find('[data-title="settingTools.homeRecommendations"]').exists()).toBe(false)
+    expect(wrapper.find('[data-title="settingTools.homeAiOpening"]').exists()).toBe(false)
+    expect(wrapper.find('[data-title="settingTools.autoContext"]').exists()).toBe(true)
   })
 
-  it('reveals the AI opening line toggle when home recommendations is turned on', async () => {
+  it('reveals the AI opening control only while advanced settings and recommendations are enabled', async () => {
     const wrapper = mount(SettingTools, {
       props: { advancedOnly: false },
       global: { stubs: settingToolsStubs }
@@ -126,10 +131,21 @@ describe('settingTools home recommendations switch', () => {
     await recSwitch.find('input').setValue(true)
     await nextTick()
 
-    expect(settingState.appSettingMock.tools.homeRecommendations).toBe(true)
-
     const aiOpeningSwitch = wrapper.find('[data-title="settingTools.homeAiOpening"]')
     expect(aiOpeningSwitch.exists()).toBe(true)
-    expect(aiOpeningSwitch.find('input').element.checked).toBe(false)
+    await aiOpeningSwitch.find('input').setValue(true)
+    await recSwitch.find('input').setValue(false)
+    await nextTick()
+    expect(wrapper.find('[data-title="settingTools.homeAiOpening"]').exists()).toBe(false)
+    await recSwitch.find('input').setValue(true)
+    await nextTick()
+    expect(
+      wrapper.get<HTMLInputElement>('[data-title="settingTools.homeAiOpening"] input').element
+        .checked
+    ).toBe(true)
+    settingState.appSettingMock.dev.advancedSettings = false
+    await nextTick()
+    expect(wrapper.find('[data-title="settingTools.homeRecommendations"]').exists()).toBe(false)
+    expect(wrapper.find('[data-title="settingTools.homeAiOpening"]').exists()).toBe(false)
   })
 })

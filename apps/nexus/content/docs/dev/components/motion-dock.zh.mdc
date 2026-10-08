@@ -1,0 +1,136 @@
+---
+title: "动态应用栏"
+description: "调用方项目支持临近弹簧放大、指针拖动和键盘排序。"
+category: MotionInteraction
+status: beta
+since: 0.6.3
+tags: [motion, dock, reorder]
+syncStatus: reviewed
+verified: false
+---
+
+## 概述
+
+`TxMotionDock` 渲染调用方提供的真实项目。指针距离同时影响当前项目和临近项目，来源弹簧保持宽高同步。拖动先改变局部预览，释放后返回新的有序项目数组。组件不使用内置演示颜色替换调用方项目，也不修改传入数组。
+
+应用栏采用水平工具栏语义。原生按钮和链接使用单项轮转焦点、本地化说明，并在真实排序后礼貌播报。暂停、减少动态效果或可见性失活时，尺寸动画停止，项目保持可读和可操作。
+
+## 用法
+
+### 受控项目和插槽
+
+演示在每次指针或键盘排序后展示调用方数组。它还包含选择、禁用项、真实图标和标签插槽，以及链接到说明段落的原生链接。
+
+:::TuffDemoWrapper{demo="MotionDockDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MotionDockItem } from '@talex-touch/tuffex/motion-dock'
+  import { ref } from 'vue'
+
+  const activeId = ref('files')
+  const items = ref<MotionDockItem[]>([
+    { id: 'files', label: '文件' },
+    { id: 'search', label: '搜索' },
+    { id: 'calendar', label: '日历' },
+  ])
+  </script>
+
+  <template>
+    <TxMotionDock v-model:items="items" v-model:active-id="activeId" show-labels>
+      <template #icon="{ item }">{{ item.label.slice(0, 1) }}</template>
+      <template #label="{ item }">{{ item.label }}</template>
+    </TxMotionDock>
+    <output>{{ items.map(item => item.id).join(' → ') }}</output>
+  </template>
+---
+:::
+
+### 指针和键盘
+
+沿应用栏移动指针可放大临近项目。`md` 使用来源的 28 px 静止尺寸、44 px 峰值和 80 px 影响半径。主指针横向移动 4 px 后开始拖动，局部排序期间保持指针捕获，并在释放时返回最终顺序。Escape、指针取消或失去捕获会恢复调用方顺序，不触发排序事件。调用方从外部替换 `items` 时，旧拖动快照会取消。
+
+左右方向键跳过禁用项循环移动焦点。Home/End 到达首个和末个可用项。Alt + 左右方向键将当前项移动一个位置；Alt + Home/End 移到两端。Enter 或空格激活当前项目。链接保持原生导航，空格提供与按钮一致的工具栏激活行为。拖动不会激活项目，也不会屏蔽后续键盘激活。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `items` | `readonly MotionDockItem[]` | 必填 | 调用方顺序和稳定的唯一 ID。需要应用 `update:items`，通常使用 `v-model:items`。 |
+| `activeId` | `string \| number` | — | 选中项目标识，支持 `v-model:active-id`。选择不改变顺序。 |
+| `reorderable` | `boolean` | `true` | 启用指针拖动和 Alt 按键排序；普通导航和激活仍然可用。 |
+| `disabled` | `boolean` | `false` | 禁用全部激活、排序并停止尺寸动画。 |
+| `paused` | `boolean` | `false` | 停止放大并恢复静止尺寸，不禁用项目操作。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 静止尺寸分别为 20、24、28 和 36 px。峰值按来源的 44/28 比例缩放。 |
+| `itemSize` | `number` | 由 `size` 决定 | 覆盖静止尺寸，最小 16 px；非有限值使用尺寸预设。 |
+| `magnifiedSize` | `number` | `itemSize × 44 / 28` | 覆盖峰值，不会小于静止尺寸。 |
+| `distance` | `number` | `80` | 指针影响半径，单位 px，最小 1 px。 |
+| `showLabels` | `boolean` | `false` | 在应用栏下显示标签。可访问名称始终来自 `item.label`。 |
+| `labels` | `Partial<MotionDockLabels>` | 见下表 | 本地化工具栏名称、键盘说明和排序播报。 |
+
+#### 项目和文案
+
+`MotionDockItem` 包含 `id: string | number`、`label: string`，以及可选的 `disabled: boolean` 和 `href: string`。没有 `href` 时渲染原生按钮，有 `href` 时渲染原生链接。禁用链接不能导航。排序保留相同项目对象，包括调用方附加字段。
+
+| 文案 | 默认值 | 用途 |
+| --- | --- | --- |
+| `dock` | `'Application dock'` | 工具栏可访问名称。 |
+| `instructions` | 英文方向键、Home/End、Alt 排序、Enter/空格和 Escape 说明 | 通过稳定的 Vue ID 关联到工具栏。 |
+| `reordered` | `'Moved {label} to position {position} of {total}.'` | 礼貌排序播报。位置从 1 开始；事件索引从 0 开始。 |
+
+### 事件
+
+| 事件 | 载荷 | 说明 |
+| --- | --- | --- |
+| `update:items` | `MotionDockItem[]` | 指针或键盘排序改变后返回的新数组，调用方需要应用。 |
+| `reorder` | `(items, detail)` | 同一个实际有序数组，以及说明操作的 `MotionDockReorder`。 |
+| `update:activeId` | `string \| number` | 原生激活请求选中项目。 |
+| `select` | `(item, index)` | 实际选中项目和当前顺序索引，不伪造业务操作。 |
+
+`MotionDockReorder` 为 `{ id, from, to, source: 'pointer' | 'keyboard' }`。`from` 和 `to` 从 0 开始。顺序未变化的释放或取消拖动不触发排序。组件不会写入存储，也不会替按钮项目执行导航。
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+| --- | --- | --- |
+| `item` | `{ item, index, active, dragging }` | 替换原生项目控件中的内容。不要嵌套另一个交互控件。 |
+| `icon` | `{ item, index }` | 图标画面。默认显示调用方标签的首字符；画面对辅助技术隐藏。 |
+| `label` | `{ item, index }` | `showLabels=true` 时显示的标签，不替换可访问名称。 |
+
+无需命令式方法。`items`、`activeId`、`reorderable` 和 `paused` 驱动真实状态。
+
+### 导出
+
+`@talex-touch/tuffex/motion-dock` 导出 `TxMotionDock`、可安装的 `MotionDock`、`TxMotionDockInstance`、`MotionDockProps`、`MotionDockEmits`、`MotionDockItem`、`MotionDockId`、`MotionDockLabels`、`MotionDockReorder` 和 `MOTION_DOCK_DEFAULT_LABELS`。
+
+### CSS 变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `--tx-motion-dock-base-size` | 由 `size` / `itemSize` 决定的静止尺寸。 |
+| `--tx-motion-dock-item-size` | 共享弹簧驱动器管理的每项尺寸。 |
+
+表面、线条、选中环和图标底色使用宿主 `--tx-*` token。悬停底色立即变化，不做颜色渐变过渡。
+
+## 来源映射
+
+| 变体 | 原始名称 | 固定版本来源 | 保留行为 |
+| --- | --- | --- | --- |
+| `dock` | `Dock` / `DockItem` | [Dock.tsx](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/Dock.tsx) | 临近指针距离放大，宽高同步；质量 0.1、刚度 220、阻尼 16；横向拖动排序。内置颜色数组改为调用方项目和插槽。 |
+
+## 最佳实践
+
+- 使用稳定且唯一的 ID，并应用 `update:items`。渲染固定数组而忽略返回顺序，会保留调用方原有顺序。
+- 保留自己的项目对象和业务动作。按钮操作监听 `select`；真实链接提供 `href`。
+- 提供本地化文案和非空项目名称。图标保持装饰内容，不嵌套第二个按钮。
+- 固定应用或导航顺序使用 `reorderable=false`。禁用项仍在数据中，但不能激活、通过工具栏聚焦或发起拖动。
+- 应用栏长度应适合宿主。可见标签可能比图标单元更宽；窄屏使用短名称或保持 `showLabels=false`。
+- 不再建立悬停计时器或第二套弹簧。组件管理运动活跃状态，收敛或失活时取消唯一 RAF。
+
+## 技术实现
+
+组件使用原生指针捕获和 HTML 工具栏语义。布局只在输入事件中读取，不在弹簧帧中测量。现有 liquid `springSteps` 保留速度并推进来源弹簧。单个按需 RAF 写入每项尺寸变量，收敛后停止。`useMotionActivity` 提供 SSR 安全的可见性、隐藏页面、减少动态效果和 KeepAlive 控制。停用或卸载时释放 RAF、指针捕获和未完成拖动。Dock 不复制 observer 或全局监听器。
+
+按 MIT 许可改编。Copyright (c) 2026 SYED  SUBHAN UDDIN。本页记录实现契约，不声称浏览器或包级验证已完成。

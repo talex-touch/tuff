@@ -11,6 +11,7 @@ import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   AgentToolConfirmRequest,
+  AgentToolOrigin,
   AgentToolConfirmSettlementReason,
   AgentToolGatewayState,
   AgentToolPermissionMode
@@ -19,7 +20,10 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ConfirmationDecision, ConfirmationRequest, ToolGatewayHandle } from './gateway-server'
 import { ToolConfirmationUnavailableError } from './gateway-server'
 import { randomUUID } from 'node:crypto'
-import { AgentToolEvents } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import {
+  AGENT_TOOL_CONFIRMATION_TIMEOUT_MS,
+  AgentToolEvents
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
@@ -43,8 +47,6 @@ export * from './tool-registry'
 
 const toolLog = createLogger('agent-tools')
 
-/** A user who never answers must not wedge the agent loop forever. */
-const DEFAULT_CONFIRMATION_TIMEOUT_MS = 2 * 60 * 1000
 const MIN_CONFIRMATION_TIMEOUT_MS = 250
 const CONFIRMATION_TIMEOUT_ENV = 'TUFF_AGENT_TOOL_CONFIRM_TIMEOUT_MS'
 
@@ -52,9 +54,9 @@ function resolveConfirmationTimeoutMs(): number {
   const candidate = Number(process.env[CONFIRMATION_TIMEOUT_ENV])
   return Number.isInteger(candidate) &&
     candidate >= MIN_CONFIRMATION_TIMEOUT_MS &&
-    candidate < DEFAULT_CONFIRMATION_TIMEOUT_MS
+    candidate < AGENT_TOOL_CONFIRMATION_TIMEOUT_MS
     ? candidate
-    : DEFAULT_CONFIRMATION_TIMEOUT_MS
+    : AGENT_TOOL_CONFIRMATION_TIMEOUT_MS
 }
 
 function assertHostOwned(context: HandlerContext): void {
@@ -62,6 +64,13 @@ function assertHostOwned(context: HandlerContext): void {
   if (pluginId) {
     throw new Error(`[AgentTools] Plugin '${pluginId}' cannot drive agent tools`)
   }
+}
+
+export interface GatewayRuntimeConfig {
+  url: string
+  token: string
+  tools: string[]
+  release?: () => void
 }
 
 export class ToolGatewayModule extends BaseModule<TalexEvents> {
@@ -116,12 +125,14 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
   }
 
   /** Spawn-time inputs for the pi provider; empty tools means "no tools". */
-  getRuntimeConfig(): { url: string; token: string; tools: string[] } | null {
+  getRuntimeConfig(origin?: AgentToolOrigin): GatewayRuntimeConfig | null {
     if (!this.enabled || !this.handle) return null
+    const scope = origin ? this.handle.scope(origin) : undefined
     return {
       url: this.handle.url,
-      token: this.handle.token,
-      tools: [...createToolRegistry(this.registryOptions()).keys()]
+      token: scope?.token ?? this.handle.token,
+      tools: [...createToolRegistry(this.registryOptions()).keys()],
+      ...(scope ? { release: scope.release } : {})
     }
   }
 
@@ -199,7 +210,8 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       tool: request.tool,
       risk: request.risk,
       summary: request.summary,
-      input: request.input
+      input: request.input,
+      ...(request.origin ? { origin: { ...request.origin } } : {})
     }
 
     return await new Promise<ConfirmationDecision>((resolveDecision) => {
@@ -390,7 +402,7 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
 
     // The provider asks at spawn time, so flipping tools on mid-conversation
     // takes effect on the next turn without re-registering anything.
-    setPiToolRuntimeResolver(() => this.getRuntimeConfig())
+    setPiToolRuntimeResolver((origin) => this.getRuntimeConfig(origin))
 
     toolLog.info('Agent tool channels registered')
   }

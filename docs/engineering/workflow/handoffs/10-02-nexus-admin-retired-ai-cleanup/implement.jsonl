@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/retired-ai-cleanup.md", "reason": "Verdict table, reachability ranges for tuffIntelligenceLabService.ts, intelligenceStore split, test and guard list, atomic deletion order"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Parent contracts: shared-tree rules, CI-equivalent test command, commit policy"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Analytics panel contract at :73 changes from seven to six panels"}
+{"file": ".trellis/spec/frontend/nexus-provider-scene-routing.md", "reason": "Live provider/scene routing that must keep working after the lab service is trimmed"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "Guards must keep a negative control; three admin guards have been vacuous since 10-01"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands and per-workspace lint"}

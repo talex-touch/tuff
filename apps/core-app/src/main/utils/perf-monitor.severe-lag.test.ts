@@ -41,6 +41,7 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 
 vi.mock('./perf-context', () => ({
   getPerfContextSnapshot: () => [],
+  getRecentPerfContextSnapshot: () => [],
   markPerfEventLoopLag: vi.fn()
 }))
 
@@ -130,5 +131,60 @@ describe('perf-monitor severe lag burst', () => {
     })
 
     expect(cause).toBe('native_or_system_stall')
+  })
+})
+
+describe('inferEventLoopLagCause attribution', () => {
+  const idleLanes = {
+    critical: { queued: 0, inFlight: 0 },
+    realtime: { queued: 0, inFlight: 0 },
+    io: { queued: 0, inFlight: 0 },
+    maintenance: { queued: 0, inFlight: 0 },
+    serial: { queued: 0, inFlight: 0 }
+  }
+
+  it('does not blame a polling task that is merely in flight', async () => {
+    const { inferEventLoopLagCause } = await import('./perf-monitor')
+    const cause = inferEventLoopLagCause({
+      lagMs: 2500,
+      contextsCount: 0,
+      recentContextsCount: 0,
+      pollingActiveCount: 1,
+      queueDepthByLane: { ...idleLanes, io: { queued: 0, inFlight: 1 } },
+      pollingRecentMaxDurationMs: 1,
+      pollingRecentMaxSchedulerDelayMs: 700
+    })
+
+    expect(cause).toBe('unattributed_main_thread_block')
+  })
+
+  it('still reports a backlog when tasks are queued behind the loop', async () => {
+    const { inferEventLoopLagCause } = await import('./perf-monitor')
+    const cause = inferEventLoopLagCause({
+      lagMs: 2500,
+      contextsCount: 0,
+      recentContextsCount: 0,
+      pollingActiveCount: 1,
+      queueDepthByLane: { ...idleLanes, io: { queued: 2, inFlight: 1 } },
+      pollingRecentMaxDurationMs: 1,
+      pollingRecentMaxSchedulerDelayMs: 700
+    })
+
+    expect(cause).toBe('polling_queue_backlog')
+  })
+
+  it('treats a context that closed inside the lag span as the attribution', async () => {
+    const { inferEventLoopLagCause } = await import('./perf-monitor')
+    const cause = inferEventLoopLagCause({
+      lagMs: 2500,
+      contextsCount: 0,
+      recentContextsCount: 1,
+      pollingActiveCount: 1,
+      queueDepthByLane: { ...idleLanes, io: { queued: 0, inFlight: 1 } },
+      pollingRecentMaxDurationMs: 1,
+      pollingRecentMaxSchedulerDelayMs: 700
+    })
+
+    expect(cause).toBeNull()
   })
 })

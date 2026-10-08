@@ -54,15 +54,14 @@ const metaRow = computed(() => props.items.some(item => item.meta))
         v-for="item in items"
         :key="item.key"
         :label="item.label"
+        :meta="item.meta"
         :value="item.value"
         :title="item.title"
         :icon-class="item.iconClass"
         :insight="item.insight"
       >
-        <!-- TxStatCard draws its `meta` prop only in the progress layout, so a plain card carries it in the label. -->
-        <template v-if="metaRow" #label>
-          {{ item.label }}
-          <span class="AdminStatGrid-Meta">{{ item.meta }}</span>
+        <template v-if="metaRow && !item.meta" #meta>
+          <span aria-hidden="true">&nbsp;</span>
         </template>
       </TxStatCard>
     </template>
@@ -90,14 +89,6 @@ const metaRow = computed(() => props.items.some(item => item.meta))
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
 }
 
-/* TxStatCard's own meta line: 12px under the label, in the label's colour. An
-   empty one keeps its height, for a card in a row that has the line elsewhere. */
-.AdminStatGrid-Meta {
-  display: block;
-  min-height: 1lh;
-  margin-top: 4px;
-  font-size: 12px;
-}
 
 .AdminStatGrid-PlaceholderGap {
   height: 12px;

@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-03-audit-insights-page/prd.md", "reason": "acceptance AC-P1–AC-P8 to verify"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent §5 contract the page must match"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "verify skeleton mirrors layout and controls are semantic"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "repo-wide quality gates"}

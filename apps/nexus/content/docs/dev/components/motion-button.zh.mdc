@@ -1,0 +1,283 @@
+---
+title: "MotionButton 动效按钮"
+description: "保留原生按钮和链接语义的 13 类交互与 35 个来源图标组合"
+category: MotionButtons
+status: beta
+since: 0.6.3
+tags: [motion, button, icon, spring, interaction]
+syncStatus: reviewed
+verified: false
+---
+
+## 安装
+
+```ts
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/motion-button/style.css'
+```
+
+## 用法
+
+### 全部交互与来源组合
+
+演示可筛选 13 类交互，遍历 35 个图标组合，并切换网格、列表和图标矩阵。每项支持真实悬停、键盘聚焦、原生激活和装饰回放。选中状态与激活次数由演示调用方维护，复制项实际写入剪贴板。
+
+:::TuffDemoWrapper{demo="MotionButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+
+  const playing = ref(false)
+  </script>
+
+  <template>
+    <TxMotionButton
+      source-id="7"
+      label="播放预览"
+      active-label="暂停预览"
+      :selected="playing"
+      @click="playing = !playing"
+    />
+    <TxMotionButton
+      variant="magnetic"
+      icon="arrow-right"
+      label="打开项目文档"
+      href="https://github.com/TalexDreamSoul/talex-touch"
+      :magnetic-strength="0.35"
+    />
+  </template>
+---
+:::
+
+### 调用方的操作与内容
+
+`sourceId` 只选择视觉参数，不执行操作，也不提供默认文案。悬停可以显示勾选图标，但不宣称业务成功。只有调用方设置的 `selected` 才启用 `activeLabel`。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+
+const copied = ref(false)
+const busy = ref(false)
+const error = ref('')
+const marked = ref(false)
+async function copyHash() {
+  busy.value = true
+  error.value = ''
+  try {
+    await navigator.clipboard.writeText('43c29ce9cdd16459e3eab4992381b8d35b38776a')
+    copied.value = true
+  }
+  catch {
+    error.value = '无法访问剪贴板'
+  }
+  finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <TxMotionButton source-id="4" label="复制提交" active-label="已复制"
+    :selected="copied" :disabled="busy" @click="copyHash" />
+  <p role="status">{{ error }}</p>
+  <TxMotionButton variant="sparkle" label="标记本地条目" :selected="marked" @click="marked = !marked">
+    <template #icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h16" /></svg></template>
+    <template #active-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg></template>
+    <template #default="{ selected }">{{ selected ? '已标记本地条目' : '标记本地条目' }}</template>
+  </TxMotionButton>
+</template>
+```
+
+应用负责真实业务操作和图标内容。内容插槽用于标签和装饰，需要独立操作的控件应放在按钮外。
+
+### 焦点模糊链接
+
+来源 `35` 渲染真实链接或按钮的分组。组件不创建占位地址，也不把多个交互元素包在一个按钮里。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+const lastLabel = ref('')
+</script>
+
+<template>
+  <TxMotionButton source-id="35" label="项目链接" :items="[
+    { label: '仓库', href: 'https://github.com/TalexDreamSoul/talex-touch' },
+    { label: '文档', href: '/docs' },
+    { label: '本地操作' },
+  ]" @select="item => lastLabel = item.label" />
+  <output>{{ lastLabel }}</output>
+</template>
+```
+
+### 最佳实践
+
+- 用 `label`、默认插槽或 `ariaLabel` 提供明确名称。图标矩阵中的控件也需要无障碍名称。
+- 在 `@click` 或 `@select` 中执行真实操作。根据调用方状态设置 `selected` 和 `activeLabel`。悬停与回放不报告成功，也不改写业务状态。
+- 导航用 `href`，表单提交用 `type="submit"`。按钮保留 Enter 和空格激活，链接保留 Enter 激活及组合键打开方式。
+- 操作不可执行时设置 `disabled`。禁用链接会移除地址和 Tab 停靠，不依靠装饰遮罩拦截事件。
+- 使用 `sourceId` 选择原始组合。内容不同时可以覆盖 `variant`、图标和颜色，也可以通过插槽提供自己的图标。
+- 焦点模糊的 `#item` 插槽只放非交互标签。外层原生链接或按钮已经负责聚焦和激活。
+- 设置 `animated=false` 保留内容和静态端点。减少动态效果、文档隐藏、控件离屏及 KeepAlive 失活都会暂停装饰动画。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `sourceId` | `MotionButtonSourceId` | — | 原始字符串 ID `"1"`～`"35"`，选择交互、图标对、活动颜色/填充和保留时间。不提供可见文案或业务操作。 |
+| `variant` | `MotionButtonVariant` | 来源预设，否则 `morph` | 显式覆盖交互类型，下方列出全部 13 个值。 |
+| `label` | `string` | `''` | 调用方提供的可见标签。图标控件没有 `ariaLabel` 时也用它命名。 |
+| `activeLabel` | `string` | — | 仅在 `selected === true` 时替换 `label`。 |
+| `ariaLabel` | `string` | — | 覆盖无障碍名称。焦点模糊模式用于分组名称。 |
+| `icon` | `MorphIconSource` | 来源预设 | 首个图标，接受内置名称、SVG 路径 `d`、Lucide 风格 `IconNode`，以及 IconMorph 支持的 SVG 源码。 |
+| `activeIcon` | `MorphIconSource` | 来源预设，否则 `icon` | 图标对交互的目标图标。 |
+| `iconColor` | `string` | 来源预设，否则 `currentColor` | pulse/shake 的首个图标活动颜色，也是目标颜色的回退值。静止图标继承控件文字颜色。 |
+| `activeIconColor` | `string` | 来源预设，否则 `iconColor` | 目标图标颜色，接受 CSS 颜色或 token，立即切换。 |
+| `activeFill` | `boolean` | 来源预设，否则 `false` | 在 pulse/color-morph/morph 中填充活动图标。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | 高度分别为 24/30/36/42 px，沿用 TuffEx 尺寸词汇。 |
+| `disabled` | `boolean` | `false` | 原生按钮禁用，或移除链接地址和 Tab 停靠。焦点模糊模式会禁用所有条目。 |
+| `animated` | `boolean` | `true` | 共享生命周期允许时启用装饰动画。 |
+| `selected` | `boolean` | — | 调用方提供的目标图标状态，按钮同步 `aria-pressed`。不执行业务，也不确认成功。 |
+| `href` | `string` | — | 渲染原生链接，代替按钮。 |
+| `target` | `string` | — | 原生链接目标窗口。 |
+| `rel` | `string` | `_blank` 时为 `noopener noreferrer` | 原生链接关系，显式值优先。 |
+| `type` | `'button' \| 'submit' \| 'reset'` | `button` | 原生按钮类型，不应用于链接。 |
+| `iconOnly` | `boolean` | `false` | 只显示图标的方形控件，保留无障碍名称。 |
+| `hoverBackground` | `string` | `var(--tx-fill-color)` | 交互背景立即变化，不对悬停颜色补间。 |
+| `holdDuration` | `number` | 来源预设，否则 `0` | 离开后保留装饰目标图标的毫秒数。4/21/22/24/25 默认保留 500 ms，不保留成功文案。 |
+| `spring` | `Transition` | 各元素的源参数 | 显式覆盖几何弹簧。默认外层布局为 500/25，普通图标为 600/25，rotate/text-reveal 为 400/25，expand-ring 为 400/20，焦点轮廓为 350/20，通知点为 600/15。也接受 duration/ease；物理参数会传给 IconMorph。 |
+| `magneticStrength` | `number` | `0.35` | 磁吸的指针偏移倍数。 |
+| `magneticRange` | `number` | — | 可选的作用距离，单位 px。未设置时保留目录样例在按钮内不限制距离的行为。 |
+| `magneticSpring` | `SpringConfig` | `{ stiffness: 500, damping: 25 }` | 磁吸位移与归零共用的逐帧弹簧。 |
+| `items` | `readonly MotionButtonItem[]` | `[]` | 焦点模糊的调用方条目。每项有 `label`，可选 `href`、`target`、`rel` 和 `disabled`。 |
+| `blurAmount` | `number` | `4` | 焦点模糊的其他条目模糊半径，单位 px。 |
+| `opacityAmount` | `number` | `0.4` | 其他条目的不透明度，限制在 0～1。 |
+| `showBrackets` | `boolean` | `true` | 显示活动条目的虚线轮廓。 |
+
+`id`、`name`、`value`、`form`、`download`、`aria-expanded` 和 `aria-controls` 等原生属性透传到实际元素。焦点模糊模式的透传属性应用于分组。
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `click` | `MouseEvent` | 普通按钮或链接的原生激活。禁用时不发出，不隐式更新状态，也不延迟业务操作。 |
+| `select` | `(item: MotionButtonItem, index: number, event: MouseEvent)` | 启用的焦点模糊条目被原生激活。调用方未阻止默认事件时保留导航。 |
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+| --- | --- | --- |
+| `default` | `{ active, selected, disabled }` | 可见标签和内容，回退为经 TextMorph 渲染的 `label`。空焦点模糊分组也提供此回退。 |
+| `icon` | `{ active, selected }` | 自定义首个图标。morph/color-morph 可用单个作用域图标插槽根据活动状态渲染。 |
+| `active-icon` | `{ active, selected }` | slide-arrow、sparkle、ring、morph 和 color-morph 的目标图标。成对插槽保留来源位移或缩放切换。 |
+| `reveal` | `{ active }` | text-reveal 的第二行揭示文字。它属于装饰，不重复进入无障碍名称，默认仍显示同一标签。 |
+| `item` | `{ item, index, active }` | 焦点模糊的条目标签，不放嵌套交互控件。 |
+
+### 暴露方法
+
+| 方法 | 签名 | 说明 |
+| --- | --- | --- |
+| `replay` | `() => void` | 回放视觉轨迹，不发出 `click`/`select`，不改写 `selected`。磁吸位移/归零和焦点模糊也可回放。失活或禁用时不启动工作。 |
+| `focus` | `() => void` | 聚焦原生控件，或焦点模糊中首个启用的条目。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--tx-motion-button-height` | 24/30/36/42 px | 尺寸档位的控件高度。 |
+| `--tx-motion-button-pad` | 12/16/24/28 px | 尺寸档位的水平内边距。 |
+| `--tx-motion-button-duration` | 图标/轮廓弹簧解析结果 | 图标和轮廓的几何过渡时长，失活时为零。 |
+| `--tx-motion-button-ease` | 图标/轮廓弹簧解析结果 | 图标和轮廓的几何/透明度编译曲线。 |
+| `--tx-motion-button-layout-duration` | 500/25 弹簧解析结果 | 外层内边距和缩放的过渡时长。 |
+| `--tx-motion-button-layout-ease` | 500/25 弹簧解析结果 | 独立外层几何曲线。 |
+| `--tx-motion-button-dot-duration` | 600/15 弹簧解析结果 | ring 通知点过渡时长。 |
+| `--tx-motion-button-dot-ease` | 600/15 弹簧解析结果 | 独立通知点曲线。 |
+| `--tx-motion-button-hover-bg` | `hoverBackground` | 立即切换的交互背景。 |
+| `--tx-motion-button-icon-color` | 解析后的目标颜色 | shake 的活动标签颜色，图标颜色和填充也立即变化。 |
+| `--tx-motion-button-blur` | `blurAmount` | 焦点模糊的其他条目滤镜。 |
+| `--tx-motion-button-dim` | `opacityAmount` | 焦点模糊的其他条目不透明度。 |
+
+### 类型
+
+导出 `MotionButtonProps`、`MotionButtonEmits`、`MotionButtonInstance`、`MotionButtonItem`、`MotionButtonSize`、`MotionButtonVariant`、`MotionButtonSourceId`、`MotionButtonCatalogEntry` 和 `TxMotionButtonInstance`。`MotionButton` 可安装，`TxMotionButton` 是 Vue 组件。`MOTION_BUTTON_VARIANTS`、`MOTION_BUTTON_SOURCE_IDS`、`MOTION_BUTTON_CATALOG` 和 `MOTION_BUTTON_PRESETS` 提供真实枚举与来源元数据。
+
+| 交互 | 独立轨迹 |
+| --- | --- |
+| `slide-arrow` | 首个图标向左退出 10 px，标签保持连续，右侧图标从右侧 10 px 进入。宽度和间距沿 600/25 弹簧变化。 |
+| `sparkle` | 首个图标向上退出 15 px 并缩至 0.8，目标从下方进入。两个星粒分别从 −45°/+45° 回转，延迟 50/100 ms。 |
+| `morph` | 各来源线条图标对使用 IconMorph 的向量几何，0.5→1 的缩放和透明度入场保留来源切换节奏。 |
+| `color-morph` | Bookmark、ThumbsUp 和 Star 各保留自己的轮廓，立即切换颜色和填充，保留来源缩放/透明度节奏。 |
+| `pulse` | Heart 在 400 ms 内按 1→1.25→1 脉冲缩放，活动填充和颜色立即变化。 |
+| `rotate` | Settings 或 RefreshCw 图标沿 400/25 弹簧旋转 180°，离开时归零。 |
+| `shake` | Trash2 在 400 ms 内按 0/−2/0/−2/0 px 上下移动，同时按 0/−10°/10°/−10°/0° 摇动。 |
+| `ring` | Bell/BellRing 按 −15°/15° 和 0.8 倍缩放切换。独立的 6 px 通知点延迟 100 ms，沿自己的 600/15 弹簧弹出。 |
+| `glare` | 50 px、−20° 的光泽在 850 ms 内从 −150% 扫到 150%，间隔 1 s，仅交互时循环。 |
+| `text-reveal` | 箭头旋转 45°，两个 18 px 文本行沿 400/25 弹簧向上移动一行。 |
+| `magnetic` | 指针偏移乘以 strength 拉动控件，单一共享弹簧保留速度并回到同一原点。 |
+| `expand-ring` | 图标缩放至 1.1，独立轮廓在 600 ms 内从 1 扩散至 1.15，并淡出。 |
+| `focus-blur` | 其他真实链接/按钮模糊并降低透明度，活动条目的虚线轮廓沿 350/20 弹簧从 1.3 缩放至 1.1。 |
+
+## 概述
+
+- 显式 `variant`、图标、颜色和 `holdDuration` 优先于 `sourceId`。来源标签只用于归属信息，不自动变成应用文案。
+- 悬停、聚焦、指针按下和回放驱动装饰。`selected` 保留目标图标并启用 `activeLabel`，始终由调用方提供。来源实现中仅凭悬停宣称“已复制”的行为不沿用。
+- 内容和装饰层不拦指针事件。普通控件使用原生按钮/链接，焦点模糊的各条目也保留原生语义和可见键盘轮廓。禁用链接没有 `href`、Tab 停靠或激活事件。
+- 原生表单提交/重置和链接导航不改成 JavaScript 键盘模拟。Enter/空格按下装饰遵循实际元素支持的按键。
+- 共享活动边界停止 CSS 循环、待执行回放帧、保留/回放定时器、磁吸 RAF 和图标/文字变形。SSR 不读取浏览器 API。减少动态效果时保留可读内容与静态端点。
+- 回放只处理视觉：先绘制静止姿态，再进入同一轨迹。磁吸回放只读一次控件尺寸，复用拉动和归零弹簧；焦点模糊回放强调首个启用条目。
+
+## 技术实现
+
+- 上游：[Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+- 行为来源：`src/components/AnimatedButton.tsx:39～415`、`src/data/buttons.tsx:43～77` 和 `src/components/cards/FocusBlur.tsx:17～73`。已阅读 registry 的 `hover/magnetic-button.tsx` 与 `hover/glow-button.tsx`，独立 registry 版本归入 Motion 交互组件族。
+- 原始图标来自上游锁文件固定的 [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE)。全部 46 个 SVG 图标保留原始节点和几何属性，仅移除 React key。ISC 与 Feather 派生部分的 MIT 声明完整保存在 `icons.ts` 的 `@license` 头中。
+- TuffEx 落点：`motion-button/src/TxMotionButton.vue`、`catalog.ts`、`icons.ts` 和 `MotionButtonGlyph.vue`。图标变形复用 IconMorph，文字值变化复用 TextMorph，物理与生命周期复用已有共享弹簧和 `useMotionActivity`。活动边界变化时以实例 key 销毁旧变形控制器，不只改变减少动态效果标志。
+- 下表保留全部 35 个实际组合。ID 改变图标、轨迹参数、填充和保留时间，不只是更换标签。固定标签属于来源元数据，可见文案由调用方提供。
+
+| 来源 ID | 来源组合 | 交互 | 图标 | 来源 |
+| --- | --- | --- | --- | --- |
+| `1` | Download for Mac | slide-arrow | Apple → ArrowRight | `buttons.tsx:43` |
+| `2` | Star on GitHub | sparkle | GitHub → Star | `buttons.tsx:44` |
+| `3` | Deploy App | morph | Cloud → CloudUpload | `buttons.tsx:45` |
+| `4` | Copy Hash | morph | Copy → Check；保留图标 500 ms | `buttons.tsx:46` |
+| `5` | Sponsor | pulse | Heart；活动填充 | `buttons.tsx:47` |
+| `6` | Share | morph | Link → Send | `buttons.tsx:48` |
+| `7` | Preview | morph | Play → Pause | `buttons.tsx:49` |
+| `8` | Settings | rotate | Settings | `buttons.tsx:50` |
+| `9` | Delete | shake | Trash2 | `buttons.tsx:51` |
+| `10` | Subscribe | ring | Bell → BellRing | `buttons.tsx:52` |
+| `11` | Search | morph | Search → X | `buttons.tsx:53` |
+| `12` | Theme | morph | Moon → Sun | `buttons.tsx:54` |
+| `13` | Microphone | morph | Mic → MicOff | `buttons.tsx:55` |
+| `14` | Camera | morph | Video → VideoOff | `buttons.tsx:56` |
+| `15` | Volume | morph | Volume2 → VolumeX | `buttons.tsx:57` |
+| `16` | Lock | morph | Lock → Unlock | `buttons.tsx:58` |
+| `17` | Directory | morph | Folder → FolderOpen | `buttons.tsx:59` |
+| `18` | Visibility | morph | Eye → EyeOff | `buttons.tsx:60` |
+| `19` | Save Later | color-morph | Bookmark 轮廓 → 填充 | `buttons.tsx:61` |
+| `20` | Like | color-morph | ThumbsUp 轮廓 → 填充 | `buttons.tsx:62` |
+| `21` | Download | morph | Download → Check；保留图标 500 ms | `buttons.tsx:63` |
+| `22` | Upload | morph | Upload → Check；保留图标 500 ms | `buttons.tsx:64` |
+| `23` | Account | morph | User → UserCheck | `buttons.tsx:65` |
+| `24` | Submit | morph | Send → Check；保留图标 500 ms | `buttons.tsx:66` |
+| `25` | Edit | morph | Pen → Check；保留图标 500 ms | `buttons.tsx:67` |
+| `26` | Network | morph | Wifi → WifiOff | `buttons.tsx:68` |
+| `27` | Power | morph | Battery → BatteryCharging | `buttons.tsx:69` |
+| `28` | Expand | morph | Maximize → Minimize | `buttons.tsx:70` |
+| `29` | Reload | rotate | RefreshCw | `buttons.tsx:71` |
+| `30` | Favorite | color-morph | Star 轮廓 → 填充 | `buttons.tsx:72` |
+| `31` | Glare Shine | glare | Star 与扫过的光泽 | `buttons.tsx:73` |
+| `32` | Text Reveal | text-reveal | ArrowRight 与两个文本行 | `buttons.tsx:74` |
+| `33` | Magnetic Field | magnetic | GitHub 与真实指针拉动 | `buttons.tsx:75` |
+| `34` | Expand Ring | expand-ring | Link 与独立扩散轮廓 | `buttons.tsx:76` |
+| `35` | Focus Blur Links | focus-blur | 调用方提供的链接/按钮分组 | `buttons.tsx:77` |
+
+<TuffDocSourceLink />

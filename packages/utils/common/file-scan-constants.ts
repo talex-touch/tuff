@@ -522,7 +522,7 @@ export const PATH_PATTERNS = {
    * Anchored to a whole path segment. The unanchored forms (`/out\//`, `/build\//`, `/dist\//`)
    * matched inside other names, so `src/layout/components` was excluded as `out/` and
    * `Documents/about/team` as `bout/`… the probe in
-   * `.trellis/tasks/09-26-corebox-refresh-churn/research/root-cause.md` §3 shows both.
+   * retired task 09-26-corebox-refresh-churn, research/root-cause.md §3 shows both.
    */
   DEV_PATHS: [
     /(?:^|\/)node_modules(?:\/|$)/,

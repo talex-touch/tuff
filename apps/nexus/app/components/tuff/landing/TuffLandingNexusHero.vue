@@ -18,7 +18,7 @@ import {
 // Nexus landing hero — product-first CoreBox surface with live app search.
 // Clean atmospheric hero: the 404 page's event-horizon field (nebula +
 // starfield, no singularity) over pure black, revealed on load by a centered
-// water-ripple wavefront. Title keeps the signature line-shadow "OS".
+// water-ripple wavefront. The first title line keeps the signature line shadow.
 
 const LazyEventHorizon = defineAsyncComponent(() => import('~/components/tuff/background/EventHorizon.vue'))
 //
@@ -62,13 +62,24 @@ const copy = computed(() => ({
   titlePrefix: t('landing.nexus.hero.titlePrefix'),
   titleSubject: t('landing.nexus.hero.titleSubject'),
   titleAccent: t('landing.nexus.hero.titleAccent'),
-  subtitle: t('landing.nexus.hero.subtitle'),
   primary: t('landing.nexus.hero.getPlatformVersion', { platform: platformName.value }),
   secondary: t('landing.nexus.hero.secondaryCta'),
   openSource: t('landing.nexus.hero.openSource'),
-  hintNav: t('landing.nexus.hero.hints.nav'),
-  hintOpen: t('landing.nexus.hero.hints.open'),
-  hintActions: t('landing.nexus.hero.hints.actions'),
+  placeholder: t('landing.nexus.hero.corebox.placeholder'),
+  hintOpen: t('landing.nexus.hero.corebox.hints.open'),
+  hintExecute: t('landing.nexus.hero.corebox.hints.execute'),
+  hintActions: t('landing.nexus.hero.corebox.hints.actions'),
+  hintQuickRun: t('landing.nexus.hero.corebox.hints.quickRun'),
+  typeApp: t('landing.nexus.hero.corebox.types.app'),
+  typeFile: t('landing.nexus.hero.corebox.types.file'),
+  typeSystem: t('landing.nexus.hero.corebox.types.system'),
+  fileSub: t('landing.nexus.hero.corebox.scenes.fileSub'),
+  webSearch: t('landing.nexus.hero.corebox.scenes.webSearch'),
+  webSearchSub: t('landing.nexus.hero.corebox.scenes.webSearchSub'),
+  translate: t('landing.nexus.hero.corebox.scenes.translate'),
+  translateSub: t('landing.nexus.hero.corebox.scenes.translateSub'),
+  translateMulti: t('landing.nexus.hero.corebox.scenes.translateMulti'),
+  translateMultiSub: t('landing.nexus.hero.corebox.scenes.translateMultiSub'),
   latest: t('landing.nexus.hero.releases.latest'),
   history: t('landing.nexus.hero.releases.history'),
   historyTitle: t('landing.nexus.hero.releases.historyTitle'),
@@ -81,13 +92,29 @@ const copy = computed(() => ({
   noBuilds: t('landing.nexus.hero.releases.noBuilds'),
   certifiedTrack: t('landing.nexus.hero.releases.certifiedTrack'),
   getStable: t('landing.nexus.hero.releases.getStable'),
-  kApp: t('landing.nexus.hero.results.app'),
-  kWeb: t('landing.nexus.hero.results.web'),
-  kRecent: t('landing.nexus.hero.results.recent'),
-  aOpen: t('landing.nexus.hero.results.open'),
-  aGo: t('landing.nexus.hero.results.go'),
-  aRecent: t('landing.nexus.hero.results.recentAction'),
 }))
+
+// A full-width CJK mark draws in the left half of its em box, so a centred line
+// ending in "，" or "。" sits visibly left of centre. The mark is split off and
+// pulled in by that empty half (see .ExpHero-Punct).
+const TRAILING_CJK_PUNCT = /[，。！？、；：]$/
+
+// How much of each mark's em box stays empty on its right, measured on PingFang
+// SC at the hero's size by ink extent; anything else gets the plain half.
+const PUNCT_TRIM: Record<string, string> = { '，': '-0.68em', '。': '-0.58em' }
+
+function punctTrim(punct: string): string {
+  return PUNCT_TRIM[punct] ?? '-0.5em'
+}
+
+function splitTrailingPunct(text: string): { body: string, punct: string } {
+  return TRAILING_CJK_PUNCT.test(text)
+    ? { body: text.slice(0, -1), punct: text.slice(-1) }
+    : { body: text, punct: '' }
+}
+
+const titleSubject = computed(() => splitTrailingPunct(copy.value.titleSubject))
+const titleAccent = computed(() => splitTrailingPunct(copy.value.titleAccent))
 
 // ── Releases (live API, static fallback from real recent tags) ───────────────
 // The tail entry is the real latest stable tag — without it the primary CTA has
@@ -133,116 +160,155 @@ const capsuleNotice = computed(() => {
   }
 })
 
-// ── Live app search (typewriter + morphing results, real brand logos) ────────
-interface AppEntry {
-  query: string
-  logo: string
-  app: string
-  domain: string
-  recent: string
-}
+// ── CoreBox replica (typed scenes, measured against the real renderer) ──────
+// Geometry, colours and labels follow apps/core-app/src/renderer/src: the 56px
+// header with the orb, flat result rows (32px icon, uppercase source label,
+// ⌘1… quick keys), the #409eff selection bar and the footer hints. Every scene
+// is something Tuff does out of the box; the window grows with its results the
+// way the real one does, inside a box reserved for its tallest scene.
 
-const APPS: AppEntry[] = [
-  { query: 'figma', logo: 'i-logos-figma', app: 'Figma', domain: 'figma.com', recent: 'Figma — Design files' },
-  { query: 'spotify', logo: 'i-logos-spotify-icon', app: 'Spotify', domain: 'open.spotify.com', recent: 'Discover Weekly' },
-  { query: 'code', logo: 'i-logos-visual-studio-code', app: 'Visual Studio Code', domain: 'code.visualstudio.com', recent: '~/projects/tuff' },
-  { query: 'notion', logo: 'i-logos-notion-icon', app: 'Notion', domain: 'notion.so', recent: 'Meeting notes' },
-  { query: 'slack', logo: 'i-logos-slack-icon', app: 'Slack', domain: 'app.slack.com', recent: '#general' },
-]
+type SceneRowKind = 'app' | 'file' | 'plugin'
 
-interface ResultRow {
+interface SceneRow {
+  kind: SceneRowKind
   icon: string
+  /** Brand logos sit on a light plate like a macOS app icon; glyphs stay bare. */
+  plate?: boolean
   title: string
+  /** The characters of `title` the query matched, as [start, end). */
+  match?: [number, number]
   sub: string
-  action: string
-  mark: boolean
+  source: string
 }
 
-const typed = ref('')
-const activeIndex = ref(0)
-const searching = ref(false)
-const resultsVisible = ref(false)
+interface Scene {
+  query: string
+  rows?: SceneRow[]
+  calc?: { expression: string, result: string }
+}
 
-const currentRows = computed<ResultRow[]>(() => {
-  if (!resultsVisible.value)
-    return []
-  const app = APPS[activeIndex.value]!
+const scenes = computed<Scene[]>(() => {
   const c = copy.value
   return [
-    { icon: app.logo, title: app.app, sub: c.kApp, action: c.aOpen, mark: true },
-    { icon: 'i-carbon-earth', title: app.domain, sub: c.kWeb, action: c.aGo, mark: false },
-    { icon: 'i-carbon-time', title: app.recent, sub: c.kRecent, action: c.aRecent, mark: false },
+    {
+      query: 'fig',
+      rows: [
+        { kind: 'app', icon: 'i-logos-figma', plate: true, title: 'Figma', match: [0, 3], sub: '/Applications/Figma.app', source: c.typeApp },
+        { kind: 'file', icon: 'i-carbon-image', title: 'figma-export.png', match: [0, 3], sub: c.fileSub, source: c.typeFile },
+        { kind: 'plugin', icon: 'i-carbon-search', title: c.webSearch, sub: c.webSearchSub, source: 'touch-browser-open' },
+      ],
+    },
+    {
+      query: '12*8+5',
+      calc: { expression: '12 × 8 + 5', result: '101' },
+    },
+    {
+      query: 'fy',
+      rows: [
+        { kind: 'plugin', icon: 'i-carbon-translate', title: c.translate, sub: c.translateSub, source: 'touch-translation' },
+        { kind: 'plugin', icon: 'i-carbon-language', title: c.translateMulti, sub: c.translateMultiSub, source: 'touch-translation' },
+      ],
+    },
   ]
 })
 
-let ccCancelled = false
-const ccTimers = new Set<number>()
+const typed = ref('')
+const sceneIndex = ref(0)
+/** The scene the results show; it outlives the collapse so the rows are clipped, not dropped. */
+const shownIndex = ref(-1)
+const expanded = ref(false)
 
-function ccSleep(ms: number): Promise<void> {
+const shownScene = computed(() => (shownIndex.value >= 0 ? scenes.value[shownIndex.value] ?? null : null))
+
+const shownRows = computed(() => (shownScene.value?.rows ?? []).map((row) => {
+  const [start, end] = row.match ?? [0, 0]
+  return {
+    ...row,
+    before: row.title.slice(0, start),
+    hit: row.title.slice(start, end),
+    after: row.title.slice(end),
+  }
+}))
+
+/** The footer names the selected item the way CoreBox does: icon, title, source. */
+const footerItem = computed(() => {
+  const scene = shownScene.value
+  if (!scene)
+    return null
+  if (scene.calc)
+    return { icon: 'i-carbon-calculator', plate: false, title: scene.calc.result, source: copy.value.typeSystem, plugin: false }
+  const row = scene.rows?.[0]
+  if (!row)
+    return null
+  return { icon: row.icon, plate: Boolean(row.plate), title: row.title, source: row.source, plugin: row.kind === 'plugin' }
+})
+
+/** stagger-delay.ts, doubled so the entrance reads at marketing pace. */
+function rowDelay(index: number, count: number): number {
+  const progress = count > 1 ? index / (count - 1) : 0
+  return Math.round(Math.min(index * (0.025 + progress * progress * 0.03), 0.18) * 2000)
+}
+
+let demoCancelled = false
+const demoTimers = new Set<number>()
+
+function demoSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     if (!hasWindow()) {
       resolve()
       return
     }
     const id = window.setTimeout(() => {
-      ccTimers.delete(id)
+      demoTimers.delete(id)
       resolve()
     }, ms)
-    ccTimers.add(id)
+    demoTimers.add(id)
   })
 }
 
-async function runSearchLoop(): Promise<void> {
+async function runSceneLoop(): Promise<void> {
   for (;;) {
-    if (ccCancelled)
+    if (demoCancelled)
       return
-    const app = APPS[activeIndex.value]!
+    const scene = scenes.value[sceneIndex.value]!
 
-    // Type the query
-    for (let i = 1; i <= app.query.length; i++) {
-      if (ccCancelled)
+    for (let i = 1; i <= scene.query.length; i++) {
+      if (demoCancelled)
         return
-      typed.value = app.query.slice(0, i)
-      await ccSleep(62)
+      typed.value = scene.query.slice(0, i)
+      await demoSleep(90)
     }
-    if (ccCancelled)
+    await demoSleep(160)
+    if (demoCancelled)
       return
 
-    // Searching…
-    searching.value = true
-    await ccSleep(460)
-    if (ccCancelled)
-      return
-    searching.value = false
-
-    // Results morph in, hold
-    resultsVisible.value = true
-    await ccSleep(2400)
-    if (ccCancelled)
+    shownIndex.value = sceneIndex.value
+    expanded.value = true
+    await demoSleep(3200)
+    if (demoCancelled)
       return
 
-    // Results morph out, clear, next
-    resultsVisible.value = false
-    await ccSleep(360)
-    for (let i = app.query.length - 1; i >= 0; i--) {
-      if (ccCancelled)
+    expanded.value = false
+    await demoSleep(340)
+    for (let i = scene.query.length - 1; i >= 0; i--) {
+      if (demoCancelled)
         return
-      typed.value = app.query.slice(0, i)
-      await ccSleep(28)
+      typed.value = scene.query.slice(0, i)
+      await demoSleep(34)
     }
-    activeIndex.value = (activeIndex.value + 1) % APPS.length
-    await ccSleep(240)
+    await demoSleep(620)
+    sceneIndex.value = (sceneIndex.value + 1) % scenes.value.length
   }
 }
 
-function startSearchDemo() {
+function startSceneDemo() {
   if (enableMotion.value) {
-    runSearchLoop()
+    void runSceneLoop()
+    return
   }
-  else {
-    typed.value = APPS[0]?.query ?? ''
-    resultsVisible.value = true
-  }
+  typed.value = scenes.value[0]?.query ?? ''
+  shownIndex.value = 0
+  expanded.value = true
 }
 
 // `code` is what the capsule shows: naming the channel is what keeps it from
@@ -409,15 +475,15 @@ onMounted(() => {
   })
 
   loadReleases()
-  startSearchDemo()
+  startSceneDemo()
 })
 
 onBeforeUnmount(() => {
   if (revealFrame !== null)
     cancelAnimationFrame(revealFrame)
-  ccCancelled = true
-  ccTimers.forEach(id => hasWindow() && window.clearTimeout(id))
-  ccTimers.clear()
+  demoCancelled = true
+  demoTimers.forEach(id => hasWindow() && window.clearTimeout(id))
+  demoTimers.clear()
   if (hasWindow()) {
     document.documentElement.style.overflow = ''
     window.removeEventListener('keydown', onKeydown)
@@ -445,17 +511,16 @@ onBeforeUnmount(() => {
     <div class="ExpHero-Content">
       <h1 id="exp-hero1-title" class="ExpHero-Title reveal" style="--d: 0ms">
         <span class="ExpHero-TitleLine">
-          <span class="ExpHero-TitleLead">{{ copy.titlePrefix }}</span>
-          <TuffLandingLineShadowText class="ExpHero-TitleOs" :text="copy.titleSubject" />
+          <span v-if="copy.titlePrefix" class="ExpHero-TitleLead">{{ copy.titlePrefix }}</span>
+          <span class="ExpHero-TitleSubject">
+            <TuffLandingLineShadowText class="ExpHero-TitleOs" :text="titleSubject.body" />
+            <span v-if="titleSubject.punct" class="ExpHero-TitleOs ExpHero-Punct" :style="{ marginInlineEnd: punctTrim(titleSubject.punct) }">{{ titleSubject.punct }}</span>
+          </span>
         </span>
-        <strong class="ExpHero-TitleAccent">{{ copy.titleAccent }}</strong>
+        <strong class="ExpHero-TitleAccent">{{ titleAccent.body }}<span v-if="titleAccent.punct" class="ExpHero-Punct" :style="{ marginInlineEnd: punctTrim(titleAccent.punct) }">{{ titleAccent.punct }}</span></strong>
       </h1>
 
-      <p class="ExpHero-Subtitle reveal" style="--d: 70ms">
-        {{ copy.subtitle }}
-      </p>
-
-      <div class="ExpHero-Actions reveal" style="--d: 140ms">
+      <div class="ExpHero-Actions reveal" style="--d: 70ms">
         <NuxtLink class="NexusButton is-primary" :to="primaryHref">
           <TxOsIcon :platform="heroPlatform" />
           <span>{{ copy.primary }}</span>
@@ -466,7 +531,7 @@ onBeforeUnmount(() => {
         </NuxtLink>
       </div>
 
-      <div v-if="latestRelease" class="ExpHero-VersionWrap reveal" style="--d: 220ms">
+      <div v-if="latestRelease" class="ExpHero-VersionWrap reveal" style="--d: 150ms">
         <TxVersionCapsule
           ref="triggerRef"
           class="ExpHero-Capsule"
@@ -497,7 +562,7 @@ onBeforeUnmount(() => {
         </TxVersionCapsule>
       </div>
 
-      <div class="ExpHero-Trust reveal" style="--d: 260ms">
+      <div class="ExpHero-Trust reveal" style="--d: 190ms">
         <span>macOS · Windows · Linux</span>
         <span class="ExpHero-Dot" aria-hidden="true" />
         <span class="ExpHero-OpenSource">
@@ -507,50 +572,71 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Product surface: a single command window anchors the composition -->
-    <div class="ExpHero-Product reveal" style="--d: 350ms">
-      <div class="CommandCard">
-        <div class="CommandCard-Search">
-          <span v-if="searching" class="CommandCard-Spinner" aria-hidden="true" />
-          <span v-else class="i-carbon-search CommandCard-SearchIcon" aria-hidden="true" />
-          <span class="CommandCard-Query">{{ typed }}</span>
-          <span class="CommandCard-Caret" aria-hidden="true" />
-          <span class="CommandCard-Kbd">⌥Space</span>
-        </div>
-
-        <div class="CommandCard-Results">
-          <TransitionGroup name="cc-row">
-            <div
-              v-for="(row, i) in currentRows"
-              :key="`${activeIndex}-${i}`"
-              class="CommandCard-Row"
-              :class="{ 'is-selected': i === 0 }"
-              :style="{ '--i': i }"
-            >
-              <span
-                class="CommandCard-Tile"
-                :class="row.mark ? 'is-logo' : 'is-neutral'"
-                aria-hidden="true"
-              >
-                <span :class="row.icon" />
-              </span>
-              <span class="CommandCard-Meta">
-                <span class="CommandCard-Title">{{ row.title }}</span>
-                <span class="CommandCard-Sub">{{ row.sub }}</span>
-              </span>
-              <span class="CommandCard-Action">
-                <span v-if="i === 0" class="CommandCard-Enter" aria-hidden="true">⏎</span>
-                {{ row.action }}
-              </span>
+    <!-- Product surface: a faithful CoreBox typing its way through what Tuff
+         does. Decorative — the scenes repeat — so it stays out of the a11y tree. -->
+    <div class="ExpHero-Product reveal" style="--d: 280ms" aria-hidden="true">
+      <div class="CoreBoxReplica" :class="{ 'is-expanded': expanded }">
+        <div class="CoreBoxReplica-Window">
+          <div class="CoreBoxReplica-Header">
+            <img class="CoreBoxReplica-Logo" src="/logo.svg" alt="" width="48" height="48">
+            <div class="CoreBoxReplica-Input">
+              <span class="CoreBoxReplica-Placeholder" :class="{ 'is-hidden': typed }">{{ copy.placeholder }}</span>
+              <span class="CoreBoxReplica-Query">{{ typed }}</span>
+              <span class="CoreBoxReplica-Caret" />
             </div>
-          </TransitionGroup>
-        </div>
+            <span class="CoreBoxReplica-Pin i-carbon-pin" />
+          </div>
 
-        <div class="CommandCard-Footer" aria-hidden="true">
-          <span><kbd>↑</kbd><kbd>↓</kbd> {{ copy.hintNav }}</span>
-          <span><kbd>⏎</kbd> {{ copy.hintOpen }}</span>
-          <span><kbd>⌘</kbd><kbd>K</kbd> {{ copy.hintActions }}</span>
+          <div class="CoreBoxReplica-Body">
+            <div class="CoreBoxReplica-BodyInner">
+              <div class="CoreBoxReplica-Results">
+                <div v-if="shownScene?.calc" :key="`calc-${shownIndex}`" class="CoreBoxReplica-Calc">
+                  <span class="CoreBoxReplica-CalcExpr">{{ shownScene.calc.expression }}</span>
+                  <span class="CoreBoxReplica-CalcResult"><span>=</span>{{ shownScene.calc.result }}</span>
+                </div>
+                <template v-else>
+                  <div
+                    v-for="(row, i) in shownRows"
+                    :key="`${shownIndex}-${i}`"
+                    class="CoreBoxReplica-Row"
+                    :class="{ 'is-selected': i === 0 }"
+                    :style="{ '--stagger': `${rowDelay(i, shownRows.length)}ms` }"
+                  >
+                    <span class="CoreBoxReplica-Icon" :class="{ 'is-plate': row.plate }">
+                      <span :class="row.icon" />
+                    </span>
+                    <span class="CoreBoxReplica-Text">
+                      <span class="CoreBoxReplica-Title">{{ row.before }}<b>{{ row.hit }}</b>{{ row.after }}</span>
+                      <span class="CoreBoxReplica-Sub">{{ row.sub }}</span>
+                    </span>
+                    <span class="CoreBoxReplica-Meta">
+                      <span class="CoreBoxReplica-Source">{{ row.source }}</span>
+                      <kbd class="CoreBoxReplica-Quick">⌘{{ i + 1 }}</kbd>
+                    </span>
+                  </div>
+                </template>
+              </div>
+
+              <div v-if="footerItem" class="CoreBoxReplica-Footer">
+                <span class="CoreBoxReplica-FooterItem">
+                  <span class="CoreBoxReplica-FooterIcon" :class="{ 'is-plate': footerItem.plate }">
+                    <span :class="footerItem.icon" />
+                  </span>
+                  <span class="CoreBoxReplica-FooterText">
+                    <span class="CoreBoxReplica-FooterTitle">{{ footerItem.title }}</span>
+                    <span class="CoreBoxReplica-FooterSource">{{ footerItem.source }}</span>
+                  </span>
+                </span>
+                <span class="CoreBoxReplica-Hints">
+                  <span><kbd>↵</kbd>{{ footerItem.plugin ? copy.hintExecute : copy.hintOpen }}</span>
+                  <span><kbd>⌘K</kbd>{{ copy.hintActions }}</span>
+                  <span><kbd>⌘1-0</kbd>{{ copy.hintQuickRun }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
+        <div class="CoreBoxReplica-Glow" />
       </div>
     </div>
 
@@ -661,10 +747,12 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* Static fallback for SSR first paint and browsers without WebGL. */
+/* Static fallback for SSR first paint and browsers without WebGL. The field
+   is held a step under full strength so the title, not the nebula, leads. */
 .ExpHero-Sky {
   z-index: 0;
   background: #030305;
+  opacity: 0.82;
 }
 
 /* Short blend only — the shader's ripple wavefront owns the real entrance */
@@ -695,6 +783,7 @@ onBeforeUnmount(() => {
 .ExpHero-Scrim {
   z-index: 1;
   background:
+    radial-gradient(34% 24% at 50% 31%, rgba(3, 3, 5, 0.42) 0%, rgba(3, 3, 5, 0) 100%),
     radial-gradient(72% 60% at 50% 42%, transparent 0%, rgba(3, 3, 5, 0.66) 100%),
     linear-gradient(180deg, rgba(3, 3, 5, 0.3) 0%, rgba(3, 3, 5, 0) 38%, rgba(3, 3, 5, 0.78) 100%);
 }
@@ -727,18 +816,16 @@ onBeforeUnmount(() => {
 }
 
 /* ── Title ──────────────────────────────────────────────────────────────── */
+/* Always two beats — the white line, then the accent — at every width. */
 .ExpHero-Title {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0 0.28em;
-  max-width: 20ch;
+  flex-direction: column;
+  align-items: center;
   margin: 0;
   line-height: 1.04;
   letter-spacing: -0.01em;
   /* CJK breaks between any two glyphs by default, which would split a phrase
-     like 随心创作 mid-word once a line runs out of room */
+     like 就在眼前 mid-word once a line runs out of room */
   word-break: keep-all;
 }
 
@@ -754,6 +841,17 @@ onBeforeUnmount(() => {
   font-weight: 820;
   line-height: 1.04;
   text-shadow: 0 0 28px rgba(255, 255, 255, 0.16);
+}
+
+.ExpHero-TitleSubject {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+/* The mark's ink sits in the left half of its em box; the inline trim from
+   punctTrim() gives that empty part back, so the line centres on what is drawn. */
+.ExpHero-Punct {
+  display: inline-block;
 }
 
 .ExpHero-TitleOs {
@@ -778,20 +876,6 @@ onBeforeUnmount(() => {
   /* Extend the painted box below the baseline so gradient descenders (g, p) aren't clipped */
   padding-bottom: 0.12em;
   filter: drop-shadow(0 18px 54px rgba(105, 75, 255, 0.36));
-}
-
-/* ── Subtitle ───────────────────────────────────────────────────────────── */
-.ExpHero-Subtitle {
-  /* A CJK glyph is ~2ch wide, so the old 44ch measure cut the Chinese line short
-     and orphaned its tail. Wide enough here for both locales to hold one line at
-     desktop; `balance` keeps the narrow-viewport wrap even instead of orphaning. */
-  max-width: min(100%, 66ch);
-  margin: clamp(0.9rem, 1.6vw, 1.3rem) 0 0;
-  text-wrap: balance;
-  color: rgba(246, 247, 244, 0.68);
-  font-size: clamp(0.98rem, 1.35vw, 1.18rem);
-  font-weight: 460;
-  line-height: 1.5;
 }
 
 /* ── Actions ────────────────────────────────────────────────────────────── */
@@ -929,235 +1013,405 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
-/* ── Product surface (single, centered) ─────────────────────────────────── */
+/* ── Product surface: CoreBox replica ──────────────────────────────────── */
+/* Reserves the tallest scene (header + three rows + footer) so the window can
+   grow and shrink without re-centring the hero above it. */
 .ExpHero-Product {
   position: relative;
   z-index: 2;
-  width: min(100%, 40rem);
+  width: min(100%, 42rem);
+  height: 19rem;
   margin-top: clamp(1.9rem, 3.5vw, 2.9rem);
 }
 
-/* ── CommandCard — faithful to the real CoreBox (frameless frosted window) ── */
-.CommandCard {
+.CoreBoxReplica {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  background: rgba(20, 20, 22, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 24px 70px rgba(0, 0, 0, 0.6),
-    0 8px 24px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  overflow: hidden;
   text-align: left;
 }
 
-/* Input is the window header — large, borderless, with a hairline divider */
-.CommandCard-Search {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.CommandCard-SearchIcon {
-  font-size: 1.3rem;
-  color: #8d9095;
-}
-
-.CommandCard-Query {
-  color: #e5eaf3;
-  font-size: 1.2rem;
-  font-weight: 500;
-}
-
-.CommandCard-Caret {
-  width: 2px;
-  height: 1.35rem;
-  border-radius: 2px;
-  background: #409eff;
-  margin-left: 1px;
-  animation: exp-blink 1.1s step-end infinite;
-}
-
-.CommandCard-Kbd {
-  margin-left: auto;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 0.22rem 0.5rem;
-  color: #a3a6ad;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.CommandCard-Results {
+/* The real window is a vibrancy panel under an rgba(48,48,48,.75) mask; the
+   nebula behind the hero stands in for the desktop. */
+.CoreBoxReplica-Window {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0.5rem;
-  min-height: 12.6rem;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(48, 48, 48, 0.75);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  color: #e5eaf3;
 }
 
-/* CoreBox keeps a constant 1px border and only recolors it on active/hover */
-.CommandCard-Row {
+.CoreBoxReplica-Header {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  padding: 0.6rem 0.65rem;
-  transition: background-color 0.125s, border-color 0.125s;
+  gap: 4px;
+  height: 56px;
+  padding: 4px 8px;
+  box-sizing: border-box;
 }
 
-.CommandCard-Row.is-selected {
-  background: rgba(64, 158, 255, 0.12);
-  border-color: rgba(64, 158, 255, 0.55);
-}
-
-.CommandCard-Tile {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 11px;
+.CoreBoxReplica-Logo {
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
 }
 
-/* App row: real full-colour logo on a light icon plate (macOS-like) */
-.CommandCard-Tile.is-logo {
-  background: linear-gradient(180deg, #ffffff, #eceef3);
-  font-size: 1.6rem;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+.CoreBoxReplica-Input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  font-size: 22px;
+  font-weight: 400;
 }
 
-/* Web / recent rows: monochrome glyph on a glass tile */
-.CommandCard-Tile.is-neutral {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #a3a6ad;
-  font-size: 1.25rem;
+.CoreBoxReplica-Placeholder {
+  position: absolute;
+  left: 0;
+  color: #8d9095;
+  opacity: 0.75;
+  white-space: nowrap;
+  transition: opacity 200ms ease, filter 200ms ease;
 }
 
-/* Searching spinner (briefly replaces the search glyph) */
-.CommandCard-Spinner {
-  width: 1.25rem;
-  height: 1.25rem;
+/* Gone on the first keystroke — a fade here overlaps the typed text — and
+   back with a short fade once the query is cleared. */
+.CoreBoxReplica-Placeholder.is-hidden {
+  opacity: 0;
+  filter: blur(5px);
+  transition: none;
+}
+
+.CoreBoxReplica-Query {
+  white-space: pre;
+}
+
+.CoreBoxReplica-Caret {
+  width: 2px;
+  height: 24px;
+  margin-left: 1px;
+  border-radius: 1px;
+  background: #e5eaf3;
+  animation: replica-blink 1.06s step-end infinite;
+}
+
+.CoreBoxReplica-Pin {
+  flex-shrink: 0;
+  margin: 0 8px;
+  font-size: 18px;
+  color: #8d9095;
+}
+
+/* Grows by its own content: 0fr → 1fr is the window resize (easeOutCubic). */
+.CoreBoxReplica-Body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 260ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.is-expanded .CoreBoxReplica-Body {
+  grid-template-rows: 1fr;
+}
+
+.CoreBoxReplica-BodyInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.CoreBoxReplica-Results {
+  border-top: 1px solid #4c4d4f;
+  padding: 4px 0 6px;
+}
+
+.CoreBoxReplica-Row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  margin: 4px 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  animation: replica-row-in 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--stagger, 0ms);
+}
+
+.CoreBoxReplica-Row.is-selected {
+  background: #141414;
+}
+
+/* CoreBoxSelectionBlock: a 4px bar at half the row's height. */
+.CoreBoxReplica-Row.is-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  width: 4px;
+  height: 50%;
   border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.14);
-  border-top-color: #409eff;
-  animation: cc-spin 0.7s linear infinite;
+  background: #409eff;
+  box-shadow: 0 0 2px #409eff;
 }
 
-@keyframes cc-spin {
-  to { transform: rotate(360deg); }
+.CoreBoxReplica-Icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  font-size: 20px;
+  color: #e5eaf3;
 }
 
-/* Result morph: staggered enter, quick leave */
-.cc-row-enter-active {
-  transition:
-    opacity 380ms ease,
-    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  transition-delay: calc(var(--i, 0) * 60ms);
+.CoreBoxReplica-Icon.is-plate {
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, #eceef3);
+  font-size: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
-.cc-row-leave-active {
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
-.cc-row-enter-from {
-  opacity: 0;
-  transform: translate3d(0, 12px, 0);
-}
-
-.cc-row-leave-to {
-  opacity: 0;
-  transform: translate3d(0, -6px, 0);
-}
-
-.CommandCard-Meta {
+.CoreBoxReplica-Text {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
   min-width: 0;
 }
 
-.CommandCard-Title {
-  color: #e5eaf3;
-  font-size: 0.98rem;
-  font-weight: 560;
-  white-space: nowrap;
+.CoreBoxReplica-Title {
   overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
   text-overflow: ellipsis;
-}
-
-.CommandCard-Sub {
-  color: #8d9095;
-  font-size: 0.84rem;
-}
-
-.CommandCard-Action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: auto;
-  color: #8d9095;
-  font-size: 0.84rem;
-  font-weight: 500;
   white-space: nowrap;
 }
 
-.CommandCard-Row.is-selected .CommandCard-Action {
-  color: #cfd3dc;
+.CoreBoxReplica-Title b {
+  color: #409eff;
+  font-weight: 700;
 }
 
-.CommandCard-Enter {
-  display: grid;
-  place-items: center;
-  min-width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #e5eaf3;
-  font-size: 0.82rem;
+.CoreBoxReplica-Sub {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 0.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.CommandCard-Footer {
-  display: flex;
-  gap: 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 0.65rem 1rem;
-  color: #8d9095;
-  font-size: 0.78rem;
-}
-
-.CommandCard-Footer span {
+.CoreBoxReplica-Meta {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.CommandCard-Footer kbd {
+.CoreBoxReplica-Source {
+  max-width: 96px;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.CoreBoxReplica-Quick {
   display: inline-grid;
   place-items: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 0 0.25rem;
-  color: #a3a6ad;
-  font-size: 0.72rem;
+  min-width: 22px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #e5eaf3;
   font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
 }
 
-@keyframes exp-blink {
+/* Preview cards are their own surface: 18px radius, the selection as a border. */
+.CoreBoxReplica-Calc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 8px 16px;
+  padding: 14px 18px;
+  border: 1px solid #409eff;
+  border-radius: 18px;
+  background: #1d1d1d;
+  animation: replica-row-in 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.CoreBoxReplica-CalcExpr {
+  color: #a3a6ad;
+  font-size: 13px;
+}
+
+.CoreBoxReplica-CalcResult {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.CoreBoxReplica-CalcResult span {
+  color: #8d9095;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.CoreBoxReplica-Footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-top: 1px solid #363637;
+  background: rgba(39, 39, 39, 0.92);
+  color: #a3a6ad;
+  font-size: 12px;
+}
+
+.CoreBoxReplica-FooterItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.CoreBoxReplica-FooterIcon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  color: #e5eaf3;
+  font-size: 14px;
+}
+
+.CoreBoxReplica-FooterIcon.is-plate {
+  background: linear-gradient(180deg, #ffffff, #eceef3);
+  font-size: 12px;
+}
+
+.CoreBoxReplica-FooterText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.CoreBoxReplica-FooterTitle {
+  overflow: hidden;
+  color: #e5eaf3;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CoreBoxReplica-FooterSource {
+  font-size: 11px;
+}
+
+.CoreBoxReplica-Hints {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.CoreBoxReplica-Hints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.CoreBoxReplica-Hints kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #e5eaf3;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* The ALL IN ONE section's light bar: lit under the closed window, gone once
+   the results open. */
+.CoreBoxReplica-Glow {
+  --color-1: hsl(0 100% 63%);
+  --color-2: hsl(270 100% 63%);
+  --color-3: hsl(210 100% 63%);
+  --color-4: hsl(195 100% 63%);
+  --color-5: hsl(90 100% 63%);
+
+  position: absolute;
+  top: 54px;
+  left: 6%;
+  right: 6%;
+  height: 4px;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s ease, filter 0.45s ease;
+}
+
+.CoreBoxReplica-Glow::before {
+  content: '';
+  position: absolute;
+  inset: -4px 2.5%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-1), var(--color-5), var(--color-3), var(--color-4), var(--color-2));
+  background-size: 200%;
+  opacity: 0.65;
+  filter: blur(14px);
+  transform: translateY(4px);
+  animation: replica-rainbow 3.2s linear infinite;
+}
+
+.is-expanded .CoreBoxReplica-Glow {
+  opacity: 0;
+  transform: translateY(6px) scaleX(0.92);
+  filter: blur(8px);
+}
+
+@keyframes replica-row-in {
+  from {
+    transform: translate3d(0, 10px, 0);
+  }
+}
+
+@keyframes replica-rainbow {
+  to {
+    background-position: 200%;
+  }
+}
+
+@keyframes replica-blink {
   0%, 50% { opacity: 1; }
   50.01%, 100% { opacity: 0; }
 }
@@ -1177,7 +1431,12 @@ onBeforeUnmount(() => {
     justify-content: center;
   }
 
-  .CommandCard-Footer {
+  .ExpHero-Product {
+    height: 17rem;
+  }
+
+  .CoreBoxReplica-Source,
+  .CoreBoxReplica-Hints span:not(:first-child) {
     display: none;
   }
 }
@@ -1189,16 +1448,14 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .CommandCard-Caret {
+  .CoreBoxReplica-Caret,
+  .CoreBoxReplica-Glow::before,
+  .CoreBoxReplica-Row,
+  .CoreBoxReplica-Calc {
     animation: none;
   }
 
-  .CommandCard-Spinner {
-    animation: none;
-  }
-
-  .cc-row-enter-active,
-  .cc-row-leave-active {
+  .CoreBoxReplica-Body {
     transition: none;
   }
 }

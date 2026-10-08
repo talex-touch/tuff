@@ -102,7 +102,10 @@ vi.mock('../../utils/perf-monitor', () => ({
   }
 }))
 
-function createPipeline(settingsOverride?: Partial<ClipboardClassificationSettings>) {
+function createPipeline(
+  settingsOverride?: Partial<ClipboardClassificationSettings>,
+  readerExtras?: { readImageWithEncoded?: () => Promise<unknown> }
+) {
   const helper = new ClipboardHelper()
   const db = {
     insert: vi.fn(() => ({ values: mocks.values }))
@@ -142,7 +145,8 @@ function createPipeline(settingsOverride?: Partial<ClipboardClassificationSettin
       readImage: async () => {
         const image = mocks.readImage()
         return image.isEmpty() ? null : (image as never)
-      }
+      },
+      ...(readerExtras as object)
     }),
     getLastSuccessfulScanAt: () => lastSuccessfulScanAt,
     getLastImagePersistAt: () => lastImagePersistAt,
@@ -357,6 +361,36 @@ describe('clipboard-capture-pipeline', () => {
       expect.objectContaining({ id: 12, type: 'image' })
     )
     expect(context.notifyTransportChange).toHaveBeenCalled()
+  })
+
+  it('persists the PNG bytes the reader already had instead of re-encoding the image', async () => {
+    const image = createImage()
+    const toPNG = vi.fn(() => Buffer.from('re-encoded'))
+    image.toPNG = toPNG
+    mocks.availableFormats.mockReturnValue(['public.png'])
+    mocks.readText.mockReturnValue('')
+    mocks.readHTML.mockReturnValue('')
+    mocks.readImage.mockReturnValue(image)
+    mocks.values.mockReturnValueOnce({
+      returning: vi.fn(async () => [
+        {
+          id: 14,
+          type: 'image',
+          content: '/tmp/tuff/clipboard/images/image.png',
+          rawContent: '',
+          thumbnail: 'data:image/png;base64,thumb',
+          metadata: null
+        }
+      ])
+    })
+    const context = createPipeline(undefined, {
+      readImageWithEncoded: async () => ({ image, png: Buffer.from('native-png') })
+    })
+
+    await context.pipeline.process('corebox-show-baseline')
+
+    expect(context.createClipboardImageFile).toHaveBeenCalledWith(Buffer.from('native-png'))
+    expect(toPNG).not.toHaveBeenCalled()
   })
 
   it('keeps background polling deduped for a bootstrap-seen image', async () => {

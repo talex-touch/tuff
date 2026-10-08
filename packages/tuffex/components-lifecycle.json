@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.6.3",
-  "totalComponents": 167,
+  "totalComponents": 182,
   "versions": [
     {
       "version": "0.6.3",
@@ -433,6 +433,16 @@
       "since": "0.6.0",
       "suite": "pro"
     },
+    "card-spread": {
+      "slug": "card-spread",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "carousel-3d": {
+      "slug": "carousel-3d",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
     "cascader": {
       "slug": "cascader",
       "since": "0.3.4",
@@ -612,6 +622,11 @@
       "slug": "flex",
       "since": "0.3.4",
       "suite": "base"
+    },
+    "flip-book": {
+      "slug": "flip-book",
+      "since": "0.6.3",
+      "suite": "pro"
     },
     "flip-overlay": {
       "slug": "flip-overlay",
@@ -793,6 +808,56 @@
       "since": "0.6.0",
       "suite": "ai"
     },
+    "motion": {
+      "slug": "motion",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-button": {
+      "slug": "motion-button",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-control": {
+      "slug": "motion-control",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-dock": {
+      "slug": "motion-dock",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-form": {
+      "slug": "motion-form",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-loader": {
+      "slug": "motion-loader",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-metric": {
+      "slug": "motion-metric",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-text": {
+      "slug": "motion-text",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-toggle": {
+      "slug": "motion-toggle",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
+    "motion-transition": {
+      "slug": "motion-transition",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
     "nav-bar": {
       "slug": "nav-bar",
       "since": "0.3.4",
@@ -832,6 +897,11 @@
       "slug": "permission-state",
       "since": "0.3.4",
       "suite": "base"
+    },
+    "physics-motion": {
+      "slug": "physics-motion",
+      "since": "0.6.3",
+      "suite": "pro"
     },
     "picker": {
       "slug": "picker",
@@ -1062,6 +1132,11 @@
       "slug": "task-rows",
       "since": "0.3.9",
       "suite": "ai"
+    },
+    "terminal": {
+      "slug": "terminal",
+      "since": "0.6.3",
+      "suite": "pro"
     },
     "text-morph": {
       "slug": "text-morph",

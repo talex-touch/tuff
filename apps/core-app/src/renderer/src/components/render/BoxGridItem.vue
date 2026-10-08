@@ -10,7 +10,10 @@ import {
   resolveCoreBoxIconColor,
   shouldRenderCoreBoxIconColorful
 } from './icon-color-mode'
-import { formatRecommendationEvidence } from './recommendation-evidence'
+import {
+  formatRecommendationEvidence,
+  formatRecommendationEvidenceLabel
+} from './recommendation-evidence'
 
 interface Props {
   item: TuffItem
@@ -62,6 +65,17 @@ const badgeTitle = computed(() => {
     ? formatRecommendationEvidence(recommendation.source, recommendation.evidence, t)
     : ''
 })
+/**
+ * Contextual evidence ("Often from Xcode", "Yesterday 09:12") replaces the generic badge text; a
+ * tile's place in the grid says nothing about why it is there, so the badge has to.
+ */
+const badgeText = computed(() => {
+  const recommendation = props.item.meta?.recommendation
+  const label = recommendation
+    ? formatRecommendationEvidenceLabel(recommendation.source, recommendation.evidence, t)
+    : ''
+  return label || recommendationBadgeText.value
+})
 </script>
 
 <template>
@@ -93,7 +107,7 @@ const badgeTitle = computed(() => {
         :title="badgeTitle"
       >
         <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
-        {{ recommendationBadgeText }}
+        <span class="BoxGridItem-BadgeText">{{ badgeText }}</span>
         <span
           v-if="executeCount > 0"
           data-corebox-usage-count
@@ -296,10 +310,19 @@ const badgeTitle = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  max-width: 100%;
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 12px;
   white-space: nowrap;
+  box-sizing: border-box;
+
+  // An app name can outgrow the tile; the title attribute carries the full sentence.
+  .BoxGridItem-BadgeText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   &.badge-frequent {
     background: rgba(255, 107, 107, 0.15);

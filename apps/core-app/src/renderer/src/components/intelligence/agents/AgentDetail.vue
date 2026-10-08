@@ -1,22 +1,29 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { useAgentsSdk } from '@talex-touch/utils/renderer'
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import {
+  isUsageLimitFailure,
+  resolveIntelligenceErrorRecovery
+} from '~/modules/intelligence/ai-error-recovery'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   agent: AgentDescriptor
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
 const agentsSdk = useAgentsSdk()
 const agentDetailLog = createRendererLogger('AgentDetail')
 
@@ -31,6 +38,23 @@ const taskStep = ref('')
 
 const STATUS_POLL_INTERVAL_MS = 1500
 let taskStatusPollTimer: ReturnType<typeof setInterval> | null = null
+
+/**
+ * A task the user's own usage limit stopped says so in the interface's language — the limit set in
+ * Audit is used up — with the way there, instead of the run's stable code. Every other failure
+ * keeps the message it came with.
+ */
+const taskUsageLimit = computed(() => {
+  const error = taskError.value
+  if (!error || !isUsageLimitFailure(error)) return null
+  return resolveIntelligenceErrorRecovery({ error }, t, locale.value)
+})
+
+function toastTaskFailure(): void {
+  toast.error(
+    taskUsageLimit.value?.title ?? taskError.value ?? t('intelligence.agents.task_failed')
+  )
+}
 
 function stopTaskStatusPolling() {
   if (taskStatusPollTimer) {
@@ -143,7 +167,7 @@ const taskListeners = [
     if (payload.result?.success) {
       toast.success(t('intelligence.agents.task_success'))
     } else {
-      toast.error(taskError.value || t('intelligence.agents.task_failed'))
+      toastTaskFailure()
     }
   }),
   agentsSdk.onTaskFailed((payload) => {
@@ -157,7 +181,7 @@ const taskListeners = [
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    toast.error(taskError.value)
+    toastTaskFailure()
   }),
   agentsSdk.onTaskCancelled((payload) => {
     if (!isCurrentTask(payload.taskId, props.agent.id)) {
@@ -224,7 +248,7 @@ async function executeTask() {
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    toast.error(taskError.value)
+    toastTaskFailure()
   }
 }
 
@@ -382,7 +406,24 @@ function getCapabilityIcon(type: string): string {
           <TuffProgress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
         </div>
 
-        <div v-if="taskError" class="execute-error" role="alert">
+        <div
+          v-if="taskUsageLimit"
+          class="execute-error execute-error--usage-limit"
+          role="alert"
+          data-testid="agent-task-usage-limit"
+        >
+          <p class="execute-error__title">{{ taskUsageLimit.title }}</p>
+          <p>{{ taskUsageLimit.detail }}</p>
+          <TxButton
+            v-if="taskUsageLimit.action"
+            size="sm"
+            data-testid="agent-task-open-usage-limits"
+            @click="router.push(taskUsageLimit.action.path)"
+          >
+            {{ taskUsageLimit.action.label }}
+          </TxButton>
+        </div>
+        <div v-else-if="taskError" class="execute-error" role="alert">
           {{ taskError }}
         </div>
 
@@ -471,6 +512,21 @@ function getCapabilityIcon(type: string): string {
   margin: 0 1rem 0.75rem;
   color: var(--tx-color-danger);
   font-size: 0.8125rem;
+}
+
+.execute-error--usage-limit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+
+  p {
+    margin: 0;
+  }
+}
+
+.execute-error__title {
+  font-weight: 600;
 }
 
 .execute-result {

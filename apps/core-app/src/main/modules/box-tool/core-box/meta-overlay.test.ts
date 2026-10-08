@@ -657,7 +657,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
     markReady()
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
 
-    expect(published()).toEqual([{ visible: true, grown: true }])
+    expect(published()).toEqual([{ visible: true, grown: true, blur: false }])
     // Never a request: nothing in the renderer answers it (channel-transport-contracts).
     expect(
       mocks.sendTo.mock.calls.some(([, event]) => event === CoreBoxEvents.metaOverlay.panelState)
@@ -666,8 +666,8 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
     metaOverlayManager.hide()
 
     expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: false }
+      { visible: true, grown: true, blur: false },
+      { visible: false, grown: false, blur: false }
     ])
   })
 
@@ -677,7 +677,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
 
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
 
-    expect(published()).toEqual([{ visible: true, grown: false }])
+    expect(published()).toEqual([{ visible: true, grown: false, blur: false }])
   })
 
   it('publishes changes only', () => {
@@ -692,8 +692,8 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
     metaOverlayManager.hide()
 
     expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: false }
+      { visible: true, grown: true, blur: false },
+      { visible: false, grown: false, blur: false }
     ])
   })
 
@@ -703,7 +703,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
 
     markReady()
 
-    expect(published()).toEqual([{ visible: true, grown: true }])
+    expect(published()).toEqual([{ visible: true, grown: true, blur: false }])
   })
 
   it('clears the state when CoreBox hides under the panel', () => {
@@ -712,7 +712,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
 
     for (const listener of mocks.parentWindow.hideListeners) listener()
 
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(published().at(-1)).toEqual({ visible: false, grown: false, blur: false })
   })
 
   it('clears the state when the overlay goes away under the panel, and starts over after', () => {
@@ -720,7 +720,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
 
     metaOverlayManager.destroy()
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(published().at(-1)).toEqual({ visible: false, grown: false, blur: false })
 
     // A rebuilt overlay for the same CoreBox: the next grown open is news again.
     mocks.broadcastToWindow.mockClear()
@@ -729,7 +729,7 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
     markReady()
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
 
-    expect(published()).toEqual([{ visible: true, grown: true }])
+    expect(published()).toEqual([{ visible: true, grown: true, blur: false }])
   })
 
   it('tells CoreBox the window grew before growing it', () => {
@@ -744,8 +744,8 @@ describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
 
     // CoreBox's first frame at the new size then already paints the space the growth adds.
     expect(mocks.setHeight).toHaveBeenCalledOnce()
-    expect(publishedWhenGrowing).toEqual([{ visible: true, grown: true }])
-    expect(published()).toEqual([{ visible: true, grown: true }])
+    expect(publishedWhenGrowing).toEqual([{ visible: true, grown: true, blur: false }])
+    expect(published()).toEqual([{ visible: true, grown: true, blur: false }])
   })
 })
 
@@ -798,8 +798,8 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
 
     expect(mocks.setHeight).toHaveBeenLastCalledWith(300, hostWindow)
     expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: true }
+      { visible: true, grown: true, blur: false },
+      { visible: false, grown: true, blur: false }
     ])
 
     vi.advanceTimersByTime(160)
@@ -809,9 +809,9 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
     vi.advanceTimersByTime(40)
 
     expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: true },
-      { visible: false, grown: false }
+      { visible: true, grown: true, blur: false },
+      { visible: false, grown: true, blur: false },
+      { visible: false, grown: false, blur: false }
     ])
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -824,8 +824,8 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
     metaOverlayManager.hide()
 
     expect(published()).toEqual([
-      { visible: true, grown: false },
-      { visible: false, grown: false }
+      { visible: true, grown: false, blur: false },
+      { visible: false, grown: false, blur: false }
     ])
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -834,10 +834,10 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
     closeWhileRestoreAnimates()
 
     vi.advanceTimersByTime(900)
-    expect(published().at(-1)).toEqual({ visible: false, grown: true })
+    expect(published().at(-1)).toEqual({ visible: false, grown: true, blur: false })
 
     vi.advanceTimersByTime(200)
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(published().at(-1)).toEqual({ visible: false, grown: false, blur: false })
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -846,7 +846,7 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
 
     for (const listener of mocks.parentWindow.hideListeners) listener()
 
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(published().at(-1)).toEqual({ visible: false, grown: false, blur: false })
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -860,13 +860,13 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
     vi.advanceTimersByTime(100)
 
     expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: true },
-      { visible: true, grown: true }
+      { visible: true, grown: true, blur: false },
+      { visible: false, grown: true, blur: false },
+      { visible: true, grown: true, blur: false }
     ])
 
     metaOverlayManager.hide()
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(published().at(-1)).toEqual({ visible: false, grown: false, blur: false })
   })
 
   it('keeps painting through a reopen that fits, only until the window is back', () => {
@@ -874,25 +874,23 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
 
     // 64 + 150 + 52 = 266 fits the 300 the window is heading back to: no second growth.
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 150 }))
-    expect(published().at(-1)).toEqual({ visible: true, grown: true })
+    expect(published().at(-1)).toEqual({ visible: true, grown: true, blur: false })
 
     mocks.isResizing.mockReturnValue(false)
     vi.advanceTimersByTime(40)
 
-    expect(published().at(-1)).toEqual({ visible: true, grown: false })
+    expect(published().at(-1)).toEqual({ visible: true, grown: false, blur: false })
   })
 })
 
 /**
- * The transfer row opens the Flow picker in CoreBox, and the picker needs the window next. Handing
- * the height back on the spot shrank the window and the picker grew it again a moment later, so
- * the panel stays open until the picker's room arrives, and closing on it replays that room.
+ * The card is a stack of pages: the action list, the Flow targets and the Flow confirmation. The
+ * overlay reports every change (`ui.page`), and main follows it: it grows the window for a page
+ * that does not fit, leaves Esc to the overlay while the card can go back, and tells CoreBox to
+ * blur under a Flow page.
  */
-describe('MetaOverlayManager hand-off to the Flow picker', () => {
-  const hostWindow = expect.objectContaining({ window: mocks.parentWindow })
-
+describe('MetaOverlayManager pages of the card', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
     metaOverlayManager.destroy()
     vi.clearAllMocks()
@@ -902,12 +900,6 @@ describe('MetaOverlayManager hand-off to the Flow picker', () => {
     mocks.isResizing.mockReturnValue(false)
     metaOverlayManager.init(mocks.parentWindow as never)
     expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
-  })
-
-  afterEach(() => {
-    metaOverlayManager.destroy()
-    mocks.isResizing.mockReturnValue(false)
-    vi.useRealTimers()
   })
 
   function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
@@ -925,289 +917,336 @@ describe('MetaOverlayManager hand-off to the Flow picker', () => {
     return mocks.setHeight.mock.calls.map(([height]) => height)
   }
 
-  function hideDispatches(): number {
-    return mocks.sendTo.mock.calls.filter(([, event]) => event === MetaOverlayEvents.ui.hide).length
-  }
+  it('grows the window for a page that does not fit, and hands the pre-open height back on close', () => {
+    // 64 + 200 + 52.
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 200 }))
+    expect(heights()).toEqual([316])
 
-  /**
-   * `CoreBoxModule.applyLayoutUpdate` past its guards: the panel is offered the update first, and
-   * it is applied only when not held. The held replay re-enters it, as the module's does.
-   */
-  function applyLayoutUpdate(height: number): void {
-    if (metaOverlayManager.holdLayoutUpdate(() => applyLayoutUpdate(height))) return
-    mocks.setHeight(height, { window: mocks.parentWindow })
-  }
-
-  /** Opens a panel that grows the window from 300 to 416, then runs its transfer row. */
-  async function transferFromGrownPanel(): Promise<void> {
-    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
-    expect(heights()).toEqual([416])
-
-    await expect(
-      metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
-    ).resolves.toEqual({ success: true })
-
-    // Relayed like any renderer row: only the close waits.
-    expect(mocks.broadcastToWindow).toHaveBeenCalledWith(
-      mocks.parentWindow.id,
-      CoreBoxEvents.metaOverlay.itemAction,
-      { actionId: COREBOX_FLOW_TRANSFER_ACTION_ID, item }
-    )
-  }
-
-  function rendererGone(): void {
-    const listener = mocks.createdMetaViews
-      .at(-1)!
-      .webContents.on.mock.calls.find(([event]) => event === 'render-process-gone')?.[1] as
-      | (() => void)
-      | undefined
-    expect(listener).toBeTypeOf('function')
-    listener!()
-  }
-
-  it('moves the window once, from the panel straight to the picker, when its room arrives', async () => {
-    await transferFromGrownPanel()
-
-    // Still open: nothing handed back, the renderer not reset, focus not moved.
-    expect(metaOverlayManager.getVisible()).toBe(true)
-    expect(heights()).toEqual([416])
-    expect(hideDispatches()).toBe(0)
-    expect(mocks.parentWindow.webContents.focus).not.toHaveBeenCalled()
-
-    applyLayoutUpdate(536)
-
-    // Never back to 300 on the way: that was the shrink before the picker grew it again.
-    expect(heights()).toEqual([416, 536])
-    expect(mocks.setHeight).toHaveBeenLastCalledWith(536, hostWindow)
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
-    expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: false }
-    ])
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(1_000)
-    expect(heights()).toEqual([416, 536])
-    expect(hideDispatches()).toBe(1)
-  })
-
-  it('says the update was held and replays it exactly once, in place of the pre-open height', async () => {
-    await transferFromGrownPanel()
-    const replay = vi.fn()
-
-    // The module must not apply it as well: the replay has run by the time the hold returns.
-    expect(metaOverlayManager.holdLayoutUpdate(replay)).toBe(true)
-
-    expect(replay).toHaveBeenCalledOnce()
-    expect(heights()).toEqual([416])
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
-  })
-
-  it('hands the height back at the deadline when the picker never asks for room', async () => {
-    await transferFromGrownPanel()
-
-    // FLOW_HAND_OFF_MAX_WAIT_MS.
-    vi.advanceTimersByTime(499)
-    expect(metaOverlayManager.getVisible()).toBe(true)
-    expect(heights()).toEqual([416])
-
-    vi.advanceTimersByTime(1)
-
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(heights()).toEqual([416, 300])
-    expect(mocks.setHeight).toHaveBeenLastCalledWith(300, hostWindow)
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps the space painted from the transfer until the picker height has landed', async () => {
-    await transferFromGrownPanel()
-
-    // The window is still taller than CoreBox's own layout for the whole wait.
-    vi.advanceTimersByTime(100)
-    expect(published()).toEqual([{ visible: true, grown: true }])
-
-    // The picker's room animates the window from 416 to 536.
-    mocks.isResizing.mockReturnValue(true)
-    applyLayoutUpdate(536)
-
-    expect(heights()).toEqual([416, 536])
-    expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: true }
-    ])
-
-    vi.advanceTimersByTime(160)
-    expect(published()).toHaveLength(2)
-
-    mocks.isResizing.mockReturnValue(false)
-    vi.advanceTimersByTime(40)
-
-    expect(published()).toEqual([
-      { visible: true, grown: true },
-      { visible: false, grown: true },
-      { visible: false, grown: false }
-    ])
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('closes as usual when dismissed during the wait, and the deadline then does nothing', async () => {
-    await transferFromGrownPanel()
-
-    // What Esc in the overlay and `ui.hide` both call.
-    metaOverlayManager.hide()
-
-    expect(heights()).toEqual([416, 300])
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(1_000)
-    expect(heights()).toEqual([416, 300])
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
-  })
-
-  it('ends with CoreBox hiding, without resizing the hidden window or moving focus', async () => {
-    await transferFromGrownPanel()
-
-    for (const listener of mocks.parentWindow.hideListeners) listener()
-
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(hideDispatches()).toBe(1)
-    expect(heights()).toEqual([416])
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(1_000)
-    expect(heights()).toEqual([416])
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).not.toHaveBeenCalled()
-    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
-  })
-
-  it('ends with the overlay renderer exiting, which still hands the height back', async () => {
-    await transferFromGrownPanel()
-    expect(heights()).toEqual([416])
-
-    rendererGone()
-
-    expect(heights()).toEqual([416, 300])
-    expect(published().at(-1)).toEqual({ visible: false, grown: false })
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(1_000)
-    expect(heights()).toEqual([416, 300])
-  })
-
-  it('ends with a reopen, which keeps holding layout updates for the panel', async () => {
-    await transferFromGrownPanel()
-
-    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
-    const replay = vi.fn()
-
-    expect(metaOverlayManager.holdLayoutUpdate(replay)).toBe(true)
-    expect(replay).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1_000)
-    // The deadline went with the hand-off: the reopened panel stays, and nothing is handed back.
-    expect(metaOverlayManager.getVisible()).toBe(true)
-    expect(hideDispatches()).toBe(0)
-    expect(heights()).toEqual([416])
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 300 })
+    expect(heights()).toEqual([316, 416])
 
     metaOverlayManager.hide()
-    expect(replay).toHaveBeenCalledOnce()
-    expect(heights()).toEqual([416])
+
+    // Recorded once, at the first growth: never the 316 that growth left behind.
+    expect(heights()).toEqual([316, 416, 300])
   })
 
-  it('keeps one deadline across a second transfer, so none outlives the hand-off', async () => {
-    await transferFromGrownPanel()
-    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
-    expect(metaOverlayManager.getVisible()).toBe(true)
+  it('never shrinks the window for a shorter page while the panel is open', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 200 }))
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 400 })
+    expect(heights()).toEqual([316, 516])
 
-    applyLayoutUpdate(536)
+    // Back on the action list the card shrinks inside the window; the window stays.
+    metaOverlayManager.changePage({ page: 'actions', canGoBack: false, desiredPanelHeight: 200 })
 
-    expect(heights()).toEqual([416, 536])
-    expect(hideDispatches()).toBe(1)
-    expect(vi.getTimerCount()).toBe(0)
-
-    // A deadline left over from the first transfer would close this panel when it ran out.
-    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
-    vi.advanceTimersByTime(1_000)
-    expect(metaOverlayManager.getVisible()).toBe(true)
-    expect(hideDispatches()).toBe(1)
+    expect(heights()).toEqual([316, 516])
+    // The room the shorter page leaves is still the panel's, so CoreBox keeps painting it.
+    expect(published().at(-1)).toEqual({ visible: true, grown: true, blur: false })
   })
 
-  it('closes at once when closing would not move the window', async () => {
+  it('records the height to return to when only a later page grows the window', () => {
+    // 64 + 300 + 52 = 416 fits.
     mocks.windowHeight = 480
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
-
-    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
-
-    // A panel that never grew the window and holds nothing hands nothing back: the picker grows
-    // the window from where it is, and focus has no reason to wait.
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
     expect(heights()).toEqual([])
-    expect(published()).toEqual([
-      { visible: true, grown: false },
-      { visible: false, grown: false }
-    ])
-    expect(vi.getTimerCount()).toBe(0)
+
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 420 })
+    metaOverlayManager.changePage({
+      page: 'flow-confirm',
+      canGoBack: true,
+      desiredPanelHeight: 420
+    })
+    expect(heights()).toEqual([536])
+
+    metaOverlayManager.hide()
+    expect(heights()).toEqual([536, 480])
   })
 
-  it('waits for the picker on a panel that holds an update, even one that never grew the window', async () => {
+  it('sizes a page for the anchor the panel opened with', () => {
+    mocks.windowHeight = 56
+    // 64 + 100 + 12, then 64 + 300 + 12.
+    metaOverlayManager.show(request({ anchor: 'corner', desiredPanelHeight: 100 }))
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 300 })
+
+    expect(heights()).toEqual([176, 376])
+  })
+
+  it('leaves the window alone for a page change that carries no height', () => {
+    metaOverlayManager.show(request())
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+
+    expect(heights()).toEqual([])
+  })
+
+  it('still replays a layout update held under a grown page, instead of restoring', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 200 }))
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 300 })
+    const replay = vi.fn()
+    expect(metaOverlayManager.holdLayoutUpdate(replay)).toBe(true)
+
+    metaOverlayManager.hide()
+
+    expect(replay).toHaveBeenCalledOnce()
+    expect(heights()).toEqual([316, 416])
+  })
+
+  it('ignores a page change while no panel is open', () => {
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true, desiredPanelHeight: 300 })
+
+    expect(heights()).toEqual([])
+    expect(published()).toEqual([])
+
+    // Nor does it reach the next open.
+    metaOverlayManager.show(request())
+    expect(published()).toEqual([{ visible: true, grown: false, blur: false }])
+  })
+
+  it('blurs CoreBox while the card shows a Flow page, and says so on change only', () => {
     mocks.windowHeight = 480
     metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
-    // The results changed under the panel: closing would replay this, and the picker regrow it.
-    const stale = vi.fn()
-    expect(metaOverlayManager.holdLayoutUpdate(stale)).toBe(true)
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+    metaOverlayManager.changePage({ page: 'flow-confirm', canGoBack: true })
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+    metaOverlayManager.changePage({ page: 'actions', canGoBack: false })
 
-    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
-    expect(metaOverlayManager.getVisible()).toBe(true)
-
-    applyLayoutUpdate(536)
-
-    expect(stale).not.toHaveBeenCalled()
-    expect(heights()).toEqual([536])
-    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(published()).toEqual([
+      { visible: true, grown: false, blur: false },
+      { visible: true, grown: false, blur: true },
+      { visible: true, grown: false, blur: false }
+    ])
   })
 
-  it('closes at once and hands the height back for any other renderer row', async () => {
-    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+  it('opens blurred on a card that opens on its Flow page, and says so before growing', () => {
+    let publishedWhenGrowing: unknown[] = []
+    mocks.setHeight.mockImplementationOnce((height: number) => {
+      publishedWhenGrowing = published()
+      mocks.windowHeight = height
+    })
 
-    await metaOverlayManager.executeAction('copy-title', item)
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300, page: 'flow' }))
 
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(heights()).toEqual([416, 300])
-    expect(hideDispatches()).toBe(1)
-    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
+    expect(mocks.setHeight).toHaveBeenCalledOnce()
+    expect(publishedWhenGrowing).toEqual([{ visible: true, grown: true, blur: true }])
+    expect(published()).toEqual([{ visible: true, grown: true, blur: true }])
+  })
+
+  it('opens a show request for any other page on the action list', () => {
+    mocks.windowHeight = 480
+    // Only the action list and the Flow targets open a card; the confirmation is reached from them.
+    metaOverlayManager.show(request({ page: 'flow-confirm' as never }))
+
+    expect(published()).toEqual([{ visible: true, grown: false, blur: false }])
   })
 
   it.each([
-    ['a plugin action', 'plugin-action'],
-    // The plugin owns it, not the CoreBox renderer: no picker opens.
-    ['a plugin action registered under the transfer id', COREBOX_FLOW_TRANSFER_ACTION_ID]
-  ])('closes at once for %s', async (_label, actionId) => {
+    ['it closes', () => metaOverlayManager.hide()],
+    [
+      'CoreBox hides under it',
+      () => {
+        for (const listener of mocks.parentWindow.hideListeners) listener()
+      }
+    ],
+    ['the overlay goes away', () => metaOverlayManager.destroy()]
+  ])('drops the blur when %s', (_label, close) => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request({ page: 'flow' }))
+
+    close()
+
+    expect(published()).toEqual([
+      { visible: true, grown: false, blur: true },
+      { visible: false, grown: false, blur: false }
+    ])
+  })
+
+  it('opens the next panel on its own page, not on the one the last panel closed on', () => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request())
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+    metaOverlayManager.hide()
+    mocks.broadcastToWindow.mockClear()
+
+    metaOverlayManager.show(request())
+
+    expect(published()).toEqual([{ visible: true, grown: false, blur: false }])
+  })
+})
+
+/**
+ * Esc on the action list, and on a card that opened on its Flow page, closes the panel in main as
+ * it always has. On a page the card can go back from, it is the overlay's: it takes the card back
+ * one page, and only the Esc after that closes.
+ */
+describe('MetaOverlayManager Esc on a card with pages', () => {
+  beforeEach(() => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 480
+    metaOverlayManager.init(mocks.parentWindow as never)
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  })
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  function pressEscape(isComposing = false): { preventDefault: ReturnType<typeof vi.fn> } {
+    const beforeInput = mocks.createdMetaViews
+      .at(-1)!
+      .webContents.on.mock.calls.find(([event]) => event === 'before-input-event')?.[1] as (
+      event: { preventDefault: () => void },
+      input: { type: string; key: string; isComposing: boolean }
+    ) => void
+    expect(beforeInput).toBeTypeOf('function')
+    const event = { preventDefault: vi.fn() }
+    beforeInput(event, { type: 'keyDown', key: 'Escape', isComposing })
+    return event
+  }
+
+  it('leaves Esc to the overlay while the card can go back, and closes once it cannot', () => {
+    metaOverlayManager.show(request())
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+
+    const back = pressEscape()
+    expect(back.preventDefault).not.toHaveBeenCalled()
+    expect(metaOverlayManager.getVisible()).toBe(true)
+
+    // The overlay took the card back to the action list.
+    metaOverlayManager.changePage({ page: 'actions', canGoBack: false })
+    const close = pressEscape()
+
+    expect(close.preventDefault).toHaveBeenCalledOnce()
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('closes on the first Esc a card that opened on its Flow page', () => {
+    metaOverlayManager.show(request({ page: 'flow' }))
+
+    const close = pressEscape()
+
+    expect(close.preventDefault).toHaveBeenCalledOnce()
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('leaves Esc to the IME on any page', () => {
+    metaOverlayManager.show(request({ page: 'flow' }))
+
+    const composing = pressEscape(true)
+
+    expect(composing.preventDefault).not.toHaveBeenCalled()
+    expect(metaOverlayManager.getVisible()).toBe(true)
+  })
+
+  it('forgets the way back when the panel closes, or a new show replaces the card', () => {
+    metaOverlayManager.show(request())
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+    metaOverlayManager.hide()
+    metaOverlayManager.show(request())
+    expect(pressEscape().preventDefault).toHaveBeenCalledOnce()
+    expect(metaOverlayManager.getVisible()).toBe(false)
+
+    metaOverlayManager.show(request())
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+    // ⌘⇧D over an open panel: the new card opens on its own page, with nothing to go back to.
+    metaOverlayManager.show(request({ page: 'flow' }))
+    expect(pressEscape().preventDefault).toHaveBeenCalledOnce()
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+})
+
+/**
+ * The card's Flow page ends with the transfer action and the target it picked. Main relays the
+ * selection to the CoreBox renderer, which dispatches it, and closes the panel at once: there is
+ * no picker in CoreBox to hand the window to any more.
+ */
+describe('MetaOverlayManager Flow selection relay', () => {
+  const selection = {
+    targetId: 'com.example.notes.append',
+    consentToken: 'consent-token-1',
+    confirmationToken: 'confirmation-token-1'
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 300
+    mocks.isResizing.mockReturnValue(false)
+    metaOverlayManager.init(mocks.parentWindow as never)
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  })
+
+  afterEach(() => {
+    // Also drops the plugin action a case registers.
+    metaOverlayManager.destroy()
+    vi.useRealTimers()
+  })
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  function itemActions(): unknown[] {
+    return mocks.broadcastToWindow.mock.calls
+      .filter(([, event]) => event === CoreBoxEvents.metaOverlay.itemAction)
+      .map(([windowId, , payload]) => {
+        expect(windowId).toBe(mocks.parentWindow.id)
+        return payload
+      })
+  }
+
+  function heights(): number[] {
+    return mocks.setHeight.mock.calls.map(([height]) => height)
+  }
+
+  it('relays the selection to CoreBox with the transfer, then closes and hands the height back', async () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    metaOverlayManager.changePage({ page: 'flow', canGoBack: true })
+
+    await expect(
+      metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item, selection)
+    ).resolves.toEqual({ success: true })
+
+    expect(itemActions()).toEqual([
+      { actionId: COREBOX_FLOW_TRANSFER_ACTION_ID, item, flow: selection }
+    ])
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(heights()).toEqual([416, 300])
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('sends no selection with an action that carries none', async () => {
+    metaOverlayManager.show(request())
+
+    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
+
+    expect(itemActions()).toEqual([{ actionId: COREBOX_FLOW_TRANSFER_ACTION_ID, item }])
+    expect(itemActions()[0]).not.toHaveProperty('flow')
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('tells a plugin action registered under the transfer id that it ran, not what was picked', async () => {
     metaOverlayManager.registerPluginAction('plugin-a', {
-      id: actionId,
+      id: COREBOX_FLOW_TRANSFER_ACTION_ID,
       render: { basic: { title: 'Plugin action' } }
     })
-    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    metaOverlayManager.show(request())
 
-    await metaOverlayManager.executeAction(actionId, item)
+    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item, selection)
 
+    // The tokens are capabilities granted to CoreBox's dispatch; a plugin never receives them.
     expect(mocks.sendToPlugin).toHaveBeenCalledExactlyOnceWith(
       'plugin-a',
       CoreBoxEvents.metaOverlay.actionExecuted,
-      { actionId, item, pluginId: 'plugin-a' }
+      { actionId: COREBOX_FLOW_TRANSFER_ACTION_ID, item, pluginId: 'plugin-a' }
     )
-    expect(metaOverlayManager.getVisible()).toBe(false)
-    expect(heights()).toEqual([416, 300])
-    expect(vi.getTimerCount()).toBe(0)
+    expect(itemActions()).toEqual([])
   })
 })

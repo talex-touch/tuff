@@ -59,7 +59,7 @@ function createProvider(baseUrl: string): CustomProvider {
     apiKey: 'test-only-key',
     baseUrl,
     defaultModel: 'dictation-test',
-    models: ['dictation-test'],
+    models: [{ id: 'dictation-test' }],
     capabilities: ['text.chat'],
     priority: 1
   })

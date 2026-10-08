@@ -193,7 +193,7 @@ code: |
 - Default navigation chevrons are bundled SVGs and do not require host icon generation; custom icon classes still use `TxIcon`.
 - With `pageSizes`, a `div.tx-pagination__size` sits between the page list and the info: a visible `span.tx-pagination__size-label` and an 88px `TxSelect` whose combobox carries `aria-labelledby` pointing at that label. The nav gains `has-page-size` and lays the list, the selector and the info out in one centred row that wraps when narrow. Without `pageSizes` (or with only invalid sizes) none of this renders.
 - Picking a size emits `update:pageSize` and then `pageSizeChange`, and only when the size differs from `pageSize`. `currentPage` is left to the host; if the larger size leaves fewer pages than the current one, the existing clamp emits `update:currentPage` with the last page.
-- The selector is a `TxSelect`, named through `aria-labelledby` because TxSelect has no labelling prop of its own. The on-demand style plugin loads TxSelect's sheets with the pagination's; when importing styles by hand, add `select/style.css` and the sheets it depends on.
+- The page-size selector passes `aria-labelledby` directly to `TxSelect`, which forwards it to the combobox from the first render; no DOM-writing ref callback is needed. The on-demand style plugin loads the select's sheets with pagination; manual style imports still need `select/style.css` and its dependencies.
 
 ## Technologies
 

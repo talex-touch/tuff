@@ -51,10 +51,12 @@ import GalleryStreamText from './gallery/GalleryStreamText.vue'
 import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
 import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
 import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
+import type { DocsSuiteKey } from '~/utils/docs-suites'
+import GalleryAmicroSpecimen from './gallery/GalleryAmicroSpecimen.vue'
 
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
-const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' | 'flow' }>()
+const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
 
 const { locale } = useI18n()
 
@@ -617,6 +619,11 @@ const codeSample = 'export function greet(name: string) {\n  return \'Hello \' +
 // JSON is the editor's default language and the one it lints; six lines fit
 // the stage at the editor's natural height, so nothing has to crop it.
 const manifestSample = '{\n  "id": "com.talex.clipboard",\n  "version": "1.2.0",\n  "sdkapi": 260713,\n  "features": ["history", "pin"]\n}'
+const terminalLines = computed(() => [
+  '\x1B[32mTuffEx TxTerminal\x1B[0m',
+  localeKey.value === 'zh' ? 'ANSI 颜色 · 中文日志 ✓' : 'ANSI colors · Unicode logs ✓',
+  localeKey.value === 'zh' ? '只读显示，无进程' : 'Read-only display, no process',
+])
 // A ref, not a computed: the reader edits it in the dialog. Seeded in the
 // page's language once; switching locale keeps whatever they wrote.
 const markdownDraft = ref(localeKey.value === 'zh'
@@ -984,6 +991,20 @@ async function copyInstall() {
     clearTimeout(copyTimer)
   copyTimer = setTimeout(() => (copied.value = false), 1600)
 }
+const motionGalleryItems = [
+  { doc: 'motion-button', name: 'MotionButton', zh: '动效按钮', kind: 'motion-button' },
+  { doc: 'card-spread', name: 'CardSpread', zh: '卡片展开', kind: 'card-spread' },
+  { doc: 'carousel-3d', name: 'Carousel3D', zh: '三维轮播', kind: 'carousel-3d' },
+  { doc: 'flip-book', name: 'FlipBook', zh: '翻页书', kind: 'flip-book' },
+  { doc: 'motion-loader', name: 'MotionLoader', zh: '加载动效', kind: 'motion-loader' },
+  { doc: 'dither-chart', name: 'DitherChart', zh: '抖动图表', kind: 'dither-chart' },
+  { doc: 'motion-text', name: 'MotionText', zh: '文字动效', kind: 'motion-text' },
+  { doc: 'physics-motion', name: 'PhysicsMotion', zh: '物理动效', kind: 'physics-motion' },
+  { doc: 'motion-dock', name: 'MotionDock', zh: '动效 Dock', kind: 'motion-dock' },
+  { doc: 'motion', name: 'Motion', zh: '悬停与滚动', kind: 'motion' },
+  { doc: 'motion-toggle', name: 'MotionToggle', zh: '动效切换', kind: 'motion-toggle' },
+  { doc: 'motion-transition', name: 'MotionTransition', zh: '动效转场', kind: 'motion-transition' },
+] as const
 </script>
 
 <template>
@@ -2758,6 +2779,48 @@ async function copyInstall() {
 
     <div v-if="props.suite === 'pro'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-form')">
+          {{ cellLabel('MotionForm', '动效表单') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-form" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-control')">
+          {{ cellLabel('MotionControl', '复合控件') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-control" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-metric')">
+          {{ cellLabel('MotionMetric', '复合指标') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-metric" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
           {{ cellLabel('VersionCapsule', '版本胶囊') }}
         </NuxtLink>
@@ -2953,6 +3016,26 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSearchPanel v-model="searchPanelValue" :items="searchPanelItems" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('terminal')">
+          {{ cellLabel('Terminal', '终端显示') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block docs-gallery__block--wide" style="height: 176px">
+              <TxTerminal
+                read-only
+                :lines="terminalLines"
+                :labels="{ ariaLabel: cellLabel('Terminal output', '终端输出') }"
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -4280,6 +4363,20 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('mono-chart')">
+          {{ cellLabel('MonoChart', '单色图表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="mono-chart" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
           {{ cellLabel('DiffTable', '差异表') }}
         </NuxtLink>
@@ -4344,5 +4441,21 @@ async function copyInstall() {
         </div>
       </section>
     </div>
+
+    <div v-if="props.suite === 'motion'" class="docs-gallery__grid">
+      <section v-for="item in motionGalleryItems" :key="item.kind" class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath(item.doc)">
+          {{ cellLabel(item.name, item.zh) }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen :kind="item.kind" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+</div>
   </div>
 </template>

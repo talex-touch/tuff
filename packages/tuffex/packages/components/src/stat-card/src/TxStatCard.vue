@@ -309,7 +309,7 @@ watch(
           <span v-if="insightSuffix" class="tx-stat-card__insight-suffix">{{ insightSuffix }}</span>
         </span>
       </div>
-      <div v-else-if="isProgressVariant && ($slots.meta || meta)" class="tx-stat-card__meta">
+      <div v-if="$slots.meta || meta" class="tx-stat-card__meta">
         <slot name="meta">
           {{ meta }}
         </slot>
@@ -455,6 +455,7 @@ watch(
 }
 
 .tx-stat-card__meta {
+  margin-top: 4px;
   font-size: 12px;
   line-height: 1.2;
   color: var(--tx-text-color-secondary, #909399);

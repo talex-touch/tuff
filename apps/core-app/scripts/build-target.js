@@ -178,7 +178,7 @@ function verifyNativeModules(strict, target) {
 
   const message =
     `Required native modules missing from ${releaseDir}: ${missingModuleNames.join(', ')}. ` +
-    'Run `pnpm --filter @talex-touch/tuff-native rebuild` to produce them.'
+    'Run the native package rebuild, build:audio, and (on macOS) build:translation scripts to produce them.'
 
   if (strict || target === 'win') {
     throw new Error(message)
@@ -532,31 +532,20 @@ function build() {
 
     process.env.BUILD_TYPE = buildType
 
-    // Map target to platform name for downstream tooling
-    const platformMap = {
-      win: 'win32',
-      mac: 'darwin',
-      linux: 'linux'
-    }
-    const electronPlatform = platformMap[normalizedTarget] || normalizedTarget
-
     // Determine architecture (default based on target)
     const defaultArch = normalizedTarget === 'mac' ? 'arm64' : 'x64'
     const effectiveArch = arch || defaultArch
 
-    // Set environment variables for downstream tooling
+    // Set environment variables for downstream tooling. (ELECTRON_PLATFORM / ELECTRON_ARCH used to
+    // be exported here as well; nothing in the repo or in electron-builder reads them.)
     process.env.BUILD_TARGET = normalizedTarget
     process.env.BUILD_ARCH = effectiveArch
-    process.env.ELECTRON_PLATFORM = electronPlatform
-    process.env.ELECTRON_ARCH = effectiveArch
 
     // Set APP_VERSION for runtime code paths that should keep the package version.
     process.env.APP_VERSION = runtimeVersion
     console.log(`Setting APP_VERSION environment variable: ${runtimeVersion}`)
 
-    console.log(
-      `Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`
-    )
+    console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}`)
     verifyMacFileEventsBackend(normalizedTarget)
 
     const officialPluginBuildOrder = buildOfficialPluginPackages({ projectRoot, workspaceRoot })
@@ -594,8 +583,6 @@ function build() {
         BUILD_TYPE: buildType,
         BUILD_TARGET: normalizedTarget,
         BUILD_ARCH: effectiveArch,
-        ELECTRON_PLATFORM: electronPlatform,
-        ELECTRON_ARCH: effectiveArch,
         APP_VERSION: runtimeVersion
       }
       ensureBuildNodeOptions(buildEnv)
@@ -670,6 +657,14 @@ function build() {
       console.warn(`Warning: Failed to ensure platform modules: ${err.message}`)
     }
 
+    if (normalizedTarget === 'mac' && process.platform === 'darwin') {
+      execFileSync(
+        process.execPath,
+        [path.join(nativeAddonReleaseDir(projectRoot), '..', '..', 'scripts', 'build-translation.js'), '--universal'],
+        { stdio: 'inherit' }
+      )
+    }
+
     if (skipInstallAppDeps) {
       console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n')
       verifyNativeModules(process.env.CI === 'true', normalizedTarget)
@@ -710,7 +705,7 @@ function build() {
         })
         if (restoredAddons.length > 0) {
           console.log(
-            `[build-target] Restored the Cargo-built addons install-app-deps removed: ${restoredAddons.join(', ')}\n`
+            `[build-target] Restored the separately built native artifacts install-app-deps removed: ${restoredAddons.join(', ')}\n`
           )
         }
         verifyNativeModules(process.env.CI === 'true', normalizedTarget)
@@ -754,7 +749,7 @@ function build() {
       console.log(`[build-target] Using custom Electron distribution: ${customElectronDist}`)
     }
 
-    const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT
+    const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT
     const enableMacLsuiElement =
       normalizedTarget === 'mac' &&
       typeof macLsuiElementFlag === 'string' &&

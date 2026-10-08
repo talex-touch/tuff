@@ -4,6 +4,7 @@ import type {
   IndexedWriteFlushSnapshotService
 } from '@talex-touch/utils/search'
 import type { FileProviderRuntimeWriteSnapshot } from '../file-provider-index-contracts'
+import type { EmbeddingUsageLimitPause } from '../embedding-service'
 import type {
   FileProviderIndexBufferSnapshot,
   FileProviderIndexFlushSnapshot
@@ -47,6 +48,28 @@ export interface FileProviderRuntimeEvidenceInput {
   incrementalPersist: FileProviderRuntimeWriteSnapshot | null
   ftsWrite: FileProviderRuntimeWriteSnapshot | null
   ftsDelete: FileProviderRuntimeWriteSnapshot | null
+  /** File embedding held back by the user's AI usage limit, or null while it runs. */
+  embeddingPause?: EmbeddingUsageLimitPause | null
+}
+
+/**
+ * The row that says why semantic indexing stopped and when it picks up again: the limit that was
+ * reached and its local reset time. `degraded`, so the diagnostics put it ahead of the healthy rows;
+ * every field is a stable token or a number, which is all the public projection lets through.
+ */
+export function buildEmbeddingPauseEvidence(
+  sourceId: string,
+  pause: EmbeddingUsageLimitPause,
+  checkedAt: number = Date.now()
+): IndexedSourceEvidence {
+  return {
+    id: `${sourceId}:embedding-pause`,
+    label: 'File embedding',
+    status: 'degraded',
+    reason: pause.reason,
+    lastCheckedAt: checkedAt,
+    metadata: { limitKey: pause.limitKey, pausedUntil: pause.pausedUntil }
+  }
 }
 
 /**
@@ -151,6 +174,10 @@ export function buildFileProviderRuntimeEvidence(
         snapshot: item.snapshot
       })
     )
+  }
+
+  if (input.embeddingPause) {
+    evidence.push(buildEmbeddingPauseEvidence(sourceId, input.embeddingPause))
   }
 
   return evidence

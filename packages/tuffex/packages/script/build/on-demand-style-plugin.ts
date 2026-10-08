@@ -4,8 +4,6 @@ import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const TUFFEX_COMPONENT_STATIC_IMPORT_RE = /^\s*import\s+(?!type\b)[\s\S]*?\sfrom\s+['"]@talex-touch\/tuffex\/([a-z0-9-]+)['"]/gm
-const TUFFEX_COMPONENT_DYNAMIC_IMPORT_RE = /import\(\s*['"]@talex-touch\/tuffex\/([a-z0-9-]+)['"]\s*\)/g
 const SUPPORTED_CODE_ID_RE = /\.(?:[cm]?[jt]sx?|vue)(?:$|\?)/
 
 export interface TuffexOnDemandStylePluginOptions {
@@ -30,35 +28,15 @@ function isComponentSubpath(componentName: string) {
     && !componentName.endsWith('.css')
 }
 
-function collectComponentImports(code: string) {
-  const components = new Set<string>()
 
-  for (const pattern of [TUFFEX_COMPONENT_STATIC_IMPORT_RE, TUFFEX_COMPONENT_DYNAMIC_IMPORT_RE]) {
-    pattern.lastIndex = 0
-    for (let match = pattern.exec(code); match !== null; match = pattern.exec(code)) {
-      const componentName = match[1]
-      if (!componentName)
-        continue
-      if (isComponentSubpath(componentName))
-        components.add(componentName)
-    }
-  }
-
-  return [...components].sort()
-}
-
-function hasStyleImport(code: string, componentName: string) {
-  const specifier = `@talex-touch/tuffex/${componentName}/style.css`
-  return code.includes(`'${specifier}'`) || code.includes(`"${specifier}"`)
-}
 
 function createStyleImports(
   componentNames: string[],
   styleDeps: Record<string, string[]>,
-  code: string,
+  existingStyles: Set<string>,
 ): string {
   return expandStyleClosure(componentNames, styleDeps)
-    .filter(componentName => !hasStyleImport(code, componentName))
+    .filter(componentName => !existingStyles.has(componentName))
     .map(componentName => `import '@talex-touch/tuffex/${componentName}/style.css';`)
     .join('\n')
 }
@@ -192,36 +170,69 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
       if (!SUPPORTED_CODE_ID_RE.test(id))
         return null
 
-      if (options.componentDistRoot) {
-        const distComponentName = componentNameFromDistEntry(id, options.componentDistRoot)
-        if (!distComponentName)
-          return null
-
-        const styleImports = createStyleImports([distComponentName], styleDeps, code)
-        if (!styleImports)
-          return null
-
-        return {
-          code: `${styleImports}\n${code}`,
-          map: null,
+      const distComponentName = componentNameFromDistEntry(id, options.componentDistRoot)
+      if (options.componentDistRoot && !distComponentName)
+        return null
+      if (!options.componentDistRoot && !code.includes('@talex-touch/tuffex/'))
+        return null
+      const ast = this.parse(code)
+      const componentNames = new Set<string>()
+      const existingStyles = new Set<string>()
+      for (const node of ast.body) {
+        if (node.type !== 'ImportDeclaration' || typeof node.source.value !== 'string')
+          continue
+        const style = /^@talex-touch\/tuffex\/([a-z0-9-]+)\/style\.css$/.exec(node.source.value)?.[1]
+        if (style)
+          existingStyles.add(style)
+        const name = /^@talex-touch\/tuffex\/([a-z0-9-]+)$/.exec(node.source.value)?.[1]
+        if (name && isComponentSubpath(name))
+          componentNames.add(name)
+      }
+      if (distComponentName) {
+        const styleImports = createStyleImports([distComponentName], styleDeps, existingStyles)
+        return styleImports ? { code: `${styleImports}\n${code}`, map: null } : null
+      }
+      const styleImports = createStyleImports([...componentNames], styleDeps, existingStyles)
+      const staticStyles = expandStyleClosure([...componentNames], styleDeps)
+      for (const name of staticStyles)
+        existingStyles.add(name)
+      const dynamicImports: Array<{ start: number, end: number, name: string }> = []
+      function visit(value: unknown) {
+        if (!value || typeof value !== 'object')
+          return
+        if (Array.isArray(value)) {
+          for (const item of value)
+            visit(item)
+          return
         }
+        const node = value as Record<string, unknown>
+        if (node.type === 'ImportExpression') {
+          const source = node.source as { value?: unknown }
+          const name = typeof source.value === 'string'
+            ? /^@talex-touch\/tuffex\/([a-z0-9-]+)$/.exec(source.value)?.[1]
+            : undefined
+          if (name && isComponentSubpath(name))
+            dynamicImports.push({ start: Number(node.start), end: Number(node.end), name })
+        }
+        for (const key in node)
+          visit(node[key])
       }
-
-      if (!code.includes('@talex-touch/tuffex/'))
+      visit(ast)
+      if (!styleImports && !dynamicImports.length)
         return null
-
-      const componentNames = collectComponentImports(code)
-      if (componentNames.length === 0)
-        return null
-
-      const styleImports = createStyleImports(componentNames, styleDeps, code)
-      if (!styleImports)
-        return null
-
-      return {
-        code: `${styleImports}\n${code}`,
-        map: null,
+      const pieces: string[] = [styleImports, '\n']
+      let cursor = 0
+      for (const entry of dynamicImports.sort((a, b) => a.start - b.start)) {
+        const styles = expandStyleClosure([entry.name], styleDeps)
+          .filter(name => !existingStyles.has(name))
+        if (!styles.length)
+          continue
+        const imports = styles.map(name => `import('@talex-touch/tuffex/${name}/style.css')`)
+        pieces.push(code.slice(cursor, entry.start), `Promise.all([${code.slice(entry.start, entry.end)}, ${imports.join(', ')}]).then(([module]) => module)`)
+        cursor = entry.end
       }
+      pieces.push(code.slice(cursor))
+      return { code: pieces.join(''), map: null }
     },
   }
 }

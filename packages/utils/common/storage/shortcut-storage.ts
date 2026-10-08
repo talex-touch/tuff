@@ -5,10 +5,12 @@ import { shortcutSettingOriginData } from './entity/shortcut-settings'
 class ShortcutStorage {
   private _config: ShortcutSetting = []
 
-  constructor(private readonly storage: {
-    getConfig: (name: string) => any
-    saveConfig: (name: string, content?: string) => void
-  }) {
+  constructor(
+    private readonly storage: {
+      getConfig: (name: string) => any
+      saveConfig: (name: string, content?: string) => void | { success: boolean }
+    },
+  ) {
     this.init()
   }
 
@@ -17,24 +19,24 @@ class ShortcutStorage {
     if (!config || !Array.isArray(config) || config.length === 0) {
       this._config = [...shortcutSettingOriginData]
       this._save()
-    }
-    else {
+    } else {
       this._config = config
     }
   }
 
-  private _save() {
-    this.storage.saveConfig(StorageList.SHORTCUT_SETTING, JSON.stringify(this._config, null, 2))
+  private _save(config: ShortcutSetting = this._config) {
+    const result = this.storage.saveConfig(StorageList.SHORTCUT_SETTING, JSON.stringify(config, null, 2))
+    if (result && !result.success) {
+      throw new Error('Shortcut configuration save failed')
+    }
+    this._config = config
   }
 
   /**
-   * The live element, for internal mutators only.
+   * The current element, for internal mutators only.
    *
-   * The public accessors below hand out clones, but `updateShortcutAccelerator` and
-   * `updateShortcutEnabled` work by assigning to the returned object and then calling
-   * `_save()`. Routing them through the public accessor would have them mutate a throwaway
-   * copy and persist the unchanged config -- the shortcut editor would appear to accept a
-   * change that never took effect.
+   * Public reads return clones. Mutators build replacement values and publish them only after
+   * storage accepts the save, so a rejected edit cannot leak into a later successful write.
    */
   private _findShortcut(id: string): Shortcut | undefined {
     return this._config.find(s => s.id === id)
@@ -62,19 +64,22 @@ class ShortcutStorage {
     }
     // Stored by value, not by reference: keeping the caller's object would leave them holding
     // a handle to internal state, which is the same defect as the accessors had, just inbound.
-    this._config.push(structuredClone(shortcut))
-    this._save()
+    this._save([...this._config, structuredClone(shortcut)])
     return true
   }
 
-  updateShortcutAccelerator(id: string, newAccelerator: string): boolean {
+  updateShortcutAccelerator(id: string, newAccelerator: string, enabled?: boolean): boolean {
     const shortcut = this._findShortcut(id)
     if (!shortcut) {
       return false
     }
-    shortcut.accelerator = newAccelerator
-    shortcut.meta.modificationTime = Date.now()
-    this._save()
+    const updated = {
+      ...shortcut,
+      accelerator: newAccelerator,
+      meta: { ...shortcut.meta, modificationTime: Date.now() },
+    }
+    if (typeof enabled === 'boolean') updated.meta.enabled = enabled
+    this._save(this._config.map(current => (current === shortcut ? updated : current)))
     return true
   }
 
@@ -83,9 +88,11 @@ class ShortcutStorage {
     if (!shortcut) {
       return false
     }
-    shortcut.meta.enabled = enabled
-    shortcut.meta.modificationTime = Date.now()
-    this._save()
+    const updated = {
+      ...shortcut,
+      meta: { ...shortcut.meta, enabled, modificationTime: Date.now() },
+    }
+    this._save(this._config.map(current => (current === shortcut ? updated : current)))
     return true
   }
 
@@ -101,8 +108,7 @@ class ShortcutStorage {
       return 0
     }
 
-    this._config = nextConfig
-    this._save()
+    this._save(nextConfig)
     return removedCount
   }
 }

@@ -34,6 +34,7 @@ import { toLangChainOpenAiReasoningFields } from '@talex-touch/utils/intelligenc
 import { getNetworkService } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
+import { decodeImageAttachment } from './attachment-spill'
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
@@ -237,6 +238,27 @@ export function extractTextContent(content: unknown): string {
   return ''
 }
 
+/**
+ * A user turn with its images as `image_url` data-URL parts, which both LangChain adapters
+ * (OpenAI-compatible and Anthropic) translate to their wire. Main's model gate
+ * (`planChatModelRequest`) has already refused a turn whose model does not accept images, so a
+ * part sent here is one the binding/catalog says the model reads; an attachment that is not a
+ * valid image data URL is dropped.
+ */
+export function toLangChainUserMessage(message: IntelligenceMessage): HumanMessage {
+  const images = (message.attachments ?? []).flatMap((attachment) => {
+    const image = decodeImageAttachment(attachment)
+    return image ? [`data:${image.mediaType};base64,${image.base64}`] : []
+  })
+  if (images.length === 0) return new HumanMessage(message.content)
+  return new HumanMessage({
+    content: [
+      { type: 'text', text: message.content },
+      ...images.map((url) => ({ type: 'image_url', image_url: { url } }))
+    ]
+  })
+}
+
 function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
   return messages.map((message) => {
     if (message.role === 'system') {
@@ -245,8 +267,18 @@ function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
     if (message.role === 'assistant') {
       return new AIMessage(message.content)
     }
-    return new HumanMessage(message.content)
+    return toLangChainUserMessage(message)
   })
+}
+
+/** Whether a response carried any token counts at all, as opposed to the zeros defaulted later. */
+export function hasReportedUsage(rawMessage: Record<string, unknown>): boolean {
+  const responseMetadata = asRecord(rawMessage.response_metadata)
+  return (
+    Object.keys(asRecord(rawMessage.usage_metadata)).length > 0 ||
+    Object.keys(asRecord(responseMetadata.tokenUsage)).length > 0 ||
+    Object.keys(asRecord(responseMetadata.usage)).length > 0
+  )
 }
 
 function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsageInfo {
@@ -748,6 +780,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return {
       result: content,
       usage,
+      usageReported: hasReportedUsage(rawMessage),
       model: resolveModelName(rawMessage, modelName),
       latency: Date.now() - startTime,
       traceId,

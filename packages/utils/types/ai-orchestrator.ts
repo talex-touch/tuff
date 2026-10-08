@@ -12,6 +12,83 @@ export type AiCliProviderId =
  */
 export type AiImportOriginId = AiCliProviderId | "manual";
 
+/**
+ * Agents whose skills and MCP servers Tuff reads in place. cc-switch's library and the shared
+ * `~/.agents` layer hold skills for several agents, but they are storage rather than agents, so they
+ * are not on this list.
+ */
+export const KNOWN_AI_AGENT_IDS = [
+  "codex",
+  "claude",
+  "pi",
+  "oh-my-pi",
+  "opencode",
+  "cursor",
+  "gemini",
+  "kiro",
+  "qoder",
+  "codebuddy",
+  "factory",
+  "reasonix",
+  "kilocode",
+  "devin",
+] as const;
+
+export type KnownAiAgentId = (typeof KNOWN_AI_AGENT_IDS)[number];
+
+/**
+ * An agent id. Open-ended on purpose: the directory table grows with the tools people install, and a
+ * resource that belongs to an agent this build has no brand for still names its owner instead of
+ * vanishing from the list.
+ */
+export type AiAgentId = KnownAiAgentId | (string & {});
+
+/**
+ * Brand names. A product's name reads the same in every locale, which is why main may hand these out
+ * while every other display string stays the renderer's.
+ */
+const AI_AGENT_LABELS: Readonly<Record<KnownAiAgentId, string>> = {
+  codex: "Codex",
+  claude: "Claude Code",
+  pi: "Pi",
+  "oh-my-pi": "Oh My Pi",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+  gemini: "Gemini CLI",
+  kiro: "Kiro",
+  qoder: "Qoder",
+  codebuddy: "CodeBuddy",
+  factory: "Factory",
+  reasonix: "Reasonix",
+  kilocode: "Kilo Code",
+  devin: "Devin",
+};
+
+export function isKnownAiAgentId(value: string): value is KnownAiAgentId {
+  return Object.prototype.hasOwnProperty.call(AI_AGENT_LABELS, value);
+}
+
+/** The agent's brand name, or its id when this build has none. */
+export function aiAgentLabel(agentId: AiAgentId): string {
+  return isKnownAiAgentId(agentId) ? AI_AGENT_LABELS[agentId] : agentId;
+}
+
+/**
+ * One agent an inventory found on this machine, and how much of each resource it holds.
+ *
+ * An inventory lists only the agents holding at least one of the resource it counted, and fills only
+ * that count. The other one is `null` — "not counted by this response" — rather than a zero nobody
+ * measured.
+ */
+export interface AgentPresence {
+  agentId: AiAgentId;
+  label: string;
+  /** Skills the agent's own directory holds. */
+  skillCount: number | null;
+  /** MCP servers the agent's own configuration declares. */
+  mcpServerCount: number | null;
+}
+
 export type AiRuntimeProviderId = "pi-core";
 
 export type AiImportItemKind =
@@ -89,6 +166,13 @@ export interface AiImportCandidateBase {
   kind: AiImportItemKind;
   name: string;
   path: string;
+  /**
+   * The directory discovery held the file to, when that was not its source's root: an MCP file an
+   * agent keeps beside its configuration directory (`~/.claude.json` next to `~/.claude`) is held to
+   * its own directory. Canonical; absent means the source root. Applying the candidate re-reads the
+   * file within the same directory.
+   */
+  containedBy?: string;
   fingerprint: string;
   state: AiImportCandidateState;
   updatedAt?: number;
@@ -155,14 +239,48 @@ export interface AiImportPreviewRequest {
   providerIds?: AiCliProviderId[];
 }
 
+/**
+ * Which servers of one MCP candidate to import. Everything else the file declares stays behind: no
+ * profile, no migrated secret, and no copy of its definition in the stored snapshot.
+ */
+export interface AiImportMcpServerSelection {
+  /** Server names as the file keys them under its MCP root (`mcpServers.<name>`). */
+  include: string[];
+  /**
+   * Members of `include` that land switched off — imported and kept, not run. Servers Tuff already
+   * holds from the file keep their own switches without being named here.
+   */
+  disabled?: string[];
+}
+
 export interface AiImportApplyRequest {
   scanId: string;
   candidateIds: string[];
+  /**
+   * Consent to move credentials into the secure store. Only a value the store does not already hold
+   * under its reference needs it: applying servers whose credentials an earlier import moved asks
+   * nothing.
+   */
   confirmSecretMigration?: boolean;
   overrides?: Record<
     string,
     { targetScope?: AiImportTargetScope; alias?: string }
   >;
+  /**
+   * Per MCP candidate id, the servers to import. A selected MCP candidate without an entry imports
+   * every server it declares, as before. An entry for a candidate outside `candidateIds`, for a
+   * candidate that is not MCP, or naming a server the scan did not find in the file rejects the
+   * import, as does one naming a server that needs re-authentication (OAuth, a credential on the
+   * command line, a reference to a value kept elsewhere: it could not run, and it would stop the
+   * file's other servers).
+   *
+   * The selection adds to what Tuff already holds from that file, never replaces it: servers
+   * imported earlier stay, with their credentials and their switches — one that is not running now
+   * lands switched off — and the stored item is switched on so the selected servers run. A held
+   * server that needs re-authentication, or that the file no longer declares, is left out. An item
+   * marked invalid can be taken this way, leaving out the servers that made it so.
+   */
+  mcpServers?: Record<string, AiImportMcpServerSelection>;
 }
 
 export interface AiImportApplyItemResult {

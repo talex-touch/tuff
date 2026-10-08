@@ -1,184 +1,231 @@
-import type { SQL } from 'drizzle-orm'
-import { ne } from 'drizzle-orm'
-import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createClient, type Client } from '@libsql/client'
+import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as schema from '../db/schema'
+import { SearchIndexService } from '../modules/box-tool/search-engine/search-index-service'
 
-const {
-  appRebuildMock,
-  deleteMock,
-  fileRebuildMock,
-  getDbMock,
-  getSearchDbMock,
-  runMock,
-  selectFromMock,
-  selectMock,
-  deleteWhereMock,
-  selectWhereMock
-} = vi.hoisted(() => ({
-  appRebuildMock: vi.fn(),
-  deleteMock: vi.fn(),
-  fileRebuildMock: vi.fn(),
-  getDbMock: vi.fn(),
-  getSearchDbMock: vi.fn(),
-  runMock: vi.fn(),
-  selectFromMock: vi.fn(),
-  selectMock: vi.fn(),
-  deleteWhereMock: vi.fn(),
-  selectWhereMock: vi.fn()
-}))
+let primaryDb: LibSQLDatabase<typeof schema>
+let fileHomeDb: LibSQLDatabase<typeof schema>
+let directory: string | undefined
+const clients: Client[] = []
 
 vi.mock('../modules/database', () => ({
   databaseModule: {
-    getDb: getDbMock,
-    getSearchDb: getSearchDbMock,
-    getAuxDb: vi.fn()
+    getDb: () => primaryDb,
+    getSearchDb: () => fileHomeDb,
+    getAuxDb: () => primaryDb
   }
 }))
-
-vi.mock('../modules/clipboard', () => ({
-  clipboardModule: {
-    cleanupHistory: vi.fn()
-  }
-}))
-
+vi.mock('../modules/clipboard', () => ({ clipboardModule: { cleanupHistory: vi.fn() } }))
 vi.mock('./temp-file.service', () => ({
-  tempFileService: {
-    cleanup: vi.fn(),
-    getBaseDir: vi.fn(() => '/tmp')
-  }
+  tempFileService: { cleanup: vi.fn(), getBaseDir: () => '/tmp' }
 }))
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
 
-vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
-  appProvider: {
-    rebuildIndex: appRebuildMock
-  }
-}))
-
-vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
-  fileProvider: {
-    rebuildIndex: fileRebuildMock
-  }
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(() => '/tmp')
-  }
-}))
-
-import { files, keywordMappings, searchIndexMeta } from '../db/schema'
 import { cleanupFileIndex } from './storage-maintenance'
 
-describe('cleanupFileIndex', () => {
-  beforeEach(() => {
-    // `.from()` is awaited directly for unscoped counts and chained with `.where()` for scoped
-    // ones, so it has to be thenable *and* carry a `where`.
-    selectWhereMock.mockReset().mockResolvedValue([{ count: 1 }])
-    selectFromMock.mockReset().mockImplementation(() => {
-      const rows = [{ count: 1 }]
-      return Object.assign(Promise.resolve(rows), { where: selectWhereMock })
-    })
-    selectMock.mockReset().mockReturnValue({ from: selectFromMock })
-    deleteWhereMock.mockReset().mockResolvedValue(undefined)
-    deleteMock
-      .mockReset()
-      .mockImplementation(() =>
-        Object.assign(Promise.resolve(undefined), { where: deleteWhereMock })
-      )
-    runMock.mockReset().mockResolvedValue(undefined)
-    const connection = {
-      select: selectMock,
-      delete: deleteMock,
-      run: runMock
+afterEach(async () => {
+  for (const client of clients.splice(0)) client.close()
+  if (directory) await rm(directory, { recursive: true, force: true })
+  directory = undefined
+})
+
+async function openHome(name: string) {
+  const client = createClient({ url: `file:${join(directory!, name)}` })
+  clients.push(client)
+  await client.executeMultiple(`
+    CREATE TABLE files (
+      id INTEGER PRIMARY KEY,path TEXT NOT NULL UNIQUE,name TEXT NOT NULL,display_name TEXT,
+      extension TEXT,size INTEGER,mtime INTEGER NOT NULL,ctime INTEGER NOT NULL,
+      last_indexed_at INTEGER NOT NULL,is_dir INTEGER NOT NULL,type TEXT NOT NULL,
+      content TEXT,embedding_status TEXT NOT NULL
+    );
+    CREATE TABLE file_extensions (file_id INTEGER NOT NULL,key TEXT NOT NULL,value TEXT,
+      PRIMARY KEY(file_id,key));
+    CREATE TABLE file_index_progress (file_id INTEGER PRIMARY KEY,status TEXT NOT NULL);
+    CREATE TABLE scan_progress (source_id TEXT NOT NULL,path TEXT NOT NULL,last_scanned INTEGER NOT NULL,
+      PRIMARY KEY(source_id,path));
+    CREATE TABLE embeddings (id INTEGER PRIMARY KEY,source_id TEXT NOT NULL,source_type TEXT NOT NULL,
+      embedding BLOB NOT NULL,model TEXT NOT NULL,created_at INTEGER NOT NULL);
+    CREATE TABLE keyword_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT,keyword TEXT NOT NULL,
+      item_id TEXT NOT NULL,provider_id TEXT NOT NULL,priority REAL NOT NULL);
+    CREATE TABLE query_completions (id INTEGER PRIMARY KEY,query TEXT NOT NULL);
+    INSERT INTO files(id,path,name,size,mtime,ctime,last_indexed_at,is_dir,type,embedding_status)
+      VALUES (1,'/managed/outside/App.app','Managed app',3,11,7,13,0,'app','none'),
+             (2,'/indexed/file.txt','Indexed file',3,11,7,13,0,'file','none');
+    INSERT INTO file_extensions(file_id,key,value)
+      VALUES (1,'managed-entry','only-catalog-copy'),(2,'icon','file-icon');
+    INSERT INTO file_index_progress(file_id,status) VALUES (2,'completed');
+    INSERT INTO scan_progress(source_id,path,last_scanned) VALUES ('file-provider','/retired-root',13);
+    INSERT INTO embeddings(id,source_id,source_type,embedding,model,created_at)
+      VALUES (1,'2','file',X'00000000','fixture',13),(2,'note-owner','note',X'00000000','fixture',13);
+    INSERT INTO query_completions(id,query) VALUES (1,'filequery');
+  `)
+  const db = drizzle(client, { schema })
+  const search = new SearchIndexService(db, { directMode: true, initializationMode: 'writer' })
+  await search.warmup()
+  await search.indexItems([
+    { itemId: 'app:managed', providerId: 'app-provider', type: 'app', name: 'managedapptitle' },
+    { itemId: 'file:owned', providerId: 'file-provider', type: 'file', name: 'fileindextitle' }
+  ])
+  const deletedRecords = JSON.stringify([
+    {
+      id: 2,
+      path: '/indexed/file.txt',
+      mtime: 11,
+      ctime: 7,
+      size: 3,
+      lastIndexedAt: 13,
+      itemId: 'file:owned'
     }
-    getDbMock.mockReset().mockResolvedValue(connection)
-    getSearchDbMock.mockReset().mockReturnValue(connection)
-    appRebuildMock.mockReset().mockResolvedValue({ success: true })
-    fileRebuildMock.mockReset().mockResolvedValue({ success: true })
-  })
+  ])
+  await db.insert(schema.searchIndexPendingCommits).values([
+    { commitId: 'file-commit', sourceId: 'file-provider', deletedRecords, removedIndexedItems: 1 },
+    { commitId: 'other-commit', sourceId: 'other-provider', deletedRecords, removedIndexedItems: 1 }
+  ])
+  await db.insert(schema.searchIndexFileMaintenance).values([
+    {
+      taskId: 'file-work',
+      sourceId: 'file-provider',
+      reason: 'missing-root',
+      filePath: '/retired-root',
+      expectedRecord: null,
+      cursor: 4
+    },
+    {
+      taskId: 'other-work',
+      sourceId: 'other-provider',
+      reason: 'missing-root',
+      filePath: '/other-root',
+      expectedRecord: null,
+      cursor: 7
+    }
+  ])
+  return { client, db, search }
+}
 
-  it('rebuilds app index before file index after cleanup', async () => {
-    const result = await cleanupFileIndex({ clearSearchIndex: true, rebuild: true })
+async function catalogSnapshot(client: Client) {
+  return {
+    files: (await client.execute('SELECT id,path,type FROM files ORDER BY id')).rows,
+    extensions: (
+      await client.execute('SELECT file_id,key,value FROM file_extensions ORDER BY file_id,key')
+    ).rows,
+    metadata: (
+      await client.execute(
+        'SELECT provider_id,item_id,keyword_hash,fts_rowid,document_hash FROM search_index_meta ORDER BY provider_id,item_id'
+      )
+    ).rows,
+    pending: (
+      await client.execute(
+        'SELECT commit_id,source_id FROM search_index_pending_commits ORDER BY commit_id'
+      )
+    ).rows,
+    work: (
+      await client.execute(
+        'SELECT task_id,source_id,cursor FROM search_index_file_maintenance ORDER BY task_id'
+      )
+    ).rows
+  }
+}
 
-    expect(result.success).toBe(true)
-    expect(result.removedCount).toBe(4)
-    expect(appRebuildMock).toHaveBeenCalledTimes(1)
-    expect(fileRebuildMock).toHaveBeenCalledWith({ force: true })
-    expect(appRebuildMock.mock.invocationCallOrder[0]).toBeLessThan(
-      fileRebuildMock.mock.invocationCallOrder[0]
-    )
-  })
+describe('cleanupFileIndex actual storage ownership', () => {
+  it.each(['split', 'primary-fallback'] as const)(
+    'clears file projections and derivatives but preserves app catalog on %s',
+    async (topology) => {
+      directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))
+      const primary = await openHome('primary.sqlite')
+      const live = topology === 'split' ? await openHome('search-index.sqlite') : primary
+      primaryDb = primary.db
+      fileHomeDb = live.db
+      const primaryBefore = await catalogSnapshot(primary.client)
+      expect(
+        (await live.search.search('file-provider', 'fileindextitle')).map((row) => row.itemId)
+      ).toEqual(['file:owned'])
+      const result = await cleanupFileIndex({
+        includeEmbeddings: true,
+        clearSearchIndex: true,
+        rebuild: false
+      })
+      expect(result).toEqual({ success: true, removedCount: 4 })
+      expect((await live.client.execute('SELECT id,path,type FROM files')).rows).toEqual([
+        { id: 1, path: '/managed/outside/App.app', type: 'app' }
+      ])
+      expect(
+        (await live.client.execute('SELECT file_id,key,value FROM file_extensions')).rows
+      ).toEqual([{ file_id: 1, key: 'managed-entry', value: 'only-catalog-copy' }])
+      expect((await live.client.execute('SELECT file_id FROM file_index_progress')).rows).toEqual(
+        []
+      )
+      expect((await live.client.execute('SELECT path FROM scan_progress')).rows).toEqual([])
+      expect(
+        (await live.client.execute('SELECT source_id,source_type FROM embeddings')).rows
+      ).toEqual([{ source_id: 'note-owner', source_type: 'note' }])
+      expect(await live.search.search('file-provider', 'fileindextitle')).toEqual([])
+      expect(await live.search.lookupByKeywords('file-provider', ['fileindextitle'])).toEqual(
+        new Map()
+      )
+      expect(
+        (
+          await live.client.execute(
+            "SELECT item_id FROM search_index_meta WHERE provider_id = 'file-provider'"
+          )
+        ).rows
+      ).toEqual([])
+      expect(
+        (await live.client.execute('SELECT commit_id FROM search_index_pending_commits')).rows
+      ).toEqual([])
+      expect(
+        (await live.client.execute('SELECT task_id FROM search_index_file_maintenance')).rows
+      ).toEqual([])
+      expect((await live.client.execute('SELECT id FROM query_completions')).rows).toEqual([])
+      if (topology === 'split') {
+        expect(await catalogSnapshot(primary.client)).toEqual(primaryBefore)
+        expect(
+          (await primary.search.search('app-provider', 'managedapptitle')).map((row) => row.itemId)
+        ).toEqual(['app:managed'])
+      }
+    }
+  )
 
-  /**
-   * #1770. File rows live in `search-index.db` under the default-on split; `getDb()` is the primary
-   * connection, which holds only the app catalog. Cleaning up through it counted and deleted from
-   * the wrong file.
-   */
-  it('cleans the search connection, not the primary', async () => {
-    await cleanupFileIndex({})
-
-    expect(getSearchDbMock).toHaveBeenCalled()
-    expect(getDbMock).not.toHaveBeenCalled()
-  })
-
-  /**
-   * The other half of #1770, which predates the split: `files` also holds the app catalog,
-   * including user-authored entries added via `addAppByPath` that exist nowhere else and that
-   * `rebuildIndex()` cannot rediscover outside the watch paths. An unscoped delete removed them.
-   */
-  it('scopes the files and file_extensions deletes so the app catalog survives', async () => {
-    await cleanupFileIndex({})
-
-    // Four tables are cleared: fileIndexProgress and scanProgress are file-only and stay
-    // unscoped, while files and file_extensions must each go through `.where(...)`.
-    expect(deleteMock).toHaveBeenCalledTimes(4)
-    expect(deleteWhereMock).toHaveBeenCalledTimes(2)
-
-    // Counting `.where()` calls alone would pass with an inverted predicate, so pin the rendered
-    // SQL: the same clause built here must render identically to what the deletes received. If the
-    // source predicate drifts from `ne(files.type, 'app')`, the render diverges and this fails.
-    const dialect = new SQLiteSyncDialect()
-    const render = (predicate: SQL) => dialect.sqlToQuery(predicate)
-
-    const [extensionsPredicate] = deleteWhereMock.mock.calls[0] as [SQL]
-    const [filesPredicate] = deleteWhereMock.mock.calls[1] as [SQL]
-
-    expect(render(filesPredicate)).toEqual(render(ne(files.type, 'app')))
-
-    // The extensions delete is scoped by a subquery. Its inner SQL is not readable from here --
-    // the connection is a mock, so drizzle sees an opaque value and renders the whole subquery as
-    // a single `?` rather than nested SQL. What is readable is the predicate the subquery itself
-    // was built with, which is where the scoping actually lives.
-    expect(render(extensionsPredicate).sql).toBe('"file_extensions"."file_id" in ?')
-    const [subqueryPredicate] = selectWhereMock.mock.calls[0] as [SQL]
-    expect(render(subqueryPredicate)).toEqual(render(ne(files.type, 'app')))
-  })
-
-  it('returns rebuild error while still attempting file index rebuild', async () => {
-    appRebuildMock.mockResolvedValueOnce({ success: false, error: 'app rebuild failed' })
-
-    const result = await cleanupFileIndex({ clearSearchIndex: true, rebuild: true })
-
-    expect(fileRebuildMock).toHaveBeenCalledTimes(1)
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('app rebuild failed')
-  })
-
-  /**
-   * `search_index_meta` holds one row per indexed document. Wiping `search_index` without it left
-   * rows that claim documents the index no longer has, which the app source's health count reads.
-   */
-  it('clears search_index_meta together with the search index it describes', async () => {
-    await cleanupFileIndex({ clearSearchIndex: true })
-
-    expect(runMock).toHaveBeenCalled()
-    expect(deleteMock).toHaveBeenCalledWith(searchIndexMeta)
-    expect(deleteMock).toHaveBeenCalledWith(keywordMappings)
-  })
-
-  it('leaves search_index_meta alone when the search index is kept', async () => {
-    await cleanupFileIndex({})
-
-    expect(deleteMock).not.toHaveBeenCalledWith(searchIndexMeta)
-  })
+  it.each(['split', 'primary-fallback'] as const)(
+    'keeps explicitly retained projections and other-source queues on %s',
+    async (topology) => {
+      directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))
+      const primary = await openHome('primary.sqlite')
+      const live = topology === 'split' ? await openHome('search-index.sqlite') : primary
+      primaryDb = primary.db
+      fileHomeDb = live.db
+      const result = await cleanupFileIndex({
+        includeEmbeddings: true,
+        clearSearchIndex: false,
+        rebuild: false
+      })
+      expect(result).toEqual({ success: true, removedCount: 4 })
+      expect((await live.client.execute('SELECT id,path,type FROM files')).rows).toEqual([
+        { id: 1, path: '/managed/outside/App.app', type: 'app' }
+      ])
+      expect(
+        (await live.search.search('file-provider', 'fileindextitle')).map((row) => row.itemId)
+      ).toEqual(['file:owned'])
+      expect(
+        (await live.search.lookupByKeywords('file-provider', ['fileindextitle'])).get(
+          'fileindextitle'
+        )
+      ).toEqual([{ itemId: 'file:owned', priority: 1.25 }])
+      expect(
+        (await live.client.execute('SELECT commit_id,source_id FROM search_index_pending_commits'))
+          .rows
+      ).toEqual([{ commit_id: 'other-commit', source_id: 'other-provider' }])
+      expect(
+        (
+          await live.client.execute(
+            'SELECT task_id,source_id,cursor FROM search_index_file_maintenance'
+          )
+        ).rows
+      ).toEqual([{ task_id: 'other-work', source_id: 'other-provider', cursor: 7 }])
+    }
+  )
 })

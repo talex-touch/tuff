@@ -82,6 +82,10 @@ export class ScanScheduler {
     let enteredLease = false
     this.runGate.start(sourceId, 'scan', startedAt)
     try {
+      if (source.mutationScheduling?.scan === 'sliced') {
+        enteredLease = true
+        return await this.scanSourceWithinLease(source, reason, request, undefined, { startedAt })
+      }
       return await this.sourceMutationGate.run(sourceId, async (lease) => {
         enteredLease = true
         return await this.scanSourceWithinLease(source, reason, request, lease, { startedAt })
@@ -115,6 +119,7 @@ export class ScanScheduler {
     let scanError: ScanSchedulerPhaseError | null = null
 
     const mutationLeaseId = mutationLease?.id
+    const sliced = !mutationLeaseId && source.mutationScheduling?.scan === 'sliced'
     if (!reservation) this.runGate.start(sourceId, 'scan', startedAt)
     try {
       for await (const batch of source.scan({
@@ -122,35 +127,72 @@ export class ScanScheduler {
         sourceId,
         reason,
         mutationLeaseId,
-        onDelta: mutationLeaseId
-          ? async (delta) => {
-              if (delta.sourceId !== sourceId) {
-                throw new Error(
-                  `Indexed source '${sourceId}' yielded delta for '${delta.sourceId}'`
-                )
+        onDelta:
+          mutationLeaseId || sliced
+            ? async (delta) => {
+                if (delta.sourceId !== sourceId) {
+                  throw new Error(
+                    `Indexed source '${sourceId}' yielded delta for '${delta.sourceId}'`
+                  )
+                }
+                try {
+                  if (mutationLeaseId) {
+                    await this.store.applyDelta({ ...delta, mutationLeaseId })
+                  } else if (delta.mutationLeaseId) {
+                    await this.sourceMutationGate.runWithinLease(
+                      sourceId,
+                      delta.mutationLeaseId,
+                      async () => await this.store.applyDelta(delta)
+                    )
+                  } else {
+                    await this.sourceMutationGate.runWhenIdle(
+                      sourceId,
+                      async (lease) =>
+                        await this.store.applyDelta({ ...delta, mutationLeaseId: lease.id }),
+                      request.signal
+                    )
+                  }
+                } catch (error) {
+                  throw new ScanSchedulerPhaseError(
+                    'store',
+                    this.stringifyError(error),
+                    batches,
+                    records,
+                    indexedRecords
+                  )
+                }
               }
-              try {
-                await this.store.applyDelta({ ...delta, mutationLeaseId })
-              } catch (error) {
-                throw new ScanSchedulerPhaseError(
-                  'store',
-                  this.stringifyError(error),
-                  batches,
-                  records,
-                  indexedRecords
-                )
-              }
-            }
-          : request.onDelta
+            : request.onDelta
       })) {
         if (batch.sourceId !== sourceId) {
           throw new Error(`Indexed source '${sourceId}' yielded batch for '${batch.sourceId}'`)
         }
+        if (sliced && batch.committedRecordCount !== undefined) {
+          if (
+            batch.records.length > 0 ||
+            !Number.isSafeInteger(batch.committedRecordCount) ||
+            batch.committedRecordCount < 0
+          ) {
+            throw new Error(`INDEXED_SOURCE_COMMIT_ACK_INVALID:${sourceId}`)
+          }
+          batches += 1
+          records += batch.committedRecordCount
+          indexedRecords += batch.committedRecordCount
+          continue
+        }
         let summary: Awaited<ReturnType<IndexStoreAdapter['applyBatch']>>
         try {
-          summary = await this.store.applyBatch(
-            mutationLeaseId ? { ...batch, mutationLeaseId } : batch
-          )
+          if (mutationLeaseId) {
+            summary = await this.store.applyBatch({ ...batch, mutationLeaseId })
+          } else if (sliced) {
+            summary = await this.sourceMutationGate.runWhenIdle(
+              sourceId,
+              async (lease) => await this.store.applyBatch({ ...batch, mutationLeaseId: lease.id }),
+              request.signal
+            )
+          } else {
+            summary = await this.store.applyBatch(batch)
+          }
         } catch (error) {
           throw new ScanSchedulerPhaseError(
             'store',

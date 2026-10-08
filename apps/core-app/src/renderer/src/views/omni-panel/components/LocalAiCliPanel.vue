@@ -7,13 +7,14 @@ import type {
   LocalAiCliContextItem,
   LocalAiCliProviderId,
   LocalAiCliStatus,
-  LocalAiCliTaskChunk
+  LocalAiCliTaskChunk,
+  LocalAiCliTerminalExit,
+  LocalAiCliTerminalCreateResult
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { FitAddon } from '@xterm/addon-fit'
-import { Terminal } from '@xterm/xterm'
-import '@xterm/xterm/css/xterm.css'
+import type { TerminalInstance, TerminalSize } from '@talex-touch/tuffex/terminal'
+import { TxTerminal } from '@talex-touch/tuffex/terminal'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -55,12 +56,18 @@ const errorCode = ref('')
 const projectId = ref<string | undefined>(undefined)
 const sessionRef = ref<string | undefined>(undefined)
 const approval = ref<LocalAiCliApprovalRequest | null>(null)
-const terminalHost = ref<HTMLElement | null>(null)
+const terminalView = ref<TerminalInstance | null>(null)
 const terminalSessionId = ref<string | null>(null)
+const terminalVisible = ref(false)
+const terminalOpening = ref(false)
+let terminalGeneration = 0
+let terminalCreateController: AbortController | null = null
+let terminalCreation: Promise<LocalAiCliTerminalCreateResult> | null = null
+type PendingTerminalEvent =
+  | { kind: 'data'; sessionId: string; data: string }
+  | { kind: 'exit'; exit: LocalAiCliTerminalExit }
+let pendingTerminalEvents: PendingTerminalEvent[] = []
 let streamController: { cancel: () => void } | null = null
-let terminal: Terminal | null = null
-let fitAddon: FitAddon | null = null
-let terminalInputDispose: { dispose: () => void } | null = null
 
 const runnableProviders = computed(() =>
   (status.value?.providers ?? []).filter(
@@ -100,9 +107,11 @@ const canOpenTerminal = computed(
     phase.value === 'done' &&
     selectedProviderStatus.value?.capabilities.terminalRead === true &&
     (!sessionRef.value || selectedProviderStatus.value.capabilities.terminalResume) &&
-    !terminalSessionId.value
+    !terminalSessionId.value &&
+    !terminalOpening.value
 )
 watch(provider, () => {
+  if (terminalVisible.value || terminalOpening.value) void closeTerminal()
   if (
     access.value === 'workspace-write' &&
     !selectedProviderStatus.value?.capabilities.taskWriteApproval
@@ -343,58 +352,130 @@ async function openSettings(): Promise<void> {
   await sdk.openSettings()
 }
 
+function writeTerminalOutput(data: string): void {
+  const view = terminalView.value
+  if (!view) return
+  void view.write(data).catch(() => {
+    if (terminalView.value === view) log.error('Failed to display local AI CLI terminal output')
+  })
+}
+
+function handleTerminalExit(payload: LocalAiCliTerminalExit): void {
+  if (payload.sessionId !== terminalSessionId.value) return
+  writeTerminalOutput(
+    `\r\n[exit ${payload.exitCode ?? payload.signal ?? t('terminal.closed')}]\r\n`
+  )
+  terminalSessionId.value = null
+}
+
+function handleTerminalInput(data: string): void {
+  const sessionId = terminalSessionId.value
+  if (!sessionId) return
+  void sdk.terminal.write({ sessionId, data }).catch(() => {
+    log.error('Failed to write local AI CLI terminal input')
+  })
+}
+
+function handleTerminalResize(size: TerminalSize): void {
+  const sessionId = terminalSessionId.value
+  if (!sessionId) return
+  void sdk.terminal.resize({ sessionId, ...size }).catch(() => {
+    log.error('Failed to resize local AI CLI terminal')
+  })
+}
+
+function handleTerminalReady(view: TerminalInstance): void {
+  terminalView.value = view
+  const size = view.getSize()
+  if (size) handleTerminalResize(size)
+  if (terminalSessionId.value) view.focus()
+}
+
 async function openTerminal(): Promise<void> {
   if (!provider.value || !canOpenTerminal.value) return
+  const generation = ++terminalGeneration
+  const controller = new AbortController()
+  terminalCreateController = controller
+  terminalOpening.value = true
+  terminalVisible.value = true
+  pendingTerminalEvents = []
+  await nextTick()
+  if (generation !== terminalGeneration) return
+  terminalView.value?.reset()
   try {
-    const result = await sdk.terminal.create({
-      provider: provider.value,
-      access: access.value,
-      projectId: projectId.value,
-      sessionRef: sessionRef.value,
-      cols: 92,
-      rows: 24
-    })
-    terminalSessionId.value = result.sessionId
-    await nextTick()
-    terminal = new Terminal({
-      cols: 92,
-      rows: 24,
-      convertEol: true,
-      fontSize: 12,
-      theme: { background: '#111318' }
-    })
-    fitAddon = new FitAddon()
-    terminal.loadAddon(fitAddon)
-    if (terminalHost.value) terminal.open(terminalHost.value)
-    fitAddon.fit()
-    terminalInputDispose = terminal.onData((data: string) => {
-      if (!terminalSessionId.value) return
-      void sdk.terminal.write({ sessionId: terminalSessionId.value, data }).catch(() => {
-        log.error('Failed to write local AI CLI terminal input')
-      })
-    })
-    if (terminalSessionId.value) {
-      await sdk.terminal.resize({
-        sessionId: terminalSessionId.value,
-        cols: terminal.cols,
-        rows: terminal.rows
-      })
+    const initialSize = terminalView.value?.getSize()
+    const creation = sdk.terminal.create(
+      {
+        provider: provider.value,
+        access: access.value,
+        projectId: projectId.value,
+        sessionRef: sessionRef.value,
+        cols: initialSize?.cols ?? 92,
+        rows: initialSize?.rows ?? 24
+      },
+      { signal: controller.signal }
+    )
+    terminalCreation = creation
+    const result = await creation
+    if (terminalCreation === creation) {
+      terminalCreation = null
+      terminalCreateController = null
     }
+    if (generation !== terminalGeneration) {
+      if (!controller.signal.aborted) await sdk.terminal.kill({ sessionId: result.sessionId })
+      return
+    }
+    terminalSessionId.value = result.sessionId
+    terminalOpening.value = false
+    const earlyEvents = pendingTerminalEvents
+    pendingTerminalEvents = []
+    for (const event of earlyEvents) {
+      if (event.kind === 'data') {
+        if (event.sessionId === terminalSessionId.value) writeTerminalOutput(event.data)
+      } else {
+        handleTerminalExit(event.exit)
+      }
+    }
+    await nextTick()
+    if (generation !== terminalGeneration) return
+    const view = terminalView.value
+    const size = view?.getSize()
+    if (size) handleTerminalResize(size)
+    if (terminalSessionId.value) view?.focus()
   } catch {
+    if (generation !== terminalGeneration) return
+    await closeTerminal()
     log.error('Failed to open local AI CLI terminal')
     toast.error(t('localAiCliPanel.terminalFailed'))
   }
 }
 
 async function closeTerminal(): Promise<void> {
+  terminalGeneration += 1
+  const creation = terminalCreation
+  const controller = terminalCreateController
+  terminalCreation = null
+  terminalCreateController = null
   const sessionId = terminalSessionId.value
+  if (!sessionId) controller?.abort()
+  terminalOpening.value = false
+  terminalVisible.value = false
+  pendingTerminalEvents = []
   terminalSessionId.value = null
-  terminalInputDispose?.dispose()
-  terminalInputDispose = null
-  terminal?.dispose()
-  terminal = null
-  fitAddon = null
-  if (sessionId) await sdk.terminal.kill({ sessionId }).catch(() => undefined)
+  terminalView.value = null
+  if (sessionId) {
+    await sdk.terminal.kill({ sessionId }).catch(() => {
+      log.error('Failed to close local AI CLI terminal')
+    })
+  } else if (creation) {
+    await creation
+      .then((result) => sdk.terminal.kill({ sessionId: result.sessionId }))
+      .catch((error: unknown) => {
+        if (!(error instanceof Error) || error.name !== 'AbortError') {
+          log.error('Failed to settle local AI CLI terminal creation')
+        }
+      })
+  }
 }
 
 async function newTask(): Promise<void> {
@@ -432,12 +513,12 @@ async function close(): Promise<void> {
 }
 
 const disposeTerminalData = sdk.terminal.onData((payload) => {
-  if (payload.sessionId === terminalSessionId.value) terminal?.write(payload.data)
+  if (payload.sessionId === terminalSessionId.value) writeTerminalOutput(payload.data)
+  else if (terminalOpening.value) pendingTerminalEvents.push({ kind: 'data', ...payload })
 })
 const disposeTerminalExit = sdk.terminal.onExit((payload) => {
-  if (payload.sessionId !== terminalSessionId.value) return
-  terminal?.writeln(`\r\n[exit ${payload.exitCode ?? payload.signal ?? ''}]`)
-  terminalSessionId.value = null
+  if (payload.sessionId === terminalSessionId.value) handleTerminalExit(payload)
+  else if (terminalOpening.value) pendingTerminalEvents.push({ kind: 'exit', exit: payload })
 })
 
 onMounted(() => {
@@ -571,7 +652,16 @@ defineExpose({ open, reset, newTask })
         <TxMarkdownView v-if="output" :content="output" theme="auto" />
       </div>
 
-      <div v-show="terminalSessionId" ref="terminalHost" class="LocalAiCliPanel__terminal" />
+      <TxTerminal
+        v-if="terminalVisible"
+        ref="terminalView"
+        class="LocalAiCliPanel__terminal"
+        :read-only="!terminalSessionId"
+        :auto-focus="true"
+        @ready="handleTerminalReady"
+        @data="handleTerminalInput"
+        @resize="handleTerminalResize"
+      />
     </template>
   </section>
 </template>
@@ -677,7 +767,7 @@ defineExpose({ open, reset, newTask })
     height: 260px;
     overflow: hidden;
     border-radius: 10px;
-    background: #111318;
+    background: var(--tx-bg-color-overlay);
   }
 }
 </style>

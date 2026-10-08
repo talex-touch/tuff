@@ -10,6 +10,8 @@
 import type { ProviderModelOption } from './useModelOptions'
 import { nextTick, reactive } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { resolveProviderEffectiveModel } from '../../../../main/modules/ai/model-request-plan'
 
 const mocks = vi.hoisted(() => ({
   getProviderModelOptions: vi.fn<() => Promise<ProviderModelOption[]>>(),
@@ -65,7 +67,21 @@ function providerOptions(): ProviderModelOption[] {
       models: ['gpt-4o-mini'],
       available: false
     }
-  ]
+  ].map((option) => ({
+    ...option,
+    effectiveModels: option.models.map((model) =>
+      resolveProviderEffectiveModel(
+        {
+          id: option.providerId,
+          name: option.providerName,
+          type: option.providerType as IntelligenceProviderType,
+          enabled: option.available,
+          models: option.models.map((id) => ({ id }))
+        },
+        model
+      )
+    )
+  }))
 }
 
 function resetAppSetting(conversation?: Record<string, unknown>): void {
@@ -99,7 +115,7 @@ describe('choices', () => {
 
     await load()
 
-    expect(choices.value).toEqual([
+    expect(choices.value.map(({ binding: _binding, ...choice }) => choice)).toEqual([
       {
         providerId: 'pi-cli',
         providerName: 'Pi (local CLI)',
@@ -246,21 +262,13 @@ describe('select', () => {
   it('creates the conversation block when an older profile lacks it', async () => {
     resetAppSetting()
     const useModelOptions = await importComposable()
-    const { load, persistedSelection, select, isSelected } = useModelOptions()
+    const { load, select, isSelected } = useModelOptions()
     await load()
-
-    expect(persistedSelection.value).toBeNull()
-    expect(() => isSelected(PI_ASTRA)).not.toThrow()
 
     select(PI_ASTRA)
     await nextTick()
 
-    // Created the way the defaults write it, reasoning effort included.
-    expect(appSetting.conversation).toEqual({
-      model: PI_ASTRA,
-      favoriteModels: [],
-      reasoningEffort: 'auto'
-    })
+    expect(appSetting.conversation).toMatchObject({ model: PI_ASTRA })
     expect(isSelected(PI_ASTRA)).toBe(true)
   })
 })

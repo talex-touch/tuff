@@ -2,21 +2,38 @@ export default {
     nexus: {
       hero: {
         eyebrow: '本地优先，隐私内建。',
-        titlePrefix: '你的',
-        titleSubject: 'OS',
-        titleLead: '你的 OS，',
-        titleAccent: '可 随心创作',
-        title: '你的 OS，可 随心创作',
+        titlePrefix: '',
+        titleSubject: '想到，',
+        titleLead: '想到，',
+        titleAccent: '就在眼前。',
+        title: '想到，就在眼前。',
         copy: 'Tuff 的公开入口：承载可信发布、插件生态和开发文档，让桌面端保持轻、快、可扩展。',
-        subtitle: '一个入口，搜索文件、启动应用、驱动 Agent。',
         primaryCta: '获取当前版本',
         getPlatformVersion: '获取 {platform} 版本',
         secondaryCta: '查看开发文档',
         openSource: '免费开源',
-        hints: {
-          nav: '导航',
-          open: '打开',
-          actions: '操作',
+        corebox: {
+          placeholder: 'Everything in Tuff.',
+          types: {
+            app: '应用',
+            file: '文件',
+            system: '系统',
+          },
+          hints: {
+            open: '打开',
+            execute: '执行',
+            actions: '操作',
+            quickRun: '快速执行',
+          },
+          scenes: {
+            fileSub: 'png • 2.1 MB • 2026/10/6 14:20 • 下载',
+            webSearch: '网页搜索',
+            webSearchSub: '使用默认搜索引擎搜索输入内容',
+            translate: '翻译',
+            translateSub: '翻译选中的文本或剪贴板内容',
+            translateMulti: '多源翻译',
+            translateMultiSub: '同时使用多个翻译源进行翻译',
+          },
         },
         releases: {
           latest: '最新',
@@ -42,14 +59,6 @@ export default {
             stability: '稳定性未经完整验证，不建议用于生产环境。',
             channel: '如需长期稳定，请选择 Release 稳定版通道。',
           },
-        },
-        results: {
-          app: '应用程序',
-          web: '在浏览器打开',
-          recent: '最近打开',
-          open: '打开',
-          go: '前往',
-          recentAction: '最近',
         },
       },
       product: {
@@ -273,10 +282,15 @@ export default {
           },
         },
       },
+      rail: {
+        label: '页面导航',
+      },
       plugins: {
-        eyebrow: '插件中心',
-        headline: '扩展 Tuff 到你的工具',
-        subheadline: '将 Tuff 连接到你的工具，扩展其功能。',
+        eyebrow: '插件',
+        headline: '装一个，多一招。',
+        subheadline: '去插件商店挑几招，装上就能用。',
+        prev: '上一张',
+        next: '下一张',
         extensions: {
           notion: {
             name: 'Notion',
@@ -301,6 +315,42 @@ export default {
           spotify: {
             name: 'Spotify',
             description: '根据你的专注会话，自适应播放音乐。',
+          },
+          json: {
+            name: 'JSON 格式化',
+            description: '乱成一团的 JSON，一键排好。',
+            summon: 'json',
+            label: '三层筛网的线稿，指针选中的那层会升起来',
+          },
+          browser: {
+            name: '浏览器打开',
+            description: '网址贴进来，回车就开。',
+            summon: 'url',
+            label: '一台路由器的线稿，天线会朝指针倾斜',
+          },
+          vscodeProjects: {
+            name: 'VS Code 项目',
+            description: '最近的项目，回车直接打开。',
+            summon: 'vscode',
+            label: '一台笔记本电脑的线稿，屏幕随指针高度开合',
+          },
+          image: {
+            name: '图片处理',
+            description: '改尺寸、压体积、换格式。',
+            summon: 'image',
+            label: '一只放大镜的线稿，随指针在纸面上移动',
+          },
+          hosts: {
+            name: 'Hosts 配置',
+            description: '改 hosts 之前，先看一眼。',
+            summon: 'hosts',
+            label: '一把挂锁的线稿，指针靠近时锁扣会弹开',
+          },
+          aiSessions: {
+            name: 'AI 会话',
+            description: '搜本地 AI 会话，复制脱敏引用。',
+            summon: 'ai 会话',
+            label: '一张提交历史图的线稿，指针下的节点会升起来',
           },
         },
       },
@@ -663,27 +713,37 @@ export default {
       },
       faq: {
         eyebrow: '常见问题',
-        headline: '你的疑问，我们都想好答案。',
+        kicker: 'FAQ',
+        headline: '你可能想问',
+        aside: {
+          title: '没找到答案？',
+          docs: '翻翻文档',
+          github: '去 GitHub 提问',
+        },
         items: {
+          platforms: {
+            question: '支持哪些系统？',
+            answer: 'macOS（Apple 芯片和 Intel）、Windows（x64）和 Linux 都有安装包。Linux 推荐装 .deb。',
+          },
           access: {
-            question: '如何加入 Beta？',
-            answer: '预约先锋计划，我们每周批次开通，并为团队安排引导会议。',
+            question: '怎么用上 Beta 版？',
+            answer: '在「更新」页或 GitHub Releases 下载带 beta 标记的版本，装好后会自动收到 Beta 更新。想换回稳定版，到 设置 → 关于 → 更新通道 切换。',
           },
           privacy: {
-            question: '数据如何被处理？',
-            answer: '绝大多数逻辑在本地运行，云端同步全程加密，密钥由你掌控，可按工作区开启。',
+            question: '我的数据存在哪？',
+            answer: '默认存在你自己的电脑上，密钥交给系统钥匙串保管。登录后默认开启同步，设置、AI 配置等内容先在本机加密再上传。崩溃报告和使用统计默认开启，都能在设置里关掉。',
           },
           build: {
-            question: '不会写代码也能搭建自动化吗？',
-            answer: '可以。FlowScript 提供可视化构建器，开发者也可随时下沉到代码层。',
+            question: '不会写代码，能做自动化吗？',
+            answer: '能做一部分。日常的小自动化靠插件和 AI 命令；可视化工作流还在 Beta，默认没有开放。',
           },
           migration: {
-            question: '现有快捷指令能迁移吗？',
-            answer: '支持从 Raycast、Alfred 与自定义脚本导入，Tuff 会转化为类型化指令。',
+            question: '能从 Raycast、Alfred 搬过来吗？',
+            answer: '暂时没有导入工具。应用和文件不用搬，装好就能搜到；常用的文字可以存进片段库。',
           },
           pricing: {
-            question: '免费阶段会持续多久？',
-            answer: '未来会推出付费层，但 Pioneer 团队会一直免费直至正式公开发布。',
+            question: '收费吗？',
+            answer: '现在免费，Tuff 本身也开源。用 Tuff 托管的 AI 会消耗额度，每月都有免费额度；正式版之后可能会推出付费档。',
           },
         },
       },
@@ -717,6 +777,93 @@ export default {
             copy: 'Skills、Computer Use、MiniApp、ACP、自动化与沙箱持续并入。',
           },
         },
+        copied: '已复制',
+      },
+      showcase: {
+        eyebrow: '功能',
+        headlineLead: '一个框，',
+        headlineAccent: '办很多事。',
+        subheadline: '下面这些装好就有，不用另外找插件。',
+        items: {
+          launch: {
+            title: '打开应用',
+            summon: '⌥ Space',
+            copy: '按下 ⌥Space，输入两三个字母就能打开，拼音和缩写都认。',
+            label: '一块键盘的线稿，指针下的按键会沉下去',
+          },
+          files: {
+            title: '找文件',
+            summon: 'report.pdf',
+            copy: 'Windows 接 Everything，macOS 用 Spotlight 加本地索引，文件名打到一半就出来。',
+            label: '三层抽屉柜的线稿，指针选中的抽屉会滑出来',
+          },
+          clipboard: {
+            title: '剪贴板历史',
+            summon: '剪贴板',
+            copy: '文字、图片、文件都留着，还记得是从哪个应用复制的。',
+            label: '一排卡片的线稿，指针下的卡片会立起来',
+          },
+          translate: {
+            title: '翻译',
+            summon: 'fy',
+            copy: '输入 fy 直接翻译；fy-multi 把谷歌、必应、DeepL 等结果并排对比。',
+            label: '一面天线锅的线稿，会转向指针',
+          },
+          quickops: {
+            title: '快捷工具',
+            summon: 'ops',
+            copy: '计时器、番茄钟、防休眠、查端口和 IP，一句命令就办。',
+            label: '一块点阵屏的线稿，指针划过的地方会亮起来',
+          },
+          snippets: {
+            title: '片段库',
+            summon: '片段',
+            copy: '常用的文字、代码和提示词存成片段，要用的时候一搜就有。',
+            label: '一排抽拉式刀片架的线稿，指针附近的刀片会被抽出来',
+          },
+        },
+      },
+      designSystem: {
+        eyebrow: '设计规范',
+        kicker: 'TUFFEX DESIGN',
+        headlineLead: '设计，',
+        headlineAccent: '有章可循。',
+        figure: {
+          index: 'FIG. 01',
+          title: '组件分层',
+          label: '拆成四层的应用窗口线稿：窗口、侧栏、卡片与弹层',
+        },
+        tokens: {
+          type: {
+            title: '字体',
+            note: 'Inter · PingFang SC · 字重 500',
+          },
+          color: {
+            title: '颜色',
+            note: '品牌色与语义色 · 深色值',
+          },
+          curve: {
+            title: '连续曲率',
+            g1: 'G1 圆弧',
+            g2: 'G2 连续',
+            note: 'Tuffex 的 squircle 外形曲率连续：转角从直边平滑弯入，没有一处突然拐弯。左右移动对比。',
+          },
+          motion: {
+            title: '动效',
+            note: '0.2s / 0.3s',
+            strong: '强减速',
+            spring: '弹性',
+          },
+        },
+        stats: {
+          title: '规模',
+          components: '组件',
+          docs: '文档页',
+          themes: '主题',
+          note: '中英双语文档 · 浅色 / 深色 / 高对比',
+        },
+        cta: '打开 Tuffex Design',
+        copyCommand: '复制安装命令',
         copied: '已复制',
       },
       openFoundation: {

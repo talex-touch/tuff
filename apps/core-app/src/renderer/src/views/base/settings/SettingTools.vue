@@ -35,6 +35,12 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
+import {
+  BETA_FEATURE_SHORTCUTS,
+  isBetaFeatureEnabled,
+  isShortcutFeatureEnabled,
+  type BetaFeature
+} from '../../../../../shared/beta-features'
 
 const props = withDefaults(
   defineProps<{
@@ -51,8 +57,16 @@ const { rerun: rerunBeginnerGuide } = useBeginnerGuide()
 
 const shortcuts = ref<ShortcutWithStatus[] | null>(null)
 const systemShortcuts = computed(() =>
-  (shortcuts.value || []).filter((shortcut) => isSystemShortcut(shortcut))
+  (shortcuts.value || []).filter(
+    (shortcut) =>
+      isSystemShortcut(shortcut) &&
+      isShortcutFeatureEnabled(appSetting, shortcut.id) &&
+      (shortcut.id !== 'local-ai-cli.quick-open' || appSetting.localAiCli?.enabled === true)
+  )
 )
+const betaFeatures = Object.keys(BETA_FEATURE_SHORTCUTS) as BetaFeature[]
+const savingBetaFeatures = reactive(new Set<BetaFeature>())
+const showBetaFeatures = computed(() => appSetting.dev?.advancedSettings === true)
 const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
@@ -97,6 +111,9 @@ const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
+const savingShortcutIds = new Set<string>()
+let latestShortcutRead = 0
+let shortcutViewDisposed = false
 
 const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
 const AUTO_CLEAR_TIME_OPTIONS = [-1, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
@@ -260,7 +277,7 @@ function ensureOmniPanelSettings(): void {
   if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
     appSetting.omniPanel = {
       enableShortcut: false,
-      enableMouseLongPress: true,
+      enableMouseLongPress: appSettingOriginData.omniPanel.enableMouseLongPress,
       mouseLongPressDurationMs: DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS,
       autoMountFirstFeatureOnPluginInstall:
         appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
@@ -275,7 +292,7 @@ function ensureOmniPanelSettings(): void {
     appSetting.omniPanel.enableShortcut = false
   }
   if (appSetting.omniPanel.enableMouseLongPress === undefined) {
-    appSetting.omniPanel.enableMouseLongPress = true
+    appSetting.omniPanel.enableMouseLongPress = appSettingOriginData.omniPanel.enableMouseLongPress
   }
   appSetting.omniPanel.mouseLongPressDurationMs = normalizeSelectNumber(
     appSetting.omniPanel.mouseLongPressDurationMs,
@@ -365,13 +382,29 @@ const omniPanelMouseTriggerEnabled = computed(() => {
   const target = shortcuts.value?.find(
     (shortcut) => shortcut.id === 'core.omniPanel.mouseLongPress'
   )
-  if (!target) return true
+  if (!isBetaFeatureEnabled(appSetting, 'omniPanel') || !target) return false
   return isShortcutEnabled(target)
 })
 
 async function refreshShortcuts(): Promise<void> {
-  shortcuts.value = await shortconApi.getAll()
+  const request = ++latestShortcutRead
+  try {
+    const next = await shortconApi.getAll()
+    if (shortcutViewDisposed || request !== latestShortcutRead) return
+    const current = new Map((shortcuts.value ?? []).map((shortcut) => [shortcut.id, shortcut]))
+    shortcuts.value = next.map((shortcut) =>
+      savingShortcutIds.has(shortcut.id) ? (current.get(shortcut.id) ?? shortcut) : shortcut
+    )
+  } catch (error) {
+    if (!shortcutViewDisposed && request === latestShortcutRead) {
+      settingToolsLog.warn('Failed to refresh shortcuts', error)
+    }
+  }
 }
+
+const stopShortcutChanges = shortconApi.onChanged(() => {
+  void refreshShortcuts()
+})
 
 onMounted(async () => {
   ensureClipboardPollingSettings()
@@ -423,7 +456,10 @@ async function updateShortcut(id: string, newAccelerator: string): Promise<void>
     target.accelerator = newAccelerator
   }
 
-  const success = await saveShortcut(id, { accelerator: newAccelerator })
+  const saving = saveShortcut(id, { accelerator: newAccelerator })
+  const saveRun = saveRunIdMap.get(id)
+  const success = await saving
+  if (shortcutViewDisposed || saveRunIdMap.get(id) !== saveRun) return
   if (!success && target && previousValue) {
     target.accelerator = previousValue
   }
@@ -445,15 +481,41 @@ async function updateShortcutEnabled(id: string, enabled: boolean): Promise<void
   if (id === 'core.omniPanel.mouseLongPress' && appSetting.omniPanel) {
     appSetting.omniPanel.enableMouseLongPress = enabled
   }
-  const success = await saveShortcut(id, { enabled })
+  const saving = saveShortcut(id, { enabled })
+  const saveRun = saveRunIdMap.get(id)
+  const success = await saving
+  if (shortcutViewDisposed || saveRunIdMap.get(id) !== saveRun) return
   if (!success && target) {
     target.meta.enabled = previousEnabled
   }
   if (!success && appSetting.omniPanel) {
-    appSetting.omniPanel.enableShortcut = previousOmniPanelShortcutEnabled
-    appSetting.omniPanel.enableMouseLongPress = previousOmniPanelMouseLongPressEnabled
+    if (id === 'core.omniPanel.toggle') {
+      appSetting.omniPanel.enableShortcut = previousOmniPanelShortcutEnabled
+    }
+    if (id === 'core.omniPanel.mouseLongPress') {
+      appSetting.omniPanel.enableMouseLongPress = previousOmniPanelMouseLongPressEnabled
+    }
   }
   await refreshShortcuts()
+}
+
+async function updateBetaFeature(feature: BetaFeature, enabled: boolean): Promise<void> {
+  if (!showBetaFeatures.value || savingBetaFeatures.has(feature)) return
+  savingBetaFeatures.add(feature)
+  try {
+    if (enabled) {
+      const success = await saveShortcut(BETA_FEATURE_SHORTCUTS[feature], { enabled: true })
+      if (!success || shortcutViewDisposed) return
+      if (feature === 'omniPanel' && appSetting.omniPanel) {
+        appSetting.omniPanel.enableShortcut = true
+      }
+    }
+    appSetting.betaFeatures ??= { ...appSettingOriginData.betaFeatures }
+    appSetting.betaFeatures[feature] = enabled
+    await refreshShortcuts()
+  } finally {
+    savingBetaFeatures.delete(feature)
+  }
 }
 
 function setRowSaveState(id: string, state: SaveState): void {
@@ -499,11 +561,12 @@ async function saveShortcut(
 ): Promise<boolean> {
   const nextRunId = (saveRunIdMap.get(id) ?? 0) + 1
   saveRunIdMap.set(id, nextRunId)
+  ++latestShortcutRead
+  savingShortcutIds.add(id)
   setRowSaveState(id, 'saving')
-  if (saveRunIdMap.get(id) !== nextRunId) return false
   try {
     const success = await shortconApi.update(id, payload.accelerator, payload.enabled)
-    if (saveRunIdMap.get(id) !== nextRunId) return success
+    if (shortcutViewDisposed || saveRunIdMap.get(id) !== nextRunId) return success
     if (!success) {
       setRowSaveState(id, 'error')
       toast.error(t('settingTools.shortcutsDialog.saveFailed'))
@@ -512,10 +575,15 @@ async function saveShortcut(
     setRowSaveState(id, 'success')
     return true
   } catch (error) {
-    if (saveRunIdMap.get(id) !== nextRunId) return false
+    if (shortcutViewDisposed || saveRunIdMap.get(id) !== nextRunId) return false
     setRowSaveState(id, 'error')
     toast.error(t('settingTools.shortcutsDialog.saveFailed'))
     return false
+  } finally {
+    if (saveRunIdMap.get(id) === nextRunId) {
+      ++latestShortcutRead
+      savingShortcutIds.delete(id)
+    }
   }
 }
 
@@ -697,8 +765,9 @@ async function resetShortcutChanges(): Promise<void> {
 watch(shortcutsDialogVisible, (visible) => {
   if (!visible) return
   shortcutSearch.value = ''
-  saveStateMap.clear()
-  saveRunIdMap.clear()
+  for (const id of saveStateMap.keys()) {
+    if (!savingShortcutIds.has(id)) saveStateMap.delete(id)
+  }
   for (const timer of saveTimers.values()) {
     window.clearTimeout(timer)
   }
@@ -714,6 +783,11 @@ watch(shortcutsDialogVisible, (visible) => {
 })
 
 onBeforeUnmount(() => {
+  shortcutViewDisposed = true
+  ++latestShortcutRead
+  stopShortcutChanges()
+  savingShortcutIds.clear()
+  saveRunIdMap.clear()
   for (const timer of saveTimers.values()) {
     window.clearTimeout(timer)
   }
@@ -744,6 +818,7 @@ onBeforeUnmount(() => {
       :description="t('settingTools.autoContextDesc')"
     />
     <TuffBlockSwitch
+      v-if="showBetaFeatures"
       v-model="homeRecommendationsEnabled"
       :title="t('settingTools.homeRecommendations')"
       :description="t('settingTools.homeRecommendationsDesc')"
@@ -753,11 +828,33 @@ onBeforeUnmount(() => {
       </template>
     </TuffBlockSwitch>
     <TuffBlockSwitch
-      v-if="homeRecommendationsEnabled"
+      v-if="showBetaFeatures && homeRecommendationsEnabled"
       v-model="homeAiOpeningEnabled"
       :title="t('settingTools.homeAiOpening')"
       :description="t('settingTools.homeAiOpeningDesc')"
     />
+  </TuffGroupBlock>
+
+  <TuffGroupBlock
+    v-if="!props.advancedOnly && showBetaFeatures"
+    :name="t('settingTools.betaFeaturesTitle')"
+    :description="t('settingTools.betaFeaturesDesc')"
+    :collapsible="false"
+  >
+    <TuffBlockSwitch
+      v-for="feature in betaFeatures"
+      :key="feature"
+      :data-beta-feature="feature"
+      :model-value="isBetaFeatureEnabled(appSetting, feature)"
+      :disabled="shortcutsLoading || savingBetaFeatures.has(feature)"
+      :title="getShortcutLabel(BETA_FEATURE_SHORTCUTS[feature])"
+      :description="t('settingTools.betaFeatureEnableDesc')"
+      @update:model-value="updateBetaFeature(feature, $event)"
+    >
+      <template #tags>
+        <TuffBetaTag />
+      </template>
+    </TuffBlockSwitch>
   </TuffGroupBlock>
 
   <!-- Utilities group block -->

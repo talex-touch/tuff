@@ -7,12 +7,16 @@ import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/sec
 import { PLUGIN_FACING_INTELLIGENCE_EVENTS } from '@talex-touch/utils/transport/security/plugin-facing-events'
 import {
   intelligenceApiEvents,
-  intelligenceContextEvents
+  intelligenceContextEvents,
+  intelligenceKnowledgeEvents
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import './intelligence-test-harness'
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
+import { contextHygieneService } from './intelligence-context-hygiene'
+import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { IntelligenceModule } from './intelligence-module'
+import { createUsageLimitError } from './usage-ledger/usage-limits'
 
 const permissionMocks = vi.hoisted(() => ({
   getPermissionModule: vi.fn(),
@@ -490,5 +494,155 @@ describe('IntelligenceModule plugin channel permission boundary', () => {
     })
     expect(JSON.stringify(loggerMocks.error.mock.calls)).not.toContain('provider-stream-secret')
     expect(JSON.stringify(loggerMocks.error.mock.calls)).not.toContain('provider-cause-secret')
+  })
+})
+
+/**
+ * A capability call that fails answers in the caller's terms, by the rule a failed stream follows:
+ * a plugin gets the stable code alone, the app's own renderer `[CODE:capability] reason`. Before,
+ * every failure became `safeApiHandler`'s one public sentence — a call refused by the usage limit
+ * reached Home, CoreBox and the selection panel as "The operation failed. Please retry."
+ */
+describe('IntelligenceModule capability call failures', () => {
+  /** 2026-10-04 00:00 in Shanghai, where the reason's local time is read. */
+  const RESETS_AT = Date.parse('2026-10-03T16:00:00.000Z')
+  const originalTimeZone = process.env.TZ
+  const refusal = (capabilityId = 'text.chat') =>
+    createUsageLimitError(capabilityId, {
+      key: 'requestsPerDay',
+      used: 2,
+      max: 2,
+      resetsAt: RESETS_AT
+    })
+  const HOST_REASON =
+    'The usage limit you set is reached (requestsPerDay: 2 / 2); it resets at 2026-10-04 00:00 local time (2026-10-03T16:00:00.000Z).'
+  const PROVIDER_SECRET = 'https://gateway.example.test/v1?key=sk-provider-secret-123456'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.TZ = 'Asia/Shanghai'
+    permissionMocks.getPluginByName.mockReturnValue({ sdkapi: SDK_API })
+    permissionMocks.checkPermission.mockReturnValue({ allowed: true })
+    permissionMocks.getPermissionModule.mockReturnValue({
+      checkPermission: permissionMocks.checkPermission
+    })
+  })
+
+  afterEach(() => {
+    if (originalTimeZone === undefined) delete process.env.TZ
+    else process.env.TZ = originalTimeZone
+  })
+
+  it('tells the app which limit refused an invoke and when it resets; a plugin gets the code', async () => {
+    intelligenceSdkMocks.invoke.mockRejectedValue(refusal())
+    const { invokeHandlers } = createRegistrarHarness()
+    const handler = requireInvokeHandler(invokeHandlers, intelligenceApiEvents.invoke)
+
+    await expect(handler(INVOKE_PAYLOAD, {} as HandlerContext)).resolves.toEqual({
+      ok: false,
+      error: `[USAGE_LIMIT_REACHED:text.chat] ${HOST_REASON}`,
+      code: 'USAGE_LIMIT_REACHED'
+    })
+    await expectStableApiFailure(
+      Promise.resolve(handler(INVOKE_PAYLOAD, trustedPluginContext())),
+      'USAGE_LIMIT_REACHED',
+      ['requestsPerDay', '2026-10-03T16:00:00.000Z']
+    )
+  })
+
+  it('answers a refused Context execution and compatibility chat the same way', async () => {
+    const execute = vi
+      .spyOn(intelligenceContextExecutionService, 'invoke')
+      .mockRejectedValue(refusal())
+    intelligenceSdkMocks.invoke.mockRejectedValue(refusal())
+    const { invokeHandlers } = createRegistrarHarness()
+
+    try {
+      const contextExecute = requireInvokeHandler(invokeHandlers, intelligenceContextEvents.execute)
+      await expect(
+        contextExecute(
+          { capabilityId: 'text.chat', input: 'hi', payload: { messages: [] }, context: {} },
+          {} as HandlerContext
+        )
+      ).resolves.toMatchObject({
+        ok: false,
+        error: `[USAGE_LIMIT_REACHED:text.chat] ${HOST_REASON}`,
+        code: 'USAGE_LIMIT_REACHED'
+      })
+      await expectStableApiFailure(
+        Promise.resolve(
+          contextExecute(
+            { capabilityId: 'text.chat', input: 'hi', payload: {}, context: {}, _sdkapi: SDK_API },
+            trustedPluginContext()
+          )
+        ),
+        'USAGE_LIMIT_REACHED'
+      )
+
+      const chat = requireInvokeHandler(invokeHandlers, intelligenceApiEvents.chatLangChain)
+      await expect(chat({ messages: [] }, {} as HandlerContext)).resolves.toMatchObject({
+        ok: false,
+        code: 'USAGE_LIMIT_REACHED'
+      })
+    } finally {
+      execute.mockRestore()
+    }
+  })
+
+  it('gives the app the code and its reason, never the provider message itself', async () => {
+    intelligenceSdkMocks.invoke.mockRejectedValue(
+      new Error(`fetch failed: socket hang up at ${PROVIDER_SECRET}`)
+    )
+    const { invokeHandlers } = createRegistrarHarness()
+    const handler = requireInvokeHandler(invokeHandlers, intelligenceApiEvents.invoke)
+
+    const host = (await handler(INVOKE_PAYLOAD, {} as HandlerContext)) as Record<string, unknown>
+    expect(host).toEqual({
+      ok: false,
+      error:
+        '[NETWORK_FAILURE:text.chat] The provider request failed before a valid model response was returned.',
+      code: 'NETWORK_FAILURE'
+    })
+    await expectStableApiFailure(
+      Promise.resolve(handler(INVOKE_PAYLOAD, trustedPluginContext())),
+      'NETWORK_FAILURE',
+      [PROVIDER_SECRET, 'socket hang up']
+    )
+    expect(JSON.stringify(host)).not.toContain('sk-provider-secret')
+  })
+
+  /**
+   * The other protected channels never reach a model — local knowledge is SQLite FTS, Context and
+   * memory are local bookkeeping, discovery reads configuration — so no usage limit can refuse
+   * them, and their failures keep `safeApiHandler`'s public sentence for host and plugin alike.
+   */
+  it('keeps the public sentence on the channels that never run a capability', async () => {
+    const search = vi
+      .spyOn(localKnowledgeEngine, 'search')
+      .mockRejectedValue(new Error('fts index corrupt at /Users/someone/kb.db'))
+    const memories = vi
+      .spyOn(contextHygieneService, 'listMemories')
+      .mockRejectedValue(new Error('memory table locked'))
+    const { invokeHandlers } = createRegistrarHarness()
+    const publicSentence = { ok: false, error: 'The operation failed. Please retry.' }
+
+    try {
+      const knowledge = requireInvokeHandler(invokeHandlers, intelligenceKnowledgeEvents.search)
+      const payload = { query: 'anything', _sdkapi: SDK_API }
+      await expect(knowledge(payload, {} as HandlerContext)).resolves.toEqual(publicSentence)
+      await expect(knowledge(payload, trustedPluginContext())).resolves.toEqual(publicSentence)
+      // Both reached the engine: the sentence is the failure's, not a guard's.
+      expect(search).toHaveBeenCalledTimes(2)
+
+      const listMemories = requireInvokeHandler(
+        invokeHandlers,
+        intelligenceContextEvents.listMemories
+      )
+      await expect(listMemories({}, {} as HandlerContext)).resolves.toEqual(publicSentence)
+      expect(memories).toHaveBeenCalledOnce()
+    } finally {
+      search.mockRestore()
+      memories.mockRestore()
+    }
   })
 })

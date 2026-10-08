@@ -1,4 +1,11 @@
-import type { TuffexOnDemandStylePluginOptions } from '../on-demand-style-plugin'
+import type { Rollup } from 'vite'
+import { Buffer } from 'node:buffer'
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
+import { build, normalizePath } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { expandStyleClosure, tuffexOnDemandStylePlugin } from '../on-demand-style-plugin'
 
@@ -9,25 +16,188 @@ const styleDeps = {
   'dialog': ['base-surface'],
 }
 
-function transform(
-  code: string,
-  id = '/app/src/page.vue',
-  options: TuffexOnDemandStylePluginOptions = {},
-) {
-  const plugin = tuffexOnDemandStylePlugin({ styleDeps, ...options })
-  const handler = typeof plugin.transform === 'function' ? plugin.transform : plugin.transform?.handler
-  return (handler as (code: string, id: string) => { code: string } | null)?.call({}, code, id) ?? null
+const execFileAsync = promisify(execFile)
+const progressStyles = ['base-anchor', 'base-surface', 'progress-bar', 'spinner', 'tooltip']
+const allStyles = ['base-anchor', 'base-surface', 'dialog', 'progress-bar', 'spinner', 'tooltip']
+const componentExports: Record<string, string> = {
+  'base-surface': 'TxBaseSurface',
+  'base-anchor': 'TxBaseAnchor',
+  'tooltip': 'TxTooltip',
+  'spinner': 'TxSpinner',
+  'progress-bar': 'TxProgressBar',
+  'dialog': 'TxDialog',
+  'ghost': 'TxGhost',
 }
 
-/**
- * Every TuffEx stylesheet the transform emitted, in the order it emitted them.
- * Matches the specifier rather than the whole statement, so a formatting change
- * cannot make a suppression assertion pass for the wrong reason.
- */
-function injectedStyleComponents(result: { code: string } | null): string[] {
-  return [...(result?.code ?? '').matchAll(/@talex-touch\/tuffex\/([a-z0-9-]+)\/style\.css/g)]
-    .map(match => match[1])
-    .filter((name): name is string => Boolean(name))
+type Mode = 'generic' | 'componentDistRoot'
+
+interface Snapshot {
+  components: string[]
+  styles: string[]
+  value?: string
+}
+
+interface BuiltObservation {
+  snapshots: Snapshot[]
+  emittedStyles: string[]
+}
+
+// Execute the emitted ES modules, not the transform's source text. The child
+// process isolates the browser preload boundary from Vitest's global state.
+// Its link adapter reads actual CSS assets; it does not fake component imports.
+const observeBuiltModules = String.raw`
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const { outDir, entry, initialCss, actions } = JSON.parse(process.argv[1]);
+const links = initialCss.map(file => ({
+  href: pathToFileURL(join(outDir, file)).href,
+  rel: 'stylesheet',
+}));
+globalThis.__fixtureComponents = [];
+globalThis.document = {
+  createElement() {
+    return {
+      relList: { supports: () => true },
+      setAttribute() {},
+      addEventListener(event, callback) {
+        if (event === 'load') queueMicrotask(callback);
+      },
+    };
+  },
+  getElementsByTagName: () => links,
+  querySelector(selector) {
+    const href = /link\[href="([^"]+)"\]/.exec(selector)?.[1];
+    return href ? links.find(link => link.href === href
+      && (!selector.includes('stylesheet') || link.rel === 'stylesheet')) : null;
+  },
+  head: { appendChild: link => links.push(link) },
+};
+globalThis.window = { dispatchEvent() {} };
+
+async function snapshot(value) {
+  const css = await Promise.all(links.filter(link => link.rel === 'stylesheet')
+    .map(link => readFile(new URL(link.href), 'utf8')));
+  return {
+    components: [...globalThis.__fixtureComponents].sort(),
+    styles: css.flatMap(text => [...text.matchAll(/\.fixture-([a-z0-9-]+)\s*\{/g)]
+      .map(match => match[1])).sort(),
+    value,
+  };
+}
+
+const module = await import(pathToFileURL(join(outDir, entry)).href);
+const snapshots = [await snapshot(module.initial)];
+for (const action of actions) {
+  const activated = await module[action]();
+  snapshots.push(await snapshot(activated.default));
+}
+process.stdout.write(JSON.stringify(snapshots));
+`
+
+async function buildFixture(
+  mode: Mode,
+  source: string,
+  actions: string[],
+  progressEntryExtra = '',
+): Promise<BuiltObservation> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'tuffex-lazy-style-'))
+  try {
+    // Vite resolves symlinks before assigning module IDs (/tmp is /private/tmp
+    // on macOS). Canonicalize all fixture paths, including componentDistRoot.
+    const root = await realpath(fixtureRoot)
+    const packageRoot = join(root, 'node_modules/@talex-touch/tuffex')
+    const componentDistRoot = join(packageRoot, 'dist/es')
+    const entry = join(root, '.nuxt/components.plugin.ts')
+    const outDir = join(root, 'output')
+    await mkdir(dirname(entry), { recursive: true })
+    await mkdir(packageRoot, { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module' }))
+    await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
+      name: '@talex-touch/tuffex',
+      type: 'module',
+      exports: {
+        './*/style.css': './dist/es/*/style.css',
+        './*': './dist/es/*/index.js',
+      },
+    }))
+    for (const [name, exported] of Object.entries(componentExports)) {
+      const directory = join(componentDistRoot, name)
+      await mkdir(directory, { recursive: true })
+      const dependencies = styleDeps[name as keyof typeof styleDeps] ?? []
+      await writeFile(join(directory, 'index.js'), [
+        ...dependencies.map(dependency => `import '../${dependency}/index.js';`),
+        `globalThis.__fixtureComponents.push('${name}');`,
+        `export const ${exported} = '${name}';`,
+        `export default ${exported};`,
+        name === 'progress-bar' ? progressEntryExtra : '',
+      ].join('\n'))
+      await writeFile(join(directory, 'style.css'), `.fixture-${name} { --fixture-${name}: 1; }`)
+    }
+    await writeFile(entry, source)
+    const result = await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      base: './',
+      plugins: [tuffexOnDemandStylePlugin({
+        styleDeps,
+        ...(mode === 'componentDistRoot' ? { componentDistRoot } : {}),
+      })],
+      build: {
+        outDir,
+        write: true,
+        minify: false,
+        cssMinify: false,
+        cssCodeSplit: true,
+        modulePreload: { polyfill: false },
+        rollupOptions: { input: entry, preserveEntrySignatures: 'strict' },
+      },
+    }) as Rollup.RollupOutput
+    const chunks = result.output.filter((output): output is Rollup.OutputChunk => output.type === 'chunk')
+    const entryChunk = chunks.find(chunk => chunk.isEntry && chunk.facadeModuleId === normalizePath(entry))
+    if (!entryChunk)
+      throw new Error('Vite did not emit the fixture entry')
+
+    // A browser initially loads only CSS attached to the entry's static output
+    // graph. Dynamic CSS is observed through Vite's emitted preload runtime.
+    const initialCss = new Set<string>()
+    const visited = new Set<string>()
+    function visitStaticChunk(chunk: Rollup.OutputChunk) {
+      if (visited.has(chunk.fileName))
+        return
+      visited.add(chunk.fileName)
+      const metadata = (chunk as Rollup.OutputChunk & {
+        viteMetadata?: { importedCss: Set<string> }
+      }).viteMetadata
+      for (const file of metadata?.importedCss ?? [])
+        initialCss.add(file)
+      for (const file of chunk.imports) {
+        const dependency = chunks.find(candidate => candidate.fileName === file)
+        if (!dependency)
+          throw new Error(`Missing emitted static chunk: ${file}`)
+        visitStaticChunk(dependency)
+      }
+    }
+    visitStaticChunk(entryChunk)
+    const emittedStyles = result.output.flatMap((output) => {
+      if (output.type !== 'asset' || !output.fileName.endsWith('.css'))
+        return []
+      const css = typeof output.source === 'string' ? output.source : Buffer.from(output.source).toString('utf8')
+      return [...css.matchAll(/\.fixture-([a-z0-9-]+)\s*\{/g)].map(match => match[1]!)
+    }).sort()
+    const { stdout } = await execFileAsync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      observeBuiltModules,
+      JSON.stringify({ outDir, entry: entryChunk.fileName, initialCss: [...initialCss], actions }),
+    ], { encoding: 'utf8' })
+    return { snapshots: JSON.parse(stdout), emittedStyles }
+  }
+  finally {
+    await rm(fixtureRoot, { recursive: true, force: true })
+  }
 }
 
 describe('expandStyleClosure', () => {
@@ -57,6 +227,7 @@ describe('expandStyleClosure', () => {
     const cyclic = { a: ['b'], b: ['c'], c: ['a'] }
 
     const ordered = expandStyleClosure(['a'], cyclic)
+    expect(ordered).toHaveLength(3)
     expect(new Set(ordered)).toEqual(new Set(['a', 'b', 'c']))
   })
 
@@ -65,123 +236,63 @@ describe('expandStyleClosure', () => {
   })
 })
 
-describe('tuffexOnDemandStylePlugin', () => {
-  it('injects the whole closure for one component import', () => {
-    const result = transform(`import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'\n`)
+// Intentional dynamic imports exercise lazy loading: static imports would erase
+// the first-screen versus activation boundary these output contracts defend.
+describe.each<Mode>(['generic', 'componentDistRoot'])('Vite lazy stylesheet graph (%s)', (mode) => {
+  it('keeps a generated registry cold and loads each activated component with its complete style closure', async () => {
+    const { snapshots, emittedStyles } = await buildFixture(mode, [
+      `import type { TxGhost } from '@talex-touch/tuffex/ghost'`,
+      `export type Ghost = typeof TxGhost`,
+      `/*! import { TxGhost } from '@talex-touch/tuffex/ghost'; */`,
+      `export const importText = "import('@talex-touch/tuffex/ghost')"`,
+      `export const loadProgress = () => import('@talex-touch/tuffex/progress-bar')`,
+      `export const loadDialog = () => import('@talex-touch/tuffex/dialog')`,
+    ].join('\n'), ['loadProgress', 'loadDialog'])
 
-    expect(result?.code.split('\n').slice(0, 5)).toEqual([
-      `import '@talex-touch/tuffex/base-surface/style.css';`,
-      `import '@talex-touch/tuffex/base-anchor/style.css';`,
-      `import '@talex-touch/tuffex/tooltip/style.css';`,
-      `import '@talex-touch/tuffex/spinner/style.css';`,
-      `import '@talex-touch/tuffex/progress-bar/style.css';`,
-    ])
+    expect(snapshots[0]).toEqual({ components: [], styles: [] })
+    expect(snapshots[1]).toEqual({ components: progressStyles, styles: progressStyles, value: 'progress-bar' })
+    expect(snapshots[2]).toEqual({ components: allStyles, styles: allStyles, value: 'dialog' })
+    expect(emittedStyles).toEqual(allStyles)
   })
 
-  it('leaves a stylesheet the author already imported alone', () => {
-    const code = [
+  it('deduplicates a shared static dependency without eagerly loading the dynamic component closure', async () => {
+    const { snapshots, emittedStyles } = await buildFixture(mode, [
+      `import { TxDialog } from '@talex-touch/tuffex/dialog'`,
+      `import '@talex-touch/tuffex/tooltip/style.css'`,
+      `export const initial = TxDialog`,
+      `export const loadProgress = () => import('@talex-touch/tuffex/progress-bar')`,
+    ].join('\n'), ['loadProgress'])
+
+    expect(snapshots[0]).toEqual({
+      components: ['base-surface', 'dialog'],
+      styles: ['base-surface', 'dialog', 'tooltip'],
+      value: 'dialog',
+    })
+    expect(snapshots[1]).toEqual({ components: allStyles, styles: allStyles, value: 'progress-bar' })
+    // Exact rule multiplicity catches duplication across emitted CSS files as
+    // well as repeated links when the lazy branch joins the static graph.
+    expect(emittedStyles).toEqual(allStyles)
+  })
+
+  it('does not confuse type-only imports or CSS-looking strings and comments with real stylesheet edges', async () => {
+    const stylesheetImpostors = [
+      `export const styleText = '@talex-touch/tuffex/base-surface/style.css'`,
+      `/*! import '@talex-touch/tuffex/base-anchor/style.css'; */`,
+    ].join('\n')
+    const { snapshots, emittedStyles } = await buildFixture(mode, [
+      `import type { TxGhost } from '@talex-touch/tuffex/ghost'`,
+      `export type Ghost = typeof TxGhost`,
       `import '@talex-touch/tuffex/tooltip/style.css'`,
       `import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'`,
-      ``,
-    ].join('\n')
+      `export const initial = TxProgressBar`,
+      stylesheetImpostors,
+    ].join('\n'), [], stylesheetImpostors)
 
-    const result = transform(code)
-    const injected = result?.code.split('\n').filter(line => line.startsWith('import \'@talex-touch'))
-
-    expect(injected).not.toContain(`import '@talex-touch/tuffex/tooltip/style.css';`)
-    expect(injected).toContain(`import '@talex-touch/tuffex/progress-bar/style.css';`)
-  })
-
-  it('ignores files that never mention the library', () => {
-    expect(transform(`import { ref } from 'vue'\n`)).toBeNull()
-  })
-
-  it('is inert when disabled', () => {
-    const plugin = tuffexOnDemandStylePlugin({ enabled: false, styleDeps })
-    const handler = typeof plugin.transform === 'function' ? plugin.transform : plugin.transform?.handler
-    const result = (handler as (code: string, id: string) => unknown)
-      .call({}, `import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'\n`, '/app/src/page.vue')
-
-    expect(result).toBeNull()
-  })
-})
-
-describe('tuffexOnDemandStylePlugin with componentDistRoot', () => {
-  const componentDistRoot = '/workspace/packages/tuffex/dist/es'
-
-  // A real built entry (`dist/es/progress-bar/index.js`) imports its neighbours
-  // relatively and never names `@talex-touch/tuffex/...`, so the entry has to be
-  // recognised by its path — otherwise no built component would get its styles.
-  const builtEntry = [
-    `import { withInstall } from '../utils/withInstall.js'`,
-    `import _sfc_main from './src/TxProgressBar.vue.js'`,
-    ``,
-    `export default withInstall(_sfc_main)`,
-    ``,
-  ].join('\n')
-
-  // What a generated Nuxt registry does: one dynamic import per component.
-  const nuxtRegistry = [
-    `export default {`,
-    `  TxProgressBar: () => import('@talex-touch/tuffex/progress-bar'),`,
-    `  TxTooltip: () => import('@talex-touch/tuffex/tooltip'),`,
-    `  TxDialog: () => import('@talex-touch/tuffex/dialog'),`,
-    `}`,
-    ``,
-  ].join('\n')
-
-  it('injects the complete closure into a built component entry', () => {
-    const result = transform(builtEntry, `${componentDistRoot}/progress-bar/index.js`, { componentDistRoot })
-
-    expect(injectedStyleComponents(result)).toEqual([
-      'base-surface',
-      'base-anchor',
-      'tooltip',
-      'spinner',
-      'progress-bar',
-    ])
-  })
-
-  it('leaves a generated .nuxt module to load styles with each component chunk', () => {
-    const result = transform(nuxtRegistry, '/workspace/app/.nuxt/components.plugin.mjs', { componentDistRoot })
-
-    expect(injectedStyleComponents(result)).toEqual([])
-  })
-
-  it('leaves a Nuxt app runtime module to load styles with each component chunk', () => {
-    const result = transform(
-      nuxtRegistry,
-      '/workspace/app/node_modules/nuxt/dist/app/components.plugin.mjs',
-      { componentDistRoot },
-    )
-
-    expect(injectedStyleComponents(result)).toEqual([])
-  })
-
-  it('keeps fanning out for a Nuxt module when no dist root is configured', () => {
-    // The control for the two suppression cases above: the same registry does get
-    // the global fan-out unless `componentDistRoot` opts into the split.
-    const result = transform(nuxtRegistry, '/workspace/app/.nuxt/components.plugin.mjs')
-
-    expect(injectedStyleComponents(result)).toEqual([
-      'base-surface',
-      'dialog',
-      'base-anchor',
-      'tooltip',
-      'spinner',
-      'progress-bar',
-    ])
-  })
-
-  it('leaves an ordinary importer untouched in component-entry mode', () => {
-    // With `componentDistRoot` set the plugin is component-entry-only: a page that
-    // names a dozen components must not drag the whole closure into the entry chunk.
-    const result = transform(
-      `import { TxDialog } from '@talex-touch/tuffex/dialog'\n`,
-      '/app/src/page.vue',
-      { componentDistRoot },
-    )
-
-    expect(injectedStyleComponents(result)).toEqual([])
+    expect(snapshots).toEqual([{
+      components: progressStyles,
+      styles: progressStyles,
+      value: 'progress-bar',
+    }])
+    expect(emittedStyles).toEqual(progressStyles)
   })
 })

@@ -49,8 +49,8 @@ onBeforeUnmount(() => clearTimeout(timer))
 .docs-gallery__stream-element {
   width: 100%;
   max-width: 17rem;
-  /* The finished answer's height, held so the cell never jumps while it streams. */
-  min-height: 8.5rem;
+  /* The finished answer's height (the English one, the taller), held so the cell never jumps while it streams. */
+  min-height: 6.75rem;
   font-size: 13px;
 }
 

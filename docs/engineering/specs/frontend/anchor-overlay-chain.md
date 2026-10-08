@@ -1,0 +1,111 @@
+# Anchor Overlay Chain (nested menus)
+
+> How tuffex anchored overlays (tooltip/popover/dropdown/context-menu) nest, and the contracts a
+> nested-panel feature must go through. Established 2026-08-18 with `TxDropdownSubmenu` /
+> `TxContextMenuSubmenu`.
+
+---
+
+## The chain model
+
+- Every anchored overlay registers with the app-scoped anchor-delay service
+  (`packages/tuffex/packages/utils/anchor-delay.ts`) via `useAnchorDelay` in **TxTooltip** —
+  the tooltip is the family's single registrant; TxBaseAnchor does not register.
+- Parent/child links come from the **component tree** (`TX_ANCHOR_NODE_KEY` provide/inject),
+  never the DOM: panels teleport to `<body>` (TxBaseAnchor), so DOM containment is severed by
+  the time anything could ask. A popover rendered inside another panel's slot content links
+  automatically — no wiring needed in the nesting component.
+- Chain invariants, all service-enforced:
+  - **Never close upwards**: preemption and suppression exempt ancestors (`isDescendantOf`).
+  - **Close cascades downwards**, deepest first: closing a panel closes its open descendants,
+    so `keepAliveContent` cannot leave phantom-open entries that preempt/suppress others.
+  - **Hover travel**: floating-enter calls `cancelChain()` (voids pending closes on self +
+    ancestors); floating-leave calls `requestCloseChain()` (schedules self + hover-closeable
+    ancestors). Ancestors opt in via `hoverCloseable: () => trigger === 'hover'` — a
+    click-opened menu is never closed by a hover child leaving.
+  - **Hover zone** (2026-10-08): floating-enter/leave are TxBaseAnchor's `floating-enter` /
+    `floating-leave`, emitted by the floating root, so the card padding and the hover bridge
+    count as the panel. Handlers on the slot content left the padding as a dead ring.
+  - **Hover bridge**: with `hoverBridge` (TxTooltip sets it for `trigger="hover"` +
+    `interactive`) the open anchor renders a hit area filling the trapezoid between the
+    reference's facing edge and the panel's facing edge, measured by the last floating-ui
+    middleware. TxFlatDropdown renders the same bridge as a sibling of its panel.
+  - **Transit (safe triangle)**: leaving the reference towards an open interactive hover panel
+    starts a transit (`utils/hover-intent.ts`). While the pointer stays inside the triangle from
+    its exit point to the panel's facing edge and keeps moving, `holdChain()` defers every
+    timer close on the anchor and its ancestors; `releaseChain(replay)` runs them if the pointer
+    gives up (left the triangle, or still for 100ms) and drops them if it arrives. Other hover
+    triggers crossed on the way do not open (`isHoverClaimed` → `waitForHoverTransit`); the one
+    the pointer stops on opens when the transit is given up. Explicit closes (`closeNow`,
+    preemption, Escape) ignore holds.
+  - **Outside-click exemption**: TxBaseAnchor publishes its floating element under its chain
+    node (`delayNode` prop, wired by TxTooltip — deliberately a prop, not inject: a bare anchor
+    inside someone else's panel would inject the wrong node and clobber the registration).
+    `handleOutside` asks `isEventInsideChain(node, event)` before closing, so clicks in open
+    descendant panels don't count as outside.
+
+## Building on it
+
+- Nested menu rows: use `TxDropdownSubmenu` / `TxContextMenuSubmenu` (family barrels + nexus
+  plugin registry both list them). Their internal popover is `trigger="hover"`,
+  `placement="right-start"`, `reference-full-width`, `match-reference-width: false`.
+- Selection closes the whole chain by **root-context passthrough**: dropdown submenus let
+  nested items inject the root `txDropdownMenu` context straight through; context-menu
+  submenus re-provide the root `close`/`closeOnSelect` into their nested `TxContextMenuPanel`.
+  Never provide a submenu-local close as the item context — that closes one level only.
+- Escape closes every open level at once (each anchor listens on document); this is accepted
+  behavior, not a bug to fix per-level.
+
+## Panels that host a text field
+
+A dropdown that opens on a search box (the Home model menu) breaks two assumptions the menu
+primitives make. Both are handled in `TxDropdownMenu` since 2026-09-06:
+
+- `initialFocus="none"` keeps the primitive from moving focus to the first item on open; the
+  host places focus itself. Default `'first-item'` is unchanged.
+- `Home` / `End` on an `input`, `textarea` or `contenteditable` target pass through so the caret
+  moves; `ArrowUp` / `ArrowDown` are still claimed there — that is how the field hands focus to
+  the item list without a host handler. `TxDropdownSubmenu` and `TxContextMenuPanel` still take
+  `Home` / `End` everywhere (neither hosts a field).
+
+Focusing anything inside an anchored panel right after `open` flips does not work in Chromium:
+`TxBaseAnchor` keeps `.tx-base-anchor__clip` at `visibility: hidden` until `animateOpen` runs,
+which is two `nextTick`s + `waitForFirstPosition` + `waitForStablePanelSize` (2+ rAF) later, and
+`focus()` inside a `visibility: hidden` subtree is refused. jsdom ignores CSS visibility, so a
+single-`nextTick` focus passes its unit test and silently fails in the app. Host pattern
+(`HomeModelMenu.focusSearchWhenShown`; the Nexus docs sidebar's suite switcher does the same to
+land on its checked `menuitemradio`): retry `focus()` once per `requestAnimationFrame`, stop
+when `document.activeElement` is the target, bound the loop (30 frames), and abort on close /
+unmount via a run token. Known gap: the primitive's own `focusFirstItem()` is a single
+`nextTick` and is subject to the same failure — treat "first item focused on open" as unverified
+in a real browser until that is reworked.
+
+## referenceFullWidth chain
+
+The reference wrapper stack is `.tx-base-anchor__reference` > `.tx-tooltip__reference` >
+`.tx-popover__reference`, all shrink-to-fit by default. `referenceFullWidth` must reach ALL
+three layers: TxPopover applies it to its own wrapper, forwards it to TxTooltip as a prop
+(fixed 2026-08-18 — it used to skip the middle layer, breaking the width chain), and pushes an
+`is-full-width` class to the anchor layer via `referenceClass`. If a trigger row inside a
+panel won't stretch, check this chain before adding `:global` width hacks — HeaderUserMenu
+accumulated ~40 lines of dead/misaimed overrides against exactly this bug.
+
+`TxDropdownMenu` does not declare `referenceFullWidth`, but its root is `TxPopover` and attributes
+fall through, so `<TxDropdownMenu reference-full-width>` reaches all three layers (the Nexus docs
+sidebar's full-width suite switcher relies on this).
+
+## Verification commands
+
+- `cd packages/tuffex && npx vitest run packages/utils/__tests__/anchor-delay.test.ts` —
+  chain semantics (cascade, cancelChain, hoverCloseable skip, isEventInsideChain, transit hold).
+- `npx vitest run packages/utils/__tests__/hover-intent.test.ts packages/components/src/tooltip/__tests__/tooltip-hover-intent.test.ts`
+  — bridge and triangle geometry, transit outcomes, crossed-trigger deferral through the real
+  Popover → Tooltip chain.
+- `npx vitest run packages/components/src/dropdown-menu packages/components/src/context-menu`
+  — submenu open/close, whole-chain select close, keyboard traversal.
+- Hover-chain visual check needs a real pointer path (CDP `Input.dispatchMouseEvent` works;
+  see `apps/nexus/scripts/audit-cdp-client.mjs`); jsdom cannot cover panel-to-panel travel.
+  Transit timing needs a realistic event cadence: Chromium delivers `mousemove` on animation
+  frames, and a throttled automation window (ego idles at ~2fps) spaces events past the 100ms
+  stall, which reads as the pointer stopping on whatever is under it. Keep an animation
+  running in the page and dispatch raw CDP `mouseMoved` back to back.

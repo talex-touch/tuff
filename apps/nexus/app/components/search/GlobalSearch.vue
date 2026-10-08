@@ -28,12 +28,8 @@ const {
 const emptyText = computed(() => (loading.value ? t('search.loading') : t('search.empty')))
 let panelTween: gsap.core.Tween | gsap.core.Timeline | null = null
 let scrollLockState: {
-  bodyOverflow: string
-  bodyPosition: string
-  bodyTop: string
-  bodyWidth: string
   htmlOverflow: string
-  scrollY: number
+  bodyPaddingRight: string
 } | null = null
 
 const hotspotCommands = computed<SearchCommandItem[]>(() => [
@@ -145,34 +141,31 @@ function syncSearchLayer() {
   overlay.style.setProperty('--nexus-search-layer', String(currentOverlayLayer()))
 }
 
+/**
+ * `overflow: hidden` on the root keeps the scroll offset, so the docs sidebar and outline
+ * stay stuck where they were. Pinning the body with `position: fixed` moved the scroll onto
+ * the body instead and carried both out of view behind the overlay. The padding stands in for
+ * a classic scrollbar, which would otherwise vanish and shift the page sideways.
+ */
 function lockPageScroll() {
   if (!import.meta.client || scrollLockState)
     return
-  const scrollY = window.scrollY || document.documentElement.scrollTop || 0
+  const root = document.documentElement
+  const scrollbarWidth = window.innerWidth - root.clientWidth
   scrollLockState = {
-    bodyOverflow: document.body.style.overflow,
-    bodyPosition: document.body.style.position,
-    bodyTop: document.body.style.top,
-    bodyWidth: document.body.style.width,
-    htmlOverflow: document.documentElement.style.overflow,
-    scrollY,
+    htmlOverflow: root.style.overflow,
+    bodyPaddingRight: document.body.style.paddingRight,
   }
-  document.body.style.overflow = 'hidden'
-  document.body.style.position = 'fixed'
-  document.body.style.top = `-${scrollY}px`
-  document.body.style.width = '100%'
-  document.documentElement.style.overflow = 'hidden'
+  root.style.overflow = 'hidden'
+  if (scrollbarWidth > 0)
+    document.body.style.paddingRight = `${scrollbarWidth}px`
 }
 
 function unlockPageScroll() {
   if (!import.meta.client || !scrollLockState)
     return
-  document.body.style.overflow = scrollLockState.bodyOverflow
-  document.body.style.position = scrollLockState.bodyPosition
-  document.body.style.top = scrollLockState.bodyTop
-  document.body.style.width = scrollLockState.bodyWidth
   document.documentElement.style.overflow = scrollLockState.htmlOverflow
-  window.scrollTo(0, scrollLockState.scrollY)
+  document.body.style.paddingRight = scrollLockState.bodyPaddingRight
   scrollLockState = null
 }
 
@@ -311,6 +304,8 @@ function runFlipCloseAnimation() {
   })
 }
 
+// app.vue only mounts this component once `open` is already true, so without `immediate`
+// the lock never ran and the page kept scrolling behind the palette.
 watch(open, (value) => {
   if (value) {
     lockPageScroll()
@@ -319,7 +314,7 @@ watch(open, (value) => {
   unlockPageScroll()
   if (!value)
     resetSearch()
-})
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   unlockPageScroll()

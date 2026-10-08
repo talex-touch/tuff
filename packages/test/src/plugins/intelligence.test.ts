@@ -1597,6 +1597,31 @@ describe('intelligence plugin', () => {
     }
   })
 
+  it('keeps the host global usage limit apart from quota and Nexus credits', () => {
+    // A failed stream hands the plugin the stable code alone.
+    const fromCode = intelligenceTest.normalizeInvokeError(
+      Object.assign(new Error('USAGE_LIMIT_REACHED'), { code: 'USAGE_LIMIT_REACHED' }),
+    )
+    expect(fromCode).toMatchObject({
+      code: 'USAGE_LIMIT_REACHED',
+      message: '已达到你设置的 AI 用量上限，可在 设置 › 智能 › 审计 调整',
+    })
+    expect(fromCode.recovery).toContain('设置 › 智能 › 审计')
+    expect(JSON.stringify(fromCode)).not.toMatch(/配额|积分|credits/i)
+
+    // Only the token in the text, beside quota wording: still the usage limit, ahead of quota.
+    const fromText = intelligenceTest.normalizeInvokeError(
+      new Error('[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: requestsPerDay (quota exceeded)'),
+    )
+    expect(fromText.code).toBe('USAGE_LIMIT_REACHED')
+    expect(fromText.message).not.toContain('配额不足')
+
+    // Quota keeps its own copy.
+    expect(intelligenceTest.normalizeInvokeError(new Error('Quota exceeded: daily limit')).code).toBe(
+      'QUOTA_EXHAUSTED',
+    )
+  })
+
   it('uses static reason and recovery without exposing provider diagnostics', () => {
     const rawCanary = 'provider-secret-at-/private/provider/config.json'
     const detailedError = Object.assign(new Error(rawCanary), {
@@ -1623,6 +1648,7 @@ describe('intelligence plugin', () => {
     'PERMISSION_DENIED',
     'NETWORK_FAILURE',
     'QUOTA_CHECK_UNAVAILABLE',
+    'USAGE_LIMIT_REACHED',
     'NEXUS_AUTH_REQUIRED',
     'INVALID_REQUEST',
     'UNKNOWN',

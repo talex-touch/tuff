@@ -9,9 +9,8 @@
  * - Only the platform's own command modifier counts — ⌘ on macOS, Ctrl elsewhere. Ctrl+N on a Mac
  *   belongs to the focused field ("next line"), and a Windows habit must not fire a Mac command.
  *
- * Pure on purpose: `model-menu-hotkeys.ts` next door proves the same kind of contract without an
- * Electron instance. Matching and labelling have to agree — a badge that teaches a key that does
- * nothing is worse than no badge.
+ * Pure on purpose, so the contract is provable without an Electron instance. Matching and labelling
+ * have to agree — a badge that teaches a key that does nothing is worse than no badge.
  */
 
 export interface ShortcutChord {

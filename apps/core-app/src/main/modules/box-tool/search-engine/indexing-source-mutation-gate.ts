@@ -1,3 +1,6 @@
+import { isIndexMaintenanceIdle, waitForIndexMaintenanceIdle } from './search-activity'
+import { IndexMaintenanceDeferredError, indexMaintenanceContext } from './index-maintenance-context'
+
 export const INDEXING_SOURCE_MUTATION_LEASE_INVALID = 'INDEXING_SOURCE_MUTATION_LEASE_INVALID'
 
 export function isIndexingSourceMutationLeaseInvalidError(
@@ -21,7 +24,7 @@ interface SourceGateState {
   epoch: number
   active: number
   nextLeaseId: number
-  activeLeaseIds: Set<string>
+  activeLeaseIds: Map<string, number>
   idleWaiters: Set<() => void>
   queueTail: Promise<void>
 }
@@ -31,15 +34,37 @@ export class IndexingSourceMutationGate {
 
   async run<T>(
     sourceId: string,
-    operation: (lease: IndexingSourceMutationLease) => Promise<T>
+    operation: (lease: IndexingSourceMutationLease) => Promise<T>,
+    signal?: AbortSignal
   ): Promise<T> {
     const state = this.getState(sourceId)
     const ticket = this.enqueue(state)
-    await ticket.previous
+    try {
+      if (signal) {
+        await new Promise<void>((resolve, reject) => {
+          const abort = (): void => {
+            signal.removeEventListener('abort', abort)
+            reject(signal.reason)
+          }
+          signal.addEventListener('abort', abort, { once: true })
+          void ticket.previous.then(() => {
+            signal.removeEventListener('abort', abort)
+            resolve()
+          })
+          if (signal.aborted) abort()
+        })
+      } else {
+        await ticket.previous
+      }
+      signal?.throwIfAborted()
+    } catch (error) {
+      void ticket.previous.then(ticket.release)
+      throw error
+    }
 
     state.active += 1
     const leaseId = `${sourceId}:${state.epoch}:${state.nextLeaseId++}`
-    state.activeLeaseIds.add(leaseId)
+    state.activeLeaseIds.set(leaseId, 0)
     const lease: IndexingSourceMutationLease = {
       sourceId,
       epoch: state.epoch,
@@ -58,6 +83,48 @@ export class IndexingSourceMutationGate {
         void this.waitForIdle(state).then(ticket.release)
       }
     }
+  }
+
+  /** Waiting and a late foreground deferral both happen outside the source lease. */
+  async runWhenIdle<T>(
+    sourceId: string,
+    operation: (lease: IndexingSourceMutationLease) => Promise<T>,
+    signal?: AbortSignal
+  ): Promise<T> {
+    while (true) {
+      await waitForIndexMaintenanceIdle(signal)
+      try {
+        const result = await this.run<{ deferred: true } | { deferred: false; value: T }>(
+          sourceId,
+          async (lease) => {
+            if (!isIndexMaintenanceIdle()) return { deferred: true }
+            return {
+              deferred: false,
+              value: await indexMaintenanceContext.run(true, async () => await operation(lease))
+            }
+          },
+          signal
+        )
+        if (!result.deferred) return result.value
+      } catch (error) {
+        if (!(error instanceof IndexMaintenanceDeferredError)) throw error
+      }
+    }
+  }
+
+  recordCommittedRecords(sourceId: string, leaseId: string, count: number): void {
+    const state = this.getState(sourceId)
+    const previous = state.activeLeaseIds.get(leaseId)
+    if (previous === undefined)
+      throw new Error(`${INDEXING_SOURCE_MUTATION_LEASE_INVALID}:${sourceId}`)
+    state.activeLeaseIds.set(leaseId, previous + count)
+  }
+
+  getCommittedRecordCount(sourceId: string, leaseId: string): number {
+    const count = this.getState(sourceId).activeLeaseIds.get(leaseId)
+    if (count === undefined)
+      throw new Error(`${INDEXING_SOURCE_MUTATION_LEASE_INVALID}:${sourceId}`)
+    return count
   }
 
   async runWithinLease<T>(
@@ -92,12 +159,17 @@ export class IndexingSourceMutationGate {
       throw error
     }
 
+    state.epoch += 1
+    const leaseId = `${sourceId}:${state.epoch}:exclusive`
+    state.active += 1
+    state.activeLeaseIds.set(leaseId, 0)
     try {
-      state.epoch += 1
-      const leaseId = `${sourceId}:${state.epoch}:exclusive`
       return await operation({ sourceId, epoch: state.epoch, exclusive: true, id: leaseId })
     } finally {
-      ticket.release()
+      state.activeLeaseIds.delete(leaseId)
+      this.releaseActive(state)
+      if (state.active === 0) ticket.release()
+      else void this.waitForIdle(state).then(ticket.release)
     }
   }
 
@@ -113,7 +185,7 @@ export class IndexingSourceMutationGate {
       epoch: 0,
       active: 0,
       nextLeaseId: 1,
-      activeLeaseIds: new Set(),
+      activeLeaseIds: new Map(),
       idleWaiters: new Set(),
       queueTail: Promise.resolve()
     }

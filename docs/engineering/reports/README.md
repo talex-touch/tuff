@@ -39,6 +39,13 @@
 - [`release-gate-and-worktree-closeout-2026-09-13.md`](./release-gate-and-worktree-closeout-2026-09-13.md)：工作树收口与 `quality:release` 在 clean committed HEAD 上的分阶段复跑证据。
 - [`cloudflare-ai-gateway-nexus-scene-routing-2026-09-25.md`](./cloudflare-ai-gateway-nexus-scene-routing-2026-09-25.md)：CF AI Gateway 接入 Nexus 的计费口径、硬限制、上游覆盖与本仓不变量冲突点调研结论（未落地，含待实测清单）。
 
+## 活报告
+
+以下报告不带日期，随代码演进持续更新（发现修复或失效时就地勾除并注明原因）；2026-10-03 从迁移前的任务文档迁入，原文逐字保留：
+
+- [`search-crossplatform-audit.md`](./search-crossplatform-audit.md)：搜索系统与跨平台风险的活审计 backlog。
+- [`search-index-split-write-acceptance.md`](./search-index-split-write-acceptance.md)：search-index split 写路径的应用级验收矩阵与执行记录。
+
 ## 复核要求
 
 1. 生成或更新 evidence 后，先确认 manifest/checklist/README 引用的 artifact 存在。

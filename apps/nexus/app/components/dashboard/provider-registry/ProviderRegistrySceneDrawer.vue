@@ -10,7 +10,6 @@ import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, useId } from 'vue'
 import AdminFormField from '~/components/admin/AdminFormField.vue'
-import { vAdminControlId, vAdminControlLabel } from '~/composables/useAdminFieldControl'
 import { ADMIN_FORMAT_EMPTY } from '~/composables/useAdminFormat'
 
 const props = defineProps<{
@@ -97,23 +96,23 @@ function selectRunCapability(capability: unknown) {
             <TuffInput :id="fieldId('display-name')" v-model="admin.sceneForm.displayName" class="RegistryForm-Control" />
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.owner', 'Owner')" :for="fieldId('owner')">
-            <TuffSelect v-model="admin.sceneForm.owner" v-admin-control-id="fieldId('owner')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('owner')" v-model="admin.sceneForm.owner" class="RegistryForm-Control">
               <TuffSelectItem v-for="owner in admin.sceneOwnerOptions" :key="owner" :value="owner" :label="valueLabel(owner)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.strategy', 'Strategy')" :for="fieldId('strategy')">
-            <TuffSelect v-model="admin.sceneForm.strategyMode" v-admin-control-id="fieldId('strategy')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('strategy')" v-model="admin.sceneForm.strategyMode" class="RegistryForm-Control">
               <TuffSelectItem v-for="strategy in admin.strategyOptions" :key="strategy" :value="strategy" :label="valueLabel(strategy)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.status', 'Status')" :for="fieldId('status')">
-            <TuffSelect v-model="admin.sceneForm.status" v-admin-control-id="fieldId('status')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('status')" v-model="admin.sceneForm.status" class="RegistryForm-Control">
               <TuffSelectItem value="enabled" :label="valueLabel('enabled')" />
               <TuffSelectItem value="disabled" :label="valueLabel('disabled')" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.fallback', 'Fallback')" :for="fieldId('fallback')">
-            <TuffSelect v-model="admin.sceneForm.fallback" v-admin-control-id="fieldId('fallback')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('fallback')" v-model="admin.sceneForm.fallback" class="RegistryForm-Control">
               <TuffSelectItem v-for="fallback in admin.fallbackOptions" :key="fallback" :value="fallback" :label="valueLabel(fallback)" />
             </TuffSelect>
           </AdminFormField>
@@ -140,11 +139,11 @@ function selectRunCapability(capability: unknown) {
               <span />
             </div>
             <div v-for="(row, index) in admin.bindingRows.value" :key="index" class="RegistryRows-Row is-binding">
-              <TuffSelect v-model="row.providerId" v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.provider', 'Provider'), index)" class="RegistryForm-Control">
+              <TuffSelect v-model="row.providerId" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.provider', 'Provider'), index)" class="RegistryForm-Control">
                 <TuffSelectItem v-for="provider in admin.providerOptions.value" :key="provider.value" :value="provider.value" :label="provider.label" />
               </TuffSelect>
               <TuffInput v-model="row.capability" class="RegistryForm-Control" placeholder="image.translate.e2e" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.capability', 'Capability'), index)" />
-              <TuffSelect v-model="row.model" v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.model', 'Model'), index)" class="RegistryForm-Control" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
+              <TuffSelect v-model="row.model" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.model', 'Model'), index)" class="RegistryForm-Control" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
                 <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
                 <TuffSelectItem v-for="model in admin.bindingModelOptions(row.providerId)" :key="model" :value="model" :label="model" />
               </TuffSelect>
@@ -168,12 +167,12 @@ function selectRunCapability(capability: unknown) {
             <TuffInput :id="fieldId('edit-display-name')" v-model="editPanel.displayName" class="RegistryForm-Control" />
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.owner', 'Owner')" :for="fieldId('edit-owner')">
-            <TuffSelect v-model="editPanel.owner" v-admin-control-id="fieldId('edit-owner')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('edit-owner')" v-model="editPanel.owner" class="RegistryForm-Control">
               <TuffSelectItem v-for="owner in admin.sceneOwnerOptions" :key="owner" :value="owner" :label="valueLabel(owner)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.ownerScope', 'Owner scope')" :for="fieldId('edit-owner-scope')">
-            <TuffSelect v-model="editPanel.ownerScope" v-admin-control-id="fieldId('edit-owner-scope')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('edit-owner-scope')" v-model="editPanel.ownerScope" class="RegistryForm-Control">
               <TuffSelectItem v-for="scope in admin.ownerScopeOptions" :key="scope" :value="scope" :label="valueLabel(scope)" />
             </TuffSelect>
           </AdminFormField>
@@ -181,17 +180,17 @@ function selectRunCapability(capability: unknown) {
             <TuffInput :id="fieldId('edit-owner-id')" v-model="editPanel.ownerId" class="RegistryForm-Control" />
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.status', 'Status')" :for="fieldId('edit-status')">
-            <TuffSelect v-model="editPanel.status" v-admin-control-id="fieldId('edit-status')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('edit-status')" v-model="editPanel.status" class="RegistryForm-Control">
               <TuffSelectItem v-for="status in admin.bindingStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.strategy', 'Strategy')" :for="fieldId('edit-strategy')">
-            <TuffSelect v-model="editPanel.strategyMode" v-admin-control-id="fieldId('edit-strategy')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('edit-strategy')" v-model="editPanel.strategyMode" class="RegistryForm-Control">
               <TuffSelectItem v-for="strategy in admin.strategyOptions" :key="strategy" :value="strategy" :label="valueLabel(strategy)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.fallback', 'Fallback')" :for="fieldId('edit-fallback')">
-            <TuffSelect v-model="editPanel.fallback" v-admin-control-id="fieldId('edit-fallback')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('edit-fallback')" v-model="editPanel.fallback" class="RegistryForm-Control">
               <TuffSelectItem v-for="fallback in admin.fallbackOptions" :key="fallback" :value="fallback" :label="valueLabel(fallback)" />
             </TuffSelect>
           </AdminFormField>
@@ -221,11 +220,11 @@ function selectRunCapability(capability: unknown) {
           <div class="RegistryRows">
             <div v-for="(row, index) in editPanel.bindings" :key="index" class="RegistryRows-Item">
               <div class="RegistryRows-Row is-binding">
-                <TuffSelect v-model="row.providerId" v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.provider', 'Provider'), index)" class="RegistryForm-Control">
+                <TuffSelect v-model="row.providerId" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.provider', 'Provider'), index)" class="RegistryForm-Control">
                   <TuffSelectItem v-for="providerOption in admin.providerOptions.value" :key="providerOption.value" :value="providerOption.value" :label="providerOption.label" />
                 </TuffSelect>
                 <TuffInput v-model="row.capability" class="RegistryForm-Control" placeholder="image.translate.e2e" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.capability', 'Capability'), index)" />
-                <TuffSelect v-model="row.model" v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.model', 'Model'), index)" class="RegistryForm-Control" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
+                <TuffSelect v-model="row.model" :aria-label="rowLabel(t('dashboard.providerRegistry.fields.model', 'Model'), index)" class="RegistryForm-Control" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
                   <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
                   <TuffSelectItem v-for="model in admin.bindingModelOptions(row.providerId)" :key="model" :value="model" :label="model" />
                 </TuffSelect>
@@ -243,7 +242,7 @@ function selectRunCapability(capability: unknown) {
                   <TuffInput :id="fieldId(`binding-${index}-weight`)" v-model="row.weightText" type="number" class="RegistryForm-Control" />
                 </AdminFormField>
                 <AdminFormField :label="t('dashboard.providerRegistry.fields.bindingStatus', 'Binding status')" :for="fieldId(`binding-${index}-status`)">
-                  <TuffSelect v-model="row.status" v-admin-control-id="fieldId(`binding-${index}-status`)" class="RegistryForm-Control">
+                  <TuffSelect :id="fieldId(`binding-${index}-status`)" v-model="row.status" class="RegistryForm-Control">
                     <TuffSelectItem v-for="status in admin.bindingStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
                   </TuffSelect>
                 </AdminFormField>
@@ -262,13 +261,13 @@ function selectRunCapability(capability: unknown) {
       <template v-else-if="mode === 'run' && scene && runPanel">
         <section class="RegistryForm-Grid">
           <AdminFormField :label="t('dashboard.providerRegistry.fields.capability', 'Capability')" :for="fieldId('run-capability')">
-            <TuffSelect v-admin-control-id="fieldId('run-capability')" :model-value="runPanel.capability" class="RegistryForm-Control" @update:model-value="selectRunCapability">
+            <TuffSelect :id="fieldId('run-capability')" :model-value="runPanel.capability" class="RegistryForm-Control" @update:model-value="selectRunCapability">
               <TuffSelectItem value="" :label="t('dashboard.providerRegistry.routes.defaultCapability', 'Route default')" />
               <TuffSelectItem v-for="capability in admin.sceneCapabilities(scene)" :key="capability" :value="capability" :label="capability" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.provider', 'Provider')" :for="fieldId('run-provider')">
-            <TuffSelect v-model="runPanel.providerId" v-admin-control-id="fieldId('run-provider')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('run-provider')" v-model="runPanel.providerId" class="RegistryForm-Control">
               <TuffSelectItem value="" :label="t('dashboard.providerRegistry.routes.defaultProvider', 'Strategy default')" />
               <TuffSelectItem v-for="provider in admin.sceneProviderOptions(scene)" :key="provider.value" :value="provider.value" :label="provider.label" />
             </TuffSelect>

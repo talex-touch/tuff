@@ -13,6 +13,7 @@ import { app, nativeTheme, protocol } from 'electron'
 import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { isStartupBenchmarkMode } from './core/acceptance-mode'
 import { configureAboutPanel, installApplicationMenu } from './core/application-menu'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { innerRootPath, isDuplicateInstance } from './core/precore'
@@ -57,7 +58,7 @@ import { syncModule } from './modules/sync'
 import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
-import { terminalModule } from './modules/terminal/terminal.manager'
+import { terminalModule } from './modules/terminal'
 import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
@@ -93,12 +94,6 @@ protocol.registerSchemesAsPrivileged([
 
 let lastVerboseLogsState: boolean | null = null
 
-function parseBooleanEnvFlag(value: string | undefined): boolean {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-}
-
 function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback
   const parsed = Number.parseInt(value, 10)
@@ -106,7 +101,7 @@ function parsePositiveIntegerEnv(value: string | undefined, fallback: number): n
   return parsed
 }
 
-const startupBenchmarkEnabled = parseBooleanEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+const startupBenchmarkEnabled = isStartupBenchmarkMode()
 const startupBenchmarkExitDelayMs = parsePositiveIntegerEnv(
   process.env.TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS,
   1_200

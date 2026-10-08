@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-kit/prd.md", "reason": "Kit requirements and the audits pilot acceptance"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Definition of done (section 4) the pilot is checked against"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading-state and admin shell rules"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands and forbidden patterns"}

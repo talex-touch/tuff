@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
+import { defineNuxtConfig } from 'nuxt/config'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkCloseComponentTags } from './app/utils/remark-close-component-tags'
@@ -15,6 +16,7 @@ import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
+import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -25,6 +27,7 @@ loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override:
 const isDev = process.env.NODE_ENV !== 'production'
 const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
 const currentDir = dirname(fileURLToPath(import.meta.url))
+const nexusDemoLoaderBase = `/_nuxt/demo-loaders/${randomUUID()}/`
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
@@ -38,7 +41,6 @@ const tuffexDevMode = resolveTuffexDevMode({
   distEntryExists: existsSync(tuffexDistEntry),
 })
 const useTuffexSource = tuffexDevMode === 'source'
-const useTuffexDistComponentStyleMode = isDev && tuffexDevMode === 'dist'
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexBaseStyleEntry = useTuffexSource
   ? resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
@@ -46,15 +48,13 @@ const tuffexBaseStyleEntry = useTuffexSource
 const tuffexComponentSourceEntry = `${tuffexComponentsSourceRoot}/$1/index.ts`
 const tuffexComponentDistEntry = `${tuffexDistRoot}/$1/index.js`
 const tuffexComponentEntry = useTuffexSource ? tuffexComponentSourceEntry : tuffexComponentDistEntry
-const tuffexComponentAutoImportEntry = isDev ? tuffexComponentEntry : tuffexComponentSourceEntry
+const tuffexComponentAutoImportEntry = tuffexComponentEntry
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
 const tuffexComponentSourceTypePathEntry = `${tuffexComponentsSourceRoot}/*/index.ts`
 const tuffexComponentDistTypePathEntry = `${tuffexDistRoot}/*/index.d.ts`
-const tuffexComponentTypePathEntry = !isDev
+const tuffexComponentTypePathEntry = useTuffexSource
   ? tuffexComponentSourceTypePathEntry
-  : useTuffexSource
-    ? tuffexComponentSourceTypePathEntry
-    : tuffexComponentDistTypePathEntry
+  : tuffexComponentDistTypePathEntry
 const tuffexComponentStyleTypePathEntry = resolve(tuffexDistRoot, '*/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const tuffexDistUtilsEntry = useTuffexSource
@@ -222,7 +222,7 @@ export default defineNuxtConfig({
           'content/demo-registry.ts',
           'content/demo-loader.ts',
           'content/demo-lazy.ts',
-          'content/demo-registry-loader.ts',
+          'content/demo-component-loader.ts',
           'content/TuffCodeBlockRenderer.vue',
         ],
       },
@@ -523,6 +523,7 @@ export default defineNuxtConfig({
       __RRWEB_EXCLUDE_IFRAME__: true,
       __RRWEB_EXCLUDE_SHADOW_DOM__: true,
       __SENTRY_EXCLUDE_REPLAY_WORKER__: true,
+      __NEXUS_DEMO_LOADER_BASE__: JSON.stringify(nexusDemoLoaderBase),
     },
     build: {
       chunkSizeWarningLimit: 600,
@@ -586,9 +587,10 @@ export default defineNuxtConfig({
     },
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
+      nexusDemoLoadersPlugin(currentDir, nexusDemoLoaderBase),
       tuffexOnDemandStylePlugin({
         enabled: tuffexDevMode === 'dist',
-        componentDistRoot: useTuffexDistComponentStyleMode ? tuffexDistRoot : undefined,
+        componentDistRoot: tuffexDevMode === 'dist' ? tuffexDistRoot : undefined,
       }),
     ],
     server: {
@@ -634,7 +636,7 @@ export default defineNuxtConfig({
         '/app/components/content/demo-registry.ts',
         '/app/components/content/demo-loader.ts',
         '/app/components/content/demo-lazy.ts',
-        '/app/components/content/demo-registry-loader.ts',
+        '/app/components/content/demo-component-loader.ts',
         '/app/components/content/TuffCodeBlockRenderer.vue',
         '/app/components/store/',
         '/app/components/tuff/',

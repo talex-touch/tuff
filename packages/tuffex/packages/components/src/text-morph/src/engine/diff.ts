@@ -29,7 +29,6 @@ export interface DiffOptions {
   cursorIndex?: number
 }
 
-const NBSP = '\u00A0'
 
 // Numbers share too few characters to pair with each other, so they all collapse to one token.
 const NUMBER_TOKEN = '\u0000#'
@@ -252,7 +251,7 @@ export function diffSegments(
       if (sep === '\n')
         segments.push({ id: alloc.take(`newline-${charOffset}`), string: '\n' })
       else
-        segments.push({ id: alloc.take(`space-${charOffset}`), string: NBSP })
+        segments.push({ id: alloc.take(`space-${charOffset}`), string: sep })
       charOffset++
     }
   }

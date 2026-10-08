@@ -1,0 +1,66 @@
+schema: comet.native.v4
+name: option-shortcut-physical-key-recording
+language: zh-CN
+phase: shape
+status: await-user
+state_version: 2
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: 46c7a298acb2a53dbf883284403d0d6d77ce8a69c4d79c4eab2f5ad41a2728c4
+spec_changes:
+  - capability: shortcut-recording
+    operation: create
+    source: specs/shortcut-recording/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/option-shortcut-physical-key-recording
+  target_branch: task/chore/live-work-1003
+  finish: null
+loop:
+  stage: await-user
+  goal_cycle: 1
+  iteration: 0
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: confirm-shape
+acceptance:
+  - id: A1
+    source: brief.md
+    text: macOS 的 Digit1 即使 key 为 ¡，也录制并显示 Option+1；Option＋Shift＋数字键保留实际数字主键与 Shift
+      修饰，不保存输入法产生的字符。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: macOS 的字母与标点物理键在 Option 特殊字符或 Dead key 情况下仍生成对应既有主键，例如 KeyE →
+      Option+E、Slash → Option+Slash；不生成 Option+Dead 或 Option+特殊字符。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: 无有效 code 的既有 fallback、各平台修饰键名称、修饰键单独按下、数字小键盘与特殊功能键，以及
+      Escape/Backspace/清除按钮和失焦恢复全局快捷键的原行为不变；真实浏览器中的共用录制组件能够捕获并回写正确字符串。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-10-03T17:24:33.879Z

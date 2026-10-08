@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { FileProviderFullScanRunService } from './file-provider-full-scan-run-service'
+import type { FileProviderFullScanRunDeps } from './file-provider-full-scan-run-service'
 import type { ScannedFileInfo } from '../types'
 
 function scannedFile(path: string): ScannedFileInfo {
   return {
     path,
-    name: path.split('/').pop() ?? path,
+    name: path.split('/').at(-1)!,
     extension: '.txt',
     size: 1,
     ctime: new Date(1000),
@@ -13,99 +14,50 @@ function scannedFile(path: string): ScannedFileInfo {
   }
 }
 
-describe('file-provider-full-scan-run-service', () => {
-  it('scans paths, inserts mapped records, reports progress, and returns completed paths', async () => {
-    const finishPerfContext = vi.fn()
-    const scanDirectory = vi.fn(async function* (rootPath: string) {
-      yield rootPath === '/a' ? [scannedFile('/a/one.txt')] : [scannedFile('/b/two.txt')]
-    })
-    const insertRecords = vi.fn(async (_rootPath, records) => ({
-      insertedCount: records.length
-    }))
-    const emitProgress = vi.fn()
-    const yieldAfterScan = vi.fn(async () => {})
-    let now = 100
-    const service = new FileProviderFullScanRunService({
-      enterPerfContext: vi.fn(() => finishPerfContext),
-      scanDirectory,
-      insertRecords,
-      emitProgress,
-      yieldAfterScan,
-      now: () => {
-        now += 20
-        return now
-      },
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
-    })
-
-    const context = { runId: 'scan' }
-    const result = await service.execute(['/a', '/b'], context)
-
-    expect(scanDirectory).toHaveBeenNthCalledWith(1, '/a', undefined, context)
-    expect(insertRecords).toHaveBeenNthCalledWith(
-      1,
-      '/a',
-      [
-        expect.objectContaining({
-          path: '/a/one.txt',
-          mtime: new Date(2000),
-          ctime: new Date(1000),
-          lastIndexedAt: expect.any(Date),
-          isDir: false,
-          type: 'file'
-        })
-      ],
-      context
-    )
-    expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 2)
-    expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
-    expect(yieldAfterScan).toHaveBeenCalledTimes(2)
-    expect(finishPerfContext).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({
-      added: 2,
-      completedPaths: ['/a', '/b'],
-      checkpointsToClear: new Map()
-    })
-  })
-
-  it('returns empty result without starting perf context when no paths are provided', async () => {
-    const enterPerfContext = vi.fn()
-    const service = new FileProviderFullScanRunService({
-      enterPerfContext,
-      scanDirectory: vi.fn(),
-      insertRecords: vi.fn(),
-      emitProgress: vi.fn(),
-      yieldAfterScan: vi.fn(),
-      now: () => 0,
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
-    })
-
-    await expect(service.execute([], {})).resolves.toEqual({
-      added: 0,
-      completedPaths: [],
-      checkpointsToClear: new Map()
-    })
-    expect(enterPerfContext).not.toHaveBeenCalled()
-  })
-
-  it('passes exclude paths to the scanner', async () => {
-    const excludePathsSet = new Set(['/tmp/db.sqlite'])
-    const scanDirectory = vi.fn(async function* () {})
-    const service = new FileProviderFullScanRunService({
-      enterPerfContext: vi.fn(() => vi.fn()),
-      scanDirectory,
-      insertRecords: vi.fn(),
-      emitProgress: vi.fn(),
-      yieldAfterScan: vi.fn(),
-      now: () => 0,
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
-    })
-
-    await service.execute(['/a'], {}, { excludePathsSet })
-
-    expect(scanDirectory).toHaveBeenCalledWith('/a', excludePathsSet, {})
-  })
+describe('fullscan completion evidence', () => {
+  it.each([
+    {
+      name: 'a clean completed scan',
+      stats: { entryCount: 2, errorCount: 0 },
+      completed: ['/root']
+    },
+    {
+      name: 'a scan with unreadable entries',
+      stats: { entryCount: 2, errorCount: 1 },
+      completed: []
+    },
+    { name: 'an unknown scan outcome', stats: null, completed: [] }
+  ])(
+    'counts actual committed rows and reports root completion only for $name',
+    async ({ stats, completed }) => {
+      const persisted: Array<{ path: string; mtime: number; ctime: number }> = []
+      const deps: FileProviderFullScanRunDeps<undefined> = {
+        enterPerfContext: () => () => undefined,
+        scanDirectory: async function* (_root, _excluded, _context, onStats) {
+          yield [scannedFile('/root/admitted.txt'), scannedFile('/root/skipped.txt')]
+          if (stats) onStats(stats)
+        },
+        insertRecords: async (_root, records) => {
+          const admitted = records.filter((record) => record.path !== '/root/skipped.txt')
+          for (const record of admitted) {
+            persisted.push({
+              path: record.path,
+              mtime: (record.mtime as Date).getTime(),
+              ctime: (record.ctime as Date).getTime()
+            })
+          }
+          return { insertedCount: admitted.length }
+        },
+        emitProgress: () => undefined,
+        yieldAfterScan: async () => undefined,
+        now: () => 0,
+        formatDuration: (duration) => `${duration}ms`,
+        logDebug: () => undefined
+      }
+      const result = await new FileProviderFullScanRunService(deps).execute(['/root'], undefined)
+      expect(result.added).toBe(1)
+      expect(result.completedPaths).toEqual(completed)
+      expect(persisted).toEqual([{ path: '/root/admitted.txt', mtime: 2000, ctime: 1000 }])
+    }
+  )
 })

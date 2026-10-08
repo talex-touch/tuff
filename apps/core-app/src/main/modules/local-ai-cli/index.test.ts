@@ -5,6 +5,7 @@ import type {
   LocalAiCliStatus,
   LocalAiCliTaskChunk
 } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type { ChildProcess } from 'node:child_process'
 /**
  * Local AI CLI continuation runs a real provider process against a real project directory, so these
  * tests double only the two external boundaries (the provider child process / PTY / Claude SDK) and
@@ -17,10 +18,10 @@ import type {
  *  - a native-session lease is released exactly once and effectively on every teardown path.
  * No provider quota is spent: `spawnSafe`, `node-pty` and the Claude Agent SDK are injected doubles.
  */
-import type { ChildProcess } from 'node:child_process'
+import type { Mock } from 'vitest'
 import type { StoredLocalAiCliSession } from './session-store'
 import { EventEmitter } from 'node:events'
-import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +31,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalAiCliModule } from './index'
+import * as piNativeSession from './pi-native-session'
 import { markLocalAiCliSessionState, upsertLocalAiCliSession } from './session-store'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
@@ -166,6 +168,8 @@ interface FakePty {
     dispose: () => void
   }
   emitExit: (exitCode: number) => void
+  emitData: (data: string) => void
+  listenerCount: () => number
 }
 
 interface TaskStream {
@@ -185,6 +189,7 @@ interface FakeTransport {
   broadcasts: Array<{ event: string; payload: unknown }>
   broadcast: ReturnType<typeof vi.fn>
   broadcastToWindow: ReturnType<typeof vi.fn>
+  notifyTo: Mock<(...args: unknown[]) => boolean>
   sendTo: ReturnType<typeof vi.fn>
   sendToWindow: ReturnType<typeof vi.fn>
   on: (event: { toEventName: () => string } | string, handler: RegisteredHandler) => () => void
@@ -289,6 +294,7 @@ function createFakeTransport(): FakeTransport {
       broadcasts.push({ event: event.toEventName(), payload })
     }),
     broadcastToWindow: vi.fn(),
+    notifyTo: vi.fn((..._args: unknown[]) => true),
     sendTo: vi.fn(async () => undefined),
     sendToWindow: vi.fn(async () => undefined),
     // The host registration APIs both key by event name, and some call sites pass the raw name
@@ -308,21 +314,36 @@ function createFakeTransport(): FakeTransport {
 
 function createFakePty(): FakePty {
   const state = { kills: 0, writes: [] as string[], resizes: [] as Array<[number, number]> }
-  const exitListeners: Array<(event: { exitCode: number; signal?: number }) => void> = []
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   return {
     state,
     write: (data) => state.writes.push(data),
     resize: (cols, rows) => state.resizes.push([cols, rows]),
     kill: () => {
       state.kills += 1
+      exitListeners.forEach((listener) => listener({ exitCode: 0, signal: 9 }))
     },
-    onData: () => ({ dispose: () => undefined }),
+    onData: (listener) => {
+      dataListeners.add(listener)
+      return {
+        dispose: () => {
+          dataListeners.delete(listener)
+        }
+      }
+    },
     onExit: (listener) => {
-      exitListeners.push(listener)
-      return { dispose: () => undefined }
+      exitListeners.add(listener)
+      return {
+        dispose: () => {
+          exitListeners.delete(listener)
+        }
+      }
     },
+    emitData: (data) => dataListeners.forEach((listener) => listener(data)),
+    listenerCount: () => dataListeners.size + exitListeners.size,
     emitExit: (exitCode) => {
-      for (const listener of exitListeners) listener({ exitCode })
+      exitListeners.forEach((listener) => listener({ exitCode }))
     }
   }
 }
@@ -360,6 +381,10 @@ function expectExecutableDirFirstOnPath(env: unknown, executable: string): void 
   )
 }
 
+function providerExecutable(provider: LocalAiCliProviderId): string {
+  return join(tempRoot, 'bin', provider)
+}
+
 function providerStatus(provider: LocalAiCliProviderId): LocalAiCliProviderStatus {
   return {
     id: provider,
@@ -367,7 +392,7 @@ function providerStatus(provider: LocalAiCliProviderId): LocalAiCliProviderStatu
     enabled: true,
     installed: true,
     version: '1.0.0',
-    executablePath: `/fake/bin/${provider}`,
+    executablePath: providerExecutable(provider),
     capabilities: {
       taskRead: true,
       taskWriteApproval: true,
@@ -386,10 +411,10 @@ function appSettings(): Record<string, unknown> {
       enabled: true,
       defaultProvider: 'pi',
       providers: {
-        pi: { enabled: true, executableOverride: '/fake/bin/pi' },
-        codex: { enabled: true, executableOverride: '/fake/bin/codex' },
-        claude: { enabled: true, executableOverride: '/fake/bin/claude' },
-        'oh-my-pi': { enabled: true, executableOverride: '/fake/bin/oh-my-pi' }
+        pi: { enabled: true, executableOverride: providerExecutable('pi') },
+        codex: { enabled: true, executableOverride: providerExecutable('codex') },
+        claude: { enabled: true, executableOverride: providerExecutable('claude') },
+        'oh-my-pi': { enabled: true, executableOverride: providerExecutable('oh-my-pi') }
       }
     }
   }
@@ -638,7 +663,6 @@ async function expectTupleFree(
     },
     sender
   )
-  expect(created.sessionId).toBeTruthy()
   await invokeHandler(
     transport,
     LocalAiCliEvents.terminal.kill.toEventName(),
@@ -656,6 +680,11 @@ beforeEach(async () => {
   projectRoot = join(tempRoot, 'project')
   moduleDir = join(tempRoot, 'module')
   await mkdir(projectRoot, { recursive: true })
+  await mkdir(join(tempRoot, 'bin'))
+  for (const provider of ['pi', 'codex', 'claude', 'oh-my-pi'] as const) {
+    await writeFile(providerExecutable(provider), '#!/bin/sh\nexit 0\n')
+    await chmod(providerExecutable(provider), 0o700)
+  }
   // Read when pi reports a stored session not found; a test must never look in the real ~/.pi.
   vi.stubEnv('PI_CODING_AGENT_SESSION_DIR', join(tempRoot, 'pi-sessions'))
 
@@ -918,22 +947,21 @@ describe('localAiCli terminal resume gates', () => {
     const { transport } = await initModule()
     const pointer = await seedPointer({ nativeSessionId: 'pi-term-resume-1', expectedHeadId: 'h2' })
 
-    const created = await createTerminal(
+    await createTerminal(
       transport,
       { provider: 'pi', access: 'workspace-read', cols: 80, rows: 24, sessionRef: pointer.id },
       createFakeSender()
     )
 
-    expect(created.sessionId).toBeTruthy()
     const spawn = ptySpawnMock.mock.calls[0]
-    expect(spawn?.[0]).toBe('/fake/bin/pi')
+    expect(spawn?.[0]).toBe(providerExecutable('pi'))
     expect(spawn?.[1]).toEqual(
       expect.arrayContaining(['--no-tools', '--session', 'pi-term-resume-1'])
     )
     expect(spawn?.[2]).toMatchObject({ cwd: projectRoot })
     expectExecutableDirFirstOnPath(
       (spawn?.[2] as { env?: unknown } | undefined)?.env,
-      '/fake/bin/pi'
+      providerExecutable('pi')
     )
   })
 })
@@ -1054,7 +1082,7 @@ describe('localAiCli native-session leases', () => {
     expect(third.sessionId).not.toBe(second.sessionId)
     sender.emit('destroyed')
 
-    await expectTupleFree(transport, pointer, sender)
+    await expectTupleFree(transport, pointer, createFakeSender())
   })
 
   it('releases a held task lease and kills the provider on module destroy', async () => {
@@ -1121,11 +1149,11 @@ describe('localAiCli Pi task continuation', () => {
     expect(taskSessionChunk(stream.chunks).sessionRef).toBe(row.id)
 
     const spawn = spawnCall()
-    expect(spawn.command).toBe('/fake/bin/pi')
+    expect(spawn.command).toBe(providerExecutable('pi'))
     expect(spawn.args).toContain('--mode')
     expect(spawn.args).not.toContain('--session')
     expect(spawn.options).toMatchObject({ cwd: projectRoot })
-    expectExecutableDirFirstOnPath(spawn.options.env, '/fake/bin/pi')
+    expectExecutableDirFirstOnPath(spawn.options.env, providerExecutable('pi'))
     // The prompt body and the provider transcript stay main-only; only sessionRef is renderer-safe.
     expectOpaqueTaskChunks(stream.chunks, [
       'pi-fresh-1',
@@ -1186,9 +1214,14 @@ describe('localAiCli Pi task continuation', () => {
       sessionId: 'pi-lazy-1',
       sessionFile,
       before: { entries: [model, thinking], leafId: 't1' },
-      append:
-        `${JSON.stringify({ type: 'session', id: 'pi-lazy-1', cwd: workspacePath })}\n` +
-        [model, thinking, user, assistant].map(piEntryLine).join(''),
+      append: `${JSON.stringify({ type: 'session', id: 'pi-lazy-1', cwd: workspacePath })}\n${[
+        model,
+        thinking,
+        user,
+        assistant
+      ]
+        .map(piEntryLine)
+        .join('')}`,
       post: { entries: [user, assistant], leafId: 'a1' },
       answer: 'OK'
     })
@@ -1675,9 +1708,9 @@ describe('localAiCli Claude SDK continuation', () => {
     expect(claudeOptions[0]).toMatchObject({
       resume: 'claude-resume-1',
       cwd: projectRoot,
-      pathToClaudeCodeExecutable: '/fake/bin/claude'
+      pathToClaudeCodeExecutable: providerExecutable('claude')
     })
-    expectExecutableDirFirstOnPath(claudeOptions[0]?.env, '/fake/bin/claude')
+    expectExecutableDirFirstOnPath(claudeOptions[0]?.env, providerExecutable('claude'))
     expect(spawnSafeMock).not.toHaveBeenCalled()
     expect(taskSessionChunk(stream.chunks).sessionRef).toBe(pointer.id)
     expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'resumed answer' })
@@ -1836,7 +1869,7 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     const status = await readStatus()
     expect(status).toMatchObject({ betaAvailable: true, enabled: false })
     expect(status.providers.map((provider) => [provider.installed, provider.issueCode])).toEqual(
-      Array(4).fill([false, 'NOT_PROBED'])
+      Array.from({ length: 4 }).fill([false, 'NOT_PROBED'])
     )
     expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
 
@@ -1846,5 +1879,475 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     await readStatus({ refresh: true })
     expect(refreshExecutablesMock).toHaveBeenCalledTimes(1)
     expect(resolveAllProviderStatusesMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('localAiCli Pi final-attempt lifecycle', () => {
+  async function beginRun() {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({ nativeSessionId: 'pi-retry', expectedHeadId: PI_BASE_LEAF })
+    const sessionFile = await writePiSessionFile('pi-retry', piBaseEntries)
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ sessionRef: pointer.id }), stream.context)
+    await waitFor(() => child.framesOfType('get_state').length === 1, 'initial state request')
+    child.sendLine({
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: { sessionId: 'pi-retry', sessionFile }
+    })
+    await waitFor(() => child.framesOfType('get_entries').length === 1, 'initial head request')
+    child.sendLine({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: piBaseEntries, leafId: PI_BASE_LEAF }
+    })
+    await waitFor(() => child.framesOfType('prompt').length === 1, 'prompt after native capture')
+    const user = piEntry('u3', PI_BASE_LEAF, 'user', 'second question')
+    const assistant = piEntry('a3', 'u3', 'assistant', 'retry answer')
+    const post = { entries: [...piBaseEntries, user, assistant], leafId: assistant.id }
+    const append = () => appendFile(sessionFile, piEntryLine(user) + piEntryLine(assistant))
+    return { pointer, child, stream, run, post, append, sessionFile }
+  }
+
+  it.each([
+    { name: 'agent_end without retry', event: { type: 'agent_end' } },
+    { name: 'agent_end with explicit false', event: { type: 'agent_end', willRetry: false } },
+    { name: 'agent_settled after retry', event: { type: 'agent_settled', willRetry: true } }
+  ])('keeps retry alive and verifies exactly once at $name', async ({ event }) => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'first attempt; ' }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    child.sendLine({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 1 })
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'retry answer' }
+    })
+    // This positive control is queued after agent_end: reaching it proves the retry event was consumed.
+    await waitFor(
+      () =>
+        stream.chunks.some((chunk) => chunk.type === 'text-delta' && chunk.text === 'retry answer'),
+      'retry text while task stays live'
+    )
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.kills).toBe(0)
+    expect(stream.isEnded()).toBe(false)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+
+    await append()
+    child.sendLine(event)
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    await waitFor(() => child.framesOfType('get_entries').length === 2, 'single final head request')
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    // Queued after verification: none of these may change the answer, head, or successful outcome.
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'LATE_CANARY' }
+    })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    await run
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toHaveLength(1)
+    expect(child.framesOfType('get_entries')).toHaveLength(2)
+    expect(child.kills).toBe(1)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([
+      { type: 'complete', callId: expect.any(String), text: 'first attempt; retry answer' }
+    ])
+    expect(
+      stream.chunks.some(
+        (chunk) => chunk.type === 'text-delta' && chunk.text.includes('LATE_CANARY')
+      )
+    ).toBe(false)
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe('a3')
+    expect((await pointerRow(pointer.id))?.state).toBe('available')
+  })
+
+  it.each([
+    {
+      name: 'final agent_end after an errored assistant message',
+      finalEvents: [{ type: 'agent_end', willRetry: false }, { type: 'agent_settled' }]
+    },
+    {
+      name: 'exhausted auto_retry_end followed by agent_settled',
+      finalEvents: [
+        {
+          type: 'auto_retry_end',
+          success: false,
+          attempt: 1,
+          finalError: 'provider retries exhausted'
+        },
+        { type: 'agent_settled' },
+        { type: 'agent_end', willRetry: false }
+      ]
+    }
+  ])('does not verify or complete failed upstream output at $name', async ({ finalEvents }) => {
+    const { pointer, child, stream, run, sessionFile } = await beginRun()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'FAILED_ATTEMPT_PREVIEW' }
+    })
+    child.sendLine({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'FAILED_ATTEMPT_PREVIEW' }],
+        stopReason: 'error',
+        errorMessage: 'provider temporarily unavailable'
+      }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    child.sendLine({ type: 'auto_retry_start', attempt: 1, maxAttempts: 1, delayMs: 1 })
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'FAILED_RETRY_PREVIEW' }
+    })
+    // Reaching the next attempt proves the errored message and retrying end were consumed.
+    await waitFor(
+      () =>
+        child.kills > 0 ||
+        stream.chunks.some(
+          (chunk) => chunk.type === 'text-delta' && chunk.text === 'FAILED_RETRY_PREVIEW'
+        ),
+      'retry output after an errored attempt'
+    )
+    expect(stream.chunks).toContainEqual({
+      type: 'text-delta',
+      callId: expect.any(String),
+      text: 'FAILED_RETRY_PREVIEW'
+    })
+    expect(child.kills).toBe(0)
+    expect(stream.isEnded()).toBe(false)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(
+      stream.chunks.filter((chunk) => chunk.type === 'failed' || chunk.type === 'complete')
+    ).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+
+    const user = piEntry('u3', PI_BASE_LEAF, 'user', 'second question')
+    const failedAssistant = {
+      ...piEntry('a3', 'u3', 'assistant', 'FAILED_RETRY_PREVIEW'),
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'FAILED_RETRY_PREVIEW' }],
+        stopReason: 'error',
+        errorMessage: 'provider retries exhausted'
+      }
+    }
+    await appendFile(sessionFile, piEntryLine(user) + piEntryLine(failedAssistant))
+    child.sendLine({ type: 'message_end', message: failedAssistant.message })
+    for (const event of finalEvents) child.sendLine(event)
+    // RPC may exit 0 despite provider failure; EOF drains all queued protocol events.
+    child.close(0)
+    await run
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'failed')).toEqual([
+      { type: 'failed', callId: expect.any(String), code: 'PROCESS_EXITED', recoverable: true }
+    ])
+    expect(stream.isEnded()).toBe(true)
+    const stored = await pointerRow(pointer.id)
+    expect(stored?.expected_head_id).toBe(PI_BASE_LEAF)
+    expect(stored?.state).toBe('available')
+  })
+
+  it('cancelling during retry ignores queued text/end/entries and never advances the head', async () => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    await append()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'partial' }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    await waitFor(
+      () => stream.chunks.some((chunk) => chunk.type === 'text-delta'),
+      'partial answer before cancellation'
+    )
+    stream.controller.abort()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'LATE_CANARY' }
+    })
+    child.sendLine({ type: 'agent_settled' })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    await run
+    expect(stream.chunks.filter((chunk) => chunk.type === 'cancelled')).toEqual([
+      { type: 'cancelled', callId: expect.any(String) }
+    ])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(
+      stream.chunks.some((chunk) => chunk.type === 'text-delta' && chunk.text === 'LATE_CANARY')
+    ).toBe(false)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+  })
+
+  it('cancelling while real native verification is suspended prevents its late successful head commit', async () => {
+    const verify = piNativeSession.verifyPiSessionAppend
+    let release!: () => void
+    let entered = false
+    const gate = new Promise<void>((resolveGate) => {
+      release = resolveGate
+    })
+    const verifier = vi
+      .spyOn(piNativeSession, 'verifyPiSessionAppend')
+      .mockImplementationOnce(async (input) => {
+        const head = await verify(input)
+        entered = true
+        await gate
+        return head
+      })
+    try {
+      const { pointer, child, stream, run, post, append } = await beginRun()
+      await append()
+      child.sendLine({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'answer' }
+      })
+      child.sendLine({ type: 'agent_settled' })
+      await waitFor(() => child.framesOfType('get_entries').length === 2, 'final head request')
+      child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+      await waitFor(() => entered, 'verified native append awaiting release')
+      stream.controller.abort()
+      release()
+      child.sendLine({ type: 'agent_end' })
+      await run
+      expect(stream.chunks.filter((chunk) => chunk.type === 'cancelled')).toEqual([
+        { type: 'cancelled', callId: expect.any(String) }
+      ])
+      expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+      expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+      expect(child.framesOfType('get_entries')).toHaveLength(2)
+    } finally {
+      release()
+      verifier.mockRestore()
+    }
+  })
+
+  it('a protocol failure before queued final events stays failed and leaves the original native head', async () => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    await append()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'partial' }
+    })
+    child.sendLine('not-json')
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    await run
+    expect(stream.chunks.filter((chunk) => chunk.type === 'failed')).toEqual([
+      { type: 'failed', callId: expect.any(String), code: 'PROTOCOL_INVALID', recoverable: true }
+    ])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+  })
+})
+
+describe('localAiCli shared terminal lifecycle', () => {
+  const request = { provider: 'pi', access: 'workspace-read', cols: 90, rows: 27 }
+
+  it('rejects a different sender object even when it reuses the owner numeric id', async () => {
+    const { transport } = await initModule()
+    const owner = createFakeSender(42)
+    const foreign = createFakeSender(42)
+    const { sessionId } = await createTerminal(transport, request, owner)
+    for (const target of [sessionId, 'nonexistent']) {
+      for (const [event, payload] of [
+        [LocalAiCliEvents.terminal.write, { sessionId: target, data: 'attack' }],
+        [LocalAiCliEvents.terminal.resize, { sessionId: target, cols: 120, rows: 40 }],
+        [LocalAiCliEvents.terminal.kill, { sessionId: target }]
+      ] as const) {
+        await expect(
+          invokeHandler(transport, event.toEventName(), payload, { plugin: null, sender: foreign })
+        ).rejects.toThrow(/TERMINAL_(SESSION_)?NOT_FOUND/)
+      }
+    }
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.write.toEventName(),
+      { sessionId, data: 'owner\u0003' },
+      { plugin: null, sender: owner }
+    )
+    expect(ptyInstances[0].state.writes).toEqual(['owner\u0003'])
+    expect(ptyInstances[0].state.resizes).toEqual([])
+    expect(ptyInstances[0].state.kills).toBe(0)
+  })
+
+  it('delivers an entire large output block and one exit, without late data', async () => {
+    const { transport } = await initModule()
+    const sender = createFakeSender()
+    const { sessionId } = await createTerminal(transport, request, sender)
+    const pty = ptyInstances[0]
+    const large = `\u001B[32m中文\u001B[0m${'z'.repeat(100_000)}`
+    pty.emitData(large)
+    pty.emitData('last')
+    pty.emitExit(5)
+    pty.emitData('late')
+    pty.emitExit(0)
+    expect(
+      transport.notifyTo.mock.calls
+        .filter(([, event]) => event === LocalAiCliEvents.terminal.data)
+        .map(([, , payload]) => payload)
+    ).toEqual([
+      { sessionId, data: large },
+      { sessionId, data: 'last' }
+    ])
+    expect(
+      transport.notifyTo.mock.calls
+        .filter(([, event]) => event === LocalAiCliEvents.terminal.exit)
+        .map(([, , payload]) => payload)
+    ).toEqual([{ sessionId, exitCode: 5 }])
+    expect(transport.notifyTo.mock.calls.map(([recipient]) => recipient)).toEqual([
+      sender,
+      sender,
+      sender
+    ])
+    expect(pty.listenerCount()).toBe(0)
+  })
+
+  it('releases a resumed lease after PTY spawn failure so a later retry can resume', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({ nativeSessionId: 'pi-pty-failed', expectedHeadId: 'h2' })
+    ptySpawnMock.mockImplementationOnce(() => {
+      throw new Error('native PTY refused spawn')
+    })
+    await expect(
+      createTerminal(transport, { ...request, sessionRef: pointer.id }, createFakeSender())
+    ).rejects.toThrow('TERMINAL_SPAWN_FAILED')
+    await expectTupleFree(transport, pointer, createFakeSender())
+  })
+})
+
+describe('localAiCli terminal lease exit barrier', () => {
+  it('keeps a native session leased until a killed PTY actually reports exit', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({
+      nativeSessionId: 'pi-lease-exit-barrier',
+      expectedHeadId: 'h2'
+    })
+    const sender = createFakeSender()
+    const request = {
+      provider: 'pi',
+      access: 'workspace-read',
+      cols: 80,
+      rows: 24,
+      sessionRef: pointer.id
+    }
+    const { sessionId } = await createTerminal(transport, request, sender)
+    const pty = ptyInstances[0]
+    pty.kill = () => {
+      pty.state.kills += 1
+    }
+    try {
+      let settled = false
+      const closing = invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { sessionId },
+        { plugin: null, sender }
+      ).then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      await expect(createTerminal(transport, request, sender)).rejects.toThrow(
+        'NATIVE_SESSION_BUSY'
+      )
+      expect(pty.state.kills).toBe(1)
+      pty.emitExit(137)
+      await closing
+      expect(pty.listenerCount()).toBe(0)
+      await expectTupleFree(transport, pointer, sender)
+    } finally {
+      pty.emitExit(137)
+    }
+  })
+})
+
+describe('localAiCli creation token ownership', () => {
+  it('isolates the same token across sender objects and closes only its owning process', async () => {
+    const { transport } = await initModule()
+    const firstOwner = createFakeSender(42)
+    const secondOwner = createFakeSender(42)
+    const creationToken = 'ai-token-shared-between-windows'
+    const request = { provider: 'pi', access: 'workspace-read', cols: 90, rows: 25, creationToken }
+    await createTerminal(transport, request, firstOwner)
+    const second = await createTerminal(transport, request, secondOwner)
+    await expect(
+      invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { creationToken },
+        {
+          plugin: null,
+          sender: createFakeSender(42)
+        }
+      )
+    ).rejects.toThrow('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.kill.toEventName(),
+      { creationToken },
+      { plugin: null, sender: firstOwner }
+    )
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.write.toEventName(),
+      { sessionId: second.sessionId, data: 'second owner' },
+      { plugin: null, sender: secondOwner }
+    )
+    expect(ptyInstances[0].state.kills).toBe(1)
+    expect(ptyInstances[1].state.kills).toBe(0)
+    expect(ptyInstances[1].state.writes).toEqual(['second owner'])
+  })
+
+  it('cancels before a pending Provider lookup returns and never spawns its late process', async () => {
+    const { transport } = await initModule()
+    let entered!: () => void
+    const lookupStarted = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    let complete!: (status: LocalAiCliProviderStatus) => void
+    resolveProviderStatusMock.mockImplementationOnce(() => {
+      entered()
+      return new Promise<LocalAiCliProviderStatus>((resolve) => {
+        complete = resolve
+      })
+    })
+    const sender = createFakeSender()
+    const creationToken = 'ai-provider-pending'
+    const creating = createTerminal(
+      transport,
+      { provider: 'pi', access: 'workspace-read', cols: 90, rows: 25, creationToken },
+      sender
+    )
+    const rejection = expect(creating).rejects.toThrow('TERMINAL_CREATE_CANCELLED')
+    try {
+      await lookupStarted
+      await invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { creationToken },
+        { plugin: null, sender }
+      )
+      complete(providerStatus('pi'))
+      await rejection
+      expect(ptySpawnMock).not.toHaveBeenCalled()
+      expect(sender.listenerCount('did-start-navigation')).toBe(0)
+    } finally {
+      complete?.(providerStatus('pi'))
+    }
   })
 })

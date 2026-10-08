@@ -24,7 +24,20 @@ import * as schema from './schema'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
 
+/** Minimal admitted history used for local recommendation scene recall. */
+export interface RecommendationHistoryEvent {
+  sourceId: string
+  itemId: string
+  sourceType: string
+  timestamp: number
+  previousApp?: string | null
+  previousAppName?: string | null
+}
+
 const DAY_MS = 86_400_000
+
+/** Safety net for the foreground-activity load: the table holds one row per app ever activated. */
+const APP_FOREGROUND_ACTIVITY_READ_LIMIT = 2000
 
 /** Local natural-day windows the behaviour reader reports. */
 export const BEHAVIOR_WINDOW_30_DAYS_MS = 30 * DAY_MS
@@ -315,20 +328,6 @@ function createDbUtilsInternal(
         db.update(schema.files).set(data).where(eq(schema.files.path, path)).returning()
       )
     },
-    /**
-     * @deprecated Use SearchIndexWorkerClient.removeFile() instead.
-     *
-     * Direct main-thread writes to the files table bypass the single-writer
-     * architecture and can cause SQLITE_BUSY under contention. The worker is
-     * now the sole writer for file-index domain (files, file_extensions,
-     * keyword_mappings).
-     *
-     * Migration: replace `dbUtils.removeFile(path)` with
-     * `searchIndexWorker.removeFile(path)`.
-     */
-    async removeFile(path: string) {
-      return runWrite(db.delete(schema.files).where(eq(schema.files.path, path)))
-    },
     async getAllFiles() {
       return readDb.select().from(schema.files)
     },
@@ -350,11 +349,20 @@ function createDbUtilsInternal(
      * Bounded in SQL rather than filtered in JS. The app catalog can afford `getFilesByType('app')`
      * and a JS filter; the file index cannot — it is routinely tens of thousands of rows, and this
      * runs on the empty-query path.
+     *
+     * `idx_files_is_dir_ctime` turns it into an index range read that stops at `limit`; without it
+     * the LIMIT bounded nothing — a SCAN plus a temp B-tree sort, synchronous on the main thread.
+     * Only the columns the caller reads: `content` sits in overflow pages a `SELECT *` would load.
      */
     async getRecentlyCreatedFiles(createdAfter: Date, limit: number) {
       if (limit <= 0) return []
       return readDb
-        .select()
+        .select({
+          path: schema.files.path,
+          size: schema.files.size,
+          isDir: schema.files.isDir,
+          ctime: schema.files.ctime
+        })
         .from(schema.files)
         .where(and(eq(schema.files.isDir, false), gte(schema.files.ctime, createdAfter)))
         .orderBy(desc(schema.files.ctime))
@@ -419,7 +427,7 @@ function createDbUtilsInternal(
         .where(
           and(
             gt(schema.fileExtensions.fileId, afterId),
-            eq(schema.files.type, 'file'),
+            schema.fileTypeIs('file'),
             eq(schema.fileExtensions.key, 'icon'),
             like(schema.fileExtensions.value, 'data:image/png;base64,%')
           )
@@ -789,6 +797,45 @@ function createDbUtilsInternal(
         .where(eq(schema.itemUsageStats.sourceId, sourceId))
     },
 
+    /** No partial sample may claim an exact source preference or a cross-day habit. */
+    async getRecommendationHistory(now = Date.now()): Promise<RecommendationHistoryEvent[]> {
+      const maxEvents = 10_000
+      const rows = await db
+        .select({
+          sourceId: schema.executeEvents.sourceId,
+          itemId: schema.executeEvents.itemId,
+          sourceType: schema.executeEvents.sourceType,
+          timestamp: schema.executeEvents.timestamp,
+          context: schema.usageLogs.context
+        })
+        .from(schema.executeEvents)
+        .leftJoin(schema.usageLogs, eq(schema.executeEvents.eventId, schema.usageLogs.eventId))
+        .where(
+          and(
+            gte(schema.executeEvents.timestamp, new Date(now - BEHAVIOR_WINDOW_30_DAYS_MS)),
+            lte(schema.executeEvents.timestamp, new Date(now))
+          )
+        )
+        .orderBy(desc(schema.executeEvents.timestamp))
+        .limit(maxEvents + 1)
+      if (rows.length > maxEvents) return []
+      return rows.map((row) => {
+        const rawContext = parseJsonQuietly(row.context)
+        const context =
+          rawContext && typeof rawContext === 'object'
+            ? (rawContext as Record<string, unknown>)
+            : undefined
+        return {
+          sourceId: row.sourceId,
+          itemId: row.itemId,
+          sourceType: row.sourceType,
+          timestamp: row.timestamp.getTime(),
+          previousApp: typeof context?.prevApp === 'string' ? context.prevApp : null,
+          previousAppName: typeof context?.prevAppName === 'string' ? context.prevAppName : null
+        }
+      })
+    },
+
     /**
      * Behaviour facts for a batch of item keys — the same numbers counting, display and ranking
      * must agree on (R2).
@@ -939,6 +986,55 @@ function createDbUtilsInternal(
         row.executeCount = lifetime?.executeCount ?? 0
         return row
       })
+    },
+
+    /**
+     * Per-app foreground instants the OS activation tracker persisted, newest first.
+     *
+     * Bounded by `since` and `limit`: the table holds one row per app ever activated, and the
+     * tracker only loads the window it may still claim as "last used".
+     */
+    async getAppForegroundActivity(
+      since: Date,
+      limit = APP_FOREGROUND_ACTIVITY_READ_LIMIT
+    ): Promise<Array<{ appKey: string; lastActiveAt: number }>> {
+      const rows = await db
+        .select({
+          appKey: schema.appForegroundActivity.appKey,
+          lastActiveAt: schema.appForegroundActivity.lastActiveAt
+        })
+        .from(schema.appForegroundActivity)
+        .where(gte(schema.appForegroundActivity.lastActiveAt, since))
+        .orderBy(desc(schema.appForegroundActivity.lastActiveAt))
+        .limit(limit)
+      return rows.map((row) => ({ appKey: row.appKey, lastActiveAt: row.lastActiveAt.getTime() }))
+    },
+
+    /**
+     * Upserts the tracker's latest per-app foreground instants in one statement.
+     *
+     * The tracker is the only writer and holds the latest value in memory, so a row is replaced
+     * rather than merged: `MAX()` would pin a future instant forever after a clock correction.
+     */
+    async saveAppForegroundActivity(
+      rows: Array<{ appKey: string; lastActiveAt: number }>
+    ): Promise<void> {
+      if (rows.length === 0) return
+      await scheduleDbWrite(
+        'usage.foreground.flush',
+        async () => {
+          await db
+            .insert(schema.appForegroundActivity)
+            .values(
+              rows.map((row) => ({ appKey: row.appKey, lastActiveAt: new Date(row.lastActiveAt) }))
+            )
+            .onConflictDoUpdate({
+              target: schema.appForegroundActivity.appKey,
+              set: { lastActiveAt: sql`excluded.last_active_at` }
+            })
+        },
+        { priority: 'background' }
+      )
     },
 
     /**

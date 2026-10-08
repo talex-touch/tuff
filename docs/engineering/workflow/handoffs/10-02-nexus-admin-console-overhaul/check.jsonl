@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/prd.md", "reason": "Decisions D1-D9 and cross-child acceptance criteria the integration review checks against"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Page migration definition of done (section 4) and testing strategy (section 5)"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/visual-baseline-2026-10-02.md", "reason": "Before state to compare the final sweep against"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands and forbidden patterns"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Admin shell, loading-state and i18n rules the review enforces"}

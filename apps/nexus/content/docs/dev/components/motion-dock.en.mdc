@@ -1,0 +1,136 @@
+---
+title: "Motion dock"
+description: "Caller-owned items with adjacent spring magnification, pointer dragging and keyboard reorder."
+category: MotionInteraction
+status: beta
+since: 0.6.3
+tags: [motion, dock, reorder]
+syncStatus: reviewed
+verified: false
+---
+
+## Overview
+
+`TxMotionDock` renders actual caller-provided items. Pointer distance influences the item under the pointer and its neighbors; the source spring keeps width and height synchronized. Dragging changes a local preview, then returns a new ordered item array on release. It never replaces the caller's items with built-in demo colors or mutates the provided array.
+
+The dock is a horizontal toolbar. Native buttons and links use roving focus, localized instructions and a polite announcement after an actual reorder. Pausing, reduced motion or visibility suspension stops size animation while leaving the items readable and operable.
+
+## Usage
+
+### Controlled items and slots
+
+The demo displays the caller array after every pointer or keyboard reorder. It also demonstrates selection, a disabled item, real icon/label slots and a native link to its help paragraph.
+
+:::TuffDemoWrapper{demo="MotionDockDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MotionDockItem } from '@talex-touch/tuffex/motion-dock'
+  import { ref } from 'vue'
+
+  const activeId = ref('files')
+  const items = ref<MotionDockItem[]>([
+    { id: 'files', label: 'Files' },
+    { id: 'search', label: 'Search' },
+    { id: 'calendar', label: 'Calendar' },
+  ])
+  </script>
+
+  <template>
+    <TxMotionDock v-model:items="items" v-model:active-id="activeId" show-labels>
+      <template #icon="{ item }">{{ item.label.slice(0, 1) }}</template>
+      <template #label="{ item }">{{ item.label }}</template>
+    </TxMotionDock>
+    <output>{{ items.map(item => item.id).join(' → ') }}</output>
+  </template>
+---
+:::
+
+### Pointer and keyboard
+
+Move along the dock to magnify adjacent items. The source uses a 28px resting size, 44px peak and an 80px influence radius at `md`. A primary pointer drag starts after 4px of horizontal movement, preserves pointer capture through local reorder, and emits the final order on release. Escape, pointer cancellation or lost capture restores the caller order without emitting a reorder. An external replacement of `items` cancels the stale drag snapshot.
+
+Left/Right moves focus through enabled items with wrapping; Home/End reaches the first/last enabled item. Alt + Left/Right moves the focused item one position; Alt + Home/End moves it to an end. Enter or Space activates the focused item. Links retain native navigation, with Space providing the same toolbar activation as buttons. A drag does not activate its item, and subsequent keyboard activation is not suppressed.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `items` | `readonly MotionDockItem[]` | Required | Caller-owned order and stable unique IDs. Synchronize `update:items`, normally with `v-model:items`. |
+| `activeId` | `string \| number` | — | Selected identity; supports `v-model:active-id`. Selection does not modify the order. |
+| `reorderable` | `boolean` | `true` | Enable pointer drag and Alt-key reorder; normal navigation and activation remain available. |
+| `disabled` | `boolean` | `false` | Disable all activation/reorder and stop size animation. |
+| `paused` | `boolean` | `false` | Stop magnification and restore resting sizes without disabling item actions. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Resting sizes 20, 24, 28 and 36px. Peak size scales by the source 44/28 ratio. |
+| `itemSize` | `number` | From `size` | Override resting size, minimum 16px; non-finite values use the size preset. |
+| `magnifiedSize` | `number` | `itemSize × 44 / 28` | Override peak, never smaller than the resting size. |
+| `distance` | `number` | `80` | Pointer influence radius in pixels; minimum 1px. |
+| `showLabels` | `boolean` | `false` | Show item label text below the dock. Accessible names always use `item.label`. |
+| `labels` | `Partial<MotionDockLabels>` | See below | Localized toolbar name, keyboard instructions and reorder announcement. |
+
+#### Item and labels
+
+`MotionDockItem` contains `id: string | number`, `label: string`, optional `disabled: boolean` and optional `href: string`. Without `href`, it is a native button. With `href`, it is a native link; disabled links cannot navigate. Reorder preserves the same item objects, including caller-owned additional fields.
+
+| Label | Default | Meaning |
+| --- | --- | --- |
+| `dock` | `'Application dock'` | Toolbar accessible name. |
+| `instructions` | English arrow/Home/End, Alt-reorder, Enter/Space and Escape instructions | Associated with the toolbar through a stable Vue ID. |
+| `reordered` | `'Moved {label} to position {position} of {total}.'` | Polite reorder announcement. Positions are one-based; event indexes are zero-based. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `update:items` | `MotionDockItem[]` | A new array after a changed pointer or keyboard order. The caller must apply it. |
+| `reorder` | `(items, detail)` | The same actual ordered array and `MotionDockReorder` describing the operation. |
+| `update:activeId` | `string \| number` | A native activation requests selection. |
+| `select` | `(item, index)` | Actual selected item and its current order index; not a fabricated business action. |
+
+`MotionDockReorder` is `{ id, from, to, source: 'pointer' | 'keyboard' }`. `from` and `to` are zero-based. Releasing without an order change or cancelling a drag emits no reorder. The component does not write storage or navigate on behalf of a button item.
+
+### Slots
+
+| Slot | Scope | Description |
+| --- | --- | --- |
+| `item` | `{ item, index, active, dragging }` | Replace the content inside the native item control. Do not nest another interactive control. |
+| `icon` | `{ item, index }` | Icon artwork. The fallback is the first character of the caller's label. Artwork is hidden from assistive technology. |
+| `label` | `{ item, index }` | Visible label content when `showLabels=true`; does not replace the accessible name. |
+
+No imperative method is required. `items`, `activeId`, `reorderable` and `paused` drive the real state.
+
+### Exports
+
+`@talex-touch/tuffex/motion-dock` exports `TxMotionDock`, installable `MotionDock`, `TxMotionDockInstance`, `MotionDockProps`, `MotionDockEmits`, `MotionDockItem`, `MotionDockId`, `MotionDockLabels`, `MotionDockReorder` and `MOTION_DOCK_DEFAULT_LABELS`.
+
+### CSS variables
+
+| Variable | Meaning |
+| --- | --- |
+| `--tx-motion-dock-base-size` | Resting size, derived from `size` / `itemSize`. |
+| `--tx-motion-dock-item-size` | Per-item size owned by the shared spring driver. |
+
+Surface, line, selected ring and icon fill use host `--tx-*` tokens. Hover fills change immediately rather than tweening color.
+
+## Source mapping
+
+| Variant | Original symbol | Pinned source | Retained behavior |
+| --- | --- | --- | --- |
+| `dock` | `Dock` / `DockItem` | [Dock.tsx](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/Dock.tsx) | Adjacent pointer-distance magnification; synchronized width/height; mass 0.1, stiffness 220, damping 16; horizontal drag-to-reorder. Built-in color arrays become caller-owned items and slots. |
+
+## Best Practices
+
+- Use stable unique IDs and apply `update:items`. Rendering a fixed array while ignoring the emitted order intentionally keeps the caller order unchanged.
+- Keep your own item objects and business actions. Listen to `select` for button actions; supply `href` for actual links.
+- Provide localized labels and nonempty item names. Icon content should remain decorative, not a second nested button.
+- Use `reorderable=false` for fixed app/navigation order. Disabled items remain part of the data but cannot activate, focus through the toolbar or start a drag.
+- Keep the dock compact enough for its host. Visible labels can be wider than icon cells; use concise names or keep `showLabels=false` on narrow surfaces.
+- Do not add a second hover timer or spring. The component owns motion activity and cancels the single RAF when it settles or suspends.
+
+## Technologies
+
+The implementation uses native pointer capture and HTML toolbar semantics. Layout is measured on input events, not in spring frames. The existing liquid `springSteps` advances the source spring with carried velocity. A single demand-driven RAF writes item size custom properties and stops at rest. `useMotionActivity` owns SSR-safe visibility, hidden-document, reduced-motion and KeepAlive suspension. RAF ownership, pointer capture and pending drag state are released on deactivation/unmount. No observers or global listeners are duplicated by the dock.
+
+Adapted under MIT. Copyright (c) 2026 SYED  SUBHAN UDDIN. This page records implementation contracts; it does not claim a completed browser or package verification run.

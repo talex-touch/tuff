@@ -165,14 +165,27 @@ const tarball = await packWorkspacePackage(root)
  * compile against the code being shipped alongside them.
  */
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-const siblings = Object.keys(manifest.dependencies ?? {}).filter(name =>
-  name.startsWith('@talex-touch/'),
-)
-
 const overrides = {}
-for (const name of siblings) {
+const packedSiblings = new Set()
+async function packSiblingClosure(name) {
+  if (packedSiblings.has(name)) return
+  packedSiblings.add(name)
   const siblingRoot = resolve(root, '..', name.slice('@talex-touch/'.length))
+  const siblingManifest = JSON.parse(await readFile(join(siblingRoot, 'package.json'), 'utf8'))
+  const dependencies = {
+    ...siblingManifest.dependencies,
+    ...siblingManifest.optionalDependencies,
+    ...siblingManifest.peerDependencies,
+  }
+  for (const [dependency, specifier] of Object.entries(dependencies)) {
+    if (dependency.startsWith('@talex-touch/') && String(specifier).startsWith('workspace:'))
+      await packSiblingClosure(dependency)
+  }
   overrides[name] = `file:${await packWorkspacePackage(siblingRoot)}`
+}
+for (const [name, specifier] of Object.entries(manifest.dependencies ?? {})) {
+  if (name.startsWith('@talex-touch/') && String(specifier).startsWith('workspace:'))
+    await packSiblingClosure(name)
 }
 
 /*

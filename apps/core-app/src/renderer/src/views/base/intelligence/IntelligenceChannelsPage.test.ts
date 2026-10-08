@@ -115,7 +115,7 @@ const onDeviceChannel: IntelligenceProviderConfig = {
   enabled: true,
   type: IntelligenceProviderType.CUSTOM,
   capabilities: ['audio.asr'],
-  models: ['sense-voice-small'],
+  models: [{ id: 'sense-voice-small' }],
   defaultModel: 'sense-voice-small',
   metadata: {
     channelType: ON_DEVICE_ASR_CHANNEL_TYPE,

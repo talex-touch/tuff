@@ -1,0 +1,108 @@
+---
+title: 动效套件
+description: 按钮、卡片展开、3D 轮播、加载动效、抖动图表与输入驱动动效
+category: MotionSuite
+status: beta
+since: 0.6.3
+tags: [motion, interaction, animation, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+下方每个格子都渲染真实组件，内容或数据由标本传入。使用悬停、焦点、点击、拖动或可见控件体验行为。重置按钮只重新挂载当前标本，模型与播放状态一起恢复；点击组件名称进入完整变体演示和 API 页。
+
+::DocsComponentsGallery{suite="motion"}
+::
+
+### 最佳实践
+
+- 数值、条目、状态和导航由应用驱动。按钮反馈、加载循环或提交请求不能证明业务操作成功。
+- 重复和装饰动效不要进入 live region。保留一份可读文字和原生键盘控件。
+- 尊重减少动态效果与可见性。共享活动门禁在隐藏、失活或卸载时停止持续工作。
+- 文字值变化复用 `TxTextMorph`，运动复用共享 spring；这些家族不新增文字 diff 或物理引擎。
+
+## 概述
+
+Motion 是八个文档套件之一，包含十二个组件家族。安装仍使用现有 Base、Pro 和 AI 三套 barrel。这里的组件从 `@talex-touch/tuffex/pro` 引入；DitherChart 还提供现有 `@talex-touch/tuffex/charts` 图表入口。0.6.3 源码随 Tuff beta 测试，尚未独立发布 npm。
+
+### 按钮
+
+[MotionButton 动效按钮](./motion-button.zh.mdc) 保留命名按钮效果与来源预设。标签、图标、菜单项、链接和活动状态由调用方传入。使用原生按钮或链接行为，不把视觉结束当作业务成功。
+
+### 卡片展开
+
+[CardSpread 卡片展开](./card-spread.zh.mdc) 将调用方的卡片排成弧形、扇形、线性、印章、层叠和散布结构。选中索引与展开状态受控，键盘和指针操作使用同一组条目。
+
+### 3D 轮播
+
+[Carousel3D 三维轮播](./carousel-3d.zh.mdc) 沿弧形、CoverFlow 和时间机器路径展示调用方卡片，包含对应单色变体。[FlipBook 翻页书](./flip-book.zh.mdc) 翻动传入的页面，可配置纸张、折痕和图片处理。两者都有真实导航，不是静态示意图。
+
+### 加载动效
+
+[MotionLoader 加载动效](./motion-loader.zh.mdc) 保留来源加载器各自的几何结构与节奏。调用方控制加载状态和无障碍文字，选择加载器不会制造业务完成状态。
+
+### 抖动图表
+
+[DitherChart 抖动图表](./dither-chart.zh.mdc) 用像素、有序抖动和 SVG 图案展示传入的序列、节点与单元格。时间范围、选中序列和筛选会改变实际图表输入。组件位于现有 charts 边界，使用 `--tx-chart-*` 主题变量。不需要抖动材质时，在数据套件查看 [MonoChart 单色图表](./mono-chart.zh.mdc)。
+
+### 文字
+
+[MotionText 文字动效](./motion-text.zh.mdc) 区分文字展示与文字值变化。字符、词、段落、打字、模糊、揭示和 3D 效果保留原始可读文字；文字间媒体和焦点效果接受调用方内容。
+
+### 物理动效
+
+[PhysicsMotion 物理动效](./physics-motion.zh.mdc) 保留来源几何，以及悬停、点击、循环或手动触发关系。重放启动新一次展示，可见性和减少动态效果处理限制隐藏持续工作。
+
+### 悬停、指针与滚动
+
+[Motion](./motion.zh.mdc) 覆盖入场、卡片悬停、倾斜、磁吸、指针、聚光灯和滚动联动展示。[MotionDock 动效 Dock](./motion-dock.zh.mdc) 放大和重排调用方条目，返回实际新顺序。滚动变体可指定调用方的滚动容器。
+
+### 切换控件
+
+[MotionToggle 动效切换](./motion-toggle.zh.mdc) 将每种切换效果绑定到调用方的模型、选项和计数。指针和键盘激活更新同一个受控值，外观不会另存一套业务状态。
+
+### 转场
+
+[MotionTransition 动效转场](./motion-transition.zh.mdc) 用门、遮罩、波形、透视舞台和幕帘切换带 key 的内容。内联、卡片、模态和覆盖模式共享受控内容标识、可见性与重放行为。
+
+## API 参考
+
+### 引入
+
+```ts
+import {
+  TxCardSpread,
+  TxCarousel3D,
+  TxFlipBook,
+  TxMotion,
+  TxMotionButton,
+  TxMotionDock,
+  TxMotionLoader,
+  TxMotionText,
+  TxMotionToggle,
+  TxMotionTransition,
+  TxPhysicsMotion,
+} from '@talex-touch/tuffex/pro'
+import { TxDitherChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/base.css'
+```
+
+上方 `suite="motion"` 是文档预览分类，没有第四套安装 barrel。`@talex-touch/tuffex/motion` 是 `TxMotion` 的合法单组件子路径。手动引入组件时，按《[安装与引入](./installation.zh.mdc)》和对应组件 API 页加载按需样式。
+
+### 属性
+
+| 总览组件 | 属性 | 值 | 行为 |
+| --- | --- | --- | --- |
+| `DocsComponentsGallery` | `suite` | `motion` | 只展示 Motion 部分，包含十二个实时标本和各自的重置控件。 |
+
+### 相关套件
+
+- [数据套件](./data-suite.zh.mdc)：MonoChart、现有图表族和轻量可视化。
+- [进阶套件](./pro-suite.zh.mdc)：MotionForm、MotionControl、MotionMetric，以及现有视觉效果和原语。
+- [理念](./index.zh.mdc)：安装、主题、无障碍和完整组件索引。
+
+## 技术实现
+
+侧栏、总览和中心页使用共享 `docs-suites.ts` 分类。重新分类脚本将分类写入组件 frontmatter，`SECTION_ORDER` 提供稳定页序。预览重置使用 `DocsGallerySpecimen`；新标本各自持有模型，重置会重新开始真实交互。来源改编保留 Amicro 的 MIT 署名和源文件级 Apache-2.0 声明；Lucide 图标数据另保留 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖。可见性、减少动态效果和 spring 由 TuffEx 统一维护。

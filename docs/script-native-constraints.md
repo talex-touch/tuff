@@ -12,7 +12,8 @@
 ## References
 - apps/core-app/src/main/core/channel-core.ts
 - apps/core-app/src/main/modules/plugin/plugin.ts
-- apps/core-app/src/main/modules/terminal/terminal.manager.ts
+- apps/core-app/src/main/modules/terminal/index.ts
+- apps/core-app/src/main/modules/terminal/pty-session-core.ts
 - apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts
 - plugins/touch-system-actions/index.js
 - apps/core-app/electron-builder.yml
@@ -32,9 +33,9 @@
 - 位置：`src/main/modules/plugin/plugin.ts:763-807`
 
 ### 模式 C：外部进程执行（TerminalModule）
-- 通过 `child_process.spawn` 执行命令。
-- Windows 使用 `cmd.exe`；macOS/Linux 使用 `$SHELL` 或 `/bin/bash`。
-- 位置：`src/main/modules/terminal/terminal.manager.ts:12-89`
+- 通用终端和 AI CLI 由共用 `node-pty` 核心启动真实 PTY，支持输入、控制键和行列变化。
+- 创建接收可执行文件、独立参数、cwd 和初始尺寸，不自动解析命令字符串或选择平台 shell。
+- 位置：`src/main/modules/terminal/index.ts`、`src/main/modules/terminal/pty-session-core.ts`。
 
 ### 模式 D：外部 CLI 集成（Everything Provider）
 - Windows 专属依赖 `Everything` + `es.exe`。
@@ -56,8 +57,8 @@
 2) **系统指令权限**：关机/重启在 macOS/Windows 均需要管理员权限并可能弹窗提示。  
    参考：`plugins/touch-system-actions/index.js`
 
-3) **Shell 差异**：命令执行依赖 OS Shell，Windows 为 `cmd.exe`，macOS/Linux 为 `$SHELL` 或 `/bin/bash`。  
-   参考：`src/main/modules/terminal/terminal.manager.ts:12-89`
+3) **PTY 与可执行文件依赖**：交互式终端需要可用的 `node-pty` 和明确的可执行文件。缺失或启动失败返回错误，不回退到管道进程。跨平台打包与运行证据须分别核验。
+   参考：`src/main/modules/terminal/pty-session-core.ts`
 
 4) **原生二进制加载要求**：动态库需 `asarUnpack`，否则可能无法加载。  
    参考：`apps/core-app/electron-builder.yml:3-13`
@@ -84,14 +85,14 @@
 - 在未获得管理员权限时执行关机/重启类系统指令。  
   参考：`plugins/touch-system-actions/index.js`
 - 直接在渲染进程执行系统命令（现有执行入口均位于主进程）。  
-  参考：`src/main/modules/terminal/terminal.manager.ts:1-89`
+  参考：`src/main/modules/terminal/index.ts`
 
 ---
 
 ## 4) Electron Sandbox / 签名 / 权限影响
 
 - 外部进程执行集中在主进程，渲染进程通过 IPC/Transport 访问，符合 sandbox 约束。  
-  参考：`src/main/modules/terminal/terminal.manager.ts:1-89`
+  参考：`src/main/modules/terminal/index.ts`、`src/main/modules/terminal/pty-session-core.ts`
 - macOS 发布版需额外签名/公证，否则可能触发 Gatekeeper 风险。  
   参考：`apps/core-app/electron-builder.yml:81-92`
 - 系统级操作（关机/重启/锁屏）依赖系统权限，需明确提示与失败降级。  

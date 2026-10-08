@@ -11,7 +11,7 @@ verified: false
 
 ## 用法
 
-悬停触发器即可展开。指针离开后面板会保留 `closeDelay` 毫秒，方便你把指针移进去。`close-on-content-click` 让面板在内部任意点击后关闭。
+悬停触发器即可展开。触发器与面板之间的间隙由悬停桥覆盖，朝面板移动的指针由安全三角保持面板打开；指针真正离开后，面板再保留 `closeDelay` 毫秒。`close-on-content-click` 让面板在内部任意点击后关闭。
 
 ### FlatDropdown（基础）
 :::TuffDemoWrapper{demo="FlatDropdownBasicDemo" code-lang="vue"}
@@ -39,7 +39,7 @@ code: |
 ### 最佳实践
 
 - 破坏性或会改变状态的菜单优先用 `trigger="click"` —— 悬停展开在触控板上很容易误触。
-- `hover` 模式下 `closeDelay` 要留足（默认 `600`）；太短会让指针斜向移入面板变得非常难受。
+- 斜向移入面板由悬停桥和安全三角负责，不依赖 `closeDelay`；`closeDelay` 只决定指针真正离开（偏离三角形、停顿，或从背向面板的一侧离开）后面板还停留多久。
 - 当下拉位于自带层叠或裁剪上下文的容器内、且需要继承该上下文时，设 `teleport="false"`。注意就地渲染会重新暴露在祖先的 `overflow: hidden` 之下。
 - 用 `side` 插槽参数翻转你自己的装饰元素（箭头、阴影），以配合面板翻转到触发器上方的情况。
 - 不要假设面板在展开后就已完成定位 —— 位置是响应式异步写回的，若需读取绝对几何请放到 `requestAnimationFrame` 中测量。
@@ -88,7 +88,7 @@ code: |
 
 `trigger` 决定面板如何被唤起：
 
-- `hover`（默认）—— 指针进入或获得焦点时展开，离开后延迟 `closeDelay` 关闭。
+- `hover`（默认）—— 指针进入或获得焦点时展开，离开后延迟 `closeDelay` 关闭；朝面板移动的途中不算离开。
 - `click` —— 点击切换，不应用 `closeDelay`。
 - `manual` —— 组件永不自行展开，完全由 `v-model` 驱动。
 
@@ -113,7 +113,7 @@ code: |
 
 | 属性 | 默认值 | 触发关闭的条件 |
 |---|---|---|
-| `closeOnClickOutside` | `true` | 点击落在触发器与面板之外 |
+| `closeOnClickOutside` | `true` | 点击落在触发器、面板与悬停桥之外 |
 | `closeOnEsc` | `true` | 按下 `Escape` |
 | `closeOnContentClick` | `false` | 面板内部发生任意点击 |
 
@@ -123,3 +123,6 @@ code: |
 
 - 组件：`packages/tuffex/packages/components/src/flat-dropdown/src/TxFlatDropdown.vue`
 - 类型：`packages/tuffex/packages/components/src/flat-dropdown/src/types.ts`
+- 悬停桥与安全三角与锚点家族共用 `packages/tuffex/packages/utils/hover-intent.ts`。桥的几何由 Floating UI 中间件链最后一环算出，渲染成面板的兄弟节点、共用同一套 `position: fixed` 与 `z-index`，进出事件与面板相同。
+- 被否掉的做法：把桥做成面板的子元素或伪元素。面板的 `transform` 属于缩放入场与模糊退场，宿主的 `panelClass` 还可能给面板加 `overflow: hidden`，伸出盒外的命中区会被一并裁掉。
+- **实测覆盖:** `packages/tuffex/packages/components/src/flat-dropdown/__tests__/flat-dropdown.test.ts` 覆盖悬停桥：以面板兄弟节点渲染、指针停在桥上不关闭、按在桥上不算外部点击、`click` 模式不渲染桥。

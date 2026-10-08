@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { SliderEmits, SliderProps } from './types'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { useThumbJelly } from './use-thumb-jelly'
 import { clamp01, useTooltipMotion } from './use-tooltip-motion'
 
@@ -15,6 +16,7 @@ const props = withDefaults(defineProps<SliderProps>(), {
   max: 100,
   step: 1,
   disabled: false,
+  active: true,
   showValue: false,
   thumbSurface: true,
   thumbVariant: 'blur',
@@ -45,6 +47,12 @@ const emit = defineEmits<SliderEmits>()
 const inputRef = ref<HTMLInputElement | null>(null)
 const mainRef = ref<HTMLDivElement | null>(null)
 const tooltipRef = ref<HTMLDivElement | null>(null)
+const suspended = ref(false)
+const trackingActive = computed(() => props.active && !suspended.value)
+const reducedMotion = useReducedMotion()
+const tooltipMotionEnabled = computed(() => trackingActive.value && props.tooltipTilt && !reducedMotion.value)
+let mounted = false
+let resourcesActive = false
 
 const mainWidth = ref(0)
 const mainLeftPx = ref(0)
@@ -131,10 +139,10 @@ const valueText = computed(() => {
   return undefined
 })
 
-const isHovering = computed(() => hovering.value && !props.disabled)
+const isHovering = computed(() => trackingActive.value && hovering.value && !props.disabled)
 
 const shouldShowTooltip = computed(() => {
-  if (!props.showTooltip)
+  if (!trackingActive.value || !props.showTooltip)
     return false
   if (props.disabled)
     return false
@@ -146,7 +154,7 @@ const shouldShowTooltip = computed(() => {
 })
 
 const motion = useTooltipMotion({
-  isEnabled: () => props.tooltipTilt,
+  isEnabled: () => tooltipMotionEnabled.value,
   isActive: () => shouldShowTooltip.value,
   target: () => thumbCenterPx.value,
   config: () => ({
@@ -161,17 +169,9 @@ const motion = useTooltipMotion({
   }),
 })
 
-/**
- * Under reduced motion the pill still changes rim and shadow with state; it just
- * never deforms. Read once at setup — the preference does not flip mid-session in
- * practice, and a media-query listener per slider would buy nothing.
- */
-const reducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false
 
 const jelly = useThumbJelly({
-  isEnabled: () => props.thumbSurface && !reducedMotion,
+  isEnabled: () => trackingActive.value && props.thumbSurface && !reducedMotion.value,
 })
 
 /**
@@ -194,7 +194,7 @@ const surfaceStyle = computed<Record<string, string | undefined>>(() => ({
  * solid body and the glass fades in on grab.
  */
 const showGlass = computed(() =>
-  props.thumbSurface && props.thumbVariant === 'glass' && (dragging.value || jelly.active.value),
+  trackingActive.value && props.thumbSurface && props.thumbVariant === 'glass' && (dragging.value || jelly.active.value),
 )
 
 /** Read per grab, so a theme toggle mid-session is honoured; the class beats the OS preference. */
@@ -219,7 +219,7 @@ const glassLook = computed(() => darkTheme.value
  * name with no rules behind it so the tooltip swaps in and out on the same frame.
  */
 const transitionName = computed(() =>
-  props.tooltipMotion === 'none' ? 'tx-slider-tooltip-none' : 'tx-slider-tooltip',
+  props.tooltipMotion === 'none' || reducedMotion.value ? 'tx-slider-tooltip-none' : 'tx-slider-tooltip',
 )
 
 const tooltipTransitionStyle = computed<Record<string, string>>(() => {
@@ -230,14 +230,14 @@ const tooltipTransitionStyle = computed<Record<string, string>>(() => {
 })
 
 const tooltipStyle = computed(() => {
-  const baseX = props.tooltipTilt ? motion.followX.value : thumbCenterPx.value
-  const offsetX = props.tooltipTilt ? motion.offsetX.value : 0
-  const baseRotate = props.tooltipTilt ? motion.tiltDeg.value : 0
-  const baseSquash = props.tooltipTilt ? motion.squash.value : 0
-  const baseSkew = props.tooltipTilt ? motion.skewDeg.value : 0
+  const baseX = tooltipMotionEnabled.value ? motion.followX.value : thumbCenterPx.value
+  const offsetX = tooltipMotionEnabled.value ? motion.offsetX.value : 0
+  const baseRotate = tooltipMotionEnabled.value ? motion.tiltDeg.value : 0
+  const baseSquash = tooltipMotionEnabled.value ? motion.squash.value : 0
+  const baseSkew = tooltipMotionEnabled.value ? motion.skewDeg.value : 0
 
-  const wobble = props.tooltipTilt && props.tooltipJelly ? motion.wobble.value : 0
-  const wobbleDir = props.tooltipTilt && props.tooltipJelly ? motion.wobbleDir.value : 1
+  const wobble = tooltipMotionEnabled.value && props.tooltipJelly ? motion.wobble.value : 0
+  const wobbleDir = tooltipMotionEnabled.value && props.tooltipJelly ? motion.wobbleDir.value : 1
   const wobbleRotate = wobble * wobbleDir * Math.max(0, props.tooltipJellyRotateDeg)
   const wobbleSkew = wobble * wobbleDir * Math.max(0, props.tooltipJellySkewDeg)
   const wobbleSquash = Math.abs(wobble) * Math.max(0, props.tooltipJellySquash)
@@ -259,7 +259,7 @@ const tooltipStyle = computed(() => {
   const origin = props.tooltipPlacement === 'bottom' ? '50% 0%' : '50% 100%'
 
   const useMotion = props.tooltipMotion !== 'none'
-  const transition = useMotion
+  const transition = reducedMotion.value ? 'none' : useMotion
     ? (dragging.value ? 'none' : 'transform 0.3s ease')
     : (dragging.value ? 'opacity 0.12s ease' : 'opacity 0.2s ease, transform 0.3s ease')
 
@@ -315,6 +315,8 @@ function driveTooltipMotion(
   velocityScale: number,
   accelerationScale: number,
 ): void {
+  if (!tooltipMotionEnabled.value)
+    return
   const direction = velocity >= 0 ? 1 : -1
   const intensity = clamp01(
     Math.abs(velocity) / velocityScale
@@ -337,7 +339,7 @@ function driveTooltipMotion(
 }
 
 function onGlobalPointerMove(e: PointerEvent): void {
-  if (!dragging.value)
+  if (!trackingActive.value || !dragging.value)
     return
 
   const now = performance.now()
@@ -402,14 +404,14 @@ function onChange(e: Event): void {
 }
 
 function startDragging(e: PointerEvent): void {
-  if (props.disabled)
+  if (props.disabled || !trackingActive.value)
     return
   dragging.value = true
   refreshMetrics()
   darkTheme.value = readDarkTheme()
   jelly.press()
 
-  if (props.tooltipTilt) {
+  if (tooltipMotionEnabled.value) {
     motion.reset()
     motion.start()
   }
@@ -433,7 +435,7 @@ function stopDragging(): void {
   pointerVelocity.value = 0
   pointerAcceleration.value = 0
 
-  if (props.tooltipTilt) {
+  if (tooltipMotionEnabled.value) {
     // Release the lean; the spring carries the tooltip back over the thumb.
     motion.settle(1, 0)
     motion.start()
@@ -491,8 +493,10 @@ watch(
       return
     }
     await nextTick()
+    if (!mounted || !shouldShowTooltip.value || !trackingActive.value)
+      return
     refreshTooltipWidth()
-    if (props.tooltipTilt) {
+    if (tooltipMotionEnabled.value) {
       motion.reset()
       motion.start()
     }
@@ -506,39 +510,76 @@ watch(tooltipText, async () => {
   if (!shouldShowTooltip.value)
     return
   await nextTick()
+  if (!mounted || !shouldShowTooltip.value || !trackingActive.value)
+    return
   refreshTooltipWidth()
 })
 
-onMounted(() => {
+function startResources(): void {
+  if (!mounted || !trackingActive.value || resourcesActive)
+    return
+  resourcesActive = true
   refreshMetrics()
   window.addEventListener('pointerup', onGlobalPointerUp)
-
   if (typeof ResizeObserver !== 'undefined' && mainRef.value) {
-    resizeObserver = new ResizeObserver(() => refreshMetrics())
-    resizeObserver.observe(mainRef.value)
+    const current = new ResizeObserver(() => {
+      if (resourcesActive && resizeObserver === current)
+        refreshMetrics()
+    })
+    resizeObserver = current
+    current.observe(mainRef.value)
   }
-
   if (typeof ResizeObserver !== 'undefined') {
-    tooltipResizeObserver = new ResizeObserver(() => refreshTooltipWidth())
+    const current = new ResizeObserver(() => {
+      if (resourcesActive && tooltipResizeObserver === current)
+        refreshTooltipWidth()
+    })
+    tooltipResizeObserver = current
+    if (shouldShowTooltip.value && tooltipRef.value) {
+      refreshTooltipWidth()
+      current.observe(tooltipRef.value)
+    }
   }
-})
+}
 
-onBeforeUnmount(() => {
+function stopResources(): void {
+  resourcesActive = false
+  dragging.value = false
+  hovering.value = false
   motion.stop()
+  motion.reset()
   jelly.stop()
-  window.removeEventListener('pointerup', onGlobalPointerUp)
-  window.removeEventListener('pointermove', onGlobalPointerMove)
-
-  if (resizeObserver && mainRef.value) {
-    resizeObserver.unobserve(mainRef.value)
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointerup', onGlobalPointerUp)
+    window.removeEventListener('pointermove', onGlobalPointerMove)
   }
+  resizeObserver?.disconnect()
   resizeObserver = null
-
-  if (tooltipResizeObserver && tooltipRef.value) {
-    tooltipResizeObserver.unobserve(tooltipRef.value)
-  }
+  tooltipResizeObserver?.disconnect()
   tooltipResizeObserver = null
-})
+  lastPointerTs.value = null
+  lastPointerX.value = null
+  pointerVelocity.value = 0
+  pointerAcceleration.value = 0
+  lastInputTs.value = null
+  lastInputValue.value = null
+  inputVelocity.value = 0
+  inputAcceleration.value = 0
+}
+
+watch(trackingActive, active => active ? startResources() : stopResources(), { flush: 'sync' })
+watch(() => [props.thumbSurface, reducedMotion.value] as const, ([surface, reduced]) => {
+  if (!surface || reduced)
+    jelly.stop()
+  if (reduced) {
+    motion.stop()
+    motion.reset()
+  }
+}, { flush: 'sync' })
+onMounted(() => { mounted = true; startResources() })
+onActivated(() => { suspended.value = false })
+onDeactivated(() => { suspended.value = true })
+onBeforeUnmount(() => { mounted = false; suspended.value = true; stopResources() })
 </script>
 
 <template>
@@ -617,7 +658,7 @@ onBeforeUnmount(() => {
         :max="max"
         :step="step"
         :disabled="disabled"
-        :value="clampedValue"
+        :value="liveValue"
         :aria-label="ariaLabel"
         :aria-labelledby="ariaLabelledby"
         :aria-valuetext="valueText"

@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-02-tuffex-admin-primitives/prd.md", "reason": "Acceptance: tuffex gates, Nexus docs-coverage gate, unchanged default behavior"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Docs-sync checklist including wrapper components"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Visual rules the review enforces"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands"}

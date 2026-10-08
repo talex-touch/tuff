@@ -15,6 +15,7 @@ verified: true
 
 - Prefer `options` for data-driven lists and `TuffSelectItem` for small static templates that need custom inline markup.
 - Do not mix `options` and slot items for the same option set; `options` mode owns rendering while slot items only register when no prop options exist.
+- Name single selects with an adjacent `<label for>` and `id`, or pass `aria-label` directly. For multiple selects, use `aria-label` or `aria-labelledby`; do not wrap the select in a label.
 - Keep remote search requests in the host and use `searchDebounce` to limit request volume.
 - Persist `create` results into your own options store before relying on the created value appearing in future dropdown opens.
 - Keep `modelValue` type aligned with `multiple`; use a scalar in single mode and an array in multiple mode.
@@ -110,13 +111,15 @@ Use the default mode for compact form fields and filters. The trigger is read-on
 code: |
   <script setup lang="ts">
   import type { TxSelectValue } from '@talex-touch/tuffex'
-  import { ref } from 'vue'
+  import { ref, useId } from 'vue'
 
   const value = ref<TxSelectValue>('engineering')
+  const controlId = useId()
   </script>
 
   <template>
-    <TuffSelect v-model="value" placeholder="Please select">
+    <label :for="controlId">Team</label>
+    <TuffSelect :id="controlId" v-model="value" placeholder="Please select" aria-label="Team">
       <TuffSelectItem value="design" label="Design team" />
       <TuffSelectItem value="engineering" label="Engineering team" />
       <TuffSelectItem value="support" label="Support team" />
@@ -444,6 +447,7 @@ code: |
 - `allowCreate` only creates `{ value, label }` from the current input and emits `create`; append created options to your host `options` source when they should appear in the list.
 - When a value is provided before items mount, the select resolves the display label after options register. Numeric strings and numbers compare by numeric value when both are finite.
 - Accessibility roles: the trigger is a `combobox` with `aria-haspopup="listbox"` and `aria-expanded` bound to open state; the dropdown list is a `listbox` (adding `aria-multiselectable` in `multiple` mode); each option is an `option` whose `aria-selected` reflects selection.
+- `id`, accessible names and other control attributes reach the actual combobox on the first render and on updates, not the root layout div. `class` and `style` remain on the root. Single-select labels target the input; multiple-select names target its existing combobox container.
 
 ## Technologies
 

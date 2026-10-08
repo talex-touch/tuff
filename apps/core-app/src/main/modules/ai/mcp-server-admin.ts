@@ -29,14 +29,10 @@ const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 /** RFC 7230 header field-name token. */
 const HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
 
-export interface McpServerAdminDeps {
+export interface McpServerAdminDeps extends McpProbeRunner {
   getItem: (itemId: string) => Promise<AiImportedConfigItem | null>
   persistManualItem: (input: ManualImportedItemInput) => Promise<AiImportedConfigItem>
   mcpProfilesFromItem: (item: AiImportedConfigItem) => IntelligenceMcpProfile[]
-  registerProfile: (profile: IntelligenceMcpProfile) => void
-  unregisterProfile: (profileId: string) => Promise<unknown>
-  /** Connects if needed and reports the server's tool list. */
-  listServerTools: (profileId: string) => Promise<unknown[]>
   secureStore: {
     isAvailable: () => boolean
     read: (authRef: string) => Promise<string | null>
@@ -47,9 +43,42 @@ export interface McpServerAdminDeps {
   newItemId?: () => string
 }
 
+/** What a probe needs from the MCP registry. */
+export interface McpProbeRunner {
+  registerProfile: (profile: IntelligenceMcpProfile) => void
+  unregisterProfile: (profileId: string) => Promise<unknown>
+  /** Connects if needed and reports the server's tool list. */
+  listServerTools: (profileId: string) => Promise<unknown[]>
+}
+
+/**
+ * Starts one server for a probe and counts its tools.
+ *
+ * The registry only holds what the runtime reconciled — switched-on servers of switched-on items —
+ * so a server it does not run (`running` false) is registered for the probe, as switched on, since
+ * the registry lists no tools for a disabled profile, and dropped again right after: a probe never
+ * leaves a server process running behind a switch the user left off, or behind a server Tuff does
+ * not hold at all.
+ */
+export async function probeProfile(
+  runner: McpProbeRunner,
+  profile: IntelligenceMcpProfile,
+  running: boolean
+): Promise<{ toolCount: number } | { failure: string }> {
+  runner.registerProfile(running ? profile : { ...profile, enabled: true })
+  try {
+    return { toolCount: (await runner.listServerTools(profile.id)).length }
+  } catch (error) {
+    return { failure: messageOf(error) }
+  } finally {
+    if (!running) await runner.unregisterProfile(profile.id).catch(() => undefined)
+  }
+}
+
 export interface McpServerAdmin {
   upsertManual: (input: McpManualServerInput & { itemId?: string }) => Promise<{ itemId: string }>
-  probe: (itemId: string) => Promise<McpProbeResult>
+  /** With `profileId`, starts only that server of the item; without it, every server it holds. */
+  probe: (itemId: string, profileId?: string) => Promise<McpProbeResult>
 }
 
 function hash(value: string): string {
@@ -235,32 +264,30 @@ export function createMcpServerAdmin(deps: McpServerAdminDeps): McpServerAdmin {
       return { itemId }
     },
 
-    probe: async (itemId) => {
+    probe: async (itemId, profileId) => {
       const item = await deps.getItem(itemId)
       if (!item || item.kind !== 'mcp')
         return { ok: false, error: `MCP server ${itemId} is not configured` }
-      const profiles = deps.mcpProfilesFromItem(item)
-      if (profiles.length === 0) return { ok: false, error: 'This entry defines no MCP server' }
+      const held = deps.mcpProfilesFromItem(item)
+      if (held.length === 0) return { ok: false, error: 'This entry defines no MCP server' }
+      // A page that names one server gets that one alone: probing it must not start the neighbours
+      // its configuration file happened to declare beside it.
+      const profiles = profileId ? held.filter((profile) => profile.id === profileId) : held
+      if (profiles.length === 0)
+        return { ok: false, error: `MCP server ${profileId} is not part of ${itemId}` }
 
       const failures: string[] = []
       let toolCount = 0
       for (const profile of profiles) {
-        if (profile.enabled === false) {
+        // Credentials an imported copy cannot replay (OAuth, a token flag): starting it could only
+        // fail, so it is reported without being started. A server merely switched off is probed.
+        if (profile.metadata?.reauthRequired === true) {
           failures.push(`${profile.name}: disabled until its credentials are re-entered`)
           continue
         }
-        // The registry only holds what the runtime reconciled from active
-        // items, so a switched-off row has to be registered to be reachable...
-        deps.registerProfile(profile)
-        try {
-          toolCount += (await deps.listServerTools(profile.id)).length
-        } catch (error) {
-          failures.push(`${profile.name}: ${messageOf(error)}`)
-        } finally {
-          // ...and dropped again right after, so a probe never leaves a server
-          // process running behind a switch the user left off.
-          if (!item.active) await deps.unregisterProfile(profile.id).catch(() => undefined)
-        }
+        const outcome = await probeProfile(deps, profile, item.active && profile.enabled !== false)
+        if ('failure' in outcome) failures.push(`${profile.name}: ${outcome.failure}`)
+        else toolCount += outcome.toolCount
       }
       return failures.length > 0
         ? { ok: false, error: failures.join('; ') }

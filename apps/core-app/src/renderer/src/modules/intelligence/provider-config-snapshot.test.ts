@@ -13,7 +13,7 @@ describe('snapshotIntelligenceProviderConfig', () => {
       type: IntelligenceProviderType.CUSTOM,
       name: 'Provider Test',
       enabled: true,
-      models: ['model-a'],
+      models: [{ id: 'model-a' }],
       capabilities: ['text.chat'],
       metadata: { nested: { enabled: true } },
       rateLimit: { requestsPerMinute: 10 }

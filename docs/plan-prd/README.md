@@ -1,12 +1,12 @@
 # Talex Touch 项目文档中心
 
-> 更新时间：2026-08-01
-> 定位：规划入口。当前任务状态以 Trellis 为准；本目录只保留优先级、路线、专题和验收边界。
+> 更新时间：2026-10-03
+> 定位：规划入口。进行中的变更状态以 Comet Native 为准（`docs/comet/changes/`，由 Runtime 写入）；切换前的任务已冻结；本目录只保留优先级、路线、专题和验收边界。
 
 ## 先看这四个入口
 
 1. [`TODO.md`](./TODO.md)：当前两周稳定化顺序与完成条件。
-2. [`.trellis/tasks/README.md`](../../.trellis/tasks/README.md)：实时任务、owner、PRD、设计和实施状态。
+2. [`../engineering/workflow/backlog.md`](../engineering/workflow/backlog.md)：切换到 Comet Native 时冻结的旧任务（owner、下一步、blocker、证据）；进行中的变更在 `docs/comet/changes/`，入口 `/comet`。
 3. [`04-implementation/Roadmap-vNext-2026-06-18.md`](./04-implementation/Roadmap-vNext-2026-06-18.md)：R0-R9 产品路线。
 4. [`01-project/CHANGES.md`](./01-project/CHANGES.md)：已完成事实与验证证据索引。
 
@@ -30,7 +30,7 @@ P0 稳定化三项均已关闭：
 - [`TODO-BACKLOG-LONG-TERM.md`](./TODO-BACKLOG-LONG-TERM.md)：长期债务池。
 - [`04-implementation/Stability-Architecture-Optimization-2026-07-04.md`](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)：稳定性代码落点与验证矩阵。
 - [`../engineering/security-hardening-handoff-2026-07-15.md`](../engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接。
-- [Search & Cross-Platform Audit](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索/跨平台 backlog。
+- [Search & Cross-Platform Audit](../engineering/reports/search-crossplatform-audit.md)：搜索/跨平台 backlog（活审计）。
 - [`03-features/window-switcher-plugin-todo.md`](./03-features/window-switcher-plugin-todo.md)：窗口切换插件的宿主契约、跨平台边界与实施 TODO。
 
 ## Evidence 入口
@@ -43,7 +43,7 @@ P0 稳定化三项均已关闭：
 ## 文档治理规则
 
 - `TODO.md` 只承载当前两周顺序，不复制专题完成流水。
-- Trellis 只承载任务执行状态；Roadmap 不记录临时 worktree 状态。
+- Comet 变更只承载执行状态（由 Runtime 写入），冻结的迁移前任务只读；Roadmap 不记录临时 worktree 状态。
 - 专题状态冲突时，全局优先级服从 `TODO.md`，完成声明服从 evidence。
 - 行为、接口或架构变化至少同步对应专题文档与 `CHANGES.md`；只有全局优先级变化才更新本入口。
 - 旧执行计划保留兼容入口并标记 Historical，不继续维护第二套“当前事实”。

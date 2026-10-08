@@ -1,14 +1,18 @@
 /**
  * File Tools
  *
- * Built-in tools for file operations.
+ * Built-in tools for file operations. write/delete/copy/move run through the conversation file
+ * review lifecycle: with a Main-supplied `ctx.workspace` the mutation is confined to the
+ * conversation's project, serialized per path and recorded with before/after evidence; without one
+ * it behaves as it always has (path locks only, nothing recorded).
  */
 
 import type { AgentPermission } from '@talex-touch/utils'
 import type { ToolExecutionContext } from '../tool-registry'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import process from 'node:process'
+import { resolveToolPath } from '../../../conversation/file-review-fs'
+import { fileReviewService } from '../../../conversation/file-review-service'
 import { toolRegistry } from '../tool-registry'
 
 /**
@@ -34,7 +38,7 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath, encoding = 'utf-8' } = input as { path: string; encoding?: string }
-      const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
+      const resolvedPath = resolveToolPath(filePath, ctx.workingDirectory)
       return fs.readFile(resolvedPath, { encoding: encoding as BufferEncoding })
     }
   )
@@ -67,13 +71,17 @@ export function registerFileTools(): void {
         content: string
         encoding?: string
       }
-      const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
-
-      // Ensure directory exists
-      await fs.mkdir(path.dirname(resolvedPath), { recursive: true })
-      await fs.writeFile(resolvedPath, content, { encoding: encoding as BufferEncoding })
-
-      return { success: true, path: resolvedPath }
+      return fileReviewService.executeFileOperation(
+        ctx,
+        'write',
+        [filePath],
+        async ([resolvedPath]) => {
+          // Ensure directory exists
+          await fs.mkdir(path.dirname(resolvedPath!), { recursive: true })
+          await fs.writeFile(resolvedPath!, content, { encoding: encoding as BufferEncoding })
+          return { success: true, path: resolvedPath }
+        }
+      )
     }
   )
 
@@ -95,7 +103,7 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
-      const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
+      const resolvedPath = resolveToolPath(filePath, ctx.workingDirectory)
 
       try {
         await fs.access(resolvedPath)
@@ -125,7 +133,7 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: dirPath, recursive = false } = input as { path: string; recursive?: boolean }
-      const resolvedPath = resolvePath(dirPath, ctx.workingDirectory)
+      const resolvedPath = resolveToolPath(dirPath, ctx.workingDirectory)
 
       const entries = await fs.readdir(resolvedPath, { withFileTypes: true })
       const items: { name: string; type: 'file' | 'directory'; path: string }[] = []
@@ -177,10 +185,15 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
-      const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
-
-      await fs.unlink(resolvedPath)
-      return { success: true, deleted: resolvedPath }
+      return fileReviewService.executeFileOperation(
+        ctx,
+        'delete',
+        [filePath],
+        async ([resolvedPath]) => {
+          await fs.unlink(resolvedPath!)
+          return { success: true, deleted: resolvedPath }
+        }
+      )
     }
   )
 
@@ -203,14 +216,17 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { source, destination } = input as { source: string; destination: string }
-      const srcPath = resolvePath(source, ctx.workingDirectory)
-      const destPath = resolvePath(destination, ctx.workingDirectory)
-
-      // Ensure destination directory exists
-      await fs.mkdir(path.dirname(destPath), { recursive: true })
-      await fs.copyFile(srcPath, destPath)
-
-      return { success: true, source: srcPath, destination: destPath }
+      return fileReviewService.executeFileOperation(
+        ctx,
+        'copy',
+        [source, destination],
+        async ([srcPath, destPath]) => {
+          // Ensure destination directory exists
+          await fs.mkdir(path.dirname(destPath!), { recursive: true })
+          await fs.copyFile(srcPath!, destPath!)
+          return { success: true, source: srcPath, destination: destPath }
+        }
+      )
     }
   )
 
@@ -237,14 +253,17 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { source, destination } = input as { source: string; destination: string }
-      const srcPath = resolvePath(source, ctx.workingDirectory)
-      const destPath = resolvePath(destination, ctx.workingDirectory)
-
-      // Ensure destination directory exists
-      await fs.mkdir(path.dirname(destPath), { recursive: true })
-      await fs.rename(srcPath, destPath)
-
-      return { success: true, source: srcPath, destination: destPath }
+      return fileReviewService.executeFileOperation(
+        ctx,
+        'move',
+        [source, destination],
+        async ([srcPath, destPath]) => {
+          // Ensure destination directory exists
+          await fs.mkdir(path.dirname(destPath!), { recursive: true })
+          await fs.rename(srcPath!, destPath!)
+          return { success: true, source: srcPath, destination: destPath }
+        }
+      )
     }
   )
 
@@ -266,7 +285,7 @@ export function registerFileTools(): void {
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
-      const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
+      const resolvedPath = resolveToolPath(filePath, ctx.workingDirectory)
 
       const stats = await fs.stat(resolvedPath)
 
@@ -282,16 +301,4 @@ export function registerFileTools(): void {
       }
     }
   )
-}
-
-/**
- * Resolve path relative to working directory
- */
-function resolvePath(filePath: string, workingDirectory?: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath
-  }
-
-  const base = workingDirectory || process.cwd()
-  return path.resolve(base, filePath)
 }

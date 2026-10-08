@@ -1,0 +1,198 @@
+---
+title: MotionControl
+description: 保留完整源码映射、真实模型与调用方结果的 UIkit 动效控件
+category: Advanced
+status: beta
+since: 0.6.3
+tags: [motion, controls, uikit, pro]
+syncStatus: reviewed
+---
+
+`TxMotionControl` 保留 Amicro 的 21 个 UIkit 目录条目与全部 13 个额外导出。内部组合 `TxSelect`、`TxTabs`、`TxDropdownMenu`、`TxContextMenu`、`TxTooltip`、`TxPagination` 与 `TxTextMorph`，不把它们替换成只有外观的按钮。
+
+## 用法
+
+### 完整源码画廊
+
+下方每项源码能力都有独立可操作的示例。按上游导出名筛选，触发操作，再查看模型与真实事件。选项和命令是调用方提供的演示数据，不是组件内置的业务默认值。
+
+:::TuffDemoWrapper{demo="MotionControlDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionControl } from '@talex-touch/tuffex/motion-control'
+
+  const saved = ref(false)
+  const category = ref('design')
+  const options = [
+    { value: 'design', label: '设计' },
+    { value: 'dev', label: '开发' },
+  ]
+  </script>
+
+  <template>
+    <TxMotionControl
+      v-model="saved"
+      variant="yui-save-pill"
+      :labels="{ save: '保存项目', saved: '已保存' }"
+    />
+    <TxMotionControl
+      v-model="category"
+      variant="yui-category-select"
+      :options="options"
+      label="分类"
+    />
+  </template>
+---
+:::
+
+### 受控操作
+
+- 选择器、筛选、日期、标签、步骤与命令输出 `update:modelValue`、`change` 和 `select`。`value` 是稳定选项键，修改显示文案不会丢失选中状态。
+- `yui-multi-tab-close` 接受 `v-model:items`。关闭当前标签会选择最近的剩余可用标签，关闭其他标签不改变当前选择。离开的标签保留测得的位置，执行 200ms 收缩淡出，不延迟模型事件。关闭控件位于标签导航旁的独立操作条中，避免把交互按钮嵌套进标签按钮。`minItems`、`maxItems` 和 `closable` 决定边界。添加时使用 `newItem`，或输出 `add` 让宿主创建条目；组件不编造业务标题或 ID。
+- 保存、关注、主题和 PiP 使用布尔模型。PiP 只输出期望的界面状态，不声称已经调用视频平台 API。应用可通过 `action` 对接真实实现。
+- `back-forward-nav` 输出 `navigate`，并遵守 `canBack` / `canForward`；不读取或修改全局浏览器历史。
+- 计数器按 `step` 改变，在 `min` / `max` 处停止。聚焦计数器控件后，上下方向键增减，Home/End 选择配置边界。分页和圆点使用从 1 开始的页码，`count` 为页数。
+- 下载只输出 `download`。`status` 和 `progress` 由宿主提供；组件不会启动定时器后报告下载成功。演示生成真实文件并请求浏览器保存，但不声称文件已经保存完成。状态选择器是明确的外观输入，不是传输结果。
+- 提示由现有浮层的 hover、focus、延迟链、Escape 和外部点击契约控制。频率选择器展开后呈现真实标签组，收起后将焦点交还触发器。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `MotionControlVariant` | `yui-category-select` | 下方 34 个精确映射之一；21 个目录 ID 原样保留。 |
+| `modelValue` | `string \| number \| boolean` | 由变体决定 | 受控值。省略时保存本地交互状态；选择类型默认使用调用方提供的首个可用选项。 |
+| `options` | `MotionControlItem[]` | `[]` | 选择器、标签、日期、筛选或步骤选项。优先于 `items`，但可关闭标签始终使用 `items`。 |
+| `items` | `MotionControlItem[]` | `[]` | 菜单命令或可关闭标签；绑定 `v-model:items` 以保存关闭和已准备条目的添加结果。 |
+| `count` | `number` | 分段条/步骤器为 `3`，其他为 `4` | 分段数、页数，或没有 options 时生成的步骤数。 |
+| `min` | `number` | `0` | 计数器下界，以及非受控数字值的初始值。 |
+| `max` | `number` | — | 可选计数器上界。 |
+| `step` | `number` | `1` | 计数器或径向进度的增量；设为 `25` 可呈现源码径向环的四分之一进度交互。 |
+| `disabled` | `boolean` | `false` | 阻止选择、命令、值变化、关闭、添加与下载请求。 |
+| `size` | `xs \| sm \| md \| lg` | `md` | 通过 token 驱动控件高度与内边距。 |
+| `status` | `idle \| loading \| success \| error` | `idle` | 宿主拥有的下载状态；`loading` 阻止重复请求，只有 `success` 显示完成勾。 |
+| `progress` | `number` | `0` | 宿主拥有的下载百分比，仅在 loading 时显示。 |
+| `open` | `boolean` | — | 可选受控菜单、提示或频率展开状态；分类选择保留 `TxSelect` 自身开合契约。 |
+| `animated` | `boolean` | `true` | 仅在已挂载、可见、激活且未请求减少动态效果时运行动效。 |
+| `label` | `string` | `''` | 按变体作为可见操作文案或组/触发器的可访问名称。 |
+| `tooltip` | `string` | `''` | 提示或 glance 文案；悬停链接未提供时显示 `href`。 |
+| `href` | `string` | `''` | 悬停链接的真实目标；省略时触发器变成输出 `action` 的命令按钮。 |
+| `target` | `_self \| _blank` | `_self` | 链接目标；新窗口自动带 `noopener noreferrer`。 |
+| `newItem` | `MotionControlItem` | — | 调用方已经准备的新标签；重复值不能添加。 |
+| `maxItems` | `number` | — | 可选标签数量上限。 |
+| `minItems` | `number` | `0` | 最少保留标签数；设为 `1` 保留上游最后一项不可关闭的限制。 |
+| `canBack` | `boolean` | `true` | 是否允许后退导航请求。 |
+| `canForward` | `boolean` | `true` | 是否允许前进导航请求。 |
+| `labels` | `Partial<MotionControlLabels>` | 英文默认文案 | 覆盖全部用户可见默认字符串，不依赖组件库消息目录。 |
+
+`MotionControlItem` 包含 `value: string | number`、`label: string`，以及可选 `disabled`、`icon`（文本字形）、`description`、`closable`、`danger` 和 `children`。菜单 children 呈现真实递归 dropdown/context 子菜单。`description` 透传至 `TxSelect`，标签和菜单内容可通过插槽提供。键必须唯一，标签原语将键转成字符串后也不能重复。
+
+### 事件
+
+| 事件 | 参数 | 时机 |
+| --- | --- | --- |
+| `update:modelValue` | `MotionControlValue` | 允许的操作改变值。 |
+| `change` | `MotionControlValue` | 与模型变化同步；未改变的选择不重复输出。 |
+| `select` | `MotionControlItem` | 选中调用方选项、步骤、标签或命令，包括重复选择。 |
+| `update:items` | `MotionControlItem[]` | 关闭标签或添加提供的 `newItem`。 |
+| `update:open` | `boolean` | 菜单、提示或频率展开状态改变。 |
+| `close` | `MotionControlItem` | 执行允许的标签关闭。 |
+| `add` | `MotionControlItem \| undefined` | 添加准备好的标签，或请求宿主创建标签。 |
+| `action` | `{ variant, value, item? }` | 触发操作、链接、提示按钮，改变切换状态，执行菜单命令或确认频率选择。 |
+| `navigate` | `'back' \| 'forward'` | 允许的方向导航请求。 |
+| `download` | — | 必须由应用处理的真实请求，不是完成事件。 |
+
+菜单命令使用原语的 `select` 事件，保留关闭前确认节奏与 reduced-motion 立即执行路径；业务处理器不抢在这一契约之前运行。
+
+### 插槽
+
+| 插槽 | 作用域 | 用途 |
+| --- | --- | --- |
+| `default` | — | 悬停链接、磁性操作或展开操作的标签内容。 |
+| `item` | `{ item, active }` | 标签名和进度步骤内容；原生标签/步骤按钮内部不要放其他交互控件。 |
+| `icon` | `{ item, active }` | 调用方标签图标；给条目设置 `icon` 以启用图标区域。 |
+| `panel` | `{ item, active? }` | 标签对应内容；省略时空标签面板不保留视觉占位。 |
+| `menu` | `{ items, select }` | 替换菜单内容并保留根原语；调用 `select(item)` 输出宿主命令事件。 |
+| `preview` | — | 提示/glance 预览内容，包括状态信息。 |
+| `value` | `{ value, item }` | 在控件旁追加宿主渲染的值、数量或选中项。 |
+
+### 文案
+
+已导出 `MOTION_CONTROL_DEFAULT_LABELS`，键与默认值如下：
+
+```ts
+{
+  control: 'Motion control', choose: 'Choose an option', frequency: 'Frequency',
+  confirm: 'Confirm selection', add: 'Add tab', close: 'Close',
+  increase: 'Increase', decrease: 'Decrease', back: 'Back', forward: 'Forward',
+  actions: 'Actions', details: 'View details', action: 'Action', launch: 'Launch',
+  link: 'Open link', preview: 'Preview', help: 'Help', download: 'Download',
+  downloading: 'Downloading', downloaded: 'Downloaded', downloadError: 'Download failed',
+  pip: 'Enter picture in picture', pipOff: 'Exit picture in picture',
+  save: 'Save item', saved: 'Saved', follow: 'Follow', following: 'Following',
+  grid: 'Grid view', list: 'List view', stack: 'Stack view', light: 'Light mode',
+  dark: 'Dark mode', progress: 'Progress', page: 'Page',
+}
+```
+
+演示最后一项将保存 pill 的调用方布尔值和文案适配为点赞操作，并显示真实变化的数量；不编造上游不存在的 `LikeButton` 导出。
+
+## 源码映射
+
+源码固定为 [Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)。下表路径相对于 `src/components/css-animations/`。公开的 `MOTION_CONTROL_SOURCES` 提供完整路径、源码行范围、上游导出名和模型领域，`MOTION_CONTROL_VARIANTS` 提供完整变体 ID。
+
+### 目录变体
+
+| 变体 | 上游导出 | 源码 | 保留的结构与操作 |
+| --- | --- | --- | --- |
+| `yui-category-select` | `CategorySelect` | `yui-components/YuiUiKit1.tsx:9–63` | 圆角选择器、旋转箭头、向下展开菜单；选择调用方选项。 |
+| `yui-filter-tag-pill` | `FilterTagPill` | `yui-components/UiKitTrios.tsx:10–38` | 分段筛选与移动 pill；选中选项键。 |
+| `yui-submenu-flyout` | `SubmenuFlyout` | `yui-components/UiKitTrios.tsx:41–74` | 横向展开的 flyout；命令与子菜单输出真实选择事件。 |
+| `yui-hover-link` | `HoverLinkCard` | `yui-components/YuiUiKit1.tsx:66–107` | 抬升链接 pill 和悬浮 URL；访问 `href` 或输出 action。 |
+| `yui-magnetic-icon-btn` | `MagneticIconButton` | `yui-components/UiKitTrios.tsx:81–94` | 箭头按钮横向触感位移；输出 action。 |
+| `yui-morph-action-pill` | `MorphActionPill` | `yui-components/UiKitTrios.tsx:97–124` | 悬停/聚焦展开执行指示；触发操作。 |
+| `yui-plus-minus-toggle` | `PlusMinusToggle` | `yui-components/YuiUiKit1.tsx:110–142` | 两个独立方形控件与按压弹性反馈；选择 `plus` / `minus`。 |
+| `yui-light-dark-toggle` | `LightDarkMorphToggle` | `yui-components/YuiUiKit1.tsx:145–169` | 日/月图标旋转和状态背景；布尔模型。 |
+| `yui-ab-tabs` | `SegmentedABTabs` | `yui-components/YuiUiKit2.tsx:202–238` | 宽分段标签与滑动选中 pill；调用方 A/B 选项。 |
+| `yui-progress-stepper` | `ProgressStepper` | `yui-components/YuiUiKit1.tsx:172–216` | 相连步骤节点、填充轨道、当前步骤扩张；选项键或自动生成的一基步骤值。 |
+| `yui-segmented-arc-meter` | `SegmentedArcMeter` | `yui-components/RedesignedUiTrios.tsx:10–30` | 离散竖条缩放与百分比；数字等级 `0..count`。 |
+| `yui-segmented-step-bar` | `SegmentedStepBar` | `yui-components/UiKitTrios.tsx:159–174` | 横向电池式分段；点击循环数字等级。 |
+| `yui-multi-tab-close` | `MultiTabCloseBar` | `yui-components/YuiUiKit1.tsx:219–287` | 真实标签与测量后的收缩淡出、独立关闭控件和添加请求；驱动选中值和条目列表。 |
+| `yui-date-position` | `DatePositionSelector` | `yui-components/YuiUiKit1.tsx:290–328` | 调用方连续日期选项与圆角滑动高亮。 |
+| `yui-stepper-dots` | `SegmentedStepperDots` | `yui-components/RedesignedUiTrios.tsx:35–61` | 选中圆点扩成 pill；从 1 开始的页码值。 |
+| `yui-context-menu` | `ContextMenuEditDelete` | `yui-components/YuiUiKit2.tsx:9–56` | 缩放/淡入操作弹层，语义化编辑/删除或调用方命令。 |
+| `yui-glance-preview` | `CardGlancePreview` | `yui-components/RedesignedUiTrios.tsx:66–100` | 悬浮 glance 内容和状态点，hover/focus 预览。 |
+| `yui-download-icons` | `DownloadAnimatedIcons` | `yui-components/YuiUiKit2.tsx:99–138` | 宿主 loading 状态下箭头弹跳；只有宿主 success 显示勾。 |
+| `yui-wheel-counter` | `VerticalWheelCounter` | `yui-components/RedesignedUiTrios.tsx:105–143` | 纵向数字 morph 和上下叠放增减按钮；有边界的数字值。 |
+| `yui-perspective-layout` | `PerspectiveLayoutSwitcher` | `yui-components/RedesignedUiTrios.tsx:148–170` | 网格/堆叠图标旋转缩放入场；`grid` / `stack` 模型。 |
+| `yui-save-pill` | `BookmarkSavePill` | `yui-components/RedesignedUiTrios.tsx:175–193` | 书签/勾图标与变化文案的保存 pill；布尔模型。 |
+
+### 额外导出
+
+| 变体 | 上游导出 | 源码 | 保留的结构与操作 |
+| --- | --- | --- | --- |
+| `frequency-selector` | `FrequencySelector` | `FrequencySelector.tsx:12–126` | 标签模糊、展开的横向选项 pill 与独立确认收起控件。 |
+| `tab-bar` | `TabBar` | `TabBar.tsx:16–72` | 选中项文案展开的图标标签；调用方稳定标签键。 |
+| `radial-progress-ring` | `RadialProgressRing` | `yui-components/UiKitTrios.tsx:131–156` | SVG stroke-offset 圆环与百分比；点击按 `step` 推进数字进度。 |
+| `pagination-numbered-bubble` | `PaginationNumberedBubble` | `yui-components/YuiUiKit1.tsx:331–366` | 选中页码气泡上抬；真实一基分页。 |
+| `back-forward-nav` | `BackForwardNav` | `yui-components/YuiUiKit1.tsx:369–397` | 独立方向图标按钮；输出受边界约束的导航请求。 |
+| `question-tooltip` | `QuestionTooltip` | `yui-components/YuiUiKit2.tsx:59–97` | 圆形问号触发器和锚定提示，支持 hover/focus。 |
+| `pip-mode-icons` | `PipModeIcons` | `yui-components/YuiUiKit2.tsx:141–168` | 层叠图标和入场的小窗；期望 PiP 布尔值与 action。 |
+| `simple-plus-minus-btn` | `SimplePlusMinusBtn` | `yui-components/YuiUiKit2.tsx:171–199` | 两个独立小按钮，不内嵌数值显示；真实有界计数。 |
+| `quantity-counter` | `QuantityCounter` | `yui-components/YuiUiKit2.tsx:241–274` | 横向圆角 pill，包含减号、动态数字与加号。 |
+| `list-column-toggle` | `ListColumnToggle` | `yui-components/YuiUiKit2.tsx:277–301` | 网格/列表图标旋转入场与变化文案；`grid` / `list`。 |
+| `follow-check-button` | `FollowCheckButton` | `yui-components/YuiUiKit2.tsx:304–322` | 加号/勾图标的关注 pill 与真实布尔切换。 |
+| `menu-dots-expand` | `MenuDotsExpand` | `yui-components/YuiUiKit2.tsx:325–347` | 省略号操作触发器打开真实调用方命令，不保留无操作的 pulse 定时器。 |
+| `compact-mode-switch` | `CompactModeSwitch` | `yui-components/YuiUiKit2.tsx:350–386` | 纯图标网格/列表分段标签与选中 pill。 |
+
+## 最佳实践
+
+- 业务数据与结果由应用拥有。菜单命令不等于后端编辑成功，PiP 布尔值不证明平台切换完成，浏览器下载请求也不等于文件保存确认。
+- 使用稳定 `value` 键，独立翻译显示文案。提供真实的分类、日期、频率、标签与命令选项，组件不会写死业务列表。
+- 可关闭标签同时绑定 `v-model` 和 `v-model:items`。需要保留最后一项时提供 `minItems="1"`；通过 `add` 分配真实 ID，只有宿主已经准备好条目时才使用 `newItem`。
+- 标签/步骤文案插槽中不要放其他交互元素。独立操作放在原生按钮之外，丰富标签内容使用 `panel` 插槽。
+- 下载状态由宿主处理，`download` 必须连接真实传输。取消和错误也属于传输层，组件显示不会伪造结果。
+- 现有原语负责 roving focus、方向键、菜单激活、Escape、外部点击、锚定和提示焦点。离屏、文档隐藏、KeepAlive 失活、卸载或 reduced-motion 时停止 CSS 动效；数字和文案变化复用 `TxTextMorph` 与公共 spring。

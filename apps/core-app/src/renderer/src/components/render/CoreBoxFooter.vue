@@ -421,7 +421,12 @@ const keyHints = computed(() => {
   transition: none;
   transform: translateY(100%);
 
-  --fake-inner-opacity: 0.95;
+  // The tint over the frost. CoreBox lays an opaque band under the rows here
+  // (`.CoreBoxRes-Main::before`), so the backdrop filter has something to blur and the tint can let
+  // it through. Both variables: tuffex's `.fake-background::before` takes `--fake-opacity` with
+  // `!important` in every window, not only under `.touch-blur` as CoreApp's own rule does.
+  --fake-inner-opacity: 0.5;
+  --fake-opacity: 0.5;
   --fake-radius: 0;
 
   backdrop-filter: blur(18px) saturate(180%);

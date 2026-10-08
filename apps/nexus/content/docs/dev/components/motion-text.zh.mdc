@@ -1,0 +1,238 @@
+---
+title: MotionText
+description: "45 个可追溯文字效果、4 个 registry 揭示，以及乱序揭示、调用方行内媒体和真实焦点模糊交互。"
+category: MotionText
+status: beta
+since: 0.6.3
+tags: [motion, text, grapheme, hover, media, accessibility]
+syncStatus: reviewed
+verified: false
+---
+
+## 概述
+
+`TxMotionText` 保留 Amicro 的 45 个原始目录 ID 与 7 个独立的 registry / 源码扩展。各变体分别保留自己的方向、分段、错峰、缩放、模糊、遮罩、3D 变换或持续节奏。`MOTION_TEXT_VARIANTS` 提供真实类型化的名称、分组、分段方式和固定来源；`MOTION_TEXT_VARIANT_IDS` 是完整 ID 清单。
+
+入场与装饰播放和**值变化**分开处理。始终挂载的 `TxTextMorph` 负责所有文字值更新，没有第二套 diff 引擎，回放也不重新挂载它。屏幕阅读器只读取一次原文。同一时刻只有一个文字层可选中：一般播放时选中装饰原文，乱序揭示时选中未改动的原文，静止时选中 TextMorph 层。空白、换行、emoji ZWJ 序列及组合字符均保留。
+
+## 用法
+
+### 全量来源变体
+
+在真实目录中选择全部 52 个 ID，按分组、名称或 ID 筛选，使用“下一个效果”遍历，编辑多语言原文，并反复回放。悬停变体响应独立字素 / 词，也支持键盘聚焦。“暂停”会恢复完整可读文字，包括打字和乱序揭示进行到一半时。
+
+:::TuffDemoWrapper{demo="MotionTextDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionText } from '@talex-touch/tuffex/motion-text'
+
+  const text = ref('Design motion, 设计动效 👩🏽‍💻 é')
+  const replayKey = ref(0)
+  </script>
+
+  <template>
+    <TxMotionText :text="text" variant="txt-blurup-word" :replay-key="replayKey" />
+    <TxButton @click="replayKey++">回放</TxButton>
+    <!-- 更新文字使用已挂载的 TextMorph 引擎。 -->
+    <TxButton @click="text = 'A new value，仍保留完整文字'">替换文字</TxButton>
+  </template>
+---
+:::
+
+### 源码交互能力
+
+乱序揭示是实际悬停 / 聚焦触发的字素替换，不是静态标题。它可从开头、末尾或中心按完整字素揭示，并使用原文字符池或调用方 `characters`。空白不参与乱序。`focus-blur` 接收调用方条目：有 `href` 的条目仍为原生链接，没有 `href` 的条目为发出 `select` 的按钮。悬停或聚焦项保持清晰，其它项变模糊；焦点括号复用共享 spring。
+
+```vue
+<TxMotionText
+  text="保留 👩🏽‍💻 和 é"
+  variant="scramble-hover"
+  sequential
+  reveal-direction="center"
+  :use-original-chars-only="false"
+  characters="ABC123✦"
+/>
+<TxMotionText
+  variant="focus-blur"
+  :items="[
+    { id: 'design', label: '设计', href: '/design' },
+    { id: 'motion', label: '动效' },
+  ]"
+  @select="item => selectedId = item.id"
+/>
+```
+
+行内媒体使用调用方 `mediaSrc`、图片 / 视频属性或 `media` 插槽。默认悬停触发时，指针和键盘焦点都离开后收起媒体。`trigger="manual"` 通过暴露的 `animate()` / `reset()` 控制；`trigger="in-view"` 在可见时展开。减少动态效果模式下，媒体立即显示，不执行宽度 / 缩放动画。内置或插槽视频在失活或媒体收起时暂停；插槽收到 `active` 和 `open`，用于自己管理资源生命周期。
+
+```vue
+<TxMotionText
+  variant="media-between-text"
+  first-text="创造"
+  second-text="体验"
+  :media-src="imageUrl"
+  media-alt="抽象纹理"
+/>
+<TxMotionText variant="media-between-text" first-text="你的" second-text="媒体">
+  <template #media="{ active, open }">
+    <img :src="imageUrl" alt="调用方插图">
+  </template>
+</TxMotionText>
+```
+
+### 最佳实践
+
+- 文字、媒体和条目由调用方持有；组件不内嵌演示业务数据。
+- 替换文字时保持组件挂载。装饰回放使用 `replayKey` 或 `replay()`，不要按文字值给组件设置 `key`。
+- 中文词分段使用有效的 `locale`。字素效果不拆开家庭 emoji 或组合字符；没有 `Intl.Segmenter` 时，装饰字素播放把整段原文保留为一个安全单元。
+- 悬停效果属于装饰，不冒充操作按钮。导航 / 操作使用原生 `focus-blur` 条目或独立语义控件。
+- `paused` 停止所有自有动画、乱序超时和视频播放。持续效果仅在挂载、处于交叉可见区域、文档可见、启用且非减少动态效果时运行，KeepAlive 失活同样停止。
+- Morph 引擎不做软换行。可传入显式换行（`text-reveal` 逐行揭示），长正文则使用支持换行的文字组件。
+- 字距变体最终回到自然正文间距。光晕交叉淡化两层静态阴影；悬停颜色立即变化，不做颜色补间。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `text` | `string` | `''` | 目录、registry 和乱序效果的原文。 |
+| `variant` | `MotionTextVariant` | `'txt-dia'` | 下方 52 个 ID 之一。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 由 token 控制的内容字号。 |
+| `tag` | `'span' \| 'div' \| 'p' \| 'h1' \| 'h2' \| 'h3'` | `'span'` | 根语义元素。 |
+| `locale` | `string` | `'en'` | 词 / 字素分段及 TextMorph 的 locale。 |
+| `paused` | `boolean` | `false` | 取消动态效果，显示完整可读原文。 |
+| `trigger` | `'in-view' \| 'hover' \| 'manual'` | 按来源 | 入场 / 持续效果默认 in-view；乱序 / 媒体默认 hover。字素 / 词悬停和焦点条目保留原生交互。 |
+| `replayKey` | `string \| number` | — | 改变时回放，不重新挂载 TextMorph。 |
+| `durationMs` | `number` | 按来源 | 定时效果时长（毫秒）；物理 spring 使用自己的稳定时长。 |
+| `staggerMs` | `number` | 按来源 | 覆盖来源中各单元的延迟（毫秒）。 |
+| `transition` | `Transition` | 按来源 | 共享 `'snappy' \| 'smooth' \| 'bouncy'`、`{ stiffness?, damping?, mass? }` 或 `{ duration, ease? }`，覆盖来源节奏。 |
+| `initialBlur` | `number` | `8` | Registry blur-text 初始模糊半径（像素）。 |
+| `yOffset` | `number` | `15` | Registry character-stagger 初始竖向偏移。 |
+| `scrambleSpeed` | `number` | `40` | 乱序帧之间的毫秒数。 |
+| `maxIterations` | `number` | `10` | 非顺序乱序的迭代次数。 |
+| `sequential` | `boolean` | `false` | 每帧逐步揭示更多完整字素。 |
+| `revealDirection` | `'start' \| 'end' \| 'center'` | `'start'` | 顺序乱序的揭示方向。 |
+| `useOriginalCharsOnly` | `boolean` | `true` | 替换字符从原文非空白字素中选择。 |
+| `characters` | `string` | 拉丁字母、数字与符号 | original-only 为 false 时的自定义替换字符池。 |
+| `firstText` | `string` | `''` | 行内媒体前的文字。 |
+| `secondText` | `string` | `''` | 行内媒体后的文字。 |
+| `mediaSrc` | `string` | — | 调用方图片 / 视频 URL，不制造假兜底。 |
+| `mediaType` | `'image' \| 'video'` | `'image'` | 内置媒体渲染类型。 |
+| `mediaAlt` | `string` | `''` | 图片替代文字 / 视频无障碍名称。 |
+| `mediaPoster` | `string` | `''` | 调用方视频封面。 |
+| `mediaWidth` | `number` | `70` | 展开后的行内媒体宽度（像素）。 |
+| `mediaHeight` | `number` | `40` | 行内媒体高度（像素）。 |
+| `mediaAutoplay` | `boolean` | `true` | 仅在 active 且展开时请求播放；浏览器自动播放策略可拒绝。 |
+| `mediaLoop` | `boolean` | `true` | 内置视频仅在 active 时循环。 |
+| `mediaMuted` | `boolean` | `true` | 内置视频的静音状态。 |
+| `mediaPlaysinline` | `boolean` | `true` | 内置视频的行内播放属性。 |
+| `items` | `readonly MotionTextItem[]` | `[]` | 焦点条目 `{ id, label, href? }`。稳定 ID 保留已挂载的标签引擎。 |
+| `blurAmount` | `number` | `4` | 非当前焦点条目的模糊半径（像素）。 |
+| `opacityAmount` | `number` | `0.4` | 非当前焦点条目的透明度。 |
+| `showBrackets` | `boolean` | `true` | 共享 spring 焦点括号。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `animation-start` | `MotionTextVariant` | 装饰播放或文字值 morph 开始。 |
+| `animation-complete` | `MotionTextVariant` | 有限播放 / morph 结束，持续循环不会周期性播报完成。 |
+| `animation-cancel` | `MotionTextVariant` | 正在运行的有限播放 / morph 被打断。 |
+| `select` | `MotionTextItem` | 激活焦点条目；原生链接保留其导航行为。 |
+| `media-error` | `Event` | 调用方图片 / 视频报告真实加载错误。 |
+
+### 插槽
+
+| 插槽 | 作用域 | 说明 |
+| --- | --- | --- |
+| `media` | `{ open: boolean, active: boolean }` | 替换内置图片 / 视频，保留 hover / manual / in-view 几何与活动状态控制。 |
+
+### 暴露方法
+
+| 方法 | 说明 |
+| --- | --- |
+| `replay()` | 取消上次装饰播放后回放；行内媒体执行展开。 |
+| `animate()` | 相同的显式播放 / 展开操作，保留上游 ref 触发契约。 |
+| `reset()` | 取消工作，恢复原文并收起媒体；清除焦点条目装饰。 |
+
+`MotionTextProps`、`MotionTextItem`、`MotionTextVariant`、`MotionTextVariantInfo`、`MotionTextTrigger`、`MotionTextRevealDirection`、`MotionTextMediaSlotProps`、`MotionTextSlots`、`MotionTextExpose` 和 `TxMotionTextInstance` 均由 `@talex-touch/tuffex/motion-text` 导出。
+
+### 变体目录
+
+| 原始 ID | 保留的效果 |
+| --- | --- |
+| `txt-dia` | 多边形遮罩揭示与 8px 模糊，850ms。 |
+| `txt-blur` | 整段 12px 模糊、0.9→1 缩放与淡入，700ms。 |
+| `txt-shimmer` | 静态文字渐变与 2s 透明度微光。 |
+| `txt-typewriter` | 1.2s 内逐完整字素显示，光标移动并闪烁。 |
+| `txt-reveal` | 水平 inset 遮罩揭示，750ms。 |
+| `txt-fade-char` | 字素淡入，300ms / 50ms 错峰。 |
+| `txt-fade-word` | 词淡入，400ms / 150ms 错峰。 |
+| `txt-fade-text` | 整段淡入，800ms。 |
+| `txt-blurup-word` | 词从 15px 和 8px 模糊上升，500ms / 120ms。 |
+| `txt-blurup-char` | 字素从 15px 和 8px 模糊上升，400ms / 40ms。 |
+| `txt-stagger` | 词以 expo 曲线上升 20px，500ms / 100ms。 |
+| `txt-slideup-char` | 字素从 +100% Y 滑入遮罩，400ms / 40ms。 |
+| `txt-slideup-word` | 词从 +100% Y 滑入遮罩，500ms / 100ms。 |
+| `txt-slideup-text` | 整段从 +100% Y 滑入遮罩，600ms。 |
+| `txt-slidedown-char` | 字素从 −100% Y 滑入遮罩，400ms / 40ms。 |
+| `txt-slidedown-word` | 词从 −100% Y 滑入遮罩，500ms / 100ms。 |
+| `txt-slideleft-char` | 字素从 +40px X 滑入并淡入，400ms / 40ms。 |
+| `txt-slideright-char` | 字素从 −40px X 滑入并淡入，400ms / 40ms。 |
+| `txt-dropin-char` | 字素从 50px 上方下落，spring 500/25，40ms 错峰。 |
+| `txt-riseup-word` | 词上升 30px、0.8→1 缩放，spring 400/22，120ms 错峰。 |
+| `txt-bouncein-char` | 字素 0→1.3→1 缩放与淡入，500ms / 50ms。 |
+| `txt-scalein-char` | 字素 0→1 缩放，spring 450/22，40ms 错峰。 |
+| `txt-scalein-word` | 词 0.4→1 缩放与淡入，400ms / 120ms。 |
+| `txt-scalein-text` | 整段 0.5→1 缩放与淡入，spring 400/25。 |
+| `txt-zoomin-text` | 整段 0.2→1 缩放与淡入，600ms。 |
+| `txt-zoomout-text` | 整段 1.8→1 缩放与淡入，600ms。 |
+| `txt-flipy-char` | 字素 Y 轴 90°→0° 翻转，500ms / 50ms。 |
+| `txt-flipx-char` | 字素 X 轴 90°→0° 翻转，500ms / 50ms。 |
+| `txt-rotatein-char` | 字素 −45°→0° 与 0.5→1 缩放 / 淡入，400ms / 40ms。 |
+| `txt-swing-word` | 词绕顶部 X 轴 −90°→0°，spring 350/18，120ms 错峰。 |
+| `txt-stretchx-char` | 字素 X 缩放 2.5→1 与淡入，400ms / 40ms。 |
+| `txt-stretchy-char` | 字素 Y 缩放 2.5→1 与淡入，400ms / 40ms。 |
+| `txt-skewx-char` | 字素 X 倾斜 −30°→0° 与淡入，400ms / 40ms。 |
+| `txt-trackingin-text` | 0.6em 宽间距收拢到自然间距，700ms。 |
+| `txt-trackingout-text` | −0.2em 紧间距展开到自然间距，700ms。 |
+| `txt-spring-text` | 字素悬停上升 −8px、缩放 1.2，spring 500/15。 |
+| `txt-hoverlift-char` | 来源中相同的字素悬停上升 / 缩放轨迹。 |
+| `txt-hoverlift-word` | 词悬停上升 −6px，spring 400/18。 |
+| `txt-hoverscale-char` | 字素悬停缩放 1.4，spring 500/18。 |
+| `txt-hoverscale-word` | 词悬停缩放 1.25，spring 400/20。 |
+| `txt-float-char` | 0→−6px→0，2s 周期 / 每字素 100ms 相位。 |
+| `txt-float-word` | 0→−8px→0，2.4s 周期 / 每词 200ms 相位。 |
+| `txt-pulse-char` | 0.3→1→0.3 透明度，1.5s 周期 / 80ms 相位。 |
+| `txt-pulse-word` | 0.3→1→0.3 透明度，1.8s 周期 / 250ms 相位。 |
+| `txt-glow-text` | 10px / 25px 静态环境阴影交叉淡化，2s 周期。 |
+| `registry-blur-text` | Registry 逐字素模糊 / 淡入，可配置半径，500ms / 20ms。 |
+| `character-stagger` | Registry 字素升起、0.8 缩放与淡入，spring 300/18/0.8，15ms 错峰。 |
+| `text-reveal` | Registry 逐行 +100% Y 遮罩揭示，800ms / 150ms。 |
+| `word-reveal` | Registry 词上升 15px、0.9→1 缩放与 cubic 曲线，500ms / 40ms。 |
+| `scramble-hover` | 悬停 / 聚焦乱序；迭代或开头 / 末尾 / 中心顺序揭示。 |
+| `media-between-text` | 调用方媒体在两段 morph 文字之间展开、淡入并缩放。 |
+| `focus-blur` | 真实指针 / 键盘同级模糊，原生条目激活与 spring 括号。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--tx-motion-text-font-size` | 按尺寸 | MotionText 继承的内容字号。 |
+| `--tx-motion-text-line-height` | `1.5`（`lg`：`1.75`） | 内容行高；大尺寸增加呼吸感，不放大正文字号。 |
+| `--tx-motion-text-media-width` | `70px` | 从 `mediaWidth` 派生的行内宽度。 |
+| `--tx-motion-text-media-height` | `40px` | 从 `mediaHeight` 派生的行内高度。 |
+
+文字、光晕、焦点、表面及描边均使用现有 `--tx-*` 主题 token。
+
+## 技术实现
+
+- 固定上游 [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) 提交 `43c29ce9cdd16459e3eab4992381b8d35b38776a`；MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+- 45 个目录条目对应 `src/data/textAnimations.ts` 与 `src/components/text/AnimatedText.tsx` 的独立分支。4 个 registry 来源位于 `registry/ui/text/`。额外来源为 `ScrambleHover.tsx`、`MediaBetweenText.tsx` 和两份 `FocusBlur.tsx` 实现。准确范围由 `MOTION_TEXT_VARIANTS` 导出并在演示中显示。
+- 实现：`motion-text/src/TxMotionText.vue`；来源轨迹位于 `src/presets.ts`，类型 API 位于 `src/types.ts`。装饰 WAAPI 资源和唯一乱序超时通过 `useMotionActivity` 的幂等取消边界管理；值变化复用 `TxTextMorph`，词分段复用 `stream-text/src/segment.ts`，spring 曲线复用 `liquid/src/spring.ts`。
+- 打字按完整字素步进，不裁切半个字符。字距最终回到自然正文间距。两个共用上游 switch 分支的悬停目录 ID 仍可分别发现，但不虚构来源中不存在的不同轨迹。
+- 本页描述实现行为；集成、构建和真实浏览器验收由所属工作流统一执行，不在本页声称已通过。
+
+<TuffDocSourceLink />

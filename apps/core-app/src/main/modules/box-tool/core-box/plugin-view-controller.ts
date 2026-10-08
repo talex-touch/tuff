@@ -629,6 +629,11 @@ export class PluginViewController {
     return this.uiViewFocused
   }
 
+  public getFocusSnapshot(): { active: boolean; focused: boolean } {
+    const contents = this.getAliveUIViewWebContents()
+    return { active: Boolean(contents), focused: contents?.isFocused() === true }
+  }
+
   public forwardKeyEvent(event: CoreBoxKeyEvent): void {
     if (!this.uiView) {
       pluginViewLog.debug('Cannot forward key event: no UI view attached')

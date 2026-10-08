@@ -1,20 +1,31 @@
 import type {
   DivisionBoxConfig,
-  FlowPayload,
+  FlowTargetInfo,
   IProviderActivate,
   ITuffIcon,
   TuffItem
 } from '@talex-touch/utils'
-import type { MetaPanelAnchor } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { MetaFlowSelection } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
-import { onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw } from 'vue'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
+import { onBeforeUnmount, onMounted, reactive, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { createRendererLogger } from '../../../../utils/renderer-log'
+import {
+  buildCoreBoxFlowPayload,
+  resolveCoreBoxFlowActorPluginId,
+  resolveFeaturePluginId
+} from '../../meta-actions/core-box-flow-payload'
 import { showCoreBoxFooterFeedback } from '../../meta-actions/footer-feedback'
-import { isCoreBoxFooterShown } from './useKeyboard'
+import { buildCoreBoxMetaShowRequest, isCoreBoxFooterShown } from './useKeyboard'
+
+export {
+  buildCoreBoxFlowPayload,
+  resolveCoreBoxFlowActorPluginId
+} from '../../meta-actions/core-box-flow-payload'
 
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 const COREBOX_HEADER_HEIGHT = 56
@@ -51,17 +62,6 @@ function buildDetachedFeatureUrl(item: TuffItem, query: string, pluginId: string
     providerSource: item.source?.id || ''
   })
   return `tuff://detached?${params.toString()}`
-}
-
-function resolveFeaturePluginId(item: TuffItem): string | undefined {
-  const pluginName = item.meta?.pluginName
-  if (typeof pluginName === 'string' && pluginName.trim()) {
-    return pluginName
-  }
-  if (item.source?.type === 'plugin' && item.source.id !== 'plugin-features') {
-    return item.source.id
-  }
-  return undefined
 }
 
 function buildDetachedPayload(item: TuffItem, query: string): { item: TuffItem; query: string } {
@@ -123,29 +123,6 @@ export function buildDetachedFeatureConfig(
   }
 }
 
-export function buildCoreBoxFlowPayload(item: TuffItem, query: string): FlowPayload {
-  return {
-    type: 'json',
-    data: { item, query },
-    context: {
-      sourcePluginId: resolveFeaturePluginId(item) ?? 'corebox',
-      sourceFeatureId: item.meta?.featureId
-    }
-  }
-}
-
-export function resolveCoreBoxFlowActorPluginId(payload: FlowPayload | null): string | undefined {
-  if (!payload || payload.type !== 'json') {
-    return undefined
-  }
-  const data = payload.data as { item?: TuffItem } | undefined
-  const item = data?.item
-  if (item?.source?.type !== 'plugin') {
-    return undefined
-  }
-  return resolveFeaturePluginId(item)
-}
-
 function getFlowPermissionMessage(
   error: { message?: string; code?: string; permissionId?: string } | undefined,
   t: ReturnType<typeof useI18n>['t']
@@ -189,15 +166,6 @@ export function useDetach(options: UseDetachOptions) {
   const { searchVal, res, boxOptions, isUIMode, activeActivations, deactivateProvider } = options
   const { t } = useI18n()
   const transport = useTuffTransport()
-
-  const flowVisible = ref(false)
-  // Shallow: the payload goes over IPC as it is, and structured clone rejects Vue's proxies. A deep
-  // ref wrapped it in one, so every dispatch failed with "An object could not be cloned".
-  const flowPayload = shallowRef<FlowPayload | null>(null)
-  const flowSessionId = ref('')
-  // Where the Flow picker anchors: above the footer's ⌘K hint when the footer shows, as the ⌘K
-  // panel does, else in the window corner.
-  const flowAnchor = ref<MetaPanelAnchor>('corner')
 
   async function getCurrentCoreBoxBounds(): Promise<{
     x: number
@@ -277,37 +245,68 @@ export function useDetach(options: UseDetachOptions) {
     }
   }
 
-  function openFlowSelector(item: TuffItem): void {
-    // `toRaw`: an item taken from an activation or the box data is a Proxy, which the clone rejects
-    // as well.
-    flowPayload.value = buildCoreBoxFlowPayload(toRaw(item), searchVal.value)
-    flowAnchor.value = !isUIMode.value && isCoreBoxFooterShown() ? 'footer' : 'corner'
-    flowVisible.value = true
-  }
+  /**
+   * Opens the ⌘K card straight on its Flow page for the item (⌘⇧D, or the shortcut a plugin view
+   * forwards). The card is drawn by the overlay view main keeps above the plugin view, so a transfer
+   * started in plugin UI mode is seen as well. The targets are fetched first: main then grows the
+   * window once, to the height they need. A failed fetch opens the page on none.
+   *
+   * Not from a DivisionBox, which has no ⌘K card: main hangs the overlay on the CoreBox window
+   * alone, so the card would open there — whenever CoreBox is up — for the DivisionBox's item.
+   */
+  async function openFlowPanel(item: TuffItem): Promise<void> {
+    if (document.body.classList.contains('division-box')) return
 
-  function closeFlowSelector(): void {
-    flowVisible.value = false
-    flowPayload.value = null
-    flowSessionId.value = ''
+    // `toRaw`: an item taken from an activation, the box data or the results is a Proxy, which the
+    // structured clone on the way to main rejects.
+    const raw = toRaw(item)
+    let flowTargets: FlowTargetInfo[] = []
+    try {
+      const response = await transport.send(FlowEvents.getTargets, {
+        payloadType: buildCoreBoxFlowPayload(raw, searchVal.value).type
+      })
+      if (response?.success) {
+        flowTargets = response.data || []
+      } else {
+        detachLog.error('Failed to load Flow targets:', response?.error)
+      }
+    } catch (error) {
+      detachLog.error('Failed to load Flow targets:', error)
+    }
+
+    try {
+      await transport.send(
+        MetaOverlayEvents.ui.show,
+        buildCoreBoxMetaShowRequest(raw, {
+          footerShown: !isUIMode.value && isCoreBoxFooterShown(),
+          page: 'flow',
+          flowTargets
+        })
+      )
+    } catch (error) {
+      detachLog.error('Failed to open the Flow page:', error)
+    }
   }
 
   /**
+   * Sends the item to the target picked on the ⌘K card's Flow page, which relays the pick with the
+   * transfer action (`useActionPanel`). The payload is built here, from the item and the query on
+   * screen, as the card's consent check assumed (`buildCoreBoxFlowPayload`).
+   *
    * The outcome goes to the footer, as a ⌘K action's does: CoreBox mounts no toast host, so a toast
    * never reached the screen and a transfer that failed looked like one that had not been tried.
    */
-  async function dispatchFlow(payload: {
-    targetId: string
-    consentToken?: string
-    confirmationToken?: string
-  }): Promise<void> {
-    if (!flowPayload.value) return
+  async function dispatchFlow(item: TuffItem, selection: MetaFlowSelection): Promise<void> {
+    // `toRaw`, and nothing reactive holding the payload: structured clone rejects Vue's proxies, and
+    // every dispatch once failed with "An object could not be cloned".
+    const payload = buildCoreBoxFlowPayload(toRaw(item), searchVal.value)
     try {
-      const { targetId, consentToken, confirmationToken } = payload
-      const actorPluginId = resolveCoreBoxFlowActorPluginId(flowPayload.value)
+      const { targetId, consentToken, confirmationToken } = selection
+      const actorPluginId = resolveCoreBoxFlowActorPluginId(payload)
       const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
         actorPluginId,
-        payload: flowPayload.value,
+        payload,
         options: { preferredTarget: targetId, skipSelector: true, consentToken, confirmationToken }
       })
       if (response?.success) {
@@ -323,8 +322,6 @@ export function useDetach(options: UseDetachOptions) {
     } catch (error) {
       detachLog.error('Flow failed:', error)
       showCoreBoxFooterFeedback(t('corebox.flowFailed', '流转失败'), 'error')
-    } finally {
-      closeFlowSelector()
     }
   }
 
@@ -343,7 +340,7 @@ export function useDetach(options: UseDetachOptions) {
   const unregFlow = transport.on(FlowEvents.triggerTransfer, () => {
     const currentItem =
       getActiveFeature(activeActivations.value, boxOptions.data) ?? res.value[boxOptions.focus]
-    if (currentItem) openFlowSelector(currentItem)
+    if (currentItem) void openFlowPanel(currentItem)
   })
 
   function handleDetachShortcut(): void {
@@ -359,11 +356,14 @@ export function useDetach(options: UseDetachOptions) {
 
   function handleFlowShortcut(event: Event): void {
     const detail = (event as CustomEvent<{ item?: TuffItem }>).detail
+    // The key's own item first: `useKeyboard` resolves it from the live activations, then the
+    // focused result. The box data keeps the last plugin feature after its view has gone; read
+    // ahead of the key's item, it sent that feature instead of the result the user had picked.
     const currentItem =
-      getActiveFeature(activeActivations.value, boxOptions.data) ??
       detail?.item ??
+      getActiveFeature(activeActivations.value, boxOptions.data) ??
       res.value[boxOptions.focus]
-    if (currentItem) openFlowSelector(currentItem)
+    if (currentItem) void openFlowPanel(currentItem)
   }
 
   onMounted(() => {
@@ -379,14 +379,9 @@ export function useDetach(options: UseDetachOptions) {
   })
 
   return reactive({
-    flowVisible,
-    flowPayload,
-    flowSessionId,
-    flowAnchor,
     detachFeature,
     detachUIMode,
-    openFlowSelector,
-    closeFlowSelector,
+    openFlowPanel,
     dispatchFlow
   })
 }

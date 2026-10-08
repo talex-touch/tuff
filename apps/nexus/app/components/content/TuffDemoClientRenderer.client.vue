@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, h, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { createAsyncDemo, type DemoLoader } from './demo-loader'
-import { loadDemoRegistry } from './demo-registry-loader'
+import type { ComponentPublicInstance } from 'vue'
+import type { DemoModule } from './demo-loader'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { loadDemoComponent } from './demo-component-loader'
 
 interface DemoClientRendererProps {
   demo: string
@@ -14,7 +15,6 @@ interface DemoClientRendererProps {
 }
 
 type DemoResetMethod = () => void | Promise<void>
-
 type DemoResetController = ComponentPublicInstance & {
   replayDemo?: DemoResetMethod
   resetDemo?: DemoResetMethod
@@ -22,95 +22,54 @@ type DemoResetController = ComponentPublicInstance & {
   reset?: DemoResetMethod
 }
 
-type DemoRegistry = Record<string, DemoLoader>
-type RegistryState = 'idle' | 'loading' | 'ready' | 'error'
-
 const props = defineProps<DemoClientRendererProps>()
 const emit = defineEmits<{
-  (event: 'instance-change', instance: DemoResetController | null): void
+  'instance-change': [instance: DemoResetController | null]
 }>()
 const demoInstanceRef = ref<DemoResetController | null>(null)
-const demoLoaders = shallowRef<DemoRegistry | null>(null)
-const registryState = ref<RegistryState>('idle')
-let registryRequestId = 0
-
-const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__placeholder' }, props.loadingLabel)
-
-const DemoErrorFallback: Component = () =>
-  h('div', { class: 'tuff-demo__placeholder', style: 'color: var(--tx-color-danger)' }, props.errorLabel)
-
-const demoComponentMap = new Map<string, Component>()
-
-async function ensureDemoRegistry() {
-  if (demoLoaders.value || registryState.value === 'loading')
-    return
-
-  const requestId = ++registryRequestId
-  registryState.value = 'loading'
-
-  try {
-    const loaders = await loadDemoRegistry()
-    if (requestId !== registryRequestId)
-      return
-
-    demoLoaders.value = loaders
-    registryState.value = 'ready'
-  }
-  catch {
-    if (requestId !== registryRequestId)
-      return
-
-    registryState.value = 'error'
-  }
-}
-
-const demoComponent = computed(() => {
-  if (!props.isActive)
-    return null
-  if (!props.demo)
-    return null
-  if (!demoLoaders.value)
-    return null
-
-  const existing = demoComponentMap.get(props.demo)
-  if (existing)
-    return existing
-
-  const loader = demoLoaders.value[props.demo]
-  if (!loader)
-    return null
-
-  const component = createAsyncDemo(loader, DemoLoadingFallback, DemoErrorFallback)
-  demoComponentMap.set(props.demo, component)
-  return component
-})
-
-const isRegistryLoading = computed(() => props.isActive && registryState.value === 'loading')
-const didRegistryFail = computed(() => props.isActive && registryState.value === 'error')
+const demoModule = shallowRef<DemoModule | null>(null)
+const loadState = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
+let requestId = 0
 
 watch(
   () => [props.isActive, props.demo] as const,
-  ([isActive, demo]) => {
-    if (isActive && demo)
-      void ensureDemoRegistry()
+  async ([isActive, name]) => {
+    const currentRequestId = ++requestId
+    demoModule.value = null
+    if (!isActive || !name) {
+      loadState.value = 'idle'
+      return
+    }
+    loadState.value = 'loading'
+    try {
+      const loaded = await loadDemoComponent(name)
+      if (currentRequestId !== requestId)
+        return
+      demoModule.value = loaded
+      loadState.value = 'ready'
+    }
+    catch {
+      if (currentRequestId === requestId)
+        loadState.value = 'error'
+    }
   },
   { immediate: true },
 )
 
+const demoComponent = computed(() => props.isActive ? demoModule.value?.default : null)
 watch(demoInstanceRef, instance => emit('instance-change', instance), { flush: 'post' })
-
 onBeforeUnmount(() => {
-  registryRequestId += 1
+  requestId += 1
   emit('instance-change', null)
 })
 </script>
 
 <template>
   <component :is="demoComponent" v-if="demoComponent" :key="props.renderKey" ref="demoInstanceRef" />
-  <div v-else-if="isRegistryLoading" class="tuff-demo__placeholder">
+  <div v-else-if="loadState === 'loading'" class="tuff-demo__placeholder">
     {{ props.loadingLabel }}
   </div>
-  <div v-else-if="didRegistryFail" class="tuff-demo__placeholder" style="color: var(--tx-color-danger)">
+  <div v-else-if="loadState === 'error'" class="tuff-demo__placeholder" style="color: var(--tx-color-danger)">
     {{ props.errorLabel }}
   </div>
   <div v-else-if="!props.isActive" class="tuff-demo__placeholder">

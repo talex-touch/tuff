@@ -1,6 +1,6 @@
 /**
- * Binds local skill directories to main-owned storage and exposes the four
- * calls the settings page makes.
+ * Binds local skill directories to main-owned storage and exposes the calls the
+ * settings pages make.
  *
  * The registry is the main process's own: scanning and reading both happen
  * here, so the renderer never sees a path it could write back unchecked — it
@@ -8,16 +8,27 @@
  * Every mutation re-reads, re-validates and persists durably, because losing a
  * registered directory on quit would silently unlink a library the user thinks
  * is still attached.
+ *
+ * Nothing here writes into a directory it reads. The agents' own libraries are
+ * other tools' property; the only file this module writes is Tuff's own
+ * `skill-local-sources.json`.
  */
 
 import type { AgentSkillRoot } from './agent-skill-roots'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { LocalSkillConfig } from './skill-local-sources'
+import type {
+  LocalSkillDirView,
+  LocalSkillSnapshotView,
+  SkillInventorySnapshot
+} from '@talex-touch/utils/transport/sdk/domains/skill-local'
+import type { LocalSkillConfig, LocalSkillScanEntry } from './skill-local-sources'
 import { StorageList } from '@talex-touch/utils'
-import { defineEvent } from '@talex-touch/utils/transport/event/builder'
+import { SkillLocalEvents } from '@talex-touch/utils/transport/sdk/domains/skill-local'
 import { createLogger } from '../../utils/logger'
 import { getMainConfig, saveMainConfigDurable } from '../storage'
 import { existingAgentSkillRoots } from './agent-skill-roots'
+import { aiOrchestratorStore } from './ai-orchestrator-store'
+import { buildSkillInventory } from './resource-inventory/skill-inventory'
 import {
   EMPTY_LOCAL_SKILL_CONFIG,
   localSkillSnapshot,
@@ -28,53 +39,6 @@ import {
 } from './skill-local-sources'
 
 const skillLocalLog = createLogger('Intelligence').child('LocalSkills')
-
-/** What a row in the settings list needs; the manifest path stays main-side. */
-export interface LocalSkillView {
-  id: string
-  name: string
-  description: string
-  path: string
-  sourceDir: string
-  enabled: boolean
-}
-
-/**
- * One directory a skill was found under. `sourceId` names the agent that owns it and is null for a
- * directory the user linked; the renderer turns that id into a label, so no display string is
- * invented here.
- */
-export interface LocalSkillDirView {
-  path: string
-  sourceId: string | null
-  auto: boolean
-}
-
-export interface LocalSkillSnapshotView {
-  dirs: LocalSkillDirView[]
-  skills: LocalSkillView[]
-}
-
-/**
- * Mirrored in `SettingSkillsMcp.vue`. Four calls with flat payloads did not
- * justify a transport domain of their own; edit both copies or neither.
- */
-const skillLocalListEvent = defineEvent('ai')
-  .module('skill-local')
-  .event('list')
-  .define<void, LocalSkillSnapshotView>()
-const skillLocalAddDirEvent = defineEvent('ai')
-  .module('skill-local')
-  .event('add-dir')
-  .define<{ path: string }, LocalSkillSnapshotView>()
-const skillLocalRemoveDirEvent = defineEvent('ai')
-  .module('skill-local')
-  .event('remove-dir')
-  .define<{ path: string }, LocalSkillSnapshotView>()
-const skillLocalSetEnabledEvent = defineEvent('ai')
-  .module('skill-local')
-  .event('set-enabled')
-  .define<{ id: string; enabled: boolean }, LocalSkillSnapshotView>()
 
 /**
  * Reading a linked file and browsing the user's disk are the host's own
@@ -133,19 +97,41 @@ async function writeLocalSkillConfig(config: LocalSkillConfig): Promise<void> {
   if (!result.success) throw new Error('LOCAL_SKILL_CONFIG_PERSIST_FAILED')
 }
 
-async function snapshotView(): Promise<LocalSkillSnapshotView> {
+/** One scan, with the directories it covered and how many skills each one reaches. */
+async function scanWithDirs(): Promise<{
+  dirs: LocalSkillDirView[]
+  skills: LocalSkillScanEntry[]
+}> {
   const persisted = readLocalSkillConfig()
   const snapshot = await localSkillSnapshot(effectiveLocalSkillConfig())
+  const reachedBy = new Map<string, Set<string>>()
+  for (const skill of snapshot.skills) {
+    for (const source of skill.sources) {
+      const ids = reachedBy.get(source.sourceDir) ?? new Set<string>()
+      ids.add(skill.id)
+      reachedBy.set(source.sourceDir, ids)
+    }
+  }
+  const dirView = (path: string, sourceId: string | null, auto: boolean): LocalSkillDirView => ({
+    path,
+    sourceId,
+    auto,
+    skillCount: reachedBy.get(path)?.size ?? 0
+  })
   return {
     dirs: [
-      ...detectedSkillRoots.map((root) => ({
-        path: root.path,
-        sourceId: root.id,
-        auto: true
-      })),
-      ...persisted.dirs.map((path) => ({ path, sourceId: null, auto: false }))
+      ...detectedSkillRoots.map((root) => dirView(root.path, root.id, true)),
+      ...persisted.dirs.map((path) => dirView(path, null, false))
     ],
-    skills: snapshot.skills.map(({ id, name, description, path, sourceDir, enabled }) => ({
+    skills: snapshot.skills
+  }
+}
+
+async function snapshotView(): Promise<LocalSkillSnapshotView> {
+  const { dirs, skills } = await scanWithDirs()
+  return {
+    dirs,
+    skills: skills.map(({ id, name, description, path, sourceDir, enabled }) => ({
       id,
       name,
       description,
@@ -154,6 +140,20 @@ async function snapshotView(): Promise<LocalSkillSnapshotView> {
       enabled
     }))
   }
+}
+
+/**
+ * Every skill the settings page lists: the files on disk merged by real path, each with all the
+ * agents that link it, plus the copies imported into Tuff.
+ */
+export async function localSkillInventory(): Promise<SkillInventorySnapshot> {
+  // The page is the natural moment to notice an agent installed since launch.
+  await refreshDetectedSkillRoots()
+  const [{ dirs, skills }, items] = await Promise.all([
+    scanWithDirs(),
+    aiOrchestratorStore.listImportedItems()
+  ])
+  return buildSkillInventory({ dirs, skills, importedItems: items })
 }
 
 async function mutate(
@@ -171,23 +171,27 @@ export function registerSkillLocalChannels(transport: ITuffTransportMain): () =>
   void refreshDetectedSkillRoots()
 
   const cleanups = [
-    transport.on(skillLocalListEvent, async (_payload, context) => {
+    transport.on(SkillLocalEvents.list, async (_payload, context) => {
       assertHostOwned(context)
       // The page is the natural moment to notice an agent installed since launch.
       await refreshDetectedSkillRoots()
       return await snapshotView()
     }),
-    transport.on(skillLocalAddDirEvent, async (payload, context) => {
+    transport.on(SkillLocalEvents.inventory, async (_payload, context) => {
+      assertHostOwned(context)
+      return await localSkillInventory()
+    }),
+    transport.on(SkillLocalEvents.addDir, async (payload, context) => {
       assertHostOwned(context)
       return await mutate((config) => withLocalSkillDir(config, payload.path))
     }),
-    transport.on(skillLocalRemoveDirEvent, async (payload, context) => {
+    transport.on(SkillLocalEvents.removeDir, async (payload, context) => {
       assertHostOwned(context)
       if (detectedSkillRoots.some((root) => root.path === payload.path))
         throw new Error('A detected agent library is not a linked directory')
       return await mutate((config) => withoutLocalSkillDir(config, payload.path))
     }),
-    transport.on(skillLocalSetEnabledEvent, async (payload, context) => {
+    transport.on(SkillLocalEvents.setEnabled, async (payload, context) => {
       assertHostOwned(context)
       return await mutate((config) =>
         withLocalSkillEnabled(config, payload.id, payload.enabled === true)

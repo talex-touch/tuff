@@ -80,6 +80,7 @@ const AI_ERROR_MESSAGES = {
   PROVIDER_UNAVAILABLE: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
   QUOTA_EXHAUSTED: 'AI 配额不足，请稍后重试或调整用量',
   QUOTA_CHECK_UNAVAILABLE: 'AI 配额校验暂不可用，请稍后重试；若持续失败请检查配额存储与配置',
+  USAGE_LIMIT_REACHED: '已达到你设置的 AI 用量上限，可在 设置 › 智能 › 审计 调整',
   MODEL_UNSUPPORTED: '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
   CAPABILITY_UNSUPPORTED: '当前 Provider 不支持该能力，请切换 Provider 或能力',
   NETWORK_FAILURE: 'AI 网络请求失败，请检查网络或 Provider endpoint 后重试',
@@ -112,6 +113,10 @@ const AI_ERROR_DETAILS = {
   QUOTA_CHECK_UNAVAILABLE: {
     reason: '配额状态无法可靠校验，因此请求已被阻止。',
     recovery: '等待配额存储恢复，或检查 Intelligence 配额配置后重试。',
+  },
+  USAGE_LIMIT_REACHED: {
+    reason: '本机 AI 调用已达到你在「审计」里设置的用量上限。',
+    recovery: '等上限按本地时间重置，或在 设置 › 智能 › 审计 调高或清除上限后重试。',
   },
   MODEL_UNSUPPORTED: {
     reason: '所选模型不支持当前请求。',
@@ -1468,6 +1473,11 @@ function normalizeInvokeError(error) {
     }
     else if (lower.includes('permission') || lower.includes('denied') || lower.includes('intelligence.basic')) {
       code = 'PERMISSION_DENIED'
+    }
+    // The host's own global usage limit, before every quota rule: the user set it, it is not
+    // Nexus credits or a provider quota.
+    else if (lower.includes('usage_limit_reached')) {
+      code = 'USAGE_LIMIT_REACHED'
     }
     else if (
       lower.includes('quota_check_unavailable')

@@ -1,5 +1,9 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { ComposerTranslation } from 'vue-i18n'
+import {
+  isUsageLimitFailure,
+  USAGE_LIMIT_REACHED_CODE
+} from '~/modules/intelligence/ai-error-recovery'
 
 interface SourceMetaResult {
   icon: string
@@ -49,6 +53,8 @@ const SIGNAL_REASON_LABELS: Record<string, string> = {
   QUOTA_EXCEEDED: 'coreBox.resultSignalReasons.quotaExceeded',
   QUOTA_EXHAUSTED: 'coreBox.resultSignalReasons.quotaExceeded',
   QUOTA_CHECK_UNAVAILABLE: 'coreBox.resultSignalReasons.quotaCheckUnavailable',
+  // The limit the user set in Audit — not credits; see `resolveSignalReasonKey`.
+  USAGE_LIMIT_REACHED: 'coreBox.resultSignalReasons.usageLimitReached',
   NETWORK_FAILURE: 'coreBox.resultSignalReasons.networkFailure',
   INVALID_REQUEST: 'coreBox.resultSignalReasons.invalidRequest',
   UNKNOWN: 'coreBox.resultSignalReasons.unknownFailure',
@@ -80,6 +86,7 @@ const SIGNAL_ACTION_HINT_LABELS: Record<string, string> = {
   QUOTA_EXCEEDED: 'coreBox.resultSignalActions.checkQuota',
   QUOTA_EXHAUSTED: 'coreBox.resultSignalActions.checkQuota',
   QUOTA_CHECK_UNAVAILABLE: 'coreBox.resultSignalActions.inspectQuota',
+  USAGE_LIMIT_REACHED: 'coreBox.resultSignalActions.openUsageLimits',
   NETWORK_FAILURE: 'coreBox.resultSignalActions.retryNetwork',
   INVALID_REQUEST: 'coreBox.resultSignalActions.fixRequest',
   UNKNOWN: 'coreBox.resultSignalActions.inspectFailure',
@@ -116,6 +123,7 @@ const FAILED_REASON_KEYS = new Set([
   'QUOTA_EXCEEDED',
   'QUOTA_EXHAUSTED',
   'QUOTA_CHECK_UNAVAILABLE',
+  'USAGE_LIMIT_REACHED',
   'NETWORK_FAILURE',
   'INVALID_REQUEST',
   'UNKNOWN',
@@ -199,11 +207,24 @@ function toReasonKey(reason: string): string {
     .toUpperCase()
 }
 
+/**
+ * The lookup key of a reason. A usage-limit refusal can arrive as main's whole sentence
+ * (`[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: …`) rather than the bare code; it still
+ * gets its own label instead of the raw English. Matched on the code as written, underscores and
+ * all: a provider's own "usage limit reached" (a CLI subscription) is not the user's Audit limit.
+ */
+function resolveSignalReasonKey(reason: string): string {
+  const key = toReasonKey(reason)
+  return !Object.hasOwn(SIGNAL_REASON_LABELS, key) && isUsageLimitFailure(reason)
+    ? USAGE_LIMIT_REACHED_CODE
+    : key
+}
+
 function inferSignalToneFromReason(reason: string | undefined): ResultSignal['tone'] | null {
   const normalized = reason?.replace(/\s+/g, ' ').trim()
   if (!normalized) return null
 
-  const reasonKey = toReasonKey(normalized)
+  const reasonKey = resolveSignalReasonKey(normalized)
   if (FAILED_REASON_KEYS.has(reasonKey)) return 'danger'
   if (DEGRADED_REASON_KEYS.has(reasonKey)) return 'warning'
   return null
@@ -223,7 +244,7 @@ export function resolveSignalReasonLabel(
   const normalized = reason?.replace(/\s+/g, ' ').trim()
   if (!normalized) return ''
 
-  const knownKey = SIGNAL_REASON_LABELS[toReasonKey(normalized)]
+  const knownKey = SIGNAL_REASON_LABELS[resolveSignalReasonKey(normalized)]
   if (knownKey) {
     return t(knownKey, normalized)
   }
@@ -238,7 +259,7 @@ export function resolveSignalActionHint(
 ): string {
   const normalized = reason?.replace(/\s+/g, ' ').trim()
   if (normalized) {
-    const actionKey = SIGNAL_ACTION_HINT_LABELS[toReasonKey(normalized)]
+    const actionKey = SIGNAL_ACTION_HINT_LABELS[resolveSignalReasonKey(normalized)]
     if (actionKey) return t(actionKey, normalized)
   }
 

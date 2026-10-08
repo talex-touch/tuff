@@ -84,4 +84,36 @@ describe('perf context', () => {
       })
     })
   })
+
+  it('keeps contexts that already closed so a lag report can still name them', async () => {
+    const { enterPerfContext, getRecentPerfContextSnapshot } = await import('./perf-context')
+
+    const disposeShort = enterPerfContext('Noise.tiny')
+    await vi.advanceTimersByTimeAsync(20)
+    disposeShort()
+
+    const disposeBlock = enterPerfContext('Clipboard.check', { task: 'poll' })
+    await vi.advanceTimersByTimeAsync(2700)
+    disposeBlock()
+
+    expect(getPerfContextSnapshotIsEmpty(await import('./perf-context'))).toBe(true)
+    expect(getRecentPerfContextSnapshot(3000)).toEqual([
+      expect.objectContaining({
+        label: 'Clipboard.check',
+        durationMs: 2700,
+        mode: 'duration',
+        endedAgoMs: 0,
+        meta: { task: 'poll' }
+      })
+    ])
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(getRecentPerfContextSnapshot(3000)).toEqual([])
+  })
 })
+
+function getPerfContextSnapshotIsEmpty(module: {
+  getPerfContextSnapshot: (limit?: number) => unknown[]
+}): boolean {
+  return module.getPerfContextSnapshot(3).length === 0
+}

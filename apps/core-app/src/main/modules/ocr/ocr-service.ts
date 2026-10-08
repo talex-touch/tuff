@@ -33,6 +33,7 @@ import {
   getCapabilityPrompt
 } from '../ai/intelligence-config'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
+import { readUsageLimitInfo, USAGE_LIMIT_REACHED_CODE } from '../ai/usage-ledger/usage-limits'
 import { windowManager } from '../box-tool/core-box/window'
 import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
 import { databaseModule } from '../database'
@@ -101,6 +102,9 @@ const MAX_OCR_META_TEXT_CHARS = 8000
 const MAX_OCR_BLOCKS = 120
 const MAX_OCR_TEXT_CHARS = 200_000
 const MAX_EMBEDDING_INPUT_CHARS = 8000
+/** Stable usage-ledger callers (audit rebuild design §1.4). */
+const OCR_CLIPBOARD_CALLER = 'core.ocr.clipboard'
+const OCR_EMBEDDING_CALLER = 'core.ocr.embedding'
 const OCR_FAILURE_THRESHOLD = 5
 const OCR_FAILURE_WINDOW_MS = 10 * 60 * 1000
 const OCR_QUEUE_DISABLE_BASE_MS = 30 * 60 * 1000
@@ -882,11 +886,19 @@ class OcrService {
         payload,
         {
           modelPreference,
-          allowedProviderIds
+          allowedProviderIds,
+          metadata: { caller: OCR_CLIPBOARD_CALLER }
         }
       )
       await this.persistAgentSuccess(job, invocation)
     } catch (error) {
+      // The user's global AI usage limit (usage-limits task C5): the job ends with that code and is
+      // never retried — any retry before the reset is refused the same way. Not an OCR failure, so
+      // it does not count toward disabling the queue either.
+      if (readUsageLimitInfo(error)) {
+        await this.endJobOnUsageLimit(job)
+        return
+      }
       const retryReason = this.classifyRetryableAgentError(error)
       if (retryReason) {
         await this.deferJob(job, retryReason)
@@ -898,6 +910,38 @@ class OcrService {
         error,
         job.attempts ?? 0
       )
+    }
+  }
+
+  /**
+   * Ends an agent job the global AI usage limit refused: failed with `USAGE_LIMIT_REACHED`, no retry
+   * scheduled, and the clipboard entry says why.
+   */
+  private async endJobOnUsageLimit(job: typeof ocrJobs.$inferSelect): Promise<void> {
+    const jobId = job.id
+    if (!this.db || !jobId) return
+
+    await this.withDbWrite('ocr.jobs.fail', (db) =>
+      db
+        .update(ocrJobs)
+        .set({
+          status: 'failed',
+          lastError: USAGE_LIMIT_REACHED_CODE,
+          nextRetryAt: null,
+          finishedAt: new Date()
+        })
+        .where(eq(ocrJobs.id, jobId))
+    )
+
+    if (job.clipboardId) {
+      await this.updateClipboardMeta(job.clipboardId, {
+        ocr_status: 'failed',
+        ocr_last_error: USAGE_LIMIT_REACHED_CODE,
+        ocr_job_id: jobId,
+        ocr_retry_count: job.attempts ?? 0,
+        ocr_retry_after_seconds: null,
+        ocr_next_retry_at: null
+      })
     }
   }
 
@@ -1147,7 +1191,8 @@ class OcrService {
         { text: trimmedText },
         {
           modelPreference: capabilityOptions.modelPreference,
-          allowedProviderIds: capabilityOptions.allowedProviderIds
+          allowedProviderIds: capabilityOptions.allowedProviderIds,
+          metadata: { caller: OCR_EMBEDDING_CALLER }
         }
       )
       return response.result

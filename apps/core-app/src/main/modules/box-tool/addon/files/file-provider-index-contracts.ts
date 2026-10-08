@@ -1,12 +1,15 @@
 import type {
-  IndexedSourceDelta,
   IndexedSourceRecordBatch,
   IndexedSourceResetRequest,
   IndexedSourceResetResult,
   IndexedSourceScanRequest,
   IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
-import type { UpsertFileRecord } from '../../search-engine/search-index-writer'
+import type {
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  UpsertFileRecord
+} from '../../search-engine/search-index-writer'
 import type { PersistAndApplyProviderItemsMetrics } from '../../search-engine/workers/search-index-worker-types'
 
 // The shapes FileProvider's index runs trade in: the delegates the runtime hands it, the options a
@@ -34,27 +37,38 @@ export interface FileIndexSyncStats {
   deleted: number
   skipped: number
   errors: number
+  pending?: boolean
 }
 
 export interface FileIndexRunOptions {
   onRecordBatch?: (batch: IndexedSourceRecordBatch) => void | Promise<void>
-  onDelta?: (delta: IndexedSourceDelta) => void | Promise<void>
   throwOnFailure?: boolean
   signal?: AbortSignal
   mutationLeaseId?: string
+  maintenance?: boolean
+  maintenanceDeadlineAt?: number
 }
 
 export interface FileIndexedSourceRuntimeMutationDelegate {
-  withMutationLease: <T>(operation: (leaseId: string) => Promise<T>) => Promise<T>
+  withMutationLease: <T>(
+    operation: (leaseId: string) => Promise<T>,
+    options?: { maintenance?: boolean; signal?: AbortSignal }
+  ) => Promise<T>
+  publishFileDeletionCommit: (commit: {
+    sourceId: string
+    deletedRecords: readonly (ExpectedFileRecord | ExpectedMissingFileSearchRecord)[]
+    removedIndexedItems: number
+    mutationLeaseId: string
+    reason: string
+  }) => Promise<void>
   applyBatch: (batch: IndexedSourceRecordBatch) => Promise<unknown>
-  applyBatchWithPersistence?: (
+  applyBatchWithPersistence: (
     batch: IndexedSourceRecordBatch,
     records: UpsertFileRecord[]
   ) => Promise<{
     persistedCount: number
     metrics?: PersistAndApplyProviderItemsMetrics
   }>
-  applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>
   cleanupSource: (sourceId: string, mutationLeaseId?: string) => Promise<unknown>
   countSource: (sourceId: string, mutationLeaseId?: string) => Promise<number>
   publishContentCleared: (affectedItems: number) => Promise<void>

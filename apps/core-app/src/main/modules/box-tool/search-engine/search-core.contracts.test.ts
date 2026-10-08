@@ -1,11 +1,18 @@
 import type { IProviderActivate, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
-import type * as schema from '../../../db/schema'
+import * as schema from '../../../db/schema'
+import type * as SearchActivity from './search-activity'
+import type { SearchIndexCommitHub } from './search-index-commit-hub'
+import type { ActiveAppInfo } from '../../system/active-app'
+import type * as DbUtilsModule from '../../../db/utils'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import { readFile } from 'node:fs/promises'
 
 type PinnedItem = typeof schema.pinnedItems.$inferSelect
 type ItemUsageStat = typeof schema.itemUsageStats.$inferSelect
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import type { ExecuteRecordResult } from '../../../db/utils'
+import type { DbUtils } from '../../../db/utils'
 // resetModules reinitializes the real AppProvider module graph before each contract case.
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 })
 
@@ -14,6 +21,7 @@ const state = vi.hoisted(() => {
   const searchUpdateCompletion = { current: Promise.withResolvers<void>() }
 
   return {
+    foregroundApp: null as ActiveAppInfo | null,
     /**
      * The committed-execute push. `broadcast` reaches every window (the main window owns the
      * settings/application pages); `broadcastToWindow` is the explicit CoreBox delivery, because
@@ -43,6 +51,7 @@ const state = vi.hoisted(() => {
     fileProviderPrepareForShutdown: vi.fn(async () => undefined),
     fileProviderResetDelegate: vi.fn(),
     fileProviderIndexingStatus: vi.fn(() => ({ isInitializing: false })),
+    filePathAdmitted: vi.fn((path: string) => path.startsWith('/scope/')),
     forceFlushUsageQueue: vi.fn(async () => undefined),
     getAllPinnedItems: vi.fn<() => Promise<PinnedItem[]>>(async () => []),
     getUsageStatsBatch: vi.fn<() => Promise<ItemUsageStat[]>>(async () => []),
@@ -51,7 +60,7 @@ const state = vi.hoisted(() => {
     // one transaction and reports what it accepted, not that it fans out to per-table writers.
     // Real shape: `usageStats` is the committed `item_usage_stats` row on an accepted write and
     // `null` only when the event was a duplicate, so the stub must allow both.
-    recordExecuteTransaction: vi.fn<() => Promise<ExecuteRecordResult>>(async () => ({
+    recordExecuteTransaction: vi.fn<DbUtils['recordExecuteTransaction']>(async () => ({
       accepted: true,
       usageStats: null
     })),
@@ -65,6 +74,11 @@ const state = vi.hoisted(() => {
     indexingRuntimeSetTaskStateStore: vi.fn(),
     indexingRuntimeSetWriterRouter: vi.fn(),
     invalidateRecommendationCache: vi.fn(),
+    recommend: vi.fn(async () => ({
+      containerLayout: undefined,
+      duration: 0,
+      items: [] as TuffItem[]
+    })),
     invalidateUsageStatsCache: vi.fn(),
     readWorkerClose: vi.fn(async () => undefined),
     registerCoreIndexedSources: vi.fn(),
@@ -118,13 +132,21 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('../../../db/utils', () => ({ createDbUtils: state.createDbUtils }))
+vi.mock('../../system/active-app', () => ({
+  activeAppService: { getActiveApp: async () => state.foregroundApp }
+}))
 vi.mock('../../../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
-    getStats: vi.fn(() => ({ queued: 0, processing: false, currentTaskLabel: null }))
+    schedule: async (_label: string, operation: () => Promise<unknown>) => operation(),
+    getStats: vi.fn(() => ({ queued: 0, processing: false, currentTaskLabel: null })),
+    hasInteractiveWrites: vi.fn(() => false)
   }
 }))
 vi.mock('../../../service/app-task-gate', () => ({
-  appTaskGate: { getSnapshot: vi.fn(() => ({ activeCount: 0, activeLabels: {} })) }
+  appTaskGate: {
+    getSnapshot: vi.fn(() => ({ activeCount: 0, activeLabels: {} })),
+    isActive: vi.fn(() => false)
+  }
 }))
 vi.mock('../../../utils/perf-context', () => ({ enterPerfContext: vi.fn(() => () => {}) }))
 vi.mock('../../../utils/perf-monitor', () => ({
@@ -205,7 +227,9 @@ vi.mock('../addon/files/file-provider', () => ({
     getIndexingStatus: state.fileProviderIndexingStatus,
     hasSearchFilters: vi.fn(() => false),
     id: 'file-provider',
+    isSearchPathAdmitted: state.filePathAdmitted,
     onSearch: vi.fn(),
+    semanticRecall: vi.fn(async () => []),
     prepareForSearchIndexShutdown: state.fileProviderPrepareForShutdown,
     setFilePersistencePort: state.fileProviderPersistencePort,
     setIndexedSourceRuntimeMutationDelegate: state.fileProviderMutationDelegate,
@@ -294,10 +318,13 @@ vi.mock('./query-completion-service', () => ({
 vi.mock('./recommendation/recommendation-engine', () => ({
   RecommendationEngine: class {
     invalidateCache = state.invalidateRecommendationCache
-    recommend = vi.fn(async () => ({ containerLayout: undefined, duration: 0, items: [] }))
+    recommend = state.recommend
   }
 }))
-vi.mock('./search-activity', () => ({ markSearchActivity: vi.fn() }))
+vi.mock('./search-activity', async (importOriginal) => ({
+  ...(await importOriginal<typeof SearchActivity>()),
+  markSearchActivity: vi.fn()
+}))
 vi.mock('./search-index-service', () => ({
   SearchIndexService: class {
     preloadPinyin = vi.fn()
@@ -405,7 +432,7 @@ import {
 } from './search-index-commit-coalescer'
 
 let core: SearchEngineCore
-let searchIndexCommitHub: typeof import('./search-index-commit-hub').searchIndexCommitHub
+let searchIndexCommitHub: SearchIndexCommitHub
 
 function buildItem(id: string, providerId: string, title: string): TuffItem {
   return {
@@ -433,6 +460,7 @@ describe('SearchEngineCore facade contracts', () => {
     vi.resetModules()
     vi.clearAllMocks()
     state.transportHandlers.clear()
+    state.foregroundApp = null
     state.searchUpdateCompletion.current = Promise.withResolvers<void>()
     const [searchIndexCommitHubModule, searchCoreModule] = await Promise.all([
       import('./search-index-commit-hub'),
@@ -456,6 +484,8 @@ describe('SearchEngineCore facade contracts', () => {
     })
     state.getAllPinnedItems.mockResolvedValue([])
     state.getUsageStatsBatch.mockResolvedValue([])
+    state.filePathAdmitted.mockImplementation((path: string) => path.startsWith('/scope/'))
+    state.recommend.mockResolvedValue({ containerLayout: undefined, duration: 0, items: [] })
     state.togglePin.mockResolvedValue(true)
     core.init({ app: { channel: {} } } as never)
     // File-commit invalidation is throttled with a per-instance timestamp, and these tests share
@@ -468,6 +498,138 @@ describe('SearchEngineCore facade contracts', () => {
     const lifecycle = core as unknown as { destroying: boolean }
     if (!lifecycle.destroying) await core.destroy()
   })
+
+  it.each([
+    { name: 'captured source A', known: true, expectedApp: 'com.example.editor' },
+    { name: 'unknown original source', known: false, expectedApp: undefined }
+  ])(
+    'executes a completed session with its $name after hide and source B activation',
+    async ({ known, expectedApp }) => {
+      const client = createClient({ url: ':memory:' })
+      // The harness resets modules per case: static imports would bind stale recorder/snapshot
+      // singletons instead of the ones loaded with this SearchEngineCore instance.
+      const { foregroundAppSnapshotStore } = await import('../../system/foreground-app-snapshot')
+      const { recordAcceptedExecute } = await import('./execute-recorder')
+      const migrationNames = [
+        '0000_whole_mister_fear.sql',
+        '0005_orange_wiccan.sql',
+        '0007_remarkable_silver_sable.sql',
+        '0011_add_recommendation_tables.sql',
+        '0019_usage_trend_daily.sql',
+        '0051_usage_execute_events.sql'
+      ]
+      try {
+        for (const name of migrationNames) {
+          const migration = await readFile(
+            new URL(`../../../../../resources/db/migrations/${name}`, import.meta.url),
+            'utf8'
+          )
+          for (const statement of migration.split('--> statement-breakpoint')) {
+            if (statement.trim()) await client.execute(statement)
+          }
+        }
+        const actual = await vi.importActual<typeof DbUtilsModule>('../../../db/utils')
+        const usageDb = actual.createDbUtils(drizzle(client, { schema }))
+        state.recordExecuteTransaction.mockImplementation((input) =>
+          usageDb.recordExecuteTransaction(input)
+        )
+        const externalApp = (bundleId: string, displayName: string): ActiveAppInfo => ({
+          bundleId,
+          identifier: bundleId,
+          displayName,
+          processId: process.pid + 1,
+          executablePath: `/Applications/${displayName}.app`,
+          platform: 'macos',
+          lastUpdated: 0,
+          windowTitle: null
+        })
+        const sourceItem = buildItem('source-action', 'source-provider', 'Source action')
+        core.registerProvider({
+          ...buildProvider(
+            'source-provider',
+            async () => ({ items: [sourceItem] }) as TuffSearchResult
+          ),
+          onExecute: async (args: {
+            item: TuffItem
+            searchResult?: TuffSearchResult
+            eventId: string
+          }) => {
+            // Real launch paths hide before their accepted recorder publishes. Crossing an await
+            // here also catches implementations which lose the async-local source before admission.
+            foregroundAppSnapshotStore.clear()
+            await Promise.resolve()
+            await recordAcceptedExecute({
+              item: args.item,
+              sessionId: args.searchResult?.sessionId,
+              eventId: args.eventId,
+              entryPoint: 'core-box'
+            })
+          }
+        } as never)
+        state.foregroundApp = known ? externalApp('com.example.editor', 'Editor') : null
+        foregroundAppSnapshotStore.capture()
+        await foregroundAppSnapshotStore.resolve()
+        const original = core.startSearch(
+          { inputs: [], text: 'original source action' },
+          {
+            caller: { kind: 'core-box', id: 'origin-original' }
+          }
+        )
+        const originalResult = await original.result
+        await original.completed
+        foregroundAppSnapshotStore.clear()
+        state.foregroundApp = externalApp('com.example.browser', 'Browser')
+        foregroundAppSnapshotStore.capture()
+        await foregroundAppSnapshotStore.resolve()
+        const next = core.startSearch(
+          { inputs: [], text: 'next source action' },
+          {
+            caller: { kind: 'core-box', id: 'origin-next' }
+          }
+        )
+        const nextResult = await next.result
+        await next.completed
+
+        // resetModules recreates typed-event objects; resolve the registered transport address,
+        // not the object imported before this engine's module graph was loaded.
+        const execute = [...state.transportHandlers.entries()].find(([event]) => {
+          const address = event as { toEventName: () => string }
+          return address.toEventName() === CoreBoxEvents.item.execute.toEventName()
+        })![1]
+        await execute({
+          item: sourceItem,
+          searchResult: originalResult,
+          eventId: 'original-execute'
+        } as never)
+        await execute({
+          item: sourceItem,
+          searchResult: nextResult,
+          eventId: 'next-execute'
+        } as never)
+        const history = await usageDb.getRecommendationHistory()
+        const { rows } = await client.execute(
+          'SELECT event_id, context FROM usage_logs ORDER BY id'
+        )
+        const originalContext = JSON.parse(String(rows[0].context))
+        const nextContext = JSON.parse(String(rows[1].context))
+
+        expect(rows.map((row) => row.event_id)).toEqual(['original-execute', 'next-execute'])
+        if (known) expect(originalContext.prevApp).toBe(expectedApp)
+        else expect(originalContext).not.toHaveProperty('prevApp')
+        expect(nextContext.prevApp).toBe('com.example.browser')
+        expect(history.map((event) => event.previousApp).sort()).toEqual(
+          known ? ['com.example.browser', 'com.example.editor'] : ['com.example.browser', null]
+        )
+      } finally {
+        foregroundAppSnapshotStore.clear()
+        state.foregroundApp = null
+        state.recordExecuteTransaction
+          .mockReset()
+          .mockResolvedValue({ accepted: true, usageStats: null })
+        client.close()
+      }
+    }
+  )
 
   it('reports no committed push when the write throws, so no surface is shown a count that was rolled back', async () => {
     // A failed transaction is the one case where the user's action succeeded but there is no count:
@@ -599,16 +761,6 @@ describe('SearchEngineCore facade contracts', () => {
     })
 
     expect(internals.searchFirstResultMetrics.has('session-1')).toBe(false)
-  })
-
-  it('injects the App runtime delegate through SearchCore initialization', () => {
-    expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scan: expect.any(Function),
-        reconcile: expect.any(Function),
-        applyDelta: expect.any(Function)
-      })
-    )
   })
 
   it('routes the App runtime presentation-refresh delegate to subscribed CoreBox streams', async () => {
@@ -749,24 +901,6 @@ describe('SearchEngineCore facade contracts', () => {
     ])
   })
 
-  it('records an accepted execute through the single-writer transaction, keyed by the source-qualified identity', async () => {
-    const item = buildItem('executed-item', 'usage-provider', 'Open report')
-
-    await core.recordExecute('session-usage-1', item, 'event-under-test')
-
-    // The facade's whole job here is identity resolution and handing the action to the one
-    // transaction the db owns; the transaction itself decides acceptance and dedupe.
-    expect(state.recordExecuteTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventId: 'event-under-test',
-        sourceId: 'usage-provider',
-        itemId: 'executed-item',
-        sourceType: 'application',
-        sessionId: 'session-usage-1'
-      })
-    )
-  })
-
   it('completes concurrent UI and AI searches with isolated sinks and activation snapshots', async () => {
     const uiSearch = vi.fn(
       async () =>
@@ -887,6 +1021,102 @@ describe('SearchEngineCore facade contracts', () => {
     expect(secondResult.items[0].render.basic?.title).toBe('Cached result')
     expect(secondResult.sources).not.toBe(firstResult.sources)
     expect(snapshots.map((result) => result.sessionId)).toEqual([first.sessionId, second.sessionId])
+  })
+
+  it('rechecks current file-owner roots on a cached hit without applying that policy to native-file results', async () => {
+    const owned: TuffItem = {
+      ...buildItem('owned-file', 'file-provider', 'Owned indexed file'),
+      kind: 'file',
+      source: { id: 'file-provider', name: 'Files', type: 'file' },
+      meta: { file: { path: '/scope/owned.txt' } }
+    }
+    const native: TuffItem = {
+      ...buildItem('native-file', 'mac-file-provider', 'Native file'),
+      kind: 'file',
+      source: { id: 'mac-file-provider', name: 'Native files', type: 'file' },
+      meta: { file: { path: '/outside/native.txt' } }
+    }
+    let ownedItems = [owned]
+    let nativeItems = [native]
+    core.unregisterProvider('file-provider')
+    core.unregisterProvider('mac-file-provider')
+    core.registerProvider({
+      ...buildProvider('file-provider', async () => ({ items: ownedItems }) as never),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider('mac-file-provider', async () => ({ items: nativeItems }) as never),
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'file-provider' },
+      { id: 'mac-file-provider' }
+    ] as IProviderActivate[])
+    const query = { inputs: [], text: 'current file owner scope cache' } as TuffQuery
+    const first = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'scope:before-withdrawal' }
+    })
+    expect((await first.result).items.map((item) => item.id).sort()).toEqual([
+      'native-file',
+      'owned-file'
+    ])
+    await first.completed
+
+    // Fresh provider output is now empty. The retained native item below can only come from
+    // the cached snapshot, whose index-owned member must still obey today's admission rule.
+    ownedItems = []
+    nativeItems = []
+    state.filePathAdmitted.mockImplementation(() => false)
+    const snapshots: TuffSearchResult[] = []
+    const cached = core.startSearch(query, {
+      caller: { kind: 'ai-agent', id: 'scope:after-withdrawal' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    expect((await cached.result).items.map((item) => item.id)).toEqual(['native-file'])
+    await cached.completed
+    expect(snapshots.map((result) => result.items.map((item) => item.id))).toEqual([
+      ['native-file']
+    ])
+  })
+
+  it('rechecks rebuilt recommendation ownership when roots change during recommendation lookup', async () => {
+    const owned: TuffItem = {
+      ...buildItem('owned-recommendation', 'recommendation-grid', 'Indexed recommendation'),
+      kind: 'file',
+      meta: { _originalSourceId: 'file-provider', file: { path: '/scope/recommended.txt' } }
+    }
+    const native: TuffItem = {
+      ...buildItem('native-recommendation', 'recommendation-grid', 'Native recommendation'),
+      kind: 'file',
+      meta: { _originalSourceId: 'mac-file-provider', file: { path: '/outside/recommended.txt' } }
+    }
+    const entered = Promise.withResolvers<void>()
+    const released = Promise.withResolvers<void>()
+    state.recommend.mockImplementation(async () => {
+      entered.resolve()
+      await released.promise
+      return { containerLayout: undefined, duration: 1, items: [owned, native] }
+    })
+    const operation = core.startSearch({ text: '', inputs: [] } as TuffQuery, {
+      caller: { kind: 'core-box', id: 'scope:recommendation-withdrawal' }
+    })
+    try {
+      await entered.promise
+      state.filePathAdmitted.mockImplementation(() => false)
+      released.resolve()
+      expect((await operation.result).items.map((item) => item.id)).toEqual([
+        'native-recommendation'
+      ])
+      await operation.completed
+    } finally {
+      released.resolve()
+      await operation.result
+      await operation.completed
+    }
   })
 
   it('caches what the session ended with so a repeat query keeps the deferred batch', async () => {

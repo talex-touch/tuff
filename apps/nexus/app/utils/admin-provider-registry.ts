@@ -632,18 +632,3 @@ export function resolveProviderRegistryError(error: unknown, t: RegistryTranslat
       return t('dashboard.providerRegistry.validation.defaultModelMissing', error.message)
   }
 }
-
-// ─── Keyboard ──────────────────────────────────────────────────────────────
-
-/**
- * A Tab or Escape pressed inside a `TxModal`: the modal has handled it on its own
- * overlay. `TxDrawer` listens for both keys on `document` whatever is on top, so
- * with the confirm dialog over a drawer, Escape would close the drawer as well
- * and Tab would pull focus back into it; the panel stops these at `<body>`.
- */
-export function isModalKey(event: Pick<KeyboardEvent, 'key' | 'target'>): boolean {
-  if (event.key !== 'Tab' && event.key !== 'Escape')
-    return false
-  const target = event.target as { closest?: (selector: string) => unknown } | null
-  return Boolean(target?.closest?.('.tx-modal__overlay'))
-}

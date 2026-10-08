@@ -1,0 +1,234 @@
+---
+title: MotionMetric
+description: Source-mapped caller-driven metrics, charts and composite dashboards
+category: Advanced
+status: beta
+since: 0.6.3
+tags: [motion, metrics, charts, pro]
+syncStatus: reviewed
+---
+
+`TxMotionMetric` preserves 15 catalog variants, all 29 Metrics source capabilities, and all 29 original `AnimatedMetricCard` interaction branches. Cache allocations, pixel matrices, piano keys, staircase columns, paired bars, barcodes, arcs, area curves, sleep stages and message threads retain independent layouts rather than relabeling one statistic card.
+
+## Usage
+
+### Full interactive gallery
+
+Select a catalog ID, source capability or original interaction. Switch supplied sample periods and operate chart scrubbers, noise bounds, stage selection, asset filtering and feedback input. Values and status are editable caller state. Details, share, resume, start/pause and send emit events only; sample messages are appended locally by the demo caller.
+
+Charts expose keyboard-operable data-point scrubbers by default. The noise lower input is natively bounded by the current upper value, and the upper input by the current lower value, keeping readouts and native thumbs aligned at crossings.
+
+:::TuffDemoWrapper{demo="MotionMetricDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionMetric } from '@talex-touch/tuffex/motion-metric'
+  const period = ref('weekly')
+  const periods = [
+    { value: 'weekly', label: 'Weekly', data: {
+      title: 'Sales analytics', value: 345, target: 500,
+      series: [
+        { id: 'sales', label: 'Sales', points: [{ label: 'Sep', value: 120 }, { label: 'Oct', value: 225 }] },
+        { id: 'earnings', label: 'Earnings', points: [{ label: 'Sep', value: 90 }, { label: 'Oct', value: 180 }] },
+      ],
+    } },
+    { value: 'monthly', label: 'Monthly', data: {
+      title: 'Sales analytics', value: 420, target: 500,
+      series: [
+        { id: 'sales', label: 'Sales', points: [{ label: 'Sep', value: 180 }, { label: 'Oct', value: 240 }] },
+        { id: 'earnings', label: 'Earnings', points: [{ label: 'Sep', value: 140 }, { label: 'Oct', value: 210 }] },
+      ],
+    } },
+  ]
+  </script>
+  <template>
+    <TxMotionMetric v-model:period="period" variant="m-sales-dual" :periods="periods" />
+  </template>
+---
+:::
+
+### Data and lifecycle
+
+The component does not query network, audio, health, financial or monitoring services, generate stock prices, simulate monitoring/countdowns, or promise notification delivery. The caller updates `series`, `metrics`, `status`, `remaining` and result models. Missing business data shows an empty state, not fixed readings. Existing SVG/D3 charts, `TxStatCard`, `TxSlider`, `TxInput`, `TxButton` and `TxTextMorph` are reused. Shared activity disables value/gauge motion offscreen, in hidden documents, while KeepAlive is inactive and under reduced motion.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `variant` | `MotionMetricVariant` | `m-progress-piano` | Catalog, composite or original interaction ID |
+| `interaction` | `MotionMetricInteraction` | `progress-indicator-piano` | Dispatch used only by animated-metric-card |
+| `data` | `MotionMetricData` | `—` | Caller-owned dataset |
+| `series` | `MotionMetricSeries[]` | `—` | Overrides selected dataset series |
+| `metrics` | `MotionMetricReadout[]` | `—` | Overrides selected dataset readouts |
+| `status` | `string` | `—` | Caller status; no inferred business success |
+| `period` | `string` | `First period` | Controlled selected period (v-model:period) |
+| `periods` | `MotionMetricPeriod[]` | `—` | Each option has its own real data object |
+| `filterStyle` | `'pills' \| 'select'` | `Source-appropriate` | Native pills or native select |
+| `activeIndex` | `number` | `0` | Controlled selected chart/matrix/step index |
+| `modelValue` | `number` | `data.value / data.threshold` | Numeric readout override; alerts use threshold |
+| `range` | `[number, number]` | `[data.min ?? 30, data.max ?? 120]` | Noise range bounds, emits without measuring audio |
+| `running` | `boolean` | `false` | Timer running model; never starts a clock |
+| `message` | `string` | `Empty` | Feedback draft |
+| `disabled` | `boolean` | `false` | Disables native inputs and action events |
+| `animated` | `boolean` | `true` | Shared visibility/reduced-motion gate for value/gauge motion |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | Token-driven spacing and numeral size |
+| `labels` | `Partial<MotionMetricLabels>` | `English defaults` | Override every control/empty-state string |
+| `formatValue` | `(value, unit?) => string` | `Number with up to 2 decimals + unit` | Formatting only; does not alter chart data |
+
+### Data types
+
+| Type | Fields | Description |
+|---|---|---|
+| `MotionMetricData` | `title, description, value, target, min, max, unit, previous, rank, status, remaining, total, threshold, columns, metrics, series, groups, cells, weekdays, steps, profiles, messages` | No business defaults. remaining/total are seconds. target defaults to 100 only for gauge geometry. |
+| `MotionMetricSeries` | `id, label, points, unit?, tone?` | Independent series; points have label/value, optional description, semantic tone and sleep-stage level (0–100). |
+| `MotionMetricReadout` | `id, label, value, unit?, previous?, target?, description?, status?, tone?, grade?` | Numeric or textual values; grade is used by credit reports. |
+| `MotionMetricGroup` | `id, label, value?, target?, unit?, columns?, cells?, metrics?, series?, period?, periods?` | Named sub-layout. Sales/finance/credit dashboard groups can supply independent period data; group.period is controlled, otherwise selection stays local. |
+| `MotionMetricCell` | `id, label, value, description?, selected?` | Activity intensity or calendar day; selection emits id/index. |
+| `MotionMetricStep` | `id, label, value, status?` | Relative segment width and caller-provided step state. |
+| `MotionMetricProfile` | `id, name, initials?, status, detail?, value?, segments?, flight?` | Flight contains label/from/to/departure/arrival/progress (0–100). No external avatar URL is bundled. |
+| `MotionMetricMessage` | `id, author, text, time?` | Caller-owned messages; send does not append or claim delivery. |
+| `MotionMetricPeriod` | `value, label, data` | Selected data merges over base data; explicit top-level series/metrics/status take precedence. |
+
+| Variant | Group IDs | Description |
+|---|---|---|
+| `cache-stats-card / cacheable-bandwidth-cost` | `bandwidth` | group.value/unit = cacheable amount; group.metrics = cached/non-cacheable allocation |
+| `network-telemetry` | `Any ID` | Each group is an independent named activity matrix |
+| `sales-dashboard` | `analytics, target` | Paired chart and segmented sales target |
+| `credit-score-cards` | `report, utilization, history` | Graded rows, balance/limit and score history |
+| `finance-dashboard` | `savings, credit, expenses, assets` | Pixel savings, barcode, stacked expenses and locally filtered asset allocation |
+| `marketing-cards` | `channels, campaign` | Channel allocation and chart/readout split |
+| `health-cards` | `goals, period, hydration, workout, steps, sleep, heart, target` | Daily rings, cycle dots, charts, sleep-stage heights and weekly target |
+| `system-metrics-card` | `Any ID` | Each group has quantiles and an independent chart; top-level metrics are errors |
+| `course-progress-card` | `Any ID` | Training chart and attendee readouts |
+
+Default labels: `period: Period`, `empty: No data for this period`, `details: View details`, `share: Share`, `more: More actions`, `scrubber: Select a data point`, `current: Current`, `target: Target`, `remaining: Remaining`, `low: Low`, `high: High`, `minimum: Minimum`, `maximum: Maximum`, `threshold: Threshold`, `start: Start`, `pause: Pause`, `message: Message`, `send: Send`, `all: See all`, `resume: Resume`, `analysis: Analysis`, `average: Average`.
+
+### Events
+
+| Event | Payload | Description |
+|---|---|---|
+| `update:period` | `string` | Period selection |
+| `update:activeIndex` | `number` | Chart, matrix or step selection |
+| `update:modelValue` | `number` | Progress/noise input or alert threshold |
+| `update:range` | `[number, number]` | Noise range bounds |
+| `update:running` | `boolean` | Start/pause intent; no internal clock |
+| `update:message` | `string` | Feedback draft |
+| `select` | `{ id: string, index: number }` | Selected point; chart id is empty |
+| `filter` | `{ groupId: string, period: string }` | Independent dashboard group period selection |
+| `action` | `string` | details/share/more/add/resume/all |
+| `send` | `string` | Trimmed nonempty message |
+
+### Slots
+
+| Slot | Scope | Description |
+|---|---|---|
+| `header` | `{ data }` | Custom heading area |
+| `avatar` | — | Caller-owned licensed avatar |
+| `preview` | `{ data }` | Real content preview in feedback layout |
+| `footer` | `{ data }` | Source/unit/update information |
+
+### CSS variables
+
+| Variable | Purpose |
+|---|---|
+| `--tx-mm-pad` | Root padding / 根内边距 |
+| `--tx-mm-gap` | Section spacing / 区块间距 |
+| `--tx-mm-number` | Numeric display size / 数值字号 |
+| `--tx-chart-categorical-1..6` | Independent series palette / 独立序列颜色 |
+| `--tx-chart-grid-line` | Chart reference grid / 图表参考线 |
+| `--tx-color-*`, `--tx-text-color-*`, `--tx-fill-color-*`, `--tx-bg-color`, `--tx-border-color-*` | Shared semantic theme / 共享语义主题 |
+
+## Complete variants and source mapping
+
+### 15 catalog entries
+
+| Catalog ID | Interaction | Capability |
+|---|---|---|
+| `m-cache-bandwidth` | `cacheable-bandwidth-cost` | Cached / non-cacheable allocation, total and cost |
+| `m-net-matrix` | `network-telemetry-matrix` | Finality readouts and independent network matrices |
+| `m-progress-piano` | `progress-indicator-piano` | 28 piano keys and numeric goal input |
+| `m-server-step` | `server-performance-step-bars` | Staircase columns with bright top caps |
+| `m-overview-scrubber` | `overview-bar-scrubber-card` | Striped columns, active point and scrubber tooltip |
+| `m-sales-dual` | `sales-analytics-dual-bars` | Sales / earnings paired bars and unit target |
+| `m-sales-arc` | `sales-target-segmented-arc` | Listed / delivered segmented half-circle |
+| `m-sales-radial-dash` | `sales-overview-radial-dashboard` | Rank banner, radial goal and two readouts |
+| `m-credit-barcode` | `credit-score-barcode-meter` | 42-stroke credit meter with period dropdown |
+| `m-mono-stock` | `mono-stock` | Monochrome stock curve, period data and hover values |
+| `m-users-pill` | `users-growth-pill-progress` | Star/profile header and three selectable pill bars |
+| `m-views-wave` | `views-hourly-wave-chart` | Hourly wave, actual average and period filtering |
+| `m-mono-heatmap` | `mono-heatmap` | Caller-owned 28-day grayscale activity matrix |
+| `m-timer-prep` | `timer-preparation-segmented` | Caller remaining time, selected stage and segmented steps |
+| `m-noise-level` | `noise-decibel-level` | Signal bars, current input and paired range controls |
+
+### All 29 source capabilities
+
+Each source path is relative to `src/components/metrics/` at pinned upstream commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`. The component exports `MOTION_METRIC_SOURCE_MAP` for programmatic mapping.
+
+| Source | Variant | Capability |
+|---|---|---|
+| `AnimatedMetricCard.tsx` | `animated-metric-card` | 29 interaction branches; no universal fallback card |
+| `Budget.tsx` | `budget` | Three-row 64-column budget matrix and details event |
+| `CacheStatsCard.tsx` | `cache-stats-card` | Query/cache readouts and bandwidth breakdown |
+| `CourseProgressCard.tsx` | `course-progress-card` | Course ring, resume/all actions, training bars and attendees |
+| `CreditScoreCards.tsx` | `credit-score-cards` | Score half-circle, graded report, utilization and history curve |
+| `FeedbackCard.tsx` | `feedback-card` | Caller preview, editable message, send event and real message list |
+| `FinanceDashboard.tsx` | `finance-dashboard` | Savings pixels, credit barcode, stacked expenses and asset filter |
+| `Growth.tsx` | `growth` | Three pixel-height growth columns |
+| `GrowthCalendar.tsx` | `growth-calendar` | Selectable growth pills and caller calendar |
+| `HealthCards.tsx` | `health-cards` | Daily rings, cycle dots, hydration, workout, steps, sleep stages, heart rate and weekly target |
+| `MarketingCards.tsx` | `marketing-cards` | Channel allocation and campaign chart/readout split |
+| `NetworkTelemetry.tsx` | `network-telemetry` | Summary statistics and per-network pixel matrices |
+| `NoiseCards.tsx` | `noise-cards` | Separate supplied noise readings and paired range controls |
+| `OverviewChart.tsx` | `overview-chart` | Monthly striped columns and selected readout |
+| `ProgressIndicator.tsx` | `progress-indicator` | 36-key progress, comparison and real numeric input |
+| `PromptsCard.tsx` | `prompts-card` | 30-segment prompt quota meter |
+| `RealTimeAlerts.tsx` | `real-time-alerts` | Budget bars and editable threshold line; emits input only |
+| `RunningStatsCard.tsx` | `running-stats-card` | Distance/duration and daily bars including zero days |
+| `SalesDashboard.tsx` | `sales-dashboard` | Four summary stats, paired sales bars and segmented target |
+| `SalesOverview.tsx` | `sales-overview` | Rank banner, 12-segment goal and two stats |
+| `SavingsCards.tsx` | `savings-cards` | Savings progress, add event, target and transaction columns |
+| `ServerPerformance.tsx` | `server-performance` | Capped staircase performance columns |
+| `StatusCards.tsx` | `status-cards` | Profiles, activity/sleep timelines and actual flight progress |
+| `StockChartCard.tsx` | `stock-chart-card` | Supplied stock series with derived first/last delta |
+| `SystemMetricsCard.tsx` | `system-metrics-card` | Latency/lag charts, quantiles and error breakdown |
+| `TimerCard.tsx` | `timer-card` | Remaining seconds, stage tooltip, steps and running event |
+| `UserMetrics.tsx` | `user-metrics` | Four audience statistics and a views/average wave |
+| `UsersChartCard.tsx` | `users-chart-card` | Audience area, secondary readouts and details event |
+| `VisitorsChartCard.tsx` | `visitors-chart-card` | Two independent visitor curves and actual multi-series tooltip |
+
+### Additional AnimatedMetricCard interactions
+
+The 15 catalog interactions above and 14 below comprise all 29 branches. Pass an interaction directly as `variant`, or use `variant="animated-metric-card"` with `interaction`.
+
+| Interaction | Capability |
+|---|---|
+| `mono-revenue` | Revenue curve |
+| `mono-credit` | Credit ring and tier |
+| `mono-wallet` | Balance and inflow/outflow |
+| `mono-savings` | Savings target and progress |
+| `mono-activity-ring` | Concentric independent activity goals |
+| `mono-users` | Active users and regional badges |
+| `mono-kfactor` | Referral multiplier ring |
+| `mono-latency` | Quantiles and latency polyline |
+| `mono-bandwidth` | Speed half-circle and latency/loss |
+| `mono-server` | Independent CPU/RAM rings and node/heap data |
+| `mono-progress` | Build ring, steps and caller status |
+| `mono-radar` | Incident half-circle and caller alert counts |
+| `mono-timer-arc` | Remaining-time ring and start/pause event |
+| `mono-timer-ring` | Independent focus/break concentric rings |
+
+## Best Practices
+
+- Provide actual `data` per period and respond to update events in controlled mode. Do not merely relabel a button while reusing an unfiltered series.
+- The caller owns timer remaining/total, monitoring state, noise measurements and message delivery. `running` expresses intent, never backend success.
+- Keep readouts, barcode scores, ring progress and chart units consistent with `target/min/max/unit`. Credit-score composite geometry defaults to 300–850 and can be overridden.
+- Give series/metrics/groups/cells stable IDs, real labels and units. Missing points do not generate replacement business data.
+- Use `level` on health `sleep` points for stage height. Profile segments and flight data render their respective timelines.
+- Localize with `labels`, `formatValue` and licensed avatar slots. Respect reduced motion; do not add polling or permanent decorative animation.
+
+## Source and license
+
+Ported from the pinned Amicro Metrics source implementations. MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. Sample readings exist only in the documentation demo; the component has no business defaults. Build, type checking, documentation gates and real-browser acceptance are owned by integration; this page does not claim they have already run.

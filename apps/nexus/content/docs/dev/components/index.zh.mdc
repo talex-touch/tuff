@@ -6,7 +6,7 @@ status: beta
 since: 0.3.9
 tags: [concepts, overview, foundations, utils]
 syncStatus: reviewed
-verified: true
+verified: false
 ---
 
 ## 安装
@@ -15,10 +15,10 @@ verified: true
 
 ## Tuffex Components 组件库
 
-Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族、**流程**承载画布上的流程编排——侧边栏顶部的套件切换器在这五个组件套件之外，另列「理念」作为第六个纯文档套件；选中哪个套件就直接进入它的总览页。
+Tuffex（`@talex-touch/tuffex`）是服务 CoreBox、插件界面和本文档站的 Vue 3 组件库。侧边栏有八个文档套件：**理念**、**模板**、**基础**、**进阶**、**AI**、**数据**、**流程**和**动效**。理念解释安装与设计规则，模板展示整页组合，其余六个按用途组织可复用组件。选择套件后进入总览页；模板从第一份整页组合开始。
 
-- 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》《[流程套件](./flow-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
-- 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在同包的 `@talex-touch/tuffex/charts` 子路径下。
+- 交互标本：《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》《[流程套件](./flow-suite.zh.mdc)》和《[动效套件](./motion-suite.zh.mdc)》都有真实组件预览。每个标本可重置，名称链接到详情页。
+- 安装入口保持 `@talex-touch/tuffex/base`、`/pro` 和 `/ai`。Motion 是文档分类，不新增安装 barrel。Mono 和 Dither 图表使用现有 `@talex-touch/tuffex/charts` 子路径。
 - 版本演进与变更日志：详见《[组件变更历程](./changelog.zh.mdc)》，记录每个组件的引入版本（Since xx）、每次发版更新的组件清单与版本门禁。
 
 ## Design Foundations 设计基础
@@ -103,17 +103,52 @@ code: |
 
 ## 套件总览
 
-每个套件都有一个总览页，承载自己那一部分的实时预览和组件清单——也就是在切换器里选中该套件后，侧边栏的第一个条目。
+组件套件有实时预览总览。理念从本页开始，模板打开整页组合。下表按文档条目计数，不含套件总览页；页数不等于公共组件导出数。
 
-| 套件 | 分组 | 组件数 | 引入入口 |
-|------|------|--------|----------|
-| [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 94 | `@talex-touch/tuffex/base` |
-| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
-| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 34 | `@talex-touch/tuffex/ai` |
-| [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
+| 套件 | 分组 | 页数 | 引入入口 |
+|------|------|------|----------|
+| [理念](./index.zh.mdc) | 安装 / 设计基础 / 主题 / 图标 / 无障碍 / 工具 / 声音 / 变更日志 | 8 | 纯文档 |
+| [模板](./template-shell.zh.mdc) | 应用框架 / 内容运营 / AI 应用 / 数据与流程 | 16 | 组合现有入口 |
+| [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
+| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 38 | `@talex-touch/tuffex/pro` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 35 | `@talex-touch/tuffex/ai` |
+| [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
+| [动效套件](./motion-suite.zh.mdc) | 按钮 / 卡片展开 / 3D 轮播 / 加载动效 / 抖动图表 / 文字 / 物理动效 / 悬停、指针与滚动 / 切换控件 / 转场 | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
 
-理念是第六个套件——纯文档性质、不对应组件入口。本页就是它的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
+0.6.3 源码包含新的 Motion、Mono 和 Pro 复合组件，随 Tuff beta 测试，尚未独立发布 npm。版本口径见《[组件变更历程](./changelog.zh.mdc)》。
+
+## 模板
+
+整页组合复用现有组件入口。打开模板查看实时页面和实现代码。
+
+### 应用框架
+
+- [应用外壳](./template-shell.zh.mdc)
+- [启动器](./template-launcher.zh.mdc)
+- [设置](./template-settings.zh.mdc)
+- [引导](./template-onboarding.zh.mdc)
+
+### 内容运营
+
+- [CMS](./template-cms.zh.mdc)
+- [图库](./template-gallery.zh.mdc)
+- [收件箱](./template-inbox.zh.mdc)
+- [文件](./template-files.zh.mdc)
+- [商店](./template-store.zh.mdc)
+- [文档](./template-docs.zh.mdc)
+
+### AI 应用
+
+- [智能体对话](./template-agent-chat.zh.mdc)
+- [AI 回答](./template-ai-answer.zh.mdc)
+- [研究](./template-research.zh.mdc)
+
+### 数据与流程
+
+- [仪表盘](./template-dashboard.zh.mdc)
+- [自动化](./template-automation.zh.mdc)
+- [发布](./template-release.zh.mdc)
 
 ## 基础组件
 
@@ -245,8 +280,12 @@ code: |
 - [SearchPanel 内联搜索面板](./search-panel.zh.mdc)
 - [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.mdc)
 - [CodeEditor 代码编辑器](./code-editor.zh.mdc)
+- [Terminal 终端显示](./terminal.zh.mdc)
 - [VirtualList 虚拟列表](./virtual-list.zh.mdc)
 - [VersionCapsule 版本胶囊](./version-capsule.zh.mdc)
+- [MotionForm 动效表单](./motion-form.zh.mdc)
+- [MotionControl 复合控件](./motion-control.zh.mdc)
+- [MotionMetric 复合指标](./motion-metric.zh.mdc)
 
 ### 视觉效果
 
@@ -343,8 +382,10 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 
 - [Charts 图表](./charts.zh.mdc)
 - [Chart Colors 图表色板](./chart-colors.zh.mdc)
+- [ECharts 图表](./echart-charts.zh.mdc)
 - [TimeseriesChart 时序图](./timeseries-chart.zh.mdc)
 - [Maps 地图](./maps.zh.mdc)
+- [MonoChart 单色图表](./mono-chart.zh.mdc)
 - [SankeyChart 桑基图](./sankey-chart.zh.mdc)
 - [Custom Chart 自定义图表](./custom-chart.zh.mdc)
 
@@ -362,6 +403,52 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 ### 流程编排
 
 - [Flowchart 流程画布](./flowchart.zh.mdc)
+
+## 动效
+
+输入驱动的动效与展示组件独立于安装入口分类。《[动效套件](./motion-suite.zh.mdc)》为每个家族提供实时标本，详情页展示全部命名来源变体。
+
+### 按钮
+
+- [MotionButton 动效按钮](./motion-button.zh.mdc)
+
+### 卡片展开
+
+- [CardSpread 卡片展开](./card-spread.zh.mdc)
+
+### 3D 轮播
+
+- [Carousel3D 三维轮播](./carousel-3d.zh.mdc)
+- [FlipBook 翻页书](./flip-book.zh.mdc)
+
+### 加载动效
+
+- [MotionLoader 加载动效](./motion-loader.zh.mdc)
+
+### 抖动图表
+
+- [DitherChart 抖动图表](./dither-chart.zh.mdc)
+
+### 文字
+
+- [MotionText 文字动效](./motion-text.zh.mdc)
+
+### 物理动效
+
+- [PhysicsMotion 物理动效](./physics-motion.zh.mdc)
+
+### 悬停、指针与滚动
+
+- [MotionDock 动效 Dock](./motion-dock.zh.mdc)
+- [Motion 悬停与滚动](./motion.zh.mdc)
+
+### 切换控件
+
+- [MotionToggle 动效切换](./motion-toggle.zh.mdc)
+
+### 转场
+
+- [MotionTransition 动效转场](./motion-transition.zh.mdc)
 
 ## 技术实现
 

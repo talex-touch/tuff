@@ -1,0 +1,110 @@
+---
+title: "三维轮播"
+description: "弧线、CoverFlow 和 Time Machine 独立轨迹，支持彩色、单色内容、受控当前项和时间轴。"
+category: MotionCarousels
+status: beta
+since: 0.6.3
+tags: [motion, carousel, perspective]
+---
+
+## 概述
+
+`TxCarousel3D` 渲染真实 `items`，并通过 `v-model` 提供从 0 开始的当前索引。弧线轮播、CoverFlow 和 Time Machine 使用独立的来源变换。每种轨迹都有彩色与单色 ID。卡片、前后按钮、指示点和时间轴会修改同一个当前项。
+
+## 用法
+
+### 六个来源变体与自定义内容
+
+:::TuffDemoWrapper{demo="Carousel3DDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCarousel3D } from '@talex-touch/tuffex/carousel-3d'
+  const current = ref(0)
+  const items = [
+    { id: 'today', title: '当前版本', date: '今天' },
+    { id: 'week', title: '较早版本', date: '上周' },
+    { id: 'month', title: '首个版本', date: '上月' },
+  ]
+  </script>
+  <template>
+    <TxCarousel3D v-model="current" :items="items" variant="card-time-machine"
+      previous-label="上一项" next-label="下一项" item-label="卡片"
+      timeline-label="时间轴" aria-label="三维轮播" />
+  </template>
+---
+:::
+
+演示展示全部六个 ID，支持筛选，并包含真实卡片插槽。彩色缩略图是自制内联 SVG 景物。Time Machine 在主刻度间保留两个中间刻度；悬停、聚焦、点击或拖动滑块会选择最近的数据项。
+
+| 变体 | 保留的来源几何 |
+| --- | --- |
+| `card-carousel` | 卡片间距 160px；悬停或聚焦后，每级旋转 20°、垂直移动 24px。当前项缩放 1.05，其他项展开时为 0.65，收起时为 0.8。 |
+| `card-carousel-mono` | 相同弧线轨迹；默认插槽显示调用方文字，不显示图片。 |
+| `card-cover-flow` | 透视 1000px；间距 32px，侧面旋转 ±38°，当前项深度 +50px，后方深度每级递减 50px。距离超过两级的卡片淡出。 |
+| `card-cover-flow-mono` | 相同 CoverFlow 轨迹，使用文字表面。 |
+| `card-time-machine` | 透视 800px；后方每级深度 −60px、垂直 −12px、X 轴旋转 +2°。过去卡片向下 300px、向前 200px，旋转 −20°、缩放 1.3 并消失。 |
+| `card-time-machine-mono` | 相同深度卡片堆与时间轴，使用文字表面。 |
+
+原始 ThreeDPage 中的三个三维展示复用这些真实轨迹，不会替换成同一个扇形布局。
+
+### 最佳实践
+
+- 每项提供稳定的 `id` 和 `title`，Time Machine 同时提供 `date`。图片 `src` 和 `alt` 只引用有权展示的素材。
+- 仅在数据适合循环时设置 `loop`。默认到达边界后停止，并禁用对应前后按钮。
+- 弧线的 `expanded` 未设置时由悬停或聚焦驱动；设置布尔值可控制姿态。CoverFlow 和 Time Machine 不读取这个属性。
+- 需要明确点击后才选择时，设置 `timelineHover=false`。键盘聚焦仍会展示刻度几何，但不会选择。
+- `#item` 位于选择按钮内，应提供非交互内容。插槽可替换单色默认内容，同时保留几何。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | 必填 | 调用方卡片；空数组渲染 `#empty`。 |
+| `modelValue` | `number` | 内部 `2`，Time Machine 为 `0` | 从 0 开始的当前项，限制在可用数据范围内。 |
+| `variant` | `Carousel3DVariant` | `card-carousel` | 六个 ID 之一；列表由 `CAROUSEL_3D_VARIANTS` 导出。 |
+| `expanded` | `boolean` | 未设置 | 受控弧线姿态；未设置时由悬停或聚焦控制。 |
+| `loop` | `boolean` | `false` | 前后切换是否循环。 |
+| `animated` | `boolean` | `true` | 启用三维动效，不改变操作。 |
+| `disabled` | `boolean` | `false` | 禁止卡片、按钮、刻度和滑块修改当前项。 |
+| `controls` | `boolean` | `true` | 显示前后按钮。 |
+| `dots` | `boolean` | `true` | 显示有无障碍名称的指示点。 |
+| `timeline` | `boolean` | `true` | 显示 Time Machine 刻度和范围滑块。 |
+| `timelineHover` | `boolean` | `true` | 刻度悬停或聚焦时选择最近的数据项。 |
+| `duration` | `number` | `800` | 共享弹簧过渡时长，单位为毫秒。 |
+| `size` | `xs / sm / md / lg` | `md` | 同时缩放卡片尺寸和三维轨迹。 |
+| `ariaLabel` | `string` | `Card carousel` | 区域的无障碍名称。 |
+| `previousLabel` | `string` | `Previous` | 可本地化的上一项文字。 |
+| `nextLabel` | `string` | `Next` | 可本地化的下一项文字。 |
+| `itemLabel` | `string` | `Item` | 可本地化的指示点或缺省项名称。 |
+| `timelineLabel` | `string` | `Timeline` | 可本地化的滑块和刻度名称。 |
+
+`MotionCardItem` 与 CardSpread 共用：`id?`、`title?`、`description?`、`src?`、`alt?`、`date?`、`href?` 和 `color?`。轮播默认使用标题、说明和可选图片；单色 ID 不显示默认图片。组件不内置素材或业务记录。
+
+### 事件
+
+| 事件 | 参数 | 含义 |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | 真实输入请求修改当前项。 |
+| `change` | `item: MotionCardItem, index: number` | 当前调用方数据项改变；索引未变时不发出。 |
+
+### 插槽与实例方法
+
+| API | 契约 |
+| --- | --- |
+| `#item` | `{ item, index, active }`；替换卡片内容。 |
+| `#caption` | `{ item, index, active: true }`；替换当前标题。 |
+| `#empty` | 空数组内容。 |
+| `previous()` / `next()` | 与按钮共用边界、循环和禁用规则。 |
+| `select(index)` | 对索引取整，再按边界或循环规则选择。 |
+
+方向键选择相邻项，Home 和 End 选择首尾项。原生按钮支持 Enter 和 Space。范围滑块保留原生键盘操作。当前标题以礼貌方式播报，选择不会意外移动焦点。
+
+## 技术实现
+
+来源为 Amicro 的 `CardCarousel`、`CardCoverFlow`、`CardTimeMachine`、`cards.ts`、卡片 registry 条目和 ThreeDPage 复用展示。固定提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`，采用 MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+
+CSS 变换使用共享弹簧编译器与 `useMotionActivity`。失活或减少动态效果时，直接显示目标状态，仍可选择。Time Machine 的圆角滤镜使用 Vue `useId`，多个实例及服务端渲染后的水合不会共用标识。组件不包含上游图片，也不引入 React/Motion 运行时。

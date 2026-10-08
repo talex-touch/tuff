@@ -13,6 +13,7 @@ import {
   readEnabledLocalSkill,
   readLocalSkill,
   scanLocalSkills,
+  scanLocalSkillSources,
   setLocalSkillConfigReader,
   withLocalSkillDir,
   withLocalSkillEnabled,
@@ -58,6 +59,49 @@ describe('frontmatter parsing', () => {
   it('treats a missing or unterminated fence as no metadata rather than an error', () => {
     expect(parseSkillFrontmatter('# Just a heading')).toEqual({})
     expect(parseSkillFrontmatter('---\nname: Half written\n')).toEqual({})
+  })
+
+  /**
+   * `~/.cc-switch/skills/bggg-creator-image2ppt/SKILL.md` on 2026-10-03: a folded block description.
+   * The line-by-line reader took `description: >` at its word and the skills page showed ">".
+   */
+  it('reads a block-scalar description as its text, on one line', () => {
+    const manifest = [
+      '---',
+      'name: bggg-creator-image2ppt',
+      'description: >',
+      '  把图片、截图、海报、PPT 页面截图、HTML 或 SVG 设计稿转换成可编辑 PPTX 的 Codex skill。',
+      '  当用户需要 image2ppt、图片转 PPT 时使用。',
+      '---',
+      '# bggg-creator-image2ppt'
+    ].join('\n')
+
+    expect(parseSkillFrontmatter(manifest)).toEqual({
+      name: 'bggg-creator-image2ppt',
+      description:
+        '把图片、截图、海报、PPT 页面截图、HTML 或 SVG 设计稿转换成可编辑 PPTX 的 Codex skill。 当用户需要 image2ppt、图片转 PPT 时使用。'
+    })
+  })
+
+  it('reads literal and chomped blocks, and a block name, the same way', () => {
+    expect(
+      parseSkillFrontmatter('---\nname: |-\n  Release\n  notes\ndescription: |+\n  a\n  b\n\n---\n')
+    ).toEqual({ name: 'Release notes', description: 'a b' })
+  })
+
+  it('leaves an empty value unset, so the directory name still names the skill', () => {
+    expect(parseSkillFrontmatter('---\nname:\ndescription: >\n---\n')).toEqual({})
+  })
+
+  it('never reads a line indented under another key as name or description', () => {
+    expect(
+      parseSkillFrontmatter(
+        '---\nname: outer\ndescription: >\n  Use when: the name line below is part of this\n  name: not a key\n---\n'
+      )
+    ).toEqual({
+      name: 'outer',
+      description: 'Use when: the name line below is part of this name: not a key'
+    })
   })
 })
 
@@ -129,6 +173,62 @@ describe('scanning', () => {
     )
 
     expect(skills).toHaveLength(1)
+  })
+
+  it('remembers every directory that reaches a file and the entry it came through', async () => {
+    const target = await writeSkill(join(root, 'shared', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit-link'), 'dir')
+    await mkdir(join(root, 'other', 'group'), { recursive: true })
+    await symlink(target, join(root, 'other', 'group', 'audit'), 'dir')
+
+    const [skill] = await scanLocalSkillSources(
+      config({ dirs: [join(root, 'lib'), join(root, 'shared'), join(root, 'other')] })
+    )
+
+    expect(skill).toMatchObject({
+      id: localSkillId(target),
+      path: target,
+      // Reads still go through the first directory, exactly as before every source was kept.
+      sourceDir: join(root, 'lib'),
+      sources: [
+        { sourceDir: join(root, 'lib'), entryPath: join(root, 'lib', 'audit-link') },
+        { sourceDir: join(root, 'shared'), entryPath: join(root, 'shared', 'audit') },
+        { sourceDir: join(root, 'other'), entryPath: join(root, 'other', 'group', 'audit') }
+      ],
+      // The only directory whose real path holds the file.
+      storeDir: join(root, 'shared')
+    })
+  })
+
+  it('has no store directory for a file outside every registered directory', async () => {
+    const target = await writeSkill(join(root, 'bundle', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit'), 'dir')
+
+    const [skill] = await scanLocalSkillSources(config({ dirs: [join(root, 'lib')] }))
+
+    expect(skill).toMatchObject({ path: target, storeDir: null })
+  })
+
+  it('hands the injection and the MCP host the narrow entry, without the link paths', async () => {
+    const target = await writeSkill(join(root, 'shared', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit-link'), 'dir')
+
+    const [skill] = await scanLocalSkills(
+      config({ dirs: [join(root, 'lib'), join(root, 'shared')] })
+    )
+
+    expect(Object.keys(skill!).sort()).toEqual([
+      'description',
+      'enabled',
+      'id',
+      'manifestPath',
+      'name',
+      'path',
+      'sourceDir'
+    ])
   })
 
   it('stops at MAX_ENTRIES_PER_DIR skills in one directory', async () => {

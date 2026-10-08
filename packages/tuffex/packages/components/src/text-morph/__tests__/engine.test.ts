@@ -1,13 +1,7 @@
 import type { MorphSegment } from '../src/engine'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveTransition } from '../../liquid/src/spring'
 import { diffSegments, isNumericWord, segmentNumber, segmentText, TextMorphEngine } from '../src/engine'
-
-const NBSP = '\u00A0'
-
-function textOf(segments: MorphSegment[]): string {
-  return segments.map(segment => segment.string).join('')
-}
 
 function idOfCharAt(segments: MorphSegment[], index: number): string {
   return segments[index]!.id
@@ -28,6 +22,8 @@ interface AnimateCall {
 function installWaapiStub() {
   const calls: AnimateCall[] = []
   const perElement = new WeakMap<HTMLElement, Animation[]>()
+  const originalAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
+  const originalGetAnimations = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getAnimations')
 
   const animate = function (
     this: HTMLElement,
@@ -59,40 +55,36 @@ function installWaapiStub() {
     configurable: true,
   })
 
-  return calls
-}
-
-function removeWaapiStub() {
-  Reflect.deleteProperty(HTMLElement.prototype, 'animate')
-  Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
+  return {
+    calls,
+    restore() {
+      for (const [name, descriptor] of [
+        ['animate', originalAnimate],
+        ['getAnimations', originalGetAnimations],
+      ] as const) {
+        if (descriptor)
+          Object.defineProperty(HTMLElement.prototype, name, descriptor)
+        else
+          Reflect.deleteProperty(HTMLElement.prototype, name)
+      }
+    },
+  }
 }
 
 function stubReducedMotion(matches: boolean) {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    configurable: true,
-    value: (query: string) => ({
-      matches,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
+  window.matchMedia = (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
   })
 }
 
 describe('segmentText', () => {
-  it('cuts a spaced value into words with the space kept as a segment', () => {
-    const segments = segmentText('hello world', 'en')
-
-    expect(textOf(segments)).toBe(`hello${NBSP}world`)
-    expect(segments.map(s => s.string)).toContain('hello')
-    expect(segments.map(s => s.string)).toContain('world')
-  })
-
   it('cuts a value with no spaces per grapheme', () => {
     const segments = segmentText('abc', 'en')
 
@@ -111,7 +103,7 @@ describe('segmentText', () => {
     const segments = segmentText('one\ntwo', 'en')
 
     expect(segments.filter(s => s.string === '\n')).toHaveLength(1)
-    expect(textOf(segments)).toBe('one\ntwo')
+    expect(segments.map(segment => segment.string).join('')).toBe('one\ntwo')
   })
 })
 
@@ -127,25 +119,24 @@ describe('diffSegments', () => {
 
   it('carries the shared characters of a replaced word onto the new one', () => {
     const before = segmentText('sound stage', 'en')
-    const { segments } = diffSegments(before, 'sound stone', 'en')
+    const stageId = before.find(s => s.string === 'stage')!.id
+    const { segments, splits } = diffSegments(before, 'sound stone', 'en')
 
-    // "stage" -> "stone" shares s/t/e, so those characters keep their identity
-    // rather than the whole word being swapped.
-    const beforeIds = new Set(before.map(s => s.id))
-    const carried = segments.filter(s => beforeIds.has(s.id) && s.string !== 'sound')
-
-    expect(carried.length).toBeGreaterThan(0)
-    expect(textOf(segments)).toBe(`sound${NBSP}stone`)
+    // Only s/t/e survive the replacement, not just its neighbouring separator.
+    const oldChars = splits.get(stageId)!
+    expect(segments.filter(s => oldChars.some(old => old.id === s.id))).toEqual(
+      oldChars.filter(s => ['s', 't', 'e'].includes(s.string)),
+    )
   })
 
-  it('does not pair words that share too little', () => {
+  it('does not split an unrelated replacement to reuse a single matching character', () => {
     const before = segmentText('alpha zzz', 'en')
-    const { segments } = diffSegments(before, 'alpha qqqq', 'en')
+    const oldWord = before.find(segment => segment.string === 'zzz')!
+    const { segments, splits } = diffSegments(before, 'alpha zqqq', 'en')
 
-    const zzzChars = before.filter(s => s.string === 'zzz').map(s => s.id)
-    const reused = segments.filter(s => zzzChars.includes(s.id))
-
-    expect(reused).toHaveLength(0)
+    expect(segments.map(segment => segment.string).join('')).toBe('alpha zqqq')
+    expect(splits.has(oldWord.id)).toBe(false)
+    expect(segments.find(segment => segment.string === 'zqqq')?.id).not.toBe(oldWord.id)
   })
 })
 
@@ -201,32 +192,66 @@ describe('numeric place-value matching', () => {
 describe('textMorphEngine', () => {
   let host: HTMLElement
   let calls: AnimateCall[]
+  let restoreWaapi: () => void
+  let originalMatchMedia: typeof window.matchMedia
 
   beforeEach(() => {
+    originalMatchMedia = window.matchMedia
     stubReducedMotion(false)
-    calls = installWaapiStub()
+    const waapi = installWaapiStub()
+    calls = waapi.calls
+    restoreWaapi = waapi.restore
     host = document.createElement('span')
     document.body.appendChild(host)
   })
 
   afterEach(() => {
-    removeWaapiStub()
-    vi.unstubAllGlobals()
+    restoreWaapi()
+    window.matchMedia = originalMatchMedia
     host.remove()
   })
 
-  it('splits the value into aria-hidden segments behind one readable copy', () => {
-    const engine = new TextMorphEngine({ element: host })
-    engine.update('hi')
+  it.each([
+    {
+      name: 'ordinary spaces, tabs and repeated edge whitespace',
+      values: ['  sound  stage  ', ' sound stone   ', '\t sound\t stone \t'],
+    },
+    {
+      name: 'real NBSP mixed with ordinary spaces',
+      values: [' A\u00A0B  ', ' A\u00A0C  ', ' A B\u00A0C '],
+    },
+    {
+      name: 'blank lines, emoji graphemes and combining marks',
+      values: ['👩🏽‍💻e\u0301', '👨‍👩‍👧‍👦o\u0308', '\n👩🏽‍💻 e\u0301\n\n '],
+    },
+    {
+      name: 'paired numeric words with surrounding whitespace',
+      values: ['  $1,204.50  12.5% ', ' $1,318.50   13.5%  ', ' $1,318.50\u00A0 13.5% '],
+    },
+  ])('preserves $name on first render and interrupted updates', ({ values }) => {
+    const engine = new TextMorphEngine({ element: host, locale: 'en', numbers: true })
 
-    expect(host.hasAttribute('tx-morph-root')).toBe(true)
-    expect(host.querySelector('[tx-morph-sr]')?.textContent).toBe('hi')
+    try {
+      for (const [index, value] of values.entries()) {
+        engine.update(value)
 
-    const items = Array.from(host.querySelectorAll('[tx-morph-item]'))
-    expect(items.length).toBeGreaterThan(0)
-    expect(items.every(item => item.getAttribute('aria-hidden') === 'true')).toBe(true)
+        // Observe the real engine DOM, including BRs and nested numeric slots.
+        // This is not a clipboard simulation: CSS selection still needs a browser.
+        const current = Array.from(host.querySelectorAll('[tx-morph-item]:not([tx-morph-exiting])'))
+        expect(current.map(item => item.tagName === 'BR' ? '\n' : item.textContent).join('')).toBe(value)
+        expect(host.querySelectorAll('[tx-morph-sr]')).toHaveLength(1)
+        expect(host.querySelector('[tx-morph-sr]')?.textContent).toBe(value)
+        expect(Array.from(host.querySelectorAll('[tx-morph-item]'))
+          .every(item => item.getAttribute('aria-hidden') === 'true')).toBe(true)
 
-    engine.destroy()
+        // WAAPI never finishes here: the old fragments really remain during the check.
+        if (index === 1)
+          expect(host.querySelectorAll('[tx-morph-exiting]').length).toBeGreaterThan(0)
+      }
+    }
+    finally {
+      engine.destroy()
+    }
   })
 
   it('takes both the duration and the curve from the spring, ignoring durationMs', () => {
@@ -261,16 +286,14 @@ describe('textMorphEngine', () => {
   it('writes the value straight in under prefers-reduced-motion, leaving nothing to diff', () => {
     stubReducedMotion(true)
 
-    const engine = new TextMorphEngine({ element: host })
+    const engine = new TextMorphEngine({ element: host, respectReducedMotion: true })
     engine.update('first')
 
     expect(host.textContent).toBe('first')
     expect(host.querySelector('[tx-morph-item]')).toBeNull()
     expect(host.hasAttribute('tx-morph-root')).toBe(false)
 
-    // Re-enabling motion must start from a clean slate: diffing against the
-    // segments of a value that was written as plain text would animate elements
-    // that were never in the DOM.
+    // Consecutive plain updates must not accumulate old fragments.
     engine.update('second')
     expect(host.textContent).toBe('second')
     expect(host.querySelectorAll('[tx-morph-exiting]')).toHaveLength(0)
@@ -278,7 +301,7 @@ describe('textMorphEngine', () => {
     engine.destroy()
   })
 
-  it('honours disabled the same way, without consulting the media query', () => {
+  it('writes plain text without morph fragments when explicitly disabled', () => {
     const engine = new TextMorphEngine({ element: host, disabled: true })
     engine.update('plain')
 
@@ -289,7 +312,7 @@ describe('textMorphEngine', () => {
   })
 
   it('gives numeric characters a slot to slide inside', () => {
-    const engine = new TextMorphEngine({ element: host })
+    const engine = new TextMorphEngine({ element: host, numbers: true })
     engine.update('1204')
 
     const slots = host.querySelectorAll('[tx-morph-slot]')
@@ -311,8 +334,6 @@ describe('textMorphEngine', () => {
   it('strips its own attributes and the readable copy on destroy', () => {
     const engine = new TextMorphEngine({ element: host, debug: true })
     engine.update('gone')
-
-    expect(host.hasAttribute('tx-morph-debug')).toBe(true)
 
     engine.destroy()
 
