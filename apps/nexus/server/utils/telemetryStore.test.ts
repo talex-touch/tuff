@@ -683,6 +683,9 @@ describe('telemetryStore single-commit writes (#1788)', () => {
 
   it('commits a whole request as one D1 batch, rows and receipt together', async () => {
     const db = state.db as MockD1Database
+    // The governance store applies its schema on first use: one batch, once per database. Apply it
+    // up front so the batches counted below are the commit's own.
+    await listPlatformGovernanceEvents(makeEvent(), { limit: 1 })
     const prepared = await prepareTelemetryWrite(makeEvent(), [searchEvent(120), searchEvent(400)])
     expect(prepared.db).toBe(db)
     expect(prepared.results).toEqual([{ status: 'accepted' }, { status: 'accepted' }])
@@ -702,10 +705,10 @@ describe('telemetryStore single-commit writes (#1788)', () => {
       ],
     })
 
-    // The commit is the first batch after planning: the two rows and the receipt. Search counters are
-    // no longer written per event (the daily rollup derives them), and a store that creates its schema
-    // on first use -- the governance follow-ups -- runs its own batch after it.
-    expect(db.batchSizes[batchesBeforeCommit]).toBe(3)
+    // Exactly one batch for the commit: the two rows and the receipt. Search counters are no longer
+    // written per event; the daily rollup derives them from these rows.
+    expect(db.batchSizes).toHaveLength(batchesBeforeCommit + 1)
+    expect(db.batchSizes.at(-1)).toBe(3)
     expect(prepared.batch!.size).toBe(2)
     expect(db.standaloneRuns).toEqual([])
 
