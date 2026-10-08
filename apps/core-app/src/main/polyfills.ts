@@ -35,9 +35,6 @@ const __dirname = path.dirname(__filename)
 globalThis.__filename = __filename
 globalThis.__dirname = __dirname
 
-process.env.DIST = path.join(__dirname, '..')
-process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')
-
 const runtimeLogger = log4js.getLogger('runtime')
 
 // check debug settings

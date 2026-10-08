@@ -532,31 +532,20 @@ function build() {
 
     process.env.BUILD_TYPE = buildType
 
-    // Map target to platform name for downstream tooling
-    const platformMap = {
-      win: 'win32',
-      mac: 'darwin',
-      linux: 'linux'
-    }
-    const electronPlatform = platformMap[normalizedTarget] || normalizedTarget
-
     // Determine architecture (default based on target)
     const defaultArch = normalizedTarget === 'mac' ? 'arm64' : 'x64'
     const effectiveArch = arch || defaultArch
 
-    // Set environment variables for downstream tooling
+    // Set environment variables for downstream tooling. (ELECTRON_PLATFORM / ELECTRON_ARCH used to
+    // be exported here as well; nothing in the repo or in electron-builder reads them.)
     process.env.BUILD_TARGET = normalizedTarget
     process.env.BUILD_ARCH = effectiveArch
-    process.env.ELECTRON_PLATFORM = electronPlatform
-    process.env.ELECTRON_ARCH = effectiveArch
 
     // Set APP_VERSION for runtime code paths that should keep the package version.
     process.env.APP_VERSION = runtimeVersion
     console.log(`Setting APP_VERSION environment variable: ${runtimeVersion}`)
 
-    console.log(
-      `Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`
-    )
+    console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}`)
     verifyMacFileEventsBackend(normalizedTarget)
 
     const officialPluginBuildOrder = buildOfficialPluginPackages({ projectRoot, workspaceRoot })
@@ -594,8 +583,6 @@ function build() {
         BUILD_TYPE: buildType,
         BUILD_TARGET: normalizedTarget,
         BUILD_ARCH: effectiveArch,
-        ELECTRON_PLATFORM: electronPlatform,
-        ELECTRON_ARCH: effectiveArch,
         APP_VERSION: runtimeVersion
       }
       ensureBuildNodeOptions(buildEnv)
@@ -762,7 +749,7 @@ function build() {
       console.log(`[build-target] Using custom Electron distribution: ${customElectronDist}`)
     }
 
-    const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT
+    const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT
     const enableMacLsuiElement =
       normalizedTarget === 'mac' &&
       typeof macLsuiElementFlag === 'string' &&

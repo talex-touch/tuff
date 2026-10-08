@@ -255,23 +255,10 @@ jobs:
 
       - name: Set Build Environment Variables
         shell: bash
-        env:
-          # Passed as an environment value rather than spliced into the script text below.
-          # A secret containing a quote or $(…) would otherwise be either a bash syntax error
-          # that fails every release build on all three runners, or a command substitution
-          # bash executes. Log masking does not help — the value is evaluated, not printed
-          # (#540). The same secret is already passed this way at the build step further down.
-          TUFF_ENCRYPTION_KEY: ${{ secrets.TUFF_ENCRYPTION_KEY }}
         run: |
           # GitHub Actions 自动提供 GITHUB_SHA
           echo "GITHUB_SHA is set: ${GITHUB_SHA}"
           echo "Setting Electron download/cache mirrors..."
-          # TUFF_ENCRYPTION_KEY 从 secrets 中获取，如果不存在则为空（非官方构建）
-          if [ -n "${TUFF_ENCRYPTION_KEY}" ]; then
-            echo "TUFF_ENCRYPTION_KEY is set (official build)"
-          else
-            echo "TUFF_ENCRYPTION_KEY is not set (unofficial build)"
-          fi
 
       - name: Clean Previous Build Artifacts
         shell: bash
@@ -522,7 +509,6 @@ jobs:
         shell: bash
         env:
           GITHUB_SHA: ${{ github.sha }}
-          TUFF_ENCRYPTION_KEY: ${{ secrets.TUFF_ENCRYPTION_KEY }}
           RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
           TUFF_RELEASE_ATTESTATION_REQUIRED: "true"
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
