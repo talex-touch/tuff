@@ -7,7 +7,7 @@ import {
 } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
-import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
+import { fileExtensions, files as filesSchema, fileTypeIs } from '../../../../../db/schema'
 import type { SearchIndexService } from '../../../search-engine/search-index-service'
 import { searchLogger } from '../../../search-engine/search-logger'
 import { WHITELISTED_EXTENSIONS, getTypeTagsForExtension, type FileTypeTag } from '../constants'
@@ -308,7 +308,7 @@ export class FileProviderSearchResultService {
       })
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, candidatePaths)))
     if (signal.aborted) return this.empty(query)
     searchLogger.fileDataResults(rows.length, this.now() - dataFetchStart)
     this.deps.logDebug('Loaded candidate rows for scoring', {

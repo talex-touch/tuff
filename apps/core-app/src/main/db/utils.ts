@@ -424,7 +424,7 @@ function createDbUtilsInternal(
         .where(
           and(
             gt(schema.fileExtensions.fileId, afterId),
-            eq(schema.files.type, 'file'),
+            schema.fileTypeIs('file'),
             eq(schema.fileExtensions.key, 'icon'),
             like(schema.fileExtensions.value, 'data:image/png;base64,%')
           )

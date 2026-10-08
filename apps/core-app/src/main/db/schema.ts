@@ -1,5 +1,6 @@
 // src/db/schema.ts
 
+import type { SQL } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
 import {
   customType,
@@ -147,6 +148,7 @@ export const files = sqliteTable(
     // diagnostics poll. Without these the planner did a full SCAN of a 106k-row
     // table inside a 6 GB database — measured 8.1s per diagnostics request, which
     // is what made the IPC handler block for seconds (#index-stats-scan).
+    // A query that pairs the type with a more selective key filters with `fileTypeIs` instead.
     typeIdx: index('idx_files_type').on(table.type),
     typeEmbeddingIdx: index('idx_files_type_embedding_status').on(
       table.type,
@@ -159,6 +161,19 @@ export const files = sqliteTable(
     isDirCtimeIdx: index('idx_files_is_dir_ctime').on(table.isDir, table.ctime)
   })
 )
+
+/**
+ * `files.type = <type>` that the query planner cannot answer from `idx_files_type`.
+ *
+ * Nearly every row is `type = 'file'`, but with no table statistics SQLite guesses an equality on
+ * that index matches about ten rows. So a query that also carries a selective key — `path IN (…)`
+ * of ten paths or more, a `file_extensions` id range — was planned through it and visited every
+ * file row: 5.7s for one 500-path reconcile batch against a cold 5 GB index, 68ms by path
+ * (2026-10-07). The unary `+` only removes the term from index selection; the filter is unchanged.
+ */
+export function fileTypeIs(type: string): SQL {
+  return sql`+${files.type} = ${type}`
+}
 
 /**
  * 存储文件的扩展属性，如应用的 bundleId, icon 等

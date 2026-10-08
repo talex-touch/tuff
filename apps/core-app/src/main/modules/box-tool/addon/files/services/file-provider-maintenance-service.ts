@@ -14,6 +14,7 @@ import type { DbUtils } from '../../../../../db/utils'
 import { scheduleDbWrite } from '../../../../../db/db-write'
 import {
   files as filesSchema,
+  fileTypeIs,
   searchIndexFileMaintenance,
   searchIndexMaintenanceProgress
 } from '../../../../../db/schema'
@@ -447,7 +448,7 @@ export class FileProviderMaintenanceService {
         lastIndexedAt: filesSchema.lastIndexedAt
       })
       .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, paths)))
   }
 
   public async withFileMutationSlice<T>(

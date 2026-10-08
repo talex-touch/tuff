@@ -75,7 +75,8 @@ import { scheduleDbWrite } from '../../../../db/db-write'
 import {
   config as configSchema,
   fileIndexProgress,
-  files as filesSchema
+  files as filesSchema,
+  fileTypeIs
 } from '../../../../db/schema'
 import { isSqliteBusyError } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
@@ -1205,7 +1206,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .getFileIndexReadDb()
       .select()
       .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, paths)))
     if (files.length === 0) return
     const progressRows = await this.dbUtils.getFileIndexProgressByFileIds(
       files.map((file) => file.id)
@@ -1660,7 +1661,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastIndexedAt: filesSchema.lastIndexedAt
       })
       .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, paths)))
   }
 
   /**
@@ -1890,7 +1891,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .from(filesSchema)
             .where(
               and(
-                eq(filesSchema.type, 'file'),
+                fileTypeIs('file'),
                 inArray(
                   filesSchema.path,
                   accepted.map((record) => record.path)
@@ -3234,7 +3235,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastIndexedAt: filesSchema.lastIndexedAt
       })
       .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, paths)))
   }
 
   private scheduleIndexing(

@@ -833,7 +833,7 @@ export async function removeMissingFileSearchRecordsInTransaction(
       locatedRecords.map((record) => sql`${record.path}`),
       sql`, `
     )})
-      AND type = 'file'
+      AND ${schema.fileTypeIs('file')}
   `)
   const presentPaths = new Set(presentFiles.map((record) => record.path))
   const metaRows = await tx.all<{
