@@ -23,6 +23,21 @@
     ancestors); floating-leave calls `requestCloseChain()` (schedules self + hover-closeable
     ancestors). Ancestors opt in via `hoverCloseable: () => trigger === 'hover'` — a
     click-opened menu is never closed by a hover child leaving.
+  - **Hover zone** (2026-10-08): floating-enter/leave are TxBaseAnchor's `floating-enter` /
+    `floating-leave`, emitted by the floating root, so the card padding and the hover bridge
+    count as the panel. Handlers on the slot content left the padding as a dead ring.
+  - **Hover bridge**: with `hoverBridge` (TxTooltip sets it for `trigger="hover"` +
+    `interactive`) the open anchor renders a hit area filling the trapezoid between the
+    reference's facing edge and the panel's facing edge, measured by the last floating-ui
+    middleware. TxFlatDropdown renders the same bridge as a sibling of its panel.
+  - **Transit (safe triangle)**: leaving the reference towards an open interactive hover panel
+    starts a transit (`utils/hover-intent.ts`). While the pointer stays inside the triangle from
+    its exit point to the panel's facing edge and keeps moving, `holdChain()` defers every
+    timer close on the anchor and its ancestors; `releaseChain(replay)` runs them if the pointer
+    gives up (left the triangle, or still for 100ms) and drops them if it arrives. Other hover
+    triggers crossed on the way do not open (`isHoverClaimed` → `waitForHoverTransit`); the one
+    the pointer stops on opens when the transit is given up. Explicit closes (`closeNow`,
+    preemption, Escape) ignore holds.
   - **Outside-click exemption**: TxBaseAnchor publishes its floating element under its chain
     node (`delayNode` prop, wired by TxTooltip — deliberately a prop, not inject: a bare anchor
     inside someone else's panel would inject the wrong node and clobber the registration).
@@ -82,8 +97,15 @@ sidebar's full-width suite switcher relies on this).
 ## Verification commands
 
 - `cd packages/tuffex && npx vitest run packages/utils/__tests__/anchor-delay.test.ts` —
-  chain semantics (cascade, cancelChain, hoverCloseable skip, isEventInsideChain).
+  chain semantics (cascade, cancelChain, hoverCloseable skip, isEventInsideChain, transit hold).
+- `npx vitest run packages/utils/__tests__/hover-intent.test.ts packages/components/src/tooltip/__tests__/tooltip-hover-intent.test.ts`
+  — bridge and triangle geometry, transit outcomes, crossed-trigger deferral through the real
+  Popover → Tooltip chain.
 - `npx vitest run packages/components/src/dropdown-menu packages/components/src/context-menu`
   — submenu open/close, whole-chain select close, keyboard traversal.
 - Hover-chain visual check needs a real pointer path (CDP `Input.dispatchMouseEvent` works;
   see `apps/nexus/scripts/audit-cdp-client.mjs`); jsdom cannot cover panel-to-panel travel.
+  Transit timing needs a realistic event cadence: Chromium delivers `mousemove` on animation
+  frames, and a throttled automation window (ego idles at ~2fps) spaces events past the 100ms
+  stall, which reads as the pointer stopping on whatever is under it. Keep an animation
+  running in the page and dispatch raw CDP `mouseMoved` back to back.

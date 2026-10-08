@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import type { Slots } from 'vue'
+import type { HoverTransitHandlers } from '../../../../utils/hover-intent'
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
 import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 import { useAnchorDelay } from '../../../../utils/anchor-delay'
+import {
+  beginHoverTransit,
+  cancelHoverTransit,
+  isHoverClaimed,
+  settleHoverTransit,
+  stopWaitingForHoverTransit,
+  waitForHoverTransit,
+} from '../../../../utils/hover-intent'
 import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxTooltip' })
@@ -81,14 +90,22 @@ const delay = useAnchorDelay({
   // wait for outside click / Escape / select.
   hoverCloseable: () => props.trigger === 'hover',
 })
+// The chain node already identifies this anchor uniquely; it doubles as the
+// hover transit's owner key.
+const transitOwner = delay.node
 
 // Keeps the registry honest when the state moves without going through the
 // service: v-model from the host, Escape, or an outside click.
 watch(open, (value) => {
-  if (value)
+  if (value) {
     delay.openNow()
-  else
+  }
+  else {
     delay.closeNow()
+    // Closed some other way mid-trip (Escape, a select, preemption): nothing
+    // is left to travel to.
+    cancelHoverTransit(transitOwner)
+  }
 })
 
 function clearTimers() {
@@ -107,14 +124,56 @@ function scheduleClose() {
 
 const isTooltipRole = computed(() => props.role === 'tooltip')
 
-function onEnter() {
+/** A panel the pointer can travel into: the only kind with a bridge and a safe triangle. */
+const hoverIntent = computed(() => props.trigger === 'hover' && props.interactive)
+
+const referenceRef = ref<HTMLElement | null>(null)
+
+/** Whether the pointer is on the trigger right now: a deferred open only proceeds if it still is. */
+let pointerOnReference = false
+
+const transitHandlers: HoverTransitHandlers = {
+  reference: () => referenceRef.value,
+  contains: target => anchorRef.value?.containsFloating?.(target) ?? false,
+  panelRect: () => anchorRef.value?.getPanelRect?.() ?? null,
+  side: () => anchorRef.value?.getSide?.() ?? 'bottom',
+  onStart: () => delay.holdChain(),
+  onEnd: (outcome) => {
+    // The ancestors' closes deferred during the trip stand only if the pointer
+    // gave up on the way; arriving means it never left the chain.
+    delay.releaseChain(outcome !== 'arrived')
+    if (outcome === 'abandoned')
+      scheduleClose()
+  },
+}
+
+function onEnter(event: MouseEvent) {
   if (props.trigger !== 'hover')
     return
+  pointerOnReference = true
+  // Back on its own trigger mid-trip: the panel was never given up.
+  settleHoverTransit(transitOwner)
+  // The pointer is crossing this trigger on its way to another panel. Opening
+  // here would yank that panel out from under the pointer aiming at it, so wait
+  // for the trip's verdict: stopping here gives the pointer up, and this opens.
+  if (!open.value && isHoverClaimed(transitOwner, event)) {
+    waitForHoverTransit(transitOwner, () => {
+      if (pointerOnReference)
+        scheduleOpen()
+    })
+    return
+  }
   scheduleOpen()
 }
 
-function onLeave() {
+function onLeave(event: MouseEvent) {
   if (props.trigger !== 'hover')
+    return
+  pointerOnReference = false
+  stopWaitingForHoverTransit(transitOwner)
+  // Heading for the open panel: the safe triangle decides when this closes,
+  // not the clock. An exit through the far edge falls through to the delay.
+  if (hoverIntent.value && open.value && beginHoverTransit(transitOwner, event, transitHandlers))
     return
   scheduleClose()
 }
@@ -133,11 +192,15 @@ function onFocusOut() {
   scheduleClose()
 }
 
+/**
+ * Pointer handlers bind to the anchor's whole floating layer — panel box and
+ * bridge — not to the content inside the card. Inside the card the panel's own
+ * padding was a dead ring: resting on the visible edge of the panel closed it.
+ */
 function onFloatingEnter() {
-  if (!props.interactive)
+  if (!hoverIntent.value)
     return
-  if (props.trigger !== 'hover')
-    return
+  settleHoverTransit(transitOwner)
   // Chain-wide: this panel may be a nested submenu whose parent scheduled its
   // own close when the pointer crossed out of it. Landing here proves the
   // pointer never left the chain, so every ancestor's pending close is void.
@@ -145,9 +208,7 @@ function onFloatingEnter() {
 }
 
 function onFloatingLeave() {
-  if (!props.interactive)
-    return
-  if (props.trigger !== 'hover')
+  if (!hoverIntent.value)
     return
   // Chain-wide: leaving a nested panel means leaving every panel above it.
   // Hover-opened ancestors close along; click-opened ones are skipped.
@@ -206,6 +267,9 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     // Not host-overridable: the anchor publishes its floating element under
     // this chain node so ancestors can recognise clicks inside nested panels.
     delayNode: delay.node,
+    // Not host-overridable either: the bridge only exists for the trip the
+    // safe triangle protects.
+    hoverBridge: hoverIntent.value,
   }
 })
 
@@ -249,6 +313,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimers()
+  cancelHoverTransit(transitOwner)
+  stopWaitingForHoverTransit(transitOwner)
 })
 
 const anchorRef = ref<InstanceType<typeof TxBaseAnchor> | null>(null)
@@ -264,9 +330,12 @@ defineExpose({
     v-model="open"
     :disabled="props.disabled"
     v-bind="resolvedAnchorProps"
+    @floating-enter="onFloatingEnter"
+    @floating-leave="onFloatingLeave"
   >
     <template #reference>
       <span
+        ref="referenceRef"
         class="tx-tooltip__reference"
         :class="{ 'is-full-width': props.referenceFullWidth }"
         :aria-describedby="open && isTooltipRole ? tooltipId : undefined"
@@ -286,8 +355,6 @@ defineExpose({
         :data-side="side"
         :role="props.role"
         :style="props.unstyled ? undefined : tooltipVars"
-        @mouseenter="onFloatingEnter"
-        @mouseleave="onFloatingLeave"
         @focusin="onFloatingEnter"
         @focusout="onFloatingLeave"
       >

@@ -363,6 +363,7 @@ code: |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 | `toggleOnReferenceClick` | `boolean` | `true` | 点击 reference 是否自动切换开关 |
+| `hoverBridge` | `boolean` | `false` | 打开期间在 reference 与面板之间铺一块透明命中区（悬停桥），指针穿过 `offset` 间隙时不算离开浮层。通常不用手动设：`TxTooltip` 在 `trigger="hover"` 且 `interactive` 时自动开启 |
 
 ### BaseAnchorAnimationOptions
 
@@ -400,6 +401,8 @@ code: |
 | `open` | - | 打开时触发 |
 | `close` | - | 关闭时触发 |
 | `update:modelValue` | `boolean` | v-model 更新 |
+| `floating-enter` | `MouseEvent` | 指针进入浮层：面板外框，或开启 `hoverBridge` 时的悬停桥 |
+| `floating-leave` | `MouseEvent` | 指针离开整个浮层 |
 
 ### Slots
 
@@ -415,6 +418,9 @@ code: |
 | `close` | - | 编程式关闭 |
 | `toggle` | - | 编程式切换 |
 | `updatePosition` | - | 手动刷新 Floating UI 定位 |
+| `getPanelRect` | - | 面板当前绘制出的矩形（`DOMRect`），未挂载时为 `null`。取的是 clip 而不是浮层根节点：`side=top` 的面板生长时靠位移钉住朝向 reference 的那条边，只有 clip 的矩形报告的是看得见的那条边 |
+| `containsFloating` | `(target: Node)` | `target` 是否在浮层里（面板、悬停桥或其中任意节点） |
+| `getSide` | - | Floating UI 最终落位的方向：`top` / `right` / `bottom` / `left` |
 
 ## 概述
 
@@ -422,6 +428,7 @@ code: |
 - `disabled` 会阻断打开；已打开的非受控 Anchor 在切换为 disabled 后会关闭。
 - `closeOnClickOutside` 与 `closeOnEsc` 分别控制外部指针事件和 Escape 关闭。
 - `toggleOnReferenceClick=false` 会阻断 reference 点击切换，适合输入框等自行处理点击行为的 reference。
+- `floating-enter` / `floating-leave` 以整个浮层为界：面板外框（含卡片内边距）加上悬停桥，而不只是插槽内容。悬停桥只在 `hoverBridge` 开启且面板打开时存在，形状是 reference 朝向面板的那条边与面板朝向 reference 的那条边的凸包（梯形），所以不会伸到 reference 旁边的相邻控件上。几何由 Floating UI 中间件链的最后一环与面板定位同帧算出，随 `flip` / `shift` 换边；关闭一开始就撤掉。
 - `virtualReference` 会覆盖 DOM reference 参与 Floating UI 定位，但 reference 插槽仍会渲染以保持结构与插槽契约。适合需要坐标锚点的组件。
 - `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
 - `maxHeight` 会被视口剩余高度裁剪。只有面板内部自带滚动容器时才使用 `unlimitedHeight`。
@@ -444,6 +451,7 @@ code: |
 - 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、`animation` 对象变体，以及 surface-motion adaptation 策略。
 - 被否掉的做法：让 `.tx-base-anchor__card` 自己 `overflow: auto`。它曾是默认写法，但卡片的 surface 层是它的绝对定位子元素，包含块随卡片内容一起滚动——面板往下滚多少像素，底部就有多少像素只剩页面背景。自带列表滚动容器的面板（select、search-select）碰不到，把整个 body 交给卡片的 dropdown-menu 会。现在卡片 `overflow: hidden`、body `overflow: auto`，surface 留在原地。
 - 被否掉的做法：把箭头放在 clip 外，作为浮层根节点的直接子元素。clip 的 `visibility` 管不到它，于是面板还没开始动，它就先以完整尺寸出现了两三帧；`:not(.is-open)` 规则在关闭的第一帧就把它藏掉，收回动画全程看不见；`expand` 时面板漂移 12px，箭头却钉在终点位置，底边先陷进面板 15px，回弹时又离开边缘 1.3px。现在它是 `.tx-base-anchor__content` 的子元素，全程贴着面板边缘。floating-ui 给出的偏移落点不变：`transfer` 的回弹内边距只加在远端，而箭头贴的是近端，横向偏移也不受它影响。
+- 被否掉的做法：把悬停桥画成面板宽度的矩形条，或做成 clip 的伪元素。矩形条会盖住 reference 旁边的控件（Nexus 顶栏里语言切换就紧挨着主题切换）；clip 是 `overflow: hidden`，伸出盒外的伪元素会被裁掉，命中区也随之消失。桥现在是浮层根节点的子元素，用 `clip-path` 裁成梯形，`clip-path` 同时裁掉命中区。
 - 保留浮层的几何由关闭生命周期管理：动画完成回调通过运行标识检查后停放外层根节点，同时裁剪箭头和液态舞台。`right: 100%` 不留收缩适配空间，因此 `.is-parked` 使用 `width: max-content` 保持内容固有宽度；内联显式宽度、reference 宽度和 middleware 的最大宽度仍生效。仅隐藏内层 clip 会让旧根节点的位移和宽度继续撑宽文档；裁剪整个页面会遮住问题，把已打开的面板改成 fixed 则会破坏合成线程的滚动跟随。
 - `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
 - 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
@@ -454,6 +462,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、`animation` 对象变体，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、`animation` 对象变体，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。`base-anchor-hover-bridge.test.ts` 覆盖悬停桥：中间件只在 `hoverBridge` 时挂上且位于链尾、间隙闭合时写入 `box: null`、桥只在打开时渲染且属于浮层、浮层根节点派发 `floating-enter` / `floating-leave`，以及暴露的几何方法。
 
 <TuffDocSourceLink />

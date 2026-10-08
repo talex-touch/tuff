@@ -159,6 +159,14 @@ export interface BaseAnchorProps {
   closeOnClickOutside?: boolean
   closeOnEsc?: boolean
   toggleOnReferenceClick?: boolean
+  /**
+   * Render the hover bridge while open: an invisible hit area filling the
+   * trough between the reference's facing edge and the panel's, so the pointer
+   * never leaves the floating layer on its way across the `offset` gap. Wired
+   * by TxTooltip for hover-triggered interactive panels; a hint, or a panel
+   * opened by click, has nothing to travel to.
+   */
+  hoverBridge?: boolean
 
   /**
    * Chain identity in the anchor-delay service, wired by TxTooltip — not a

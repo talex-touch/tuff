@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { Middleware } from '@floating-ui/vue'
 import type { StyleValue } from 'vue'
+import type { HoverBridgeBox } from '../../../../utils/hover-intent'
 import type { TxCardProps } from '../../card/src/types'
 import type { LiquidMetrics } from './base-anchor-liquid'
 import type { BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference } from './types'
@@ -7,6 +9,7 @@ import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating }
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { useAnchorDelayService } from '../../../../utils/anchor-delay'
 import { hasWindow } from '../../../../utils/env'
+import { hoverBridgeAt } from '../../../../utils/hover-intent'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
 import { beadPinchRatio, beadSpanAt, createLiquidMetrics, geometryAt, itemOpacityAt, LIQUID_DEFAULTS, neckClipAt } from './base-anchor-liquid'
@@ -46,6 +49,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   closeOnClickOutside: true,
   closeOnEsc: true,
   toggleOnReferenceClick: true,
+  hoverBridge: false,
   delayNode: null,
 })
 
@@ -53,6 +57,10 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'open'): void
   (e: 'close'): void
+  /** The pointer entered the floating layer — the panel or its bridge. */
+  (e: 'floating-enter', event: MouseEvent): void
+  /** The pointer left the floating layer altogether. */
+  (e: 'floating-leave', event: MouseEvent): void
 }>()
 const attrs = useAttrs()
 
@@ -146,11 +154,23 @@ let runId = 0
 const floatingReference = computed(() => props.virtualReference ?? referenceRef.value)
 
 /**
+ * Measures the trough between the reference and the panel for the hover
+ * bridge (see hoverBridgeAt). `data` always carries `box`, even as `null` —
+ * floating-ui merges middleware data, so a gap that closes would otherwise
+ * keep the last box.
+ */
+const hoverBridgeMiddleware: Middleware = {
+  name: 'hoverBridge',
+  fn: state => ({ data: { box: hoverBridgeAt(state, true) } }),
+}
+
+/**
  * A computed rather than a literal so `disableFlip` can be answered at runtime;
  * floating-ui re-runs positioning when the list identity changes. Nothing else
  * in here reads a reactive source during construction — `offset` is a getter,
  * `size.apply` and `arrow.element` are both resolved inside the middleware run —
- * so the only thing that can invalidate this list is `disableFlip` itself.
+ * so the only things that can invalidate this list are `disableFlip` and
+ * `hoverBridge` themselves.
  */
 const middleware = computed(() => [
   offsetMw(() => props.offset),
@@ -189,6 +209,7 @@ const middleware = computed(() => [
     },
   }),
   arrow({ element: arrowRef, padding: 6 }),
+  ...(props.hoverBridge ? [hoverBridgeMiddleware] : []),
 ])
 
 const { floatingStyles, middlewareData, placement, update, isPositioned } = useFloating(floatingReference as any, floatingRef, {
@@ -306,6 +327,25 @@ const arrowStyle = computed<Record<string, string>>(() => {
 function fmt(value: number): string {
   return Number(value.toFixed(2)).toString()
 }
+
+/**
+ * Only while open: a closing panel has already let the pointer go, and its
+ * bridge must not catch the pointer on its way past.
+ */
+const hoverBridgeStyle = computed<Record<string, string> | null>(() => {
+  if (!props.hoverBridge || !open.value)
+    return null
+  const box = (middlewareData.value as { hoverBridge?: { box?: HoverBridgeBox | null } })?.hoverBridge?.box
+  if (!box)
+    return null
+  return {
+    left: `${fmt(box.left)}px`,
+    top: `${fmt(box.top)}px`,
+    width: `${fmt(box.width)}px`,
+    height: `${fmt(box.height)}px`,
+    clipPath: box.clipPath,
+  }
+})
 
 function syncOutlineSize() {
   const el = contentRef.value
@@ -811,6 +851,15 @@ defineExpose({
   close,
   toggle,
   updatePosition: update,
+  /**
+   * The panel's box as drawn right now. The clip, not the floating root: while
+   * a side=top panel grows it is translated so its trigger-facing edge stays
+   * pinned, and only its own rect reports that edge where it is seen.
+   */
+  getPanelRect: () => clipRef.value?.getBoundingClientRect() ?? null,
+  /** Whether `target` sits in the floating layer: the panel, its bridge, or anything inside them. */
+  containsFloating: (target: Node) => !!floatingRef.value?.contains(target),
+  getSide: () => side.value,
 })
 
 /* ─── outside click / esc ─── */
@@ -1062,7 +1111,21 @@ onBeforeUnmount(() => {
       class="tx-base-anchor"
       :class="[floatingClass, { 'is-open': open, 'is-parked': isParked, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
       :style="[floatingStyle, floatingStyles, isParked ? parkedFloatingStyle : undefined, { zIndex }]"
+      @mouseenter="emit('floating-enter', $event)"
+      @mouseleave="emit('floating-leave', $event)"
     >
+      <!--
+        Hover bridge: the trough between the trigger and the panel, as a hit
+        area of the floating layer. Crossing the gap then never leaves the panel,
+        so its hover handlers see one continuous stay instead of a leave, a gap,
+        and a race against the close delay.
+      -->
+      <div
+        v-if="hoverBridgeStyle"
+        class="tx-base-anchor__bridge"
+        :style="hoverBridgeStyle"
+        aria-hidden="true"
+      />
       <!--
         The trigger body and the panel share one goo filter so they read as a
         single body of water: the panel is torn off through a neck that thins and
@@ -1298,6 +1361,13 @@ onBeforeUnmount(() => {
   will-change: clip-path;
   visibility: hidden;
   z-index: 2;
+}
+
+/* Transparent and unpainted: it only has to be hit-tested. `clip-path` (inline)
+   cuts the hit area to the trapezoid. */
+.tx-base-anchor__bridge {
+  position: absolute;
+  pointer-events: auto;
 }
 
 /*

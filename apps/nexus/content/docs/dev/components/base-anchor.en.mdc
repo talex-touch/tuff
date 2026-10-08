@@ -363,6 +363,7 @@ code: |
 | `closeOnClickOutside` | `boolean` | `true` | Close on outside click. |
 | `closeOnEsc` | `boolean` | `true` | Close on Escape key. |
 | `toggleOnReferenceClick` | `boolean` | `true` | Toggle open state on reference click. |
+| `hoverBridge` | `boolean` | `false` | While open, lay an invisible hit area (the hover bridge) between the reference and the panel, so a pointer crossing the `offset` gap never leaves the floating layer. Rarely set by hand: `TxTooltip` turns it on for `trigger="hover"` with `interactive`. |
 
 ### BaseAnchorAnimationOptions
 
@@ -400,6 +401,8 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 | `open` | - | Fired when popover opens. |
 | `close` | - | Fired when popover closes. |
 | `update:modelValue` | `boolean` | v-model update. |
+| `floating-enter` | `MouseEvent` | The pointer entered the floating layer: the panel box, or the hover bridge when `hoverBridge` is on. |
+| `floating-leave` | `MouseEvent` | The pointer left the floating layer altogether. |
 
 ### Slots
 
@@ -415,6 +418,9 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 | `close` | - | Programmatically close. |
 | `toggle` | - | Programmatically toggle. |
 | `updatePosition` | - | Manually refresh Floating UI placement. |
+| `getPanelRect` | - | The panel's rect as currently drawn (`DOMRect`), or `null` before it mounts. Read from the clip, not the floating root: a `side=top` panel grows with a translate that pins its reference-facing edge, and only the clip's rect reports that edge where it is seen. |
+| `containsFloating` | `(target: Node)` | Whether `target` sits in the floating layer: the panel, the hover bridge, or anything inside them. |
+| `getSide` | - | The side Floating UI finally placed the panel on: `top` / `right` / `bottom` / `left`. |
 
 ## Overview
 
@@ -422,6 +428,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - `disabled` blocks opening and closes an already open uncontrolled anchor.
 - `closeOnClickOutside` and `closeOnEsc` independently control outside pointer and Escape closing.
 - `toggleOnReferenceClick=false` keeps reference clicks from changing open state; use it for editable references that own their click behavior.
+- `floating-enter` / `floating-leave` are bounded by the whole floating layer: the panel box, card padding included, plus the hover bridge — not just the slot content. The bridge exists only while open with `hoverBridge` on. It is the hull of the reference's edge facing the panel and the panel's edge facing the reference (a trapezoid), so it never reaches over a control sitting beside the reference. Its geometry comes from the last middleware in the Floating UI chain, in the same pass and frame as the panel, and follows `flip` / `shift`; it is removed the moment a close begins.
 - `virtualReference` overrides the DOM reference used by Floating UI, while the reference slot still renders to preserve structure and slot contracts. Use it for coordinate-anchored components.
 - `class`, `style`, and non-class attrs are applied to the floating panel. Use `referenceClass` for the reference wrapper.
 - `maxHeight` is clamped by available viewport height. Use `unlimitedHeight` only for panels with their own scroll container.
@@ -444,6 +451,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, `animation` object variants, and surface-motion adaptation strategies.
 - Rejected design: letting `.tx-base-anchor__card` scroll itself with `overflow: auto`. That was the original wiring, but the card's surface layer is an absolutely positioned child of it, so its containing block scrolls with the card's content — every pixel the panel was scrolled left that much of its bottom painted on the page behind it. Panels with their own list scroller (select, search-select) never hit it; a dropdown-menu handing its whole body to the card did. The card now clips and the body scrolls, so the surface stays put.
 - Rejected design: the arrow as a direct child of the floating root, outside the clip. The clip's `visibility` never reached it, so it showed at full size for two or three frames before the panel started moving; a `:not(.is-open)` rule hid it on the first frame of a close, so its exit never showed; and under `expand` it held its final spot while the panel drifted 12px, its base sinking 15px into the panel and then lifting 1.3px off the edge at the overshoot. It is now a child of `.tx-base-anchor__content` and stays on the panel edge throughout. floating-ui's offsets land where they did: `transfer`'s bounce padding sits on the far edge, while the arrow is placed against the near edge and along the cross axis, which that padding never shifts.
+- Rejected design: drawing the hover bridge as a strip as wide as the panel, or as a pseudo-element of the clip. A strip covers the control beside the reference (in the Nexus header the language toggle sits right next to the theme toggle); the clip is `overflow: hidden`, so a pseudo-element reaching outside the box is clipped, and its hit area with it. The bridge is a child of the floating root cut to a trapezoid with `clip-path`, which clips hit testing too.
 - Retained-portal geometry is owned by the close lifecycle: the run-token-guarded motion completion parks the outer root, including arrow and liquid-stage descendants. `.is-parked` keeps intrinsic width at `max-content` because `right: 100%` leaves no shrink-to-fit space; inline explicit/reference widths and middleware max-width still apply. Hiding only the inner clip leaves the old root translation and width in document overflow; clipping the page or making open panels fixed would conceal the defect or break compositor scroll following.
 - `--tx-ba-max-height` is written only by the `size` middleware: `min(availableHeight, maxHeight)` in pixels, or `none` when unlimited. The root `:style` does not declare it — it used to bind `isUnlimitedHeight ? 'none' : undefined`, and Vue's style patcher turns an `undefined` custom property into `setProperty(name, '')`, so every re-render after a positioning pass deleted the value the middleware had just written and the panel always fell back to the 420px CSS default, overflowing past its trigger.
 - Accessibility note: `TxBaseAnchor` is positioning infrastructure only. The built primitive must provide menu/dialog/listbox roles, focus handling, and keyboard traversal appropriate to its content.
@@ -454,6 +462,6 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` exports `BaseAnchorProps`, `BaseAnchorAnimationOptions`, and virtual-reference types.
-- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, `animation` object variants, and surface-motion adaptation. `base-anchor-max-height.test.ts` verifies `--tx-ba-max-height` ownership: after the open settles and after a re-render the value is still the pixel value the middleware wrote (`none` for `unlimitedHeight`), and no empty write ever clears it.
+- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, `animation` object variants, and surface-motion adaptation. `base-anchor-max-height.test.ts` verifies `--tx-ba-max-height` ownership: after the open settles and after a re-render the value is still the pixel value the middleware wrote (`none` for `unlimitedHeight`), and no empty write ever clears it. `base-anchor-hover-bridge.test.ts` covers the hover bridge: the middleware is added only with `hoverBridge` and runs last, a closed gap writes `box: null`, the bridge renders only while open and inside the floating layer, the floating root emits `floating-enter` / `floating-leave`, and the exposed geometry methods.
 
 <TuffDocSourceLink />
