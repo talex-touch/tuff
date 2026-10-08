@@ -13,6 +13,14 @@ Work directly from the user's confirmed scope and the repository's engineering g
 
 Project Skill roots are `.omp/skills/`, `.claude/skills/`, and `.agents/skills/`; Codex-specific hooks and rules remain under `.codex/`.
 
+## Shared-machine discipline
+
+Several agents work in this checkout at once on the user's own workstation, next to the user's interactive `pnpm core:dev` instance. On 2026-10-07 that instance lagged 1–2s every few seconds for 28 minutes while agents ran `tsc`, `vitest` and extra Electron instances in parallel (load average 16 on 14 cores).
+
+- Run heavy jobs (`tsc`, `vitest`, builds, isolated Electron instances) with `nice -n 10`; the dev wrapper honours `TUFF_DEV_NICE=10` for isolated instances started through `scripts/dev-electron-wrapper.mjs`.
+- Before starting any Electron instance or crash harness, check that the user's dev instance is not running (an `Electron Helper` process whose `--user-data-dir` is the default `@talex-touch/core-app` profile, or a listener on the vite port 5173). If it is, do not start yours.
+- One isolated Electron instance per agent at a time; close it as soon as the evidence is captured.
+
 ## Standing Audits / Known Issues
 
 Before touching **search / file-indexing / cross-platform** code, read the living audit backlog — it tracks confirmed defects and prioritized risks with `file:line` references so you don't re-discover or re-introduce them:

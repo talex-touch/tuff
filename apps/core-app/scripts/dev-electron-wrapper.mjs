@@ -56,6 +56,22 @@ function isTruthyEnv(name) {
 function hasNonEmptyEnv(name) {
   return Boolean(process.env[name]?.trim())
 }
+/**
+ * `TUFF_DEV_NICE=<1..19>` runs electron-vite (and the Electron it spawns) under `nice` on POSIX.
+ * Several agents building and testing on one machine starve the user's dev instance (load
+ * average 16 on 14 cores while it lagged, 2026-10-07); a lowered priority for the secondary
+ * instances keeps the interactive one responsive.
+ */
+function readNiceLevelEnv() {
+  if (process.platform === 'win32') return null
+  const raw = process.env.TUFF_DEV_NICE?.trim()
+  if (!raw) return null
+  const level = Number.parseInt(raw, 10)
+  if (!Number.isInteger(level) || level < 1 || level > 19) {
+    throw new Error('TUFF_DEV_NICE_INVALID: expected an integer from 1 to 19')
+  }
+  return level
+}
 
 function shouldUseCustomDevElectronDist() {
   return (
@@ -97,7 +113,11 @@ function runElectronVite(env, extraElectronArgs = []) {
         ? ['/d', '/s', '/c', ['pnpm', ...args].map(quoteWindowsCmdArg).join(' ')]
         : args
 
-  const child = spawn(command, commandArgs, {
+  const niceLevel = readNiceLevelEnv()
+  const spawnCommand = niceLevel === null ? command : 'nice'
+  const spawnArgs =
+    niceLevel === null ? commandArgs : ['-n', String(niceLevel), command, ...commandArgs]
+  const child = spawn(spawnCommand, spawnArgs, {
     cwd: appRoot,
     env,
     shell: false,
