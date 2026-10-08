@@ -56,6 +56,35 @@ import { FileProviderReconciliationDeleteService } from './file-provider-reconci
 
 export const FILE_MAINTENANCE_ROUND_BUDGET_MS = 1_500
 export const FILE_MAINTENANCE_SLICE_SIZE = 64
+/** Gap between maintenance rounds while durable work is pending. */
+export const FILE_MAINTENANCE_DELAY_MS = 1_000
+/**
+ * The same gap once the main thread has just lagged. A round is up to 1.5s of main-thread work
+ * (synchronous index reads included), so at the normal 1s gap a struggling loop sees one block
+ * every ~2.5s for as long as the walk lasts. Backing off does not skip work, it spreads it.
+ */
+export const FILE_MAINTENANCE_LAG_BACKOFF_DELAY_MS = 5_000
+export const FILE_MAINTENANCE_LAG_BACKOFF_THRESHOLD_MS = 1_000
+export const FILE_MAINTENANCE_LAG_BACKOFF_WINDOW_MS = 10_000
+
+export interface RecentEventLoopLag {
+  lagMs: number
+  at: number
+}
+
+export function resolveFileMaintenanceDelayMs(
+  recentLag: RecentEventLoopLag | null | undefined,
+  now: number
+): number {
+  if (
+    recentLag &&
+    recentLag.lagMs >= FILE_MAINTENANCE_LAG_BACKOFF_THRESHOLD_MS &&
+    now - recentLag.at <= FILE_MAINTENANCE_LAG_BACKOFF_WINDOW_MS
+  ) {
+    return FILE_MAINTENANCE_LAG_BACKOFF_DELAY_MS
+  }
+  return FILE_MAINTENANCE_DELAY_MS
+}
 type FileSearchOrphanCandidate = Pick<ExpectedMissingFileSearchRecord, 'itemId'> &
   Partial<ExpectedMissingFileSearchRecord> & { filesystemPath?: string }
 type FileMaintenanceReason =
@@ -90,6 +119,8 @@ export interface FileProviderMaintenanceDeps {
   mapRecord: (record: IndexedFileSourceRecordRow) => IndexedSourceRecord
   onBaseCommitReady: () => void
   emitCleanupProgress: (current: number, total: number) => void
+  /** Latest main-process event-loop lag, if the host tracks one; spaces rounds out after it. */
+  getRecentEventLoopLag?: () => RecentEventLoopLag | null
   logInfo: (message: string, metadata?: Record<string, unknown>) => void
   logDebug: (message: string, metadata?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, metadata?: Record<string, unknown>) => void
@@ -1080,6 +1111,10 @@ export class FileProviderMaintenanceService {
 
   public scheduleFileMaintenance(): void {
     if (this.shuttingDown || this.maintenanceTimer) return
+    const delayMs = resolveFileMaintenanceDelayMs(
+      this.deps.getRecentEventLoopLag?.() ?? null,
+      Date.now()
+    )
     this.maintenanceTimer = setTimeout(() => {
       this.maintenanceTimer = null
       if (this.shuttingDown) return
@@ -1164,7 +1199,7 @@ export class FileProviderMaintenanceService {
           if (this.maintenanceRunAbortController === controller)
             this.maintenanceRunAbortController = null
         })
-    }, 1000)
+    }, delayMs)
     this.maintenanceTimer.unref?.()
   }
 }

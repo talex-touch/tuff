@@ -89,7 +89,7 @@ import {
   type LocalAssetFallbackKind
 } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
-import { enterPerfContext } from '../../../../utils/perf-context'
+import { enterPerfContext, getRecentPerfEventLoopLag } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
@@ -480,6 +480,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
     onBaseCommitReady: () => this.enrichmentResumeService.resume('base-maintenance-commit'),
     emitCleanupProgress: (current, total) => this.progressState.emit('cleanup', current, total),
+    getRecentEventLoopLag: () => getRecentPerfEventLoopLag(),
     logInfo: (message, metadata) => this.logInfo(message, metadata),
     logDebug: (message, metadata) => this.logDebug(message, metadata),
     logWarn: (message, error, metadata) => this.logWarn(message, error, metadata)

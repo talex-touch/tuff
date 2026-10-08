@@ -11,7 +11,7 @@ import {
   type FileScanOptions
 } from '@talex-touch/utils/common/file-scan-constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
-import { and, desc, eq, gt, lte, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, lt, lte, or } from 'drizzle-orm'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { DbUtils } from '../../../../../db/utils'
@@ -21,7 +21,7 @@ import type { FileIndexRunOptions } from '../file-provider-index-contracts'
 import type { FileProviderReconciliationDbRecord } from './file-provider-reconciliation-run-service'
 import type { FileProviderIncrementalChangeEntry } from './file-provider-incremental-write-service'
 import { FileWatchSubtreeService } from './file-watch-subtree-service'
-import { files as filesSchema } from '../../../../../db/schema'
+import { files as filesSchema, fileTypeIs } from '../../../../../db/schema'
 import type { IndexedWriteDeleteExecutorResult } from '../../../search-engine/indexing-write-delete-executor-service'
 
 export interface FileProviderWatchSubtreeReconcileDeps {
@@ -123,7 +123,7 @@ export class FileProviderWatchSubtreeReconcileService {
             .getFileIndexReadDb()
             .select({ id: filesSchema.id })
             .from(filesSchema)
-            .where(and(eq(filesSchema.type, 'file'), this.scopeCondition(scope)))
+            .where(and(fileTypeIs('file'), this.scopeCondition(scope)))
             .orderBy(desc(filesSchema.id))
             .limit(1)
           return rows[0]?.id ?? 0
@@ -145,7 +145,7 @@ export class FileProviderWatchSubtreeReconcileService {
             .from(filesSchema)
             .where(
               and(
-                eq(filesSchema.type, 'file'),
+                fileTypeIs('file'),
                 this.scopeCondition(scope),
                 gt(filesSchema.id, afterId),
                 lte(filesSchema.id, throughId)
@@ -215,13 +215,26 @@ export class FileProviderWatchSubtreeReconcileService {
     ]
   }
 
+  /**
+   * Scope match as an index range, not `LIKE 'scope/%'`.
+   *
+   * `LIKE` cannot use `files_path_unique`, so with `type = 'file'` in the same WHERE the planner
+   * walked `idx_files_type` and fetched every file row to test the pattern: 2.2s cold on a 5 GB
+   * dev index (2026-10-08, `files` rows average 19 KB because of `content`). The two queries
+   * above also spell `type` through `fileTypeIs` so that index is not the only candidate left.
+   * `path >= prefix AND path < prefixUpperBound` is BINARY (case-sensitive): scopes come from
+   * the watcher's physical paths (`fs.realpath` on macOS), which is the same spelling the
+   * scanner stores, so nothing is lost versus `LIKE`'s ASCII case folding.
+   */
   private scopeCondition(scope: string) {
     const normalized = path.normalize(scope)
     const prefix = normalized.endsWith(path.sep) ? normalized : `${normalized}${path.sep}`
-    const escaped = prefix.replace(/!/g, '!!').replace(/%/g, '!%').replace(/_/g, '!_')
+    const upperBound = `${prefix.slice(0, -1)}${String.fromCharCode(
+      prefix.charCodeAt(prefix.length - 1) + 1
+    )}`
     return or(
       eq(filesSchema.path, normalized),
-      sql`${filesSchema.path} LIKE ${`${escaped}%`} ESCAPE '!'`
+      and(gte(filesSchema.path, prefix), lt(filesSchema.path, upperBound))
     )
   }
 

@@ -32,10 +32,14 @@ export async function getReconciliationFileRecordsPage(
   const root = path.normalize(rootPath)
   const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`
   const escapedPrefix = prefix.replace(/!/g, '!!').replace(/%/g, '!%').replace(/_/g, '!_')
+  // `+type`: without it the planner walks `idx_files_type` and fetches every file row to test the
+  // LIKE (the `files` rows carry `content`, so that is a random read of most of the table);
+  // the rowid walk below is sequential and bounded by `id > afterId`. The LIKE stays because
+  // `rootPath` is a watch root, which macOS lower-cases while stored paths keep their case.
   return await dbUtils.getFileIndexReadDb().all<FileProviderReconciliationDbRecord>(sql`
     SELECT id, path, mtime, ctime, size, last_indexed_at AS lastIndexedAt
     FROM files
-    WHERE type = 'file' AND id > ${afterId}
+    WHERE +type = 'file' AND id > ${afterId}
       AND (path = ${root} OR path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
     ORDER BY id LIMIT ${Math.min(64, Math.max(1, limit))}
   `)
