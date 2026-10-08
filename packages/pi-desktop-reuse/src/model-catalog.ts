@@ -23,13 +23,13 @@
  * tests share one implementation instead of re-deriving these rules per surface.
  */
 
-import { publishedThinkingLevels } from './thinking-levels'
 import type {
-  ModelLimitSource,
   ModelBinding,
   ModelInfo,
+  ModelLimitSource,
   ThinkingLevel,
 } from './types/models'
+import { publishedThinkingLevels } from './thinking-levels'
 
 /** Wire protocol a provider row speaks. Mirrors the runtime adapter list. */
 export const API_STYLES = [
@@ -50,7 +50,7 @@ export type CatalogApiStyle = (typeof API_STYLES)[number]
  * uses the same Chat Completions fallback for unknown styles.
  */
 export function normalizeApiStyle(value?: string | null): CatalogApiStyle {
-  return API_STYLES.some((style) => style === value)
+  return value && (API_STYLES as readonly string[]).includes(value)
     ? (value as CatalogApiStyle)
     : 'chat_completions'
 }
@@ -75,9 +75,11 @@ const ADAPTER_API_STYLES: ReadonlyArray<readonly [string, CatalogApiStyle]> = [
  */
 export function apiStyleForAdapter(npm?: string | null): CatalogApiStyle {
   const adapter = (npm ?? '').trim().toLowerCase()
-  if (!adapter) return 'chat_completions'
+  if (!adapter)
+    return 'chat_completions'
   for (const [name, style] of ADAPTER_API_STYLES) {
-    if (adapter === name) return style
+    if (adapter === name)
+      return style
   }
   return 'chat_completions'
 }
@@ -92,8 +94,8 @@ export function modelMatchesFilter(model: ModelInfo, filter: ModelFilter): boole
       return model.reasoning === true || (model.supportedThinkingLevels?.length ?? 0) > 0
     case 'vision':
       return (
-        model.capabilities.includes('vision') ||
-        (model.modalities?.input?.includes('image') ?? false)
+        model.capabilities.includes('vision')
+        || (model.modalities?.input?.includes('image') ?? false)
       )
     case 'tools':
       return model.toolCall === true || model.capabilities.includes('tools')
@@ -101,8 +103,8 @@ export function modelMatchesFilter(model: ModelInfo, filter: ModelFilter): boole
       return model.attachment === true || model.capabilities.includes('attachments')
     case 'pdf':
       return (
-        model.capabilities.includes('pdf') ||
-        (model.modalities?.input?.includes('pdf') ?? false)
+        model.capabilities.includes('pdf')
+        || (model.modalities?.input?.includes('pdf') ?? false)
       )
     default:
       return false
@@ -118,7 +120,8 @@ export function bindingSupportsImages(
   binding?: Pick<ModelBinding, 'supportsImages'> | null,
   model?: ModelInfo | null,
 ): boolean {
-  if (typeof binding?.supportsImages === 'boolean') return binding.supportsImages
+  if (typeof binding?.supportsImages === 'boolean')
+    return binding.supportsImages
   return model ? modelMatchesFilter(model, 'vision') : false
 }
 
@@ -127,7 +130,8 @@ export function bindingSupportsDocuments(
   binding?: Pick<ModelBinding, 'supportsDocuments'> | null,
   model?: ModelInfo | null,
 ): boolean {
-  if (typeof binding?.supportsDocuments === 'boolean') return binding.supportsDocuments
+  if (typeof binding?.supportsDocuments === 'boolean')
+    return binding.supportsDocuments
   return model ? modelMatchesFilter(model, 'pdf') : false
 }
 
@@ -171,9 +175,12 @@ export function effectiveContextWindow(
   const published = positiveTokenCount(publishedContextWindow)
   const configured = positiveTokenCount(configuredContextWindow)
 
-  if (source === 'catalog') return published ?? configured
-  if (source === 'user') return configured ?? published
-  if (configured === undefined) return published
+  if (source === 'catalog')
+    return published ?? configured
+  if (source === 'user')
+    return configured ?? published
+  if (configured === undefined)
+    return published
   return configured
 }
 
@@ -194,9 +201,12 @@ export function effectiveMaxTokens(
   const published = positiveTokenCount(publishedMaxTokens)
   const configured = positiveTokenCount(configuredMaxTokens)
 
-  if (source === 'catalog') return published ?? configured
-  if (source === 'user') return configured ?? published
-  if (configured === undefined) return published
+  if (source === 'catalog')
+    return published ?? configured
+  if (source === 'user')
+    return configured ?? published
+  if (configured === undefined)
+    return published
   return configured
 }
 
@@ -209,8 +219,8 @@ function positiveTokenCount(value?: number | null): number | undefined {
 }
 
 /** Binding fields the limits resolver reads and rewrites. */
-type BindingLimits = Pick<ModelBinding, 'contextWindow'> &
-  Partial<Pick<ModelBinding, 'maxTokens' | 'contextWindowSource' | 'maxTokensSource'>>
+type BindingLimits = Pick<ModelBinding, 'contextWindow'>
+  & Partial<Pick<ModelBinding, 'maxTokens' | 'contextWindowSource' | 'maxTokensSource'>>
 
 /**
  * Resolve a saved binding's limits against its catalog baseline for
@@ -231,14 +241,14 @@ type BindingLimits = Pick<ModelBinding, 'contextWindow'> &
  * taken while the record still resolved stays in force.
  */
 export function resolveBindingLimits<
-  C extends { contextWindow?: number | null; maxTokens?: number | null; source?: string },
+  C extends { contextWindow?: number | null, maxTokens?: number | null, source?: string },
   B extends BindingLimits,
 >(catalogConfig: C, binding: B): {
   catalogConfig: C
   binding: B & Partial<Pick<ModelBinding, 'contextWindowSource' | 'maxTokensSource'>>
 }
 export function resolveBindingLimits<
-  C extends { contextWindow?: number | null; maxTokens?: number | null; source?: string },
+  C extends { contextWindow?: number | null, maxTokens?: number | null, source?: string },
   B extends BindingLimits,
 >(
   catalogConfig: C,
@@ -248,13 +258,14 @@ export function resolveBindingLimits<
   binding: (B & Partial<Pick<ModelBinding, 'contextWindowSource' | 'maxTokensSource'>>) | null | undefined
 }
 export function resolveBindingLimits(
-  catalogConfig: { contextWindow?: number | null; maxTokens?: number | null; source?: string },
+  catalogConfig: { contextWindow?: number | null, maxTokens?: number | null, source?: string },
   binding: BindingLimits | null | undefined,
 ): {
-  catalogConfig: { contextWindow?: number | null; maxTokens?: number | null; source?: string }
+  catalogConfig: { contextWindow?: number | null, maxTokens?: number | null, source?: string }
   binding: BindingLimits | null | undefined
 } {
-  if (!binding) return { catalogConfig, binding }
+  if (!binding)
+    return { catalogConfig, binding }
   const publishedRecord = catalogConfig.source !== 'generic'
   const published = publishedRecord
     ? positiveTokenCount(catalogConfig.contextWindow)
@@ -366,7 +377,8 @@ export function bindingForCustomModel(id: string): ModelBinding {
  * Drop a fraction's trailing zeros: `200.0` reads `200` and `1.10` reads `1.1`.
  */
 function trimFraction(value: string): string {
-  if (!value.includes('.')) return value
+  if (!value.includes('.'))
+    return value
   return value.replace(/0+$/, '').replace(/\.$/, '')
 }
 
@@ -383,7 +395,8 @@ function trimFraction(value: string): string {
  * limit go through `formatTokenCount` instead.
  */
 export function formatCompactTokenCount(tokens: number): string {
-  if (tokens < 1_000) return String(tokens)
+  if (tokens < 1_000)
+    return String(tokens)
   const thousands = tokens / 1_000
   // Rounding can push a `K` mantissa up to 1000 (999,999 -> `1000K`), which
   // reads as a scale error. Promote those to the `M` scale instead.
@@ -400,7 +413,8 @@ export function formatCompactTokenCount(tokens: number): string {
  * renders as an em dash rather than a number the user might trust.
  */
 export function formatTokenCount(tokens?: number): string {
-  if (!tokens || tokens <= 0) return '—'
+  if (!tokens || tokens <= 0)
+    return '—'
   return formatCompactTokenCount(tokens)
 }
 
@@ -411,7 +425,8 @@ export function formatTokenCount(tokens?: number): string {
 export function formatModelPrice(cost?: ModelInfo['cost']): string {
   const input = cost?.input
   const output = cost?.output
-  if (input === undefined && output === undefined) return '—'
+  if (input === undefined && output === undefined)
+    return '—'
   const price = (value?: number) =>
     value === undefined
       ? '—'
