@@ -289,6 +289,105 @@ describe('anchor-delay service', () => {
     })
   })
 
+  describe('transit hold', () => {
+    const closeDelay = ANCHOR_DELAY_PRESETS.layers.menu.closeDelay
+
+    function openChain() {
+      const parent = attach(service, 'menu')
+      const child = attach(service, 'menu', parent.handle.node)
+      parent.handle.openNow()
+      child.handle.openNow()
+      return { parent, child }
+    }
+
+    it('defers an ancestor close that comes due while the child holds', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      // The pointer's path to the child panel crossed out of the parent's.
+      parent.handle.requestClose()
+
+      vi.advanceTimersByTime(closeDelay * 3)
+      expect(parent.handle.isOpen()).toBe(true)
+      expect(child.handle.isOpen()).toBe(true)
+    })
+
+    it('runs the deferred close at once when the trip is given up', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      parent.handle.requestClose()
+      vi.advanceTimersByTime(closeDelay)
+
+      child.handle.releaseChain(true)
+      expect(parent.handle.isOpen()).toBe(false)
+      // Closing the parent takes its panel's children with it.
+      expect(child.handle.isOpen()).toBe(false)
+    })
+
+    it('drops the deferred close when the pointer arrives', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      parent.handle.requestClose()
+      vi.advanceTimersByTime(closeDelay)
+
+      child.handle.releaseChain(false)
+      vi.advanceTimersByTime(10_000)
+      expect(parent.handle.isOpen()).toBe(true)
+    })
+
+    it('lets a newer decision supersede the deferred close', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      parent.handle.requestClose()
+      vi.advanceTimersByTime(closeDelay)
+      // The pointer came back into the parent's panel on the way.
+      parent.handle.cancelChain()
+
+      child.handle.releaseChain(true)
+      expect(parent.handle.isOpen()).toBe(true)
+    })
+
+    it('leaves a close that has not come due on its own timer', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      parent.handle.requestClose()
+
+      child.handle.releaseChain(true)
+      expect(parent.handle.isOpen()).toBe(true)
+      vi.advanceTimersByTime(closeDelay)
+      expect(parent.handle.isOpen()).toBe(false)
+    })
+
+    it('holds only the chain above the holder', () => {
+      service.configure({ preempts: { menu: [] } })
+      const { child } = openChain()
+      const stranger = attach(service, 'menu')
+      stranger.handle.openNow()
+      child.handle.holdChain()
+
+      stranger.handle.requestClose()
+      vi.advanceTimersByTime(closeDelay)
+      expect(stranger.handle.isOpen()).toBe(false)
+    })
+
+    it('never holds back an explicit close', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+
+      parent.handle.closeNow()
+      expect(parent.handle.isOpen()).toBe(false)
+    })
+
+    it('drops the hold with the anchor', () => {
+      const { parent, child } = openChain()
+      child.handle.holdChain()
+      child.handle.dispose()
+
+      parent.handle.requestClose()
+      vi.advanceTimersByTime(closeDelay)
+      expect(parent.handle.isOpen()).toBe(false)
+    })
+  })
+
   describe('warm group', () => {
     it('opens with no delay while a sibling is still open', () => {
       const a = attach(service, 'hint')
