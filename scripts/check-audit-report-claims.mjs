@@ -87,9 +87,13 @@ export function referencedTasks(markdown) {
   return [...new Set([...markdown.matchAll(TASK_REFERENCE)].map(match => match[1]))]
 }
 
-/** Where the runtime boolean flags are declared, as `parseEnvBoolean('NAME', true)`. */
+/**
+ * Where the runtime boolean flags are declared, as `getBooleanEnv('NAME', true)` -- the shared
+ * parser from `@talex-touch/utils/env` since 4eaa57381 (2026-10-07). The former local helper,
+ * `parseEnvBoolean`, stays recognised so a report dated across the rename still re-derives.
+ */
 const FLAG_SOURCE = 'apps/core-app/src/main/db/runtime-flags.ts'
-const FLAG_DECLARATION = /parseEnvBoolean\(\s*'([A-Z][A-Z0-9_]*)'\s*,\s*(true|false)\s*\)/g
+const FLAG_DECLARATION = /(?:getBooleanEnv|parseEnvBoolean)\(\s*'([A-Z][A-Z0-9_]*)'\s*,\s*(true|false)\s*\)/g
 
 /**
  * Phrases asserting a default, in either language, mapped to what they assert.
@@ -232,7 +236,7 @@ function main() {
   const flagDefaults = parseFlagDefaults(fs.readFileSync(flagSource, 'utf8'))
   if (flagDefaults.size === 0) {
     console.error(
-      `No parseEnvBoolean declarations found in ${FLAG_SOURCE}. An empty flag map asserts nothing,`
+      `No getBooleanEnv/parseEnvBoolean declarations found in ${FLAG_SOURCE}. An empty flag map asserts nothing,`
       + ' so this is an error rather than a pass.',
     )
     return 1
@@ -362,12 +366,14 @@ function selfTest() {
     },
   ]
 
-  // Flag-default half. The real declaration shape, plus a decoy that is not one.
+  // Flag-default half. Both declaration shapes (shared parser and the retired local helper),
+  // plus a decoy that is not one.
   const flagSource = [
-    'export const DB_AUX_ENABLED = parseEnvBoolean(\'TUFF_DB_AUX_ENABLED\', true)',
-    'export const DB_SEARCH_SPLIT_ENABLED = parseEnvBoolean(\'TUFF_DB_SEARCH_SPLIT_ENABLED\', true)',
+    'export const DB_AUX_ENABLED = getBooleanEnv(\'TUFF_DB_AUX_ENABLED\', true)',
+    'export const DB_SEARCH_SPLIT_ENABLED = getBooleanEnv(\'TUFF_DB_SEARCH_SPLIT_ENABLED\', true)',
     'export const LEGACY = parseEnvBoolean(\'TUFF_LEGACY\', false)',
     'function parseEnvBoolean(name: string, defaultValue: boolean): boolean {',
+    'export function getBooleanEnv(key: string, fallback = false): boolean {',
   ].join('\n')
   const flags = parseFlagDefaults(flagSource)
   const claim = text => findFlagClaims(['r.md'], flags, () => text)
@@ -376,6 +382,8 @@ function selfTest() {
     { name: 'a default-on flag is parsed', actual: flags.get('TUFF_DB_SEARCH_SPLIT_ENABLED'), expected: true },
     { name: 'a default-off flag is parsed', actual: flags.get('TUFF_LEGACY'), expected: false },
     { name: 'the helper signature is not a declaration', actual: flags.has('name'), expected: false },
+    { name: 'the shared parser signature is not a declaration either', actual: flags.has('key'), expected: false },
+    { name: 'both declaration spellings land in one map', actual: flags.size, expected: 3 },
     // The sentence from #1107, verbatim in shape: eight reports carried it after the flip.
     { name: 'the bullet that started #1107 is caught', actual: claim('- `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认关闭，但环境变量仍可启用').length, expected: 1 },
     { name: 'the exported short name alone is enough', actual: claim('`DB_SEARCH_SPLIT_ENABLED` 默认关闭').length, expected: 1 },
