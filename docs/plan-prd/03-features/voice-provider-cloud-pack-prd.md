@@ -127,7 +127,7 @@
 - 后续云控能力复用 `CatalogManifestV1`、固定发布签名、内容寻址、可选 A256GCM envelope/key identity、登录态获取、SQLite 生命周期和安全诊断。
 - 每个新增 `CatalogPackType` 仍必须随客户端发布独立 typed schema/normalizer、持久化投影和 runtime adapter；共享层不解释任意字段，更不执行下载代码。
 - 远程 check/download/key/activate 只有在账户登录完成后可用，未登录返回 `CATALOG_AUTH_REQUIRED` 且零网络请求；本地 status/rollback 保留用于诊断恢复。
-- 云控包不得改变本机 opt-in。语音输入 fresh default 为关闭，必须由用户在带明显状态标识的 Settings 开关中手动开启；登录或激活路由包都不能代替该动作。新增实质性云控类别/用途前同步更新用户协议或单独告知。
+- 云控包不得改变本机 opt-in：激活路由包不会打开语音输入。语音输入未登录时默认关闭；登录后若用户从未手动拨过开关，会自动开启一次（记为 `enabledSource: 'sign-in'`），用户手动关闭的选择在之后每次登录都保持（2026-10-08 老板确认改为登录后默认开启）。新增实质性云控类别/用途前同步更新用户协议或单独告知。
 
 ---
 

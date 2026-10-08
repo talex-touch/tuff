@@ -43,6 +43,8 @@ export interface CatalogService {
   /** Read-only active voice-provider facade; null until a voice pack activates. */
   getVoiceProviderRegistry(): VoiceProviderRegistry | null
   getVoiceProviderStatus(): CatalogStatus
+  /** Stored metadata of the active voice pack (size, import time); null until one activates. */
+  getVoiceProviderPack(): CatalogStoredPack | null
   downloadVoiceProviderPack(manifest: CatalogManifestV1): Promise<VerifiedVoiceProviderPack>
   importVoiceProviderPack(pack: VerifiedVoiceProviderPack): Promise<CatalogStoredPack>
   activateVoiceProviderPack(ref: CatalogPackRef): Promise<CatalogStatus>
@@ -92,6 +94,7 @@ export class DefaultCatalogService implements CatalogService {
   private activeRegistry: DomainLexiconRegistry
   private status: CatalogStatus
   private voiceRegistry: VoiceProviderRegistry | null = null
+  private voicePack: CatalogStoredPack | null = null
   private voiceStatus: CatalogStatus
 
   constructor(dependencies: CatalogServiceDependencies) {
@@ -297,6 +300,10 @@ export class DefaultCatalogService implements CatalogService {
     return this.voiceStatus
   }
 
+  getVoiceProviderPack(): CatalogStoredPack | null {
+    return this.voicePack
+  }
+
   async downloadVoiceProviderPack(manifest: CatalogManifestV1): Promise<VerifiedVoiceProviderPack> {
     let keyBytes: Uint8Array | null = null
     try {
@@ -480,6 +487,7 @@ export class DefaultCatalogService implements CatalogService {
 
   private publishVoiceSnapshot(snapshot: VoiceProviderCatalogSnapshot): void {
     this.voiceRegistry = snapshot.registry
+    this.voicePack = snapshot.active
     this.voiceStatus = freezeStatus({
       databaseAvailable: true,
       registrySource: 'sqlite',

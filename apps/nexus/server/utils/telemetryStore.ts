@@ -1,17 +1,17 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createHash } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
-import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
+import { recordPlatformGovernanceEvent, type RecordPlatformGovernanceEventInput } from './platformGovernanceStore'
 import { resolveRequestGeo } from './requestGeo'
+import { scheduleTelemetryDailyRollup, withUnrolledTelemetryDays } from './telemetryDailyRollup'
 import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
 import {
   MAX_PROVIDER_DURATION_MS,
   MAX_SEARCH_DURATION_MS,
   MAX_SEARCH_RESULT_COUNT,
-  PROVIDER_STATUS_VALUES,
   isPlainObject,
   normalizeNumber,
   normalizeString,
@@ -22,13 +22,12 @@ import {
   type TelemetryEventInput,
 } from './telemetrySanitizer'
 
+export type { TelemetryEventInput } from './telemetrySanitizer'
+
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
 const TELEMETRY_QUARANTINE_TABLE = 'telemetry_events_quarantine'
 const TELEMETRY_BATCH_RECEIPTS_TABLE = 'telemetry_batch_receipts'
-
-const SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS = 300
-const SEARCH_TOTAL_SLOW_THRESHOLD_MS = 800
 
 let telemetrySchemaInitialized = false
 
@@ -55,82 +54,95 @@ async function ensureTelemetrySchema(db: D1Database) {
   if (telemetrySchemaInitialized)
     return
 
-  // Telemetry events table - stores individual events
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TELEMETRY_TABLE} (
-      id TEXT PRIMARY KEY,
-      event_type TEXT NOT NULL,
-      user_id TEXT,
-      client_id TEXT,
-      device_fingerprint TEXT,
-      platform TEXT,
-      version TEXT,
-      region TEXT,
-      country_code TEXT,
-      region_code TEXT,
-      region_name TEXT,
-      city TEXT,
-      latitude REAL,
-      longitude REAL,
-      timezone TEXT,
-      geo_source TEXT,
-      ip TEXT,
-      search_query TEXT,
-      search_duration_ms INTEGER,
-      search_result_count INTEGER,
-      provider_timings TEXT,
-      input_types TEXT,
-      metadata TEXT,
-      is_anonymous INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  // Daily aggregated stats table
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DAILY_STATS_TABLE} (
-      date TEXT NOT NULL,
-      stat_type TEXT NOT NULL,
-      stat_key TEXT NOT NULL DEFAULT '',
-      value INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (date, stat_type, stat_key)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TELEMETRY_QUARANTINE_TABLE} (
-      id TEXT PRIMARY KEY,
-      event_type TEXT,
-      reason TEXT NOT NULL,
-      payload TEXT,
-      ip TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
-      scope TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL,
-      payload_hash TEXT NOT NULL,
-      response_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      PRIMARY KEY (scope, idempotency_key)
-    );
-  `).run()
+  // One round trip for the tables and one for the indexes, instead of one per statement: this
+  // runs on the first telemetry request of every isolate, which on Workers is often.
+  await db.batch([
+    // Telemetry events table - stores individual events
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS ${TELEMETRY_TABLE} (
+        id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        user_id TEXT,
+        client_id TEXT,
+        device_fingerprint TEXT,
+        platform TEXT,
+        version TEXT,
+        region TEXT,
+        country_code TEXT,
+        region_code TEXT,
+        region_name TEXT,
+        city TEXT,
+        latitude REAL,
+        longitude REAL,
+        timezone TEXT,
+        geo_source TEXT,
+        ip TEXT,
+        search_query TEXT,
+        search_duration_ms INTEGER,
+        search_result_count INTEGER,
+        provider_timings TEXT,
+        input_types TEXT,
+        metadata TEXT,
+        is_anonymous INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      );
+    `),
+    // Daily aggregated stats table
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS ${DAILY_STATS_TABLE} (
+        date TEXT NOT NULL,
+        stat_type TEXT NOT NULL,
+        stat_key TEXT NOT NULL DEFAULT '',
+        value INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (date, stat_type, stat_key)
+      );
+    `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS ${TELEMETRY_QUARANTINE_TABLE} (
+        id TEXT PRIMARY KEY,
+        event_type TEXT,
+        reason TEXT NOT NULL,
+        payload TEXT,
+        ip TEXT,
+        created_at TEXT NOT NULL
+      );
+    `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
+        scope TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        payload_hash TEXT NOT NULL,
+        response_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        PRIMARY KEY (scope, idempotency_key)
+      );
+    `),
+  ])
 
   await ensureTelemetryColumns(db)
 
-  // Indexes for efficient queries
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON ${TELEMETRY_TABLE}(created_at);
-  `).run()
+  // Indexes for efficient queries. Each one is another row written for every event, so there is no
+  // `event_type`-only index: every query that filters on the type also bounds `created_at`, which
+  // `idx_telemetry_event_geo` (event_type, created_at, ...) serves.
+  await db.batch([
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON ${TELEMETRY_TABLE}(created_at);
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON ${DAILY_STATS_TABLE}(date);
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_telemetry_quarantine_created_at ON ${TELEMETRY_QUARANTINE_TABLE}(created_at);
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_telemetry_batch_receipts_expires_at
+      ON ${TELEMETRY_BATCH_RECEIPTS_TABLE}(expires_at);
+    `),
+  ])
 
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON ${TELEMETRY_TABLE}(event_type);
-  `).run()
-
+  // These two depend on columns added by `ensureTelemetryColumns`; an older schema that could not
+  // be evolved must not block ingestion, so each stays on its own and may fail quietly.
   try {
     await db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_telemetry_ip_created_at ON ${TELEMETRY_TABLE}(ip, created_at);
@@ -150,20 +162,17 @@ async function ensureTelemetrySchema(db: D1Database) {
     // ignore index creation failures for older schemas
   }
 
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON ${DAILY_STATS_TABLE}(date);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_telemetry_quarantine_created_at ON ${TELEMETRY_QUARANTINE_TABLE}(created_at);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_telemetry_batch_receipts_expires_at
-    ON ${TELEMETRY_BATCH_RECEIPTS_TABLE}(expires_at);
-  `).run()
-
   telemetrySchemaInitialized = true
+}
+
+/** The shape the batch and record routes accept from `X-Idempotency-Key` (or the startup report's metadata). */
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/
+
+export function normalizeTelemetryIdempotencyKey(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return IDEMPOTENCY_KEY_PATTERN.test(trimmed) ? trimmed : null
 }
 
 export function digestTelemetryBatchPayload(payload: unknown): string {
@@ -223,27 +232,28 @@ export async function getTelemetryBatchReceipt<TResponse extends Record<string, 
   }
 }
 
-export async function storeTelemetryBatchReceipt(
-  event: H3Event,
-  input: {
-    scope: string
-    idempotencyKey: string
-    payloadHash: string
-    response: Record<string, unknown>
-    now?: Date
-    retentionDays?: number
-  },
-): Promise<void> {
-  const db = getD1Database(event)
-  if (!db)
-    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+export interface TelemetryBatchReceiptInput {
+  scope: string
+  idempotencyKey: string
+  payloadHash: string
+  response: Record<string, unknown>
+  now?: Date
+  retentionDays?: number
+}
 
-  await ensureTelemetrySchema(db)
-
+/**
+ * The receipt row as a statement, so a route can commit it in the same `db.batch()` as the event
+ * rows it acknowledges. A receipt without its rows, or rows without their receipt, is exactly the
+ * false-success / duplicate-on-retry pair #1788 describes.
+ */
+export function buildTelemetryBatchReceiptStatement(
+  db: D1Database,
+  input: TelemetryBatchReceiptInput,
+): D1PreparedStatement {
   const now = input.now ?? new Date()
   const retentionDays = Number.isFinite(input.retentionDays) ? Math.max(14, Number(input.retentionDays)) : 14
   const expiresAt = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000).toISOString()
-  await db.prepare(`
+  return db.prepare(`
     INSERT INTO ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
       scope, idempotency_key, payload_hash, response_json, created_at, expires_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -255,7 +265,19 @@ export async function storeTelemetryBatchReceipt(
     JSON.stringify(input.response),
     now.toISOString(),
     expiresAt,
-  ).run()
+  )
+}
+
+export async function storeTelemetryBatchReceipt(
+  event: H3Event,
+  input: TelemetryBatchReceiptInput,
+): Promise<void> {
+  const db = getD1Database(event)
+  if (!db)
+    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+
+  await ensureTelemetrySchema(db)
+  await buildTelemetryBatchReceiptStatement(db, input).run()
 }
 
 async function ensureTelemetryColumns(db: D1Database): Promise<void> {
@@ -295,17 +317,17 @@ export interface DailyStats {
   hourlyDistribution: Record<string, number>
 }
 
-async function recordTelemetryQuarantine(
+function buildTelemetryQuarantineStatement(
   db: D1Database,
   payload: TelemetryEventInput,
   reason: string,
   ip?: string,
   eventType?: string,
-): Promise<void> {
+): D1PreparedStatement {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const payloadText = safeStringify(payload)
-  await db.prepare(`
+  return db.prepare(`
     INSERT INTO ${TELEMETRY_QUARANTINE_TABLE} (
       id, event_type, reason, payload, ip, created_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6);
@@ -316,46 +338,140 @@ async function recordTelemetryQuarantine(
     payloadText,
     ip ?? null,
     now,
-  ).run()
+  )
+}
+
+type DailyStatOp = 'inc' | 'max' | 'min'
+
+interface DailyStatDelta {
+  date: string
+  statType: string
+  statKey: string
+  op: DailyStatOp
+  value: number
+}
+
+const DAILY_STAT_UPDATE: Record<DailyStatOp, string> = {
+  inc: 'value = value + ?4',
+  max: 'value = MAX(value, ?4)',
+  min: 'value = MIN(value, ?4)',
 }
 
 /**
- * Record a telemetry event
+ * Everything one request wants written, collected so it can go to D1 as a single `batch()`.
+ *
+ * `db.batch()` runs its statements in one implicit transaction: either every row and counter
+ * lands, or none does. The previous shape ran each statement on its own round trip -- about 90
+ * for a single search event -- so a failure part-way through a batch left some events persisted
+ * with no receipt, and the client's retry (same idempotency key, receipt not found) persisted
+ * them again (#1788).
+ *
+ * Daily counters are merged before they become statements: twenty feature-use events increment
+ * `feature_use` once with +20 rather than twenty times with +1. That is also what keeps the batch
+ * small enough to send as one request.
  */
-export async function recordTelemetryEvent(
-  event: H3Event,
-  telemetry: TelemetryEventInput,
-): Promise<TelemetryRecordResult> {
-  const db = getD1Database(event)
-  if (!db) {
-    if (shouldUseCloudflareBindings())
-      console.warn('Telemetry: Database not available')
-    return { status: 'dropped', reason: 'database_unavailable' }
+export class TelemetryWriteBatch {
+  private readonly rows: D1PreparedStatement[] = []
+  private readonly stats = new Map<string, DailyStatDelta>()
+  readonly governance: RecordPlatformGovernanceEventInput[] = []
+
+  constructor(private readonly db: D1Database) {}
+
+  /** Rows plus one statement per distinct counter: what `toStatements()` will produce. */
+  get size(): number {
+    return this.rows.length + this.stats.size
   }
 
-  await ensureTelemetrySchema(db)
+  add(statement: D1PreparedStatement): void {
+    this.rows.push(statement)
+  }
 
+  inc(date: string, statType: string, statKey: string, increment: number): void {
+    this.merge('inc', date, statType, statKey, increment, (current, next) => current + next)
+  }
+
+  max(date: string, statType: string, statKey: string, value: number): void {
+    this.merge('max', date, statType, statKey, value, Math.max)
+  }
+
+  min(date: string, statType: string, statKey: string, value: number): void {
+    this.merge('min', date, statType, statKey, value, Math.min)
+  }
+
+  toStatements(): D1PreparedStatement[] {
+    const statements = [...this.rows]
+    for (const delta of this.stats.values()) {
+      statements.push(this.db.prepare(`
+        INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET ${DAILY_STAT_UPDATE[delta.op]};
+      `).bind(delta.date, delta.statType, delta.statKey, delta.value))
+    }
+    return statements
+  }
+
+  private merge(
+    op: DailyStatOp,
+    date: string,
+    statType: string,
+    statKey: string,
+    value: number,
+    combine: (current: number, next: number) => number,
+  ): void {
+    const key = `${op}\u0000${date}\u0000${statType}\u0000${statKey}`
+    const current = this.stats.get(key)
+    if (current) {
+      current.value = combine(current.value, value)
+      return
+    }
+    this.stats.set(key, { date, statType, statKey, op, value })
+  }
+}
+
+interface TelemetryRequestContext {
+  ip: string | undefined
+  geo: ReturnType<typeof resolveRequestGeo>
+  now: string
+  today: string
+}
+
+/** Resolved once per request: every event in a batch arrived on the same connection at the same time. */
+function resolveTelemetryRequestContext(event: H3Event): TelemetryRequestContext {
   const now = new Date().toISOString()
-  const today = now.slice(0, 10)
-  const ip = resolveRequestIp(event)
+  return {
+    ip: resolveRequestIp(event) || undefined,
+    geo: resolveRequestGeo(event),
+    now,
+    today: now.slice(0, 10),
+  }
+}
+
+/**
+ * Adds one event's row, counters and governance follow-ups to the batch. Nothing is written here.
+ */
+function planTelemetryEvent(
+  db: D1Database,
+  batch: TelemetryWriteBatch,
+  context: TelemetryRequestContext,
+  telemetry: TelemetryEventInput,
+): TelemetryRecordResult {
+  const { ip, geo, now, today } = context
   const normalized = normalizeTelemetryInput(telemetry)
   if (!normalized.telemetry) {
     const reason = normalized.reason || 'invalid_event'
-    await recordTelemetryQuarantine(db, telemetry, reason, ip)
-    await incrementDailyStat(db, today, 'events_quarantined', reason, 1)
+    batch.add(buildTelemetryQuarantineStatement(db, telemetry, reason, ip))
+    batch.inc(today, 'events_quarantined', reason, 1)
     return { status: 'quarantined', reason }
   }
 
   const id = crypto.randomUUID()
   const safeSearchQuery = undefined
-  const geo = resolveRequestGeo(event)
   const countryCode = geo.countryCode || normalized.telemetry.region || null
   const region = countryCode
   const sanitized = normalized.telemetry
   const actorId = sanitized.userId || sanitized.clientId || sanitized.deviceFingerprint
 
-  // Insert telemetry event
-  await db.prepare(`
+  batch.add(db.prepare(`
     INSERT INTO ${TELEMETRY_TABLE} (
       id, event_type, user_id, client_id, device_fingerprint, platform, version,
       region, country_code, region_code, region_name, city, latitude, longitude, timezone, geo_source,
@@ -391,10 +507,11 @@ export async function recordTelemetryEvent(
     sanitized.metadata ? JSON.stringify(sanitized.metadata) : null,
     sanitized.isAnonymous ? 1 : 0,
     now,
-  ).run()
+  ))
 
-  // Update daily stats
-  await incrementDailyStat(db, today, 'total_events', '', 1)
+  // Visits, searches, performance samples and the day's totals are counted from these rows by the
+  // daily rollup (`telemetryDailyRollup.ts`). Upserting every counter per event cost about 90 D1
+  // writes for one search event, and the free plan stops all writes at 100,000 a day.
 
   if (sanitized.eventType === 'visit') {
     const meta = sanitized.metadata && typeof sanitized.metadata === 'object'
@@ -402,7 +519,7 @@ export async function recordTelemetryEvent(
       : {}
     const visitRoute = normalizeString(meta.route, 180)
     const visitSurface = normalizeString(meta.surface, 80)
-    await recordPlatformGovernanceEvent(event, {
+    batch.governance.push({
       scope: 'app',
       action: 'visit',
       actorId,
@@ -426,14 +543,14 @@ export async function recordTelemetryEvent(
         regionCode: geo.regionCode,
         timezone: geo.timezone,
       },
-    }).catch(() => {})
+    })
   }
 
   if (sanitized.eventType === 'search') {
     const meta = sanitized.metadata && typeof sanitized.metadata === 'object'
       ? sanitized.metadata as Record<string, unknown>
       : {}
-    await recordPlatformGovernanceEvent(event, {
+    batch.governance.push({
       scope: 'app',
       action: 'search',
       actorId,
@@ -482,172 +599,26 @@ export async function recordTelemetryEvent(
         regionCode: geo.regionCode,
         timezone: geo.timezone,
       },
-    }).catch(() => {})
-  }
-
-  if (sanitized.eventType === 'search' || sanitized.eventType === 'visit') {
-    const hour = new Date(now).getUTCHours().toString().padStart(2, '0')
-    await incrementDailyStat(db, today, 'hour', hour, 1)
-  }
-
-  if (sanitized.eventType === 'visit') {
-    await incrementDailyStat(db, today, 'visits', '', 1)
-    const uniqueKey = sanitized.clientId || sanitized.userId || sanitized.deviceFingerprint
-    if (uniqueKey) {
-      await incrementDailyStat(db, today, 'unique_users', uniqueKey, 1)
-    }
-    if (sanitized.platform) {
-      await incrementDailyStat(db, today, 'platform', sanitized.platform, 1)
-    }
-    if (region) {
-      await incrementDailyStat(db, today, 'region', region, 1)
-    }
-    if (sanitized.metadata && typeof sanitized.metadata === 'object') {
-      const meta = sanitized.metadata as Record<string, unknown>
-      if (meta.kind === 'startup') {
-        const mainProcess = meta.mainProcess as { moduleDetails?: Array<{ name?: string, loadTime?: number }> } | undefined
-        const moduleDetails = Array.isArray(mainProcess?.moduleDetails) ? mainProcess?.moduleDetails : []
-        for (const detail of moduleDetails) {
-          const moduleName = typeof detail.name === 'string' ? detail.name : 'unknown'
-          const loadTime = normalizeNumber(detail.loadTime, { min: 0, max: MAX_SEARCH_DURATION_MS }) ?? 0
-          await incrementDailyStat(db, today, 'module_load_total', moduleName, loadTime)
-          await incrementDailyStat(db, today, 'module_load_count', moduleName, 1)
-          await updateDailyStatMax(db, today, 'module_load_max', moduleName, loadTime)
-          await updateDailyStatMin(db, today, 'module_load_min', moduleName, loadTime)
-        }
-      }
-    }
-  }
-
-  if (sanitized.eventType === 'search') {
-    const searchCountry = countryCode || 'Unknown'
-    const searchSubdivision = geo.regionCode || geo.regionName || 'Unknown'
-
-    await incrementDailyStat(db, today, 'searches', '', 1)
-    await incrementDailyStat(db, today, 'search_geo_country', searchCountry, 1)
-    await incrementDailyStat(db, today, 'search_geo_subdivision', `${searchCountry}:${searchSubdivision}`, 1)
-
-    if (typeof sanitized.searchDurationMs === 'number') {
-      await incrementDailyStat(db, today, 'search_duration_total', '', sanitized.searchDurationMs)
-      await updateDailyStatMax(db, today, 'search_duration_max', '', sanitized.searchDurationMs)
-      await updateDailyStatMin(db, today, 'search_duration_min', '', sanitized.searchDurationMs)
-    }
-    if (typeof sanitized.searchResultCount === 'number') {
-      await incrementDailyStat(db, today, 'search_result_total', '', sanitized.searchResultCount)
-      await incrementDailyStat(db, today, 'search_result_count', '', 1)
-    }
-    // Track input types only (search text is never stored)
-    if (Array.isArray(sanitized.inputTypes)) {
-      for (const inputType of sanitized.inputTypes) {
-        await incrementDailyStat(db, today, 'search_input_type', inputType, 1)
-      }
-    }
-    if (sanitized.providerTimings) {
-      for (const [providerId, duration] of Object.entries(sanitized.providerTimings)) {
-        await incrementDailyStat(db, today, 'search_provider', providerId, 1)
-        if (typeof duration === 'number') {
-          await incrementDailyStat(db, today, 'search_provider_time_total', providerId, duration)
-          await incrementDailyStat(db, today, 'search_provider_time_count', providerId, 1)
-          await updateDailyStatMax(db, today, 'search_provider_time_max', providerId, duration)
-          await updateDailyStatMin(db, today, 'search_provider_time_min', providerId, duration)
-        }
-      }
-    }
-    if (sanitized.metadata && typeof sanitized.metadata === 'object') {
-      const meta = sanitized.metadata as Record<string, unknown>
-      const queryLength = normalizeNumber(meta.queryLength, { min: 0, max: 2048 })
-      if (typeof queryLength === 'number') {
-        await incrementDailyStat(db, today, 'search_query_length_total', '', queryLength)
-        await incrementDailyStat(db, today, 'search_query_length_count', '', 1)
-      }
-      const sortingDuration = normalizeNumber(meta.sortingDuration, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof sortingDuration === 'number') {
-        await incrementDailyStat(db, today, 'search_sorting_total', '', sortingDuration)
-        await incrementDailyStat(db, today, 'search_sorting_count', '', 1)
-        await updateDailyStatMax(db, today, 'search_sorting_max', '', sortingDuration)
-        await updateDailyStatMin(db, today, 'search_sorting_min', '', sortingDuration)
-      }
-      if (typeof meta.queryType === 'string') {
-        await incrementDailyStat(db, today, 'search_query_type', meta.queryType, 1)
-      }
-      if (typeof meta.searchScene === 'string') {
-        await incrementDailyStat(db, today, 'search_scene', meta.searchScene, 1)
-      }
-      if (typeof meta.providerFilter === 'string') {
-        await incrementDailyStat(db, today, 'search_provider_filter', meta.providerFilter, 1)
-      }
-      if (meta.resultCategories && typeof meta.resultCategories === 'object') {
-        for (const [key, value] of Object.entries(meta.resultCategories as Record<string, unknown>)) {
-          const normalizedValue = normalizeNumber(value, { min: 0, max: MAX_SEARCH_RESULT_COUNT })
-          if (typeof normalizedValue === 'number') {
-            await incrementDailyStat(db, today, 'search_result_category', key, normalizedValue)
-          }
-        }
-      }
-      if (meta.providerResults && typeof meta.providerResults === 'object') {
-        for (const [key, value] of Object.entries(meta.providerResults as Record<string, unknown>)) {
-          const normalizedValue = normalizeNumber(value, { min: 0, max: MAX_SEARCH_RESULT_COUNT })
-          if (typeof normalizedValue === 'number') {
-            await incrementDailyStat(db, today, 'search_provider_result', key, normalizedValue)
-          }
-        }
-      }
-      if (meta.providerStatus && typeof meta.providerStatus === 'object') {
-        for (const [key, value] of Object.entries(meta.providerStatus as Record<string, unknown>)) {
-          const status = normalizeString(value, 16)
-          if (status && PROVIDER_STATUS_VALUES.has(status)) {
-            await incrementDailyStat(db, today, 'search_provider_status', `${key}:${status}`, 1)
-            if (status === 'error') {
-              await incrementDailyStat(db, today, 'search_provider_error', key, 1)
-            }
-            if (status === 'timeout') {
-              await incrementDailyStat(db, today, 'search_provider_timeout', key, 1)
-            }
-          }
-        }
-      }
-      const firstResultMs = normalizeNumber(meta.firstResultMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof firstResultMs === 'number') {
-        await incrementDailyStat(db, today, 'search_first_result_total', '', firstResultMs)
-        await incrementDailyStat(db, today, 'search_first_result_count', '', 1)
-        await updateDailyStatMax(db, today, 'search_first_result_max', '', firstResultMs)
-        await updateDailyStatMin(db, today, 'search_first_result_min', '', firstResultMs)
-      }
-      const slowByFirstResult =
-        typeof firstResultMs === 'number' && firstResultMs > SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS
-      const slowByTotal =
-        typeof sanitized.searchDurationMs === 'number' &&
-        sanitized.searchDurationMs > SEARCH_TOTAL_SLOW_THRESHOLD_MS
-      if (slowByFirstResult || slowByTotal) {
-        await incrementDailyStat(db, today, 'search_slow_count', '', 1)
-        if (sanitized.providerTimings) {
-          for (const [providerId, duration] of Object.entries(sanitized.providerTimings)) {
-            if (duration > SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS) {
-              await incrementDailyStat(db, today, 'search_provider_slow', providerId, 1)
-            }
-          }
-        }
-      }
-    }
+    })
   }
 
   if (sanitized.eventType === 'feature_use') {
-    await incrementDailyStat(db, today, 'feature_use', '', 1)
+    batch.inc(today, 'feature_use', '', 1)
     if (sanitized.metadata && typeof sanitized.metadata === 'object') {
       const meta = sanitized.metadata as Record<string, unknown>
       if (typeof meta.sourceType === 'string') {
-        await incrementDailyStat(db, today, 'feature_use_source_type', meta.sourceType, 1)
+        batch.inc(today, 'feature_use_source_type', meta.sourceType, 1)
       }
       if (typeof meta.itemKind === 'string') {
-        await incrementDailyStat(db, today, 'feature_use_item_kind', meta.itemKind, 1)
+        batch.inc(today, 'feature_use_item_kind', meta.itemKind, 1)
       }
       if (typeof meta.pluginName === 'string') {
-        await incrementDailyStat(db, today, 'feature_use_plugin', meta.pluginName, 1)
+        batch.inc(today, 'feature_use_plugin', meta.pluginName, 1)
       }
       const pluginId = normalizeString(meta.pluginId, 128)
       const pluginName = normalizeString(meta.pluginName, 128)
       if (pluginId || pluginName) {
-        await recordPlatformGovernanceEvent(event, {
+        batch.governance.push({
           scope: 'plugin',
           action: 'invoke',
           actorId: sanitized.userId || sanitized.clientId || sanitized.deviceFingerprint,
@@ -663,7 +634,7 @@ export async function recordTelemetryEvent(
             sourceType: normalizeString(meta.sourceType, 64) ?? null,
             countryCode,
           },
-        }).catch(() => {})
+        })
       }
       if (meta.sourceType === 'update') {
         const updateAction = normalizeString(meta.action, 64)
@@ -679,139 +650,120 @@ export async function recordTelemetryEvent(
           }
         }
         if (updateAction) {
-          await incrementDailyStat(db, today, 'update_action', updateAction, 1)
+          batch.inc(today, 'update_action', updateAction, 1)
         }
         if (updateStage) {
-          await incrementDailyStat(db, today, 'update_stage', updateStage, 1)
+          batch.inc(today, 'update_stage', updateStage, 1)
         }
         if (updateResult) {
-          await incrementDailyStat(db, today, 'update_result', updateResult, 1)
+          batch.inc(today, 'update_result', updateResult, 1)
         }
         const updateChannel = normalizeString(meta.sourceId, 64)
         if (updateChannel) {
-          await incrementDailyStat(db, today, 'update_channel', updateChannel, 1)
+          batch.inc(today, 'update_channel', updateChannel, 1)
         }
         const updateSource = normalizeString(meta.sourceName, 64)
         if (updateSource) {
-          await incrementDailyStat(db, today, 'update_source', updateSource, 1)
+          batch.inc(today, 'update_source', updateSource, 1)
         }
         const updateTag = normalizeString(meta.sourceVersion, 64)
         if (updateTag) {
-          await incrementDailyStat(db, today, 'update_tag', updateTag, 1)
+          batch.inc(today, 'update_tag', updateTag, 1)
         }
         const updateItemKind = normalizeString(meta.itemKind, 32)
         if (updateItemKind) {
-          await incrementDailyStat(db, today, 'update_item_kind', updateItemKind, 1)
+          batch.inc(today, 'update_item_kind', updateItemKind, 1)
         }
       }
       const categoryL1 = normalizeUsageCategoryPart(meta.usageCategoryL1) || 'others'
       const categoryL2 = normalizeUsageCategoryPart(meta.usageCategoryL2) || 'others'
-      await incrementDailyStat(db, today, 'feature_use_category', `${categoryL1}:${categoryL2}`, 1)
+      batch.inc(today, 'feature_use_category', `${categoryL1}:${categoryL2}`, 1)
       const executeLatencyMs = normalizeNumber(meta.executeLatencyMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
       if (typeof executeLatencyMs === 'number') {
-        await incrementDailyStat(db, today, 'execute_latency_total', '', executeLatencyMs)
-        await incrementDailyStat(db, today, 'execute_latency_count', '', 1)
-        await updateDailyStatMax(db, today, 'execute_latency_max', '', executeLatencyMs)
-        await updateDailyStatMin(db, today, 'execute_latency_min', '', executeLatencyMs)
+        batch.inc(today, 'execute_latency_total', '', executeLatencyMs)
+        batch.inc(today, 'execute_latency_count', '', 1)
+        batch.max(today, 'execute_latency_max', '', executeLatencyMs)
+        batch.min(today, 'execute_latency_min', '', executeLatencyMs)
       }
     }
   }
 
-  if (sanitized.eventType === 'performance') {
-    if (sanitized.metadata && typeof sanitized.metadata === 'object') {
-      const meta = sanitized.metadata as Record<string, unknown>
-      const longTaskTotalMs = normalizeNumber(meta.longTaskTotalMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof longTaskTotalMs === 'number') {
-        await incrementDailyStat(db, today, 'perf_longtask_total_ms', '', longTaskTotalMs)
-      }
-      const longTaskCount = normalizeNumber(meta.longTaskCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT })
-      if (typeof longTaskCount === 'number') {
-        await incrementDailyStat(db, today, 'perf_longtask_count', '', longTaskCount)
-      }
-      const longTaskMaxMs = normalizeNumber(meta.longTaskMaxMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof longTaskMaxMs === 'number') {
-        await updateDailyStatMax(db, today, 'perf_longtask_max_ms', '', longTaskMaxMs)
-      }
-      const rafJankTotalMs = normalizeNumber(meta.rafJankTotalMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof rafJankTotalMs === 'number') {
-        await incrementDailyStat(db, today, 'perf_raf_jank_total_ms', '', rafJankTotalMs)
-      }
-      const rafJankCount = normalizeNumber(meta.rafJankCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT })
-      if (typeof rafJankCount === 'number') {
-        await incrementDailyStat(db, today, 'perf_raf_jank_count', '', rafJankCount)
-      }
-      const rafJankMaxMs = normalizeNumber(meta.rafJankMaxMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof rafJankMaxMs === 'number') {
-        await updateDailyStatMax(db, today, 'perf_raf_jank_max_ms', '', rafJankMaxMs)
-      }
-      const eventLoopDelayP95Ms = normalizeNumber(meta.eventLoopDelayP95Ms, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof eventLoopDelayP95Ms === 'number') {
-        await incrementDailyStat(db, today, 'perf_event_loop_delay_p95_total_ms', '', eventLoopDelayP95Ms)
-        await incrementDailyStat(db, today, 'perf_event_loop_delay_p95_count', '', 1)
-      }
-      const eventLoopDelayMaxMs = normalizeNumber(meta.eventLoopDelayMaxMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof eventLoopDelayMaxMs === 'number') {
-        await updateDailyStatMax(db, today, 'perf_event_loop_delay_max_ms', '', eventLoopDelayMaxMs)
-      }
-      const unresponsiveTotalMs = normalizeNumber(meta.unresponsiveTotalMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof unresponsiveTotalMs === 'number') {
-        await incrementDailyStat(db, today, 'perf_unresponsive_total_ms', '', unresponsiveTotalMs)
-      }
-      const unresponsiveCount = normalizeNumber(meta.unresponsiveCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT })
-      if (typeof unresponsiveCount === 'number') {
-        await incrementDailyStat(db, today, 'perf_unresponsive_count', '', unresponsiveCount)
-      }
-      const unresponsiveMaxMs = normalizeNumber(meta.unresponsiveMaxMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
-      if (typeof unresponsiveMaxMs === 'number') {
-        await updateDailyStatMax(db, today, 'perf_unresponsive_max_ms', '', unresponsiveMaxMs)
-      }
-    }
-  }
-
-  scheduleTelemetryRetentionMaintenance(event, db)
   return { status: 'accepted' }
 }
 
-async function incrementDailyStat(
-  db: D1Database,
-  date: string,
-  statType: string,
-  statKey: string,
-  increment: number,
-): Promise<void> {
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    VALUES (?1, ?2, ?3, ?4)
-    ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET value = value + ?4;
-  `).bind(date, statType, statKey, increment).run()
+export interface PreparedTelemetryWrite {
+  /** `null` when no D1 binding is available; every result is then `dropped`. */
+  db: D1Database | null
+  batch: TelemetryWriteBatch | null
+  results: TelemetryRecordResult[]
 }
 
-async function updateDailyStatMax(
-  db: D1Database,
-  date: string,
-  statType: string,
-  statKey: string,
-  value: number,
-): Promise<void> {
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    VALUES (?1, ?2, ?3, ?4)
-    ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET value = MAX(value, ?4);
-  `).bind(date, statType, statKey, value).run()
+/**
+ * Plans every event of one request without writing anything, so the caller can decide the
+ * acknowledgement first and commit rows, counters and that acknowledgement's receipt together.
+ */
+export async function prepareTelemetryWrite(
+  event: H3Event,
+  inputs: TelemetryEventInput[],
+): Promise<PreparedTelemetryWrite> {
+  const db = getD1Database(event)
+  if (!db) {
+    if (shouldUseCloudflareBindings())
+      console.warn('Telemetry: Database not available')
+    return {
+      db: null,
+      batch: null,
+      results: inputs.map(() => ({ status: 'dropped', reason: 'database_unavailable' })),
+    }
+  }
+
+  await ensureTelemetrySchema(db)
+
+  const context = resolveTelemetryRequestContext(event)
+  const batch = new TelemetryWriteBatch(db)
+  const results = inputs.map(input => planTelemetryEvent(db, batch, context, input))
+  return { db, batch, results }
 }
 
-async function updateDailyStatMin(
-  db: D1Database,
-  date: string,
-  statType: string,
-  statKey: string,
-  value: number,
+export interface CommitTelemetryWriteOptions {
+  /** Appended after the telemetry rows and counters, inside the same transaction (the receipt). */
+  extraStatements?: D1PreparedStatement[]
+}
+
+/**
+ * One `db.batch()` for the whole request; governance follow-ups and retention maintenance run
+ * only after it committed, so they never describe rows that did not land.
+ */
+export async function commitTelemetryWrite(
+  event: H3Event,
+  prepared: { db: D1Database, batch: TelemetryWriteBatch },
+  options: CommitTelemetryWriteOptions = {},
 ): Promise<void> {
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    VALUES (?1, ?2, ?3, ?4)
-    ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET value = MIN(value, ?4);
-  `).bind(date, statType, statKey, value).run()
+  const statements = [...prepared.batch.toStatements(), ...(options.extraStatements ?? [])]
+  if (statements.length > 0)
+    await prepared.db.batch(statements)
+
+  for (const input of prepared.batch.governance) {
+    await recordPlatformGovernanceEvent(event, input).catch(() => {})
+  }
+
+  scheduleTelemetryRetentionMaintenance(event, prepared.db)
+  scheduleTelemetryDailyRollup(event, prepared.db)
+}
+
+/**
+ * Record a telemetry event
+ */
+export async function recordTelemetryEvent(
+  event: H3Event,
+  telemetry: TelemetryEventInput,
+): Promise<TelemetryRecordResult> {
+  const prepared = await prepareTelemetryWrite(event, [telemetry])
+  const result = prepared.results[0] ?? { status: 'dropped', reason: 'database_unavailable' }
+  if (!prepared.db || !prepared.batch)
+    return result
+  await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch })
+  return result
 }
 
 function percentile(values: number[], ratio: number): number {
@@ -954,15 +906,16 @@ export async function getAnalyticsSummary(
   const days = options.days || 30
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
-  const startDateStr = startDate.toISOString().split('T')[0]
+  const startDateStr = startDate.toISOString().slice(0, 10)
 
   // Get daily stats
-  const { results: dailyResults } = await db.prepare(`
+  const { results: storedDailyResults } = await db.prepare(`
     SELECT date, stat_type, stat_key, value
     FROM ${DAILY_STATS_TABLE}
     WHERE date >= ?1
     ORDER BY date DESC;
   `).bind(startDateStr).all<{ date: string, stat_type: string, stat_key: string, value: number }>()
+  const dailyResults = await withUnrolledTelemetryDays(db, storedDailyResults ?? [], { from: startDateStr })
 
   // Aggregate stats
   const dailyMap = new Map<string, { visits: number, searches: number, durationTotal: number }>()
@@ -1023,7 +976,7 @@ export async function getAnalyticsSummary(
   let perfUnresponsiveCount = 0
   let perfUnresponsiveMaxMs = 0
 
-  for (const row of dailyResults ?? []) {
+  for (const row of dailyResults) {
     if (!dailyMap.has(row.date)) {
       dailyMap.set(row.date, { visits: 0, searches: 0, durationTotal: 0 })
     }

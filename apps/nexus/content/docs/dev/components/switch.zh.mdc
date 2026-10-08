@@ -1,6 +1,6 @@
 ---
 title: Switch 开关
-description: 轻触反馈与状态切换
+description: 在开与关两种状态间切换的控件
 category: Form
 status: beta
 since: 0.3.4
@@ -26,311 +26,166 @@ code: |
 ---
 :::
 
-### Toggle State
-点击或使用 Enter / Space 可切换状态，位移与颜色同步变化。
+### 切换状态
+点击、Enter 或 Space 切换。
 :::TuffDemoWrapper{demo="SwitchToggleStateDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const firstSwitch = ref(false)
-  const secondSwitch = ref(true)
-  </script>
-
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 12px;">
-      <TuffSwitch v-model="firstSwitch" />
-      <TuffSwitch v-model="secondSwitch" />
-    </div>
+    <TuffSwitch v-model="first" />
+    <TuffSwitch v-model="second" />
   </template>
 ---
 :::
 
-### 不同大小
-小尺寸适合密集列表，默认尺寸适合表单，大尺寸适合突出设置项。尺寸同时决定 label 字号与轨道间距。
+### 尺寸
+`size` 同时决定文案字号与间距。
 :::TuffDemoWrapper{demo="SwitchSizesDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const smallEnabled = ref(true)
-  const defaultEnabled = ref(true)
-  const largeEnabled = ref(true)
-  </script>
-
   <template>
-    <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch v-model="smallEnabled" label="小尺寸" size="small" />
-      <TuffSwitch v-model="defaultEnabled" label="默认尺寸" />
-      <TuffSwitch v-model="largeEnabled" label="大尺寸" size="large" />
-    </div>
+    <TuffSwitch v-model="enabled" label="小尺寸" size="small" />
+    <TuffSwitch v-model="enabled" label="默认尺寸" />
+    <TuffSwitch v-model="enabled" label="大尺寸" size="large" />
   </template>
 ---
 :::
 
-### 禁用效果
-禁用态会降低透明度、移除聚焦，并阻止点击与键盘切换。
+### 禁用
 :::TuffDemoWrapper{demo="SwitchDisabledDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const enabled = ref(true)
-  const disabledOff = ref(false)
-  const disabledOn = ref(true)
-  </script>
-
   <template>
-    <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch v-model="enabled" label="可操作" />
-      <TuffSwitch v-model="disabledOff" label="禁用 / 关闭" disabled />
-      <TuffSwitch v-model="disabledOn" label="禁用 / 开启" disabled />
-    </div>
+    <TuffSwitch v-model="off" label="禁用 / 关闭" disabled />
+    <TuffSwitch v-model="on" label="禁用 / 开启" disabled />
   </template>
 ---
 :::
 
 ### 加载中
-`loading` 用于开关值需要等待服务端确认的场景：滑块保持在当前一侧并变成旋转环，同时屏蔽点击与键盘切换。
+等待服务端确认时设置 `loading`：滑块停在原值并变为旋转环，期间不可切换。
 :::TuffDemoWrapper{demo="SwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const asyncEnabled = ref(false)
+  const enabled = ref(false)
   const committing = ref(false)
-  const loadingOff = ref(false)
-  const loadingOn = ref(true)
 
-  function commit(next: boolean) {
+  async function commit(next: boolean) {
     committing.value = true
-    setTimeout(() => {
-      asyncEnabled.value = next
+    try {
+      await save(next)
+      enabled.value = next
+    }
+    finally {
       committing.value = false
-    }, 1200)
+    }
   }
   </script>
 
   <template>
-    <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch :model-value="asyncEnabled" :loading="committing" label="异步提交" @change="commit" />
-      <TuffSwitch v-model="loadingOff" label="加载中 / 关闭" loading />
-      <TuffSwitch v-model="loadingOn" label="加载中 / 开启" loading />
-    </div>
+    <TuffSwitch :model-value="enabled" :loading="committing" label="异步提交" @change="commit" />
   </template>
 ---
 :::
 
-### 前后 Label
-`label` 渲染在轨道旁边，`labelPlacement` 决定在前还是在后。文案变化时由内置的 `TxTextTransformer` 做模糊交叉淡入，不会硬切；默认插槽接受任意节点，按原样渲染、不参与动效。
+### 文案
+`label` 变化时交叉淡入，`labelPlacement` 决定文案在前或在后。默认插槽原样渲染，不带过渡。
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const compact = ref(false)
-  const telemetry = ref(false)
-  const autoSync = ref(true)
-  </script>
-
   <template>
-    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 18px;">
-      <TuffSwitch v-model="compact" label="紧凑模式" />
-      <TuffSwitch v-model="telemetry" label="匿名统计" label-placement="start" />
-
-      <!-- 文案随值翻转：内置 transformer 负责交叉淡入 -->
-      <TuffSwitch v-model="autoSync" :label="autoSync ? '开' : '关'" />
-
-      <!-- 插槽接受任意节点，原样渲染 -->
-      <TuffSwitch v-model="autoSync">
-        <strong>自动同步</strong>
-      </TuffSwitch>
-    </div>
+    <TuffSwitch v-model="compact" label="紧凑模式" />
+    <TuffSwitch v-model="telemetry" label="匿名统计" label-placement="start" />
+    <TuffSwitch v-model="autoSync" :label="autoSync ? '开' : '关'" />
+    <TuffSwitch v-model="autoSync">
+      <strong>自动同步</strong>
+    </TuffSwitch>
   </template>
 ---
 :::
 
 ### 自定义颜色
-覆盖 `--tuff-switch-active-color`（以及 `--tuff-switch-track-color` / `--tuff-switch-thumb-color`）即可换色。轨道视觉在 `.tuff-switch__track` 上，覆盖根节点的 `background-color` 不再生效。
+覆盖 `--tuff-switch-active-color`、`--tuff-switch-track-color` 或 `--tuff-switch-thumb-color`。
 :::TuffDemoWrapper{demo="SwitchCustomColorDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const success = ref(true)
-  const warning = ref(true)
-  const violet = ref(false)
-  </script>
-
   <template>
-    <div class="switch-custom-color-demo">
-      <label class="switch-custom-color-demo__item is-success">
-        <span>成功色</span>
-        <TuffSwitch v-model="success" />
-      </label>
-      <label class="switch-custom-color-demo__item is-warning">
-        <span>警告色</span>
-        <TuffSwitch v-model="warning" />
-      </label>
-      <label class="switch-custom-color-demo__item is-violet">
-        <span>紫色</span>
-        <TuffSwitch v-model="violet" />
-      </label>
-    </div>
+    <TuffSwitch v-model="enabled" class="success-switch" />
   </template>
 
   <style scoped>
-  .switch-custom-color-demo {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .switch-custom-color-demo__item {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--switch-demo-color);
-  }
-
-  .switch-custom-color-demo__item :deep(.tuff-switch) {
-    --tuff-switch-active-color: var(--switch-demo-color);
-  }
-
-  .switch-custom-color-demo__item.is-success {
-    --switch-demo-color: var(--tx-color-success);
-  }
-
-  .switch-custom-color-demo__item.is-warning {
-    --switch-demo-color: var(--tx-color-warning);
-  }
-
-  .switch-custom-color-demo__item.is-violet {
-    --switch-demo-color: #8b5cf6;
+  .success-switch {
+    --tuff-switch-active-color: var(--tx-color-success);
   }
   </style>
 ---
 :::
 
 ### 设置项
-开关搭配标签、说明文案和状态文本，用于设置列表。状态文本在组件外部时，用 `TxTextTransformer` 保持同一套文字过渡。
+状态文本放在开关外部时，用 `TxTextTransformer` 获得同样的文字过渡。
 ::::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { reactive } from 'vue'
-
-  const settings = reactive({
-    notifications: true,
-    focusMode: false,
-    autoUpdate: true,
-  })
-  </script>
-
   <template>
-    <div class="settings-panel">
-      <div class="settings-row">
-        <div>
-          <TxTag label="通知" />
-          <p>接收系统和插件的重要提醒。</p>
-        </div>
-        <div class="settings-state">
-          <TxTextTransformer :text="settings.notifications ? '已开启' : '已关闭'" />
-          <TuffSwitch v-model="settings.notifications" />
-        </div>
+    <div class="settings-row">
+      <div>
+        <TxTag label="通知" />
+        <p>接收系统和插件的重要提醒。</p>
       </div>
-      <div class="settings-row">
-        <div>
-          <TxTag label="专注模式" color="var(--tx-color-warning)" />
-          <p>隐藏非必要提示，减少打断。</p>
-        </div>
-        <TuffSwitch v-model="settings.focusMode" />
-      </div>
+      <TxTextTransformer :text="notifications ? '已开启' : '已关闭'" />
+      <TuffSwitch v-model="notifications" />
     </div>
   </template>
-
-  <style scoped>
-  .settings-panel {
-    display: flex;
-    flex-direction: column;
-    width: min(100%, 560px);
-  }
-
-  .settings-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-  </style>
 ---
 ::::
 
 ### 最佳实践
 
-- Switch 用于即时生效的布尔设置；表单提交项或多选组优先使用 Checkbox。
-- 切换需要等待服务端确认时用 `loading` 补上这个「不即时」的空档，别让开关先跳到新值再跳回来。
-- `loading` 期间不要抢先写回 `modelValue`；让滑块停在旧值上，提交成功后再更新，失败则直接撤下 loading，状态自然回到原位。
-- 用 `label` 提供可读文案，而不是在外面手写一个 `<span>`——内置路径自带文字过渡与 `aria-label` 抑制。
-- `label` 放控件的**名称**（「紧凑模式」）。状态文本（「已开启」）放外面并用 `TxTextTransformer`：`TxTextTransformer` 自带 `aria-live="polite"`，放进 label 会让每次切换被朗读两遍。
-- 标签与开关保持垂直居中，密集设置行也要保留足够点击区域。
-- 自定义颜色覆盖 `--tuff-switch-active-color` 等变量，不要去改 `.tuff-switch__track` 的具体规则，以保留禁用、焦点与尺寸样式。
+- 即时生效的布尔设置用 Switch；随表单提交的选项用 Checkbox。
+- 需要服务端确认时设置 `loading`，成功后再写回 `modelValue`；失败时只撤下 `loading`。
+- `label` 写控件名称（「紧凑模式」）。「已开启」这类状态文本放在外部，用 `TxTextTransformer` 渲染，避免被朗读两次。
+- 换色只覆盖 CSS 变量，不改写 `.tuff-switch__track` 的样式规则。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `modelValue` | `boolean` | `false` | 由 `v-model` 控制的开关状态。 |
-| `label` | `string` | - | 轨道旁的可见文案。变化时经由内置 `TxTextTransformer` 交叉淡入；存在时会添加 `has-label` 并抑制 `aria-label`。 |
-| `labelPlacement` | `'start' \| 'end'` | `'end'` | label 位于轨道前还是后。无 label 时无效。 |
-| `size` | `'small' \| 'default' \| 'large'` | `'default'` | 视觉尺寸，同时决定 label 字号与轨道间距。默认尺寸不添加额外 modifier class。 |
-| `disabled` | `boolean` | `false` | 移除可聚焦能力，并阻止点击、Enter、Space 切换。 |
-| `loading` | `boolean` | `false` | 异步提交中：滑块变为旋转环，添加 `is-loading` 与 `aria-busy="true"`，并阻止切换。 |
+| `modelValue` | `boolean` | `false` | 开关状态，配合 `v-model` 使用。 |
+| `label` | `string` | - | 轨道旁的文案，变化时交叉淡入。 |
+| `labelPlacement` | `'start' \| 'end'` | `'end'` | 文案在轨道前或后。 |
+| `size` | `'small' \| 'default' \| 'large'` | `'default'` | 尺寸，同时影响文案字号与间距。 |
+| `disabled` | `boolean` | `false` | 禁止切换，并移出 Tab 序列。 |
+| `loading` | `boolean` | `false` | 显示旋转环并禁止切换。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value: boolean) => void` | 启用状态下点击、Enter 或 Space 后，携带下一个开关值触发。 |
-| `change` | `(value: boolean) => void` | 启用状态下用户切换后，携带同一个下一个开关值触发。 |
+| `update:modelValue` | `(value: boolean) => void` | 用户切换后触发，参数为新值。 |
+| `change` | `(value: boolean) => void` | 与 `update:modelValue` 同时触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|-------|------|
-| `default` | - | 自定义可见文案，优先于 `label`。接受任意节点，因此**不走**文字过渡；需要动效就用 `label`。 |
+| `default` | - | 自定义文案，优先于 `label`；原样渲染，不带过渡。 |
 
 ## 概述
 
-- 根节点是原生 `<button>`，渲染 `role="switch"`、`aria-checked`、`aria-disabled`；不设置 `tabindex`——可聚焦性由按钮元素自身提供。
-- `disabled=true` 时设置原生 `disabled`（因而移出 Tab 序列）、添加 `is-disabled`，并阻止点击、Enter、Space 触发事件。
-- `loading=true` 与 `disabled` 一样设置原生 `disabled` 并阻止事件，但添加的是 `is-loading` 而非 `is-disabled`：不套用禁用态的降透明度，另外渲染 `aria-busy="true"`。两者同时为 true 时两个 class 都会出现。
-- 启用切换会同时触发 `update:modelValue` 与 `change`；组件不会在宿主未处理 `v-model` 更新时自行修改外部状态。
-- 根节点是 flex 容器，轨道在子节点 `.tuff-switch__track` 上，滑块在 `.tuff-switch__thumb`。状态 class（`is-active` / `is-disabled` / `is-loading` / `has-label`）仍然全部挂在根节点。
-- `label` 或默认插槽存在时添加 `has-label`，并且不再渲染 `aria-label`——可见文案已经是可访问名称，再叠一个 `aria-label` 会盖掉语音控制用户实际读到的文字。
-- `size="small"` 与 `size="large"` 会添加尺寸 modifier；`size="default"` 只保留基础 class。
+- 根节点是原生 `<button role="switch">`，带 `aria-checked`。
+- 受控组件：切换只派发事件，父级回写 `modelValue` 后外观才更新。
+- `disabled` 与 `loading` 都设置原生 `disabled`；`loading` 不降低透明度，并设置 `aria-busy="true"`。
+- 有可见文案（`label` 或插槽）时不渲染 `aria-label`。
+- 减少动态效果时，加载环停止旋转。
 
 ## 技术实现
 
-- **Model contract:** `TxSwitch` 由 `modelValue` 控制。用户交互会同时派发 `update:modelValue` 与 `change`，参数为下一个 boolean；视觉状态在父级回写新 prop 后更新。
-- **键盘契约:** 启用状态响应点击、Enter 与 Space（原生按钮语义）。禁用状态由原生 `disabled` 移出 Tab 序列，保持 `aria-disabled="true"`，且不派发事件。
-- **加载契约:** `loading` 是纯视觉与阻断状态，组件不持有异步逻辑。滑块位置仍由 `modelValue` 决定，因此加载中的环停在旧值一侧，表示这一次切换尚未落地。
-- **动效降级:** 环形指示器在 `prefers-reduced-motion: reduce` 下停止旋转；缺口边框本身是静态字形，提示不会消失。
-- **Class 契约变更（2026-08-31）:** 轨道视觉从根节点下沉到 `.tuff-switch__track`，`.tuff-switch.is-active { background-color }` 这条曾被本页推荐的覆盖写法**不再生效**，改用 `--tuff-switch-active-color`。根节点的 class、`closest('.tuff-switch')` 命中与所有事件契约不变。
-- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断、加载中阻断与 `aria-busy` 生命周期，以及 label 结构：无 label 时不渲染 `__label`、`label` 走 `TxTextTransformer`、插槽绕过 transformer、`labelPlacement` 的前后顺序、有可见文案时 `aria-label` 消失；并断言两种状态下均不渲染 `tabindex`。
-
-- Component source: `packages/tuffex/packages/components/src/switch/src/TxSwitch.vue`。
-- Style source: `packages/tuffex/packages/components/src/switch/style/index.scss`。
-- Export entry: `packages/tuffex/packages/components/src/switch/index.ts` 导出 `TuffSwitch`，别名 `TxSwitch`，并使用组件自身的 `TuffSwitch` name 注册。
-- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` 验证语义、尺寸 class、点击更新与禁用行为。
+- 状态类 `is-active`、`is-disabled`、`is-loading`、`has-label` 挂在根节点；轨道与滑块是 `.tuff-switch__track`、`.tuff-switch__thumb`。
+- 源码：`packages/tuffex/packages/components/src/switch/`。
 
 <TuffDocSourceLink />

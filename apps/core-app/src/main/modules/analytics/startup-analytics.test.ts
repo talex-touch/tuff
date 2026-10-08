@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StartupMetrics } from './types'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 
@@ -391,5 +391,224 @@ describe('StartupAnalytics outbox flush budget', () => {
       ([file]) => file === REPORT_QUEUE_FILE
     )?.[1] as unknown[] | undefined
     expect(saved).toHaveLength(8)
+  })
+})
+
+describe('StartupAnalytics telemetry consent', () => {
+  const historyDocument = () => ({ entries: [], maxEntries: 10, lastUpdated: Date.now() })
+  let consentEnabled = true
+
+  beforeEach(() => {
+    consentEnabled = true
+    getMainConfigMock.mockImplementation((file) =>
+      file === StorageList.SENTRY_CONFIG ? { enabled: consentEnabled } : historyDocument()
+    )
+  })
+
+  afterEach(() => {
+    getMainConfigMock.mockImplementation(() => historyDocument())
+    vi.clearAllMocks()
+  })
+
+  function makeAnalytics() {
+    const analytics = new StartupAnalytics({ enabled: true, maxHistory: 5 })
+    ;(analytics as unknown as { currentMetrics: StartupMetrics }).currentMetrics = makeMetrics({
+      sessionId: 'consent',
+      totalStartupTime: 1000,
+      modulesLoadTime: 400,
+      rendererStart: 10,
+      rendererReady: 210,
+      moduleDetails: [{ name: 'module-a', loadTime: 100, order: 0 }]
+    })
+    vi.spyOn(analytics, 'getHistory').mockReturnValue(historyDocument())
+    const ensureOutboxFlushTask = vi.fn()
+    ;(
+      analytics as unknown as { ensureOutboxFlushTask: (endpoint: string) => void }
+    ).ensureOutboxFlushTask = ensureOutboxFlushTask
+    return { analytics, ensureOutboxFlushTask }
+  }
+
+  it('does not queue a startup report while telemetry upload is switched off', async () => {
+    consentEnabled = false
+    const { analytics, ensureOutboxFlushTask } = makeAnalytics()
+
+    await analytics.reportMetrics('http://example.test')
+
+    const queued = saveMainConfigMock.mock.calls.find(
+      ([key]) => key === StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
+    )
+    expect(queued).toBeUndefined()
+    expect(ensureOutboxFlushTask).not.toHaveBeenCalled()
+    expect(getMainConfigMock).toHaveBeenCalledWith(StorageList.SENTRY_CONFIG)
+  })
+
+  it('still queues the report while the switch is on (positive control)', async () => {
+    const { analytics, ensureOutboxFlushTask } = makeAnalytics()
+
+    await analytics.reportMetrics('http://example.test')
+
+    const queued = saveMainConfigMock.mock.calls.find(
+      ([key]) => key === StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
+    )
+    expect(queued).toBeDefined()
+    expect(ensureOutboxFlushTask).toHaveBeenCalledWith('http://example.test')
+  })
+
+  it('discards queued startup reports instead of uploading them once the switch is off', async () => {
+    consentEnabled = false
+    const { analytics } = makeAnalytics()
+    const list = vi.fn(async () => [
+      {
+        id: 7,
+        endpoint: 'http://example.test/api/telemetry/record',
+        payload: { eventType: 'visit', metadata: { kind: 'startup' } },
+        createdAt: Date.now(),
+        retryCount: 32,
+        lastError: null
+      },
+      {
+        id: 8,
+        endpoint: 'http://example.test/api/telemetry/batch',
+        payload: { metadata: { kind: 'sentry.nexus.batch' }, events: [] },
+        createdAt: Date.now(),
+        retryCount: 0,
+        lastError: null
+      }
+    ])
+    const remove = vi.fn(async () => {})
+    ;(analytics as unknown as { getReportQueueStore: () => unknown }).getReportQueueStore = () => ({
+      list,
+      remove,
+      markAttempt: vi.fn(),
+      prune: vi.fn()
+    })
+
+    await (
+      analytics as unknown as { flushQueuedReports: (endpoint: string) => Promise<void> }
+    ).flushQueuedReports('http://example.test/api/telemetry/record')
+
+    expect(networkRequestMock).not.toHaveBeenCalled()
+    expect(remove).toHaveBeenCalledWith(7)
+    // The Sentry batch rows belong to the Sentry service's own purge, not to this one.
+    expect(remove).not.toHaveBeenCalledWith(8)
+  })
+})
+
+describe('StartupAnalytics outbox failure codes and idempotency', () => {
+  const STARTUP_KEY = 'startup:1f0b2a3c-aaaa-4bbb-8ccc-000000000001'
+
+  afterEach(() => {
+    vi.clearAllMocks()
+    getMainConfigMock.mockImplementation(() => ({
+      entries: [],
+      maxEntries: 10,
+      lastUpdated: Date.now()
+    }))
+  })
+
+  function dbItem(id: number, idempotencyKey?: string) {
+    return {
+      id,
+      endpoint: 'http://example.test/api/telemetry/record',
+      payload: {
+        eventType: 'visit',
+        clientId: 'client-1',
+        metadata: idempotencyKey ? { kind: 'startup', idempotencyKey } : { kind: 'startup' }
+      },
+      createdAt: Date.now() - 1000,
+      retryCount: 0,
+      lastError: null
+    }
+  }
+
+  async function flushDb(items: ReturnType<typeof dbItem>[]) {
+    const analytics = new StartupAnalytics({ enabled: true })
+    const store = {
+      list: vi.fn(async () => items),
+      remove: vi.fn(async () => {}),
+      markAttempt: vi.fn(async () => {}),
+      prune: vi.fn(async () => {})
+    }
+    ;(analytics as unknown as { getReportQueueStore: () => unknown }).getReportQueueStore = () =>
+      store
+    await (
+      analytics as unknown as { flushQueuedReports: (endpoint: string) => Promise<void> }
+    ).flushQueuedReports('http://example.test/api/telemetry/record')
+    return store
+  }
+
+  const requestHeaders = (call = 0): Record<string, string> =>
+    (networkRequestMock.mock.calls[call]?.[0] as { headers: Record<string, string> }).headers
+
+  it('records the network error code on the outbox row instead of nothing', async () => {
+    networkRequestMock.mockRejectedValue(
+      Object.assign(new Error('NETWORK_TIMEOUT after 12000ms'), { code: 'NETWORK_TIMEOUT' })
+    )
+    const store = await flushDb([dbItem(7, STARTUP_KEY)])
+    expect(store.markAttempt).toHaveBeenCalledWith(7, 'NETWORK_TIMEOUT')
+    expect(store.remove).not.toHaveBeenCalled()
+  })
+
+  it('turns an HTTP status failure into HTTP_<status>', async () => {
+    networkRequestMock.mockRejectedValue(
+      Object.assign(new Error('NETWORK_HTTP_STATUS_403'), { status: 403 })
+    )
+    const store = await flushDb([dbItem(8, STARTUP_KEY)])
+    expect(store.markAttempt).toHaveBeenCalledWith(8, 'HTTP_403')
+  })
+
+  it('sends the report key as X-Idempotency-Key so a retry is de-duplicated server-side', async () => {
+    networkRequestMock.mockResolvedValue({ status: 200, data: '' })
+    const store = await flushDb([dbItem(9, STARTUP_KEY), dbItem(10)])
+    expect(requestHeaders(0)['X-Idempotency-Key']).toBe(STARTUP_KEY)
+    expect(requestHeaders(1)['X-Idempotency-Key']).toBeUndefined()
+    expect(store.remove).toHaveBeenCalledTimes(2)
+  })
+
+  it('stamps every queued report with a startup:<sessionId> key', async () => {
+    const analytics = new StartupAnalytics({ enabled: true, maxHistory: 5 })
+    ;(analytics as unknown as { currentMetrics: StartupMetrics }).currentMetrics = makeMetrics({
+      sessionId: 'session-abc-123',
+      totalStartupTime: 1000,
+      modulesLoadTime: 400,
+      rendererStart: 10,
+      rendererReady: 210,
+      moduleDetails: []
+    })
+    vi.spyOn(analytics, 'getHistory').mockReturnValue({
+      entries: [],
+      maxEntries: 10,
+      lastUpdated: Date.now()
+    })
+    ;(
+      analytics as unknown as { ensureOutboxFlushTask: (endpoint: string) => void }
+    ).ensureOutboxFlushTask = vi.fn()
+
+    await analytics.reportMetrics('http://example.test')
+
+    const queued = saveMainConfigMock.mock.calls.find(
+      ([key]) => key === StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
+    )?.[1] as Array<{ payload: { metadata: { idempotencyKey?: string } } }>
+    expect(queued?.[0]?.payload.metadata.idempotencyKey).toBe('startup:session-abc-123')
+  })
+})
+
+describe('resolveStartupReportFailureCode', () => {
+  it('prefers a stable code, then an HTTP status, then a code-shaped message', async () => {
+    const { resolveStartupReportFailureCode } = await import('./startup-analytics')
+    expect(
+      resolveStartupReportFailureCode(Object.assign(new Error('x'), { code: 'NETWORK_TIMEOUT' }))
+    ).toBe('NETWORK_TIMEOUT')
+    expect(resolveStartupReportFailureCode(Object.assign(new Error('x'), { status: 429 }))).toBe(
+      'HTTP_429'
+    )
+    expect(resolveStartupReportFailureCode(new Error('NETWORK_UNAVAILABLE'))).toBe(
+      'NETWORK_UNAVAILABLE'
+    )
+    expect(resolveStartupReportFailureCode(new Error('connect ECONNREFUSED 1.2.3.4:443'))).toBe(
+      'STARTUP_REPORT_FAILED'
+    )
+    expect(resolveStartupReportFailureCode('string error')).toBe('STARTUP_REPORT_FAILED')
+    expect(resolveStartupReportFailureCode(null)).toBe('STARTUP_REPORT_FAILED')
   })
 })

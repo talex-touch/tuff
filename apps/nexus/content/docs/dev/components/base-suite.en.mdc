@@ -1,6 +1,6 @@
 ---
 title: Basics Suite
-description: "The everyday interface body: general, form, layout, navigation, data display, feedback and status"
+description: Components for general use, forms, layout, navigation, data display, feedback, and status.
 category: BaseSuite
 status: beta
 since: 0.3.9
@@ -9,13 +9,19 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Usage
+## Installation
 
-Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxButton, TuffSwitch } from '@talex-touch/tuffex/base'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+---
+:::
+
+## Usage
 
 ::DocsComponentsGallery{suite="base"}
 ::
-
-## Overview
-
-The Basics suite is the body of everyday interfaces. Its seven groups unfold from atoms to full paths: **General** (buttons, icons, avatars, badges), **Form** (inputs, selects, dates, switches, uploads), **Layout** (containers, grids, cards), **Navigation** (tabs, breadcrumbs, menus), **Data Display** (tables, trees, timelines), **Feedback** (dialogs, drawers, progress) and **Status & Empty** (empty states, errors, skeletons). Everything imports on demand through the `@talex-touch/tuffex/base` entry.

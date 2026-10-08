@@ -301,6 +301,59 @@ describe('transcribeNexusAudio', () => {
     expect(auth.performNexusRequestWithAuth).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    {
+      name: 'a bare 500 on submit',
+      submit: nexusResponse({ statusCode: 500, statusMessage: 'Server Error' }, 500),
+      poll: null,
+      serverCode: undefined
+    },
+    {
+      name: 'a coded 503 on submit',
+      submit: nexusResponse(
+        {
+          statusCode: 503,
+          statusMessage: 'ASR_ROUTE_UNAVAILABLE',
+          data: { errorCode: 'ASR_ROUTE_UNAVAILABLE' }
+        },
+        503
+      ),
+      poll: null,
+      serverCode: 'ASR_ROUTE_UNAVAILABLE'
+    },
+    {
+      name: 'a 502 while polling',
+      submit: nexusResponse({ requestId: 'asr_5xx', status: 'dispatching' }, 202),
+      poll: nexusResponse({ statusCode: 502, statusMessage: 'Bad Gateway' }, 502),
+      serverCode: undefined
+    }
+  ])(
+    'reports $name as the service failing, not the network',
+    async ({ submit, poll, serverCode }) => {
+      auth.performNexusRequestWithAuth.mockResolvedValueOnce(submit)
+      if (poll) auth.performNexusRequestWithAuth.mockResolvedValueOnce(poll)
+
+      const transcription = transcribeNexusAudio({ audio: wavWithData(4) })
+      const rejection = expect(transcription).rejects.toMatchObject({
+        code: 'PROVIDER_UNAVAILABLE',
+        reason: expect.stringContaining(`HTTP ${(poll ?? submit).status}`)
+      })
+      await vi.advanceTimersByTimeAsync(500)
+      await rejection
+      await transcription.catch((error: { serverCode?: string }) => {
+        expect(error.serverCode).toBe(serverCode)
+      })
+    }
+  )
+
+  it('keeps NETWORK_FAILURE for a request that never got an answer', async () => {
+    auth.performNexusRequestWithAuth.mockRejectedValueOnce(new TypeError('fetch failed'))
+
+    await expect(transcribeNexusAudio({ audio: wavWithData(4) })).rejects.toMatchObject({
+      code: 'NETWORK_FAILURE'
+    })
+  })
+
   it('routes a catalog descriptor through its own absolute submit and poll URLs', async () => {
     auth.performNexusRequestWithAuth
       .mockResolvedValueOnce(nexusResponse({ requestId: 'asr_pack', status: 'dispatching' }, 202))

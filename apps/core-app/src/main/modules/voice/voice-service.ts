@@ -38,6 +38,7 @@ import { VOICE_CAPTURE_UNAVAILABLE_CODES } from '@talex-touch/utils/transport/sd
 import { StorageList } from '@talex-touch/utils'
 import {
   DEFAULT_VOICE_POLISH_STRENGTH,
+  normalizeVoiceHistoryEnabled,
   normalizeVoicePolishStrength
 } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { createLogger } from '../../utils/logger'
@@ -69,7 +70,7 @@ function isVoiceHistoryEnabled(): boolean {
     const setting = getMainConfig(StorageList.APP_SETTING) as {
       voiceInput?: { historyEnabled?: unknown }
     }
-    return setting.voiceInput?.historyEnabled === true
+    return normalizeVoiceHistoryEnabled(setting.voiceInput?.historyEnabled)
   } catch {
     return false
   }

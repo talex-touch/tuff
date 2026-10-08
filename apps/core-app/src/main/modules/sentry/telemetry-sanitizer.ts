@@ -127,6 +127,35 @@ const SENSITIVE_KEY_PATTERN =
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_.:-]+$/
 const SAFE_EVENT_MESSAGE = 'redacted'
+/**
+ * Frame locations that carry no user data and that Sentry needs for source maps and grouping.
+ *
+ * The Electron SDK's NormalizePaths integration runs before `beforeSend` and rewrites every path
+ * under `app.getAppPath()` to `app:///…` (renderer events included, since they are captured through
+ * the main client). Anything still absolute at this point is outside the app bundle -- a user
+ * directory, a temp file -- and is dropped as before. Without this, uploaded source maps could not
+ * be applied and every issue grouped on function names alone.
+ */
+const SAFE_FRAME_FILENAME_PATTERN =
+  /^(?:app:\/\/\/[A-Za-z0-9_./@+-]{1,256}|node:[A-Za-z0-9_./-]{1,128}|<anonymous>)$/
+/**
+ * Exception values this codebase throws as stable codes (`new Error('NETWORK_TIMEOUT')`). Prose
+ * messages, SQL, paths and native driver text never match and stay redacted.
+ */
+const STABLE_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
+const MAX_STABLE_ERROR_CODE_LENGTH = 64
+
+function sanitizeFrameFilename(value: unknown): string | undefined {
+  return typeof value === 'string' && SAFE_FRAME_FILENAME_PATTERN.test(value) ? value : undefined
+}
+
+function sanitizeExceptionValue(value: unknown): string {
+  return typeof value === 'string' &&
+    value.length <= MAX_STABLE_ERROR_CODE_LENGTH &&
+    STABLE_ERROR_CODE_PATTERN.test(value)
+    ? value
+    : SAFE_EVENT_MESSAGE
+}
 
 function normalizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string | undefined {
   if (typeof value !== 'string') return undefined
@@ -476,14 +505,16 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
   }
 
   for (const value of event.exception?.values ?? []) {
-    if (value.value) value.value = SAFE_EVENT_MESSAGE
+    if (value.value) value.value = sanitizeExceptionValue(value.value)
     // Exception module names and mechanism data may embed raw SQL, params, or
     // paths from the underlying driver error; only the classification type
     // and sanitized frames may leave the process.
     delete value.module
     delete value.mechanism
     for (const frame of value.stacktrace?.frames ?? []) {
-      delete frame.filename
+      const filename = sanitizeFrameFilename(frame.filename)
+      if (filename) frame.filename = filename
+      else delete frame.filename
       delete frame.abs_path
       delete frame.context_line
       delete frame.pre_context

@@ -35,6 +35,23 @@ export function normalizeVoiceAsrSource(value: unknown): VoiceAsrSource {
 }
 
 /**
+ * Whether recognitions are kept as records (source audio and transcript).
+ *
+ * On by default, so a profile that never touched the switch keeps them. A stored value that is not
+ * a boolean reads as off: keeping audio nobody agreed to is the failure that matters here.
+ */
+export function normalizeVoiceHistoryEnabled(value: unknown): boolean {
+  return value === undefined || value === true
+}
+
+/**
+ * Who last set `voiceInput.enabled`: the Settings switch, or the sign-in that turned it on.
+ *
+ * Absent means nobody has — the profile is still on its default.
+ */
+export type VoiceInputEnabledSource = 'user' | 'sign-in'
+
+/**
  * What CoreBox's ⌘1–⌘0 does with the numbered result.
  *
  * `execute` runs it; `locate` only moves the selection onto it. Both are reasonable, so it is a
@@ -277,6 +294,9 @@ const _appSettingOriginData = {
      * 与它无关的是采集链路里常开的高通与抗混叠滤波——那两个是缺陷修复，不是偏好。
      */
     noiseSuppression: false,
+
+    /** 保留识别记录（源音频与转录）。默认开启，用户可在设置里关闭；读取统一走 `normalizeVoiceHistoryEnabled`。 */
+    historyEnabled: true,
 
     /**
      * 识别来源偏好：云端 / 本地 / 混合。
@@ -632,6 +652,7 @@ export interface VoiceInputSetting {
   source?: VoiceAsrSource
   historyEnabled?: boolean
   noiseSuppression?: boolean
+  enabledSource?: VoiceInputEnabledSource
 }
 
 function isSettingRecord(value: unknown): value is Record<string, unknown> {
@@ -668,7 +689,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
   const polishEnabled = source.polishEnabled !== false
   const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
-  const historyEnabled = source.historyEnabled === true
+  const historyEnabled = normalizeVoiceHistoryEnabled(source.historyEnabled)
   const hasNoiseSuppression = Object.prototype.hasOwnProperty.call(source, 'noiseSuppression')
   // `=== true` rather than `!== false`: an unreadable value has to land on off. Turning
   // suppression on by accident changes what the recogniser hears, and the user never asked.
@@ -698,5 +719,25 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     ...(hasNoiseSuppression ? { noiseSuppression } : {}),
     ...(hasSource ? { source: asrSource } : {}),
   }
+  return true
+}
+
+/**
+ * Turns dictation on for a signed-in account whose owner has not chosen.
+ *
+ * Signing in is what makes the cloud route usable, so a profile still on its default gets dictation
+ * without a second trip to Settings. The Settings switch records `user` every time it is flipped,
+ * and that choice — an explicit off included — outlives every later sign-in; a switch turned on
+ * here records `sign-in` and is not touched again.
+ *
+ * @returns whether `setting` changed and has to be saved.
+ */
+export function enableVoiceInputForSignIn(setting: Record<string, unknown>): boolean {
+  const normalized = ensureVoiceInputSetting(setting)
+  const voiceInput = setting.voiceInput as Record<string, unknown>
+  if (voiceInput.enabled === true || voiceInput.enabledSource === 'user')
+    return normalized
+  voiceInput.enabled = true
+  voiceInput.enabledSource = 'sign-in'
   return true
 }

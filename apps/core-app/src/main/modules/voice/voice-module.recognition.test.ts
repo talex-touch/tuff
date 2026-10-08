@@ -113,6 +113,9 @@ vi.mock('./command-gesture', () => ({
   },
   registerPlatformVoiceGesture: vi.fn()
 }))
+vi.mock('./voice-input-sign-in', () => ({
+  registerVoiceInputSignInDefault: vi.fn(() => () => {})
+}))
 
 import { VoiceModule } from './voice-module'
 

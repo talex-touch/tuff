@@ -760,6 +760,12 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     durationMs: number,
     meta: ModuleLifecycleMeta
   ): void {
+    // Only failures leave the machine. A successful phase used to be uploaded too, which came to
+    // about 120 `performance` events per launch (41 modules × created/init/start) that no Nexus
+    // reader ever aggregated: the store only folds longTask/rafJank/eventLoop/unresponsive fields
+    // into daily stats, and per-module startup timing already arrives with the startup report
+    // (2026-10-08 telemetry audit). The structured log above keeps the local record.
+    if (status !== 'failed') return
     try {
       const sentryService = getSentryService()
       if (!sentryService.isTelemetryEnabled()) {
@@ -767,7 +773,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       }
       const moduleKeyLabel = meta.moduleKey.description ?? meta.moduleKey.toString()
       sentryService.queueNexusTelemetry({
-        eventType: status === 'success' ? 'performance' : 'error',
+        eventType: 'error',
         metadata: {
           kind: 'module-lifecycle',
           phase,
