@@ -1191,6 +1191,7 @@ export class DatabaseModule extends BaseModule {
         'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
         'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
         'CREATE INDEX IF NOT EXISTS idx_files_is_dir_ctime ON files (is_dir, ctime)',
+        'CREATE INDEX IF NOT EXISTS idx_files_type_extension_mtime ON files (type, extension, mtime)',
         'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
       ]
       for (const statement of searchPerfIndexes) {
@@ -1548,6 +1549,7 @@ export class DatabaseModule extends BaseModule {
       'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
       'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
       'CREATE INDEX IF NOT EXISTS idx_files_is_dir_ctime ON files (is_dir, ctime)',
+      'CREATE INDEX IF NOT EXISTS idx_files_type_extension_mtime ON files (type, extension, mtime)',
       'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
     ]
 

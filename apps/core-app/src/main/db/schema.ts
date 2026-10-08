@@ -158,7 +158,16 @@ export const files = sqliteTable(
     // `is_dir = 0 AND ctime >= ?` and orders by ctime. Unindexed it was a SCAN plus a temp B-tree
     // sort, run synchronously on the main thread: the first empty query after launch froze it for
     // 6.6s in that step against a cold 5 GB file (2026-10-07).
-    isDirCtimeIdx: index('idx_files_is_dir_ctime').on(table.isDir, table.ctime)
+    isDirCtimeIdx: index('idx_files_is_dir_ctime').on(table.isDir, table.ctime),
+    // `file-provider-search-result-service` answers an extension query with
+    // `type = 'file' AND extension IN (…) ORDER BY mtime DESC LIMIT 50`. Through `idx_files_type`
+    // that fetched every file row: 5.4s cold on a 5 GB dev index, 1ms as a covering range here
+    // (2026-10-08). Created at runtime like its siblings; the index is 1.1 MB for 52k rows.
+    typeExtensionMtimeIdx: index('idx_files_type_extension_mtime').on(
+      table.type,
+      table.extension,
+      table.mtime
+    )
   })
 )
 
