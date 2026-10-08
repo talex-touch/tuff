@@ -711,27 +711,37 @@ export default {
       },
       faq: {
         eyebrow: 'FAQ',
-        headline: 'Questions, answered.',
+        kicker: 'FAQ',
+        headline: 'You might be wondering',
+        aside: {
+          title: 'Still stuck?',
+          docs: 'Read the docs',
+          github: 'Ask on GitHub',
+        },
         items: {
+          platforms: {
+            question: 'Which systems does it run on?',
+            answer: 'macOS (Apple silicon and Intel), Windows (x64), and Linux all have installers. On Linux, the .deb is the one to get.',
+          },
           access: {
-            question: 'How do I get access to the beta?',
-            answer: 'Join the Pioneer waitlist. We approve batches weekly and set up onboarding calls for teams.',
+            question: 'How do I get the beta?',
+            answer: 'Download a build marked beta from the Updates page or GitHub Releases; it stays on beta updates from then on. To go back to stable, switch in Settings → About → Update channel.',
           },
           privacy: {
-            question: 'How does Tuff handle my data?',
-            answer: 'Most processing runs locally. Cloud sync is encrypted with keys you control and optional by workspace.',
+            question: 'Where does my data live?',
+            answer: 'On your own computer, with secrets kept in the system keychain. Signing in turns sync on by default, and what syncs, such as settings and AI setup, is encrypted on your machine before upload. Crash reports and usage stats are on by default; both can be turned off in Settings.',
           },
           build: {
-            question: 'Do I need to code to build automations?',
-            answer: 'Not at all. FlowScript offers visual builders, while developers can drop down to code when needed.',
+            question: 'Can I automate without writing code?',
+            answer: 'Up to a point. Everyday automation comes from plugins and AI commands; the visual workflow builder is still in beta and not open by default.',
           },
           migration: {
-            question: 'Can we migrate our existing shortcuts?',
-            answer: 'Yes. Import from Raycast, Alfred, and custom scripts. Tuff converts them into typed commands.',
+            question: 'Can I bring my Raycast or Alfred setup?',
+            answer: 'There is no importer yet. Apps and files need no moving: they show up once Tuff is installed. Text you reuse can go into the snippet library.',
           },
           pricing: {
-            question: 'Will pricing stay free forever?',
-            answer: 'We will introduce paid tiers later, but Pioneer teams keep everything free through general availability.',
+            question: 'Does it cost anything?',
+            answer: 'It is free right now, and Tuff itself is open source. AI hosted by Tuff uses credits, with a free allowance every month; paid tiers may come after the stable release.',
           },
         },
       },

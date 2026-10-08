@@ -257,8 +257,9 @@ describe('Nexus deploy asset budget', () => {
     expect(ecosystemSource).not.toContain('h-[520px] w-[720px]')
     expect(ecosystemSource).toContain('right-0 h-[640px]')
     expect(ecosystemSource).toContain('sm:right-[-240px]')
-    expect(faqSource).toContain('right-0 h-[520px]')
-    expect(faqSource).toContain('sm:right-[-240px]')
+    // The FAQ was rebuilt without its two orbs (2026-10-08); like Community and
+    // Waitlist below, it must not grow a fixed-size one back.
+    expect(faqSource).not.toMatch(/h-\[\d+px\] w-\[\d+px\]/)
 
     // Community and Waitlist carry none at all: the blurred orbs, the aurora
     // bars and the backdrop-blur layer were taken out for their paint cost.

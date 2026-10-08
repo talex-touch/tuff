@@ -710,27 +710,37 @@ export default {
       },
       faq: {
         eyebrow: '常见问题',
-        headline: '你的疑问，我们都想好答案。',
+        kicker: 'FAQ',
+        headline: '你可能想问',
+        aside: {
+          title: '没找到答案？',
+          docs: '翻翻文档',
+          github: '去 GitHub 提问',
+        },
         items: {
+          platforms: {
+            question: '支持哪些系统？',
+            answer: 'macOS（Apple 芯片和 Intel）、Windows（x64）和 Linux 都有安装包。Linux 推荐装 .deb。',
+          },
           access: {
-            question: '如何加入 Beta？',
-            answer: '预约先锋计划，我们每周批次开通，并为团队安排引导会议。',
+            question: '怎么用上 Beta 版？',
+            answer: '在「更新」页或 GitHub Releases 下载带 beta 标记的版本，装好后会自动收到 Beta 更新。想换回稳定版，到 设置 → 关于 → 更新通道 切换。',
           },
           privacy: {
-            question: '数据如何被处理？',
-            answer: '绝大多数逻辑在本地运行，云端同步全程加密，密钥由你掌控，可按工作区开启。',
+            question: '我的数据存在哪？',
+            answer: '默认存在你自己的电脑上，密钥交给系统钥匙串保管。登录后默认开启同步，设置、AI 配置等内容先在本机加密再上传。崩溃报告和使用统计默认开启，都能在设置里关掉。',
           },
           build: {
-            question: '不会写代码也能搭建自动化吗？',
-            answer: '可以。FlowScript 提供可视化构建器，开发者也可随时下沉到代码层。',
+            question: '不会写代码，能做自动化吗？',
+            answer: '能做一部分。日常的小自动化靠插件和 AI 命令；可视化工作流还在 Beta，默认没有开放。',
           },
           migration: {
-            question: '现有快捷指令能迁移吗？',
-            answer: '支持从 Raycast、Alfred 与自定义脚本导入，Tuff 会转化为类型化指令。',
+            question: '能从 Raycast、Alfred 搬过来吗？',
+            answer: '暂时没有导入工具。应用和文件不用搬，装好就能搜到；常用的文字可以存进片段库。',
           },
           pricing: {
-            question: '免费阶段会持续多久？',
-            answer: '未来会推出付费层，但 Pioneer 团队会一直免费直至正式公开发布。',
+            question: '收费吗？',
+            answer: '现在免费，Tuff 本身也开源。用 Tuff 托管的 AI 会消耗额度，每月都有免费额度；正式版之后可能会推出付费档。',
           },
         },
       },
