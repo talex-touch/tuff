@@ -100,6 +100,7 @@ const labels = computed(() => {
         :panel-background="background"
         panel-shadow="soft"
         :panel-padding="12"
+        :width="284"
       >
         <template #reference>
           <TxButton>{{ trigger === 'hover' ? labels.referenceHover : labels.referenceClick }}</TxButton>

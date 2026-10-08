@@ -157,6 +157,7 @@ code: |
           :panel-background="background"
           panel-shadow="soft"
           :panel-padding="12"
+          :width="284"
         >
           <template #reference>
             <TxButton>Click me</TxButton>
