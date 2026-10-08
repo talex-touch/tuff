@@ -49,6 +49,7 @@ import {
   subscribeDarwinForegroundActivations
 } from '../../system/foreground-app-activity'
 import { foregroundAppSnapshotStore } from '../../system/foreground-app-snapshot'
+import { resolveRecommendationContextSources } from './recommendation/context-provider'
 import { appProvider } from '../addon/apps/app-provider'
 import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
@@ -180,7 +181,8 @@ function isForegroundActivityTrackingEnabled(): boolean {
   try {
     const recommendation = getMainConfig(StorageList.APP_SETTING)?.recommendation
     return (
-      recommendation?.enabled !== false && recommendation?.contextSources?.foregroundApp !== false
+      recommendation?.enabled !== false &&
+      resolveRecommendationContextSources(recommendation?.contextSources).foregroundApp
     )
   } catch {
     return false

@@ -230,3 +230,116 @@ describe('ForegroundAppSnapshotStore', () => {
     }
   )
 })
+
+describe('ForegroundAppSnapshotStore with an instant source', () => {
+  function createStore(
+    queryActiveApp = vi.fn(async () => createActiveApp({ bundleId: 'os.query' }))
+  ) {
+    const store = new ForegroundAppSnapshotStore({
+      queryActiveApp,
+      isSelfApp: isSelfActiveApp,
+      now: () => 1_000
+    })
+    return { store, queryActiveApp }
+  }
+
+  it('takes the app the OS already reported without querying', async () => {
+    const { store, queryActiveApp } = createStore()
+    const app = createActiveApp({ bundleId: 'com.apple.Safari' })
+    store.setInstantSource({ readForegroundApp: () => ({ app, pendingName: null }) })
+
+    store.capture()
+
+    expect(store.get()).toEqual({ app, capturedAt: 1_000 })
+    expect(await store.resolve()).toEqual({ app, capturedAt: 1_000 })
+    expect(queryActiveApp).not.toHaveBeenCalled()
+  })
+
+  it('fills in the display name when the pending lookup settles, and only then', async () => {
+    const { store } = createStore()
+    const pending = Promise.withResolvers<string | null>()
+    const app = createActiveApp({
+      bundleId: 'com.apple.Safari',
+      identifier: 'com.apple.Safari',
+      displayName: null
+    })
+    store.setInstantSource({ readForegroundApp: () => ({ app, pendingName: pending.promise }) })
+
+    store.capture()
+    expect(store.get()?.app.displayName).toBeNull()
+    const reading = store.resolve()
+    pending.resolve('Safari')
+
+    expect((await reading)?.app).toMatchObject({
+      displayName: 'Safari',
+      identifier: 'com.apple.Safari',
+      bundleId: 'com.apple.Safari'
+    })
+  })
+
+  it('skips an instant read that resolves to Touch itself without falling back to the OS', async () => {
+    const { store, queryActiveApp } = createStore()
+    store.setInstantSource({
+      readForegroundApp: () => ({
+        app: createActiveApp({ bundleId: 'com.tagzxia.app.tuff', processId: process.pid }),
+        pendingName: null
+      })
+    })
+
+    store.capture()
+
+    expect(store.hasActiveSession).toBe(true)
+    expect(await store.resolve()).toBeNull()
+    expect(queryActiveApp).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['nothing to report', () => null],
+    [
+      'a throwing source',
+      () => {
+        throw new Error('tracker exploded')
+      }
+    ]
+  ])('falls back to the OS query on %s', async (_label, readForegroundApp) => {
+    const { store, queryActiveApp } = createStore()
+    store.setInstantSource({ readForegroundApp })
+
+    store.capture()
+
+    expect((await store.resolve())?.app.bundleId).toBe('os.query')
+    expect(queryActiveApp).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a name that settles after the activation was cleared', async () => {
+    const { store } = createStore()
+    const pending = Promise.withResolvers<string | null>()
+    store.setInstantSource({
+      readForegroundApp: () => ({
+        app: createActiveApp({ displayName: null }),
+        pendingName: pending.promise
+      })
+    })
+
+    store.capture()
+    store.clear()
+    pending.resolve('Late Name')
+    await pending.promise
+
+    expect(store.get()).toBeNull()
+    expect(store.hasActiveSession).toBe(false)
+  })
+
+  it('queries the OS again once the source is unregistered', async () => {
+    const { store, queryActiveApp } = createStore()
+    store.setInstantSource({
+      readForegroundApp: () => ({ app: createActiveApp(), pendingName: null })
+    })
+    store.setInstantSource(null)
+
+    store.capture()
+
+    expect((await store.resolve())?.app.bundleId).toBe('os.query')
+    expect(queryActiveApp).toHaveBeenCalledOnce()
+  })
+})

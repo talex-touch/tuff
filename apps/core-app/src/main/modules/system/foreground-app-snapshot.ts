@@ -123,10 +123,7 @@ export class ForegroundAppSnapshotStore {
       .then((name) => {
         const snapshot = this.snapshot
         if (generation !== this.generation || !this.active || !snapshot || !name) return
-        this.snapshot = {
-          ...snapshot,
-          app: { ...snapshot.app, displayName: name, identifier: name }
-        }
+        this.snapshot = { ...snapshot, app: { ...snapshot.app, displayName: name } }
       })
       .catch(() => undefined)
       .finally(() => {

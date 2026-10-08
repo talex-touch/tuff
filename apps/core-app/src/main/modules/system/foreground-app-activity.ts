@@ -118,11 +118,14 @@ export const subscribeDarwinForegroundActivations: ForegroundActivationSource = 
 /** What an activation does not carry: the app's name, and the app in front before any arrives. */
 export interface ForegroundAppDescriber {
   nameOf: (bundleId: string) => Promise<string | null>
-  frontmost: () => Promise<{
-    activation: ForegroundActivation
-    name: string | null
-    executablePath: string | null
-  } | null>
+  frontmost: () => Promise<{ activation: ForegroundActivation; name: string | null } | null>
+}
+
+/** Per-app display name: known, being looked up, or when the last lookup failed. */
+interface AppNameEntry {
+  name: string | null
+  lookup: Promise<string | null> | null
+  failedAt: number | null
 }
 
 /** `"WeChat" ASN:0x0-0x26026: …` — lsappinfo prints the name first, quoted. */
@@ -159,8 +162,7 @@ export const describeDarwinRunningApps: ForegroundAppDescriber = {
         appKey: bundleId.toLowerCase(),
         pid: Number.isFinite(pid) ? pid : null
       },
-      name: parseLsappinfoName(stdout),
-      executablePath: /\bexecutable path="([^"\n]+)"/.exec(stdout)?.[1] ?? null
+      name: parseLsappinfoName(stdout)
     }
   }
 }
@@ -221,14 +223,8 @@ export class ForegroundAppActivityTracker
   private store: ForegroundAppActivityStore | null = null
   private flushing: Promise<void> | null = null
   /** What the OS last reported in front, whatever the recording switches say. */
-  private frontmost: {
-    activation: ForegroundActivation
-    executablePath: string | null
-    since: number
-  } | null = null
-  private readonly names = new Map<string, string>()
-  private readonly nameLookups = new Map<string, Promise<string | null>>()
-  private readonly nameFailedAt = new Map<string, number>()
+  private frontmost: { activation: ForegroundActivation; since: number } | null = null
+  private readonly names = new Map<string, AppNameEntry>()
 
   constructor(private readonly deps: ForegroundAppActivityDeps) {}
 
@@ -250,15 +246,12 @@ export class ForegroundAppActivityTracker
 
     void this.probeFrontmost()
     await this.load()
+    // `flush()` already joins a flush in progress, so no polling-level dedupe is needed.
     this.pollingService.register(FLUSH_TASK_ID, () => this.flush(), {
       interval: FLUSH_INTERVAL_MS,
       unit: 'milliseconds',
-      lane: 'maintenance',
-      backpressure: 'latest_wins',
-      dedupeKey: FLUSH_TASK_ID,
-      maxInFlight: 1
+      lane: 'maintenance'
     })
-    this.pollingService.start()
   }
 
   /** Unsubscribes, credits the stay still in progress and writes everything out. */
@@ -287,20 +280,21 @@ export class ForegroundAppActivityTracker
     const frontmost = this.frontmost
     if (!this.unsubscribe || !frontmost) return null
     const { bundleId, appKey, pid } = frontmost.activation
-    const name = this.names.get(appKey) ?? null
+    const entry = this.names.get(appKey)
+    const name = entry?.name ?? null
     const app: ActiveAppInfo = {
       identifier: name ?? bundleId,
       displayName: name,
       bundleId,
       processId: pid,
-      executablePath: frontmost.executablePath,
+      executablePath: null,
       platform: 'macos',
       windowTitle: null,
       url: null,
       icon: null,
       lastUpdated: frontmost.since
     }
-    return { app, pendingName: name === null ? (this.nameLookups.get(appKey) ?? null) : null }
+    return { app, pendingName: name === null ? (entry?.lookup ?? null) : null }
   }
 
   view(now = this.now()): ForegroundActivityView | null {
@@ -348,12 +342,9 @@ export class ForegroundAppActivityTracker
     await this.load()
   }
 
-  private handleActivation(
-    activation: ForegroundActivation,
-    executablePath: string | null = null
-  ): void {
+  private handleActivation(activation: ForegroundActivation): void {
     const at = this.now()
-    this.frontmost = { activation, executablePath, since: at }
+    this.frontmost = { activation, since: at }
     const isSelf = isSelfBundleId(activation.appKey) || activation.pid === process.pid
     if (!isSelf) void this.lookupName(activation)
     if (!this.deps.isEnabled()) {
@@ -372,32 +363,28 @@ export class ForegroundAppActivityTracker
   /** One lookup per app at a time; a failed one is not retried before {@link NAME_RETRY_MS}. */
   private lookupName(activation: ForegroundActivation): Promise<string | null> | null {
     const nameOf = this.deps.describe?.nameOf
+    if (!nameOf) return null
     const { appKey, bundleId } = activation
-    if (!nameOf || this.names.has(appKey)) return null
-    const inFlight = this.nameLookups.get(appKey)
-    if (inFlight) return inFlight
-    const failedAt = this.nameFailedAt.get(appKey)
-    if (failedAt !== undefined && this.now() - failedAt < NAME_RETRY_MS) return null
+    const entry = this.names.get(appKey) ?? { name: null, lookup: null, failedAt: null }
+    if (entry.name !== null) return null
+    if (entry.lookup) return entry.lookup
+    if (entry.failedAt !== null && this.now() - entry.failedAt < NAME_RETRY_MS) return null
 
-    const lookup = nameOf(bundleId)
+    entry.lookup = nameOf(bundleId)
       .catch((error) => {
         activityLog.debug('Failed to look up app name', { error, meta: { appKey } })
         return null
       })
       .then((name) => {
-        if (name) {
-          this.names.set(appKey, name)
-          this.nameFailedAt.delete(appKey)
-        } else {
-          this.nameFailedAt.set(appKey, this.now())
-        }
+        entry.name = name
+        entry.failedAt = name ? null : this.now()
         return name
       })
       .finally(() => {
-        this.nameLookups.delete(appKey)
+        entry.lookup = null
       })
-    this.nameLookups.set(appKey, lookup)
-    return lookup
+    this.names.set(appKey, entry)
+    return entry.lookup
   }
 
   /** Names the app already in front at startup, before the OS has reported any activation. */
@@ -408,8 +395,10 @@ export class ForegroundAppActivityTracker
       const found = await probe()
       // An activation that arrived meanwhile is newer than anything the probe saw.
       if (!found || this.frontmost || !this.unsubscribe) return
-      if (found.name) this.names.set(found.activation.appKey, found.name)
-      this.handleActivation(found.activation, found.executablePath)
+      if (found.name) {
+        this.names.set(found.activation.appKey, { name: found.name, lookup: null, failedAt: null })
+      }
+      this.handleActivation(found.activation)
     } catch (error) {
       activityLog.debug('Failed to probe the frontmost app', { error })
     }

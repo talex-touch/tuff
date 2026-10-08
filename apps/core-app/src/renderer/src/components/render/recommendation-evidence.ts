@@ -1,5 +1,9 @@
 import type { RecommendationEvidence, RecommendationSource } from '@talex-touch/utils'
-import { FREQUENT_MIN_ACTIVE_DAYS_30, FREQUENT_MIN_EXECUTES_30 } from '@talex-touch/utils'
+import {
+  FREQUENT_MIN_ACTIVE_DAYS_30,
+  FREQUENT_MIN_EXECUTES_30,
+  resolveLastUsedAt
+} from '@talex-touch/utils'
 import type { ComposerTranslation } from 'vue-i18n'
 
 const HOUR_MS = 3_600_000
@@ -49,26 +53,14 @@ function formatPeakHours(evidence: RecommendationEvidence, t: ComposerTranslatio
   })
 }
 
-/**
- * When the item was last used: an accepted execution or a foreground stay (an app reached by ⌘Tab
- * or the Dock counts), whichever is later. A future instant is clock skew, not a fact about the
- * past, so it is skipped rather than clamped.
- */
-function resolveLastUsedAt(evidence: RecommendationEvidence, now: number): number | null {
-  let latest: number | null = null
-  for (const value of [evidence.lastExecutedAt, evidence.lastActiveAt]) {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value > now) continue
-    if (latest === null || value > latest) latest = value
-  }
-  return latest
-}
-
 function formatLastUsed(
   evidence: RecommendationEvidence,
   t: ComposerTranslation,
   now: number
 ): string | null {
-  const lastUsedAt = resolveLastUsedAt(evidence, now)
+  // An accepted execution or a foreground stay (an app reached by ⌘Tab or the Dock counts),
+  // whichever is later; the main-process scorer dates "last used" with the same function.
+  const lastUsedAt = resolveLastUsedAt(evidence.lastExecutedAt, evidence.lastActiveAt, now)
   if (lastUsedAt === null) return null
 
   const age = now - lastUsedAt

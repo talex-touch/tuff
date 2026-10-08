@@ -88,8 +88,10 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   (0..20, evidence-gated) + `calculateRecencyBoost(lastUsedAt)` and clamps the total with
   `Math.min(BEHAVIOR_SCORE_MAX, …)` (`BEHAVIOR_SCORE_MAX = 100`) before multiplying by
   `BEHAVIOR_SCORE_WEIGHT`. The recency term is at most 10 points (`10 * exp(-0.1 * hoursSince)`) and
-  uses `resolveLastUsedAt(behavior.lastExecutedAt, lastActiveAt)` — the later of the ledger's accepted
-  execution and the OS-reported foreground stay — so a reliable date is still required. It used to be worth 100, which
+  uses `resolveLastUsedAt(behavior.lastExecutedAt, lastActiveAt, now)` from `@talex-touch/utils/core-box`
+  — the later of the ledger's accepted execution and the OS-reported foreground stay, ignoring an instant
+  after `now` (clock skew); the renderer dates its evidence line with the same function — so a reliable
+  date is still required. It used to be worth 100, which
   let one recent execution alone saturate the automatic budget and drown sustained habits; the cap is
   now 10. Comparing an item with a real run against one without must not let recency alone reach 100.
   A fully established habit's 100 lands at the same 1e6 scale as the old `executeCount * 1e4`

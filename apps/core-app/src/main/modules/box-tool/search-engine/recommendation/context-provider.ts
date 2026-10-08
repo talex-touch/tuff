@@ -10,7 +10,7 @@ import { createLogger } from '../../../../utils/logger'
 const contextProviderLog = createLogger('RecommendationEngine').child('ContextProvider')
 const execFileAsync = promisify(execFile)
 
-interface RecommendationContextSources {
+export interface RecommendationContextSources {
   time: boolean
   foregroundApp: boolean
   clipboard: boolean
@@ -68,6 +68,26 @@ const FOCUS_CONTEXT_TTL_MS = 30 * 1000
 
 /** Upper bound on the `defaults` read, so a blocked cfprefsd degrades instead of hanging. */
 const FOCUS_CONTEXT_TIMEOUT_MS = 500
+
+/**
+ * The 推荐分析 switches as stored in App Settings: every source is on unless it was explicitly
+ * turned off, and a missing or malformed block means the defaults. The one place this mapping
+ * lives — the foreground tracker's recording gate reads it too.
+ */
+export function resolveRecommendationContextSources(raw: unknown): RecommendationContextSources {
+  if (!raw || typeof raw !== 'object') return DEFAULT_CONTEXT_SOURCES
+  const sources = raw as Partial<Record<keyof RecommendationContextSources, unknown>>
+  return {
+    time: sources.time !== false,
+    foregroundApp: sources.foregroundApp !== false,
+    clipboard: sources.clipboard !== false,
+    selection: sources.selection !== false,
+    network: sources.network !== false,
+    focus: sources.focus !== false,
+    power: sources.power !== false,
+    location: sources.location !== false
+  }
+}
 
 export function hashContextContent(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
@@ -360,22 +380,9 @@ export class ContextProvider {
     }
 
     try {
-      const settings = getMainConfig(StorageList.APP_SETTING)
-      const raw = settings?.recommendation?.contextSources
-      if (!raw || typeof raw !== 'object') {
-        return DEFAULT_CONTEXT_SOURCES
-      }
-
-      return {
-        time: raw.time !== false,
-        foregroundApp: raw.foregroundApp !== false,
-        clipboard: raw.clipboard !== false,
-        selection: raw.selection !== false,
-        network: raw.network !== false,
-        focus: raw.focus !== false,
-        power: raw.power !== false,
-        location: raw.location !== false
-      }
+      return resolveRecommendationContextSources(
+        getMainConfig(StorageList.APP_SETTING)?.recommendation?.contextSources
+      )
     } catch (error) {
       contextProviderLog.debug('Failed to load recommendation context settings', {
         meta: { reason: error instanceof Error ? error.message : String(error) }

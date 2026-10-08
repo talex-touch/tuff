@@ -38,6 +38,7 @@ import { createClipboardRecommendationSource } from './clipboard-recommendation-
 import { createFileRecommendationSource } from './file-recommendation-source'
 import {
   APP_RECOMMENDATION_SOURCE_ID,
+  APP_RECOMMENDATION_SOURCE_TYPE,
   createAppRecommendationSource
 } from './app-recommendation-source'
 import {
@@ -474,8 +475,6 @@ const RECOMMENDATION_CACHE_SCHEMA_VERSION = 4
 const APP_ACTIVITY_CATALOG_TTL_MS = 10 * 60 * 1000
 /** Apps per pass that foreground use alone may nominate into the "recent" dimension. */
 const FOREGROUND_RECENT_CANDIDATE_LIMIT = 10
-/** `item_usage_stats.source_type` the app provider writes; read by `isAppSourceType`. */
-const APP_USAGE_SOURCE_TYPE = 'application'
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -2042,9 +2041,9 @@ export class RecommendationEngine {
 
       const items = await this.itemRebuilder.rebuildItems(
         ranked.map((app, index) => ({
-          sourceId: 'app-provider',
+          sourceId: APP_RECOMMENDATION_SOURCE_ID,
           itemId: app.path,
-          sourceType: 'application',
+          sourceType: APP_RECOMMENDATION_SOURCE_TYPE,
           usageStats: EMPTY_USAGE_STATS,
           source: 'cold-start' as const,
           score: COLD_START_BASE_SCORE - index
@@ -2056,6 +2055,30 @@ export class RecommendationEngine {
       recommendationLog.warn('Cold start recommendation failed', { meta: toErrorMeta(error) })
       return []
     }
+  }
+
+  /**
+   * The `appIdentity` / `bundleId` extension values of the given catalog rows, keyed by file id,
+   * from one indexed read of `file_extensions`. Rows carrying neither key are absent. Shared by the
+   * novelty gate and the foreground-activity index so both name an app the same way.
+   */
+  private async loadAppCatalogExtensionsByFileId(
+    apps: Array<{ id: number }>
+  ): Promise<Map<number, Record<string, string>>> {
+    const byFileId = new Map<number, Record<string, string>>()
+    if (apps.length === 0) return byFileId
+
+    const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(
+      apps.map((app) => app.id),
+      [APP_IDENTITY_EXTENSION_KEY, 'bundleId']
+    )
+    for (const extension of extensions) {
+      if (typeof extension.value !== 'string') continue
+      const entry = byFileId.get(extension.fileId) ?? {}
+      entry[extension.key] = extension.value
+      byFileId.set(extension.fileId, entry)
+    }
+    return byFileId
   }
 
   /**
@@ -2073,17 +2096,7 @@ export class RecommendationEngine {
     if (apps.length === 0) return identities
 
     try {
-      const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(
-        apps.map((app) => app.id),
-        [APP_IDENTITY_EXTENSION_KEY, 'bundleId']
-      )
-      const byFileId = new Map<number, Record<string, string>>()
-      for (const extension of extensions) {
-        if (typeof extension.value !== 'string') continue
-        const entry = byFileId.get(extension.fileId) ?? {}
-        entry[extension.key] = extension.value
-        byFileId.set(extension.fileId, entry)
-      }
+      const byFileId = await this.loadAppCatalogExtensionsByFileId(apps)
       for (const app of apps) {
         const entry = byFileId.get(app.id)
         identities.set(
@@ -2169,7 +2182,10 @@ export class RecommendationEngine {
       const usageStatsMap = new Map(
         (
           await this.dbUtils.getUsageStatsBatch(
-            fresh.map(({ app }) => ({ sourceId: 'app-provider', itemId: catalogIdFor(app) }))
+            fresh.map(({ app }) => ({
+              sourceId: APP_RECOMMENDATION_SOURCE_ID,
+              itemId: catalogIdFor(app)
+            }))
           )
         ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
       )
@@ -2180,17 +2196,19 @@ export class RecommendationEngine {
       // Never gate on `installedAt`: its absence is silent in this query and would skip every app.
       const unused = fresh.filter(
         ({ app }) =>
-          (usageStatsMap.get(`app-provider:${catalogIdFor(app)}`)?.executeCount ?? 0) === 0
+          (usageStatsMap.get(`${APP_RECOMMENDATION_SOURCE_ID}:${catalogIdFor(app)}`)
+            ?.executeCount ?? 0) === 0
       )
       if (unused.length === 0) return []
 
       return unused.map(({ app, installedAt }) => {
         const itemId = catalogIdFor(app)
         return {
-          sourceId: 'app-provider',
+          sourceId: APP_RECOMMENDATION_SOURCE_ID,
           itemId,
-          sourceType: 'application',
-          usageStats: usageStatsMap.get(`app-provider:${itemId}`) ?? EMPTY_USAGE_STATS,
+          sourceType: APP_RECOMMENDATION_SOURCE_TYPE,
+          usageStats:
+            usageStatsMap.get(`${APP_RECOMMENDATION_SOURCE_ID}:${itemId}`) ?? EMPTY_USAGE_STATS,
           source: 'newly-installed' as const,
           firstSeenAt: installedAt
         }
@@ -2647,7 +2665,7 @@ export class RecommendationEngine {
       candidate: {
         sourceId: APP_RECOMMENDATION_SOURCE_ID,
         itemId,
-        sourceType: APP_USAGE_SOURCE_TYPE,
+        sourceType: APP_RECOMMENDATION_SOURCE_TYPE,
         usageStats: usageByKey.get(`${APP_RECOMMENDATION_SOURCE_ID}:${itemId}`) ?? EMPTY_USAGE_STATS
       },
       lastActiveAt
@@ -2673,8 +2691,9 @@ export class RecommendationEngine {
 
   /**
    * The OS names an app by bundle id; usage rows name it by `appIdentity || path || bundleId`. This
-   * indexes the catalog both ways. Two indexed reads over the app rows, reused until the next
-   * invalidation or {@link APP_ACTIVITY_CATALOG_TTL_MS}; a failed read is not cached.
+   * indexes the catalog both ways. Two indexed reads over the app rows (the extension read is the
+   * one the novelty gate uses), reused until the next invalidation or
+   * {@link APP_ACTIVITY_CATALOG_TTL_MS}; a failed read is not cached.
    */
   private async loadAppActivityCatalog(): Promise<AppActivityCatalog> {
     const cached = this.appActivityCatalog
@@ -2687,20 +2706,7 @@ export class RecommendationEngine {
     }
     try {
       const apps = await this.appCatalogDbUtils.getFilesByType('app')
-      const extensions =
-        apps.length > 0
-          ? await this.appCatalogDbUtils.getFileExtensionsByFileIds(
-              apps.map((app) => app.id),
-              [APP_IDENTITY_EXTENSION_KEY, 'bundleId']
-            )
-          : []
-      const byFileId = new Map<number, Record<string, string>>()
-      for (const extension of extensions) {
-        if (typeof extension.value !== 'string') continue
-        const entry = byFileId.get(extension.fileId) ?? {}
-        entry[extension.key] = extension.value
-        byFileId.set(extension.fileId, entry)
-      }
+      const byFileId = await this.loadAppCatalogExtensionsByFileId(apps)
 
       for (const app of apps) {
         const entry = byFileId.get(app.id)
@@ -3229,7 +3235,11 @@ export class RecommendationEngine {
     // 的「用过」：账本里的执行，或系统报告的前台停留（⌘Tab / Dock 切过去也算用过），取较晚者。
     // 旧的 stored lastExecuted 可能来自升级前「实际启动前就记数」的入口，用它会让「最近使用」的
     // 理由站不住脚（R9）。没有可靠日期就不给这份加成，也不该被标成「最近」。
-    const lastUsedAt = resolveLastUsedAt(candidate.behavior?.lastExecutedAt, candidate.lastActiveAt)
+    const lastUsedAt = resolveLastUsedAt(
+      candidate.behavior?.lastExecutedAt,
+      candidate.lastActiveAt,
+      Date.now()
+    )
     const recencyBoost = lastUsedAt !== null ? this.calculateRecencyBoost(new Date(lastUsedAt)) : 0
     const timeContribution =
       candidate.behavior && context.timeAvailable !== false

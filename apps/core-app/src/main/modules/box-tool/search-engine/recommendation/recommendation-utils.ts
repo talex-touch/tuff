@@ -23,6 +23,7 @@ export {
   isFrequentEligible,
   toItemTimeDistribution,
   DAY_MS,
+  resolveLastUsedAt,
   toDayBucket
 } from '@talex-touch/utils/core-box'
 import {
@@ -184,19 +185,4 @@ export function resolveEvidenceBackedReason(
     default:
       return source
   }
-}
-
-/**
- * The later of the two dated "used" facts — an accepted execution and a foreground stay — or null
- * when neither exists. Neither is ever substituted for the other's absence.
- */
-export function resolveLastUsedAt(
-  lastExecutedAt: number | null | undefined,
-  lastActiveAt: number | null | undefined
-): number | null {
-  const executed = typeof lastExecutedAt === 'number' && Number.isFinite(lastExecutedAt)
-  const active = typeof lastActiveAt === 'number' && Number.isFinite(lastActiveAt)
-  if (executed && active) return Math.max(lastExecutedAt, lastActiveAt)
-  if (executed) return lastExecutedAt
-  return active ? lastActiveAt : null
 }

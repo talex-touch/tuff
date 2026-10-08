@@ -4,10 +4,13 @@ import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
 import { mapAppsToRecommendationItems } from '../../addon/apps/search-processing-service'
 import { isSelfAppIdentity } from '../../../system/self-app-identity'
 import { createLogger } from '../../../../utils/logger'
+import { APP_PROVIDER_SOURCE_ID, APP_PROVIDER_SOURCE_TYPE } from '../app-source-identity'
 
 const appSourceLog = createLogger('RecommendationEngine').child('AppSource')
 
-export const APP_RECOMMENDATION_SOURCE_ID = 'app-provider'
+export const APP_RECOMMENDATION_SOURCE_ID = APP_PROVIDER_SOURCE_ID
+/** The `item_usage_stats.source_type` the app provider writes; `APP_RECOMMENDATION_ALIASES` lists both spellings. */
+export const APP_RECOMMENDATION_SOURCE_TYPE = APP_PROVIDER_SOURCE_TYPE
 
 /** `item_usage_stats` still carries both spellings for apps. */
 export const APP_RECOMMENDATION_ALIASES = ['application', 'app'] as const

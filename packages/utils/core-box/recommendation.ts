@@ -266,3 +266,25 @@ export interface RecommendationMetadata {
   badge: RecommendationBadge
   evidence?: RecommendationEvidence
 }
+
+/**
+ * The later of the two dated "used" facts — an accepted execution and a foreground stay — or null
+ * when neither exists. Neither is ever substituted for the other's absence. With `now`, an instant
+ * in the future is ignored: it is clock skew, not a fact about the past.
+ *
+ * Shared by the main-process scorer (recency term, `recent` reason) and the renderer's evidence
+ * line so the two never date "last used" differently.
+ */
+export function resolveLastUsedAt(
+  lastExecutedAt: number | null | undefined,
+  lastActiveAt: number | null | undefined,
+  now?: number
+): number | null {
+  let latest: number | null = null
+  for (const value of [lastExecutedAt, lastActiveAt]) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue
+    if (now !== undefined && value > now) continue
+    if (latest === null || value > latest) latest = value
+  }
+  return latest
+}

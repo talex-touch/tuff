@@ -6,17 +6,11 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { activeAppService } from '../../system/active-app'
 import { foregroundAppSnapshotStore, isSelfActiveApp } from '../../system/foreground-app-snapshot'
+import { APP_PROVIDER_SOURCE_ID, APP_PROVIDER_SOURCE_TYPE } from './app-source-identity'
+
+export { APP_PROVIDER_SOURCE_ID } from './app-source-identity'
 
 const log = getLogger('search-engine')
-
-/**
- * The provider id every application row is keyed by. `item_usage_stats`, `item_time_stats` and
- * `usage_trend_daily` all use `(source_id, item_id)`, and the app provider declares this id
- * (`app-provider.ts`), so a launch recorded under anything else would land in its own bucket and
- * never join back to the catalog.
- */
-export const APP_PROVIDER_SOURCE_ID = 'app-provider'
-const APP_PROVIDER_SOURCE_TYPE = 'application'
 
 export interface AppLaunchRecord {
   /** The catalogue item id; the statistical key for this launch. */
