@@ -4,12 +4,11 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { isPlainObject, normalizeString } from './telemetrySanitizer'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const INBOX_TABLE = 'browser_notification_inbox'
 const MAX_MEMORY_ITEMS = 1000
 const MAX_METADATA_BYTES = 32 * 1024
-
-const initializedSchemas = new WeakSet<D1Database>()
 
 export type BrowserNotificationStatus = 'unread' | 'read'
 
@@ -102,31 +101,29 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return event ? readCloudflareBindings(event)?.DB ?? null : null
 }
 
+const INBOX_SCHEMA = defineD1Schema('browser-notification-inbox', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${INBOX_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        resource_type TEXT,
+        resource_id TEXT,
+        status TEXT NOT NULL DEFAULT 'unread',
+        metadata_json TEXT,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        read_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${INBOX_TABLE}_user_status_created ON ${INBOX_TABLE}(user_id, status, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_${INBOX_TABLE}_resource ON ${INBOX_TABLE}(resource_type, resource_id)`,
+  ],
+})
+
 async function ensureInboxSchema(db: D1Database): Promise<void> {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${INBOX_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      action TEXT NOT NULL,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      resource_type TEXT,
-      resource_id TEXT,
-      status TEXT NOT NULL DEFAULT 'unread',
-      metadata_json TEXT,
-      occurred_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      read_at TEXT
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${INBOX_TABLE}_user_status_created ON ${INBOX_TABLE}(user_id, status, created_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${INBOX_TABLE}_resource ON ${INBOX_TABLE}(resource_type, resource_id);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, INBOX_SCHEMA)
 }
 
 function assertString(value: unknown, field: string, maxLength = 180): string {
@@ -338,22 +335,71 @@ export async function listBrowserNotificationInbox(
   }
 
   await ensureInboxSchema(db)
+  const { results } = await listStatement(db, userId, status, limit).all<BrowserNotificationRow>()
+
+  return (results ?? []).map(mapRow)
+}
+
+function listStatement(db: D1Database, userId: string, status: BrowserNotificationStatus | 'all', limit: number) {
   const conditions = ['user_id = ?']
   const values: Array<string | number> = [userId]
   if (status !== 'all') {
     conditions.push('status = ?')
     values.push(status)
   }
-  const { results } = await db.prepare(`
+  return db.prepare(`
     SELECT id, user_id, action, title, body, resource_type, resource_id,
       status, metadata_json, occurred_at, created_at, read_at
     FROM ${INBOX_TABLE}
     WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC
     LIMIT ?;
-  `).bind(...values, limit).all<BrowserNotificationRow>()
+  `).bind(...values, limit)
+}
 
-  return (results ?? []).map(mapRow)
+function unreadCountStatement(db: D1Database, userId: string) {
+  return db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM ${INBOX_TABLE}
+    WHERE user_id = ?1 AND status = 'unread';
+  `).bind(userId)
+}
+
+export interface BrowserNotificationInboxPage {
+  notifications: BrowserNotificationInboxItem[]
+  unreadCount: number
+}
+
+/**
+ * A page of the inbox and the unread count, in one round trip: the inbox handler used to wait for
+ * the page before asking for the count.
+ */
+export async function readBrowserNotificationInbox(
+  event: H3Event | undefined,
+  options: ListBrowserNotificationInboxOptions,
+): Promise<BrowserNotificationInboxPage> {
+  const userId = assertString(options.userId, 'userId', 180)
+  const status = normalizeStatus(options.status)
+  const limit = normalizeLimit(options.limit)
+  const db = getD1Database(event)
+
+  if (!db) {
+    return {
+      notifications: await listBrowserNotificationInbox(event, options),
+      unreadCount: await countUnreadBrowserNotifications(event, userId),
+    }
+  }
+
+  await ensureInboxSchema(db)
+  const [page, count] = await db.batch([
+    listStatement(db, userId, status, limit),
+    unreadCountStatement(db, userId),
+  ])
+
+  return {
+    notifications: ((page?.results ?? []) as BrowserNotificationRow[]).map(mapRow),
+    unreadCount: Number((count?.results?.[0] as { count?: unknown } | undefined)?.count) || 0,
+  }
 }
 
 export async function countUnreadBrowserNotifications(event: H3Event | undefined, userIdValue: unknown): Promise<number> {
@@ -364,11 +410,7 @@ export async function countUnreadBrowserNotifications(event: H3Event | undefined
     return memoryItems.filter(item => item.userId === userId && item.status === 'unread').length
 
   await ensureInboxSchema(db)
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM ${INBOX_TABLE}
-    WHERE user_id = ?1 AND status = 'unread';
-  `).bind(userId).first<{ count: number }>()
+  const row = await unreadCountStatement(db, userId).first<{ count: number }>()
 
   return Number(row?.count) || 0
 }
@@ -411,11 +453,10 @@ export async function markBrowserNotificationsRead(
     return Number(result.meta?.changes) || 0
   }
 
-  const placeholders = ids.map((_, index) => `?${index + 3}`).join(', ')
   const result = await db.prepare(`
     UPDATE ${INBOX_TABLE}
     SET status = 'read', read_at = ?2
-    WHERE user_id = ?1 AND status = 'unread' AND id IN (${placeholders});
-  `).bind(userId, now, ...ids).run()
+    WHERE user_id = ?1 AND status = 'unread' AND id IN (SELECT value FROM json_each(?3));
+  `).bind(userId, now, JSON.stringify(ids)).run()
   return Number(result.meta?.changes) || 0
 }

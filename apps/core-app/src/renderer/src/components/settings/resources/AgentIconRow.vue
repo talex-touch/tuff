@@ -110,7 +110,7 @@ const summary = computed(() => {
         v-for="slot in layout.shown"
         :key="slot.agentId"
         :content="slot.tooltip"
-        :anchor="{ placement: 'top', showArrow: true }"
+        :anchor="{ placement: 'top' }"
       >
         <span
           class="AgentIconRow-Item"
@@ -125,7 +125,7 @@ const summary = computed(() => {
           />
         </span>
       </TxTooltip>
-      <TxTooltip v-if="layout.folded.length > 0" :anchor="{ placement: 'top', showArrow: true }">
+      <TxTooltip v-if="layout.folded.length > 0" :anchor="{ placement: 'top' }">
         <span
           class="AgentIconRow-More"
           :data-folded="layout.folded.map((slot) => slot.agentId).join(' ')"

@@ -1,6 +1,6 @@
 ---
 title: Utils
-description: Public helper functions exported from the TuffEx root entry and ./utils subpath
+description: Public helpers exported from the root entry and the ./utils subpath.
 category: Foundations
 status: beta
 since: 1.0.0
@@ -17,30 +17,30 @@ import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 
 ### Z-index manager
 
-Hands out overlay stacking levels from one source so components do not hard-code conflicting `z-index` values.
+One source of overlay stacking levels, so components never hard-code `z-index`.
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
-| `nextZIndex()` | `() => number` | Claim the next incremented level for a new overlay |
+| `nextZIndex()` | `() => number` | Claim the next level for a new overlay |
 | `getZIndex()` | `() => number` | Read the current top level without incrementing |
 | `refreshZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Recount from a given baseline |
-| `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Reset to the seed after unmount / in tests |
-| `configureZIndex(options)` | `(options) => void` | Configure the base seed and overrides globally |
+| `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Reset to the seed after unmount or in tests |
+| `configureZIndex(options)` | `(options) => void` | Set the base seed and overrides globally |
 | `onZIndexEvent(listener)` | `(listener) => () => void` | Subscribe to level changes; returns an unsubscribe |
 
 ### Environment guards
 
-SSR-safe checks for browser API availability so you never touch `window` / `document` / `navigator` blindly.
+SSR-safe checks before touching `window` / `document` / `navigator`.
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
-| `hasWindow()` | `() => boolean` | Guard before accessing `window` |
-| `hasDocument()` | `() => boolean` | Guard before accessing `document` |
+| `hasWindow()` | `() => boolean` | Guard before touching `window` |
+| `hasDocument()` | `() => boolean` | Guard before touching `document` |
 | `hasNavigator()` | `() => boolean` | Guard before `navigator` (vibrate, clipboard) |
 
 ### Haptics (vibrate)
 
-Wraps `navigator.vibrate` with semantic patterns.
+Semantic patterns over `navigator.vibrate`.
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
@@ -51,21 +51,21 @@ Wraps `navigator.vibrate` with semantic patterns.
 
 ### Toast
 
-A global toast queue that does not require a per-page host (rendering still needs `TxToastHost`).
+A global toast queue with no per-page host; rendering still needs `TxToastHost`.
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
-| `toast(options)` | `(options) => string` | Show a toast; returns an id usable to dismiss it |
-| `dismissToast(id)` | `(id: string) => void` | Dismiss a specific toast |
+| `toast(options)` | `(options) => string` | Show a toast; returns an id for dismissing it |
+| `dismissToast(id)` | `(id: string) => void` | Dismiss one toast |
 | `clearToasts()` | `() => void` | Clear every toast |
 
 ### Dialog manager
 
-Serially manages global dialogs by priority with lifecycle callbacks.
+Queues global dialogs by priority and runs them one at a time, with lifecycle callbacks.
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
-| `getDialogManager()` | `() => DialogManager` | Get the global singleton to queue / open dialogs |
+| `getDialogManager()` | `() => DialogManager` | Get the global singleton to queue or open dialogs |
 
 ### Animation
 
@@ -73,13 +73,13 @@ Serially manages global dialogs by priority with lifecycle callbacks.
 |--------|-----------|-------------|
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | Run a FLIP transition on an element (powers `TxFlipOverlay`) |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | Measure and transition size changes (powers `TxAutoSizer`) |
-| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | Step a value you animate from your own frame loop along a spring (`{ stiffness, damping, mass? }`, `dt` in seconds), keeping its velocity when the target moves; also the `integrate` for `useJellyIndicator`'s glide |
-| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | Run an ease string through this before handing it to GSAP: `spring(...)` and `cubic-bezier(...)` become progress functions (GSAP knows neither form and silently falls back to its default ease), while GSAP's own names come back untouched; every GSAP-driven `TxBaseAnchor` motion goes through it |
-| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | Evaluate a CSS timing function in JS: `cubic-bezier(...)`, an evenly spaced `linear(...)` list, and `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`; anything else degrades to a clamped linear ramp, so it never returns `null`. Cached per spec, so a frame loop can call it every frame. `TxLiquid` and `TxTextMorph` use it to keep script-driven motion on the same curve as a CSS transition |
-| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | Closed-form underdamped spring normalised to the timeline: leaves 0, passes 1, settles back and lands on exactly 1; more damping, less overshoot. Unlike `stepSpring`, which integrates frame by frame, this is a fixed curve you can use directly as an `ease` |
+| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | Step a value along a spring (`{ stiffness, damping, mass? }`, `dt` in seconds) from your own frame loop, keeping velocity when the target moves; usable as `useJellyIndicator`'s glide `integrate` |
+| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | Convert an ease before handing it to GSAP: `spring(...)` and `cubic-bezier(...)` become progress functions (GSAP knows neither and silently uses its default); GSAP names pass through |
+| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | Evaluate a CSS timing function in JS: `cubic-bezier(...)`, evenly spaced `linear(...)`, and `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`; anything else degrades to clamped linear, never `null`. Cached per spec, safe per frame |
+| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | Closed-form underdamped spring normalized to the timeline: overshoots 1, settles, lands on exactly 1. Unlike frame-stepped `stepSpring`, usable directly as an `ease` |
 | `parseSpringEase(value)` | `(value: string \| undefined \| null) => ((t: number) => number) \| null` | Parse `spring` / `spring(omega)` / `spring(omega, zeta)`; anything else returns `null` |
-| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | Timing function equivalent to CSS `cubic-bezier()`; the charts entry's `cubicBezier` is this same function |
-| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | Parse a `cubic-bezier(...)` string; GSAP names, keywords and spring forms return `null`, as do x controls outside [0, 1] |
+| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | Equivalent to CSS `cubic-bezier()`; the charts entry's `cubicBezier` is this function |
+| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | Parse a `cubic-bezier(...)` string; GSAP names, keywords, spring forms, or x controls outside [0, 1] return `null` |
 
 ### Install helper
 
@@ -90,4 +90,4 @@ Serially manages global dialogs by priority with lifecycle callbacks.
 ## Technologies
 
 - Barrel: `packages/tuffex/packages/components/src/utils/index.ts` re-exports `packages/tuffex/packages/utils/*`.
-- Subpath entry: `@talex-touch/tuffex/utils`; the root `@talex-touch/tuffex` entry also folds in these exports.
+- Subpath entry `@talex-touch/tuffex/utils`; the root `@talex-touch/tuffex` entry exports the same helpers.

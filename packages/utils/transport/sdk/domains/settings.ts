@@ -210,6 +210,9 @@ export interface SettingsSdk {
     rollback: (
       request?: CatalogVoiceProviderRollbackRequest,
     ) => Promise<CatalogVoiceProviderRollbackResponse>;
+    onStatusChanged: (
+      handler: (snapshot: CatalogVoiceProviderStatusResponse) => void,
+    ) => () => void;
   };
 }
 
@@ -322,6 +325,8 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       sync: () => transport.send(CatalogEvents.voiceProvider.sync),
       rollback: (request) =>
         transport.send(CatalogEvents.voiceProvider.rollback, request ?? {}),
+      onStatusChanged: (handler) =>
+        transport.on(CatalogEvents.voiceProvider.statusChanged, handler),
     },
   };
 }

@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Sidebar workspace
-
-:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" title="Sidebar workspace" description="With focus inside, ⌘K opens the command palette; the sidebar switches sections and New workflow writes to the feed; the bell opens the latest notification. All figures are sample data."}
+:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" description="⌘K opens the command palette, the sidebar switches sections, and the bell opens notifications. Sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -107,10 +106,8 @@ code: |
 :::
 
 ### Top-nav console
-
-A console with its navigation along the top: the first row is a global bar (product switcher, workspace and data region, search, help, notifications, account), the second holds the section tabs and who is online, and the breadcrumb in the page header drills into a project and back out one level at a time. Next to the sidebar workspace it gives all the horizontal space to the content grid, which suits a team console with few sections (five or fewer) and frequent jumps between products and workspaces; a back office with many, deeply nested sections still reads better with a sidebar.
-
-:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" title="Top-nav console" description="With focus inside, ⌘K opens the command palette; product, workspace, notifications and account are dropdown menus, with a Data region submenu in the workspace menu; a project card opens its detail and the breadcrumb walks back. All figures are sample data."}
+Navigation folds into two rows at the top, leaving the full width to content. Suits consoles with few sections and frequent product or workspace switches.
+:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" description="⌘K opens the command palette; product, workspace, notifications, and account are dropdown menus. Sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -243,46 +240,42 @@ code: |
 
 ## Overview
 
-The admin shell of a Tuff team workspace. Workspace navigation runs down the left; the top bar holds the current location, a page filter, the ⌘K command palette, notifications and the account menu; the main area is an overview dashboard. Switching sections swaps only the main area — the shell itself stays put. The second style, Top-nav console, folds the navigation into two rows across the top, gives the full width to a project grid, and switches product and workspace from the global bar.
+The admin shell of a team workspace: switching sections replaces only the main area.
 
-It suits any desktop or web back office that needs navigation, global commands and notifications together: a plugin store console, a team dashboard, an operations workbench.
-
-- With focus inside the template, ⌘K (Ctrl+K on Windows) opens the command palette; the ⌘K keycap in the top bar does too. The key is bound on the template root and calls `preventDefault()`, so the docs site's own ⌘K search does not open as well.
-- The sidebar switches sections: Overview is the dashboard; Plugins lets you turn each plugin on or off and the Active plugins metric follows; the rest are empty states with an action. Both New workflow in the sidebar and the + on the Workflows row add an entry to the top of the feed and bump the Workflows count.
-- The bell opens the latest notification and clears the unread count. Actions from the palette and the account menu (pause sync, invite, sign out) report in the same tray and close after 3.2 seconds; pausing sync turns the Services status and the sidebar's sync dot amber together.
-- The top-bar filter only works on the current page: activity on Overview, plugins on Plugins; it is disabled elsewhere.
-- Once in view it plays once: at 0.8 s the Translate plugin installs into the feed and the plugin count goes up; at 1.4 s the bell gains one and the notification opens; at 2 s Launches today rolls to 1,291. A click or any key inside the template stops it; with reduced motion on, the final state shows straight away.
-- Wide (≥ 960px) shows four metric cards, a rail with who is online, services and devices, and an axis plus top queries on the trend; narrow (< 640px) folds the sidebar into a menu button in the top bar and turns the metric cards into a horizontal scroller.
-- Top-nav console: ⌘K is bound on the template root as in the sidebar style; the search field in the global bar is only an entry and opens the same palette. The palette jumps to sections, opens projects, creates a plugin or workflow and switches workspace; Workspace settings is disabled without owner permission.
-- Top-nav console: product, workspace, notifications and account are dropdown menus that work with the arrow keys; Data region in the workspace menu is a submenu (→ opens it, ← goes back). Switching workspace swaps the projects, members, activity and tab counts together; a project card opens its detail, and the breadcrumb's Projects and workspace name walk back out.
-- Top-nav console: once in view it plays once — at 0.8 s Zhou Yining comes online and the count goes from 3 to 4; at 1.6 s the Translate build finishes and 2.4.1 is published, adding an entry to the top of the feed; at 2.2 s the bell gains an unread item and a note with View appears bottom right. A click or any key inside the template stops it; with reduced motion on, the final state shows straight away with no note. Wide (≥ 960px) adds the rail and the build queue, and ≥ 1200px lays recent projects out in four columns; narrow (< 640px) swaps the global bar for a TxNavBar and moves the menus into a drawer.
+- ⌘K (Ctrl+K on Windows) is bound on the template root and calls `preventDefault()`, so the docs site's own search stays closed.
+- The sidebar switches sections; New workflow adds an entry to the top of the feed.
+- The bell opens the latest notification; feedback from commands and the account menu lands in the same tray and closes after 3.2 seconds.
+- It plays once when it scrolls into view; a click or key press stops it, and reduced motion shows the final state.
+- Wide (≥ 960px) adds a rail; narrow (< 640px) folds the sidebar into a top-bar menu.
+- Top-nav console: product, workspace, notifications, and account are dropdown menus, with a Data region submenu under workspace; a project card opens its detail, and the breadcrumb walks back.
+- Top-nav console: narrow (< 640px) swaps the global bar for a TxNavBar and moves the menus into a drawer.
 
 ## Customization
 
-- New navigation: `navItems` is TxSidebarNav's `items`, and the narrow menu button reuses the same list. `badge` takes a number and replays its pop-in whenever it changes.
-- Keep global shortcuts off `window` and `document`: the host page usually owns ⌘K and `/` already. Give TxSidebarNav's `search-hint` a multi-character glyph such as `⌘K` only — a single character makes it take that key for the whole page on `document`.
-- Use the controlled TxToastPanel for notifications rather than the global `toast()`: the tray stays inside the shell, hangs off the bell, and never shares a queue with toasts elsewhere on the page.
-- Once there are many sections, turn the main area into a router outlet (`<RouterView>` or `<NuxtPage>`) and keep only the sidebar, top bar and palette in the shell.
-- Top-nav console: TxDropdownMenu panels top out at 360px, which is why the product switcher is a two-column app grid; for a true multi-column mega panel use TxPopover with an explicit `width` and add moving focus in plus the Tab and Esc hand-back yourself. TxNavBar's side cells are buttons themselves and cannot hold a menu, so the narrow menus have to live in a drawer; give icon-only cells some screen-reader text.
+- The navigation data is TxSidebarNav's `items`; the narrow menu reuses it.
+- Bind shortcuts on the template root, not `window` or `document`; give `search-hint` a multi-character glyph such as `⌘K`.
+- Use a controlled TxToastPanel for notifications, not the global `toast()`.
+- With many sections, turn the main area into a router outlet (`<RouterView>` / `<NuxtPage>`).
+- Top-nav console: TxDropdownMenu panels top out at 360px; for wider panels use TxPopover with an explicit `width` and handle focus yourself.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Sidebar | [TxSidebarNav](/docs/dev/components/sidebar-nav) | Workspace switcher, grouped navigation with counts, the New workflow action and a per-row + action; sync status in the footer |
-| Top bar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxSearchInput](/docs/dev/components/search-input), [TxKbd](/docs/dev/components/kbd), [TxTooltip](/docs/dev/components/tooltip) | Current location (the workspace name leads back to Overview), a filter for the current page, the ⌘K entry |
-| Notification tray | [TxIconButton](/docs/dev/components/button), [TxBadge](/docs/dev/components/badge), [TxToastPanel](/docs/dev/components/toast-panel), [TxIconChip](/docs/dev/components/icon-chip) | The bell and its unread count; the latest item hangs below the bell on a dashed tether |
-| Account menu | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxAvatar](/docs/dev/components/avatar) | Command palette, pause clipboard sync, sign out |
-| Command palette | [TxCommandPalette](/docs/dev/components/command-palette) | Jump to a section, create a workflow, pause sync, invite a teammate; commands without permission are disabled |
-| Metrics | [TxStatCard](/docs/dev/components/stat-card), [TxTextMorph](/docs/dev/components/text-morph) | Launches today, active plugins, search latency; index coverage (progress variant) when wide |
-| Activity | [TxTimeline](/docs/dev/components/timeline), [TxSearchEmpty](/docs/dev/components/search-empty) | Recent events, new ones slide in at the top; an empty filter offers Clear filter |
-| Query trend | [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart) | CoreBox queries per hour today, read by hover or arrow keys; axis and top queries when wide |
-| Rail (wide) | [TxStatusBadge](/docs/dev/components/status-badge), [TxAvatar](/docs/dev/components/avatar), [TxButton](/docs/dev/components/button) | Who is online, service status, devices; at column width only the services stay |
-| Other sections | [TxEmptyState](/docs/dev/components/empty-state), [TuffSwitch](/docs/dev/components/switch), [TxTag](/docs/dev/components/tag) | Plugins can be switched on and off one by one; the other sections are empty states with an action |
-| Global bar (Top-nav console) | [TxDropdownMenu / TxDropdownItem / TxDropdownSubmenu](/docs/dev/components/dropdown-menu), [TxIconChip](/docs/dev/components/icon-chip), [TxKbd](/docs/dev/components/kbd) | Product switcher (a two-column app grid plus recent items), workspace switcher with a Data region submenu, a search entry that opens the palette; Docs and Changelog when wide |
-| Notifications and account (Top-nav console) | [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxBadge](/docs/dev/components/badge), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxAvatar](/docs/dev/components/avatar), [TxTooltip](/docs/dev/components/tooltip) | The unread count on the bell's corner; notifications are menu items that open their project and mark themselves read, and Mark all as read keeps the menu open; the account menu |
-| Section tabs (Top-nav console) | [TxTabs / TxTabItem](/docs/dev/components/tabs), [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar), [TxTextMorph](/docs/dev/components/text-morph) | Underlined tabs, Projects with a count and Settings behind owner permission; who is online stays on the right |
-| Page header (Top-nav console) | TxTabHeader from [TxTabs](/docs/dev/components/tabs), [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxButton / TxSplitButton](/docs/dev/components/button) | The breadcrumb drills into a project and back one level at a time; invite a teammate, create a project by type |
-| Projects (Top-nav console) | [TxCard](/docs/dev/components/card), [TxStatusBadge](/docs/dev/components/status-badge), [TxProgressBar](/docs/dev/components/progress-bar), [TxFilterChips](/docs/dev/components/filter-chips), [TxSearchInput](/docs/dev/components/search-input), [TxCardItem](/docs/dev/components/card-item) | A card grid of recent projects (the whole card is the target); type filters and search on Projects; versions and collaborators in the detail |
-| Rail (Top-nav console, wide) | [TxCardItem](/docs/dev/components/card-item), [TxSparkChart](/docs/dev/components/spark-chart) | Who is online, builds this week (sample data) and activity; the main area gains a build queue |
-| Narrow (Top-nav console) | [TxNavBar](/docs/dev/components/nav-bar), [TxDrawer](/docs/dev/components/drawer) | The global bar folds into a compact top bar, and workspace, notifications, products and account move into a drawer |
+| Sidebar | [TxSidebarNav](/docs/dev/components/sidebar-nav) | Workspace switcher, grouped navigation, and the main action |
+| Top bar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxSearchInput](/docs/dev/components/search-input), [TxKbd](/docs/dev/components/kbd), [TxTooltip](/docs/dev/components/tooltip) | Location, filter, and the ⌘K entry |
+| Notification tray | [TxIconButton](/docs/dev/components/button), [TxBadge](/docs/dev/components/badge), [TxToastPanel](/docs/dev/components/toast-panel), [TxIconChip](/docs/dev/components/icon-chip) | Bell, unread count, and latest notification |
+| Account menu | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxAvatar](/docs/dev/components/avatar) | Account actions |
+| Command palette | [TxCommandPalette](/docs/dev/components/command-palette) | Navigation and global commands |
+| Metrics | [TxStatCard](/docs/dev/components/stat-card), [TxTextMorph](/docs/dev/components/text-morph) | Key metrics |
+| Activity | [TxTimeline](/docs/dev/components/timeline), [TxSearchEmpty](/docs/dev/components/search-empty) | Recent events and the no-results state |
+| Query trend | [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart) | Queries per hour |
+| Rail (wide) | [TxStatusBadge](/docs/dev/components/status-badge), [TxAvatar](/docs/dev/components/avatar), [TxButton](/docs/dev/components/button) | Who is online, services, devices |
+| Other sections | [TxEmptyState](/docs/dev/components/empty-state), [TuffSwitch](/docs/dev/components/switch), [TxTag](/docs/dev/components/tag) | Plugin toggles and empty states |
+| Global bar (Top-nav console) | [TxDropdownMenu / TxDropdownItem / TxDropdownSubmenu](/docs/dev/components/dropdown-menu), [TxIconChip](/docs/dev/components/icon-chip), [TxKbd](/docs/dev/components/kbd) | Product, workspace, and data-region switching; search entry |
+| Notifications and account (Top-nav console) | [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxBadge](/docs/dev/components/badge), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxAvatar](/docs/dev/components/avatar), [TxTooltip](/docs/dev/components/tooltip) | Unread badge, notification menu, and account menu |
+| Section tabs (Top-nav console) | [TxTabs / TxTabItem](/docs/dev/components/tabs), [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar), [TxTextMorph](/docs/dev/components/text-morph) | Section tabs and who is online |
+| Page header (Top-nav console) | TxTabHeader from [TxTabs](/docs/dev/components/tabs), [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxButton / TxSplitButton](/docs/dev/components/button) | Breadcrumb drill-down and create-by-type |
+| Projects (Top-nav console) | [TxCard](/docs/dev/components/card), [TxStatusBadge](/docs/dev/components/status-badge), [TxProgressBar](/docs/dev/components/progress-bar), [TxFilterChips](/docs/dev/components/filter-chips), [TxSearchInput](/docs/dev/components/search-input), [TxCardItem](/docs/dev/components/card-item) | Project grid, filters, and detail |
+| Rail (Top-nav console, wide) | [TxCardItem](/docs/dev/components/card-item), [TxSparkChart](/docs/dev/components/spark-chart) | Who is online, builds, and activity |
+| Narrow (Top-nav console) | [TxNavBar](/docs/dev/components/nav-bar), [TxDrawer](/docs/dev/components/drawer) | Compact top bar and drawer menus |

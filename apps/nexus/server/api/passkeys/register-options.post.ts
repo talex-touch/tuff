@@ -5,8 +5,9 @@ import { requireSessionAuth } from '../../utils/auth'
 import { createWebAuthnChallenge, getUserById } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSessionAuth(event)
-  const user = await getUserById(event, userId)
+  const auth = await requireSessionAuth(event)
+  const { userId } = auth
+  const user = auth.user ?? await getUserById(event, userId)
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }

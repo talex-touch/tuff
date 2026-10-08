@@ -8,6 +8,7 @@ import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 import { buildReleaseNotesPath } from './releaseNotesPath'
 import { saveUpdateAsset } from './updateAssetStorage'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const UPDATES_KEY = 'dashboard:updates'
 const UPDATES_TABLE = 'dashboard_updates'
@@ -16,17 +17,8 @@ const UPDATES_SETTINGS_TABLE = 'dashboard_update_settings'
 const UPDATES_SETTINGS_ID = 'global'
 const DEFAULT_PAYLOAD_CONTENT_TYPE = 'application/json'
 
-let schemaInitialized = false
 let hasLoggedDashboardDb = false
 let hasLoggedDashboardFallback = false
-
-async function ensureUpdateColumn(db: D1Database, name: string, ddl: string) {
-  const { results } = await db.prepare(`PRAGMA table_info(${UPDATES_TABLE});`).all<{ name: string }>()
-  const exists = (results ?? []).some(row => row.name === name)
-  if (!exists) {
-    await db.prepare(`ALTER TABLE ${UPDATES_TABLE} ADD COLUMN ${ddl};`).run()
-  }
-}
 
 interface D1UpdateRow {
   id: string
@@ -69,54 +61,59 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return db
 }
 
+/**
+ * The update columns after `title` were added over time. Each used to cost its own `PRAGMA` on every
+ * cold isolate (nine of them; 2,812 runs in a week of production).
+ */
+const DASHBOARD_SCHEMA = defineD1Schema('dashboard-updates', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${UPDATES_TABLE} (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL DEFAULT 'news',
+        scope TEXT NOT NULL DEFAULT 'web',
+        channels TEXT NOT NULL DEFAULT '[]',
+        release_tag TEXT,
+        title TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        tags TEXT NOT NULL,
+        link TEXT NOT NULL,
+        payload_key TEXT,
+        payload_sha256 TEXT,
+        payload_content_type TEXT,
+        payload_version TEXT,
+        payload_size INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_dashboard_updates_release_tag ON ${UPDATES_TABLE}(release_tag)`,
+    `CREATE TABLE IF NOT EXISTS ${UPDATES_SETTINGS_TABLE} (
+        id TEXT PRIMARY KEY,
+        sync_base_url TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+  ],
+  columns: [
+    {
+      table: UPDATES_TABLE,
+      columns: [
+        { name: 'type', ddl: "type TEXT NOT NULL DEFAULT 'news'" },
+        { name: 'scope', ddl: "scope TEXT NOT NULL DEFAULT 'web'" },
+        { name: 'channels', ddl: "channels TEXT NOT NULL DEFAULT '[]'" },
+        { name: 'release_tag', ddl: 'release_tag TEXT' },
+        { name: 'payload_key', ddl: 'payload_key TEXT' },
+        { name: 'payload_sha256', ddl: 'payload_sha256 TEXT' },
+        { name: 'payload_content_type', ddl: 'payload_content_type TEXT' },
+        { name: 'payload_version', ddl: 'payload_version TEXT' },
+        { name: 'payload_size', ddl: 'payload_size INTEGER' },
+      ],
+    },
+  ],
+})
+
 async function ensureDashboardSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${UPDATES_TABLE} (
-      id TEXT PRIMARY KEY,
-      type TEXT NOT NULL DEFAULT 'news',
-      scope TEXT NOT NULL DEFAULT 'web',
-      channels TEXT NOT NULL DEFAULT '[]',
-      release_tag TEXT,
-      title TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      tags TEXT NOT NULL,
-      link TEXT NOT NULL,
-      payload_key TEXT,
-      payload_sha256 TEXT,
-      payload_content_type TEXT,
-      payload_version TEXT,
-      payload_size INTEGER,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await ensureUpdateColumn(db, 'type', "type TEXT NOT NULL DEFAULT 'news'")
-  await ensureUpdateColumn(db, 'scope', "scope TEXT NOT NULL DEFAULT 'web'")
-  await ensureUpdateColumn(db, 'channels', "channels TEXT NOT NULL DEFAULT '[]'")
-  await ensureUpdateColumn(db, 'release_tag', 'release_tag TEXT')
-  await ensureUpdateColumn(db, 'payload_key', 'payload_key TEXT')
-  await ensureUpdateColumn(db, 'payload_sha256', 'payload_sha256 TEXT')
-  await ensureUpdateColumn(db, 'payload_content_type', 'payload_content_type TEXT')
-  await ensureUpdateColumn(db, 'payload_version', 'payload_version TEXT')
-  await ensureUpdateColumn(db, 'payload_size', 'payload_size INTEGER')
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_dashboard_updates_release_tag ON ${UPDATES_TABLE}(release_tag);`).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${UPDATES_SETTINGS_TABLE} (
-      id TEXT PRIMARY KEY,
-      sync_base_url TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  schemaInitialized = true
+  await ensureD1Schema(db, DASHBOARD_SCHEMA)
 }
 
 export type UpdateScope = 'web' | 'system' | 'both'

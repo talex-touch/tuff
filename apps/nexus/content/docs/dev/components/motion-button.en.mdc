@@ -21,7 +21,7 @@ import '@talex-touch/tuffex/motion-button/style.css'
 
 ### All interactions and source combinations
 
-Filter any of the 13 interactions, inspect all 35 icon pairs, and switch between grid, list and icon-matrix layouts. Each specimen supports pointer hover, keyboard focus, native activation and decorative replay. The demo caller owns selected state and activation counts; the copy specimen writes to the real clipboard.
+Filter any of the 13 interactions, inspect all 35 icon pairs, and switch between grid, list and icon-matrix layouts. Each specimen supports pointer hover, keyboard focus, native activation and decorative replay. Selected state and activation counts live only in the demo's local state; the copy specimen writes to the real clipboard.
 
 :::TuffDemoWrapper{demo="MotionButtonDemo" code-lang="vue"}
 ---

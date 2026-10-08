@@ -1,14 +1,13 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { SceneRunFallbackTrailItem, SceneRunResult, SceneRunSelection, SceneRunTraceStep, SceneRunUsage } from './sceneOrchestrator'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const LEDGER_TABLE = 'provider_usage_ledger'
 const JSON_LIMIT_BYTES = 128 * 1024
-
-const initializedSchemas = new WeakSet<D1Database>()
 
 export type ProviderUsageLedgerStatus = 'planned' | 'completed' | 'failed'
 export type ProviderUsageLedgerMode = 'dry_run' | 'execute'
@@ -101,43 +100,41 @@ function getD1Database(event: H3Event): D1Database {
   return db
 }
 
+const PROVIDER_USAGE_LEDGER_SCHEMA = defineD1Schema('provider-usage-ledger', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${LEDGER_TABLE} (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        scene_id TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        strategy_mode TEXT NOT NULL,
+        capability TEXT,
+        provider_id TEXT,
+        unit TEXT NOT NULL,
+        quantity REAL NOT NULL DEFAULT 0,
+        billable INTEGER NOT NULL DEFAULT 0,
+        estimated INTEGER NOT NULL DEFAULT 0,
+        pricing_ref TEXT,
+        provider_usage_ref TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        trace_json TEXT NOT NULL,
+        fallback_trail_json TEXT NOT NULL,
+        selected_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_run ON ${LEDGER_TABLE}(run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_scene ON ${LEDGER_TABLE}(scene_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_provider ON ${LEDGER_TABLE}(provider_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_capability ON ${LEDGER_TABLE}(capability, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_usage_ref ON ${LEDGER_TABLE}(provider_usage_ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_status ON ${LEDGER_TABLE}(status, created_at)`,
+  ],
+})
+
 async function ensureProviderUsageLedgerSchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${LEDGER_TABLE} (
-      id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL,
-      scene_id TEXT NOT NULL,
-      mode TEXT NOT NULL,
-      status TEXT NOT NULL,
-      strategy_mode TEXT NOT NULL,
-      capability TEXT,
-      provider_id TEXT,
-      unit TEXT NOT NULL,
-      quantity REAL NOT NULL DEFAULT 0,
-      billable INTEGER NOT NULL DEFAULT 0,
-      estimated INTEGER NOT NULL DEFAULT 0,
-      pricing_ref TEXT,
-      provider_usage_ref TEXT,
-      error_code TEXT,
-      error_message TEXT,
-      trace_json TEXT NOT NULL,
-      fallback_trail_json TEXT NOT NULL,
-      selected_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_run ON ${LEDGER_TABLE}(run_id);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_scene ON ${LEDGER_TABLE}(scene_id, created_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_provider ON ${LEDGER_TABLE}(provider_id, created_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_capability ON ${LEDGER_TABLE}(capability, created_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_usage_ref ON ${LEDGER_TABLE}(provider_usage_ref);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_status ON ${LEDGER_TABLE}(status, created_at);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, PROVIDER_USAGE_LEDGER_SCHEMA)
 }
 
 function clampText(value: unknown, maxLength: number): string | null {
@@ -373,9 +370,11 @@ export async function recordProviderUsageLedger(event: H3Event, run: SceneRunRes
   const usageItems = normalizeRunUsage(run)
   const entries: ProviderUsageLedgerEntry[] = []
 
+  // Every usage row in one round trip (and one transaction); they were inserted one by one.
+  const inserts: D1PreparedStatement[] = []
   for (const usage of usageItems) {
     const id = randomUUID()
-    await db.prepare(`
+    inserts.push(db.prepare(`
       INSERT INTO ${LEDGER_TABLE} (
         id, run_id, scene_id, mode, status, strategy_mode, capability, provider_id,
         unit, quantity, billable, estimated, pricing_ref, provider_usage_ref,
@@ -403,7 +402,7 @@ export async function recordProviderUsageLedger(event: H3Event, run: SceneRunRes
       fallbackTrailJson,
       selectedJson,
       now,
-    ).run()
+    ))
 
     entries.push({
       id,
@@ -428,6 +427,9 @@ export async function recordProviderUsageLedger(event: H3Event, run: SceneRunRes
       createdAt: now,
     })
   }
+
+  if (inserts.length)
+    await db.batch(inserts)
 
   return entries
 }

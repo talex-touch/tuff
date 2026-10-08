@@ -128,7 +128,7 @@ code: |
 | `update:dateCursor` | 点索引或 `null`。 |
 | `select` | 指针点击或Enter/空格选中的数据项。 |
 
-插槽：`header({ total, period })`、`tooltip({ hover })`、`footer({ dataset })`。tooltip复用现有charts core上下文与 `TxChartTooltip` 定位。`dot`、`line`、`dashed` 保留不同标记结构。绘图区支持方向键、Home/End、Enter/空格和Escape；图例与周期使用原生按钮。
+插槽：`header({ total, period })`、`tooltip({ hover })`、`footer({ dataset })`。tooltip复用现有charts core上下文与 `TxChartTooltip` 定位。默认tooltip以悬停的数据点（日期或类目）为标题，数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）两者相同，只保留数据行。`dot`、`line`、`dashed` 保留不同标记结构。绘图区支持方向键、Home/End、Enter/空格和Escape；图例与周期使用原生按钮。
 
 ### CSS 变量
 

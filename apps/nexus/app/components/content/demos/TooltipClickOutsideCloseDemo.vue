@@ -21,7 +21,6 @@ const labels = computed(() => (locale.value === 'zh'
       v-model="open"
       trigger="click"
       :content="labels.content"
-      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">
         {{ labels.trigger }}

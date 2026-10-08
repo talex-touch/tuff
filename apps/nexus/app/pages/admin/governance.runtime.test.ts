@@ -26,6 +26,9 @@ interface GovernancePageContext {
 interface GovernancePageOptions {
   role: 'admin' | 'member'
   failStorageNotification?: boolean
+  /** Holds every read until the test lets them through, to see which ones were sent meanwhile. */
+  gate?: Promise<void>
+  storageProfiles?: Array<Record<string, unknown>>
 }
 
 interface GovernancePageInstance {
@@ -47,7 +50,7 @@ interface GovernancePageDependencies {
   user: { value: { role: 'admin' | 'member' } }
   navigateTo: Mock
   requestJson: Mock
-  useAsyncData: (key: string, loader: () => Promise<unknown>, config?: AsyncDataOptions) => Promise<unknown>
+  useAsyncData: (key: string, loader: () => Promise<unknown>, config?: AsyncDataOptions) => unknown
   onMounted: (callback: () => void) => void
 }
 
@@ -139,7 +142,15 @@ beforeAll(async () => {
   setupGovernanceFacade = await compileGovernanceFacade()
 })
 
+let setupSettled = false
+let lastRequestJson: Mock | null = null
+
+function requestUrlsSent(): string[] {
+  return (lastRequestJson?.mock.calls ?? []).map(call => String(call[0]))
+}
+
 async function createGovernancePage(options: GovernancePageOptions): Promise<GovernancePageInstance> {
+  setupSettled = false
   const asyncRecords: AsyncRecord[] = []
   const refreshOrder: string[] = []
   const stopWatchers: Array<() => void> = []
@@ -147,6 +158,8 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
   const navigateTo = vi.fn()
   const user = ref({ role: options.role })
   const requestJson = vi.fn(async (url: string) => {
+    if (options.gate)
+      await options.gate
     if (url === '/api/dashboard/storage/policies') {
       return {
         policies: [],
@@ -164,7 +177,7 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
           utilization: 0.9,
           reasons: ['max-bytes-warning'],
         }],
-        profiles: [],
+        profiles: options.storageProfiles ?? [],
         generatedAt: '2026-07-12T00:00:00.000Z',
       }
     }
@@ -184,6 +197,7 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
 
     return {}
   })
+  lastRequestJson = requestJson
 
   const trackedWatch = (...args: Parameters<typeof watch>) => {
     const stop = watch(...args)
@@ -191,7 +205,9 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
     return stop
   }
 
-  const useAsyncData = async (key: string, loader: () => Promise<unknown>, config: AsyncDataOptions = {}) => {
+  // Like Nuxt's: the refs are there at once, the request is already on its way, and the result is
+  // also a promise of itself for a caller that waits for the data.
+  const useAsyncData = (key: string, loader: () => Promise<unknown>, config: AsyncDataOptions = {}) => {
     const data = ref(config.default?.())
     const pending = ref(false)
     const error = ref<unknown>(null)
@@ -211,11 +227,13 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
     })
 
     asyncRecords.push({ key, refresh })
-    await refresh()
+    const asyncData = { data, pending, error, refresh }
+    // Nuxt watches the sources from the start, while the first read is still on its way.
     for (const source of config.watch ?? [])
       trackedWatch(source as never, () => { void refresh() })
+    const ready = refresh().then(() => asyncData)
 
-    return { data, pending, error, refresh }
+    return Object.assign(ready, asyncData)
   }
 
   const context = await setupGovernanceFacade({
@@ -226,6 +244,7 @@ async function createGovernancePage(options: GovernancePageOptions): Promise<Gov
     useAsyncData,
     onMounted: callback => mountedCallbacks.push(callback),
   })
+  setupSettled = true
   for (const callback of mountedCallbacks)
     callback()
   return {
@@ -285,6 +304,33 @@ describe('dashboard governance page runtime contract', () => {
       query: expect.objectContaining({ days: 7 }),
     })
 
+    page.dispose()
+  })
+
+  it('sends all ten reads at once and mounts when the slowest is back', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const pageReady = createGovernancePage({ role: 'admin', gate })
+    await flushReactiveWork()
+
+    // Held by the gate: every read is already on its way, and the page is still waiting for them.
+    expect(new Set(requestUrlsSent()).size).toBe(10)
+    expect(setupSettled).toBe(false)
+
+    release()
+    const page = await pageReady
+    expect(setupSettled).toBe(true)
+    page.dispose()
+  })
+
+  it('reads the storage channel aggregate once when the profiles arrive naming the channel it already asked for', async () => {
+    const page = await createGovernancePage({
+      role: 'admin',
+      storageProfiles: [{ id: 'cloudflare-r2', channel: 'r2', provider: 'cloudflare-r2', label: 'Cloudflare R2' }],
+    })
+    await flushReactiveWork()
+
+    expect(requestUrlsSent().filter(url => url === '/api/dashboard/storage/channels/analytics')).toHaveLength(1)
     page.dispose()
   })
 

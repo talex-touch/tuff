@@ -1,6 +1,6 @@
 ---
 title: "Checkbox 复选框"
-description: "用于布尔选择的复选框组件，支持键盘切换、可访问性标签、填充态和 SVG 勾选变体。"
+description: "在选中与未选中之间切换的复选控件"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,9 +11,8 @@ verified: true
 
 ## 用法
 
-点击复选框或文案即可切换状态，选中态会跟随视觉变体播放填充或勾选动画。
-
-### Checkbox
+### 基础
+点击方框或文案切换。
 :::TuffDemoWrapper{demo="CheckboxCheckboxDemo" code-lang="vue"}
 ---
 code: |
@@ -29,177 +28,87 @@ code: |
 ---
 :::
 
-默认 `checkmark` 会显示内部勾选标记；需要更收敛的纯填充样式时，可使用 `variant="fill"`。
-
-### Checkbox variants
+### 变体
+默认 `checkmark` 显示勾选标记；`variant="fill"` 只填充方框。
 :::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const fillChecked = ref(true)
-  const checkmarkChecked = ref(true)
-  </script>
-
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="fillChecked" variant="fill" label="填充样式" />
-      <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="带勾选标记" />
-    </div>
+    <TxCheckbox v-model="fillChecked" variant="fill" label="填充样式" />
+    <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="带勾选标记" />
   </template>
 ---
 :::
 
-`disabled` 会移除可聚焦能力，并阻止点击与键盘切换；禁用态仍会保留当前选中状态。
-
-### Checkbox (disabled)
+### 禁用
 :::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const disabledUnchecked = ref(false)
-  const disabledChecked = ref(true)
-  </script>
-
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="disabledUnchecked" label="禁用" disabled />
-      <TxCheckbox v-model="disabledChecked" label="禁用且已选中" disabled />
-    </div>
+    <TxCheckbox v-model="unchecked" label="禁用" disabled />
+    <TxCheckbox v-model="checked" label="禁用且已选中" disabled />
   </template>
 ---
 :::
 
-### 最佳实践
-
-- 优先提供可见 `label` 或默认插槽。只有图标式/无可见文案控件才使用 `ariaLabel`。
-- 用 `disabled` 作为禁用状态的唯一来源；禁用后组件会退出 Tab 顺序，也不会触发 `update:modelValue` 或 `change`。
-- `loading` 与 `disabled` 表达不同含义：前者是「正在提交」，后者是「不可用」。用 `disabled` 表示忙碌会让控件看起来永久不可点。
-- `loading` 期间不要抢先写回 `modelValue`；让方框停在旧值上，提交成功后再更新，失败则直接撤下 loading，状态自然回到原位。
-- 紧凑设置行中需要“文案在前、控件在后”时使用 `labelPlacement="start"`。
-
-## API 参考
-
-### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| modelValue / v-model | 绑定的选中状态。启用时通过点击、Enter 或 Space 更新。 | `boolean` | `false` |
-| disabled | 是否禁用。禁用后不可聚焦，且不会触发切换。 | `boolean` | `false` |
-| loading | 异步提交中：方框变为旋转环，添加 `is-loading` 与 `aria-busy="true"`，并像 `disabled` 一样阻止切换，但不套用禁用态配色。 | `boolean` | `false` |
-| label | 显示在复选框旁边的文本标签。 | `string` | - |
-| labelPlacement | 标签位置：`start` 为前置，`end` 为后置。 | `'start' \| 'end'` | `'end'` |
-| variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'checkmark'` |
-| ariaLabel | 无可见 `label` / 默认插槽时使用的可访问性标签。 | `string` | - |
-| indeterminate | 部分选中：所辖项目选中了一部分但不是全部。渲染横杠并上报 `aria-checked="mixed"`；此时点击会解析为「全选」而不是翻转布尔值，与原生 `indeterminate` 行为一致。 | `boolean` | `false` |
-
-### Events
-
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| update:modelValue | 用户切换后触发的 v-model 更新事件。 | `(value: boolean) => void` |
-| change | 用户切换后触发的状态变更事件。 | `(value: boolean) => void` |
-
-### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| default | 自定义可见标签内容；存在时会替代 `label` 展示。 |
-
-## 文案在前
-
-通过 `label-placement="start"` 将标签放到勾选框左侧，适合“状态文本 + 控件”的紧凑布局。
-
-### Checkbox (label start)
+### 文案在前
+`labelPlacement="start"` 把文案放在方框前。
 :::TuffDemoWrapper{demo="CheckboxCheckboxLabelStartDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(true)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked" label="我在前面" label-placement="start" />
   </template>
 ---
 :::
 
-## 无文案
-
-无 `label` / 无默认插槽时，必须提供 `aria-label`，保证屏幕阅读器能识别控件含义。
-
-### Checkbox (no label)
+### 无文案
+没有 `label` 或插槽时，必须传 `aria-label`。
 :::TuffDemoWrapper{demo="CheckboxCheckboxNoLabelDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(false)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked" aria-label="勾选" />
   </template>
 ---
 :::
 
-## 加载状态
-
-`loading` 用于选中状态需要等待服务端确认的场景：方框变成旋转环，勾选标记、横杠与填充一起让位，改由环的颜色表示状态——未选中是中性灰，已选中与部分选中都是主色——同时阻止点击与键盘切换。
-
-### Checkbox (loading)
+### 加载中
+等待服务端确认时设置 `loading`：方框变为旋转环，未选中为灰色，已选中与部分选中为主色，期间不可切换。
 :::TuffDemoWrapper{demo="CheckboxCheckboxLoadingDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const asyncChecked = ref(false)
+  const checked = ref(false)
   const committing = ref(false)
-  const loadingUnchecked = ref(false)
-  const loadingChecked = ref(true)
-  const loadingMixed = ref(false)
+  const mixed = ref(false)
 
-  function commit(next: boolean) {
+  async function commit(next: boolean) {
     committing.value = true
-    setTimeout(() => {
-      asyncChecked.value = next
+    try {
+      await save(next)
+      checked.value = next
+    }
+    finally {
       committing.value = false
-    }, 1200)
+    }
   }
   </script>
 
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox :model-value="asyncChecked" :loading="committing" label="异步提交" @change="commit" />
-      <TxCheckbox v-model="loadingUnchecked" label="加载中 / 未选中" loading />
-      <TxCheckbox v-model="loadingChecked" label="加载中 / 已选中" loading />
-      <TxCheckbox v-model="loadingMixed" label="加载中 / 部分选中" indeterminate loading />
-    </div>
+    <TxCheckbox :model-value="checked" :loading="committing" label="异步提交" @change="commit" />
+    <TxCheckbox v-model="mixed" label="加载中 / 部分选中" indeterminate loading />
   </template>
 ---
 :::
 
-## 使用插槽
-
-默认插槽会替代 `label` 作为可见标签，适合加入说明文本、图标或强调样式。
-
-### Checkbox (slot)
+### 自定义文案
+默认插槽替代 `label`。
 :::TuffDemoWrapper{demo="CheckboxCheckboxSlotDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(false)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked">
       <span>自定义标签</span>
@@ -208,17 +117,52 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 优先用可见的 `label` 或插槽；只有没有可见文案时才用 `ariaLabel`。
+- 「正在提交」用 `loading`，「不可用」用 `disabled`；用 `disabled` 表示忙碌会让控件像是永久不可用。
+- 需要服务端确认时设置 `loading`，成功后再写回 `modelValue`；失败时只撤下 `loading`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `modelValue` / `v-model` | `boolean` | `false` | 选中状态。 |
+| `disabled` | `boolean` | `false` | 禁止切换，并移出 Tab 序列。 |
+| `loading` | `boolean` | `false` | 显示旋转环并禁止切换，不套用禁用态配色。 |
+| `label` | `string` | - | 方框旁的文案。 |
+| `labelPlacement` | `'start' \| 'end'` | `'end'` | 文案在方框前或后。 |
+| `variant` | `'checkmark' \| 'fill'` | `'checkmark'` | `checkmark` 显示勾选标记，`fill` 只填充方框。 |
+| `ariaLabel` | `string` | - | 没有可见文案时的可访问名称。 |
+| `indeterminate` | `boolean` | `false` | 部分选中：显示横杠，点击后变为选中。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | 用户切换后触发，参数为新值。 |
+| `change` | `(value: boolean) => void` | 与 `update:modelValue` 同时触发。 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 自定义文案，优先于 `label`。 |
+
+## 概述
+
+- 根节点是原生 `<button role="checkbox">`；点击、Enter 或 Space 切换。
+- 受控组件：切换只派发事件，父级回写 `modelValue` 后外观才更新。
+- `indeterminate` 时 `aria-checked="mixed"`；加载中已选中与部分选中外观相同，靠它区分。
+- `disabled` 与 `loading` 都设置原生 `disabled`；`loading` 另设 `aria-busy="true"`。
+- 有可见文案时不渲染 `aria-label`。
+- 减少动态效果时，加载环停止旋转。
+
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` 与 `checkbox.test.ts`。
-- **加载契约:** `loading` 是纯视觉与阻断状态，组件不持有异步逻辑。环的颜色仍由 `modelValue` / `indeterminate` 决定，因此它停在旧值上，表示这一次切换尚未落地。
-- **加载态的已知取舍:** 已选中与部分选中在加载期间外观一致（同为主色环），这一差异由 `aria-checked="mixed"` 承担。曾试过「保留填充 + 白色环」以区分两者，但白环压在浅色页面上几乎不可见，因此改为环着色方案。
-- 可访问性说明:根节点负责 `role="checkbox"`、`aria-checked` 与键盘处理;应优先提供可见标签或默认插槽,仅在没有可见文案时使用 `ariaLabel`。
-- **动效降级:** 环形指示器在 `prefers-reduced-motion: reduce` 下停止旋转；缺口边框本身是静态字形，提示不会消失。
-- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、默认 `checkmark` 变体与显式 `fill` / `checkmark` 变体、点击事件、禁用阻断，以及加载中阻断、`is-loading` 与 `is-disabled` 分离、部分选中在加载时仍上报 `mixed`、`aria-busy` 的出现与消失。
-
-- Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`。
-- Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` 同时导出 `TuffCheckbox` 与 `TxCheckbox`。
-- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` 覆盖点击切换、ARIA 标签、插槽优先级、变体 class 与禁用阻断；键盘激活由原生 `<button>` 元素继承。
+- `index.ts` 同时导出 `TuffCheckbox` 与 `TxCheckbox`。
+- 源码：`packages/tuffex/packages/components/src/checkbox/`。
 
 <TuffDocSourceLink />

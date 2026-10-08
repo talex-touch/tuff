@@ -1,54 +1,69 @@
+import { getQuery } from 'h3'
 import { requireAuth } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
-import { getTeamById, listTeamMembers } from '../../utils/creditsStore'
+import { listTeamMembersWithProfiles } from '../../utils/creditsStore'
 import { resolveActiveTeamContext } from '../../utils/teamContext'
-import { listInvites, listPendingInvitesForEmail } from '../../utils/teamStore'
+import { listInvites, listPendingInvitesWithTeamsForEmail } from '../../utils/teamStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
   const context = await resolveActiveTeamContext(event, userId)
-  const currentUser = await getUserById(event, userId)
 
-  const members = await listTeamMembers(event, context.team.id)
-  const membersWithProfile = await Promise.all(members.map(async (member) => {
-    const profile = await getUserById(event, member.userId)
+  // The dashboard nav reads only the team's kind and the viewer's role in it, on every visit to the
+  // dashboard: it skips the members, the invites and the received invites.
+  if (getQuery(event).view === 'summary') {
     return {
-      id: member.userId,
-      userId: member.userId,
-      name: profile?.name || profile?.email || member.userId,
-      email: profile?.email || '',
-      role: member.role,
-      status: 'active',
-      joinedAt: member.joinedAt,
+      team: {
+        id: context.team.id,
+        name: context.team.name,
+        type: context.team.type,
+        role: context.role,
+      },
     }
+  }
+
+  const currentUser = auth.user ?? await getUserById(event, userId)
+
+  // Members (with their profiles), the team's invites and the invites this user received are
+  // independent: one round trip of latency for all three. Members and received invites used to read
+  // each user and each inviting team one by one.
+  const [members, teamInvites, pendingInvites] = await Promise.all([
+    listTeamMembersWithProfiles(event, context.team.id),
+    context.permissions.canInvite ? listInvites(event, context.team.id) : Promise.resolve([]),
+    context.team.type === 'personal'
+      ? listPendingInvitesWithTeamsForEmail(event, currentUser?.email || '')
+      : Promise.resolve([]),
+  ])
+
+  const membersWithProfile = members.map(member => ({
+    id: member.userId,
+    userId: member.userId,
+    name: member.name || member.email || member.userId,
+    email: member.email || '',
+    role: member.role,
+    status: 'active',
+    joinedAt: member.joinedAt,
   }))
 
-  const invites = context.permissions.canInvite
-    ? (await listInvites(event, context.team.id)).map(invite => ({
-        id: invite.id,
-        email: invite.email,
-        role: invite.role,
-        status: invite.status,
-        expiresAt: invite.expiresAt,
-        createdAt: invite.createdAt,
-      }))
-    : []
+  const invites = teamInvites.map(invite => ({
+    id: invite.id,
+    email: invite.email,
+    role: invite.role,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+    createdAt: invite.createdAt,
+  }))
 
-  const receivedInvites = context.team.type === 'personal'
-    ? await Promise.all((await listPendingInvitesForEmail(event, currentUser?.email || '')).map(async (invite) => {
-        const inviteTeam = await getTeamById(event, invite.organizationId)
-
-        return {
-          id: invite.id,
-          teamId: invite.organizationId,
-          teamName: inviteTeam?.name || invite.organizationId,
-          role: invite.role,
-          status: invite.status,
-          expiresAt: invite.expiresAt,
-          createdAt: invite.createdAt,
-        }
-      }))
-    : []
+  const receivedInvites = pendingInvites.map(invite => ({
+    id: invite.id,
+    teamId: invite.organizationId,
+    teamName: invite.teamName || invite.organizationId,
+    role: invite.role,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+    createdAt: invite.createdAt,
+  }))
 
   return {
     team: {

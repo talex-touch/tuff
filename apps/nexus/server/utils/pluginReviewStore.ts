@@ -3,13 +3,13 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PLUGIN_REVIEWS_TABLE = 'store_plugin_reviews'
 const LEGACY_PLUGIN_REVIEWS_TABLE = 'market_plugin_reviews'
 const PLUGIN_REVIEWS_KEY = 'store:pluginReviews'
 const LEGACY_PLUGIN_REVIEWS_KEY = ['market', 'pluginReviews'].join(':')
 
-let reviewSchemaInitialized = false
 
 export type PluginReviewStatus = 'pending' | 'approved' | 'rejected'
 
@@ -268,44 +268,34 @@ function mapStoredReview(item: StoredPluginReview): PluginReviewRecord {
   }
 }
 
+const PLUGIN_REVIEW_SCHEMA = defineD1Schema('plugin-reviews', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PLUGIN_REVIEWS_TABLE} (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_avatar TEXT,
+        rating INTEGER NOT NULL,
+        title TEXT,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (plugin_id, user_id)
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_plugin_id
+      ON ${PLUGIN_REVIEWS_TABLE}(plugin_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_status
+      ON ${PLUGIN_REVIEWS_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_user_id
+      ON ${PLUGIN_REVIEWS_TABLE}(user_id)`,
+  ],
+  migrate: { id: 'copy-legacy-plugin-reviews', run: migrateLegacyPluginReviewsTable },
+})
+
 async function ensurePluginReviewSchema(db: D1Database): Promise<void> {
-  if (reviewSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGIN_REVIEWS_TABLE} (
-      id TEXT PRIMARY KEY,
-      plugin_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      author_name TEXT NOT NULL,
-      author_avatar TEXT,
-      rating INTEGER NOT NULL,
-      title TEXT,
-      content TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (plugin_id, user_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_plugin_id
-    ON ${PLUGIN_REVIEWS_TABLE}(plugin_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_status
-    ON ${PLUGIN_REVIEWS_TABLE}(status);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_REVIEWS_TABLE}_user_id
-    ON ${PLUGIN_REVIEWS_TABLE}(user_id);
-  `).run()
-
-  await migrateLegacyPluginReviewsTable(db)
-  reviewSchemaInitialized = true
+  await ensureD1Schema(db, PLUGIN_REVIEW_SCHEMA)
 }
 
 async function readStoredReviews(): Promise<StoredPluginReview[]> {

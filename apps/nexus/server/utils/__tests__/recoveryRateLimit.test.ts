@@ -1,8 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { H3Event } from 'h3'
-import { describe, expect, it } from 'vitest'
-import { evaluateRecoveryRateLimit } from '../authStore'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSqliteD1, type SqliteD1Database } from '../../../test/helpers/d1-sqlite'
+import { evaluateRecoveryRateLimit, getUserById } from '../authStore'
+
+vi.mock('../cloudflare', async importOriginal => ({
+  ...(await importOriginal<typeof import('../cloudflare')>()),
+  readCloudflareBindings: (event: any) => event.context.cloudflare?.env,
+}))
 
 /**
  * Bounding recovery-code guesses (#904).
@@ -13,54 +19,49 @@ import { evaluateRecoveryRateLimit } from '../authStore'
  * already trusted or the user has registered no passkeys.
  */
 
-/** A database whose COUNT(*) answers with `count`, whatever is asked. */
-function createEvent(count: number, seen: string[][] = []): H3Event {
-  const db = {
-    prepare(sql: string) {
-      return {
-        bind: (...args: unknown[]) => {
-          if (sql.includes('COUNT'))
-            seen.push(args.map(String))
-          return {
-            // countDeviceAuthAudits reads `total`, per `SELECT COUNT(*) AS total`.
-            first: async () => (sql.includes('COUNT') ? { total: count } : null),
-            all: async () => ({ results: [] }),
-            run: async () => ({}),
-          }
-        },
-        first: async () => null,
-        all: async () => ({ results: [] }),
-        run: async () => ({}),
-      }
-    },
-    async batch() {
-      return []
-    },
-  }
+let sqlite: SqliteD1Database
 
+function createEvent(): H3Event {
   return {
-    context: { cloudflare: { env: { DB: db } } },
+    context: { cloudflare: { env: { DB: sqlite } } },
     node: { req: { headers: {} } },
   } as unknown as H3Event
 }
+
+function insertAudit(action: string, status: string, ids: { userId?: string, deviceId?: string }) {
+  sqlite.sqlite.prepare(`
+    INSERT INTO auth_device_auth_audits (id, action, status, user_id, device_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(crypto.randomUUID(), action, status, ids.userId ?? null, ids.deviceId ?? null, new Date().toISOString())
+}
+
+beforeEach(async () => {
+  sqlite = createSqliteD1()
+  // Creates the auth tables through the schema gate.
+  await getUserById(createEvent(), 'warm')
+})
 
 describe('evaluateRecoveryRateLimit', () => {
   it('allows an attempt when nothing has failed recently', async () => {
     // Positive control: a limiter that refused everything would satisfy the assertions below
     // while locking every user out of recovery entirely.
-    expect(await evaluateRecoveryRateLimit(createEvent(0), { userId: 'u1', deviceId: 'd1' }))
+    expect(await evaluateRecoveryRateLimit(createEvent(), { userId: 'u1', deviceId: 'd1' }))
       .toEqual({ allowed: true })
   })
 
   it('blocks once the per-device budget is spent', async () => {
-    const decision = await evaluateRecoveryRateLimit(createEvent(5), { userId: 'u1', deviceId: 'd1' })
+    for (let index = 0; index < 5; index++)
+      insertAudit('recover', 'failed', { userId: 'u1', deviceId: 'd1' })
+    const decision = await evaluateRecoveryRateLimit(createEvent(), { userId: 'u1', deviceId: 'd1' })
     expect(decision.allowed).toBe(false)
     expect(decision.scope).toBe('device')
   })
 
   it('falls back to the per-user budget when no device id is known', async () => {
     // Without this, dropping the device header would sidestep the limit entirely.
-    const decision = await evaluateRecoveryRateLimit(createEvent(10), { userId: 'u1' })
+    for (let index = 0; index < 10; index++)
+      insertAudit('recover', 'failed', { userId: 'u1', deviceId: `d${index}` })
+    const decision = await evaluateRecoveryRateLimit(createEvent(), { userId: 'u1' })
     expect(decision.allowed).toBe(false)
     expect(decision.scope).toBe('user')
   })
@@ -68,13 +69,12 @@ describe('evaluateRecoveryRateLimit', () => {
   it('counts only failed recovery attempts', async () => {
     // A successful recovery must not consume anyone's budget, and other device-auth actions
     // in the same audit table must not be mistaken for recovery guesses.
-    const seen: string[][] = []
-    await evaluateRecoveryRateLimit(createEvent(0, seen), { userId: 'u1', deviceId: 'd1' })
-    expect(seen.length).toBeGreaterThan(0)
-    for (const args of seen) {
-      expect(args).toContain('recover')
-      expect(args).toContain('failed')
+    for (let index = 0; index < 10; index++) {
+      insertAudit('recover', 'success', { userId: 'u1', deviceId: 'd1' })
+      insertAudit('request', 'failed', { userId: 'u1', deviceId: 'd1' })
     }
+    expect(await evaluateRecoveryRateLimit(createEvent(), { userId: 'u1', deviceId: 'd1' }))
+      .toEqual({ allowed: true })
   })
 })
 

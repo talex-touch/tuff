@@ -4,17 +4,14 @@ import { listPlugins } from '../../../utils/pluginsStore'
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
 
-  const plugins = await listPlugins(event, {
-    includeVersions: true,
-    viewerIsAdmin: true,
-    statuses: ['pending'],
-  })
-
-  // Also find plugins with pending versions
+  // One read of every plugin: the pending ones are among them. It was a read for each list.
   const allPlugins = await listPlugins(event, {
     includeVersions: true,
     viewerIsAdmin: true,
   })
+  const plugins = allPlugins.filter(plugin => plugin.status === 'pending')
+
+  // Also find plugins with pending versions
 
   const pluginsWithPendingVersions = allPlugins.filter((plugin) => {
     if (plugin.status === 'pending')

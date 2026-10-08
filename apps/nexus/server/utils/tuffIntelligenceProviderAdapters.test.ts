@@ -210,7 +210,7 @@ describe('Nexus provider adapter boundary', () => {
         reservedCredits: 514,
         releasedCredits: 511,
       }),
-      { idempotencyKey: 'intelligence-invoke-release:trace_adapter_1' },
+      { idempotencyKey: 'intelligence-invoke-release:trace_adapter_1', reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
   })
 
@@ -330,7 +330,7 @@ describe('Nexus provider adapter boundary', () => {
       511,
       'intelligence-invoke-release',
       expect.objectContaining({ capabilityId: 'text.chat', traceId: 'trace_stream_1' }),
-      { idempotencyKey: 'intelligence-invoke-release:trace_stream_1' },
+      { idempotencyKey: 'intelligence-invoke-release:trace_stream_1', reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
     expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
       expect.anything(),
@@ -402,7 +402,7 @@ describe('Nexus provider adapter boundary', () => {
       512,
       'intelligence-invoke-release',
       expect.objectContaining({ traceId: 'trace_fallback_1' }),
-      { idempotencyKey: 'intelligence-invoke-release:trace_fallback_1' },
+      { idempotencyKey: 'intelligence-invoke-release:trace_fallback_1', reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
   })
 
@@ -456,7 +456,7 @@ describe('Nexus provider adapter boundary', () => {
         releasedCredits: 514,
         traceOutcome: 'dispatch-failed',
       }),
-      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/), reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
   })
 })

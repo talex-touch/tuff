@@ -1,6 +1,6 @@
 ---
 title: "Checkbox"
-description: "Accessible boolean selection control with keyboard toggling, label placement, fill state, and SVG tick variant."
+description: "A control that toggles between checked and unchecked."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,9 +11,8 @@ verified: true
 
 ## Usage
 
-Click the box or its label to toggle the state. The checked state follows the selected visual variant with either fill or tick motion.
-
-### Checkbox
+### Basic
+Click the box or its label to toggle.
 :::TuffDemoWrapper{demo="CheckboxCheckboxDemo" code-lang="vue"}
 ---
 code: |
@@ -29,177 +28,87 @@ code: |
 ---
 :::
 
-The default `checkmark` variant shows the inner tick. Use `variant="fill"` when you want a quieter pure filled square.
-
-### Checkbox variants
+### Variants
+The default `checkmark` draws a tick; `variant="fill"` only fills the box.
 :::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const fillChecked = ref(true)
-  const checkmarkChecked = ref(true)
-  </script>
-
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="fillChecked" variant="fill" label="Fill style" />
-      <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="With checkmark" />
-    </div>
+    <TxCheckbox v-model="fillChecked" variant="fill" label="Fill style" />
+    <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="With checkmark" />
   </template>
 ---
 :::
 
-`disabled` removes focusability and prevents click or keyboard toggles while preserving the current checked state.
-
-### Checkbox (disabled)
+### Disabled
 :::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const disabledUnchecked = ref(false)
-  const disabledChecked = ref(true)
-  </script>
-
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="disabledUnchecked" label="Disabled" disabled />
-      <TxCheckbox v-model="disabledChecked" label="Disabled checked" disabled />
-    </div>
+    <TxCheckbox v-model="unchecked" label="Disabled" disabled />
+    <TxCheckbox v-model="checked" label="Disabled checked" disabled />
   </template>
 ---
 :::
 
-### Best Practices
-
-- Prefer a visible `label` or default slot. Use `ariaLabel` only for icon-only or visually label-less controls.
-- Keep `disabled` as the single source for inert state; disabled checkboxes are removed from tab order and emit neither `update:modelValue` nor `change`.
-- `loading` and `disabled` say different things: "committing" versus "unavailable". Using `disabled` for a busy control makes it look permanently inert.
-- Do not write `modelValue` back optimistically while `loading` is set. Leave the box on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
-- Use `labelPlacement="start"` for compact settings rows where the text should align before the control.
-
-## API Reference
-
-### Props
-
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| modelValue / v-model | Checked state. Updates through click, Enter, or Space when enabled. | `boolean` | `false` |
-| disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
-| loading | Pending async commit: the box becomes a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling the way `disabled` does — without the disabled palette. | `boolean` | `false` |
-| label | Visible text label rendered next to the checkbox. | `string` | - |
-| labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
-| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'checkmark'` |
-| ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
-| indeterminate | Partial selection: some but not all of the governed items are checked. Renders the dash and reports `aria-checked="mixed"`; activating it resolves to checked rather than flipping the boolean, matching a native input's `indeterminate` behaviour. | `boolean` | `false` |
-
-### Events
-
-| Event | Description | Params |
-|--------|------|----------|
-| update:modelValue | v-model update emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
-| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
-
-### Slots
-
-| Slot | Description |
-|--------|------|
-| default | Custom visible label content. When present, it replaces `label` rendering. |
-
-## Label First
-
-Use `label-placement="start"` to render the visible label before the checkbox box.
-
-### Checkbox (label start)
+### Label First
+`labelPlacement="start"` puts the label before the box.
 :::TuffDemoWrapper{demo="CheckboxCheckboxLabelStartDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(true)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked" label="Text first" label-placement="start" />
   </template>
 ---
 :::
 
-## No Label
-
-When there is no `label` or default slot, pass `aria-label` so assistive technology can identify the control.
-
-### Checkbox (no label)
+### No Label
+Without a `label` or slot, pass `aria-label`.
 :::TuffDemoWrapper{demo="CheckboxCheckboxNoLabelDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(false)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked" aria-label="Toggle option" />
   </template>
 ---
 :::
 
-## Loading State
-
-Use `loading` when the checked state needs server confirmation: the box becomes a spinning ring, the tick, dash, and fill all stand down, and the ring's color carries the state instead — neutral grey when unchecked, primary when checked or mixed. Pointer and keyboard toggles are blocked.
-
-### Checkbox (loading)
+### Loading
+Set `loading` while a server confirms the change. The box becomes a ring, grey when unchecked and primary when checked or mixed, and toggling is blocked.
 :::TuffDemoWrapper{demo="CheckboxCheckboxLoadingDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const asyncChecked = ref(false)
+  const checked = ref(false)
   const committing = ref(false)
-  const loadingUnchecked = ref(false)
-  const loadingChecked = ref(true)
-  const loadingMixed = ref(false)
+  const mixed = ref(false)
 
-  function commit(next: boolean) {
+  async function commit(next: boolean) {
     committing.value = true
-    setTimeout(() => {
-      asyncChecked.value = next
+    try {
+      await save(next)
+      checked.value = next
+    }
+    finally {
       committing.value = false
-    }, 1200)
+    }
   }
   </script>
 
   <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox :model-value="asyncChecked" :loading="committing" label="Async commit" @change="commit" />
-      <TxCheckbox v-model="loadingUnchecked" label="Loading / unchecked" loading />
-      <TxCheckbox v-model="loadingChecked" label="Loading / checked" loading />
-      <TxCheckbox v-model="loadingMixed" label="Loading / mixed" indeterminate loading />
-    </div>
+    <TxCheckbox :model-value="checked" :loading="committing" label="Async commit" @change="commit" />
+    <TxCheckbox v-model="mixed" label="Loading / mixed" indeterminate loading />
   </template>
 ---
 :::
 
-## Using Slots
-
-The default slot replaces `label` as the visible label. Use it for rich text, helper copy, icons, or emphasis.
-
-### Checkbox (slot)
+### Custom Label
+The default slot replaces `label`.
 :::TuffDemoWrapper{demo="CheckboxCheckboxSlotDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const checked = ref(false)
-  </script>
-
   <template>
     <TxCheckbox v-model="checked">
       <span>Custom label</span>
@@ -208,17 +117,52 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Prefer a visible `label` or slot; use `ariaLabel` only when there is no visible text.
+- Use `loading` for "committing" and `disabled` for "unavailable"; a busy control shown as `disabled` looks permanently inert.
+- When the server must confirm, set `loading` and write `modelValue` only on success. On failure, just clear `loading`.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|--------|------|--------|------|
+| `modelValue` / `v-model` | `boolean` | `false` | The checked state. |
+| `disabled` | `boolean` | `false` | Blocks toggling and removes the box from the tab order. |
+| `loading` | `boolean` | `false` | Shows a spinning ring and blocks toggling, without the disabled palette. |
+| `label` | `string` | - | Text beside the box. |
+| `labelPlacement` | `'start' \| 'end'` | `'end'` | Puts the label before or after the box. |
+| `variant` | `'checkmark' \| 'fill'` | `'checkmark'` | `checkmark` draws a tick; `fill` only fills the box. |
+| `ariaLabel` | `string` | - | Accessible name when there is no visible text. |
+| `indeterminate` | `boolean` | `false` | Partial selection: shows a dash, and a click resolves to checked. |
+
+### Events
+
+| Event | Params | Description |
+|--------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | Fires after a user toggle with the new value. |
+| `change` | `(value: boolean) => void` | Fires together with `update:modelValue`. |
+
+### Slots
+
+| Slot | Description |
+|--------|------|
+| `default` | Custom label content; overrides `label`. |
+
+## Overview
+
+- The root is a native `<button role="checkbox">`; click, Enter, or Space toggles it.
+- It is controlled: a toggle only emits, and the box updates once the parent writes `modelValue` back.
+- `indeterminate` sets `aria-checked="mixed"`, which is what tells checked from mixed while loading, since both look the same.
+- `disabled` and `loading` both set the native `disabled` attribute; `loading` also sets `aria-busy="true"`.
+- With visible text, no `aria-label` is rendered.
+- Under reduced motion, the loading ring stops spinning.
+
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` and `checkbox.test.ts`.
-- **Loading contract:** `loading` is a purely visual and blocking state; the component owns no async logic. The ring's color still follows `modelValue` / `indeterminate`, so it sits on the old value to show that this toggle has not landed yet.
-- **Known loading trade-off:** checked and mixed look identical while loading (both draw a primary ring); `aria-checked="mixed"` is what preserves the difference. Keeping the fill and drawing a white ring on it was tried first, but the white ring is close to invisible against a light page, so ring-coloring won.
-- Accessibility note: the root element owns `role="checkbox"`, `aria-checked`, and keyboard handling; provide a visible label or default slot whenever possible, and reserve `ariaLabel` for controls with no visible text.
-- **Motion fallback:** The ring stops rotating under `prefers-reduced-motion: reduce`; its gapped border is a static glyph on its own, so the busy cue survives.
-- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, the default `checkmark` variant plus explicit `fill` and `checkmark` variants, click emits, disabled blocking, plus loading blocking, `is-loading` staying separate from `is-disabled`, a partial selection still reporting `mixed` while loading, and the `aria-busy` lifecycle.
-
-- Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`.
-- Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` exports both `TuffCheckbox` and `TxCheckbox`.
-- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` verifies click toggles, ARIA labelling, slot precedence, variant classes, and disabled blocking; keyboard activation is inherited from the native `<button>` element.
+- `index.ts` exports both `TuffCheckbox` and `TxCheckbox`.
+- Source: `packages/tuffex/packages/components/src/checkbox/`.
 
 <TuffDocSourceLink />

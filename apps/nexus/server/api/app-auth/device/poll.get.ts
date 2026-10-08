@@ -69,14 +69,17 @@ export default defineEventHandler(async (event) => {
       reactivateRevoked: true,
     },
   })
-  await logLoginAttempt(event, {
-    userId: request.userId,
-    deviceId: request.deviceId,
-    success: true,
-    reason: 'device_auth',
-    clientType,
-  })
-  await deleteDeviceAuthRequest(event, deviceCode)
+  // Independent writes: one round trip of latency instead of two.
+  await Promise.all([
+    logLoginAttempt(event, {
+      userId: request.userId,
+      deviceId: request.deviceId,
+      success: true,
+      reason: 'device_auth',
+      clientType,
+    }),
+    deleteDeviceAuthRequest(event, deviceCode),
+  ])
   return {
     status: 'approved',
     ...tokens,

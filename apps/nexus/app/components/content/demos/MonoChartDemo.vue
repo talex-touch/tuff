@@ -14,14 +14,14 @@ const months = ref(5)
 const readout = ref('')
 const copy = computed(() => locale.value.startsWith('zh') ? {
   source: '切换输入数据', filter: '筛选原始变体 ID', extras: '额外来源能力', calendar: 'GitHub 日历与仓库展开',
-  username: 'GitHub 用户名', load: '加载真实公开数据', provided: '调用方提供的确定性样本', custom: '切换自定义五级配色', cell: '单元格大小', months: '月数',
+  username: 'GitHub 用户名', load: '加载真实公开数据', provided: '图表使用固定的样本数据。', custom: '切换自定义五级配色', cell: '单元格大小', months: '月数',
   selected: '选中', all: '完整范围', recent: '最近四项', primary: '主要', baseline: '基线', third: '扩展',
   empty: '空输入', month: ['一月', '二月', '三月', '四月', '五月', '六月'],
   items: ['核心', '界面', '资源', '其他'], stages: ['访问', '注册', '活跃', '付费'],
   price: '价格', metric: '指标', sourceA: '来源 A', sourceB: '来源 B', sink: '汇入', nested: '嵌套树图', range: '真实日期筛选',
 } : {
   source: 'Switch input data', filter: 'Filter original variant IDs', extras: 'Additional source capabilities', calendar: 'GitHub calendar and repository disclosure',
-  username: 'GitHub username', load: 'Load real public data', provided: 'Deterministic caller-provided samples', custom: 'Toggle custom five-level palette', cell: 'Cell size', months: 'Months',
+  username: 'GitHub username', load: 'Load real public data', provided: 'Charts use fixed sample data.', custom: 'Toggle custom five-level palette', cell: 'Cell size', months: 'Months',
   selected: 'Selected', all: 'Full range', recent: 'Latest four items', primary: 'Primary', baseline: 'Baseline', third: 'Extension',
   empty: 'Empty input', month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
   items: ['Core', 'UI', 'Assets', 'Other'], stages: ['Visits', 'Signup', 'Active', 'Pro'],

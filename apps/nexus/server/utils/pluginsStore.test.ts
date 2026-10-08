@@ -175,6 +175,38 @@ class MockD1Database {
     }
   }
 
+  /** In order, without D1's rollback, which these cases do not exercise. */
+  async batch(statements: Array<{ all: () => Promise<unknown> }>) {
+    const results: unknown[] = []
+    for (const statement of statements)
+      results.push(await statement.all())
+    return results
+  }
+
+  /** The plugins a `json_each` key list selects, by id or by slug. */
+  private pluginsForKeys(sql: string, bindings: unknown[]): D1PluginRow[] {
+    const keys = new Set(JSON.parse(String(bindings[0])) as string[])
+    const bySlug = /WHERE slug IN/.test(sql)
+    return this.plugins.filter(plugin => keys.has(bySlug ? String((plugin as { slug?: unknown }).slug) : plugin.id))
+  }
+
+  /** The plugins `listPlugins`' filters select, applied in the order its statement binds them. */
+  private pluginsForListFilter(sql: string, bindings: unknown[]): D1PluginRow[] {
+    let rows = this.plugins
+    let index = 0
+    if (/user_id = \?/.test(sql)) {
+      const ownerId = bindings[index++]
+      rows = rows.filter(plugin => plugin.user_id === ownerId)
+    }
+    if (/status IN \(SELECT value FROM json_each/.test(sql)) {
+      const statuses = new Set(JSON.parse(String(bindings[index++])) as string[])
+      rows = rows.filter(plugin => statuses.has(plugin.status))
+    }
+    if (sql.includes(`status = 'approved'`))
+      rows = rows.filter(plugin => plugin.status === 'approved')
+    return rows
+  }
+
   private async first<T>(sql: string, bindings: unknown[]): Promise<T | null> {
     if (sql.includes('FROM dashboard_plugins') && sql.includes('WHERE id')) {
       const pluginId = bindings[0]
@@ -201,12 +233,22 @@ class MockD1Database {
           })) as T[],
       }
     }
+    if (sql.includes('FROM dashboard_plugin_versions') && sql.includes('json_each')) {
+      const pluginIds = new Set(this.pluginsForKeys(sql, bindings).map(plugin => plugin.id))
+      return { results: this.versions.filter(version => pluginIds.has(version.plugin_id)) as T[] }
+    }
+    if (sql.includes('FROM dashboard_plugin_versions') && sql.includes('IN (SELECT id FROM dashboard_plugins')) {
+      const pluginIds = new Set(this.pluginsForListFilter(sql, bindings).map(plugin => plugin.id))
+      return { results: this.versions.filter(version => pluginIds.has(version.plugin_id)) as T[] }
+    }
+    if (sql.includes('FROM dashboard_plugins') && sql.includes('json_each(?1))') && !sql.includes('status IN'))
+      return { results: this.pluginsForKeys(sql, bindings) as T[] }
     if (sql.includes('FROM dashboard_plugin_versions')) {
       const pluginIds = new Set(bindings.filter((value): value is string => typeof value === 'string'))
       return { results: this.versions.filter(version => pluginIds.has(version.plugin_id)) as T[] }
     }
     if (sql.includes('FROM dashboard_plugins'))
-      return { results: this.plugins as T[] }
+      return { results: this.pluginsForListFilter(sql, bindings) as T[] }
     return { results: [] }
   }
 

@@ -1,6 +1,6 @@
 ---
 title: "TypingIndicator 打字中"
-description: "用于聊天界面的内联打字中与加载状态。"
+description: "聊天界面内联的输入中与加载状态指示器"
 category: AiChat
 status: beta
 since: 1.0.0
@@ -9,7 +9,9 @@ syncStatus: reviewed
 verified: true
 ---
 
-### TypingIndicator
+## 用法
+
+### 基础
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---
 code: |
@@ -19,110 +21,66 @@ code: |
 ---
 :::
 
-## 用法
-
-### TypingIndicator variants
+### 变体
+`variant` 选择样式，每种变体有各自的尺寸 prop。
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">dots</code>
-        <TxTypingIndicator text="Typing…" />
-        <TxTypingIndicator :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">ai</code>
-        <TxTypingIndicator variant="ai" text="Generating…" />
-        <TxTypingIndicator variant="ai" :loader-size="32" text="32px" />
-        <TxTypingIndicator variant="ai" :loader-size="24" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">pure</code>
-        <TxTypingIndicator variant="pure" text="Loading" />
-        <TxTypingIndicator variant="pure" :pure-size="12" text="12px" />
-        <div style="display: inline-flex; gap: 6px; align-items: center; color: var(--tx-text-color-secondary);">
-          <span style="width: 16px; height: 16px; border-radius: 4px; background: var(--tx-fill-color); display: inline-block;" />
-          <TxTypingIndicator variant="pure" :pure-size="12" :show-text="false" />
-          <span style="font-size: 12px;">Icon</span>
-        </div>
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">ring</code>
-        <TxTypingIndicator variant="ring" :show-text="false" />
-        <TxTypingIndicator variant="ring" :ring-size="14" :show-text="false" />
-        <TxTypingIndicator variant="ring" :ring-size="22" :ring-thickness="3" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">circle-dash</code>
-        <TxTypingIndicator variant="circle-dash" :show-text="false" />
-        <TxTypingIndicator variant="circle-dash" :circle-dash-size="14" :show-text="false" />
-        <TxTypingIndicator variant="circle-dash" :circle-dash-size="22" :circle-dash-thickness="3" :circle-dash-dash-deg="10" :circle-dash-gap-deg="10" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">bars</code>
-        <TxTypingIndicator variant="bars" :show-text="false" />
-        <TxTypingIndicator variant="bars" :bars-size="16" :show-text="false" />
-      </div>
-    </div>
+    <TxTypingIndicator text="Typing…" />
+    <TxTypingIndicator variant="ai" :loader-size="32" text="Generating…" />
+    <TxTypingIndicator variant="pure" :pure-size="12" text="Loading" />
+    <TxTypingIndicator variant="ring" :ring-size="22" :ring-thickness="3" :show-text="false" />
+    <TxTypingIndicator variant="circle-dash" :circle-dash-dash-deg="10" :circle-dash-gap-deg="10" :show-text="false" />
+    <TxTypingIndicator variant="bars" :bars-size="16" :show-text="false" />
   </template>
 ---
 :::
 
 ### 最佳实践
 
-- 内联聊天行和紧凑 assistant 占位优先使用默认 `dots` 变体。
-- 需要品牌化生成状态且空间充足时使用 `ai`。
-- 工具栏、消息元信息行或骨架屏旁的加载状态可使用 `pure`、`ring`、`circle-dash` 或 `bars`。
-- 除非其它可见标签已经描述等待操作，否则保持 `showText=true`。
-- 数字尺寸 prop 都按 px 调整；同一聊天 transcript 中避免混用过多变体。
+- 内联聊天行与紧凑的助手占位用默认的 `dots`。
+- 空间充足、需要品牌化的生成状态时用 `ai`。
+- 工具栏、消息元信息行或骨架屏旁用 `pure`、`ring`、`circle-dash` 或 `bars`。
+- 保持 `showText=true`，除非相邻的可见标签已说明在等待什么。
+- 同一段对话中不要混用多种变体。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | 指示器视觉样式；`dots` 通用，`ai` 用于模型思考态，`bars`/`ring` 用于强调持续处理。 |
-| `text` | `string` | `'Typing…'` | `showText` 开启时显示的状态文案，按场景改写（如「正在生成…」）。 |
-| `showText` | `boolean` | `true` | 是否显示文案 |
-| `size` | `number` | `6` | `dots` 变体的圆点直径（px）；随宿主字号放大时同步调大。 |
-| `gap` | `number` | `5` | dots 模式间距(px) |
-| `loaderSize` | `number` | `44` | ai 模式尺寸(px) |
-| `pureSize` | `number` | `14` | pure 模式尺寸(px) |
-| `ringSize` | `number` | `18` | ring 模式尺寸(px) |
-| `ringThickness` | `number` | `2` | ring 模式线宽(px) |
-| `circleDashSize` | `number` | `18` | circle-dash 模式尺寸(px) |
-| `circleDashThickness` | `number` | `2` | circle-dash 模式线宽(px) |
-| `circleDashDashDeg` | `number` | `12` | circle-dash 模式 dash 角度(deg) |
-| `circleDashGapDeg` | `number` | `12` | circle-dash 模式 gap 角度(deg) |
-| `barsSize` | `number` | `12` | bars 模式高度(px) |
+| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | 指示器样式。 |
+| `text` | `string` | `'Typing…'` | `showText` 开启时显示的文案。 |
+| `showText` | `boolean` | `true` | 显示文案。 |
+| `ariaLabel` | `string` | - | `showText` 关闭时供读屏朗读的文案；缺省时用 `text`。 |
+| `size` | `number` | `6` | `dots` 的圆点直径（px）。 |
+| `gap` | `number` | `5` | `dots` 的圆点间距（px）。 |
+| `loaderSize` | `number` | `44` | `ai` 的尺寸（px）。 |
+| `pureSize` | `number` | `14` | `pure` 的直径（px）。 |
+| `ringSize` | `number` | `18` | `ring` 的直径（px）。 |
+| `ringThickness` | `number` | `2` | `ring` 的线宽（px）。 |
+| `circleDashSize` | `number` | `18` | `circle-dash` 的直径（px）。 |
+| `circleDashThickness` | `number` | `2` | `circle-dash` 的线宽（px）。 |
+| `circleDashDashDeg` | `number` | `12` | `circle-dash` 的虚线段角度（deg）。 |
+| `circleDashGapDeg` | `number` | `12` | `circle-dash` 的间隔角度（deg）。 |
+| `barsSize` | `number` | `12` | `bars` 的高度（px）。 |
 
-### CSS Variables
+### CSS 变量
 
 | 变量 | 来源 | 说明 |
 |------|------|------|
-| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | 指示器整体颜色。所有变体（含 dots）都从它派生，宿主使用自有 token 体系时用它一处改色。 |
+| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | 所有变体的颜色，一处即可改色。 |
 
-## Events
+## 概述
 
-`TxTypingIndicator` 不派发组件事件。它是被动的 `role="status"` 状态指示器。
-
-## Slots
-
-`TxTypingIndicator` 不暴露插槽。可访问状态文案使用 `text`；只有相邻 UI 已经说明等待状态时才使用 `showText=false`。
+- 根节点为 `role="status"`、`aria-live="polite"`；指示器图形均为 `aria-hidden`。
+- `showText` 关闭时仍渲染视觉隐藏的文案（`ariaLabel`，缺省时为 `text`），读屏照常朗读。
 
 ## 技术实现
 
-- 组件源码:`packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue` 确认 `role="status"`、`aria-live="polite"`、装饰性 loader 的 `aria-hidden`、变体 CSS 变量、AI mask 作用域 id 和可选文本渲染。
-- 类型契约:`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `TypingIndicatorProps` 和所有变体尺寸 prop。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts` 覆盖状态语义、dot 尺寸、隐藏文本、AI mask 尺寸、spinner 变体和 bars 渲染。
-- 导出入口:`packages/tuffex/packages/components/src/chat/index.ts` 导出 `TypingIndicator`、`TxTypingIndicator` 和 `TypingIndicatorProps`。
+- `ai` 变体用 SVG mask 绘制，mask id 按实例生成，同页多个实例互不干扰。
+- 源码：`packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`。
 
 <TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/index.ts" />

@@ -3,7 +3,8 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, createHmac } from 'node:crypto'
 import { createError } from 'h3'
-import { assertStorageChannelPolicy, listPlatformGovernanceConfigs, recordStorageChannelUsage, type PlatformGovernanceConfig } from './platformGovernanceStore'
+import { assertStorageChannelPolicy, listEnabledStorageChannelConfigs, recordStorageChannelUsage, type PlatformGovernanceConfig } from './platformGovernanceStore'
+import { runAfterResponse } from './afterResponse'
 import { getStorageCredential, type StorageAccessKeyCredential } from './storageCredentialStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
@@ -368,10 +369,7 @@ async function resolveConfiguredExternalStorage(
   event: H3Event,
   resourceType: string,
 ): Promise<StorageObjectExternalConfig | null> {
-  const policies = await listPlatformGovernanceConfigs(event, {
-    configType: 'storage_channel',
-    enabled: true,
-  })
+  const policies = await listEnabledStorageChannelConfigs(event)
   const candidates = policies.filter(policy =>
     (policy.channel === 's3' || policy.channel === 'oss')
     && (!policy.targetId || policy.targetId === resourceType)
@@ -579,7 +577,8 @@ async function recordObjectStorageUsage(
     unit: 'byte' | 'operation'
   },
 ): Promise<void> {
-  await recordStorageChannelUsage(input.event, {
+  // Recorded after the response: it was best effort already, but the object waited for it.
+  runAfterResponse(input.event, 'storage usage', () => recordStorageChannelUsage(input.event, {
     action: input.action,
     actorId: input.actorId,
     channel: input.backend.channel,
@@ -591,7 +590,7 @@ async function recordObjectStorageUsage(
     metadata: input.contentType
       ? { contentType: input.contentType }
       : undefined,
-  }).catch(() => {})
+  }))
 }
 
 function normalizeWriteRetryPolicy(policy?: Partial<StorageObjectWriteRetryPolicy>): StorageObjectWriteRetryPolicy {
@@ -789,7 +788,86 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
 }
 
 export async function getStorageObject(input: StorageObjectContext): Promise<StorageObjectResult | null> {
+  return await readBufferedStorageObject(input, await resolveObjectStorageBackend(input))
+}
+
+/** A stored object for a caller that passes it straight through and needs no digest of it. */
+export interface StorageObjectStream {
+  key: string
+  /** A stream from R2; the bytes themselves from the other backends, which answer in full. */
+  body: ReadableStream<Uint8Array> | Buffer
+  size: number
+  contentType: string
+  storageChannel: string
+  storageProvider: string
+  ownerId?: string
+  storesOwnership: boolean
+}
+
+/**
+ * `getStorageObject` without holding the object in memory: from R2 the body streams to the client
+ * instead of being read whole into the isolate (128 MB, shared by every request it serves) and
+ * hashed. Policy and usage are applied as for a full read, sized from the object's metadata, before
+ * any byte is sent.
+ */
+export async function openStorageObject(input: StorageObjectContext): Promise<StorageObjectStream | null> {
   const backend = await resolveObjectStorageBackend(input)
+  if (backend.externalStorage || !backend.bucket) {
+    const object = await readBufferedStorageObject(input, backend)
+    if (!object)
+      return null
+    const { data, sha256: _sha256, uploadRetry: _uploadRetry, ...rest } = object
+    return { ...rest, body: data }
+  }
+
+  const object = await backend.bucket.get(input.key)
+  if (!object)
+    return null
+
+  const contentType = normalizeContentType(object.httpMetadata?.contentType, input.defaultContentType ?? DEFAULT_CONTENT_TYPE)
+  try {
+    await assertObjectStoragePolicy({
+      event: input.event,
+      backend,
+      resourceType: input.resourceType,
+      action: 'storage.read',
+      unit: 'byte',
+      quantity: object.size,
+    })
+  }
+  catch (error) {
+    // A refused read must not leave the stream open.
+    await object.body.cancel().catch(() => {})
+    throw error
+  }
+  await recordObjectStorageUsage({
+    event: input.event,
+    backend,
+    key: input.key,
+    governanceResourceId: input.governanceResourceId,
+    resourceType: input.resourceType,
+    action: 'storage.read',
+    contentType,
+    unit: 'byte',
+    quantity: object.size,
+  })
+
+  return {
+    key: input.key,
+    body: object.body as unknown as ReadableStream<Uint8Array>,
+    size: object.size,
+    contentType,
+    storageChannel: backend.channel,
+    storageProvider: backend.provider,
+    ownerId: object.customMetadata?.ownerId || undefined,
+    storesOwnership: true,
+  }
+}
+
+async function readBufferedStorageObject(
+  input: StorageObjectContext,
+  backend: ResolvedObjectStorageBackend,
+): Promise<StorageObjectResult | null> {
   const fallbackContentType = input.defaultContentType ?? DEFAULT_CONTENT_TYPE
 
   if (backend.externalStorage) {

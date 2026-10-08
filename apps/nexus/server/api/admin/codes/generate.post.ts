@@ -1,7 +1,7 @@
 import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 import { requireAdmin } from '../../../utils/auth'
 import { logAdminAudit } from '../../../utils/adminAuditStore'
-import { createActivationCode } from '../../../utils/subscriptionStore'
+import { createActivationCodes } from '../../../utils/subscriptionStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
@@ -35,19 +35,16 @@ export default defineEventHandler(async (event) => {
   // Validate count
   const codeCount = Math.min(Math.max(1, count || 1), 100)
 
-  const codes: Awaited<ReturnType<typeof createActivationCode>>[] = []
+  let codes: Awaited<ReturnType<typeof createActivationCodes>>
 
   try {
-    for (let i = 0; i < codeCount; i++) {
-      const code = await createActivationCode(event, {
-        plan: plan as SubscriptionPlan,
-        durationDays,
-        maxUses: maxUses || 1,
-        expiresInDays: expiresInDays || undefined,
-        createdBy: userId,
-      })
-      codes.push(code)
-    }
+    codes = await createActivationCodes(event, {
+      plan: plan as SubscriptionPlan,
+      durationDays,
+      maxUses: maxUses || 1,
+      expiresInDays: expiresInDays || undefined,
+      createdBy: userId,
+    }, codeCount)
   }
   catch (error: any) {
     console.error('[admin/codes/generate] Error:', error)

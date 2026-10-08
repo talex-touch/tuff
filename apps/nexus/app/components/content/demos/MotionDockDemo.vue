@@ -13,16 +13,16 @@ const lastSelected = ref<MotionDockId | null>(null)
 const copy = computed(() => locale.value === 'zh' ? {
   apps: { files: '文件', search: '搜索', calendar: '日历', terminal: '终端', settings: '设置', help: '说明', locked: '锁定' },
   reset: '恢复初始顺序', reorderOn: '排序：开启', reorderOff: '排序：关闭', pause: '暂停放大', resume: '启用放大',
-  labelsOn: '标签：显示', labelsOff: '标签：隐藏', order: '调用方数组顺序', selected: '实际选中', none: '尚无',
+  labelsOn: '标签：显示', labelsOff: '标签：隐藏', order: '当前顺序', selected: '实际选中', none: '尚无',
   pointer: '指针', keyboard: '键盘', moved: '实际排序操作',
-  help: '沿工具栏移动指针，会同时放大临近项。拖动项目后，调用方数组同步更新。方向键移动焦点，Alt + 方向键排序，Home / End 跳到两端；按 Escape 取消拖动。锁定项不能激活，说明项是当前段落的真实链接。',
+  help: '沿工具栏移动指针，会同时放大临近项。拖动项目后，顺序同步更新。方向键移动焦点，Alt + 方向键排序，Home / End 跳到两端；按 Escape 取消拖动。锁定项不能激活，说明项是当前段落的真实链接。',
   labels: { dock: '应用程序栏', instructions: '左右方向键移动焦点，Home 和 End 到达首尾。Alt 加这些按键调整顺序。Enter 或空格激活；Escape 取消指针拖动。', reordered: '已将{label}移到第 {position} 项，共 {total} 项。' },
 } : {
   apps: { files: 'Files', search: 'Search', calendar: 'Calendar', terminal: 'Terminal', settings: 'Settings', help: 'Help', locked: 'Locked' },
   reset: 'Restore initial order', reorderOn: 'Reorder: on', reorderOff: 'Reorder: off', pause: 'Pause magnification', resume: 'Enable magnification',
-  labelsOn: 'Labels: visible', labelsOff: 'Labels: hidden', order: 'Caller array order', selected: 'Actual selection', none: 'None yet',
+  labelsOn: 'Labels: visible', labelsOff: 'Labels: hidden', order: 'Current order', selected: 'Actual selection', none: 'None yet',
   pointer: 'Pointer', keyboard: 'Keyboard', moved: 'Actual reorder',
-  help: 'Move the pointer along the toolbar to magnify neighboring items. Dragging updates the caller array. Arrow keys move focus; Alt + arrows reorder; Home / End reach the ends. Escape cancels a drag. The locked item cannot activate. Help is a real link to this paragraph.',
+  help: 'Move the pointer along the toolbar to magnify neighboring items. Dragging updates the order. Arrow keys move focus; Alt + arrows reorder; Home / End reach the ends. Escape cancels a drag. The locked item cannot activate. Help is a real link to this paragraph.',
   labels: { dock: 'Application dock', instructions: 'Left and Right move focus; Home and End reach the ends. Alt with these keys changes order. Enter or Space activates; Escape cancels a pointer drag.', reordered: 'Moved {label} to position {position} of {total}.' },
 })
 const initialIds = ['files', 'search', 'calendar', 'terminal', 'settings', 'help', 'locked'] as const

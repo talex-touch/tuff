@@ -18,7 +18,7 @@ import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import { buildCapabilityMessages } from './tuffIntelligenceCapabilityMessages'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
-import { ensureDefaultProviderSceneSeed } from './providerSceneSeed'
+import { ensureDefaultProviderSceneSeedForMiss } from './providerSceneSeed'
 import { convertUsd, getUsdRates } from './exchangeRateService'
 import { consumeCredits, releaseConsumedCredits } from './creditsStore'
 import {
@@ -1665,6 +1665,9 @@ async function resolveCandidatesForCapability(
 ): Promise<ResolvedSceneCandidate[]> {
   const resolved: ResolvedSceneCandidate[] = []
   const bindings = scene.bindings.filter(binding => binding.capability === capability)
+  // The bindings' providers side by side: on a cold registry cache they were read one after another.
+  await Promise.all([...new Set(bindings.map(binding => binding.providerId))]
+    .map(providerId => resolveProvider(event, providerId, providerCache)))
 
   for (const binding of bindings) {
     const provider = await resolveProvider(event, binding.providerId, providerCache)
@@ -1766,23 +1769,24 @@ function createFailedRun(
 }
 
 async function finalizeSceneRun(event: H3Event, run: SceneRunResult): Promise<SceneRunResult> {
-  try {
-    await recordProviderUsageLedger(event, run)
-  }
-  catch (error) {
-    console.warn('[sceneOrchestrator] Failed to record provider usage ledger', error)
-  }
-  for (const usage of run.usage) {
-    const providerId = usage.providerId
-    if (!providerId)
-      continue
-    try {
-      await recordPlatformGovernanceUsage(event, providerId, usage)
-    }
-    catch (error) {
-      console.warn('[sceneOrchestrator] Failed to record governance usage', error)
-    }
-  }
+  // The usage ledger and each governance event are independent writes: side by side, not one round
+  // trip after another before the run is returned.
+  await Promise.all([
+    recordProviderUsageLedger(event, run).catch((error) => {
+      console.warn('[sceneOrchestrator] Failed to record provider usage ledger', error)
+    }),
+    ...run.usage.map(async (usage) => {
+      const providerId = usage.providerId
+      if (!providerId)
+        return
+      try {
+        await recordPlatformGovernanceUsage(event, providerId, usage)
+      }
+      catch (error) {
+        console.warn('[sceneOrchestrator] Failed to record governance usage', error)
+      }
+    }),
+  ])
   return run
 }
 
@@ -2098,7 +2102,7 @@ async function settleSceneRunCredits(
         sceneId: context.sceneId,
         runId: context.runId,
         chargedCredits: billing.chargedCredits,
-      }, { idempotencyKey: `scene-run-release:${context.runId}` })
+      }, { idempotencyKey: `scene-run-release:${context.runId}`, reservationLedgerId: billing.ledgerId ?? undefined })
       billing.releasedCredits = released.amount
     }
     catch (error) {
@@ -2147,7 +2151,7 @@ async function releaseSceneRunCredits(
       sceneId: context.sceneId,
       runId: context.runId,
       failureCode,
-    }, { idempotencyKey: `scene-run-release:${context.runId}` })
+    }, { idempotencyKey: `scene-run-release:${context.runId}`, reservationLedgerId: billing.ledgerId ?? undefined })
     billing.releasedCredits += released.amount
   }
   catch (error) {
@@ -2198,7 +2202,7 @@ export async function resolveSceneProviderCandidates(
 ): Promise<SceneProviderResolution> {
   let scene = await getSceneRegistryEntry(event, options.sceneId)
   if (!scene && options.sceneId.startsWith('nexus.intelligence.')) {
-    await ensureDefaultProviderSceneSeed(event)
+    await ensureDefaultProviderSceneSeedForMiss(event)
     scene = await getSceneRegistryEntry(event, options.sceneId)
   }
   if (!scene || scene.status !== 'enabled') {

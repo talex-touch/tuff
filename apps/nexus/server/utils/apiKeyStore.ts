@@ -4,39 +4,36 @@ import { createError } from 'h3'
 import crypto from 'uncrypto'
 import { createHash } from 'node:crypto'
 import { readCloudflareBindings } from './cloudflare'
+import { runAfterResponse } from './afterResponse'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const API_KEYS_TABLE = 'user_api_keys'
-
-let apiKeySchemaInitialized = false
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
 }
 
+const API_KEY_SCHEMA = defineD1Schema('api-keys', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${API_KEYS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL,
+        scopes TEXT NOT NULL DEFAULT '["plugin:publish"]',
+        last_used_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON ${API_KEYS_TABLE}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON ${API_KEYS_TABLE}(key_hash)`,
+  ],
+})
+
 async function ensureApiKeySchema(db: D1Database) {
-  if (apiKeySchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${API_KEYS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      key_prefix TEXT NOT NULL,
-      key_hash TEXT NOT NULL,
-      scopes TEXT NOT NULL DEFAULT '["plugin:publish"]',
-      last_used_at TEXT,
-      expires_at TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON ${API_KEYS_TABLE}(user_id);
-  `).run()
-
-  apiKeySchemaInitialized = true
+  await ensureD1Schema(db, API_KEY_SCHEMA)
 }
 
 export interface ApiKey {
@@ -198,26 +195,38 @@ export async function deleteApiKeysForUser(event: H3Event, userId: string): Prom
 /**
  * Validate an API key and return the user ID if valid
  */
-async function lookupApiKeyRow(
-  db: D1Database,
-  prefix: string,
-  hash: string
-): Promise<{ id: string, user_id: string, scopes: string, expires_at: string | null } | null> {
+interface ApiKeyRow {
+  id: string
+  user_id: string
+  scopes: string
+  expires_at: string | null
+  last_used_at: string | null
+  key_hash: string
+}
+
+/** How stale `last_used_at` may get before a request refreshes it. */
+const API_KEY_TOUCH_INTERVAL_MS = 5 * 60 * 1000
+
+/**
+ * The key's row, by the SHA-256 hash or, for keys created before the migration, the legacy 32-bit
+ * hash — one query for both (it was up to two). A hash that matches more than one row is never
+ * resolved: on a collision the SHA-256 match is required to be unique, then the legacy one, so a
+ * collision can never pick the wrong user.
+ */
+async function lookupApiKeyRow(db: D1Database, prefix: string, key: string): Promise<ApiKeyRow | null> {
+  const sha = sha256Hex(key)
+  const legacy = legacyHash(key)
   const { results } = await db.prepare(`
-    SELECT id, user_id, scopes, expires_at
+    SELECT id, user_id, scopes, expires_at, last_used_at, key_hash
     FROM ${API_KEYS_TABLE}
-    WHERE key_prefix = ?1 AND key_hash = ?2;
-  `).bind(prefix, hash).all<{
-    id: string
-    user_id: string
-    scopes: string
-    expires_at: string | null
-  }>()
-  // Reject ambiguous matches — never guess with results[0] on a collision.
-  if (!results || results.length !== 1) {
-    return null
-  }
-  return results[0] ?? null
+    WHERE key_prefix = ?1 AND key_hash IN (?2, ?3);
+  `).bind(prefix, sha, legacy).all<ApiKeyRow>()
+  const rows = results ?? []
+  const shaRows = rows.filter(row => row.key_hash === sha)
+  if (shaRows.length === 1)
+    return shaRows[0]!
+  const legacyRows = rows.filter(row => row.key_hash === legacy)
+  return legacyRows.length === 1 ? legacyRows[0]! : null
 }
 
 export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string, scopes: string[] } | null> {
@@ -233,13 +242,7 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
   await ensureApiKeySchema(db)
 
   const prefix = `${key.substring(0, 12)}...`
-
-  // Prefer the SHA-256 hash; fall back to the legacy 32-bit hash only for keys
-  // created before the migration. lookupApiKeyRow rejects ambiguous multi-row
-  // matches so a hash collision can never resolve to the wrong user.
-  const row
-    = (await lookupApiKeyRow(db, prefix, sha256Hex(key)))
-      ?? (await lookupApiKeyRow(db, prefix, legacyHash(key)))
+  const row = await lookupApiKeyRow(db, prefix, key)
   if (!row) {
     return null
   }
@@ -249,12 +252,16 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
     return null
   }
 
-  // Update last used
-  await db.prepare(`
-    UPDATE ${API_KEYS_TABLE}
-    SET last_used_at = ?1
-    WHERE id = ?2;
-  `).bind(new Date().toISOString(), row.id).run()
+  // "Last used" is a dashboard hint: refreshed at most every few minutes, after the response.
+  // It was an awaited write on every API-key request.
+  const now = new Date()
+  if (!row.last_used_at || row.last_used_at < new Date(now.getTime() - API_KEY_TOUCH_INTERVAL_MS).toISOString()) {
+    runAfterResponse(event, 'api key last_used_at', () => db.prepare(`
+      UPDATE ${API_KEYS_TABLE}
+      SET last_used_at = ?1
+      WHERE id = ?2;
+    `).bind(now.toISOString(), row.id).run())
+  }
 
   return {
     userId: row.user_id,

@@ -1,6 +1,6 @@
 ---
 title: "Picker"
-description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized array values."
+description: "A wheel picker that selects one value per column."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,10 +11,8 @@ verified: true
 
 ## Usage
 
-### Popup, Inline, And Dense Rows
-
-The demo covers the three common contracts: controlled popup visibility, inline rendering with disabled options, and compact row sizing through `itemHeight` / `visibleItemCount`.
-
+### Popup, Inline, and Dense Rows
+`v-model:visible` controls the popup, `popup="false"` renders inline, and `itemHeight` / `visibleItemCount` size the rows.
 :::TuffDemoWrapper{demo="PickerPickerDemo" code-lang="vue"}
 ---
 code: |
@@ -22,18 +20,16 @@ code: |
   import type { PickerColumn, PickerValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const popupVisible = ref(false)
-  const popupValue = ref<PickerValue>(['pro', 'monthly'])
-  const inlineValue = ref<PickerValue>(['high', 'triage'])
-  const denseValue = ref<PickerValue>(['apac', 30])
+  const visible = ref(false)
+  const value = ref<PickerValue>(['pro', 'monthly'])
 
-  const popupColumns: PickerColumn[] = [
+  const columns: PickerColumn[] = [
     {
       key: 'plan',
       options: [
         { value: 'free', label: 'Free' },
         { value: 'pro', label: 'Pro' },
-        { value: 'team', label: 'Team' },
+        { value: 'team', label: 'Team', disabled: true },
       ],
     },
     {
@@ -44,93 +40,33 @@ code: |
       ],
     },
   ]
-
-  const inlineColumns: PickerColumn[] = [
-    {
-      key: 'priority',
-      options: [
-        { value: 'low', label: 'Low priority' },
-        { value: 'high', label: 'High priority' },
-        { value: 'frozen', label: 'Frozen', disabled: true },
-      ],
-    },
-    {
-      key: 'queue',
-      options: [
-        { value: 'inbox', label: 'Inbox' },
-        { value: 'triage', label: 'Triage queue' },
-      ],
-    },
-  ]
-
-  const denseColumns: PickerColumn[] = [
-    {
-      key: 'region',
-      options: [
-        { value: 'na', label: 'North America' },
-        { value: 'eu', label: 'Europe' },
-        { value: 'apac', label: 'Asia Pacific' },
-      ],
-    },
-    {
-      key: 'window',
-      options: [
-        { value: 15, label: '15 minutes' },
-        { value: 30, label: '30 minutes' },
-        { value: 60, label: '60 minutes' },
-      ],
-    },
-  ]
   </script>
 
   <template>
-    <div style="display: grid; gap: 16px;">
-      <section>
-        <TxButton variant="primary" @click="popupVisible = true">
-          Open picker
-        </TxButton>
-        <TxPicker
-          v-model="popupValue"
-          v-model:visible="popupVisible"
-          title="Subscription plan"
-          :columns="popupColumns"
-          confirm-text="Apply"
-          cancel-text="Cancel"
-        />
-      </section>
+    <TxButton @click="visible = true">Open picker</TxButton>
+    <TxPicker v-model="value" v-model:visible="visible" title="Subscription plan" :columns="columns" />
 
-      <section>
-        <TxPicker
-          v-model="inlineValue"
-          :popup="false"
-          title="Alert routing"
-          :columns="inlineColumns"
-        />
-      </section>
+    <TxPicker v-model="value" :popup="false" title="Subscription plan" :columns="columns" />
 
-      <section>
-        <TxPicker
-          v-model="denseValue"
-          :popup="false"
-          :show-toolbar="false"
-          :columns="denseColumns"
-          :item-height="28"
-          :visible-item-count="4"
-        />
-      </section>
-    </div>
+    <TxPicker
+      v-model="value"
+      :popup="false"
+      :show-toolbar="false"
+      :columns="columns"
+      :item-height="28"
+      :visible-item-count="4"
+    />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Keep `modelValue` as a stable array ordered exactly like `columns`; sparse arrays are normalized, but explicit values make form state easier to audit.
-- Provide `column.key` whenever columns can be reordered or conditionally rendered, so Vue does not reuse scroll containers for different data.
-- Keep option `value` primitives stable. Store display names in `label`, not in the persisted value.
-- Use inline mode (`popup=false`) for settings panels that should remain visible; use popup mode for mobile or task-focused transient choices.
-- Do not put selectable disabled values in submitted form state. The component skips disabled options only when it has to normalize or recover from scroll.
-- Keep `visibleItemCount` odd in design specs. The runtime rounds even numbers upward, which can make screenshots differ by one row.
+- Keep `modelValue` a complete array ordered like `columns`; sparse arrays are normalized, but explicit values keep form state auditable.
+- Give each column a `key` when columns reorder or render conditionally, so Vue doesn't reuse an old column for different data.
+- Use stable primitive option `value`s and put display text in `label`.
+- Use inline mode (`popup=false`) for always-visible settings, and the popup for mobile or short tasks.
+- Don't submit disabled values: the component skips disabled options only when it normalizes or recovers a scroll.
 
 ## API Reference
 
@@ -138,86 +74,72 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `PickerValue` | `[]` | Selected value per column. Missing, invalid, or non-array values normalize to the first enabled option. |
-| `columns` | `PickerColumn[]` | `[]` | Column definitions rendered from left to right. |
-| `visible` | `boolean` | `false` | Popup open state controlled by `v-model:visible`. |
-| `popup` | `boolean` | `true` | Renders as a Teleport bottom popup when true; renders inline when false. |
-| `title` | `string` | `''` | Center title shown in the toolbar. |
-| `showToolbar` | `boolean` | `true` | Shows cancel/title/confirm toolbar actions. |
-| `confirmText` | `string` | `'Confirm'` | Text for the confirm button. |
-| `cancelText` | `string` | `'Cancel'` | Text for the cancel button. |
-| `disabled` | `boolean` | `false` | Disables toolbar buttons, option buttons, and drag state updates. |
-| `itemHeight` | `number` | `36` | Option row height in pixels; values below 24 are clamped to 24. |
-| `visibleItemCount` | `number` | `5` | Number of visible rows. Even values are rounded up to the next odd count, with a minimum of 3. |
+| `modelValue` | `PickerValue` | `[]` | One value per column; missing or invalid values fall back to the first enabled option. |
+| `columns` | `PickerColumn[]` | `[]` | Column definitions, left to right. |
+| `visible` | `boolean` | `false` | Popup visibility, bound with `v-model:visible`. |
+| `popup` | `boolean` | `true` | `true` teleports a bottom popup; `false` renders inline. |
+| `title` | `string` | `''` | Toolbar title. |
+| `showToolbar` | `boolean` | `true` | Shows the cancel, title, and confirm toolbar. |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text. |
+| `cancelText` | `string` | `'Cancel'` | Cancel button text. |
+| `disabled` | `boolean` | `false` | Disables the toolbar, the options, and dragging. |
+| `itemHeight` | `number` | `36` | Row height in px; at least 24. |
+| `visibleItemCount` | `number` | `5` | Visible rows; even counts round up to odd, at least 3. |
 | `closeOnClickMask` | `boolean` | `true` | Closes the popup when the mask is clicked. |
-| `lazyMount` | `boolean` | `true` | Delays popup body rendering until the picker has opened once. |
-
-### PickerValue
-
-```ts
-type PickerValue = Array<string | number>
-```
-
-### PickerColumn
-
-| Field | Type | Description |
-|------|------|------|
-| `key` | `string` | Optional stable key for the column. |
-| `options` | `PickerOption[]` | Options available in this column. |
-
-### PickerOption
-
-| Field | Type | Description |
-|------|------|------|
-| `value` | `string \| number` | Primitive value emitted for the column. |
-| `label` | `string` | Visible option label. |
-| `disabled` | `boolean` | Prevents selecting this option and skips it during normalization fallback. |
+| `lazyMount` | `boolean` | `true` | Mounts the popup body on first open. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value: PickerValue)` | Emitted when scrolling changes a column value. |
-| `change` | `(value: PickerValue)` | Emitted with the same normalized value after a live column change. |
-| `update:visible` | `(visible: boolean)` | Popup visibility update emitted by open/close actions. |
-| `confirm` | `(value: PickerValue)` | Emitted with the current local value when confirm is clicked, then closes. |
-| `cancel` | - | Emitted when cancel is clicked, then closes. |
-| `open` | - | Emitted when the picker opens. |
-| `close` | - | Emitted when the picker closes. |
+| `update:modelValue` | `(value: PickerValue)` | Fires when turning a column changes its value. |
+| `change` | `(value: PickerValue)` | Fires together with `update:modelValue`. |
+| `update:visible` | `(visible: boolean)` | Fires on open and close. |
+| `confirm` | `(value: PickerValue)` | Fires with the current value on confirm, then closes. |
+| `cancel` | - | Fires on cancel, then closes. |
+| `open` | - | Fires on open. |
+| `close` | - | Fires on close. |
 
-### Exposes
+### Exposed Methods
 
 | Name | Type | Description |
 |------|------|------|
-| `open` | `() => void` | Opens the picker popup by writing `visible=true`. |
-| `close` | `() => void` | Closes the picker popup. |
-| `toggle` | `() => void` | Toggles the popup open state. |
+| `open` | `() => void` | Opens the popup by writing `visible=true`. |
+| `close` | `() => void` | Closes the popup. |
+| `toggle` | `() => void` | Toggles the popup. |
 
-## Slots
+### Types
 
-`TxPicker` does not expose slots. Use `columns[].options[].label` for visible option text and `title` / `confirmText` / `cancelText` for toolbar copy.
+```ts
+type PickerValue = Array<string | number>
+```
+
+`PickerColumn`, one entry of `columns`:
+
+| Field | Type | Description |
+|------|------|------|
+| `key` | `string` | Optional stable key. |
+| `options` | `PickerOption[]` | The column's options. |
+
+`PickerOption`, one entry of `options`:
+
+| Field | Type | Description |
+|------|------|------|
+| `value` | `string \| number` | Primitive value emitted for the column. |
+| `label` | `string` | Visible text. |
+| `disabled` | `boolean` | Prevents selection; skipped by the normalization fallback. |
 
 ## Overview
 
-- `modelValue` is always an array with one primitive value per column.
-- Missing, invalid, or non-array model values normalize to the first enabled option in each column.
-- Disabled options cannot be selected and are skipped by normalization fallback.
-- Popup mode is controlled by `visible` / `v-model:visible`; inline mode renders immediately when `popup` is `false`.
-- `visibleItemCount` is rounded up to an odd number and never below `3`; `itemHeight` is clamped to at least `24`.
-- Scrolling emits `update:modelValue` and `change`; clicking confirm emits `confirm` with the current normalized value and then closes.
-- A column is a drum the component turns itself, not a native scroller. It owns the pointer, the wheel, clicks and the keyboard, and its whole position is one number: the offset, in rows, fractional while it turns.
-- Rows are stacked on the centre line and placed on the drum from there — out to the radius, `rotateX` by their distance from the offset, then the whole drum back by one radius so the front row sits on the screen plane at exactly one row high, under the highlight. Because they start centred rather than laid out down the column, a rotation has no layout offset to fight.
-- The drum fills the column. The eye sits three radii in front of it, where its silhouette reaches `r · √(3/5)`; the radius is set so that equals half the column, and each row is a flat face of it (`step = 2 · atan(itemHeight / 2 / r)`). At the defaults that is `r = 116px`, a 17.6° step and a 348px perspective: the rows beside the centre stand at about 94%, 77%, 53% and 27% of their height and narrow as they roll back over the rim, and a fade darkens the surface toward it.
-- Rows take no part in hit testing (`pointer-events: none`). The column reads the row under a point out of the projected geometry instead: a row turned by `a` is drawn at `y = r · sin a · 3 / (4 − cos a)`, which inverts in closed form, and points past the silhouette resolve to its rim. A transformed row's hit area travels with it, and the enlarged centre row would otherwise cover its neighbours and swallow their clicks.
-- A drag tracks the finger, then coasts: the release velocity carries the offset on and it eases to the nearest enabled row on a cubic ease-out, so it leaves quickly and arrives slowly. The wheel turns the column directly and settles 120ms after it stops. With `prefers-reduced-motion: reduce` a drag still follows the pointer, but there is no coast and the column lands on its row without easing.
-- A controlled parent echoes every emitted value back through `modelValue`. A column already turning onto that value — easing there, or held by a drag or a wheel that committed it — is left to finish its turn; only a value the picker is not heading to re-places the column.
-- Only the rows in front of the drum's rim are drawn — past `acos(1/4)` a row faces away from the eye and `backface-visibility` hides it. That is eleven rows at the default size, whatever the column's length. Each carries `aria-setsize` and `aria-posinset`, so the window is invisible to assistive tech.
+- Each column is a drum the component turns itself, not a native scroller; it handles the pointer, the wheel, clicks, and the keyboard.
+- A drag tracks the pointer, then coasts on its release velocity and settles on the nearest enabled row with a cubic ease-out; the wheel settles 120ms after it stops.
+- Under reduced motion a drag still tracks the pointer, but there is no coast and settling doesn't ease.
+- When a controlled parent echoes back the value a column is already turning to, the column finishes its turn instead of being re-placed.
+- Only the rows facing the viewer are drawn (11 at the default size, whatever the column length); each carries `aria-setsize` and `aria-posinset`, so screen readers see the full list.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/picker/src/TxPicker.vue` defines the popup/inline rendering paths, normalization fallback, scroll snapping, `open` / `close` / `toggle` exposes, and row-size clamping.
-- Type contracts: `packages/tuffex/packages/components/src/picker/src/types.ts` exports `PickerValue`, `PickerColumn`, `PickerOption`, `PickerProps`, and `PickerEmits`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/picker/__tests__/picker.test.ts` covers value normalization, disabled-option fallback, toolbar confirm/cancel emissions, disabled toolbar/options, and clamped layout variables.
-- Rejected: a fixed 18° step with a `9r` perspective and the front row pushed out toward the viewer. Only about ±36° of the drum fell inside a five-row column, the neighbours kept 95% of their height, the fade cut off everything past them, and the enlarged centre row overflowed the highlight — it read as a flat list sliding up and down.
+- Rows sit on the drum by `rotateX` of their distance from the offset (defaults: `r = 116px`, a 17.6° step, a 348px perspective); rows skip hit testing, and a click resolves to its row by inverting the projection in closed form.
+- Source: `packages/tuffex/packages/components/src/picker/`.
 
 <TuffDocSourceLink />

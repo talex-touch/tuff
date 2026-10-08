@@ -4,10 +4,9 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { recordTelemetryMessages } from './messageStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const AUDIT_TABLE = 'admin_breakglass_audit'
-
-let schemaReady = false
 
 export type AdminControlChannel = 'A' | 'B' | 'C'
 
@@ -27,43 +26,33 @@ function requireDb(event: H3Event): D1Database {
   return db
 }
 
+const ADMIN_BREAKGLASS_AUDIT_SCHEMA = defineD1Schema('admin-breakglass-audit', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
+        id TEXT PRIMARY KEY,
+        actor_id TEXT NOT NULL,
+        actor_admin_id TEXT,
+        channel TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target TEXT,
+        scope TEXT,
+        decision TEXT NOT NULL,
+        evidence_ref TEXT,
+        prev_hash TEXT,
+        row_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_created
+      ON ${AUDIT_TABLE}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_actor_created
+      ON ${AUDIT_TABLE}(actor_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_action_created
+      ON ${AUDIT_TABLE}(action, created_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaReady)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
-      id TEXT PRIMARY KEY,
-      actor_id TEXT NOT NULL,
-      actor_admin_id TEXT,
-      channel TEXT NOT NULL,
-      action TEXT NOT NULL,
-      target TEXT,
-      scope TEXT,
-      decision TEXT NOT NULL,
-      evidence_ref TEXT,
-      prev_hash TEXT,
-      row_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_created
-    ON ${AUDIT_TABLE}(created_at);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_actor_created
-    ON ${AUDIT_TABLE}(actor_id, created_at);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_breakglass_audit_action_created
-    ON ${AUDIT_TABLE}(action, created_at);
-  `).run()
-
-  schemaReady = true
+  await ensureD1Schema(db, ADMIN_BREAKGLASS_AUDIT_SCHEMA)
 }
 
 function stableSerialize(value: unknown): string {

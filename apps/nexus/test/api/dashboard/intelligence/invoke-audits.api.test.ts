@@ -83,7 +83,10 @@ class MockCreditLedgerDatabase {
     }
 
     if (sql.includes('FROM credit_ledger')) {
-      const traceIds = args.filter((value): value is string => typeof value === 'string')
+      // The trace ids arrive as one JSON array (`json_each`).
+      const traceIds = sql.includes('json_each')
+        ? JSON.parse(String(args[0])) as string[]
+        : args.filter((value): value is string => typeof value === 'string')
       const results = this.rows
         .filter((row) => {
           const metadata = JSON.parse(row.metadata) as { traceId?: string }

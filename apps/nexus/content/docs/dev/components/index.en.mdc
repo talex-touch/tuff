@@ -1,6 +1,6 @@
 ---
 title: Concepts Overview
-description: "What Tuffex is, the three concept blocks behind it, and the full component index"
+description: "Tuffex concepts, suites, and the complete component index."
 category: Foundations
 status: beta
 since: 0.3.9
@@ -9,118 +9,68 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Installation
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, plugin surfaces, and this documentation site.
 
-Three import shapes — per component, per suite barrel, or the root entry — plus the stylesheet each one needs. Start at [Installation](./installation.en.mdc).
+## Concepts
 
-## Tuffex Components
+| Page | Covers |
+|------|--------|
+| [Installation](./installation.en.mdc) | Three import paths and their stylesheets |
+| [Design Foundations](./foundations.en.mdc) | Typography and color tokens |
+| [Theming](./theming.en.mdc) | Token overrides, dark mode, high contrast |
+| [Icons](./icons.en.mdc) | How `TxIcon` resolves and loads icons |
+| [Accessibility](./accessibility.en.mdc) | Focus, motion, contrast and ARIA conventions |
+| [Utils](./utils.en.mdc) | Stacking, toast, dialog and animation helpers |
+| [Sound](./sound.en.mdc) | Synthesized feedback sounds, off by default |
+| [Component Changelog](./changelog.en.mdc) | Release history and since index |
 
-Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering CoreBox, plugin surfaces and this documentation site. The sidebar has eight documentation suites: **Concepts**, **Templates**, **Basics**, **Pro**, **AI**, **Data**, **Flow** and **Motion**. Concepts explains installation and design rules; Templates contains full-page compositions; the other six group reusable components by purpose. Choosing a suite opens its overview, or the first composition in Templates.
+## Suite Overview
 
-- Live specimens: [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) and [Motion](./motion-suite.en.mdc) open with interactive component grids. Each specimen has a reset control and a link to its documentation.
-- Installation barrels stay `@talex-touch/tuffex/base`, `/pro` and `/ai`. Motion is a documentation suite, not a new installation barrel. Mono and Dither charts import from the existing `@talex-touch/tuffex/charts` subpath.
-- Changelog & Lifecycle: See [Component Changelog & Lifecycle](./changelog.en.mdc) for introduction versions (Since xx), per-release component changes, and release gates.
+| Suite | Groups | Pages | Entry |
+|-------|--------|-------|-------|
+| [Concepts](./index.en.mdc) | Installation, design rules, helpers | 8 | Documentation only |
+| [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 16 | Compositions of existing entries |
+| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
+| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 38 | `@talex-touch/tuffex/pro` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 35 | `@talex-touch/tuffex/ai` |
+| [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
+| [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
+| [Motion Suite](./motion-suite.en.mdc) | 10 groups: buttons, carousels, loaders, text, transitions… | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 
-## Design Foundations
+- Page counts are documentation entries, excluding suite overviews; they are not export counts.
+- There are only three suite entries: `base`, `pro` and `ai`. Data, Flow and Motion are documentation suites; charts also have `@talex-touch/tuffex/charts`.
 
-The bottom layer of every component's visual is a set of `--tx-*` design tokens: the font stack with its size/weight scale, and color semantics for both light and dark themes (primary, success/warning/danger, layered text and fill). Components never define their own visuals — they consume this layer, so re-theming means changing tokens, and app-side customization should land on the same layer. The full inventory lives in [Design Foundations](./foundations.en.mdc).
+## Composition Example
 
-## Theming
-
-Where Foundations lists the tokens, [Theming](./theming.en.mdc) is how you override them: global tokens, the dark and high-contrast selectors, the AI suite's own `--tx-bui-*` layer, and the ~300 per-component hooks that retheme one component or one subtree.
-
-## Icons
-
-`TxIcon` decides what an icon string is rather than making the caller declare it — an Iconify class, one of seven builtin glyphs, an emoji, or an explicit URL / file source. [Icons](./icons.en.mdc) covers that resolution order and how an app teaches the component to load icons from its own storage.
-
-## Utils
-
-Public helper functions that ship alongside the components, exported from the root entry and the `./utils` subpath: `nextZIndex` for unified overlay stacking, `toast` notifications, dialog orchestration, environment guards (`hasWindow` and friends), haptics and animation helpers. The components themselves go through this same layer, so reusing it keeps app behavior consistent. The full API lives in [Utils](./utils.en.mdc).
-
-## Composed Workspace Demo
-
-This demo validates component composition in a realistic admin slice: search input, switch, button, status badges, progress, and selectable table work together in one responsive panel.
-
-::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="Release workspace" description="A practical baseline for Dashboard / Admin component composition."}
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="Release workspace" description="A baseline for Dashboard / Admin composition"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const query = ref('')
-  const selectedKeys = ref([1])
-  const automationEnabled = ref(true)
-
-  const columns = [
-    { key: 'task', title: 'Task' },
-    { key: 'owner', title: 'Owner' },
-    { key: 'status', title: 'Status' },
-  ]
-  const rows = [
-    { id: 1, task: 'Release notes', owner: 'Ivy', status: 'In review' },
-    { id: 2, task: 'Canary rollout', owner: 'Long', status: 'In progress' },
-  ]
-  </script>
-
   <template>
-    <section class="workflow-panel">
-      <header>
-        <h3>Release workspace</h3>
-        <TxButton variant="primary" size="sm" icon="i-carbon-rocket">Deploy</TxButton>
-      </header>
-      <TuffInput v-model="query" placeholder="Search tasks" prefix-icon="i-carbon-search" clearable />
-      <TuffSwitch v-model="automationEnabled" />
-      <TxProgressBar :percentage="84" status="success" show-text />
-      <TxStatusBadge text="Reviewing" status="warning" />
-      <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="rows" row-key="id" selectable />
-    </section>
+    <TxButton variant="primary" size="sm" icon="i-carbon-rocket">Deploy</TxButton>
+    <TuffInput v-model="query" placeholder="Search tasks" prefix-icon="i-carbon-search" clearable />
+    <TuffSwitch v-model="automationEnabled" />
+    <TxProgressBar :percentage="84" status="success" show-text />
+    <TxStatusBadge text="Reviewing" status="warning" />
+    <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="rows" row-key="id" selectable />
   </template>
 ---
 ::
 
 ## Tutorial Path
 
-- Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.mdc) to learn the “actions → status → data” page structure.
-- Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, navigation settings, and detail drawers.
-- For list pages, keep keyword search, scope filtering, and no-match recovery in one path with `TxSearchInput`, `TxSearchSelect`, and `TxSearchEmpty`.
-- For data lists, use `TxDataTable` for the main body, `TxPagination` for navigation, and `TxSkeleton` / `TxLayoutSkeleton` for waiting states.
-- For settings pages and admin shells, use `TxTabs` for fixed sections, `TxDropdownMenu` / `TxPopover` for lightweight actions and short notes, and `TxDrawer` for dense configuration.
-- Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
-- Task feedback paths should mount `TxToastHost` for notifications, use `TxTooltip` for action hints, `TxLoadingOverlay` for local blocking refreshes, and `TxSpinner` for inline waiting.
-- Permission orchestration paths should use `TxTree` for scope, `TxTreeSelect` for owner team, `TxTransfer` for resource grants, and `TxTimeline` for audit progress.
-- Release configuration paths should use `TxCascader` for release scope, `TxFlatSelect` for package and rollout choices, `TxSegmentedSlider` for risk tiers, `TxSlider` for traffic ramps, and `TxTagInput` for short metadata.
-- Use the grouped component list below for detail pages; the sidebar only highlights migration states that still need attention, while reviewed pages are marked as `Verified` in the sync dashboard.
-- Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
+- Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.mdc): split a page into actions → status → data.
+- On list pages, `TxSearchInput`, `TxSearchSelect` and `TxSearchEmpty` carry search and no-match recovery; `TxDataTable` + `TxPagination` carry the data.
+- Design loading, empty and error states together: `TxLoadingState`, `TxEmptyState`, `TxErrorState`.
+- Compose dashboards from `TxDataTable`, `TxStatusBadge`, `TxProgressBar` and charts, not one-off SVG or status UI; settings pages use `TxTabs` for sections and `TxDrawer` for dense configuration.
 
 ## Migration Dashboard
 
-- `In progress`: this page is still being edited; demos/API may change.
-- `AI migrated`: migration is complete, but source-code verification is recommended.
-- `Reviewed`: manually reviewed.
+`Verified`: manually reviewed; `Migrated`: AI-migrated, worth checking against source; `In progress` / `Not migrated`: demos and API may still change. The sidebar flags only pages that still need attention.
 
 ::DocsComponentSyncTable
 ::
 
-## Suite Overview
-
-Component suites have live overview grids. Concepts starts here; Templates opens a complete page composition. Page counts below exclude suite overview pages and count documentation entries rather than public exports.
-
-| Suite | Groups | Pages | Entry |
-|-------|--------|-------|-------|
-| [Concepts](./index.en.mdc) | Installation / Foundations / Theming / Icons / Accessibility / Utils / Sound / Changelog | 8 | Documentation only |
-| [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 16 | Compositions of existing entries |
-| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
-| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 38 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 35 | `@talex-touch/tuffex/ai` |
-| [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
-| [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
-| [Motion Suite](./motion-suite.en.mdc) | Buttons / Card Spreads / 3D Carousels / Loaders / Dither Charts / Text / Physics / Hover, Cursor & Scroll / Toggles / Transitions | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
-
-Source version 0.6.3 includes the new Motion, Mono and composite Pro families. It ships for Tuff beta testing and has not been independently published to npm; see [Changelog](./changelog.en.mdc).
-
 ## Templates
-
-Full-page compositions use the same component entries. Open a template to inspect its live page and implementation.
 
 ### App shells
 
@@ -151,8 +101,6 @@ Full-page compositions use the same component entries. Open a template to inspec
 - [Release](./template-release.en.mdc)
 
 ## Basics
-
-The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Suite page: [Basics Suite](./base-suite.en.mdc). Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
 
 ### General
 
@@ -272,8 +220,6 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 
 ## Pro
 
-Rich interaction, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry. Suite page: [Pro Suite](./pro-suite.en.mdc).
-
 ### Interaction
 
 - [CommandPalette](./command-palette.en.mdc)
@@ -323,7 +269,7 @@ Rich interaction, visual effects and low-level primitives, importable through th
 
 ## AI Suite
 
-AI-native interface components, partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT) — see the [AI Suite](./ai-suite.en.mdc) page for full showcases — importable through the `@talex-touch/tuffex/ai` category entry.
+Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 
 ### Chat
 
@@ -374,11 +320,7 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 
 ## Data
 
-Data visualization and charts: the main package's visualization components (imported through `@talex-touch/tuffex/pro`) plus the chart family behind the `@talex-touch/tuffex/charts` subpath (kumo-shaped, no echarts). Suite page: [Data Suite](./data-suite.en.mdc).
-
 ### Charts
-
-Docs for the chart family behind the `@talex-touch/tuffex/charts` subpath (kumo), shipped inside the main tuffex package.
 
 - [Charts](./charts.en.mdc)
 - [Chart Colors](./chart-colors.en.mdc)
@@ -398,15 +340,11 @@ Docs for the chart family behind the `@talex-touch/tuffex/charts` subpath (kumo)
 
 ## Flow
 
-Workflow orchestration: nodes, branches and connectors on a dotted canvas. It imports through the `@talex-touch/tuffex/ai` entry — like Data, the suite is a docs-level split. Suite page: [Flow Suite](./flow-suite.en.mdc).
-
 ### Flow
 
 - [Flowchart](./flowchart.en.mdc)
 
 ## Motion
-
-Input-driven motion and presentation families, grouped independently of installation barrels. [Motion Suite](./motion-suite.en.mdc) includes a live specimen for each family; the component pages expose every named source variant.
 
 ### Buttons
 
@@ -452,12 +390,5 @@ Input-driven motion and presentation families, grouped independently of installa
 
 ## Technologies
 
-- Hub scope: this page is the Concepts suite overview and the component documentation index; per-component API / props / best-practice details live in the linked component pages.
-- Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
-- Demo registry: `apps/nexus/app/components/content/demo-registry.ts` maps each `TuffDemoWrapper` demo on this page to a standalone Vue demo file.
-- Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the live "Preview" grid on each suite page; it takes a required `suite` prop and renders that band only.
-- **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
-
-## Accessibility
-
-Focus rings on `:focus-visible`, `prefers-reduced-motion` handling, the high-contrast palette, and the ARIA conventions the components share — along with a plain account of where coverage stops. See [Accessibility](./accessibility.en.mdc).
+- Exported slug set: `packages/tuffex/packages/components/src/components.ts`. This page must link every documented export; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` enforces it.
+- Demo registry: `apps/nexus/app/components/content/demo-registry.ts`; suite preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` (`suite` is required).

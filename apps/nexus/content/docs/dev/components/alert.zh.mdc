@@ -1,6 +1,6 @@
 ---
 title: Alert 警告
-description: 用于上下文反馈、语义提示和可关闭通知的内联状态横幅。
+description: 在页面内显示上下文状态的提示横幅
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,25 +11,22 @@ verified: true
 
 ## 用法
 
-### 提示类型
-
+### 类型
+`type` 决定配色与默认图标。
 :::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div>
-      <TxAlert title="提示" message="检查一下配置项。" type="info" />
-      <TxAlert title="成功" message="已保存。" type="success" />
-      <TxAlert title="注意" message="有需要处理的内容。" type="warning" />
-      <TxAlert title="失败" message="保存失败。" type="error" />
-    </div>
+    <TxAlert title="提示" message="检查一下配置项。" type="info" />
+    <TxAlert title="成功" message="已保存。" type="success" />
+    <TxAlert title="注意" message="有需要处理的内容。" type="warning" />
+    <TxAlert title="失败" message="保存失败。" type="error" />
   </template>
 ---
 :::
 
 ### 常驻提示
-
-当消息属于页面状态、不应在本地消失时，使用 `closable=false`。
+属于页面状态、不应被关闭的提示设置 `closable=false`。
 
 ```vue
 <template>
@@ -58,7 +55,7 @@ code: |
 </template>
 ```
 
-### 纯文本横幅
+### 纯文本
 
 ```vue
 <template>
@@ -68,59 +65,56 @@ code: |
 
 ### 最佳实践
 
-- Alert 用于页面上下文反馈，不要替代 toast。
-- `type` 应符合用户影响：失败动作用 `error`，风险提示用 `warning`，中性引导用 `info`。
-- 在宿主中处理 `close`，通过移除 alert 或持久化关闭状态来完成隐藏。
-- 合规、阻塞或始终相关的提示使用 `closable=false`。
-- 不要把主流程塞进 alert 正文；操作按钮放在 alert 后方，布局和语义更清晰。
+- 页面上下文反馈用 Alert，瞬时的操作结果用 Toast。
+- 按用户影响选择 `type`：失败用 `error`，风险用 `warning`，中性引导用 `info`。
+- 合规、阻塞或始终相关的提示设置 `closable=false`；需要记住关闭状态时在 `close` 中持久化。
+- 文案简短、可执行，不要同时挂载多个新 Alert。
+- 操作按钮放在 Alert 之后，不放进正文。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | 视觉意图与默认图标映射。 |
-| `title` | `string` | - | 可选标题文本。不存在且无 `title` 插槽时隐藏标题行。 |
-| `message` | `string` | - | 未提供默认插槽时使用的正文消息。 |
-| `closable` | `boolean` | `true` | 渲染关闭按钮和关闭区域 padding。 |
-| `showIcon` | `boolean` | `true` | 渲染语义前置图标。 |
+| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | 语义类型，决定配色与默认图标。 |
+| `title` | `string` | - | 标题；未设置且无 `title` 插槽时不渲染标题行。 |
+| `message` | `string` | - | 正文；默认插槽优先。 |
+| `closable` | `boolean` | `true` | 显示关闭按钮。 |
+| `showIcon` | `boolean` | `true` | 显示前置语义图标。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
 | `close` | - | 点击关闭按钮时触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `title` | - | 自定义标题内容。 |
-| `default` | - | 自定义正文内容，会替换 `message`。 |
+| `title` | - | 自定义标题。 |
+| `default` | - | 自定义正文，替换 `message`。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open` | `() => void` | 重新显示已关闭的 Alert。 |
+| `close` | `() => void` | 隐藏 Alert 并派发 `close`。 |
 
 ## 概述
 
-- 根节点渲染 `role="alert"`，并带类型 class（`tx-alert--info`、`--success`、`--warning` 或 `--error`）。
-- `type` 决定默认前置图标名：`info`、`check-circle`、`alert-triangle` 或 `x-circle`。
-- `showIcon=false` 会移除前置图标容器。
-- 只有存在 `title` 或 `title` 插槽时才渲染标题行。
-- 默认插槽会替换 `.tx-alert__message` 内的 `message`。
-- `closable=true` 会渲染关闭按钮，添加 `tx-alert--closable`，并预留右侧 padding。
-- 点击关闭按钮会发出 `close`**并且**隐藏自身，离场动画因此才有可播放的对象。宿主仍可继续用 `v-if` 驱动，但不再是必须的。
-- 根节点是 `<Transition name="tx-alert" appear>`：挂载时以 0.26s 淡入并轻微上移，离场为 0.16s。透传属性仍然落在 `.tx-alert` 上，渲染出的根元素也仍是该 div。
-- 实例上暴露 `open()` 与 `close()`，可以把已关闭的警示恢复回来——文档组件库页面的重置按钮就是用 `open()` 实现的。
-- 只动画 opacity 与 transform。根节点是 `display: flex`，高度塌缩会在动画途中接管布局、把图标/正文/关闭按钮重新堆叠。若需要收拢留下的空位，请把一组警示包进 `<TransitionGroup>`。
-- 在 `prefers-reduced-motion: reduce` 下改为 0.01s 纯淡入淡出，不做位移。
-- 关闭按钮只有图标文本，并使用 `aria-label="Close"`。
+- 根节点为 `role="alert"`，挂载时读屏器立即播报。
+- `type` 对应的图标为 `info`、`check-circle`、`alert-triangle`、`x-circle`，均为 `TxIcon` 内置图标，无需图标字体。
+- 点击关闭按钮会隐藏自身并派发 `close`；宿主仍可用 `v-if` 控制显示。
+- 只过渡 opacity 与 transform，不收拢高度；需要收拢空位时用 `<TransitionGroup>` 包裹。
+- 减少动态效果时只淡入淡出，不位移。
+- 关闭按钮只有图标，带 `aria-label="Close"`。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`、`types.ts` 与 `alert.test.ts`。
-- **实测覆盖:** `alert.test.ts` 覆盖语义 alert role、type class、标题/消息渲染、图标可见性、标题/默认插槽、关闭按钮隐藏、`close` 事件行为，以及每种 `type` 都能解析到真实的 `builtin` 图标、关闭后隐藏且 `open()` 可恢复、透传属性落在 `.tx-alert` 而非 transition 上。
-- 可访问性说明：`role="alert"` 会强提示读屏器。文案应短、可执行，并避免一次性挂载多个新 alert。
+- 根节点带 `tx-alert--<type>` 与 `tx-alert--closable` class，外层是 `<Transition name="tx-alert" appear>`；透传属性落在 `.tx-alert` 上。
+- 源码：`packages/tuffex/packages/components/src/alert/`。
 
-- Component source: `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`.
-- Types: `packages/tuffex/packages/components/src/alert/src/types.ts` exports `AlertProps`, `AlertEmits`, and `AlertType`.
-- Coverage: `packages/tuffex/packages/components/src/alert/__tests__/alert.test.ts` verifies role/class rendering, slots, close controls, and close events.
 <TuffDocSourceLink />

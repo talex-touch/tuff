@@ -69,7 +69,9 @@ describe('telemetry route wiring', () => {
 
   it.each(routes)('$name resolves the user id from credentials', ({ source }) => {
     expect(source).toContain('resolveTelemetryUserId(event)')
-    expect(source).toContain('userId: resolvedUserId || undefined')
+    // Attribution is the resolved identity gated by the event's own anonymity flag; the body's
+    // userId never reaches this expression.
+    expect(source).toContain('userId: anonymous ? undefined : resolvedUserId || undefined')
   })
 
   it.each(routes)('$name no longer takes a user id from the body', ({ source }) => {
@@ -81,7 +83,9 @@ describe('telemetry route wiring', () => {
 
   it.each(routes)('$name marks an unattributed event anonymous whatever the body claims', ({ source }) => {
     // Otherwise an event with no owner could still be stored as non-anonymous, which is the
-    // state the per-user dashboard reads.
-    expect(source).toMatch(/isAnonymous: resolvedUserId \?/)
+    // state the per-user dashboard reads. `!resolvedUserId` has to be the first operand: an
+    // explicit `isAnonymous: false` from an unauthenticated client must not win.
+    expect(source).toMatch(/const anonymous = !resolvedUserId \|\| /)
+    expect(source).toContain('isAnonymous: anonymous')
   })
 })

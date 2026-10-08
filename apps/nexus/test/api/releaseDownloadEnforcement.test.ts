@@ -23,13 +23,14 @@ const releasesStoreMocks = vi.hoisted(() => ({
 }))
 
 const releaseAssetMocks = vi.hoisted(() => ({
-  requireReleaseAsset: vi.fn(),
+  requireReleaseAssetStream: vi.fn(),
 }))
 
 const h3Mocks = vi.hoisted(() => ({
   getQuery: vi.fn(),
   sendRedirect: vi.fn(),
   send: vi.fn(),
+  sendStream: vi.fn(),
   setResponseHeader: vi.fn(),
 }))
 
@@ -43,6 +44,7 @@ vi.mock('h3', async () => {
     getQuery: h3Mocks.getQuery,
     sendRedirect: h3Mocks.sendRedirect,
     send: h3Mocks.send,
+    sendStream: h3Mocks.sendStream,
     setResponseHeader: h3Mocks.setResponseHeader,
   }
 })
@@ -109,12 +111,14 @@ beforeEach(() => {
   signatureMocks.parseReleaseDownloadQuerySignature.mockReturnValue(null)
   h3Mocks.getQuery.mockReturnValue({})
   releasesStoreMocks.getReleaseByTag.mockResolvedValue(makeRelease())
-  releaseAssetMocks.requireReleaseAsset.mockResolvedValue({
-    data: Buffer.from([1, 2, 3]),
+  releaseAssetMocks.requireReleaseAssetStream.mockResolvedValue({
+    body: Buffer.from([1, 2, 3]),
+    size: 3,
     contentType: 'application/octet-stream',
   })
   h3Mocks.sendRedirect.mockReturnValue(REDIRECTED)
   h3Mocks.send.mockImplementation((_event, body) => body)
+  h3Mocks.sendStream.mockImplementation((_event, body) => body)
 })
 
 describe('GET release download', () => {
@@ -150,27 +154,36 @@ describe('GET release download', () => {
       'https://cdn.example.com/Tuff-2.5.0-arm64.dmg',
       302,
     )
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 
-  it('increments the count and sends the stored asset body', async () => {
+  it('increments the count and streams the stored asset body', async () => {
     useValidSignature()
     releasesStoreMocks.getReleaseByTag.mockResolvedValueOnce(makeRelease({
       fileKey: 'releases/v2.5.0/darwin-arm64/Tuff-2.5.0-arm64.dmg',
       downloadUrl: '/api/releases/v2.5.0/download/darwin/arm64',
       size: 999,
     }))
-    const body = Buffer.from([1, 2, 3])
-    releaseAssetMocks.requireReleaseAsset.mockResolvedValueOnce({
-      data: body,
+    // An installer is streamed from R2, never read whole into the isolate.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]))
+        controller.close()
+      },
+    })
+    releaseAssetMocks.requireReleaseAssetStream.mockResolvedValueOnce({
+      body,
+      size: 3,
       contentType: 'application/octet-stream',
     })
 
     const handler = await loadGetHandler()
-    await expect(handler(makeEvent())).resolves.toEqual(body)
+    await expect(handler(makeEvent())).resolves.toBe(body)
 
     expect(releasesStoreMocks.incrementDownloadCount).toHaveBeenCalledWith(expect.anything(), 'asset-id')
-    expect(releaseAssetMocks.requireReleaseAsset).toHaveBeenCalledOnce()
+    expect(releaseAssetMocks.requireReleaseAssetStream).toHaveBeenCalledOnce()
+    expect(h3Mocks.sendStream).toHaveBeenCalledWith(expect.anything(), body)
+    expect(h3Mocks.send).not.toHaveBeenCalled()
     expect(h3Mocks.setResponseHeader).toHaveBeenCalledWith(expect.anything(), 'Content-Length', 3)
   })
 
@@ -217,7 +230,7 @@ describe('HEAD release download', () => {
     const handler = await loadHeadHandler()
     expect(await statusOf(handler(makeEvent()))).toBe(403)
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 
   it('rejects an expired signature while unsigned fallback is enabled', async () => {
@@ -240,7 +253,7 @@ describe('HEAD release download', () => {
       302,
     )
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 
   it('returns stored asset metadata with no body, count, or storage read', async () => {
@@ -278,7 +291,7 @@ describe('HEAD release download', () => {
     expect(h3Mocks.send).not.toHaveBeenCalled()
     expect(h3Mocks.sendRedirect).not.toHaveBeenCalled()
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -290,7 +303,7 @@ describe('HEAD release download', () => {
     const handler = await loadHeadHandler()
     expect(await statusOf(handler(makeEvent()))).toBe(403)
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 })
 
@@ -323,7 +336,7 @@ describe('release download with unsigned fallback disabled', () => {
     const handler = await loadHeadHandler()
     expect(await statusOf(handler(makeEvent()))).toBe(403)
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 
   it('rejects HEAD when a signature cannot be verified because the server secret is missing', async () => {
@@ -339,6 +352,6 @@ describe('release download with unsigned fallback disabled', () => {
     const handler = await loadHeadHandler()
     expect(await statusOf(handler(makeEvent()))).toBe(403)
     expect(releasesStoreMocks.incrementDownloadCount).not.toHaveBeenCalled()
-    expect(releaseAssetMocks.requireReleaseAsset).not.toHaveBeenCalled()
+    expect(releaseAssetMocks.requireReleaseAssetStream).not.toHaveBeenCalled()
   })
 })

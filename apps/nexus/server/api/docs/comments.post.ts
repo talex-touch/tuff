@@ -3,7 +3,8 @@ import { getUserById } from '../../utils/authStore'
 import { createComment, ensureCommentsSchema, getD1Database, normalizePath, sanitizeContent } from '../../utils/docCommentsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
 
   const body = await readBody<{ path: string, content: string }>(event)
   const docPath = body?.path
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   await ensureCommentsSchema(db)
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   const userName = user?.name ?? null
   const userImage = user?.image ?? null
 

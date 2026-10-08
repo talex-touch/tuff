@@ -1,106 +1,41 @@
-import { describe, expect, it, vi } from 'vitest'
-import { listLoginHistory } from '../authStore'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSqliteD1, type SqliteD1Database } from '../../../test/helpers/d1-sqlite'
 
-vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: (event: any) => event.context.cloudflare?.env, }))
+vi.mock('../cloudflare', async importOriginal => ({
+  ...(await importOriginal<typeof import('../cloudflare')>()),
+  readCloudflareBindings: (event: any) => event.context.cloudflare?.env,
+}))
 
-class MockStatement {
-  private args: any[] = []
+let sqlite: SqliteD1Database
+let store: typeof import('../authStore')
 
-  constructor(
-    private readonly db: MockD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...args: any[]) {
-    this.args = args
-    return this
-  }
-
-  async run() {
-    return this.db.run(this.sql, this.args)
-  }
-
-  async all() {
-    return this.db.all(this.sql, this.args)
-  }
+function createEvent() {
+  return { context: { cloudflare: { env: { DB: sqlite } } }, node: { req: { headers: {} } } } as any
 }
 
-class MockD1Database {
-  readonly loginHistory = [{
-    id: 'history-1',
-    user_id: 'user-1',
-    device_id: null,
-    ip: '203.0.113.42',
-    user_agent: 'vitest',
-    success: 1,
-    reason: 'password',
-    client_type: 'web',
-    // Relative to now. listLoginHistory prunes rows older than its 90-day window
-    // before listing (authStore.ts:2804-2808), so a pinned created_at is a dated time
-    // bomb: this row was written 2026-06-21 and would have started failing on
-    // 2026-09-19, looking like a login-history regression rather than fixture rot.
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    country_code: 'US',
-    region_code: 'CA',
-    region_name: 'California',
-    city: 'San Francisco',
-    latitude: 37.7749,
-    longitude: -122.4194,
-    timezone: 'America/Los_Angeles',
-    geo_source: 'cf',
-  }]
-
-  prepare(sql: string) {
-    return new MockStatement(this, sql)
-  }
-
-  run(sql: string, args: any[]) {
-    if (sql.includes('DELETE FROM auth_login_history')) {
-      const [cutoff] = args
-      const cutoffMs = new Date(cutoff).getTime()
-      for (let index = this.loginHistory.length - 1; index >= 0; index--) {
-        const createdAt = this.loginHistory[index]?.created_at
-        if (createdAt && new Date(createdAt).getTime() < cutoffMs)
-          this.loginHistory.splice(index, 1)
-      }
-    }
-    return { meta: { changes: 0 } }
-  }
-
-  all(sql: string, args: any[] = []) {
-    if (sql.includes('PRAGMA table_info')) {
-      return { results: [{ name: 'client_type' }] }
-    }
-    if (sql.includes('SELECT * FROM auth_login_history')) {
-      const [userId] = args
-      return {
-        results: this.loginHistory
-          .filter(row => row.user_id === userId)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at)),
-      }
-    }
-    return { results: [] }
-  }
+function insertHistory(id: string, createdAt: string, userId = 'user-1') {
+  sqlite.sqlite.prepare(`
+    INSERT INTO auth_login_history (
+      id, user_id, device_id, ip, user_agent, success, reason, client_type, created_at,
+      country_code, region_code, region_name, city, latitude, longitude, timezone, geo_source
+    ) VALUES (?, ?, NULL, '203.0.113.42', 'vitest', 1, 'password', 'web', ?, 'US', 'CA', 'California', 'San Francisco', 37.7749, -122.4194, 'America/Los_Angeles', 'cf')
+  `).run(id, userId, createdAt)
 }
 
-function createEvent(db: MockD1Database) {
-  return {
-    context: {
-      cloudflare: {
-        env: { DB: db },
-      },
-    },
-    node: {
-      req: {
-        headers: {},
-      },
-    },
-  } as any
-}
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+beforeEach(async () => {
+  vi.resetModules()
+  store = await import('../authStore')
+  sqlite = createSqliteD1()
+  await store.getUserById(createEvent(), 'warm')
+})
 
 describe('auth login history', () => {
   it('preserves web login client type and masks IP addresses', async () => {
-    const records = await listLoginHistory(createEvent(new MockD1Database()), 'user-1')
+    insertHistory('history-1', daysAgo(1))
+
+    const records = await store.listLoginHistory(createEvent(), 'user-1')
 
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({
@@ -109,6 +44,20 @@ describe('auth login history', () => {
       ip: '203.0.113.42',
       ip_masked: '203.0.*.*',
       success: true,
+    })
+  })
+
+  it('never lists rows past the window, and prunes them after the response rather than before the read', async () => {
+    insertHistory('recent', daysAgo(1))
+    insertHistory('expired', daysAgo(120))
+    insertHistory('expired-other-user', daysAgo(120), 'user-2')
+
+    const records = await store.listLoginHistory(createEvent(), 'user-1')
+    expect(records.map(record => record.id)).toEqual(['recent'])
+
+    await vi.waitFor(() => {
+      const left = sqlite.sqlite.prepare('SELECT id FROM auth_login_history ORDER BY id').all()
+      expect(left).toEqual([{ id: 'recent' }])
     })
   })
 })

@@ -5,9 +5,11 @@ import { createError } from 'h3'
 import { resolveObjectBucket } from './cloudflare'
 import {
   getStorageObject,
+  openStorageObject,
   putStorageObject,
   type StorageObjectResult,
   type StorageObjectMemory,
+  type StorageObjectStream,
 } from './storageObjectStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
@@ -65,6 +67,29 @@ export async function getReleaseAsset(
   return object
     ? { data: object.data, contentType: object.contentType }
     : null
+}
+
+/**
+ * The asset as a stream. Installers run to hundreds of megabytes, past the isolate's 128 MB, which
+ * every request it is serving shares; read whole, one download could take the isolate down.
+ */
+export async function requireReleaseAssetStream(
+  event: H3Event,
+  key: string,
+  options: Pick<ReleaseAssetStorageOptions, 'governanceResourceId' | 'resourceType'> = {},
+): Promise<StorageObjectStream> {
+  const object = await openStorageObject({
+    event,
+    bucket: getAssetBucket(event),
+    memoryStorage,
+    key,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: options.resourceType ?? 'release-asset',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
+  if (!object)
+    throw createError({ statusCode: 404, statusMessage: 'Asset not found.' })
+  return object
 }
 
 export async function requireReleaseAsset(

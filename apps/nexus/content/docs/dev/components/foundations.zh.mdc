@@ -1,6 +1,6 @@
 ---
 title: 设计基础
-description: 与 Tuffex variables 对齐的字体与颜色体系
+description: Tuffex 组件共用的字体与颜色 token
 category: Foundations
 status: beta
 since: 1.0.0
@@ -11,12 +11,10 @@ verified: true
 
 ## 用法
 
-- 变量全部以 Tuffex 默认值为准。
-- 暗色模式支持 `[data-theme='dark']` 与 `.dark` 两种选择器。
+- 表中数值为默认值；覆盖方式见《[主题定制](./theming.zh.mdc)》。
+- 深色列在 `[data-theme='dark']` 或 `.dark` 下生效。
 
 ## 字体
-
-**主字体栈**
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -24,14 +22,7 @@ code: |
   --tx-font-family:
     "Inter", "PingFang SC", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
----
-:::
 
-**字号与字重**
-
-:::TuffCodeBlock{lang="css"}
----
-code: |
   --tx-font-size-base: 14px;
   --tx-font-size-small: 12px;
   --tx-font-size-large: 16px;
@@ -90,13 +81,8 @@ code: |
 
 ## 技术实现
 
-- **Token 说明:** 表格记录的是 `variables.scss` 中默认 light/dark 变量。高对比 mixin 定义了另一组值；Tuff 暴露该模式时应单独补充文档。
-- **导入说明:** 新页面应使用 `@talex-touch/tuffex/base.css` 加按组件的 style import。完整 `@talex-touch/tuffex/style.css` bundle 只是迁移兼容入口，不是文档推荐模式。
-- **实测覆盖:** 本页已按 `variables.scss` 人工核对；docs smoke 覆盖由 component-docs coverage 测试与 demo lazy/client-boundary 测试提供。
-
-- Token source: `packages/tuffex/packages/components/style/variables.scss`。
-- Runtime entry: `@talex-touch/tuffex/base.css` 提供变量/基础样式，`@talex-touch/tuffex/<component>/style.css` 提供组件级 CSS。
-- Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验组件文档注册；`apps/nexus/app/components/content/demo-lazy.test.ts` 与 `demo-client-boundary.test.ts` 校验 demo 加载边界。
+- 源码：`packages/tuffex/packages/components/style/variables.scss`，经 `@talex-touch/tuffex/base.css` 输出。
+- 高对比度调色板另有一组值，见《[主题定制](./theming.zh.mdc)》。
 
 <style scoped>
 .tuff-swatch {

@@ -6,6 +6,7 @@ import {
   deleteStorageObject,
   getStorageObject,
   listStorageObjectKeys,
+  openStorageObject,
   putStorageObject,
   resolveStorageObjectExternalConfigForPolicy,
   type StorageObjectExternalConfig,
@@ -802,5 +803,97 @@ describe('external storage ownership (#1644)', () => {
     // object without one is refused rather than waved through.
     expect(loaded?.ownerId).toBeUndefined()
     expect(loaded?.storesOwnership).toBe(true)
+  })
+})
+
+describe('openStorageObject', () => {
+  function streamingBucket(bytes: Uint8Array, onCancel?: () => void) {
+    const bufferedReads = { count: 0 }
+    const bucket = {
+      get: async () => ({
+        size: bytes.byteLength,
+        httpMetadata: { contentType: 'application/x-tpex' },
+        customMetadata: { ownerId: 'user-1' },
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes)
+            controller.close()
+          },
+          cancel() {
+            onCancel?.()
+          },
+        }),
+        arrayBuffer: async () => {
+          bufferedReads.count += 1
+          return bytes.buffer
+        },
+      }),
+      put: async () => {},
+    } as any
+    return { bucket, bufferedReads }
+  }
+
+  async function flush() {
+    for (let round = 0; round < 3; round += 1)
+      await new Promise<void>(resolve => setImmediate(resolve))
+  }
+
+  it('hands an R2 body through as a stream and records the read by its size', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const resourceType = `stream-${marker}`
+    const { bucket, bufferedReads } = streamingBucket(new TextEncoder().encode('package bytes'))
+
+    const object = await openStorageObject({ event: h3Event, bucket, memoryStorage: createMemory(), key: `${marker}.tpex`, resourceType })
+
+    expect(object).toMatchObject({ size: 13, contentType: 'application/x-tpex', storageChannel: 'r2', ownerId: 'user-1' })
+    expect(object!.body).toBeInstanceOf(ReadableStream)
+    expect(bufferedReads.count).toBe(0)
+    expect(await new Response(object!.body as ReadableStream).text()).toBe('package bytes')
+
+    await flush()
+    const rows = await listPlatformGovernanceEvents(h3Event, { scope: 'storage', resourceType, days: 30, limit: 10 })
+    expect(rows.filter(row => row.action === 'storage.read').map(row => row.quantity)).toEqual([13])
+  })
+
+  it('refuses a read the channel policy does not allow, and closes the stream', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const resourceType = `stream-blocked-${marker}`
+    let cancelled = false
+    const { bucket } = streamingBucket(new Uint8Array([1, 2, 3, 4]), () => {
+      cancelled = true
+    })
+    await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'storage_channel',
+      name: `Read budget ${marker}`,
+      channel: 'r2',
+      provider: 'cloudflare-r2',
+      targetId: resourceType,
+      limits: { trafficBytes: 3, windowDays: 30 },
+    }, 'admin')
+
+    await expect(openStorageObject({ event: h3Event, bucket, memoryStorage: createMemory(), key: `${marker}.bin`, resourceType }))
+      .rejects.toMatchObject({ statusCode: 429 })
+    expect(cancelled).toBe(true)
+  })
+
+  it('answers with the bytes from the stores that do not stream', async () => {
+    const marker = crypto.randomUUID()
+    const memoryStorage = createMemory()
+    memoryStorage.set(`${marker}.bin`, { data: Buffer.from('in memory'), contentType: 'text/plain' })
+
+    const object = await openStorageObject({ event: event(marker), bucket: null, memoryStorage, key: `${marker}.bin`, resourceType: `memory-${marker}` })
+
+    expect(Buffer.isBuffer(object!.body)).toBe(true)
+    expect(object).toMatchObject({ size: 9, contentType: 'text/plain', storageChannel: 'memory' })
+    expect(object).not.toHaveProperty('sha256')
+  })
+
+  it('answers null for an object that is not there', async () => {
+    const marker = crypto.randomUUID()
+    const bucket = { get: async () => null, put: async () => {} } as any
+
+    await expect(openStorageObject({ event: event(marker), bucket, memoryStorage: createMemory(), key: 'missing', resourceType: 'x' })).resolves.toBeNull()
   })
 })

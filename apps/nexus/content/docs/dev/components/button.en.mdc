@@ -1,6 +1,6 @@
 ---
 title: Button
-description: Tactile button system with flat variants
+description: A control that performs an action, plus split, icon, and copy buttons.
 category: Basic
 status: beta
 since: 0.3.4
@@ -29,16 +29,7 @@ code: |
 
 ## Usage
 
-Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
-
-- Keep a single primary button per view to avoid hierarchy conflicts
-- Use `variant` and `size` to convey action priority
-- Async actions should show `loading` to avoid repeated triggers
-
-### Appearance
-
-Base visuals and semantic variants.
-
+### Variants
 ::TuffDemoWrapper{demo="ButtonVariantsDemo" code-lang="vue"}
 ---
 code: |
@@ -56,9 +47,6 @@ code: |
 ::
 
 ### Disabled
-
-Disabled states.
-
 ::TuffDemoWrapper{demo="ButtonDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -73,40 +61,37 @@ code: |
 ::
 
 ### Loading
-
-Show loading feedback during async actions.
-
+The button is disabled while `loading`; on icon-only buttons the indicator sits over the icon.
 ::TuffDemoWrapper{demo="ButtonLoadingDemo" code-lang="vue"}
 ---
 code: |
-  <script setup>
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const loading = ref(false)
 
-  async function handleClick() {
-    if (loading.value) return
+  async function submit() {
     loading.value = true
-    setTimeout(() => { loading.value = false }, 1200)
+    try {
+      await save()
+    }
+    finally {
+      loading.value = false
+    }
   }
   </script>
 
   <template>
-    <TxButton variant="primary" :loading="loading" @click="handleClick">
+    <TxButton variant="primary" :loading="loading" @click="submit">
       {{ loading ? 'Loading' : 'Click to load' }}
     </TxButton>
-    <TxButton variant="secondary" :loading="loading" @click="handleClick">
-      {{ loading ? 'Loading' : 'Click to load' }}
-    </TxButton>
-    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="submit" />
   </template>
 ---
 ::
 
 ### Sizes
-
-Buttons provide three sizes beyond the default, affecting density and tactile feel.
-
+`size` has three tiers, `sm`, `md`, and `lg`, at 26, 32, and 38px tall.
 ::TuffDemoWrapper{demo="ButtonSizesDemo" code-lang="vue"}
 ---
 code: |
@@ -119,9 +104,7 @@ code: |
 ::
 
 ### Block
-
-Block buttons fill the container width for full-width primary actions.
-
+`block` fills the container width; with `loadingVariant="bar"`, loading shows as a sweep layer.
 ::TuffDemoWrapper{demo="ButtonBlockDemo" code-lang="vue"}
 ---
 code: |
@@ -132,9 +115,7 @@ code: |
 ::
 
 ### Shapes
-
-Adjust shapes with `plain` / `round` / `circle` / `dashed`. Non-block circles follow the selected height: `sm` is 26×26, `md` is 32×32, and `lg` is 38×38; the flat `sm` variant keeps its 32×32 size.
-
+A non-block `circle` is as wide as the button is tall; the flat variant's `sm` is 32px.
 ::TuffDemoWrapper{demo="ButtonShapesDemo" code-lang="vue"}
 ---
 code: |
@@ -150,9 +131,7 @@ code: |
 ::
 
 ### Haptics
-
-Haptics are explicit opt-in: set `vibrate` to invoke device vibration and a strength-matched button nudge. The visual feedback still works on desktops that do not expose vibration.
-
+`vibrate` is opt-in: a click vibrates the device and nudges the button by strength; the nudge shows even without vibration support.
 :::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
 ---
 code: |
@@ -167,44 +146,20 @@ code: |
 :::
 
 ### Split Button
-
-A combined button for "primary action + more actions" (e.g., RUN + …).
-
+`TxSplitButton` pairs a primary action with more actions in the `menu` slot.
 ::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const loading = ref(false)
-
-  async function handleRun() {
-    if (loading.value)
-      return
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 1200))
-    loading.value = false
-  }
-  </script>
-
   <template>
-    <TxSplitButton
-      variant="primary"
-      size="sm"
-      icon="i-ri-play-fill"
-      :loading="loading"
-      @click="handleRun"
-    >
+    <TxSplitButton variant="primary" size="sm" icon="i-carbon-play-filled" :loading="running" @click="run">
       RUN
       <template #menu="{ close }">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-            Settings
-          </TxButton>
-          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-            Open Folder
-          </TxButton>
-        </div>
+        <TxButton size="sm" plain block icon="i-carbon-settings" @click="close()">
+          Settings
+        </TxButton>
+        <TxButton size="sm" plain block icon="i-carbon-folder-open" @click="close()">
+          Open Folder
+        </TxButton>
       </template>
     </TxSplitButton>
   </template>
@@ -212,66 +167,43 @@ code: |
 ::
 
 ### Primary + Ghost
-
-Pair primary with ghost for clear hierarchy.
-
+Use `primary` for the main action and `ghost` for the secondary one.
 ::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton icon="i-ri-add-line">Create Project</TxButton>
+    <TxButton variant="primary" icon="i-carbon-add">Create Project</TxButton>
     <TxButton variant="ghost">Secondary action</TxButton>
   </template>
 ---
 ::
 
 ### Icon Button
-
-An icon-only action button: `label` supplies the accessible name, `pressed` carries a persistent toggle, and `status` adds semantic tones.
-
+`label` supplies the accessible name, `pressed` a persistent toggle state, and `status` a semantic tone.
 ::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const pinned = ref(false)
-  </script>
-
   <template>
-    <div class="flex flex-wrap items-center gap-3">
-      <TxIconButton
-        icon="i-carbon-star"
-        label="Pin workspace"
-        shape="circle"
-        :pressed="pinned"
-        @click="pinned = !pinned"
-      />
-      <TxIconButton icon="i-carbon-edit" label="Edit item" shape="square" status="info" />
-      <TxIconButton icon="i-carbon-add" label="Add item" shape="pill" size="lg" status="success" />
-      <TxIconButton icon="i-carbon-warning" label="Action needs attention" status="warning" />
-      <TxIconButton icon="i-carbon-trash-can" label="Delete item" status="danger" disabled />
-    </div>
+    <TxIconButton icon="i-carbon-star" label="Pin workspace" shape="circle" :pressed="pinned" @click="pinned = !pinned" />
+    <TxIconButton icon="i-carbon-edit" label="Edit item" shape="square" status="info" />
+    <TxIconButton icon="i-carbon-add" label="Add item" shape="pill" size="lg" status="success" />
+    <TxIconButton icon="i-carbon-warning" label="Action needs attention" status="warning" />
+    <TxIconButton icon="i-carbon-trash-can" label="Delete item" status="danger" disabled />
   </template>
 ---
 ::::
 
 ### Copy Button
-
-A clipboard button with copied feedback and error events.
-
+Shows `copiedLabel` after a successful copy and emits `error` on failure.
 ::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  const installCommand = 'pnpm add @talex-touch/tuffex'
-  </script>
-
   <template>
     <TxCopyButton
-      :text="installCommand"
+      text="pnpm add @talex-touch/tuffex"
       copy-label="Copy install command"
       copied-label="Copied"
+      @error="notifyCopyFailed"
     />
   </template>
 ---
@@ -279,18 +211,17 @@ code: |
 
 ### Best Practices
 
-- Keep one primary action per view or card. Pair `primary` with `ghost` or `secondary` for lower-priority actions.
-- Use `nativeType="submit"` only inside forms; the default `button` prevents accidental form submission.
-- Use `loading` for every async action and clear it on success and failure paths so the button cannot get stuck disabled.
-- Prefer `circle` only for icon-only actions; when `block` and `circle` are combined, the component intentionally keeps regular label layout.
-- Use `loadingVariant="bar"` for full-width submit bars and keep spinner loading for compact or icon buttons.
-- Keep menu actions in `TxSplitButton` responsible for calling the provided `close()` callback after a selection.
-- For `TxIconButton`, always set `label` unless visible text is supplied through the slot; use `pressed` only for persistent toggles and normal click buttons for one-shot actions.
-- Give `TxCopyButton` a `copyLabel` that names the target; handle `error` when the copied value is critical, since browsers can reject clipboard writes outside trusted gestures.
+- Keep one primary button per view or card; use `ghost` or `secondary` for lower-priority actions.
+- Set `loading` for async actions and clear it on both success and failure, so the button never sticks disabled.
+- Use `nativeType="submit"` only inside forms; the default `button` never submits by accident.
+- Use `TxIconButton` with a `label` for icon-only actions; reserve `pressed` for persistent toggles.
+- Name the copied target in `TxCopyButton`'s `copyLabel`; handle `error` for critical values, since browsers can reject writes outside a user gesture.
 
 ## API Reference
 
-### Props
+### TxButton
+
+#### Props
 
 ::DocApiTable
 ---
@@ -300,85 +231,85 @@ rows:
       kind: enum
       enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
     default: "'secondary'"
-    description: 'Visual style variant. Falls back to `secondary` when unset and not derived from `type`.'
+    description: 'Visual style.'
   - parameter: type
     type:
       kind: enum
       enums: [primary, success, warning, danger, info, text]
     default: '-'
-    description: 'Semantic tone alias. Used only when `variant` is not set; `text` maps to `ghost`.'
+    description: 'Semantic alias, used only when variant is unset; text maps to ghost.'
   - parameter: size
     type:
       kind: enum
       enums: [sm, md, lg]
     default: "'md'"
-    description: 'Button size; the three tiers are 26px / 32px / 38px. Use `lg` for primary page actions and `sm` for table rows and compact toolbars.'
+    description: 'Heights 26 / 32 / 38px; the old values large, small, and mini are normalized at runtime.'
   - parameter: block
     type: boolean
     default: 'false'
-    description: 'Block-level button that fills the parent width. Common for mobile form submits and drawer footer actions.'
+    description: 'Fills the parent width.'
   - parameter: plain
     type: boolean
     default: 'false'
-    description: 'Plain style'
+    description: 'Plain style.'
   - parameter: dashed
     type: boolean
     default: 'false'
-    description: 'Dashed style'
+    description: 'Dashed border.'
   - parameter: round
     type: boolean
     default: 'false'
-    description: 'Rounded style'
+    description: 'Rounded shape.'
   - parameter: circle
     type: boolean
     default: 'false'
-    description: 'Circular button'
+    description: 'Circular shape for icon-only buttons.'
   - parameter: loading
     type: boolean
     default: 'false'
-    description: 'Loading state'
+    description: 'Shows a loading indicator and blocks clicks.'
   - parameter: loading-variant
     type:
       kind: enum
       enums: [spinner, bar]
     default: "'spinner'"
-    description: 'Loading feedback style. `bar` only renders as a sweep layer when `block` is also true.'
+    description: 'Loading style; bar renders as a sweep layer only with block.'
   - parameter: disabled
     type: boolean
     default: 'false'
-    description: 'Disabled state'
+    description: 'Disables the button and suppresses click.'
   - parameter: border
     type: boolean
     default: 'true'
-    description: 'Controls whether the button keeps its border color; `false` adds the borderless class.'
+    description: 'When false, drops the border color.'
   - parameter: icon
     type: string
     default: '-'
-    description: 'Icon class name'
+    description: 'Icon class shown before the label.'
   - parameter: autofocus
     type: boolean
     default: 'false'
-    description: 'Autofocus'
+    description: 'Focuses the button after mount.'
   - parameter: native-type
     type:
       kind: enum
       enums: [button, submit, reset]
     default: "'button'"
-    description: 'Native type attribute'
+    description: 'Native type attribute.'
   - parameter: vibrate
     type: boolean
     default: 'false'
-    description: 'Enable device haptics and its matching visual nudge; opt in explicitly'
+    description: 'Vibrates the device and shakes the button to match on click.'
   - parameter: vibrate-type
     type:
       kind: enum
       enums: [light, medium, heavy, bit, success, warning, error]
     default: "'light'"
-    description: 'Haptic type'
+    description: 'Vibration strength.'
 ---
 ::
 
-### Events
+#### Events
 
 ::DocApiTable
 ---
@@ -390,95 +321,100 @@ rows:
         type ButtonClickHandler = (event: MouseEvent) => void
       language: typescript
     default: '-'
-    description: 'Triggered on click'
+    description: 'Fires on click unless disabled or loading.'
 ---
 ::
 
-### Slots
+#### Slots
 
 | Slot | Description |
 |------|-------------|
-| `default` | Button label or custom inline content rendered after the optional icon / loading spinner. |
+| `default` | Label or custom content, rendered after the icon and loading indicator. |
 
-### SplitButton Props
+### TxSplitButton
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | Visual variant shared by the primary and menu buttons. |
-| `size` | `'sm' \| 'md' \| 'lg'` | `md` | Button density; the three tiers are 28px / 32px / 40px. |
-| `disabled` | `boolean` | `false` | Disables both the primary action and menu trigger. |
-| `loading` | `boolean` | `false` | Shows the primary spinner and disables both interactive zones. |
-| `icon` | `string` | - | Icon class shown before the primary label while not loading. |
-| `menuIcon` | `string` | `i-ri-more-2-line` | Icon class used by the menu trigger slot fallback. |
-| `menuDisabled` | `boolean` | `false` | Disables only the menu trigger in addition to global disabled/loading state. |
-| `menuWidth` | `number` | `200` | Popover width passed to `TxPopover`. |
+| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | Variant shared by the primary and menu buttons. |
+| `size` | `'sm' \| 'md' \| 'lg'` | `md` | Heights 28 / 32 / 40px. |
+| `disabled` | `boolean` | `false` | Disables both the primary action and the menu trigger. |
+| `loading` | `boolean` | `false` | Shows the primary spinner and disables both sides. |
+| `icon` | `string` | - | Icon class shown before the label while not loading. |
+| `menuIcon` | `string` | `i-ri-more-2-line` | Default icon class of the menu trigger. |
+| `menuDisabled` | `boolean` | `false` | Disables only the menu trigger. |
+| `menuWidth` | `number` | `200` | Popover width, passed to `TxPopover`. |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | Popover placement. |
-| `menuOffset` | `number` | `8` | Popover offset in pixels. |
+| `menuOffset` | `number` | `8` | Popover offset in px. |
 
-### SplitButton Events
+#### Events
 
 | Event | Params | Description |
 |-------|--------|-------------|
-| `click` | `(event: MouseEvent)` | Emitted by the primary button when not disabled or loading. |
-| `menuOpenChange` | `(open: boolean)` | Emitted whenever the internal popover open state changes. |
+| `click` | `(event: MouseEvent)` | Fires on a primary click unless disabled or loading. |
+| `menuOpenChange` | `(open: boolean)` | Fires when the menu opens or closes. |
 
-### SplitButton Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
 | `default` | - | Primary action label. |
-| `menu` | `{ close: () => void }` | Menu content rendered inside `TxPopover`; call `close()` from menu actions after selection. |
-| `menu-icon` | - | Replaces the default more icon in the menu trigger. |
+| `menu` | `{ close: () => void }` | Menu content inside the popover; call `close()` after a selection. |
+| `menu-icon` | - | Replaces the menu trigger icon. |
 
-### IconButton Props
+### TxIconButton
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `icon` | `string` | `''` | Icon class/name rendered through `TxIcon` when no default slot is provided. |
-| `label` | `string` | `''` | Accessible label. Required for icon-only actions. |
+| `icon` | `string` | `''` | Icon name rendered through `TxIcon` when there is no default slot. |
+| `label` | `string` | `''` | Accessible name; required for icon-only use, and its absence warns in development. |
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Button size. |
 | `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | Hit-area silhouette. |
-| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | Semantic visual tone; omitted keeps the neutral style. |
-| `pressed` | `boolean` | - | Toggle state; forwarded to `aria-pressed` when defined. |
-| `disabled` | `boolean` | `false` | Native disabled state and visual disabled class. |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | Semantic tone for icon, hover, pressed, and focus; changes no behavior or permission. |
+| `pressed` | `boolean` | - | Persistent toggle state; renders `aria-pressed` when defined. |
+| `disabled` | `boolean` | `false` | Native disabled state. |
 | `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | Native `type` attribute. |
-- `status` changes the semantic icon color, hover, pressed, and focus treatments; it does not change behavior or provide authorization.
 
-### IconButton Events
+#### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `click` | `(event: MouseEvent)` | Emitted for enabled clicks. |
+| `click` | `(event: MouseEvent)` | Fires on click unless disabled. |
 
-### IconButton Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
 | `default` | `{ hover, pressed }` | Custom icon or animated content. |
 
-### CopyButton Props
+### TxCopyButton
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `text` | `string` | `''` | Text written to the clipboard. |
-| `copyLabel` | `string` | `'Copy'` | Idle label and aria-label. |
-| `copiedLabel` | `string` | `'Copied'` | Success label and aria-label. |
-| `disabled` | `boolean` | `false` | Disables the button and prevents copy. |
-| `timeout` | `number` | `1400` | Milliseconds before copied state resets. |
-| `size` | `'sm' \| 'md'` | `'sm'` | Button density. |
+| `copyLabel` | `string` | `'Copy'` | Idle label and `aria-label`. |
+| `copiedLabel` | `string` | `'Copied'` | Label and `aria-label` after a successful copy. |
+| `disabled` | `boolean` | `false` | Disables the button and prevents copying. |
+| `timeout` | `number` | `1400` | Milliseconds before the copied state resets. |
+| `size` | `'sm' \| 'md'` | `'sm'` | Button size. |
 
-### CopyButton Events
+#### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `copy` | `(text: string)` | Emitted after successful clipboard write. |
-| `error` | `(error: unknown)` | Emitted when clipboard write fails. |
+| `copy` | `(text: string)` | Fires after a successful clipboard write. |
+| `error` | `(error: unknown)` | Fires when the clipboard write fails. |
 
-### CopyButton Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `default` | `{ copied, copying }` | Custom button label/content. |
+| `default` | `{ copied, copying }` | Custom button content. |
 
 ### Types
 :::TuffCodeBlock{lang="ts"}
@@ -496,35 +432,22 @@ code: |
 
 ## Overview
 
-- `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
-- Size has exactly three tiers: `sm`, `md`, `lg`. The older spellings `large`, `small` and `mini` are gone from the type but are still normalized at runtime (`large` → `lg`, `small` / `mini` → `sm`), because consumers of published builds pass them from plain JS.
-- `--tx-button-height` is the shared size variable used by the button height and non-block circle width. Circle shape removes ordinary horizontal padding and minimum width; `block + circle` keeps the existing full-width text layout.
-- `disabled` and `loading` both disable the native `<button>` and suppress the emitted `click` event.
-- `loadingVariant="bar"` is only visible for `block` buttons; icon-only / inline buttons use the spinner slot or overlay spinner.
-- Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
-- `vibrate` is off by default. When explicitly enabled, a click invokes device vibration at the resolved strength and plays a matching button shake; the shake is skipped under `prefers-reduced-motion: reduce`.
-- `TxSplitButton` disables both action zones while loading; `menuDisabled` only disables the menu trigger.
-- `TxIconButton` maps `label` to `aria-label` — provide it for icon-only controls; boolean `pressed` emits `aria-pressed` with active styling; the default slot receives `{ hover, pressed }`.
-- `TxCopyButton` ignores clicks while `disabled` or copying; `copy` fires only after a successful clipboard write, `error` fires when both clipboard strategies fail, and `copiedLabel` shows for `timeout` milliseconds after success.
+- `variant` wins over `type`; with neither set, the button is `secondary`.
+- `disabled` and `loading` both disable the native `<button>` and suppress `click`; a loading `TxSplitButton` disables both sides.
+- Non-block, non-circle buttons animate width with a FLIP transition when `loading` toggles; `block` with `circle` keeps the regular label layout.
+- An icon-only `TxButton` takes its name from attrs such as `aria-label`; `TxIconButton` maps `label` to `aria-label` and a boolean `pressed` to `aria-pressed`.
+- `TxCopyButton` uses the Clipboard API and falls back to `execCommand` when it is unavailable; it ignores clicks while disabled or copying.
+- Under reduced motion, the `vibrate` shake is skipped.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/button/src/{button,split-button,icon-button,copy-button}.vue`, plus `types.ts` and `split-button.ts`.
-- Coverage: `button.test.ts`, `split-button.test.ts`, `icon-button.test.ts`, `copy-button.test.ts` under `packages/tuffex/packages/components/src/button/__tests__/` — variants and type precedence, every size tier plus the runtime normalization of published spellings, disabled/loading click suppression, the loading bar, icons, shapes, borderless mode, native type, clipboard success/error, accessible-name warnings.
-- Non-block buttons animate loading width changes through a size FLIP transition; the haptic shake is skipped under `prefers-reduced-motion: reduce`.
-
-<TuffDocSourceLink label="View source" />
+- `--tx-button-height` sets both the button height and the width of a non-block circle.
+- Source: `packages/tuffex/packages/components/src/button/`.
 
 ## Use cases
 
-- Page and card actions with one primary per view; pair `primary` with `ghost` or `secondary`.
-- Form submits (`nativeType="submit"`) and drawer footers (`block`).
-- Async actions that must show `loading` and stay disabled until they settle.
-- Table rows and toolbars (`size="sm"`), icon-only controls (`circle` + `label`).
-- One action with a menu of variants (`TxSplitButton`), copy-to-clipboard (`TxCopyButton`).
+- Page and card actions, form submits (`nativeType="submit"`), and drawer footers (`block`).
+- Table rows and toolbars (`size="sm"`), and icon-only actions (`circle` or `TxIconButton`).
+- A primary action with a menu of variants (`TxSplitButton`), and copy-to-clipboard (`TxCopyButton`).
 
-## Accessibility
-
-- The native `<button>` supplies keyboard activation; `disabled` and `loading` set the native state and suppress `click`.
-- Icon-only controls need an accessible name: `label` on `TxIconButton`, or surrounding markup/attrs on `TxButton`.
-- `pressed` is forwarded to `aria-pressed`; the `TxIconButton` default slot receives `{ hover, pressed }` for a visible state.
+<TuffDocSourceLink label="View source" />

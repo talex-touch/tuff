@@ -29,7 +29,7 @@ export interface IconChipProps {
   variant?: IconChipVariant
   /** @default 'square' */
   shape?: IconChipShape
-  /** Short label such as `PDF`. The default slot wins when both are given. */
+  /** Short label such as `PDF`. Past three characters (`JSON`) the plate widens; height, radius and font keep the size ladder. The default slot wins when both are given. */
   label?: string
   /** Overrides the derived font size (`max(7, size * 0.4)` rounded). */
   fontSize?: number

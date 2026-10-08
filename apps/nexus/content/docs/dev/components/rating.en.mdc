@@ -1,6 +1,6 @@
 ---
 title: Rating
-description: Star rating input
+description: An input that sets a value by choosing stars.
 category: Form
 status: beta
 since: 0.3.4
@@ -11,9 +11,8 @@ verified: true
 
 ## Usage
 
-### Half-star Rating
-
-Use `precision="0.5"` for half-step ratings. Half stars fill from the left side.
+### Half Stars
+With `precision="0.5"`, clicking the selected full star again turns it into a half star.
 
 ::TuffDemoWrapper{demo="RatingBasicDemo" code-lang="vue"}
 ---
@@ -30,13 +29,67 @@ code: |
 ---
 ::
 
+### Custom Icons
+`icon` sets every state; `filledIcon` / `emptyIcon` / `halfIcon` override one each. Built-in icons, Iconify classes, and emoji all work.
+
+::TuffDemoWrapper{demo="RatingIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRating v-model="diamond" icon="💎" show-text />
+    <TxRating v-model="hearts" icon="i-carbon-favorite-filled" filled-color="#f43f5e" :precision="0.5" />
+    <TxRating v-model="faces" filled-icon="😍" empty-icon="😶" :precision="0.5" />
+  </template>
+---
+::
+
+### Click Animation
+A bounce, glow, and ripple play by default; `:animated="false"` turns them off.
+
+::TuffDemoWrapper{demo="RatingAnimationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRating v-model="score" :precision="0.5" show-text />
+    <TxRating v-model="still" :animated="false" show-text />
+  </template>
+---
+::
+
+### Custom Styles
+Colors, `size`, and `gap` each have a prop; the `#text` slot rewrites the score text.
+
+::TuffDemoWrapper{demo="RatingStyleDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRating
+      v-model="score"
+      :size="30"
+      :gap="8"
+      filled-color="#f97316"
+      empty-color="rgba(249, 115, 22, 0.2)"
+      hover-color="#fb923c"
+      text-color="#f97316"
+      show-text
+    />
+
+    <TxRating v-model="score" readonly show-text>
+      <template #text="{ value, max }">
+        {{ value }} / {{ max }} readonly
+      </template>
+    </TxRating>
+  </template>
+---
+::
+
 ### Best Practices
 
-- Use `precision="0.5"` only when half-step feedback is meaningful. For yes/no confidence or coarse satisfaction, full stars are easier to scan.
-- Keep `disabled` for unavailable input and `readonly` for display-only historical scores; both block updates, but they communicate different intent.
-- Provide `showText` or a custom `#text` slot when exact numeric value matters, especially for half-star values.
-- Prefer state-specific `filledIcon` / `emptyIcon` / `halfIcon` only when the icon set has clear contrast. Otherwise use one shared `icon` and tune colors.
-- Disable `animated` in dense forms, tables, or reduced-motion-heavy contexts where click pop animation distracts from the data entry flow.
+- Use `precision="0.5"` only when half steps mean something; use full stars for coarse satisfaction.
+- Use `disabled` when input is unavailable and `readonly` to display a past score.
+- Turn on `showText` or provide a `#text` slot when the exact value matters.
+- If an icon set's states don't contrast clearly, use one shared `icon` and tell states apart by color.
+- Turn off `animated` in dense forms and tables.
 
 ## API Reference
 
@@ -47,75 +100,75 @@ rows:
   - name: modelValue
     type: number
     default: '0'
-    description: Current score passed by `v-model`.
+    description: The current score, bound with `v-model`.
   - name: maxStars
     type: number
     default: '5'
-    description: Number of rendered star buttons.
+    description: Number of stars.
   - name: precision
     type: "number | 0.5"
     default: '1'
-    description: Step size. `0.5` enables half-star toggling; other numeric values only affect score text precision.
+    description: Step size; `0.5` enables half stars, other values only set the score text's decimal places.
   - name: showText
     type: boolean
     default: 'false'
-    description: Show score text
+    description: Shows the score text after the stars.
   - name: disabled
     type: boolean
     default: 'false'
-    description: Disables star buttons and marks the root as aria-disabled.
+    description: Blocks rating and marks the root `aria-disabled`.
   - name: readonly
     type: boolean
     default: 'false'
-    description: Display-only mode. Star buttons are disabled and the root is marked aria-readonly.
+    description: Displays the score only and marks the root `aria-readonly`.
   - name: icon
     type: "string | TxIconSource"
     default: '-'
-    description: Shared icon used by filled and empty layers when state-specific icons are not provided.
+    description: Icon shared by the filled and empty layers; state icons take precedence.
   - name: filledIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: Filled icon. Falls back to `icon`, then `star`.
+    description: Filled icon; falls back to `icon`, then `star`.
   - name: emptyIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: Empty icon. Falls back to `icon`, then `star`.
+    description: Empty icon; falls back to `icon`, then `star`.
   - name: halfIcon
     type: "string | TxIconSource"
     default: '-'
-    description: Half icon. When omitted, Rating clips the filled layer from the left.
+    description: Half-star icon; when omitted, the filled layer is clipped from the left.
   - name: filledColor
     type: string
     default: '#fbbf24'
-    description: Filled icon color; CSS fallback is `#fbbf24`.
+    description: Color of filled icons.
   - name: emptyColor
     type: string
     default: '#d1d5db'
-    description: Empty icon color; CSS fallback is `#d1d5db`.
+    description: Color of empty icons.
   - name: hoverColor
     type: string
     default: 'filledColor'
-    description: Hover color for the filled layer; falls back to `filledColor` / `#fbbf24`.
+    description: Color of the filled layer on hover.
   - name: textColor
     type: string
     default: '#6b7280'
-    description: Score text color; CSS fallback is `#6b7280`.
+    description: Color of the score text.
   - name: size
     type: "number | string"
     default: '20px'
-    description: Star icon size. Numbers are converted to px; CSS fallback is `20px`.
+    description: Star icon size; numbers are treated as px.
   - name: gap
     type: "number | string"
     default: '2px'
-    description: Gap between stars. Numbers are converted to px; CSS fallback is `2px`.
+    description: Gap between stars; numbers are treated as px.
   - name: animated
     type: boolean
     default: 'true'
-    description: Play the click pop / ripple animation after selection.
+    description: Plays the bounce and ripple after a selection.
   - name: starLabel
     type: "(star: number) => string"
     default: '-'
-    description: Localizable accessible label for each star button. Defaults to English "Rate N star(s)".
+    description: Accessible label for each star; defaults to English `Rate N star(s)`.
 ---
 :::
 
@@ -123,185 +176,22 @@ rows:
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `update:modelValue` | `(value: number)` | Emitted after an interactive star click with the next rating value. |
-| `change` | `(value: number)` | Mirrors `update:modelValue` for consumers that use change handlers. |
+| `update:modelValue` | `(value: number)` | Fires with the new score after an interactive star is clicked. |
+| `change` | `(value: number)` | Fires together with `update:modelValue`. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `text` | `{ value: number, max: number }` | Replaces the default `value / max` label when `showText` is true. |
-
-## Custom Icons
-
-Set `icon` to reuse one icon for all states, or use `filled-icon`, `empty-icon`, and `half-icon` separately. Built-in icons, Iconify classes, and emoji are supported, including hearts, diamonds, and face icons.
-
-::TuffDemoWrapper{demo="RatingIconDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const diamond = ref(3)
-  const hearts = ref(4.5)
-  const faces = ref(2.5)
-  </script>
-
-  <template>
-    <!-- Single emoji icon -->
-    <TxRating
-      v-model="diamond"
-      icon="💎"
-      :size="26"
-      filled-color="#38bdf8"
-      empty-color="rgba(56, 189, 248, 0.2)"
-      hover-color="#7dd3fc"
-      text-color="#38bdf8"
-      show-text
-    />
-
-    <!-- Iconify class icon -->
-    <TxRating
-      v-model="hearts"
-      :precision="0.5"
-      :size="28"
-      icon="i-carbon-favorite-filled"
-      filled-color="#f43f5e"
-      empty-color="rgba(244, 63, 94, 0.18)"
-      hover-color="#fb7185"
-      text-color="#f43f5e"
-      show-text
-    />
-
-    <!-- Separate filled / empty icons -->
-    <TxRating
-      v-model="faces"
-      :precision="0.5"
-      :size="26"
-      filled-icon="😍"
-      empty-icon="😶"
-      filled-color="#f59e0b"
-      empty-color="rgba(148, 163, 184, 0.5)"
-      hover-color="#fbbf24"
-      text-color="#f59e0b"
-      show-text
-    />
-  </template>
----
-::
-
-## Click Animation
-
-Rating plays a more visible bounce + glow + ripple animation after a click by default. Set `:animated="false"` to disable it.
-
-::TuffDemoWrapper{demo="RatingAnimationDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const animated = ref(2)
-  const heart = ref(3)
-  const still = ref(2)
-  </script>
-
-  <template>
-    <!-- Default bounce + glow + ripple -->
-    <TxRating v-model="animated" :precision="0.5" :size="28" :gap="6" show-text />
-
-    <!-- Heart pop -->
-    <TxRating
-      v-model="heart"
-      icon="i-carbon-favorite-filled"
-      :size="30"
-      :gap="7"
-      filled-color="#f43f5e"
-      empty-color="rgba(244, 63, 94, 0.18)"
-      hover-color="#fb7185"
-      text-color="#f43f5e"
-      show-text
-    />
-
-    <!-- Animation off -->
-    <TxRating v-model="still" :animated="false" filled-color="#a78bfa" show-text />
-  </template>
----
-::
+| `text` | `{ value: number, max: number }` | Replaces the default `value / max` text when `showText` is on. |
 
 ## Overview
 
-Rating exposes the star group as a radio group. `disabled` and `readonly` both block updates; `readonly` is display-only and removes star button interaction while keeping the rating visible.
+- The star row renders as `role="radiogroup"`, and each star is a `role="radio"` button.
+- `disabled` and `readonly` both block updates; the score still shows.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/rating/src/types.ts`, `TxRating.vue`, and `rating.test.ts`.
-- Existing tests cover half-star clipping, full-star and half-star reselection, model/change emission, readonly/disabled blocking, custom colors/icons/sizing, disabled animation, radio semantics, and `text` slot props.
-- API note: `precision="0.5"` enables half-star toggling when clicking the currently selected full star; other numeric precision values affect score text precision only.
-- Accessibility note: the star row is a radio group. Use `readonly` for historical display and `disabled` for unavailable input.
-
-- Component source: `packages/tuffex/packages/components/src/rating/src/TxRating.vue`.
-- Types: `packages/tuffex/packages/components/src/rating/src/types.ts` exports `RatingProps`, `RatingEmits`, and `RatingIcon`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/rating/__tests__/rating.test.ts` verifies half-star clipping, model/change emits, half-star reselection, readonly/disabled blocking, custom style/icons, disabled animation, radio semantics, and `text` slot props.
+- Source: `packages/tuffex/packages/components/src/rating/`; exports the `RatingProps`, `RatingEmits`, and `RatingIcon` types.
 
 <TuffDocSourceLink />
-
-## Customization
-
-Use `filled-color`, `empty-color`, `hover-color`, `text-color`, `size`, and `gap` to tune the visual style. The demo includes orange, green read-only, and compact violet appearances.
-
-::TuffDemoWrapper{demo="RatingStyleDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const warmScore = ref(4)
-  const greenScore = ref(3.5)
-  const violetScore = ref(2.5)
-  </script>
-
-  <template>
-    <!-- Orange / large -->
-    <TxRating
-      v-model="warmScore"
-      :size="30"
-      :gap="8"
-      :precision="0.5"
-      filled-color="#f97316"
-      empty-color="rgba(249, 115, 22, 0.2)"
-      hover-color="#fb923c"
-      text-color="#f97316"
-      show-text
-    />
-
-    <!-- Green / readonly with a custom #text slot -->
-    <TxRating
-      v-model="greenScore"
-      :size="22"
-      :gap="5"
-      :precision="0.5"
-      readonly
-      show-text
-      filled-color="#22c55e"
-      empty-color="rgba(34, 197, 94, 0.18)"
-      text-color="#22c55e"
-    >
-      <template #text="{ value, max }">
-        {{ value }} / {{ max }} readonly
-      </template>
-    </TxRating>
-
-    <!-- Violet / compact -->
-    <TxRating
-      v-model="violetScore"
-      :precision="0.5"
-      :size="18"
-      filled-color="#a78bfa"
-      empty-color="rgba(167, 139, 250, 0.2)"
-      hover-color="#c4b5fd"
-      text-color="#a78bfa"
-      show-text
-    />
-  </template>
----
-::

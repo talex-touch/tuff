@@ -10,12 +10,12 @@ import {
   type ProviderRegistryRecord,
 } from './providerRegistryStore'
 import { resolveProviderSceneAdapterKey, sceneCapabilityAdapterSupports } from './sceneCapabilityAdapterRegistry'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SCENES_TABLE = 'scene_registry'
 const BINDINGS_TABLE = 'scene_strategy_bindings'
 const JSON_LIMIT_BYTES = 64 * 1024
 
-const initializedSchemas = new WeakSet<D1Database>()
 
 export const SCENE_REGISTRY_OWNERS = ['nexus', 'core-app', 'app', 'plugin'] as const
 export const SCENE_STRATEGY_MODES = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual'] as const
@@ -198,60 +198,59 @@ function getD1Database(event: H3Event): D1Database {
   return db
 }
 
+const SCENE_REGISTRY_SCHEMA = defineD1Schema('scene-registry', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SCENES_TABLE} (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        owner TEXT NOT NULL,
+        owner_scope TEXT NOT NULL,
+        owner_id TEXT,
+        status TEXT NOT NULL,
+        required_capabilities TEXT NOT NULL,
+        strategy_mode TEXT NOT NULL,
+        fallback TEXT NOT NULL,
+        metering_policy TEXT,
+        audit_policy TEXT,
+        metadata TEXT,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${BINDINGS_TABLE} (
+        id TEXT PRIMARY KEY,
+        scene_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        model TEXT,
+        priority INTEGER NOT NULL DEFAULT 100,
+        weight REAL,
+        status TEXT NOT NULL,
+        constraints_json TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(scene_id, provider_id, capability),
+        FOREIGN KEY (scene_id) REFERENCES ${SCENES_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_scene_registry_owner ON ${SCENES_TABLE}(owner)`,
+    `CREATE INDEX IF NOT EXISTS idx_scene_registry_status ON ${SCENES_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_scene ON ${BINDINGS_TABLE}(scene_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_provider ON ${BINDINGS_TABLE}(provider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_capability ON ${BINDINGS_TABLE}(capability)`,
+  ],
+  columns: [
+    {
+      table: BINDINGS_TABLE,
+      columns: [
+        { name: 'model', ddl: 'model TEXT' },
+      ],
+    },
+  ],
+})
+
 async function ensureSceneRegistrySchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SCENES_TABLE} (
-      id TEXT PRIMARY KEY,
-      display_name TEXT NOT NULL,
-      owner TEXT NOT NULL,
-      owner_scope TEXT NOT NULL,
-      owner_id TEXT,
-      status TEXT NOT NULL,
-      required_capabilities TEXT NOT NULL,
-      strategy_mode TEXT NOT NULL,
-      fallback TEXT NOT NULL,
-      metering_policy TEXT,
-      audit_policy TEXT,
-      metadata TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${BINDINGS_TABLE} (
-      id TEXT PRIMARY KEY,
-      scene_id TEXT NOT NULL,
-      provider_id TEXT NOT NULL,
-      capability TEXT NOT NULL,
-      model TEXT,
-      priority INTEGER NOT NULL DEFAULT 100,
-      weight REAL,
-      status TEXT NOT NULL,
-      constraints_json TEXT,
-      metadata TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(scene_id, provider_id, capability),
-      FOREIGN KEY (scene_id) REFERENCES ${SCENES_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  const { results: bindingColumns } = await db.prepare(`PRAGMA table_info(${BINDINGS_TABLE});`).all<{ name?: string }>()
-  if (!(bindingColumns ?? []).some(column => column.name === 'model'))
-    await db.prepare(`ALTER TABLE ${BINDINGS_TABLE} ADD COLUMN model TEXT;`).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_registry_owner ON ${SCENES_TABLE}(owner);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_registry_status ON ${SCENES_TABLE}(status);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_scene ON ${BINDINGS_TABLE}(scene_id);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_provider ON ${BINDINGS_TABLE}(provider_id);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_strategy_bindings_capability ON ${BINDINGS_TABLE}(capability);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, SCENE_REGISTRY_SCHEMA)
 }
 
 function assertNonEmptyString(value: unknown, field: string, maxLength = 120): string {
@@ -523,32 +522,17 @@ function buildSceneWhere(options: ListSceneRegistryOptions) {
   }
 }
 
-async function listBindingsForScenes(db: D1Database, sceneIds: string[]): Promise<SceneStrategyBindingRecord[]> {
-  if (sceneIds.length === 0)
-    return []
-
-  const placeholders = sceneIds.map(() => '?').join(', ')
-  const { results } = await db.prepare(`
-    SELECT id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
-      metadata, created_at, updated_at
-    FROM ${BINDINGS_TABLE}
-    WHERE scene_id IN (${placeholders})
-    ORDER BY priority ASC, capability ASC;
-  `).bind(...sceneIds).all<SceneStrategyBindingRow>()
-
-  return (results ?? []).map(mapBinding)
-}
-
 async function replaceSceneBindings(
   db: D1Database,
   sceneId: string,
   bindings: NormalizedSceneStrategyBindingInput[],
   now: string,
 ) {
-  await db.prepare(`DELETE FROM ${BINDINGS_TABLE} WHERE scene_id = ?;`).bind(sceneId).run()
-
-  for (const binding of bindings) {
-    await db.prepare(`
+  // One transaction: the old bindings are never half replaced, and it is one round trip rather
+  // than one per binding.
+  await db.batch([
+    db.prepare(`DELETE FROM ${BINDINGS_TABLE} WHERE scene_id = ?;`).bind(sceneId),
+    ...bindings.map(binding => db.prepare(`
       INSERT INTO ${BINDINGS_TABLE} (
         id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
         metadata, created_at, updated_at
@@ -567,8 +551,39 @@ async function replaceSceneBindings(
       binding.metadataJson,
       now,
       now,
-    ).run()
+    )),
+  ])
+}
+
+/**
+ * How long an isolate may answer scene registry reads from memory. Every AI call and scene run resolves
+ * scene registry entries; they change when an operator edits the registry. A write through this isolate
+ * forgets them at once; other isolates pick it up within this window.
+ */
+const SCENE_REGISTRY_CACHE_TTL_MS = 30_000
+
+const sceneRegistryCache = new WeakMap<object, Map<string, { value: SceneRegistryRecord | null, expiresAt: number }>>()
+
+function forgetSceneRegistryCache(event: H3Event): void {
+  const db = readCloudflareBindings(event)?.DB
+  if (db)
+    sceneRegistryCache.delete(db)
+}
+
+function readCachedScene(db: D1Database, id: string): { value: SceneRegistryRecord | null } | null {
+  const entry = sceneRegistryCache.get(db)?.get(id)
+  if (!entry || entry.expiresAt <= Date.now())
+    return null
+  return { value: entry.value ? structuredClone(entry.value) : null }
+}
+
+function writeCachedScene(db: D1Database, id: string, value: SceneRegistryRecord | null): void {
+  let entries = sceneRegistryCache.get(db)
+  if (!entries) {
+    entries = new Map()
+    sceneRegistryCache.set(db, entries)
   }
+  entries.set(id, { value: value ? structuredClone(value) : null, expiresAt: Date.now() + SCENE_REGISTRY_CACHE_TTL_MS })
 }
 
 export async function listSceneRegistryEntries(
@@ -579,16 +594,27 @@ export async function listSceneRegistryEntries(
   await ensureSceneRegistrySchema(db)
 
   const { clause, values } = buildSceneWhere(options)
-  const { results } = await db.prepare(`
-    SELECT id, display_name, owner, owner_scope, owner_id, status, required_capabilities,
-      strategy_mode, fallback, metering_policy, audit_policy, metadata, created_by, created_at, updated_at
-    FROM ${SCENES_TABLE}
-    ${clause}
-    ORDER BY created_at DESC;
-  `).bind(...values).all<SceneRegistryRow>()
+  // The scenes and their bindings in one round trip. The bindings used to follow with an `IN` list of
+  // every scene's id: a second round trip, and past 100 scenes more parameters than D1 binds.
+  const [sceneResult, bindingResult] = await db.batch([
+    db.prepare(`
+      SELECT id, display_name, owner, owner_scope, owner_id, status, required_capabilities,
+        strategy_mode, fallback, metering_policy, audit_policy, metadata, created_by, created_at, updated_at
+      FROM ${SCENES_TABLE}
+      ${clause}
+      ORDER BY created_at DESC;
+    `).bind(...values),
+    db.prepare(`
+      SELECT id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
+        metadata, created_at, updated_at
+      FROM ${BINDINGS_TABLE}
+      WHERE scene_id IN (SELECT id FROM ${SCENES_TABLE} ${clause})
+      ORDER BY priority ASC, capability ASC;
+    `).bind(...values),
+  ])
 
-  const sceneRows = results ?? []
-  const bindings = await listBindingsForScenes(db, sceneRows.map(row => row.id))
+  const sceneRows = (sceneResult?.results ?? []) as SceneRegistryRow[]
+  const bindings = ((bindingResult?.results ?? []) as SceneStrategyBindingRow[]).map(mapBinding)
   const bindingsByScene = new Map<string, SceneStrategyBindingRecord[]>()
   for (const binding of bindings) {
     const list = bindingsByScene.get(binding.sceneId) ?? []
@@ -599,23 +625,44 @@ export async function listSceneRegistryEntries(
   return sceneRows.map(row => mapScene(row, bindingsByScene.get(row.id) ?? []))
 }
 
-export async function getSceneRegistryEntry(event: H3Event, id: string): Promise<SceneRegistryRecord | null> {
+/** Reads straight from the database: writers use it to answer with what they just wrote. */
+async function loadSceneRegistryEntry(event: H3Event, id: string): Promise<SceneRegistryRecord | null> {
   const db = getD1Database(event)
   await ensureSceneRegistrySchema(db)
 
   const safeId = assertNonEmptyString(id, 'id', 160)
-  const scene = await db.prepare(`
-    SELECT id, display_name, owner, owner_scope, owner_id, status, required_capabilities,
-      strategy_mode, fallback, metering_policy, audit_policy, metadata, created_by, created_at, updated_at
-    FROM ${SCENES_TABLE}
-    WHERE id = ?;
-  `).bind(safeId).first<SceneRegistryRow>()
+  // The scene and its bindings in one round trip; they were two.
+  const [sceneResult, bindingResult] = await db.batch([
+    db.prepare(`
+      SELECT id, display_name, owner, owner_scope, owner_id, status, required_capabilities,
+        strategy_mode, fallback, metering_policy, audit_policy, metadata, created_by, created_at, updated_at
+      FROM ${SCENES_TABLE}
+      WHERE id = ?;
+    `).bind(safeId),
+    db.prepare(`
+      SELECT id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
+        metadata, created_at, updated_at
+      FROM ${BINDINGS_TABLE}
+      WHERE scene_id = ?
+      ORDER BY priority ASC, capability ASC;
+    `).bind(safeId),
+  ])
+  const scene = (sceneResult?.results?.[0] ?? null) as SceneRegistryRow | null
+  const record = scene
+    ? mapScene(scene, ((bindingResult?.results ?? []) as SceneStrategyBindingRow[]).map(mapBinding))
+    : null
+  return record
+}
 
-  if (!scene)
-    return null
-
-  const bindings = await listBindingsForScenes(db, [safeId])
-  return mapScene(scene, bindings)
+export async function getSceneRegistryEntry(event: H3Event, id: string): Promise<SceneRegistryRecord | null> {
+  const db = getD1Database(event)
+  const safeId = assertNonEmptyString(id, 'id', 160)
+  const cached = readCachedScene(db, safeId)
+  if (cached)
+    return cached.value
+  const record = await loadSceneRegistryEntry(event, safeId)
+  writeCachedScene(db, safeId, record)
+  return record
 }
 
 function providerModels(provider: ProviderRegistryRecord): string[] {
@@ -706,7 +753,7 @@ export async function withSceneRegistryReadiness(
   }
 }
 
-export async function createSceneRegistryEntry(
+async function createSceneRegistryEntryUncached(
   event: H3Event,
   input: CreateSceneRegistryInput,
   createdBy: string,
@@ -745,19 +792,29 @@ export async function createSceneRegistryEntry(
 
   await replaceSceneBindings(db, normalized.id, normalized.bindings, now)
 
-  const created = await getSceneRegistryEntry(event, normalized.id)
+  const created = await loadSceneRegistryEntry(event, normalized.id)
   if (!created) {
     throw createError({ statusCode: 500, statusMessage: 'Scene registry entry was not created.' })
   }
   return created
 }
 
-export async function updateSceneRegistryEntry(
+/** createSceneRegistryEntry, then the registry cache forgets this database's entries (see `forgetSceneRegistryCache`). */
+export async function createSceneRegistryEntry(...args: Parameters<typeof createSceneRegistryEntryUncached>): ReturnType<typeof createSceneRegistryEntryUncached> {
+  try {
+    return await createSceneRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetSceneRegistryCache(args[0])
+  }
+}
+
+async function updateSceneRegistryEntryUncached(
   event: H3Event,
   id: string,
   input: UpdateSceneRegistryInput,
 ): Promise<SceneRegistryRecord | null> {
-  const existing = await getSceneRegistryEntry(event, id)
+  const existing = await loadSceneRegistryEntry(event, id)
   if (!existing)
     return null
 
@@ -803,11 +860,21 @@ export async function updateSceneRegistryEntry(
     await replaceSceneBindings(db, existing.id, normalized.bindings, now)
   }
 
-  return await getSceneRegistryEntry(event, existing.id)
+  return await loadSceneRegistryEntry(event, existing.id)
 }
 
-export async function deleteSceneRegistryEntry(event: H3Event, id: string): Promise<boolean> {
-  const existing = await getSceneRegistryEntry(event, id)
+/** updateSceneRegistryEntry, then the registry cache forgets this database's entries (see `forgetSceneRegistryCache`). */
+export async function updateSceneRegistryEntry(...args: Parameters<typeof updateSceneRegistryEntryUncached>): ReturnType<typeof updateSceneRegistryEntryUncached> {
+  try {
+    return await updateSceneRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetSceneRegistryCache(args[0])
+  }
+}
+
+async function deleteSceneRegistryEntryUncached(event: H3Event, id: string): Promise<boolean> {
+  const existing = await loadSceneRegistryEntry(event, id)
   if (!existing)
     return false
 
@@ -816,4 +883,14 @@ export async function deleteSceneRegistryEntry(event: H3Event, id: string): Prom
   await db.prepare(`DELETE FROM ${BINDINGS_TABLE} WHERE scene_id = ?;`).bind(existing.id).run()
   await db.prepare(`DELETE FROM ${SCENES_TABLE} WHERE id = ?;`).bind(existing.id).run()
   return true
+}
+
+/** deleteSceneRegistryEntry, then the registry cache forgets this database's entries (see `forgetSceneRegistryCache`). */
+export async function deleteSceneRegistryEntry(...args: Parameters<typeof deleteSceneRegistryEntryUncached>): ReturnType<typeof deleteSceneRegistryEntryUncached> {
+  try {
+    return await deleteSceneRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetSceneRegistryCache(args[0])
+  }
 }

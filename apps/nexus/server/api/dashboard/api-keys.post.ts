@@ -5,7 +5,8 @@ import { DEFAULT_PLUGIN_API_KEY_SCOPES, isAdminOnlyApiKeyScope, isApiKeyScope } 
 import { requireAuth } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
 
   const body = await readBody(event)
   const { name, scopes, expiresInDays } = body
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid key name' })
   }
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
   const requestedScopes = Array.isArray(scopes)
     ? scopes.filter(isApiKeyScope)

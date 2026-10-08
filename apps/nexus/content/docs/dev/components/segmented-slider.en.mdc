@@ -1,6 +1,6 @@
 ---
 title: "SegmentedSlider"
-description: "Discrete slider for choosing one value from a fixed set."
+description: "A slider for choosing one of a fixed set of discrete steps."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### SegmentedSlider
+### Basic
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderDemo" code-lang="vue"}
 ---
 code: |
@@ -28,137 +28,44 @@ code: |
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 16px; width: 400px;">
-      <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          Current value: {{ value }}
-        </div>
-        <TxSegmentedSlider v-model="value" :segments="segments" />
-      </div>
-    </div>
+    <TxSegmentedSlider v-model="value" :segments="segments" />
   </template>
 ---
 :::
 
-### Best Practices
-
-- Use three to seven stable segments; long or dynamic option lists should use `TxSelect` or `TxSearchSelect` instead.
-- Keep segment values primitive and unique. Duplicate values make selection state ambiguous.
-- Disable labels only when nearby copy already names each stop; otherwise labels are the user's map of the discrete choices.
-- Prefer `TxSlider` for continuous values and `TxSegmentedSlider` for ordinal policy states.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `number \| string \| null` | `0` | Currently selected segment value; passing `null` auto-selects the first segment on mount. |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | Ordered segment definitions rendered along the track. |
-| `disabled` | `boolean` | `false` | Prevents click and keyboard selection changes. |
-| `showLabels` | `boolean` | `true` | Shows each segment label when a label is provided. |
-| `vertical` | `boolean` | `false` | Renders a vertical track with bottom-to-top progress. |
-
-### SegmentedSliderSegment
-
-| Prop | Type | Description |
-|------|------|------|
-| `value` | `number \| string` | Value emitted when the segment is selected. |
-| `label` | `string` | Optional text rendered next to the segment marker. |
-
-### Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: number \| string)` | Emitted when an enabled segment requests a new value. |
-| `change` | `(value: number \| string)` | Emitted with the same selected value for change listeners. |
-
-### Slots
-
-`TxSegmentedSlider` does not expose public slots. Labels come from `segments[].label` so keyboard, pointer, and vertical rendering stay deterministic.
-
-## Custom Options
-
-### SegmentedSlider (custom)
+### Custom Segments
+A `value` can be a string, and a `label` any text, emoji included.
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderCustomDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const priceValue = ref('pro')
-  const priceSegments = [
+  const plan = ref('pro')
+  const planSegments = [
     { value: 'free', label: 'Free' },
     { value: 'pro', label: 'Pro' },
     { value: 'team', label: 'Team' },
     { value: 'enterprise', label: 'Enterprise' },
   ]
 
-  const ratingValue = ref(3)
-  const ratingSegments = [
-    { value: 1, label: '⭐' },
-    { value: 2, label: '⭐⭐' },
-    { value: 3, label: '⭐⭐⭐' },
-    { value: 4, label: '⭐⭐⭐⭐' },
-    { value: 5, label: '⭐⭐⭐⭐⭐' },
-  ]
+  const rating = ref(3)
+  const ratingSegments = [1, 2, 3, 4, 5].map(n => ({ value: n, label: '⭐'.repeat(n) }))
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 24px; width: 400px;">
-      <div>
-        <div style="font-size: 14px; margin-bottom: 12px;">
-          Price tier selection
-        </div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          Current: {{ priceValue }}
-        </div>
-        <TxSegmentedSlider v-model="priceValue" :segments="priceSegments" />
-      </div>
-
-      <div>
-        <div style="font-size: 14px; margin-bottom: 12px;">
-          Rating selection
-        </div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          Current: {{ ratingValue }} stars
-        </div>
-        <TxSegmentedSlider v-model="ratingValue" :segments="ratingSegments" />
-      </div>
-    </div>
+    <TxSegmentedSlider v-model="plan" :segments="planSegments" />
+    <TxSegmentedSlider v-model="rating" :segments="ratingSegments" />
   </template>
 ---
 :::
 
-## Release Policy Configuration
-
-This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
+### Release Policy
+Use `TxSegmentedSlider` for the risk tier and `TxSlider` for the traffic ratio.
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: 'Desktop',
-      children: [
-        {
-          value: 'stable',
-          label: 'Stable',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
   const riskSegments = [
     { value: 1, label: 'Low' },
     { value: 2, label: 'Med' },
@@ -168,40 +75,64 @@ code: |
   </script>
 
   <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
-      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
-        <TxFlatSelectItem value="signed" label="Signed build" />
-        <TxFlatSelectItem value="archive" label="Archive" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
-        <TxFlatSelectItem value="phased" label="Phased" />
-        <TxFlatSelectItem value="guarded" label="Guarded" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
-    </section>
+    <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+    <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+      <TxFlatSelectItem value="phased" label="Phased" />
+      <TxFlatSelectItem value="guarded" label="Guarded" />
+    </TxFlatSelect>
+    <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+    <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+    <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
   </template>
 ---
 ::
 
+### Best Practices
+
+- Use 3–7 stable segments; switch to `TxSelect` or `TxSearchSelect` for long or dynamic lists.
+- Keep each segment `value` primitive and unique.
+- Turn off `showLabels` only when nearby text already explains each step.
+- Use `TxSlider` for continuous numbers and `TxSegmentedSlider` for ordered tiers such as risk, plan, or quality gates.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `number \| string \| null` | `0` | Selected segment value; `null` selects the first segment after mount. |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | Segments, in order along the track. |
+| `disabled` | `boolean` | `false` | Blocks changes by click and keyboard. |
+| `showLabels` | `boolean` | `true` | Shows each segment's `label`, if it has one. |
+| `vertical` | `boolean` | `false` | Uses a vertical track that fills bottom-to-top. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: number \| string)` | Fires when a segment is chosen by click or keyboard. |
+| `change` | `(value: number \| string)` | Fires together with `update:modelValue`. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export interface SegmentedSliderSegment {
+    value: number | string // emitted when selected
+    label?: string // text beside the stop
+  }
+---
+:::
+
 ## Overview
 
-- The row is one `radiogroup` and each stop a `radio`, so a screen reader announces it as a set of mutually exclusive choices rather than a row of toggles.
-- Roving tabindex: Tab reaches the row once and lands on the current stop. Arrow keys move and clamp at both ends, Home and End jump to them. The vertical layout stacks bottom-to-top, so Up advances there.
-- Stops are round because the dot is a block: as an inline `<span>` its width and height were dropped and its 2px border rendered as a bare vertical stroke on the track.
-- The track is tinted from the text colour, the pair that actually inverts between themes, so it stays visible on a dark surface.
-- The focus ring is keyboard-only; hover previews an unselected stop by growing it slightly. Both stop under `prefers-reduced-motion`.
+- The row is a `radiogroup` and each stop a `radio`.
+- Tab enters the row once, on the current stop; arrow keys move and stop at both ends, and Home / End jump to them. In the vertical layout, Up moves forward.
+- The focus ring shows only for keyboard use; hover slightly grows an unselected stop. Both stop under reduced motion.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
-- Screenshot: `.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`.
-- Recommendation: use it only when values are naturally discrete and stable; risk tiers, plan tiers, and release gates are better fits than continuous numeric tuning.
-
-- Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
-- Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts` verifies horizontal progress and segment positions, button semantics, active/completed state, vertical rendering, model/change emits, disabled guards, label hiding, and null-model first-segment selection.
+- Source: `packages/tuffex/packages/components/src/segmented-slider/`.
 
 <TuffDocSourceLink />

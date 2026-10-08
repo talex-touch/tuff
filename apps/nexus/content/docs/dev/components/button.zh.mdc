@@ -1,6 +1,6 @@
 ---
 title: Button 按钮
-description: 触感按钮与扁平按钮的核心交互
+description: 触发操作的按钮，含分割、图标与复制按钮
 category: Basic
 status: beta
 since: 0.3.4
@@ -29,16 +29,7 @@ code: |
 
 ## 用法
 
-按钮用于触发明确的动作，建议在界面里保持主次层级清晰：
-
-- 同一界面只保留一个主按钮，避免权重冲突
-- 通过 `variant` 与 `size` 传递动作层级
-- 异步操作必须展示 `loading`，避免重复触发
-
-### Appearance
-
-基础外观与主次层级组合。
-
+### 变体
 ::TuffDemoWrapper{demo="ButtonVariantsDemo" code-lang="vue"}
 ---
 code: |
@@ -55,10 +46,7 @@ code: |
 ---
 ::
 
-### Disabled
-
-按钮不可用状态。
-
+### 禁用
 ::TuffDemoWrapper{demo="ButtonDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -72,41 +60,38 @@ code: |
 ---
 ::
 
-### Loading
-
-点击按钮后进行数据加载操作，在按钮上显示加载状态。
-
+### 加载中
+`loading` 期间按钮禁用；纯图标按钮的加载指示叠在图标上。
 ::TuffDemoWrapper{demo="ButtonLoadingDemo" code-lang="vue"}
 ---
 code: |
-  <script setup>
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const loading = ref(false)
 
-  async function handleClick() {
-    if (loading.value) return
+  async function submit() {
     loading.value = true
-    setTimeout(() => { loading.value = false }, 1200)
+    try {
+      await save()
+    }
+    finally {
+      loading.value = false
+    }
   }
   </script>
 
   <template>
-    <TxButton variant="primary" :loading="loading" @click="handleClick">
+    <TxButton variant="primary" :loading="loading" @click="submit">
       {{ loading ? '加载中' : '点击加载' }}
     </TxButton>
-    <TxButton variant="secondary" :loading="loading" @click="handleClick">
-      {{ loading ? '加载中' : '点击加载' }}
-    </TxButton>
-    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="submit" />
   </template>
 ---
 ::
 
-### Sizes
-
-Button 组件提供除了默认值以外的三种尺寸，可以在不同场景下选择合适的按钮尺寸，尺寸会影响触感与密度。
-
+### 尺寸
+`size` 有 `sm`、`md`、`lg` 三档，高度为 26、32、38px。
 ::TuffDemoWrapper{demo="ButtonSizesDemo" code-lang="vue"}
 ---
 code: |
@@ -118,10 +103,8 @@ code: |
 ---
 ::
 
-### Block
-
-在卡片或表单中使用块级按钮，用于撑满容器的主操作。
-
+### 块级
+`block` 撑满容器宽度；搭配 `loadingVariant="bar"` 时加载显示为扫光层。
 ::TuffDemoWrapper{demo="ButtonBlockDemo" code-lang="vue"}
 ---
 code: |
@@ -131,10 +114,8 @@ code: |
 ---
 ::
 
-### Shapes
-
-通过 `plain`、`round`、`circle` 和 `dashed` 调整形态。非块级圆按钮跟随尺寸档位：`sm` 为 26×26，`md` 为 32×32，`lg` 为 38×38；flat 变体的 `sm` 保持 32×32。
-
+### 形态
+非块级 `circle` 的边长等于按钮高度；flat 变体的 `sm` 为 32px。
 ::TuffDemoWrapper{demo="ButtonShapesDemo" code-lang="vue"}
 ---
 code: |
@@ -149,10 +130,8 @@ code: |
 ---
 ::
 
-### Haptics
-
-移动端触觉反馈需要显式开启：设置 `vibrate` 后，点击会调用设备震动，并让按钮本体按震动强度做小幅晃动；桌面端即使设备不支持震动，也会显示该视觉反馈。
-
+### 触感反馈
+`vibrate` 需显式开启：点击时触发设备震动，并按强度轻晃按钮；不支持震动的设备也会晃动。
 :::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
 ---
 code: |
@@ -166,112 +145,65 @@ code: |
 ---
 :::
 
-### Split Button
-
-用于"主操作 + 更多操作"的组合按钮（例如 RUN + …）。
-
+### 分割按钮
+`TxSplitButton` 把主操作与 `menu` 插槽中的更多操作组合在一起。
 ::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const loading = ref(false)
-
-  async function handleRun() {
-    if (loading.value)
-      return
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 1200))
-    loading.value = false
-  }
-  </script>
-
   <template>
-    <TxSplitButton
-      variant="primary"
-      size="sm"
-      icon="i-ri-play-fill"
-      :loading="loading"
-      @click="handleRun"
-    >
+    <TxSplitButton variant="primary" size="sm" icon="i-carbon-play-filled" :loading="running" @click="run">
       RUN
       <template #menu="{ close }">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-            Settings
-          </TxButton>
-          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-            Open Folder
-          </TxButton>
-        </div>
+        <TxButton size="sm" plain block icon="i-carbon-settings" @click="close()">
+          Settings
+        </TxButton>
+        <TxButton size="sm" plain block icon="i-carbon-folder-open" @click="close()">
+          Open Folder
+        </TxButton>
       </template>
     </TxSplitButton>
   </template>
 ---
 ::
 
-### Primary + Ghost
-
-主动作 + 次动作组合时使用 `primary + ghost` 保持层级清晰。
-
+### 主次搭配
+主操作用 `primary`，次操作用 `ghost`。
 ::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton icon="i-ri-add-line">创建项目</TxButton>
+    <TxButton variant="primary" icon="i-carbon-add">创建项目</TxButton>
     <TxButton variant="ghost">次要操作</TxButton>
   </template>
 ---
 ::
 
-### Icon Button
-
-纯图标动作按钮：`label` 提供可访问名称，`pressed` 承载持久切换态，`status` 提供语义状态色。
-
+### 图标按钮
+`label` 提供可访问名称，`pressed` 表示持久切换态，`status` 设置语义色。
 ::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const pinned = ref(false)
-  </script>
-
   <template>
-    <div class="flex flex-wrap items-center gap-3">
-      <TxIconButton
-        icon="i-carbon-star"
-        label="置顶工作区"
-        shape="circle"
-        :pressed="pinned"
-        @click="pinned = !pinned"
-      />
-      <TxIconButton icon="i-carbon-edit" label="编辑项目" shape="square" status="info" />
-      <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" status="success" />
-      <TxIconButton icon="i-carbon-warning" label="需要注意的操作" status="warning" />
-      <TxIconButton icon="i-carbon-trash-can" label="删除项目" status="danger" disabled />
-    </div>
+    <TxIconButton icon="i-carbon-star" label="置顶工作区" shape="circle" :pressed="pinned" @click="pinned = !pinned" />
+    <TxIconButton icon="i-carbon-edit" label="编辑项目" shape="square" status="info" />
+    <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" status="success" />
+    <TxIconButton icon="i-carbon-warning" label="需要注意的操作" status="warning" />
+    <TxIconButton icon="i-carbon-trash-can" label="删除项目" status="danger" disabled />
   </template>
 ---
 ::::
 
-### Copy Button
-
-带复制完成反馈与错误事件的剪贴板按钮。
-
+### 复制按钮
+成功后显示 `copiedLabel`，失败时派发 `error`。
 ::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  const installCommand = 'pnpm add @talex-touch/tuffex'
-  </script>
-
   <template>
     <TxCopyButton
-      :text="installCommand"
+      text="pnpm add @talex-touch/tuffex"
       copy-label="复制安装命令"
       copied-label="已复制"
+      @error="notifyCopyFailed"
     />
   </template>
 ---
@@ -279,18 +211,17 @@ code: |
 
 ### 最佳实践
 
-- 每个视图或卡片只保留一个主按钮。主动作可搭配 `ghost` 或 `secondary` 表达低优先级动作。
-- 只有在表单内才使用 `nativeType="submit"`；默认 `button` 用于避免意外提交表单。
-- 所有异步动作都应设置 `loading`，并在成功和失败路径都清理，避免按钮卡在禁用状态。
-- `circle` 优先用于纯图标动作；`block` 与 `circle` 组合时，组件会刻意保持常规文案布局。
-- 全宽提交条使用 `loadingVariant="bar"`；紧凑按钮或图标按钮继续使用 spinner loading。
-- `TxSplitButton` 的菜单动作完成选择后，应调用 slot 暴露的 `close()` 回调。
-- `TxIconButton` 除非插槽中有可见文本，否则始终设置 `label`；`pressed` 只用于持久开关，一次性动作使用普通点击按钮。
-- `TxCopyButton` 的 `copyLabel` 应明确点名复制目标；复制值很关键时处理 `error`，浏览器可能拒绝非可信手势触发的剪贴板写入。
+- 每个视图或卡片只放一个主按钮，次要动作用 `ghost` 或 `secondary`。
+- 异步动作设置 `loading`，成功与失败路径都要撤下，避免按钮卡在禁用态。
+- 只在表单内使用 `nativeType="submit"`；默认的 `button` 不会意外提交表单。
+- 纯图标动作用 `TxIconButton` 并设置 `label`；`pressed` 只用于持久开关。
+- `TxCopyButton` 的 `copyLabel` 写明复制对象；复制值关键时处理 `error`，浏览器可能拒绝非用户手势的写入。
 
 ## API 参考
 
-### Props
+### TxButton
+
+#### 属性
 
 ::DocApiTable
 ---
@@ -300,85 +231,85 @@ rows:
       kind: enum
       enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
     default: "'secondary'"
-    description: '视觉风格变体。未显式设置时（且未通过 `type` 推导）回退为 `secondary`。'
+    description: '视觉风格。'
   - parameter: type
     type:
       kind: enum
       enums: [primary, success, warning, danger, info, text]
     default: '-'
-    description: '语义 tone 别名。仅在未设置 `variant` 时用于推导视觉变体；`text` 会映射为 `ghost`。'
+    description: '语义别名，仅在未设置 variant 时生效；text 映射为 ghost。'
   - parameter: size
     type:
       kind: enum
       enums: [sm, md, lg]
     default: "'md'"
-    description: '按钮尺寸，三档对应 26px / 32px / 38px。`lg` 用于页面主操作，`sm` 用于表格行内与紧凑工具条。'
+    description: '高度 26 / 32 / 38px；旧值 large、small、mini 在运行时归一。'
   - parameter: block
     type: boolean
     default: 'false'
-    description: '块级按钮，撑满父容器宽度。移动端表单提交与抽屉底部操作常用。'
+    description: '撑满父容器宽度。'
   - parameter: plain
     type: boolean
     default: 'false'
-    description: '是否朴素按钮'
+    description: '朴素样式。'
   - parameter: dashed
     type: boolean
     default: 'false'
-    description: '是否虚线按钮'
+    description: '虚线边框。'
   - parameter: round
     type: boolean
     default: 'false'
-    description: '是否圆角按钮'
+    description: '圆角形态。'
   - parameter: circle
     type: boolean
     default: 'false'
-    description: '是否圆形按钮'
+    description: '圆形，用于纯图标按钮。'
   - parameter: loading
     type: boolean
     default: 'false'
-    description: '是否加载中状态'
+    description: '显示加载指示并禁止点击。'
   - parameter: loading-variant
     type:
       kind: enum
       enums: [spinner, bar]
     default: "'spinner'"
-    description: '加载反馈样式。`bar` 只有在同时设置 `block` 时才渲染为扫光层。'
+    description: '加载样式；bar 仅在 block 时渲染为扫光层。'
   - parameter: disabled
     type: boolean
     default: 'false'
-    description: '是否禁用状态'
+    description: '禁用按钮并阻止 click。'
   - parameter: border
     type: boolean
     default: 'true'
-    description: '是否保留按钮边框颜色；`false` 会添加 borderless 状态。'
+    description: '为 false 时去掉边框色。'
   - parameter: icon
     type: string
     default: '-'
-    description: '图标类名'
+    description: '显示在文案前的图标类名。'
   - parameter: autofocus
     type: boolean
     default: 'false'
-    description: '是否默认聚焦'
+    description: '挂载后自动聚焦。'
   - parameter: native-type
     type:
       kind: enum
       enums: [button, submit, reset]
     default: "'button'"
-    description: '原生 type 属性'
+    description: '原生 type 属性。'
   - parameter: vibrate
     type: boolean
     default: 'false'
-    description: '是否启用震动与对应的视觉晃动反馈；需显式开启'
+    description: '点击时触发设备震动与对应的按钮晃动。'
   - parameter: vibrate-type
     type:
       kind: enum
       enums: [light, medium, heavy, bit, success, warning, error]
     default: "'light'"
-    description: '震动类型'
+    description: '震动强度。'
 ---
 ::
 
-### Events
+#### 事件
 
 ::DocApiTable
 ---
@@ -390,95 +321,100 @@ rows:
         type ButtonClickHandler = (event: MouseEvent) => void
       language: typescript
     default: '-'
-    description: '点击时触发'
+    description: '未禁用且未加载时点击触发。'
 ---
 ::
 
-### Slots
+#### 插槽
 
 | 插槽名 | 说明 |
 |--------|------|
-| `default` | 按钮文案或自定义内联内容，渲染在可选图标 / loading spinner 之后。 |
+| `default` | 文案或自定义内容，渲染在图标与加载指示之后。 |
 
-### SplitButton Props
+### TxSplitButton
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | 主按钮与菜单按钮共享的视觉变体。 |
-| `size` | `'sm' \| 'md' \| 'lg'` | `md` | 按钮密度，三档对应 28px / 32px / 40px。 |
-| `disabled` | `boolean` | `false` | 同时禁用主操作和菜单触发器。 |
-| `loading` | `boolean` | `false` | 显示主按钮 spinner，并禁用两个交互区域。 |
-| `icon` | `string` | - | 未处于 loading 时显示在主文案前的图标类名。 |
-| `menuIcon` | `string` | `i-ri-more-2-line` | 菜单触发器默认图标类名。 |
-| `menuDisabled` | `boolean` | `false` | 在全局 disabled/loading 之外，仅禁用菜单触发器。 |
-| `menuWidth` | `number` | `200` | 透传给 `TxPopover` 的弹层宽度。 |
+| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | 主按钮与菜单按钮共用的变体。 |
+| `size` | `'sm' \| 'md' \| 'lg'` | `md` | 高度 28 / 32 / 40px。 |
+| `disabled` | `boolean` | `false` | 同时禁用主操作与菜单触发器。 |
+| `loading` | `boolean` | `false` | 主按钮显示加载指示，两侧均禁用。 |
+| `icon` | `string` | - | 非加载时显示在文案前的图标类名。 |
+| `menuIcon` | `string` | `i-ri-more-2-line` | 菜单触发器的默认图标类名。 |
+| `menuDisabled` | `boolean` | `false` | 仅禁用菜单触发器。 |
+| `menuWidth` | `number` | `200` | 弹层宽度，透传给 `TxPopover`。 |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | 弹层位置。 |
-| `menuOffset` | `number` | `8` | 弹层偏移像素。 |
+| `menuOffset` | `number` | `8` | 弹层偏移（px）。 |
 
-### SplitButton Events
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |--------|------|------|
-| `click` | `(event: MouseEvent)` | 主按钮在非 disabled / loading 状态下点击时触发。 |
-| `menuOpenChange` | `(open: boolean)` | 内部 popover 打开状态变化时触发。 |
+| `click` | `(event: MouseEvent)` | 主按钮在未禁用、未加载时点击触发。 |
+| `menuOpenChange` | `(open: boolean)` | 菜单打开状态变化时触发。 |
 
-### SplitButton Slots
+#### 插槽
 
 | 插槽名 | 参数 | 说明 |
 |--------|------|------|
 | `default` | - | 主操作文案。 |
-| `menu` | `{ close: () => void }` | 渲染在 `TxPopover` 内的菜单内容；菜单项完成选择后应调用 `close()`。 |
-| `menu-icon` | - | 替换菜单触发器默认更多图标。 |
+| `menu` | `{ close: () => void }` | 弹层中的菜单内容；选择后调用 `close()`。 |
+| `menu-icon` | - | 替换菜单触发器的图标。 |
 
-### IconButton Props
+### TxIconButton
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `icon` | `string` | `''` | 未提供默认插槽时，通过 `TxIcon` 渲染的图标名称。 |
-| `label` | `string` | `''` | 可访问名称。纯图标操作必填。 |
+| `icon` | `string` | `''` | 无默认插槽时经 `TxIcon` 渲染的图标名。 |
+| `label` | `string` | `''` | 可访问名称；纯图标时必填，缺失时开发环境告警。 |
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 按钮尺寸。 |
 | `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | 点击区域轮廓。 |
-| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | 语义视觉状态色；未设置时保持中性样式。 |
-| `pressed` | `boolean` | - | 持久切换态；定义后转发为 `aria-pressed`。 |
-| `disabled` | `boolean` | `false` | 原生禁用态与禁用样式。 |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | 语义色，作用于图标、悬停、按下与焦点；不改变行为或权限。 |
+| `pressed` | `boolean` | - | 持久切换态，定义时输出 `aria-pressed`。 |
+| `disabled` | `boolean` | `false` | 原生禁用。 |
 | `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | 原生 `type` 属性。 |
-- `status` 会改变图标的语义颜色、悬停、按下和焦点样式；不改变行为，也不提供授权。
 
-### IconButton Events
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `click` | `(event: MouseEvent)` | 启用状态下点击后触发。 |
+| `click` | `(event: MouseEvent)` | 未禁用时点击触发。 |
 
-### IconButton Slots
+#### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
 | `default` | `{ hover, pressed }` | 自定义图标或动画内容。 |
 
-### CopyButton Props
+### TxCopyButton
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `text` | `string` | `''` | 写入剪贴板的文本。 |
-| `copyLabel` | `string` | `'Copy'` | 空闲状态文案和 aria-label。 |
-| `copiedLabel` | `string` | `'Copied'` | 成功状态文案和 aria-label。 |
-| `disabled` | `boolean` | `false` | 禁用按钮并阻止复制。 |
-| `timeout` | `number` | `1400` | 复制完成状态重置延迟，单位 ms。 |
-| `size` | `'sm' \| 'md'` | `'sm'` | 按钮密度。 |
+| `copyLabel` | `string` | `'Copy'` | 空闲时的文案与 `aria-label`。 |
+| `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案与 `aria-label`。 |
+| `disabled` | `boolean` | `false` | 禁用并阻止复制。 |
+| `timeout` | `number` | `1400` | 成功状态恢复前的毫秒数。 |
+| `size` | `'sm' \| 'md'` | `'sm'` | 按钮尺寸。 |
 
-### CopyButton Events
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `copy` | `(text: string)` | 剪贴板写入成功后触发。 |
-| `error` | `(error: unknown)` | 剪贴板写入失败时触发。 |
+| `copy` | `(text: string)` | 写入剪贴板成功后触发。 |
+| `error` | `(error: unknown)` | 写入失败时触发。 |
 
-### CopyButton Slots
+#### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | `{ copied, copying }` | 自定义按钮文案或内容。 |
+| `default` | `{ copied, copying }` | 自定义按钮内容。 |
 
 ### 类型
 :::TuffCodeBlock{lang="ts"}
@@ -496,35 +432,22 @@ code: |
 
 ## 概述
 
-- `variant` 优先级高于语义 `type`；未设置 `variant` 时，`type="text"` 映射为 `ghost`，其它语义类型映射到对应视觉变体。
-- 尺寸只有 `sm`、`md`、`lg` 三档。历史拼写 `large`、`small`、`mini` 已从类型中移除，但运行时仍会归一化（`large` → `lg`，`small` / `mini` → `sm`），因为已发布版本的使用方会从 JS 传入这些字符串。
-- `--tx-button-height` 统一控制按钮高度和非块级圆按钮的宽度。圆形不继承普通按钮的水平内边距与最小宽度；`block + circle` 保留原有全宽文案布局。
-- `disabled` 和 `loading` 都会禁用原生 `<button>`，并阻止 `click` 事件向外 emit。
-- `loadingVariant="bar"` 仅在块级按钮上可见；图标按钮和普通内联按钮使用 spinner slot 或 overlay spinner。
-- 非 block、非 circle 的按钮在 loading 切换时会用尺寸 FLIP 过渡宽度变化。
-- `vibrate` 默认关闭。显式开启后，点击会按解析出的震动强度触发设备震动，并让按钮播放等比幅度的小晃动；`prefers-reduced-motion: reduce` 下不晃动。
-- `TxSplitButton` 在 loading 时会禁用主操作和菜单；`menuDisabled` 只额外禁用菜单触发器。
-- `TxIconButton` 的 `label` 会成为 `aria-label`，纯图标按钮必须提供；`pressed` 是 boolean 时输出 `aria-pressed` 并应用激活样式；默认插槽接收 `{ hover, pressed }`。
-- `TxCopyButton` 在 `disabled` 或复制进行中忽略点击；只有剪贴板写入成功后才触发 `copy`，两种剪贴板策略都失败时触发 `error`；成功后 `copiedLabel` 显示 `timeout` 毫秒后恢复。
+- `variant` 优先于 `type`；两者都未设置时为 `secondary`。
+- `disabled` 与 `loading` 都禁用原生 `<button>` 并阻止 `click`；`TxSplitButton` 加载时两侧都禁用。
+- 非块级、非圆形按钮在 `loading` 切换时以 FLIP 过渡宽度；`block` 与 `circle` 并用时保持常规文案布局。
+- 纯图标的 `TxButton` 用 `aria-label` 等 attrs 命名；`TxIconButton` 把 `label` 写入 `aria-label`，布尔 `pressed` 写入 `aria-pressed`。
+- `TxCopyButton` 优先用 Clipboard API，不可用时回退到 `execCommand`；禁用或写入中忽略点击。
+- 减少动态效果时跳过 `vibrate` 的晃动。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/button/src/{button,split-button,icon-button,copy-button}.vue`，以及 `types.ts`、`split-button.ts`。
-- 覆盖：`packages/tuffex/packages/components/src/button/__tests__/` 下的 `button.test.ts`、`split-button.test.ts`、`icon-button.test.ts`、`copy-button.test.ts` —— 变体与 `type` 优先级、三档尺寸与已发布旧写法的运行时归位、`disabled`/`loading` 抑制 `click`、加载条、图标、形状、无边框、原生 type、剪贴板成功与失败、缺失可访问名称的告警。
-- 非 block 按钮的加载宽度变化走 size FLIP 过渡；`prefers-reduced-motion: reduce` 下跳过振感抖动。
-
-<TuffDocSourceLink label="View source" />
+- `--tx-button-height` 同时决定按钮高度与非块级圆形按钮的宽度。
+- 源码：`packages/tuffex/packages/components/src/button/`。
 
 ## 使用场景
 
-- 页面与卡片动作，一个视图只保留一个主按钮；主按钮与 `ghost` / `secondary` 搭配。
-- 表单提交（`nativeType="submit"`）与抽屉底部操作（`block`）。
-- 异步动作：展示 `loading`，完成前保持不可点。
-- 表格行与工具栏（`size="sm"`）、纯图标操作（`circle` + `label`）。
-- 一个主操作带一组变体（`TxSplitButton`）、复制到剪贴板（`TxCopyButton`）。
+- 页面与卡片动作、表单提交（`nativeType="submit"`）、抽屉底部操作（`block`）。
+- 表格行与工具栏（`size="sm"`）、纯图标操作（`circle` 或 `TxIconButton`）。
+- 带一组变体的主操作（`TxSplitButton`）、复制到剪贴板（`TxCopyButton`）。
 
-## 无障碍
-
-- 原生 `<button>` 提供键盘激活；`disabled` 与 `loading` 写入原生状态并抑制 `click`。
-- 纯图标按钮必须有可访问名称：`TxIconButton` 用 `label`，`TxButton` 由外部标记或 attrs 提供。
-- `pressed` 转发到 `aria-pressed`；`TxIconButton` 默认插槽收到 `{ hover, pressed }` 用于可见状态。
+<TuffDocSourceLink label="View source" />

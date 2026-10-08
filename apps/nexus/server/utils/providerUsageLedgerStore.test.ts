@@ -49,6 +49,11 @@ class MockStatement {
   async all<T = any>() {
     return { results: this.db.all(this.sql, this.args) as T[] }
   }
+
+  /** What `batch` runs: rows for a read, the write's result otherwise. */
+  async execute() {
+    return /^\s*(?:SELECT|WITH|PRAGMA)\b/i.test(this.sql) ? this.all() : this.run()
+  }
 }
 
 class MockD1Database {
@@ -57,6 +62,14 @@ class MockD1Database {
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
+  }
+
+  /** In order, like D1's batch (without its rollback, which these tests do not exercise). */
+  async batch(statements: MockStatement[]) {
+    const results = []
+    for (const statement of statements)
+      results.push(await statement.execute())
+    return results
   }
 
   run(sql: string, args: any[]) {

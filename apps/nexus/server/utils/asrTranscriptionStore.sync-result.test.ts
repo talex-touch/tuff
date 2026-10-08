@@ -9,10 +9,10 @@ import {
   deleteAsrResultObject,
   getAsrResultObject,
   putAsrResultObject,
-  scheduleExpiredAsrResultCleanup,
   type AsrRequestRecord,
   type AsrSynchronousResult,
 } from './asrTranscriptionStore'
+import { scheduleExpiredAsrResultCleanup } from './asrCleanupSchedule'
 
 interface StoredObject {
   data: Buffer
@@ -151,6 +151,13 @@ class CleanupStatement {
     if (this.sql.includes('PRAGMA table_info')) {
       return { results: [{ name: 'pricing_snapshot' }] as T[] }
     }
+    // The cleanup's lease: these cases are about what one run does, so every claim wins.
+    if (this.sql.includes('INSERT INTO nexus_maintenance_state')) {
+      return { results: [{ key: this.args[0] }] as T[] }
+    }
+    if (this.sql.includes('SELECT next_run_at FROM nexus_maintenance_state')) {
+      return { results: [{ next_run_at: null }] as T[] }
+    }
     if (!this.sql.includes('delivery_expires_at <= ?')) return { results: [] as T[] }
     const cutoff = String(this.args[0] ?? '')
     const limit = Number(this.args[1] ?? 0)
@@ -176,6 +183,11 @@ class CleanupDatabase {
 
   prepare(sql: string) {
     return new CleanupStatement(this, sql)
+  }
+
+  /** The lease claim's batch: the claim and a read of when the lease is next due. */
+  async batch(statements: CleanupStatement[]) {
+    return Promise.all(statements.map(statement => statement.all()))
   }
 }
 

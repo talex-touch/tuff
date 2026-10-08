@@ -12,9 +12,8 @@ describe('dashboard notification inbox UI contract', () => {
     expect(nav).toContain("notifications: '/dashboard/notifications'")
     expect(nav).toContain("id: 'notifications'")
     expect(nav).toContain("route.path.startsWith('/dashboard/notifications')")
-    expect(nav).toContain("requestJson<{ unreadCount?: unknown }>('/api/dashboard/notifications/inbox'")
-    expect(nav).toContain("status: 'unread'")
-    expect(nav).toContain('limit: 1')
+    // The badge asks for the count alone, not for a page of the inbox.
+    expect(nav).toContain("requestJson<{ unreadCount?: unknown }>('/api/dashboard/notifications/inbox/unread-count')")
     expect(nav).toContain("useState<number>('dashboard-notification-unread-count'")
     expect(nav).toContain("item.id === 'notifications' && notificationUnreadCount > 0")
     expect(nav).toContain('notificationUnreadBadgeText')

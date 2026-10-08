@@ -1,6 +1,6 @@
 ---
 title: Tag
-description: Compact labels for categories, filters, semantic states, and removable metadata.
+description: A compact label for categories, filters, and states.
 category: Basic
 status: beta
 since: 0.3.4
@@ -11,26 +11,22 @@ verified: true
 
 ## Usage
 
-### Tags
-
+### Colors and Sizes
+`color` sets the text color and derives the background and border.
 :::TuffDemoWrapper{demo="TagTagsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="Default" size="sm" />
-      <TxTag label="Success" size="md" color="var(--tx-color-success)" />
-      <TxTag label="Warning" size="sm" color="var(--tx-color-warning)" />
-      <TxTag label="Danger" size="md" color="var(--tx-color-danger)" />
-    </div>
+    <TxTag label="Default" size="sm" />
+    <TxTag label="Success" size="md" color="var(--tx-color-success)" />
+    <TxTag label="Warning" size="sm" color="var(--tx-color-warning)" />
+    <TxTag label="Danger" size="md" color="var(--tx-color-danger)" />
   </template>
 ---
 :::
 
 ### Closable
-
-Use closable tags for removable filters or user-defined labels.
-
+`closable` renders a close button; `close` only signals intent, and the host updates the data.
 :::TuffDemoWrapper{demo="TagClosableDemo" code-lang="vue"}
 ---
 code: |
@@ -50,31 +46,23 @@ code: |
 :::
 
 ### Icon and Custom Color
-
+`background` and `border` override the colors derived from `color`.
 :::TuffDemoWrapper{demo="TagIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="AI Pick" icon="i-carbon-ai" color="#8b5cf6" />
-      <TxTag label="Synced" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
-      <TxTag label="Protected" icon="i-carbon-locked" color="#f59e0b" background="rgba(245, 158, 11, 0.14)" border="rgba(245, 158, 11, 0.36)" />
-    </div>
+    <TxTag label="AI Pick" icon="i-carbon-ai" color="#8b5cf6" />
+    <TxTag label="Synced" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+    <TxTag label="Protected" icon="i-carbon-locked" color="#f59e0b" background="rgba(245, 158, 11, 0.14)" border="rgba(245, 158, 11, 0.36)" />
   </template>
 ---
 :::
 
 ### Interaction and Disabled
-
+With `@click` bound, the tag becomes a focusable button; `disabled` blocks `click` and `close`.
 :::TuffDemoWrapper{demo="TagStateDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref(false)
-  </script>
-
   <template>
     <TxTag
       :label="active ? 'Selected' : 'Clickable'"
@@ -87,15 +75,12 @@ code: |
 :::
 
 ### Tag + Button
-
 :::TuffDemoWrapper{demo="TagTagButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="Beta" size="md" />
-      <TxButton size="sm">Upgrade</TxButton>
-    </div>
+    <TxTag label="Beta" size="md" />
+    <TxButton size="sm">Upgrade</TxButton>
   </template>
 ---
 :::
@@ -103,10 +88,10 @@ code: |
 ### Best Practices
 
 - Use tags for metadata and state hints, not as a replacement for primary buttons.
-- Keep `label` concise; long strings break the compact rhythm of tables and filter rows.
-- Use `closable` for filters, user labels, and temporary scopes where removal is expected.
-- Provide explicit `background`/`border` when using custom raw colors that need stronger contrast.
-- For destructive removal, confirm in the host before mutating data; `TxTag` only emits intent.
+- Keep `label` short and readable without relying on color.
+- Use `closable` for removable filters, user labels, and temporary scopes.
+- Pass explicit `background` / `border` when a raw custom color lacks contrast.
+- Confirm removal in the host; `TxTag` only emits intent.
 
 ## API Reference
 
@@ -114,61 +99,51 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `label` | `string \| null` | `''` | Text content when the default slot is not provided. |
+| `label` | `string \| null` | `''` | Text shown when there is no default slot; `null` counts as empty. |
 | `icon` | `string` | `''` | Leading icon class. |
-| `color` | `string` | `'var(--tx-color-primary)'` | Main text/icon color and base color for derived background/border. |
-| `background` | `string` | `''` | Custom background color. Defaults to a translucent mix of `color`. |
-| `border` | `string` | `''` | Custom border color. Defaults to a translucent mix of `color`. |
+| `color` | `string` | `'var(--tx-color-primary)'` | Text and icon color; the base for the derived background and border. |
+| `background` | `string` | `''` | Custom background; defaults to a translucent mix of `color`. |
+| `border` | `string` | `''` | Custom border; defaults to a translucent mix of `color`. |
 | `size` | `'sm' \| 'md'` | `'sm'` | Tag density. |
-| `closable` | `boolean` | `false` | Render the close button. |
-| `disabled` | `boolean` | `false` | Disable tag click and close interactions. |
-| `pill` | `boolean` | `false` | Use a fully rounded pill shape (adds `.pill` to the root); for filter chips and similar cases that should read differently in shape from square tags. |
+| `closable` | `boolean` | `false` | Renders the close button. |
+| `closeAriaLabel` | `string` | `'Remove tag'` | `aria-label` of the close button; pass localized text. |
+| `disabled` | `boolean` | `false` | Disables click and close. |
+| `pill` | `boolean` | `false` | Fully rounded pill shape, for filter chips that must differ from square tags. |
 | `variant` | `'outline' \| 'soft' \| 'plain'` | `'outline'` | Fill recipe; see the table below. |
-| `dot` | `string` | - | Leading dot colour; omit to render no dot. Lets a tag carry a category hue while its text stays legible. |
-| `dotSize` | `number` | `6` | Dot diameter in pixels. |
-| `count` | `number` | - | Trailing count badge; `0` renders, omitting the prop renders nothing. |
+| `dot` | `string` | - | Leading dot color; no dot when omitted. |
+| `dotSize` | `number` | `6` | Dot diameter in px. |
+| `count` | `number` | - | Trailing count; `0` renders, omitting it renders nothing. |
 
-The three `variant` recipes:
-
-| Value | Fill | Hairline | Text | Use |
+| `variant` | Fill | Hairline | Text | Use |
 |------|------|------|------|------|
-| `outline` | 12% | 32% | Full-strength hue | The default, byte-identical to existing tags |
-| `soft` | 20% | 34% | 92% hue mixed toward ink | Steadier for 11px text on a coloured fill |
-| `plain` | Neutral fill | Neutral hairline | Secondary ink | Ignores `color`; for overflow counters like `+3` and metadata that must not compete |
+| `outline` | 12% | 32% | Full-strength hue | Default |
+| `soft` | 20% | 34% | 92% hue mixed toward ink | 11px text on a colored fill |
+| `plain` | Neutral fill | Neutral hairline | Secondary ink | Ignores `color`; for overflow counters like `+3` and secondary metadata |
 
-An explicit `background` / `border` still overrides whichever variant is chosen.
+An explicit `background` / `border` overrides any `variant`.
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `click` | `MouseEvent` | Emitted when the tag root is clicked and `disabled=false`. |
-| `close` | - | Emitted when the close button is clicked and `disabled=false`. |
+| `click` | `MouseEvent` | Fires on click unless disabled; with a listener bound, Enter / Space fire it too. |
+| `close` | - | Fires when the close button is clicked, unless disabled. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `default` | - | Replaces the `label` text inside the tag content area. |
+| `default` | - | Replaces the `label` text, keeping the icon and close button. |
 
 ## Overview
 
-- The root is static metadata with no live-region role; tag text must be meaningful without relying on color.
-- `label` defaults to an empty string; `null` is normalized to an empty string.
-- The default slot replaces `label` content but keeps the icon and close affordance.
-- `color` defaults to `var(--tx-color-primary)`. Missing `background` and `border` are derived from `color` with `color-mix`.
-- The close affordance is a native `button type="button"` with `aria-label="Remove tag"`.
-- Close clicks stop propagation, so `close` does not also emit the tag-level `click` event.
-- `disabled` reduces opacity, disables the close button, and blocks both `click` and `close` emits.
+- Without `@click`, the root is static metadata with no role; with it, the root is a focusable `role="button"` that carries `aria-disabled` when disabled.
+- The close button is a native `button type="button"` whose `aria-label` comes from `closeAriaLabel`.
+- Close clicks stop propagating, so `close` never also fires `click`.
+- `disabled` lowers opacity, disables the close button, and blocks `click` and `close`.
 
 ## Technologies
 
-- **Accessibility note:** The close affordance is a real `button`, but the tag-level `click` handler lives on a non-focusable `span`. Use `click` only for optional pointer affordances; choose a button or checkbox pattern when the tag action must be keyboard reachable.
-- **Verified coverage:** `tag.test.ts` checks label/icon/style rendering, default-slot override, click and close emission separation, disabled blocking, and disabled close-button state.
-
-- Component source: `packages/tuffex/packages/components/src/tag/src/TxTag.vue`.
-- Types: `packages/tuffex/packages/components/src/tag/src/types.ts` exports `TagProps` and `TagEmits`.
-- Export alias: `packages/tuffex/packages/components/src/tag/index.ts` exports `Tag`, `TxTag`, `TagProps`, `TagEmits`, and `TxTagInstance`.
-- Coverage: `packages/tuffex/packages/components/src/tag/__tests__/tag.test.ts` verifies rendering, slots, events, and disabled behavior.
+- Source: `packages/tuffex/packages/components/src/tag/`.
 
 <TuffDocSourceLink />

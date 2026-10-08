@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +7,8 @@ import handler from '../../../server/api/store/plugins/[slug]/download.get'
 const h3Mocks = vi.hoisted(() => ({
   createError: vi.fn((input: { statusCode: number, statusMessage: string }) => Object.assign(new Error(input.statusMessage), input)),
   getQuery: vi.fn(),
-  sendRedirect: vi.fn(),
+  send: vi.fn(),
+  setResponseHeader: vi.fn(),
 }))
 
 const pluginsStoreMocks = vi.hoisted(() => ({
@@ -46,7 +48,8 @@ vi.hoisted(() => {
 vi.mock('h3', () => ({
   createError: h3Mocks.createError,
   getQuery: h3Mocks.getQuery,
-  sendRedirect: h3Mocks.sendRedirect,
+  send: h3Mocks.send,
+  setResponseHeader: h3Mocks.setResponseHeader,
 }))
 vi.mock('../../../server/utils/pluginPackageStorage', () => pluginPackageStorageMocks)
 vi.mock('../../../server/utils/pluginsStore', () => pluginsStoreMocks)
@@ -83,7 +86,7 @@ const plugin = {
 beforeEach(() => {
   vi.clearAllMocks()
   h3Mocks.getQuery.mockReturnValue({ version: version.version })
-  h3Mocks.sendRedirect.mockReturnValue({ redirected: version.packageUrl })
+  h3Mocks.send.mockImplementation((_event: unknown, data: unknown) => ({ sent: data }))
   pluginStoreAccessMocks.resolvePluginStoreAudience.mockResolvedValue('public')
   pluginsStoreMocks.getPluginBySlug.mockResolvedValue(plugin)
   pluginsStoreMocks.getPluginVersionEligibility.mockReturnValue({ eligible: true })
@@ -129,15 +132,39 @@ describe('/api/store/plugins/:slug/download.tpex', () => {
     expect(pluginsStoreMocks.blockPluginVersionAdmission).toHaveBeenCalledWith(event, plugin.id, version.id, 'artifact-digest-mismatch')
   })
 
-  it('redirects a valid artifact to the selected package URL without blocking admission', async () => {
-    const result = await handler(event)
+  it('answers with the verified package itself instead of redirecting to a second read', async () => {
+    const result = await handler(event) as unknown as { sent: Uint8Array }
 
-    expect(h3Mocks.sendRedirect).toHaveBeenCalledWith(event, version.packageUrl, 302)
-    expect(result).toEqual({ redirected: version.packageUrl })
+    expect(Buffer.from(result.sent).equals(Buffer.from(artifactBytes))).toBe(true)
+    // One read of the package: the redirect target read it again.
+    expect(pluginPackageStorageMocks.getPluginPackage).toHaveBeenCalledTimes(1)
     expect(pluginsStoreMocks.blockPluginVersionAdmission).not.toHaveBeenCalled()
+    // The headers `/api/plugins/assets/:key` answered with.
+    const headers = Object.fromEntries(h3Mocks.setResponseHeader.mock.calls.map(([, name, value]) => [name, value]))
+    expect(headers).toEqual({
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': artifactBytes.byteLength,
+      'Cache-Control': 'private, max-age=0, must-revalidate',
+      'Content-Disposition': 'attachment; filename="1.0.0.tpex"',
+    })
   })
 
-  it('uses the authenticated beta audience across Store and asset redirects', async () => {
+  it('counts the install and records both events after the response, on waitUntil', async () => {
+    const waitUntil = vi.fn()
+    const pending = new Promise<never>(() => {})
+    pluginsStoreMocks.incrementPluginInstalls.mockReturnValue(pending)
+    const deferredEvent = { context: { ...event.context, waitUntil } } as unknown as H3Event
+
+    // The writes never finish here, and the download does not wait for them.
+    await handler(deferredEvent)
+
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    await Promise.resolve()
+    expect(pluginsStoreMocks.incrementPluginInstalls).toHaveBeenCalledWith(deferredEvent, plugin.id)
+    expect(governanceMocks.recordPlatformGovernanceEvent.mock.calls.map(([, input]) => input.action)).toEqual(['download', 'install'])
+  })
+
+  it('uses the authenticated beta audience for the Store read and the package it serves', async () => {
     const betaVersion = {
       ...version,
       channel: 'BETA',
@@ -159,10 +186,6 @@ describe('/api/store/plugins/:slug/download.tpex', () => {
       audience: 'beta',
     })
     expect(pluginsStoreMocks.getPluginVersionEligibility).toHaveBeenCalledWith(betaPlugin, betaVersion, 'beta')
-    expect(h3Mocks.sendRedirect).toHaveBeenCalledWith(
-      event,
-      '/api/plugins/assets/beta-package.tpex?channel=BETA',
-      302,
-    )
+    expect(h3Mocks.send).toHaveBeenCalledTimes(1)
   })
 })

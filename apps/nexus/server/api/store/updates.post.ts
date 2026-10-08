@@ -1,5 +1,5 @@
 import { createError, readBody } from 'h3'
-import { getPluginBySlug } from '../../utils/pluginsStore'
+import { getPluginsBySlugs } from '../../utils/pluginsStore'
 
 function buildStoreDownloadUrl(slug: string, version: string): string {
   return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
@@ -26,16 +26,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'plugins array is required.' })
 
   const updates: UpdateInfo[] = []
+  const installedPlugins = body.plugins.filter(installed => installed.slug && installed.version)
+  // Every installed plugin in one round trip: it was three per plugin, one plugin after another.
+  const plugins = await getPluginsBySlugs(event, installedPlugins.map(installed => installed.slug), {
+    includeVersions: true,
+    forStore: true,
+  })
 
-  for (const installed of body.plugins) {
-    if (!installed.slug || !installed.version)
-      continue
-
-    const plugin = await getPluginBySlug(event, installed.slug, {
-      includeVersions: true,
-      forStore: true,
-    })
-
+  for (const installed of installedPlugins) {
+    const plugin = plugins.get(installed.slug)
     if (!plugin)
       continue
 

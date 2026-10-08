@@ -1,7 +1,6 @@
-import { Buffer } from 'node:buffer'
-import { createError, send, setResponseHeader } from 'h3'
+import { createError, send, sendStream, setResponseHeader } from 'h3'
 import { getOptionalAuth } from '../../../utils/auth'
-import { getPluginPackage } from '../../../utils/pluginPackageStorage'
+import { openPluginPackage } from '../../../utils/pluginPackageStorage'
 import { getUserById } from '../../../utils/authStore'
 import { buildPluginPackageGovernanceResourceId, findVersionByPackageKey } from '../../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../../utils/pluginStoreAccess'
@@ -47,22 +46,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'You are not allowed to download this package.' })
   }
 
-  const packageResult = await getPluginPackage(event, key, {
+  // Streamed: a package (up to 30 MB) is no longer read whole into the isolate on its way through.
+  const packageResult = await openPluginPackage(event, key, {
     governanceResourceId: buildPluginPackageGovernanceResourceId(version),
   })
 
   if (!packageResult)
     throw createError({ statusCode: 404, statusMessage: 'Package not found.' })
 
-  // Ensure we have a proper Buffer for binary response
-  const buffer = Buffer.isBuffer(packageResult.data)
-    ? packageResult.data
-    : Buffer.from(packageResult.data)
-
   setResponseHeader(event, 'Content-Type', packageResult.contentType)
-  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Content-Length', packageResult.size)
   setResponseHeader(event, 'Cache-Control', 'private, max-age=0, must-revalidate')
   setResponseHeader(event, 'Content-Disposition', `attachment; filename="${version.version}.tpex"`)
 
-  return send(event, buffer)
+  return packageResult.body instanceof ReadableStream
+    ? sendStream(event, packageResult.body)
+    : send(event, packageResult.body)
 })

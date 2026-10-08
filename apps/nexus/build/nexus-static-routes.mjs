@@ -55,7 +55,16 @@ export const PAGES_REDIRECT_STATUSES = new Set([200, 301, 302, 303, 307, 308])
 /** A catch-all source; any docs rule listed below one of these never fires. */
 export const PAGES_CATCH_ALL_SOURCE = '/*'
 
+/**
+ * The policy pages' documents (`/license`, `/privacy`, `/protocol`) in both locales, read on SPA
+ * navigation to those pages. Prerendered so that read is a static file, not the runtime content
+ * database. Listed with the docs API routes: they share the Worker exclusion and JSON headers.
+ */
+export const contentApiPrerenderRoutes = ['license', 'privacy', 'protocol']
+  .flatMap(name => ['en', 'zh'].map(locale => `/api/content/policy/${name}/${locale}`))
+
 export const docsApiPrerenderRoutes = [
+  ...contentApiPrerenderRoutes,
   '/api/docs/component-sync',
   '/api/docs/navigation/en/all',
   '/api/docs/navigation/zh/all',
@@ -113,6 +122,7 @@ export const docsStaticHtmlHeaderRoutes = ['/en/docs', '/zh/docs', '/en/docs/**'
  * the explicit content-type is part of the same rule.
  */
 export const docsStaticJsonHeaderRoutes = [
+  '/api/content/policy/**',
   '/api/docs/page/**',
   '/api/docs/navigation/**',
   '/api/docs/search/**',

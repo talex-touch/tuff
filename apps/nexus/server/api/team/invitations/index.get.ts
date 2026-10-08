@@ -4,8 +4,9 @@ import { validateInviteForUser } from '../../../utils/teamInviteValidation'
 import { listPendingInvitesForEmail } from '../../../utils/teamStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
-  const user = await getUserById(event, userId)
+  const auth = await requireAuth(event)
+  const { userId } = auth
+  const user = auth.user ?? await getUserById(event, userId)
 
   if (!user?.email) {
     return { invitations: [] }
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const invites = await listPendingInvitesForEmail(event, user.email)
   const invitations = await Promise.all(invites.map(async (invite) => {
-    const validation = await validateInviteForUser(event, userId, invite.id, 'id')
+    const validation = await validateInviteForUser(event, userId, invite.id, 'id', user)
 
     return {
       id: invite.id,

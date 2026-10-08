@@ -6,6 +6,7 @@ import { useRuntimeConfig } from '#imports'
 import { hashPassword, verifyPassword } from './authCrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SESSION_TABLE = 'admin_emergency_sessions'
 const ATTEMPT_TABLE = 'admin_emergency_attempts'
@@ -14,8 +15,6 @@ const RECOVERY_CODE_TABLE = 'admin_recovery_codes'
 
 type EmergencySessionStatus = 'init' | 'verified' | 'expired' | 'revoked'
 type EmergencyAction = 'init' | 'verify' | 'issue'
-
-let schemaReady = false
 
 export interface AdminEmergencySession {
   sessionId: string
@@ -60,160 +59,72 @@ function requireDb(event: H3Event): D1Database {
   return db
 }
 
+const ADMIN_EMERGENCY_SCHEMA = defineD1Schema('admin-emergency', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SESSION_TABLE} (
+        session_id TEXT PRIMARY KEY,
+        admin_id TEXT,
+        status TEXT NOT NULL,
+        dfp_hash TEXT NOT NULL,
+        challenge TEXT NOT NULL,
+        verify_nonce TEXT,
+        fail_count INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT NOT NULL,
+        verified_at TEXT,
+        created_at TEXT NOT NULL,
+        revoked_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_sessions_status_expires
+      ON ${SESSION_TABLE}(status, expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_sessions_admin_created
+      ON ${SESSION_TABLE}(admin_id, created_at)`,
+    `CREATE TABLE IF NOT EXISTS ${ATTEMPT_TABLE} (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        ip_hash TEXT,
+        admin_hint_hash TEXT,
+        dfp_hash TEXT,
+        action TEXT NOT NULL,
+        success INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_session_action_created
+      ON ${ATTEMPT_TABLE}(session_id, action, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_ip_created
+      ON ${ATTEMPT_TABLE}(ip_hash, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_hint_created
+      ON ${ATTEMPT_TABLE}(admin_hint_hash, created_at)`,
+    `CREATE TABLE IF NOT EXISTS ${JTI_TABLE} (
+        jti TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        issued_at TEXT NOT NULL,
+        used_at TEXT,
+        expires_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_jti_expires
+      ON ${JTI_TABLE}(expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_emergency_jti_used
+      ON ${JTI_TABLE}(used_at)`,
+    `CREATE TABLE IF NOT EXISTS ${RECOVERY_CODE_TABLE} (
+        id TEXT PRIMARY KEY,
+        admin_id TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_recovery_codes_admin_used
+      ON ${RECOVERY_CODE_TABLE}(admin_id, used_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_recovery_codes_expires
+      ON ${RECOVERY_CODE_TABLE}(expires_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaReady) return
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${SESSION_TABLE} (
-      session_id TEXT PRIMARY KEY,
-      admin_id TEXT,
-      status TEXT NOT NULL,
-      dfp_hash TEXT NOT NULL,
-      challenge TEXT NOT NULL,
-      verify_nonce TEXT,
-      fail_count INTEGER NOT NULL DEFAULT 0,
-      expires_at TEXT NOT NULL,
-      verified_at TEXT,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_sessions_status_expires
-    ON ${SESSION_TABLE}(status, expires_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_sessions_admin_created
-    ON ${SESSION_TABLE}(admin_id, created_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${ATTEMPT_TABLE} (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      ip_hash TEXT,
-      admin_hint_hash TEXT,
-      dfp_hash TEXT,
-      action TEXT NOT NULL,
-      success INTEGER NOT NULL DEFAULT 0,
-      reason TEXT,
-      created_at TEXT NOT NULL
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_session_action_created
-    ON ${ATTEMPT_TABLE}(session_id, action, created_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_ip_created
-    ON ${ATTEMPT_TABLE}(ip_hash, created_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_attempts_hint_created
-    ON ${ATTEMPT_TABLE}(admin_hint_hash, created_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${JTI_TABLE} (
-      jti TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      issued_at TEXT NOT NULL,
-      used_at TEXT,
-      expires_at TEXT NOT NULL
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_jti_expires
-    ON ${JTI_TABLE}(expires_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_emergency_jti_used
-    ON ${JTI_TABLE}(used_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${RECOVERY_CODE_TABLE} (
-      id TEXT PRIMARY KEY,
-      admin_id TEXT NOT NULL,
-      code_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      used_at TEXT,
-      created_at TEXT NOT NULL,
-      expires_at TEXT
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_recovery_codes_admin_used
-    ON ${RECOVERY_CODE_TABLE}(admin_id, used_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_admin_recovery_codes_expires
-    ON ${RECOVERY_CODE_TABLE}(expires_at);
-  `,
-    )
-    .run()
-
-  schemaReady = true
+  await ensureD1Schema(db, ADMIN_EMERGENCY_SCHEMA)
 }
 
 function nowIso() {

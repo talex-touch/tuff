@@ -43,6 +43,15 @@ class MockStatement {
   async all<T = any>() {
     return { results: this.db.all(this.sql, this.args) as T[] }
   }
+
+  /** What `batch` answers for this statement: a release read as its row, anything else as `all` would. */
+  async batchResult() {
+    if (this.sql.includes('FROM app_releases') && !this.sql.includes('FROM app_release_assets')) {
+      const row = this.db.first(this.sql, this.args)
+      return { results: row ? [row] : [] }
+    }
+    return { results: this.db.all(this.sql) }
+  }
 }
 
 class MockD1Database {
@@ -74,6 +83,10 @@ class MockD1Database {
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
+  }
+
+  async batch(statements: MockStatement[]) {
+    return Promise.all(statements.map(statement => statement.batchResult()))
   }
 
   run(sql: string, args: any[]) {

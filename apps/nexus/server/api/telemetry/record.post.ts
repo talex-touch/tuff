@@ -1,6 +1,38 @@
+import { createError, getHeader, readBody } from 'h3'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
-import { recordTelemetryEvent } from '../../utils/telemetryStore'
+import {
+  buildTelemetryBatchReceiptStatement,
+  commitTelemetryWrite,
+  digestTelemetryBatchPayload,
+  getTelemetryBatchReceipt,
+  normalizeTelemetryIdempotencyKey,
+  prepareTelemetryWrite,
+  type TelemetryEventInput,
+} from '../../utils/telemetryStore'
 import { resolveTelemetryUserId } from '../../utils/telemetryIdentity'
+
+interface TelemetryRecordAck extends Record<string, unknown> {
+  success: true
+  accepted: number
+  rejected: number
+  duplicate: boolean
+}
+
+const TELEMETRY_RECORD_SCOPE = 'telemetry.record'
+
+/**
+ * The key comes from the header; the startup report's `metadata.idempotencyKey` is honoured too,
+ * because clients already in the field put it there and nothing read it, which is how one
+ * startup report retried 32 times got counted as up to 32 visits.
+ */
+function resolveRecordIdempotencyKey(headerValue: unknown, metadata: unknown): string | null {
+  const fromHeader = normalizeTelemetryIdempotencyKey(headerValue)
+  if (fromHeader) return fromHeader
+  const fromMetadata = metadata && typeof metadata === 'object'
+    ? (metadata as Record<string, unknown>).idempotencyKey
+    : undefined
+  return normalizeTelemetryIdempotencyKey(fromMetadata)
+}
 
 export default defineEventHandler(async (event) => {
   await guardTelemetryIp(event, { weight: 1, action: 'telemetry.record' })
@@ -34,10 +66,13 @@ export default defineEventHandler(async (event) => {
   // Deliberately not read from the body: this route is unauthenticated, so a body userId is a
   // claim anyone can make about anyone (#901). Null here means the event is anonymous.
   const resolvedUserId = await resolveTelemetryUserId(event)
+  // An event with no proven owner is anonymous whatever the body claims, and an explicit
+  // `isAnonymous: true` from a signed-in client is respected (anonymous mode).
+  const anonymous = !resolvedUserId || isAnonymous !== false
 
-  await recordTelemetryEvent(event, {
+  const payload: TelemetryEventInput = {
     eventType,
-    userId: resolvedUserId || undefined,
+    userId: anonymous ? undefined : resolvedUserId || undefined,
     clientId: clientId || undefined,
     deviceFingerprint: deviceFingerprint || undefined,
     platform: platform || undefined,
@@ -49,9 +84,46 @@ export default defineEventHandler(async (event) => {
     providerTimings: providerTimings || undefined,
     inputTypes: Array.isArray(inputTypes) ? inputTypes : undefined,
     metadata: metadata || undefined,
-    // An event with no proven owner is anonymous whatever the body claims.
-    isAnonymous: resolvedUserId ? isAnonymous !== false : true,
+    isAnonymous: anonymous,
+  }
+
+  const idempotencyKey = resolveRecordIdempotencyKey(getHeader(event, 'x-idempotency-key'), metadata)
+  const payloadHash = idempotencyKey ? digestTelemetryBatchPayload(payload) : null
+  if (idempotencyKey && payloadHash) {
+    const receipt = await getTelemetryBatchReceipt<TelemetryRecordAck>(event, TELEMETRY_RECORD_SCOPE, idempotencyKey)
+    if (receipt) {
+      if (receipt.payloadHash !== payloadHash) {
+        throw createError({ statusCode: 409, statusMessage: 'Idempotency key reused with different telemetry payload' })
+      }
+      return { ...receipt.response, duplicate: true }
+    }
+  }
+
+  const prepared = await prepareTelemetryWrite(event, [payload])
+  const result = prepared.results[0]
+  if (!prepared.db || !prepared.batch || !result || result.status === 'dropped') {
+    // Previously this answered `success: true` with nothing stored, which the client took as
+    // delivered and removed from its outbox.
+    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+  }
+
+  const response: TelemetryRecordAck = {
+    success: true,
+    accepted: result.status === 'accepted' ? 1 : 0,
+    rejected: result.status === 'accepted' ? 0 : 1,
+    duplicate: false,
+  }
+
+  await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
+    extraStatements: idempotencyKey && payloadHash
+      ? [buildTelemetryBatchReceiptStatement(prepared.db, {
+          scope: TELEMETRY_RECORD_SCOPE,
+          idempotencyKey,
+          payloadHash,
+          response,
+        })]
+      : [],
   })
 
-  return { success: true }
+  return response
 })

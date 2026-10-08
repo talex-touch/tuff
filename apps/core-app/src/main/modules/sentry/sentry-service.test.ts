@@ -1196,3 +1196,278 @@ describe('SentryServiceModule native crash delivery diagnostics', () => {
     expect(exposed).not.toContain('.dmp')
   })
 })
+
+describe('SentryServiceModule opt-out purges every consent-gated outbox kind', () => {
+  beforeEach(() => {
+    networkRequestMock.mockReset()
+  })
+
+  it('drops queued startup reports together with the Sentry batches, and leaves foreign rows', async () => {
+    const { SentryServiceModule } = await import('./sentry-service')
+    const list = vi.fn(async () => [
+      {
+        id: 1,
+        endpoint: 'https://nexus.local/api/telemetry/batch',
+        payload: { metadata: { kind: 'sentry.nexus.batch' }, events: [{ eventType: 'search' }] },
+        createdAt: 1,
+        retryCount: 0,
+        lastError: null
+      },
+      {
+        id: 2,
+        endpoint: 'https://nexus.local/api/telemetry/record',
+        // The startup report's real shape: a single `visit` event whose metadata carries the kind.
+        payload: { eventType: 'visit', clientId: 'client-1', metadata: { kind: 'startup' } },
+        createdAt: 2,
+        retryCount: 32,
+        lastError: null
+      },
+      {
+        id: 3,
+        endpoint: 'https://nexus.local/api/other',
+        payload: { metadata: { kind: 'something.else' } },
+        createdAt: 3,
+        retryCount: 0,
+        lastError: null
+      }
+    ])
+    const remove = vi.fn(async () => {})
+    const markAttempt = vi.fn(async () => {})
+    const service = new SentryServiceModule() as unknown as {
+      config: { enabled: boolean; anonymous: boolean }
+      getReportQueueStore: () => {
+        list: typeof list
+        remove: typeof remove
+        markAttempt: typeof markAttempt
+      }
+      saveConfig: (config: { enabled?: boolean; anonymous?: boolean }) => void
+      flushQueuedNexusTelemetryOutbox: () => Promise<void>
+    }
+    service.getReportQueueStore = () => ({ list, remove, markAttempt })
+    service.config = { enabled: true, anonymous: false }
+
+    service.saveConfig({ enabled: false })
+    await service.flushQueuedNexusTelemetryOutbox()
+
+    expect(networkRequestMock).not.toHaveBeenCalled()
+    expect(remove).toHaveBeenCalledWith(1)
+    expect(remove).toHaveBeenCalledWith(2)
+    expect(remove).not.toHaveBeenCalledWith(3)
+    expect(markAttempt).not.toHaveBeenCalled()
+  })
+})
+
+describe('sanitizeSentryEvent keeps what Sentry needs and nothing it must not have (2026-10-08)', () => {
+  function frameEvent(frames: Array<Record<string, unknown>>, value: string): Sentry.Event {
+    return {
+      exception: {
+        values: [{ type: 'Error', value, stacktrace: { frames: frames as never } }]
+      }
+    } as Sentry.Event
+  }
+
+  it('keeps app-bundle and node-internal frame locations, drops every other path', () => {
+    const event = sanitizeSentryEvent(
+      frameEvent(
+        [
+          {
+            filename: 'app:///out/main/index.js',
+            abs_path: '/Applications/Tuff.app/x',
+            function: 'a'
+          },
+          { filename: 'app:///node_modules/@sentry/core/index.js', function: 'b' },
+          { filename: 'node:internal/process/task_queues', function: 'c' },
+          { filename: '<anonymous>', function: 'd' },
+          { filename: '/Users/alice/Workspace/private/file.ts', function: 'e' },
+          { filename: 'C:\\Users\\alice\\AppData\\Local\\tuff\\index.js', function: 'f' },
+          { filename: 'file:///Users/alice/Downloads/x.js', function: 'g' },
+          { filename: 'app:///out/main/index.js?token=secret value', function: 'h' }
+        ],
+        'prose message'
+      )
+    )
+    const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? []
+    expect(frames.map((frame) => frame.filename)).toEqual([
+      'app:///out/main/index.js',
+      'app:///node_modules/@sentry/core/index.js',
+      'node:internal/process/task_queues',
+      '<anonymous>',
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    ])
+    expect(frames.every((frame) => frame.abs_path === undefined)).toBe(true)
+  })
+
+  it('keeps a stable error code as the exception value and redacts everything else', () => {
+    const codes = [
+      'NETWORK_TIMEOUT',
+      'PRIVACY_TELEMETRY_STORE_UNAVAILABLE',
+      'STORAGE_SAVE_REJECTED'
+    ]
+    for (const code of codes) {
+      expect(sanitizeSentryEvent(frameEvent([], code)).exception?.values?.[0]?.value).toBe(code)
+    }
+    const prose = [
+      'ENOENT: no such file or directory, open /Users/alice/secret.txt',
+      'SQLITE_BUSY: database is locked',
+      'network_timeout',
+      'NETWORK TIMEOUT',
+      'A'.repeat(65),
+      `${'SQL_'}SELECT * FROM users WHERE email = 'a@b.c'`
+    ]
+    for (const message of prose) {
+      expect(sanitizeSentryEvent(frameEvent([], message)).exception?.values?.[0]?.value).toBe(
+        'redacted'
+      )
+    }
+  })
+})
+
+const authMocks = vi.hoisted(() => ({ token: null as string | null }))
+vi.mock('../auth', () => ({ getAuthToken: () => authMocks.token }))
+
+describe('SentryServiceModule attaches the account token only to attributed batches', () => {
+  beforeEach(() => {
+    networkRequestMock.mockReset()
+    authMocks.token = null
+  })
+
+  function outboxItem(id: number, events: Array<Record<string, unknown>>) {
+    return {
+      id,
+      endpoint: 'https://nexus.local/api/telemetry/batch',
+      payload: {
+        metadata: {
+          kind: 'sentry.nexus.batch',
+          idempotencyKey: `sentry:0000000${id}-0000-4000-8000-000000000000`
+        },
+        events
+      },
+      createdAt: id,
+      retryCount: 0,
+      lastError: null
+    }
+  }
+
+  async function flushWith(items: ReturnType<typeof outboxItem>[]) {
+    const { SentryServiceModule } = await import('./sentry-service')
+    const store = {
+      list: vi.fn(async () => items),
+      remove: vi.fn(async () => {}),
+      markAttempt: vi.fn(async () => {})
+    }
+    const service = new SentryServiceModule() as unknown as {
+      config: { enabled: boolean; anonymous: boolean }
+      getReportQueueStore: () => typeof store
+      flushQueuedNexusTelemetryOutbox: () => Promise<void>
+    }
+    service.getReportQueueStore = () => store
+    service.config = { enabled: true, anonymous: false }
+    networkRequestMock.mockResolvedValue({ status: 200, data: '' })
+    await service.flushQueuedNexusTelemetryOutbox()
+    return store
+  }
+
+  const headersOf = (call: number): Record<string, string> =>
+    (networkRequestMock.mock.calls[call]?.[0] as { headers: Record<string, string> }).headers
+
+  it('sends the bearer token with a batch holding a non-anonymous event, and nothing otherwise', async () => {
+    authMocks.token = 'tok-123'
+    const store = await flushWith([
+      outboxItem(1, [{ eventType: 'search', isAnonymous: false, userId: 'user_1' }]),
+      outboxItem(2, [{ eventType: 'search', isAnonymous: true }]),
+      outboxItem(3, [{ eventType: 'performance' }])
+    ])
+
+    expect(networkRequestMock).toHaveBeenCalledTimes(3)
+    expect(headersOf(0).Authorization).toBe('Bearer tok-123')
+    expect(headersOf(0)['X-Idempotency-Key']).toBe('sentry:00000001-0000-4000-8000-000000000000')
+    expect(headersOf(1).Authorization).toBeUndefined()
+    expect(headersOf(2).Authorization).toBeUndefined()
+    expect(store.remove).toHaveBeenCalledTimes(3)
+  })
+
+  it('uploads an attributed batch without a token when signed out, and strips a Bearer prefix', async () => {
+    await flushWith([outboxItem(1, [{ eventType: 'search', isAnonymous: false }])])
+    expect(headersOf(0).Authorization).toBeUndefined()
+
+    networkRequestMock.mockReset()
+    authMocks.token = 'Bearer already-prefixed'
+    await flushWith([outboxItem(1, [{ eventType: 'search', isAnonymous: false }])])
+    expect(headersOf(0).Authorization).toBe('Bearer already-prefixed')
+  })
+})
+
+describe('SentryServiceModule ends an outbox round on an endpoint-wide failure (2026-10-08)', () => {
+  beforeEach(() => {
+    networkRequestMock.mockReset()
+  })
+
+  function outboxItem(id: number) {
+    return {
+      id,
+      endpoint: 'https://nexus.local/api/telemetry/batch',
+      payload: {
+        metadata: {
+          kind: 'sentry.nexus.batch',
+          idempotencyKey: `sentry:0000000${id}-0000-4000-8000-000000000000`
+        },
+        events: [{ eventType: 'performance' }]
+      },
+      createdAt: id,
+      retryCount: 0,
+      lastError: null
+    }
+  }
+
+  async function createService(items: ReturnType<typeof outboxItem>[]) {
+    const { SentryServiceModule } = await import('./sentry-service')
+    const store = {
+      list: vi.fn(async () => items),
+      remove: vi.fn(async () => {}),
+      markAttempt: vi.fn(async () => {})
+    }
+    const service = new SentryServiceModule() as unknown as {
+      config: { enabled: boolean; anonymous: boolean }
+      getReportQueueStore: () => typeof store
+      flushQueuedNexusTelemetryOutbox: () => Promise<void>
+    }
+    service.getReportQueueStore = () => store
+    service.config = { enabled: true, anonymous: false }
+    return { service, store }
+  }
+
+  it.each([500, 503, 403, 429])(
+    'stops after one %i instead of sending every due batch into it',
+    async (status) => {
+      const { service, store } = await createService([outboxItem(1), outboxItem(2), outboxItem(3)])
+      networkRequestMock.mockResolvedValue({ status, data: '' })
+
+      await service.flushQueuedNexusTelemetryOutbox()
+
+      expect(networkRequestMock).toHaveBeenCalledTimes(1)
+      expect(store.markAttempt).toHaveBeenCalledOnce()
+      expect(store.markAttempt).toHaveBeenCalledWith(1, `HTTP_${status}`)
+      expect(store.remove).not.toHaveBeenCalled()
+
+      // The next interval lands inside the cooldown, so it sends nothing at all.
+      await service.flushQueuedNexusTelemetryOutbox()
+      expect(networkRequestMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('keeps going past a batch the server rejected as its own problem', async () => {
+    const { service, store } = await createService([outboxItem(1), outboxItem(2), outboxItem(3)])
+    networkRequestMock
+      .mockResolvedValueOnce({ status: 400, data: '' })
+      .mockResolvedValue({ status: 200, data: '' })
+
+    await service.flushQueuedNexusTelemetryOutbox()
+
+    expect(networkRequestMock).toHaveBeenCalledTimes(3)
+    expect(store.markAttempt).toHaveBeenCalledWith(1, 'HTTP_400')
+    expect(store.remove).toHaveBeenCalledTimes(2)
+  })
+})

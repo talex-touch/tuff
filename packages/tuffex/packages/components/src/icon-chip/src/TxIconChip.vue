@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<IconChipProps>(), {
   shape: 'square',
 })
 
-defineSlots<{
+const slots = defineSlots<{
   /** Chip contents — an inline SVG or short text. Overrides `label`. */
   default?: () => any
 }>()
@@ -35,6 +35,10 @@ const resolvedFontSize = computed(() =>
   props.fontSize !== undefined ? props.fontSize : Math.max(7, Math.round(props.size * 0.4)),
 )
 
+// The square holds three letters at the derived size; a longer label (`JSON`)
+// widens the plate instead of spilling past it. Slot content sizes itself.
+const isWide = computed(() => !slots.default && (props.label?.length ?? 0) > 3)
+
 const style = computed(() => ({
   '--tx-bui-icon-chip-size': `${props.size}px`,
   '--tx-bui-icon-chip-radius': resolvedRadius.value,
@@ -48,7 +52,7 @@ const style = computed(() => ({
     :class="[
       `is-${tone}`,
       `is-${variant}`,
-      { 'is-circle': shape === 'circle' },
+      { 'is-circle': shape === 'circle', 'is-wide': isWide },
     ]"
     :style="style"
     :role="ariaLabel ? 'img' : undefined"
@@ -76,6 +80,15 @@ const style = computed(() => ({
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.01em;
+
+  // Height, radius and font stay on the size ladder; only the width follows
+  // the label.
+  &.is-wide {
+    width: auto;
+    min-width: var(--tx-bui-icon-chip-size, 14px);
+    padding: 0 calc(var(--tx-bui-icon-chip-size, 14px) * 0.2);
+    white-space: nowrap;
+  }
 
   > svg {
     width: 62%;

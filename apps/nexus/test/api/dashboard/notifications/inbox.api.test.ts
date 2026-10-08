@@ -29,23 +29,41 @@ class MockStatement {
   }
 
   async run() {
+    this.db.queries += 1
     return this.db.run(this.sql, this.args)
   }
 
   async first<T = any>() {
+    this.db.queries += 1
     return this.db.first(this.sql, this.args) as T
   }
 
   async all<T = any>() {
+    this.db.queries += 1
     return { results: this.db.all(this.sql, this.args) as T[] }
+  }
+
+  /** What this statement contributes to a `batch`: rows, or the one count row. */
+  batchResult() {
+    return this.sql.includes('COUNT(*) AS count')
+      ? { results: [this.db.first(this.sql, this.args)] }
+      : { results: this.db.all(this.sql, this.args) }
   }
 }
 
 class MockD1Database {
   inbox = new Map<string, InboxRow>()
 
+  /** Round trips: one per statement run on its own, one per batch. */
+  queries = 0
+
   prepare(sql: string) {
     return new MockStatement(this, sql)
+  }
+
+  async batch(statements: MockStatement[]) {
+    this.queries += 1
+    return statements.map(statement => statement.batchResult())
   }
 
   run(sql: string, args: any[]) {
@@ -87,7 +105,8 @@ class MockD1Database {
     if (sql.includes('UPDATE browser_notification_inbox')) {
       const userId = String(args[0])
       const readAt = String(args[1])
-      const ids = new Set(args.slice(2).map(String))
+      // The selected ids arrive as one JSON array (`json_each`); marking all binds none.
+      const ids = new Set(args.length > 2 ? (JSON.parse(String(args[2])) as unknown[]).map(String) : [])
       let changes = 0
       for (const row of this.inbox.values()) {
         if (row.user_id !== userId || row.status !== 'unread')
@@ -156,6 +175,7 @@ vi.mock('../../../../server/utils/auth', () => authMocks)
 vi.mock('../../../../server/utils/cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../../server/utils/cloudflare')>()), readCloudflareBindings: () => state.db ? { DB: state.db } : undefined, }))
 
 let listInboxHandler: (event: any) => Promise<any>
+let unreadCountHandler: (event: any) => Promise<any>
 let markReadHandler: (event: any) => Promise<any>
 let storeBrowserNotification: typeof import('../../../../server/utils/browserNotificationInboxStore').storeBrowserNotification
 
@@ -165,6 +185,7 @@ beforeAll(async () => {
   storeBrowserNotification = store.storeBrowserNotification
   listInboxHandler = (await import('../../../../server/api/dashboard/notifications/inbox/index.get')).default as (event: any) => Promise<any>
   markReadHandler = (await import('../../../../server/api/dashboard/notifications/inbox/read.post')).default as (event: any) => Promise<any>
+  unreadCountHandler = (await import('../../../../server/api/dashboard/notifications/inbox/unread-count.get')).default as (event: any) => Promise<any>
 })
 
 function makeEvent() {
@@ -240,6 +261,37 @@ describe('/api/dashboard/notifications/inbox', () => {
         readAt: expect.any(String),
       }),
     ])
+  })
+
+  it('answers the nav badge with the unread count alone', async () => {
+    const event = makeEvent()
+    for (const userId of ['user_1', 'user_1', 'user_2']) {
+      await storeBrowserNotification(event, {
+        userId,
+        action: 'plugin.version.approved',
+        title: 'Plugin approved',
+        body: 'Tuff notification: plugin.version.approved',
+      })
+    }
+
+    await expect(unreadCountHandler(event)).resolves.toEqual({ unreadCount: 2 })
+  })
+
+  it('reads the page and the unread count in one batch', async () => {
+    const event = makeEvent()
+    await storeBrowserNotification(event, {
+      userId: 'user_1',
+      action: 'plugin.version.approved',
+      title: 'Plugin approved',
+      body: 'Tuff notification: plugin.version.approved',
+    })
+    const queriesBefore = state.db!.queries
+
+    const listed = await listInboxHandler(event)
+
+    expect(listed.unreadCount).toBe(1)
+    expect(listed.notifications).toHaveLength(1)
+    expect(state.db!.queries - queriesBefore).toBe(1)
   })
 
   it('rejects mark-read calls without ids or all=true', async () => {

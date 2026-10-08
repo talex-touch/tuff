@@ -101,7 +101,6 @@ function openClickMenu(event: MouseEvent) {
       :x="x"
       :y="y"
       :animation="animationOptions"
-      show-arrow
       @open="setAction(isZh ? '受控菜单已打开' : 'Controlled menu opened')"
     >
       <template #menu>
@@ -205,7 +204,6 @@ function openClickMenu(event: MouseEvent) {
         placement="bottom-start"
         :width="260"
         :panel-padding="6"
-        :show-arrow="true"
         :animation="{ type: 'transfer', duration: 180, closeDuration: 120 }"
       >
         <template #reference>

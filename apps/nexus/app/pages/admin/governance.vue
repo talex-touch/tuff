@@ -175,7 +175,18 @@ function emptyD1Readiness(): PlatformGovernanceD1Readiness {
   }
 }
 
-const { data: summaryData, pending: summaryPending, error: summaryError, refresh: refreshSummary } = await useAsyncData<GovernanceSummary>(
+/**
+ * The ten reads below used to be awaited one after another, so the console's route skeleton stayed up
+ * for the sum of their round trips — several seconds from CN — before this page mounted. They all start
+ * at once now, and the page waits once, for the slowest (after the last of them).
+ */
+const governanceRequests: Array<Promise<unknown>> = []
+function startGovernanceRequest<T extends Promise<unknown>>(request: T): T {
+  governanceRequests.push(request)
+  return request
+}
+
+const { data: summaryData, pending: summaryPending, error: summaryError, refresh: refreshSummary } = startGovernanceRequest(useAsyncData<GovernanceSummary>(
   'dashboard-governance-summary',
   async () => await requestJson<GovernanceSummary>('/api/dashboard/governance/summary', {
     query: {
@@ -198,25 +209,25 @@ const { data: summaryData, pending: summaryPending, error: summaryError, refresh
     }),
     server: false,
   },
-)
+))
 
-const { data: configsData, pending: configsPending, error: configsError, refresh: refreshConfigs } = await useAsyncData<ConfigListResponse>(
+const { data: configsData, pending: configsPending, error: configsError, refresh: refreshConfigs } = startGovernanceRequest(useAsyncData<ConfigListResponse>(
   'dashboard-governance-configs',
   async () => await requestJson<ConfigListResponse>('/api/dashboard/governance/configs'),
   {
     default: () => ({ configs: [], generatedAt: '' }),
     server: false,
   },
-)
+))
 
-const { data: d1ReadinessData, pending: d1ReadinessPending, error: d1ReadinessError, refresh: refreshD1Readiness } = await useAsyncData<PlatformGovernanceD1Readiness>(
+const { data: d1ReadinessData, pending: d1ReadinessPending, error: d1ReadinessError, refresh: refreshD1Readiness } = startGovernanceRequest(useAsyncData<PlatformGovernanceD1Readiness>(
   'dashboard-governance-d1-readiness',
   async () => await requestJson<PlatformGovernanceD1Readiness>('/api/dashboard/governance/d1-readiness'),
   {
     default: emptyD1Readiness,
     server: false,
   },
-)
+))
 
 function emptyScopedAnalytics(): GovernanceScopedAnalytics {
   return {
@@ -284,7 +295,7 @@ function emptyStorageChannelAnalytics(): StorageChannelAnalyticsResponse {
   }
 }
 
-const { data: analyticsData, pending: analyticsPending, error: analyticsError, refresh: refreshAnalytics } = await useAsyncData<GovernanceAnalytics>(
+const { data: analyticsData, pending: analyticsPending, error: analyticsError, refresh: refreshAnalytics } = startGovernanceRequest(useAsyncData<GovernanceAnalytics>(
   'dashboard-governance-analytics',
   async () => await requestJson<GovernanceAnalytics>('/api/dashboard/governance/analytics', {
     query: {
@@ -622,7 +633,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
     }),
     server: false,
   },
-)
+))
 
 function emptyGovernanceReportSnapshot(): PlatformGovernanceReportSnapshot {
   return {
@@ -651,7 +662,7 @@ function emptyGovernanceReportSnapshot(): PlatformGovernanceReportSnapshot {
   }
 }
 
-const { data: reportData, pending: reportPending, error: reportError, refresh: refreshReport } = await useAsyncData<PlatformGovernanceReportSnapshot>(
+const { data: reportData, pending: reportPending, error: reportError, refresh: refreshReport } = startGovernanceRequest(useAsyncData<PlatformGovernanceReportSnapshot>(
   'dashboard-governance-report',
   async () => await requestJson<PlatformGovernanceReportSnapshot>('/api/dashboard/governance/report', {
     query: {
@@ -664,9 +675,9 @@ const { data: reportData, pending: reportPending, error: reportError, refresh: r
     default: emptyGovernanceReportSnapshot,
     server: false,
   },
-)
+))
 
-const { data: storagePoliciesData, pending: storagePoliciesPending, error: storagePoliciesError, refresh: refreshStoragePolicies } = await useAsyncData<StoragePoliciesResponse>(
+const { data: storagePoliciesData, pending: storagePoliciesPending, error: storagePoliciesError, refresh: refreshStoragePolicies } = startGovernanceRequest(useAsyncData<StoragePoliciesResponse>(
   'dashboard-governance-storage-policies',
   async () => await requestJson<StoragePoliciesResponse>('/api/dashboard/storage/policies', {
     query: {
@@ -684,9 +695,9 @@ const { data: storagePoliciesData, pending: storagePoliciesPending, error: stora
     }),
     server: false,
   },
-)
+))
 
-const { data: storageCredentialsData, pending: storageCredentialsPending, error: storageCredentialsError, refresh: refreshStorageCredentials } = await useAsyncData<StorageCredentialsResponse>(
+const { data: storageCredentialsData, pending: storageCredentialsPending, error: storageCredentialsError, refresh: refreshStorageCredentials } = startGovernanceRequest(useAsyncData<StorageCredentialsResponse>(
   'dashboard-governance-storage-credentials',
   async () => await requestJson<StorageCredentialsResponse>('/api/dashboard/storage/credentials'),
   {
@@ -696,9 +707,9 @@ const { data: storageCredentialsData, pending: storageCredentialsPending, error:
     }),
     server: false,
   },
-)
+))
 
-const { data: notificationCredentialsData, pending: notificationCredentialsPending, error: notificationCredentialsError, refresh: refreshNotificationCredentials } = await useAsyncData<NotificationCredentialsResponse>(
+const { data: notificationCredentialsData, pending: notificationCredentialsPending, error: notificationCredentialsError, refresh: refreshNotificationCredentials } = startGovernanceRequest(useAsyncData<NotificationCredentialsResponse>(
   'dashboard-governance-notification-credentials',
   async () => await requestJson<NotificationCredentialsResponse>('/api/dashboard/notifications/credentials'),
   {
@@ -708,9 +719,9 @@ const { data: notificationCredentialsData, pending: notificationCredentialsPendi
     }),
     server: false,
   },
-)
+))
 
-const { data: notificationChannelsData, pending: notificationChannelsPending, error: notificationChannelsError, refresh: refreshNotificationChannels } = await useAsyncData<NotificationChannelsResponse>(
+const { data: notificationChannelsData, pending: notificationChannelsPending, error: notificationChannelsError, refresh: refreshNotificationChannels } = startGovernanceRequest(useAsyncData<NotificationChannelsResponse>(
   'dashboard-governance-notification-channels',
   async () => await requestJson<NotificationChannelsResponse>('/api/dashboard/notifications/channels'),
   {
@@ -722,7 +733,7 @@ const { data: notificationChannelsData, pending: notificationChannelsPending, er
     }),
     server: false,
   },
-)
+))
 
 const configs = computed(() => configsData.value?.configs ?? [])
 const storageEvaluations = computed(() => storagePoliciesData.value?.evaluations ?? [])
@@ -806,17 +817,22 @@ const storageChannelAnalyticsQuery = computed(() => ({
   channel: selectedStorageProfile.value?.channel || storageForm.channel || undefined,
   provider: selectedStorageProfile.value?.provider || storageForm.provider || undefined,
 }))
-const { data: storageChannelAnalyticsData, pending: storageChannelAnalyticsPending, error: storageChannelAnalyticsError, refresh: refreshStorageChannelAnalytics } = await useAsyncData<StorageChannelAnalyticsResponse>(
+// Watched by value: the storage profiles land after this read has started, and the default profile
+// they resolve to names the same channel the form already did — a new object, not a new query.
+const storageChannelAnalyticsQueryKey = computed(() => JSON.stringify(storageChannelAnalyticsQuery.value))
+const { data: storageChannelAnalyticsData, pending: storageChannelAnalyticsPending, error: storageChannelAnalyticsError, refresh: refreshStorageChannelAnalytics } = startGovernanceRequest(useAsyncData<StorageChannelAnalyticsResponse>(
   'dashboard-governance-storage-channel-analytics',
   async () => await requestJson<StorageChannelAnalyticsResponse>('/api/dashboard/storage/channels/analytics', {
     query: storageChannelAnalyticsQuery.value,
   }),
   {
-    watch: [storageChannelAnalyticsQuery],
+    watch: [storageChannelAnalyticsQueryKey],
     default: emptyStorageChannelAnalytics,
     server: false,
   },
-)
+))
+
+await Promise.all(governanceRequests)
 const selectedStorageChannelAnalytics = computed(() => storageChannelAnalyticsData.value ?? emptyStorageChannelAnalytics())
 const governancePagePending = computed(() => mounted.value && (summaryPending.value || configsPending.value || analyticsPending.value || reportPending.value || storagePoliciesPending.value || storageChannelAnalyticsPending.value || storageCredentialsPending.value || notificationCredentialsPending.value || notificationChannelsPending.value || d1ReadinessPending.value))
 const reportHydratedPending = computed(() => mounted.value && reportPending.value)

@@ -1,6 +1,6 @@
 ---
 title: 基础套件
-description: 日常界面的主体组件：通用、表单、布局、导航、数据展示、反馈与状态占位
+description: 通用、表单、布局、导航、数据展示、反馈与状态组件
 category: BaseSuite
 status: beta
 since: 0.3.9
@@ -9,13 +9,19 @@ syncStatus: reviewed
 verified: false
 ---
 
-## 用法
+## 安装
 
-每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxButton, TuffSwitch } from '@talex-touch/tuffex/base'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+---
+:::
+
+## 用法
 
 ::DocsComponentsGallery{suite="base"}
 ::
-
-## 概述
-
-基础套件是日常界面的主体，七个分组从原子到路径逐层展开：**通用**（按钮、图标、头像、徽标）、**表单**（输入、选择、日期、开关、上传）、**布局**（容器、栅格、卡片）、**导航**（标签页、面包屑、菜单）、**数据展示**（表格、树形、时间线）、**反馈**（弹窗、抽屉、进度）与**状态占位**（空态、错误、骨架屏）。全部组件经 `@talex-touch/tuffex/base` 分类入口按需引入。

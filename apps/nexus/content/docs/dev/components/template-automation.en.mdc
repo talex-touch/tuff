@@ -1,6 +1,6 @@
 ---
 title: Automation
-description: An automation editor with a flow canvas, per-node settings, an animated run, run history and a log
+description: An automation editor with a flow canvas, node settings, and a run log.
 category: TemplateData
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Clipboard OCR → Translate
-
-:::TuffDemoWrapper{demo="TemplateAutomationDemo" code-lang="vue" title="Clipboard OCR → Translate" description="Runs once when it scrolls into view. Raise the minimum confidence to send the next run through the AI re-read, or simulate a rate limit to watch the retry."}
+:::TuffDemoWrapper{demo="TemplateAutomationDemo" code-lang="vue" description="Runs once in view; change a node's settings and press Run again."}
 ---
 code: |
   <script setup lang="ts">
@@ -83,32 +82,30 @@ code: |
 
 ## Overview
 
-Tuff's screenshot OCR is exactly this flow: when an image is copied, the system's own OCR reads it first, an AI model re-reads it only when the native engine is not confident enough, the text is translated, and the translation goes back on the clipboard with a notification. This template draws it as an automation you can edit and run: the flow canvas in the middle, node settings and the current run on the right, and in the wide layout a run history and a resizable log pane.
+Tuff's screenshot OCR flow as an automation you can edit and run: an AI re-read when native OCR isn't confident enough, then a translation back to the clipboard.
 
-It fits workflow editors in the Zapier / n8n mould, CI pipelines, approval flows, and any screen where people set up a chain of steps and then watch it run.
-
-- The first time the template scrolls into view it runs once, in about 3.3 seconds: nodes go running, then done, and the edges the data travels along move; the side panel switches to This run and the log fills in line by line. With reduced motion the finished run is shown straight away and no timer starts.
-- Click a node to edit it; changes apply to the next run. Apple Vision reads the sample screenshot at 93% confidence, so set Native OCR's minimum confidence to 94% or more and press Run: this time the run detours through the AI re-read on the right. Otherwise that node shows Skipped.
-- Turn on Simulate rate limit (429) on the Translate node: in the next run translation fails first, retries after 600ms and succeeds, and the history records it as retried.
-- Stop a run while it is going: the step in progress is marked cancelled and the log gains a `cancelled by user` line.
-- Nodes can be dragged and snap to the dot grid. The layout is recomputed from the canvas size and a drag is kept as an offset, so it survives going full screen.
-- Wide (≥ 960px) shows the run history, the four-step progress and the log pane. In the column and on narrow screens, Node and This run become tabs in the side panel, and narrow stacks that panel under the canvas.
+- The first time it scrolls into view it runs once (about 3.3 seconds), and the edges the data travels along move; reduced motion shows the finished run with no timers.
+- Click a node to edit it for the next run; set Native OCR's minimum confidence to 94% or more (the sample reads 93%) and the run detours through the AI re-read.
+- With Simulate rate limit (429) on the Translate node, translation fails first and succeeds on a retry 600ms later.
+- Stop marks the step in progress as cancelled and adds a `cancelled by user` log line.
+- Nodes drag and snap to the dot grid; a drag is kept as an offset, so it survives full screen.
+- Wide (≥ 960px) shows the run history, four-step progress, and the log pane; in the column and on narrow screens, Node and This run become tabs.
 
 ## Customization
 
-- Use your own flow: nodes and edges are plain arrays, and `flowNodes()` only turns the canvas size into coordinates. TxFlowchart always connects the bottom of one node to the top of the next, so a branch node has to sit to the side, letting the edge that skips it run straight past.
-- Wire it to a real runner: replace the timed steps `buildPlan()` lays out with events pushed from the backend (SSE or WebSocket). Each event calls `setNode()` once and appends a log line; the rest of the screen is derived from those states.
-- TxFlowchart has no per-edge styling API. The template borrows `dashed` to mean "in flight" and puts the colour and the motion in its own CSS, inside `prefers-reduced-motion: no-preference`.
-- TxFlatSelect and the fine-tune card's type menu do not teleport. Keep them where no `overflow: hidden` ancestor can clip them and well away from the container's bottom edge.
+- For your own flow, nodes and edges are plain arrays and `flowNodes()` only computes coordinates; edges always run from a node's bottom to the next node's top, so offset branch nodes sideways.
+- For a real runner, replace the timed steps in `buildPlan()` with backend events (SSE or WebSocket); each event calls `setNode()` once and appends a log line.
+- TxFlowchart has no per-edge styling API: the template borrows `dashed` for "in flight" and keeps the color and motion inside `prefers-reduced-motion: no-preference`.
+- TxFlatSelect and the fine-tune card's type menu don't teleport; keep them clear of `overflow: hidden` ancestors and away from the container's bottom edge.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Top bar | [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxSteps](/docs/dev/components/steps), [TxSwitch](/docs/dev/components/switch), [TxButton](/docs/dev/components/button) | A running timer or the last result; four-step progress when wide; the auto-run switch; Run / Stop |
-| Canvas | [TxFlowchart](/docs/dev/components/flowchart), [TxStatusBadge](/docs/dev/components/status-badge), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxDotIndicator](/docs/dev/components/dot-indicator) | Five nodes top to bottom, each card drawing its own run state; the edge carrying the payload is a moving dashed line |
-| Node settings | [TxFlatSelect](/docs/dev/components/flat-select), [TxScrubField](/docs/dev/components/scrub-field), [TxSwitch](/docs/dev/components/switch), [TxFineTuneCard](/docs/dev/components/fine-tune-card), [TxToastPanel](/docs/dev/components/toast-panel) | A form per node; the notify node styles its notification with the fine-tune card and previews it live underneath |
-| This run | [TxTaskRows](/docs/dev/components/task-rows), [TxCodeStream](/docs/dev/components/code-stream) | Each step's state, output and expandable details; a run log that appears line by line |
-| Run history (wide) | [TxTimeline](/docs/dev/components/timeline) | Outcome and duration of recent runs, newest first |
-| Log pane (wide) | [TxSplitter](/docs/dev/components/splitter) | Drag the divider to trade canvas height for log height; the nodes re-space to fit |
-| Completion | [TxToastPanel](/docs/dev/components/toast-panel) | A result card hanging from the Run button, gone after four seconds |
+| Top bar | [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxSteps](/docs/dev/components/steps), [TxSwitch](/docs/dev/components/switch), [TxButton](/docs/dev/components/button) | State, progress, and Run / Stop |
+| Canvas | [TxFlowchart](/docs/dev/components/flowchart), [TxStatusBadge](/docs/dev/components/status-badge), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxDotIndicator](/docs/dev/components/dot-indicator) | Five nodes and moving edges |
+| Node settings | [TxFlatSelect](/docs/dev/components/flat-select), [TxScrubField](/docs/dev/components/scrub-field), [TxSwitch](/docs/dev/components/switch), [TxFineTuneCard](/docs/dev/components/fine-tune-card), [TxToastPanel](/docs/dev/components/toast-panel) | A form per node |
+| This run | [TxTaskRows](/docs/dev/components/task-rows), [TxCodeStream](/docs/dev/components/code-stream) | Step states and run log |
+| Run history (wide) | [TxTimeline](/docs/dev/components/timeline) | Recent runs, newest first |
+| Log pane (wide) | [TxSplitter](/docs/dev/components/splitter) | Canvas and log heights |
+| Completion | [TxToastPanel](/docs/dev/components/toast-panel) | Result card for four seconds |

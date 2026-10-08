@@ -11,7 +11,7 @@ const open = ref(false)
 const background = ref<PanelBackground>('refraction')
 const placement = ref<PopoverPlacement>('bottom-start')
 const trigger = ref<PopoverTrigger>('click')
-const showArrow = ref(true)
+const showArrow = ref(false)
 const keepAliveContent = ref(true)
 
 const labels = computed(() => {
@@ -100,6 +100,7 @@ const labels = computed(() => {
         :panel-background="background"
         panel-shadow="soft"
         :panel-padding="12"
+        :width="284"
       >
         <template #reference>
           <TxButton>{{ trigger === 'hover' ? labels.referenceHover : labels.referenceClick }}</TxButton>

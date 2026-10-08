@@ -1,9 +1,10 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readCloudflareBindings } from './cloudflare'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const DOC_VIEWS_TABLE = 'doc_views'
 const DOC_VIEWS_DAILY_TABLE = 'doc_views_daily'
@@ -27,7 +28,6 @@ const TOKEN_TTL_SECONDS = 15 * 60
 const EVIDENCE_RETENTION_DAYS = 90
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60_000
 
-let analyticsSchemaInitialized = false
 let analyticsCleanupAt = 0
 
 export type DocEngagementSourceType = 'docs_page' | 'doc_comments_admin'
@@ -328,281 +328,236 @@ function computeBlockMs(violationCount: number): number {
   return Math.min(BASE_BLOCK_MS * 2 ** exp, MAX_BLOCK_MS)
 }
 
-async function ensureDocViewsColumns(db: D1Database) {
-  const { results } = await db.prepare(`PRAGMA table_info(${DOC_VIEWS_TABLE});`).all<{ name?: string }>()
-  const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
-  const addColumn = async (name: string, ddl: string) => {
-    if (!columns.has(name))
-      await db.prepare(`ALTER TABLE ${DOC_VIEWS_TABLE} ADD COLUMN ${ddl};`).run()
-  }
-  await addColumn('title', 'title TEXT')
-  await addColumn('session_count', 'session_count INTEGER NOT NULL DEFAULT 0')
-  await addColumn('active_ms', 'active_ms INTEGER NOT NULL DEFAULT 0')
-  await addColumn('total_ms', 'total_ms INTEGER NOT NULL DEFAULT 0')
-  await addColumn('copy_count', 'copy_count INTEGER NOT NULL DEFAULT 0')
-  await addColumn('select_count', 'select_count INTEGER NOT NULL DEFAULT 0')
-  await addColumn('last_view_at', 'last_view_at INTEGER')
-  await addColumn('last_read_at', 'last_read_at INTEGER')
-}
-
-async function ensureSessionColumns(db: D1Database) {
-  const { results } = await db.prepare(`PRAGMA table_info(${DOC_SESSION_TABLE});`).all<{ name?: string }>()
-  const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
-  const addColumn = async (name: string, ddl: string) => {
-    if (!columns.has(name))
-      await db.prepare(`ALTER TABLE ${DOC_SESSION_TABLE} ADD COLUMN ${ddl};`).run()
-  }
-  await addColumn('challenge_id', 'challenge_id TEXT')
-  await addColumn('source_type', `source_type TEXT NOT NULL DEFAULT 'docs_page'`)
-}
-
-async function ensureColumns(
-  db: D1Database,
-  table: string,
-  definitions: Array<{ name: string, ddl: string }>,
-) {
-  const { results } = await db.prepare(`PRAGMA table_info(${table});`).all<{ name?: string }>()
-  const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
-  for (const definition of definitions) {
-    if (!columns.has(definition.name))
-      await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition.ddl};`).run()
-  }
-}
+const DOC_ANALYTICS_SCHEMA = defineD1Schema('doc-analytics', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${DOC_VIEWS_TABLE} (
+        path TEXT PRIMARY KEY,
+        title TEXT,
+        views INTEGER NOT NULL DEFAULT 0,
+        session_count INTEGER NOT NULL DEFAULT 0,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        copy_count INTEGER NOT NULL DEFAULT 0,
+        select_count INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        last_view_at INTEGER,
+        last_read_at INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_VIEWS_DAILY_TABLE} (
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        title TEXT,
+        views INTEGER NOT NULL DEFAULT 0,
+        session_count INTEGER NOT NULL DEFAULT 0,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        copy_count INTEGER NOT NULL DEFAULT 0,
+        select_count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (date, path)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_SECTION_TABLE} (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        last_read_at INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_SECTION_DAILY_TABLE} (
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        last_read_at INTEGER,
+        PRIMARY KEY (date, path, section_id)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_ACTION_TABLE} (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        count INTEGER NOT NULL DEFAULT 0,
+        last_action_at INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_ACTION_DAILY_TABLE} (
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        count INTEGER NOT NULL DEFAULT 0,
+        last_action_at INTEGER,
+        PRIMARY KEY (date, path, action_type, source_type, section_id)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_TABLE} (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        bucket INTEGER NOT NULL,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        last_read_at INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_DAILY_TABLE} (
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        bucket INTEGER NOT NULL,
+        active_ms INTEGER NOT NULL DEFAULT 0,
+        total_ms INTEGER NOT NULL DEFAULT 0,
+        last_read_at INTEGER,
+        PRIMARY KEY (date, path, source_type, section_id, bucket)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_TABLE} (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        action_source TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        text_hash TEXT,
+        text_length INTEGER,
+        anchor_start INTEGER,
+        anchor_end INTEGER,
+        anchor_bucket INTEGER,
+        count INTEGER NOT NULL DEFAULT 0,
+        last_action_at INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_DAILY_TABLE} (
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        action_source TEXT NOT NULL,
+        section_id TEXT NOT NULL,
+        section_title TEXT,
+        text_hash TEXT,
+        text_length INTEGER,
+        anchor_start INTEGER,
+        anchor_end INTEGER,
+        anchor_bucket INTEGER,
+        count INTEGER NOT NULL DEFAULT 0,
+        last_action_at INTEGER,
+        PRIMARY KEY (date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_SESSION_TABLE} (
+        session_id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'docs_page',
+        client_id TEXT NOT NULL,
+        ip TEXT,
+        risk_level INTEGER NOT NULL DEFAULT 0,
+        issued_at INTEGER NOT NULL,
+        expect_report_at INTEGER NOT NULL,
+        reported_at INTEGER,
+        status TEXT NOT NULL,
+        challenge_id TEXT
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_NONCE_TABLE} (
+        nonce_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        nonce_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_doc_nonce_hash ON ${DOC_NONCE_TABLE}(nonce_hash)`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_CHALLENGE_TABLE} (
+        challenge_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        seed TEXT NOT NULL,
+        difficulty INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DOC_SECURITY_TABLE} (
+        ip TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        violation_count INTEGER NOT NULL DEFAULT 0,
+        risk_level INTEGER NOT NULL DEFAULT 0,
+        blocked_until INTEGER,
+        last_violation_at INTEGER,
+        PRIMARY KEY (ip, client_id)
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_heatmap_path ON ${DOC_HEATMAP_TABLE}(path, source_type, active_ms DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_evidence_path ON ${DOC_EVIDENCE_TABLE}(path, source_type, action_type, count DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_session_source ON ${DOC_SESSION_TABLE}(source_type, path, issued_at DESC)`,
+    // `expirePendingSessions` looks sessions up by owner on every docs view; none of the indexes led
+    // with it, so it read every session ever issued (2,022 rows a run in production, and growing).
+    `CREATE INDEX IF NOT EXISTS idx_doc_session_pending_owner ON ${DOC_SESSION_TABLE}(ip, client_id, expect_report_at) WHERE status = 'pending'`,
+  ],
+  columns: [
+    {
+      table: DOC_VIEWS_TABLE,
+      columns: [
+        { name: 'title', ddl: 'title TEXT' },
+        { name: 'session_count', ddl: 'session_count INTEGER NOT NULL DEFAULT 0' },
+        { name: 'active_ms', ddl: 'active_ms INTEGER NOT NULL DEFAULT 0' },
+        { name: 'total_ms', ddl: 'total_ms INTEGER NOT NULL DEFAULT 0' },
+        { name: 'copy_count', ddl: 'copy_count INTEGER NOT NULL DEFAULT 0' },
+        { name: 'select_count', ddl: 'select_count INTEGER NOT NULL DEFAULT 0' },
+        { name: 'last_view_at', ddl: 'last_view_at INTEGER' },
+        { name: 'last_read_at', ddl: 'last_read_at INTEGER' },
+      ],
+    },
+    {
+      table: DOC_EVIDENCE_TABLE,
+      columns: [
+        { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
+        { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
+      ],
+    },
+    {
+      table: DOC_EVIDENCE_DAILY_TABLE,
+      columns: [
+        { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
+        { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
+      ],
+    },
+    {
+      table: DOC_SESSION_TABLE,
+      columns: [
+        { name: 'challenge_id', ddl: 'challenge_id TEXT' },
+        { name: 'source_type', ddl: "source_type TEXT NOT NULL DEFAULT 'docs_page'" },
+      ],
+    },
+  ],
+})
 
 export async function ensureDocAnalyticsSchema(db: D1Database) {
-  if (analyticsSchemaInitialized)
-    return
+  await ensureD1Schema(db, DOC_ANALYTICS_SCHEMA)
+}
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_VIEWS_TABLE} (
-      path TEXT PRIMARY KEY,
-      title TEXT,
-      views INTEGER NOT NULL DEFAULT 0,
-      session_count INTEGER NOT NULL DEFAULT 0,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      copy_count INTEGER NOT NULL DEFAULT 0,
-      select_count INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL,
-      last_view_at INTEGER,
-      last_read_at INTEGER
-    );
-  `).run()
+/** How long engagement sessions, their nonces and challenges are kept: far past the ten-minute report window. */
+const DOC_ENGAGEMENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
-  await ensureDocViewsColumns(db)
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_VIEWS_DAILY_TABLE} (
-      date TEXT NOT NULL,
-      path TEXT NOT NULL,
-      title TEXT,
-      views INTEGER NOT NULL DEFAULT 0,
-      session_count INTEGER NOT NULL DEFAULT 0,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      copy_count INTEGER NOT NULL DEFAULT 0,
-      select_count INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (date, path)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_SECTION_TABLE} (
-      id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      view_count INTEGER NOT NULL DEFAULT 0,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      last_read_at INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_SECTION_DAILY_TABLE} (
-      date TEXT NOT NULL,
-      path TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      view_count INTEGER NOT NULL DEFAULT 0,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      last_read_at INTEGER,
-      PRIMARY KEY (date, path, section_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_ACTION_TABLE} (
-      id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      action_type TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      count INTEGER NOT NULL DEFAULT 0,
-      last_action_at INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_ACTION_DAILY_TABLE} (
-      date TEXT NOT NULL,
-      path TEXT NOT NULL,
-      action_type TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      count INTEGER NOT NULL DEFAULT 0,
-      last_action_at INTEGER,
-      PRIMARY KEY (date, path, action_type, source_type, section_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_TABLE} (
-      id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      bucket INTEGER NOT NULL,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      last_read_at INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_DAILY_TABLE} (
-      date TEXT NOT NULL,
-      path TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      bucket INTEGER NOT NULL,
-      active_ms INTEGER NOT NULL DEFAULT 0,
-      total_ms INTEGER NOT NULL DEFAULT 0,
-      last_read_at INTEGER,
-      PRIMARY KEY (date, path, source_type, section_id, bucket)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_TABLE} (
-      id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      action_type TEXT NOT NULL,
-      action_source TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      text_hash TEXT,
-      text_length INTEGER,
-      anchor_start INTEGER,
-      anchor_end INTEGER,
-      anchor_bucket INTEGER,
-      count INTEGER NOT NULL DEFAULT 0,
-      last_action_at INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_DAILY_TABLE} (
-      date TEXT NOT NULL,
-      path TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      action_type TEXT NOT NULL,
-      action_source TEXT NOT NULL,
-      section_id TEXT NOT NULL,
-      section_title TEXT,
-      text_hash TEXT,
-      text_length INTEGER,
-      anchor_start INTEGER,
-      anchor_end INTEGER,
-      anchor_bucket INTEGER,
-      count INTEGER NOT NULL DEFAULT 0,
-      last_action_at INTEGER,
-      PRIMARY KEY (date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket)
-    );
-  `).run()
-
-  await ensureColumns(db, DOC_EVIDENCE_TABLE, [
-    { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
-    { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
+/**
+ * Deletes engagement sessions, nonces and challenges older than the retention window, in one round
+ * trip. Nothing deleted them before: the sessions table only grew, and with it the work behind every
+ * page view's check for the client's overdue sessions. Run by the scheduled maintenance Worker.
+ */
+export async function cleanupDocEngagementRecords(db: D1Database, now = Date.now()) {
+  await ensureDocAnalyticsSchema(db)
+  const cutoff = now - DOC_ENGAGEMENT_RETENTION_MS
+  const [sessions, nonces, challenges] = await db.batch([
+    db.prepare(`DELETE FROM ${DOC_SESSION_TABLE} WHERE issued_at < ?1;`).bind(cutoff),
+    db.prepare(`DELETE FROM ${DOC_NONCE_TABLE} WHERE created_at < ?1;`).bind(cutoff),
+    db.prepare(`DELETE FROM ${DOC_CHALLENGE_TABLE} WHERE created_at < ?1;`).bind(cutoff),
   ])
-  await ensureColumns(db, DOC_EVIDENCE_DAILY_TABLE, [
-    { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
-    { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
-  ])
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_SESSION_TABLE} (
-      session_id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      source_type TEXT NOT NULL DEFAULT 'docs_page',
-      client_id TEXT NOT NULL,
-      ip TEXT,
-      risk_level INTEGER NOT NULL DEFAULT 0,
-      issued_at INTEGER NOT NULL,
-      expect_report_at INTEGER NOT NULL,
-      reported_at INTEGER,
-      status TEXT NOT NULL,
-      challenge_id TEXT
-    );
-  `).run()
-
-  await ensureSessionColumns(db)
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_NONCE_TABLE} (
-      nonce_id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      nonce_hash TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_doc_nonce_hash ON ${DOC_NONCE_TABLE}(nonce_hash);
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_CHALLENGE_TABLE} (
-      challenge_id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      seed TEXT NOT NULL,
-      difficulty INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_SECURITY_TABLE} (
-      ip TEXT NOT NULL,
-      client_id TEXT NOT NULL,
-      violation_count INTEGER NOT NULL DEFAULT 0,
-      risk_level INTEGER NOT NULL DEFAULT 0,
-      blocked_until INTEGER,
-      last_violation_at INTEGER,
-      PRIMARY KEY (ip, client_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_heatmap_path ON ${DOC_HEATMAP_TABLE}(path, source_type, active_ms DESC);
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_evidence_path ON ${DOC_EVIDENCE_TABLE}(path, source_type, action_type, count DESC);
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_session_source ON ${DOC_SESSION_TABLE}(source_type, path, issued_at DESC);
-  `).run()
-
-  analyticsSchemaInitialized = true
+  const changes = (result: { meta?: { changes?: number } } | undefined) => Number(result?.meta?.changes ?? 0)
+  return { sessions: changes(sessions), nonces: changes(nonces), challenges: changes(challenges) }
 }
 
 export async function getDocSecurityState(db: D1Database, ip: string, clientId: string): Promise<DocSecurityState | null> {
@@ -642,57 +597,26 @@ export async function recordDocViolation(
   return { violationCount: nextCount, riskLevel, blockedUntil }
 }
 
+/**
+ * Expires up to 20 of the client's overdue pending sessions and says how many. One statement: it was a
+ * read and then an update by id, so two requests at once could both count the same sessions.
+ */
 export async function expirePendingSessions(
   db: D1Database,
   params: { ip: string, clientId: string, now: number },
 ): Promise<number> {
   const { results } = await db.prepare(`
-    SELECT session_id FROM ${DOC_SESSION_TABLE}
-    WHERE ip = ?1 AND client_id = ?2 AND status = 'pending' AND expect_report_at < ?3
-    LIMIT 20;
-  `).bind(params.ip, params.clientId, params.now).all<{ session_id: string }>()
-
-  const ids = (results ?? []).map(item => item.session_id).filter(Boolean)
-  if (!ids.length)
-    return 0
-
-  const placeholders = ids.map(() => '?').join(',')
-  await db.prepare(`
     UPDATE ${DOC_SESSION_TABLE}
     SET status = 'expired'
-    WHERE session_id IN (${placeholders});
-  `).bind(...ids).run()
+    WHERE session_id IN (
+      SELECT session_id FROM ${DOC_SESSION_TABLE}
+      WHERE ip = ?1 AND client_id = ?2 AND status = 'pending' AND expect_report_at < ?3
+      LIMIT 20
+    )
+    RETURNING session_id;
+  `).bind(params.ip, params.clientId, params.now).all<{ session_id: string }>()
 
-  return ids.length
-}
-
-export async function createDocEngagementSession(
-  db: D1Database,
-  params: { path: string, sourceType: DocEngagementSourceType, clientId: string, ip: string | null, riskLevel: number, ttlMs: number },
-): Promise<DocEngagementSession> {
-  const sessionId = randomUUID()
-  const issuedAt = Date.now()
-  const expectReportAt = issuedAt + params.ttlMs
-
-  await db.prepare(`
-    INSERT INTO ${DOC_SESSION_TABLE} (
-      session_id, path, source_type, client_id, ip, risk_level, issued_at, expect_report_at, status
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending');
-  `).bind(sessionId, params.path, params.sourceType, params.clientId, params.ip, params.riskLevel, issuedAt, expectReportAt).run()
-
-  return {
-    sessionId,
-    path: params.path,
-    sourceType: params.sourceType,
-    clientId: params.clientId,
-    ip: params.ip,
-    riskLevel: params.riskLevel,
-    issuedAt,
-    expectReportAt,
-    reportedAt: null,
-    status: 'pending',
-    challengeId: null,
-  }
+  return results?.length ?? 0
 }
 
 export async function getDocEngagementSession(
@@ -730,37 +654,6 @@ export async function markDocSessionReported(db: D1Database, sessionId: string) 
     SET status = 'reported', reported_at = ?2
     WHERE session_id = ?1;
   `).bind(sessionId, Date.now()).run()
-}
-
-export async function createDocChallenge(
-  db: D1Database,
-  params: { sessionId: string, riskLevel: number, ttlMs: number },
-): Promise<DocEngagementChallenge> {
-  const challengeId = randomUUID()
-  const seed = randomBytes(16).toString('hex')
-  const difficulty = params.riskLevel >= 2 ? 3 : 0
-  const now = Date.now()
-  const expiresAt = now + params.ttlMs
-
-  await db.prepare(`
-    INSERT INTO ${DOC_CHALLENGE_TABLE} (challenge_id, session_id, seed, difficulty, created_at, expires_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6);
-  `).bind(challengeId, params.sessionId, seed, difficulty, now, expiresAt).run()
-
-  await db.prepare(`
-    UPDATE ${DOC_SESSION_TABLE}
-    SET challenge_id = ?2
-    WHERE session_id = ?1;
-  `).bind(params.sessionId, challengeId).run()
-
-  return {
-    challengeId,
-    sessionId: params.sessionId,
-    seed,
-    difficulty,
-    createdAt: now,
-    expiresAt,
-  }
 }
 
 export async function getDocChallenge(
@@ -801,39 +694,132 @@ export async function registerDocNonce(
   return Boolean(result?.meta?.changes)
 }
 
+/** The page's view counters, the first answering with the page's views: for callers batching them. */
+function prepareDocViewCount(db: D1Database, params: { path: string, title: string }, now: number): D1PreparedStatement[] {
+  const date = new Date(now).toISOString().split('T')[0]
+  return [
+    db.prepare(`
+      INSERT INTO ${DOC_VIEWS_TABLE} (path, title, views, session_count, updated_at, last_view_at)
+      VALUES (?1, ?2, 1, 1, ?3, ?3)
+      ON CONFLICT(path) DO UPDATE SET
+        title = COALESCE(excluded.title, ${DOC_VIEWS_TABLE}.title),
+        views = ${DOC_VIEWS_TABLE}.views + 1,
+        session_count = ${DOC_VIEWS_TABLE}.session_count + 1,
+        updated_at = excluded.updated_at,
+        last_view_at = excluded.last_view_at
+      RETURNING views;
+    `).bind(params.path, params.title || null, now),
+    db.prepare(`
+      INSERT INTO ${DOC_VIEWS_DAILY_TABLE} (date, path, title, views, session_count)
+      VALUES (?1, ?2, ?3, 1, 1)
+      ON CONFLICT(date, path) DO UPDATE SET
+        title = COALESCE(excluded.title, ${DOC_VIEWS_DAILY_TABLE}.title),
+        views = ${DOC_VIEWS_DAILY_TABLE}.views + 1,
+        session_count = ${DOC_VIEWS_DAILY_TABLE}.session_count + 1;
+    `).bind(date, params.path, params.title || null),
+  ]
+}
+
+function readViews(result: { results?: unknown[] } | undefined): number {
+  return Number((result?.results?.[0] as { views?: number } | undefined)?.views ?? 1)
+}
+
+/** Counts a page view and answers with the page's views, in one round trip; it was three. */
 export async function incrementDocView(
   db: D1Database,
   params: { path: string, title: string },
 ): Promise<number> {
-  const now = Date.now()
-  await db.prepare(`
-    INSERT INTO ${DOC_VIEWS_TABLE} (path, title, views, session_count, updated_at, last_view_at)
-    VALUES (?1, ?2, 1, 1, ?3, ?3)
-    ON CONFLICT(path) DO UPDATE SET
-      title = COALESCE(excluded.title, ${DOC_VIEWS_TABLE}.title),
-      views = ${DOC_VIEWS_TABLE}.views + 1,
-      session_count = ${DOC_VIEWS_TABLE}.session_count + 1,
-      updated_at = excluded.updated_at,
-      last_view_at = excluded.last_view_at;
-  `).bind(params.path, params.title || null, now).run()
-
-  const row = await db.prepare(
-    `SELECT views FROM ${DOC_VIEWS_TABLE} WHERE path = ?1`,
-  ).bind(params.path).first<{ views?: number }>()
-
-  const date = new Date(now).toISOString().split('T')[0]
-  await db.prepare(`
-    INSERT INTO ${DOC_VIEWS_DAILY_TABLE} (date, path, title, views, session_count)
-    VALUES (?1, ?2, ?3, 1, 1)
-    ON CONFLICT(date, path) DO UPDATE SET
-      title = COALESCE(excluded.title, ${DOC_VIEWS_DAILY_TABLE}.title),
-      views = ${DOC_VIEWS_DAILY_TABLE}.views + 1,
-      session_count = ${DOC_VIEWS_DAILY_TABLE}.session_count + 1;
-  `).bind(date, params.path, params.title || null).run()
-
-  return row?.views ?? 1
+  const [view] = await db.batch(prepareDocViewCount(db, params, Date.now()))
+  return readViews(view)
 }
 
+export interface DocViewOpening {
+  views: number
+  session: DocEngagementSession
+  challenge: DocEngagementChallenge | null
+}
+
+/**
+ * Counts a page view and opens its engagement session, with a challenge when the client's risk level
+ * calls for one, in one round trip. They were up to six statements one after another: the view, a read
+ * of its count, the daily view, the session, the challenge, and the session's link to it.
+ */
+export async function openDocViewSession(
+  db: D1Database,
+  params: {
+    path: string
+    title: string
+    sourceType: DocEngagementSourceType
+    clientId: string
+    ip: string | null
+    riskLevel: number
+    sessionTtlMs: number
+    challengeTtlMs: number
+  },
+): Promise<DocViewOpening> {
+  const now = Date.now()
+  const sessionId = randomUUID()
+  const challenge: DocEngagementChallenge | null = params.riskLevel >= 1
+    ? {
+        challengeId: randomUUID(),
+        sessionId,
+        seed: randomBytes(16).toString('hex'),
+        difficulty: params.riskLevel >= 2 ? 3 : 0,
+        createdAt: now,
+        expiresAt: now + params.challengeTtlMs,
+      }
+    : null
+  const session: DocEngagementSession = {
+    sessionId,
+    path: params.path,
+    sourceType: params.sourceType,
+    clientId: params.clientId,
+    ip: params.ip,
+    riskLevel: params.riskLevel,
+    issuedAt: now,
+    expectReportAt: now + params.sessionTtlMs,
+    reportedAt: null,
+    status: 'pending',
+    challengeId: challenge?.challengeId ?? null,
+  }
+
+  const [view] = await db.batch([
+    ...prepareDocViewCount(db, params, now),
+    db.prepare(`
+      INSERT INTO ${DOC_SESSION_TABLE} (
+        session_id, path, source_type, client_id, ip, risk_level, issued_at, expect_report_at, status, challenge_id
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9);
+    `).bind(
+      session.sessionId,
+      session.path,
+      session.sourceType,
+      session.clientId,
+      session.ip,
+      session.riskLevel,
+      session.issuedAt,
+      session.expectReportAt,
+      session.challengeId,
+    ),
+    ...(challenge
+      ? [db.prepare(`
+          INSERT INTO ${DOC_CHALLENGE_TABLE} (challenge_id, session_id, seed, difficulty, created_at, expires_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6);
+        `).bind(challenge.challengeId, challenge.sessionId, challenge.seed, challenge.difficulty, challenge.createdAt, challenge.expiresAt)]
+      : []),
+  ])
+
+  return { views: readViews(view), session, challenge }
+}
+
+/**
+ * Adds one engagement report to every counter it feeds, in one round trip and one transaction: each
+ * table is a single upsert over the report's rows (`json_each`), applied in report order. A section,
+ * a heatmap bucket and an action were two to four statements each, one after another — about 80 round
+ * trips for a typical page, and close to 900 statements for the largest report the handler accepts.
+ *
+ * `sessionId`, when given, is the engagement session the report closes; it is marked reported in the
+ * same batch.
+ */
 export async function recordDocEngagement(
   db: D1Database,
   params: {
@@ -844,6 +830,7 @@ export async function recordDocEngagement(
     totalMs: number
     sections: DocEngagementSectionInput[]
     actions: DocEngagementActionInput[]
+    sessionId?: string
   },
 ) {
   const now = Date.now()
@@ -856,61 +843,23 @@ export async function recordDocEngagement(
     .filter(action => action.type === 'select')
     .reduce((sum, action) => sum + action.count, 0)
 
-  await db.prepare(`
-    UPDATE ${DOC_VIEWS_TABLE}
-    SET
-      title = COALESCE(?2, title),
-      active_ms = active_ms + ?3,
-      total_ms = total_ms + ?4,
-      copy_count = copy_count + ?5,
-      select_count = select_count + ?6,
-      updated_at = ?7,
-      last_read_at = ?7
-    WHERE path = ?1;
-  `).bind(params.path, params.title || null, params.activeMs, params.totalMs, copyCount, selectCount, now).run()
-
-  await db.prepare(`
-    INSERT INTO ${DOC_VIEWS_DAILY_TABLE} (date, path, title, active_ms, total_ms, copy_count, select_count)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-    ON CONFLICT(date, path) DO UPDATE SET
-      title = COALESCE(excluded.title, ${DOC_VIEWS_DAILY_TABLE}.title),
-      active_ms = ${DOC_VIEWS_DAILY_TABLE}.active_ms + excluded.active_ms,
-      total_ms = ${DOC_VIEWS_DAILY_TABLE}.total_ms + excluded.total_ms,
-      copy_count = ${DOC_VIEWS_DAILY_TABLE}.copy_count + excluded.copy_count,
-      select_count = ${DOC_VIEWS_DAILY_TABLE}.select_count + excluded.select_count;
-  `).bind(date, params.path, params.title || null, params.activeMs, params.totalMs, copyCount, selectCount).run()
-
+  const sections: Array<{ id: string, sectionId: string, title: string | null, viewCount: number, activeMs: number, totalMs: number }> = []
+  const buckets: Array<{ id: string, sectionId: string, title: string | null, bucket: number, activeMs: number, totalMs: number }> = []
   for (const section of params.sections) {
     const sectionId = normalizeString(section.id, 120)
     if (!sectionId)
       continue
     const sectionTitle = normalizeString(section.title, 200)
-    const entryId = `${params.path}#${sectionId}`
     const activeMs = Math.max(0, Math.round(section.activeMs))
     const totalMs = Math.max(0, Math.round(section.totalMs))
-    const viewCount = activeMs > 0 || totalMs > 0 ? 1 : 0
-
-    await db.prepare(`
-      INSERT INTO ${DOC_SECTION_TABLE} (id, path, section_id, section_title, view_count, active_ms, total_ms, last_read_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-      ON CONFLICT(id) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_SECTION_TABLE}.section_title),
-        view_count = ${DOC_SECTION_TABLE}.view_count + excluded.view_count,
-        active_ms = ${DOC_SECTION_TABLE}.active_ms + excluded.active_ms,
-        total_ms = ${DOC_SECTION_TABLE}.total_ms + excluded.total_ms,
-        last_read_at = excluded.last_read_at;
-    `).bind(entryId, params.path, sectionId, sectionTitle || null, viewCount, activeMs, totalMs, now).run()
-
-    await db.prepare(`
-      INSERT INTO ${DOC_SECTION_DAILY_TABLE} (date, path, section_id, section_title, view_count, active_ms, total_ms, last_read_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-      ON CONFLICT(date, path, section_id) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_SECTION_DAILY_TABLE}.section_title),
-        view_count = ${DOC_SECTION_DAILY_TABLE}.view_count + excluded.view_count,
-        active_ms = ${DOC_SECTION_DAILY_TABLE}.active_ms + excluded.active_ms,
-        total_ms = ${DOC_SECTION_DAILY_TABLE}.total_ms + excluded.total_ms,
-        last_read_at = excluded.last_read_at;
-    `).bind(date, params.path, sectionId, sectionTitle || null, viewCount, activeMs, totalMs, now).run()
+    sections.push({
+      id: `${params.path}#${sectionId}`,
+      sectionId,
+      title: sectionTitle || null,
+      viewCount: activeMs > 0 || totalMs > 0 ? 1 : 0,
+      activeMs,
+      totalMs,
+    })
 
     const sectionBuckets = Array.isArray(section.buckets) ? section.buckets : []
     for (const bucketEntry of sectionBuckets) {
@@ -919,30 +868,31 @@ export async function recordDocEngagement(
       const bucketTotalMs = Math.max(0, Math.round(Number(bucketEntry.totalMs ?? 0) || 0))
       if (!bucketActiveMs && !bucketTotalMs)
         continue
-      const heatmapId = `${params.path}#${sourceType}#${sectionId}#${bucket}`
-
-      await db.prepare(`
-        INSERT INTO ${DOC_HEATMAP_TABLE} (id, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-        ON CONFLICT(id) DO UPDATE SET
-          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_TABLE}.section_title),
-          active_ms = ${DOC_HEATMAP_TABLE}.active_ms + excluded.active_ms,
-          total_ms = ${DOC_HEATMAP_TABLE}.total_ms + excluded.total_ms,
-          last_read_at = excluded.last_read_at;
-      `).bind(heatmapId, params.path, sourceType, sectionId, sectionTitle || null, bucket, bucketActiveMs, bucketTotalMs, now).run()
-
-      await db.prepare(`
-        INSERT INTO ${DOC_HEATMAP_DAILY_TABLE} (date, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-        ON CONFLICT(date, path, source_type, section_id, bucket) DO UPDATE SET
-          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_DAILY_TABLE}.section_title),
-          active_ms = ${DOC_HEATMAP_DAILY_TABLE}.active_ms + excluded.active_ms,
-          total_ms = ${DOC_HEATMAP_DAILY_TABLE}.total_ms + excluded.total_ms,
-          last_read_at = excluded.last_read_at;
-      `).bind(date, params.path, sourceType, sectionId, sectionTitle || null, bucket, bucketActiveMs, bucketTotalMs, now).run()
+      buckets.push({
+        id: `${params.path}#${sourceType}#${sectionId}#${bucket}`,
+        sectionId,
+        title: sectionTitle || null,
+        bucket,
+        activeMs: bucketActiveMs,
+        totalMs: bucketTotalMs,
+      })
     }
   }
 
+  const actions: Array<{
+    id: string
+    evidenceId: string
+    actionType: string
+    actionSource: string
+    sectionId: string
+    title: string | null
+    textHash: string
+    textLength: number
+    anchorStart: number
+    anchorEnd: number
+    anchorBucket: number
+    count: number
+  }> = []
   for (const action of params.actions) {
     const actionType = normalizeString(action.type, 16)
     const actionSource = normalizeString(action.source, 16)
@@ -950,113 +900,217 @@ export async function recordDocEngagement(
     if (!actionType || !actionSource)
       continue
     const sectionTitle = normalizeString(action.sectionTitle, 200)
-    const entryId = `${params.path}#${actionType}#${actionSource}#${sectionId}`
     const count = Math.max(0, Math.round(action.count))
     if (!count)
       continue
-
-    await db.prepare(`
-      INSERT INTO ${DOC_ACTION_TABLE} (id, path, action_type, source_type, section_id, section_title, count, last_action_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-      ON CONFLICT(id) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_ACTION_TABLE}.section_title),
-        count = ${DOC_ACTION_TABLE}.count + excluded.count,
-        last_action_at = excluded.last_action_at;
-    `).bind(entryId, params.path, actionType, actionSource, sectionId, sectionTitle || null, count, now).run()
-
-    await db.prepare(`
-      INSERT INTO ${DOC_ACTION_DAILY_TABLE} (date, path, action_type, source_type, section_id, section_title, count, last_action_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-      ON CONFLICT(date, path, action_type, source_type, section_id) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_ACTION_DAILY_TABLE}.section_title),
-        count = ${DOC_ACTION_DAILY_TABLE}.count + excluded.count,
-        last_action_at = excluded.last_action_at;
-    `).bind(date, params.path, actionType, actionSource, sectionId, sectionTitle || null, count, now).run()
 
     const textHash = normalizeString(action.textHash, 128)
     const textLength = Math.max(0, Math.round(Number(action.textLength ?? 0) || 0))
     const anchorStart = Math.max(0, Math.round(Number(action.anchorStart ?? 0) || 0))
     const anchorEnd = Math.max(0, Math.round(Number(action.anchorEnd ?? 0) || 0))
     const anchorBucket = Math.max(-1, Math.min(19, Math.round(Number(action.anchorBucket ?? -1) || -1)))
-    const evidenceId = `${params.path}#${sourceType}#${actionType}#${actionSource}#${sectionId}#${textHash || '_'}#${anchorBucket}`
-
-    await db.prepare(`
-      INSERT INTO ${DOC_EVIDENCE_TABLE} (
-        id, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
-      )
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
-      ON CONFLICT(id) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_TABLE}.section_title),
-        text_length = CASE
-          WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_TABLE}.text_length, 0) THEN excluded.text_length
-          ELSE ${DOC_EVIDENCE_TABLE}.text_length
-        END,
-        anchor_start = CASE
-          WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_start, 0) THEN excluded.anchor_start
-          ELSE ${DOC_EVIDENCE_TABLE}.anchor_start
-        END,
-        anchor_end = CASE
-          WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_end, 0) THEN excluded.anchor_end
-          ELSE ${DOC_EVIDENCE_TABLE}.anchor_end
-        END,
-        count = ${DOC_EVIDENCE_TABLE}.count + excluded.count,
-        last_action_at = excluded.last_action_at;
-    `).bind(
-      evidenceId,
-      params.path,
-      sourceType,
+    actions.push({
+      id: `${params.path}#${actionType}#${actionSource}#${sectionId}`,
+      evidenceId: `${params.path}#${sourceType}#${actionType}#${actionSource}#${sectionId}#${textHash || '_'}#${anchorBucket}`,
       actionType,
       actionSource,
       sectionId,
-      sectionTitle || null,
-      textHash || '',
-      textLength || 0,
-      anchorStart || 0,
-      anchorEnd || 0,
+      title: sectionTitle || null,
+      textHash: textHash || '',
+      textLength: textLength || 0,
+      anchorStart: anchorStart || 0,
+      anchorEnd: anchorEnd || 0,
       anchorBucket,
       count,
-      now,
-    ).run()
-
-    await db.prepare(`
-      INSERT INTO ${DOC_EVIDENCE_DAILY_TABLE} (
-        date, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
-      )
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
-      ON CONFLICT(date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket) DO UPDATE SET
-        section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_DAILY_TABLE}.section_title),
-        text_length = CASE
-          WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.text_length, 0) THEN excluded.text_length
-          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.text_length
-        END,
-        anchor_start = CASE
-          WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_start, 0) THEN excluded.anchor_start
-          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_start
-        END,
-        anchor_end = CASE
-          WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_end, 0) THEN excluded.anchor_end
-          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_end
-        END,
-        count = ${DOC_EVIDENCE_DAILY_TABLE}.count + excluded.count,
-        last_action_at = excluded.last_action_at;
-    `).bind(
-      date,
-      params.path,
-      sourceType,
-      actionType,
-      actionSource,
-      sectionId,
-      sectionTitle || null,
-      textHash || '',
-      textLength || 0,
-      anchorStart || 0,
-      anchorEnd || 0,
-      anchorBucket,
-      count,
-      now,
-    ).run()
+    })
   }
 
+  const statements: D1PreparedStatement[] = [
+    db.prepare(`
+      UPDATE ${DOC_VIEWS_TABLE}
+      SET
+        title = COALESCE(?2, title),
+        active_ms = active_ms + ?3,
+        total_ms = total_ms + ?4,
+        copy_count = copy_count + ?5,
+        select_count = select_count + ?6,
+        updated_at = ?7,
+        last_read_at = ?7
+      WHERE path = ?1;
+    `).bind(params.path, params.title || null, params.activeMs, params.totalMs, copyCount, selectCount, now),
+    db.prepare(`
+      INSERT INTO ${DOC_VIEWS_DAILY_TABLE} (date, path, title, active_ms, total_ms, copy_count, select_count)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+      ON CONFLICT(date, path) DO UPDATE SET
+        title = COALESCE(excluded.title, ${DOC_VIEWS_DAILY_TABLE}.title),
+        active_ms = ${DOC_VIEWS_DAILY_TABLE}.active_ms + excluded.active_ms,
+        total_ms = ${DOC_VIEWS_DAILY_TABLE}.total_ms + excluded.total_ms,
+        copy_count = ${DOC_VIEWS_DAILY_TABLE}.copy_count + excluded.copy_count,
+        select_count = ${DOC_VIEWS_DAILY_TABLE}.select_count + excluded.select_count;
+    `).bind(date, params.path, params.title || null, params.activeMs, params.totalMs, copyCount, selectCount),
+  ]
+
+  // `WHERE true` keeps SQLite from reading the upsert's `ON` as a join constraint; `ORDER BY key`
+  // applies the rows in report order, as the statements one per row did.
+  if (sections.length) {
+    const rows = JSON.stringify(sections)
+    statements.push(
+      db.prepare(`
+        INSERT INTO ${DOC_SECTION_TABLE} (id, path, section_id, section_title, view_count, active_ms, total_ms, last_read_at)
+        SELECT json_extract(value, '$.id'), ?1, json_extract(value, '$.sectionId'), json_extract(value, '$.title'), json_extract(value, '$.viewCount'),
+          json_extract(value, '$.activeMs'), json_extract(value, '$.totalMs'), ?2
+        FROM json_each(?3)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_SECTION_TABLE}.section_title),
+          view_count = ${DOC_SECTION_TABLE}.view_count + excluded.view_count,
+          active_ms = ${DOC_SECTION_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_SECTION_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(params.path, now, rows),
+      db.prepare(`
+        INSERT INTO ${DOC_SECTION_DAILY_TABLE} (date, path, section_id, section_title, view_count, active_ms, total_ms, last_read_at)
+        SELECT ?1, ?2, json_extract(value, '$.sectionId'), json_extract(value, '$.title'), json_extract(value, '$.viewCount'),
+          json_extract(value, '$.activeMs'), json_extract(value, '$.totalMs'), ?3
+        FROM json_each(?4)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(date, path, section_id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_SECTION_DAILY_TABLE}.section_title),
+          view_count = ${DOC_SECTION_DAILY_TABLE}.view_count + excluded.view_count,
+          active_ms = ${DOC_SECTION_DAILY_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_SECTION_DAILY_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(date, params.path, now, rows),
+    )
+  }
+
+  if (buckets.length) {
+    const rows = JSON.stringify(buckets)
+    statements.push(
+      db.prepare(`
+        INSERT INTO ${DOC_HEATMAP_TABLE} (id, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
+        SELECT json_extract(value, '$.id'), ?1, ?2, json_extract(value, '$.sectionId'), json_extract(value, '$.title'), json_extract(value, '$.bucket'),
+          json_extract(value, '$.activeMs'), json_extract(value, '$.totalMs'), ?3
+        FROM json_each(?4)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_TABLE}.section_title),
+          active_ms = ${DOC_HEATMAP_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_HEATMAP_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(params.path, sourceType, now, rows),
+      db.prepare(`
+        INSERT INTO ${DOC_HEATMAP_DAILY_TABLE} (date, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
+        SELECT ?1, ?2, ?3, json_extract(value, '$.sectionId'), json_extract(value, '$.title'), json_extract(value, '$.bucket'),
+          json_extract(value, '$.activeMs'), json_extract(value, '$.totalMs'), ?4
+        FROM json_each(?5)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(date, path, source_type, section_id, bucket) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_DAILY_TABLE}.section_title),
+          active_ms = ${DOC_HEATMAP_DAILY_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_HEATMAP_DAILY_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(date, params.path, sourceType, now, rows),
+    )
+  }
+
+  if (actions.length) {
+    const rows = JSON.stringify(actions)
+    statements.push(
+      db.prepare(`
+        INSERT INTO ${DOC_ACTION_TABLE} (id, path, action_type, source_type, section_id, section_title, count, last_action_at)
+        SELECT json_extract(value, '$.id'), ?1, json_extract(value, '$.actionType'), json_extract(value, '$.actionSource'), json_extract(value, '$.sectionId'),
+          json_extract(value, '$.title'), json_extract(value, '$.count'), ?2
+        FROM json_each(?3)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_ACTION_TABLE}.section_title),
+          count = ${DOC_ACTION_TABLE}.count + excluded.count,
+          last_action_at = excluded.last_action_at;
+      `).bind(params.path, now, rows),
+      db.prepare(`
+        INSERT INTO ${DOC_ACTION_DAILY_TABLE} (date, path, action_type, source_type, section_id, section_title, count, last_action_at)
+        SELECT ?1, ?2, json_extract(value, '$.actionType'), json_extract(value, '$.actionSource'), json_extract(value, '$.sectionId'),
+          json_extract(value, '$.title'), json_extract(value, '$.count'), ?3
+        FROM json_each(?4)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(date, path, action_type, source_type, section_id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_ACTION_DAILY_TABLE}.section_title),
+          count = ${DOC_ACTION_DAILY_TABLE}.count + excluded.count,
+          last_action_at = excluded.last_action_at;
+      `).bind(date, params.path, now, rows),
+      db.prepare(`
+        INSERT INTO ${DOC_EVIDENCE_TABLE} (
+          id, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
+        )
+        SELECT json_extract(value, '$.evidenceId'), ?1, ?2, json_extract(value, '$.actionType'), json_extract(value, '$.actionSource'), json_extract(value, '$.sectionId'),
+          json_extract(value, '$.title'), json_extract(value, '$.textHash'), json_extract(value, '$.textLength'), json_extract(value, '$.anchorStart'),
+          json_extract(value, '$.anchorEnd'), json_extract(value, '$.anchorBucket'), json_extract(value, '$.count'), ?3
+        FROM json_each(?4)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_TABLE}.section_title),
+          text_length = CASE
+            WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_TABLE}.text_length, 0) THEN excluded.text_length
+            ELSE ${DOC_EVIDENCE_TABLE}.text_length
+          END,
+          anchor_start = CASE
+            WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_start, 0) THEN excluded.anchor_start
+            ELSE ${DOC_EVIDENCE_TABLE}.anchor_start
+          END,
+          anchor_end = CASE
+            WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_end, 0) THEN excluded.anchor_end
+            ELSE ${DOC_EVIDENCE_TABLE}.anchor_end
+          END,
+          count = ${DOC_EVIDENCE_TABLE}.count + excluded.count,
+          last_action_at = excluded.last_action_at;
+      `).bind(params.path, sourceType, now, rows),
+      db.prepare(`
+        INSERT INTO ${DOC_EVIDENCE_DAILY_TABLE} (
+          date, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
+        )
+        SELECT ?1, ?2, ?3, json_extract(value, '$.actionType'), json_extract(value, '$.actionSource'), json_extract(value, '$.sectionId'),
+          json_extract(value, '$.title'), json_extract(value, '$.textHash'), json_extract(value, '$.textLength'), json_extract(value, '$.anchorStart'),
+          json_extract(value, '$.anchorEnd'), json_extract(value, '$.anchorBucket'), json_extract(value, '$.count'), ?4
+        FROM json_each(?5)
+        WHERE true
+        ORDER BY key
+        ON CONFLICT(date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_DAILY_TABLE}.section_title),
+          text_length = CASE
+            WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.text_length, 0) THEN excluded.text_length
+            ELSE ${DOC_EVIDENCE_DAILY_TABLE}.text_length
+          END,
+          anchor_start = CASE
+            WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_start, 0) THEN excluded.anchor_start
+            ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_start
+          END,
+          anchor_end = CASE
+            WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_end, 0) THEN excluded.anchor_end
+            ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_end
+          END,
+          count = ${DOC_EVIDENCE_DAILY_TABLE}.count + excluded.count,
+          last_action_at = excluded.last_action_at;
+      `).bind(date, params.path, sourceType, now, rows),
+    )
+  }
+
+  if (params.sessionId) {
+    statements.push(db.prepare(`
+      UPDATE ${DOC_SESSION_TABLE}
+      SET status = 'reported', reported_at = ?2
+      WHERE session_id = ?1;
+    `).bind(params.sessionId, now))
+  }
+
+  await db.batch(statements)
   await cleanupDocEvidenceDaily(db, now)
 }
 

@@ -1,13 +1,12 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const ACTIVATION_CODES_TABLE = 'activation_codes'
 const ACTIVATION_LOGS_TABLE = 'activation_logs'
-
-let subscriptionSchemaInitialized = false
 
 export type SubscriptionPlan = 'FREE' | 'PRO' | 'PLUS' | 'TEAM' | 'ENTERPRISE'
 
@@ -49,45 +48,35 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const SUBSCRIPTION_SCHEMA = defineD1Schema('subscriptions', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${ACTIVATION_CODES_TABLE} (
+        id TEXT PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        plan TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        max_uses INTEGER DEFAULT 1,
+        uses INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        created_by TEXT,
+        status TEXT DEFAULT 'active'
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_activation_code ON ${ACTIVATION_CODES_TABLE}(code)`,
+    `CREATE TABLE IF NOT EXISTS ${ACTIVATION_LOGS_TABLE} (
+        id TEXT PRIMARY KEY,
+        code_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        activated_at TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_activation_user ON ${ACTIVATION_LOGS_TABLE}(user_id)`,
+  ],
+})
+
 async function ensureSubscriptionSchema(db: D1Database) {
-  if (subscriptionSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${ACTIVATION_CODES_TABLE} (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      plan TEXT NOT NULL,
-      duration_days INTEGER NOT NULL,
-      max_uses INTEGER DEFAULT 1,
-      uses INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL,
-      expires_at TEXT,
-      created_by TEXT,
-      status TEXT DEFAULT 'active'
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_activation_code ON ${ACTIVATION_CODES_TABLE}(code);
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${ACTIVATION_LOGS_TABLE} (
-      id TEXT PRIMARY KEY,
-      code_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      activated_at TEXT NOT NULL,
-      plan TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_activation_user ON ${ACTIVATION_LOGS_TABLE}(user_id);
-  `).run()
-
-  subscriptionSchemaInitialized = true
+  await ensureD1Schema(db, SUBSCRIPTION_SCHEMA)
 }
 
 function normalizeActivationCode(code: string): string {
@@ -138,16 +127,29 @@ export function generateActivationCode(plan: SubscriptionPlan): string {
   return `TUFF-${plan}-${randomCodeSegment(8)}-${randomCodeSegment(4)}`
 }
 
-export async function createActivationCode(
+export interface CreateActivationCodeInput {
+  plan: SubscriptionPlan
+  durationDays: number
+  maxUses?: number
+  expiresInDays?: number
+  createdBy?: string
+}
+
+export async function createActivationCode(event: H3Event, input: CreateActivationCodeInput): Promise<ActivationCode> {
+  const [code] = await createActivationCodes(event, input, 1)
+  return code!
+}
+
+/**
+ * `count` codes with the same terms, written in one batch: one round trip, and all or none of them.
+ * The admin generator used to insert up to a hundred one after another, and a failure part way left
+ * the codes before it in place with no audit entry for them.
+ */
+export async function createActivationCodes(
   event: H3Event,
-  input: {
-    plan: SubscriptionPlan
-    durationDays: number
-    maxUses?: number
-    expiresInDays?: number
-    createdBy?: string
-  },
-): Promise<ActivationCode> {
+  input: CreateActivationCodeInput,
+  count: number,
+): Promise<ActivationCode[]> {
   const db = getD1Database(event)
   if (!db) {
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -160,7 +162,7 @@ export async function createActivationCode(
     ? new Date(now.getTime() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     : null
 
-  const code: ActivationCode = {
+  const codes: ActivationCode[] = Array.from({ length: count }, () => ({
     id: randomUUID(),
     code: generateActivationCode(input.plan),
     plan: input.plan,
@@ -171,9 +173,9 @@ export async function createActivationCode(
     expiresAt,
     createdBy: input.createdBy || null,
     status: 'active',
-  }
+  }))
 
-  await db.prepare(`
+  await db.batch(codes.map(code => db.prepare(`
     INSERT INTO ${ACTIVATION_CODES_TABLE} (
       id, code, plan, duration_days, max_uses, uses,
       created_at, expires_at, created_by, status
@@ -189,9 +191,9 @@ export async function createActivationCode(
     code.expiresAt,
     code.createdBy,
     code.status,
-  ).run()
+  )))
 
-  return code
+  return codes
 }
 
 export async function getActivationCodeByCode(
@@ -311,22 +313,24 @@ export async function getUserActivationHistory(
   }))
 }
 
-export async function getUserSubscription(event: H3Event, userId: string): Promise<UserSubscription> {
-  const db = getD1Database(event)
-  if (!db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  }
+interface LatestActivationRow {
+  plan: string
+  activated_at: string
+  expires_at: string
+}
 
-  await ensureSubscriptionSchema(db)
-
-  const row = await db.prepare(`
+/** The statement that reads a user's latest plan activation; `mapLatestActivation` reads its row. */
+export function prepareLatestActivationQuery(db: D1Database, userId: string): D1PreparedStatement {
+  return db.prepare(`
     SELECT plan, activated_at, expires_at
     FROM ${ACTIVATION_LOGS_TABLE}
     WHERE user_id = ?1
     ORDER BY activated_at DESC
     LIMIT 1;
-  `).bind(userId).first<{ plan: string, activated_at: string, expires_at: string }>()
+  `).bind(userId)
+}
 
+export function mapLatestActivation(row: LatestActivationRow | null | undefined): UserSubscription {
   if (!row) {
     return {
       plan: 'FREE',
@@ -345,6 +349,22 @@ export async function getUserSubscription(event: H3Event, userId: string): Promi
     activatedAt: row.activated_at || null,
     isActive,
   }
+}
+
+export async function ensureSubscriptionTables(db: D1Database): Promise<void> {
+  await ensureSubscriptionSchema(db)
+}
+
+export async function getUserSubscription(event: H3Event, userId: string): Promise<UserSubscription> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureSubscriptionSchema(db)
+
+  const row = await prepareLatestActivationQuery(db, userId).first<LatestActivationRow>()
+  return mapLatestActivation(row)
 }
 
 export function getSubscriptionFromMetadata(metadata: any): UserSubscription {

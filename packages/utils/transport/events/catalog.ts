@@ -26,5 +26,10 @@ export const CatalogEvents = {
       .module('voice-provider')
       .event('rollback')
       .define<CatalogVoiceProviderRollbackRequest, CatalogVoiceProviderRollbackResponse>(),
+    /** Main → renderer whenever a sync starts or settles, or a rollback lands. */
+    statusChanged: defineEvent('catalog')
+      .module('voice-provider')
+      .event('status-changed')
+      .define<CatalogVoiceProviderStatusResponse, void>(),
   },
 } as const

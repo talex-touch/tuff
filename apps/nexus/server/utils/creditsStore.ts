@@ -1,10 +1,11 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createHash } from 'node:crypto'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { getUserSubscription } from './subscriptionStore'
 import { getTeamQuota } from './teamStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 type CreditPlan = 'FREE' | 'PLUS' | 'PRO' | 'TEAM' | 'ENTERPRISE'
 
@@ -18,8 +19,6 @@ const CREDIT_CHECKINS_TABLE = 'credit_checkins'
 const USERS_TABLE = 'auth_users'
 const ACCOUNTS_TABLE = 'auth_accounts'
 const PASSKEYS_TABLE = 'auth_passkeys'
-
-let creditsSchemaInitialized = false
 
 const DEFAULT_TEAM_QUOTA = 2000000
 /**
@@ -175,114 +174,86 @@ export function requireDatabase(event: H3Event): D1Database {
   return db
 }
 
+const CREDITS_SCHEMA = defineD1Schema('credits', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${TEAMS_TABLE} (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        owner_user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${TEAM_MEMBERS_TABLE} (
+        team_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        joined_at TEXT NOT NULL,
+        PRIMARY KEY (team_id, user_id)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_PLANS_TABLE} (
+        plan_id TEXT PRIMARY KEY,
+        monthly_quota REAL NOT NULL,
+        personal_quota REAL NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_BALANCES_TABLE} (
+        scope TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        month TEXT NOT NULL,
+        quota REAL NOT NULL,
+        used REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (scope, scope_id, month)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_LEDGER_TABLE} (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        delta REAL NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        metadata TEXT,
+        idempotency_key TEXT,
+        idempotency_hash TEXT
+      )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_ledger_idempotency
+      ON ${CREDIT_LEDGER_TABLE}(scope, scope_id, reason, idempotency_key)
+      WHERE idempotency_key IS NOT NULL`,
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_BOOST_CLAIMS_TABLE} (
+        user_id TEXT NOT NULL,
+        month TEXT NOT NULL,
+        claimed_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, month)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_CHECKINS_TABLE} (
+        user_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        claimed_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, day)
+      )`,
+    // Per-user and per-scope reads that used to scan: `listUserTeams` (every credit and team request,
+    // and `team_members`' key leads with the team) and the ledger pages and trends.
+    `CREATE INDEX IF NOT EXISTS idx_team_members_user ON ${TEAM_MEMBERS_TABLE}(user_id, team_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_credit_ledger_scope_created ON ${CREDIT_LEDGER_TABLE}(scope, scope_id, created_at)`,
+    // Nothing reads `credit_plans`; the row is kept as it was, written when the definition (and with it
+    // the default quotas) changes rather than twice on every cold isolate.
+    `INSERT INTO ${CREDIT_PLANS_TABLE} (plan_id, monthly_quota, personal_quota)
+      VALUES ('${DEFAULT_PLAN_ID}', ${DEFAULT_TEAM_QUOTA}, ${DEFAULT_PERSONAL_QUOTA})
+      ON CONFLICT(plan_id) DO UPDATE SET
+        monthly_quota = excluded.monthly_quota,
+        personal_quota = excluded.personal_quota`,
+  ],
+  columns: [
+    {
+      table: CREDIT_LEDGER_TABLE,
+      columns: [
+        { name: 'idempotency_key', ddl: 'idempotency_key TEXT' },
+        { name: 'idempotency_hash', ddl: 'idempotency_hash TEXT' },
+      ],
+    },
+  ],
+})
+
 async function ensureCreditsSchema(db: D1Database) {
-  if (creditsSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TEAMS_TABLE} (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      owner_user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TEAM_MEMBERS_TABLE} (
-      team_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      joined_at TEXT NOT NULL,
-      PRIMARY KEY (team_id, user_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDIT_PLANS_TABLE} (
-      plan_id TEXT PRIMARY KEY,
-      monthly_quota REAL NOT NULL,
-      personal_quota REAL NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDIT_BALANCES_TABLE} (
-      scope TEXT NOT NULL,
-      scope_id TEXT NOT NULL,
-      month TEXT NOT NULL,
-      quota REAL NOT NULL,
-      used REAL NOT NULL DEFAULT 0,
-      PRIMARY KEY (scope, scope_id, month)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDIT_LEDGER_TABLE} (
-      id TEXT PRIMARY KEY,
-      scope TEXT NOT NULL,
-      scope_id TEXT NOT NULL,
-      delta REAL NOT NULL,
-      reason TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      metadata TEXT,
-      idempotency_key TEXT,
-      idempotency_hash TEXT
-    );
-  `).run()
-
-  try {
-    const { results } = await db.prepare(`PRAGMA table_info(${CREDIT_LEDGER_TABLE});`).all<{ name?: string }>()
-    const columns = new Set((results ?? []).map(column => column.name).filter(Boolean) as string[])
-    if (!columns.has('idempotency_key')) {
-      await db.prepare(`ALTER TABLE ${CREDIT_LEDGER_TABLE} ADD COLUMN idempotency_key TEXT;`).run()
-    }
-    if (!columns.has('idempotency_hash')) {
-      await db.prepare(`ALTER TABLE ${CREDIT_LEDGER_TABLE} ADD COLUMN idempotency_hash TEXT;`).run()
-    }
-  }
-  catch {
-    // Older D1 previews may reject table introspection during first boot; the create path above
-    // already covers fresh schemas, and existing schemas keep the non-idempotent fallback.
-  }
-
-  await db.prepare(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_ledger_idempotency
-    ON ${CREDIT_LEDGER_TABLE}(scope, scope_id, reason, idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDIT_BOOST_CLAIMS_TABLE} (
-      user_id TEXT NOT NULL,
-      month TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      PRIMARY KEY (user_id, month)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDIT_CHECKINS_TABLE} (
-      user_id TEXT NOT NULL,
-      day TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      PRIMARY KEY (user_id, day)
-    );
-  `).run()
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${CREDIT_PLANS_TABLE} (plan_id, monthly_quota, personal_quota)
-    VALUES (?, ?, ?)
-  `).bind(DEFAULT_PLAN_ID, DEFAULT_TEAM_QUOTA, DEFAULT_PERSONAL_QUOTA).run()
-
-  await db.prepare(`
-    UPDATE ${CREDIT_PLANS_TABLE}
-    SET monthly_quota = ?, personal_quota = ?
-    WHERE plan_id = ?
-  `).bind(DEFAULT_TEAM_QUOTA, DEFAULT_PERSONAL_QUOTA, DEFAULT_PLAN_ID).run()
-
-  creditsSchemaInitialized = true
+  await ensureD1Schema(db, CREDITS_SCHEMA)
 }
 
 function getMonthKey(date = new Date()): string {
@@ -368,44 +339,45 @@ async function resolveTeamQuotaByPlan(
   return DEFAULT_TEAM_QUOTA + Math.max(0, seatsLimit - TEAM_BASE_SEATS) * TEAM_POOL_PER_SEAT
 }
 
-async function resolveBoostContext(event: H3Event, userId: string): Promise<BoostContext> {
-  const db = requireDatabase(event)
-  await ensureCreditsSchema(db)
+interface BoostFactsRow {
+  email_state?: string | null
+  email_verified?: string | null
+  oauth_total?: number | null
+  oauth_latest?: string | null
+  passkey_total?: number | null
+  passkey_latest?: string | null
+  boost_claimed_at?: string | null
+}
 
-  const userRow = await db.prepare(`
-    SELECT id, email_state, email_verified FROM ${USERS_TABLE}
-    WHERE id = ?
-    LIMIT 1
-  `).bind(userId).first<D1UserRow & { email_verified?: string | null }>()
+/**
+ * Everything the FREE boost decision reads, in one statement: it was up to five sequential reads
+ * (the user, an accounts count, a passkeys count, then the latest of each), and the summary ran
+ * that sequence twice.
+ */
+function prepareBoostFactsQuery(db: D1Database, userId: string, month: string): D1PreparedStatement {
+  return db.prepare(`
+    SELECT
+      (SELECT email_state FROM ${USERS_TABLE} WHERE id = ?1) AS email_state,
+      (SELECT email_verified FROM ${USERS_TABLE} WHERE id = ?1) AS email_verified,
+      (SELECT COUNT(1) FROM ${ACCOUNTS_TABLE} WHERE user_id = ?1) AS oauth_total,
+      (SELECT MAX(created_at) FROM ${ACCOUNTS_TABLE} WHERE user_id = ?1) AS oauth_latest,
+      (SELECT COUNT(1) FROM ${PASSKEYS_TABLE} WHERE user_id = ?1) AS passkey_total,
+      (SELECT MAX(created_at) FROM ${PASSKEYS_TABLE} WHERE user_id = ?1) AS passkey_latest,
+      (SELECT claimed_at FROM ${CREDIT_BOOST_CLAIMS_TABLE} WHERE user_id = ?1 AND month = ?2 LIMIT 1) AS boost_claimed_at
+  `).bind(userId, month)
+}
 
-  const emailVerified = userRow?.email_state === 'verified'
-  const oauthRow = await db.prepare(`
-    SELECT COUNT(1) as total FROM ${ACCOUNTS_TABLE}
-    WHERE user_id = ?
-  `).bind(userId).first<{ total?: number }>()
-  const passkeyRow = await db.prepare(`
-    SELECT COUNT(1) as total FROM ${PASSKEYS_TABLE}
-    WHERE user_id = ?
-  `).bind(userId).first<{ total?: number }>()
-
-  const oauthLinked = Number(oauthRow?.total ?? 0) > 0
-  const passkeyBound = Number(passkeyRow?.total ?? 0) > 0
+function deriveBoostContext(row: BoostFactsRow | null | undefined): BoostContext {
+  const emailVerified = row?.email_state === 'verified'
+  const oauthLinked = Number(row?.oauth_total ?? 0) > 0
+  const passkeyBound = Number(row?.passkey_total ?? 0) > 0
   const eligible = emailVerified && oauthLinked && passkeyBound
 
   let activatedMonth: string | null = null
   if (eligible) {
-    const emailVerifiedAt = userRow?.email_verified ? Date.parse(userRow.email_verified) : NaN
-    const oauthAtRow = await db.prepare(`
-      SELECT MAX(created_at) as created_at FROM ${ACCOUNTS_TABLE}
-      WHERE user_id = ?
-    `).bind(userId).first<{ created_at?: string | null }>()
-    const passkeyAtRow = await db.prepare(`
-      SELECT MAX(created_at) as created_at FROM ${PASSKEYS_TABLE}
-      WHERE user_id = ?
-    `).bind(userId).first<{ created_at?: string | null }>()
-
-    const oauthAt = oauthAtRow?.created_at ? Date.parse(oauthAtRow.created_at) : NaN
-    const passkeyAt = passkeyAtRow?.created_at ? Date.parse(passkeyAtRow.created_at) : NaN
+    const emailVerifiedAt = row?.email_verified ? Date.parse(row.email_verified) : Number.NaN
+    const oauthAt = row?.oauth_latest ? Date.parse(row.oauth_latest) : Number.NaN
+    const passkeyAt = row?.passkey_latest ? Date.parse(row.passkey_latest) : Number.NaN
     const latest = Math.max(
       Number.isNaN(emailVerifiedAt) ? 0 : emailVerifiedAt,
       Number.isNaN(oauthAt) ? 0 : oauthAt,
@@ -427,34 +399,19 @@ async function resolveBoostContext(event: H3Event, userId: string): Promise<Boos
   }
 }
 
-async function getBoostClaimed(event: H3Event, userId: string, month: string): Promise<boolean> {
+async function readBoostFacts(event: H3Event, userId: string, month: string): Promise<BoostFactsRow | null> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const row = await db.prepare(`
-    SELECT claimed_at FROM ${CREDIT_BOOST_CLAIMS_TABLE}
-    WHERE user_id = ? AND month = ?
-    LIMIT 1
-  `).bind(userId, month).first()
-  return Boolean(row?.claimed_at)
+  return await prepareBoostFactsQuery(db, userId, month).first<BoostFactsRow>()
 }
 
-async function resolvePersonalQuota(
-  event: H3Event,
-  userId: string,
-  baseQuota: number,
-  month: string,
-  plan: CreditPlan,
-): Promise<number> {
+function personalQuotaFromBoost(baseQuota: number, month: string, plan: CreditPlan, context: BoostContext): number {
   if (plan !== 'FREE')
     return baseQuota
-
-  const context = await resolveBoostContext(event, userId)
   if (!context.eligible)
     return baseQuota
-
   if (context.activatedMonth && context.activatedMonth !== month)
     return BOOSTED_PERSONAL_QUOTA
-
   return baseQuota
 }
 
@@ -477,36 +434,56 @@ export async function getCreditBoostStatus(
       boostedQuota: BOOSTED_PERSONAL_QUOTA,
     }
   }
-  const context = await resolveBoostContext(event, userId)
-  const claimedThisMonth = await getBoostClaimed(event, userId, month)
-  const eligible = context.eligible
+  const facts = await readBoostFacts(event, userId, month)
+  return boostStatusFromFacts(facts)
+}
 
+function boostStatusFromFacts(facts: BoostFactsRow | null | undefined): CreditBoostStatus {
+  const context = deriveBoostContext(facts)
   return {
-    eligible,
+    eligible: context.eligible,
     requirements: context.requirements,
-    claimedThisMonth,
+    claimedThisMonth: Boolean(facts?.boost_claimed_at),
     baseQuota: DEFAULT_PERSONAL_QUOTA,
     boostedQuota: BOOSTED_PERSONAL_QUOTA,
   }
 }
 
+/** The two idempotent inserts that give a user their personal team, for callers batching them. */
+export function preparePersonalTeamStatements(db: D1Database, userId: string): D1PreparedStatement[] {
+  const teamId = `team_${userId}`
+  const now = new Date().toISOString()
+  return [
+    db.prepare(`
+      INSERT OR IGNORE INTO ${TEAMS_TABLE} (id, name, type, owner_user_id, created_at)
+      VALUES (?, ?, 'personal', ?, ?)
+    `).bind(teamId, 'Personal', userId, now),
+    db.prepare(`
+      INSERT OR IGNORE INTO ${TEAM_MEMBERS_TABLE} (team_id, user_id, role, joined_at)
+      VALUES (?, ?, 'owner', ?)
+    `).bind(teamId, userId, now),
+  ]
+}
+
 export async function ensurePersonalTeam(event: H3Event, userId: string): Promise<string> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const teamId = `team_${userId}`
-  const now = new Date().toISOString()
+  // One round trip for both inserts; they were two.
+  await db.batch(preparePersonalTeamStatements(db, userId))
+  return `team_${userId}`
+}
 
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${TEAMS_TABLE} (id, name, type, owner_user_id, created_at)
-    VALUES (?, ?, 'personal', ?, ?)
-  `).bind(teamId, 'Personal', userId, now).run()
+/** The statement that counts a team's members, for callers batching it with other reads. */
+export function prepareTeamMemberCountQuery(db: D1Database, teamId: string): D1PreparedStatement {
+  return db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ?
+  `).bind(teamId)
+}
 
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${TEAM_MEMBERS_TABLE} (team_id, user_id, role, joined_at)
-    VALUES (?, ?, 'owner', ?)
-  `).bind(teamId, userId, now).run()
-
-  return teamId
+export async function ensureCreditsTables(db: D1Database): Promise<void> {
+  await ensureCreditsSchema(db)
 }
 
 export async function getTeamById(event: H3Event, teamId: string): Promise<TeamRecord | null> {
@@ -522,11 +499,9 @@ export async function getTeamById(event: H3Event, teamId: string): Promise<TeamR
   return row ? mapTeamRow(row) : null
 }
 
-export async function listUserTeams(event: H3Event, userId: string): Promise<UserTeamRecord[]> {
-  const db = requireDatabase(event)
-  await ensureCreditsSchema(db)
-
-  const result = await db.prepare(`
+/** The statement listing a user's teams: organizations first, then by join time. */
+function prepareUserTeamsQuery(db: D1Database, userId: string): D1PreparedStatement {
+  return db.prepare(`
     SELECT
       t.id,
       t.name,
@@ -541,9 +516,11 @@ export async function listUserTeams(event: H3Event, userId: string): Promise<Use
     ORDER BY
       CASE WHEN t.type = 'organization' THEN 0 ELSE 1 END,
       tm.joined_at ASC
-  `).bind(userId).all<D1TeamRow & { role: string, joined_at: string }>()
+  `).bind(userId)
+}
 
-  return (result.results ?? []).map((row) => {
+function mapUserTeamRows(rows: Array<D1TeamRow & { role: string, joined_at: string }>): UserTeamRecord[] {
+  return rows.map((row) => {
     const team = mapTeamRow(row)
     return {
       ...team,
@@ -551,6 +528,38 @@ export async function listUserTeams(event: H3Event, userId: string): Promise<Use
       joinedAt: row.joined_at,
     }
   })
+}
+
+export async function listUserTeams(event: H3Event, userId: string): Promise<UserTeamRecord[]> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const result = await prepareUserTeamsQuery(db, userId).all<D1TeamRow & { role: string, joined_at: string }>()
+  return mapUserTeamRows(result.results ?? [])
+}
+
+export interface TeamMemberWithProfile extends TeamMemberRecord {
+  name: string | null
+  email: string | null
+}
+
+/** A team's members with their name and email, in one query; the team page read each user separately. */
+export async function listTeamMembersWithProfiles(event: H3Event, teamId: string): Promise<TeamMemberWithProfile[]> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const result = await db.prepare(`
+    SELECT tm.team_id, tm.user_id, tm.role, tm.joined_at, u.name AS user_name, u.email AS user_email
+    FROM ${TEAM_MEMBERS_TABLE} tm
+    LEFT JOIN ${USERS_TABLE} u ON u.id = tm.user_id
+    WHERE tm.team_id = ?
+    ORDER BY tm.joined_at ASC
+  `).bind(teamId).all<D1TeamMemberRow & { user_name: string | null, user_email: string | null }>()
+
+  return (result.results ?? []).map(row => ({
+    ...mapTeamMemberRow(row),
+    name: row.user_name ?? null,
+    email: row.user_email ?? null,
+  }))
 }
 
 export async function listTeamMembers(event: H3Event, teamId: string): Promise<TeamMemberRecord[]> {
@@ -693,7 +702,7 @@ export async function deleteTeam(event: H3Event, teamId: string): Promise<void> 
 /**
  * The quota a user's month balance never goes below: the plan's personal
  * allowance — for FREE, the boosted allowance once the profile was completed in
- * an earlier month (`resolvePersonalQuota`).
+ * an earlier month (`personalQuotaFromBoost`).
  *
  * `ensureBalance` raises a user's balance to it on every read and write, and an
  * administrator's deduction may not take the quota under it (`adjustUserCredits`).
@@ -702,9 +711,36 @@ export async function deleteTeam(event: H3Event, teamId: string): Promise<void> 
  * read, with its ledger row and audit left behind.
  */
 async function resolveUserQuotaFloor(event: H3Event, userId: string, month: string): Promise<number> {
-  const plan = await resolvePlanForScope(event, 'user', userId)
+  return (await readUserAllowance(event, userId, month)).floor
+}
+
+/**
+ * The user's plan and boost facts, read side by side, and the quota floor they set. The two reads
+ * used to run one after the other.
+ */
+async function readUserAllowance(event: H3Event, userId: string, month: string) {
+  const [subscription, facts] = await Promise.all([
+    getUserSubscription(event, userId),
+    readBoostFacts(event, userId, month),
+  ])
+  const plan = subscription.plan as CreditPlan
   const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
-  return resolvePersonalQuota(event, userId, basePersonalQuota, month, plan)
+  return { plan, facts, floor: personalQuotaFromBoost(basePersonalQuota, month, plan, deriveBoostContext(facts)) }
+}
+
+/** Opens the scope's month row at `floor` and raises an existing row to it, for callers batching them. */
+function prepareBalanceOpen(db: D1Database, scope: 'team' | 'user', scopeId: string, month: string, floor: number): D1PreparedStatement[] {
+  return [
+    db.prepare(`
+      INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
+      VALUES (?, ?, ?, ?, 0)
+    `).bind(scope, scopeId, month, floor),
+    db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET quota = ?
+      WHERE scope = ? AND scope_id = ? AND month = ? AND quota < ?
+    `).bind(floor, scope, scopeId, month, floor),
+  ]
 }
 
 /**
@@ -719,15 +755,8 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
   const quota = scope === 'user'
     ? await resolveUserQuotaFloor(event, scopeId, month)
     : await resolveTeamQuotaByPlan(event, scopeId, await resolvePlanForScope(event, scope, scopeId))
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
-    VALUES (?, ?, ?, ?, 0)
-  `).bind(scope, scopeId, month, quota).run()
-  await db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET quota = ?
-    WHERE scope = ? AND scope_id = ? AND month = ? AND quota < ?
-  `).bind(quota, scope, scopeId, month, quota).run()
+  // Open the month's row and raise it to the floor in one round trip; they were two.
+  await db.batch(prepareBalanceOpen(db, scope, scopeId, month, quota))
   return quota
 }
 
@@ -757,27 +786,78 @@ async function resolveActiveCreditTeam(event: H3Event, userId: string) {
   }
 }
 
+/**
+ * The balance a credit-pool scope draws from for the active team: the user's first organization (by
+ * join time), else their personal team — `resolveActiveCreditTeam`'s choice, as SQL, so the summary
+ * can read that team's balance in the same batch as everything else.
+ */
+const ACTIVE_CREDIT_TEAM_SQL = `COALESCE(
+  (
+    SELECT t.id FROM ${TEAM_MEMBERS_TABLE} tm
+    INNER JOIN ${TEAMS_TABLE} t ON t.id = tm.team_id
+    WHERE tm.user_id = ?1 AND t.type = 'organization'
+    ORDER BY tm.joined_at ASC
+    LIMIT 1
+  ),
+  'team_' || ?1
+)`
+
+interface BalanceRow { quota?: unknown, used?: unknown }
+
+/**
+ * The credit summary in one round trip in the steady state: teams, both balances and the boost facts
+ * in a single batch, the plan read beside it. It was nine to thirteen sequential reads for a FREE user (the boost
+ * context alone ran twice), on every page of the web dashboard and on the desktop. A balance row
+ * that is missing or below its floor still goes through `ensureBalance`, as before.
+ */
 export async function getCreditSummary(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
   const month = getMonthKey()
 
-  const [activeCreditTeam, plan] = await Promise.all([
-    resolveActiveCreditTeam(event, userId),
-    resolvePlanForScope(event, 'user', userId),
-  ])
-
-  let [teamBalance, userBalance] = await Promise.all([
+  // The plan is read alongside the batch, not after it: both are one round trip of latency.
+  const [[teamsResult, teamBalanceResult, userBalanceResult, boostResult], subscription] = await Promise.all([db.batch([
+    prepareUserTeamsQuery(db, userId),
     db.prepare(`
-      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-    `).bind(activeCreditTeam.teamId, month).first<{ quota?: unknown; used?: unknown }>(),
+      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ${ACTIVE_CREDIT_TEAM_SQL} AND month = ?2
+    `).bind(userId, month),
     db.prepare(`
       SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
-    `).bind(userId, month).first<{ quota?: unknown; used?: unknown }>(),
-  ])
+    `).bind(userId, month),
+    prepareBoostFactsQuery(db, userId, month),
+  ]), getUserSubscription(event, userId)])
+
+  const teams = mapUserTeamRows((teamsResult?.results ?? []) as Array<D1TeamRow & { role: string, joined_at: string }>)
+  const plan = subscription.plan as CreditPlan
+  const boostFacts = (boostResult?.results?.[0] ?? null) as BoostFactsRow | null
+  let teamBalance = (teamBalanceResult?.results?.[0] ?? null) as BalanceRow | null
+  let userBalance = (userBalanceResult?.results?.[0] ?? null) as BalanceRow | null
+
+  const personalTeamId = `team_${userId}`
+  const organizationTeam = teams.find(team => team.type === 'organization') || null
+  let personalTeam = teams.find(team => team.id === personalTeamId) || null
+  if (!personalTeam) {
+    await ensurePersonalTeam(event, userId)
+    personalTeam = {
+      id: personalTeamId,
+      name: 'Personal',
+      type: 'personal',
+      ownerUserId: userId,
+      createdAt: new Date().toISOString(),
+      role: 'owner',
+      joinedAt: new Date().toISOString(),
+    }
+  }
+  const activeTeam = organizationTeam || personalTeam
+  const activeCreditTeam = {
+    personalTeamId,
+    activeTeam,
+    teamId: activeTeam.id,
+    hasTeamPool: activeTeam.type === 'organization',
+  }
 
   const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
-  const expectedPersonalQuota = await resolvePersonalQuota(event, userId, basePersonalQuota, month, plan)
+  const expectedPersonalQuota = personalQuotaFromBoost(basePersonalQuota, month, plan, deriveBoostContext(boostFacts))
   const expectedTeamQuota = activeCreditTeam.hasTeamPool
     ? await resolveTeamQuotaByPlan(event, activeCreditTeam.teamId, plan)
     : DEFAULT_TEAM_QUOTA
@@ -785,23 +865,27 @@ export async function getCreditSummary(event: H3Event, userId: string) {
   const needsUserEnsure = !userBalance || Number(userBalance.quota ?? 0) < expectedPersonalQuota
   const needsTeamEnsure = !teamBalance || Number(teamBalance.quota ?? 0) < expectedTeamQuota
 
-  if (needsUserEnsure) {
-    await ensureBalance(event, 'user', userId)
-    userBalance = await db.prepare(`
-      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
-    `).bind(userId, month).first<{ quota?: unknown; used?: unknown }>()
+  if (needsUserEnsure || needsTeamEnsure) {
+    await Promise.all([
+      needsUserEnsure ? ensureBalance(event, 'user', userId) : null,
+      needsTeamEnsure ? ensureBalance(event, 'team', activeCreditTeam.personalTeamId) : null,
+      needsTeamEnsure && activeCreditTeam.hasTeamPool ? ensureBalance(event, 'team', activeCreditTeam.teamId) : null,
+    ])
+    const [teamReread, userReread] = await db.batch([
+      db.prepare(`
+        SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
+      `).bind(activeCreditTeam.teamId, month),
+      db.prepare(`
+        SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
+      `).bind(userId, month),
+    ])
+    if (needsTeamEnsure)
+      teamBalance = (teamReread?.results?.[0] ?? null) as BalanceRow | null
+    if (needsUserEnsure)
+      userBalance = (userReread?.results?.[0] ?? null) as BalanceRow | null
   }
 
-  if (needsTeamEnsure) {
-    await ensureBalance(event, 'team', activeCreditTeam.personalTeamId)
-    if (activeCreditTeam.hasTeamPool) {
-      await ensureBalance(event, 'team', activeCreditTeam.teamId)
-    }
-    teamBalance = await db.prepare(`
-      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-    `).bind(activeCreditTeam.teamId, month).first<{ quota?: unknown; used?: unknown }>()
-  }
-  const boost = plan === 'FREE' ? await getCreditBoostStatus(event, userId, month, plan) : null
+  const boost = plan === 'FREE' ? boostStatusFromFacts(boostFacts) : null
   const userQuota = resolveCreditAmount(userBalance?.quota ?? 0)
   const canClaimNow = boost ? (boost.eligible && !boost.claimedThisMonth && userQuota < BOOSTED_PERSONAL_QUOTA) : false
   return {
@@ -825,11 +909,20 @@ export async function getCreditSummary(event: H3Event, userId: string) {
   }
 }
 
+/**
+ * Raises a FREE user's month to the boosted allowance, once a month: one read, then one atomic batch.
+ * It was the plan and boost reads (twice: again inside `ensureBalance`), the claim, a balance read and
+ * two writes, with a compensating delete when a write threw — and a request that died in between left
+ * the month claimed and the boost never applied.
+ *
+ * The writes are conditioned on the month being unclaimed and the claim row is written last. D1 runs
+ * a batch on its own, as one transaction, so racing requests apply the boost once.
+ */
 export async function claimCreditBoost(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
   const month = getMonthKey()
-  const plan = await resolvePlanForScope(event, 'user', userId)
+  const { plan, facts, floor } = await readUserAllowance(event, userId, month)
   if (plan !== 'FREE') {
     return {
       eligible: false,
@@ -838,7 +931,7 @@ export async function claimCreditBoost(event: H3Event, userId: string) {
       boost: null,
     }
   }
-  const boost = await getCreditBoostStatus(event, userId, month, plan)
+  const boost = boostStatusFromFacts(facts)
   if (!boost.eligible) {
     return {
       eligible: false,
@@ -847,15 +940,7 @@ export async function claimCreditBoost(event: H3Event, userId: string) {
       boost,
     }
   }
-
-  const now = new Date().toISOString()
-  const insertResult = await db.prepare(`
-    INSERT OR IGNORE INTO ${CREDIT_BOOST_CLAIMS_TABLE} (user_id, month, claimed_at)
-    VALUES (?, ?, ?)
-  `).bind(userId, month, now).run()
-
-  const insertChanges = Number((insertResult as any)?.meta?.changes ?? 0)
-  if (insertChanges < 1) {
+  if (boost.claimedThisMonth) {
     return {
       eligible: true,
       claimed: false,
@@ -864,53 +949,62 @@ export async function claimCreditBoost(event: H3Event, userId: string) {
     }
   }
 
-  try {
-    await ensureBalance(event, 'user', userId)
-    const balanceRow = await db.prepare(`
-      SELECT quota FROM ${CREDIT_BALANCES_TABLE}
-      WHERE scope = 'user' AND scope_id = ? AND month = ?
-    `).bind(userId, month).first()
+  const now = new Date().toISOString()
+  const ledgerId = crypto.randomUUID()
+  const unclaimed = `NOT EXISTS (SELECT 1 FROM ${CREDIT_BOOST_CLAIMS_TABLE} WHERE user_id = ? AND month = ?)`
+  const results = await db.batch([
+    ...prepareBalanceOpen(db, 'user', userId, month, floor),
+    db.prepare(`
+      INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
+      SELECT ?, 'user', ?, ? - quota, 'verification-boost', ?, ?
+      FROM ${CREDIT_BALANCES_TABLE}
+      WHERE scope = 'user' AND scope_id = ? AND month = ? AND quota < ? AND ${unclaimed}
+    `).bind(
+      ledgerId,
+      userId,
+      BOOSTED_PERSONAL_QUOTA,
+      now,
+      JSON.stringify({ userId, month }),
+      userId,
+      month,
+      BOOSTED_PERSONAL_QUOTA,
+      userId,
+      month,
+    ),
+    db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET quota = ?
+      WHERE scope = 'user' AND scope_id = ? AND month = ? AND quota < ? AND ${unclaimed}
+    `).bind(BOOSTED_PERSONAL_QUOTA, userId, month, BOOSTED_PERSONAL_QUOTA, userId, month),
+    db.prepare(`
+      INSERT OR IGNORE INTO ${CREDIT_BOOST_CLAIMS_TABLE} (user_id, month, claimed_at)
+      VALUES (?, ?, ?)
+    `).bind(userId, month, now),
+    db.prepare(`SELECT delta FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?`).bind(ledgerId),
+  ])
 
-    const currentQuota = resolveCreditAmount((balanceRow as any)?.quota ?? 0)
-    const delta = normalizeCreditAmount(BOOSTED_PERSONAL_QUOTA - currentQuota)
-
-    if (delta > 0) {
-      await db.prepare(`
-        UPDATE ${CREDIT_BALANCES_TABLE}
-        SET quota = ?
-        WHERE scope = 'user' AND scope_id = ? AND month = ?
-      `).bind(BOOSTED_PERSONAL_QUOTA, userId, month).run()
-
-      const ledgerId = crypto.randomUUID()
-      await db.prepare(`
-        INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
-        VALUES (?, 'user', ?, ?, ?, ?, ?)
-      `).bind(
-        ledgerId,
-        userId,
-        delta,
-        'verification-boost',
-        now,
-        JSON.stringify({ userId, month }),
-      ).run()
-    }
-
+  const [claimResult, ledgerResult] = results.slice(-2)
+  if (Number((claimResult?.meta as { changes?: number } | undefined)?.changes ?? 0) < 1) {
     return {
       eligible: true,
-      claimed: true,
-      delta: Math.max(0, delta),
+      claimed: false,
+      reason: 'already-claimed',
       boost: {
         ...boost,
         claimedThisMonth: true,
       },
     }
   }
-  catch (error) {
-    await db.prepare(`
-      DELETE FROM ${CREDIT_BOOST_CLAIMS_TABLE}
-      WHERE user_id = ? AND month = ?
-    `).bind(userId, month).run()
-    throw error
+
+  const delta = normalizeCreditAmount(Number((ledgerResult?.results?.[0] as { delta?: unknown } | undefined)?.delta ?? 0))
+  return {
+    eligible: true,
+    claimed: true,
+    delta,
+    boost: {
+      ...boost,
+      claimedThisMonth: true,
+    },
   }
 }
 
@@ -969,62 +1063,52 @@ export async function listCheckinsByMonth(event: H3Event, userId: string, monthI
   }
 }
 
+/**
+ * Today's check-in: one read, then one atomic batch. It was the claim, the plan and boost reads inside
+ * `ensureBalance`, then two writes, with a compensating delete when a write threw — and a request that
+ * died in between left the day claimed and the reward never paid. As in `claimCreditBoost`, the
+ * reward is conditioned on the day being unclaimed and the claim row comes last.
+ */
 export async function claimDailyCheckin(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const day = getDayKey()
-  const now = new Date().toISOString()
+  const now = new Date()
+  const day = getDayKey(now)
+  const month = getMonthKey(now)
+  const claimedAt = now.toISOString()
+  const delta = normalizeCreditAmount(CHECKIN_REWARD)
+  const { floor } = await readUserAllowance(event, userId, month)
 
-  const insertResult = await db.prepare(`
-    INSERT OR IGNORE INTO ${CREDIT_CHECKINS_TABLE} (user_id, day, claimed_at)
-    VALUES (?, ?, ?)
-  `).bind(userId, day, now).run()
+  const unclaimed = `NOT EXISTS (SELECT 1 FROM ${CREDIT_CHECKINS_TABLE} WHERE user_id = ? AND day = ?)`
+  const results = await db.batch([
+    ...prepareBalanceOpen(db, 'user', userId, month, floor),
+    db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET quota = quota + ?
+      WHERE scope = 'user' AND scope_id = ? AND month = ? AND ${unclaimed}
+    `).bind(delta, userId, month, userId, day),
+    db.prepare(`
+      INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
+      SELECT ?, 'user', ?, ?, 'daily-checkin', ?, ?
+      WHERE ${unclaimed}
+    `).bind(crypto.randomUUID(), userId, delta, claimedAt, JSON.stringify({ userId, day }), userId, day),
+    db.prepare(`
+      INSERT OR IGNORE INTO ${CREDIT_CHECKINS_TABLE} (user_id, day, claimed_at)
+      VALUES (?, ?, ?)
+    `).bind(userId, day, claimedAt),
+  ])
 
-  const insertChanges = Number((insertResult as any)?.meta?.changes ?? 0)
-  if (insertChanges < 1) {
+  if (Number((results.at(-1)?.meta as { changes?: number } | undefined)?.changes ?? 0) < 1) {
     return {
       claimed: false,
       day,
       reward: CHECKIN_REWARD,
     }
   }
-
-  try {
-    await ensureBalance(event, 'user', userId)
-    const month = getMonthKey()
-    const delta = normalizeCreditAmount(CHECKIN_REWARD)
-
-    await db.prepare(`
-      UPDATE ${CREDIT_BALANCES_TABLE}
-      SET quota = quota + ?
-      WHERE scope = 'user' AND scope_id = ? AND month = ?
-    `).bind(delta, userId, month).run()
-
-    const ledgerId = crypto.randomUUID()
-    await db.prepare(`
-      INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
-      VALUES (?, 'user', ?, ?, ?, ?, ?)
-    `).bind(
-      ledgerId,
-      userId,
-      delta,
-      'daily-checkin',
-      now,
-      JSON.stringify({ userId, day }),
-    ).run()
-
-    return {
-      claimed: true,
-      day,
-      reward: delta,
-    }
-  }
-  catch (error) {
-    await db.prepare(`
-      DELETE FROM ${CREDIT_CHECKINS_TABLE}
-      WHERE user_id = ? AND day = ?
-    `).bind(userId, day).run()
-    throw error
+  return {
+    claimed: true,
+    day,
+    reward: delta,
   }
 }
 
@@ -1173,6 +1257,32 @@ export async function adjustUserCredits(
   }
 }
 
+interface LedgerIdempotencyRow {
+  id: string
+  delta: number
+  created_at: string
+  metadata?: string | null
+  idempotency_hash?: string | null
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))
+}
+
+/**
+ * Debits `amount` from the user's active credit team and from the user, atomically.
+ *
+ * Two round trips: one batch reads the user's teams, both balances, the boost facts and any earlier
+ * debit under the same idempotency key (the plan is read beside it); a second batch opens and raises
+ * both month rows to their floors, writes the ledger row only if both balances can take the debit,
+ * moves both `used` counters, and reads the balances back to say which one refused. It was about a
+ * dozen sequential round trips before (two `ensureBalance`s, each re-deriving plan and boost, then
+ * two balance reads and an idempotency read).
+ *
+ * An idempotency key that already has a debit returns it before any balance check: a retry of a debit
+ * that spent the last credits used to fail as "exceeded" instead of returning the original. A
+ * concurrent retry that loses the unique index returns the winner's row.
+ */
 export async function consumeCredits(
   event: H3Event,
   userId: string,
@@ -1183,9 +1293,6 @@ export async function consumeCredits(
 ): Promise<CreditConsumptionResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
-  await ensureBalance(event, 'team', activeCreditTeam.teamId)
-  await ensureBalance(event, 'user', userId)
   const numericAmount = Number(amount)
   if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
     throw new Error('Invalid credit amount.')
@@ -1193,131 +1300,160 @@ export async function consumeCredits(
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const month = getMonthKey()
   const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
-  const teamBalance = await db.prepare(`
-    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(activeCreditTeam.teamId, month).first()
-  const userBalance = await db.prepare(`
-    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(userId, month).first()
-  const teamQuota = resolveCreditAmount((teamBalance as any)?.quota ?? 0)
-  const teamUsed = resolveCreditAmount((teamBalance as any)?.used ?? 0)
-  const userQuota = resolveCreditAmount((userBalance as any)?.quota ?? 0)
-  const userUsed = resolveCreditAmount((userBalance as any)?.used ?? 0)
-  const nextTeamUsed = sumCredits(teamUsed, normalizedAmount)
-  const nextUserUsed = sumCredits(userUsed, normalizedAmount)
 
-  if (nextTeamUsed > teamQuota)
-    throw new Error('Team credits exceeded.')
-  if (nextUserUsed > userQuota)
-    throw new Error('User credits exceeded.')
+  const [[teamsResult, existingResult, boostResult], subscription] = await Promise.all([db.batch([
+    prepareUserTeamsQuery(db, userId),
+    db.prepare(`
+      SELECT id, delta, created_at, metadata, idempotency_hash
+      FROM ${CREDIT_LEDGER_TABLE}
+      WHERE scope = 'team'
+        AND scope_id = ${ACTIVE_CREDIT_TEAM_SQL}
+        AND reason = ?2
+        AND idempotency_key = ?3
+      LIMIT 1
+    `).bind(userId, reason, idempotencyKey),
+    prepareBoostFactsQuery(db, userId, month),
+  ]), getUserSubscription(event, userId)])
+
+  const teams = mapUserTeamRows((teamsResult?.results ?? []) as Array<D1TeamRow & { role: string, joined_at: string }>)
+  const personalTeamId = `team_${userId}`
+  if (!teams.some(team => team.id === personalTeamId))
+    await ensurePersonalTeam(event, userId)
+  const organizationTeam = teams.find(team => team.type === 'organization') || null
+  const teamId = organizationTeam?.id ?? personalTeamId
 
   const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
   const idempotencyHash = idempotencyKey
     ? digestCreditConsumptionPayload({
         userId,
-        teamId: activeCreditTeam.teamId,
+        teamId,
         amount: normalizedAmount,
         reason,
         metadata: ledgerMetadata,
       })
     : null
 
-  if (idempotencyKey) {
-    const existing = await db.prepare(`
-      SELECT id, delta, created_at, metadata, idempotency_hash
-      FROM ${CREDIT_LEDGER_TABLE}
-      WHERE scope = 'team'
-        AND scope_id = ?
-        AND reason = ?
-        AND idempotency_key = ?
-      LIMIT 1
-    `).bind(activeCreditTeam.teamId, reason, idempotencyKey).first<{
-      id: string
-      delta: number
-      created_at: string
-      metadata?: string | null
-      idempotency_hash?: string | null
-    }>()
-
-    if (existing) {
-      if (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash)
-        throw new Error('Credit idempotency conflict.')
-
-      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
-      return {
-        ledgerId: existing.id,
-        teamId: activeCreditTeam.teamId,
-        userId,
-        amount: Math.abs(resolveCreditAmount(existing.delta)),
-        reason,
-        createdAt: existing.created_at,
-        metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
-        idempotencyKey,
-      }
+  const toExistingResult = (existing: LedgerIdempotencyRow): CreditConsumptionResult => {
+    if (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash)
+      throw new Error('Credit idempotency conflict.')
+    const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
+    return {
+      ledgerId: existing.id,
+      teamId,
+      userId,
+      amount: Math.abs(resolveCreditAmount(existing.delta)),
+      reason,
+      createdAt: existing.created_at,
+      metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
+      idempotencyKey: idempotencyKey!,
     }
   }
 
+  const existing = idempotencyKey ? (existingResult?.results?.[0] as LedgerIdempotencyRow | undefined) : undefined
+  if (existing)
+    return toExistingResult(existing)
+
+  // The month floors `ensureBalance` would apply. An organization pool's floor depends on its owner's
+  // plan and seat quota, so that rarer case keeps going through `ensureBalance` itself.
+  const plan = subscription.plan as CreditPlan
+  const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
+  const userFloor = personalQuotaFromBoost(basePersonalQuota, month, plan, deriveBoostContext((boostResult?.results?.[0] ?? null) as BoostFactsRow | null))
+  if (organizationTeam)
+    await ensureBalance(event, 'team', organizationTeam.id)
+
+  const readBalance = (scope: 'team' | 'user', scopeId: string) => db.prepare(`
+    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = ? AND scope_id = ? AND month = ?
+  `).bind(scope, scopeId, month)
+
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const batchResults = await db.batch([
-    db.prepare(`
-      INSERT INTO ${CREDIT_LEDGER_TABLE} (
-        id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
-      )
-      SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
-        WHERE scope = 'team' AND scope_id = ? AND month = ? AND used + ? <= quota
-      )
-      AND EXISTS (
-        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
-        WHERE scope = 'user' AND scope_id = ? AND month = ? AND used + ? <= quota
-      )
-    `).bind(
-      id,
-      activeCreditTeam.teamId,
-      -normalizedAmount,
-      reason,
-      now,
-      JSON.stringify(ledgerMetadata),
-      idempotencyKey,
-      idempotencyHash,
-      activeCreditTeam.teamId,
-      month,
-      normalizedAmount,
-      userId,
-      month,
-      normalizedAmount,
-    ),
-    db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET used = used + ?
-    WHERE scope = 'team'
-      AND scope_id = ?
-      AND month = ?
-      AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
-  `).bind(normalizedAmount, activeCreditTeam.teamId, month, id),
-    db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET used = used + ?
-    WHERE scope = 'user'
-      AND scope_id = ?
-      AND month = ?
-      AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
-  `).bind(normalizedAmount, userId, month, id),
-  ])
+  let results: Awaited<ReturnType<D1Database['batch']>>
+  try {
+    results = await db.batch([
+      ...(organizationTeam ? [] : prepareBalanceOpen(db, 'team', teamId, month, DEFAULT_TEAM_QUOTA)),
+      ...prepareBalanceOpen(db, 'user', userId, month, userFloor),
+      db.prepare(`
+        INSERT INTO ${CREDIT_LEDGER_TABLE} (
+          id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+        )
+        SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'team' AND scope_id = ? AND month = ? AND used + ? <= quota
+        )
+        AND EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'user' AND scope_id = ? AND month = ? AND used + ? <= quota
+        )
+      `).bind(
+        id,
+        teamId,
+        -normalizedAmount,
+        reason,
+        now,
+        JSON.stringify(ledgerMetadata),
+        idempotencyKey,
+        idempotencyHash,
+        teamId,
+        month,
+        normalizedAmount,
+        userId,
+        month,
+        normalizedAmount,
+      ),
+      db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET used = used + ?
+        WHERE scope = 'team'
+          AND scope_id = ?
+          AND month = ?
+          AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+      `).bind(normalizedAmount, teamId, month, id),
+      db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET used = used + ?
+        WHERE scope = 'user'
+          AND scope_id = ?
+          AND month = ?
+          AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+      `).bind(normalizedAmount, userId, month, id),
+      readBalance('team', teamId),
+      readBalance('user', userId),
+    ])
+  }
+  catch (error) {
+    // A concurrent request with the same key inserted first: answer with its row.
+    if (idempotencyKey && isUniqueConstraintError(error)) {
+      const winner = await db.prepare(`
+        SELECT id, delta, created_at, metadata, idempotency_hash
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE scope = 'team' AND scope_id = ? AND reason = ? AND idempotency_key = ?
+        LIMIT 1
+      `).bind(teamId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
+      if (winner)
+        return toExistingResult(winner)
+    }
+    throw error
+  }
 
-  const insertedLedger = Number((batchResults[0] as any)?.meta?.changes ?? 0)
-  const updatedTeam = Number((batchResults[1] as any)?.meta?.changes ?? 0)
-  const updatedUser = Number((batchResults[2] as any)?.meta?.changes ?? 0)
-  if (insertedLedger < 1)
+  const [insertResult, teamUpdate, userUpdate, teamBalanceResult, userBalanceResult] = results.slice(-5)
+  const insertedLedger = Number((insertResult?.meta as { changes?: number } | undefined)?.changes ?? 0)
+  if (insertedLedger < 1) {
+    const teamBalance = teamBalanceResult?.results?.[0] as { quota?: unknown, used?: unknown } | undefined
+    const userBalance = userBalanceResult?.results?.[0] as { quota?: unknown, used?: unknown } | undefined
+    if (sumCredits(resolveCreditAmount(teamBalance?.used ?? 0), normalizedAmount) > resolveCreditAmount(teamBalance?.quota ?? 0))
+      throw new Error('Team credits exceeded.')
+    if (sumCredits(resolveCreditAmount(userBalance?.used ?? 0), normalizedAmount) > resolveCreditAmount(userBalance?.quota ?? 0))
+      throw new Error('User credits exceeded.')
     throw new Error('Credits exceeded.')
-  if (updatedTeam < 1 || updatedUser < 1)
+  }
+  if (Number((teamUpdate?.meta as { changes?: number } | undefined)?.changes ?? 0) < 1
+    || Number((userUpdate?.meta as { changes?: number } | undefined)?.changes ?? 0) < 1)
     throw new Error('Credit balance update failed.')
 
   return {
     ledgerId: id,
-    teamId: activeCreditTeam.teamId,
+    teamId,
     userId,
     amount: normalizedAmount,
     reason,
@@ -1374,20 +1510,38 @@ export async function releaseConsumedCredits(
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const reservationLedgerId = options.reservationLedgerId?.trim() || null
 
+  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
+
   let teamId: string
   let month: string
+  // With a reservation, its row and any earlier release under the same key are read together: the
+  // reservation names the team, so the key lookup can find it by subquery.
+  let prefetchedExisting: LedgerIdempotencyRow | null | undefined
   if (reservationLedgerId) {
-    const reservation = await db.prepare(`
-      SELECT scope_id, delta, created_at, metadata
-      FROM ${CREDIT_LEDGER_TABLE}
-      WHERE id = ? AND scope = 'team'
-      LIMIT 1
-    `).bind(reservationLedgerId).first<{
+    const [reservationResult, existingResult] = await db.batch([
+      db.prepare(`
+        SELECT scope_id, delta, created_at, metadata
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE id = ? AND scope = 'team'
+        LIMIT 1
+      `).bind(reservationLedgerId),
+      db.prepare(`
+        SELECT id, delta, created_at, metadata, idempotency_hash
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE scope = 'team'
+          AND scope_id = (SELECT scope_id FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?1 AND scope = 'team')
+          AND reason = ?2
+          AND idempotency_key = ?3
+        LIMIT 1
+      `).bind(reservationLedgerId, reason, idempotencyKey),
+    ])
+    prefetchedExisting = (existingResult?.results?.[0] as LedgerIdempotencyRow | undefined) ?? null
+    const reservation = reservationResult?.results?.[0] as {
       scope_id: string
       delta: number
       created_at: string
       metadata?: string | null
-    }>()
+    } | undefined
     const reservationMetadata = parseLedgerMetadata(reservation?.metadata ?? null)
     const reservationDate = new Date(reservation?.created_at ?? '')
     const reservedAmount = Math.abs(resolveCreditAmount(reservation?.delta ?? 0))
@@ -1404,13 +1558,14 @@ export async function releaseConsumedCredits(
     month = getMonthKey(reservationDate)
   } else {
     const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
-    await ensureBalance(event, 'team', activeCreditTeam.teamId)
-    await ensureBalance(event, 'user', userId)
+    await Promise.all([
+      ensureBalance(event, 'team', activeCreditTeam.teamId),
+      ensureBalance(event, 'user', userId),
+    ])
     teamId = activeCreditTeam.teamId
     month = getMonthKey()
   }
 
-  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
   const ledgerMetadata = {
     ...(metadata ?? {}),
     userId,
@@ -1436,21 +1591,17 @@ export async function releaseConsumedCredits(
         })
       : null
   if (idempotencyKey) {
-    const existing = await db.prepare(`
-      SELECT id, delta, created_at, metadata, idempotency_hash
-      FROM ${CREDIT_LEDGER_TABLE}
-      WHERE scope = 'team'
-        AND scope_id = ?
-        AND reason = ?
-        AND idempotency_key = ?
-      LIMIT 1
-    `).bind(teamId, reason, idempotencyKey).first<{
-      id: string
-      delta: number
-      created_at: string
-      metadata?: string | null
-      idempotency_hash?: string | null
-    }>()
+    const existing = prefetchedExisting !== undefined
+      ? prefetchedExisting
+      : await db.prepare(`
+        SELECT id, delta, created_at, metadata, idempotency_hash
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE scope = 'team'
+          AND scope_id = ?
+          AND reason = ?
+          AND idempotency_key = ?
+        LIMIT 1
+      `).bind(teamId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
 
     if (existing) {
       const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
@@ -1601,18 +1752,31 @@ export async function listCreditUsageByUsers(
     }
   }
 
-  for (const userId of uniqueUserIds) {
-    await ensurePersonalTeam(event, userId)
-    await ensureBalance(event, 'user', userId)
-  }
+  // Every member's month is opened and raised to their floor, as before, but side by side: this ran
+  // member after member, four to five round trips each, before the page could be read. Personal teams
+  // are created only for the members that lack one (one query finds them).
+  const userIdsJson = JSON.stringify(uniqueUserIds)
+  const missingTeams = await db.prepare(`
+    SELECT ids.value AS user_id
+    FROM json_each(?1) ids
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ${TEAM_MEMBERS_TABLE} tm
+      WHERE tm.team_id = 'team_' || ids.value AND tm.user_id = ids.value
+    )
+  `).bind(userIdsJson).all<{ user_id: string }>()
+  await Promise.all([
+    ...(missingTeams.results ?? []).map(row => ensurePersonalTeam(event, row.user_id)),
+    ...uniqueUserIds.map(userId => ensureBalance(event, 'user', userId)),
+  ])
 
-  const idPlaceholders = uniqueUserIds.map(() => '?').join(', ')
+  // The member list goes in as one JSON parameter: an IN list binds one parameter per member and
+  // D1 refuses statements with more than 100.
   const conditions = [
     `cb.scope = 'user'`,
     `cb.month = ?`,
-    `cb.scope_id IN (${idPlaceholders})`,
+    `cb.scope_id IN (SELECT value FROM json_each(?))`,
   ]
-  const params: Array<string | number> = [month, ...uniqueUserIds]
+  const params: Array<string | number> = [month, userIdsJson]
 
   if (search) {
     const term = `%${search}%`
@@ -1622,15 +1786,15 @@ export async function listCreditUsageByUsers(
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`
 
-  const summaryRow = await db.prepare(`
-    SELECT COUNT(1) as total, SUM(cb.used) as total_used, SUM(cb.quota) as total_quota
-    FROM ${CREDIT_BALANCES_TABLE} cb
-    LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
-    ${whereClause}
-  `).bind(...params).first<{ total?: number; total_used?: number; total_quota?: number }>()
-
   const listParams = [...params, limit, offset]
-  const { results } = await db.prepare(`
+  const [summaryResult, listResult] = await db.batch([
+    db.prepare(`
+      SELECT COUNT(1) as total, SUM(cb.used) as total_used, SUM(cb.quota) as total_quota
+      FROM ${CREDIT_BALANCES_TABLE} cb
+      LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
+      ${whereClause}
+    `).bind(...params),
+    db.prepare(`
     SELECT
       cb.scope_id as user_id,
       cb.quota,
@@ -1645,7 +1809,10 @@ export async function listCreditUsageByUsers(
     ${whereClause}
     ORDER BY cb.used DESC, cb.scope_id ASC
     LIMIT ? OFFSET ?
-  `).bind(...listParams).all<Record<string, any>>()
+  `).bind(...listParams),
+  ])
+  const summaryRow = summaryResult?.results?.[0] as { total?: number, total_used?: number, total_quota?: number } | undefined
+  const results = (listResult?.results ?? []) as Array<Record<string, any>>
 
   return {
     month,
@@ -1690,36 +1857,35 @@ export async function listCreditLedgerByUsers(
     }
   }
 
-  const userIdPlaceholders = uniqueUserIds.map(() => '?').join(', ')
-  const teamIds = uniqueUserIds.map(userId => `team_${userId}`)
-  const teamIdPlaceholders = teamIds.map(() => '?').join(', ')
+  // The members as one JSON parameter, read three ways: they were bound three times over, so 34
+  // members passed D1's 100 parameters.
   const conditions = [
     `(
-      (l.scope = 'user' AND l.scope_id IN (${userIdPlaceholders}))
-      OR (l.scope = 'team' AND json_extract(l.metadata, '$.userId') IN (${userIdPlaceholders}))
-      OR (l.scope = 'team' AND l.scope_id IN (${teamIdPlaceholders}))
+      (l.scope = 'user' AND l.scope_id IN (SELECT value FROM json_each(?1)))
+      OR (l.scope = 'team' AND json_extract(l.metadata, '$.userId') IN (SELECT value FROM json_each(?1)))
+      OR (l.scope = 'team' AND l.scope_id IN (SELECT 'team_' || value FROM json_each(?1)))
     )`,
   ]
-  const params: Array<string | number> = [...uniqueUserIds, ...uniqueUserIds, ...teamIds]
+  const params: Array<string | number> = [JSON.stringify(uniqueUserIds)]
 
   if (search) {
     const term = `%${search}%`
-    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(COALESCE(json_extract(l.metadata, \'$.userId\'), u.id, l.scope_id)) LIKE ?)')
-    params.push(term, term, term)
+    conditions.push('(LOWER(u.email) LIKE ?2 OR LOWER(u.name) LIKE ?2 OR LOWER(COALESCE(json_extract(l.metadata, \'$.userId\'), u.id, l.scope_id)) LIKE ?2)')
+    params.push(term)
   }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`
+  const limitParam = `?${params.length + 1}`
+  const offsetParam = `?${params.length + 2}`
 
-  const totalRow = await db.prepare(`
+  // The count and the page in one round trip; they were two.
+  const [totalResult, pageResult] = await db.batch([db.prepare(`
     SELECT COUNT(1) as total
     FROM ${CREDIT_LEDGER_TABLE} l
     LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id AND l.scope = 'team'
     LEFT JOIN ${USERS_TABLE} u ON u.id = COALESCE(json_extract(l.metadata, '$.userId'), CASE WHEN l.scope = 'user' THEN l.scope_id ELSE t.owner_user_id END)
     ${whereClause}
-  `).bind(...params).first<{ total?: number }>()
-
-  const listParams = [...params, limit, offset]
-  const { results } = await db.prepare(`
+  `).bind(...params), db.prepare(`
     SELECT
       l.id,
       l.scope_id,
@@ -1737,8 +1903,10 @@ export async function listCreditLedgerByUsers(
     LEFT JOIN ${USERS_TABLE} u ON u.id = COALESCE(json_extract(l.metadata, '$.userId'), CASE WHEN l.scope = 'user' THEN l.scope_id ELSE t.owner_user_id END)
     ${whereClause}
     ORDER BY l.created_at DESC
-    LIMIT ? OFFSET ?
-  `).bind(...listParams).all<Record<string, any>>()
+    LIMIT ${limitParam} OFFSET ${offsetParam}
+  `).bind(...params, limit, offset)])
+  const totalRow = (totalResult?.results?.[0] ?? null) as { total?: number } | null
+  const results = (pageResult?.results ?? []) as Array<Record<string, any>>
 
   return {
     entries: (results ?? []).map((row) => {
@@ -1802,8 +1970,6 @@ export async function listCreditLedgerByTraceIds(
   if (!uniqueTraceIds.length)
     return []
 
-  const placeholders = uniqueTraceIds.map(() => '?').join(', ')
-
   const { results } = await db.prepare(`
     SELECT
       l.id,
@@ -1822,10 +1988,10 @@ export async function listCreditLedgerByTraceIds(
     LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
     WHERE l.scope = 'team'
       AND (l.reason = 'intelligence-invoke' OR l.reason LIKE 'intelligence-invoke-%')
-      AND json_extract(l.metadata, '$.traceId') IN (${placeholders})
+      AND json_extract(l.metadata, '$.traceId') IN (SELECT value FROM json_each(?1))
     ORDER BY l.created_at DESC
     LIMIT ${uniqueTraceIds.length * CREDIT_LEDGER_ROWS_PER_TRACE}
-  `).bind(...uniqueTraceIds).all<Record<string, any>>()
+  `).bind(JSON.stringify(uniqueTraceIds)).all<Record<string, any>>()
 
   const rows = (results ?? [])
     .map((row) => {
@@ -1925,7 +2091,6 @@ export async function listCreditTrendByUsers(
   }
 
   const teamIds = uniqueUserIds.map(userId => `team_${userId}`)
-  const placeholders = teamIds.map(() => '?').join(', ')
   const startDate = new Date(endDate)
   startDate.setUTCDate(endDate.getUTCDate() - (days - 1))
   const startIso = startDate.toISOString()
@@ -1934,9 +2099,9 @@ export async function listCreditTrendByUsers(
     SELECT created_at, delta
     FROM ${CREDIT_LEDGER_TABLE}
     WHERE scope = 'team'
-      AND scope_id IN (${placeholders})
-      AND created_at >= ?
-  `).bind(...teamIds, startIso).all<{ created_at: string; delta: number }>()
+      AND scope_id IN (SELECT value FROM json_each(?1))
+      AND created_at >= ?2
+  `).bind(JSON.stringify(teamIds), startIso).all<{ created_at: string; delta: number }>()
 
   let totalUsed = 0
   for (const row of results || []) {

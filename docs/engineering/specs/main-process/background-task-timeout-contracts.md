@@ -250,7 +250,11 @@ Any outbox/queue drain must:
 - keep that budget **under** the polling bound, so the task finishes on its own
   terms instead of being timed out mid-write;
 - stop the round on the first network failure — the endpoint is down for all of
-  them, and per-item retries just burn one timeout each;
+  them, and per-item retries just burn one timeout each. An endpoint-wide HTTP
+  answer (5xx, 403, 429) stops it too, behind a cooldown: while Nexus answered
+  500 to every batch (database out of daily writes, 2026-10-08), walking on sent
+  about one batch a second per client. Only an item-level 4xx moves on to the
+  next item;
 - when the queue is rewritten wholesale (rather than per-item removal), carry
   every unreached item back verbatim. Breaking out of a loop that builds a
   `remaining` array silently drops the tail otherwise.
@@ -354,6 +358,13 @@ factory when adding an export here.
   before its first await. Flush already accepted events while Storage is still live.
   Late module lifecycle events and previously queued polling callbacks must not read
   destroyed storage or re-arm work. Re-initialization reopens admission explicitly.
+- Both telemetry outbox flush tasks (`sentry.nexus.flush`, `startup-analytics.outbox.flush`)
+  register an explicit `timeoutMs` of round budget + one request timeout + 5s slack. The round
+  budget is only checked between items, so one more request may start just under it; at the
+  polling default (30s) the Sentry task was timed out at 30,002ms with a request still in flight.
+  A failed startup upload records a stable code on the row (`NETWORK_TIMEOUT`, `HTTP_403`,
+  `STARTUP_REPORT_FAILED`) and sends `X-Idempotency-Key: startup:<sessionId>` so Nexus
+  de-duplicates the retry; consent is re-read every round and an opt-out discards the queue.
 
 ## Scenario: macOS translation reuses a readiness-gated Swift helper
 

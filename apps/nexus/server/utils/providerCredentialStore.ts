@@ -10,6 +10,7 @@ import {
   requireD1Database,
   type SecureCredentialRow,
 } from './secureCredentialStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const CREDENTIALS_TABLE = 'provider_secure_store'
 
@@ -73,26 +74,23 @@ const crypto = createSecureCredentialCrypto({
   },
 })
 
-const initializedSchemas = new WeakSet<D1Database>()
+const PROVIDER_CREDENTIAL_SCHEMA = defineD1Schema('provider-credentials', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${CREDENTIALS_TABLE} (
+        auth_ref TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        encrypted_value TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (auth_ref, purpose)
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_secure_store_auth_ref ON ${CREDENTIALS_TABLE}(auth_ref)`,
+  ],
+})
 
 async function ensureProviderCredentialSchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDENTIALS_TABLE} (
-      auth_ref TEXT NOT NULL,
-      purpose TEXT NOT NULL,
-      encrypted_value TEXT NOT NULL,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (auth_ref, purpose)
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_secure_store_auth_ref ON ${CREDENTIALS_TABLE}(auth_ref);`).run()
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, PROVIDER_CREDENTIAL_SCHEMA)
 }
 
 function normalizeAuthType(value: unknown): ProviderCredentialAuthType {

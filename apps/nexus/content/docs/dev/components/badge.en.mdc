@@ -1,6 +1,6 @@
 ---
 title: Badge
-description: Inline count, status, and dot indicators for compact UI surfaces.
+description: A compact count, status label, or dot indicator.
 category: Basic
 status: beta
 since: 0.3.4
@@ -11,63 +11,29 @@ verified: true
 
 ## Usage
 
-### Badge Variants
-
+### Variants
 :::TuffDemoWrapper{demo="BadgeBadgeVariantsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const initialCount = 8
-  const count = ref(initialCount)
-  const errorDot = ref(true)
-  const resetDemo = () => {
-    count.value = initialCount
-    errorDot.value = true
-  }
-  </script>
-
   <template>
-    <TxFlex direction="column" gap="16px">
-      <TxFlex align="center" gap="12px" wrap="wrap">
-        <TxBadge :value="count" />
-        <TxBadge value="New" variant="primary" />
-        <TxBadge value="99+" variant="success" />
-        <TxBadge v-if="errorDot" dot variant="error" />
-      </TxFlex>
-      <TxFlex align="center" gap="8px" wrap="wrap">
-        <TxButton size="sm" @click="count++">Add</TxButton>
-        <TxButton size="sm" variant="secondary" :disabled="count === 0" @click="count--">Decrease</TxButton>
-        <TxButton size="sm" variant="secondary" @click="resetDemo">Reset</TxButton>
-        <TxSwitch v-model="errorDot" />
-      </TxFlex>
-    </TxFlex>
+    <TxBadge :value="count" />
+    <TxBadge value="New" variant="primary" />
+    <TxBadge value="99+" variant="success" />
+    <TxBadge dot variant="error" />
   </template>
 ---
 :::
 
 ### Pop Motion
-
-`open` drives the badge in and out: entering slides from the anchor offset with a scale/blur pop, closing pops out quickly while keeping the layout box. Numeric content renders through `TxTextMorph`, so count changes roll by place value — only the columns that actually moved animate.
-
+Toggling `open` slides the badge in or pops it out, keeping its layout box; numbers roll only the digits that change.
 :::TuffDemoWrapper{demo="BadgeBadgeMotionDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(true)
-  const count = ref(8)
-  </script>
-
   <template>
     <span style="position: relative; display: inline-flex">
       <TxButton variant="secondary">Inbox</TxButton>
-      <TxBadge variant="error" :value="count" :open="open" class="corner" />
+      <TxBadge variant="error" :value="count" :open="hasUnread" class="corner" />
     </span>
-    <TxSwitch v-model="open" />
-    <TxButton size="sm" round @click="count++">+1</TxButton>
   </template>
 
   <style scoped>
@@ -112,12 +78,11 @@ code: |
 
 ### Best Practices
 
-- Use `TxBadge` for counts and small state hints. Use `TxStatusBadge` when the label needs a status icon or permission mapping.
-- Keep badge text short; `white-space: nowrap` prevents wrapping.
-- For target-corner notification badges, position `TxBadge` in the host component. `TxBadge` does not anchor itself.
-- Do not rely on dot color alone for critical states; pair dot indicators with adjacent text.
-- Prefer variants for semantic states and reserve `color` for brand or custom taxonomy labels.
-- For corner notifications, bind `open` to the unread state and let the pop motion handle appearance; do not stack your own transform on the badge.
+- Use `TxBadge` for counts and short states; use `TxStatusBadge` when you need a status icon or permission mapping.
+- Keep the text short; badges never wrap.
+- Position corner badges in the host; bind `open` to the unread state and add no transform of your own.
+- Don't rely on dot color alone for critical states; put text next to it.
+- Use `variant` for semantic states; reserve `color` for brand or custom categories.
 
 ## API Reference
 
@@ -125,54 +90,44 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `variant` | `'default' \| 'primary' \| 'success' \| 'warning' \| 'error'` | `'default'` | Color preset. |
-| `value` | `number \| string` | `0` | Badge text content when the default slot is not used and `dot=false`. Numbers roll by place value through `TxTextMorph`. |
-| `color` | `string` | - | Custom background color. Also sets text color to white. |
-| `dot` | `boolean` | `false` | Render a compact dot and hide text content. |
-| `open` | `boolean` | `true` | Presence switch; toggling plays the slide/pop motion, and the closed badge keeps its layout box. |
-
-### Events
-
-`TxBadge` does not emit component events. Attach interactions to surrounding controls when a badge needs to behave like a filter or notification target.
+| `variant` | `'default' \| 'primary' \| 'success' \| 'warning' \| 'error'` | `'default'` | Semantic color preset. |
+| `value` | `number \| string` | `0` | Text when there is no slot and `dot` is off; numbers roll by digit. |
+| `color` | `string` | - | Custom background; turns the text white. |
+| `dot` | `boolean` | `false` | Renders a dot with no text. |
+| `open` | `boolean` | `true` | Presence; toggling plays the motion, and the closed badge keeps its layout box. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `default` | - | Custom pill content. Ignored when `dot=true`. |
+| `default` | - | Custom content; takes priority over `value` and is ignored with `dot`. |
 
 ### CSS Variables
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `--tx-badge-bg` | `variant` / `color` | Badge background. |
-| `--tx-badge-text` | `variant` / `color` | Badge text color. |
-| `--tx-badge-border` | `variant` | Badge border color. |
-| `--tx-badge-offset-x` / `--tx-badge-offset-y` | optional consumer hook | Slide-in start offset, defaults `-8.2px` / `12.4px`. |
-| `--tx-badge-slide-dur` | optional consumer hook | Slide-in duration, default `260ms`. |
-| `--tx-badge-pop-dur` / `--tx-badge-pop-close-dur` | optional consumer hook | Open/close scale+blur durations, defaults `500ms` / `180ms`. |
-| `--tx-badge-fade-dur` / `--tx-badge-fade-close-dur` | optional consumer hook | Fade durations, defaults `400ms` / `180ms`. |
-| `--tx-badge-blur` | optional consumer hook | Closed-state blur amount, default `2px`. |
-| `--tx-badge-slide-ease` / `--tx-badge-pop-ease` / `--tx-badge-close-ease` | optional consumer hook | Easing curves of the three motion phases. |
+| `--tx-badge-bg` | `variant` / `color` | Background. |
+| `--tx-badge-text` | `variant` / `color` | Text color. |
+| `--tx-badge-border` | `variant` | Border color. |
+| `--tx-badge-offset-x` / `--tx-badge-offset-y` | caller | Slide-in start offset; defaults `-8.2px` / `12.4px`. |
+| `--tx-badge-slide-dur` | caller | Slide-in duration; default `260ms`. |
+| `--tx-badge-pop-dur` / `--tx-badge-pop-close-dur` | caller | Pop-in / pop-out duration; defaults `500ms` / `180ms`. |
+| `--tx-badge-fade-dur` / `--tx-badge-fade-close-dur` | caller | Fade-in / fade-out duration; defaults `400ms` / `180ms`. |
+| `--tx-badge-blur` | caller | Blur of the closed state; default `2px`. |
+| `--tx-badge-slide-ease` / `--tx-badge-pop-ease` / `--tx-badge-close-ease` | caller | Easing of the three motion phases. |
 
 ## Overview
 
-- The root is an inline `span` with pill styling.
-- `variant` controls default CSS variables for background, text, and border colors.
-- `color` overrides the background via `--tx-badge-bg` and forces `--tx-badge-text: #ffffff`.
-- When `dot=true`, the component renders `.tx-badge__dot`, adds `tx-badge--dot`, and does not render `value` or default slot text.
-- When `dot=false`, the default slot takes priority over `value`.
-- `value` defaults to `0`, so an empty badge still renders `0` unless a slot or `dot` is used.
-- Numeric `value` renders through `TxTextMorph` and rolls by place value on change (9 → 10 grows the number rather than replacing it); strings and slot content render as-is. The pill's width follows the morph engine's own container animation, so nothing measures it separately.
-- Toggling `open` plays the pop motion: entering slides in with a scale/blur pop, closing pops out quickly while keeping the layout box; the entrance never plays on first mount.
-- Under `prefers-reduced-motion: reduce` the pop motion is disabled, and the morph engine honors the same preference by writing the new value straight in.
-- `TxBadge` has no click event, positioning logic, overflow truncation, or target anchoring behavior.
+- The root is an inline pill `span`.
+- With `dot`, only `.tx-badge__dot` renders; otherwise the default slot wins over `value`.
+- `value` defaults to `0`, so a badge with no slot and no `dot` shows `0`.
+- A numeric `value` rolls by place value (9 → 10 grows a digit instead of swapping the number); strings and slot content render as-is.
+- The `open` motion plays only on toggles, never on first mount; under reduced motion it is off and numbers update in place.
+- There is no click event, positioning, overflow truncation, or anchoring; attach interactions to the surrounding control.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/badge/src/TxBadge.vue` confirms inline span rendering, `variant` classes, custom color CSS variables, dot mode, and default-slot precedence over `value`.
-- Type contracts: `packages/tuffex/packages/components/src/badge/src/types.ts` defines `BadgeVariant` and `BadgeProps` (including `open`). Numeric values render through `TxTextMorph`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/badge/__tests__/badge.test.ts` covers value rendering, slot content, dot mode, and custom color variables.
-- Export: `packages/tuffex/packages/components/src/badge/index.ts` wraps the component with `withInstall` and exports `TxBadgeInstance`.
+- Numbers render through `TxTextMorph`; the pill's width follows its container animation instead of being measured.
+- Source: `packages/tuffex/packages/components/src/badge/`.
 
 <TuffDocSourceLink />

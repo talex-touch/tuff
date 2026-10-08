@@ -50,7 +50,8 @@ export interface AdminGate {
  * The profile comes through `useAuthUser()`, the same shared `auth-user` state
  * `app.vue` fills for every `requiresAuth` route: on a cold landing `app.vue`'s
  * request is already in flight when the layout sets up, so ours is skipped as a
- * duplicate; on the way in from a dashboard page it re-reads the role once. Its
+ * duplicate; on the way in from a dashboard page the role comes from the profile
+ * read in the last 30 seconds, or is read again (`fetchCurrentUserProfile`). Its
  * `refresh` is the retry. Signed-out visitors are `app.vue`'s to send to sign-in;
  * this stays `resolving` for them.
  */

@@ -26,6 +26,7 @@ import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ReportQueueStore } from './report-queue-store'
+import { readTelemetryConsent } from './telemetry-consent'
 import { getOrCreateTelemetryClientId } from './telemetry-client'
 
 const analyticsLog = createLogger('StartupAnalytics')
@@ -38,11 +39,14 @@ const STARTUP_OUTBOX_FLUSH_TASK_ID = 'startup-analytics.outbox.flush'
 const STARTUP_OUTBOX_FLUSH_INTERVAL_MS = 30_000
 const STARTUP_OUTBOX_FLUSH_STARTUP_GRACE_MS = 45_000
 const STARTUP_REPORT_REQUEST_TIMEOUT_MS = 12_000
-/**
- * Wall-clock budget for one flush round, kept under the polling service's own
- * bound so the task finishes on its own terms instead of being timed out.
- */
+/** Wall-clock budget for one flush round; checked between items, so one more request may follow. */
 const STARTUP_FLUSH_BUDGET_MS = 20_000
+/**
+ * The polling task's own bound: budget plus one in-flight request plus slack, so the task ends
+ * on its own terms rather than at the polling default (30s), which the budget alone could exceed.
+ */
+const STARTUP_OUTBOX_FLUSH_TASK_TIMEOUT_MS =
+  STARTUP_FLUSH_BUDGET_MS + STARTUP_REPORT_REQUEST_TIMEOUT_MS + 5_000
 
 export interface FileReportQueueItem {
   payload: Record<string, unknown>
@@ -54,6 +58,45 @@ export interface FileReportQueueItem {
 
 function shouldDowngradeStartupReportFailure(errorMessage: string | null | undefined): boolean {
   return shouldDowngradeRemoteFailure(errorMessage)
+}
+
+const STABLE_FAILURE_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/
+
+/**
+ * A stable code for the outbox row, so a report that keeps failing says why.
+ *
+ * `markAttempt` used to be called without one, and the packaged profile ended up with a startup
+ * report at 32 retries and `last_error` NULL (2026-10-06): no way to tell a timeout from a 4xx.
+ */
+export function resolveStartupReportFailureCode(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const code = (error as { code?: unknown }).code
+    if (typeof code === 'string' && STABLE_FAILURE_CODE_PATTERN.test(code)) return code
+    const status = (error as { status?: unknown }).status
+    if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status < 600) {
+      return `HTTP_${status}`
+    }
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && STABLE_FAILURE_CODE_PATTERN.test(message)) return message
+  }
+  return 'STARTUP_REPORT_FAILED'
+}
+
+/** The key `reportMetrics` stamps into the payload; Nexus de-duplicates a retried report on it. */
+function resolveStartupReportIdempotencyKey(payload: unknown): string | null {
+  const metadata =
+    payload && typeof payload === 'object'
+      ? (payload as { metadata?: { idempotencyKey?: unknown } }).metadata
+      : undefined
+  const key = metadata?.idempotencyKey
+  return typeof key === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(key) ? key : null
+}
+
+function buildStartupReportHeaders(payload: unknown): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const idempotencyKey = resolveStartupReportIdempotencyKey(payload)
+  if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey
+  return headers
 }
 
 /**
@@ -356,6 +399,7 @@ export class StartupAnalytics {
         backpressure: 'latest_wins',
         dedupeKey: STARTUP_OUTBOX_FLUSH_TASK_ID,
         maxInFlight: 1,
+        timeoutMs: STARTUP_OUTBOX_FLUSH_TASK_TIMEOUT_MS,
         jitterMs: 600
       }
     )
@@ -363,6 +407,13 @@ export class StartupAnalytics {
   }
 
   private async flushQueuedReports(endpoint: string): Promise<void> {
+    // Consent is re-read on every round: the switch can be turned off while reports are queued,
+    // and a queued report must not upload after that.
+    if (!readTelemetryConsent().enabled) {
+      await this.discardQueuedReports()
+      return
+    }
+
     const dbStore = this.getReportQueueStore()
     if (dbStore) {
       await this.flushQueuedReportsFromDb(dbStore, endpoint)
@@ -409,7 +460,7 @@ export class StartupAnalytics {
         await getNetworkService().request<string>({
           method: 'POST',
           url: endpoint,
-          headers: { 'Content-Type': 'application/json' },
+          headers: buildStartupReportHeaders(item.payload),
           body: item.payload,
           responseType: 'text',
           timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
@@ -459,6 +510,31 @@ export class StartupAnalytics {
     }
   }
 
+  /** Drops every queued startup report, from whichever store holds them, after an opt-out. */
+  private async discardQueuedReports(): Promise<void> {
+    const dbStore = this.getReportQueueStore()
+    if (dbStore) {
+      const queued = await dbStore.list()
+      const startupItems = queued.filter((item) => this.isStartupPayload(item.payload))
+      await Promise.allSettled(startupItems.map((item) => dbStore.remove(item.id)))
+      if (startupItems.length > 0) {
+        analyticsLog.info('Discarded queued startup analytics: telemetry upload is disabled', {
+          meta: { count: startupItems.length }
+        })
+      }
+      return
+    }
+
+    const queue = this.loadReportQueue()
+    const remaining = queue.filter((item) => !this.isStartupPayload(item.payload))
+    if (remaining.length !== queue.length) {
+      this.saveReportQueue(remaining)
+      analyticsLog.info('Discarded queued startup analytics: telemetry upload is disabled', {
+        meta: { count: queue.length - remaining.length }
+      })
+    }
+  }
+
   private async flushQueuedReportsFromDb(store: ReportQueueStore, endpoint: string): Promise<void> {
     const cutoff = Date.now() - REPORT_QUEUE_MAX_AGE
     const allItems = await store.list(cutoff)
@@ -496,7 +572,7 @@ export class StartupAnalytics {
         await getNetworkService().request<string>({
           method: 'POST',
           url: endpoint,
-          headers: { 'Content-Type': 'application/json' },
+          headers: buildStartupReportHeaders(item.payload),
           body: item.payload,
           responseType: 'text',
           timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
@@ -505,7 +581,7 @@ export class StartupAnalytics {
         succeeded += 1
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        await store.markAttempt(item.id)
+        await store.markAttempt(item.id, resolveStartupReportFailureCode(error))
         firstError ||= errorMessage
         break
       }
@@ -622,6 +698,13 @@ export class StartupAnalytics {
    */
   async reportMetrics(endpoint?: string): Promise<void> {
     if (!this.config.enabled) {
+      return
+    }
+    // The user's switch, not just the build-time env flag: a startup report carries the client id,
+    // CPU model, OS release and per-module timings, and used to leave the machine regardless of
+    // what Settings said.
+    if (!readTelemetryConsent().enabled) {
+      analyticsLog.debug('Startup analytics not queued: telemetry upload is disabled')
       return
     }
 

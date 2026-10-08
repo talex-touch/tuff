@@ -19,7 +19,7 @@ The dock is a horizontal toolbar. Native buttons and links use roving focus, loc
 
 ### Controlled items and slots
 
-The demo displays the caller array after every pointer or keyboard reorder. It also demonstrates selection, a disabled item, real icon/label slots and a native link to its help paragraph.
+The demo shows the current order after every pointer or keyboard reorder. It also demonstrates selection, a disabled item, real icon/label slots and a native link to its help paragraph.
 
 :::TuffDemoWrapper{demo="MotionDockDemo" code-lang="vue"}
 ---

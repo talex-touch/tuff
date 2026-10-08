@@ -749,7 +749,8 @@ export function useSignIn() {
         return
       }
 
-      const profile = await fetchCurrentUserProfile()
+      // Just signed in: the profile must be this account's as it is now.
+      const profile = await fetchCurrentUserProfile({ force: true })
       if (profile?.emailState === 'missing') {
         await clearOauthRuntime()
         await ensureCallbackProcessingFeedback(callbackStartedAt)

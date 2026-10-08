@@ -1,6 +1,6 @@
 ---
 title: Avatar 头像
-description: 用户头像、身份 fallback、状态点、自定义形状和叠放头像组。
+description: 代表用户身份的图片、首字母或图标
 category: Basic
 status: beta
 since: 0.3.4
@@ -11,70 +11,59 @@ verified: true
 
 ## 用法
 
-### Avatar
-
+### 基础
 :::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" alt="GitHub user" />
-      <TxAvatar name="Talex 梦魂" />
-      <TxAvatar icon="user" />
-      <TxAvatar>张</TxAvatar>
-    </div>
+    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" alt="GitHub user" />
+    <TxAvatar name="Talex 梦魂" />
+    <TxAvatar icon="user" />
+    <TxAvatar>张</TxAvatar>
   </template>
 ---
 :::
 
-### 头像尺寸
-
+### 尺寸
+`size` 取预设名或自定义像素值。
 :::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxAvatar size="small" name="Small" />
-      <TxAvatar size="medium" name="Medium" />
-      <TxAvatar size="large" name="Large" />
-      <TxAvatar size="xlarge" name="Extra Large" />
-      <TxAvatar :size="56" name="Custom Size" />
-    </div>
+    <TxAvatar size="small" name="Small" />
+    <TxAvatar size="medium" name="Medium" />
+    <TxAvatar size="large" name="Large" />
+    <TxAvatar size="xlarge" name="Extra Large" />
+    <TxAvatar :size="56" name="Custom Size" />
   </template>
 ---
 :::
 
 ### 文字头像
-
 :::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxAvatar>张</TxAvatar>
-      <TxAvatar>阿博</TxAvatar>
-      <TxAvatar>用户</TxAvatar>
-    </div>
+    <TxAvatar>张</TxAvatar>
+    <TxAvatar>阿博</TxAvatar>
+    <TxAvatar>用户</TxAvatar>
   </template>
 ---
 :::
 
 ### 图标头像
-
 :::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxAvatar icon="user" />
-      <TxAvatar icon="team" />
-    </div>
+    <TxAvatar icon="user" />
+    <TxAvatar icon="team" />
   </template>
 ---
 :::
 
 ### 头像组
-
+超过 `max` 的头像折叠为 `+N`。
 :::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
@@ -90,23 +79,21 @@ code: |
 ---
 :::
 
-### 头像组悬浮特效
-
+### 悬浮效果
+`hoverEffect` 控制单个头像的悬浮反馈，`spreadOnHover` 让整组悬浮时展开。
 :::TuffDemoWrapper{demo="AvatarGroupHoverDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 默认 lift：悬浮的头像上浮并盖过相邻头像 -->
     <TxAvatarGroup :overlap="12">
       <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
     </TxAvatarGroup>
 
-    <!-- 整组悬浮时展开；spreadOverlap 为负值即留出间隙 -->
+    <!-- 负的 spreadOverlap 在头像间留出间隙 -->
     <TxAvatarGroup :overlap="12" spread-on-hover :spread-overlap="-4">
       <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
     </TxAvatarGroup>
 
-    <!-- 关闭悬浮特效 -->
     <TxAvatarGroup :overlap="12" hover-effect="none">
       <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
     </TxAvatarGroup>
@@ -114,8 +101,8 @@ code: |
 ---
 :::
 
-### 溢出 popover
-
+### 溢出浮层
+`overflowPopover` 在 `+N` 上弹出被折叠的头像，`overflow` 插槽可替换面板内容。
 :::TuffDemoWrapper{demo="AvatarGroupPopoverDemo" code-lang="vue"}
 ---
 code: |
@@ -128,142 +115,112 @@ code: |
 :::
 
 ### 状态
-
 :::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxAvatar status="online" name="在线" />
-      <TxAvatar status="offline" name="离线" />
-      <TxAvatar status="busy" name="忙碌" />
-      <TxAvatar status="away" name="离开" />
-    </div>
+    <TxAvatar status="online" name="在线" />
+    <TxAvatar status="offline" name="离线" />
+    <TxAvatar status="busy" name="忙碌" />
+    <TxAvatar status="away" name="离开" />
   </template>
 ---
 :::
 
 ### 最佳实践
 
-- 生成身份标识时优先传 `name`，不要手写固定首字母。
-- `src` 代表真实用户或账号图片时，总是提供有意义的 `alt`。
-- `status` 只表示在线/可用性；文本型系统状态使用 `TxStatusBadge`。
-- 不要把 `clickable` 作为主要操作入口；需要键盘可访问性和清晰操作语义时，头像旁边配合语义化 `TxButton`。
-- 头像组中优先让 group 注入统一 `size`，除非某个成员确实需要不同尺寸。
-- 头像组同时用到 `status` 时，注意右侧头像会盖住左侧头像的状态点；要么加大 `overlap` 让出角落，要么用 `spreadOnHover` 让用户能展开查看。
-- 溢出 popover 只是「看一眼是谁」的附属信息，不要把它当成成员管理入口；需要可操作的成员列表时用真正的列表组件。
+- 生成身份标识时传 `name`，不要手写首字母。
+- `src` 是真实用户图片时提供有意义的 `alt`。
+- `status` 只表示在线状态；文字型系统状态用 `TxStatusBadge`。
+- 组内显示 `status` 时加大 `overlap` 或开启 `spreadOnHover`，避免状态点被遮住。
+- 溢出浮层只用于查看成员；需要操作成员时用列表组件。
 
 ## API 参考
 
-### Props
+### TxAvatar
 
-#### TxAvatar
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `src` | `string` | - | 头像图片地址。 |
-| `alt` | `string` | - | 图片替代文本。`src` 表示真实用户或账号图片时应提供。 |
-| `name` | `string` | - | 用于生成首字母 fallback 的名称。 |
-| `icon` | `string` | - | 传给 `TxIcon` 的图标名。 |
-| `size` | `'small' \| 'medium' \| 'large' \| 'xlarge' \| number \| \`${number}\` \| \`${number}px\`` | `'medium'` | 预设或自定义头像尺寸。合法自定义数字和 px 字符串会写入运行时尺寸变量。 |
-| `status` | `'online' \| 'offline' \| 'busy' \| 'away'` | - | 渲染在角落的状态点。 |
-| `shape` | `'circle' \| 'square' \| 'rounded'` | `'circle'` | 头像形状 class。 |
-| `clickable` | `boolean` | `false` | 启用可点击样式，并允许发出 `click` 事件。 |
-| `backgroundColor` | `string` | - | 自定义 fallback 背景色；写入 `--tx-avatar-bg`。 |
-| `textColor` | `string` | 设置 `backgroundColor` 时默认为 `'#ffffff'` | 自定义 fallback 文本颜色；只在设置 `backgroundColor` 时写入 `--tx-avatar-text`。 |
-
-#### TxAvatarGroup
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `max` | `number` | 子节点数量 | 渲染 `+N` 溢出头像前最多显示的子头像数；小于 0 时按 0 处理。 |
-| `size` | `AvatarSize` | - | 注入到未自定义 size 的子头像。 |
-| `overlap` | `number \| string` | `8` | 头像重叠距离；数字会转为 px，写入 `--tx-avatar-group-overlap`，再由组样式转成头像间的负 margin。 |
-| `hoverEffect` | `'none' \| 'lift'` | `'lift'` | 单个头像的悬浮反馈。`lift` 会上浮、加阴影并把该头像置顶到相邻头像之上。 |
-| `spreadOnHover` | `boolean` | `false` | 整组悬浮时把重叠距离过渡到 `spreadOverlap`。 |
-| `spreadOverlap` | `number \| string` | `0` | 展开后的重叠距离；负值即在头像之间留出间隙。仅在 `spreadOnHover` 开启时生效。 |
-| `overflowPopover` | `boolean` | `false` | 是否在 `+N` 头像上挂溢出 popover。默认关闭，因为它会引入浮层。 |
-| `overflowPopoverTrigger` | `'hover' \| 'click'` | `'hover'` | popover 的触发方式。 |
-| `overflowPopoverPlacement` | `PopoverPlacement` | `'top'` | popover 相对 `+N` 头像的位置。 |
+| `src` | `string` | - | 图片地址；加载失败时回退。 |
+| `alt` | `string` | - | 图片替代文本，`src` 为真实用户图片时提供。 |
+| `name` | `string` | - | 用于生成首字母的名称。 |
+| `icon` | `string` | - | 回退图标名，传给 `TxIcon`。 |
+| `size` | `'small' \| 'medium' \| 'large' \| 'xlarge' \| number \| \`${number}\` \| \`${number}px\`` | `'medium'` | 预设名或正数像素尺寸；无效值被忽略。 |
+| `status` | `'online' \| 'offline' \| 'busy' \| 'away'` | - | 角落的状态点，位置随 `shape` 内缩。 |
+| `shape` | `'circle' \| 'square' \| 'rounded'` | `'circle'` | 头像形状。 |
+| `clickable` | `boolean` | `false` | 启用点击样式、按钮语义与 `click` 事件。 |
+| `backgroundColor` | `string` | - | 回退内容的背景色。 |
+| `textColor` | `string` | 设置 `backgroundColor` 时默认为 `'#ffffff'` | 回退内容的文字颜色；仅与 `backgroundColor` 一起生效。 |
 
-### Events
-
-#### TxAvatar
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `click` | - | `clickable=true` 且点击根元素时触发。 |
+| `click` | - | `clickable` 时点击或按 Enter / Space 触发。 |
 
-#### TxAvatarGroup
-
-不发出公开事件。
-
-### Slots
-
-#### TxAvatar
+#### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | - | 自定义 fallback 内容，优先级高于 `icon` 和 `name`。 |
+| `default` | - | 自定义回退内容，优先于 `icon` 与 `name`。 |
 
-#### TxAvatarGroup
+### TxAvatarGroup
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `max` | `number` | 子节点数量 | 折叠为 `+N` 前最多显示的头像数；负数按 0 处理。 |
+| `size` | `AvatarSize` | - | 注入未自行设置 `size` 的子头像。 |
+| `overlap` | `number \| string` | `8` | 相邻头像的重叠距离，数字按 px 计。 |
+| `hoverEffect` | `'none' \| 'lift'` | `'lift'` | 单个头像的悬浮反馈；`lift` 上浮、加阴影并置顶。 |
+| `spreadOnHover` | `boolean` | `false` | 整组悬浮时把重叠过渡到 `spreadOverlap`。 |
+| `spreadOverlap` | `number \| string` | `0` | 展开后的重叠距离，负值留出间隙。 |
+| `overflowPopover` | `boolean` | `false` | 在 `+N` 上挂载溢出浮层。 |
+| `overflowPopoverTrigger` | `'hover' \| 'click'` | `'hover'` | 浮层触发方式。 |
+| `overflowPopoverPlacement` | `PopoverPlacement` | `'top'` | 浮层相对 `+N` 的位置。 |
+
+#### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | - | `TxAvatar` 子节点或兼容头像 VNode。 |
-| `overflow` | `{ nodes: VNode[], count: number }` | 覆写溢出 popover 的面板内容。`nodes` 是被 `max` 截掉的那批头像 VNode，`count` 是它们的数量。仅在 `overflowPopover` 开启时渲染。 |
-
-### Exposed Methods
-
-不暴露公开实例方法。
+| `default` | - | `TxAvatar` 或兼容的头像 VNode。 |
+| `overflow` | `{ nodes: VNode[], count: number }` | 溢出浮层的面板内容；`nodes` 为被 `max` 截掉的头像。 |
 
 ## 概述
 
-- fallback 优先级是图片、默认插槽、`icon`、`name` 首字母、默认 `user` 图标。
-- 图片加载失败后会进入同一套非图片 fallback 链路。
-- 首字母取第一个单词首字符；存在多个单词时，再取最后一个单词首字符。
-- `size` 支持预设尺寸、正数、正数数字字符串和正数 px 字符串。非法自定义尺寸会回退到预设样式。
-- 自定义数字尺寸会设置头像尺寸、字体尺寸、状态点尺寸和状态点边框宽度 CSS 变量。
-- 设置 `backgroundColor` 时也会设置 `textColor`；未传 `textColor` 时回退为白色。
-- 只有 `clickable=true` 时才会发出 `click`。
-- 状态点位置按 `shape` 内缩：圆形贴 45° 切点、方形与圆角贴角。根节点不做裁切（裁切由图片与 fallback 层承担），否则状态点会被形状切掉大半。
-- `--tx-avatar-status-size` 是状态点的**外径**（含描边），不是描边内侧的直径。状态点与头像组的描边颜色都取 `--tx-avatar-ring`（默认 `--tx-bg-color`，即页面底色），暗色下不再是一圈白边。
-- `TxAvatarGroup` 会保留子节点 props，只给没有自定义 size 的子头像注入 group `size`，并在 `max` 小于子节点数量时渲染 `+N`。
-- 叠放偏移（负 margin 与 `z-index`）由组样式表提供，不再内联注入；子头像上只内联注入 ring 边框与 `--tx-avatar-group-index`。靠内联 `margin-left` / `z-index` 做覆盖的调用方需要改用 CSS 变量。
-- 组内 `z-index` 自左向右递增，所以右侧头像会盖住左侧头像的右下角（包括状态点）；`hoverEffect="lift"` 会把悬浮头像置顶，从而露出被盖住的部分。
-- `overflowPopover` 默认关闭。关闭时 `+N` 就是一个普通头像，不产生任何浮层或包装元素；开启时 `+N` 被 `TxPopover` 包裹，叠放偏移转由 popover 的触发元素承担。
-- `overflowPopover` 开启但没有溢出（`max` 不小于子节点数量）时不渲染 popover。
-- 悬浮位移遵循 `prefers-reduced-motion: reduce`：位移与过渡关闭，`z-index` 置顶与阴影保留。
+- 内容按图片、默认插槽、`icon`、`name` 首字母、默认 `user` 图标的顺序回退；图片加载失败同样回退。
+- 首字母取第一个与最后一个单词的首字符，并转为大写。
+- `clickable` 时根节点带 `role="button"` 与 `tabindex="0"`，Enter / Space 与点击一样触发 `click`。
+- 组内 `z-index` 自左向右递增，右侧头像盖住左侧头像的右下角（含状态点）；`lift` 将悬浮头像置顶。
+- 开启 `overflowPopover` 且有溢出时，`+N` 由 `TxPopover` 包裹；否则是普通头像，不产生浮层。
+- 减少动态效果时取消悬浮位移与过渡，保留置顶与阴影。
 
 ## 技术实现
 
-- 已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
-- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，方便自动覆盖检查和读者定位契约。
-- 已按源码确认图片 fallback 顺序、首字母生成、自定义 size 归一化、click gating、group `max` 溢出、group size 注入和 overlap CSS 变量。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` 覆盖首字母/自定义颜色、图片错误 fallback、插槽优先级、自定义尺寸归一化、click gating、头像组溢出、悬浮 class 契约、叠放偏移不再内联、溢出 popover 的四种情形，以及状态点的 CSS 几何约束。
-- 可访问性边界：组件会转发图片 `alt`，但根节点仍是非语义化 `div`；头像承担主要操作时应使用真实按钮或链接。
-
-- Component source: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
-- Group source: `packages/tuffex/packages/components/src/avatar/src/TxAvatarGroup.vue`
-- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
-
-<TuffDocSourceLink />
+- 根节点不裁切，裁切在图片与回退层上，状态点因此能伸出形状。
+- 组内的负 margin 与 `z-index` 来自样式表（`--tx-avatar-group-overlap`、`--tx-avatar-group-index`），子头像只内联描边。
+- 源码：`packages/tuffex/packages/components/src/avatar/`。
 
 ## 自定义
 
 | 变量 | 写入方 | 用途 |
 |------|--------|------|
-| `--tx-avatar-size` | 自定义 `size` | 头像宽高。 |
-| `--tx-avatar-font-size` | 自定义 `size` | fallback 文本和图标字号。 |
+| `--tx-avatar-size` | 自定义 `size` | 宽高。 |
+| `--tx-avatar-font-size` | 自定义 `size` | 回退文字与图标字号。 |
 | `--tx-avatar-status-size` | 自定义 `size` | 状态点外径（含描边）。 |
 | `--tx-avatar-status-border` | 自定义 `size` | 状态点描边宽度。 |
-| `--tx-avatar-bg` | `backgroundColor` | fallback 背景色。 |
-| `--tx-avatar-text` | 搭配 `backgroundColor` 使用的 `textColor` | fallback 文本颜色。 |
-| `--tx-avatar-group-overlap` | `TxAvatarGroup.overlap` | 在 group 根节点暴露解析后的重叠距离。 |
-| `--tx-avatar-group-spread-overlap` | `TxAvatarGroup.spreadOverlap` | 整组悬浮展开后的重叠距离。 |
-| `--tx-avatar-group-hover-z` | 调用方 / 主题 | 悬浮头像置顶时使用的 `z-index`，默认 `999`。 |
-| `--tx-avatar-group-overflow-width` | 调用方 / 主题 | 溢出 popover 面板换行前的最大宽度，默认 `232px`（一行五个 medium 头像）。 |
-| `--tx-avatar-group-border` | 调用方 / 主题 | group 中头像项的边框颜色。 |
+| `--tx-avatar-bg` | `backgroundColor` | 回退背景色。 |
+| `--tx-avatar-text` | `textColor`（需 `backgroundColor`） | 回退文字颜色。 |
+| `--tx-avatar-ring` | 调用方 / 主题 | 状态点与组内头像的描边色，默认 `--tx-bg-color`。 |
+| `--tx-avatar-group-overlap` | `overlap` | 解析后的重叠距离。 |
+| `--tx-avatar-group-spread-overlap` | `spreadOverlap` | 展开后的重叠距离。 |
+| `--tx-avatar-group-hover-z` | 调用方 / 主题 | 悬浮置顶的 `z-index`，默认 `999`。 |
+| `--tx-avatar-group-overflow-width` | 调用方 / 主题 | 溢出面板换行前的最大宽度，默认 `232px`。 |
+| `--tx-avatar-group-border` | 调用方 / 主题 | 组内头像的描边色。 |
 
-预设内部还会使用 `--tx-avatar-size-preset`、`--tx-avatar-font-size-preset`、`--tx-avatar-status-size-preset` 和 `--tx-avatar-status-border-preset`；组内部还会使用 `--tx-avatar-status-diameter`、`--tx-avatar-status-ring`、`--tx-avatar-status-inset`、`--tx-avatar-group-gap`、`--tx-avatar-group-index` 和 `--tx-avatar-group-more-z`。调用方应优先使用对应的 prop，而不是直接设置这些变量。
+`--tx-avatar-*-preset`、`--tx-avatar-status-diameter`、`--tx-avatar-status-ring`、`--tx-avatar-status-inset`、`--tx-avatar-group-gap`、`--tx-avatar-group-index`、`--tx-avatar-group-more-z` 是内部变量，不要直接设置。
+
+<TuffDocSourceLink />

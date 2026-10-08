@@ -34,6 +34,8 @@ declare global {
     ADMIN_EMERGENCY_JWT_SECRET?: string
     ADMIN_CONTROL_PLANE_PEPPER?: string
     NEXUS_LOCAL_PAGES_PREVIEW?: string
+    /** Shared with the scheduled maintenance Worker; `/api/internal/maintenance/*` answers only to it. */
+    MAINTENANCE_SECRET?: string
   }
 }
 

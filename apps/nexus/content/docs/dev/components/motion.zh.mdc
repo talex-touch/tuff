@@ -30,7 +30,7 @@ code: |
 
   <template>
     <button type="button" @click="replay++">回放</button>
-    <TxMotion variant="fade-up" :state-key="replay">调用方内容</TxMotion>
+    <TxMotion variant="fade-up" :state-key="replay">你的内容</TxMotion>
     <TxMotion variant="card-hover" :items="items" @select="item => console.log(item.id)" />
     <TxMotion variant="magnetic-button" label="增加次数" @click="runs++">增加次数</TxMotion>
     <output>{{ runs }}</output>

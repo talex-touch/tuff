@@ -1,6 +1,6 @@
 ---
 title: Agent Chat
-description: A coding agent's full session, from plan, clarifying questions and a repo search to a write gate, the diff, tests and a summary, beside a live plan, the changed files and a plugin preview
+description: A coding agent session with a write gate, live plan, and changed files.
 category: TemplateAi
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Coding agent workbench
-
-:::TuffDemoWrapper{demo="TemplateAgentChatDemo" code-lang="vue" title="Coding agent workbench" description="Plays once it scrolls into view, then stops at the write gate until you click Allow or Deny."}
+:::TuffDemoWrapper{demo="TemplateAgentChatDemo" code-lang="vue" description="Plays once in view, then waits at the write gate for Allow or Deny."}
 ---
 code: |
   <script setup lang="ts">
@@ -90,10 +89,8 @@ code: |
 :::
 
 ### Side copilot
-
-For giving an existing page an assistant: a docs or README editor, a CMS body, a ticket or email reply. Unlike the workbench above, the page itself is the subject here; the assistant has no tool calls and no write gate, only suggestions that can be applied to the page, and which version goes in, if any, is your click.
-
-:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" title="Side copilot" description="Plays one improvement once it scrolls into view and stops at the suggestion until you click Apply; select any text in the article to try it yourself. Every answer in the demo is pre-written."}
+A docked assistant for an existing page, such as a docs editor, CMS body, or ticket reply, that only suggests edits for you to apply.
+:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="Plays one Improve and stops at the suggestion; select any text to try it. Answers are pre-written."}
 ---
 code: |
   <script setup lang="ts">
@@ -164,47 +161,41 @@ code: |
 
 ## Overview
 
-The Plugin Builder agent gets one request: add burn-after-reading to the clipboard-history plugin, so secrets copied into the history clear themselves after a short while. It plans, asks two clarifying questions, searches the code, asks permission to write files, writes the change, gets the tests green and streams a summary. The panel beside the conversation tracks the plan, the changed files and a preview of the plugin as it goes.
+A coding agent's full session on one request; a person answers its questions and approves each write.
 
-It fits any product where AI does the work for you: coding assistants, ops assistants, data or support agents that call tools. The decisions that matter stay with a person: they answer the clarifying questions, and they let the write through.
-
-The second style, Side copilot, swaps the agent for a docs assistant docked beside the page: you are writing the clipboard-history plugin's README, select text to have it explained, improved or translated, and decide yourself whether the page changes.
-
-- The demo starts once the template scrolls into view: plan, clarifying questions, code search, write request. The window's Reset button or Run again in the header replays it from the start.
-- After 3 idle seconds the questionnaire goes ahead with the recommended picks, as the hint under the card says. Click any option and it waits for you to send instead; the duration and secret types you pick carry into the summary and the task details.
-- The write gate never opens by itself. It waits until you click Allow or Deny. Allow writes the code, runs the tests and streams the summary; Deny skips the write and the tests and exports a patch instead.
-- While the agent runs, Stop sits beside the send button: the running tool card is marked stopped and the transcript keeps a line saying so.
-- Task rows in the side panel expand to show details. Clicking a changed file, in the side panel or in the run digest, scrolls the transcript to its code. Only the transcript's own container scrolls, the page never moves, and the demo never takes focus.
-- In the docs column (640–959px) the side panel switches between Tasks, Changes and Preview; from 960px the three stack, and from 1200px the agent list joins on the left. Narrow (< 640px) hides the side panel and puts an expandable task strip above the input. With reduced motion the template renders everything up to the gate at once and settles immediately after you allow, with no timers.
-- Side copilot: about a second after it scrolls into view, the template highlights a sentence under Permissions, raises the selection bar and runs Improve; the panel writes out the suggestion with its before and after, then stops. The page changes only when you click Apply, in the bar or in the panel, and the notice offers Undo. The scripted selection is the template's own highlight and never touches your real selection on the page; with reduced motion the suggestion is simply there.
-- Side copilot: select any text in the article to take over. The bar appears under the selection and stays on the text as the page or the article scrolls, as the panel collapses and as the stage expands; it hides while the selection is scrolled out of view. Explain answers without changing the page; headings, list items and code can only be explained.
-- Side copilot: in "Read-only · explain" the bar offers Explain alone and existing suggestions cannot be applied. The Clipboard tag is only a stand-in and never reads your clipboard. Wide (≥ 1200px) adds an on-this-page outline on the left; narrow (< 640px) folds the copilot into a toolbar button that opens a bottom sheet inside the stage.
+- It plays once in view and stops at the write gate; reduced motion shows everything up to the gate at once.
+- After 3 idle seconds the questionnaire takes the recommended picks; clicking any option makes it wait for you to send.
+- The write gate never opens by itself: Allow writes, tests, and summarizes; Deny skips the write and tests and exports a patch.
+- Stop marks the running tool card as stopped; clicking a changed file scrolls the transcript to its code, never the page.
+- In the docs column (640–959px) the side panel switches between Tasks, Changes, and Preview, and ≥ 1200px adds the agent list; narrow (< 640px) hides the panel.
+- Side copilot: the page changes only when you click Apply, with Undo; "Read-only · explain" leaves the bar with Explain alone.
+- Side copilot: the selection bar follows the text through scrolling and reflow; narrow (< 640px) folds the copilot into a toolbar button that opens a bottom sheet.
 
 ## Customization
 
-- Wire a real agent by replacing the demo timeline with your event stream. Rows hold only `id` and `kind` and read their content from reactive state, so a streamed event updates state and never has to replace an array element.
-- Keep a permanent tail item at the end of TxConversationStream. The component always keeps the last item outside the virtual list and remounts it when the next one arrives; with a tail in that slot, each real message mounts once, so tool-card expansion and entrance motion never replay.
-- Tier permissions by risk: a `risk="read"` call can run straight away and leave a trace in the transcript, while `write` and `execute` always wait for a person. The host owns the "remember for this session" choice.
-- Hold the questionnaire's answers through a controlled `v-model` and `v-model:index`, so a rebuilt card keeps them, and only pick the recommended answers while the reader has not touched the card.
-- Side copilot: the selection bar lives on `<body>` and anchors to a virtual reference, and the component only repositions itself on window scroll or resize. Make `selection.rects` a getter that measures the Range live, and call `updatePosition()` after collapsing the panel, expanding the stage or reflowing text, and it stays on the text.
+- To wire a real agent, replace the demo timeline with your event stream; rows hold only `id` and `kind`, so streamed events only update state.
+- Keep a permanent tail item at the end of TxConversationStream, so each message mounts once and card state and entrance motion never replay.
+- Tier permissions by risk: a `risk="read"` call runs and leaves a trace; `write` and `execute` always wait for a person.
+- Hold the questionnaire's answers in a controlled `v-model` and `v-model:index`; stop auto-picking once the reader touches the card.
+- Side copilot: make `selection.rects` a getter that measures the Range live, and call `updatePosition()` after layout changes.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Header | [TxThinkingOrb](/docs/dev/components/thinking-orb), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxContextIndicator](/docs/dev/components/context-indicator) | The agent's presence, the current phase and its elapsed time, waiting or done states, context usage |
-| Conversation | [TxConversationStream](/docs/dev/components/conversation-stream), [TxChatMessage](/docs/dev/components/chat) | A virtualized transcript that follows new content while you sit at the bottom; the request bubble |
-| Plan | [TxAgentTrace](/docs/dev/components/agent-trace) | Four plan steps appear line by line and fold away once planning ends |
-| Clarify | [TxApprovalCard](/docs/dev/components/approval-card) | Two questions: how long a secret stays (single choice) and what counts as one (multiple choice); folds into one line once answered |
-| Tool calls | [TxToolCallCard](/docs/dev/components/tool-call-card) | Input, streaming log and result of `search_repo` and `run_tests` |
-| Write gate | [TxToolConfirmation](/docs/dev/components/tool-confirmation) | Allow or deny before `apply_patch` writes files; replaced by one line once decided |
-| Change | [TxCodeStream](/docs/dev/components/code-stream) | The `clipboard-items.ts` diff, written line by line |
-| Summary | [TxTypingIndicator](/docs/dev/components/typing-indicator), [TxStreamMarkdown](/docs/dev/components/stream-markdown), [TxToolChips](/docs/dev/components/tool-chips), [TxMessageActions](/docs/dev/components/message-actions) | A writing hint, the streamed summary, a digest of this run's tool calls, copy and regenerate |
-| Side panel | [TxFlatRadio](/docs/dev/components/flat-radio), [TxTaskRows](/docs/dev/components/task-rows), [TxDiffChips](/docs/dev/components/tool-chips), [TxAgentScreen](/docs/dev/components/agent-screen), [TxSkeleton](/docs/dev/components/skeleton) | Tasks / Changes / Preview switch, plan progress, changed files (click to jump to the code), a preview of the plugin |
-| Agent list (≥ 1200px) | [TxAgentsList](/docs/dev/components/agents), [TxSuggestionChips](/docs/dev/components/suggestion-chips) | Switch agents; the other agents offer things to ask |
-| Input | [TxPromptBar](/docs/dev/components/prompt-bar) | `@` to cite sources, `/` for commands, a model picker; a Stop button while the agent runs |
-| Host page (Side copilot) | Plain DOM paragraphs | The clipboard-history plugin's README, each block marked `data-block`, so a selection has real rects to anchor to |
-| Selection bar (Side copilot) | [TxSelectionActions](/docs/dev/components/selection-actions) | Appears under the selection: Explain, Improve, Translate and a folded Shorten; once there is a suggestion, Apply / Discard / Try another version right there |
-| Copilot panel (Side copilot) | [TxModeChip](/docs/dev/components/mode-chip), [TxTag](/docs/dev/components/tag) | "Edits need your OK ↔ Read-only · explain"; what it can see: the document, the selection (removable), the clipboard (a sample toggle). The header, echoes, follow-ups and input reuse the components above |
-| Suggestion card (Side copilot) | [TxButton](/docs/dev/components/button), [TxDiffChips](/docs/dev/components/tool-chips) | The original struck through and the suggestion underlined, written out as it streams; Apply to page / Discard; the change summary jumps back to its paragraph |
-| Change notice (Side copilot) | [TxToastPanel](/docs/dev/components/toast-panel) | "Applied to README.md · Undo" |
+| Header | [TxThinkingOrb](/docs/dev/components/thinking-orb), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxContextIndicator](/docs/dev/components/context-indicator) | Phase, elapsed time, and context usage |
+| Conversation | [TxConversationStream](/docs/dev/components/conversation-stream), [TxChatMessage](/docs/dev/components/chat) | Virtualized transcript and request bubble |
+| Plan | [TxAgentTrace](/docs/dev/components/agent-trace) | Plan steps that fold when done |
+| Clarify | [TxApprovalCard](/docs/dev/components/approval-card) | Two clarifying questions |
+| Tool calls | [TxToolCallCard](/docs/dev/components/tool-call-card) | Input, streamed log, and result |
+| Write gate | [TxToolConfirmation](/docs/dev/components/tool-confirmation) | Allow or deny before writing |
+| Change | [TxCodeStream](/docs/dev/components/code-stream) | The diff, line by line |
+| Summary | [TxTypingIndicator](/docs/dev/components/typing-indicator), [TxStreamMarkdown](/docs/dev/components/stream-markdown), [TxToolChips](/docs/dev/components/tool-chips), [TxMessageActions](/docs/dev/components/message-actions) | Streamed summary, tool digest, actions |
+| Side panel | [TxFlatRadio](/docs/dev/components/flat-radio), [TxTaskRows](/docs/dev/components/task-rows), [TxDiffChips](/docs/dev/components/tool-chips), [TxAgentScreen](/docs/dev/components/agent-screen), [TxSkeleton](/docs/dev/components/skeleton) | Progress, changed files, and preview |
+| Agent list (≥ 1200px) | [TxAgentsList](/docs/dev/components/agents), [TxSuggestionChips](/docs/dev/components/suggestion-chips) | Agent switching and suggested asks |
+| Input | [TxPromptBar](/docs/dev/components/prompt-bar) | Sources, commands, model, and Stop |
+| Host page (Side copilot) | Plain DOM paragraphs | Selectable README text |
+| Selection bar (Side copilot) | [TxSelectionActions](/docs/dev/components/selection-actions) | Explain, Improve, Translate, and Apply |
+| Copilot panel (Side copilot) | [TxModeChip](/docs/dev/components/mode-chip), [TxTag](/docs/dev/components/tag) | Edit mode and visible context |
+| Suggestion card (Side copilot) | [TxButton](/docs/dev/components/button), [TxDiffChips](/docs/dev/components/tool-chips) | Before and after, Apply, Discard |
+| Change notice (Side copilot) | [TxToastPanel](/docs/dev/components/toast-panel) | Undo notice after applying |

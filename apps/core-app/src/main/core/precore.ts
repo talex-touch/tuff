@@ -185,7 +185,13 @@ crashReporter.start({
   productName: 'TalexTouch',
   submitURL: '',
   uploadToServer: false,
-  ignoreSystemCrashHandler: false,
+  // Crashpad keeps the minidump and Sentry uploads it on the next launch, so the system crash
+  // handler is not needed for reporting -- and forwarding to it is harmful here: with `false`,
+  // the launch *after* a SIGABRT (the V8 OOM abort of #1964) stalled before `ready` in 4 of 5
+  // harness runs, the dump was consumed and nothing was uploaded; with `true` it reached `ready`
+  // in 0.17s and the dump was delivered, 2 of 2 (2026-10-08, talex-touch.drafts/telemetry-fix).
+  // Cost: no `.ips` report in ~/Library/Logs/DiagnosticReports for main-process crashes.
+  ignoreSystemCrashHandler: true,
   extra: {
     version: app.getVersion()
   }

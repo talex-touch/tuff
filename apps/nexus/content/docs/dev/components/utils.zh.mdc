@@ -1,6 +1,6 @@
 ---
 title: Utils 工具函数
-description: TuffEx 通过根入口与 ./utils 子路径导出的公开工具函数
+description: 根入口与 ./utils 导出的公开工具函数
 category: Foundations
 status: beta
 since: 1.0.0
@@ -17,69 +17,69 @@ import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 
 ### z-index 管理
 
-统一分配浮层层级，避免各组件各写各的 `z-index` 造成层叠错乱。
+统一分配浮层层级，组件不再各写 `z-index`。
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
 | `nextZIndex()` | `() => number` | 新建浮层时取下一个递增层级 |
-| `getZIndex()` | `() => number` | 只读当前最高层级，不递增 |
-| `refreshZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | 需要以某个基准重新计数时 |
-| `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | 卸载 / 测试后重置到种子值 |
+| `getZIndex()` | `() => number` | 读取当前最高层级，不递增 |
+| `refreshZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | 以某个基准重新计数 |
+| `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | 卸载或测试后重置到种子值 |
 | `configureZIndex(options)` | `(options) => void` | 全局配置基准种子与覆盖值 |
 | `onZIndexEvent(listener)` | `(listener) => () => void` | 订阅层级变化，返回取消订阅函数 |
 
 ### 环境守卫
 
-SSR 安全地检测浏览器 API 是否可用，避免直接访问 `window` / `document` / `navigator` 报错。
+SSR 安全：访问 `window` / `document` / `navigator` 前先判断。
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
 | `hasWindow()` | `() => boolean` | 访问 `window` 前判断 |
 | `hasDocument()` | `() => boolean` | 访问 `document` 前判断 |
-| `hasNavigator()` | `() => boolean` | 访问 `navigator`（如振动、剪贴板）前判断 |
+| `hasNavigator()` | `() => boolean` | 访问 `navigator`（振动、剪贴板）前判断 |
 
 ### 触感反馈 vibrate
 
-封装 `navigator.vibrate`，提供语义化的震动模式。
+封装 `navigator.vibrate`，提供语义化震动。
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
-| `vibrate` | `{ light() … error(), stop, isSupported }` | 直接触发预设震动，如 `vibrate.success()` |
-| `useVibrate(type, options?)` | `(type: VibrateType, options?) => void` | 按语义触发一次自定义配置的震动 |
+| `vibrate` | `{ light() … error(), stop, isSupported }` | 直接触发预设，如 `vibrate.success()` |
+| `useVibrate(type, options?)` | `(type: VibrateType, options?) => void` | 按语义触发一次可配置的震动 |
 | `stopVibrate()` | `() => void` | 打断进行中的震动 |
 | `isVibrateSupported()` | `() => boolean` | 能力检测 |
 
 ### 轻提示 toast
 
-全局 toast 队列，无需在每个页面手动挂宿主（渲染仍需 `TxToastHost`）。
+全局提示队列，页面无需各自挂宿主；渲染仍需 `TxToastHost`。
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
-| `toast(options)` | `(options) => string` | 弹出提示，返回可用于关闭的 id |
+| `toast(options)` | `(options) => string` | 弹出提示，返回用于关闭的 id |
 | `dismissToast(id)` | `(id: string) => void` | 关闭指定提示 |
-| `clearToasts()` | `() => void` | 清空所有提示 |
+| `clearToasts()` | `() => void` | 清空全部提示 |
 
 ### 对话框编排 dialog-manager
 
-按优先级排队、并带生命周期回调地串行管理全局对话框。
+按优先级排队，带生命周期回调，串行管理全局对话框。
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
-| `getDialogManager()` | `() => DialogManager` | 获取全局单例以排队 / 打开对话框 |
+| `getDialogManager()` | `() => DialogManager` | 获取全局单例，排队或打开对话框 |
 
 ### 动画
 
 | 导出 | 签名 | 何时用 |
 |------|------|--------|
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | 对元素做 FLIP 过渡（`TxFlipOverlay` 底层） |
-| `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | 尺寸自适应测量与过渡（`TxAutoSizer` 底层） |
-| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | 在自己的逐帧循环里让数值沿弹簧（`{ stiffness, damping, mass? }`，`dt` 以秒计）前进，换目标时保留速度；也是 `useJellyIndicator` glide 材质的 `integrate` |
-| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | 缓动字符串交给 GSAP 之前先过一遍：`spring(...)` 与 `cubic-bezier(...)` 转成进度函数（GSAP 不认识这两种写法，会静默换成默认缓动），GSAP 自己的缓动名原样返回；`TxBaseAnchor` 的 GSAP 动效都走它 |
-| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | 在 JS 里按 CSS 缓动求值：`cubic-bezier(...)`、等距的 `linear(...)` 列表，以及 `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`；其他写法退化为钳制的线性，从不返回 `null`；按写法缓存，逐帧调用也不重复解析。`TxLiquid` 与 `TxTextMorph` 用它让脚本驱动的运动和 CSS 过渡走同一条曲线 |
-| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | 按时间线归一化的闭式欠阻尼弹簧曲线：从 0 出发、先冲过 1 再回落、终点恰为 1，阻尼越大冲得越少。和逐帧积分的 `stepSpring` 不同，它是可以直接当 `ease` 用的固定曲线 |
+| `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | 测量尺寸变化并过渡（`TxAutoSizer` 底层） |
+| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | 在自有帧循环中沿弹簧推进数值（`spring` 为 `{ stiffness, damping, mass? }`，`dt` 以秒计），换目标时保留速度；可作 `useJellyIndicator` glide 的 `integrate` |
+| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | 交给 GSAP 前转换缓动：`spring(...)`、`cubic-bezier(...)` 转为进度函数（GSAP 不认识，会静默换成默认缓动），GSAP 缓动名原样返回 |
+| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | 在 JS 中按 CSS 缓动求值：`cubic-bezier(...)`、等距 `linear(...)` 与 `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`；其他写法退化为钳制线性，从不返回 `null`；按写法缓存，可逐帧调用 |
+| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | 按时间线归一化的闭式欠阻尼弹簧：冲过 1 再回落，终点恰为 1；与逐帧积分的 `stepSpring` 不同，可直接当 `ease` 用 |
 | `parseSpringEase(value)` | `(value: string \| undefined \| null) => ((t: number) => number) \| null` | 解析 `spring` / `spring(omega)` / `spring(omega, zeta)`，其他写法返回 `null` |
-| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | 与 CSS `cubic-bezier()` 等价的缓动函数；图表入口导出的 `cubicBezier` 就是它 |
-| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | 解析 `cubic-bezier(...)` 字符串；GSAP 缓动名、关键字和弹簧写法都返回 `null`，x 控制点超出 [0, 1] 也返回 `null` |
+| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | 等价于 CSS `cubic-bezier()`；图表入口的 `cubicBezier` 即此函数 |
+| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | 解析 `cubic-bezier(...)`；GSAP 缓动名、关键字、弹簧写法，或 x 控制点超出 [0, 1] 时返回 `null` |
 
 ### 安装辅助
 
@@ -90,4 +90,4 @@ SSR 安全地检测浏览器 API 是否可用，避免直接访问 `window` / `d
 ## 技术实现
 
 - 桶文件：`packages/tuffex/packages/components/src/utils/index.ts` 再导出 `packages/tuffex/packages/utils/*`。
-- 子路径入口：`@talex-touch/tuffex/utils`；根入口 `@talex-touch/tuffex` 亦并入这些导出。
+- 子路径入口 `@talex-touch/tuffex/utils`；根入口 `@talex-touch/tuffex` 同样导出。

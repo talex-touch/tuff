@@ -1,6 +1,6 @@
 ---
 title: "SearchInput 搜索输入框"
-description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
+description: "内置搜索图标、按 Enter 搜索的输入框"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,40 +11,19 @@ verified: true
 
 ## 用法
 
-### SearchInput
+### 基础
+按 Enter 立即派发 `search`。
 :::TuffDemoWrapper{demo="SearchInputSearchInputDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('')
-  const last = ref('')
-  function onSearch(next: string) {
-    last.value = next
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
-      <TxSearchInput
-        v-model="value"
-        placeholder="Search anything"
-        @search="onSearch"
-      />
-
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        value: {{ value }}
-      </div>
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        last search: {{ last }}
-      </div>
-    </div>
+    <TxSearchInput v-model="value" placeholder="搜索" @search="onSearch" />
   </template>
 ---
 :::
 
-### SearchInput (remote)
+### 远程搜索
+`remote` 在输入停止 `searchDebounce` 毫秒后派发 `search`；结果面板由宿主渲染。
 :::TuffDemoWrapper{demo="SearchInputSearchInputRemoteDemo" code-lang="vue"}
 ---
 code: |
@@ -52,182 +31,99 @@ code: |
   import { ref } from 'vue'
 
   const value = ref('')
-  const loading = ref(false)
   const hits = ref<string[]>([])
   const open = ref(false)
 
-  async function onSearch(q: string) {
-    const query = q.trim().toLowerCase()
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 200))
-    hits.value = Array.from({ length: 12 })
-      .map((_, i) => `Result ${i + 1}`)
-      .filter(s => s.toLowerCase().includes(query))
-    loading.value = false
+  async function onSearch(query: string) {
+    hits.value = await searchApi(query)
     open.value = true
-  }
-
-  function onPick(h: string) {
-    value.value = h
-    open.value = false
   }
   </script>
 
   <template>
-    <div style="width: 320px;">
-      <TxPopover v-model="open" :offset="6" :close-on-click-outside="true" :reference-full-width="true">
-        <template #reference>
-          <TxSearchInput
-            v-model="value"
-            remote
-            :search-debounce="250"
-            placeholder="Type to remote-search"
-            @focus="open = true"
-            @search="onSearch"
-          />
-        </template>
+    <TxPopover v-model="open" reference-full-width>
+      <template #reference>
+        <TxSearchInput
+          v-model="value"
+          remote
+          :search-debounce="250"
+          @focus="open = true"
+          @search="onSearch"
+        />
+      </template>
 
-        <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="10">
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-              <span v-if="loading">Loading...</span>
-              <span v-else>Hits: {{ hits.length }}</span>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto;">
-              <button
-                v-for="h in hits"
-                :key="h"
-                type="button"
-                style="text-align: left; padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; background: transparent; cursor: pointer;"
-                @click="onPick(h)"
-              >
-                {{ h }}
-              </button>
-
-              <div v-if="!loading && value.trim() && !hits.length" style="color: var(--tx-text-color-secondary, #909399); font-size: 12px; padding: 6px 2px;">
-                No results
-              </div>
-            </div>
-          </div>
-        </TxCard>
-      </TxPopover>
-    </div>
+      <button v-for="hit in hits" :key="hit" @click="value = hit">
+        {{ hit }}
+      </button>
+    </TxPopover>
   </template>
 ---
 :::
 
-### 最佳实践
-
-- 仅需要关键词和 Enter 触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
-- `remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。API 调用方应保持幂等，因为两条路径可能产生同一个查询。
-- 不要只依赖 placeholder 表达业务语义；密集工具栏里应提供外部标签、分组标题或上下文说明。
-- 只有本地或完整缓存搜索才把 `searchDebounce` 设为 `0`；网络搜索应保留防抖，避免请求风暴。
-
-## API 参考
-
-### TxSearchInput Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `string` | `''` | 输入值（v-model） |
-| `placeholder` | `string` | `'Search'` | 占位 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `clearable` | `boolean` | `true` | 可清空 |
-| `remote` | `boolean` | `false` | 是否远程搜索（输入时触发 `search`） |
-| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(v: string)` | v-model 更新 |
-| `input` | `(v: string)` | 输入 |
-| `focus` | `(e: FocusEvent)` | 聚焦 |
-| `blur` | `(e: FocusEvent)` | 失焦 |
-| `clear` | - | 清空 |
-| `search` | `(v: string)` | Enter 或 remote 输入触发 |
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `focus()` | `() => void` | 聚焦 |
-| `blur()` | `() => void` | 失焦 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v: string) => void` | 设置值 |
-| `getValue()` | `() => string` | 获取值 |
-
-### Slots
-
-`TxSearchInput` 不暴露公共插槽。前缀搜索图标由组件内置；需要自定义前缀或后缀时应直接使用 `TuffInput`。
-
-## 后台筛选工具栏
-
-`TxSearchInput` 适合承载关键词输入；当筛选还需要“范围/类型”时，搭配 `TxSearchSelect` 和 `TxSearchEmpty` 可以形成完整的列表筛选路径。
-
-::::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="已通过本地 Tuff 页面截图验证的搜索输入、筛选选择器与搜索空态组合。"}
+### 筛选工具栏
+关键词交给 `TxSearchInput`，范围交给 `TxSearchSelect`，无结果时显示 `TxSearchEmpty`。
+::::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('all')
-  const lastSearch = ref('')
-
-  const scopeOptions = [
-    { value: 'all', label: '全部' },
-    { value: 'plugins', label: '插件' },
-    { value: 'docs', label: '文档' },
-    { value: 'tasks', label: '任务' },
-  ]
-  const records = [
-    { type: 'plugins', title: '插件发布流水' },
-    { type: 'docs', title: 'Tuffex 组件教程' },
-    { type: 'tasks', title: '截图核验任务' },
-  ]
-
-  const filteredRecords = computed(() => {
-    const keyword = query.value.trim().toLowerCase()
-    const scope = String(selectedScope.value)
-    return records.filter((item) => {
-      const matchesScope = scope === 'all' || item.type === scope
-      const matchesQuery = !keyword || item.title.toLowerCase().includes(keyword)
-      return matchesScope && matchesQuery
-    })
-  })
-
-  function onSearch(value: string) {
-    lastSearch.value = value.trim()
-  }
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxSearchInput
-        v-model="query"
-        remote
-        :search-debounce="180"
-        placeholder="搜索插件 / 文档 / 任务"
-        @search="onSearch"
-      />
-      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="筛选范围" />
-      <TxSearchEmpty v-if="!filteredRecords.length" description="换一个关键词或筛选范围。" />
-    </section>
+    <TxSearchInput
+      v-model="query"
+      remote
+      :search-debounce="180"
+      placeholder="搜索插件 / 文档 / 任务"
+      @search="onSearch"
+    />
+    <TxSearchSelect v-model="scope" :options="scopeOptions" placeholder="筛选范围" />
+    <TxSearchEmpty v-if="!filteredRecords.length" description="换一个关键词或筛选范围。" />
   </template>
 ---
 ::::
 
+### 最佳实践
+
+- 只需关键词与 Enter 时用 `TxSearchInput`；需要结果面板或回填选中值时用 `TxSearchSelect`。
+- `remote` 下 Enter 与防抖可能派发同一查询，请求处理保持幂等。
+- 不要只靠 placeholder 表达含义；密集工具栏中提供外部标签或上下文。
+- 只有本地或已完整缓存的搜索才把 `searchDebounce` 设为 `0`。
+- 需要自定义前缀或后缀时直接使用 `TuffInput`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 输入值，配合 `v-model` 使用。 |
+| `placeholder` | `string` | `'Search'` | 占位文本。 |
+| `disabled` | `boolean` | `false` | 禁止输入、清空与远程搜索。 |
+| `clearable` | `boolean` | `true` | 有值时显示清空按钮。 |
+| `remote` | `boolean` | `false` | 输入时按防抖派发 `search`。 |
+| `searchDebounce` | `number` | `200` | 远程搜索的防抖时长（ms）。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(v: string)` | 输入值变化时触发。 |
+| `input` | `(v: string)` | 与 `update:modelValue` 同时触发。 |
+| `focus` | `(e: FocusEvent)` | 输入框获得焦点时触发。 |
+| `blur` | `(e: FocusEvent)` | 输入框失去焦点时触发。 |
+| `clear` | - | 清空按钮重置值后触发。 |
+| `search` | `(v: string)` | 按 Enter 时立即触发；`remote` 下输入防抖结束后也触发。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `focus()` | `() => void` | 聚焦输入框。 |
+| `blur()` | `() => void` | 使输入框失焦。 |
+| `clear()` | `() => void` | 清空值并触发 `clear`。 |
+| `setValue(v)` | `(v: string) => void` | 设置输入值。 |
+| `getValue()` | `() => string` | 返回当前输入值。 |
+
 ## 技术实现
 
-- **搜索契约：** Enter 会立即触发 `search`。`remote=true` 时，输入变化还会按防抖触发 `search`，但禁用状态不会发起远程搜索。
-- **清空契约：** 组件转发 `TuffInput` 的清空行为，触发 `clear`，并暴露同一组 focus/blur/value helpers 方便外层集成。
-- **组合契约：** 搜索图标由 `TxSearchInput` 内置管理；需要自定义前后缀插槽时应直接使用 `TuffInput`。
-- **实测覆盖:** `search-input.test.ts` 覆盖输入/搜索事件、远程防抖、禁用远程阻断、清空转发，以及 `getValue()` / `setValue()` helper 暴露。
-
-- Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
-- Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.
-- Coverage: `packages/tuffex/packages/components/src/search-input/__tests__/search-input.test.ts` verifies input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
+- 包装 `TuffInput` 并内置前缀搜索图标；清空行为与暴露方法均转发自 `TuffInput`。
+- 源码：`packages/tuffex/packages/components/src/search-input/`。
 
 <TuffDocSourceLink />

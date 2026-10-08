@@ -1,6 +1,6 @@
 ---
 title: Suggestion Chips
-description: A horizontal row of follow-up prompts users can send in one tap.
+description: A set of follow-up prompts that users send with one tap.
 category: AiChat
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Suggestion Chips
+### Basic
 ::::TuffDemoWrapper{demo="SuggestionChipsSuggestionChipsDemo" code-lang="vue"}
 ---
 code: |
@@ -36,10 +36,8 @@ code: |
 ::::
 
 ### Vertical Follow-up List
-
-`layout="list"` turns the chips into rule-separated rows led by a return arrow, each arriving a beat after the one above it. This is the shape a settled answer ends on: follow-ups as a list you can finish reading, rather than a rail you have to drag sideways.
-
-:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="Follow-ups in a streaming answer" description="Once the prose finishes, the stacked sources and the follow-up list become usable together."}
+`layout="list"` turns the chips into rule-separated rows, each led by a return arrow.
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="Usable, with the sources, once the prose finishes"}
 ---
 code: |
   <template>
@@ -51,10 +49,11 @@ code: |
 
 ### Best Practices
 
-- Offer three to five suggestions. The row scrolls beyond that, but options past the fold are rarely tapped.
-- Word them the way a user would speak ("Add unit tests"), not as feature names ("Test generation").
-- Clear or replace the list after a tap so the same prompt cannot be sent twice.
+- Offer three to five suggestions.
+- Word them as a user would say them ("Add unit tests"), not as feature names ("Test generation").
+- Clear or replace the list after a tap so the same prompt can't be sent twice.
 - Use stable ids rather than the label text, so analytics and de-duplication survive copy changes.
+- End a settled answer with `layout="list"`.
 
 ## API Reference
 
@@ -62,27 +61,20 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `suggestions` | `AiSuggestion[]` | — | The suggestions to render, where `AiSuggestion` is `{ id: string, text: string }`. Required. |
+| `suggestions` | `AiSuggestion[]` | — | The suggestions, each `{ id: string, text: string }`. Required. |
 | `layout` | `'wrap' \| 'list'` | `'wrap'` | `list` stacks them into rule-separated rows with a return glyph. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `select` | `(suggestion: AiSuggestion)` | Emitted when a chip is clicked, carrying that suggestion. |
-
-## Slots
-
-`TxSuggestionChips` exposes no slots. Chip labels come from `suggestion.text`; use a custom implementation if you need rich content.
+| `select` | `(suggestion: AiSuggestion)` | Fires when a chip is clicked, with the whole suggestion. |
 
 ## Overview
 
-- `layout="list"` changes the arrangement only. Data and events are untouched: `select` still carries the whole suggestion object.
-- Rows in the list layout stagger in by position, 90ms apart. Reduced motion drops the entrance entirely while the rows themselves still render.
-- The rule is drawn on each row's bottom border, including the last one — that matches upstream, and the screenshots.
-- Nothing renders when `suggestions` is empty, so there is no need to wrap the component in your own `v-if`.
-- Each chip is keyed by `suggestion.id`; keep ids unique within a set.
-- Clicking emits `select` with the whole suggestion object, not an index or an id.
-- The component holds no selection state and does not remove a suggestion after it is tapped — clearing the list is the consumer's call.
-- The row scrolls horizontally when it overflows. The scrollbar is hidden and both edges are masked so the overflow reads as scrollable rather than clipped.
-- The container is `role="list"` and each chip is `role="listitem"`. That overrides the implicit `<button>` semantics, so screen readers announce a list item rather than a button. Supply surrounding text if button semantics matter for your surface.
+- Nothing renders when `suggestions` is empty.
+- Each chip is keyed by `id`; keep ids unique within a set.
+- The component holds no selection state and doesn't remove a suggestion after a tap.
+- `wrap` scrolls horizontally on overflow, with a hidden scrollbar and edge masks that signal the overflow.
+- `list` rows stagger in by position, 90ms apart; under reduced motion they simply appear.
+- The container is `role="list"` and each chip `role="listitem"`, which overrides the button semantics; add surrounding text where button semantics matter.

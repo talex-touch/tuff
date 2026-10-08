@@ -436,6 +436,7 @@ code: |
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 动画只通过 `animation` 对象配置，组件没有顶层的 `duration` / `ease` prop；没写的字段按类型取默认值。
 - 没传 `ease` 的 `expand` 按面板高度选弹簧：高度不超过约 63px 时就是 `spring(10, 0.6)`（约 10% 过冲）；更高的面板提高阻尼，把盒子的过冲压在预算内，同时提高刚度，让首次到达满高的时刻保持不变。预算由 `expandBounceBudget` 给出：130px 以内为 6px，更高时按高度的平方根增长，206px 约 7.6px，394px 约 10.4px。只有纵向卡片面板会伸缩真实盒子，横向落位走窗口揭示，不受影响。
+- 整个锚点家族默认不画箭头：BaseAnchor、Tooltip、Popover 的 `showArrow` 都默认 `false`，基于它们的 DropdownMenu、ContextMenu、Select 等组件同样不带箭头；需要时逐个实例开启。
 - `showArrow` 的箭头是面板的一部分：它挂在面板内容层上，内容层的位移、缩放、模糊和透明度都会带着它走；面板开始运动之前、收起之后，它都随面板一起隐藏。各动画类型只给它加自己那一拍：`expand` 等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回、再让面板折叠；`transfer` 先把它藏进面板，滑入落地时弹出；`boom` 晚而快地弹出；`opacity` 没有额外动作，只随面板淡入淡出。
 - `eager` 在首次打开前挂载隐藏但可测量的内容；`keepAliveContent` 在关闭后保留内容状态。关闭动画结束后，根节点停放到视口外，并裁剪自身溢出，避免保留的面板在视口缩小时撑宽文档。显式宽度、跟随 reference 的宽度和内容固有尺寸仍可测量，不使用 `display: none` 或页面级裁剪。
 - 打开和关闭动画期间，面板保持文档绝对定位，根节点通过位移定位，页面滚动由合成线程带动面板跟随 reference。只有退出画面结束后才停放；重新打开会在首次定位和尺寸计算前恢复文档几何，并使旧的关闭完成回调失效。

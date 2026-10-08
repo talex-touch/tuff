@@ -1,6 +1,6 @@
 ---
 title: "Avatar Variants"
-description: "Curated TxAvatar, TxOutlineBorder, and TxCornerOverlay recipes for status, activity, platform, system, social, and contextual avatar badges."
+description: "Recipes that add status dots, badges, and rings to avatars."
 category: Basic
 status: beta
 since: 1.0.0
@@ -9,16 +9,16 @@ syncStatus: reviewed
 verified: true
 ---
 
-## Gallery
+## Usage
 
-### Avatar Variants Gallery
+### Gallery
+Compositions of `TxAvatar` with `TxCornerOverlay`, `TxOutlineBorder`, and `TxIcon`, grouped by status, activity, platform, system, social, and context.
 :::TuffDemoWrapper{demo="AvatarVariantsAvatarVariantsGalleryDemo" code-lang="vue"}
 ---
 code: |
-  <!-- This page is a recipe gallery (30+ variants + a scoped <style>). See the demo file under
-       Source for the full source; copy only the minimal pattern you need. Three representative compositions: -->
+  <!-- Three representative recipes; the demo source has all 30+ variants -->
   <template>
-    <!-- Online status dot: CornerOverlay + circle -->
+    <!-- Online status dot -->
     <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
       <TxAvatar src="https://i.pravatar.cc/150?u=online" size="large" />
       <template #overlay>
@@ -26,7 +26,7 @@ code: |
       </template>
     </TxCornerOverlay>
 
-    <!-- Platform / system badge: CornerOverlay + icon badge -->
+    <!-- Platform badge -->
     <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
       <TxAvatar size="large" background-color="var(--tx-fill-color-light)">
         <TxIcon name="i-carbon-chat" :size="24" style="color: var(--tx-color-success)" />
@@ -38,7 +38,7 @@ code: |
       </template>
     </TxCornerOverlay>
 
-    <!-- Ring + verified badge: wrapped in OutlineBorder ring -->
+    <!-- Ring + verified badge -->
     <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2" clip-mode="none">
       <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
         <TxAvatar src="https://i.pravatar.cc/150?u=verified" size="large" />
@@ -53,16 +53,15 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Copy only the smallest pattern you need; don't import the whole gallery demo.
+- When a badge conveys user state, state it in adjacent text or the parent control's label, not by color or icon shape alone.
+- Give purely decorative badges an empty `alt` or `aria-hidden`.
+
 ## Technologies
 
-- **Composition note:** This page is a recipe gallery, not a standalone exported component. Each card combines `TxAvatar`, `TxCornerOverlay`, `TxOutlineBorder`, `TxIcon`, and local CSS utilities; copy the smallest needed pattern instead of importing the gallery demo.
-- **Accessibility note:** Purely decorative badges use empty `alt` or `aria-hidden` in the demo. If a badge changes user state, expose that state in adjacent text or the parent control label rather than relying on color or icon shape alone.
-- **Verified coverage:** The demo registry loads `AvatarVariantsAvatarVariantsGalleryDemo`; the underlying component tests are `avatar.test.ts` for `TxAvatar`/`TxAvatarGroup`, plus the relevant `corner-overlay` and `outline-border` component tests for overlay placement and ring/mask behavior.
-
-- Demo source: `apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue`.
-- Helper source: `apps/nexus/app/components/content/demos/AvatarVariantCard.vue`.
-- Component sources: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`, `TxAvatarGroup.vue`, plus the documented `corner-overlay` and `outline-border` primitives used by the recipes.
-- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts` exports `AvatarProps`, `AvatarGroupProps`, `AvatarSize`, `AvatarStatus`, and `AvatarShape`.
-- Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` verifies initials, image fallback, slots, custom size, click emission, and group overflow count; `apps/nexus/app/components/content/demo-lazy.test.ts` verifies lazy demo loading.
+- This page is a recipe gallery, not an exported component; the badge styles are local CSS classes in the demo.
+- Source: `apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue` and `AvatarVariantCard.vue`; components in `packages/tuffex/packages/components/src/avatar/`, `corner-overlay/`, and `outline-border/`.
 
 <TuffDocSourceLink />

@@ -1,8 +1,12 @@
 import type { DashboardPluginVersion, StorePluginSearchPlugin } from '../../utils/pluginsStore'
 import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
+import { openEdgeCache } from '../../utils/edgeCache'
 import { searchStorePlugins } from '../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
 import { projectPublicPluginManifest } from '../../utils/pluginManifestProjection'
+
+/** How long a copy of a public Store search is served from the edge cache. */
+const STORE_SEARCH_EDGE_TTL_SECONDS = 120
 
 interface StoreSearchQuery {
   q?: string
@@ -35,6 +39,15 @@ function isCompactEnabled(value: unknown): boolean {
 
   const normalized = value.trim().toLowerCase()
   return normalized === '' || normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+/**
+ * Whether the request is for the public Store, the audience `resolvePluginStoreAudience` grants without
+ * asking who is calling: no channel, or RELEASE. Only that listing is the same for everyone.
+ */
+function isPublicStoreChannel(value: unknown): boolean {
+  const channel = (Array.isArray(value) ? value[0] : value)?.toString().trim().toUpperCase()
+  return !channel || channel === 'RELEASE'
 }
 
 function readBoundedInteger(value: unknown, fallback: number, min: number, max: number): number {
@@ -100,7 +113,7 @@ function cleanPluginForSearch(
     createdAt: plugin.createdAt,
     updatedAt: plugin.updatedAt,
     latestVersion: cleanVersionForSearch(plugin.slug, latest, compact, audience),
-    readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
+    readmeUrl: (plugin.hasReadme ?? Boolean(plugin.readmeMarkdown)) ? `/api/store/plugins/${plugin.slug}/readme` : null,
   }
   if (compact)
     return base
@@ -119,6 +132,18 @@ export default defineEventHandler(async (event) => {
   const compact = isCompactEnabled(query.compact)
   const limit = readBoundedInteger(query.limit, 50, 1, 100)
   const offset = readBoundedInteger(query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+
+  // Only public results are the same for everyone; the beta audience needs a moderator. The keyword
+  // is matched case-insensitively, so its case does not split the copies.
+  const edge = isPublicStoreChannel(query.channel)
+    ? await openEdgeCache(event, {
+        name: 'store/search',
+        params: { q: keyword.toLowerCase(), category, compact, limit, offset },
+      })
+    : null
+  if (edge?.hit)
+    return edge.hit
+
   const audience = await resolvePluginStoreAudience(event)
 
   const result = await searchStorePlugins(event, {
@@ -127,15 +152,20 @@ export default defineEventHandler(async (event) => {
     limit,
     offset,
     audience,
+    // Only the full form carries readme text.
+    includeReadme: !compact,
   })
 
   const plugins = result.plugins
     .map(plugin => cleanPluginForSearch(plugin, compact, audience))
     .filter((value): value is NonNullable<typeof value> => Boolean(value))
-  return {
+  const body = {
     plugins,
     total: result.total,
     limit: result.limit,
     offset: result.offset,
   }
+  if (edge)
+    return edge.store({ body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }, STORE_SEARCH_EDGE_TTL_SECONDS)
+  return body
 })

@@ -1,49 +1,38 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const MESSAGE_TABLE = 'telemetry_messages'
-
-let messageSchemaInitialized = false
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
 }
 
+const MESSAGE_SCHEMA = defineD1Schema('telemetry-messages', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${MESSAGE_TABLE} (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        meta TEXT,
+        status TEXT NOT NULL DEFAULT 'unread',
+        platform TEXT,
+        version TEXT,
+        is_anonymous INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON ${MESSAGE_TABLE}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_status ON ${MESSAGE_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_source ON ${MESSAGE_TABLE}(source)`,
+  ],
+})
+
 async function ensureMessageSchema(db: D1Database) {
-  if (messageSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${MESSAGE_TABLE} (
-      id TEXT PRIMARY KEY,
-      source TEXT NOT NULL,
-      severity TEXT NOT NULL,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      meta TEXT,
-      status TEXT NOT NULL DEFAULT 'unread',
-      platform TEXT,
-      version TEXT,
-      is_anonymous INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON ${MESSAGE_TABLE}(created_at);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_messages_status ON ${MESSAGE_TABLE}(status);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_messages_source ON ${MESSAGE_TABLE}(source);
-  `).run()
-
-  messageSchemaInitialized = true
+  await ensureD1Schema(db, MESSAGE_SCHEMA)
 }
 
 export interface TelemetryMessageInput {
@@ -85,35 +74,43 @@ export async function recordTelemetryMessages(
     return 0
   }
 
+  // One batch for the lot (the endpoint takes up to a hundred), where each message used to be its own
+  // round trip. A batch is one transaction, so a failure keeps none of them rather than the ones
+  // before it.
   let processed = 0
   try {
     await ensureMessageSchema(db)
 
-    for (const input of inputs) {
-      if (!input.source || !input.severity || !input.title || !input.message) {
-        continue
-      }
-      const id = input.id || crypto.randomUUID()
-      const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString()
-      await db.prepare(`
-        INSERT OR REPLACE INTO ${MESSAGE_TABLE} (
-          id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
-      `).bind(
-        id,
-        input.source,
-        input.severity,
-        input.title,
-        input.message,
-        input.meta ? JSON.stringify(input.meta) : null,
-        input.status || 'unread',
-        input.platform || null,
-        input.version || null,
-        input.isAnonymous === false ? 0 : 1,
-        createdAt,
-      ).run()
-      processed += 1
-    }
+    const statements = inputs
+      .filter(input => input.source && input.severity && input.title && input.message)
+      // An unparsable `createdAt` skips its own message. Building the batch would otherwise throw on
+      // it and drop every message in the request, where the one-by-one loop dropped it and the rest.
+      .filter(input => !input.createdAt || Number.isFinite(new Date(input.createdAt).getTime()))
+      .map((input) => {
+        const id = input.id || crypto.randomUUID()
+        const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString()
+        return db.prepare(`
+          INSERT OR REPLACE INTO ${MESSAGE_TABLE} (
+            id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+        `).bind(
+          id,
+          input.source,
+          input.severity,
+          input.title,
+          input.message,
+          input.meta ? JSON.stringify(input.meta) : null,
+          input.status || 'unread',
+          input.platform || null,
+          input.version || null,
+          input.isAnonymous === false ? 0 : 1,
+          createdAt,
+        )
+      })
+
+    if (statements.length > 0)
+      await db.batch(statements)
+    processed = statements.length
   }
   catch (error) {
     console.warn('Telemetry messages: D1 error', error)

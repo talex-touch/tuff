@@ -5,12 +5,13 @@ import { sendEmail } from '../../utils/email'
 import { requireSessionAuth } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSessionAuth(event)
+  const auth = await requireSessionAuth(event)
+  const { userId } = auth
   const body = await readBody(event)
   const skip = Boolean(body?.skip)
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }

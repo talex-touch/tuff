@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 /**
  * Shared AES-256-GCM credential store.
@@ -296,26 +297,23 @@ export function createTypedCredentialStore<TType extends string, TPayload>(
   },
 ) {
   const crypto = createSecureCredentialCrypto(descriptor)
-  const initializedSchemas = new WeakSet<D1Database>()
-  const columns = 'auth_ref, credential_type, encrypted_value, created_by, created_at, updated_at'
-
-  async function ensureSchema(db: D1Database) {
-    if (initializedSchemas.has(db))
-      return
-
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS ${descriptor.table} (
+  const schema = defineD1Schema(`secure-credentials:${descriptor.table}`, {
+    statements: [
+      `CREATE TABLE IF NOT EXISTS ${descriptor.table} (
         auth_ref TEXT PRIMARY KEY,
         credential_type TEXT NOT NULL,
         encrypted_value TEXT NOT NULL,
         created_by TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      );
-    `).run()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_${descriptor.table}_type ON ${descriptor.table}(credential_type)`,
+    ],
+  })
+  const columns = 'auth_ref, credential_type, encrypted_value, created_by, created_at, updated_at'
 
-    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${descriptor.table}_type ON ${descriptor.table}(credential_type);`).run()
-    initializedSchemas.add(db)
+  async function ensureSchema(db: D1Database) {
+    await ensureD1Schema(db, schema)
   }
 
   function mapRow(row: TypedCredentialRow): TypedCredentialRecord<TType> {

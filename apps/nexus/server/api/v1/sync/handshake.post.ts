@@ -3,9 +3,9 @@ import { requireAppAuth } from '../../../utils/auth'
 import {
   countActiveDevices,
   readDeviceId,
-  upsertDevice,
+  touchDevice,
   readDeviceMetadata,
-  revokeInactiveDevices,
+  revokeInactiveDevicesAndCountActive,
   revokeOldestDevices
 } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
@@ -22,25 +22,25 @@ export default defineEventHandler(async (event) => {
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
 
-  await upsertDevice(event, userId, deviceId, readDeviceMetadata(event))
+  await touchDevice(event, userId, deviceId, readDeviceMetadata(event))
 
   const quota = await getOrInitQuota(event, userId)
-  const evictedDevices = [
-    ...(await revokeInactiveDevices(event, userId, {
-      inactiveBefore: new Date(Date.now() - DEVICE_INACTIVE_MS).toISOString(),
-      keepDeviceId: deviceId
-    })),
-  ]
-  const deviceCount = await countActiveDevices(event, userId)
-  if (deviceCount > quota.limits.device_limit) {
+  const inactive = await revokeInactiveDevicesAndCountActive(event, userId, {
+    inactiveBefore: new Date(Date.now() - DEVICE_INACTIVE_MS).toISOString(),
+    keepDeviceId: deviceId
+  })
+  const evictedDevices = [...inactive.evicted]
+  // Counted again only when the oldest devices were revoked; otherwise the count above still holds.
+  let finalDeviceCount = inactive.activeCount
+  if (inactive.activeCount > quota.limits.device_limit) {
     evictedDevices.push(
       ...(await revokeOldestDevices(event, userId, {
         limit: quota.limits.device_limit,
         keepDeviceId: deviceId
       }))
     )
+    finalDeviceCount = await countActiveDevices(event, userId)
   }
-  const finalDeviceCount = await countActiveDevices(event, userId)
   if (finalDeviceCount > quota.limits.device_limit) {
     throw createSyncError('QUOTA_DEVICE_EXCEEDED', 403, 'Device limit exceeded')
   }

@@ -1,21 +1,42 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { requestJson, useTypedFetch } from '~/utils/request'
+import { requestJson } from '~/utils/request'
+import { sessionGeneration } from '~/utils/session-generation'
+
+interface NavTeamSummary {
+  type?: string
+  role?: string
+}
+
+/** When an answer arrived, and for which signed-in account (`sessionGeneration`). */
+interface Checked {
+  at: number
+  generation: number
+}
+
+interface NavTeamState extends Checked {
+  team: NavTeamSummary | null
+}
+
+/**
+ * The nav's reads outlive its own mount: it is set up again each time the dashboard is entered, and
+ * the team (for the OAuth entry) and the unread badge were fetched every time — the badge on every
+ * route change as well. Both now keep their answer for a while, per signed-in account; the team and
+ * OAuth pages, where the team changes, still ask again on the way in.
+ */
+const TEAM_SUMMARY_TTL_MS = 60_000
+const UNREAD_COUNT_TTL_MS = 60_000
 
 const { t } = useI18n()
 const route = useRoute()
+// Loads the profile through the shared cache; `refresh` (a forced read) is only for a missing one.
 const { user, refresh, isAuthenticated } = useAuthUser()
 const notificationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
+const notificationUnreadCheckedAt = useState<Checked | null>('dashboard-notification-unread-checked-at', () => null)
+const teamState = useState<NavTeamState | null>('dashboard-nav-team', () => null)
 const mounted = ref(false)
-const { data: teamData, refresh: refreshTeamData } = useTypedFetch<{
-  team?: {
-    type?: string
-    role?: string
-  }
-}>('/api/dashboard/team', {
-  immediate: false,
-  server: false,
-})
+let teamRequest: Promise<void> | null = null
+let unreadRequest: Promise<void> | null = null
 
 const revalidateUser = () => {
   if (!isAuthenticated.value)
@@ -23,10 +44,28 @@ const revalidateUser = () => {
   void refresh()
 }
 
-const revalidateTeam = () => {
+function isFresh(entry: Checked | null, ttlMs: number) {
+  return entry !== null && entry.generation === sessionGeneration() && Date.now() - entry.at < ttlMs
+}
+
+function revalidateTeam(force = false) {
   if (!mounted.value || !isAuthenticated.value)
     return
-  void refreshTeamData()
+  if (teamRequest || (!force && isFresh(teamState.value, TEAM_SUMMARY_TTL_MS)))
+    return
+
+  const generation = sessionGeneration()
+  teamRequest = requestJson<{ team?: NavTeamSummary }>('/api/dashboard/team', { query: { view: 'summary' } })
+    .then((data) => {
+      if (generation === sessionGeneration())
+        teamState.value = { team: data?.team ?? null, at: Date.now(), generation }
+    })
+    .catch(() => {
+      // The nav keeps what it had; the team page reports its own errors.
+    })
+    .finally(() => {
+      teamRequest = null
+    })
 }
 
 function setNotificationUnreadCount(value: unknown) {
@@ -34,33 +73,37 @@ function setNotificationUnreadCount(value: unknown) {
   notificationUnreadCount.value = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
 }
 
-async function refreshNotificationUnreadCount() {
+function refreshNotificationUnreadCount() {
   if (!import.meta.client || !mounted.value)
     return
   if (!isAuthenticated.value) {
     setNotificationUnreadCount(0)
+    notificationUnreadCheckedAt.value = null
     return
   }
+  if (unreadRequest || isFresh(notificationUnreadCheckedAt.value, UNREAD_COUNT_TTL_MS))
+    return
 
-  try {
-    const data = await requestJson<{ unreadCount?: unknown }>('/api/dashboard/notifications/inbox', {
-      query: {
-        status: 'unread',
-        limit: 1,
-      },
+  const generation = sessionGeneration()
+  unreadRequest = requestJson<{ unreadCount?: unknown }>('/api/dashboard/notifications/inbox/unread-count')
+    .then((data) => {
+      if (generation !== sessionGeneration())
+        return
+      setNotificationUnreadCount(data.unreadCount)
+      notificationUnreadCheckedAt.value = { at: Date.now(), generation }
     })
-    setNotificationUnreadCount(data.unreadCount)
-  }
-  catch {
-    // The notifications page surfaces full inbox errors.
-  }
+    .catch(() => {
+      // The notifications page surfaces full inbox errors.
+    })
+    .finally(() => {
+      unreadRequest = null
+    })
 }
 
 onMounted(() => {
   mounted.value = true
-  revalidateUser()
   revalidateTeam()
-  void refreshNotificationUnreadCount()
+  refreshNotificationUnreadCount()
 })
 
 watch(
@@ -69,9 +112,10 @@ watch(
     if (!user.value)
       revalidateUser()
     if (path.startsWith('/dashboard/team') || path.startsWith('/dashboard/oauth'))
-      revalidateTeam()
-    if (path.startsWith('/dashboard'))
-      void refreshNotificationUnreadCount()
+      revalidateTeam(true)
+    // The notifications page reads the inbox itself and keeps this badge in step.
+    if (path.startsWith('/dashboard') && !path.startsWith('/dashboard/notifications'))
+      refreshNotificationUnreadCount()
   },
 )
 
@@ -80,10 +124,11 @@ watch(
   (authed) => {
     if (authed) {
       revalidateTeam()
-      void refreshNotificationUnreadCount()
+      refreshNotificationUnreadCount()
     }
     else {
       setNotificationUnreadCount(0)
+      notificationUnreadCheckedAt.value = null
     }
   },
   { immediate: true },
@@ -95,7 +140,7 @@ watch(
  * hydration mismatch.
  */
 const { isAdmin: isAccountAdmin } = useAccountRole()
-const { isTeamAdmin: isTeamAdminRole } = useTeamRole(() => teamData.value?.team)
+const { isTeamAdmin: isTeamAdminRole } = useTeamRole(() => teamState.value?.team)
 
 const isAdmin = computed(() => mounted.value && isAccountAdmin.value)
 const isTeamAdmin = computed(() => mounted.value && isTeamAdminRole.value)

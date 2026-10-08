@@ -156,11 +156,7 @@ const showAgents = computed(() => props.agents.length > 0 || props.configured.le
               A hinted label takes the pointer, so its hint can show; every other part of the text
               lets the pointer through to the row's button.
             -->
-            <TxTooltip
-              v-if="tag.hint"
-              :content="tag.hint"
-              :anchor="{ placement: 'top', showArrow: true }"
-            >
+            <TxTooltip v-if="tag.hint" :content="tag.hint" :anchor="{ placement: 'top' }">
               <SettingChip class="ResourceRow-HintedTag" :tone="tag.tone ?? 'neutral'">
                 {{ tag.label }}
               </SettingChip>

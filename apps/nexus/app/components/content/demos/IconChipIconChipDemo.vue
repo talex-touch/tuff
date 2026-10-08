@@ -34,6 +34,7 @@ const copy = computed(() => {
         <TxIconChip :size="14" tone="accent" label="DOC" />
         <TxIconChip :size="14" tone="orange" label="XLS" />
         <TxIconChip :size="14" tone="neutral" label="TXT" />
+        <TxIconChip :size="14" tone="ink" label="JSON" />
       </div>
     </div>
 

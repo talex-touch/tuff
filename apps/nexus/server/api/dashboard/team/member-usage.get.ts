@@ -1,5 +1,4 @@
 import { requireAuth } from '../../../utils/auth'
-import { getUserById } from '../../../utils/authStore'
 import { isTeamRoleAdminLike, resolveActiveTeamContext } from '../../../utils/teamContext'
 import { listTeamMemberUsage } from '../../../utils/teamStore'
 
@@ -14,17 +13,14 @@ export default defineEventHandler(async (event) => {
     canViewAll ? undefined : userId,
   )
 
-  const usage = await Promise.all(usageRows.map(async (row) => {
-    const profile = await getUserById(event, row.userId)
-    return {
-      userId: row.userId,
-      name: profile?.name || profile?.email || row.userId,
-      email: profile?.email || '',
-      aiRequestsUsed: row.aiRequestsUsed,
-      aiTokensUsed: row.aiTokensUsed,
-      weekStartDate: row.weekStartDate,
-      updatedAt: row.updatedAt,
-    }
+  const usage = usageRows.map(row => ({
+    userId: row.userId,
+    name: row.name || row.email || row.userId,
+    email: row.email || '',
+    aiRequestsUsed: row.aiRequestsUsed,
+    aiTokensUsed: row.aiTokensUsed,
+    weekStartDate: row.weekStartDate,
+    updatedAt: row.updatedAt,
   }))
 
   return {

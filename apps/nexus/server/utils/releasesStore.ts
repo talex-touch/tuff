@@ -5,6 +5,7 @@ import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 import { upsertReleaseUpdate } from './dashboardStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const RELEASES_KEY = 'app:releases'
 const RELEASE_ASSETS_KEY = 'app:release_assets'
@@ -13,7 +14,6 @@ const RELEASES_TABLE = 'app_releases'
 const RELEASE_ASSETS_TABLE = 'app_release_assets'
 const RELEASE_REVISIONS_TABLE = 'app_release_revisions'
 
-let schemaInitialized = false
 let hasLoggedReleasesDb = false
 let hasLoggedReleasesFallback = false
 
@@ -189,156 +189,92 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return db
 }
 
+const RELEASES_SCHEMA = defineD1Schema('releases', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${RELEASES_TABLE} (
+        id TEXT PRIMARY KEY,
+        tag TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        version TEXT NOT NULL,
+        rollback_from_version TEXT NOT NULL DEFAULT '',
+        rollback_compatible INTEGER NOT NULL DEFAULT 0,
+        notes TEXT NOT NULL,
+        notes_html TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        published_at TEXT,
+        min_app_version TEXT,
+        is_critical INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${RELEASE_ASSETS_TABLE} (
+        id TEXT PRIMARY KEY,
+        release_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        arch TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'upload',
+        file_key TEXT,
+        signature_key TEXT,
+        signature_url TEXT,
+        download_url TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT,
+        content_type TEXT NOT NULL,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${RELEASE_REVISIONS_TABLE} (
+        id TEXT PRIMARY KEY,
+        release_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        snapshot TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_releases_channel ON ${RELEASES_TABLE}(channel)`,
+    `CREATE INDEX IF NOT EXISTS idx_releases_status ON ${RELEASES_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_assets_release_id ON ${RELEASE_ASSETS_TABLE}(release_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_revisions_release_id ON ${RELEASE_REVISIONS_TABLE}(release_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_revisions_tag ON ${RELEASE_REVISIONS_TABLE}(tag)`,
+    // The update check's latest-release query orders by `datetime(published_at)`; only an index on that
+    // same expression serves the order, so it read and sorted every release of the channel (20 ms a run).
+    `CREATE INDEX IF NOT EXISTS idx_releases_channel_status_published ON ${RELEASES_TABLE}(channel, status, datetime(published_at) DESC)`,
+  ],
+  columns: [
+    {
+      table: RELEASES_TABLE,
+      columns: [
+        { name: 'notes_html', ddl: 'notes_html TEXT' },
+        { name: 'published_at', ddl: 'published_at TEXT' },
+        { name: 'min_app_version', ddl: 'min_app_version TEXT' },
+        { name: 'is_critical', ddl: 'is_critical INTEGER NOT NULL DEFAULT 0' },
+        { name: 'rollback_from_version', ddl: "rollback_from_version TEXT NOT NULL DEFAULT ''" },
+        { name: 'rollback_compatible', ddl: 'rollback_compatible INTEGER NOT NULL DEFAULT 0' },
+      ],
+    },
+    {
+      table: RELEASE_ASSETS_TABLE,
+      columns: [
+        { name: 'source_type', ddl: "source_type TEXT NOT NULL DEFAULT 'upload'" },
+        { name: 'file_key', ddl: 'file_key TEXT' },
+        { name: 'signature_key', ddl: 'signature_key TEXT' },
+        { name: 'signature_url', ddl: 'signature_url TEXT' },
+        { name: 'sha256', ddl: 'sha256 TEXT' },
+        { name: 'content_type', ddl: "content_type TEXT NOT NULL DEFAULT 'application/octet-stream'" },
+        { name: 'download_count', ddl: 'download_count INTEGER NOT NULL DEFAULT 0' },
+      ],
+    },
+  ],
+})
+
 async function ensureReleasesSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${RELEASES_TABLE} (
-      id TEXT PRIMARY KEY,
-      tag TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      channel TEXT NOT NULL,
-      version TEXT NOT NULL,
-      rollback_from_version TEXT NOT NULL DEFAULT '',
-      rollback_compatible INTEGER NOT NULL DEFAULT 0,
-      notes TEXT NOT NULL,
-      notes_html TEXT,
-      status TEXT NOT NULL DEFAULT 'draft',
-      published_at TEXT,
-      min_app_version TEXT,
-      is_critical INTEGER NOT NULL DEFAULT 0,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${RELEASE_ASSETS_TABLE} (
-      id TEXT PRIMARY KEY,
-      release_id TEXT NOT NULL,
-      platform TEXT NOT NULL,
-      arch TEXT NOT NULL,
-      filename TEXT NOT NULL,
-      source_type TEXT NOT NULL DEFAULT 'upload',
-      file_key TEXT,
-      signature_key TEXT,
-      signature_url TEXT,
-      download_url TEXT NOT NULL,
-      size INTEGER NOT NULL,
-      sha256 TEXT,
-      content_type TEXT NOT NULL,
-      download_count INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${RELEASE_REVISIONS_TABLE} (
-      id TEXT PRIMARY KEY,
-      release_id TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      snapshot TEXT NOT NULL,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
-    );
-  `,
-    )
-    .run()
-
-  await ensureTableColumns(db, RELEASES_TABLE, [
-    { name: 'notes_html', ddl: 'notes_html TEXT' },
-    { name: 'published_at', ddl: 'published_at TEXT' },
-    { name: 'min_app_version', ddl: 'min_app_version TEXT' },
-    { name: 'is_critical', ddl: 'is_critical INTEGER NOT NULL DEFAULT 0' },
-    {
-      name: 'rollback_from_version',
-      ddl: 'rollback_from_version TEXT NOT NULL DEFAULT \'\'',
-    },
-    {
-      name: 'rollback_compatible',
-      ddl: 'rollback_compatible INTEGER NOT NULL DEFAULT 0',
-    },
-  ])
-
-  await ensureTableColumns(db, RELEASE_ASSETS_TABLE, [
-    { name: 'source_type', ddl: `source_type TEXT NOT NULL DEFAULT 'upload'` },
-    { name: 'file_key', ddl: 'file_key TEXT' },
-    { name: 'signature_key', ddl: 'signature_key TEXT' },
-    { name: 'signature_url', ddl: 'signature_url TEXT' },
-    { name: 'sha256', ddl: 'sha256 TEXT' },
-    {
-      name: 'content_type',
-      ddl: `content_type TEXT NOT NULL DEFAULT 'application/octet-stream'`,
-    },
-    {
-      name: 'download_count',
-      ddl: 'download_count INTEGER NOT NULL DEFAULT 0',
-    },
-  ])
-
-  await db
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_releases_channel ON ${RELEASES_TABLE}(channel);`,
-    )
-    .run()
-  await db
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_releases_status ON ${RELEASES_TABLE}(status);`,
-    )
-    .run()
-  await db
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_release_assets_release_id ON ${RELEASE_ASSETS_TABLE}(release_id);`,
-    )
-    .run()
-  await db
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_release_revisions_release_id ON ${RELEASE_REVISIONS_TABLE}(release_id);`,
-    )
-    .run()
-  await db
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_release_revisions_tag ON ${RELEASE_REVISIONS_TABLE}(tag);`,
-    )
-    .run()
-
-  schemaInitialized = true
-}
-
-async function ensureTableColumns(
-  db: D1Database,
-  table: string,
-  definitions: Array<{ name: string, ddl: string }>,
-) {
-  const { results } = await db
-    .prepare(`PRAGMA table_info(${table});`)
-    .all<{ name?: string }>()
-  const columns = new Set(
-    (results ?? []).map(item => item.name).filter(Boolean) as string[],
-  )
-
-  for (const definition of definitions) {
-    if (!columns.has(definition.name)) {
-      await db
-        .prepare(`ALTER TABLE ${table} ADD COLUMN ${definition.ddl};`)
-        .run()
-    }
-  }
+  await ensureD1Schema(db, RELEASES_SCHEMA)
 }
 
 function mapReleaseRow(row: D1ReleaseRow): AppRelease {
@@ -602,29 +538,28 @@ export async function listReleases(
       }
     }
 
-    const stmt = db.prepare(query)
-    const { results } = bindings.length
-      ? await stmt.bind(...bindings).all<D1ReleaseRow>()
-      : await stmt.all<D1ReleaseRow>()
+    const bound = (sql: string) => bindings.length ? db.prepare(sql).bind(...bindings) : db.prepare(sql)
 
-    const releases = (results ?? []).map(mapReleaseRow)
+    if (!options.includeAssets) {
+      const { results } = await bound(query).all<D1ReleaseRow>()
+      return (results ?? []).map(mapReleaseRow)
+    }
 
-    if (options.includeAssets && releases.length) {
-      const ids = releases.map(r => r.id)
-      const placeholders = ids.map((_, idx) => `?${idx + 1}`).join(', ')
-
-      const assetsQuery = `
+    // The page and its assets in one round trip. The assets used to follow with an `IN` list of the
+    // page's ids: a second round trip, and past 100 releases more parameters than D1 binds.
+    const [releaseResult, assetResults] = await db.batch([
+      bound(query),
+      bound(`
         SELECT *
         FROM ${RELEASE_ASSETS_TABLE}
-        WHERE release_id IN (${placeholders})
+        WHERE release_id IN (SELECT id FROM (${query}))
         ORDER BY platform, arch;
-      `
+      `),
+    ])
+    const releases = ((releaseResult?.results ?? []) as D1ReleaseRow[]).map(mapReleaseRow)
 
-      const assetResults = await db
-        .prepare(assetsQuery)
-        .bind(...ids)
-        .all<D1ReleaseAssetRow>()
-      const assets = (assetResults.results ?? []).map(mapAssetRow)
+    if (releases.length) {
+      const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
 
       const assetsByRelease = new Map<string, ReleaseAsset[]>()
       for (const asset of assets) {
@@ -708,43 +643,31 @@ export async function getLatestRelease(
   if (db) {
     await ensureReleasesSchema(db)
 
-    const row = await db
-      .prepare(
-        `
+    // The release and its assets in one round trip; the assets' release is the same subquery, read in
+    // the same transaction. They were two.
+    const latest = `
       SELECT *
       FROM ${RELEASES_TABLE}
       WHERE channel = ?1 AND status = 'published'
       ORDER BY datetime(published_at) DESC
-      LIMIT 1;
-    `,
-      )
-      .bind(channel)
-      .first<D1ReleaseRow>()
+      LIMIT 1`
+    const bindings: unknown[] = platform ? [channel, platform] : [channel]
+    const [releaseResult, assetResults] = await db.batch([
+      db.prepare(`${latest};`).bind(channel),
+      db.prepare(`
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id = (SELECT id FROM (${latest}))${platform ? ' AND platform = ?2' : ''}
+        ORDER BY platform, arch;
+      `).bind(...bindings),
+    ])
 
+    const row = (releaseResult?.results?.[0] ?? null) as D1ReleaseRow | null
     if (!row)
       return null
 
     const release = mapReleaseRow(row)
-
-    let assetsQuery = `
-      SELECT *
-      FROM ${RELEASE_ASSETS_TABLE}
-      WHERE release_id = ?1
-    `
-    const bindings: unknown[] = [release.id]
-
-    if (platform) {
-      assetsQuery += ` AND platform = ?2`
-      bindings.push(platform)
-    }
-
-    assetsQuery += ` ORDER BY platform, arch;`
-
-    const assetResults = await db
-      .prepare(assetsQuery)
-      .bind(...bindings)
-      .all<D1ReleaseAssetRow>()
-    const assets = (assetResults.results ?? []).map(mapAssetRow)
+    const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
 
     return { ...release, assets }
   }
@@ -786,39 +709,34 @@ export async function getReleaseByTag(
   if (db) {
     await ensureReleasesSchema(db)
 
-    const row = await db
-      .prepare(
-        `
+    const releaseQuery = db.prepare(`
       SELECT *
       FROM ${RELEASES_TABLE}
       WHERE tag = ?1;
-    `,
-      )
-      .bind(tag)
-      .first<D1ReleaseRow>()
+    `).bind(tag)
 
+    if (!includeAssets) {
+      const row = await releaseQuery.first<D1ReleaseRow>()
+      return row ? mapReleaseRow(row) : null
+    }
+
+    // The release and its assets in one round trip; they were two.
+    const [releaseResult, assetResults] = await db.batch([
+      releaseQuery,
+      db.prepare(`
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id = (SELECT id FROM ${RELEASES_TABLE} WHERE tag = ?1)
+        ORDER BY platform, arch;
+      `).bind(tag),
+    ])
+
+    const row = (releaseResult?.results?.[0] ?? null) as D1ReleaseRow | null
     if (!row)
       return null
 
-    const release = mapReleaseRow(row)
-
-    if (!includeAssets)
-      return release
-
-    const assetResults = await db
-      .prepare(
-        `
-      SELECT *
-      FROM ${RELEASE_ASSETS_TABLE}
-      WHERE release_id = ?1
-      ORDER BY platform, arch;
-    `,
-      )
-      .bind(release.id)
-      .all<D1ReleaseAssetRow>()
-
-    const assets = (assetResults.results ?? []).map(mapAssetRow)
-    return { ...release, assets }
+    const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
+    return { ...mapReleaseRow(row), assets }
   }
 
   // Memory fallback

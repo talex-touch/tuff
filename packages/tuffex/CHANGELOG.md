@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `base-anchor`, `charts`, `liquid`, `transition`
+- **更新组件**: `base-anchor`, `charts`, `icon-chip`, `liquid`, `popover`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -17,11 +17,18 @@
 - 融合 Amicro 固定来源的按钮、卡片展开、三维轮播与书页、命名加载器、文字、物理、指针与滚动、开关和内容转场；Nexus 新增独立 Motion 文档章节，Mono Charts 位于 Data，复合表单、控件和指标位于 Pro。安装边界仍为 base/pro/ai，图表沿用现有 SVG/d3 入口。
 - 内容、数据、模型、上传选择与业务结果由调用方驱动；动效复用已有 spring 与 TextMorph。新增 `useMotionActivity` 统一视口、页面活动、KeepAlive 与减少动态效果边界，npm 分发清单保留 `AMICRO-LICENSE`、`AMICRO-APACHE-LICENSE` 和 `LUCIDE-LICENSE`。
 
+### 🎨 外观与主题
+
+- 锚点家族默认不再画箭头：`TxTooltip`（`anchor.showArrow`）与 `TxPopover` 的 `showArrow` 默认值由 `true` 改为 `false`，与 `TxBaseAnchor`、`TxContextMenu` 一致；基于 Popover 的 `TxDropdownMenu`、`TxSplitButton`、`TxCascader`、`TxTreeSelect`、头像组溢出面板，以及基于 Tooltip 的 `TxMotionControl` 提示和 `TxProgressBar` 提示随之不带箭头。需要箭头时逐个实例传 `showArrow`。
+- `TxPopover` 未传 `offset` 且无箭头时的间距由 2px 改为 6px，与 DropdownMenu、Select 系列一致：2px 时面板上沿压住触发器 3px 的焦点描边。默认 Popover 的面板因此从离触发器 8px 变为 6px；显式关箭头且不传 `offset` 的 `TxDatePicker`（字段形态）与 `TxIconPicker` 从 2px 变为 6px。开启箭头时的间距不变。
+
 ### 🐛 组件修复
 
 - `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
 - `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。
 - `TxMotionLoader` 将保留的 React SVG 描边属性转换为标准 SVG 属性，恢复来源中的线宽、端帽、连接和虚线参数；`viewBox` 与滤镜大小写保持不变，SSR 与客户端遵循相同几何。
+- `TxDitherChart` 默认 tooltip 不再把数据点标签打两遍：标题写悬停的数据点（日期或类目），数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）只保留数据行。tooltip 落到图表下半部时也不再被坐标轴文字盖住。
+- `TxIconChip` 的 `label` 超过三个字符（如 `JSON`）时角标横向变宽，不再溢出 14px 方块；三个字符以内仍是原来的正方形，高度、圆角与字号不变。
 
 ### 🧩 组件导出
 

@@ -21,8 +21,7 @@ const { t } = useI18n()
 const toolbarTooltipAnchor = {
   placement: 'bottom',
   panelBackground: 'blur',
-  panelShadow: 'soft',
-  showArrow: true
+  panelShadow: 'soft'
 } as const
 
 const isHistoryDrawerOpen = ref(false)

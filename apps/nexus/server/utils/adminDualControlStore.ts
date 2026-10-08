@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const TABLE_NAME = 'admin_dual_control_operations'
 
@@ -42,8 +43,6 @@ export interface DualControlOperation {
   reason: string | null
 }
 
-let schemaReady = false
-
 function getDb(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
 }
@@ -56,40 +55,33 @@ function requireDb(event: H3Event): D1Database {
   return db
 }
 
+const ADMIN_DUAL_CONTROL_SCHEMA = defineD1Schema('admin-dual-control', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
+        id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        payload_digest TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        submitter_actor_id TEXT NOT NULL,
+        submitter_admin_id TEXT,
+        confirmer_actor_id TEXT,
+        confirmer_admin_id TEXT,
+        status TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        confirmed_at TEXT,
+        reason TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_dual_control_status_expires
+      ON ${TABLE_NAME}(status, expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_dual_control_action_created
+      ON ${TABLE_NAME}(action, created_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaReady)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-      id TEXT PRIMARY KEY,
-      action TEXT NOT NULL,
-      payload_json TEXT NOT NULL,
-      payload_digest TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      submitter_actor_id TEXT NOT NULL,
-      submitter_admin_id TEXT,
-      confirmer_actor_id TEXT,
-      confirmer_admin_id TEXT,
-      status TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      confirmed_at TEXT,
-      reason TEXT
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_dual_control_status_expires
-    ON ${TABLE_NAME}(status, expires_at);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_dual_control_action_created
-    ON ${TABLE_NAME}(action, created_at);
-  `).run()
-
-  schemaReady = true
+  await ensureD1Schema(db, ADMIN_DUAL_CONTROL_SCHEMA)
 }
 
 function toOperation(row: DualControlRow | null): DualControlOperation | null {

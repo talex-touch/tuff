@@ -2,10 +2,9 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const RATE_LIMIT_TABLE = 'admin_rate_limits'
-
-let schemaReady = false
 
 function getDb(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
@@ -22,26 +21,22 @@ function requireDb(event: H3Event): D1Database {
   return db
 }
 
+const ADMIN_RATE_LIMIT_SCHEMA = defineD1Schema('admin-rate-limit', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${RATE_LIMIT_TABLE} (
+        key TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        blocked_until INTEGER,
+        updated_at INTEGER NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_rate_limits_updated
+      ON ${RATE_LIMIT_TABLE}(updated_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaReady)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${RATE_LIMIT_TABLE} (
-      key TEXT PRIMARY KEY,
-      window_start INTEGER NOT NULL,
-      count INTEGER NOT NULL DEFAULT 0,
-      blocked_until INTEGER,
-      updated_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_rate_limits_updated
-    ON ${RATE_LIMIT_TABLE}(updated_at);
-  `).run()
-
-  schemaReady = true
+  await ensureD1Schema(db, ADMIN_RATE_LIMIT_SCHEMA)
 }
 
 function setRateLimitHeaders(event: H3Event, retryAfterSeconds: number) {

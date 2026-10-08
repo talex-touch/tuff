@@ -190,7 +190,7 @@ function voiceSnapshot(pack: CatalogStoredPack): VoiceProviderCatalogSnapshot {
     lastCheckedAt: null,
     lastUpdatedAt: pack.activatedAt,
     rollbackReason: null,
-    registry: {} as VoiceProviderCatalogSnapshot['registry'],
+    registry: { list: () => [] } as unknown as VoiceProviderCatalogSnapshot['registry'],
     pack: {} as VoiceProviderCatalogSnapshot['pack']
   }
 }
@@ -630,7 +630,9 @@ describe('CatalogModule', () => {
 
       const status = await harness.invoke(CatalogEvents.voiceProvider.getStatus)
       expect(status).toEqual({
-        status: expect.objectContaining({ active: null, lastErrorCode: null })
+        status: expect.objectContaining({ active: null, lastErrorCode: null }),
+        pack: null,
+        syncing: false
       })
 
       const rollback = (await harness.invoke(CatalogEvents.voiceProvider.rollback, {
@@ -670,9 +672,11 @@ describe('CatalogModule', () => {
       harness.pipeline.length = 0
 
       const status = await harness.invoke(CatalogEvents.voiceProvider.getStatus)
-      expect(Object.keys(status as object)).toEqual(['status'])
+      expect(Object.keys(status as object)).toEqual(['status', 'pack', 'syncing'])
       expect(status).toEqual({
-        status: expect.objectContaining({ active: activatedDiagnostic, lastErrorCode: null })
+        status: expect.objectContaining({ active: activatedDiagnostic, lastErrorCode: null }),
+        pack: { payloadBytes: 8, importedAt: 150, expiresAt: null, providers: [] },
+        syncing: false
       })
       expect(JSON.stringify(status)).not.toContain(VOICE_MANIFEST_SIGNATURE)
 
