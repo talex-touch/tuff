@@ -346,11 +346,20 @@ function createDbUtilsInternal(
      * Bounded in SQL rather than filtered in JS. The app catalog can afford `getFilesByType('app')`
      * and a JS filter; the file index cannot — it is routinely tens of thousands of rows, and this
      * runs on the empty-query path.
+     *
+     * `idx_files_is_dir_ctime` turns it into an index range read that stops at `limit`; without it
+     * the LIMIT bounded nothing — a SCAN plus a temp B-tree sort, synchronous on the main thread.
+     * Only the columns the caller reads: `content` sits in overflow pages a `SELECT *` would load.
      */
     async getRecentlyCreatedFiles(createdAfter: Date, limit: number) {
       if (limit <= 0) return []
       return readDb
-        .select()
+        .select({
+          path: schema.files.path,
+          size: schema.files.size,
+          isDir: schema.files.isDir,
+          ctime: schema.files.ctime
+        })
         .from(schema.files)
         .where(and(eq(schema.files.isDir, false), gte(schema.files.ctime, createdAfter)))
         .orderBy(desc(schema.files.ctime))

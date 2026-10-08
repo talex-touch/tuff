@@ -1181,13 +1181,16 @@ export class DatabaseModule extends BaseModule {
       // file_index_progress indexes back `getIndexStats()`, whose six COUNT(*)
       // queries the diagnostics IPC handler runs on every poll — unindexed they
       // were full table SCANs, measured 11.5s per diagnostics request against
-      // this 6 GB file versus 25ms with these present. Best-effort like that
+      // this 6 GB file versus 25ms with these present. `idx_files_is_dir_ctime`
+      // backs the empty query's newly-added-file candidates, which the main
+      // process reads from this file synchronously. Best-effort like that
       // primary path — a missing perf index must not abort the split (unlike
       // the two correctness fixups above).
       const searchPerfIndexes = [
         'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)',
         'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
         'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
+        'CREATE INDEX IF NOT EXISTS idx_files_is_dir_ctime ON files (is_dir, ctime)',
         'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
       ]
       for (const statement of searchPerfIndexes) {
@@ -1534,7 +1537,8 @@ export class DatabaseModule extends BaseModule {
     // The files/file_index_progress entries back `getIndexStats()`, which the
     // diagnostics IPC handler calls on every poll. Unindexed, its six COUNT(*)
     // queries each did a full table SCAN — 8.1s per request measured on a 6 GB
-    // index, against 27ms once these exist.
+    // index, against 27ms once these exist. `idx_files_is_dir_ctime` backs the
+    // empty query's newly-added-file candidates (`getRecentlyCreatedFiles`).
     const statements = [
       'CREATE INDEX IF NOT EXISTS idx_query_completions_prefix ON query_completions (prefix)',
       'CREATE INDEX IF NOT EXISTS idx_item_usage_execute_count ON item_usage_stats (execute_count)',
@@ -1543,6 +1547,7 @@ export class DatabaseModule extends BaseModule {
       'CREATE INDEX IF NOT EXISTS idx_usage_logs_action_ts ON usage_logs (action, timestamp)',
       'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
       'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
+      'CREATE INDEX IF NOT EXISTS idx_files_is_dir_ctime ON files (is_dir, ctime)',
       'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
     ]
 

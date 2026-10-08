@@ -148,7 +148,15 @@ export const files = sqliteTable(
     // table inside a 6 GB database — measured 8.1s per diagnostics request, which
     // is what made the IPC handler block for seconds (#index-stats-scan).
     typeIdx: index('idx_files_type').on(table.type),
-    typeEmbeddingIdx: index('idx_files_type_embedding_status').on(table.type, table.embeddingStatus)
+    typeEmbeddingIdx: index('idx_files_type_embedding_status').on(
+      table.type,
+      table.embeddingStatus
+    ),
+    // `getRecentlyCreatedFiles` (the empty query's newly-added-file candidates) filters
+    // `is_dir = 0 AND ctime >= ?` and orders by ctime. Unindexed it was a SCAN plus a temp B-tree
+    // sort, run synchronously on the main thread: the first empty query after launch froze it for
+    // 6.6s in that step against a cold 5 GB file (2026-10-07).
+    isDirCtimeIdx: index('idx_files_is_dir_ctime').on(table.isDir, table.ctime)
   })
 )
 
