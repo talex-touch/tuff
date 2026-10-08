@@ -118,6 +118,7 @@ import {
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
+import type { FilePersistenceEntry } from '../../search-engine/file-index-persistence-repository'
 import { waitForIndexMaintenanceIdle } from '../../search-engine/search-activity'
 import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
 import {
@@ -981,7 +982,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       resume: (reason) => this.enrichmentResumeService.resume(reason),
       stop: () => this.enrichmentResumeService.stop(),
       cancelPending: () => this.indexSchedulerService.cancelPending(),
-      clearData: () => this.clearContentIndexingDataWithLease()
+      clearData: () => this.clearContentIndexingDataWithLease(),
+      compact: (reason) => this.compactSearchIndex(reason)
     })
     this.indexPersistEntryMapper = new IndexedWorkerPersistEntryMapperService()
     this.indexRuntimeService = new FileProviderIndexRuntimeService({
@@ -992,7 +994,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getInflightResults: () => this.inflightIndexWorkerResults,
       ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
       getSearchIndexWorker: () => this.requireFilePersistencePort(),
-      buildPersistEntries: (entries) => this.indexPersistEntryMapper.map(entries),
+      buildPersistEntries: (entries) =>
+        this.stripContentWhenDisabled(this.indexPersistEntryMapper.map(entries)),
       publishRecords: (entries) => this.publishCommittedWorkerRecords(entries),
       indexEmbeddings: (entries) =>
         this.contentIndexPolicyService.isEnabled()
@@ -2700,6 +2703,57 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public updateContentIndexSettings(contentIndexingEnabled: boolean) {
     return this.contentIndexPolicyService.update(contentIndexingEnabled)
+  }
+
+  /**
+   * Insurance behind the content switch: with content indexing off, no parser result may land
+   * in `files.content`. A dev index that had the switch off since policy version 1 still held
+   * 623 MB of content on 2026-10-08, so the gate in `enqueueContentIndexing` alone is not trusted.
+   */
+  private stripContentWhenDisabled(entries: FilePersistenceEntry[]): FilePersistenceEntry[] {
+    if (this.contentIndexPolicyService.isEnabled()) return entries
+    return entries.map((entry) =>
+      entry.fileUpdate
+        ? {
+            ...entry,
+            fileUpdate: {
+              ...entry.fileUpdate,
+              content: null,
+              contentHash: null,
+              embeddings: undefined
+            }
+          }
+        : entry
+    )
+  }
+
+  /**
+   * Reclaims the pages a content cleanup freed. Only under the split, where the index worker
+   * owns the file and runs the `VACUUM` off the main thread; the worker also decides whether
+   * the freelist and the free disk make it worth the minutes (`search-index-compaction.ts`).
+   */
+  private async compactSearchIndex(reason: string): Promise<void> {
+    if (this.shuttingDown) return
+    if (!this.isSearchSplitEnabledNow()) {
+      this.logDebug('Search index compaction skipped: split disabled', { reason })
+      return
+    }
+    try {
+      const outcome = await searchIndexWriter.compact(reason)
+      if (!outcome) {
+        this.logDebug('Search index compaction skipped: writer busy', { reason })
+        return
+      }
+      this.logInfo(outcome.ran ? 'Search index compacted' : 'Search index compaction skipped', {
+        reason: outcome.reason,
+        fileBytesBefore: outcome.fileBytesBefore,
+        fileBytesAfter: outcome.fileBytesAfter,
+        freelistBytesBefore: outcome.freelistBytesBefore,
+        durationMs: outcome.durationMs
+      })
+    } catch (error) {
+      this.logWarn('Search index compaction failed', error, { reason })
+    }
   }
 
   private async clearContentIndexingDataWithLease(): Promise<void> {

@@ -39,7 +39,9 @@ import type {
   ShutdownMessage,
   StageProviderReplacementItemsMessage,
   WorkerErrorMessage,
-  WorkerResultMessage
+  WorkerResultMessage,
+  VacuumMessage,
+  VacuumResult
 } from './search-index-worker-types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type {
@@ -47,6 +49,8 @@ import type {
   FileMetadataUpdateRecord,
   UpsertFileRecord
 } from '../file-index-persistence-repository'
+import { stat, statfs } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { parentPort } from 'node:worker_threads'
@@ -54,6 +58,7 @@ import { type Client, createClient, type InValue } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { createLogger } from '../../../../utils/logger'
+import { resolveSearchIndexCompactionDecision } from '../search-index-compaction'
 import {
   FILE_INDEX_PERSISTENCE_RETRY_LABELS,
   listPendingFileDeletionCommitsInHome,
@@ -139,6 +144,7 @@ type WorkerRequest =
   | AcknowledgeIndexMaintenanceCommitMessage
   | ShutdownMessage
   | ExecWriteMessage
+  | VacuumMessage
   | WorkerMetricsRequest
 
 // ---------- Worker State ----------
@@ -146,6 +152,7 @@ type WorkerRequest =
 let searchIndex: SearchIndexService | null = null
 let db: LibSQLDatabase<typeof schema> | null = null
 let client: Client | null = null
+let dbFilePath: string | null = null
 let filePersistenceRepository: FileIndexPersistenceRepository | null = null
 let initialized = false
 
@@ -534,6 +541,10 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         respond({ type: 'result', taskId, result: await handleExecWrite(message) })
         break
 
+      case 'vacuum':
+        respond({ type: 'result', taskId, result: await handleVacuum(message) })
+        break
+
       default:
         respond({ type: 'error', taskId, error: { message: `Unknown message type` } })
     }
@@ -548,6 +559,73 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
  * WAL into the main db and `close()` releases the connection cleanly before the
  * parent terminates the thread — closing the abrupt-terminate corruption window.
  */
+async function readPragmaNumber(target: Client, pragma: string, column: string): Promise<number> {
+  const result = await target.execute(`PRAGMA ${pragma}`)
+  const row = result.rows?.[0] as Record<string, unknown> | undefined
+  const value = Number(row?.[column])
+  return Number.isFinite(value) ? value : 0
+}
+
+/**
+ * `VACUUM` outside any transaction, on this worker thread only. The main process never runs
+ * it: a VACUUM of a multi-GB file takes minutes and the main-thread libsql binding is
+ * synchronous. Readers keep their WAL snapshot meanwhile; index writes wait in the queue.
+ */
+async function handleVacuum(message: VacuumMessage): Promise<VacuumResult> {
+  if (!client || !dbFilePath) throw new Error('Worker not initialized — send init first')
+  const target = client
+  const filePath = dbFilePath
+  const startedAt = performance.now()
+  const pageSize = await readPragmaNumber(target, 'page_size', 'page_size')
+  const freelistPages = await readPragmaNumber(target, 'freelist_count', 'freelist_count')
+  const freelistBytesBefore = freelistPages * pageSize
+  const fileBytesBefore = (await stat(filePath)).size
+  const freeDiskBytes = await statfs(path.dirname(filePath))
+    .then((stats) => Number(stats.bavail) * Number(stats.bsize))
+    .catch(() => null)
+  const decision = resolveSearchIndexCompactionDecision({
+    fileBytes: fileBytesBefore,
+    freelistBytes: freelistBytesBefore,
+    freeDiskBytes
+  })
+  if (!decision.run) {
+    searchIndexWorkerLog.info('Search index compaction skipped', {
+      meta: { reason: decision.reason, fileBytesBefore, freelistBytesBefore, freeDiskBytes }
+    })
+    return {
+      ran: false,
+      reason: decision.reason,
+      fileBytesBefore,
+      fileBytesAfter: fileBytesBefore,
+      freelistBytesBefore,
+      durationMs: Math.round(performance.now() - startedAt)
+    }
+  }
+  await target.execute('VACUUM')
+  // Under WAL the rewritten database sits in the WAL until a checkpoint; truncate it now so
+  // the reclaimed space is actually returned instead of parked in `-wal`.
+  await target.execute('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined)
+  const fileBytesAfter = (await stat(filePath)).size
+  const durationMs = Math.round(performance.now() - startedAt)
+  searchIndexWorkerLog.info('Search index compacted', {
+    meta: {
+      reason: message.reason,
+      fileBytesBefore,
+      fileBytesAfter,
+      freelistBytesBefore,
+      durationMs
+    }
+  })
+  return {
+    ran: true,
+    reason: message.reason,
+    fileBytesBefore,
+    fileBytesAfter,
+    freelistBytesBefore,
+    durationMs
+  }
+}
+
 async function handleExecWrite(message: ExecWriteMessage): Promise<ExecWriteResult[]> {
   if (!client) throw new Error('Worker not initialized — send init first')
 
@@ -630,6 +708,7 @@ async function handleInit(message: InitMessage): Promise<void> {
 
   const workerClient = createClient({ url: `file:${dbPath}`, timeout: 30_000 })
   client = workerClient
+  dbFilePath = dbPath
 
   // Apply WAL mode and performance pragmas — same as main thread
   const journalModeResult = await workerClient.execute('PRAGMA journal_mode = WAL')

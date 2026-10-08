@@ -15,6 +15,11 @@ interface FileProviderContentIndexPolicyDeps {
   stop: () => void
   cancelPending: () => void
   clearData: () => Promise<void>
+  /**
+   * Reclaims the pages `clearData` freed. Fire-and-forget on purpose: a compaction of a
+   * multi-GB index takes minutes and neither the settings reply nor startup may wait on it.
+   */
+  compact?: (reason: string) => Promise<void>
 }
 
 /** Owns the opt-in content-index transition without leaking it into the file provider facade. */
@@ -72,6 +77,7 @@ export class FileProviderContentIndexPolicyService {
         this.transition = 'idle'
         this.deps.syncSettings()
         this.suppressed = false
+        void this.deps.compact?.('content-indexing-disabled')
         return this.getSnapshot()
       } catch (error) {
         this.suppressed = false
@@ -103,6 +109,7 @@ export class FileProviderContentIndexPolicyService {
       this.suppressed = false
       this.transition = 'idle'
     }
+    void this.deps.compact?.('content-cleanup-startup')
   }
 
   private resolveState(settings: FileIndexSettings): FileContentIndexingState {

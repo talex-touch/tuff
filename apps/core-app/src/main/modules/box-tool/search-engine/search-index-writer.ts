@@ -43,7 +43,8 @@ import {
 } from './index-maintenance-context'
 import type {
   ExecWriteResult,
-  PersistAndApplyProviderItemsMetrics
+  PersistAndApplyProviderItemsMetrics,
+  VacuumResult
 } from './workers/search-index-worker-types'
 import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
@@ -170,6 +171,11 @@ export interface SearchIndexPhysicalWriter {
   removeProviderItems(sourceId: string, itemIds: readonly string[]): Promise<number>
   clearSource(sourceId: string): Promise<number>
   cleanupSource(sourceId: string): Promise<number>
+  /**
+   * Reclaim pages freed by a bulk cleanup. Resolves `null` where no safe compaction exists:
+   * the legacy writer shares the main thread, and a `VACUUM` there would freeze the UI.
+   */
+  compact?(reason: string): Promise<VacuumResult | null>
   countSource(sourceId: string): Promise<number>
   runIndexMaintenanceSlice?(
     sourceId: string,
@@ -713,6 +719,17 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     }, 'background')
   }
 
+  /**
+   * Background admission: index writes queue behind the `VACUUM` for its duration, searches
+   * keep reading the WAL snapshot. Skipped while index maintenance is busy, like cleanup.
+   */
+  async compact(reason: string): Promise<VacuumResult | null> {
+    return await this.withAdmission(async () => {
+      if (!isIndexMaintenanceIdle()) return null
+      return await this.client.vacuum(reason)
+    }, 'background')
+  }
+
   async runIndexMaintenanceSlice(
     sourceId: string,
     limit = 64,
@@ -1104,6 +1121,11 @@ export class LegacySearchIndexWriter implements SearchIndexPhysicalWriter {
 
   async cleanupSource(sourceId: string): Promise<number> {
     return await this.service.cleanupOrphanKeywords(sourceId)
+  }
+
+  /** The legacy service runs on the main thread; a `VACUUM` here would block the UI for minutes. */
+  async compact(): Promise<VacuumResult | null> {
+    return null
   }
 
   async countSource(sourceId: string): Promise<number> {

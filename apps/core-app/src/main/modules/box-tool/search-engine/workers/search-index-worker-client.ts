@@ -33,7 +33,8 @@ import type {
   AcknowledgeFileDeletionCommitsResult,
   RunIndexMaintenanceSliceMessage,
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
-  WorkerResultMessage
+  WorkerResultMessage,
+  VacuumResult
 } from './search-index-worker-types'
 import type {
   ExpectedFileRecord,
@@ -698,6 +699,18 @@ export class SearchIndexWorkerClient {
       sourceId
     })
     return result ?? 0
+  }
+
+  /** No timeout on purpose: a `VACUUM` of a multi-GB file legitimately takes minutes. */
+  async vacuum(reason: string): Promise<VacuumResult | null> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('vacuum')
+    const result = await this.sendAndWaitWithResult<VacuumResult>(taskId, {
+      type: 'vacuum',
+      taskId,
+      reason
+    })
+    return result ?? null
   }
 
   async runIndexMaintenanceSlice(

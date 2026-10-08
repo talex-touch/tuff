@@ -249,6 +249,26 @@ export interface ExecWriteResult {
 }
 
 /**
+ * `VACUUM` the worker-owned index file. The worker decides whether it is worth it (see
+ * `search-index-compaction.ts`); the result says what it did and why.
+ */
+export interface VacuumMessage {
+  type: 'vacuum'
+  taskId: string
+  /** Why the caller asked; echoed into the log line. */
+  reason: string
+}
+
+export interface VacuumResult {
+  ran: boolean
+  reason: string
+  fileBytesBefore: number
+  fileBytesAfter: number
+  freelistBytesBefore: number
+  durationMs: number
+}
+
+/**
  * Union of all search-index-worker message types.
  */
 export type SearchIndexWorkerMessage =
@@ -274,6 +294,7 @@ export type SearchIndexWorkerMessage =
   | AcknowledgeIndexMaintenanceCommitMessage
   | ShutdownMessage
   | ExecWriteMessage
+  | VacuumMessage
 
 // ============================================================================
 // Shared result types
