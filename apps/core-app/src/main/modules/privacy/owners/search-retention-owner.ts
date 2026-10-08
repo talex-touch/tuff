@@ -498,12 +498,12 @@ export function createSearchRetentionOwner(options: SearchRetentionOwnerOptions)
       },
       {
         client: options.coreClient,
-        sql: `SELECT source_id, item_id, source_type, timestamp
+        // Only the shape of the execution, as `item-usage` does: the item id is usually an absolute
+        // path (which the export rejects) and the source id names the provider; neither is exported.
+        sql: `SELECT source_type, timestamp
                 FROM usage_execute_events ORDER BY timestamp, rowid LIMIT ?`,
         map: (row) => ({
           kind: 'usage-execute-event',
-          sourceId: exportString(row.source_id, 256),
-          itemId: exportString(row.item_id, 256),
           sourceType: exportString(row.source_type, 256),
           executedAt: exportNumber(row.timestamp)
         })

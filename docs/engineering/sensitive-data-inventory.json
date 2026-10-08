@@ -189,7 +189,7 @@
       "exportPolicy": "ordinary bounded allowlisted metadata export",
       "deletionPolicy": "typed category delete/retention; pins, source index, static embeddings, config, and task state survive",
       "retentionPolicy": "user policy with strict cutoff and keyset paging; accepted execution dates expire with usage detail without lowering cumulative counts; foreground last-active instants expire under the same cutoff",
-      "rendererExposure": "search UI receives same-item counts and bounded recommendation facts, never other-source raw execution history; bounded Privacy export omits execution event IDs",
+      "rendererExposure": "search UI receives same-item counts and bounded recommendation facts, never other-source raw execution history; bounded Privacy export omits execution event IDs and item IDs",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [

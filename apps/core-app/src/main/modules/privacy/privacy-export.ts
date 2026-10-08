@@ -153,7 +153,7 @@ const EXPORT_RECORD_FIELDS: Readonly<
     ]),
     'item-time-usage': new Set(['kind', 'updatedAt']),
     'usage-trend': new Set(['kind', 'day', 'executeCount']),
-    'usage-execute-event': new Set(['kind', 'sourceId', 'itemId', 'sourceType', 'executedAt']),
+    'usage-execute-event': new Set(['kind', 'sourceType', 'executedAt']),
     'app-foreground-activity': new Set(['kind', 'lastActiveAt'])
   }),
   'intelligence-audit': Object.freeze({
