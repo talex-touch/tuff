@@ -295,7 +295,8 @@ function validatePackage(layout) {
   for (const file of LEGAL_FILES) {
     const buffer = readRegularFile(path.join(packageRoot, file), `${PACKAGE_DIR}/${file}`)
     if (buffer.length === 0) fail(`${PACKAGE_DIR}/${file} is empty`)
-    legal[file] = buffer
+    // Normalize CRLF to LF so text file hashes match deterministically across platforms
+    legal[file] = Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8')
   }
 
   const licenseText = legal.LICENSE.toString('utf8')
