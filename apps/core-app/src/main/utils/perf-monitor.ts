@@ -29,6 +29,7 @@ import {
   PERF_SUMMARY_LOG_SLOW_MS,
   PERF_SUMMARY_LOG_TOP_LIMIT,
   PERF_SUMMARY_TOP_SLOW_MIN_MS,
+  RECENT_CONTEXT_LAG_SLACK_MS,
   RENDERER_LOG_THROTTLE_MS,
   resolveUiThreshold,
   SEVERE_LAG_BURST_COOLDOWN_MS,
@@ -38,7 +39,11 @@ import {
   SUMMARY_INTERVAL_MS,
   SYSTEM_SLEEP_THRESHOLD_MS
 } from './perf-monitor-config'
-import { getPerfContextSnapshot, markPerfEventLoopLag } from './perf-context'
+import {
+  getPerfContextSnapshot,
+  getRecentPerfContextSnapshot,
+  markPerfEventLoopLag
+} from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
 import { getHeapStatistics } from 'node:v8'
 
@@ -128,6 +133,8 @@ export type EventLoopLagCause =
 interface EventLoopLagCauseInput {
   lagMs: number
   contextsCount: number
+  /** Contexts that closed inside the lag span: the usual home of a synchronous block. */
+  recentContextsCount?: number
   pollingActiveCount: number
   queueDepthByLane: Record<string, { queued: number; inFlight: number }>
   pollingRecentMaxDurationMs: number
@@ -222,7 +229,7 @@ export function inferEventLoopLagCause(input: EventLoopLagCauseInput): EventLoop
     return null
   }
 
-  if (input.contextsCount > 0) {
+  if (input.contextsCount > 0 || (input.recentContextsCount ?? 0) > 0) {
     return null
   }
 
@@ -245,7 +252,10 @@ export function inferEventLoopLagCause(input: EventLoopLagCauseInput): EventLoop
     return 'native_or_system_stall'
   }
 
-  if (laneTotals.queued > 0 || laneTotals.inFlight > 0) {
+  // Only a queued task is a backlog. An in-flight polling task is an awaited promise, which
+  // cannot block the loop by itself; blaming it named `startup-analytics.outbox.flush` on
+  // every lag line for a whole evening (2026-10-07) while it merely waited on the network.
+  if (laneTotals.queued > 0) {
     return 'polling_queue_backlog'
   }
 
@@ -774,6 +784,8 @@ export class PerfMonitor {
     const shouldEmit = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
     if (shouldEmit) {
       const contexts = getPerfContextSnapshot(3)
+      // The lag spans roughly [now - lagMs - tick, now]; the slack covers logging delays.
+      const recentContexts = getRecentPerfContextSnapshot(lagMs + RECENT_CONTEXT_LAG_SLACK_MS, 3)
       const heapNow = Date.now()
       const heapStats =
         lagMs >= 500 && heapNow - this.lastHeapSnapshotAt >= this.heapSnapshotIntervalMs
@@ -864,6 +876,9 @@ export class PerfMonitor {
       const primaryContext = contexts[0]
         ? `${contexts[0].label} ${formatDuration(contexts[0].durationMs)}`
         : undefined
+      const primaryRecentContext = recentContexts[0]
+        ? `${recentContexts[0].label} ${formatDuration(recentContexts[0].durationMs)}`
+        : undefined
       const primaryPollingActive = pollingActive[0]
         ? `${pollingActive[0].id} ${formatDuration(pollingActive[0].ageMs)}`
         : undefined
@@ -881,12 +896,13 @@ export class PerfMonitor {
       const suspectedCause = inferEventLoopLagCause({
         lagMs,
         contextsCount: contexts.length,
+        recentContextsCount: recentContexts.length,
         pollingActiveCount: pollingActive.length,
         queueDepthByLane,
         pollingRecentMaxDurationMs,
         pollingRecentMaxSchedulerDelayMs
       })
-      const diagnosticKey = `${primaryContext ?? 'none'}|${primaryPollingRecent ?? 'none'}|${suspectedCause ?? 'none'}`
+      const diagnosticKey = `${primaryContext ?? 'none'}|${primaryRecentContext ?? 'none'}|${primaryPollingRecent ?? 'none'}|${suspectedCause ?? 'none'}`
       const diagnosticCauseChanged = diagnosticKey !== this.lastLoopDiagnosticKey
       if (diagnosticCauseChanged) {
         this.lastLoopDiagnosticKey = diagnosticKey
@@ -910,6 +926,7 @@ export class PerfMonitor {
             this.shouldLog(`event_loop.lag:diagnostic:${severity}`, diagnosticThrottleMs, now)))
       const messageHints = [
         primaryContext ? `context=${primaryContext}` : null,
+        primaryRecentContext ? `ended=${primaryRecentContext}` : null,
         primaryPollingActive ? `polling=${primaryPollingActive}` : null,
         primaryPollingRecent ? `recent=${primaryPollingRecent}` : null,
         suspectedCause ? `suspect=${suspectedCause}` : null
@@ -929,6 +946,8 @@ export class PerfMonitor {
         lagMs: Math.round(lagMs),
         contexts,
         primaryContext,
+        recentContexts,
+        primaryRecentContext,
         pollingActive,
         pollingRecent,
         primaryPollingActive,
@@ -976,6 +995,7 @@ export class PerfMonitor {
             lagMs,
             severity,
             contexts,
+            recentContexts,
             pollingActive,
             pollingRecent,
             lastSlowIpc,

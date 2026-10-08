@@ -29,6 +29,8 @@ export function resolveUiThreshold(kind: string): { warn: number; error: number 
 
 export const LOOP_LAG_WARN_MS = 200
 export const LOOP_LAG_ERROR_MS = 2_000
+/** Extra window, past the lag span itself, in which a just-closed perf context still counts for it. */
+export const RECENT_CONTEXT_LAG_SLACK_MS = 500
 /** Lags above this threshold are almost certainly caused by system sleep/suspend, not real event loop blocking. */
 export const SYSTEM_SLEEP_THRESHOLD_MS = 30_000
 
