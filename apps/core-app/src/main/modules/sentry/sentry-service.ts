@@ -1703,10 +1703,12 @@ export class SentryServiceModule extends BaseModule {
 
   async flushCoreBoxFocusOnShutdown(): Promise<void> {
     if (!this.config.enabled) return
-    await Promise.all([
-      Sentry.flush(2_000),
-      this.flushNexusTelemetry().then(() => this.flushQueuedNexusTelemetryOutbox())
-    ])
+    // Persist to the outbox only. This runs from BEFORE_MODULES_UNLOAD, ahead of unloadAll, and
+    // uploading here put a 15s-per-request network round in front of every module's teardown:
+    // with Nexus unreachable it consumed the whole before-quit budget on its own. The next
+    // launch's poll uploads the rows, which is also what onDestroy does on app close
+    // (uploadOutbox=false).
+    await Promise.all([Sentry.flush(2_000), this.flushNexusTelemetry()])
   }
 
   /**

@@ -40,7 +40,7 @@ Scoped reconciliation preserves the configured watch-root depth when a nested di
 
 ## 5. Lifecycle is awaited
 
-Watcher shutdown stops intake before closing native streams, awaits registration and metadata work, and suppresses late callbacks. Router unsubscribe detaches producers, drains file/app queues and pending subtree reconciliations, then disposes the queues. Reconciliation uses the runtime's mutation lease and streaming sinks; it must not publish side effects through a second uncoordinated writer.
+Watcher shutdown stops intake before closing native streams, awaits registration and metadata work, and suppresses late callbacks. The module closes its streams on `BEFORE_QUIT_STOP_WATCHERS` as well as in `onDestroy` through one shared promise, so the quit flow can stop them before module unload without closing twice. Router unsubscribe detaches producers, drains file/app queues and pending subtree reconciliations, then disposes the queues. Reconciliation uses the runtime's mutation lease and streaming sinks; it must not publish side effects through a second uncoordinated writer.
 
 ## Verification limits
 

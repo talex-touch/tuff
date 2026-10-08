@@ -335,9 +335,21 @@ factory when adding an export here.
   router drain while waiting on the scan mutation gate; placing cancellation after that
   await creates a cycle. Attach rejection handlers when concurrent drains are created,
   collect failures, and keep the writer alive until every required drain succeeds.
+- The before-quit flow stops native file watchers first (`BEFORE_QUIT_STOP_WATCHERS`, own 2s
+  bound, shared promise), before renderer quiesce and `BEFORE_APP_QUIT`. Every exit path ends
+  in `app.exit` (`process.exit` is `app.exit` in the main process), which tears the Node
+  environment down without waiting for module unload, and an FSEvents stream still running at
+  that point aborts the process from its own thread. The dev force-exit path runs the same stop
+  before destroying windows.
+- `BEFORE_MODULES_UNLOAD` listeners run before `unloadAll` starts, so they must not wait on the
+  network: the CoreBox focus telemetry flush persists to the outbox only, and the next launch's
+  poll uploads it (same as Sentry's `onDestroy` on app close).
 - After before-quit cleanup finishes, set the completed latch **before** handing off to
   DevProcessManager. Its synchronous `app.quit()` re-enters the same handler; otherwise
-  the pending cleanup promise prevents that second quit and the 5s force-exit timer wins.
+  the pending cleanup promise prevents that second quit and the force-exit timer wins. That
+  timer is the before-quit budget plus a tail grace (`GRACEFUL_SHUTDOWN_TIMEOUT_MS`, 12s), not
+  a flat value: at 5s it fired first on every slow shutdown and destroyed windows while modules
+  were still loaded.
 - Sentry teardown closes telemetry admission and detaches producer subscriptions/timers
   before its first await. Flush already accepted events while Storage is still live.
   Late module lifecycle events and previously queued polling callbacks must not read

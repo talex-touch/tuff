@@ -324,7 +324,7 @@ The two `regChannel` signatures are the trap: passing a `ChannelType` to the ren
 **TouchEventBus** provides application-wide event dispatching:
 
 ```typescript
-// String enum — 33 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
+// String enum — 36 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
 enum TalexEvents {
   BEFORE_APP_START = 'before-app-start',
   APP_START = 'app-start',

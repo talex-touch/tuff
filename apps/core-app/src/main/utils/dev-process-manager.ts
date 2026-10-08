@@ -1,10 +1,16 @@
 import process from 'node:process'
 import { app, BrowserWindow } from 'electron'
 import { createLogger } from './logger'
+import { DEFAULT_BEFORE_QUIT_TIMEOUT_MS } from '../core/before-quit-guard'
+import { stopWatchersBeforeQuit } from '../core/before-quit-stop-watchers'
 import { setQuitIntent } from '../core/quit-intent'
 
 const devProcessLog = createLogger('DevProcessManager')
-const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000
+// The force-exit timer may only fire when the whole quit chain is stuck: the before-quit budget,
+// then Sentry's will-quit session flush (2s) and Electron's quit-when-idle drain. At a flat 5s it
+// fired first on every slow shutdown and destroyed windows while modules were still loaded.
+const SHUTDOWN_TAIL_GRACE_MS = 4_000
+export const GRACEFUL_SHUTDOWN_TIMEOUT_MS = DEFAULT_BEFORE_QUIT_TIMEOUT_MS + SHUTDOWN_TAIL_GRACE_MS
 const DEV_PARENT_LIVENESS_INTERVAL_MS = 1000
 const DEV_PARENT_PID_ENV = 'TUFF_DEV_PARENT_PID'
 
@@ -166,12 +172,24 @@ export class DevProcessManager {
     this.forceShutdownPromise = (async () => {
       devProcessLog.warn('Force shutdown started', { meta: { reason } })
       try {
+        // Native watchers before the windows: process.exit below is app.exit in the main
+        // process, which tears the Node environment down, and an FSEvents stream still
+        // running at that point aborts the process. Shared with the before-quit flow, so this
+        // normally just joins a stop that already finished.
+        const stopWatchers = await stopWatchersBeforeQuit()
+        if (stopWatchers.timedOut) {
+          devProcessLog.warn('Native watcher stop timed out during forced shutdown', {
+            meta: { durationMs: stopWatchers.durationMs }
+          })
+        }
         await this.cleanupProcesses()
       } catch (error) {
         devProcessLog.error('Error during forced shutdown cleanup', { error })
       } finally {
         this.clearShutdownTimeout()
       }
+      // Electron maps process.exit to app.exit in the main process: it quits once the message
+      // loop is idle rather than terminating here, so everything above has to be done already.
       process.exit(1)
     })()
 

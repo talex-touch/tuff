@@ -26,7 +26,8 @@ import {
 import { installDefaultSessionPermissionPolicy } from './default-session-permissions'
 import { installReportOnlyCspPolicy } from './report-only-csp'
 import { getCurrentTouchApp } from './main-runtime-state'
-import { runWithBeforeQuitTimeout } from './before-quit-guard'
+import { DEFAULT_BEFORE_QUIT_TIMEOUT_MS, runWithBeforeQuitTimeout } from './before-quit-guard'
+import { stopWatchersBeforeQuit } from './before-quit-stop-watchers'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
 import { finalizeBeforeQuit } from './before-quit-finalize'
@@ -372,7 +373,6 @@ app.addListener('ready', (event, launchInfo) =>
 
 let beforeQuitFlowDone = false
 let beforeQuitFlowPromise: Promise<void> | null = null
-const BEFORE_QUIT_TIMEOUT_MS = 8_000
 
 type ShutdownObservationProvider = {
   getShutdownObservation?: () => unknown
@@ -430,10 +430,19 @@ app.on('before-quit', (event) => {
       const quitEvent = new BeforeAppQuitEvent(event, intent)
       const beforeQuitResult = await runWithBeforeQuitTimeout(
         async () => {
+          // Native watchers first: their streams must be gone before any path that can reach
+          // app.exit (the force-exit timer, Sentry's will-quit handler) starts tearing the
+          // environment down. Bounded on its own so a stuck watcher cannot eat the budget.
+          const stopWatchers = await stopWatchersBeforeQuit()
+          if (stopWatchers.timedOut) {
+            mainLog.warn('Native watcher stop timed out; continuing shutdown', {
+              meta: { durationMs: stopWatchers.durationMs }
+            })
+          }
           await quiesceRenderersBeforeQuit()
           await touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent)
         },
-        BEFORE_QUIT_TIMEOUT_MS,
+        DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
         getBeforeQuitTimeoutHint
       )
       if (beforeQuitResult.timedOut) {
@@ -442,7 +451,7 @@ app.on('before-quit', (event) => {
           : mainLog.error.bind(mainLog)
         logTimeout('before-quit handlers timed out, continue shutdown', {
           meta: {
-            timeoutMs: BEFORE_QUIT_TIMEOUT_MS,
+            timeoutMs: DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
             durationMs: beforeQuitResult.durationMs,
             timeoutHint: stringifyTimeoutHint(beforeQuitResult.timeoutHint)
           }

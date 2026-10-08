@@ -1,4 +1,4 @@
-const DEFAULT_BEFORE_QUIT_TIMEOUT_MS = 8_000
+export const DEFAULT_BEFORE_QUIT_TIMEOUT_MS = 8_000
 
 export interface BeforeQuitGuardResult {
   timedOut: boolean
