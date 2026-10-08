@@ -1,8 +1,19 @@
 <script lang="ts" setup>
+import type { Middleware } from '@floating-ui/vue'
+import type { HoverBridgeBox, HoverTransitHandlers } from '../../../../utils/hover-intent'
 import type { TxFlatDropdownContentSlotProps, TxFlatDropdownProps, TxFlatDropdownTriggerSlotProps } from './types'
 import { autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useAnchorDelay } from '../../../../utils/anchor-delay'
+import {
+  beginHoverTransit,
+  cancelHoverTransit,
+  hoverBridgeAt,
+  isHoverClaimed,
+  settleHoverTransit,
+  stopWaitingForHoverTransit,
+  waitForHoverTransit,
+} from '../../../../utils/hover-intent'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxFlatDropdown' })
@@ -59,8 +70,19 @@ const open = computed<boolean>({
   },
 })
 
+/**
+ * The hover bridge's geometry (see hoverBridgeAt), laid out as the panel's
+ * sibling: the panel's own `transform` belongs to its scale animation, and a
+ * host's `panelClass` may clip its overflow. `box` is always written, even as
+ * `null` — floating-ui merges middleware data.
+ */
+const hoverBridgeMiddleware: Middleware = {
+  name: 'hoverBridge',
+  fn: state => ({ data: { box: hoverBridgeAt(state, false) } }),
+}
+
 /* ─── floating-ui: position via top/left so `transform` stays free for the scale animation ─── */
-const { floatingStyles, placement } = useFloating(referenceRef, floatingRef, {
+const { floatingStyles, middlewareData, placement } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   transform: false,
@@ -83,6 +105,7 @@ const { floatingStyles, placement } = useFloating(referenceRef, floatingRef, {
         }
       },
     }),
+    hoverBridgeMiddleware,
   ],
 })
 
@@ -110,6 +133,30 @@ const panelStyle = computed(() => [
   },
 ])
 
+const bridgeRef = ref<HTMLElement | null>(null)
+
+/**
+ * Hover-only, and only while open: a leaving panel has let the pointer go. It
+ * shares the panel's positioning scheme and stacking, so it sits flush with
+ * the panel in the same containing block.
+ */
+const bridgeStyle = computed<Record<string, string | number> | null>(() => {
+  if (props.trigger !== 'hover' || !open.value)
+    return null
+  const box = (middlewareData.value as { hoverBridge?: { box?: HoverBridgeBox | null } })?.hoverBridge?.box
+  if (!box)
+    return null
+  return {
+    position: 'fixed',
+    left: `${box.left}px`,
+    top: `${box.top}px`,
+    width: `${box.width}px`,
+    height: `${box.height}px`,
+    clipPath: box.clipPath,
+    zIndex: panelZIndex.value,
+  }
+})
+
 const teleportTarget = computed(() => (typeof props.teleport === 'string' ? props.teleport : 'body'))
 const teleportDisabled = computed(() => props.teleport === false)
 
@@ -126,6 +173,9 @@ const delay = useAnchorDelay({
   openDelay: () => props.openDelay,
   closeDelay: () => props.closeDelay,
 })
+// The chain node already identifies this dropdown uniquely; it doubles as the
+// hover transit's owner key.
+const transitOwner = delay.node
 
 // Keeps the registry honest when the state moves without the service:
 // v-model from the host, Escape, outside click, and the imperative API.
@@ -136,6 +186,7 @@ watch(open, (value) => {
   }
   else {
     delay.closeNow()
+    cancelHoverTransit(transitOwner)
   }
 })
 
@@ -153,16 +204,53 @@ function scheduleClose() {
   delay.requestClose()
 }
 
+/* ─── hover intent: the pointer's trip to the panel (see utils/hover-intent) ─── */
+/** Whether the pointer is on the trigger right now: a deferred open only proceeds if it still is. */
+let pointerOnTrigger = false
+
+const transitHandlers: HoverTransitHandlers = {
+  reference: () => referenceRef.value,
+  contains: target => !!(floatingRef.value?.contains(target) || bridgeRef.value?.contains(target)),
+  panelRect: () => floatingRef.value?.getBoundingClientRect() ?? null,
+  side: () => side.value,
+  onStart: () => delay.holdChain(),
+  onEnd: (outcome) => {
+    delay.releaseChain(outcome !== 'arrived')
+    if (outcome === 'abandoned')
+      scheduleClose()
+  },
+}
+
 /* ─── trigger interactions ─── */
-function onTriggerEnter() {
+// Focus shares these handlers; only a pointer travels, so only a MouseEvent
+// takes part in the trip.
+function onTriggerEnter(event: Event) {
   if (props.trigger !== 'hover')
     return
+  if (event instanceof MouseEvent) {
+    pointerOnTrigger = true
+    settleHoverTransit(transitOwner)
+    // Crossing on the way to another panel: wait for that trip's verdict.
+    if (!open.value && isHoverClaimed(transitOwner, event)) {
+      waitForHoverTransit(transitOwner, () => {
+        if (pointerOnTrigger)
+          scheduleOpen()
+      })
+      return
+    }
+  }
   scheduleOpen()
 }
 
-function onTriggerLeave() {
+function onTriggerLeave(event: Event) {
   if (props.trigger !== 'hover')
     return
+  if (event instanceof MouseEvent) {
+    pointerOnTrigger = false
+    stopWaitingForHoverTransit(transitOwner)
+    if (open.value && beginHoverTransit(transitOwner, event, transitHandlers))
+      return
+  }
   scheduleClose()
 }
 
@@ -177,9 +265,11 @@ function onTriggerClick(event: MouseEvent) {
   open.value = !open.value
 }
 
+// The bridge shares these: entering it is entering the panel.
 function onPanelEnter() {
   if (props.trigger !== 'hover')
     return
+  settleHoverTransit(transitOwner)
   clearTimers()
 }
 
@@ -229,7 +319,7 @@ function onDocumentPointerDown(event: MouseEvent) {
   const target = event.target as Node | null
   if (!target)
     return
-  if (referenceRef.value?.contains(target) || floatingRef.value?.contains(target))
+  if (referenceRef.value?.contains(target) || floatingRef.value?.contains(target) || bridgeRef.value?.contains(target))
     return
   hide()
 }
@@ -262,6 +352,8 @@ watch(() => props.disabled, (disabled) => {
 
 onBeforeUnmount(() => {
   clearTimers()
+  cancelHoverTransit(transitOwner)
+  stopWaitingForHoverTransit(transitOwner)
   if (typeof document !== 'undefined') {
     document.removeEventListener('pointerdown', onDocumentPointerDown, true)
     document.removeEventListener('keydown', onDocumentKeydown)
@@ -286,6 +378,19 @@ onBeforeUnmount(() => {
     <slot name="trigger" v-bind="triggerSlotProps" />
 
     <Teleport :to="teleportTarget" :disabled="teleportDisabled">
+      <!--
+        Hover bridge: the trough between the trigger and the panel, entered and
+        left like the panel itself, so crossing the gap never leaves it.
+      -->
+      <div
+        v-if="bridgeStyle"
+        ref="bridgeRef"
+        class="tx-flat-dropdown__bridge"
+        :style="bridgeStyle"
+        aria-hidden="true"
+        @mouseenter="onPanelEnter"
+        @mouseleave="onPanelLeave"
+      />
       <Transition name="tx-flat-dropdown">
         <div
           v-if="open"
