@@ -17,6 +17,7 @@ import { MINI_WORLD_GEO } from './mini-world-geo'
 import type { FileUploaderFile } from '@tuffex-components/file-uploader'
 import type { ImageUploaderFile } from '@tuffex-components/image-uploader'
 import type { AiChainStep, AiElementMessage } from '@tuffex-components/ai-elements'
+import type { ContextChunk } from '@tuffex-components/context-cards'
 import type { OrbState } from '@tuffex-components/thinking-orb'
 import {
   TxBlankSlate,
@@ -118,6 +119,13 @@ const copy = computed(() => (localeKey.value === 'zh'
       aboutBody: '一套服务 Talex Touch 生态的 Vue 组件库。',
       installTitle: '如何安装？',
       installBody: 'pnpm add @talex-touch/tuffex',
+      contextTitle: '全部片段',
+      contextChunk: {
+        title: '按需引入',
+        body: '新接入的应用和包优先使用子路径导入，默认避免业务 bundle 拉入包根入口和全量样式。',
+        chars: '字符',
+        source: 'README_ZHCN.md',
+      },
       periods: [
         { value: 'day', label: '日' },
         { value: 'week', label: '周' },
@@ -222,6 +230,13 @@ const copy = computed(() => (localeKey.value === 'zh'
       aboutBody: 'A Vue component family powering the Talex Touch ecosystem.',
       installTitle: 'How to install?',
       installBody: 'pnpm add @talex-touch/tuffex',
+      contextTitle: 'All chunks',
+      contextChunk: {
+        title: 'On-demand import',
+        body: 'Use subpath imports for new app and package integrations. This keeps the package root and full stylesheet out of business bundles by default.',
+        chars: 'characters',
+        source: 'README.md',
+      },
       periods: [
         { value: 'day', label: 'Day' },
         { value: 'week', label: 'Week' },
@@ -743,9 +758,16 @@ const aiSources = [
   { id: 's1', url: 'https://github.com/talex-touch/talex-touch', title: 'talex-touch' },
   { id: 's2', url: 'https://www.npmjs.com/package/@talex-touch/tuffex' },
 ]
-const contextChunks = computed(() => [
-  { id: 'c1', title: 'manifest.json', excerpt: copy.value.installBody, source: { name: 'manifest.json', badge: 'JSON', tone: 'accent' as const } },
-])
+const contextChunks = computed<ContextChunk[]>(() => {
+  const chunk = copy.value.contextChunk
+  return [{
+    id: 'c1',
+    title: chunk.title,
+    chars: `${chunk.body.length} ${chunk.chars}`,
+    body: chunk.body,
+    source: { name: chunk.source, badge: 'MD', tone: 'accent' },
+  }]
+})
 const insightPages = computed(() => [
   { key: 'adoption', prose: copy.value.aboutBody, suggestion: copy.value.suggestions[0]?.text },
 ])
@@ -4096,7 +4118,7 @@ const motionGalleryItems = [
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxContextCards :chunks="contextChunks" :total="32" />
+              <TxContextCards :chunks="contextChunks" :title="copy.contextTitle" :total="32" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
