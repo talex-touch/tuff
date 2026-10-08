@@ -166,7 +166,7 @@ code: |
 :::
 
 ### 尺寸
-未传 `padding` 时，`size` 取 `10` / `12` / `16` px 内边距。
+`size` 只影响内边距。
 :::TuffDemoWrapper{demo="CardSizeDemo" code-lang="vue"}
 ---
 code: |
@@ -215,7 +215,7 @@ code: |
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `variant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框形态；`plain` 无边框、无悬停反馈。 |
-| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | 表面材质，转发给 `TxBaseSurface`。 |
+| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | 表面材质。 |
 | `shadow` | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度。 |
 | `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 内边距预设：`10` / `12` / `16` px。 |
 | `radius` | `number` | `18` | 圆角（px）。 |
@@ -226,7 +226,7 @@ code: |
 | `glassOverlayOpacity` | `number` | `0.18` | 高光层透明度。 |
 | `maskOpacity` | `number` | `0.75` | `mask` 下的表面透明度，收敛到 `0..1`。 |
 | `fallbackMaskOpacity` | `number` | `0.26` | 运动中降级为遮罩时的透明度（0–1）。 |
-| `surfaceMoving` | `boolean` | `false` | 外部运动标记，与惯性运动合并后转发给表面。|
+| `surfaceMoving` | `boolean` | `false` | 外部运动标记，与惯性运动合并后转发给表面。 |
 | `refractionStrength` | `number` | `62` | 折射强度（0–100），驱动色散与扭曲。 |
 | `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 折射风格预设。 |
 | `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | 折射色调预设；`vivid` 避免发灰。 |
@@ -265,7 +265,7 @@ code: |
 - 可点击卡片禁用时设置 `aria-disabled` 并移出 Tab 序列。
 - 只响应卡片自身的 Enter / Space，插槽内控件的按键不会触发卡片。
 - `loading` 的遮罩带 `aria-hidden`，读屏或表单忙碌提示由调用方负责。
-- `background` 作为表面模式转发给 `TxBaseSurface`：`mask` 使用 `maskOpacity`，`glass` 与 `refraction` 使用模糊与高光参数；`refraction*` 只在 `refraction` 下生效。
+- `background` 作为表面模式转发给 `TxBaseSurface`：`mask` 使用 `maskOpacity`，`glass` 与 `refraction` 使用模糊与高光参数；折射参数只在 `refraction` 下生效。
 
 ## 技术实现
 
