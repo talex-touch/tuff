@@ -23,8 +23,8 @@ describe('runtime module resource projection', () => {
 })
 
 const TARGET_NATIVE_ADDONS: Array<[target: string, expectedAddons: string[]]> = [
-  ['mac', ['tuff_native_ocr.node', 'tuff_native_audio.node']],
-  ['darwin', ['tuff_native_ocr.node', 'tuff_native_audio.node']],
+  ['mac', ['tuff_native_ocr.node', 'tuff_native_audio.node', 'tuff-native-translation']],
+  ['darwin', ['tuff_native_ocr.node', 'tuff_native_audio.node', 'tuff-native-translation']],
   ['linux', ['tuff_native_ocr.node', 'tuff_native_audio.node']],
   ['win', ['tuff_native_ocr.node', 'tuff_native_audio.node', 'tuff_native_everything.node']],
   ['win32', ['tuff_native_ocr.node', 'tuff_native_audio.node', 'tuff_native_everything.node']]

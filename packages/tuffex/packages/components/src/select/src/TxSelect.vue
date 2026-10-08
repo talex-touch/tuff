@@ -728,6 +728,7 @@ onBeforeUnmount(() => {
       },
     ]"
     :style="attrs.style as StyleValue"
+    :data-testid="attrs['data-testid'] as string"
   >
     <TxPopover
       v-model="isOpen"

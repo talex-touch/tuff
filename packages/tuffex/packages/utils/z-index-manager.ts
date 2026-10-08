@@ -80,6 +80,12 @@ export function isTopmostModalDialog(dialog: HTMLElement | null): boolean {
   for (const candidate of dialogs) {
     if (candidate === dialog)
       continue
+    if (candidate.getAttribute('aria-hidden') === 'true' || candidate.hasAttribute('inert'))
+      continue
+    if (candidate.classList.contains('tx-drawer') && !candidate.classList.contains('tx-drawer--visible'))
+      continue
+    if (candidate.classList.contains('tx-modal') && !candidate.classList.contains('tx-modal--visible'))
+      continue
     const style = getComputedStyle(candidate)
     if (style.display === 'none' || style.visibility === 'hidden')
       continue

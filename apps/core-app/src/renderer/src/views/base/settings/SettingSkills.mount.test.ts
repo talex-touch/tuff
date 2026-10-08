@@ -276,6 +276,7 @@ const mounted: VueWrapper[] = []
 async function mountPage(): Promise<VueWrapper> {
   const wrapper = mount(SettingSkills, {
     props: { title: 'Skills' },
+    attachTo: document.body,
     global: { stubs: { teleport: true } }
   })
   mounted.push(wrapper)

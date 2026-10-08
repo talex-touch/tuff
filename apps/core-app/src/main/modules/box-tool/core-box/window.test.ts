@@ -264,7 +264,13 @@ vi.mock('./web-contents-view-guard', () => ({
 }))
 
 vi.mock('../../system/foreground-app-snapshot', () => ({
-  captureForegroundAppSnapshot: mocks.captureForegroundAppSnapshot
+  captureForegroundAppSnapshot: mocks.captureForegroundAppSnapshot,
+  foregroundAppSnapshotStore: {
+    capture: mocks.captureForegroundAppSnapshot,
+    getSnapshot: vi.fn(() => null),
+    setSnapshot: vi.fn(),
+    clear: vi.fn()
+  }
 }))
 
 import { app } from 'electron'
