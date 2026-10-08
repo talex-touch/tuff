@@ -59,7 +59,12 @@ export function createLocalAiCliSdk(transport: ITuffTransport): LocalAiCliSdk {
     request: LocalAiCliTerminalCreateRequest,
     options: LocalAiCliTerminalCreateOptions = {},
   ): Promise<LocalAiCliTerminalCreateResult> => {
-    const { promise, resolve, reject } = Promise.withResolvers<LocalAiCliTerminalCreateResult>()
+    let resolve!: (value: LocalAiCliTerminalCreateResult | PromiseLike<LocalAiCliTerminalCreateResult>) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<LocalAiCliTerminalCreateResult>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
     const { signal } = options
     if (signal?.aborted) {
       reject(terminalCreationAbortError())

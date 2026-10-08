@@ -14,7 +14,10 @@ export class EnvDetector {
       throw new Error('EnvDetector not initialized. Call EnvDetector.init(transport) first.')
     }
     const sdk = createTerminalSdk(this.transport)
-    const { promise, resolve } = Promise.withResolvers<string | null>()
+    let resolve!: (value: string | null | PromiseLike<string | null>) => void
+    const promise = new Promise<string | null>((res) => {
+      resolve = res
+    })
     const controller = new AbortController()
     let output = ''
     let finished = false

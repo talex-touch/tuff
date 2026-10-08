@@ -32,7 +32,12 @@ type EarlyEvent = { type: 'data', payload: TerminalDataPayload }
 export function createTerminalSdk(transport: ITuffTransport): TerminalSdk {
   return {
     create(request, handlers = {}) {
-      const { promise, resolve, reject } = Promise.withResolvers<TerminalSessionHandle>()
+      let resolve!: (value: TerminalSessionHandle | PromiseLike<TerminalSessionHandle>) => void
+      let reject!: (reason?: unknown) => void
+      const promise = new Promise<TerminalSessionHandle>((res, rej) => {
+        resolve = res
+        reject = rej
+      })
       const { signal } = handlers
       if (signal?.aborted) {
         reject(terminalCreationAbortError())
@@ -145,9 +150,9 @@ export function createTerminalSdk(transport: ITuffTransport): TerminalSdk {
             const sessionId = result.id
             resolve({
               id: sessionId,
-              write: data => closed || closing ? Promise.reject(new Error('TERMINAL_SESSION_CLOSED'))
+              write: (data: string) => closed || closing ? Promise.reject(new Error('TERMINAL_SESSION_CLOSED'))
                 : transport.send(TerminalEvents.session.write, { id: sessionId, data }, { immediate: true }),
-              resize: (cols, rows) => closed || closing ? Promise.reject(new Error('TERMINAL_SESSION_CLOSED'))
+              resize: (cols: number, rows: number) => closed || closing ? Promise.reject(new Error('TERMINAL_SESSION_CLOSED'))
                 : transport.send(TerminalEvents.session.resize, { id: sessionId, cols, rows }, { immediate: true }),
               close,
             })
