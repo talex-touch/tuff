@@ -14,7 +14,7 @@ syncStatus: reviewed
 
 ### Full interactive gallery
 
-Select a catalog ID, source capability or original interaction. Switch supplied sample periods and operate chart scrubbers, noise bounds, stage selection, asset filtering and feedback input. Values and status are editable caller state. Details, share, resume, start/pause and send emit events only; sample messages are appended locally by the demo caller.
+Select a catalog ID, source capability or original interaction. Switch supplied sample periods and operate chart scrubbers, noise bounds, stage selection, asset filtering and feedback input. Values and status can be edited right in the demo. Details, share, resume, start/pause and send only emit events; the demo appends sample messages locally.
 
 Charts expose keyboard-operable data-point scrubbers by default. The noise lower input is natively bounded by the current upper value, and the upper input by the current lower value, keeping readouts and native thumbs aligned at crossings.
 

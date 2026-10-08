@@ -7,20 +7,20 @@ import { computed, reactive, ref } from 'vue'
 const { locale } = useI18n()
 const copy = computed(() => locale.value === 'zh' ? {
   all: '全部控件', filter: '筛选源码能力', state: '当前模型', event: '最近真实事件', none: '尚未操作',
-  disabled: '禁用控件', motion: '启用动效', status: '调用方状态输入', downloadNote: '下载会生成并请求保存真实文本文件。浏览器没有保存完成回调，因此不会自动显示成功。右侧状态仅用于手动查看调用方驱动的外观。',
+  disabled: '禁用控件', motion: '启用动效', status: '下载状态', downloadNote: '下载会生成并请求保存真实文本文件。浏览器没有保存完成回调，因此不会自动显示成功。状态选择框只用来手动预览各状态的外观。',
   tab: '标签', close: '已关闭', added: '已添加', requested: '已请求浏览器下载', history: '导航位置',
   category: ['设计', '开发', '测试'], filters: ['全部', '精选', '最新'], frequency: ['每天', '每周', '每月', '每年'],
   tabs: ['收件箱', '日历', '通知'], days: ['24日', '25日', '26日'], steps: ['草稿', '审核', '发布'],
-  menu: ['编辑', '删除', '导出', '纯文本', 'JSON'], preview: '这段预览来自调用方插槽。', tooltip: '聚焦或悬停即可显示提示。',
+  menu: ['编辑', '删除', '导出', '纯文本', 'JSON'], preview: '组件文档：用法、属性与示例。', tooltip: '聚焦或悬停即可显示提示。',
   action: '打开文档', launch: '执行', like: '赞', liked: '已赞', likes: '当前赞数',
   statuses: ['空闲', '下载中', '已完成', '失败'], labelOverrides: '标签与事件适配示例',
 } : {
   all: 'All controls', filter: 'Filter by source ability', state: 'Current model', event: 'Latest real event', none: 'No interaction yet',
-  disabled: 'Disable controls', motion: 'Enable motion', status: 'Caller state input', downloadNote: 'Download generates a real text file and asks the browser to save it. Browsers expose no saved-file completion callback, so it never reports success automatically. The status selector only previews caller-driven feedback.',
+  disabled: 'Disable controls', motion: 'Enable motion', status: 'Download status', downloadNote: 'Download generates a real text file and asks the browser to save it. Browsers expose no saved-file completion callback, so it never reports success automatically. The status selector only previews how each state looks.',
   tab: 'Tab', close: 'Closed', added: 'Added', requested: 'Browser download requested', history: 'Navigation position',
   category: ['Design', 'Development', 'Testing'], filters: ['All', 'Featured', 'New'], frequency: ['Daily', 'Weekly', 'Monthly', 'Yearly'],
   tabs: ['Inbox', 'Calendar', 'Alerts'], days: ['24th', '25th', '26th'], steps: ['Draft', 'Review', 'Release'],
-  menu: ['Edit', 'Delete', 'Export', 'Plain text', 'JSON'], preview: 'This preview comes from the caller slot.', tooltip: 'Focus or hover to reveal the hint.',
+  menu: ['Edit', 'Delete', 'Export', 'Plain text', 'JSON'], preview: 'Component docs: usage, props and examples.', tooltip: 'Focus or hover to reveal the hint.',
   action: 'Open documentation', launch: 'Launch', like: 'Like', liked: 'Liked', likes: 'Current likes',
   statuses: ['Idle', 'Downloading', 'Complete', 'Error'], labelOverrides: 'Label and event adaptation',
 })

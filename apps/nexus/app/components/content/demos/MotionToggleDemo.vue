@@ -10,13 +10,13 @@ const copy = computed(() => locale.value === 'zh' ? {
   filter: '筛选变体', all: '全部变体',
   on: '已开启', off: '已关闭', saved: '已收藏', save: '收藏', like: '喜欢', dislike: '不喜欢', repost: '转发', theme: '深色主题', lock: '解锁', check: '确认', period: '统计周期',
   periods: ['每日', '每周', '每月'], unsupported: '浏览器不支持 Vibration API', accepted: '浏览器接受请求；无法确认设备实际震动', rejected: '浏览器未接受请求',
-  count: '调用方计数', model: '模型', action: '操作次数', sizes: '尺寸',
+  count: '计数', model: '模型', action: '操作次数', sizes: '尺寸',
 } : {
   reset: 'Reset models externally', disabled: 'Disable actions', animated: 'Enable animation', haptics: 'Request haptic feedback',
   filter: 'Filter variant', all: 'All variants',
   on: 'On', off: 'Off', saved: 'Saved', save: 'Bookmark', like: 'Like', dislike: 'Dislike', repost: 'Repost', theme: 'Dark theme', lock: 'Unlock', check: 'Confirm', period: 'Reporting period',
   periods: ['Daily', 'Weekly', 'Monthly'], unsupported: 'Vibration API unavailable', accepted: 'Browser accepted the request; physical vibration is not confirmed', rejected: 'Browser rejected the request',
-  count: 'Caller-owned count', model: 'Model', action: 'Activations', sizes: 'Sizes',
+  count: 'Count', model: 'Model', action: 'Activations', sizes: 'Sizes',
 })
 const models = reactive(Object.fromEntries(MOTION_TOGGLE_VARIANTS.map(variant => [variant, variant === 't-pill' ? 'daily' : false])) as Record<MotionToggleVariant, MotionToggleValue>)
 const counts = reactive<Record<string, number>>({ 't-like': 42, 't-repost': 18 })

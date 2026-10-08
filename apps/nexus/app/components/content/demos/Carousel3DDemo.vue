@@ -9,13 +9,13 @@ const copy = computed(() => locale.value === 'zh' ? {
   current: '当前项', timeline: '时间轴', animated: '启用动画', loop: '循环切换',
   expanded: '固定展开弧线', date: ['今天', '昨天', '上周', '上月', '去年'],
   hint: '三种轨迹各有彩色和单色版本。点击卡片、指示点或时间轴，拖动滑块；方向键和 Home/End 同样可操作。',
-  slot: '自定义卡片插槽', description: '由调用方提供内容',
+  slot: '自定义卡片插槽', descriptions: ['湖边晨光', '林间小径', '山谷落日', '暮色山脊', '海岸薄雾'],
 } : {
   all: 'All variants', variant: 'Variant', previous: 'Previous', next: 'Next', item: 'Original landscape',
   current: 'Current item', timeline: 'Timeline', animated: 'Animate', loop: 'Loop',
   expanded: 'Keep arc expanded', date: ['Today', 'Yesterday', 'Last week', 'Last month', 'Last year'],
   hint: 'Each spatial path has color and monochrome versions. Select cards, dots or timeline ticks; drag the scrubber. Arrow keys and Home/End work as well.',
-  slot: 'Custom item slot', description: 'Caller-owned content',
+  slot: 'Custom item slot', descriptions: ['Lake at dawn', 'Forest path', 'Valley sunset', 'Ridge at dusk', 'Coastal mist'],
 })
 const filter = ref<Carousel3DVariant | 'all'>('all')
 const variants = computed(() => filter.value === 'all' ? CAROUSEL_3D_VARIANTS : [filter.value])
@@ -26,7 +26,7 @@ const indices = reactive<Record<string, number>>({})
 const slotIndex = ref(0)
 const colors = ['#536f92', '#648b77', '#a8825b', '#7f739d', '#567f85']
 const items = computed(() => colors.map((color, index) => ({
-  id: index, title: `${copy.value.item} ${index + 1}`, date: copy.value.date[index], description: copy.value.description,
+  id: index, title: `${copy.value.item} ${index + 1}`, date: copy.value.date[index], description: copy.value.descriptions[index],
   src: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160"><rect width="220" height="160" fill="${color}"/><circle cx="${50 + index * 20}" cy="50" r="25" fill="#fff" opacity=".7"/><path d="M0 160V120L70 60L120 100L190 50L220 100V160Z" fill="#fff" opacity=".45"/></svg>`)}`,
 })))
 </script>

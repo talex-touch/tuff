@@ -9,20 +9,20 @@ const copy = computed(() => locale.value === 'zh' ? {
   padding: '图像留白', imageRadius: '图像圆角', creaseOpacity: '折痕不透明度',
   paperColor: '纸张颜色', shadowIntensity: '阴影范围', intro: '重放开场翻页',
   animate: '启用动画', compact: '紧凑版', loop: '循环翻页', current: '当前右页',
-  core: 'Book：调用方文字页', dither: 'DitherBook：自制插槽图形页',
+  core: 'Book：文字页', dither: 'DitherBook：自制插槽图形页',
   extracted: 'SimpleCompExtracted：宽屏书页与侧向导航',
   hint: '点击书页或前后按钮翻页。展开设置可修改真实留白、圆角、折痕、纸色和阴影。减少动态效果仍会立即完成翻页。',
-  page: '纸页', prose: '这段文字来自调用方 pages 数据。左页是前一张，右页是当前页；翻动纸叶的正反两面保留各自内容。',
+  page: '纸页', prose: ['晨光从左侧照进来，纸面泛着暖白。', '铅笔先勾出山的轮廓，天空留白。', '水彩一层层叠上去，每层都等它干透。', '折痕处的阴影比想象中更深。', '最后一页留给潦草的笔记。', '合上本子，纸边已经起了毛。'],
   started: '翻页开始', ended: '翻页结束',
 } : {
   title: 'Original paper studies', previous: 'Previous', next: 'Next', settings: 'Book settings',
   padding: 'Image padding', imageRadius: 'Image radius', creaseOpacity: 'Crease opacity',
   paperColor: 'Paper color', shadowIntensity: 'Shadow intensity', intro: 'Replay opening flips',
   animate: 'Animate', compact: 'Compact', loop: 'Loop pages', current: 'Current right page',
-  core: 'Book: caller-owned text pages', dither: 'DitherBook: original slotted drawings',
+  core: 'Book: text pages', dither: 'DitherBook: original slotted drawings',
   extracted: 'SimpleCompExtracted: wide pages and side navigation',
   hint: 'Click pages or previous/next buttons to turn. The settings edit real padding, radius, crease, paper color and shadow. Reduced motion still completes every page turn immediately.',
-  page: 'Page', prose: 'This text comes from the caller’s pages data. The previous page stays on the left and the current page on the right; the turning leaf keeps distinct front and back content.',
+  page: 'Page', prose: ['Morning light from the left warms the paper.', 'Pencil first: the ridge line, the sky left blank.', 'Watercolor in layers, each one left to dry.', 'The shadow in the crease runs deeper than expected.', 'The last page is saved for quick notes.', 'Closed again, the edges already soft with use.'],
   started: 'Flip started', ended: 'Flip completed',
 })
 const book = ref<TxFlipBookInstance | null>(null)
@@ -36,7 +36,7 @@ const loop = ref(true)
 const event = ref('')
 const settings = ref<FlipBookSettings>({ padding: 10, imageRadius: 20, creaseOpacity: 11, paperColor: 'var(--tx-bg-color-overlay, var(--tx-bg-color))', shadowIntensity: 24 })
 watch(compact, value => { settings.value = { ...settings.value, padding: value ? 6 : 10, imageRadius: value ? 8 : 20, shadowIntensity: value ? 10 : 24 } })
-const pages = computed<FlipBookPage[]>(() => Array.from({ length: 6 }, (_, index) => ({ id: index, title: `${copy.value.page} ${index + 1}`, content: copy.value.prose })))
+const pages = computed<FlipBookPage[]>(() => Array.from({ length: 6 }, (_, index) => ({ id: index, title: `${copy.value.page} ${index + 1}`, content: copy.value.prose[index] })))
 const labels = computed(() => ({ previous: copy.value.previous, next: copy.value.next, settings: copy.value.settings, padding: copy.value.padding, imageRadius: copy.value.imageRadius, creaseOpacity: copy.value.creaseOpacity, paperColor: copy.value.paperColor, shadowIntensity: copy.value.shadowIntensity, intro: copy.value.intro }))
 </script>
 
