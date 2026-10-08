@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import gsap from 'gsap'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
-import { EXPAND_BOUNCE_PX, expandSpringFor } from '../src/base-anchor-motion'
+import { EXPAND_BOUNCE_PX, expandBounceBudget, expandSpringFor } from '../src/base-anchor-motion'
 import TxBaseAnchor from '../src/TxBaseAnchor.vue'
 
 const CardStub = defineComponent({ name: 'TxCard', template: '<div><slot /></div>' })
@@ -251,6 +251,16 @@ describe('expand bounce budget', () => {
     expect(expandSpringFor(0)).toEqual({ omega: 10, zeta: 0.6 })
   })
 
+  it('holds the budget flat up to three rows and grows it with the square root past them', () => {
+    expect(expandBounceBudget(48)).toBe(EXPAND_BOUNCE_PX)
+    expect(expandBounceBudget(130)).toBe(EXPAND_BOUNCE_PX)
+    // Five rows and ten rows of the docs harness menu.
+    expect(expandBounceBudget(206)).toBeCloseTo(7.55, 2)
+    expect(expandBounceBudget(394)).toBeCloseTo(10.45, 2)
+    // Still nowhere near the proportional ~10% it replaced (20px and 38px).
+    expect(expandBounceBudget(394) / 394).toBeLessThan(0.03)
+  })
+
   it('damps taller panels down to the budget and keeps the crossing time', () => {
     const crossing = ({ omega, zeta }: { omega: number, zeta: number }) =>
       (Math.PI - Math.acos(zeta)) / (omega * Math.sqrt(1 - zeta * zeta))
@@ -259,7 +269,7 @@ describe('expand bounce budget', () => {
     for (const height of [130, 260, 420]) {
       const spring = expandSpringFor(height)
       const overshoot = Math.exp(-spring.zeta * Math.PI / Math.sqrt(1 - spring.zeta ** 2))
-      expect(overshoot * height).toBeCloseTo(EXPAND_BOUNCE_PX, 5)
+      expect(overshoot * height).toBeCloseTo(expandBounceBudget(height), 5)
       expect(crossing(spring)).toBeCloseTo(base, 5)
     }
   })
@@ -270,8 +280,8 @@ describe('expand bounce budget', () => {
     const { overshoot, firstFull } = sampleBox(anchor, open, 146)
 
     // One bounce still — just not ~10% of the panel (14px here).
-    expect(overshoot).toBeGreaterThan(EXPAND_BOUNCE_PX - 0.5)
-    expect(overshoot).toBeLessThan(EXPAND_BOUNCE_PX + 0.5)
+    expect(overshoot).toBeGreaterThan(expandBounceBudget(146) - 0.5)
+    expect(overshoot).toBeLessThan(expandBounceBudget(146) + 0.5)
     // spring(10, 0.6) first reaches its target at ~111ms of 400.
     expect(firstFull).toBeGreaterThanOrEqual(104)
     expect(firstFull).toBeLessThanOrEqual(118)

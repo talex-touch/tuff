@@ -37,7 +37,7 @@ code: |
 
 ### 展开动画
 
-默认的 `animation.type='expand'` 从靠近 reference 的角展开面板，关闭时折回。回弹按面板高度收敛：盒子最多越过内容 6px，更高的面板只是更早稳住，首次到达满高的时刻不变。`show-arrow` 让三角箭头跟随面板运动和最终定位。位移揭示可在下方动画模式中选择 `transfer`。
+默认的 `animation.type='expand'` 从靠近 reference 的角展开面板，关闭时折回。回弹按面板高度收敛：三行（约 130px）以内的盒子最多越过内容 6px，更高的面板按高度的平方根略微放开（五行约 7.6px，十行约 10.4px），首次到达满高的时刻不变。`show-arrow` 让三角箭头跟随面板运动和最终定位。位移揭示可在下方动画模式中选择 `transfer`。
 
 #### 柔和边缘
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -435,7 +435,7 @@ code: |
 - 超出 `maxHeight` 时滚动的是卡片的 body，不是 `.tx-base-anchor__card` 本身——卡片只负责裁剪。面板背景由卡片内一个绝对定位的 surface 层绘制，让卡片自己滚会把这层背景一起滚走。面板内容需要滚动位置时，取的是卡片 body 而不是卡片。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 动画只通过 `animation` 对象配置，组件没有顶层的 `duration` / `ease` prop；没写的字段按类型取默认值。
-- 没传 `ease` 的 `expand` 按面板高度选弹簧：高度不超过约 63px 时就是 `spring(10, 0.6)`（约 10% 过冲）；更高的面板提高阻尼，把盒子的过冲压在 6px，同时提高刚度，让首次到达满高的时刻保持不变。只有纵向卡片面板会伸缩真实盒子，横向落位走窗口揭示，不受影响。
+- 没传 `ease` 的 `expand` 按面板高度选弹簧：高度不超过约 63px 时就是 `spring(10, 0.6)`（约 10% 过冲）；更高的面板提高阻尼，把盒子的过冲压在预算内，同时提高刚度，让首次到达满高的时刻保持不变。预算由 `expandBounceBudget` 给出：130px 以内为 6px，更高时按高度的平方根增长，206px 约 7.6px，394px 约 10.4px。只有纵向卡片面板会伸缩真实盒子，横向落位走窗口揭示，不受影响。
 - `showArrow` 的箭头是面板的一部分：它挂在面板内容层上，内容层的位移、缩放、模糊和透明度都会带着它走；面板开始运动之前、收起之后，它都随面板一起隐藏。各动画类型只给它加自己那一拍：`expand` 等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回、再让面板折叠；`transfer` 先把它藏进面板，滑入落地时弹出；`boom` 晚而快地弹出；`opacity` 没有额外动作，只随面板淡入淡出。
 - `eager` 在首次打开前挂载隐藏但可测量的内容；`keepAliveContent` 在关闭后保留内容状态。关闭动画结束后，根节点停放到视口外，并裁剪自身溢出，避免保留的面板在视口缩小时撑宽文档。显式宽度、跟随 reference 的宽度和内容固有尺寸仍可测量，不使用 `display: none` 或页面级裁剪。
 - 打开和关闭动画期间，面板保持文档绝对定位，根节点通过位移定位，页面滚动由合成线程带动面板跟随 reference。只有退出画面结束后才停放；重新打开会在首次定位和尺寸计算前恢复文档几何，并使旧的关闭完成回调失效。
@@ -453,6 +453,7 @@ code: |
 - 被否掉的做法：让 `.tx-base-anchor__card` 自己 `overflow: auto`。它曾是默认写法，但卡片的 surface 层是它的绝对定位子元素，包含块随卡片内容一起滚动——面板往下滚多少像素，底部就有多少像素只剩页面背景。自带列表滚动容器的面板（select、search-select）碰不到，把整个 body 交给卡片的 dropdown-menu 会。现在卡片 `overflow: hidden`、body `overflow: auto`，surface 留在原地。
 - 被否掉的做法：把箭头放在 clip 外，作为浮层根节点的直接子元素。clip 的 `visibility` 管不到它，于是面板还没开始动，它就先以完整尺寸出现了两三帧；`:not(.is-open)` 规则在关闭的第一帧就把它藏掉，收回动画全程看不见；`expand` 时面板漂移 12px，箭头却钉在终点位置，底边先陷进面板 15px，回弹时又离开边缘 1.3px。现在它是 `.tx-base-anchor__content` 的子元素，全程贴着面板边缘。floating-ui 给出的偏移落点不变：`transfer` 的回弹内边距只加在远端，而箭头贴的是近端，横向偏移也不受它影响。
 - 被否掉的做法：所有面板共用 `spring(10, 0.6)`。过冲与面板高度成正比：三项的主题菜单（130.8px）在真实浏览器里多冲 12.8px，348ms 才稳住在 ±0.5px 内，读起来像橡皮筋，不像落定。也试过只压缩越过 100% 的那一段，但穿越满高的那一帧速度会突然变小，正是当初嫌 `back.out` 不丝滑的那种折角。现在由 `expandSpringFor` 按高度解出阻尼与刚度，同一个菜单过冲 6.2px、248ms 稳住，首次到达满高仍在 112ms。
+- 被否掉的做法：所有高度一律封顶 6px。三行菜单上刚好，五行（206px）以上手测读起来发僵，像被按住了一样（2026-10-08 的反馈）。按比例放开就回到了橡皮筋，所以取中间：130px 以上按高度的平方根增长。
 - 被否掉的做法：把悬停桥画成面板宽度的矩形条，或做成 clip 的伪元素。矩形条会盖住 reference 旁边的控件（Nexus 顶栏里语言切换就紧挨着主题切换）；clip 是 `overflow: hidden`，伸出盒外的伪元素会被裁掉，命中区也随之消失。桥现在是浮层根节点的子元素，用 `clip-path` 裁成梯形，`clip-path` 同时裁掉命中区。
 - 保留浮层的几何由关闭生命周期管理：动画完成回调通过运行标识检查后停放外层根节点，同时裁剪箭头和液态舞台。`right: 100%` 不留收缩适配空间，因此 `.is-parked` 使用 `width: max-content` 保持内容固有宽度；内联显式宽度、reference 宽度和 middleware 的最大宽度仍生效。仅隐藏内层 clip 会让旧根节点的位移和宽度继续撑宽文档；裁剪整个页面会遮住问题，把已打开的面板改成 fixed 则会破坏合成线程的滚动跟随。
 - `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
@@ -464,6 +465,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、`animation` 对象变体，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。`base-anchor-hover-bridge.test.ts` 覆盖悬停桥：中间件只在 `hoverBridge` 时挂上且位于链尾、间隙闭合时写入 `box: null`、桥只在打开时渲染且属于浮层、浮层根节点派发 `floating-enter` / `floating-leave`，以及暴露的几何方法。`base-anchor-animation-phases.test.ts` 逐帧步进真实 GSAP 时间线：146px 面板的过冲落在 6px，首次到达满高与基准弹簧同拍，显式传入的 `ease` 原样运行。
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、`animation` 对象变体，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。`base-anchor-hover-bridge.test.ts` 覆盖悬停桥：中间件只在 `hoverBridge` 时挂上且位于链尾、间隙闭合时写入 `box: null`、桥只在打开时渲染且属于浮层、浮层根节点派发 `floating-enter` / `floating-leave`，以及暴露的几何方法。`base-anchor-animation-phases.test.ts` 逐帧步进真实 GSAP 时间线：146px 面板的过冲落在预算（约 6.4px）上，首次到达满高与基准弹簧同拍；预算在 130px 以内持平、之后按平方根增长；显式传入的 `ease` 原样运行。
 
 <TuffDocSourceLink />

@@ -143,15 +143,30 @@ const EXPAND_DEFAULTS = {
 } as const
 
 /**
- * How far past its content a growing panel may stretch, in pixels. A spring
- * overshoots in proportion to what it moves, so at one damping the bounce
- * scaled with the panel: ~10% of its height, 12px on a three-row menu and 40px
- * on a 420px list. On a menu that reads as rubber, not as a settle.
+ * How far past its content a growing panel may stretch, in pixels, at
+ * EXPAND_BOUNCE_REFERENCE_HEIGHT and below. A spring overshoots in proportion
+ * to what it moves, so at one damping the bounce scaled with the panel: ~10% of
+ * its height, 12px on a three-row menu and 40px on a 420px list. On a menu that
+ * reads as rubber, not as a settle.
  */
 export const EXPAND_BOUNCE_PX = 6
 
+/** A three-row menu: the height EXPAND_BOUNCE_PX was judged on. */
+const EXPAND_BOUNCE_REFERENCE_HEIGHT = 130
+
 /** Past this the spring is all but critically damped; the budget still holds up to ~4000px. */
 const EXPAND_MAX_ZETA = 0.9
+
+/**
+ * The bounce budget for a panel `height` pixels tall. Flat up to the reference
+ * height, then growing with the square root of the height. Holding taller panels
+ * at the same 6px read as stiff from five rows (206px) up, while letting the
+ * bounce grow in proportion is the rubber this replaced; the square root lands
+ * in between: ~7.6px at five rows, ~10.4px at ten (394px).
+ */
+export function expandBounceBudget(height: number): number {
+  return EXPAND_BOUNCE_PX * Math.sqrt(Math.max(1, height / EXPAND_BOUNCE_REFERENCE_HEIGHT))
+}
 
 /** How far past its target an underdamped spring released from rest travels, as a fraction. */
 function springOvershoot(zeta: number): number {
@@ -166,17 +181,18 @@ function springCrossing(zeta: number): number {
 /**
  * The default expand spring for a panel `height` pixels tall. Up to the height
  * where EXPAND_SPRING's overshoot fits the bounce budget this is EXPAND_SPRING
- * itself. Past it, damping rises just enough to hold the stretch at
- * EXPAND_BOUNCE_PX, and stiffness rises with it so the panel still first
- * reaches full size at the same moment: the attack is untouched, only the
+ * itself. Past it, damping rises just enough to hold the stretch at the budget
+ * (see expandBounceBudget), and stiffness rises with it so the panel still
+ * first reaches full size at the same moment: the attack is untouched, only the
  * overshoot shrinks and the settle shortens.
  */
 export function expandSpringFor(height: number): { omega: number, zeta: number } {
   const base = EXPAND_SPRING
-  if (!(height > 0) || height * springOvershoot(base.zeta) <= EXPAND_BOUNCE_PX)
+  const budget = expandBounceBudget(height)
+  if (!(height > 0) || height * springOvershoot(base.zeta) <= budget)
     return { omega: base.omega, zeta: base.zeta }
 
-  const lnRatio = Math.log(EXPAND_BOUNCE_PX / height)
+  const lnRatio = Math.log(budget / height)
   const zeta = Math.min(EXPAND_MAX_ZETA, -lnRatio / Math.sqrt(Math.PI ** 2 + lnRatio ** 2))
   return {
     omega: base.omega * springCrossing(zeta) / springCrossing(base.zeta),
