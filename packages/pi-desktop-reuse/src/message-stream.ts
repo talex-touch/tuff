@@ -34,7 +34,8 @@ export function cumulativeDelta(
   previous: string,
   next: string,
 ): { delta: string, reset: boolean } {
-  if (next === previous) return { delta: '', reset: false }
+  if (next === previous)
+    return { delta: '', reset: false }
   if (next.startsWith(previous)) {
     return { delta: next.slice(previous.length), reset: false }
   }
@@ -71,8 +72,10 @@ export function hasMessageUpdateDeltas(event: MessageUpdateEvent): boolean {
 
 /** Slim an in-memory snapshot+delta update for the cross-process path. */
 export function toWireMessageUpdate(event: MessageUpdateEvent): MessageUpdateEvent {
-  if (event.stream === 'delta') return event
-  if (!hasMessageUpdateDeltas(event)) return event
+  if (event.stream === 'delta')
+    return event
+  if (!hasMessageUpdateDeltas(event))
+    return event
   return {
     type: 'message_update',
     stream: 'delta',
@@ -90,7 +93,8 @@ function mergeDeltaField(
   nextReset: boolean | undefined,
   nextDelta: string | undefined,
 ): { reset: boolean, delta: string } {
-  if (nextReset) return { reset: true, delta: nextDelta ?? '' }
+  if (nextReset)
+    return { reset: true, delta: nextDelta ?? '' }
   if (previousReset) {
     return { reset: true, delta: `${previousDelta ?? ''}${nextDelta ?? ''}` }
   }
@@ -102,7 +106,8 @@ export function mergeMessageUpdates(
   previous: MessageUpdateEvent,
   next: MessageUpdateEvent,
 ): MessageUpdateEvent {
-  if (!hasMessageUpdateDeltas(next)) return next
+  if (!hasMessageUpdateDeltas(next))
+    return next
   if (!hasMessageUpdateDeltas(previous)) {
     return {
       type: 'message_update',
@@ -161,15 +166,20 @@ export function applyMessageUpdate(
   previous: UiMessage | undefined,
   event: MessageUpdateEvent,
 ): UiMessage {
-  if (event.stream !== 'delta') return event.message
+  if (event.stream !== 'delta')
+    return event.message
   const seed
     = previous && previous.id === event.message.id ? previous : event.message
   let content = seed.content ?? ''
   let thinking = seed.thinking ?? ''
-  if (event.resetText) content = event.deltaText ?? ''
-  else if (event.deltaText) content += event.deltaText
-  if (event.resetThinking) thinking = event.deltaThinking ?? ''
-  else if (event.deltaThinking) thinking += event.deltaThinking
+  if (event.resetText)
+    content = event.deltaText ?? ''
+  else if (event.deltaText)
+    content += event.deltaText
+  if (event.resetThinking)
+    thinking = event.deltaThinking ?? ''
+  else if (event.deltaThinking)
+    thinking += event.deltaThinking
   return {
     ...seed,
     id: event.message.id,
@@ -200,7 +210,8 @@ export function deltaStreamPayloadFits(
   payload: unknown,
   maxBytes: number,
 ): boolean {
-  if (maxBytes <= 0) return false
+  if (maxBytes <= 0)
+    return false
   const event = (payload as { event?: MessageUpdateEvent } | null)?.event
   if (!event || event.type !== 'message_update' || event.stream !== 'delta') {
     return false

@@ -26,7 +26,8 @@ export function positiveTokenCount(value: number | undefined): number {
 
 export function usageTokenTotal(usage: MessageUsage): number {
   const reportedTotal = positiveTokenCount(usage.totalTokens)
-  if (reportedTotal > 0) return reportedTotal
+  if (reportedTotal > 0)
+    return reportedTotal
   return positiveTokenCount(usage.inputTokens) + positiveTokenCount(usage.outputTokens)
 }
 
