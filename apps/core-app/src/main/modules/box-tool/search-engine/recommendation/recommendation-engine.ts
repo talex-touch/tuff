@@ -1,4 +1,9 @@
-import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
+import type {
+  RecommendationEvidence,
+  RecommendationSource,
+  TuffContainerLayout,
+  TuffItem
+} from '@talex-touch/utils'
 import type {
   IExecuteArgs,
   IExecuteOutcome,
@@ -21,6 +26,10 @@ import { getSentryService } from '../../../sentry'
 import { ContextProvider, hashContextContent } from './context-provider'
 import { toParsedItemTimeStats } from '../time-stats-aggregator'
 import { ItemRebuilder } from './item-rebuilder'
+import {
+  buildRecommendationContextCandidates,
+  RECOMMENDATION_CONTEXT_SCORE_MAX
+} from './recommendation-context-history'
 import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
 import { createFileRecommendationSource } from './file-recommendation-source'
 import { createAppRecommendationSource } from './app-recommendation-source'
@@ -93,7 +102,8 @@ const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS = 20_000
-const CONTEXT_MATCH_WEIGHT = 1e6
+/** Preset matches may nudge by at most ten behaviour-equivalent points. */
+const CONTEXT_MATCH_WEIGHT = 1e3
 /**
  * Band for host-generated contextual candidates (currently the clipboard-URL card).
  *
@@ -128,8 +138,8 @@ const PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT = 5
 const EXPLORATION_LIMIT = 1
 /** Candidates all plugins together may contribute, so N plugins cannot crowd out the built-ins. */
 const PLUGIN_CANDIDATES_TOTAL_LIMIT = 15
-/** One row. The grid tier is capped to it so the two tiers stay visually distinct. */
-const GRID_TIER_COLUMNS = 6
+/** First five entries of the same recommendation sequence, regardless of kind. */
+const GRID_TIER_COLUMNS = 5
 
 /**
  * A captured selection is the same privacy tier as the clipboard but a weaker
@@ -444,7 +454,7 @@ function toLogMeta(meta?: Record<string, unknown>): LogMeta | undefined {
  * broken until it expires. Bump when the candidate set changes; rows from older versions simply
  * age out, which is the correct cost of the change being visible immediately.
  */
-const RECOMMENDATION_CACHE_SCHEMA_VERSION = 2
+const RECOMMENDATION_CACHE_SCHEMA_VERSION = 3
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -1750,66 +1760,14 @@ export class RecommendationEngine {
     return true
   }
 
-  /**
-   * Two tiers: a grid of launch targets, then a list of things the host is proposing.
-   *
-   * The grid holds only what the user has a right to reach for without explanation: their pinned
-   * entries, and habits that crossed the strict frequent threshold. It is deliberately NOT filled
-   * to capacity — a grid padded with exploration or loose suggestions is what let a never-used
-   * install sit where a real habit belonged. When nothing qualifies the section is absent and the
-   * empty state is a single list.
-   *
-   * Files never enter the grid, pinned or not. A tile is an icon and a name; a file's thumbnail
-   * often is not generated yet (and cannot be, for media outside the `tfile` allowlist), so it
-   * would render as a grey square — while as a row it gets its path, size and date. Its reason
-   * badge has room there too, which is the point of the lower tier. Files are also what opens the
-   * right-hand preview pane (`addon` in CoreBox.vue), and a bare icon row is the wrong anchor for a
-   * panel that takes most of the window: anything that would open it belongs in the list.
-   */
-  /**
-   * Whether this item reads as a grid tile rather than a list row.
-   *
-   * A tile is an icon plus a name. Files are excluded because their thumbnail is often not
-   * generated yet — and for media outside the `tfile` allowlist it never can be — so a file tile
-   * is a grey square with a truncated filename, while a file row carries its path, size and date.
-   * Keeping them out is also what keeps the preview pane out of the grid: the renderer opens it
-   * for a focused `kind: 'file'` item, and the grid must never hold one.
-   */
-  private isTileableRecommendation(item: TuffItem): boolean {
-    return item.kind !== 'file' && item.kind !== 'folder' && item.source?.type !== 'file'
-  }
+  /** Partition the already-ranked sequence; display position never claims a habit. */
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
     const sections: TuffContainerLayout['sections'] = []
-
-    // Pinned tileable entries come first in the grid, in list order; everything else on the grid
-    // must have crossed the strict frequent threshold. There is no fill: a short grid stays short.
-    const pinnedTiles: TuffItem[] = []
-    const eligibleTiles: TuffItem[] = []
-    const listItems: TuffItem[] = []
-
-    for (const item of items) {
-      const isPinned = item.meta?.pinned?.isPinned === true
-      if (!this.isTileableRecommendation(item)) {
-        listItems.push(item)
-        continue
-      }
-      if (isPinned) {
-        pinnedTiles.push(item)
-        continue
-      }
-      if (this.isGridEligible(item)) eligibleTiles.push(item)
-      else listItems.push(item)
-    }
-
-    // One row only, and never padded with exploration or other suggestions: the top tier is the
-    // user's pinned entries plus habits that actually crossed the threshold. No eligible tile and
-    // nothing pinned means there is no habitual section at all.
-    const grid = [...pinnedTiles, ...eligibleTiles].slice(0, GRID_TIER_COLUMNS)
-    const columns = Math.min(GRID_TIER_COLUMNS, items.length || GRID_TIER_COLUMNS)
-
+    const grid = items.slice(0, GRID_TIER_COLUMNS)
+    const proposed = items.slice(GRID_TIER_COLUMNS)
     if (grid.length > 0) {
       sections.push({
         id: 'habitual',
@@ -1818,16 +1776,6 @@ export class RecommendationEngine {
         itemIds: grid.map((item) => item.id)
       })
     }
-
-    // A pinned file cannot tile, but the user still asked to always see it, so it leads the list
-    // instead of trailing it where pinning appended it. Grid overflow, pinned files and everything
-    // else that is proposed rather than habitual lands here in the order the scorer produced.
-    const gridIds = new Set(grid.map((item) => item.id))
-    const proposed = [
-      ...listItems.filter((item) => item.meta?.pinned?.isPinned === true),
-      ...listItems.filter((item) => item.meta?.pinned?.isPinned !== true)
-    ].filter((item) => !gridIds.has(item.id))
-
     if (proposed.length > 0) {
       sections.push({
         id: 'proposed',
@@ -1836,31 +1784,11 @@ export class RecommendationEngine {
         itemIds: proposed.map((item) => item.id)
       })
     }
-
     return {
       mode: 'grid',
-      grid: {
-        columns,
-        gap: 12,
-        itemSize: 'medium'
-      },
+      grid: { columns: GRID_TIER_COLUMNS, gap: 12, itemSize: 'medium' },
       sections
     }
-  }
-
-  /**
-   * Whether this item earned a grid slot by habit rather than by label.
-   *
-   * The badge a candidate arrived with is not evidence: a plugin item or a cold-start suggestion is
-   * never eligible, and a `frequent`-labelled row only qualifies when the scorer confirmed the
-   * strict threshold from real dated executions. Pinned items bypass this by design — they are the
-   * user's explicit choice — and are handled by the caller.
-   */
-  private isGridEligible(item: TuffItem): boolean {
-    const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation as
-      | { frequentEligible?: boolean }
-      | undefined
-    return recommendation?.frequentEligible === true
   }
 
   private combineRecommendedWithPinned(
@@ -1881,7 +1809,7 @@ export class RecommendationEngine {
       )
     ).slice(0, Math.max(0, limit - visiblePinnedItems.length))
 
-    return [...visibleRecommendItems, ...visiblePinnedItems]
+    return [...visiblePinnedItems, ...visibleRecommendItems]
   }
 
   /** Descending by `scoring.final` (written by the rebuilder), ties keep input order. */
@@ -2283,7 +2211,8 @@ export class RecommendationEngine {
     )
 
     // 维度 3: 时段热门 (Top 20)
-    const timeBasedItems = await this.getTimeBasedTopItems(context.time, 20)
+    const timeBasedItems =
+      context.timeAvailable === false ? [] : await this.getTimeBasedTopItems(context.time, 20)
     recommendationLog.debug('Loaded time-based candidates', {
       meta: { count: timeBasedItems.length }
     })
@@ -2341,6 +2270,32 @@ export class RecommendationEngine {
     // arrives from the frequent/recent dimensions and keeps its real evidence and its badge.
     const builtinDestinations = this.getBuiltinDestinationCandidates()
     candidates.push(...builtinDestinations)
+
+    const sceneCandidates = buildRecommendationContextCandidates(
+      await this.dbUtils.getRecommendationHistory(),
+      context
+    )
+    if (sceneCandidates.length > 0) {
+      const sceneStats = new Map(
+        (await this.dbUtils.getUsageStatsBatch(sceneCandidates)).map((stat) => [
+          `${stat.sourceId}:${stat.itemId}`,
+          stat
+        ])
+      )
+      for (const scene of sceneCandidates) {
+        const usageStats = sceneStats.get(`${scene.sourceId}:${scene.itemId}`)
+        if (!usageStats) continue
+        candidates.push({
+          sourceId: scene.sourceId,
+          itemId: scene.itemId,
+          sourceType: scene.sourceType,
+          source: scene.source,
+          usageStats,
+          contextScore: scene.score,
+          contextEvidence: scene.evidence
+        })
+      }
+    }
 
     // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
     // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
@@ -3096,12 +3051,19 @@ export class RecommendationEngine {
       candidate.behavior?.lastExecutedAt != null
         ? this.calculateRecencyBoost(new Date(candidate.behavior.lastExecutedAt))
         : 0
+    const timeContribution =
+      candidate.behavior && context.timeAvailable !== false
+        ? calculateTimeContribution(candidate.behavior, context.time)
+        : 0
     const automaticBudget =
-      (candidate.behavior
-        ? calculateBehaviorScore(candidate.behavior) +
-          calculateTimeContribution(candidate.behavior, context.time)
-        : 0) + recencyBoost
+      (candidate.behavior ? calculateBehaviorScore(candidate.behavior) : 0) +
+      timeContribution +
+      recencyBoost
     score += Math.min(BEHAVIOR_SCORE_MAX, automaticBudget) * BEHAVIOR_SCORE_WEIGHT
+    // Source preference and yesterday are one learned-scene term, never independently paid.
+    score +=
+      Math.min(RECOMMENDATION_CONTEXT_SCORE_MAX, Math.max(0, candidate.contextScore ?? 0)) *
+      BEHAVIOR_SCORE_WEIGHT
 
     // Novelty: the exploration channel for freshly installed apps. It hands the
     // item back to frecency the moment there is a real execute to rank on —
@@ -3427,12 +3389,9 @@ export class RecommendationEngine {
    * Re-applies the volatile half of the ranking on top of a (possibly cached)
    * item list and re-orders it.
    *
-   * The cache key only carries slow-moving context (see
-   * `ContextProvider.generateCacheKey`), so a hit can carry a stable ranking
-   * computed under a completely different clipboard / foreground app. This
-   * stage restores those signals per request over the already-capped list, and
-   * injects the clipboard-URL action, which exists only while a URL is on the
-   * clipboard and therefore can never be part of a reusable cache entry.
+   * Learned source-app and time-window recall is isolated by the cache key.
+   * Clipboard, selection and transient system-state matches are applied afresh,
+   * including the clipboard URL action, without accumulating a previous request's bonus.
    */
   private async applyVolatileContextRerank(
     items: TuffItem[],
@@ -3446,7 +3405,10 @@ export class RecommendationEngine {
 
     const rescored = recommendItems.map((item) => {
       const stableScore = this.readStableScore(item)
-      const volatileScore = this.calculateContextMatch(this.toVolatileCandidate(item), context)
+      const volatileScore = Math.max(
+        -100,
+        Math.min(100, this.calculateContextMatch(this.toVolatileCandidate(item), context))
+      )
       return this.withScores(item, stableScore, volatileScore * CONTEXT_MATCH_WEIGHT)
     })
 
@@ -3874,6 +3836,13 @@ export class RecommendationEngine {
       if (candidate.source === 'time-based') {
         existing.source = 'time-based'
       }
+      if (candidate.contextEvidence) {
+        existing.contextEvidence = { ...existing.contextEvidence, ...candidate.contextEvidence }
+        if ((candidate.contextScore ?? 0) > (existing.contextScore ?? 0)) {
+          existing.contextScore = candidate.contextScore
+          existing.source = candidate.source
+        }
+      }
       // A new app can also own a zero-execute usage row (it was searched but
       // never launched), which puts it in an earlier dimension first. Keep the
       // install stamp so the novelty boost still fires, and label it as the
@@ -4061,6 +4030,9 @@ interface ItemCandidate {
    * can tell "no evidence" from "evidence of zero".
    */
   behavior?: UsageBehaviorFacts
+  /** One bounded learned-scene contribution; independent evidence is retained after dedupe. */
+  contextScore?: number
+  contextEvidence?: RecommendationEvidence
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
   /**
@@ -4084,18 +4056,7 @@ interface VolatileCandidate {
 
 /** 候选项(带来源标记) */
 interface CandidateItem extends ItemCandidate {
-  source:
-    | 'frequent'
-    | 'recent'
-    | 'time-based'
-    | 'trending'
-    | 'context'
-    | 'pinned'
-    | 'plugin'
-    | 'newly-installed'
-    /** A file that appeared on disk inside the novelty window. */
-    | 'newly-added'
-    | 'cold-start'
+  source: RecommendationSource
 }
 
 /**

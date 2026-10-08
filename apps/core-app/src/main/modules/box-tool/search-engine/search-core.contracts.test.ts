@@ -1,13 +1,18 @@
 import type { IProviderActivate, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
-import type * as schema from '../../../db/schema'
+import * as schema from '../../../db/schema'
 import type * as SearchActivity from './search-activity'
 import type { SearchIndexCommitHub } from './search-index-commit-hub'
+import type { ActiveAppInfo } from '../../system/active-app'
+import type * as DbUtilsModule from '../../../db/utils'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import { readFile } from 'node:fs/promises'
 
 type PinnedItem = typeof schema.pinnedItems.$inferSelect
 type ItemUsageStat = typeof schema.itemUsageStats.$inferSelect
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import type { ExecuteRecordResult } from '../../../db/utils'
+import type { DbUtils } from '../../../db/utils'
 // resetModules reinitializes the real AppProvider module graph before each contract case.
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 })
 
@@ -16,6 +21,7 @@ const state = vi.hoisted(() => {
   const searchUpdateCompletion = { current: Promise.withResolvers<void>() }
 
   return {
+    foregroundApp: null as ActiveAppInfo | null,
     /**
      * The committed-execute push. `broadcast` reaches every window (the main window owns the
      * settings/application pages); `broadcastToWindow` is the explicit CoreBox delivery, because
@@ -54,7 +60,7 @@ const state = vi.hoisted(() => {
     // one transaction and reports what it accepted, not that it fans out to per-table writers.
     // Real shape: `usageStats` is the committed `item_usage_stats` row on an accepted write and
     // `null` only when the event was a duplicate, so the stub must allow both.
-    recordExecuteTransaction: vi.fn<() => Promise<ExecuteRecordResult>>(async () => ({
+    recordExecuteTransaction: vi.fn<DbUtils['recordExecuteTransaction']>(async () => ({
       accepted: true,
       usageStats: null
     })),
@@ -126,8 +132,12 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('../../../db/utils', () => ({ createDbUtils: state.createDbUtils }))
+vi.mock('../../system/active-app', () => ({
+  activeAppService: { getActiveApp: async () => state.foregroundApp }
+}))
 vi.mock('../../../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
+    schedule: async (_label: string, operation: () => Promise<unknown>) => operation(),
     getStats: vi.fn(() => ({ queued: 0, processing: false, currentTaskLabel: null })),
     hasInteractiveWrites: vi.fn(() => false)
   }
@@ -450,6 +460,7 @@ describe('SearchEngineCore facade contracts', () => {
     vi.resetModules()
     vi.clearAllMocks()
     state.transportHandlers.clear()
+    state.foregroundApp = null
     state.searchUpdateCompletion.current = Promise.withResolvers<void>()
     const [searchIndexCommitHubModule, searchCoreModule] = await Promise.all([
       import('./search-index-commit-hub'),
@@ -487,6 +498,138 @@ describe('SearchEngineCore facade contracts', () => {
     const lifecycle = core as unknown as { destroying: boolean }
     if (!lifecycle.destroying) await core.destroy()
   })
+
+  it.each([
+    { name: 'captured source A', known: true, expectedApp: 'com.example.editor' },
+    { name: 'unknown original source', known: false, expectedApp: undefined }
+  ])(
+    'executes a completed session with its $name after hide and source B activation',
+    async ({ known, expectedApp }) => {
+      const client = createClient({ url: ':memory:' })
+      // The harness resets modules per case: static imports would bind stale recorder/snapshot
+      // singletons instead of the ones loaded with this SearchEngineCore instance.
+      const { foregroundAppSnapshotStore } = await import('../../system/foreground-app-snapshot')
+      const { recordAcceptedExecute } = await import('./execute-recorder')
+      const migrationNames = [
+        '0000_whole_mister_fear.sql',
+        '0005_orange_wiccan.sql',
+        '0007_remarkable_silver_sable.sql',
+        '0011_add_recommendation_tables.sql',
+        '0019_usage_trend_daily.sql',
+        '0051_usage_execute_events.sql'
+      ]
+      try {
+        for (const name of migrationNames) {
+          const migration = await readFile(
+            new URL(`../../../../../resources/db/migrations/${name}`, import.meta.url),
+            'utf8'
+          )
+          for (const statement of migration.split('--> statement-breakpoint')) {
+            if (statement.trim()) await client.execute(statement)
+          }
+        }
+        const actual = await vi.importActual<typeof DbUtilsModule>('../../../db/utils')
+        const usageDb = actual.createDbUtils(drizzle(client, { schema }))
+        state.recordExecuteTransaction.mockImplementation((input) =>
+          usageDb.recordExecuteTransaction(input)
+        )
+        const externalApp = (bundleId: string, displayName: string): ActiveAppInfo => ({
+          bundleId,
+          identifier: bundleId,
+          displayName,
+          processId: process.pid + 1,
+          executablePath: `/Applications/${displayName}.app`,
+          platform: 'macos',
+          lastUpdated: 0,
+          windowTitle: null
+        })
+        const sourceItem = buildItem('source-action', 'source-provider', 'Source action')
+        core.registerProvider({
+          ...buildProvider(
+            'source-provider',
+            async () => ({ items: [sourceItem] }) as TuffSearchResult
+          ),
+          onExecute: async (args: {
+            item: TuffItem
+            searchResult?: TuffSearchResult
+            eventId: string
+          }) => {
+            // Real launch paths hide before their accepted recorder publishes. Crossing an await
+            // here also catches implementations which lose the async-local source before admission.
+            foregroundAppSnapshotStore.clear()
+            await Promise.resolve()
+            await recordAcceptedExecute({
+              item: args.item,
+              sessionId: args.searchResult?.sessionId,
+              eventId: args.eventId,
+              entryPoint: 'core-box'
+            })
+          }
+        } as never)
+        state.foregroundApp = known ? externalApp('com.example.editor', 'Editor') : null
+        foregroundAppSnapshotStore.capture()
+        await foregroundAppSnapshotStore.resolve()
+        const original = core.startSearch(
+          { inputs: [], text: 'original source action' },
+          {
+            caller: { kind: 'core-box', id: 'origin-original' }
+          }
+        )
+        const originalResult = await original.result
+        await original.completed
+        foregroundAppSnapshotStore.clear()
+        state.foregroundApp = externalApp('com.example.browser', 'Browser')
+        foregroundAppSnapshotStore.capture()
+        await foregroundAppSnapshotStore.resolve()
+        const next = core.startSearch(
+          { inputs: [], text: 'next source action' },
+          {
+            caller: { kind: 'core-box', id: 'origin-next' }
+          }
+        )
+        const nextResult = await next.result
+        await next.completed
+
+        // resetModules recreates typed-event objects; resolve the registered transport address,
+        // not the object imported before this engine's module graph was loaded.
+        const execute = [...state.transportHandlers.entries()].find(([event]) => {
+          const address = event as { toEventName: () => string }
+          return address.toEventName() === CoreBoxEvents.item.execute.toEventName()
+        })![1]
+        await execute({
+          item: sourceItem,
+          searchResult: originalResult,
+          eventId: 'original-execute'
+        } as never)
+        await execute({
+          item: sourceItem,
+          searchResult: nextResult,
+          eventId: 'next-execute'
+        } as never)
+        const history = await usageDb.getRecommendationHistory()
+        const { rows } = await client.execute(
+          'SELECT event_id, context FROM usage_logs ORDER BY id'
+        )
+        const originalContext = JSON.parse(String(rows[0].context))
+        const nextContext = JSON.parse(String(rows[1].context))
+
+        expect(rows.map((row) => row.event_id)).toEqual(['original-execute', 'next-execute'])
+        if (known) expect(originalContext.prevApp).toBe(expectedApp)
+        else expect(originalContext).not.toHaveProperty('prevApp')
+        expect(nextContext.prevApp).toBe('com.example.browser')
+        expect(history.map((event) => event.previousApp).sort()).toEqual(
+          known ? ['com.example.browser', 'com.example.editor'] : ['com.example.browser', null]
+        )
+      } finally {
+        foregroundAppSnapshotStore.clear()
+        state.foregroundApp = null
+        state.recordExecuteTransaction
+          .mockReset()
+          .mockResolvedValue({ accepted: true, usageStats: null })
+        client.close()
+      }
+    }
+  )
 
   it('reports no committed push when the write throws, so no surface is shown a count that was rolled back', async () => {
     // A failed transaction is the one case where the user's action succeeded but there is no count:

@@ -1,11 +1,7 @@
 import type { RecommendationEvidence, TuffItem } from '@talex-touch/utils'
 import type { ScoredItem } from './recommendation-engine'
 import { createLogger } from '../../../../utils/logger'
-import {
-  isFrequentEligible,
-  resolveEvidenceBackedReason,
-  resolvePeakHourRange
-} from './recommendation-utils'
+import { resolveEvidenceBackedReason, resolvePeakHourRange } from './recommendation-utils'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
 import { DEFAULT_RECOMMENDATION_BADGE, RECOMMENDATION_BADGES } from './recommendation-presentation'
 
@@ -188,11 +184,7 @@ export class ItemRebuilder {
         reason: this.getReasonLabel(reasonSource),
         isIntelligent: true,
         badge: this.generateBadge(reasonSource),
-        evidence: this.buildEvidence(scored),
-        // The grid admits a tile by this flag, not by the badge: the label says what recalled the
-        // item, this says whether the dated behaviour crossed the frequent threshold. Absent means
-        // "no evidence" (not executable by habit), and the layout treats it as such.
-        frequentEligible: scored.behavior !== undefined && isFrequentEligible(scored.behavior)
+        evidence: this.buildEvidence(scored)
       }
       // Store original itemId for deduplication in recommendation-engine
       meta._originalItemId = scored.itemId
@@ -220,7 +212,9 @@ export class ItemRebuilder {
       context: 'Smart Match',
       plugin: 'Plugin',
       'newly-installed': 'Just Installed',
-      'cold-start': 'Suggested'
+      'cold-start': 'Suggested',
+      yesterday: 'Used Yesterday Around Now',
+      'app-context': 'Source App Preference'
     }
     return labels[source] || 'Recommended'
   }
@@ -244,7 +238,7 @@ export class ItemRebuilder {
    * dropped; a zero count is treated as unknown because "used 0 times" is not a reason.
    */
   private buildEvidence(scored: ScoredItem): RecommendationEvidence | undefined {
-    const evidence: RecommendationEvidence = {}
+    const evidence: RecommendationEvidence = { ...scored.contextEvidence }
 
     // The lifetime aggregate is a real fact, and both carriers come from `item_usage_stats`: the
     // candidate's `usageStats` row and the behaviour facts' `executeCount`. Prefer the row, fall

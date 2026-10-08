@@ -153,6 +153,11 @@ Changes to public recommendation weights, the child SDK facade, or recommendatio
 - Child scoring is synchronous and local. Inputs are caller-owned facts; scoring makes no capability request and exposes no other source's usage history.
 - Capture realm intrinsics before plugin code runs; freeze the public model and constants. A plugin's later global mutation must not change the host model or the captured child's arithmetic.
 - Behaviour contributes at most 80 points; time contributes at most 20, and requires at least 10 dated executions over 3 local days in 30 days. The host clamps automatic behaviour/time/recency to 100.
+- The host's learned source-app/yesterday recall is separate from the shared plugin weight factory:
+  it adds one confidence-bounded scene term of at most 25 points. It never exposes another source's
+  raw history to a plugin or changes `reco-model-2`'s published formulas. Preset context matches may
+  nudge by at most ten behaviour-equivalent points. Grid placement is the unified first-five slice,
+  not the shared frequent-eligibility verdict.
 - Provider priority contributes at most 5 points and cannot confer frequent eligibility. Eligibility requires 5 dated executions over 3 local days in 30 days.
 - Register and release callbacks through the current tenant generation. Starting-host registration is permitted; executing before activation, using a foreign owner, and retaining callbacks after unload are not.
 

@@ -35,7 +35,10 @@ import { createLogger } from '../../../utils/logger'
 import { DivisionBoxManager } from '../../division-box/manager'
 import { getPermissionModule } from '../../permission'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
-import { captureForegroundAppSnapshot } from '../../system/foreground-app-snapshot'
+import {
+  captureForegroundAppSnapshot,
+  foregroundAppSnapshotStore
+} from '../../system/foreground-app-snapshot'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
 import { CoreBoxFocusDiagnostics } from './focus-diagnostics'
@@ -624,6 +627,7 @@ export class WindowManager {
    */
   public hide(options: { immediate?: boolean } = {}): void {
     this.focusDiagnostics.cancel('hidden')
+    foregroundAppSnapshotStore.clear()
     const window = this.current
     if (!window) return
     if (window.window.isDestroyed()) return

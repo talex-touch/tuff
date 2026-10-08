@@ -2,8 +2,10 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { AcceptedExecuteRecord } from './execute-recorder'
 import { recordAcceptedExecute } from './execute-recorder'
 import type { UsageEntryPoint } from './usage-entry-point'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { activeAppService } from '../../system/active-app'
+import { foregroundAppSnapshotStore, isSelfActiveApp } from '../../system/foreground-app-snapshot'
 
 const log = getLogger('search-engine')
 
@@ -45,6 +47,18 @@ function buildSyntheticAppItem(itemId: string): TuffItem {
   } as TuffItem
 }
 
+export interface PreviousAppContext {
+  prevApp?: string
+  prevAppName?: string
+}
+
+const executeSourceContext = new AsyncLocalStorage<PreviousAppContext>()
+
+/** Keeps the main-owned search origin through hide, launch and asynchronous acceptance. */
+export function withPreviousAppContext<T>(context: PreviousAppContext, operation: () => T): T {
+  return executeSourceContext.run(context, operation)
+}
+
 /**
  * Captures the foreground application as the "previous app" for an execute about to happen.
  *
@@ -52,15 +66,18 @@ function buildSyntheticAppItem(itemId: string): TuffItem {
  * transition identically. Returns an empty object when the foreground app is unavailable: that
  * costs this event its edge in the transition graph and nothing else.
  */
-export async function resolvePreviousAppContext(): Promise<{
-  prevApp?: string
-  prevAppName?: string
-}> {
+export async function resolvePreviousAppContext(): Promise<PreviousAppContext> {
   try {
-    // Without the icon: this runs on the launch path and the bitmap is both the expensive part
-    // and useless here.
-    const active = await activeAppService.getActiveApp({ includeIcon: false })
-    const identity = active?.bundleId || active?.identifier
+    const executionContext = executeSourceContext.getStore()
+    if (executionContext) return executionContext
+    const hasActivation = foregroundAppSnapshotStore.hasActiveSession
+    const snapshot = await foregroundAppSnapshotStore.resolve()
+    // While CoreBox is active, an unavailable pre-show capture is unknown, not a live read of Tuff.
+    const active = hasActivation
+      ? snapshot?.app
+      : await activeAppService.getActiveApp({ includeIcon: false })
+    if (!active || isSelfActiveApp(active)) return {}
+    const identity = active.bundleId || active.identifier
     if (!identity) return {}
     return active.displayName
       ? { prevApp: identity, prevAppName: active.displayName }

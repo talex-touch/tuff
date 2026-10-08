@@ -97,6 +97,7 @@ export class ContextProvider {
 
     return {
       time: sources.time ? this.getTimeContext() : NEUTRAL_TIME_CONTEXT,
+      timeAvailable: sources.time,
       clipboard,
       selection,
       foregroundApp,
@@ -312,9 +313,10 @@ export class ContextProvider {
       const { foregroundAppSnapshotStore, isSelfActiveApp } =
         await import('../../../system/foreground-app-snapshot')
 
-      const snapshot = foregroundAppSnapshotStore.get()
+      const hasActivation = foregroundAppSnapshotStore.hasActiveSession
+      const snapshot = await foregroundAppSnapshotStore.resolve()
       let activeApp = snapshot?.app ?? null
-      if (!activeApp) {
+      if (!activeApp && !hasActivation) {
         const { activeAppService } = await import('../../../system/active-app')
         activeApp = await activeAppService.getActiveApp({
           includeIcon: false
@@ -606,18 +608,18 @@ export class ContextProvider {
   }
 
   /**
-   * Generates cache key from context signal.
-   *
-   * @remarks
-   * Only SLOW-MOVING context belongs here (time slot, workday/weekend, online
-   * flag). Volatile signals — clipboard, selection, foreground app, battery,
-   * power mode, DND, network identity — are deliberately absent: with them in
-   * the key the 15-min background refresh warmed a key the user's own request
-   * could never hit, so every visible request recomputed from scratch. They
-   * are re-applied per request by the engine's volatile re-rank stage instead.
+   * Learned recall depends on the source app and the local clock window. Clipboard,
+   * selection and transient system-state matches remain uncached per-request effects.
    */
   generateCacheKey(context: ContextSignal): string {
-    const parts: string[] = [context.time.timeSlot, resolveDayType(context.time.dayOfWeek)]
+    const now = new Date()
+    const parts: string[] = [
+      context.time.timeSlot,
+      resolveDayType(context.time.dayOfWeek),
+      `clock:${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}:${context.time.hourOfDay}:${now.getMinutes()}`,
+      `time:${context.timeAvailable === false ? 'off' : 'on'}`,
+      `source:${context.foregroundApp?.bundleId.toLowerCase() || 'none'}`
+    ]
 
     if (context.systemState) {
       parts.push(`net:${context.systemState.isOnline ? '1' : '0'}`)

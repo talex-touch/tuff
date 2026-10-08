@@ -24,6 +24,16 @@ import * as schema from './schema'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
 
+/** Minimal admitted history used for local recommendation scene recall. */
+export interface RecommendationHistoryEvent {
+  sourceId: string
+  itemId: string
+  sourceType: string
+  timestamp: number
+  previousApp?: string | null
+  previousAppName?: string | null
+}
+
 const DAY_MS = 86_400_000
 
 /** Local natural-day windows the behaviour reader reports. */
@@ -773,6 +783,45 @@ function createDbUtilsInternal(
         .select()
         .from(schema.itemUsageStats)
         .where(eq(schema.itemUsageStats.sourceId, sourceId))
+    },
+
+    /** No partial sample may claim an exact source preference or a cross-day habit. */
+    async getRecommendationHistory(now = Date.now()): Promise<RecommendationHistoryEvent[]> {
+      const maxEvents = 10_000
+      const rows = await db
+        .select({
+          sourceId: schema.executeEvents.sourceId,
+          itemId: schema.executeEvents.itemId,
+          sourceType: schema.executeEvents.sourceType,
+          timestamp: schema.executeEvents.timestamp,
+          context: schema.usageLogs.context
+        })
+        .from(schema.executeEvents)
+        .leftJoin(schema.usageLogs, eq(schema.executeEvents.eventId, schema.usageLogs.eventId))
+        .where(
+          and(
+            gte(schema.executeEvents.timestamp, new Date(now - BEHAVIOR_WINDOW_30_DAYS_MS)),
+            lte(schema.executeEvents.timestamp, new Date(now))
+          )
+        )
+        .orderBy(desc(schema.executeEvents.timestamp))
+        .limit(maxEvents + 1)
+      if (rows.length > maxEvents) return []
+      return rows.map((row) => {
+        const rawContext = parseJsonQuietly(row.context)
+        const context =
+          rawContext && typeof rawContext === 'object'
+            ? (rawContext as Record<string, unknown>)
+            : undefined
+        return {
+          sourceId: row.sourceId,
+          itemId: row.itemId,
+          sourceType: row.sourceType,
+          timestamp: row.timestamp.getTime(),
+          previousApp: typeof context?.prevApp === 'string' ? context.prevApp : null,
+          previousAppName: typeof context?.prevAppName === 'string' ? context.prevAppName : null
+        }
+      })
     },
 
     /**

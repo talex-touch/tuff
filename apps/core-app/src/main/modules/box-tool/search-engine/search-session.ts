@@ -9,6 +9,7 @@ import type {
   CoreBoxSearchEndPayload,
   CoreBoxSearchUpdatePayload
 } from '@talex-touch/utils/transport/events/types'
+import type { PreviousAppContext } from './app-launch-recorder'
 import { getActivationKey } from './search-core-utils'
 import { beginForegroundSearchActivity, endForegroundSearchActivity } from './search-activity'
 
@@ -101,6 +102,7 @@ export class SearchSession {
   readonly startedAt = Date.now()
   readonly signal: AbortSignal
   readonly completed: Promise<void>
+  readonly sourceAppContext?: Promise<PreviousAppContext>
 
   private readonly abortController = new AbortController()
   private activations: Map<string, IProviderActivate> | null
@@ -123,6 +125,7 @@ export class SearchSession {
     query: TuffQuery
     activations: readonly IProviderActivate[] | null
     sink?: SearchSink
+    sourceAppContext?: Promise<PreviousAppContext>
     onTerminal: (session: SearchSession) => void
     onDeliveryError?: (error: unknown, session: SearchSession) => void
   }) {
@@ -133,6 +136,7 @@ export class SearchSession {
     this.onTerminal = options.onTerminal
     this.onDeliveryError = options.onDeliveryError ?? (() => {})
     this.signal = this.abortController.signal
+    this.sourceAppContext = options.sourceAppContext
     this.completed = new Promise<void>((resolve) => {
       this.resolveCompleted = resolve
     })
@@ -321,6 +325,7 @@ export interface SearchSessionTrace {
   query: Readonly<TuffQuery>
   startedAt: number
   cacheKey: string | null
+  sourceAppContext?: Promise<PreviousAppContext>
 }
 
 const MAX_RETAINED_SESSION_TRACES = 200
@@ -347,6 +352,7 @@ export class SearchSessionRegistry {
     query: TuffQuery
     activations: readonly IProviderActivate[] | null
     sink?: SearchSink
+    sourceAppContext?: Promise<PreviousAppContext>
   }): SearchSession {
     if (this.destroyed || this.destroyPromise) {
       throw new Error('Search session registry is shutting down')
@@ -361,7 +367,8 @@ export class SearchSessionRegistry {
           caller: terminalSession.caller,
           query: terminalSession.query,
           startedAt: terminalSession.startedAt,
-          cacheKey: terminalSession.cacheKey
+          cacheKey: terminalSession.cacheKey,
+          sourceAppContext: terminalSession.sourceAppContext
         })
         if (this.completedTraces.size > MAX_RETAINED_SESSION_TRACES) {
           const oldest = this.completedTraces.keys().next().value
@@ -390,7 +397,8 @@ export class SearchSessionRegistry {
         caller: live.caller,
         query: live.query,
         startedAt: live.startedAt,
-        cacheKey: live.cacheKey
+        cacheKey: live.cacheKey,
+        sourceAppContext: live.sourceAppContext
       }
     }
     return this.completedTraces.get(sessionId)

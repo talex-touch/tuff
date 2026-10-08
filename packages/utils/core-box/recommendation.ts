@@ -1,24 +1,13 @@
 import type { IExecuteArgs } from './tuff/tuff-dsl'
 
 /**
- * Recommendation sources in the order their sections are rendered in the
- * CoreBox empty state.
- *
- * This array is the single source of truth for both the `RecommendationSource`
- * union and the section ordering: the main process groups by it, the renderer
- * renders in it. Three separate copies of this union used to drift apart (one
- * here, one in `TuffItem.meta.recommendation`, one on the engine's
- * `CandidateItem`), each missing a different member.
- *
- * Ordering rationale: the more certain the signal, the earlier it appears.
- * Explicit user intent (`pinned`) first, then observed behaviour
- * (`frequent` / `time-based` / `recent`), then inference (`trending` /
- * `cold-start`) last.
+ * The single vocabulary for recommendation reasons. Display position is decided
+ * by the unified ranking, not by the order of reasons in this array.
  */
 export const RECOMMENDATION_SECTION_ORDER = [
   /** Explicitly pinned by the user */
   'pinned',
-  /** High lifetime execute count */
+  /** Sustained, dated executions across distinct days */
   'frequent',
   /** Usually used around the current hour */
   'time-based',
@@ -35,7 +24,11 @@ export const RECOMMENDATION_SECTION_ORDER = [
   /** Rising usage across the recent window */
   'trending',
   /** Catalog ordering used when there is no usage history at all */
-  'cold-start'
+  'cold-start',
+  /** Accepted executions around the same local time yesterday */
+  'yesterday',
+  /** Personal target preference when arriving from the current source app */
+  'app-context'
 ] as const
 
 /** A recommendation source. Derived from {@link RECOMMENDATION_SECTION_ORDER}. */
@@ -72,6 +65,28 @@ export interface RecommendationEvidence {
    * range may wrap past midnight (e.g. `{ startHour: 22, endHour: 0 }`).
    */
   peakHourRange?: { startHour: number; endHour: number }
+  /** Accepted executions in yesterday's local-calendar +/- one-hour window. */
+  yesterday?: {
+    lastExecutedAt: number
+    executeCount: number
+  }
+  /** Dated source-app choices; all counts share the same trailing 30-day window. */
+  sourceApp?: {
+    bundleId: string
+    name: string
+    executeCount: number
+    activeDays: number
+    totalExecutions: number
+    baselineExecuteCount: number
+    baselineTotalExecutions: number
+    /** Joint source-app/time evidence, never assembled from separate marginal counts. */
+    timeWindow?: {
+      startHour: number
+      endHour: number
+      executeCount: number
+      activeDays: number
+    }
+  }
 }
 
 /**
@@ -94,6 +109,8 @@ export interface TimePattern {
  */
 export interface ContextSignal {
   time: TimePattern
+  /** False when the host's time-context source is disabled; no dated time suggestion may use it. */
+  timeAvailable?: boolean
   clipboard?: {
     type: string
     /** Hashed content for privacy (not original text) */

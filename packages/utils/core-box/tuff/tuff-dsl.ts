@@ -1227,12 +1227,6 @@ export interface TuffMeta {
      * placeholder or a guess.
      */
     evidence?: RecommendationEvidence
-    /**
-     * Whether the dated behaviour crossed the strict frequent threshold (>=5 executions over
-     * >=3 distinct local days in the last 30 days). The grid admits a tile by this, never by the
-     * badge; absent means no evidence, which is not a habit.
-     */
-    frequentEligible?: boolean
   }
 
   /**

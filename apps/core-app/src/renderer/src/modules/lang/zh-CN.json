@@ -3514,8 +3514,7 @@
     },
     "sections": {
       "habitual": "此刻常用",
-      "proposed": "最近案例",
-      "habitualEmptyTitle": "常用项目会随使用出现"
+      "proposed": "最近案例"
     },
     "recommendation": {
       "badge": {
@@ -3528,7 +3527,9 @@
         "newlyInstalled": "新安装",
         "pinned": "已固定",
         "suggested": "推荐",
-        "newlyAdded": "新文件"
+        "newlyAdded": "新文件",
+        "yesterday": "昨日此时",
+        "appContext": "应用场景"
       }
     }
   },
@@ -6919,6 +6920,16 @@
       "lastUsed": "{age}前用过",
       "justInstalled": "刚刚安装",
       "installed": "{age}前安装",
+      "sourceAppTime": "从 {app} 唤起时常在 {start}–{end} 点使用",
+      "sourceAppHabit": "从 {app} 唤起时常用",
+      "sourceAppUsed": "近 30 天从 {app} 唤起时用过 {count} 次",
+      "yesterday": "昨天 {time} 用过",
+      "label": {
+        "sourceAppTime": "{app} {start}–{end} 点",
+        "sourceAppHabit": "{app} 常用",
+        "sourceAppUsed": "{app} 用过",
+        "yesterday": "昨天 {time}"
+      },
       "age": {
         "hours": "{count} 小时",
         "days": "{count} 天",

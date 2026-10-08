@@ -89,6 +89,7 @@ import { SearchQueryOrchestrator } from './search-query-orchestrator'
 import { ProviderHealthService } from './provider-health-service'
 import { SearchUsageService } from './search-usage-service'
 import { setExecuteRecorder } from './execute-recorder'
+import { resolvePreviousAppContext, withPreviousAppContext } from './app-launch-recorder'
 import type { UsageEntryPoint } from './usage-entry-point'
 import { resolveUsageIdentity } from './usage-identity'
 import {
@@ -1019,7 +1020,8 @@ export class SearchEngineCore
       caller,
       query: requestQuery,
       activations,
-      sink: context?.sink
+      sink: context?.sink,
+      sourceAppContext: caller.kind === 'core-box' ? resolvePreviousAppContext() : undefined
     })
     const result = this.executeSearch(requestQuery, session)
       .then(async (initialResult) => {
@@ -1853,6 +1855,17 @@ export class SearchEngineCore
     }
   }
 
+  private async withExecuteSourceApp<T>(
+    sessionId: string | undefined,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const trace = sessionId ? this.sessionRegistry.getTrace(sessionId) : undefined
+    const sourceContext = trace?.sourceAppContext
+      ? await trace.sourceAppContext
+      : await resolvePreviousAppContext()
+    return withPreviousAppContext(sourceContext, operation)
+  }
+
   /**
    * Counts one accepted major action, whichever entry asked for it.
    *
@@ -2314,82 +2327,84 @@ export class SearchEngineCore
       return instance.getSearchCacheTelemetry()
     })
 
-    transport.on(CoreBoxEvents.item.execute, async (payload) => {
+    transport.on(CoreBoxEvents.item.execute, (payload) => {
       const { item, searchResult, actionId } = payload as {
         item: TuffItem
         searchResult?: TuffSearchResult
         actionId?: string
         eventId?: string
       }
-      const provider = instance.providerRegistry.get(item.source.id)
+      return instance.withExecuteSourceApp(searchResult?.sessionId, async () => {
+        const provider = instance.providerRegistry.get(item.source.id)
 
-      // One user action, one id: the entry minted it (renderer) or this default does. It is
-      // reused verbatim for any retry/duplicate of the same action, and the database dedupes on it,
-      // so a second notification cannot add a second count.
-      const eventId =
-        typeof payload.eventId === 'string' && payload.eventId ? payload.eventId : randomUUID()
+        // One user action, one id: the entry minted it (renderer) or this default does. It is
+        // reused verbatim for any retry/duplicate of the same action, and the database dedupes on it,
+        // so a second notification cannot add a second count.
+        const eventId =
+          typeof payload.eventId === 'string' && payload.eventId ? payload.eventId : randomUUID()
 
-      // A source with no search provider (plugin recommendation candidates) still declares whether
-      // it can execute its own item. It is dispatched to instead of being dropped, and it reports
-      // acceptance; the count is recorded on the same path and under the same eventId as any other
-      // execute. The source never writes statistics itself.
-      if (!provider || !provider.onExecute) {
-        const sourceEntry = recommendationSourceRegistry.resolve(item.source.id)
-        if (!sourceEntry?.execute) {
+        // A source with no search provider (plugin recommendation candidates) still declares whether
+        // it can execute its own item. It is dispatched to instead of being dropped, and it reports
+        // acceptance; the count is recorded on the same path and under the same eventId as any other
+        // execute. The source never writes statistics itself.
+        if (!provider || !provider.onExecute) {
+          const sourceEntry = recommendationSourceRegistry.resolve(item.source.id)
+          if (!sourceEntry?.execute) {
+            return instance.getActivationState()
+          }
+
+          let outcome: IExecuteOutcome
+          try {
+            outcome = await sourceEntry.execute({ item, searchResult, actionId, eventId })
+          } catch (error) {
+            searchEngineLog.warn('Recommendation source execute failed', {
+              error,
+              meta: { sourceId: item.source.id, itemId: item.id }
+            })
+            return instance.getActivationState()
+          }
+
+          if (outcome.accepted) {
+            await instance.recordExecute(searchResult?.sessionId ?? null, item, eventId, {
+              entryPoint: 'recommendation'
+            })
+          }
+
+          if (outcome.activation) {
+            instance.activateProviders([outcome.activation])
+            if (!hasConcreteActivationFeature(outcome.activation)) {
+              const query: TuffQuery = { text: '' }
+              await instance.search(query)
+            }
+          }
+
           return instance.getActivationState()
         }
 
-        let outcome: IExecuteOutcome
-        try {
-          outcome = await sourceEntry.execute({ item, searchResult, actionId, eventId })
-        } catch (error) {
-          searchEngineLog.warn('Recommendation source execute failed', {
-            error,
-            meta: { sourceId: item.source.id, itemId: item.id }
-          })
-          return instance.getActivationState()
-        }
+        const activationResult = await provider.onExecute({ item, searchResult, actionId, eventId })
 
-        if (outcome.accepted) {
-          await instance.recordExecute(searchResult?.sessionId ?? null, item, eventId, {
-            entryPoint: 'recommendation'
-          })
-        }
+        if (activationResult) {
+          let activation: IProviderActivate
+          if (typeof activationResult === 'object') {
+            activation = activationResult
+          } else {
+            activation = {
+              id: provider.id,
+              name: provider.name,
+              icon: provider.icon,
+              meta: item.meta?.extension || {}
+            }
+          }
+          instance.activateProviders([activation])
 
-        if (outcome.activation) {
-          instance.activateProviders([outcome.activation])
-          if (!hasConcreteActivationFeature(outcome.activation)) {
+          if (!hasConcreteActivationFeature(activation)) {
             const query: TuffQuery = { text: '' }
             await instance.search(query)
           }
         }
 
         return instance.getActivationState()
-      }
-
-      const activationResult = await provider.onExecute({ item, searchResult, actionId, eventId })
-
-      if (activationResult) {
-        let activation: IProviderActivate
-        if (typeof activationResult === 'object') {
-          activation = activationResult
-        } else {
-          activation = {
-            id: provider.id,
-            name: provider.name,
-            icon: provider.icon,
-            meta: item.meta?.extension || {}
-          }
-        }
-        instance.activateProviders([activation])
-
-        if (!hasConcreteActivationFeature(activation)) {
-          const query: TuffQuery = { text: '' }
-          await instance.search(query)
-        }
-      }
-
-      return instance.getActivationState()
+      })
     })
 
     const handleGetRecommendations = async (data?: { limit?: number; forceRefresh?: boolean }) => {
@@ -2697,7 +2712,7 @@ const searchEngineCore = SearchEngineCore.getInstance()
 setExecuteRecorder((record) =>
   searchEngineCore.recordExecute(record.sessionId ?? null, record.item, record.eventId, {
     entryPoint: record.entryPoint,
-    previousApp: record.previousApp ?? null
+    previousApp: record.previousApp
   })
 )
 

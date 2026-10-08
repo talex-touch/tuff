@@ -5,7 +5,6 @@ import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useElementSize } from '@vueuse/core'
 import {
@@ -67,7 +66,6 @@ import { resolveCoreBoxCompletionDisplay } from './completion-display'
 import TagSection from './tag/TagSection.vue'
 import { devLog } from '~/utils/dev-log'
 import { useI18n } from 'vue-i18n'
-import { omniPanelShowEvent } from '../../../../shared/events/omni-panel'
 
 declare global {
   interface Window {
@@ -78,8 +76,6 @@ declare global {
 const scrollbar = ref()
 const boxInputRef = ref()
 const transport = useTuffTransport()
-const localAiCli = createLocalAiCliSdk(transport)
-const localAiCliAvailable = ref(false)
 const router = useRouter()
 const { t } = useI18n()
 const { isMac } = useRendererPlatform()
@@ -196,32 +192,6 @@ const canSubmitFeaturePrompt = computed(
 function handleSubmitFeaturePrompt(): void {
   if (!canSubmitFeaturePrompt.value || !activeSendTargetItem.value) return
   void handleExecute(activeSendTargetItem.value)
-}
-
-// Mount and every show each ask. Only the newest ask may set the button, in whatever order the
-// answers land.
-let localAiCliAvailabilityRequest = 0
-
-async function refreshLocalAiCliAvailability(): Promise<void> {
-  const request = ++localAiCliAvailabilityRequest
-  let available: boolean
-  try {
-    const status = await localAiCli.getStatus()
-    // Shown once the user has turned local agents on in Settings; off macOS, never.
-    available = status.betaAvailable && status.enabled
-  } catch {
-    available = false
-  }
-  if (request === localAiCliAvailabilityRequest) localAiCliAvailable.value = available
-}
-
-async function handleOpenLocalAiCli(): Promise<void> {
-  await transport.send(omniPanelShowEvent, {
-    captureSelection: false,
-    source: 'corebox-local-ai',
-    draftText: searchVal.value
-  })
-  await transport.send(CoreBoxEvents.ui.hide, undefined)
 }
 
 function isPluginWidgetRenderItem(item: TuffItem | null | undefined): item is TuffItem {
@@ -706,13 +676,6 @@ function handleCoreBoxWindowFocus(): void {
   focusCoreBoxInput()
 }
 
-function handleCoreBoxShown(): void {
-  focusCoreBoxInput()
-  // On every show, not only at mount: CoreBox stays alive while the master switch is turned in
-  // Settings. The main process answers from its memo, so this starts no CLI.
-  void refreshLocalAiCliAvailability()
-}
-
 // Preview History hook
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
 const previewHistory = usePreviewHistory({
@@ -775,8 +738,7 @@ const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusCoreB
 
 onMounted(() => {
   resetAutoPasteState()
-  void refreshLocalAiCliAvailability()
-  window.addEventListener('corebox:shown', handleCoreBoxShown)
+  window.addEventListener('corebox:shown', focusCoreBoxInput)
   window.addEventListener('focus', handleCoreBoxWindowFocus)
   focusCoreBoxInput()
 })
@@ -786,7 +748,7 @@ onBeforeUnmount(() => {
   cleanupVisibility()
   unregUIModeExited()
   unregFocusInput()
-  window.removeEventListener('corebox:shown', handleCoreBoxShown)
+  window.removeEventListener('corebox:shown', focusCoreBoxInput)
   window.removeEventListener('focus', handleCoreBoxWindowFocus)
   if (resWatchTimerId !== null) {
     clearTimeout(resWatchTimerId)
@@ -1349,23 +1311,12 @@ const customCss = computed(() => {
           >
             <TuffIcon :icon="{ type: 'class', value: 'i-ri-send-plane-2-fill' }" />
           </button>
-          <template v-else>
-            <button
-              v-if="localAiCliAvailable"
-              class="CoreBox-SendButton CoreBox-LocalAiButton"
-              type="button"
-              :aria-label="t('localAiCliPanel.actionTitle')"
-              :title="t('localAiCliPanel.actionSubtitle')"
-              @click.stop="handleOpenLocalAiCli"
-            >
-              <TuffIcon :icon="{ type: 'class', value: 'i-ri-terminal-box-line' }" />
-            </button>
-            <TuffIcon
-              :icon="pinIcon"
-              :alt="t('corebox.pin', '固定 CoreBox')"
-              @click="handleTogglePin"
-            />
-          </template>
+          <TuffIcon
+            v-else
+            :icon="pinIcon"
+            :alt="t('corebox.pin', '固定 CoreBox')"
+            @click="handleTogglePin"
+          />
         </div>
       </template>
     </div>

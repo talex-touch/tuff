@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { foregroundAppSnapshotStore } from '../../../system/foreground-app-snapshot'
 import { selectionSnapshotStore } from '../../../system/selection-snapshot-store'
 import { ContextProvider } from './context-provider'
+import { buildRecommendationContextCandidates } from './recommendation-context-history'
+import { resolvePreviousAppContext, withPreviousAppContext } from '../app-launch-recorder'
 
 const getActiveAppMock = vi.hoisted(() => vi.fn())
 
@@ -100,6 +102,7 @@ describe('ContextProvider foreground app', () => {
   afterEach(() => {
     foregroundAppSnapshotStore.clear()
     getActiveAppMock.mockReset()
+    vi.useRealTimers()
   })
 
   it('prefers the snapshot taken before CoreBox stole focus', async () => {
@@ -123,6 +126,46 @@ describe('ContextProvider foreground app', () => {
       name: 'Visual Studio Code'
     })
     expect(getActiveAppMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains early source promises across hide and the next cold activation', async () => {
+    vi.useFakeTimers()
+    const sourceA = Promise.withResolvers<ActiveAppInfo | null>()
+    const sourceB = Promise.withResolvers<ActiveAppInfo | null>()
+    getActiveAppMock.mockReturnValueOnce(sourceA.promise).mockReturnValueOnce(sourceB.promise)
+
+    foregroundAppSnapshotStore.capture()
+    // This is the promise a search begun before the cold OS read settles retains as its origin.
+    const originalOrigin = resolvePreviousAppContext()
+    await vi.advanceTimersByTimeAsync(194)
+    sourceA.resolve(
+      createActiveApp({ bundleId: 'source.a', identifier: 'source.a', displayName: 'Source A' })
+    )
+    expect(await originalOrigin).toEqual({ prevApp: 'source.a', prevAppName: 'Source A' })
+
+    foregroundAppSnapshotStore.clear()
+    foregroundAppSnapshotStore.capture()
+    const nextOrigin = resolvePreviousAppContext()
+    await vi.advanceTimersByTimeAsync(240)
+    sourceB.resolve(
+      createActiveApp({ bundleId: 'source.b', identifier: 'source.b', displayName: 'Source B' })
+    )
+    expect(await nextOrigin).toEqual({ prevApp: 'source.b', prevAppName: 'Source B' })
+
+    foregroundAppSnapshotStore.clear()
+    getActiveAppMock.mockResolvedValue(createActiveApp({ bundleId: 'unrelated.live.source' }))
+    expect(
+      await withPreviousAppContext(await originalOrigin, async () => {
+        await Promise.resolve()
+        return await resolvePreviousAppContext()
+      })
+    ).toEqual({ prevApp: 'source.a', prevAppName: 'Source A' })
+    expect(
+      await withPreviousAppContext(await nextOrigin, async () => {
+        await Promise.resolve()
+        return await resolvePreviousAppContext()
+      })
+    ).toEqual({ prevApp: 'source.b', prevAppName: 'Source B' })
   })
 
   it('reports no foreground app when the answer is Touch itself', async () => {
@@ -158,12 +201,23 @@ describe('ContextProvider', () => {
 
     const context = await provider.getCurrentContext()
 
-    expect(context.time).toEqual({
-      hourOfDay: 12,
-      dayOfWeek: 1,
-      isWorkingHours: true,
-      timeSlot: 'afternoon'
-    })
+    const now = Date.now()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    expect(
+      buildRecommendationContextCandidates(
+        [
+          {
+            sourceId: 'app-provider',
+            itemId: 'yesterday-target',
+            sourceType: 'application',
+            timestamp: yesterday.getTime()
+          }
+        ],
+        context,
+        now
+      )
+    ).toEqual([])
     expect(context.clipboard).toBeUndefined()
     expect(context.foregroundApp).toBeUndefined()
     expect(context.systemState).toBeUndefined()
@@ -207,7 +261,7 @@ describe('ContextProvider', () => {
     })
   })
 
-  it('keeps only slow-moving, privacy-safe context in the cache key', () => {
+  it('keeps clipboard content and private system values out of the cache key', () => {
     const provider = new ContextProvider()
     const key = provider.generateCacheKey({
       time: {
@@ -238,26 +292,12 @@ describe('ContextProvider', () => {
       }
     })
 
-    expect(key).toBe('morning|workday|net:1')
-    // Volatile context must NOT key the cache — it is re-applied per request.
     expect(key).not.toContain('hashed_clipboard_only')
     expect(key).not.toContain('net_hash_only')
     expect(key).not.toContain('bat:')
     expect(key).not.toContain('loc_hash_only')
     expect(key).not.toContain('Asia/Shanghai')
     expect(key).not.toContain('Visual Studio Code')
-  })
-
-  it('collapses weekdays into a workday/weekend bucket', () => {
-    const provider = new ContextProvider()
-    const keyFor = (dayOfWeek: number): string =>
-      provider.generateCacheKey({
-        time: { hourOfDay: 9, dayOfWeek, isWorkingHours: true, timeSlot: 'morning' }
-      })
-
-    expect(keyFor(1)).toBe(keyFor(4))
-    expect(keyFor(0)).toBe(keyFor(6))
-    expect(keyFor(1)).not.toBe(keyFor(6))
   })
 })
 

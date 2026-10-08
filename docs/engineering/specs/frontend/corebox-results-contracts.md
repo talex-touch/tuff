@@ -54,6 +54,10 @@ Not repeated here:
 - Hidden keep-alive windows and continuous work:
   [Hook Guidelines](./hook-guidelines.md#coreapp-window-visibility-and-continuous-work).
 - Grid keyboard geometry: [Component Guidelines](./component-guidelines.md#grid-keyboard-geometry).
+- Empty recommendations use one pinned-first ranked sequence: first five in the 此刻常用 grid,
+  the rest in the 最近案例 list. Both headings are unchanged; all item kinds are eligible for
+  either presentation, global keyboard indices continue across the boundary, and file tiles use
+  the same selected-file preview/execute path as list rows. Position alone never claims a habit.
 - Not landed yet, so not specified: preview-card identity and border (R-F) and the R-P2 items
   (history panel, height measurement, preview placeholder) of `09-25-corebox-list-motion`.
 
@@ -213,9 +217,8 @@ const TILE_REFLOW_SETTLE_MS = 260         // revealActiveItemAfterReflow: nextTi
 - **No scroll against a viewport shorter than the row.** `effectiveHeight < itemBottom − itemTop`
   returns without scrolling: the window is collapsed to its header or still growing, and any scroll
   computed then buries the sections above the row once the window has grown.
-- **Row 0 scrolls to the top.** When focus is 0 and the row is above the viewport, scroll to 0, not
-  to the row's top: nothing focusable sits above row 0, only section titles and the habitual
-  guidance (which takes no focus), and they must come back with it.
+- **Row 0 scrolls to the top.** When focus is 0 and the row is above the viewport, scroll to 0,
+  not to the row's top: section titles above the first selectable item must come back with it.
 - **Only a re-wrap reveals.** `handleGridColumnsChange` stores the column count as before but calls
   `revealActiveItemAfterReflow` only when `res.value` is the same array it reported for last time —
   the same tiles re-wrapping (the preview pane squeezing the row). A grid mounting for new results

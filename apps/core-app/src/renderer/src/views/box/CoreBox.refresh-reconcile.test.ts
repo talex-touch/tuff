@@ -58,10 +58,6 @@ vi.mock('@talex-touch/utils/transport', () => {
   }
 })
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/local-ai-cli', () => ({
-  createLocalAiCliSdk: () => ({ getStatus: async () => ({ betaAvailable: false }) })
-}))
-
 vi.mock('~/components/render/addon/TuffItemAddon.vue', () => ({
   default: {
     name: 'TuffItemAddon',
@@ -164,7 +160,11 @@ vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useFocus', () => ({
-  useFocus: () => ({ focusInput: () => {}, focusWindowAndInput: async () => {} })
+  useFocus: () => ({
+    focusInput: () => {},
+    focusWindowAndInput: async () => {},
+    getSummonId: () => null
+  })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useKeyboard', () => ({

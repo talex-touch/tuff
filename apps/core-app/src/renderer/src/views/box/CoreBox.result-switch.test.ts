@@ -43,10 +43,6 @@ vi.mock('@talex-touch/utils/transport', () => ({
   })
 }))
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/local-ai-cli', () => ({
-  createLocalAiCliSdk: () => ({ getStatus: async () => ({ betaAvailable: false }) })
-}))
-
 vi.mock('~/components/render/addon/TuffItemAddon.vue', async () => {
   const { watch } = await vi.importActual<typeof Vue>('vue')
   return {
@@ -176,7 +172,11 @@ vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useFocus', () => ({
-  useFocus: () => ({ focusInput: () => {}, focusWindowAndInput: async () => {} })
+  useFocus: () => ({
+    focusInput: () => {},
+    focusWindowAndInput: async () => {},
+    getSummonId: () => null
+  })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useKeyboard', () => ({
@@ -587,6 +587,40 @@ describe('CoreBox preview pane', () => {
   }
 
   const closed = { compressed: false, type: 'none', item: 'none' }
+
+  it('previews a top-five file tile and keeps file selection coherent across the overflow-list boundary', async () => {
+    vi.useFakeTimers()
+    const results = [
+      fileItem('grid-file'),
+      item('app-1', 'App 1'),
+      item('app-2', 'App 2'),
+      item('app-3', 'App 3'),
+      item('app-4', 'App 4'),
+      fileItem('list-file')
+    ]
+    state.layout = {
+      mode: 'grid',
+      grid: { columns: 5 },
+      sections: [
+        { id: 'habitual', layout: 'grid', itemIds: results.slice(0, 5).map((entry) => entry.id) },
+        { id: 'proposed', layout: 'list', itemIds: results.slice(5).map((entry) => entry.id) }
+      ]
+    }
+    state.searchVal.value = ''
+    state.results.value = results
+    const coreBox = mountCoreBox()
+    await nextTick()
+
+    expect(paneState(coreBox)).toEqual({ compressed: true, type: 'preview', item: 'grid-file' })
+    await select(4)
+    await select(5)
+    expect(paneState(coreBox)).toEqual({ compressed: true, type: 'preview', item: 'list-file' })
+    expect(state.addonOpens).toBe(1)
+
+    await select(4)
+    coreBox.getComponent({ name: 'TuffItemAddon' }).vm.$emit('openItem')
+    expect(state.handleExecute.mock.calls.map(([entry]) => entry?.id)).toEqual(['list-file'])
+  })
 
   it('stays open across a mixed list and closes once the selection rests off files', async () => {
     vi.useFakeTimers()
