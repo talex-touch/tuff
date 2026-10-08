@@ -180,6 +180,18 @@ export class MetaOverlayManager {
       this.destroyRenderer()
     })
 
+    // A view that loads its page while it sits in the key window becomes that window's first
+    // responder. The prewarm builds this one in a CoreBox revealed and focused a moment earlier, so
+    // the hidden overlay took the keyboard: the input stayed the active element, yet no key reached
+    // it until the next summon (2026-10-07, the first summon after every launch). Nothing hidden
+    // may keep the keyboard, so it goes straight back to CoreBox, as `hide()` hands it back. A panel
+    // being shown keeps it: `flushPendingShow` sets `isVisible` before its own focus call.
+    ownedMetaView.webContents.on('focus', () => {
+      if (this.metaView !== ownedMetaView || this.isVisible) return
+      metaOverlayLog.debug('Hidden MetaOverlay took focus; returning it to CoreBox')
+      useAliveWebContents(this.getAliveParentWindow())?.focus()
+    })
+
     // Handle ESC key to close MetaOverlay. Not while an IME composes: its Esc cancels the
     // composition, and the renderer closes the panel on the next plain Esc. Not while the card can
     // go back a page either: that Esc is the overlay's, and takes the card back one page.
