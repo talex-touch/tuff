@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-10-03",
+  "updatedAt": "2026-10-07",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -176,16 +176,19 @@
       "classification": "behavioral-metadata",
       "owner": "SearchPrivacyDataOwner",
       "storageLocations": [
-        "primary/auxiliary database search detail tables including usage_execute_events",
+        "primary/auxiliary database search detail tables including usage_execute_events and app_foreground_activity",
         "in-memory search detail caches"
       ],
       "writers": [
-        "Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID"
+        "Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID",
+        "macOS foreground tracker: latest per-app frontmost instant from NSWorkspace activations, coalesced and gated by the recommendation switches"
       ],
-      "readers": ["Search ranking, local recommendation behavior windows, and diagnostics"],
+      "readers": [
+        "Search ranking, local recommendation behavior windows, recommendation recency and last-used evidence, and diagnostics"
+      ],
       "exportPolicy": "ordinary bounded allowlisted metadata export",
       "deletionPolicy": "typed category delete/retention; pins, source index, static embeddings, config, and task state survive",
-      "retentionPolicy": "user policy with strict cutoff and keyset paging; accepted execution dates expire with usage detail without lowering cumulative counts",
+      "retentionPolicy": "user policy with strict cutoff and keyset paging; accepted execution dates expire with usage detail without lowering cumulative counts; foreground last-active instants expire under the same cutoff",
       "rendererExposure": "search UI receives same-item counts and bounded recommendation facts, never other-source raw execution history; bounded Privacy export omits execution event IDs",
       "portable": false,
       "migrationStatus": "owner-bound",
@@ -193,6 +196,7 @@
         "apps/core-app/src/main/modules/privacy/owners/search-retention-owner.ts#symbol=createSearchRetentionOwner",
         "apps/core-app/src/main/db/utils.ts#symbol=recordExecuteTransaction",
         "apps/core-app/src/main/db/utils.ts#symbol=getUsageBehaviorBatch",
+        "apps/core-app/src/main/modules/system/foreground-app-activity.ts#symbol=ForegroundAppActivityTracker",
         "docs/engineering/reports/sensitive-data-lifecycle-301/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
       ]
     },

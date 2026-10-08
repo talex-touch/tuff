@@ -152,7 +152,8 @@ const EXPORT_RECORD_FIELDS: Readonly<
       'updatedAt'
     ]),
     'item-time-usage': new Set(['kind', 'updatedAt']),
-    'usage-trend': new Set(['kind', 'day', 'executeCount'])
+    'usage-trend': new Set(['kind', 'day', 'executeCount']),
+    'app-foreground-activity': new Set(['kind', 'lastActiveAt'])
   }),
   'intelligence-audit': Object.freeze({
     'intelligence-audit-metadata': new Set([

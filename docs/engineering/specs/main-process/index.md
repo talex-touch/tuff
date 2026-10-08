@@ -62,8 +62,9 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   `installedAt` extension (write-once via conflict-do-nothing, watch-now fallback),
   double-gate freshness predicate, novelty→frecency handoff, the single
   `RECOMMENDATION_SECTION_ORDER` source of truth (also the section render order),
-  verifiable-or-absent evidence rules, cache-invalidation read-guard vs cleanup
-  deletion, exposure slice tag rules.
+  verifiable-or-absent evidence rules, macOS foreground stays as a dated "last used"
+  fact (never a count), cache-invalidation read-guard vs cleanup deletion, exposure
+  slice tag rules.
 - [recommendation-source-registry-contracts.md](recommendation-source-registry-contracts.md) —
   how a source enters the empty-state grid: capability-vs-standalone registration
   (chosen by which db handle answers), push-in-only registration because

@@ -332,6 +332,24 @@ export const executeEvents = sqliteTable(
 )
 
 /**
+ * When each app was last the frontmost application, from OS activation events.
+ *
+ * Deliberately outside the accepted-execution ledger: switching to an app is evidence it was in
+ * use, not a launch, so this dates "last used" and the recency term but never a count, a habit or
+ * a time distribution. Keyed by the lower-cased bundle id the OS reports; one row per app.
+ */
+export const appForegroundActivity = sqliteTable(
+  'app_foreground_activity',
+  {
+    appKey: text('app_key').primaryKey(),
+    lastActiveAt: integer('last_active_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    lastActiveIdx: index('idx_app_foreground_activity_last_active').on(table.lastActiveAt)
+  })
+)
+
+/**
  * 按天聚合的执行统计，用于趋势计算，避免扫描 usage_logs。
  */
 export const usageTrendDaily = sqliteTable(

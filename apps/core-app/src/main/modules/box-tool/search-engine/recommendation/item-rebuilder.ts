@@ -177,7 +177,11 @@ export class ItemRebuilder {
       // The recall tag says what put the item in the pool; the *reason* it is shown with is
       // derived from dated evidence here, so a `frequent` recall carrying only a legacy lifetime
       // count cannot print a habit badge it cannot support (R9).
-      const reasonSource = resolveEvidenceBackedReason(scored.source, scored.behavior)
+      const reasonSource = resolveEvidenceBackedReason(
+        scored.source,
+        scored.behavior,
+        scored.lastActiveAt
+      )
       meta.recommendation = {
         score: scored.score,
         source: reasonSource,
@@ -260,6 +264,13 @@ export class ItemRebuilder {
       lastExecutedAt > 0
     ) {
       evidence.lastExecutedAt = lastExecutedAt
+    }
+
+    // A foreground stay the OS reported is its own dated fact, kept apart from the ledger's: the
+    // renderer dates "last used" by the later of the two, and neither ever stands in for a count.
+    const lastActiveAt = scored.lastActiveAt
+    if (typeof lastActiveAt === 'number' && Number.isFinite(lastActiveAt) && lastActiveAt > 0) {
+      evidence.lastActiveAt = lastActiveAt
     }
 
     const installedAt = scored.source === 'newly-installed' ? scored.firstSeenAt : undefined

@@ -555,7 +555,7 @@
     "recommendationContextTime": "推荐分析：时间",
     "recommendationContextTimeDesc": "根据小时、工作日和时间段调整推荐。",
     "recommendationContextForegroundApp": "推荐分析：前台应用",
-    "recommendationContextForegroundAppDesc": "根据当前正在使用的应用补充相关工具推荐。",
+    "recommendationContextForegroundAppDesc": "根据当前正在使用的应用补充相关工具推荐。在 macOS 上还会记录各应用最近一次在前台的时间，切换过去用的应用也算「最近用过」。",
     "recommendationContextClipboard": "推荐分析：剪贴板",
     "recommendationContextClipboardDesc": "根据剪贴板内容类型推荐编辑器、浏览器、文件工具等。",
     "recommendationContextSelection": "推荐分析：选中文本",

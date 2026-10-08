@@ -165,6 +165,16 @@ export function createSearchRetentionOwner(options: SearchRetentionOwnerOptions)
         "length(COALESCE(event_id, '')) + length(COALESCE(source_id, '')) + length(COALESCE(item_id, '')) + length(COALESCE(source_type, ''))"
     },
     {
+      client: options.coreClient,
+      label: 'app-foreground-activity',
+      // When each app was last in front. It dates the same "last used" claim as the ledger, so it
+      // expires under the same policy: keeping it would let a cleared history still say "used".
+      table: 'app_foreground_activity',
+      cutoffColumn: 'last_active_at',
+      cutoffUnit: 'seconds',
+      byteExpression: "length(COALESCE(app_key, ''))"
+    },
+    {
       client: options.auxiliaryClient,
       label: 'recommendation-cache',
       table: 'recommendation_cache',
@@ -496,6 +506,15 @@ export function createSearchRetentionOwner(options: SearchRetentionOwnerOptions)
           itemId: exportString(row.item_id, 256),
           sourceType: exportString(row.source_type, 256),
           executedAt: exportNumber(row.timestamp)
+        })
+      },
+      {
+        client: options.coreClient,
+        sql: `SELECT last_active_at
+                FROM app_foreground_activity ORDER BY last_active_at, rowid LIMIT ?`,
+        map: (row) => ({
+          kind: 'app-foreground-activity',
+          lastActiveAt: exportNumber(row.last_active_at)
         })
       }
     ]

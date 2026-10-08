@@ -144,6 +144,8 @@ export function resolvePeakHourRange(
  * - `recent` / `trending` / `time-based` all need at least one accepted execution whose reliable
  *   timestamp the ledger can date ({@link UsageBehaviorFacts.lastExecutedAt}). Legacy rows keep
  *   their lifetime count but carry no dated event, and must not wear any behavioural badge.
+ * - `recent` alone may instead rest on a foreground stay the OS reported (`lastActiveAt`): being in
+ *   front of an app is use. It is not an execution, so it can never back a count-based claim.
  * - `time-based` additionally keeps the same 10-execution / 3-day gate the time *score* uses.
  * - `trending` additionally requires at least two dated executions in 7 days and growth over the
  *   dated 30-day weekly average; one accepted action cannot validate an older inferred trend.
@@ -156,15 +158,16 @@ export function resolvePeakHourRange(
  */
 export function resolveEvidenceBackedReason(
   source: RecommendationSource,
-  behavior: UsageBehaviorFacts | undefined
+  behavior: UsageBehaviorFacts | undefined,
+  lastActiveAt?: number | null
 ): RecommendationSource {
   switch (source) {
     case 'frequent':
       return behavior && isFrequentEligible(behavior)
         ? 'frequent'
-        : resolveEvidenceBackedReason('recent', behavior)
+        : resolveEvidenceBackedReason('recent', behavior, lastActiveAt)
     case 'recent':
-      return behavior?.lastExecutedAt != null ? source : 'cold-start'
+      return behavior?.lastExecutedAt != null || lastActiveAt != null ? source : 'cold-start'
     case 'trending':
       return behavior &&
         behavior.lastExecutedAt != null &&
@@ -181,4 +184,19 @@ export function resolveEvidenceBackedReason(
     default:
       return source
   }
+}
+
+/**
+ * The later of the two dated "used" facts — an accepted execution and a foreground stay — or null
+ * when neither exists. Neither is ever substituted for the other's absence.
+ */
+export function resolveLastUsedAt(
+  lastExecutedAt: number | null | undefined,
+  lastActiveAt: number | null | undefined
+): number | null {
+  const executed = typeof lastExecutedAt === 'number' && Number.isFinite(lastExecutedAt)
+  const active = typeof lastActiveAt === 'number' && Number.isFinite(lastActiveAt)
+  if (executed && active) return Math.max(lastExecutedAt, lastActiveAt)
+  if (executed) return lastExecutedAt
+  return active ? lastActiveAt : null
 }

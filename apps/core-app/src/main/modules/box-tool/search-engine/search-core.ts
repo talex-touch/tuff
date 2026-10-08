@@ -17,7 +17,7 @@ import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transpo
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
+import { StorageList, TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -37,7 +37,16 @@ import { perfMonitor } from '../../../utils/perf-monitor'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
-import { OnboardingGateError, onboardingGate } from '../../storage'
+import {
+  getMainConfig,
+  isMainStorageReady,
+  OnboardingGateError,
+  onboardingGate
+} from '../../storage'
+import {
+  ForegroundAppActivityTracker,
+  subscribeDarwinForegroundActivations
+} from '../../system/foreground-app-activity'
 import { appProvider } from '../addon/apps/app-provider'
 import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
@@ -163,6 +172,19 @@ function hasConcreteActivationFeature(activation: IProviderActivate): boolean {
   return Boolean(meta && typeof meta === 'object' && 'feature' in meta && meta.feature)
 }
 
+/** Foreground recording follows the recommendation switches: 智能推荐 and 推荐分析：前台应用. */
+function isForegroundActivityTrackingEnabled(): boolean {
+  if (!isMainStorageReady()) return false
+  try {
+    const recommendation = getMainConfig(StorageList.APP_SETTING)?.recommendation
+    return (
+      recommendation?.enabled !== false && recommendation?.contextSources?.foregroundApp !== false
+    )
+  } catch {
+    return false
+  }
+}
+
 interface SearchPipelineStageDurations {
   parseDuration: number
   providerAggregationDuration: number
@@ -228,6 +250,8 @@ export class SearchEngineCore
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
+  /** Dates "last used" for apps reached by ⌘Tab or the Dock; see foreground-app-activity.ts. */
+  private foregroundActivity: ForegroundAppActivityTracker | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private indexingRuntime: IndexingRuntime | null = null
   private readonly pollingService = PollingService.getInstance()
@@ -505,6 +529,8 @@ export class SearchEngineCore
 
   public async preparePrivacyRetentionCleanup(): Promise<void> {
     await this.searchUsageService.flush()
+    // Pending foreground instants land first, so the cutoff applies to them like every other row.
+    await this.foregroundActivity?.flush()
   }
 
   /**
@@ -521,6 +547,8 @@ export class SearchEngineCore
     this.searchUsageService.invalidateRetentionCaches()
     this.cacheTelemetry.recordInvalidation('privacy-cleanup', this.searchCache.size)
     this.searchCache.clear()
+    // Clears the in-memory instants synchronously, then reloads only what survived the cutoff.
+    void this.foregroundActivity?.resetFromStore()
     this.recommendationEngine?.invalidateCache()
   }
 
@@ -572,6 +600,27 @@ export class SearchEngineCore
       committedAt: Date.now(),
       recommendationsInvalidated: true
     })
+  }
+
+  /**
+   * Starts the OS foreground tracker the recommendation engine dates "last used" with. Inert off
+   * macOS; nothing is recorded while either recommendation switch is off.
+   */
+  private startForegroundActivityTracking(dbUtils: DbUtils): ForegroundAppActivityTracker {
+    void this.foregroundActivity?.stop()
+    const tracker = new ForegroundAppActivityTracker({
+      subscribe: subscribeDarwinForegroundActivations,
+      isEnabled: isForegroundActivityTrackingEnabled
+    })
+    void tracker
+      .start({
+        load: (since) => dbUtils.getAppForegroundActivity(since),
+        save: (entries) => dbUtils.saveAppForegroundActivity(entries)
+      })
+      .catch((error) => {
+        searchEngineLog.warn('Failed to start foreground app activity tracking', { error })
+      })
+    return tracker
   }
 
   private emitIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
@@ -2225,12 +2274,14 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.searchUsageService.initialize(db)
     searchEngineLog.debug('Initializing RecommendationEngine')
+    instance.foregroundActivity = instance.startForegroundActivityTracking(instance.dbUtils)
     // Second handle: app-catalog reads (primary db) for rebuilding app
     // recommendation items — the app catalog does not move into the search
     // file under the split. Split off → both handles read the primary.
     instance.recommendationEngine = new RecommendationEngine(
       instance.dbUtils,
-      createDbUtils(db, auxDb)
+      createDbUtils(db, auxDb),
+      instance.foregroundActivity
     )
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
     instance.indexingRuntime = indexingRuntime
@@ -2691,6 +2742,10 @@ export class SearchEngineCore
       this.indexingRuntime = null
       this.indexWriterRouter = null
 
+      await this.foregroundActivity?.stop().catch((error) => {
+        searchEngineLog.error('Failed to flush foreground app activity on destroy', { error })
+      })
+      this.foregroundActivity = null
       await this.searchUsageService.flush().catch((error) => {
         searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
       })

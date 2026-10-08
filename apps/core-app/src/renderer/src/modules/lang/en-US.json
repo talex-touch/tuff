@@ -555,7 +555,7 @@
     "recommendationContextTime": "Time context",
     "recommendationContextTimeDesc": "Use local time slots to rank recommendations without sending data out.",
     "recommendationContextForegroundApp": "Foreground app context",
-    "recommendationContextForegroundAppDesc": "Prefer actions related to the app you are currently using.",
+    "recommendationContextForegroundAppDesc": "Prefer actions related to the app you are currently using. On macOS it also remembers when each app was last in front, so apps you switch to count as recently used.",
     "recommendationContextClipboard": "Clipboard context",
     "recommendationContextClipboardDesc": "Use clipboard type and lightweight content hints for local recommendations.",
     "recommendationContextSelection": "Selected text context",

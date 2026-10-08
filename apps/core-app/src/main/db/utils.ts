@@ -36,6 +36,9 @@ export interface RecommendationHistoryEvent {
 
 const DAY_MS = 86_400_000
 
+/** Safety net for the foreground-activity load: the table holds one row per app ever activated. */
+const APP_FOREGROUND_ACTIVITY_READ_LIMIT = 2000
+
 /** Local natural-day windows the behaviour reader reports. */
 export const BEHAVIOR_WINDOW_30_DAYS_MS = 30 * DAY_MS
 export const BEHAVIOR_WINDOW_7_DAYS_MS = 7 * DAY_MS
@@ -983,6 +986,55 @@ function createDbUtilsInternal(
         row.executeCount = lifetime?.executeCount ?? 0
         return row
       })
+    },
+
+    /**
+     * Per-app foreground instants the OS activation tracker persisted, newest first.
+     *
+     * Bounded by `since` and `limit`: the table holds one row per app ever activated, and the
+     * tracker only loads the window it may still claim as "last used".
+     */
+    async getAppForegroundActivity(
+      since: Date,
+      limit = APP_FOREGROUND_ACTIVITY_READ_LIMIT
+    ): Promise<Array<{ appKey: string; lastActiveAt: number }>> {
+      const rows = await db
+        .select({
+          appKey: schema.appForegroundActivity.appKey,
+          lastActiveAt: schema.appForegroundActivity.lastActiveAt
+        })
+        .from(schema.appForegroundActivity)
+        .where(gte(schema.appForegroundActivity.lastActiveAt, since))
+        .orderBy(desc(schema.appForegroundActivity.lastActiveAt))
+        .limit(limit)
+      return rows.map((row) => ({ appKey: row.appKey, lastActiveAt: row.lastActiveAt.getTime() }))
+    },
+
+    /**
+     * Upserts the tracker's latest per-app foreground instants in one statement.
+     *
+     * The tracker is the only writer and holds the latest value in memory, so a row is replaced
+     * rather than merged: `MAX()` would pin a future instant forever after a clock correction.
+     */
+    async saveAppForegroundActivity(
+      rows: Array<{ appKey: string; lastActiveAt: number }>
+    ): Promise<void> {
+      if (rows.length === 0) return
+      await scheduleDbWrite(
+        'usage.foreground.flush',
+        async () => {
+          await db
+            .insert(schema.appForegroundActivity)
+            .values(
+              rows.map((row) => ({ appKey: row.appKey, lastActiveAt: new Date(row.lastActiveAt) }))
+            )
+            .onConflictDoUpdate({
+              target: schema.appForegroundActivity.appKey,
+              set: { lastActiveAt: sql`excluded.last_active_at` }
+            })
+        },
+        { priority: 'background' }
+      )
     },
 
     /**

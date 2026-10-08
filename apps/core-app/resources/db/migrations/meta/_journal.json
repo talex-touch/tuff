@@ -379,6 +379,13 @@
       "when": 1787011200000,
       "tag": "0053_search_index_document_locators",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1787097600000,
+      "tag": "0054_app_foreground_activity",
+      "breakpoints": true
     }
   ]
 }

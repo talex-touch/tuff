@@ -57,6 +57,11 @@ export interface RecommendationEvidence {
   executeCount?: number
   /** Epoch ms of the last execution */
   lastExecutedAt?: number
+  /**
+   * Epoch ms the app was last the frontmost application (OS foreground tracking). Switching to an
+   * app is use, so "last used" reads the later of this and `lastExecutedAt`; it is never a count.
+   */
+  lastActiveAt?: number
   /** Epoch ms the item was installed */
   installedAt?: number
   /**

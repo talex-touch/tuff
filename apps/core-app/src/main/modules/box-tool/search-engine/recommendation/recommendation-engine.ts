@@ -12,6 +12,10 @@ import type {
 } from '@talex-touch/utils/core-box'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { DbUtils } from '../../../../db/utils'
+import type {
+  ForegroundActivityView,
+  ForegroundAppActivityReader
+} from '../../../system/foreground-app-activity'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { createHash } from 'node:crypto'
@@ -32,7 +36,10 @@ import {
 } from './recommendation-context-history'
 import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
 import { createFileRecommendationSource } from './file-recommendation-source'
-import { createAppRecommendationSource } from './app-recommendation-source'
+import {
+  APP_RECOMMENDATION_SOURCE_ID,
+  createAppRecommendationSource
+} from './app-recommendation-source'
 import {
   BUILTIN_CLIPBOARD_URL_SOURCE_ID,
   createSnapshotRecommendationSource,
@@ -47,7 +54,13 @@ import { describeRecommendation } from './recommendation-presentation'
 import { isRecommendableNewFile } from './file-recommendation-admission'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
-import { APP_IDENTITY_EXTENSION_KEY, resolveAppItemId } from '../../addon/apps/app-index-metadata'
+import {
+  APP_IDENTITY_EXTENSION_KEY,
+  resolveAppItemId,
+  resolveAppItemIds
+} from '../../addon/apps/app-index-metadata'
+import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
+import { isSelfAppIdentity } from '../../../system/self-app-identity'
 import {
   APP_DESTINATION_ITEM_IDS,
   APP_DESTINATION_PROVIDER_ID,
@@ -66,6 +79,7 @@ import {
   calculateTimeContribution,
   isSparseUsageBehaviorRow,
   resolveEvidenceBackedReason,
+  resolveLastUsedAt,
   usageBehaviorRowToFacts,
   toDayBucket,
   toErrorMeta,
@@ -454,11 +468,21 @@ function toLogMeta(meta?: Record<string, unknown>): LogMeta | undefined {
  * broken until it expires. Bump when the candidate set changes; rows from older versions simply
  * age out, which is the correct cost of the change being visible immediately.
  */
-const RECOMMENDATION_CACHE_SCHEMA_VERSION = 3
+const RECOMMENDATION_CACHE_SCHEMA_VERSION = 4
+
+/** How long the bundle-id index over the app catalog may be reused between invalidations. */
+const APP_ACTIVITY_CATALOG_TTL_MS = 10 * 60 * 1000
+/** Apps per pass that foreground use alone may nominate into the "recent" dimension. */
+const FOREGROUND_RECENT_CANDIDATE_LIMIT = 10
+/** `item_usage_stats.source_type` the app provider writes; read by `isAppSourceType`. */
+const APP_USAGE_SOURCE_TYPE = 'application'
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
+
+  /** Bundle id ↔ usage identity over the app catalog; dropped on every invalidation. */
+  private appActivityCatalog: AppActivityCatalog | null = null
 
   private recommendationCache: {
     items: TuffItem[]
@@ -539,10 +563,14 @@ export class RecommendationEngine {
    * the app catalog stays on the primary db under the search split, while the
    * split-aware `dbUtils` reads FILE rows from the worker-owned search file.
    * Defaults to `dbUtils` (split off → identical).
+   *
+   * `foregroundActivity` is the OS foreground tracker, so apps reached by ⌘Tab or the Dock count
+   * as used. Its instants date "last used" and the recency term; they never become counts.
    */
   constructor(
     private dbUtils: DbUtils,
-    private appCatalogDbUtils: DbUtils = dbUtils
+    private appCatalogDbUtils: DbUtils = dbUtils,
+    private readonly foregroundActivity: ForegroundAppActivityReader | null = null
   ) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder()
@@ -1408,6 +1436,7 @@ export class RecommendationEngine {
    */
   public invalidateCache(): void {
     this.recommendationCache = null
+    this.appActivityCatalog = null
     this.cacheGeneration += 1
     this.cacheInvalidatedAt = Date.now()
     // Cleanup only — the read guard above is what makes invalidation immediate.
@@ -2198,8 +2227,10 @@ export class RecommendationEngine {
       }))
     )
 
-    // 维度 2: 最近使用 (Top 20)
-    const recentItems = await this.getRecentItems(20)
+    // 维度 2: 最近使用 (Top 20) —— Touch 里执行过的，加上 ⌘Tab / Dock 切过去用过的应用。
+    // One read of the foreground tracker serves the whole pass, so recall and dating agree.
+    const foreground = this.foregroundActivity?.view() ?? null
+    const recentItems = await this.getRecentItems(20, foreground)
     recommendationLog.debug('Loaded recent candidates', {
       meta: { count: recentItems.length }
     })
@@ -2319,6 +2350,9 @@ export class RecommendationEngine {
     for (const item of deduplicated) {
       item.behavior = behaviorByKey.get(`${item.sourceId}:${item.itemId}`)
     }
+    // Foreground use is dated per app from the same view the recall used. It sits beside
+    // `behavior`, never inside it: a switch is not an execution.
+    if (foreground) await this.attachForegroundActivity(deduplicated, foreground)
 
     // The recall tag stays what recalled the item; the *reason* it is shown with is derived from
     // dated evidence in the rebuilder, so a `frequent` recall with a legacy lifetime count cannot
@@ -2518,8 +2552,14 @@ export class RecommendationEngine {
    * timestamp can predate the entry fix, so "recent" would be a reason the evidence cannot support
    * (R9). An item with only lifetime count and no accepted event in the window is dropped from this
    * dimension, not demoted below it.
+   *
+   * The other dated "used" fact is a foreground stay the OS reported: an app the user keeps reaching
+   * by ⌘Tab is recent even if Touch never launched it. Both lists merge on the later instant.
    */
-  private async getRecentItems(limit: number): Promise<ItemCandidate[]> {
+  private async getRecentItems(
+    limit: number,
+    foreground: ForegroundActivityView | null = null
+  ): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
 
     const stats = await db
@@ -2530,29 +2570,170 @@ export class RecommendationEngine {
       .limit(limit * 3)
       .all()
 
-    if (stats.length === 0) return []
+    const behaviorByKey =
+      stats.length > 0
+        ? await this.loadUsageBehaviorByKey(
+            stats.map((stat) => ({ sourceId: stat.sourceId, itemId: stat.itemId }))
+          )
+        : new Map<string, UsageBehaviorRow>()
 
-    const behaviorByKey = await this.loadUsageBehaviorByKey(
-      stats.map((stat) => ({ sourceId: stat.sourceId, itemId: stat.itemId }))
-    )
+    const ranked = new Map<string, { candidate: ItemCandidate; lastUsedAt: number }>()
+    for (const stat of stats) {
+      const key = `${stat.sourceId}:${stat.itemId}`
+      const lastExecutedAt = behaviorByKey.get(key)?.lastExecutedAt
+      if (lastExecutedAt == null) continue
+      ranked.set(key, {
+        candidate: {
+          sourceId: stat.sourceId,
+          itemId: stat.itemId,
+          sourceType: stat.sourceType,
+          usageStats: stat
+        },
+        lastUsedAt: lastExecutedAt
+      })
+    }
 
-    return stats
-      .map((stat) => ({
-        stat,
-        lastExecutedAt: behaviorByKey.get(`${stat.sourceId}:${stat.itemId}`)?.lastExecutedAt ?? null
-      }))
-      .filter(
-        (entry): entry is { stat: (typeof stats)[number]; lastExecutedAt: number } =>
-          entry.lastExecutedAt != null
-      )
-      .sort((left, right) => right.lastExecutedAt - left.lastExecutedAt)
+    for (const entry of await this.getForegroundRecentCandidates(foreground)) {
+      const key = `${entry.candidate.sourceId}:${entry.candidate.itemId}`
+      const known = ranked.get(key)
+      if (known) known.lastUsedAt = Math.max(known.lastUsedAt, entry.lastActiveAt)
+      else ranked.set(key, { candidate: entry.candidate, lastUsedAt: entry.lastActiveAt })
+    }
+
+    return [...ranked.values()]
+      .sort((left, right) => right.lastUsedAt - left.lastUsedAt)
       .slice(0, limit)
-      .map(({ stat }) => ({
-        sourceId: stat.sourceId,
-        itemId: stat.itemId,
-        sourceType: stat.sourceType,
-        usageStats: stat
-      }))
+      .map(({ candidate }) => candidate)
+  }
+
+  /**
+   * Apps the user was most recently in front of, as recall candidates under the app provider.
+   *
+   * Only catalog apps the app source will render are nominated — not Touch itself, not a helper —
+   * so a slot is never spent on an item the rebuild drops. An app without a usage row gets the empty
+   * placeholder: it has no history to show, only the foreground instant attached later.
+   */
+  private async getForegroundRecentCandidates(
+    foreground: ForegroundActivityView | null
+  ): Promise<Array<{ candidate: ItemCandidate; lastActiveAt: number }>> {
+    if (!foreground) return []
+    // Over-read: activations also come from apps outside the catalog (helpers, launchers).
+    const recent = foreground.recent(FOREGROUND_RECENT_CANDIDATE_LIMIT * 2)
+    if (recent.length === 0) return []
+
+    const catalog = await this.loadAppActivityCatalog()
+    const nominated: Array<{ itemId: string; lastActiveAt: number }> = []
+    for (const entry of recent) {
+      for (const itemId of catalog.itemIdsByAppKey.get(entry.appKey) ?? []) {
+        nominated.push({ itemId, lastActiveAt: entry.lastActiveAt })
+      }
+      if (nominated.length >= FOREGROUND_RECENT_CANDIDATE_LIMIT) break
+    }
+    if (nominated.length === 0) return []
+
+    const usageByKey = new Map<string, typeof schema.itemUsageStats.$inferSelect>()
+    try {
+      const rows = await this.dbUtils.getUsageStatsBatch(
+        nominated.map(({ itemId }) => ({ sourceId: APP_RECOMMENDATION_SOURCE_ID, itemId }))
+      )
+      for (const row of rows) usageByKey.set(`${row.sourceId}:${row.itemId}`, row)
+    } catch (error) {
+      recommendationLog.debug('Failed to load usage rows for foreground candidates', {
+        meta: toErrorMeta(error)
+      })
+    }
+
+    return nominated.map(({ itemId, lastActiveAt }) => ({
+      candidate: {
+        sourceId: APP_RECOMMENDATION_SOURCE_ID,
+        itemId,
+        sourceType: APP_USAGE_SOURCE_TYPE,
+        usageStats: usageByKey.get(`${APP_RECOMMENDATION_SOURCE_ID}:${itemId}`) ?? EMPTY_USAGE_STATS
+      },
+      lastActiveAt
+    }))
+  }
+
+  /** Dates every app candidate's last foreground stay, through one catalog index per pass. */
+  private async attachForegroundActivity(
+    candidates: CandidateItem[],
+    foreground: ForegroundActivityView
+  ): Promise<void> {
+    const apps = candidates.filter((candidate) => isAppSourceType(candidate.sourceType))
+    if (apps.length === 0) return
+
+    const catalog = await this.loadAppActivityCatalog()
+    for (const candidate of apps) {
+      const appKey = catalog.appKeyByItemId.get(candidate.itemId)
+      if (!appKey) continue
+      const lastActiveAt = foreground.lastActiveAt(appKey)
+      if (lastActiveAt !== null) candidate.lastActiveAt = lastActiveAt
+    }
+  }
+
+  /**
+   * The OS names an app by bundle id; usage rows name it by `appIdentity || path || bundleId`. This
+   * indexes the catalog both ways. Two indexed reads over the app rows, reused until the next
+   * invalidation or {@link APP_ACTIVITY_CATALOG_TTL_MS}; a failed read is not cached.
+   */
+  private async loadAppActivityCatalog(): Promise<AppActivityCatalog> {
+    const cached = this.appActivityCatalog
+    if (cached && Date.now() - cached.builtAt < APP_ACTIVITY_CATALOG_TTL_MS) return cached
+
+    const catalog: AppActivityCatalog = {
+      builtAt: Date.now(),
+      appKeyByItemId: new Map(),
+      itemIdsByAppKey: new Map()
+    }
+    try {
+      const apps = await this.appCatalogDbUtils.getFilesByType('app')
+      const extensions =
+        apps.length > 0
+          ? await this.appCatalogDbUtils.getFileExtensionsByFileIds(
+              apps.map((app) => app.id),
+              [APP_IDENTITY_EXTENSION_KEY, 'bundleId']
+            )
+          : []
+      const byFileId = new Map<number, Record<string, string>>()
+      for (const extension of extensions) {
+        if (typeof extension.value !== 'string') continue
+        const entry = byFileId.get(extension.fileId) ?? {}
+        entry[extension.key] = extension.value
+        byFileId.set(extension.fileId, entry)
+      }
+
+      for (const app of apps) {
+        const entry = byFileId.get(app.id)
+        const bundleId = entry?.['bundleId']?.trim()
+        if (!bundleId) continue
+        const appKey = bundleId.toLowerCase()
+        const identity = {
+          appIdentity: entry?.[APP_IDENTITY_EXTENSION_KEY],
+          bundleId,
+          path: app.path
+        }
+        for (const itemId of resolveAppItemIds(identity)) {
+          catalog.appKeyByItemId.set(itemId, appKey)
+        }
+        if (
+          isSelfAppIdentity({ executablePath: app.path, bundleId }) ||
+          matchNoisySystemAppRule({ path: app.path, bundleId, name: app.displayName || app.name })
+        ) {
+          continue
+        }
+        const itemIds = catalog.itemIdsByAppKey.get(appKey) ?? []
+        itemIds.push(resolveAppItemId(identity))
+        catalog.itemIdsByAppKey.set(appKey, itemIds)
+      }
+    } catch (error) {
+      recommendationLog.debug('Failed to index the app catalog for foreground activity', {
+        meta: toErrorMeta(error)
+      })
+      return cached ?? catalog
+    }
+
+    this.appActivityCatalog = catalog
+    return catalog
   }
 
   /**
@@ -3044,13 +3225,12 @@ export class RecommendationEngine {
 
     // 行为分：只由有可靠日期证据的真实执行构成，0..80；时间偏好最多 20；最近使用加成也是同一
     // 自动族的一项。三者之和封顶 BEHAVIOR_SCORE_MAX（100），所以「自动行为」整体真的落在
-    // 0..100，而不是 base+time 到 100 之后还追加一份独立 recency（R5）。recency 只承认有可靠事件
-    // 日期的执行：旧的 stored lastExecuted 可能来自升级前「实际启动前就记数」的入口，用它会让
-    // 「最近使用」的理由站不住脚（R9）。没有可靠日期就不给这份加成，也不该被标成「最近」。
-    const recencyBoost =
-      candidate.behavior?.lastExecutedAt != null
-        ? this.calculateRecencyBoost(new Date(candidate.behavior.lastExecutedAt))
-        : 0
+    // 0..100，而不是 base+time 到 100 之后还追加一份独立 recency（R5）。recency 只承认有可靠日期
+    // 的「用过」：账本里的执行，或系统报告的前台停留（⌘Tab / Dock 切过去也算用过），取较晚者。
+    // 旧的 stored lastExecuted 可能来自升级前「实际启动前就记数」的入口，用它会让「最近使用」的
+    // 理由站不住脚（R9）。没有可靠日期就不给这份加成，也不该被标成「最近」。
+    const lastUsedAt = resolveLastUsedAt(candidate.behavior?.lastExecutedAt, candidate.lastActiveAt)
+    const recencyBoost = lastUsedAt !== null ? this.calculateRecencyBoost(new Date(lastUsedAt)) : 0
     const timeContribution =
       candidate.behavior && context.timeAvailable !== false
         ? calculateTimeContribution(candidate.behavior, context.time)
@@ -4041,6 +4221,20 @@ interface ItemCandidate {
    * channel is the same regardless of what appeared.
    */
   firstSeenAt?: number
+  /**
+   * Epoch ms the app was last frontmost, from the OS foreground tracker. Dates "last used" and the
+   * recency term only — a switch is not an execution, so it never reaches `behavior` or a count.
+   */
+  lastActiveAt?: number
+}
+
+/** The app catalog indexed by the bundle id the OS reports. */
+interface AppActivityCatalog {
+  builtAt: number
+  /** Every identity form a usage row may carry for an app → its lower-cased bundle id. */
+  appKeyByItemId: Map<string, string>
+  /** Lower-cased bundle id → canonical usage identities of the rows the app source renders. */
+  itemIdsByAppKey: Map<string, string[]>
 }
 
 /**

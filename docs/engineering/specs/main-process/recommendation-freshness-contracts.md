@@ -67,12 +67,12 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   row deletion runs with `dropPolicy: 'drop'` — it is cleanup, never the mechanism.
   Index-commit trigger fires only for `providerIds` containing `APP_INDEXED_SOURCE_ID`.
 - **Candidate-shape cache versions.** Persisted keys begin with `reco-v<schemaVersion>` (currently
-  3), followed by local date/hour/minute, time-source availability, source-app identity, semantic
+  4), followed by local date/hour/minute, time-source availability, source-app identity, semantic
   settings and pin signature. A different app or clock window must not reuse learned-scene recall.
   Clipboard, selection and transient system-state effects remain per-request and idempotent.
 - **Evidence must be verifiable or absent.** `meta.recommendation.evidence` carries only
-  facts the DB actually holds (`executeCount`, `lastExecutedAt`, `installedAt`, `peakHourRange`,
-  `yesterday`, `sourceApp`). Counts and dates are validated and omitted when
+  facts the DB actually holds (`executeCount`, `lastExecutedAt`, `lastActiveAt`, `installedAt`,
+  `peakHourRange`, `yesterday`, `sourceApp`). Counts and dates are validated and omitted when
   unavailable; an all-empty evidence object is dropped entirely so the renderer prints
   nothing rather than a placeholder. The dated fields come from the batch behaviour read
   (`scored.behavior`), never from the stored aggregate: a legacy row's `lastExecuted` can
@@ -85,10 +85,11 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   `usage_logs` by `event_id`; legacy logs alone cannot confer a dated recommendation.
 - **The automatic score is one bounded budget, including recency.** The engine sums
   `calculateBehaviorScore(behavior)` (0..80 saturated) + `calculateTimeContribution(behavior, time)`
-  (0..20, evidence-gated) + `calculateRecencyBoost(lastExecutedAt)` and clamps the total with
+  (0..20, evidence-gated) + `calculateRecencyBoost(lastUsedAt)` and clamps the total with
   `Math.min(BEHAVIOR_SCORE_MAX, …)` (`BEHAVIOR_SCORE_MAX = 100`) before multiplying by
   `BEHAVIOR_SCORE_WEIGHT`. The recency term is at most 10 points (`10 * exp(-0.1 * hoursSince)`) and
-  only uses `behavior.lastExecutedAt`, so a reliable date is required. It used to be worth 100, which
+  uses `resolveLastUsedAt(behavior.lastExecutedAt, lastActiveAt)` — the later of the ledger's accepted
+  execution and the OS-reported foreground stay — so a reliable date is still required. It used to be worth 100, which
   let one recent execution alone saturate the automatic budget and drown sustained habits; the cap is
   now 10. Comparing an item with a real run against one without must not let recency alone reach 100.
   A fully established habit's 100 lands at the same 1e6 scale as the old `executeCount * 1e4`
@@ -122,7 +123,29 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   A main-owned source promise travels
   with the retained search trace; execution uses async-local context so hide or a later activation
   cannot change the original action's source. Explicit `previousApp: null` stays unknown. Clipboard
-  apply captures before automation hides. No OS-wide activity monitoring or new history table is added.
+  apply captures before automation hides. The snapshot path adds no polling; the only OS-wide
+  signal is the foreground tracker below.
+- **Foreground use dates "last used", never a count (2026-10-07).** On macOS,
+  `ForegroundAppActivityTracker` (`modules/system/foreground-app-activity.ts`) subscribes to
+  `NSWorkspaceDidActivateApplicationNotification` through
+  `systemPreferences.subscribeWorkspaceNotification` — event-driven, no polling, no child process, no
+  Accessibility/Automation permission (the AppleScript lookup in `active-app.ts` must not be polled
+  for this). Electron delivers `NSWorkspaceApplicationKey` as the NSRunningApplication description
+  (`<… (com.apple.finder - 872) …>`); only a reverse-DNS bundle id is accepted, lower-cased. A stay
+  is credited when it ends (the next activation, lock-screen/suspend) and only if it lasted
+  ≥1s; the app still in front reads as "now"; Touch's own activations (bundle id or `process.pid`)
+  end the previous stay without starting one. Only the latest instant per app is kept, in memory
+  and in `app_foreground_activity` (`app_key` = bundle id, `last_active_at` seconds), flushed at
+  most every 5 minutes and on destroy. Recording and reading both stop while 智能推荐 or
+  推荐分析：前台应用 is off. The table is a `search-history` privacy target with the same cutoff,
+  and the tracker reloads from the store after a cleanup. The engine maps catalog usage
+  identities to bundle ids through one cached catalog index (dropped by `invalidateCache()`),
+  attaches `lastActiveAt` beside — never inside — `behavior`, lets foreground-recent catalog apps
+  (self and noisy helpers excluded) join the `recent` recall, and accepts `lastActiveAt` as the
+  only non-ledger proof of the `recent` reason. Counts, frequent/trending/time-based gates,
+  distributions, transitions, source-app and yesterday stay ledger-only. Scores are cached at most
+  per minute and source app (the key above), so a switch is not an invalidation trigger. Windows
+  and Linux have no activation source yet and keep the ledger-only behaviour.
 - **Default settings are suggestions, not fabricated habits.** An empty query always nominates
   three searchable destinations (`settings-general`, `settings-appearance`, `settings-channels`),
   even with sparse history. They use `source: 'cold-start'` and empty usage statistics. Real usage
