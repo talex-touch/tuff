@@ -7,7 +7,7 @@ export type ContextChunkTone = IconChipTone
 export interface ContextChunkSource {
   /** Display name, e.g. `Dairy Onboarding SOP.pdf`. */
   name: string
-  /** Short file-type badge, e.g. `PDF`. Omit to drop the badge plate. */
+  /** Short file-type badge, e.g. `PDF`; four or more characters (`JSON`) widen the plate. Omit to drop the badge plate. */
   badge?: string
   /** Badge fill. @default 'neutral' */
   tone?: ContextChunkTone

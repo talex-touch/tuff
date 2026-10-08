@@ -17,6 +17,7 @@ verified: true
 code: |
   <template>
     <TxIconChip :size="14" tone="red" label="PDF" />
+    <TxIconChip :size="14" tone="ink" label="JSON" />
     <TxIconChip :size="18" tone="accent" variant="soft">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
@@ -30,6 +31,7 @@ code: |
 ### Best Practices
 
 - Keep file-type badges at 14px and let `tone` carry the format (red for PDF, green for CSV), consistently across the app.
+- Pass four-letter formats (`JSON`, `YAML`) as `label` like any other; the plate widens. Do not shrink `fontSize` to squeeze them into the square.
 - Use 32px with `tone="ink"` for initial plates — it inverts correctly across light and dark, so do not hard-code a colour.
 - Reach for `TxDotIndicator` when you need a status dot; do not shrink `TxIconChip` to 6px to fake one.
 - Avoid overriding `radius` without a design reason: the derived ladder is the visual language itself.
@@ -45,7 +47,7 @@ code: |
 | `tone` | `'neutral' \| 'ink' \| 'accent' \| 'green' \| 'orange' \| 'red'` | `'neutral'` | Colour role. |
 | `variant` | `'solid' \| 'soft'` | `'solid'` | `solid` fills with the tone; `soft` uses its tint with a 30% hairline ring. |
 | `shape` | `'square' \| 'circle'` | `'square'` | Plate shape. |
-| `label` | `string` | - | Short text such as `PDF`. The default slot wins over it. |
+| `label` | `string` | - | Short text such as `PDF`. Past three characters (`JSON`) the plate widens; see below. The default slot wins over it. |
 | `fontSize` | `number` | - | Overrides the derived font size. |
 | `ariaLabel` | `string` | - | Promotes the chip to `role="img"` with that name. Left unset, the chip is `aria-hidden`. |
 
@@ -65,13 +67,14 @@ Neither `radius` nor `fontSize` has to be passed — both derive from `size`:
 
 - Radius is `round(size / 4)`: 14→4, 18→5, 32→8, matching all three real Beautiful UI usages.
 - Font size is `max(7, round(size * 0.4))`: 14→7 (three uppercase letters must fit) and 32→13.
+- Width equals `size` until `label` runs past three characters; then it follows the text, never narrower than `size`, with `size × 0.2` of padding on each side (about 2.8px on a 14px badge). Height, radius and font size do not change. Default-slot content is not measured by this rule.
 
 Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `radius` rather than fighting it.
 
 ## Overview
 
 - The chip is `aria-hidden="true"` by default: it nearly always duplicates adjacent text (a `PDF` badge beside `report.pdf`). Pass `ariaLabel` only when the chip is the sole carrier of the information.
-- The `soft` hairline ring is a `box-shadow`, not a `border`, so it takes no layout space and the chip's box always equals `size`.
+- The `soft` hairline ring is a `box-shadow`, not a `border`, so it takes no layout space and the chip stays `size` tall (a long label only widens it).
 - `neutral` looks the same under both variants (`inset` fill plus hairline ring); it was never a fill colour.
 
 ## Technologies

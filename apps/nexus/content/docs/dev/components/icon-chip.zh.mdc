@@ -17,6 +17,7 @@ verified: true
 code: |
   <template>
     <TxIconChip :size="14" tone="red" label="PDF" />
+    <TxIconChip :size="14" tone="ink" label="JSON" />
     <TxIconChip :size="18" tone="accent" variant="soft">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
@@ -30,6 +31,7 @@ code: |
 ### 最佳实践
 
 - 文件类型角标固定用 14px，配 `tone` 区分格式（PDF 红、CSV 绿等），并保持全站一致。
+- 四个字母以上的格式（`JSON`、`YAML`）照常传 `label`，角标会横向变宽；不要为了塞进方块去调小 `fontSize`。
 - 首字母方块用 32px + `tone="ink"`，深浅主题会自动反色，不要写死颜色。
 - 需要状态点而不是角标时用 `TxDotIndicator`，不要把 `TxIconChip` 缩到 6px 当圆点使。
 - 除非确有设计依据，不要覆盖 `radius`：推导出的阶梯就是这套视觉语言本身。
@@ -45,7 +47,7 @@ code: |
 | `tone` | `'neutral' \| 'ink' \| 'accent' \| 'green' \| 'orange' \| 'red'` | `'neutral'` | 配色。 |
 | `variant` | `'solid' \| 'soft'` | `'solid'` | `solid` 用整块填充；`soft` 用同色浅底 + 30% 发丝环。 |
 | `shape` | `'square' \| 'circle'` | `'square'` | 形状。 |
-| `label` | `string` | - | 短文本，如 `PDF`。默认插槽优先级更高。 |
+| `label` | `string` | - | 短文本，如 `PDF`。超过三个字符（如 `JSON`）时角标横向变宽，见下文。默认插槽优先级更高。 |
 | `fontSize` | `number` | - | 覆盖推导出的字号。 |
 | `ariaLabel` | `string` | - | 传入后角标变为 `role="img"` 并带上该名称；不传则 `aria-hidden`。 |
 
@@ -65,13 +67,14 @@ code: |
 
 - 圆角 = `round(size / 4)`，即 14→4、18→5、32→8，与 Beautiful UI 的三处实际用法逐一吻合。
 - 字号 = `max(7, round(size * 0.4))`，即 14→7（要放下三个大写字母）、32→13。
+- 宽度默认等于 `size`。`label` 超过三个字符时改为随文字增长：最小仍是 `size`，左右各留 `size × 0.2` 的内边距（14px 角标约 2.8px），高度、圆角与字号不变。默认插槽的内容不参与这条规则。
 
 需要偏离时显式传 `radius` / `fontSize` 覆盖即可；`shape="circle"` 会忽略 `radius`，不与之相争。
 
 ## 概述
 
 - 默认 `aria-hidden="true"`：角标几乎总是与相邻文本重复（`report.pdf` 旁边的 `PDF` 角标）。只有当它是唯一信息载体时才传 `ariaLabel`。
-- `soft` 的发丝环走 `box-shadow` 而非 `border`，因此不占布局，角标的盒尺寸始终等于 `size`。
+- `soft` 的发丝环走 `box-shadow` 而非 `border`，因此不占布局，角标的高度始终等于 `size`（长标签只放宽宽度）。
 - `neutral` 在两种 `variant` 下观感一致（`inset` 底 + 发丝环），它本来就不是填充色。
 
 ## 技术实现
