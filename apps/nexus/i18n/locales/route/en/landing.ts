@@ -284,9 +284,11 @@ export default {
       },
     },
       plugins: {
-        eyebrow: 'Plugins Center',
-        headline: 'Extend Tuff to your tools.',
-        subheadline: 'Connect Tuff to your tools and extend their capabilities.',
+        eyebrow: 'Plugins',
+        headline: 'One plugin, one more trick.',
+        subheadline: 'Pick a few from the store. They work the moment they are in.',
+        prev: 'Previous',
+        next: 'Next',
         extensions: {
           notion: {
             name: 'Notion',
@@ -311,6 +313,42 @@ export default {
           spotify: {
             name: 'Spotify',
             description: 'Score your focus sessions with adaptive soundtracks.',
+          },
+          json: {
+            name: 'JSON Formatter',
+            description: 'Messy JSON, tidied in one go.',
+            summon: 'json',
+            label: 'Line drawing of three stacked sieves; the one the pointer picks rises',
+          },
+          browser: {
+            name: 'Browser Open',
+            description: 'Paste a link, press Enter.',
+            summon: 'url',
+            label: 'Line drawing of a router whose antennas lean toward the pointer',
+          },
+          vscodeProjects: {
+            name: 'VS Code Projects',
+            description: 'Recent projects, one Enter away.',
+            summon: 'vscode',
+            label: 'Line drawing of a laptop whose lid follows the pointer',
+          },
+          image: {
+            name: 'Image',
+            description: 'Resize, compress, convert.',
+            summon: 'image',
+            label: 'Line drawing of a loupe the pointer drags across a sheet',
+          },
+          hosts: {
+            name: 'Hosts',
+            description: 'See the change before it lands.',
+            summon: 'hosts',
+            label: 'Line drawing of a padlock whose shackle springs open as the pointer nears',
+          },
+          aiSessions: {
+            name: 'AI Sessions',
+            description: 'Search local AI sessions, copy a redacted reference.',
+            summon: 'ai sessions',
+            label: 'Line drawing of a commit graph; the node under the pointer rises',
           },
         },
       },

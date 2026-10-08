@@ -283,9 +283,11 @@ export default {
         },
       },
       plugins: {
-        eyebrow: '插件中心',
-        headline: '扩展 Tuff 到你的工具',
-        subheadline: '将 Tuff 连接到你的工具，扩展其功能。',
+        eyebrow: '插件',
+        headline: '装一个，多一招。',
+        subheadline: '去插件商店挑几招，装上就能用。',
+        prev: '上一张',
+        next: '下一张',
         extensions: {
           notion: {
             name: 'Notion',
@@ -310,6 +312,42 @@ export default {
           spotify: {
             name: 'Spotify',
             description: '根据你的专注会话，自适应播放音乐。',
+          },
+          json: {
+            name: 'JSON 格式化',
+            description: '乱成一团的 JSON，一键排好。',
+            summon: 'json',
+            label: '三层筛网的线稿，指针选中的那层会升起来',
+          },
+          browser: {
+            name: '浏览器打开',
+            description: '网址贴进来，回车就开。',
+            summon: 'url',
+            label: '一台路由器的线稿，天线会朝指针倾斜',
+          },
+          vscodeProjects: {
+            name: 'VS Code 项目',
+            description: '最近的项目，回车直接打开。',
+            summon: 'vscode',
+            label: '一台笔记本电脑的线稿，屏幕随指针高度开合',
+          },
+          image: {
+            name: '图片处理',
+            description: '改尺寸、压体积、换格式。',
+            summon: 'image',
+            label: '一只放大镜的线稿，随指针在纸面上移动',
+          },
+          hosts: {
+            name: 'Hosts 配置',
+            description: '改 hosts 之前，先看一眼。',
+            summon: 'hosts',
+            label: '一把挂锁的线稿，指针靠近时锁扣会弹开',
+          },
+          aiSessions: {
+            name: 'AI 会话',
+            description: '搜本地 AI 会话，复制脱敏引用。',
+            summon: 'ai 会话',
+            label: '一张提交历史图的线稿，指针下的节点会升起来',
           },
         },
       },
