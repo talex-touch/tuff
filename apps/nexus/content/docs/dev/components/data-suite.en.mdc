@@ -19,3 +19,13 @@ Every cell is a live, interactive component; click the name in the top-left corn
 ## Overview
 
 The Data suite is where numbers become a picture, and it gathers everything Tuffex ships for it. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays; **Charts** is the full chart family behind the `@talex-touch/tuffex/charts` subpath — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency. Both live in the main package and import through the `@talex-touch/tuffex/pro` entry, or through `@talex-touch/tuffex/charts` for the family as a whole. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have. It animates on ECharts' default timings — 1000ms enter, 500ms data update, 300ms state switch — and under `prefers-reduced-motion: reduce` every animation lands on its final frame instead.
+
+### Mono charts
+
+[MonoChart](./mono-chart.en.mdc) adds the thirty original monochrome chart variants and the source GitHub activity presentation. Supply the actual series, categories, points, matrices, candles, ranges or graph data required by the selected variant. Native selectors update its controlled series mode, layout, curve, period and line visibility. Import `TxMonoChart` from `@talex-touch/tuffex/charts`; it lives inside the existing charts module.
+
+### Dither charts in Motion
+
+[DitherChart](./dither-chart.en.mdc) belongs to [Motion](./motion-suite.en.mdc) because its catalog combines chart structure with animated dither presentation. It uses the same existing charts package boundary and `--tx-chart-*` tokens. No standalone chart package is added.
+
+These additions have `since: 0.6.3` in the current source, included in Tuff beta testing and not yet independently published to npm.

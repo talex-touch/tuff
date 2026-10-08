@@ -5,7 +5,7 @@ import type { StreamAtom as Atom, StreamRun as Run, StreamUnit as Unit } from '.
 import type { StreamState, StreamTextEmits, StreamTextProps } from './types'
 import { computed, createTextVNode, h, onBeforeUnmount, ref, watch } from 'vue'
 import TxInlineCitation from '../../inline-citation/src/TxInlineCitation.vue'
-import { useReducedMotion } from '../../liquid/src/use-reduced-motion'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { buildStreamModel } from './model'
 import { streamRevealDuration } from './presets'
 import TxStreamCaret from './TxStreamCaret.vue'

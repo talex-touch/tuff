@@ -108,8 +108,14 @@ defineExpose({
   display: inline-block;
   position: relative;
   will-change: opacity, transform;
+  white-space: pre;
   transform: none;
   opacity: 1;
+}
+
+[tx-morph-exiting] {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /*

@@ -1,0 +1,108 @@
+---
+title: Motion Suite
+description: "Buttons, card spreads, 3D carousels, loaders, dither charts and input-driven motion"
+category: MotionSuite
+status: beta
+since: 0.6.3
+tags: [motion, interaction, animation, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+Each cell below renders its real component with caller-provided content or data. Hover, focus, click, drag or use the visible controls to try it. The reset button remounts only that specimen, including its local model and playback state; the component name opens the full variant gallery and API.
+
+::DocsComponentsGallery{suite="motion"}
+::
+
+### Best Practices
+
+- Drive values, items, status and navigation from your application. A visual press, loading cycle or submit request does not establish that a business operation succeeded.
+- Keep repeated or decorative motion out of live regions. Provide one readable text value and native keyboard controls.
+- Respect reduced motion and visibility. The shared activity gate suspends continuous work when the specimen is hidden, deactivated or unmounted.
+- Use the existing `TxTextMorph` engine for changing text values and the shared spring for motion; these families do not add another text-diff or physics engine.
+
+## Overview
+
+Motion is one of the eight documentation suites. It groups twelve component families while installation remains split into the existing Base, Pro and AI barrels. These Motion components import from `@talex-touch/tuffex/pro`, except DitherChart, which also has the existing `@talex-touch/tuffex/charts` entry. Source version 0.6.3 is included in Tuff beta testing and has not been independently published to npm.
+
+### Buttons
+
+[MotionButton](./motion-button.en.mdc) preserves the named button treatments and source presets. Labels, icons, menu items, links and active state come from the caller. Use its native button or anchor behavior rather than treating visual completion as a successful operation.
+
+### Card Spreads
+
+[CardSpread](./card-spread.en.mdc) arranges the caller's cards into arcs, fans, linear spreads, stamped layouts, cascades and scattered groups. Its selected index and expanded state remain controlled; keyboard selection follows the same items as pointer selection.
+
+### 3D Carousels
+
+[Carousel3D](./carousel-3d.en.mdc) displays caller-provided cards along arc, CoverFlow and time-machine paths, including the monochrome variants. [FlipBook](./flip-book.en.mdc) turns supplied pages with configurable paper, crease and image treatment. Both expose real navigation instead of a static illustration.
+
+### Loaders
+
+[MotionLoader](./motion-loader.en.mdc) renders the independent geometric structures and rhythms from the source loader catalog. The caller owns loading state and accessible text; choosing a loader never creates a simulated business completion.
+
+### Dither Charts
+
+[DitherChart](./dither-chart.en.mdc) renders supplied series, nodes and cells with pixel, ordered and SVG pattern treatments. Period, selected series and filters change the actual chart inputs. It lives in the existing charts package boundary and uses `--tx-chart-*` tokens. For monochrome charts without the dither treatment, open [MonoChart](./mono-chart.en.mdc) in Data.
+
+### Text
+
+[MotionText](./motion-text.en.mdc) separates text presentation from changing text values. The source character, word, paragraph, typing, blur, reveal and 3D effects keep the original readable text; media-between-text and focus treatments accept caller content.
+
+### Physics
+
+[PhysicsMotion](./physics-motion.en.mdc) retains the source geometries and their hover, click, loop or manual triggers. Replay starts a new presentation while visibility and reduced-motion handling prevent hidden continuous work.
+
+### Hover, Cursor & Scroll
+
+[Motion](./motion.en.mdc) covers entrances, card hover, tilt, magnetic attraction, cursors, spotlights and scroll-linked presentation. [MotionDock](./motion-dock.en.mdc) magnifies and reorders caller-provided items, returning the actual new order. Scroll-linked variants can target the caller's scrolling container.
+
+### Toggles
+
+[MotionToggle](./motion-toggle.en.mdc) binds each toggle treatment to the caller's model, options and counts. Pointer and keyboard activation update the same controlled value; appearance is not a separate source of state.
+
+### Transitions
+
+[MotionTransition](./motion-transition.en.mdc) changes keyed content through doors, masks, waves, perspective stages and curtains. Inline, card, modal and overlay modes share controlled content identity, visibility and replay behavior.
+
+## API Reference
+
+### Imports
+
+```ts
+import {
+  TxCardSpread,
+  TxCarousel3D,
+  TxFlipBook,
+  TxMotion,
+  TxMotionButton,
+  TxMotionDock,
+  TxMotionLoader,
+  TxMotionText,
+  TxMotionToggle,
+  TxMotionTransition,
+  TxPhysicsMotion,
+} from '@talex-touch/tuffex/pro'
+import { TxDitherChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/base.css'
+```
+
+The `suite="motion"` key above is a documentation grouping; there is no fourth installation suite barrel. `@talex-touch/tuffex/motion` is the legal single-component subpath for `TxMotion`. For manual component imports, follow the on-demand stylesheet instructions on [Installation](./installation.en.mdc) and each component's API page.
+
+### Props
+
+| Overview component | Prop | Value | Behavior |
+| --- | --- | --- | --- |
+| `DocsComponentsGallery` | `suite` | `motion` | Renders only the Motion band, with twelve live specimens and per-specimen reset controls. |
+
+### Related Suites
+
+- [Data](./data-suite.en.mdc): MonoChart, the existing chart family and compact visualization.
+- [Pro](./pro-suite.en.mdc): MotionForm, MotionControl and MotionMetric, alongside existing effects and primitives.
+- [Concepts](./index.en.mdc): installation, theming, accessibility and the full component index.
+
+## Technologies
+
+The sidebar, overview and hub use the shared `docs-suites.ts` taxonomy. The recategorization script assigns its categories to component frontmatter; `SECTION_ORDER` supplies stable page ordering. Gallery reset uses `DocsGallerySpecimen`, and every new specimen owns its model locally so reset restarts its actual interaction. Source adaptations retain Amicro's MIT attribution and source-file Apache-2.0 notices; preserved Lucide glyph data retains ISC and applicable Feather-MIT notices without a React or Lucide runtime dependency. Shared visibility, reduced-motion and spring behavior belong to TuffEx.

@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, realpathSync, readdirSync, readFileSync } from 'node:fs'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
+import { fileURLToPath } from 'node:url'
 
 function isLegalCssComment(text) {
   const normalized = text.trim()
@@ -39,6 +40,18 @@ const componentEntries = Object.fromEntries(
     .map(dirent => [`${dirent.name}/index`, `./src/${dirent.name}/index.ts`])
 )
 
+// Shared utilities live outside preserveModulesRoot. Keep their module paths
+// package-relative instead of shipping the absolute build-worktree directory.
+const utilsSourceRoot = realpathSync(fileURLToPath(new URL('../utils/', import.meta.url))).replaceAll('\\', '/')
+function componentModuleFileName(chunk) {
+  const id = chunk.facadeModuleId?.replaceAll('\\', '/')
+  if (id?.startsWith(`${utilsSourceRoot}/`)) {
+    const name = id.slice(utilsSourceRoot.length + 1).replace(/\.[cm]?[jt]sx?$/, '')
+    return `utils/internal/${name}.js`
+  }
+  return '[name].js'
+}
+
 export default defineConfig({
   css: {
     postcss: {
@@ -74,7 +87,7 @@ export default defineConfig({
           exports: 'named',
           format: 'es',
           dir: '../../dist/es',
-          entryFileNames: '[name].js',
+          entryFileNames: componentModuleFileName,
           preserveModules: true,
           preserveModulesRoot: 'src',
         },
@@ -82,7 +95,7 @@ export default defineConfig({
           exports: 'named',
           format: 'cjs',
           dir: '../../dist/lib',
-          entryFileNames: '[name].js',
+          entryFileNames: componentModuleFileName,
           preserveModules: true,
           preserveModulesRoot: 'src',
         },

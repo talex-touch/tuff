@@ -51,10 +51,12 @@ import GalleryStreamText from './gallery/GalleryStreamText.vue'
 import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
 import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
 import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
+import type { DocsSuiteKey } from '~/utils/docs-suites'
+import GalleryAmicroSpecimen from './gallery/GalleryAmicroSpecimen.vue'
 
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
-const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' | 'flow' }>()
+const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
 
 const { locale } = useI18n()
 
@@ -2763,6 +2765,48 @@ async function copyInstall() {
 
     <div v-if="props.suite === 'pro'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-form')">
+          {{ cellLabel('MotionForm', '动效表单') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-form" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-control')">
+          {{ cellLabel('MotionControl', '复合控件') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-control" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-metric')">
+          {{ cellLabel('MotionMetric', '复合指标') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-metric" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
           {{ cellLabel('VersionCapsule', '版本胶囊') }}
         </NuxtLink>
@@ -4305,6 +4349,20 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('mono-chart')">
+          {{ cellLabel('MonoChart', '单色图表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="mono-chart" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
           {{ cellLabel('DiffTable', '差异表') }}
         </NuxtLink>
@@ -4369,5 +4427,175 @@ async function copyInstall() {
         </div>
       </section>
     </div>
+
+    <div v-if="props.suite === 'motion'" class="docs-gallery__grid">
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-button')">
+          {{ cellLabel('MotionButton', '动效按钮') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-button" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('card-spread')">
+          {{ cellLabel('CardSpread', '卡片展开') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="card-spread" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('carousel-3d')">
+          {{ cellLabel('Carousel3D', '三维轮播') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="carousel-3d" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('flip-book')">
+          {{ cellLabel('FlipBook', '翻页书') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="flip-book" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-loader')">
+          {{ cellLabel('MotionLoader', '加载动效') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-loader" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('dither-chart')">
+          {{ cellLabel('DitherChart', '抖动图表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="dither-chart" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-text')">
+          {{ cellLabel('MotionText', '文字动效') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-text" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('physics-motion')">
+          {{ cellLabel('PhysicsMotion', '物理动效') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="physics-motion" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-dock')">
+          {{ cellLabel('MotionDock', '动效 Dock') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-dock" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion')">
+          {{ cellLabel('Motion', '悬停与滚动') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-toggle')">
+          {{ cellLabel('MotionToggle', '动效切换') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-toggle" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('motion-transition')">
+          {{ cellLabel('MotionTransition', '动效转场') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryAmicroSpecimen kind="motion-transition" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+</div>
   </div>
 </template>

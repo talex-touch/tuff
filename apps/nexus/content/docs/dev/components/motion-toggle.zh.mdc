@@ -1,0 +1,116 @@
+---
+title: "MotionToggle 动态开关"
+description: "12 种受控开关与操作样式，保留真实模型、图标反馈和调用方计数。"
+category: MotionToggles
+status: beta
+since: 0.6.3
+tags: [motion, toggle, action, accessibility]
+verified: false
+---
+
+## 用法
+
+### 受控操作
+
+每个目录变体都使用实际受控模型。喜欢和转发操作还发出可撤销的计数变化。演示展示全部 12 个目录 ID 与 registry 的 `classic-toggle`，并提供外部重置、尺寸、禁用操作、调用方标签面板和可选触觉结果。
+
+:::TuffDemoWrapper{demo="MotionToggleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionToggle } from '@talex-touch/tuffex/motion-toggle'
+  const liked = ref(false)
+  const likes = ref(42)
+  const period = ref('daily')
+  const periods = [
+    { value: 'daily', label: '每日' },
+    { value: 'weekly', label: '每周' },
+    { value: 'monthly', label: '每月' },
+  ]
+  </script>
+
+  <template>
+    <TxMotionToggle v-model="liked" v-model:count="likes" variant="t-like" label="喜欢" />
+    <output>{{ liked }} · {{ likes }}</output>
+    <TxMotionToggle v-model="period" variant="t-pill" :options="periods" label="统计周期" />
+    <output>{{ period }}</output>
+  </template>
+---
+:::
+
+### 命名变体
+
+| ID | 独立反馈 |
+| --- | --- |
+| `t-bounce` | 实际状态变化后，滑块移动并产生两次超调回弹。 |
+| `t-solid` | 高对比实心轨道，滑块以 150ms 移动。 |
+| `t-rect` | 方形轨道与滑块，spring stiffness 为 500，damping 为 30。 |
+| `t-circle` | 较大的圆形胶囊，spring stiffness 为 450，damping 为 25。 |
+| `t-bookmark` | 收藏图标填充、spring 弹出，以及调用方的开启/关闭标签。 |
+| `t-like` | 心形填充、spring 突出、径向粒子和可撤销计数。 |
+| `t-dislike` | 点踩高亮，图标短暂旋转 −15°。 |
+| `t-repost` | 图标旋转 180°，计数可撤销。 |
+| `t-pill` | 调用方选项、测量后的滑动 spring 指示器，以及键盘选择。 |
+| `t-morph` | 锁定/解锁图标切换，滑块旋转 180°。 |
+| `t-check` | 滑块移动后绘制 SVG 勾选路径。 |
+| `t-theme` | 太阳/月亮切换，滑块旋转 360°，背景随状态改变。组件不修改文档主题。 |
+| `classic-toggle` | Registry 额外胶囊，`md` 尺寸为 64×36px，移动距离为 28px，spring stiffness 为 500，damping 为 30。 |
+
+### 最佳实践
+
+- 开关和操作按钮使用 boolean `v-model`；`t-pill` 使用 string/number 模型，并传入匹配的 `options`。
+- 始终提供 `label`。图标开关使用带 switch 语义的原生 `button`；操作按钮使用 `aria-pressed`。Enter 和 Space 走同一条原生点击路径。
+- 喜欢/转发需要展示计数时，使用 `v-model:count`。启用时加一，撤销时减一。初值和持久化由调用方负责，不用定时器假装远程保存成功。
+- `t-pill` 提供 tablist、游走焦点、方向键与 Home/End，并跳过禁用选项。调用方渲染面板时，把对应 `panelId` 传给选项；面板内容与数据请求不放进本组件。
+- `enabled=false` 只停止运动，不禁止模型操作。阻止激活应使用 `disabled`。
+- 减少动态效果时，模型继续更新，滑块、图标与勾选立即到达最终状态，不播放装饰粒子。失活时取消运动资源。
+- 触觉反馈需显式启用。浏览器接受请求不等于设备已震动；不支持的桌面浏览器按实际能力报告。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `modelValue` | `boolean \| string \| number` | `false` | 受控状态；`t-pill` 匹配 string/number 选项值。 |
+| `variant` | `MotionToggleVariant` | `'t-bounce'` | 上表全部 ID，导出为 `MOTION_TOGGLE_VARIANTS`。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 组件尺寸；`md` 保留来源几何。 |
+| `disabled` | `boolean` | `false` | 阻止指针与键盘激活。 |
+| `label` | `string` | 必填 | 无障碍名称，未提供开启/关闭标签时也作为操作文字。 |
+| `onLabel` | `string` | `label` | 已启用操作文字。 |
+| `offLabel` | `string` | `label` | 未启用操作文字。 |
+| `count` | `number` | — | 调用方的喜欢/转发计数；提供后启用 `update:count`。 |
+| `options` | `MotionToggleOption[]` | `[]` | `{ value: string \| number, label: string, disabled?: boolean, panelId?: string }`，不写死业务标签。 |
+| `enabled` | `boolean` | `true` | 独立控制动画，不影响模型操作。 |
+| `haptic` | `false \| MotionHapticType` | `false` | 可选 light/medium/heavy/success/warning/error 触觉请求。 |
+| `transition` | `Transition` | 各来源的共用 spring | 由既有 Liquid spring 编译器覆盖滑块和标签指示器转场。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `update:modelValue` | `MotionToggleValue` | 下一个 boolean 状态或选项值。 |
+| `update:count` | `number` | 喜欢/转发启用时加一、撤销时减一后的计数；仅在提供 count 时发出。 |
+| `change` | `MotionToggleValue` | 实际激活后的新模型，重复选择同一选项不发事件。 |
+| `activate` | `MotionToggleActivation` | `{ value, previous, variant, count? }`，不表示远程操作成功。 |
+| `haptic` | `MotionHapticResult` | 显式请求后的 `{ supported, accepted }`；accepted 仅反映浏览器返回值。 |
+
+### 插槽
+
+| 名称 | 参数 | 说明 |
+| --- | --- | --- |
+| `default` | `{ active: boolean, count?: number }` | 替换操作按钮文字或计数，不改变模型操作。 |
+| `icon` | `{ active: boolean }` | 替换收藏、心形、点踩、转发，或锁定/主题图标。 |
+| `thumb` | `{ active: boolean }` | 没有锁定、主题或勾选图标的开关滑块内容。 |
+| `option` | `{ option, index, active }` | 调用方标签内容；原生标签按钮内应保留非交互内容。 |
+
+## 概述
+
+所有操作都受控。外部变化更新滑块、图标和选项状态，组件不存第二份业务模型。开关使用 `role="switch"` 与 `aria-checked`；操作按钮使用原生按压语义；标签通过 `aria-selected` 和调用方提供的面板关系表达选择。喜欢/转发计数只由实际状态切换推导。
+
+内部 IconSwap 与 `TxMotion` 共用，保留按 key 的缩放、模糊和透明度转场。spring 参数由既有 Liquid 引擎解析。失活时取消 WAAPI 反馈与粒子工作；标签测量观察器和尺寸监听遵循生命周期。触觉请求复用既有震动工具，不保证 macOS 桌面设备已震动。
+
+## 技术实现
+
+来源为 Amicro 的 MIT `AnimatedToggle`、12 个 toggle 目录条目、IconSwap，以及 registry 的 classic-toggle。Copyright (c) 2026 SYED  SUBHAN UDDIN。原生 Vue/浏览器控件替代 React/Motion。上游 double-bounce 的 CSS 类没有配套样式，本实现提供实际两次回弹关键帧，不保留无效果类名。最终集成检查与真实浏览器验收由 Build 负责人执行，本页不宣称已通过验收。

@@ -53,6 +53,7 @@ export type {
   SeriesExtent,
   StringAccessor,
 } from './src/core/types'
+export * from './src/dither-chart'
 export { TxGrid as TxChartGrid } from './src/grid'
 export type { GridProps as ChartGridProps, TxGridInstance as TxChartGridInstance } from './src/grid'
 
@@ -147,6 +148,7 @@ export type {
   MapStyle,
   RoamState,
 } from './src/maps'
+export * from './src/mono-chart'
 
 export {
   CHART_DARK_COLORS,

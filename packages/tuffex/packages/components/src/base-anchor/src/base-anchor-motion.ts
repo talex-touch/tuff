@@ -45,6 +45,8 @@ interface BaseAnchorMotionOptions {
   isOpen: ComputedRef<boolean>
   isCurrentRun: (runId: number) => boolean
   setMounted: (value: boolean) => void
+  /** The leave visuals have settled; the host may park a retained floating root. */
+  onCloseSettled: () => void
   setPanelSurfaceMoving: (value: boolean) => void
   pulsePanelSurfaceMoving: (duration?: number) => void
 
@@ -788,6 +790,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       options.setMounted(false)
     options.setPanelSurfaceMoving(false)
     tl = null
+    options.onCloseSettled()
   }
 
   /**
@@ -1145,15 +1148,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   }
 
   async function animateClose(currentRunId: number) {
+    clearTimeline()
     const clip = options.clipRef.value
     const content = options.contentRef.value
     if (!clip || !content || !hasWindow()) {
-      options.setMounted(false)
-      options.setPanelSurfaceMoving(false)
+      finishClose(currentRunId)
       return
     }
-
-    clearTimeline()
 
     const animation = resolvedAnimation.value
     const type = effectiveCloseAnimationType.value

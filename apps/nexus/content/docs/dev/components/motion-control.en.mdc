@@ -1,0 +1,194 @@
+---
+title: MotionControl
+description: Source-mapped UIkit controls with real models, commands, and caller-owned results
+category: Advanced
+status: beta
+since: 0.6.3
+tags: [motion, controls, uikit, pro]
+syncStatus: reviewed
+---
+
+`TxMotionControl` preserves the 21 Amicro UIkit catalog entries and all 13 additional exports. It composes `TxSelect`, `TxTabs`, `TxDropdownMenu`, `TxContextMenu`, `TxTooltip`, `TxPagination`, and `TxTextMorph`; it does not replace those controls with decorative buttons.
+
+## Usage
+
+### Full source gallery
+
+Every source ability below has its own interactive specimen. Filter by its upstream export name, operate it, and inspect its model and emitted event. Options and commands are demo data supplied by the caller, not defaults embedded in the component.
+
+:::TuffDemoWrapper{demo="MotionControlDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionControl } from '@talex-touch/tuffex/motion-control'
+
+  const saved = ref(false)
+  const category = ref('design')
+  const options = [
+    { value: 'design', label: 'Design' },
+    { value: 'dev', label: 'Development' },
+  ]
+  </script>
+
+  <template>
+    <TxMotionControl v-model="saved" variant="yui-save-pill" />
+    <TxMotionControl
+      v-model="category"
+      variant="yui-category-select"
+      :options="options"
+      label="Category"
+    />
+  </template>
+---
+:::
+
+### Controlled operations
+
+- Selectors, filters, dates, tabs, steps, and commands emit `update:modelValue`, `change`, and `select`. `value` is the stable option key; labels can change without losing selection.
+- `yui-multi-tab-close` takes `v-model:items`. Closing the selected tab chooses the nearest remaining enabled tab; closing any other tab keeps the current selection. The leaving tab retains its measured position for its 200ms shrink/fade, without delaying the emitted model change. Close controls sit beside the tab navigation in a separate action strip, avoiding an interactive button nested inside a tab button. `minItems`, `maxItems`, and `closable` control the boundaries. Add uses `newItem`, or emits `add` so the host creates its own item; it never fabricates a business label or ID.
+- Save, follow, theme, and PiP controls use a boolean model. PiP emits the desired UI state; it does not claim to invoke a video platform API. The application can connect `action` to its own implementation.
+- `back-forward-nav` emits `navigate` and respects `canBack` / `canForward`; it does not read or mutate global browser history.
+- Counters change by `step` and stop at `min` / `max`. Up/Down work on the counter controls, and Home/End select the configured boundaries. Pagination and dots use one-based page numbers, with `count` pages.
+- Download emits `download` only. The host supplies `status` and `progress`; the component never starts a timer and reports a successful download. The demo generates a real file and requests a browser download, but deliberately does not claim saved-file completion. Its status selector is an explicit visual input, not a transfer result.
+- Tooltips appear on hover and focus using the existing anchor-delay, Escape, and outside-click contracts. The frequency selector expands into real tabs and restores focus to its trigger when collapsed.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `variant` | `MotionControlVariant` | `yui-category-select` | One of the 34 exact mappings below; the 21 catalog IDs are retained unchanged. |
+| `modelValue` | `string \| number \| boolean` | Variant-dependent | Controlled value. Without it, interactive state stays local; selection defaults to the first enabled supplied choice. |
+| `options` | `MotionControlItem[]` | `[]` | Selector, tab, date, filter, or step choices. Takes precedence over `items`, except closeable tabs always use `items`. |
+| `items` | `MotionControlItem[]` | `[]` | Menu commands or closeable tabs. Bind `v-model:items` to persist closing and prepared additions. |
+| `count` | `number` | `3` for step bar/stepper, otherwise `4` | Segment count, page count, or generated step count when no options are provided. |
+| `min` | `number` | `0` | Minimum counter value and uncontrolled numeric starting value. |
+| `max` | `number` | — | Optional counter upper bound. |
+| `step` | `number` | `1` | Counter increment or radial-progress increment. Set `25` for the source radial ring's quarter-progress interaction. |
+| `disabled` | `boolean` | `false` | Prevents selection, commands, changes, closing, additions, and download requests. |
+| `size` | `xs \| sm \| md \| lg` | `md` | Token-driven control height and inset. |
+| `status` | `idle \| loading \| success \| error` | `idle` | Host-owned download state. `loading` blocks another request; `success` alone shows the checkmark. |
+| `progress` | `number` | `0` | Host-owned download percentage, displayed while loading. |
+| `open` | `boolean` | — | Optional controlled menu, tooltip, or frequency expansion. Category selection retains `TxSelect`'s own opening contract. |
+| `animated` | `boolean` | `true` | Enable motion only while mounted, visible, active, and allowed by reduced-motion preferences. |
+| `label` | `string` | `''` | Visible action label or accessible group/trigger name, depending on the variant. |
+| `tooltip` | `string` | `''` | Tooltip/glance text; hover-link falls back to `href`. |
+| `href` | `string` | `''` | Real hover-link destination. Without it the trigger is a command button emitting `action`. |
+| `target` | `_self \| _blank` | `_self` | Link target; blank targets receive `noopener noreferrer`. |
+| `newItem` | `MotionControlItem` | — | Optional caller-prepared new tab; duplicate values cannot be added. |
+| `maxItems` | `number` | — | Optional tab count ceiling. |
+| `minItems` | `number` | `0` | Minimum retained tab count. Use `1` to preserve the upstream last-tab restriction. |
+| `canBack` | `boolean` | `true` | Enables the back navigation request. |
+| `canForward` | `boolean` | `true` | Enables the forward navigation request. |
+| `labels` | `Partial<MotionControlLabels>` | English labels | Override every user-visible default without a library message catalog. |
+
+`MotionControlItem` contains `value: string | number`, `label: string`, optional `disabled`, `icon` (text glyph), `description`, `closable`, `danger`, and `children`. Menu children render real recursive dropdown/context submenus. `description` is passed through to `TxSelect`; tab and menu bodies can be supplied through slots. Keep keys unique, including after string conversion for the tab primitive.
+
+### Events
+
+| Event | Payload | When |
+| --- | --- | --- |
+| `update:modelValue` | `MotionControlValue` | A permitted operation changes the value. |
+| `change` | `MotionControlValue` | Same model change; does not duplicate unchanged selections. |
+| `select` | `MotionControlItem` | A supplied option, step, tab, or command is selected, including a repeated selection. |
+| `update:items` | `MotionControlItem[]` | A tab is closed or a supplied `newItem` is added. |
+| `update:open` | `boolean` | A menu, tooltip, or frequency expansion changes. |
+| `close` | `MotionControlItem` | The permitted tab close occurs. |
+| `add` | `MotionControlItem \| undefined` | A prepared tab is added, or the host is asked to create one. |
+| `action` | `{ variant, value, item? }` | An action/link/hint is invoked, a toggle changes, a menu command runs, or frequency selection is confirmed. |
+| `navigate` | `'back' \| 'forward'` | A permitted directional navigation request. |
+| `download` | — | A real request the application must handle; it is not a completion event. |
+
+Menu commands use the primitives' `select` event, including their pre-close confirmation rhythm and immediate reduced-motion path; business handlers do not run ahead of that contract.
+
+### Slots
+
+| Slot | Scope | Purpose |
+| --- | --- | --- |
+| `default` | — | Hover-link, magnetic-action, or morph-action label content. |
+| `item` | `{ item, active }` | Tab labels and progress-step content. Keep it non-interactive inside the native tab/step button. |
+| `icon` | `{ item, active }` | Supplied tab icon content; set an item's `icon` to enable the icon region. |
+| `panel` | `{ item, active? }` | Content belonging to a tab; without this slot the empty tab panel does not reserve visual space. |
+| `menu` | `{ items, select }` | Replace menu contents while retaining the root primitive. Invoke `select(item)` for caller-owned command events. |
+| `preview` | — | Tooltip/glance preview body, including its status information. |
+| `value` | `{ value, item }` | Append a caller-rendered value, count, or selected item. |
+
+### Labels
+
+`MOTION_CONTROL_DEFAULT_LABELS` is exported. Its keys/defaults are:
+
+```ts
+{
+  control: 'Motion control', choose: 'Choose an option', frequency: 'Frequency',
+  confirm: 'Confirm selection', add: 'Add tab', close: 'Close',
+  increase: 'Increase', decrease: 'Decrease', back: 'Back', forward: 'Forward',
+  actions: 'Actions', details: 'View details', action: 'Action', launch: 'Launch',
+  link: 'Open link', preview: 'Preview', help: 'Help', download: 'Download',
+  downloading: 'Downloading', downloaded: 'Downloaded', downloadError: 'Download failed',
+  pip: 'Enter picture in picture', pipOff: 'Exit picture in picture',
+  save: 'Save item', saved: 'Saved', follow: 'Follow', following: 'Following',
+  grid: 'Grid view', list: 'List view', stack: 'Stack view', light: 'Light mode',
+  dark: 'Dark mode', progress: 'Progress', page: 'Page',
+}
+```
+
+The final demo specimen adapts the save pill's caller-owned boolean and labels to a Like action with a real count. It does not invent an upstream `LikeButton` export.
+
+## Source mapping
+
+Source is pinned to [Amicro commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a). Paths below are relative to `src/components/css-animations/`. The public `MOTION_CONTROL_SOURCES` catalog carries the full path, source range, upstream export, and model domain; `MOTION_CONTROL_VARIANTS` carries the variant IDs.
+
+### Catalog variants
+
+| Variant | Upstream export | Source | Preserved structure and operation |
+| --- | --- | --- | --- |
+| `yui-category-select` | `CategorySelect` | `yui-components/YuiUiKit1.tsx:9–63` | Rounded select, rotating chevron, downward expanding menu; selects caller options. |
+| `yui-filter-tag-pill` | `FilterTagPill` | `yui-components/UiKitTrios.tsx:10–38` | Segmented filter with travelling pill; selects option key. |
+| `yui-submenu-flyout` | `SubmenuFlyout` | `yui-components/UiKitTrios.tsx:41–74` | Sideways expanding flyout; command/submenu selection emits real events. |
+| `yui-hover-link` | `HoverLinkCard` | `yui-components/YuiUiKit1.tsx:66–107` | Lifted link pill and floating URL; follows `href` or emits action. |
+| `yui-magnetic-icon-btn` | `MagneticIconButton` | `yui-components/UiKitTrios.tsx:81–94` | Horizontal tactile arrow-button travel; emits action. |
+| `yui-morph-action-pill` | `MorphActionPill` | `yui-components/UiKitTrios.tsx:97–124` | Pill reveals its launch indicator on hover/focus; invokes action. |
+| `yui-plus-minus-toggle` | `PlusMinusToggle` | `yui-components/YuiUiKit1.tsx:110–142` | Two separate square controls with press bounce; selects `plus` / `minus`. |
+| `yui-light-dark-toggle` | `LightDarkMorphToggle` | `yui-components/YuiUiKit1.tsx:145–169` | Sun/moon rotation and stateful surface; boolean model. |
+| `yui-ab-tabs` | `SegmentedABTabs` | `yui-components/YuiUiKit2.tsx:202–238` | Wide segmented tabs with sliding active pill; supplied A/B choices. |
+| `yui-progress-stepper` | `ProgressStepper` | `yui-components/YuiUiKit1.tsx:172–216` | Connected step nodes, filled track, expanded current step; option key or generated one-based step. |
+| `yui-segmented-arc-meter` | `SegmentedArcMeter` | `yui-components/RedesignedUiTrios.tsx:10–30` | Vertical discrete bars with scale and percentage; numeric level `0..count`. |
+| `yui-segmented-step-bar` | `SegmentedStepBar` | `yui-components/UiKitTrios.tsx:159–174` | Horizontal battery segments; click cycles numeric level. |
+| `yui-multi-tab-close` | `MultiTabCloseBar` | `yui-components/YuiUiKit1.tsx:219–287` | Real tabs with measured shrink/fade exits, independent close controls, and add request; models selection and item list. |
+| `yui-date-position` | `DatePositionSelector` | `yui-components/YuiUiKit1.tsx:290–328` | Consecutive caller date choices with rounded sliding highlight. |
+| `yui-stepper-dots` | `SegmentedStepperDots` | `yui-components/RedesignedUiTrios.tsx:35–61` | Selected dot expands to a pill; one-based page value. |
+| `yui-context-menu` | `ContextMenuEditDelete` | `yui-components/YuiUiKit2.tsx:9–56` | Scale/fade action popup, semantic edit/delete or supplied commands. |
+| `yui-glance-preview` | `CardGlancePreview` | `yui-components/RedesignedUiTrios.tsx:66–100` | Floating glance content and status dot, hover/focus preview. |
+| `yui-download-icons` | `DownloadAnimatedIcons` | `yui-components/YuiUiKit2.tsx:99–138` | Bouncing arrow while host reports loading; check only on host success. |
+| `yui-wheel-counter` | `VerticalWheelCounter` | `yui-components/RedesignedUiTrios.tsx:105–143` | Vertical numeric morph and stacked up/down controls; bounded number. |
+| `yui-perspective-layout` | `PerspectiveLayoutSwitcher` | `yui-components/RedesignedUiTrios.tsx:148–170` | Grid/stack icon entrance rotates and scales; `grid` / `stack` model. |
+| `yui-save-pill` | `BookmarkSavePill` | `yui-components/RedesignedUiTrios.tsx:175–193` | Bookmark/check state pill with changing label; boolean model. |
+
+### Additional exports
+
+| Variant | Upstream export | Source | Preserved structure and operation |
+| --- | --- | --- | --- |
+| `frequency-selector` | `FrequencySelector` | `FrequencySelector.tsx:12–126` | Blurred label, expanded horizontal option pills, separate confirm/collapse control. |
+| `tab-bar` | `TabBar` | `TabBar.tsx:16–72` | Icon tabs whose selected label expands; supplied stable tab keys. |
+| `radial-progress-ring` | `RadialProgressRing` | `yui-components/UiKitTrios.tsx:131–156` | SVG stroke-offset ring and percentage; click advances numeric progress by `step`. |
+| `pagination-numbered-bubble` | `PaginationNumberedBubble` | `yui-components/YuiUiKit1.tsx:331–366` | Selected numbered bubble lifts above its row; real one-based pagination. |
+| `back-forward-nav` | `BackForwardNav` | `yui-components/YuiUiKit1.tsx:369–397` | Separate directional icon controls; emits constrained navigation. |
+| `question-tooltip` | `QuestionTooltip` | `yui-components/YuiUiKit2.tsx:59–97` | Circular question trigger and anchored hint with hover/focus semantics. |
+| `pip-mode-icons` | `PipModeIcons` | `yui-components/YuiUiKit2.tsx:141–168` | Layer icon with entering inset mini-window; desired PiP boolean and action. |
+| `simple-plus-minus-btn` | `SimplePlusMinusBtn` | `yui-components/YuiUiKit2.tsx:171–199` | Two independent small buttons, no embedded display; real bounded count. |
+| `quantity-counter` | `QuantityCounter` | `yui-components/YuiUiKit2.tsx:241–274` | Horizontal round pill with minus, animated number, plus. |
+| `list-column-toggle` | `ListColumnToggle` | `yui-components/YuiUiKit2.tsx:277–301` | Grid/list icon rotation entrance and changing label; `grid` / `list`. |
+| `follow-check-button` | `FollowCheckButton` | `yui-components/YuiUiKit2.tsx:304–322` | Plus/check follow pill with real boolean toggle. |
+| `menu-dots-expand` | `MenuDotsExpand` | `yui-components/YuiUiKit2.tsx:325–347` | Dots action trigger opening real supplied commands rather than a no-op pulse timer. |
+| `compact-mode-switch` | `CompactModeSwitch` | `yui-components/YuiUiKit2.tsx:350–386` | Icon-only grid/list segmented tabs with active pill. |
+
+## Best Practices
+
+- Own business data and results in the application. A menu command is not a successful backend edit, a boolean PiP state is not proof of a platform transition, and a browser download request is not a saved-file confirmation.
+- Use stable `value` keys and localize labels independently. Supply actual category, date, frequency, tab, and command choices; no business list is hard-coded.
+- Bind both `v-model` and `v-model:items` for closeable tabs. Supply `minItems="1"` when the final tab must remain. Use `add` to allocate real IDs; use `newItem` only when the host already prepared one.
+- Keep slotted tab/step labels non-interactive. Put independent actions outside their native buttons, and use the `panel` slot for rich tab bodies.
+- Keep download state external and handle `download` with a real transport. Respect cancellation/error in that transport; this display does not fake it.
+- The existing primitives own roving focus, arrow keys, menu activation, Escape, outside click, anchoring, and tooltip focus. CSS motion stops offscreen, on hidden documents, in inactive KeepAlive instances, on unmount, or when reduced motion is requested; number/label transitions reuse `TxTextMorph` and the shared spring.

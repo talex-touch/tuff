@@ -28,6 +28,7 @@
     }
   },
   "include": [
+    "../utils/types/path-browserify.d.ts",
     "packages/**/*.ts",
     "packages/**/*.d.ts",
     "packages/**/*.vue"

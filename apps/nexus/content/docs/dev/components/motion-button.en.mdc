@@ -1,0 +1,283 @@
+---
+title: "MotionButton"
+description: "Native buttons and links with 13 independent interactions and 35 source icon combinations"
+category: MotionButtons
+status: beta
+since: 0.6.3
+tags: [motion, button, icon, spring, interaction]
+syncStatus: reviewed
+verified: false
+---
+
+## Installation
+
+```ts
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/motion-button/style.css'
+```
+
+## Usage
+
+### All interactions and source combinations
+
+Filter any of the 13 interactions, inspect all 35 icon pairs, and switch between grid, list and icon-matrix layouts. Each specimen supports pointer hover, keyboard focus, native activation and decorative replay. The demo caller owns selected state and activation counts; the copy specimen writes to the real clipboard.
+
+:::TuffDemoWrapper{demo="MotionButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+
+  const playing = ref(false)
+  </script>
+
+  <template>
+    <TxMotionButton
+      source-id="7"
+      label="Play preview"
+      active-label="Pause preview"
+      :selected="playing"
+      @click="playing = !playing"
+    />
+    <TxMotionButton
+      variant="magnetic"
+      icon="arrow-right"
+      label="Open documentation"
+      href="https://github.com/TalexDreamSoul/talex-touch"
+      :magnetic-strength="0.35"
+    />
+  </template>
+---
+:::
+
+### Caller-owned operations and content
+
+`sourceId` selects visual parameters, not an operation or a default label. A hover may reveal a check icon without claiming an operation succeeded. Only caller-owned `selected` enables `activeLabel`.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+
+const copied = ref(false)
+const busy = ref(false)
+const error = ref('')
+const marked = ref(false)
+async function copyHash() {
+  busy.value = true
+  error.value = ''
+  try {
+    await navigator.clipboard.writeText('43c29ce9cdd16459e3eab4992381b8d35b38776a')
+    copied.value = true
+  }
+  catch {
+    error.value = 'Clipboard access failed'
+  }
+  finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <TxMotionButton source-id="4" label="Copy hash" active-label="Copied"
+    :selected="copied" :disabled="busy" @click="copyHash" />
+  <p role="status">{{ error }}</p>
+  <TxMotionButton variant="sparkle" label="Mark local item" :selected="marked" @click="marked = !marked">
+    <template #icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h16" /></svg></template>
+    <template #active-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg></template>
+    <template #default="{ selected }">{{ selected ? 'Local item marked' : 'Mark local item' }}</template>
+  </TxMotionButton>
+</template>
+```
+
+The application owns its real operations and glyph content. Content slots are labels and decoration; place independent interactive controls outside the button.
+
+### Focus-blur links
+
+Source `35` renders a group of real anchors or buttons. There is no button wrapping other interactive elements, and the component creates no placeholder destinations.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { TxMotionButton } from '@talex-touch/tuffex/motion-button'
+const lastLabel = ref('')
+</script>
+
+<template>
+  <TxMotionButton source-id="35" label="Project links" :items="[
+    { label: 'Repository', href: 'https://github.com/TalexDreamSoul/talex-touch' },
+    { label: 'Documentation', href: '/docs' },
+    { label: 'Local action' },
+  ]" @select="item => lastLabel = item.label" />
+  <output>{{ lastLabel }}</output>
+</template>
+```
+
+### Best Practices
+
+- Provide a meaningful `label`, default slot or `ariaLabel`. Icon-only controls still need an accessible name.
+- Run the real operation in `@click` or `@select`. Set `selected` and `activeLabel` only from your own state; neither hover nor replay emits success or changes that state.
+- Use `href` for navigation and `type="submit"` for form submission. Buttons retain native Enter/Space activation; anchors retain native Enter activation and modifier-click navigation.
+- Set `disabled` while an operation must not run. A disabled link loses its destination and tab stop, rather than leaving a decorative overlay to intercept clicks.
+- Prefer `sourceId` for original combinations; override `variant`, icons and colors when your content needs different parameters. Use slots for your own glyphs.
+- Keep focus-blur `#item` content non-interactive: the owning anchor or button already handles focus and activation.
+- Turn off `animated` to keep content and endpoint states without decorative work. Reduced motion, hidden documents, offscreen controls and deactivated KeepAlive trees suspend animation automatically.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `sourceId` | `MotionButtonSourceId` | — | Original string ID `"1"`–`"35"`; chooses interaction, glyph pair, active tint/fill and retention. Never supplies a rendered label or operation. |
+| `variant` | `MotionButtonVariant` | Preset, otherwise `morph` | Explicit interaction override; all 13 values are listed below. |
+| `label` | `string` | `''` | Caller-owned visible label; also names an icon-only control unless `ariaLabel` is supplied. |
+| `activeLabel` | `string` | — | Replaces `label` only while `selected === true`. |
+| `ariaLabel` | `string` | — | Accessible name override; names the group for focus-blur. |
+| `icon` | `MorphIconSource` | Preset | First glyph: built-in icon name, SVG path `d`, Lucide-style `IconNode`, or SVG markup supported by IconMorph. |
+| `activeIcon` | `MorphIconSource` | Preset, otherwise `icon` | Target glyph for pair interactions. |
+| `iconColor` | `string` | Preset, otherwise `currentColor` | First-icon active tint for pulse/shake and fallback target tint. Resting glyphs inherit the control's ink. |
+| `activeIconColor` | `string` | Preset, otherwise `iconColor` | Immediate target-glyph tint; CSS color/token value. |
+| `activeFill` | `boolean` | Preset, otherwise `false` | Fills an active glyph in pulse/color-morph/morph. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | Heights 24/30/36/42 px; size vocabulary is shared with other TuffEx controls. |
+| `disabled` | `boolean` | `false` | Native disabled button, or destination-less, non-tabbable disabled link. Also disables every focus-blur item. |
+| `animated` | `boolean` | `true` | Enables decoration when the shared lifecycle gate is active. |
+| `selected` | `boolean` | — | Caller-owned target-icon state; sets `aria-pressed` on a button. Does not execute or acknowledge an operation. |
+| `href` | `string` | — | Renders a native anchor instead of a button. |
+| `target` | `string` | — | Native anchor target. |
+| `rel` | `string` | `noopener noreferrer` for `_blank` | Native anchor relationship; explicit value wins. |
+| `type` | `'button' \| 'submit' \| 'reset'` | `button` | Native button type; not applied to anchors. |
+| `iconOnly` | `boolean` | `false` | Square control without visible label; preserves accessible naming. |
+| `hoverBackground` | `string` | `var(--tx-fill-color)` | Immediate interaction fill. No hover color tween. |
+| `holdDuration` | `number` | Preset, otherwise `0` | Decorative target-icon retention after exit, in ms. IDs 4/21/22/24/25 retain for 500 ms; never retains a success label. |
+| `spring` | `Transition` | Source-specific | Explicit override for geometry springs. Defaults: outer layout 500/25; ordinary icons 600/25; rotate/text-reveal 400/25; expand-ring 400/20; focus brackets 350/20; notification dot 600/15. Also accepts duration/ease; physical coefficients are forwarded to IconMorph. |
+| `magneticStrength` | `number` | `0.35` | Pointer offset multiplier for magnetic pull. |
+| `magneticRange` | `number` | — | Optional distance limit in px. Undefined preserves the catalog's unrestricted pull inside the button. |
+| `magneticSpring` | `SpringConfig` | `{ stiffness: 500, damping: 25 }` | Shared per-frame spring for magnetic travel and return. |
+| `items` | `readonly MotionButtonItem[]` | `[]` | Caller-owned links/buttons for focus-blur. Each item has `label`, optional `href`, `target`, `rel`, `disabled`. |
+| `blurAmount` | `number` | `4` | Focus-blur sibling blur in px. |
+| `opacityAmount` | `number` | `0.4` | Focus-blur sibling opacity, clamped to 0–1. |
+| `showBrackets` | `boolean` | `true` | Focus-blur dashed outline around the hovered/focused item. |
+
+Native attributes such as `id`, `name`, `value`, `form`, `download`, `aria-expanded` and `aria-controls` pass through to the owning element. Focus-blur attributes apply to its group.
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `click` | `MouseEvent` | Native activation of a non-disabled normal button/link. No implicit state change or delayed business action. |
+| `select` | `(item: MotionButtonItem, index: number, event: MouseEvent)` | Native activation of a non-disabled focus-blur item. Navigation proceeds unless the caller prevents it. |
+
+### Slots
+
+| Slot | Scope | Description |
+| --- | --- | --- |
+| `default` | `{ active, selected, disabled }` | Visible label/content; fallback is `label` through TextMorph. Empty focus-blur groups also expose this fallback. |
+| `icon` | `{ active, selected }` | Custom first glyph. In morph/color-morph, a single scoped icon slot can render from current active state. |
+| `active-icon` | `{ active, selected }` | Custom second glyph for slide-arrow, sparkle, ring, morph and color-morph. Paired slots preserve the original movement/scale switch. |
+| `reveal` | `{ active }` | Second, visually revealed text row for text-reveal; decorative and excluded from the accessible name. Defaults to the same label. |
+| `item` | `{ item, index, active }` | Focus-blur item label; place no nested interactive controls in this slot. |
+
+### Exposed Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `replay` | `() => void` | Re-enters the visual trajectory without emitting `click`/`select` or changing `selected`. Replays magnetic pull/return and focus-blur emphasis too; inactive/disabled controls do not start work. |
+| `focus` | `() => void` | Focuses the native control, or the first enabled focus-blur item. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--tx-motion-button-height` | 24/30/36/42 px | Size-tier control height. |
+| `--tx-motion-button-pad` | 12/16/24/28 px | Size-tier horizontal padding. |
+| `--tx-motion-button-duration` | Resolved icon/bracket spring | Icon/bracket geometry transition time; zero while inactive. |
+| `--tx-motion-button-ease` | Resolved icon/bracket spring | Compiled spring easing for icon/bracket geometry and opacity. |
+| `--tx-motion-button-layout-duration` | Resolved 500/25 spring | Outer padding/scale transition time. |
+| `--tx-motion-button-layout-ease` | Resolved 500/25 spring | Independent outer geometry easing. |
+| `--tx-motion-button-dot-duration` | Resolved 600/15 spring | Ring notification-dot transition time. |
+| `--tx-motion-button-dot-ease` | Resolved 600/15 spring | Independently tuned notification-dot easing. |
+| `--tx-motion-button-hover-bg` | `hoverBackground` | Instant interaction background. |
+| `--tx-motion-button-icon-color` | Resolved target tint | Active shake-label tint; glyph tint/fill is also applied immediately. |
+| `--tx-motion-button-blur` | `blurAmount` | Focus-blur sibling filter. |
+| `--tx-motion-button-dim` | `opacityAmount` | Focus-blur sibling opacity. |
+
+### Types
+
+Exports include `MotionButtonProps`, `MotionButtonEmits`, `MotionButtonInstance`, `MotionButtonItem`, `MotionButtonSize`, `MotionButtonVariant`, `MotionButtonSourceId`, `MotionButtonCatalogEntry` and `TxMotionButtonInstance`. `MotionButton` is installable; `TxMotionButton` is the Vue component. `MOTION_BUTTON_VARIANTS`, `MOTION_BUTTON_SOURCE_IDS`, `MOTION_BUTTON_CATALOG` and `MOTION_BUTTON_PRESETS` expose the actual enumerations and source metadata.
+
+| Interaction | Independent trajectory |
+| --- | --- |
+| `slide-arrow` | First icon exits 10 px left; label keeps its place as the right icon enters from 10 px right. Width/gap follows the 600/25 spring. |
+| `sparkle` | First icon exits upward 15 px at 0.8 scale; target enters from below. Two separate star particles unwind from −45°/+45°, delayed 50/100 ms. |
+| `morph` | Each original stroke pair uses IconMorph's vector geometry; a 0.5-to-1 scale/opacity entrance keeps the source switch rhythm. |
+| `color-morph` | Bookmark/thumb/star keeps its own outline and switches immediate tint plus filled state; the source scale/opacity beat remains. |
+| `pulse` | Heart expands 1 → 1.25 → 1 over 400 ms, with immediate active fill/tint. |
+| `rotate` | Settings or reload glyph rotates 180° with a 400/25 spring and returns on exit. |
+| `shake` | Trash moves 0/−2/0/−2/0 px vertically with 0/−10°/10°/−10°/0° rotation over 400 ms. |
+| `ring` | Bell switches to BellRing via −15°/15°, 0.8-scale icon poses; a separate 6 px notification dot uses its own 600/15 spring after 100 ms. |
+| `glare` | A 50 px, −20° shine travels −150% → 150% in 850 ms with a 1 s repeat gap, only while interacting. |
+| `text-reveal` | Arrow rotates 45°; two 18 px text rows scroll upward one row with a 400/25 spring. |
+| `magnetic` | Pointer offset × strength pulls the control; one shared spring carries velocity and returns it to the same origin. |
+| `expand-ring` | Glyph scales to 1.1; the separate outline expands 1 → 1.15 and fades out over 600 ms. |
+| `focus-blur` | Other real links/buttons blur and dim; the active item's dashed brackets use a 350/20 spring from 1.3 → 1.1 scale. |
+
+## Overview
+
+- Explicit `variant`, icons, colors and `holdDuration` override `sourceId`. Source metadata labels are attribution only and never become implicit application copy.
+- Hover, focus, pointer press and replay drive decoration. `selected` holds a target icon and enables `activeLabel`; it remains caller-owned. The original hover-based “Copied” business claim is intentionally not ported.
+- Decoration uses pointer-inert content/layers. Normal controls remain native buttons/anchors, and focus-blur items remain individual native controls with visible keyboard outlines. Disabled anchors have no `href`, no tab stop and no emitted activation.
+- Native form submission/reset and link navigation are not replaced by JavaScript keyboard emulation. Enter/Space pressed decoration follows the native element's supported keys.
+- One shared activity gate stops CSS loops, pending replay frames, retention/replay timers, magnetic RAF work and icon/text morph work when inactive. SSR touches no browser APIs. Reduced motion keeps readable content and static endpoint state.
+- Replay is a visual operation: it paints a rest pose before re-entering the same path. Magnetic replay samples the control's size once and uses the same pull/return spring; focus-blur replay emphasizes the first enabled item.
+
+## Technologies
+
+- Upstream: [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+- Behavioral sources: `src/components/AnimatedButton.tsx:39–415`, `src/data/buttons.tsx:43–77`, `src/components/cards/FocusBlur.tsx:17–73`. Registry `hover/magnetic-button.tsx` and `hover/glow-button.tsx` were reviewed; their standalone registry variants belong to the Motion interaction family.
+- Original glyphs come from the upstream lockfile's pinned [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE). All 46 SVG icons retain their source nodes and geometry attributes; only React keys are omitted. The ISC and Feather-derived MIT notices are preserved in full in `icons.ts`'s `@license` header.
+- TuffEx implementation: `motion-button/src/TxMotionButton.vue`, `catalog.ts`, `icons.ts` and `MotionButtonGlyph.vue`. Stroke changes reuse IconMorph, value changes reuse TextMorph, and physics/lifecycle reuse the existing shared spring and `useMotionActivity`. An activity-boundary key destroys the old morph controller rather than merely changing its reduced-motion flag.
+- The table below preserves all 35 actual combinations; these IDs change glyphs, interaction parameters, fills and retention, not just labels. The fixed labels are source metadata; the caller supplies rendered copy.
+
+| Source ID | Source combination | Interaction | Glyphs | Source |
+| --- | --- | --- | --- | --- |
+| `1` | Download for Mac | slide-arrow | Apple → ArrowRight | `buttons.tsx:43` |
+| `2` | Star on GitHub | sparkle | GitHub → Star | `buttons.tsx:44` |
+| `3` | Deploy App | morph | Cloud → CloudUpload | `buttons.tsx:45` |
+| `4` | Copy Hash | morph | Copy → Check; 500 ms icon retention | `buttons.tsx:46` |
+| `5` | Sponsor | pulse | Heart; active fill | `buttons.tsx:47` |
+| `6` | Share | morph | Link → Send | `buttons.tsx:48` |
+| `7` | Preview | morph | Play → Pause | `buttons.tsx:49` |
+| `8` | Settings | rotate | Settings | `buttons.tsx:50` |
+| `9` | Delete | shake | Trash2 | `buttons.tsx:51` |
+| `10` | Subscribe | ring | Bell → BellRing | `buttons.tsx:52` |
+| `11` | Search | morph | Search → X | `buttons.tsx:53` |
+| `12` | Theme | morph | Moon → Sun | `buttons.tsx:54` |
+| `13` | Microphone | morph | Mic → MicOff | `buttons.tsx:55` |
+| `14` | Camera | morph | Video → VideoOff | `buttons.tsx:56` |
+| `15` | Volume | morph | Volume2 → VolumeX | `buttons.tsx:57` |
+| `16` | Lock | morph | Lock → Unlock | `buttons.tsx:58` |
+| `17` | Directory | morph | Folder → FolderOpen | `buttons.tsx:59` |
+| `18` | Visibility | morph | Eye → EyeOff | `buttons.tsx:60` |
+| `19` | Save Later | color-morph | Bookmark outline → filled | `buttons.tsx:61` |
+| `20` | Like | color-morph | ThumbsUp outline → filled | `buttons.tsx:62` |
+| `21` | Download | morph | Download → Check; 500 ms icon retention | `buttons.tsx:63` |
+| `22` | Upload | morph | Upload → Check; 500 ms icon retention | `buttons.tsx:64` |
+| `23` | Account | morph | User → UserCheck | `buttons.tsx:65` |
+| `24` | Submit | morph | Send → Check; 500 ms icon retention | `buttons.tsx:66` |
+| `25` | Edit | morph | Pen → Check; 500 ms icon retention | `buttons.tsx:67` |
+| `26` | Network | morph | Wifi → WifiOff | `buttons.tsx:68` |
+| `27` | Power | morph | Battery → BatteryCharging | `buttons.tsx:69` |
+| `28` | Expand | morph | Maximize → Minimize | `buttons.tsx:70` |
+| `29` | Reload | rotate | RefreshCw | `buttons.tsx:71` |
+| `30` | Favorite | color-morph | Star outline → filled | `buttons.tsx:72` |
+| `31` | Glare Shine | glare | Star with sweeping shine | `buttons.tsx:73` |
+| `32` | Text Reveal | text-reveal | ArrowRight and two text rows | `buttons.tsx:74` |
+| `33` | Magnetic Field | magnetic | GitHub and pointer pull | `buttons.tsx:75` |
+| `34` | Expand Ring | expand-ring | Link and separate expanding outline | `buttons.tsx:76` |
+| `35` | Focus Blur Links | focus-blur | Caller-owned link/button group | `buttons.tsx:77` |
+
+<TuffDocSourceLink />

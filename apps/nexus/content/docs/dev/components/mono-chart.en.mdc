@@ -1,0 +1,193 @@
+---
+title: MonoChart
+description: "Thirty rounded monochrome chart variants plus a data-driven GitHub activity calendar."
+category: Charts
+status: beta
+since: 0.6.3
+tags: [chart, mono, svg, activity]
+syncStatus: reviewed
+verified: false
+---
+
+## Overview
+
+`TxMonoChart` renders native SVG using the existing chart scales, d3 curves, Sankey layout and `--tx-chart-*` theme. It has no React, Recharts or ECharts runtime. All values come from `data`; omitting it shows an empty state, not invented business values. Activity palettes retain emerald, blue and violet emphasis; other charts follow the host's monochrome ink.
+
+Hover a mark to read its actual values. Focus the SVG and use arrow keys, Home or End to inspect marks, Enter or Space to emit `select`, and Escape to clear the readout. Donut/radial legends are also keyboard-operable. Repository disclosure uses a native button, `aria-expanded` and an inert collapsed list. Center values reflect the hovered segment, otherwise the caller's metric or the data total.
+
+## Usage
+
+### Catalog and data contracts
+
+The demo renders every original catalog ID, switches the actual supplied dataset, and includes all source controls. Filtering changes which examples are displayed; it does not alias different chart types to one drawing.
+
+:::TuffDemoWrapper{demo="MonoChartDemo" code-lang="vue" title="Full mono chart catalog" description="30 original variants, repository disclosure, live-source loading, palette controls and date filtering."}
+---
+code: |
+  <script setup lang="ts">
+  import { TxMonoChart } from '@talex-touch/tuffex/charts'
+  import type { MonoChartData } from '@talex-touch/tuffex/charts'
+
+  const data: MonoChartData = {
+    categories: ['Jan', 'Feb', 'Mar'],
+    series: [
+      { name: 'Output', data: [{ x: 'Jan', value: 24 }, { x: 'Feb', value: 45 }, { x: 'Mar', value: 38 }] },
+      { name: 'Baseline', data: [{ x: 'Jan', value: 18 }, { x: 'Feb', value: 32 }, { x: 'Mar', value: 29 }] },
+    ],
+  }
+  </script>
+
+  <template>
+    <TxMonoChart variant="mono-rounded-line" :data="data" :width="560" aria-label="Output by month" />
+  </template>
+---
+:::
+
+| Original variant ID | Input fields | Independent rendering / interaction |
+| --- | --- | --- |
+| `mono-activity-green` | `contributions` | Emerald 7-day columns, month labels, intensity scale and day readout. |
+| `mono-activity-blue` | `contributions` | Blue activity palette with the same real calendar contract. |
+| `mono-activity-purple` | `contributions` | Violet activity palette with the same real calendar contract. |
+| `mono-rounded-line` | `series`, `categories?` | Monotone spline, rounded caps, dots, dashed secondary series; Single/Dual switch. |
+| `mono-rounded-bar` | `series`, `categories?` | Grouped pill columns or horizontal rows; Col/Row switch. |
+| `mono-rounded-area` | `series`, `categories?` | Gradient area, rounded boundary; Monotone/Natural curve switch. |
+| `mono-rounded-donut` | `items` | Value-proportional ring segments, cap gaps, legend and hover center metric. |
+| `mono-rounded-composed` | `series`, `categories?` | First series as pill bars, subsequent series as spline overlays; Spline on/off. |
+| `mono-rounded-scatter` | `points` | Numeric X/Y coordinates, Z-weighted solid dots and dashed hover crosshair. |
+| `mono-rounded-candlestick` | `candles` | Actual OHLC domain, rounded high/low wicks, solid rising and hollow falling bodies. |
+| `mono-rounded-kpi` | `series`, `metric?`, `metricLabel?`, `change?` | Caller-owned metric/change with an embedded gradient sparkline. |
+| `mono-rounded-pyramid` | `items` | Centered rounded tiers, value-proportional widths and opacity tones. |
+| `mono-rounded-radial-group` | `items` | Multiple concentric 180-degree progress arcs with rounded caps. |
+| `mono-rounded-gauge-arc` | `items[0]` | 240-degree dial, remaining track and center value. |
+| `mono-rounded-bullet` | `items` | Actual-value pill, maximum track and independent target marker. |
+| `mono-rounded-sankey` | `nodes`, `links` | d3-computed routing, flow-weighted rounded channels and node readouts. |
+| `mono-rounded-step` | `series`, `categories?` | Step-after staircase, round joins and level dots. |
+| `mono-rounded-stacked-bar` | `series`, `categories?` | Positive/negative stacks with toned layers and rounded outside ends. |
+| `mono-rounded-radar` | `items` | Numeric polygon web, per-axis values, rounded joins and node readouts. |
+| `mono-rounded-radial-gauge` | `items` | Full concentric utilization rings starting from the left. |
+| `mono-rounded-funnel` | `items` | Input-order horizontal stage pills with proportional lengths. |
+| `mono-rounded-heatmap` | `matrix`, `categories?` | Rounded matrix cells with actual density shading and cell readouts. |
+| `mono-rounded-sparkline` | `series` | Independent telemetry rows, mini splines and per-series metric text. |
+| `mono-rounded-bubble` | `points` | Numeric distribution, Z-proportional circle area and hollow/translucent bubbles. |
+| `mono-rounded-treemap` | `tree` or `items` | Weighted binary allocation tiles, nested children, rounded gaps and tile readouts. |
+| `mono-rounded-stream` | `series`, `categories?` | Independent overlapping natural-curve gradient waves; not a bar/line alias. |
+| `mono-rounded-meter` | `items[0]` | 180-degree meter with separate track and center value. |
+| `mono-rounded-waterfall` | `waterfall` | Sequential positive/negative deltas, optional explicit bases/totals and connecting levels. |
+| `mono-rounded-polar` | `items` | 360-degree rounded radial bands starting from the top. |
+| `mono-rounded-range` | `ranges` | Actual min/max floating band with curved upper and lower boundaries. |
+
+### Source capabilities
+
+`github-activity` preserves the extra `GitHubActivity` calendar: fitted recent columns, configurable cell size and month window, month headers, one-color or four/five-color intensity scales, year metadata, stacked repository avatars and controlled/uncontrolled repository expansion. Pass `data.contributions` and `data.repos` to use your source. Explicit empty arrays remain empty.
+
+For real public data, pass `username`. Missing contribution/repository fields are loaded from the upstream public calendar endpoint and GitHub public events API through the shared network client, forwarding the same cancellation signal; no credentials are embedded. `activityLoader(username, signal)` replaces this adapter for a proxy or authenticated source. Failures emit `error` and show the configurable retry state; there is no generated-data fallback. Requests are aborted on source changes, offscreen suspension, deactivation and unmount; a stale response cannot replace a newer source.
+
+`periods` can select `periodData` datasets (shallowly merged with `data`) or inclusive numeric/ISO-date ranges. Ranges filter series points, categories, candles, range bands and contribution dates. A label-only period without matching data or a range merely emits the selection; it cannot invent a new time window. The demo's date filter removes real points, while its dataset switch replaces real input values across all chart types.
+
+### Best Practices
+
+- Use the matching data field from the catalog table; `series` is not a fallback for candles, flow nodes, matrix cells or tree allocations.
+- Match each categorical point's `x` to `categories`, or omit categories to derive their order. Provide input-order stages and tiers deliberately. `points.z` controls circle area, not radius.
+- Set each radial item's `max` for non-percent units; the default is 100. Donut values are normalized against their actual positive sum, not a hardcoded 100.
+- Supply repository URLs and labels from your source. Use a custom loader rather than exposing private credentials to the browser. Network access occurs only after the calendar becomes visible on the client.
+- Give SSR an explicit `width` and a consistent `locale`. SVG gradients and repository panel IDs use Vue `useId`, so multiple instances do not collide during hydration.
+- Localize `title`, `ariaLabel`, data labels and the `labels` object. Adapt theme tokens instead of overriding SVG geometry. Reduced motion keeps the finished chart visible.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `MonoChartVariant` | `'mono-rounded-line'` | One of the 30 IDs above or `'github-activity'`. `MONO_CHART_VARIANTS` exports the original 30 IDs. |
+| `data` | `MonoChartData` | `{}` | Caller-owned series, items, matrix, calendar, financial or flow data. |
+| `width` | `number` | `560` | Deterministic SVG coordinate width; CSS scales it to the container, minimum 180. |
+| `height` | `number` | `210` / compact `150` | SVG coordinate height, minimum 100. |
+| `title` | `string` | — | Optional heading. |
+| `ariaLabel` | `string` | `'Mono chart'` | Accessible SVG name. |
+| `compact` | `boolean` | `false` | Smaller insets, corner radius and default chart height. |
+| `seriesMode` | `'single' \| 'dual'` | local `'dual'` | `v-model:series-mode`; single uses the first series, dual includes the supplied series. |
+| `layout` | `'col' \| 'row'` | local `'col'` | `v-model:layout`; grouped/stacked bar orientation. |
+| `curve` | `'monotone' \| 'natural'` | local `'monotone'` | `v-model:curve`; line/area/range/sparkline curve. Stream always uses natural; step uses step-after. |
+| `showLine` | `boolean` | local `true` | `v-model:show-line`; composed spline visibility. |
+| `controls` | `boolean` | `true` | Show the source's line, bar, area or composed controls. |
+| `periods` | `MonoChartPeriod[]` | — | `{value,label,range?}` period buttons. |
+| `period` | `string` | first period | `v-model:period`; selected dataset/range. |
+| `periodData` | `Record<string, MonoChartData>` | — | Actual datasets indexed by period value. |
+| `centerMetric` | `string \| number` | data-derived | Center fallback when no segment is hovered. |
+| `centerLabel` | `string` | `data.metricLabel` | Center fallback label. |
+| `showTooltip` | `boolean` | `true` | Render the readout; `hover` still emits when false. |
+| `showLegend` | `boolean` | `true` | Donut/radial item legends. |
+| `showMonths` | `boolean` | `true` | Activity calendar month headers. |
+| `months` | `number` | `12` | Maximum recent activity month window, also fitted to width. |
+| `cellSize` | `number` | `11` | Activity cell coordinate size; adaptive gap, minimum 3. |
+| `accent` | `string \| string[]` | variant palette | Activity color or four/five intensity colors. Four colors prepend transparent level zero. |
+| `accentColor` | `'green' \| 'blue' \| 'purple' \| 'mono'` | variant-derived | Activity palette override when no explicit accent is supplied. |
+| `open` | `boolean` | local state | `v-model:open`; GitHub repository disclosure. |
+| `defaultOpen` | `boolean` | `false` | Initial uncontrolled disclosure state. |
+| `year` | `number` | latest contribution year | Optional GitHub year metadata override in the header; does not fabricate/filter data. |
+| `username` | `string` | — | Public GitHub source for missing calendar/repository fields. |
+| `activityLoader` | `MonoChartActivityLoader` | `loadGitHubActivity` | `(username, AbortSignal) => Promise<{contributions?,repos?}>`. |
+| `labels` | `MonoChartLabels` | English defaults | Source controls, statuses, disclosure and tooltip field names. |
+| `locale` | `string` | `'en-US'` | Month-header locale; use the same locale server/client. |
+| `formatValue` | `(number) => string` | `String(value)` | Numeric metric, legend and tooltip formatting. |
+
+### Data types
+
+All types are exported from `@talex-touch/tuffex/charts`.
+
+| `MonoChartData` field | Shape |
+| --- | --- |
+| `categories` | `(string \| number)[]`; categorical order. |
+| `series` | `{id?,name,data:{x:string\|number,value:number}[],metric?:string\|number,opacity?:number}[]`. |
+| `items` | `{label,value,max?,target?,opacity?}[]`; segment/tier/axis/ring inputs. |
+| `points` | `{label,x:number,y:number,z?:number}[]`; independent numeric axes and area weighting. |
+| `candles` | `{x,open,high,low,close}[]`; OHLC values. |
+| `ranges` | `{x,min,max}[]`; range boundaries. |
+| `waterfall` | `{label,delta,base?,total?}[]`; absent base accumulates, `total` resets its base to zero. |
+| `matrix` | `{label,values:number[]}[]`; rows can have different column counts. |
+| `contributions` | `{date:'YYYY-MM-DD',count:number,level:0\|1\|2\|3\|4}[]`. |
+| `repos` | `{name,count,href?,logo?}[]`; logo is an image URL. |
+| `nodes` / `links` | Existing `SankeyNodeData[]` / `SankeyLinkData[]`; links use numeric source/target indices. |
+| `tree` | `{label,value?,children?:MonoChartTreeNode[]}[]`; child sums own internal node area. |
+| `metric` / `metricLabel` / `change` | Optional caller-supplied header metric, unit/label and change text. |
+
+### Labels
+
+`labels` is partial; omitted keys retain English defaults: `single='Single'`, `dual='Dual'`, `col='Col'`, `row='Row'`, `monotone='Monotone'`, `natural='Natural'`, `showLine='Spline on'`, `hideLine='Spline off'`, `repositories='Top contributions in'`, `expand='Show repositories'`, `collapse='Hide repositories'`, `empty='No data'`, `loading='Loading activity'`, `error='Activity could not be loaded'`, `retry='Retry'`, `less='Less'`, `more='More'`, `target='Target'`, `open='Open'`, `high='High'`, `low='Low'`, `close='Close'`, `x='X'`, `y='Y'`, `z='Z'`, `min='Min'`, `max='Max'`, `delta='Delta'`, `balance='Balance'`.
+
+### Events
+
+| Event | Payload | Meaning |
+| --- | --- | --- |
+| `update:seriesMode`, `update:layout`, `update:curve`, `update:showLine`, `update:period`, `update:open` | Corresponding prop value | Controlled switch/disclosure changes; absent models use local state. |
+| `hover` | `MonoChartHit \| null` | `{key,label,rows:[{name,value}],value?,x,y}`; coordinates use the SVG viewBox. Null clears inspection. |
+| `select` | `MonoChartHit` | Pointer click, legend activation, Enter or Space. No business action is simulated. |
+| `load` | `{contributions?,repos?}` | Real source data accepted by the current request. |
+| `error` | `Error` | Current loader/response failure; aborted or superseded requests do not emit success/errors. |
+
+### Slots
+
+| Slot | Scope | Replacement |
+| --- | --- | --- |
+| `header` | `{metric,data}` | Metric/heading summary; controls remain separate. |
+| `tooltip` | `{hit}` | Tooltip content. |
+| `center` | `{value,label,hit}` | Ring/gauge center content. |
+| `repository` | `{repo}` | Each expanded repository row. |
+| `avatar` | `{repo,collapsed}` | Repository avatar in both the collapsed stack and expanded rows; supports arbitrary VNodes. |
+| `footer` | `{data}` | Content below the chart. |
+
+### CSS variables
+
+| Variable | Purpose |
+| --- | --- |
+| `--tx-mono-ink` | Monochrome strokes and fills; defaults to `--tx-text-color-primary`. |
+| `--tx-mono-track` | Gauge/bullet tracks; defaults to `--tx-fill-color`. |
+| `--tx-mono-accent` | Root activity hue, resolved from palette or explicit input. |
+| `--tx-chart-grid-line`, `--tx-chart-text-primary` | Existing chart grid and axis tokens. |
+| `--tx-chart-semantic-success`, `--tx-chart-categorical-1`, `--tx-chart-categorical-4` | Emerald/blue/violet activity palettes and benchmark marker. |
+| `--tx-bg-color`, `--tx-fill-color*`, `--tx-border-color*`, `--tx-text-color*` | Host surfaces, outlines and UI labels. |
+
+## Technologies
+
+The implementation ports the distinct rendering contracts of all 29 files under Amicro `src/components/mono-charts` plus its 30-row catalog. `GitHubActivity` is an additional variant, not a renamed activity palette. Geometry is pure and data-driven; chart scale/curve/tooltip-position/Sankey helpers are reused. Weighted allocation is calculated from input rather than the upstream demo's fixed CSS grid. Request abort/version ownership prevents stale updates, and the shared motion activity helper owns visibility/KeepAlive cleanup. The repository disclosure transition runs only while active and with no reduced-motion preference. No browser API is touched during SVG SSR. Final build, browser and lifecycle verification are performed by the integration owner.

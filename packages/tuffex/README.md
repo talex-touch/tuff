@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **168**.
+Current source-of-truth export modules: **182**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -116,9 +116,15 @@ General, form, layout, navigation, data, feedback and status components. Import 
 Advanced interaction, visualization, effects and low-level primitives. Import from `@talex-touch/tuffex/pro`.
 
 - `Interaction (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
+- `Animated controls (3)`: `motion-control`, `motion-form`, `motion-metric`
 - `Visualization (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
 - `Effects (23)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
+- `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
+
+Nexus presents the Motion family in its own documentation suite: Buttons, Card Spreads, 3D Carousels, Loaders, Dither Charts and additional text, physics, pointer, scroll, toggle and transition effects. Installation stays within `pro` or the component subpaths; there is no fourth suite installer. `TxMonoChart` and `TxDitherChart` use the existing `@talex-touch/tuffex/charts` SVG/d3 entry, with Mono documented under Data and Dither under Motion.
+
+Motion content, chart data and business state come from the caller. Changing text reuses TextMorph and springs reuse the existing shared compiler/integrator. `useMotionActivity` is exported from `/utils` to gate playback on visibility, document activity, KeepAlive and reduced-motion preference; static content remains available while playback is suspended.
 
 ### ai — AI
 
@@ -176,3 +182,7 @@ TuffEx is the UI foundation of the [Tuff](https://tuff.tagzxia.com) desktop appl
 ## License
 
 [MIT License](LICENSE) &copy; 2025 TalexDreamSoul
+
+Amicro-derived components retain [the upstream MIT license and copyright](AMICRO-LICENSE), from source commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`. The notice ships with the package. Upstream website assets and externally hosted fonts are not included.
+
+The upstream `DitherBook.tsx` and `SimpleCompExtracted.tsx` declare Apache-2.0 at file level. Their derivatives retain that license and Vue/TuffEx modification notices; the complete [Apache license](AMICRO-APACHE-LICENSE) ships in the package. Retained Lucide 0.546.0 glyph data carries its [ISC and Feather-derived MIT notice](LUCIDE-LICENSE), without a React/Lucide runtime dependency. Package metadata records these combined obligations instead of relabeling all derived code as MIT.

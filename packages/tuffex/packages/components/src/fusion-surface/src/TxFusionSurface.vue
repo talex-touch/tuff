@@ -2,7 +2,7 @@
 import type { ComponentPublicInstance } from 'vue'
 import type { FusionSurfaceBud, FusionSurfaceEmits, FusionSurfaceProps } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useReducedMotion } from '../../liquid/src/use-reduced-motion'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { FusionSurfaceDriver, fusionSurfaceLayerSize, fusionSurfaceOpenTarget } from './driver'
 import { shadowFilter } from './shadow'
 

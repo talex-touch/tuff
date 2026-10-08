@@ -7,7 +7,7 @@
 import type { MorphSegment } from './types'
 import { isNumericWord, segmentNumber } from './number'
 
-const NBSP = '\u00A0'
+const WHITESPACE = /^\s+$/u
 
 // A collision makes two segments fight over one element and one silently loses its
 // text, so uniqueness has to hold across the whole value, not per line.
@@ -50,7 +50,7 @@ export function groupIntoWords(segments: MorphSegment[]): { word: string, segmen
   }
 
   for (const seg of segments) {
-    if (seg.string === NBSP || seg.string === '\n')
+    if (WHITESPACE.test(seg.string))
       flush()
     else
       current.push(seg)
@@ -81,7 +81,7 @@ function expandNumbers(segments: MorphSegment[]): MorphSegment[] {
   }
 
   for (const seg of segments) {
-    if (seg.string === NBSP || seg.string === '\n') {
+    if (WHITESPACE.test(seg.string)) {
       flush()
       out.push(seg)
     }
@@ -147,7 +147,7 @@ function segmentsFromIntl(
   for (const data of Array.from(iterator)) {
     const index = offset + data.index
     if (data.segment === ' ')
-      segments.push({ id: alloc.take(`space-${index}`), string: NBSP })
+      segments.push({ id: alloc.take(`space-${index}`), string: data.segment })
     else
       segments.push({ id: allocSegmentId(data.segment, index, alloc), string: data.segment })
   }
@@ -171,7 +171,7 @@ function segmentsFallback(
 
   parts.forEach((part, i) => {
     if (byWord && i > 0) {
-      segments.push({ id: alloc.take(`space-${index}`), string: NBSP })
+      segments.push({ id: alloc.take(`space-${index}`), string: ' ' })
       index += 1
     }
     segments.push({ id: allocSegmentId(part, index, alloc), string: part })

@@ -203,7 +203,13 @@ const LIMITS = {
   // before asking: the descriptions sheet is unscoped (as TxStatusHint's is) and drives both size
   // tiers from two custom properties, and the refresh cell's two declarations are inline. Same
   // contract as every note above: actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 631 * 1024,
+  // 631 -> 736 on 2026-10-05: Amicro fusion adds 14 source modules plus two SVG/pixel
+  // chart families. The built full entry measured 731.8 KiB; the new root sheets total
+  // 89,836 B (87.7 KiB), with chart additions and the scoped Slider lifecycle surface
+  // accounting for the rest. Primitive overrides remain beneath their owning Motion
+  // roots; they do not inline the input/tabs/select/Skeleton sheets. Measured actuals
+  // plus minimal headroom; root/full-style import bans and per-file ceilings stay fixed.
+  fullCssBytes: 736 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -248,7 +254,16 @@ const LIMITS = {
   // 616 -> 620 on 2026-09-25: the `TxBottomDialog` sheet redesign in the
   // `fullCssBytes` note above, measured with it: 618.9 KiB across the same 160
   // stylesheets. Actuals plus minimal headroom, growth from here fails.
-  onDemandCssBytes: 620 * 1024,
+  // 620 -> 704 on 2026-10-05: the same complete fusion, measured at 702.3 KiB across
+  // 184 sheets. Shared primitive CSS still travels through style-deps exactly once;
+  // the new control/form selectors are local overrides, not duplicated dependencies.
+  // Keep this ceiling tight; the existing root-import and 48 KiB JS gates still apply.
+  // 704 -> 707 on 2026-10-07: integrating the accepted Terminal adds one
+  // 2,924 B xterm/TxTerminal sheet to the 184-sheet Amicro candidate. The current
+  // merged artifact measures 705.3 KiB across 185 sheets; Terminal owns this new
+  // sheet and the dependency closure still imports primitive sheets once.
+  // Keep the 48 KiB JS, 56 KiB per-sheet and root/full-style import gates fixed.
+  onDemandCssBytes: 707 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

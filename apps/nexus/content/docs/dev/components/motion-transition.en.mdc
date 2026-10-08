@@ -1,0 +1,170 @@
+---
+title: MotionTransition
+description: Controlled content transitions with doors, waves, iris, flip and curtains
+category: MotionTransitions
+status: beta
+since: 0.6.3
+tags: [motion, transition, overlay]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+`TxMotionTransition` transitions caller-provided content. `modelValue` identifies the requested view; render the default slot from its scoped `key`, which remains the outgoing key until the covered midpoint. No router, page data or business completion is created by the component.
+
+:::TuffDemoWrapper{demo="MotionTransitionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const view = ref('overview')
+  const open = ref(false)
+  const pages = {
+    overview: { title: 'Overview', body: 'Requirements and owners.' },
+    delivery: { title: 'Delivery', body: 'Components and documentation.' },
+  }
+  </script>
+
+  <template>
+    <TxButton @click="view = view === 'overview' ? 'delivery' : 'overview'">
+      Replace content
+    </TxButton>
+    <TxMotionTransition :model-value="view" variant="spatial-door-portal" mode="card">
+      <template #default="{ key }">
+        <h3>{{ pages[key].title }}</h3>
+        <p>{{ pages[key].body }}</p>
+      </template>
+    </TxMotionTransition>
+    <TxButton @click="open = true">Open fullscreen</TxButton>
+    <TxMotionTransition v-model:open="open" :model-value="view" mode="overlay" title="Preview">
+      <template #default="{ key }"><p>{{ pages[key].body }}</p></template>
+      <template #footer="{ close, replay }">
+        <TxButton @click="replay">Replay</TxButton>
+        <TxButton @click="close">Close</TxButton>
+      </template>
+    </TxMotionTransition>
+  </template>
+---
+:::
+
+### Effects and carriers
+
+| Variant | Distinct structure and trajectory |
+| --- | --- |
+| `spatial-door-portal` | Two outer-edge hinges, ±85° perspective rotation and ±10% translation. Doors close over the outgoing view, then open over the incoming view. |
+| `french-doors-3d` | Two center-edge hinges, ±90° rotation, pane insets and opacity. The hinge direction differs from the spatial portal. |
+| `obsidian-liquid-wave` | Three cubic Bezier layers with 14 independently delayed points. The leading edge rises to cover; the trailing edge rises to reveal. |
+| `radial-iris-mask` | A central circular mask expands from 0% to 150%, then retracts. |
+| `perspective-flip-stage` | The actual content rotates out around the X axis, swaps while edge-on, then rotates in with 0.85 → 1 scale and opacity. |
+| `staggered-glass-curtain` | Five frosted columns descend in order, then continue downward to reveal. |
+| `double-stairs` | Five alternating top/bottom columns cover in order and leave through the opposite edge. |
+| `liquid-wave` | The registry's three-layer wave uses 12 independently delayed Bezier points. |
+| `cross-fade` | The outgoing content fades out before the incoming content fades in; the registry's generic opacity behavior has one public identity. |
+
+`inline` renders an unframed stage. `card` adds a token-based surface, header and footer. `modal` centers a constrained dialog; `overlay` fills the visible viewport. Both dialog modes teleport to `body`, use the shared overlay allocator and trap focus. The demo displays all nine effects as cards and lets you choose any effect for inline, modal and fullscreen content. Editable text is actual slot input; completion labels reflect emitted events.
+
+### Best Practices
+
+- Render from the slot's `key`, not directly from the changing external model. Keep content identity in `modelValue` and visibility in `v-model:open`.
+- Keep the component mounted when closing. Set `open=false` instead of wrapping it in `v-if`. Closing commits pending content and restores focus while the dialog container leaves with opacity, scale and translation. Leaving nodes immediately exit focus/topmost ownership; reduced motion and explicit instant mode do not delay removal.
+- Repeated model changes interrupt the previous run and commit the latest request. `replay()`, `replayKey`, and changing `variant` replay even when the content key is unchanged.
+- Do not disable your trigger while transitioning if interruption is part of your interaction. Content itself is inert during motion; header/footer controls remain usable.
+- For the source card's hover preview, update your content model from the native `@mouseenter` listener; the demo ignores hover while a run is active and also provides keyboard-operable buttons.
+- Supply localized `title`, `ariaLabel` and `closeLabel`. A custom header uses `ariaLabel` as the dialog's accessible name.
+- Honor the system reduced-motion preference. `disabled=true` or `duration=0` provides an explicit immediate-commit path, without delaying content state or fabricating a successful business action.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `modelValue` | `string \| number` | Required | Requested content identity; this is not dialog visibility. |
+| `variant` | `MotionTransitionVariant` | `'spatial-door-portal'` | One of the nine IDs above. `MOTION_TRANSITION_VARIANTS` exports the full list. |
+| `mode` | `'inline' \| 'card' \| 'modal' \| 'overlay'` | `'inline'` | Stage carrier. |
+| `open` | `boolean` | `false` | Controlled visibility for modal/overlay; ignored by inline/card. |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig \| { duration: number; ease?: string }` | `'smooth'` | Existing shared liquid spring or timing definition. |
+| `duration` | `number` | Shared spring duration | Total leave + enter duration in milliseconds. Zero commits immediately. |
+| `speed` | `number` | `1` | Playback rate; `2` halves total time. |
+| `replayKey` | `string \| number` | — | Change to repeat the current content transition. |
+| `disabled` | `boolean` | `false` | Commit immediately rather than animate. |
+| `title` | `string` | `''` | Default header and accessible dialog title. |
+| `ariaLabel` | `string` | `'Content transition'` | Dialog name without a default title, including custom headers. |
+| `closeLabel` | `string` | `'Close'` | Close button accessible label. |
+| `closable` | `boolean` | `true` | Show the dialog close button; does not block API or Escape closing. |
+| `maskClosable` | `boolean` | `true` | Close on the modal background. |
+| `escapeClosable` | `boolean` | `true` | Let the topmost dialog close with Escape. |
+| `width` | `string` | `'640px'` | Modal width, constrained to the viewport. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Header, content and footer spacing. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `update:open` | `boolean` | Requests controlled dialog closure with `false`. |
+| `start` | `{ from, to, variant, reason }` | One accepted content transition; `reason` is `change`, `replay` or `open`. |
+| `completed` | `{ from, to, variant, reason, status }` | Emitted once after the content subtree commits. Status is `finished`, `interrupted`, `reduced`, `inactive` or `closed`. |
+| `interrupted` | Same completion object | Emitted before `completed` when a newer request replaces the previous run. |
+| `close` | `'button' \| 'escape' \| 'mask' \| 'api'` | Dialog close request. The caller must synchronize `open`. |
+
+`inactive` covers explicit disabling, zero duration, offscreen content, a hidden document and KeepAlive suspension. Interrupted runs commit their own target before the next request begins. A subsequent request wins the final displayed state. Completion is a UI transition event, not confirmation of a network, save or navigation operation. Unmount cancels pending callbacks rather than emitting events from a destroyed component.
+
+### Slots and methods
+
+| Slot | Scope | Description |
+| --- | --- | --- |
+| `default` | `{ key, phase, running, close, replay }` | Actual view; `phase` is `idle`, `leave` or `enter`. |
+| `header` | Same scope | Custom header content; the built-in close button remains separate. |
+| `footer` | Same scope | Persistent actions and completion display, outside the inert content subtree. |
+
+| Exposed method | Description |
+| --- | --- |
+| `replay()` | Repeat with the current model and variant. |
+| `finish()` | Commit the running target and emit `completed` with `finished`. |
+| `close()` | Commit pending content and request controlled dialog closure. |
+
+### CSS variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--tx-motion-transition-surface` | `--tx-bg-color-overlay` | Opaque door, iris and final wave surface. |
+| `--tx-motion-transition-pad` | Size-dependent, `16px` at md | Content/header/footer spacing. |
+| `--tx-motion-transition-radius` | Size-dependent, `16px` at md | Card/modal radius. |
+| `--tx-motion-transition-width` | `width` prop in dialog modes | Modal width. Prefer the prop when using a dialog. |
+
+## Overview
+
+The outgoing slot subtree is retained during leave. At full coverage, it is removed and the requested keyed subtree mounts. Enter reveals the new content, then `completed` fires after Vue's commit. Waves retain layered point delays; doors retain their independent hinge geometry; flip and fade animate the actual view instead of a branded placeholder.
+
+A content action transfers focus to the stage during motion and then to the first focusable item in the incoming view. Dialog opening focuses the dialog. Only the topmost modal owns Tab and Escape; closure restores the connected opener without scrolling. Reduced motion and activity loss stop the single RAF and commit the target. Listeners, observers and pending frames are released on deactivation/unmount. `useId` supplies stable stage/title IDs and deterministic wave delay seeds for SSR and hydration.
+
+## Technologies
+
+Sources are [Amicro at commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. `src/data/transitions.ts:23–199` supplies the six catalog implementations; `src/components/PageTransitionOverlay.tsx:25–196` supplies the 14-point preview wave, door origins, iris, flip and curtain structures. `PageTransitionCard.tsx` maps to card preview/replay; `PageTransitionModal.tsx` maps to dialog preview, repeat and playback rate; `PageTransitionOverlay.tsx` maps to the reusable stage. Brand copy, clipboard showcase actions and router ownership are not component business behavior.
+
+The registry file `registry/ui/transitions/page-transition.tsx:4–22` declares 18 names, but lines 88–135 implement only stairs and wave. Lines 137–143 use one opacity fallback for all other names. This mapping preserves the source coverage without claiming 16 independent effects or exporting obsolete aliases:
+
+| Upstream declared name | Actual source behavior | Public mapping |
+| --- | --- | --- |
+| `double-stairs` | Alternating five-column stairs, lines 88–120 | `double-stairs` |
+| `shutter-stairs` | Upstream fallback-only opacity | `cross-fade` |
+| `split-stairs` | Upstream fallback-only opacity | `cross-fade` |
+| `horizontal-split` | Upstream fallback-only opacity | `cross-fade` |
+| `vertical-split` | Upstream fallback-only opacity | `cross-fade` |
+| `slash` | Upstream fallback-only opacity | `cross-fade` |
+| `lattice` | Upstream fallback-only opacity | `cross-fade` |
+| `curtain-shred` | Upstream fallback-only opacity | `cross-fade` |
+| `pixel` | Upstream fallback-only opacity | `cross-fade` |
+| `pixel-wave` | Upstream fallback-only opacity | `cross-fade` |
+| `pixel-spiral` | Upstream fallback-only opacity | `cross-fade` |
+| `vortex` | Upstream fallback-only opacity | `cross-fade` |
+| `cross-fade` | Upstream fallback-only opacity | `cross-fade` |
+| `expand-grow` | Upstream fallback-only opacity | `cross-fade` |
+| `push-slide` | Upstream fallback-only opacity | `cross-fade` |
+| `pop-over` | Upstream fallback-only opacity | `cross-fade` |
+| `depth-forward` | Upstream fallback-only opacity | `cross-fade` |
+| `liquid-wave` | Three 12-point Bezier layers, lines 39–84 and 123–135 | `liquid-wave` |
+
+The implementation uses the existing `resolveTransition`/`easingFunction` spring and `useMotionActivity`, with no React, Framer Motion or Tailwind runtime. The source's 380/850 ms content-swap timers are replaced by the actual covered midpoint and animation completion. Build, automated tests and real-browser acceptance are owned by the integration verification, not claimed by this page.

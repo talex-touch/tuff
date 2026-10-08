@@ -49,8 +49,18 @@ async function openAndFocus() {
   if (props.disabled)
     return
   open.value = true
-  await nextTick()
-  panelRef.value?.focusFirstItem()
+  let attempts = 0
+  const attempt = () => {
+    if (!open.value)
+      return
+    panelRef.value?.focusFirstItem()
+    const active = document.activeElement
+    if (active && active !== triggerEl() && panelRef.value?.$el?.contains(active))
+      return
+    if (++attempts < 30)
+      requestAnimationFrame(attempt)
+  }
+  void nextTick(attempt)
 }
 
 function triggerEl(): HTMLElement | null {

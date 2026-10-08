@@ -115,6 +115,22 @@ const liquidMaskId = `tx-ba-liquid-mask-${uid}`
 
 const zIndex = ref(zIndexAllocator.get())
 const mounted = ref(false)
+const closedSettled = ref(true)
+const isParked = computed(() => closedSettled.value && !open.value)
+// Retained/eager panels keep their full layout for measurement, but a stale
+// document translation must not become page overflow while they are closed.
+// Park the whole box above/left of the viewport without a transform; clip its
+// liquid/arrow descendants as well. Open and leaving panels stay absolute.
+const parkedFloatingStyle = {
+  position: 'fixed',
+  left: 'auto',
+  top: 'auto',
+  right: '100%',
+  bottom: '100%',
+  transform: 'none',
+  overflow: 'hidden',
+  visibility: 'hidden',
+} as const
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const cleanupResizeObserver = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
@@ -449,6 +465,7 @@ const {
   isOpen: open,
   isCurrentRun: currentRunId => currentRunId === runId,
   setMounted: value => (mounted.value = value),
+  onCloseSettled: () => (closedSettled.value = true),
   setPanelSurfaceMoving,
   pulsePanelSurfaceMoving,
   prepareLiquid,
@@ -910,6 +927,9 @@ async function applyOpenState(v: boolean) {
     return
   }
 
+  // Restore document geometry before the first positioning/size pass. Closing
+  // keeps it until motion reports its settled state, not merely until open=false.
+  closedSettled.value = false
   mounted.value = true
   zIndex.value = zIndexAllocator.next()
   lastOpenedAt.value = performance.now()
@@ -1040,8 +1060,8 @@ onBeforeUnmount(() => {
       ref="floatingRef"
       v-bind="floatingAttrs"
       class="tx-base-anchor"
-      :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
-      :style="[floatingStyle, floatingStyles, { zIndex }]"
+      :class="[floatingClass, { 'is-open': open, 'is-parked': isParked, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
+      :style="[floatingStyle, floatingStyles, isParked ? parkedFloatingStyle : undefined, { zIndex }]"
     >
       <!--
         The trigger body and the panel share one goo filter so they read as a
@@ -1263,6 +1283,12 @@ onBeforeUnmount(() => {
   border: none;
   overflow: visible;
   pointer-events: none;
+}
+
+.tx-base-anchor.is-parked {
+  /* right: 100% leaves no shrink-to-fit space. Keep intrinsic content measurable;
+     explicit/reference widths and max-width remain owned by size middleware. */
+  width: max-content;
 }
 
 .tx-base-anchor__clip {

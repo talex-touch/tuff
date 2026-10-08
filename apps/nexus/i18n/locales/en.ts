@@ -587,6 +587,7 @@ export default {
       ai: 'Chat, agents and reasoning',
       data: 'Charts and visualization',
       flow: 'Flowcharts and orchestration',
+      motion: 'Buttons, cards and input-driven motion',
     },
     suites: {
       concepts: 'Concepts',
@@ -596,6 +597,7 @@ export default {
       ai: 'AI',
       data: 'Data',
       flow: 'Flow',
+      motion: 'Motion',
     },
     categories: {
       templateApp: 'App shells',
@@ -619,6 +621,16 @@ export default {
       aiReasoning: 'Reasoning',
       aiContext: 'Context & Insight',
       flow: 'Flow',
+      motionButtons: 'Buttons',
+      motionCards: 'Card Spreads',
+      motionCarousels: '3D Carousels',
+      motionLoaders: 'Loaders',
+      motionCharts: 'Dither Charts',
+      motionText: 'Text',
+      motionPhysics: 'Physics',
+      motionInteraction: 'Hover, Cursor & Scroll',
+      motionToggles: 'Toggles',
+      motionTransitions: 'Transitions',
       misc: 'Misc',
     },
     families: {

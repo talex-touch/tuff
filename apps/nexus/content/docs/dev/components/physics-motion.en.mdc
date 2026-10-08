@@ -1,0 +1,192 @@
+---
+title: "Physics motion"
+description: "61 independently retained folding, stroke, stacking and mechanical motion scenes."
+category: MotionPhysics
+status: beta
+since: 0.6.3
+tags: [motion, physics, geometry]
+syncStatus: reviewed
+verified: false
+---
+
+## Overview
+
+`TxPhysicsMotion` preserves every named non-loader whimsical implementation as its own scene. Paper folds use actual hinged layers and clipping; stroke scenes retain their original SVG coordinates; mechanical scenes retain their own pivot, motion vector, scale sequence and phase offsets. `TxMotionDock` owns the separate caller-driven dock. The CSS loaders and UI-kit controls are documented under their own components.
+
+Artwork has an explicit assembled pose. Pausing, disabling, leaving the viewport, hiding the document, KeepAlive deactivation or reduced motion cancels native animations and timers, revealing that readable pose. Decorative playback does not announce or simulate business completion.
+
+## Usage
+
+### Complete catalogue
+
+The demo renders all 61 named scenes, filters by original ID or symbol, and provides a keyboard-operable trigger on every specimen. The selected scene additionally exposes trigger, loop, speed, content and replay controls.
+
+:::TuffDemoWrapper{demo="PhysicsMotionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  const replayKey = ref(0)
+  </script>
+
+  <template>
+    <TxButton @click="replayKey++">Replay</TxButton>
+    <TxPhysicsMotion
+      variant="anim-origami-envelope"
+      trigger="click"
+      :loop="false"
+      :replay-key="replayKey"
+      :labels="{ replay: 'Replay envelope', content: 'Preview' }"
+    >
+      Envelope preview
+    </TxPhysicsMotion>
+  </template>
+---
+:::
+
+### Playback and triggers
+
+`auto` starts when the artwork becomes visible. `hover` supplies pointer-entry and focus replay; `click` supplies native button activation, including Enter and Space. `manual` starts only through `replay()` or a changed `replayKey`. A replay interrupts and replaces the previous choreography without forcing a reflow.
+
+`loop=true` retains the upstream automatic repeating preview, including for hover/click scenes. Use `loop=false` for a strictly input-triggered one-shot. Each scene restarts at its original `useLoopFlg` cadence; tracks with a distinct duration keep that duration, such as the one-second metronome or four-second gear tracks. A one-shot completes its longest track and then shows the assembled pose.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `PhysicsMotionVariant` | `'anim-card-peel'` | Exact ID from the source mapping below. |
+| `trigger` | `'auto' \| 'hover' \| 'click' \| 'manual'` | `'auto'` | Automatic visibility playback, input replay or API-only playback. |
+| `loop` | `boolean` | `true` | Retain the scene's own restart cadence and internal track durations. |
+| `paused` | `boolean` | `false` | Cancel playback and reveal the assembled pose. A queued replay can start on resume. |
+| `disabled` | `boolean` | `false` | Stop animation and disable the native interactive stage. |
+| `replayKey` | `string \| number` | — | Changing the key requests another run without remounting. |
+| `speed` | `number` | `1` | Playback multiplier, clamped to 0.1–5; non-finite values use 1. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 96, 128, 160 or 192px stage, with proportionally scaled geometry. |
+| `ariaLabel` | `string` | Source symbol or `labels.replay` | Accessible name; hover/click stages are native buttons, others are images. |
+| `labels` | `Partial<PhysicsMotionLabels>` | See below | Localized action and artwork content. |
+
+#### Labels
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `replay` | `'Replay animation'` | Default accessible name of interactive stages. |
+| `content` | `'Open'` | Actual revealed text in the gate and sliding shutter. |
+| `north` | `'N'` | North dipole block label. |
+| `south` | `'S'` | South dipole block label. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `play` | `PhysicsMotionVariant` | An actual native playback or source-loop restart starts. |
+| `finish` | `PhysicsMotionVariant` | The longest one-shot track finishes; the assembled pose is visible. Looping or cancellation does not emit this event. |
+| `covered` | `PhysicsMotionVariant` | Tsumiki's actual 1400ms source milestone, adjusted by speed. It is not a save, navigation or network result. |
+
+### Slots and methods
+
+| Entry | Contract |
+| --- | --- |
+| `default` slot | Optional caption outside the interactive stage, associated through a stable Vue ID. |
+| `replay()` | Replace the current run. If inactive, retain the request until active; reduced motion keeps the assembled pose. |
+| `reset()` | Cancel all tracks and queued replay, revealing the assembled pose. |
+| `playing` | Exposed boolean indicating that real native tracks are currently owned by this instance. |
+
+### Exports
+
+`TxPhysicsMotion`, installable `PhysicsMotion`, `TxPhysicsMotionInstance`, `PhysicsMotionProps`, `PhysicsMotionEmits`, `PhysicsMotionLabels`, `PhysicsMotionTrigger`, `PhysicsMotionVariant` and `PhysicsMotionSource` are exported from `@talex-touch/tuffex/physics-motion`.
+
+`PHYSICS_MOTION_VARIANTS` is the complete readonly ID tuple. `PHYSICS_MOTION_SOURCES` contains one real mapping per variant with `variant`, `symbol`, `file`, `period` and `behavior`. `PHYSICS_MOTION_DEFAULT_LABELS` supplies the defaults above.
+
+### CSS variables
+
+| Variable | Meaning |
+| --- | --- |
+| `--tx-physics-accent` | Optional scene accent; otherwise uses `--tx-color-primary`. Related tones mix that accent with the host's surface and ink tokens. |
+| `--tx-physics-size` / `--tx-physics-scale` | Stage length and dimensionless artwork scale, driven together by `size`. |
+
+All paper, line, background and text colors use the host's `--tx-*` tokens. Hover color changes are immediate.
+
+## Source mapping
+
+The table lists the source scene restart cadence, not a replacement universal animation duration. Every link is pinned to upstream commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`.
+
+| Variant | Original symbol | Restart cadence | Independent structure and trajectory | Pinned implementation |
+| --- | --- | --- | --- | --- |
+| `anim-card-peel` | CardStackPeel | 3000 ms | A top card peels down 24px with a 25° perspective tilt, revealing the underlay. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-bookmark-corner` | BookmarkCornerPeel | 3000 ms | The upper-right dog-ear clips away and its folded corner slides into view. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-elastic-tag` | ElasticTagSnap | 3000 ms | A luggage tag stretches down, then recoils above its anchor and settles. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `bookmark-stamp-drop` | BookmarkStampDrop | 3000 ms | A hanging ribbon badge drops from above and damps its alternating angular swing. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-split-gate` | SplitGateReveal | 3000 ms | Two vertically opposed gate panels uncover caller-provided content. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-shutter-slide` | ShutterSlide | 3000 ms | Left and right half-width shutters slide horizontally by 95% of their own width. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `diagonal-drape` | DiagonalDrape | 3000 ms | A diagonally clipped cloth exposes the accent field under a fixed pull pin. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-origami-envelope` | OrigamiEnvelopeUnfold | 3000 ms | The triangular envelope flap turns through 180° around its top hinge. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-card-dispenser` | SmartCardDispenser | 3000 ms | An identity card ejects 38px upward from behind the dispenser slot. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-sticky-note` | StickyNotePeel | 3000 ms | The top memo peels up from its bound edge, lifting and disappearing at 90°. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-receipt-tape` | ReceiptTapePrint | 3000 ms | A receipt feeds downward in four discrete print steps, then retracts. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios1.tsx) |
+| `anim-roller-blind` | RollerBlindDrop | 3000 ms | A single roller shade grows down from its fixed header, then rolls back up. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-scroll-canvas` | ScrollCanvasUnroll | 3000 ms | The scroll opens symmetrically while its left and right rollers move apart. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `flag-pennant-unfurl` | FlagPennantUnfurl | 3000 ms | A triangular pennant unfurls horizontally from its stationary pole. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `anim-ribbon-banner` | RibbonBannerSlide | 3000 ms | A pill-shaped banner stretches outward from its centre, retaining two internal marks. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-page-turn` | PageTurnCurl | 3000 ms | A sheet rises 60px, uncurls its lower corners and flattens its 45° tilt. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `area1` | Area1 | 2200 ms | A suspended fabric panel overshoots its open and closed heights between two rollers. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Area1.tsx) |
+| `tissue` | Tissue | 3000 ms | One tissue is pulled out; the following tissue pushes up from the box slot. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Tissue.tsx) |
+| `curtain` | Curtain | 3200 ms | A centre zipper rises as mirrored cloth corners curve away; the pull tab swings during travel. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Curtain.tsx) |
+| `anim-tension-capsule` | KineticTensionCapsule | 2800 ms | The rubber capsule stretches horizontally, compresses vertically and recoils; its internal nodes separate with the tension. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/KineticTensionCapsule.tsx) |
+| `area6` | Area6 | 1400 ms | An unadorned pill widens, undershoots its resting width and recoils through a second overshoot. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Area6.tsx) |
+| `anim-droplet-squish` | DropletSquish | 2400 ms | A liquid capsule alternates flattened and tall impact silhouettes with asymmetric rounded ends. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-segmented-link` | SegmentedLinkStretch | 2400 ms | Three distinct pill joints move apart by 14px at each outer joint, then snap together. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-blind-pull` | BlindPull | 2800 ms | Five accordion slats separate vertically while the tension cord and pull knob descend. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-rotating-louvers` | RotatingLouvers | 3000 ms | Four independent architectural slats turn through 75° in delayed sequence. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-iris-shutter` | GeometricIrisShutter | 3000 ms | A square camera aperture rotates 60° while expanding around its circular centre. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `radial-aperture` | RadialAperture | 3000 ms | A rounded square diaphragm rotates 90° inside its circular aperture housing. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-bubble-level` | PendulumBubbleLevel | 3000 ms | The fluid bubble crosses its centre target, overshoots in both directions, then damps. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-kinetic-metronome` | KineticTickingMetronome | 2000 ms | A weighted metronome arm ticks ±35° around its bottom pivot. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `newtons-cradle` | NewtonsCradle | 2400 ms | The left and right end balls swing on alternate halves of the transfer cycle. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-orbital-gimbal` | NestedOrbitalGimbal | 3000 ms | Four-second clockwise square and two-second counter-rotating circle tracks; both reset at the source three-second cadence. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `gyroscope-rings` | GyroscopeRings | 3000 ms | A ring rotates through a full X turn and half Y turn in perspective around a fixed core. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-slinky-coil` | SlinkyCoil | 2400 ms | Five horizontal coils extend upward from their bottom anchor and compress together. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-squash-sphere` | SquashStretchSphere | 2200 ms | A falling rubber sphere squashes on impact, stretches on rebound and returns to its launch height. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-gelatin-wobble` | GelatinWobble | 2200 ms | A square gelatin cube lands with six diminishing vertical and aspect-ratio oscillations. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-domino-chain` | DominoChain | 3000 ms | Five upright tiles tip 72° sequentially around their lower-right corners, then reset. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-card-cascade` | CardDeckCascade | 3000 ms | Three cards fan radially by ±22° and ±24px around a lower pivot. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `fan-fold` | FanFold | 2800 ms | Five slender origami fan blades spread to ±40° about a common rivet. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-gear-step` | GearToothStep | 3000 ms | Two synchronized opposite four-second toothed-ring tracks, with the source three-second restart. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `anim-magnetic-disks` | MagneticDisks | 2400 ms | Two disks stretch toward one another, squash at contact and separate after magnetic recoil. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-dual-magnet` | DualMagnetDipole | 2400 ms | North and south blocks close their 28px gap to 4px as the dipole cluster swells. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-compass-deflect` | CompassNeedleDeflect | 2600 ms | A two-tone compass needle deflects 65°, overshoots −45° and damps to north. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `balance-scale` | BalanceScale | 3200 ms | Left and right weights arrive at different times and drive a damped balance-beam tilt. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/WhimsicalVariations.tsx) |
+| `anim-sudden-brake` | SuddenBrake | 2800 ms | A vehicle decelerates from the right, then tips backward and settles around its left wheel. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-rolling-tumble` | RollingTumble | 2600 ms | A cube moves through quarter turns on a 2200ms track, reset at the source 2600ms cadence. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-inertia-skid` | InertiaSkidStop | 2800 ms | A sliding block overshoots its landing position while its skew reverses under friction. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-circuit-trace` | CircuitTraceDraw | 3000 ms | An angular PCB trace draws and erases between two fixed terminal nodes. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-hex-lattice` | HexagonLatticeDraw | 3000 ms | A six-sided wireframe assembles by stroke drawing and then wipes around its perimeter. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-stroke-waveform` | StrokeWaveform | 3000 ms | The source cardiac waveform draws left to right and progressively erases. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `stroke-spiral` | StrokeSpiral | 3000 ms | A circular signature draws while rotating through 180°, then clears during the second half turn. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `kakikaki` | Kakikaki | 3000 ms | The original seven-point calligraphic zigzag draws across its full stroke and then clears. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Kakikaki.tsx) |
+| `anim-neon-sign` | NeonSignDraw | 2800 ms | A distinct neon pulse polyline draws in 240ms, holds, then clears over the final 1200ms. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `anim-prism-stack` | PrismBlockStack | 3000 ms | Three descending prisms stack from wide foundation to narrow top with delayed weighted landings. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-modular-tile` | ModularTileSnap | 3000 ms | Two rotating modules snap into place, one with a circular inset and one with a square inset. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx) |
+| `anim-pyramid-build` | PyramidBlockBuild | 3000 ms | A three-two-one pyramid builds base to peak through staggered row-scale pops. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `tetris-block-settle` | TetrisBlockSettle | 3000 ms | An actual L-shaped three-square block settles above a fixed three-block foundation. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios2.tsx) |
+| `anim-shutter-blocks` | ShutterStepBlocks | 2800 ms | Four horizontal slices open left to right with an 80ms per-tier phase delay. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/YuiPhysicsExperiments.tsx) |
+| `magnetic-orbit-particle` | MagneticOrbitParticle | 3000 ms | A satellite follows its 2600ms orbit around a fixed core, with the source 3000ms restart. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `magnetic-grid-repel` | MagneticGridRepel | 2600 ms | Four magnetic grid points disperse along independent diagonal vectors and return. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/ConceptTrios3.tsx) |
+| `tsumiki` | Tsumiki | 3000 ms | Five bars drop from alternating rotations, cover the stack at 1400ms, then cascade downward in reverse order. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Tsumiki.tsx) |
+| `bookmark` | Bookmark | 3600 ms | Layered notched ribbons lift and descend in perspective while circular washes and four signature sparkles appear in sequence. | [Source](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/whimsical/Bookmark.tsx) |
+
+## Best Practices
+
+- Choose geometry that communicates the interaction. A paper reveal, a mechanical pivot and a path drawing retain different carriers; changing `variant` changes actual structure.
+- Supply localized `labels` and a contextual `ariaLabel`. Keep any business content in the caption or the caller's own UI.
+- Use `loop=false` for deliberate interaction feedback. Reserve automatic looping for an explicitly requested decorative preview.
+- Drive business state from real data. `finish` and `covered` are visual milestones only.
+- Let the component own visibility and reduced-motion suspension. No caller timer is needed to replay the source rhythm.
+- Import `PHYSICS_MOTION_SOURCES` for an accurate catalogue rather than maintaining a second ID list.
+
+## Technologies
+
+The port uses native HTML/SVG and Web Animations, with source-specific keyframes, clipping and nested pivots. Spring-shaped legs use the existing liquid `resolveTransition` compiler; there is no second integrator. Width/height reveals keep their glyphs unstretched through clipping and translated edges. The shared `useMotionActivity` gates all animation and source-cycle timers. No SVG definitions or global counters are required; caption identifiers use Vue `useId`.
+
+Adapted under MIT. Copyright (c) 2026 SYED  SUBHAN UDDIN. This page records implementation contracts; it does not claim a completed browser or package verification run.

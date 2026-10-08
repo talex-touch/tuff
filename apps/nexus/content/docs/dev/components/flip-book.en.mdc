@@ -1,0 +1,115 @@
+---
+title: "Flip book"
+description: "Caller-owned two-sided book pages, DitherBook controls and the wider extracted-book preset with real paper settings."
+category: MotionCarousels
+status: beta
+since: 0.6.3
+tags: [motion, book, perspective]
+---
+
+## Overview
+
+`TxFlipBook` turns an actual two-sided leaf between a left and a right base page. `v-model` is the zero-based current right-page index. The leaf's front and back keep their own page contents throughout the turn. Pages come from `pages` or `#page`; the component contains no upstream image collection.
+
+## Usage
+
+### Book, DitherBook and the embedded wide book
+
+:::TuffDemoWrapper{demo="FlipBookDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxFlipBook } from '@talex-touch/tuffex/flip-book'
+  const current = ref(0)
+  const pages = [
+    { id: 'one', title: 'First page', content: 'Caller-owned writing.' },
+    { id: 'two', title: 'Second page', content: 'A distinct reverse side.' },
+    { id: 'three', title: 'Third page', content: 'A third paper study.' },
+  ]
+  </script>
+  <template>
+    <TxFlipBook v-model="current" :pages="pages" :padding="10"
+      :image-radius="20" :crease-opacity="11" />
+  </template>
+---
+:::
+
+The demo provides text pages, original slotted SVG drawings, a current-page scrubber, actual flip events, paper settings and a replayable opening. All three source presentations are available:
+
+| Mode | Source behavior |
+| --- | --- |
+| `book` | Core Book: two base pages and a two-sided rotating leaf; no built-in toolbar/settings. The caller can drive the index directly. |
+| `dither-book` | DitherBook wrapper: previous/next, page title, settings panel, compact defaults and optional ten-turn opening. Ratio 16:10, perspective 2400px, crease width 48px, settled tilt 6°/−4°. |
+| `extracted-book` | Private Book from SimpleCompExtracted: ratio 16:9, perspective 3000px, crease width 64px, settled tilt 8°/−6°. Side SVG arrows on desktop, bottom navigation on mobile, floating settings with wider ranges. |
+
+The DitherBook opening waits 300ms, uses 140ms fast turns and 70ms intervals; its final turn uses the normal duration, as in the source. The extracted opening waits 800ms, uses 120ms turns and 20ms intervals, and disables visible manual previous/next actions until it ends. The two source entrance poses and 1200/1500ms entrance durations are also retained. `intro=false` is the reusable component default; the demo explicitly enables source playback.
+
+### Best Practices
+
+- Keep `id` stable and provide text or images you are allowed to display. No Pinterest images or external paper texture are bundled.
+- Use `#page="{ page, index, side }"` for original drawings. It renders on the real left/right pages and front/back of the turning leaf.
+- Page content should be non-interactive: the page-wide semantic turning button overlays it. Put application actions outside the book.
+- Use `v-model:settings` to persist editor changes. Individual settings props override the settings object, and the object overrides mode/compact defaults.
+- Use `mode="extracted-book" size="lg"` in the extracted book/chart composition. A parent background click can call `previous()` or `next()` after excluding other interactive elements; do not install document-wide click handlers.
+- Disable `loop` for finite documents. The left page before the first page stays blank, and boundary controls become disabled.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `pages` | `FlipBookPage[]` | required | Real page content; an empty array renders `#empty`. |
+| `modelValue` | `number` | internal `0` | Current right-page index, rounded and wrapped/clamped. |
+| `mode` | `book / dither-book / extracted-book` | `dither-book` | Core or source wrapper/preset described above. |
+| `compact` | `boolean` | `false` | Defaults to padding 6px, radius 8px and shadow 10px. |
+| `settings` | `Partial<FlipBookSettings>` | mode defaults | Controlled/editor settings object. |
+| `padding` | `number` | `10`, extracted `14` | Image/content padding in pixels. |
+| `imageRadius` | `number` | `20`, extracted `32` | Content/image radius in pixels. |
+| `creaseOpacity` | `number` | `11` | Crease opacity percentage. |
+| `paperColor` | `string` | theme surface token | Paper CSS color, including token expressions. |
+| `shadowIntensity` | `number` | `24`, extracted `34` | Content shadow blur in pixels. |
+| `loop` | `boolean` | `true` | Preserve source cyclic pages or use finite boundaries. |
+| `controls` | `boolean` | `true` | Show wrapper navigation/title; core `book` ignores it. |
+| `settingsPanel` | `boolean` | `true` | Show the wrapper settings toggle and editor. |
+| `intro` | `boolean` | `false` | Opt into the source opening sequence when visible. |
+| `introFlips` | `number` | `10` | Number of opening page turns. |
+| `animated` | `boolean` | `true` | Animate turns/entrance; false completes operations immediately. |
+| `disabled` | `boolean` | `false` | Disable manual navigation, replay and settings input. |
+| `duration` | `number` | `450` | Normal page-turn duration in milliseconds. |
+| `size` | `xs / sm / md / lg` | `md` | Maximum book width 300/400/512/640px; responsive within the host. |
+| `ariaLabel` | `string` | `Flip book` | Book group accessible name. |
+| `labels` | `FlipBookLabels` | English labels | Localizable previous/next/settings/paper fields/replay labels. |
+
+`FlipBookPage` has `id?: string | number`, `title?: string`, `src?: string`, `alt?: string`, `content?: string`. The default page renders an image when `src` exists, otherwise title/content. `FlipBookSettings` contains `padding`, `imageRadius`, `creaseOpacity`, `paperColor`, and `shadowIntensity`. `FlipBookLabels` accepts `previous`, `next`, `settings`, `padding`, `imageRadius`, `creaseOpacity`, `paperColor`, `shadowIntensity`, and `intro`.
+
+The DitherBook editor ranges are padding 0–30, radius/crease 0–40 and shadow 0–48. The extracted editor retains padding/crease 0–100, radius 0–32 and shadow 0–50. Direct props can supply values outside the editor's ranges.
+
+### Events
+
+| Event | Arguments | Meaning |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | Requested real right page. |
+| `update:settings` | `settings: FlipBookSettings` | A paper editor input changed. |
+| `change` | `page: FlipBookPage, index: number` | Navigation requested a changed caller-owned page. |
+| `flip-start` | `from: number, to: number, direction: 1 / -1` | A turn began, including immediate reduced-motion turns. |
+| `flip-end` | `index: number` | Destination pages committed, after animation or immediate completion. |
+
+### Slots and instance methods
+
+| API | Contract |
+| --- | --- |
+| `#page` | `{ page, index, side }`; side is `left / right / front / back`. |
+| `#empty` | Content when there are no pages. |
+| `previous()` / `next()` | Turn a page using the source disabled/intro rules. |
+| `goTo(index)` | Request a page, respecting disabled/busy state and wrapping/clamping. |
+| `replayIntro()` | Replay the opening only when animated and not reduced; starts/resumes on visibility. |
+
+Left/Right turn pages; Home/End request the first/last page. Inputs keep their native keyboard behavior. Both page-wide turning buttons and toolbar buttons have accessible labels and focus rings. Title changes reuse `TxTextMorph`; no second text-animation engine is introduced.
+
+## Technologies
+
+Derived from Amicro's Apache-2.0 `Book`/`DitherBook` in `dither-charts/DitherBook.tsx`, its byte-identical `simple-comp/DitherBook.tsx`, and the distinct private `Book` in `simple-comp/SimpleCompExtracted.tsx`, at commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`. Modified Vue/TuffEx source notices and the complete Apache license are distributed; the repository's MIT notice does not replace the file-level license.
+
+The leaf uses native WAAPI with the existing shared spring timing. `useMotionActivity` owns visibility, document, KeepAlive and reduced-motion gating. Timers and animations are canceled when inactive/unmounted; an in-progress inactive turn commits its destination. Reduced motion skips the opening and still completes every manual turn. Paper grain is locally generated CSS, with no network texture requests.

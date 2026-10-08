@@ -35,9 +35,9 @@ code: |
 ---
 :::
 
-### 位移动画
+### 展开动画
 
-`animation.type='transfer'`：内容从 placement 方向通过柔和边缘进入，关闭时原路回收。`show-arrow` 会让三角箭头跟随最终浮层方向与位置。
+默认的 `animation.type='expand'` 从靠近 reference 的角展开面板，关闭时折回。`show-arrow` 让三角箭头跟随面板运动和最终定位。位移揭示可在下方动画模式中选择 `transfer`。
 
 #### 柔和边缘
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -69,7 +69,7 @@ code: |
 
 ### 方向
 
-内容从 placement 方向进入和退出。例如 `top` 时，内容从上方下来，关闭时原路返回上方。
+Floating UI 决定最终方向与对齐方式。默认的 `expand` 从靠近 reference 的角展开；`flip` 改变方向后，面板动画与箭头跟随最终落位。
 
 #### 不同方向
 :::TuffDemoWrapper{demo="BaseAnchorPlacementDemo" code-lang="vue"}
@@ -326,6 +326,7 @@ code: |
 - 优先使用 `TxPopover`、`TxDropdownMenu` 或 `TxContextMenu`；只有在构建新的锚点基础组件或需要虚拟 reference 定位时才直接使用 `TxBaseAnchor`。
 - 浮层内容保持轻量；多步骤表单、危险确认或整屏流程应改用 Drawer/Dialog。
 - 坐标锚点菜单应传入 `virtualReference`，并在鼠标位置或画布变换后调用 `updatePosition()`。
+- `eager` 与 `keepAliveContent` 保留可测量的内容，不保留有效的锚点坐标。关闭时可测量尺寸；定位坐标应取自 reference 或已打开的面板。
 
 ## API 参考
 
@@ -347,7 +348,7 @@ code: |
 | `referenceClass` | `BaseAnchorClassValue` | `undefined` | 追加到 reference 包装层的 class，不会作用于浮层面板 |
 | `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | 使用虚拟 reference（如鼠标坐标）进行定位；适合 ContextMenu / 画布节点 / 光标菜单 |
 | `disableFlip` | `boolean` | `false` | 关掉 `flip` 中间件，面板贴近视口边缘时不再翻到 `placement` 的对侧。`shift` 仍在，面板依然会被推回视口内。用于宿主自行测量的 `virtualReference`（划词工具条、光标条）——中途换边会被读成另一个控件 |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | 动画配置对象，统一控制动画类型、时长、缓动与效果参数 |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | 动画配置对象，未传字段按类型取默认值；默认类型为 `expand` |
 | `useCard` | `boolean` | `true` | 是否使用内置 `TxCard` 包裹浮层内容 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | `useCard=true` 时透传给 `TxCard` 的边框形态 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background；`refraction` 即琉光） |
@@ -428,13 +429,14 @@ code: |
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 动画只通过 `animation` 对象配置，组件没有顶层的 `duration` / `ease` prop；没写的字段按类型取默认值。
 - `showArrow` 的箭头是面板的一部分：它挂在面板内容层上，内容层的位移、缩放、模糊和透明度都会带着它走；面板开始运动之前、收起之后，它都随面板一起隐藏。各动画类型只给它加自己那一拍：`expand` 等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回、再让面板折叠；`transfer` 先把它藏进面板，滑入落地时弹出；`boom` 晚而快地弹出；`opacity` 没有额外动作，只随面板淡入淡出。
-- `eager` 会在首次打开前挂载；`keepAliveContent` 会在关闭后保留内容状态。优先用于需要测量或保留表单状态的面板，不要滥用于静态文案。
+- `eager` 在首次打开前挂载隐藏但可测量的内容；`keepAliveContent` 在关闭后保留内容状态。关闭动画结束后，根节点停放到视口外，并裁剪自身溢出，避免保留的面板在视口缩小时撑宽文档。显式宽度、跟随 reference 的宽度和内容固有尺寸仍可测量，不使用 `display: none` 或页面级裁剪。
+- 打开和关闭动画期间，面板保持文档绝对定位，根节点通过位移定位，页面滚动由合成线程带动面板跟随 reference。只有退出画面结束后才停放；重新打开会在首次定位和尺寸计算前恢复文档几何，并使旧的关闭完成回调失效。
 - `drip` / `bead` 只对纵向轴有定义。`left*` / `right*` 落位（包括 `flip` 翻出来的）会降级为 opacity 路径，时序保持不变。
 - `drip` / `bead` 通过 goo 滤镜自绘不透明表面，因此不渲染 `TxCard`，`panelBackground` / `panelShadow` / `panelVariant` 均不生效。四种非 `pure` 背景都依赖 `backdrop-filter`，它在 SVG 滤镜内不生效，且经 alpha 阈值会被切成硬边。
 - `drip` / `bead` 会抑制 `showArrow`（箭头与颈部语义冲突），并用合并轮廓推导的环取代原本的圆角矩形描边，不会出现双描边。
 - `drip` / `bead` 会把触发器内部从 goo 填充里挖空，因此触发器自身的填充与文字始终可见，与页面的层叠上下文无关。轮廓那一层不参与遮罩，所以推导出的环仍然包住触发器。代价是触发器必须自带不透明背景 —— 透明触发器会从挖空处透出页面。
 - `drip` / `bead` 需要可测量的面板高度；`unlimitedHeight`（或 `maxHeight <= 0`）会回落到瞬时显示/隐藏路径。
-- `prefers-reduced-motion: reduce` 下所有动画类型都直接跳到终态而不播放：GSAP 驱动的 `transfer` / `boom` / `opacity` 立即结束，`drip` / `bead` 通过其 prepare 步骤跳到终态（`none` 本就是瞬时）。
+- `prefers-reduced-motion: reduce` 下所有动画类型都直接跳到终态而不播放：GSAP 驱动的 `expand` / `transfer` / `boom` / `opacity` 立即结束，`drip` / `bead` 通过其 prepare 步骤跳到终态（`none` 本就是瞬时）。
 
 ## 技术实现
 
@@ -442,6 +444,7 @@ code: |
 - 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、`animation` 对象变体，以及 surface-motion adaptation 策略。
 - 被否掉的做法：让 `.tx-base-anchor__card` 自己 `overflow: auto`。它曾是默认写法，但卡片的 surface 层是它的绝对定位子元素，包含块随卡片内容一起滚动——面板往下滚多少像素，底部就有多少像素只剩页面背景。自带列表滚动容器的面板（select、search-select）碰不到，把整个 body 交给卡片的 dropdown-menu 会。现在卡片 `overflow: hidden`、body `overflow: auto`，surface 留在原地。
 - 被否掉的做法：把箭头放在 clip 外，作为浮层根节点的直接子元素。clip 的 `visibility` 管不到它，于是面板还没开始动，它就先以完整尺寸出现了两三帧；`:not(.is-open)` 规则在关闭的第一帧就把它藏掉，收回动画全程看不见；`expand` 时面板漂移 12px，箭头却钉在终点位置，底边先陷进面板 15px，回弹时又离开边缘 1.3px。现在它是 `.tx-base-anchor__content` 的子元素，全程贴着面板边缘。floating-ui 给出的偏移落点不变：`transfer` 的回弹内边距只加在远端，而箭头贴的是近端，横向偏移也不受它影响。
+- 保留浮层的几何由关闭生命周期管理：动画完成回调通过运行标识检查后停放外层根节点，同时裁剪箭头和液态舞台。`right: 100%` 不留收缩适配空间，因此 `.is-parked` 使用 `width: max-content` 保持内容固有宽度；内联显式宽度、reference 宽度和 middleware 的最大宽度仍生效。仅隐藏内层 clip 会让旧根节点的位移和宽度继续撑宽文档；裁剪整个页面会遮住问题，把已打开的面板改成 fixed 则会破坏合成线程的滚动跟随。
 - `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
 - 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
 - `drip` / `bead` 的覆盖分布在 `base-anchor-liquid.test.ts`（cubic-bezier 求解、弹簧拒绝、p=0 / 0.45 / 1 的稿值几何、两条边的独立性、逐项揭示）与 `base-anchor.test.ts`（单一合并 goo 滤镜、腐蚀推导的轮廓环、滤镜外的阴影孪生、箭头/描边/卡片抑制、横向降级、不走 gsap）。

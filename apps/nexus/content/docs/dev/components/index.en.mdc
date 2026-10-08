@@ -6,7 +6,7 @@ status: beta
 since: 0.3.9
 tags: [concepts, overview, foundations, utils]
 syncStatus: reviewed
-verified: true
+verified: false
 ---
 
 ## Installation
@@ -15,10 +15,10 @@ Three import shapes — per component, per suite barrel, or the root entry — p
 
 ## Tuffex Components
 
-Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, **Data** carries visualization plus the chart family, and **Flow** carries workflow orchestration on a canvas. The suite switcher at the top of the sidebar lists Concepts as a sixth, documentation-only suite alongside these five, and picking a suite takes you straight to its overview.
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering CoreBox, plugin surfaces and this documentation site. The sidebar has eight documentation suites: **Concepts**, **Templates**, **Basics**, **Pro**, **AI**, **Data**, **Flow** and **Motion**. Concepts explains installation and design rules; Templates contains full-page compositions; the other six group reusable components by purpose. Choosing a suite opens its overview, or the first composition in Templates.
 
-- Live specimens: every suite page opens with a preview grid — [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) — where each cell is a real, interactive component; click its name to open the docs.
-- Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships behind the `@talex-touch/tuffex/charts` subpath of the same package.
+- Live specimens: [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) and [Motion](./motion-suite.en.mdc) open with interactive component grids. Each specimen has a reset control and a link to its documentation.
+- Installation barrels stay `@talex-touch/tuffex/base`, `/pro` and `/ai`. Motion is a documentation suite, not a new installation barrel. Mono and Dither charts import from the existing `@talex-touch/tuffex/charts` subpath.
 - Changelog & Lifecycle: See [Component Changelog & Lifecycle](./changelog.en.mdc) for introduction versions (Since xx), per-release component changes, and release gates.
 
 ## Design Foundations
@@ -103,17 +103,52 @@ code: |
 
 ## Suite Overview
 
-Each suite has one overview page carrying its own live preview and its own component list — the first entry in the sidebar once that suite is picked in the switcher.
+Component suites have live overview grids. Concepts starts here; Templates opens a complete page composition. Page counts below exclude suite overview pages and count documentation entries rather than public exports.
 
-| Suite | Groups | Components | Entry |
-|-------|--------|------------|-------|
-| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 94 | `@talex-touch/tuffex/base` |
-| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 28 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 34 | `@talex-touch/tuffex/ai` |
-| [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization + charts) + `@talex-touch/tuffex/charts` (chart family entry) |
+| Suite | Groups | Pages | Entry |
+|-------|--------|-------|-------|
+| [Concepts](./index.en.mdc) | Installation / Foundations / Theming / Icons / Accessibility / Utils / Sound / Changelog | 8 | Documentation only |
+| [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 16 | Compositions of existing entries |
+| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
+| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 38 | `@talex-touch/tuffex/pro` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 35 | `@talex-touch/tuffex/ai` |
+| [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
+| [Motion Suite](./motion-suite.en.mdc) | Buttons / Card Spreads / 3D Carousels / Loaders / Dither Charts / Text / Physics / Hover, Cursor & Scroll / Toggles / Transitions | 12 | `@talex-touch/tuffex/pro` + `@talex-touch/tuffex/charts` |
 
-Concepts is the sixth suite — documentation-only, with no component entry of its own. This page is its overview: library positioning, design foundations and utils above, the full component index below.
+Source version 0.6.3 includes the new Motion, Mono and composite Pro families. It ships for Tuff beta testing and has not been independently published to npm; see [Changelog](./changelog.en.mdc).
+
+## Templates
+
+Full-page compositions use the same component entries. Open a template to inspect its live page and implementation.
+
+### App shells
+
+- [Shell](./template-shell.en.mdc)
+- [Launcher](./template-launcher.en.mdc)
+- [Settings](./template-settings.en.mdc)
+- [Onboarding](./template-onboarding.en.mdc)
+
+### Content
+
+- [CMS](./template-cms.en.mdc)
+- [Gallery](./template-gallery.en.mdc)
+- [Inbox](./template-inbox.en.mdc)
+- [Files](./template-files.en.mdc)
+- [Store](./template-store.en.mdc)
+- [Docs](./template-docs.en.mdc)
+
+### AI apps
+
+- [Agent chat](./template-agent-chat.en.mdc)
+- [AI answer](./template-ai-answer.en.mdc)
+- [Research](./template-research.en.mdc)
+
+### Data & flow
+
+- [Dashboard](./template-dashboard.en.mdc)
+- [Automation](./template-automation.en.mdc)
+- [Release](./template-release.en.mdc)
 
 ## Basics
 
@@ -248,6 +283,9 @@ Rich interaction, visual effects and low-level primitives, importable through th
 - [Terminal](./terminal.en.mdc)
 - [VirtualList](./virtual-list.en.mdc)
 - [VersionCapsule](./version-capsule.en.mdc)
+- [MotionForm](./motion-form.en.mdc)
+- [MotionControl](./motion-control.en.mdc)
+- [MotionMetric](./motion-metric.en.mdc)
 
 ### Effects
 
@@ -344,8 +382,10 @@ Docs for the chart family behind the `@talex-touch/tuffex/charts` subpath (kumo)
 
 - [Charts](./charts.en.mdc)
 - [Chart Colors](./chart-colors.en.mdc)
+- [ECharts](./echart-charts.en.mdc)
 - [TimeseriesChart](./timeseries-chart.en.mdc)
 - [Maps](./maps.en.mdc)
+- [MonoChart](./mono-chart.en.mdc)
 - [SankeyChart](./sankey-chart.en.mdc)
 - [Custom Chart](./custom-chart.en.mdc)
 
@@ -363,6 +403,52 @@ Workflow orchestration: nodes, branches and connectors on a dotted canvas. It im
 ### Flow
 
 - [Flowchart](./flowchart.en.mdc)
+
+## Motion
+
+Input-driven motion and presentation families, grouped independently of installation barrels. [Motion Suite](./motion-suite.en.mdc) includes a live specimen for each family; the component pages expose every named source variant.
+
+### Buttons
+
+- [MotionButton](./motion-button.en.mdc)
+
+### Card Spreads
+
+- [CardSpread](./card-spread.en.mdc)
+
+### 3D Carousels
+
+- [Carousel3D](./carousel-3d.en.mdc)
+- [FlipBook](./flip-book.en.mdc)
+
+### Loaders
+
+- [MotionLoader](./motion-loader.en.mdc)
+
+### Dither Charts
+
+- [DitherChart](./dither-chart.en.mdc)
+
+### Text
+
+- [MotionText](./motion-text.en.mdc)
+
+### Physics
+
+- [PhysicsMotion](./physics-motion.en.mdc)
+
+### Hover, Cursor & Scroll
+
+- [MotionDock](./motion-dock.en.mdc)
+- [Motion](./motion.en.mdc)
+
+### Toggles
+
+- [MotionToggle](./motion-toggle.en.mdc)
+
+### Transitions
+
+- [MotionTransition](./motion-transition.en.mdc)
 
 ## Technologies
 

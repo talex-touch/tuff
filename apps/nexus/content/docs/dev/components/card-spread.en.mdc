@@ -1,0 +1,116 @@
+---
+title: "Card spread"
+description: "Nine content-driven card layouts and focus-blur links with selection, adjustable stamp geometry and keyboard operation."
+category: MotionCards
+status: beta
+since: 0.6.3
+tags: [motion, cards, spread]
+---
+
+## Overview
+
+`TxCardSpread` renders caller-owned items. Each layout keeps its own source coordinates, stacking order and pivot. Hover and keyboard focus expand an uncontrolled deck; the toggle pins it open. `v-model:expanded` controls the layout directly. `v-model` is the zero-based selected item, independent of expansion.
+
+## Usage
+
+### All source layouts
+
+:::TuffDemoWrapper{demo="CardSpreadDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCardSpread } from '@talex-touch/tuffex/card-spread'
+  const selected = ref(0)
+  const items = [
+    { id: 'draft', title: 'Draft' },
+    { id: 'review', title: 'Review' },
+    { id: 'ready', title: 'Ready' },
+    { id: 'publish', title: 'Publish' },
+    { id: 'archive', title: 'Archive' },
+  ]
+  </script>
+  <template>
+    <TxCardSpread v-model="selected" :items="items" variant="card-stamp-arc"
+      :angle="25" :gap="180" :y-offset="40" colorful />
+  </template>
+---
+:::
+
+The demo displays all nine spreads plus `focus-blur`, filters by the original IDs and exposes real stamp arc/gap/offset sliders. Its images are original inline SVG illustrations, not upstream assets.
+
+| Variant | Geometry and source defaults |
+| --- | --- |
+| `card-arc-5` | Bottom-center pivot; angle 30°, gap 70px, vertical stops `[10,-2,-10,-2,10]`. |
+| `card-arc-7` | Seven distinct arc stops; angle 45°, gap 110px, offset 30px. |
+| `card-long-arc-5` | Wider, flatter arc; angle 15°, gap 140px, offset 20px. |
+| `card-linear-spread` | Horizontal translation only; gap 90px. |
+| `card-corner-fan` | Bottom-left pivot; asymmetric rotation from −10° to +30° by default. |
+| `card-stamp-arc` | Dashed stamp edges; angle stops `[-1,-0.48,0,0.48,1]`, gap 180px, offset 40px. |
+| `card-cascade-stagger` | Center pivot; each step moves 14px right, 28px up and rotates 6°. Collapsed pages retain their 2px stagger. |
+| `card-scatter-spread` | Independent dealt-card coordinates and rotations; no symmetric fan substitution. |
+| `card-wheel-fan` | Pivot below the cards at 110%; rotations ±36° and vertical stops `[-8,-22,-28,-22,-8]`. |
+| `focus-blur` | Extra `FocusBlur` behavior: hovered/focused labels remain clear, siblings blur/fade and dashed brackets spring into view. |
+
+Five- and seven-stop layouts interpolate their source stops for other item counts. No cards are fabricated when items are missing.
+
+### Best Practices
+
+- Supply stable `id` values and image alternative text. `title` also names the selection control.
+- Use `expanded` when expansion is application state; leave it undefined for hover/focus and the pin toggle.
+- `angle`, `gap` and `yOffset` are the stamp source's arc, spread and offset controls. Other variants retain their own defaults when these props are omitted.
+- Item slots live inside selection buttons: use non-interactive content. `focus-blur` uses a real anchor when an item has `href`.
+- Keep wide layouts horizontally scrollable on small screens. `size` scales the cards and their geometry together.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | required | Caller-owned content; an empty array renders only `#empty`. |
+| `modelValue` | `number` | internal `0` | Zero-based selected item. |
+| `variant` | `CardSpreadVariant` | `card-arc-5` | One of the ten IDs above; exported as `CARD_SPREAD_VARIANTS`. |
+| `expanded` | `boolean` | undefined | Controlled expansion; undefined enables hover/focus/pinning. |
+| `angle` | `number` | per variant | Source rotation in degrees. |
+| `gap` | `number` | per variant | Horizontal spread distance in pixels. |
+| `yOffset` | `number` | per variant | Source vertical offsets in pixels. |
+| `hoverIntensity` | `number` | `1` | Multiplier for translation and rotation, not card scale. |
+| `duration` | `number` | `500` | Transition duration in milliseconds; timing uses the shared spring. |
+| `colorful` | `boolean` | `false` | Token-based card tints unless the item supplies `color`. |
+| `blurAmount` | `number` | `4` | `focus-blur` sibling blur in pixels. |
+| `opacityAmount` | `number` | `0.4` | `focus-blur` sibling opacity. |
+| `showBrackets` | `boolean` | `true` | Show focus brackets in `focus-blur`. |
+| `animated` | `boolean` | `true` | Motion only; selection and expansion still work when false. |
+| `disabled` | `boolean` | `false` | Disable selection, link navigation and the pin toggle. |
+| `size` | `xs / sm / md / lg` | `md` | Card and geometry scale. |
+| `ariaLabel` | `string` | `Card spread` | Group accessible name. |
+| `expandLabel` | `string` | `Expand cards` | Localizable toggle label. |
+| `collapseLabel` | `string` | `Collapse cards` | Localizable pinned/controlled toggle label. |
+
+`MotionCardItem` fields are `id?: string | number`, `title?`, `description?`, `src?`, `alt?`, `date?`, `href?`, and `color?: string`. Images and text are rendered from the caller's data. `color` accepts a CSS color or token expression.
+
+### Events
+
+| Event | Arguments | Meaning |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | Selection from card, link or keyboard. |
+| `update:expanded` | `expanded: boolean` | Pin toggle or Escape request. |
+| `select` | `item: MotionCardItem, index: number` | Selected caller-owned item. |
+
+### Slots and instance methods
+
+| API | Contract |
+| --- | --- |
+| `#item` | `{ item, index, selected, expanded }`; replaces content, not card geometry. |
+| `#empty` | Empty-state content when `items.length === 0`. |
+| `select(index)` | Select an existing item unless disabled. |
+| `toggle()` | Toggle pin/controlled expansion unless disabled. |
+
+Left/Right, Home and End select items; native buttons support Enter/Space. Escape releases the pin and emits a controlled collapse request. Focus expands the deck and remains visibly outlined.
+
+## Technologies
+
+Ported from Amicro `CardArc5`, `CardArc7`, `CardLongArc5`, `CardLinearSpread`, `CardCornerFan`, `CardStampArc`, `CardCascadeStagger`, `CardScatterSpread`, `CardWheelFan` and `FocusBlur` at commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`, under MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+
+Transforms use the existing shared spring compiler. `useMotionActivity` removes motion offscreen, in hidden documents, during KeepAlive deactivation and for reduced motion; content and operations remain available. No React/Motion runtime or external demo assets are included.

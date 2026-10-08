@@ -5,6 +5,7 @@
 ### 📦 组件变动 (Components)
 
 - **更新组件**: `base-anchor`, `charts`, `liquid`, `transition`
+- **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
 
@@ -12,10 +13,15 @@
 - `TxBaseAnchor` 的箭头有了自己的动画：箭头挂到面板内容层上，跟着面板的位移、缩放、模糊和透明度一起动，面板开始运动之前、收起之后都随面板隐藏（此前会在面板动起来前先完整闪出两三帧，关闭的第一帧就消失）；`expand` 下箭头等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回再折叠面板；`opacity` 的箭头只随面板淡入淡出。
 - `TxBaseAnchor` 的 `transfer` / `boom` / `opacity` 现在和 `expand` 一样解析 `animation.ease` / `closeEase` 里的 `spring(omega, zeta)` 与 `cubic-bezier(...)`；此前原样交给 GSAP，被静默换成 GSAP 的默认缓动。GSAP 自己的缓动名照旧透传。
 - `TxLiquid` 的 `cornerEase` 接受任意 CSS 缓动，包括全部关键字与 `linear(...)` 列表；此前只认 `cubic-bezier(...)` 与 `ease-in-out`，其余按线性处理。
+- `charts` 新增 `TxMonoChart` 与 `TxDitherChart`；`liquid` 复用共享的减少动态效果偏好，并在 KeepAlive 停用时清理动态任务。
+- 融合 Amicro 固定来源的按钮、卡片展开、三维轮播与书页、命名加载器、文字、物理、指针与滚动、开关和内容转场；Nexus 新增独立 Motion 文档章节，Mono Charts 位于 Data，复合表单、控件和指标位于 Pro。安装边界仍为 base/pro/ai，图表沿用现有 SVG/d3 入口。
+- 内容、数据、模型、上传选择与业务结果由调用方驱动；动效复用已有 spring 与 TextMorph。新增 `useMotionActivity` 统一视口、页面活动、KeepAlive 与减少动态效果边界，npm 分发清单保留 `AMICRO-LICENSE`、`AMICRO-APACHE-LICENSE` 和 `LUCIDE-LICENSE`。
 
 ### 🐛 组件修复
 
 - `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
+- `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。
+- `TxMotionLoader` 将保留的 React SVG 描边属性转换为标准 SVG 属性，恢复来源中的线宽、端帽、连接和虚线参数；`viewBox` 与滤镜大小写保持不变，SSR 与客户端遵循相同几何。
 
 ### 🧩 组件导出
 
@@ -24,6 +30,7 @@
 ### 🧪 内部
 
 - 缓动实现收拢到 `utils/animation/easing.ts`，各处副本删除：`TxBaseAnchor` 的弹簧与贝塞尔构件、`TxLiquid` 的两份 CSS 缓动求值（`spring.ts` 的 `easingFunction` 与 observer 的圆角时间线）、`TxTextMorph` 借用的那份，以及图表入口的 `cubicBezier`（名字保留，改用共享求解器）。
+- 共享工具的发布模块输出到稳定的 `utils/internal` 路径，不再把构建机的绝对工作区目录带进按需入口；公开组件与工具子路径保持不变。
 
 ### 组件修复
 
@@ -423,10 +430,13 @@ const handleClick = () => {
 | `base-surface` | pro | **0.3.4** |
 | `blank-slate` | base | **0.3.4** |
 | `border-beam` | pro | **0.3.9** |
+| `bot-avatar` | ai | **0.6.2** |
 | `breadcrumb` | base | **0.3.4** |
 | `button` | base | **0.3.4** |
 | `card` | base | **0.3.4** |
 | `card-item` | base | **0.3.4** |
+| `card-spread` | pro | **0.6.3（未独立发布）** |
+| `carousel-3d` | pro | **0.6.3（未独立发布）** |
 | `cascader` | base | **0.3.4** |
 | `cell-link` | base | **0.3.9** |
 | `chain-of-thought` | ai | **0.3.9** |
@@ -446,6 +456,7 @@ const handleClick = () => {
 | `corner-overlay` | pro | **0.3.4** |
 | `data-table` | base | **0.3.4** |
 | `date-picker` | base | **0.3.4** |
+| `descriptions` | base | **0.6.3** |
 | `dialog` | base | **0.3.4** |
 | `diff-table` | pro | **0.3.9** |
 | `divider` | base | **0.3.7** |
@@ -463,6 +474,7 @@ const handleClick = () => {
 | `flat-radio` | base | **0.3.4** |
 | `flat-select` | base | **0.3.4** |
 | `flex` | base | **0.3.4** |
+| `flip-book` | pro | **0.6.3（未独立发布）** |
 | `flip-overlay` | pro | **0.3.4** |
 | `floating` | pro | **0.3.4** |
 | `flowchart` | ai | **0.6.0** |
@@ -482,6 +494,7 @@ const handleClick = () => {
 | `icon-morph` | pro | **0.6.0** |
 | `icon-picker` | base | **0.6.0** |
 | `image-gallery` | base | **0.3.4** |
+| `image-generation` | pro | **0.6.2** |
 | `image-uploader` | base | **0.3.4** |
 | `inline-citation` | ai | **0.3.9** |
 | `input` | base | **0.3.4** |
@@ -495,8 +508,19 @@ const handleClick = () => {
 | `markdown-editor` | pro | **0.3.9** |
 | `markdown-view` | base | **0.3.4** |
 | `message-actions` | ai | **0.3.9** |
+| `metal-fx` | pro | **0.6.2** |
 | `modal` | base | **0.3.4** |
 | `mode-chip` | ai | **0.6.0** |
+| `motion` | pro | **0.6.3（未独立发布）** |
+| `motion-button` | pro | **0.6.3（未独立发布）** |
+| `motion-control` | pro | **0.6.3（未独立发布）** |
+| `motion-dock` | pro | **0.6.3（未独立发布）** |
+| `motion-form` | pro | **0.6.3（未独立发布）** |
+| `motion-loader` | pro | **0.6.3（未独立发布）** |
+| `motion-metric` | pro | **0.6.3（未独立发布）** |
+| `motion-text` | pro | **0.6.3（未独立发布）** |
+| `motion-toggle` | pro | **0.6.3（未独立发布）** |
+| `motion-transition` | pro | **0.6.3（未独立发布）** |
 | `nav-bar` | base | **0.3.4** |
 | `no-data` | base | **0.3.4** |
 | `no-selection` | base | **0.3.4** |
@@ -505,6 +529,7 @@ const handleClick = () => {
 | `outline-border` | pro | **0.3.4** |
 | `pagination` | base | **0.3.4** |
 | `permission-state` | base | **0.3.4** |
+| `physics-motion` | pro | **0.6.3（未独立发布）** |
 | `picker` | base | **0.3.4** |
 | `popover` | base | **0.3.4** |
 | `prism-glow` | pro | **0.6.0** |
@@ -551,6 +576,7 @@ const handleClick = () => {
 | `tag` | base | **0.3.4** |
 | `tag-input` | base | **0.3.4** |
 | `task-rows` | ai | **0.3.9** |
+| `terminal` | pro | **0.6.3** |
 | `text-morph` | pro | **0.6.0** |
 | `text-transformer` | pro | **0.3.4** |
 | `textarea` | base | **0.3.7** |
@@ -569,4 +595,5 @@ const handleClick = () => {
 | `tuff-logo-stroke` | pro | **0.3.4** |
 | `version-capsule` | pro | **0.3.9** |
 | `virtual-list` | pro | **0.3.4** |
+| `voice-beam` | pro | **0.6.2** |
 | `working-indicator` | ai | **0.3.9** |

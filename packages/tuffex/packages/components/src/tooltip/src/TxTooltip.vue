@@ -288,6 +288,8 @@ defineExpose({
         :style="props.unstyled ? undefined : tooltipVars"
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"
+        @focusin="onFloatingEnter"
+        @focusout="onFloatingLeave"
       >
         <template v-if="props.unstyled">
           <slot name="content" :side="side">

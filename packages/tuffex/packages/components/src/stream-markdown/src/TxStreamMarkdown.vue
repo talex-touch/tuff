@@ -2,7 +2,7 @@
 import type { StreamBlock, StreamMarkdownBlockRenderer, StreamMarkdownProps } from './types'
 import { Marked } from 'marked'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
-import { useReducedMotion } from '../../liquid/src/use-reduced-motion'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { streamRevealDuration } from '../../stream-text/src/presets'
 import TxStreamCaret from '../../stream-text/src/TxStreamCaret.vue'
 import TxCodeBlock from './TxCodeBlock.vue'
