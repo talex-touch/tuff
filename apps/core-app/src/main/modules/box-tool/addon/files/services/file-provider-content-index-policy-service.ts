@@ -2,7 +2,10 @@ import type {
   FileContentIndexingState,
   FileIndexContentSettings
 } from '@talex-touch/utils/transport/events/types'
+import { IndexedWorkerPersistEntryMapperService } from '@talex-touch/utils/search'
 import type { FileIndexSettings } from '../types'
+import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
+import type { FilePersistenceEntry } from '../../../search-engine/file-index-persistence-repository'
 
 interface FileProviderContentIndexPolicyDeps {
   cleanupVersion: number
@@ -27,11 +30,39 @@ export class FileProviderContentIndexPolicyService {
   private suppressed = false
   private transition: 'idle' | 'clearing' = 'idle'
   private queue: Promise<void> = Promise.resolve()
+  private readonly persistEntryMapper = new IndexedWorkerPersistEntryMapperService()
 
   constructor(private readonly deps: FileProviderContentIndexPolicyDeps) {}
 
   isEnabled(): boolean {
     return this.deps.getSettings().contentIndexingEnabled && !this.suppressed
+  }
+
+  /**
+   * Insurance behind the switch: with content indexing off, no parser result may land in
+   * `files.content`. A dev index that had the switch off since policy version 1 still held 623 MB
+   * of content on 2026-10-08, so the scheduling gate alone is not trusted.
+   */
+  /** Worker results mapped to persist entries, with content stripped while the switch is off. */
+  buildPersistEntries(entries: IndexWorkerFileResult[]): FilePersistenceEntry[] {
+    return this.filterPersistEntries(this.persistEntryMapper.map(entries) as FilePersistenceEntry[])
+  }
+
+  filterPersistEntries(entries: FilePersistenceEntry[]): FilePersistenceEntry[] {
+    if (this.isEnabled()) return entries
+    return entries.map((entry) =>
+      entry.fileUpdate
+        ? {
+            ...entry,
+            fileUpdate: {
+              ...entry.fileUpdate,
+              content: null,
+              contentHash: null,
+              embeddings: undefined
+            }
+          }
+        : entry
+    )
   }
 
   getSnapshot(): FileIndexContentSettings {

@@ -89,7 +89,7 @@ import {
   type LocalAssetFallbackKind
 } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
-import { enterPerfContext, getRecentPerfEventLoopLag } from '../../../../utils/perf-context'
+import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
@@ -112,13 +112,11 @@ import {
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import type { IndexedWriteDeleteExecutorResult } from '../../search-engine/indexing-write-delete-executor-service'
 import {
-  IndexedWorkerPersistEntryMapperService,
   IndexedWriteInsertExecutorService,
   IndexedWriteUpdateExecutorService
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
-import type { FilePersistenceEntry } from '../../search-engine/file-index-persistence-repository'
 import { waitForIndexMaintenanceIdle } from '../../search-engine/search-activity'
 import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
 import {
@@ -460,7 +458,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly enrichmentResumeService: FileProviderEnrichmentResumeService
   private readonly contentIndexPolicyService: FileProviderContentIndexPolicyService
-  private readonly indexPersistEntryMapper: IndexedWorkerPersistEntryMapperService
   private readonly embeddingIndexService = new FileProviderEmbeddingIndexService({
     getEmbeddingService: () => this.embeddingService ?? null,
     logDebug: (m, meta) => this.logDebug(m, meta)
@@ -481,7 +478,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
     onBaseCommitReady: () => this.enrichmentResumeService.resume('base-maintenance-commit'),
     emitCleanupProgress: (current, total) => this.progressState.emit('cleanup', current, total),
-    getRecentEventLoopLag: () => getRecentPerfEventLoopLag(),
     logInfo: (message, metadata) => this.logInfo(message, metadata),
     logDebug: (message, metadata) => this.logDebug(message, metadata),
     logWarn: (message, error, metadata) => this.logWarn(message, error, metadata)
@@ -983,9 +979,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       stop: () => this.enrichmentResumeService.stop(),
       cancelPending: () => this.indexSchedulerService.cancelPending(),
       clearData: () => this.clearContentIndexingDataWithLease(),
-      compact: (reason) => this.compactSearchIndex(reason)
+      compact: (reason) => this.maintenanceService.compactSearchIndex(reason)
     })
-    this.indexPersistEntryMapper = new IndexedWorkerPersistEntryMapperService()
     this.indexRuntimeService = new FileProviderIndexRuntimeService({
       flushBatchScheduler: this.flushBatchScheduler,
       getDbUtils: () => this.dbUtils,
@@ -994,8 +989,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getInflightResults: () => this.inflightIndexWorkerResults,
       ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
       getSearchIndexWorker: () => this.requireFilePersistencePort(),
-      buildPersistEntries: (entries) =>
-        this.stripContentWhenDisabled(this.indexPersistEntryMapper.map(entries)),
+      buildPersistEntries: (entries) => this.contentIndexPolicyService.buildPersistEntries(entries),
       publishRecords: (entries) => this.publishCommittedWorkerRecords(entries),
       indexEmbeddings: (entries) =>
         this.contentIndexPolicyService.isEnabled()
@@ -2703,57 +2697,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public updateContentIndexSettings(contentIndexingEnabled: boolean) {
     return this.contentIndexPolicyService.update(contentIndexingEnabled)
-  }
-
-  /**
-   * Insurance behind the content switch: with content indexing off, no parser result may land
-   * in `files.content`. A dev index that had the switch off since policy version 1 still held
-   * 623 MB of content on 2026-10-08, so the gate in `enqueueContentIndexing` alone is not trusted.
-   */
-  private stripContentWhenDisabled(entries: FilePersistenceEntry[]): FilePersistenceEntry[] {
-    if (this.contentIndexPolicyService.isEnabled()) return entries
-    return entries.map((entry) =>
-      entry.fileUpdate
-        ? {
-            ...entry,
-            fileUpdate: {
-              ...entry.fileUpdate,
-              content: null,
-              contentHash: null,
-              embeddings: undefined
-            }
-          }
-        : entry
-    )
-  }
-
-  /**
-   * Reclaims the pages a content cleanup freed. Only under the split, where the index worker
-   * owns the file and runs the `VACUUM` off the main thread; the worker also decides whether
-   * the freelist and the free disk make it worth the minutes (`search-index-compaction.ts`).
-   */
-  private async compactSearchIndex(reason: string): Promise<void> {
-    if (this.shuttingDown) return
-    if (!this.isSearchSplitEnabledNow()) {
-      this.logDebug('Search index compaction skipped: split disabled', { reason })
-      return
-    }
-    try {
-      const outcome = await searchIndexWriter.compact(reason)
-      if (!outcome) {
-        this.logDebug('Search index compaction skipped: writer busy', { reason })
-        return
-      }
-      this.logInfo(outcome.ran ? 'Search index compacted' : 'Search index compaction skipped', {
-        reason: outcome.reason,
-        fileBytesBefore: outcome.fileBytesBefore,
-        fileBytesAfter: outcome.fileBytesAfter,
-        freelistBytesBefore: outcome.freelistBytesBefore,
-        durationMs: outcome.durationMs
-      })
-    } catch (error) {
-      this.logWarn('Search index compaction failed', error, { reason })
-    }
   }
 
   private async clearContentIndexingDataWithLease(): Promise<void> {

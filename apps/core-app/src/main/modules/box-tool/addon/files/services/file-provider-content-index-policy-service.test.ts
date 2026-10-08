@@ -65,3 +65,30 @@ describe('FileProviderContentIndexPolicyService', () => {
     expect(compact).toHaveBeenCalledWith('content-indexing-disabled')
   })
 })
+
+describe('FileProviderContentIndexPolicyService.filterPersistEntries', () => {
+  const entry = {
+    fileId: 7,
+    fileUpdate: {
+      content: 'extracted text',
+      contentHash: 'abc',
+      embeddingStatus: 'completed',
+      embeddings: [{ model: 'm', vector: [1] }]
+    },
+    progress: { status: 'completed', progress: 1 }
+  } as never
+
+  it('drops content, hash and embeddings while content indexing is off', () => {
+    const { service } = createService({ contentIndexingEnabled: false }, 2)
+    const [filtered] = service.filterPersistEntries([entry]) as Array<{
+      fileUpdate: { content: unknown; contentHash: unknown; embeddings: unknown }
+    }>
+    expect(filtered.fileUpdate).toMatchObject({ content: null, contentHash: null })
+    expect(filtered.fileUpdate.embeddings).toBeUndefined()
+  })
+
+  it('passes entries through untouched while content indexing is on', () => {
+    const { service } = createService({ contentIndexingEnabled: true }, 2)
+    expect(service.filterPersistEntries([entry])).toEqual([entry])
+  })
+})

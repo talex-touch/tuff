@@ -19,6 +19,7 @@ import {
   searchIndexMaintenanceProgress
 } from '../../../../../db/schema'
 import { formatDuration } from '../../../../../utils/logger'
+import { getRecentPerfEventLoopLag } from '../../../../../utils/perf-context'
 import type { SearchIndexService } from '../../../search-engine/search-index-service'
 import type { IndexedWriteDeleteExecutorResult } from '../../../search-engine/indexing-write-delete-executor-service'
 import type {
@@ -119,7 +120,7 @@ export interface FileProviderMaintenanceDeps {
   mapRecord: (record: IndexedFileSourceRecordRow) => IndexedSourceRecord
   onBaseCommitReady: () => void
   emitCleanupProgress: (current: number, total: number) => void
-  /** Latest main-process event-loop lag, if the host tracks one; spaces rounds out after it. */
+  /** Latest main-process event-loop lag; defaults to the perf-context record. Tests inject one. */
   getRecentEventLoopLag?: () => RecentEventLoopLag | null
   logInfo: (message: string, metadata?: Record<string, unknown>) => void
   logDebug: (message: string, metadata?: Record<string, unknown>) => void
@@ -1109,10 +1110,44 @@ export class FileProviderMaintenanceService {
     })
   }
 
+  /**
+   * Reclaims the pages a content cleanup freed. Only under the split, where the index worker
+   * owns the file and runs the `VACUUM` off the main thread; the worker also decides whether
+   * the freelist and the free disk make it worth the minutes (`search-index-compaction.ts`).
+   */
+  public async compactSearchIndex(reason: string): Promise<void> {
+    if (this.shuttingDown) return
+    if (!this.deps.isSplitEnabled()) {
+      this.deps.logDebug('Search index compaction skipped: split disabled', { reason })
+      return
+    }
+    try {
+      const outcome = await searchIndexWriter.compact(reason)
+      if (!outcome) {
+        this.deps.logDebug('Search index compaction skipped: writer busy', { reason })
+        return
+      }
+      this.deps.logInfo(
+        outcome.ran ? 'Search index compacted' : 'Search index compaction skipped',
+        {
+          reason: outcome.reason,
+          fileBytesBefore: outcome.fileBytesBefore,
+          fileBytesAfter: outcome.fileBytesAfter,
+          freelistBytesBefore: outcome.freelistBytesBefore,
+          durationMs: outcome.durationMs
+        }
+      )
+    } catch (error) {
+      this.deps.logWarn('Search index compaction failed', error, { reason })
+    }
+  }
+
   public scheduleFileMaintenance(): void {
     if (this.shuttingDown || this.maintenanceTimer) return
     const delayMs = resolveFileMaintenanceDelayMs(
-      this.deps.getRecentEventLoopLag?.() ?? null,
+      this.deps.getRecentEventLoopLag
+        ? this.deps.getRecentEventLoopLag()
+        : getRecentPerfEventLoopLag(),
       Date.now()
     )
     this.maintenanceTimer = setTimeout(() => {
