@@ -2,7 +2,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorExitGeometry } from './types'
 import { computed } from 'vue'
 import { hasWindow } from '../../../../utils/env'
-import { resolveGsapEase } from '../../../../utils/animation/easing'
+import { createSpringEase, resolveGsapEase } from '../../../../utils/animation/easing'
 import { clamp01, LIQUID_DEFAULTS, liquidVelocityAt, resolveLiquidEase } from './base-anchor-liquid'
 
 type BaseAnchorSide = 'top' | 'bottom' | 'left' | 'right'
@@ -107,6 +107,13 @@ const TRANSFER_SEED_SCALE = 0.92
 const REFRACTION_CLOSE_PREPARE_MS = 180
 
 /**
+ * The spring a default expand starts from. zeta 0.6 puts the overshoot near
+ * 10%, which keeps the height bounce legible on a 50px demo panel (~5px).
+ * Taller panels do not keep it: see expandSpringFor.
+ */
+const EXPAND_SPRING = { omega: 10, zeta: 0.6 } as const
+
+/**
  * `expand`: one eased progress drives clip height, opacity, scale, and a short
  * drift away from the reference, together — the reference capture shows the
  * height and opacity curves coinciding to within noise.
@@ -127,15 +134,55 @@ const REFRACTION_CLOSE_PREPARE_MS = 180
 const EXPAND_DEFAULTS = {
   duration: 400,
   closeDuration: 240,
-  // zeta 0.6 puts the overshoot near 10%: the height bounce has to stay
-  // legible on a 50px demo panel (~5px), not just on the capture's 500px one.
-  ease: 'spring(10, 0.6)',
+  ease: `spring(${EXPAND_SPRING.omega}, ${EXPAND_SPRING.zeta})`,
   closeEase: 'power2.in',
   // Deep enough that the growth reads as scaling up from small, not as a
   // curtain: the panel leaves at 88% and the spring carries it ~1% past full.
   scale: 0.88,
   distance: 12,
 } as const
+
+/**
+ * How far past its content a growing panel may stretch, in pixels. A spring
+ * overshoots in proportion to what it moves, so at one damping the bounce
+ * scaled with the panel: ~10% of its height, 12px on a three-row menu and 40px
+ * on a 420px list. On a menu that reads as rubber, not as a settle.
+ */
+export const EXPAND_BOUNCE_PX = 6
+
+/** Past this the spring is all but critically damped; the budget still holds up to ~4000px. */
+const EXPAND_MAX_ZETA = 0.9
+
+/** How far past its target an underdamped spring released from rest travels, as a fraction. */
+function springOvershoot(zeta: number): number {
+  return Math.exp(-zeta * Math.PI / Math.sqrt(1 - zeta * zeta))
+}
+
+/** When it first reaches the target, in units of 1/omega. */
+function springCrossing(zeta: number): number {
+  return (Math.PI - Math.acos(zeta)) / Math.sqrt(1 - zeta * zeta)
+}
+
+/**
+ * The default expand spring for a panel `height` pixels tall. Up to the height
+ * where EXPAND_SPRING's overshoot fits the bounce budget this is EXPAND_SPRING
+ * itself. Past it, damping rises just enough to hold the stretch at
+ * EXPAND_BOUNCE_PX, and stiffness rises with it so the panel still first
+ * reaches full size at the same moment: the attack is untouched, only the
+ * overshoot shrinks and the settle shortens.
+ */
+export function expandSpringFor(height: number): { omega: number, zeta: number } {
+  const base = EXPAND_SPRING
+  if (!(height > 0) || height * springOvershoot(base.zeta) <= EXPAND_BOUNCE_PX)
+    return { omega: base.omega, zeta: base.zeta }
+
+  const lnRatio = Math.log(EXPAND_BOUNCE_PX / height)
+  const zeta = Math.min(EXPAND_MAX_ZETA, -lnRatio / Math.sqrt(Math.PI ** 2 + lnRatio ** 2))
+  return {
+    omega: base.omega * springCrossing(zeta) / springCrossing(base.zeta),
+    zeta,
+  }
+}
 
 /**
  * expand's arrow beat. The arrow sits on the panel (see TxBaseAnchor's
@@ -959,7 +1006,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     // in its default. A liquid config that degraded to the opacity path keeps
     // power2: its own curves shape the drop's raw progress (the open is
     // deliberately linear) and would read flat on a plain fade.
-    const openEase = resolveGsapEase(isLiquidFallback.value ? 'power2.out' : animation.ease)
+    let openEase = resolveGsapEase(isLiquidFallback.value ? 'power2.out' : animation.ease)
     clip.style.visibility = 'visible'
     // expand's clip bleeds past the box to keep the shadow, so it needs overflow visible.
     // The bled clip needs overflow: the bleed IS what keeps the bounce alive.
@@ -1020,6 +1067,14 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       const panelHeight = (currentSide === 'top' || currentSide === 'bottom') && options.useCard.value
         ? Math.max(0, content.offsetHeight)
         : 0
+
+      // The box stretches past its content by the spring's overshoot, so the
+      // default spring is sized to the panel (see expandSpringFor). An ease the
+      // host pinned runs as written.
+      if (panelHeight > 0 && options.animation.value?.ease == null) {
+        const spring = expandSpringFor(panelHeight)
+        openEase = createSpringEase(spring.omega, spring.zeta)
+      }
 
       // Box mode fades the body layer INSIDE the card, never the content: an
       // animated opacity above the card makes Chrome drop its backdrop-filter

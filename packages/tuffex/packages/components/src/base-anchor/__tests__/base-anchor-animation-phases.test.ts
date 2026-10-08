@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import gsap from 'gsap'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
+import { EXPAND_BOUNCE_PX, expandSpringFor } from '../src/base-anchor-motion'
 import TxBaseAnchor from '../src/TxBaseAnchor.vue'
 
 const CardStub = defineComponent({ name: 'TxCard', template: '<div><slot /></div>' })
@@ -224,5 +225,63 @@ describe('base anchor animation phases', () => {
     expect(getComputedStyle(anchor.root).visibility).toBe('hidden')
     expect(anchor.clip.style.visibility).toBe('hidden')
     expect(warn.mock.calls.map(([message]) => String(message)).join('\n')).toContain(`animation.closeType "${closeType}" cannot pair with type "${type}"`)
+  })
+})
+
+/** Steps an open timeline and reads the box: its tallest frame, and when it first reaches full size. */
+function sampleBox(anchor: AnchorFixture, open: gsap.core.Timeline, natural: number) {
+  let peak = 0
+  let firstFull = Number.POSITIVE_INFINITY
+  for (let ms = 0; ms <= 400; ms += 2) {
+    open.time(ms / 1000)
+    const height = Number.parseFloat(anchor.clip.style.height)
+    // The last frame completes the run, and settling clears the inline box.
+    if (!Number.isFinite(height))
+      continue
+    peak = Math.max(peak, height)
+    if (height >= natural && firstFull === Number.POSITIVE_INFINITY)
+      firstFull = ms
+  }
+  return { overshoot: peak - natural, firstFull }
+}
+
+describe('expand bounce budget', () => {
+  it('keeps the base spring where its overshoot already fits the budget', () => {
+    expect(expandSpringFor(48)).toEqual({ omega: 10, zeta: 0.6 })
+    expect(expandSpringFor(0)).toEqual({ omega: 10, zeta: 0.6 })
+  })
+
+  it('damps taller panels down to the budget and keeps the crossing time', () => {
+    const crossing = ({ omega, zeta }: { omega: number, zeta: number }) =>
+      (Math.PI - Math.acos(zeta)) / (omega * Math.sqrt(1 - zeta * zeta))
+    const base = crossing(expandSpringFor(48))
+
+    for (const height of [130, 260, 420]) {
+      const spring = expandSpringFor(height)
+      const overshoot = Math.exp(-spring.zeta * Math.PI / Math.sqrt(1 - spring.zeta ** 2))
+      expect(overshoot * height).toBeCloseTo(EXPAND_BOUNCE_PX, 5)
+      expect(crossing(spring)).toBeCloseTo(base, 5)
+    }
+  })
+
+  it('stretches a tall default panel by the budget, reaching full size on the same beat', async () => {
+    const anchor = mountAnchor({ type: 'expand' })
+    const { timeline: open } = await openTimeline(anchor)
+    const { overshoot, firstFull } = sampleBox(anchor, open, 146)
+
+    // One bounce still — just not ~10% of the panel (14px here).
+    expect(overshoot).toBeGreaterThan(EXPAND_BOUNCE_PX - 0.5)
+    expect(overshoot).toBeLessThan(EXPAND_BOUNCE_PX + 0.5)
+    // spring(10, 0.6) first reaches its target at ~111ms of 400.
+    expect(firstFull).toBeGreaterThanOrEqual(104)
+    expect(firstFull).toBeLessThanOrEqual(118)
+  })
+
+  it('runs a pinned ease as written', async () => {
+    const anchor = mountAnchor({ type: 'expand', ease: 'spring(10, 0.6)' })
+    const { timeline: open } = await openTimeline(anchor)
+    const { overshoot } = sampleBox(anchor, open, 146)
+
+    expect(overshoot).toBeGreaterThan(13)
   })
 })
