@@ -5,6 +5,7 @@ import type {
   LocalAiCliStatus,
   LocalAiCliTaskChunk
 } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type { ChildProcess } from 'node:child_process'
 /**
  * Local AI CLI continuation runs a real provider process against a real project directory, so these
  * tests double only the two external boundaries (the provider child process / PTY / Claude SDK) and
@@ -18,7 +19,6 @@ import type {
  * No provider quota is spent: `spawnSafe`, `node-pty` and the Claude Agent SDK are injected doubles.
  */
 import type { Mock } from 'vitest'
-import type { ChildProcess } from 'node:child_process'
 import type { StoredLocalAiCliSession } from './session-store'
 import { EventEmitter } from 'node:events'
 import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -326,11 +326,19 @@ function createFakePty(): FakePty {
     },
     onData: (listener) => {
       dataListeners.add(listener)
-      return { dispose: () => { dataListeners.delete(listener) } }
+      return {
+        dispose: () => {
+          dataListeners.delete(listener)
+        }
+      }
     },
     onExit: (listener) => {
       exitListeners.add(listener)
-      return { dispose: () => { exitListeners.delete(listener) } }
+      return {
+        dispose: () => {
+          exitListeners.delete(listener)
+        }
+      }
     },
     emitData: (data) => dataListeners.forEach((listener) => listener(data)),
     listenerCount: () => dataListeners.size + exitListeners.size,
@@ -1206,9 +1214,14 @@ describe('localAiCli Pi task continuation', () => {
       sessionId: 'pi-lazy-1',
       sessionFile,
       before: { entries: [model, thinking], leafId: 't1' },
-      append:
-        `${JSON.stringify({ type: 'session', id: 'pi-lazy-1', cwd: workspacePath })}\n` +
-        [model, thinking, user, assistant].map(piEntryLine).join(''),
+      append: `${JSON.stringify({ type: 'session', id: 'pi-lazy-1', cwd: workspacePath })}\n${[
+        model,
+        thinking,
+        user,
+        assistant
+      ]
+        .map(piEntryLine)
+        .join('')}`,
       post: { entries: [user, assistant], leafId: 'a1' },
       answer: 'OK'
     })
@@ -1856,7 +1869,7 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     const status = await readStatus()
     expect(status).toMatchObject({ betaAvailable: true, enabled: false })
     expect(status.providers.map((provider) => [provider.installed, provider.issueCode])).toEqual(
-      Array(4).fill([false, 'NOT_PROBED'])
+      Array.from({ length: 4 }).fill([false, 'NOT_PROBED'])
     )
     expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
 
@@ -2156,11 +2169,17 @@ describe('localAiCli shared terminal lifecycle', () => {
         [LocalAiCliEvents.terminal.resize, { sessionId: target, cols: 120, rows: 40 }],
         [LocalAiCliEvents.terminal.kill, { sessionId: target }]
       ] as const) {
-        await expect(invokeHandler(transport, event.toEventName(), payload, { plugin: null, sender: foreign }))
-          .rejects.toThrow(/TERMINAL_(SESSION_)?NOT_FOUND/)
+        await expect(
+          invokeHandler(transport, event.toEventName(), payload, { plugin: null, sender: foreign })
+        ).rejects.toThrow(/TERMINAL_(SESSION_)?NOT_FOUND/)
       }
     }
-    await invokeHandler(transport, LocalAiCliEvents.terminal.write.toEventName(), { sessionId, data: 'owner\u0003' }, { plugin: null, sender: owner })
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.write.toEventName(),
+      { sessionId, data: 'owner\u0003' },
+      { plugin: null, sender: owner }
+    )
     expect(ptyInstances[0].state.writes).toEqual(['owner\u0003'])
     expect(ptyInstances[0].state.resizes).toEqual([])
     expect(ptyInstances[0].state.kills).toBe(0)
@@ -2171,26 +2190,42 @@ describe('localAiCli shared terminal lifecycle', () => {
     const sender = createFakeSender()
     const { sessionId } = await createTerminal(transport, request, sender)
     const pty = ptyInstances[0]
-    const large = '\u001B[32m中文\u001B[0m' + 'z'.repeat(100_000)
+    const large = `\u001B[32m中文\u001B[0m${'z'.repeat(100_000)}`
     pty.emitData(large)
     pty.emitData('last')
     pty.emitExit(5)
     pty.emitData('late')
     pty.emitExit(0)
-    expect(transport.notifyTo.mock.calls.filter(([, event]) => event === LocalAiCliEvents.terminal.data)
-      .map(([, , payload]) => payload)).toEqual([{ sessionId, data: large }, { sessionId, data: 'last' }])
-    expect(transport.notifyTo.mock.calls.filter(([, event]) => event === LocalAiCliEvents.terminal.exit)
-      .map(([, , payload]) => payload)).toEqual([{ sessionId, exitCode: 5 }])
-    expect(transport.notifyTo.mock.calls.map(([recipient]) => recipient)).toEqual([sender, sender, sender])
+    expect(
+      transport.notifyTo.mock.calls
+        .filter(([, event]) => event === LocalAiCliEvents.terminal.data)
+        .map(([, , payload]) => payload)
+    ).toEqual([
+      { sessionId, data: large },
+      { sessionId, data: 'last' }
+    ])
+    expect(
+      transport.notifyTo.mock.calls
+        .filter(([, event]) => event === LocalAiCliEvents.terminal.exit)
+        .map(([, , payload]) => payload)
+    ).toEqual([{ sessionId, exitCode: 5 }])
+    expect(transport.notifyTo.mock.calls.map(([recipient]) => recipient)).toEqual([
+      sender,
+      sender,
+      sender
+    ])
     expect(pty.listenerCount()).toBe(0)
   })
 
   it('releases a resumed lease after PTY spawn failure so a later retry can resume', async () => {
     const { transport } = await initModule()
     const pointer = await seedPointer({ nativeSessionId: 'pi-pty-failed', expectedHeadId: 'h2' })
-    ptySpawnMock.mockImplementationOnce(() => { throw new Error('native PTY refused spawn') })
-    await expect(createTerminal(transport, { ...request, sessionRef: pointer.id }, createFakeSender()))
-      .rejects.toThrow('TERMINAL_SPAWN_FAILED')
+    ptySpawnMock.mockImplementationOnce(() => {
+      throw new Error('native PTY refused spawn')
+    })
+    await expect(
+      createTerminal(transport, { ...request, sessionRef: pointer.id }, createFakeSender())
+    ).rejects.toThrow('TERMINAL_SPAWN_FAILED')
     await expectTupleFree(transport, pointer, createFakeSender())
   })
 })
@@ -2198,19 +2233,38 @@ describe('localAiCli shared terminal lifecycle', () => {
 describe('localAiCli terminal lease exit barrier', () => {
   it('keeps a native session leased until a killed PTY actually reports exit', async () => {
     const { transport } = await initModule()
-    const pointer = await seedPointer({ nativeSessionId: 'pi-lease-exit-barrier', expectedHeadId: 'h2' })
+    const pointer = await seedPointer({
+      nativeSessionId: 'pi-lease-exit-barrier',
+      expectedHeadId: 'h2'
+    })
     const sender = createFakeSender()
-    const request = { provider: 'pi', access: 'workspace-read', cols: 80, rows: 24, sessionRef: pointer.id }
+    const request = {
+      provider: 'pi',
+      access: 'workspace-read',
+      cols: 80,
+      rows: 24,
+      sessionRef: pointer.id
+    }
     const { sessionId } = await createTerminal(transport, request, sender)
     const pty = ptyInstances[0]
-    pty.kill = () => { pty.state.kills += 1 }
+    pty.kill = () => {
+      pty.state.kills += 1
+    }
     try {
       let settled = false
-      const closing = invokeHandler(transport, LocalAiCliEvents.terminal.kill.toEventName(), { sessionId }, { plugin: null, sender })
-        .then(() => { settled = true })
+      const closing = invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { sessionId },
+        { plugin: null, sender }
+      ).then(() => {
+        settled = true
+      })
       await Promise.resolve()
       expect(settled).toBe(false)
-      await expect(createTerminal(transport, request, sender)).rejects.toThrow('NATIVE_SESSION_BUSY')
+      await expect(createTerminal(transport, request, sender)).rejects.toThrow(
+        'NATIVE_SESSION_BUSY'
+      )
       expect(pty.state.kills).toBe(1)
       pty.emitExit(137)
       await closing
@@ -2231,11 +2285,29 @@ describe('localAiCli creation token ownership', () => {
     const request = { provider: 'pi', access: 'workspace-read', cols: 90, rows: 25, creationToken }
     await createTerminal(transport, request, firstOwner)
     const second = await createTerminal(transport, request, secondOwner)
-    await expect(invokeHandler(transport, LocalAiCliEvents.terminal.kill.toEventName(), { creationToken }, {
-      plugin: null, sender: createFakeSender(42)
-    })).rejects.toThrow('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
-    await invokeHandler(transport, LocalAiCliEvents.terminal.kill.toEventName(), { creationToken }, { plugin: null, sender: firstOwner })
-    await invokeHandler(transport, LocalAiCliEvents.terminal.write.toEventName(), { sessionId: second.sessionId, data: 'second owner' }, { plugin: null, sender: secondOwner })
+    await expect(
+      invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { creationToken },
+        {
+          plugin: null,
+          sender: createFakeSender(42)
+        }
+      )
+    ).rejects.toThrow('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.kill.toEventName(),
+      { creationToken },
+      { plugin: null, sender: firstOwner }
+    )
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.terminal.write.toEventName(),
+      { sessionId: second.sessionId, data: 'second owner' },
+      { plugin: null, sender: secondOwner }
+    )
     expect(ptyInstances[0].state.kills).toBe(1)
     expect(ptyInstances[1].state.kills).toBe(0)
     expect(ptyInstances[1].state.writes).toEqual(['second owner'])
@@ -2244,19 +2316,32 @@ describe('localAiCli creation token ownership', () => {
   it('cancels before a pending Provider lookup returns and never spawns its late process', async () => {
     const { transport } = await initModule()
     let entered!: () => void
-    const lookupStarted = new Promise<void>(resolve => { entered = resolve })
+    const lookupStarted = new Promise<void>((resolve) => {
+      entered = resolve
+    })
     let complete!: (status: LocalAiCliProviderStatus) => void
     resolveProviderStatusMock.mockImplementationOnce(() => {
       entered()
-      return new Promise<LocalAiCliProviderStatus>(resolve => { complete = resolve })
+      return new Promise<LocalAiCliProviderStatus>((resolve) => {
+        complete = resolve
+      })
     })
     const sender = createFakeSender()
     const creationToken = 'ai-provider-pending'
-    const creating = createTerminal(transport, { provider: 'pi', access: 'workspace-read', cols: 90, rows: 25, creationToken }, sender)
+    const creating = createTerminal(
+      transport,
+      { provider: 'pi', access: 'workspace-read', cols: 90, rows: 25, creationToken },
+      sender
+    )
     const rejection = expect(creating).rejects.toThrow('TERMINAL_CREATE_CANCELLED')
     try {
       await lookupStarted
-      await invokeHandler(transport, LocalAiCliEvents.terminal.kill.toEventName(), { creationToken }, { plugin: null, sender })
+      await invokeHandler(
+        transport,
+        LocalAiCliEvents.terminal.kill.toEventName(),
+        { creationToken },
+        { plugin: null, sender }
+      )
       complete(providerStatus('pi'))
       await rejection
       expect(ptySpawnMock).not.toHaveBeenCalled()
