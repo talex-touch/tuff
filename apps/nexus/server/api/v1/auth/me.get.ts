@@ -3,8 +3,9 @@ import { getUserById } from '../../../utils/authStore'
 import { normalizeLocaleCode } from '../../../utils/locale'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const user = await getUserById(event, userId)
+  const auth = await requireAppAuth(event)
+  const { userId } = auth
+  const user = auth.user ?? await getUserById(event, userId)
   if (!user)
     return null
 

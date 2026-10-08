@@ -1,0 +1,18 @@
+# The scheduled maintenance Worker for the Nexus Pages project (see README.md).
+#
+# Pages Functions get no cron triggers, so maintenance used to ride on ordinary requests: every
+# isolate checked it once a minute, and the work ran in whichever request's waitUntil won the lease.
+# This Worker calls `/api/internal/maintenance/<task>` on a clock instead. It needs no bindings of its
+# own: the Pages project does the work with its D1 and R2, and the shared MAINTENANCE_SECRET
+# (`wrangler secret put MAINTENANCE_SECRET`, and the same value as a Pages production secret) is the
+# only thing that lets it in.
+name = "tuff-nexus-maintenance"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[triggers]
+crons = ["*/5 * * * *", "11 */6 * * *", "37 4 * * *"]
+
+[vars]
+NEXUS_ORIGIN = "https://tuff.tagzxia.com"

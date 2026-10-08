@@ -65,7 +65,7 @@ Feature-gated credential names may be absent while their owning feature is disab
 - Encrypted stores and catalogs: `STORAGE_SECURE_STORE_KEY` (object-storage credentials; its store is empty and its consumer fails closed, so it is not gated in Production), `VOICE_PROVIDER_CATALOG_KEYS` (a JSON secret map keyed as `voice-provider/<packId>/<version>/<keyId>` whose values are 32-byte base64 AES keys)
 - Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
 
-Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.
+Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `MAINTENANCE_SECRET` (shared with the scheduled maintenance Worker in `maintenance-worker/`; without it, `/api/internal/maintenance/*` answers 404 and maintenance stays traffic-triggered), `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.
 
 Provision these names in Cloudflare Dashboard: open **Workers & Pages → tuff → Settings → Variables and Secrets**, select the environment, add each name, choose **Secret** as the binding type, and enter the value there. The installed Wrangler `pages secret put` command has no `--env` option, so it must not be used to claim that a Secret was written to a specific environment.
 

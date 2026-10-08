@@ -1,6 +1,6 @@
 ---
 title: "Cascader 级联选择"
-description: "用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。"
+description: "从层级数据中选择一条或多条路径的选择器"
 category: Form
 syncStatus: reviewed
 status: beta
@@ -11,15 +11,16 @@ verified: true
 
 ## 用法
 
-### Cascader
+### 单选与多选
+单选时值是一条路径数组；`multiple` 时是路径数组的列表。
 :::TuffDemoWrapper{demo="CascaderCascaderDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const value1 = ref<any>(undefined)
-  const value2 = ref<any>([])
+  const single = ref()
+  const paths = ref([])
 
   const options = [
     {
@@ -36,188 +37,116 @@ code: |
         },
       ],
     },
-    {
-      value: 'jiangsu',
-      label: 'Jiangsu',
-      children: [
-        {
-          value: 'nanjing',
-          label: 'Nanjing',
-          children: [
-            { value: 'zhonghuamen', label: 'Zhong Hua Men', leaf: true },
-          ],
-        },
-      ],
-    },
   ]
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px; width: 520px;">
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <TxCascader v-model="value1" :options="options" placeholder="Single" />
-        <TxCascader v-model="value2" :options="options" multiple placeholder="Multiple" />
-      </div>
-
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        single: {{ value1 }}
-      </div>
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        multiple: {{ value2 }}
-      </div>
-    </div>
+    <TxCascader v-model="single" :options="options" placeholder="Single" />
+    <TxCascader v-model="paths" :options="options" multiple placeholder="Multiple" />
   </template>
 ---
 :::
 
-- 单选模式 `modelValue` 为路径数组，多选模式为路径数组列表。
-- `expandTrigger` 决定分支如何展开：`hover` 与 `both` 悬停打开面板，`click` 点击打开。任何设置下，点击分支行都会展开它。
-- 异步 `load` 仅在节点未提供 `children` 且未标记 `leaf` 时触发。
-
-### 最佳实践
-
-- 层级保持浅。面板最适合二到三级路径；更深的组织树应使用搜索或 TreeSelect。
-- `value` key 需要跨版本稳定。`modelValue` 存储路径 key，修改 key 会破坏已持久化的选择。
-- 异步叶子节点要显式标记 `leaf: true`；否则没有 `children` 的节点会尝试调用 `load`，而不是直接可选。
-- 叶子节点较多时保持 `searchable` 开启，但搜索只覆盖已经加载到本地的节点。
-- 多选模式下把值当作完整路径数组列表，而不是叶子 id 列表；持久化完整路径才能稳定还原展示标签。
-
-## API 参考
-
-### TxCascader Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `CascaderValue` | - | 当前值。单选模式是一条路径数组，多选模式是路径数组列表。 |
-| `options` | `CascaderNode[]` | `[]` | 根级选项树，用于渲染第一层级。 |
-| `multiple` | `boolean` | `false` | 启用多选叶子路径，并把选中的路径渲染为标签。 |
-| `disabled` | `boolean` | `false` | 禁用触发器、清空按钮、节点选择和键盘打开行为。 |
-| `placeholder` | `string` | `'Please select'` | 未选择路径时显示的占位文本。 |
-| `searchable` | `boolean` | `true` | 显示本地搜索输入框，按已加载叶子路径的格式化标签过滤。 |
-| `clearable` | `boolean` | `true` | 组件启用且已有值时显示清空按钮。 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 转发给底层 `TxPopover` 的浮层位置。 |
-| `dropdownOffset` | `number` | `6` | 转发给底层 `TxPopover` 的浮层偏移。 |
-| `dropdownWidth` | `number` | `260` | 根面板宽度，转发给底层 `TxPopover`。子层级面板按自身内容在 200px 与 `dropdownMaxWidth` 之间自适应。 |
-| `dropdownMaxWidth` | `number` | `520` | 转发给底层 `TxPopover` 的最大浮层宽度。 |
-| `dropdownMaxHeight` | `number` | `340` | 面板最大高度，单位 px。 |
-| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 控制非叶子节点展开方式；`hover` 模式下点击分支节点不会展开。 |
-| `load` | `(node, level) => Promise<CascaderNode[]>` | - | 为没有 `children` 且不是 `leaf` 的非叶子节点异步加载子节点。 |
-
-### CascaderNode
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `value` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 是否禁用 |
-| `leaf` | `boolean` | 是否叶子节点 |
-| `children` | `CascaderNode[]` | 子节点，渲染在锚定于该分支行的面板中（可选） |
-
-### CascaderValue
-
-- 单选：`CascaderPath`（`Array<string | number>`）
-- 多选：`CascaderPath[]`
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(v)` | v-model 更新 |
-| `change` | `(v)` | 值变化 |
-| `open` | - | 打开浮层 |
-| `close` | - | 关闭浮层 |
-
-### Slots
-
-`TxCascader` 不暴露自定义插槽。标签和禁用状态来自 `CascaderNode`；字段标签、帮助文本或校验信息应在外层组合。
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `open()` | `() => void` | 打开 |
-| `close()` | `() => void` | 关闭 |
-| `toggle()` | `() => void` | 切换 |
-| `focus()` | `() => void` | 聚焦触发器 |
-| `blur()` | `() => void` | 失焦触发器 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v) => void` | 设置值 |
-| `getValue()` | `() => any` | 获取当前值 |
-
-## 发布策略配置
-
-这组组件适合后台“先选范围，再定策略，再给阈值和标签”的配置流：`TxCascader` 负责层级范围，`TxFlatSelect` 负责低噪音单选，`TxSegmentedSlider` / `TxSlider` 负责离散风险和连续比例，`TxTagInput` 负责检索元数据。
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="截图验证的 Cascader / FlatSelect / SegmentedSlider / Slider / TagInput 后台配置组合。"}
+### 发布策略配置
+后台配置流：Cascader 定范围，FlatSelect 定策略，滑块定阈值，TagInput 记标签。
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: '桌面端',
-      children: [
-        {
-          value: 'stable',
-          label: '稳定通道',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
-  const riskSegments = [
-    { value: 1, label: '低' },
-    { value: 2, label: '中' },
-    { value: 3, label: '高' },
-    { value: 4, label: '冻结' },
-  ]
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
-      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
-        <TxFlatSelectItem value="signed" label="签名构建" />
-        <TxFlatSelectItem value="archive" label="归档包" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
-        <TxFlatSelectItem value="phased" label="分阶段" />
-        <TxFlatSelectItem value="guarded" label="护栏发布" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
-    </section>
+    <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+    <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
+      <TxFlatSelectItem value="phased" label="分阶段" />
+      <TxFlatSelectItem value="guarded" label="护栏发布" />
+    </TxFlatSelect>
+    <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+    <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+    <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
   </template>
 ---
 ::
 
-## 交互约定
+### 最佳实践
 
-- 每一级都是独立的浮层面板，以 `right-start` 锚定在打开它的那一行上，而不是挤在同一个宽面板里的一列。面板按自身文本宽度排版（`matchReferenceWidth` 关闭），且只有真正被展开过的分支才会挂载。
-- 行与其打开的面板之间的悬停移动、外部点击豁免以及级联关闭，都由 anchor-delay 服务负责，与 `TxDropdownSubmenu` 使用同一套机制，包括安全三角：斜向去往已展开面板时，途经的兄弟分支行不会把它换掉。
-- 行是 `role="option"`，所在层级是 `role="listbox"`。分支行额外带 `aria-haspopup="listbox"` 与 `aria-expanded`，叶子行两者都没有。
-- 键盘操作（作用于当前聚焦的层级）：上/下移动并循环，Home/End 跳到首尾，ArrowRight 展开当前分支并把焦点移到子面板首行，ArrowLeft 关闭当前层级并把焦点交还给打开它的那一行。根层级的 ArrowLeft 不做拦截。
-- 通往已展开面板路径上的每一行都保持激活态，因此深层选择读起来是一条路径，而不是孤零零一行高亮。
-- 搜索时用扁平的叶子路径结果替换层级列表，清空搜索词后恢复。
+- 层级控制在二到三级；更深的树改用搜索或 TreeSelect。
+- `value` 跨版本保持稳定：值里存的是路径 key，改 key 会让已保存的选择失效。
+- 异步加载的末端节点标记 `leaf: true`，否则它会调用 `load` 而不是变为可选。
+- 持久化完整路径而不是叶子 id，标签才能还原。
+- 保留可见的字段标签，不要只靠 placeholder。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `CascaderValue` | - | 单选为一条路径，多选为路径列表。 |
+| `options` | `CascaderNode[]` | `[]` | 根级选项树。 |
+| `multiple` | `boolean` | `false` | 多选叶子路径，已选路径显示为标签。 |
+| `disabled` | `boolean` | `false` | 禁止打开、清空与选择。 |
+| `placeholder` | `string` | `'Please select'` | 未选择时的占位文本。 |
+| `searchable` | `boolean` | `true` | 显示搜索框，只匹配已加载的叶子路径。 |
+| `clearable` | `boolean` | `true` | 有值且未禁用时显示清空按钮。 |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | 根面板位置，转发给 `TxPopover`。 |
+| `dropdownOffset` | `number` | `6` | 根面板偏移，转发给 `TxPopover`。 |
+| `dropdownWidth` | `number` | `260` | 根面板宽度；子面板按内容在 200px 与 `dropdownMaxWidth` 间自适应。 |
+| `dropdownMaxWidth` | `number` | `520` | 面板最大宽度。 |
+| `dropdownMaxHeight` | `number` | `340` | 面板最大高度（px）。 |
+| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | `click` 时点击打开分支面板，其余悬停打开；点击分支行总会展开。 |
+| `load` | `(node, level) => Promise<CascaderNode[]>` | - | 为无 `children` 且非 `leaf` 的节点异步加载子节点。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(v)` | 选择或清空后触发，参数为新值。 |
+| `change` | `(v)` | 与 `update:modelValue` 同时触发。 |
+| `open` | - | 浮层打开后触发。 |
+| `close` | - | 浮层关闭后触发。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open()` | `() => void` | 打开浮层。 |
+| `close()` | `() => void` | 关闭浮层。 |
+| `toggle()` | `() => void` | 切换浮层。 |
+| `focus()` | `() => void` | 聚焦触发器。 |
+| `blur()` | `() => void` | 让触发器失焦。 |
+| `clear()` | `() => void` | 单选清为 `undefined`，多选清为 `[]`。 |
+| `setValue(v)` | `(v) => void` | 以给定值派发 `update:modelValue` 与 `change`。 |
+| `getValue()` | `() => any` | 返回当前 `modelValue`。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type CascaderPath = Array<string | number>
+  type CascaderValue = CascaderPath | CascaderPath[] | undefined // 单选 | 多选
+---
+:::
+
+`CascaderNode`，`options` 中的一项：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string \| number` | 节点 key，组成路径。 |
+| `label` | `string` | 行、标签与搜索结果中显示的文本。 |
+| `disabled` | `boolean` | 禁止展开或选择该节点。 |
+| `leaf` | `boolean` | 标记为可选的末端节点，不再懒加载。 |
+| `children` | `CascaderNode[]` | 子节点，在锚定于该行的面板中渲染。 |
+
+## 概述
+
+- 每一级是独立浮层，以 `right-start` 锚定在打开它的行上，按自身文本排版；只挂载展开过的分支。
+- 悬停移动、外部点击豁免与级联关闭由 anchor-delay 服务负责，与 `TxDropdownSubmenu` 相同，含安全三角。
+- 触发器是 `role="combobox"`；层级是 `role="listbox"`，行是 `role="option"`，分支行另带 `aria-haspopup="listbox"` 与 `aria-expanded`。
+- 键盘：上下移动并循环，Home / End 到首尾，ArrowRight 展开并聚焦子面板首行，ArrowLeft 关闭当前层级并交还焦点；根层级不拦截 ArrowLeft。
+- 通往已展开面板的整条路径保持激活态。
+- 有搜索词时，层级换成扁平的叶子路径列表；清空后恢复。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`、`types.ts` 与 `cascader.test.ts`。
-- 现有测试覆盖叶子选择、空搜索结果、多路径切换与清空、禁用触发器/节点阻断、懒加载子节点与暴露状态方法。
-- 可访问性说明：触发器使用 `role="combobox"` 与 `aria-haspopup="listbox"`；应保留可见字段标签，不要只依赖 placeholder 作为标签。
-
-- Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
-- Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` 验证叶子选择、空搜索、多选清空、禁用阻断、懒加载子节点与暴露方法，以及锚定层级：每个分支一个面板（不再是分列布局）、`right-start` 且关闭 `matchReferenceWidth`、`expandTrigger` 决定浮层触发方式、分支行的 `aria-haspopup` / `aria-expanded`、ArrowRight 展开与 ArrowLeft 收起的漫游焦点，以及跨层级的激活路径。
-- Screenshot: `.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`.
+- 源码：`packages/tuffex/packages/components/src/cascader/`。
 
 <TuffDocSourceLink />

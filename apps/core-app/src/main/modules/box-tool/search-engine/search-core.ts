@@ -1842,18 +1842,6 @@ export class SearchEngineCore
         {}
       )
 
-      if (sentryService.isEnabled()) {
-        sentryService.recordSearchMetrics({
-          totalDuration,
-          providerTimings,
-          providerResults,
-          sortingDuration,
-          inputTypes,
-          resultCount,
-          sessionId
-        })
-      }
-
       if (stageDurations) {
         searchEngineLog.debug('Search pipeline stage timings', {
           meta: {

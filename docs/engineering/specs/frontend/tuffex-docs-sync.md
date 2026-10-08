@@ -40,14 +40,14 @@ Every wrapper from (2) owns its own `.zh.mdc` / `.en.mdc` and must be checked. `
 | `## API 参考` / `## API Reference` → `### 属性` / `### Props` / `Events` / `Slots` | A prop/event/slot is added, removed, renamed, or a default changes |
 | `## 概述` / `## Overview` (was 交互契约 / Interaction Contract) | DOM, ARIA, class names, focus/keyboard behaviour, or blocking rules change |
 | `### 最佳实践` / `### Best Practices` (inside Usage) | There is now a right and a wrong way to drive the new state |
-| `## 技术实现` / `## Technologies` (holds the old Review Notes → Verified coverage lines) | Tests were added or their assertions changed |
+| `## 技术实现` / `## Technologies` | The core mechanism, the upstream source or the source path changes |
 | CSS-variable table (inside `## API 参考` / `## API Reference`) | A `--tx-*` or component-local variable starts or stops being read |
 
 The canonical page shape — section order, which section owns what, and the sidebar grouping above it — is [Nexus Docs Structure](./nexus-docs-structure.md).
 
 zh and en stay section-for-section identical in count and order. `check:doc-parity` enforces the count only; matching prose is on the author.
 
-Record rejected designs in `## 技术实现` / Technologies (the section that replaced Review Notes). "Keeping the checkbox fill and drawing a white ring on it was tried first and is invisible on a light page" is what stops the next person re-trying it.
+Record rejected designs in the commit message or an engineering report under `docs/engineering/reports/`, not on the public page (the docs pages are kept to Apple-style reference copy since 2026-10-08). "Keeping the checkbox fill and drawing a white ring on it was tried first and is invisible on a light page" is what stops the next person re-trying it.
 
 ---
 
@@ -58,8 +58,7 @@ Appending to the end of a section, table, or bullet list is the default and is a
 - **Demo sections** — group by kind. A new state (`loading`) sits beside the other states (`disabled`), not after the composition/slot examples.
 - **Props table** — mirror `defineProps` order and keep siblings adjacent: `loading` directly after `disabled`, never at the bottom under `ariaLabel`.
 - **Best Practices** — put the new rule next to the rule it qualifies or contradicts. A `loading` rule belongs beside the `disabled` rule, or right after the bullet claiming the control is "immediate", because that is the claim it amends. Layout and styling tips stay last.
-- **Review Notes** — the shape is: what was reviewed → contracts → a11y notes → motion/degradation → **coverage last**. New contract notes go in the middle, never between the coverage line and the notes grouped with it.
-- **Interaction Contract** — follow the control flow the component actually runs, so a blocking rule sits with the other blocking rules.
+- **Overview** (was Interaction Contract) — follow the control flow the component actually runs: model/precedence → blocking rules → keyboard/ARIA → degradation, so a blocking rule sits with the other blocking rules.
 
 Adjacency is the point: two rules about one concept must read together. An item with no natural neighbour means the section needs a new grouping, not a longer tail.
 

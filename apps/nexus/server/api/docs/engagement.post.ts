@@ -10,7 +10,6 @@ import {
   getDocEngagementSession,
   getDocSecurityState,
   isAllowedDocPathForSource,
-  markDocSessionReported,
   normalizeDocPath,
   normalizeDocSourceType,
   recordDocEngagement,
@@ -225,9 +224,8 @@ export default defineEventHandler(async (event) => {
     totalMs: engagementPayload.totalMs,
     sections,
     actions,
+    sessionId,
   })
-
-  await markDocSessionReported(db, sessionId)
 
   return { success: true, source: EvidenceSource.D1, truncated: sectionTruncated || actionTruncated }
 })

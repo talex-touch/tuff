@@ -1,6 +1,6 @@
 ---
 title: "SearchSelect 搜索选择器"
-description: "搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。"
+description: "输入即搜索、点选即回填的选择器"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,7 +11,8 @@ verified: true
 
 ## 用法
 
-### SearchSelect
+### 基础
+本地模式按 `label` 过滤 `options`，输入为空时显示全部。
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectDemo" code-lang="vue"}
 ---
 code: |
@@ -29,19 +30,13 @@ code: |
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
-      <TxSearchSelect v-model="value" :options="options" placeholder="Search and pick" />
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-        Value: {{ value }}
-      </div>
-    </div>
+    <TxSearchSelect v-model="value" :options="options" placeholder="Search and pick" />
   </template>
 ---
 :::
 
-`remote=true` 时，将在输入变化（防抖）与 Enter 时触发 `search` 事件，你需要外部请求并将结果写回 `options`。
-
-### SearchSelect (remote)
+### 远程搜索
+`remote` 关闭本地过滤，输入防抖结束或按 Enter 时派发 `search`；在回调中写回 `options`。
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectRemoteDemo" code-lang="vue"}
 ---
 code: |
@@ -49,90 +44,97 @@ code: |
   import { ref } from 'vue'
 
   const value = ref<string | number>('')
-  const query = ref('')
+  const options = ref<Array<{ value: string, label: string }>>([])
   const loading = ref(false)
 
-  const options = ref<Array<{ value: string, label: string }>>([])
-
-  async function onSearch(q: string) {
-    query.value = q
+  async function onSearch(query: string) {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 220))
-
-    const base = Array.from({ length: 18 }).map((_, i) => `Result ${i + 1}`)
-    const list = base
-      .filter(s => s.toLowerCase().includes(q.trim().toLowerCase()))
-      .slice(0, 12)
-
-    options.value = list.map(s => ({ value: s, label: s }))
+    options.value = await searchApi(query)
     loading.value = false
   }
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
-      <TxSearchSelect
-        v-model="value"
-        remote
-        :loading="loading"
-        :options="options"
-        placeholder="Type to remote-search"
-        @search="onSearch"
-      />
-
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-        Query: {{ query || '-' }}
-      </div>
-    </div>
+    <TxSearchSelect
+      v-model="value"
+      remote
+      :loading="loading"
+      :options="options"
+      @search="onSearch"
+    />
   </template>
 ---
 :::
 
-- 本地模式会基于 `options` 的 `label` 进行过滤，输入为空时显示全部。
-- 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
-- 下拉关闭后会保留输入与面板内部状态，重新打开不会自动重置。
+### 筛选工具栏
+`TxSearchSelect` 承载范围、类型、状态等结构化筛选；关键词交给 `TxSearchInput`，无结果时显示 `TxSearchEmpty`。
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSearchInput v-model="query" placeholder="搜索插件 / 文档 / 任务" remote />
+    <TxSearchSelect
+      v-model="scope"
+      :options="scopeOptions"
+      placeholder="筛选范围"
+      panel-background="glass"
+    />
+    <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+  </template>
+---
+:::
 
 ### 最佳实践
 
-- 本地模式只放小型 `options`；大型远程数据源应使用 `remote`、`searchDebounce`，并由外部写回结果。
-- `label` 需要稳定且对用户可读，因为本地过滤只匹配 `option.label`。
-- 如果不是从受控选项列表中选择值，不要把自由关键词搜索塞进这里；请使用 `TxSearchInput`。
-- 禁用项只适合作为解释性条目；它们会展示但不可选择，不应成为唯一可用结果。
+- 本地模式只放小型 `options`；大型数据源用 `remote`，由外部写回结果。
+- `label` 保持稳定、可读，本地过滤只匹配它。
+- 只从受控选项中取值；自由关键词搜索用 `TxSearchInput`。
+- 禁用项只作说明性条目，不要让它成为唯一结果。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | 选中值（v-model） |
-| `placeholder` | `string` | `'Search'` | 透传给搜索输入框的占位文本。 |
-| `disabled` | `boolean` | `false` | 禁用输入框、弹层与聚焦展开，并停止发出远程 `search`。 |
-| `clearable` | `boolean` | `true` | 显示输入框清除按钮，允许清空已选值。 |
-| `options` | `TxSearchSelectOption[]` | `[]` | 下拉数据源 |
-| `loading` | `boolean` | `false` | 在输入框后缀显示小号加载指示器，用于远程结果等待。 |
-| `remote` | `boolean` | `false` | 是否远程搜索（输入触发 `search`） |
-| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
-| `dropdownMaxHeight` | `number` | `280` | 选项面板最大高度（px），超出后面板内部滚动。 |
-| `dropdownOffset` | `number` | `6` | 下拉偏移 |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
-| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
-| `panelPadding` | `number` | `6` | 面板 padding（TxCard padding） |
+| `modelValue` | `string \| number` | `''` | 选中值，配合 `v-model` 使用。 |
+| `placeholder` | `string` | `'Search'` | 输入框的占位文本。 |
+| `disabled` | `boolean` | `false` | 禁用输入、面板与聚焦展开，不派发远程 `search`。 |
+| `clearable` | `boolean` | `true` | 显示清空按钮，可清空选中值。 |
+| `options` | `TxSearchSelectOption[]` | `[]` | 候选项；禁用项不可选。 |
+| `loading` | `boolean` | `false` | 在输入框后缀显示加载指示器。 |
+| `remote` | `boolean` | `false` | 关闭本地过滤，改为派发 `search`。 |
+| `searchDebounce` | `number` | `200` | 远程 `search` 的防抖时长（ms）。 |
+| `dropdownMaxHeight` | `number` | `280` | 面板最大高度（px），超出后内部滚动。 |
+| `dropdownOffset` | `number` | `6` | 面板与输入框的间距。 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态，同 TxCard `variant`。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景，同 TxCard `background`。 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影，同 TxCard `shadow`。 |
+| `panelRadius` | `number` | `18` | 面板圆角，同 TxCard `radius`。 |
+| `panelPadding` | `number` | `6` | 面板内边距，同 TxCard `padding`。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(v: string \| number)` | v-model 更新 |
-| `change` | `(v: string \| number)` | 选中变更 |
-| `search` | `(q: string)` | 远程搜索 |
-| `select` | `(opt: TxSearchSelectOption)` | 选择某一项 |
-| `open` | - | 打开下拉 |
-| `close` | - | 关闭下拉 |
+| `update:modelValue` | `(v: string \| number)` | 选中启用项或清空后触发。 |
+| `change` | `(v: string \| number)` | 与 `update:modelValue` 同时触发。 |
+| `search` | `(q: string)` | 远程模式下输入防抖结束或按 Enter 时触发。 |
+| `select` | `(opt: TxSearchSelectOption)` | 选中启用项后、面板关闭前触发。 |
+| `open` | - | 面板打开时触发。 |
+| `close` | - | 面板关闭时触发，并取消待发的远程 `search`。 |
 
-### Types
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open()` | `() => void` | 未禁用时打开面板。 |
+| `close()` | `() => void` | 关闭面板。 |
+| `focus()` | `() => void` | 聚焦内部 `TxInput`。 |
+| `blur()` | `() => void` | 使内部 `TxInput` 失焦。 |
+| `clear()` | `() => void` | 清空输入与选中值。 |
+
+### 类型
 
 :::TuffCodeBlock{lang="ts"}
 ---
@@ -145,64 +147,15 @@ code: |
 ---
 :::
 
-### 插槽
+## 概述
 
-`TxSearchSelect` 不暴露公共插槽。输入框前缀、loading 后缀、空态和选项行都由组件内部控制，以保持键盘与 Popover 行为一致。
-
-### 暴露方法
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `open()` | `() => void` | 未禁用时打开选项面板。 |
-| `close()` | `() => void` | 关闭选项面板。 |
-| `focus()` | `() => void` | 聚焦内部 `TxInput`。 |
-| `blur()` | `() => void` | 让内部 `TxInput` 失焦。 |
-| `clear()` | `() => void` | 调用内部输入框清空能力。 |
-
-## 后台筛选工具栏
-
-在 Dashboard 列表筛选中，`TxSearchSelect` 适合承载范围、类型、状态等结构化筛选；关键词仍交给 `TxSearchInput`，无结果恢复交给 `TxSearchEmpty`。
-
-:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="搜索输入、搜索选择器与搜索空态的可截图验证组合。"}
----
-code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('all')
-  const scopeOptions = [
-    { value: 'all', label: '全部' },
-    { value: 'docs', label: '文档' },
-    { value: 'tasks', label: '任务' },
-  ]
-  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxSearchInput v-model="query" placeholder="搜索插件 / 文档 / 任务" remote />
-      <TxSearchSelect
-        v-model="selectedScope"
-        :options="scopeOptions"
-        placeholder="筛选范围"
-        panel-background="glass"
-      />
-      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
-    </section>
-  </template>
----
-:::
+- 远程模式原样显示 `options`，不缓存结果。
+- 清空时以 `''` 派发 `update:modelValue` 与 `change`。
+- 面板关闭后保留输入内容，重新打开不会重置。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
-- 建议：本地小列表直接传 `options`；远程数据源使用 `remote` + `search` 事件，并由外部写回 `options`。
-- 交互：禁用项会展示但不可选择；清空会同步发出 `update:modelValue` 和 `change` 的空值。
-- 浮层：面板由 `TxPopover` 承载，使用 `panelBackground`、`panelShadow`、`panelRadius` 与页面表面层级对齐。
-
-- Component source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`.
-- Types: `packages/tuffex/packages/components/src/search-select/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/search-select/__tests__/search-select.test.ts` 验证本地过滤并选择选项、防抖远程 search 事件，以及无匹配结果时的空态渲染。
+- 面板由 `TxPopover` 承载；不开放插槽，前缀、加载后缀、空态与选项行均由内部渲染，以保持键盘与弹层行为一致。
+- 源码：`packages/tuffex/packages/components/src/search-select/`。
 
 <TuffDocSourceLink />

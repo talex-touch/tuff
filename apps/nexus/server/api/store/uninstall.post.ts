@@ -38,14 +38,17 @@ export default defineEventHandler(async (event) => {
   if (ip) {
     const ipHash = hashIpValue(event, ip)
 
-    await enforceAdminRateLimit(event, {
-      key: `store-uninstall:ip:${ipHash}`,
-      ...UNINSTALL_RATE_LIMIT.perIp,
-    })
-    await enforceAdminRateLimit(event, {
-      key: `store-uninstall:ip-plugin:${ipHash}:${body.slug}`,
-      ...UNINSTALL_RATE_LIMIT.perIpPlugin,
-    })
+    // Both windows at once: one round trip instead of two. Either refusing still stops the decrement.
+    await Promise.all([
+      enforceAdminRateLimit(event, {
+        key: `store-uninstall:ip:${ipHash}`,
+        ...UNINSTALL_RATE_LIMIT.perIp,
+      }),
+      enforceAdminRateLimit(event, {
+        key: `store-uninstall:ip-plugin:${ipHash}:${body.slug}`,
+        ...UNINSTALL_RATE_LIMIT.perIpPlugin,
+      }),
+    ])
   }
 
   const plugin = await getPluginBySlug(event, body.slug, { forStore: true })

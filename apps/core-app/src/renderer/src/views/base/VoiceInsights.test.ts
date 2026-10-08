@@ -500,17 +500,16 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
-   * The switch resolves on `=== true`, not on `!== false`. `historyEnabled` is added by a storage
-   * migration, so a profile that has never run it carries no such key at all — and reading that as
-   * "on" would hide the explanation from exactly the readers who have never seen the settings page
-   * that turns retention on in the first place.
+   * Retention is on by default (`normalizeVoiceHistoryEnabled`), so a profile that has never
+   * touched the switch carries no key and is keeping records: its empty log means nothing has been
+   * dictated yet, and a hint would send the reader to a switch already where it should be.
    */
-  it('treats a profile with no retention preference as retention off', async () => {
+  it('treats a profile with no retention preference as retention on', async () => {
     setHistoryRetention(undefined)
     const wrapper = await mountEmptyLog()
 
     await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
-    expect(wrapper.find('[data-testid="voice-insights-records-retention"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-insights-records-retention"]').exists()).toBe(false)
 
     wrapper.unmount()
   })

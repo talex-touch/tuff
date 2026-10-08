@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   maxHeight: 420,
   unlimitedHeight: false,
   referenceFullWidth: false,
-  showArrow: true,
+  showArrow: false,
   arrowSize: 12,
   trigger: 'click',
   virtualReference: undefined,
@@ -51,7 +51,9 @@ const resolvedOffset = computed(() => {
     return props.offset
   if (props.showArrow)
     return Math.max(8, Math.round((props.arrowSize ?? 12) * 0.5) + 2)
-  return 2
+  // The menu family's gap (DropdownMenu, Select, Cascader, TreeSelect). The
+  // old 2px left the panel edge over the trigger's 3px focus outline.
+  return 6
 })
 
 const internalOpen = ref(false)

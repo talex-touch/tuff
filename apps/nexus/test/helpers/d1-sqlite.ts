@@ -25,7 +25,9 @@ import { DatabaseSync } from 'node:sqlite'
  *   across it, as Miniflare counts. node:sqlite's own `changes` is
  *   `sqlite3_changes()`, which DDL and `SELECT` leave at the previous write's
  *   count and a `RETURNING` statement read row by row never reports;
- * - `batch()` is one transaction: when a statement throws, all of them roll back.
+ * - `batch()` is one transaction: when a statement throws, all of them roll back;
+ * - a statement binds at most 100 parameters (D1's limit, far under SQLite's), so
+ *   an `IN (?, ?, …)` list built from rows fails here as it fails in production.
  *
  * Every call yields a microtask before it touches the database, so two callers
  * running at once interleave between their statements as they do against D1: a
@@ -47,6 +49,9 @@ function toSqliteValue(value: unknown, index: number): SQLInputValue {
   return value as SQLInputValue
 }
 
+/** D1's limit on the parameters one statement binds. */
+const D1_MAX_BOUND_PARAMETERS = 100
+
 /** SQLite's running count of written rows, and the last inserted rowid: D1 reports a statement's `meta` from these. */
 function writeCounters(database: DatabaseSync): { total: number, lastRowId: number } {
   const row = database.prepare('SELECT total_changes() AS total, last_insert_rowid() AS lastRowId').get()!
@@ -66,7 +71,7 @@ export class SqliteD1Statement {
 
   async first<T = Record<string, unknown>>(column?: string): Promise<T | null> {
     await Promise.resolve()
-    const row = this.database.prepare(this.sql).get(...this.values)
+    const row = this.compile().get(...this.values)
     if (!row)
       return null
     if (column === undefined)
@@ -89,13 +94,19 @@ export class SqliteD1Statement {
 
   /** Runs the statement now: its rows when it returns any, and the rows it wrote. */
   execute(): SqliteD1Result {
-    const statement = this.database.prepare(this.sql)
+    const statement = this.compile()
     const before = writeCounters(this.database)
     const results = statement.columns().length > 0
       ? statement.all(...this.values).map(row => ({ ...row }))
       : (statement.run(...this.values), [])
     const after = writeCounters(this.database)
     return { results, success: true, meta: { changes: after.total - before.total, last_row_id: after.lastRowId } }
+  }
+
+  private compile() {
+    if (this.values.length > D1_MAX_BOUND_PARAMETERS)
+      throw new Error(`D1_ERROR: too many SQL variables: ${this.values.length} bound, D1 allows ${D1_MAX_BOUND_PARAMETERS}`)
+    return this.database.prepare(this.sql)
   }
 }
 

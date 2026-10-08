@@ -128,7 +128,7 @@ Each period has `id`, `label` and optional `series`, `nodes`, `cells`. A supplie
 | `update:dateCursor` | Point index or `null`. |
 | `select` | Selected datum from pointer click or Enter/Space. |
 
-Slots: `header({ total, period })`, `tooltip({ hover })`, `footer({ dataset })`. The tooltip reuses the existing charts-core context and `TxChartTooltip` placement. `dot`, `line` and `dashed` indicators retain separate markup. The stage supports arrows, Home/End, Enter/Space and Escape; legends and period controls are native buttons.
+Slots: `header({ total, period })`, `tooltip({ hover })`, `footer({ dataset })`. The tooltip reuses the existing charts-core context and `TxChartTooltip` placement. The default tooltip is titled with the hovered point (a date or category) and names its series in the row; where the datum is the series itself (donuts, gauges, legend focus) the two would match, so only the row is shown. `dot`, `line` and `dashed` indicators retain separate markup. The stage supports arrows, Home/End, Enter/Space and Escape; legends and period controls are native buttons.
 
 ### CSS variables
 

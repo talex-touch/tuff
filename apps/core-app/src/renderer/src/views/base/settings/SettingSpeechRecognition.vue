@@ -11,6 +11,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
   ensureVoiceInputSetting,
   normalizeVoiceAsrSource,
+  normalizeVoiceHistoryEnabled,
   normalizeVoicePolishStrength,
   VOICE_ASR_SOURCES,
   VOICE_POLISH_STRENGTHS,
@@ -43,6 +44,8 @@ const voiceInputEnabled = computed({
   set: (value: boolean) => {
     ensureVoiceInputSetting(appSetting as Record<string, unknown>)
     appSetting.voiceInput.enabled = value
+    // Marks the choice as the user's, so a later sign-in leaves an explicit off alone.
+    ;(appSetting.voiceInput as VoiceInputSetting).enabledSource = 'user'
   }
 })
 const voiceSource = computed({
@@ -63,7 +66,8 @@ const voiceSourceDescription = computed(() =>
 )
 
 const historyEnabled = computed({
-  get: () => (appSetting.voiceInput as VoiceInputSetting).historyEnabled === true,
+  get: () =>
+    normalizeVoiceHistoryEnabled((appSetting.voiceInput as VoiceInputSetting).historyEnabled),
   set: (value: boolean) => {
     ensureVoiceInputSetting(appSetting as Record<string, unknown>)
     ;(appSetting.voiceInput as VoiceInputSetting).historyEnabled = value

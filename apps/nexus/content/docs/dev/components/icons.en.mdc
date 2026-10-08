@@ -1,6 +1,6 @@
 ---
 title: Icons
-description: How TxIcon resolves a name, and how an app teaches it to load its own
+description: The rules TxIcon uses to resolve and load icons.
 category: Foundations
 status: beta
 since: 0.4.0
@@ -9,19 +9,18 @@ syncStatus: reviewed
 verified: false
 ---
 
-## One prop, five sources
+## Five sources
 
-Icons reach components as a `name` string, and `TxIcon` decides what that string *is* rather than making the caller declare it. The order is fixed, and the first match wins:
+`name` resolves only to `class` or `builtin`, in table order, and the first match wins. `emoji`, `url` and `file` arrive only through the explicit `icon` prop, which takes precedence over `name`.
 
-| `name` looks like | Resolved as | Rendered as |
-|-------------------|-------------|-------------|
-| `i-carbon-search` | `class` | `<i>` carrying the class — an Iconify / UnoCSS preset icon |
-| `chevron-down` | `builtin` | Inline `<svg>` from Tuffex's own table |
-| anything else | `emoji` | The characters, as text |
-| — | `url` | Fetched and painted (see below) |
-| — | `file` | Same, after the local-file protocol is applied |
-
-`url` and `file` are never inferred from a bare string: they arrive through the `icon` prop, which takes the source explicitly.
+| Written as | Type | Renders |
+|------------|------|---------|
+| `name="i-carbon-search"` | `class` | `<i>` carrying the class: an Iconify / UnoCSS preset icon |
+| `name="chevron-down"` | `builtin` | Inline `<svg>` from the builtin table |
+| `name` set to any other string | `class` | As the first row; the string is used as the class name |
+| `:icon="{ type: 'emoji', value }"` | `emoji` | The characters, as text |
+| `:icon="{ type: 'url', value }"` | `url` | Fetched and painted |
+| `:icon="{ type: 'file', value }"` | `file` | Fetched and painted after the local-file protocol is applied |
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -33,10 +32,8 @@ code: |
     <!-- builtin: no icon set required -->
     <TxIcon name="chevron-down" />
 
-    <!-- emoji: the fallback, and often the point -->
-    <TxIcon name="🚀" />
-
-    <!-- explicit source -->
+    <!-- explicit sources -->
+    <TxIcon :icon="{ type: 'emoji', value: '🚀' }" />
     <TxIcon :icon="{ type: 'url', value: '/icons/plugin.svg' }" />
     <TxIcon :icon="{ type: 'file', value: '/Users/me/icon.png', colorful: true }" />
   </template>
@@ -45,24 +42,25 @@ code: |
 
 ## The builtin table
 
-Seven glyphs ship inside the component so core affordances never depend on an icon set being installed: `check`, `chevron-down`, `close`, `search`, `user`, `star`, `star-half`.
+`check`, `chevron-down`, `close`, `search`, `user`, `star`, `star-half`, `info`, `check-circle`, `x-circle` and `alert-triangle` ship inside the component, so core affordances render even with no icon collection configured.
 
-They are deliberately few. The table exists so a disclosure arrow or a rating star renders in an app that has configured no icon collection at all — not as a general icon library. Anything beyond these seven should come from an Iconify class or an explicit source.
+- The table is not a general icon library; use an Iconify class or an explicit source for anything else.
+- Entries are filled silhouettes or open strokes. `chevron-down` is stroked: it is a disclosure affordance at 12–14px, where a filled wedge reads as a heavy blob beside its label.
 
-Entries are drawn either as a filled silhouette or as an open stroked path. `chevron-down` is stroked: it is a disclosure affordance rendered at 12–14px in collapses, dropdowns and submenus, where a filled wedge reads as a heavy blob beside its label.
+## Color, mask, and `colorful`
 
-## Colour, mask, and `colorful`
+Applies to `url` / `file` sources.
 
-Addressable icons (`url` / `file`) render one of two ways:
+| Mode | Renders | Use for |
+|------|---------|---------|
+| Monochrome (default) | A single-color SVG painted as a CSS mask; takes `currentColor` and follows the theme | UI glyphs |
+| `colorful: true` | An `<img>` with its own colors | Logos and app icons |
 
-- **Monochrome (default).** A single-colour SVG is painted as a CSS mask, so it takes `currentColor` and inherits the surrounding text colour — including through theme switches.
-- **`colorful: true`.** The file renders as an `<img>` with its own colours untouched. Use it for logos and app icons, where recolouring would be wrong.
+`color` on the source overrides the monochrome ink.
 
-`color` on the source overrides the ink for monochrome rendering.
+## Loading your own icons
 
-## Teaching it to load your icons
-
-An app usually stores icons somewhere `<img src>` cannot reach directly — behind a custom protocol, an authenticated endpoint, or a transport layer. Rather than special-casing that in every component, provide a config once and every descendant `TxIcon` picks it up:
+When icons sit behind a custom protocol, an authenticated endpoint, or a transport layer, provide a config once; every descendant `TxIcon` picks it up:
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -80,20 +78,16 @@ code: |
 ---
 :::
 
-Any single `TxIcon` can override the injected config with its own `urlResolver` / `svgFetcher` props — useful when one surface loads from a different origin than the rest of the app.
+A single `TxIcon` overrides the injected config with its own `urlResolver` / `svgFetcher` props.
 
 ## Animated icons
 
-Iconify collections are static glyphs. When a surface wants an icon that *moves* — on hover, on focus, or driven by state — [AnimateIcons](https://animateicons.in/) is a usable source: 542 MIT-licensed animated icons built on Lucide geometry.
+For an icon that moves, [AnimateIcons](https://animateicons.in/) offers 542 MIT-licensed animated icons built on Lucide geometry.
 
-It ships as **React components** (`motion/react`), so it is not a dependency you can add to Tuffex or a Vue app. What it is good for is the artwork: the SVG geometry and the per-path animation timings are in the open, and both port cleanly to a Vue component or to Tuffex's existing motion primitives.
-
-Two honest caveats before reaching for it:
-
-- **Not an Iconify collection.** There is no `i-animateicons-*` class. Each icon is a component with its own markup, so it cannot flow through `TxIcon`'s `name` resolution — it is a component you write, not a string you pass.
-- **Check the static answer first.** If the icon does not actually need to move, a glyph from a collection your build already ships (`carbon`, `ri`, `simple-icons`…) is the smaller answer.
-
-Attribution and the MIT notice travel with any geometry you copy.
+- It ships as React components (`motion/react`), not a dependency for Tuffex or a Vue app; what ports is the SVG geometry and per-path timing.
+- It is not an Iconify collection: there is no `i-animateicons-*` class, and a port is a component, not a `name` string.
+- If the icon doesn't need to move, prefer a collection your build already ships (`carbon`, `ri`, `simple-icons`…).
+- Keep the attribution and MIT notice with any geometry you copy.
 
 ## Technologies
 
@@ -104,6 +98,6 @@ Attribution and the MIT notice travel with any geometry you copy.
 
 | Component | For |
 |-----------|-----|
-| [Icon](./icon.en.mdc) | The general case, and the full prop list |
-| [IconChip](./icon-chip.en.mdc) | A small tinted plate holding a glyph or a short label |
-| Status icon | A tone-coloured glyph for success / warning / error states |
+| [Icon](./icon.en.mdc) | General use and full props |
+| [IconChip](./icon-chip.en.mdc) | Tinted plate for a glyph or label |
+| Status icon | Tone-colored status glyph |

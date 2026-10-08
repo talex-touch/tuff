@@ -4,14 +4,13 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const STATE_TABLE = 'admin_defense_mode_state'
 const HISTORY_TABLE = 'admin_defense_mode_history'
 const PRIMARY_STATE_ID = 'global'
 
 export type DefenseMode = 'NORMAL' | 'ELEVATED' | 'EXTREME'
-
-let schemaReady = false
 
 function getDb(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
@@ -25,36 +24,29 @@ function requireDb(event: H3Event): D1Database {
   return db
 }
 
+const DEFENSE_MODE_SCHEMA = defineD1Schema('defense-mode', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${STATE_TABLE} (
+        id TEXT PRIMARY KEY,
+        mode TEXT NOT NULL,
+        updated_by TEXT,
+        reason TEXT,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${HISTORY_TABLE} (
+        id TEXT PRIMARY KEY,
+        mode TEXT NOT NULL,
+        updated_by TEXT,
+        reason TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_defense_mode_history_created
+      ON ${HISTORY_TABLE}(created_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaReady)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${STATE_TABLE} (
-      id TEXT PRIMARY KEY,
-      mode TEXT NOT NULL,
-      updated_by TEXT,
-      reason TEXT,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${HISTORY_TABLE} (
-      id TEXT PRIMARY KEY,
-      mode TEXT NOT NULL,
-      updated_by TEXT,
-      reason TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_defense_mode_history_created
-    ON ${HISTORY_TABLE}(created_at);
-  `).run()
-
-  schemaReady = true
+  await ensureD1Schema(db, DEFENSE_MODE_SCHEMA)
 }
 
 function resolveDefaultMode(event: H3Event): DefenseMode {

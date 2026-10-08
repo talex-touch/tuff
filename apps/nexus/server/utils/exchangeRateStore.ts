@@ -1,15 +1,16 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { claimMaintenanceRun } from './maintenanceLease'
 
 const EXCHANGE_RATE_TABLE = 'exchange_rate_snapshots'
 const EXCHANGE_RATE_RATES_TABLE = 'exchange_rate_rates'
 const EXCHANGE_RATE_CACHE_PREFIX = 'exchange-rate:latest'
-
-let exchangeRateSchemaInitialized = false
-let exchangeRateRatesSchemaInitialized = false
+/** How long one request's refresh of a stale snapshot keeps the others answering with it. */
+const EXCHANGE_RATE_REFRESH_LEASE_MS = 60 * 1000
 
 export interface ExchangeRateSnapshot {
   id: string
@@ -97,51 +98,43 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const EXCHANGE_RATE_SCHEMA = defineD1Schema('exchange-rate', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${EXCHANGE_RATE_TABLE} (
+        id TEXT PRIMARY KEY,
+        base_currency TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        provider_updated_at INTEGER,
+        provider_next_update_at INTEGER,
+        payload_json TEXT NOT NULL,
+        rates_json TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${EXCHANGE_RATE_TABLE}_base_fetched_at
+      ON ${EXCHANGE_RATE_TABLE}(base_currency, fetched_at)`,
+  ],
+})
+
 async function ensureExchangeRateSchema(db: D1Database): Promise<void> {
-  if (exchangeRateSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${EXCHANGE_RATE_TABLE} (
-      id TEXT PRIMARY KEY,
-      base_currency TEXT NOT NULL,
-      fetched_at INTEGER NOT NULL,
-      provider_updated_at INTEGER,
-      provider_next_update_at INTEGER,
-      payload_json TEXT NOT NULL,
-      rates_json TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${EXCHANGE_RATE_TABLE}_base_fetched_at
-    ON ${EXCHANGE_RATE_TABLE}(base_currency, fetched_at);
-  `).run()
-
-  exchangeRateSchemaInitialized = true
+  await ensureD1Schema(db, EXCHANGE_RATE_SCHEMA)
 }
 
+const EXCHANGE_RATE_RATES_SCHEMA = defineD1Schema('exchange-rate-rates', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${EXCHANGE_RATE_RATES_TABLE} (
+        id TEXT PRIMARY KEY,
+        base_currency TEXT NOT NULL,
+        target_currency TEXT NOT NULL,
+        rate REAL NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        provider_updated_at INTEGER
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${EXCHANGE_RATE_RATES_TABLE}_target_fetched_at
+      ON ${EXCHANGE_RATE_RATES_TABLE}(target_currency, fetched_at)`,
+  ],
+})
+
 async function ensureExchangeRateRatesSchema(db: D1Database): Promise<void> {
-  if (exchangeRateRatesSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${EXCHANGE_RATE_RATES_TABLE} (
-      id TEXT PRIMARY KEY,
-      base_currency TEXT NOT NULL,
-      target_currency TEXT NOT NULL,
-      rate REAL NOT NULL,
-      fetched_at INTEGER NOT NULL,
-      provider_updated_at INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${EXCHANGE_RATE_RATES_TABLE}_target_fetched_at
-    ON ${EXCHANGE_RATE_RATES_TABLE}(target_currency, fetched_at);
-  `).run()
-
-  exchangeRateRatesSchemaInitialized = true
+  await ensureD1Schema(db, EXCHANGE_RATE_RATES_SCHEMA)
 }
 
 function resolveCacheKey(baseCurrency: string) {
@@ -246,6 +239,28 @@ export async function getLatestSnapshot(
   return await storageCacheAdapter.readCache(baseCurrency)
 }
 
+function prepareSnapshotInsert(db: D1Database, snapshot: ExchangeRateSnapshot): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO ${EXCHANGE_RATE_TABLE} (
+      id,
+      base_currency,
+      fetched_at,
+      provider_updated_at,
+      provider_next_update_at,
+      payload_json,
+      rates_json
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);
+  `).bind(
+    snapshot.id,
+    snapshot.baseCurrency,
+    snapshot.fetchedAt,
+    snapshot.providerUpdatedAt ?? null,
+    snapshot.providerNextUpdateAt ?? null,
+    JSON.stringify(snapshot.payload ?? {}),
+    JSON.stringify(snapshot.rates ?? {}),
+  )
+}
+
 export async function saveSnapshot(
   event: H3Event,
   snapshot: ExchangeRateSnapshot,
@@ -254,66 +269,60 @@ export async function saveSnapshot(
 
   if (db) {
     await ensureExchangeRateSchema(db)
-    await db.prepare(`
-      INSERT INTO ${EXCHANGE_RATE_TABLE} (
-        id,
-        base_currency,
-        fetched_at,
-        provider_updated_at,
-        provider_next_update_at,
-        payload_json,
-        rates_json
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);
-    `).bind(
-      snapshot.id,
-      snapshot.baseCurrency,
-      snapshot.fetchedAt,
-      snapshot.providerUpdatedAt ?? null,
-      snapshot.providerNextUpdateAt ?? null,
-      JSON.stringify(snapshot.payload ?? {}),
-      JSON.stringify(snapshot.rates ?? {}),
-    ).run()
+    await prepareSnapshotInsert(db, snapshot).run()
   }
 
   await storageCacheAdapter.writeCache(snapshot)
 }
 
+/**
+ * The snapshot and a history row per rate, in one round trip and one transaction. The rates were
+ * inserted one statement at a time: about 160 round trips, on the request that found the snapshot
+ * stale.
+ */
 export async function saveSnapshotWithRates(
   event: H3Event,
   snapshot: ExchangeRateSnapshot,
   options: SaveSnapshotOptions = {},
 ): Promise<void> {
   const db = getD1Database(event)
-  await saveSnapshot(event, snapshot)
-
-  if (!db || options.storeRateRows === false)
+  if (!db || options.storeRateRows === false) {
+    await saveSnapshot(event, snapshot)
     return
-
-  await ensureExchangeRateRatesSchema(db)
-
-  const entries = Object.entries(snapshot.rates || {})
-  if (!entries.length)
-    return
-
-  for (const [targetCurrency, rate] of entries) {
-    await db.prepare(`
-      INSERT INTO ${EXCHANGE_RATE_RATES_TABLE} (
-        id,
-        base_currency,
-        target_currency,
-        rate,
-        fetched_at,
-        provider_updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6);
-    `).bind(
-      randomUUID(),
-      snapshot.baseCurrency,
-      targetCurrency,
-      rate,
-      snapshot.fetchedAt,
-      snapshot.providerUpdatedAt ?? null,
-    ).run()
   }
+
+  await Promise.all([ensureExchangeRateSchema(db), ensureExchangeRateRatesSchema(db)])
+  const rates = Object.entries(snapshot.rates || {}).map(([targetCurrency, rate]) => [randomUUID(), targetCurrency, rate])
+  await db.batch([
+    prepareSnapshotInsert(db, snapshot),
+    ...(rates.length
+      ? [db.prepare(`
+          INSERT INTO ${EXCHANGE_RATE_RATES_TABLE} (
+            id,
+            base_currency,
+            target_currency,
+            rate,
+            fetched_at,
+            provider_updated_at
+          )
+          SELECT json_extract(value, '$[0]'), ?1, json_extract(value, '$[1]'), json_extract(value, '$[2]'), ?2, ?3
+          FROM json_each(?4);
+        `).bind(snapshot.baseCurrency, snapshot.fetchedAt, snapshot.providerUpdatedAt ?? null, JSON.stringify(rates))]
+      : []),
+  ])
+  await storageCacheAdapter.writeCache(snapshot)
+}
+
+/**
+ * Whether this request may refresh the stale `baseCurrency` snapshot. One request at a time does:
+ * the others answer with the stale snapshot until it lands, instead of each calling the provider
+ * (and spending its quota) and writing its own copy. Without a database every request may.
+ */
+export async function claimSnapshotRefresh(event: H3Event, baseCurrency: string, now: number): Promise<boolean> {
+  const db = getD1Database(event)
+  if (!db)
+    return true
+  return (await claimMaintenanceRun(db, `exchange_rate_refresh:${baseCurrency}`, new Date(now), EXCHANGE_RATE_REFRESH_LEASE_MS)).claimed
 }
 
 export async function listRateHistory(
@@ -409,21 +418,21 @@ export async function cleanupHistory(
   if (!db)
     return
 
-  await ensureExchangeRateSchema(db)
-  await ensureExchangeRateRatesSchema(db)
+  await Promise.all([ensureExchangeRateSchema(db), ensureExchangeRateRatesSchema(db)])
 
   const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
   const baseCurrency = options.baseCurrency ?? 'USD'
 
-  await db.prepare(`
-    DELETE FROM ${EXCHANGE_RATE_TABLE}
-    WHERE base_currency = ?1 AND fetched_at < ?2;
-  `).bind(baseCurrency, cutoff).run()
-
-  await db.prepare(`
-    DELETE FROM ${EXCHANGE_RATE_RATES_TABLE}
-    WHERE base_currency = ?1 AND fetched_at < ?2;
-  `).bind(baseCurrency, cutoff).run()
+  await db.batch([
+    db.prepare(`
+      DELETE FROM ${EXCHANGE_RATE_TABLE}
+      WHERE base_currency = ?1 AND fetched_at < ?2;
+    `).bind(baseCurrency, cutoff),
+    db.prepare(`
+      DELETE FROM ${EXCHANGE_RATE_RATES_TABLE}
+      WHERE base_currency = ?1 AND fetched_at < ?2;
+    `).bind(baseCurrency, cutoff),
+  ])
 }
 
 export async function listSnapshots(

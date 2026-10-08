@@ -333,7 +333,7 @@ describe('invokeIntelligenceCapability', () => {
         releasedCredits: hold - chargedCredits,
         chargedCredits,
       }),
-      { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
+      { idempotencyKey: `intelligence-invoke-release:${result.traceId}`, reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
 
     const creditMetadata = JSON.stringify(creditStoreMocks.consumeCredits.mock.calls[0]?.[4])
@@ -486,7 +486,7 @@ describe('invokeIntelligenceCapability', () => {
         releasedCredits: hold,
         traceOutcome: 'unmetered',
       }),
-      { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
+      { idempotencyKey: `intelligence-invoke-release:${result.traceId}`, reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
     expect(result.metadata.billing).toMatchObject({
       chargedCredits: 0,
@@ -532,7 +532,7 @@ describe('invokeIntelligenceCapability', () => {
         releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
-      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/), reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
     expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       success: false,
@@ -745,7 +745,7 @@ describe('invokeIntelligenceCapability', () => {
         releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
-      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/), reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
     expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
     expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
@@ -840,7 +840,7 @@ describe('invokeIntelligenceCapability', () => {
         releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
-      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/), reservationLedgerId: expect.stringMatching(/^ledger_intelligence-invoke-reserve_/) },
     )
     expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
     const requestEvents = await listPlatformGovernanceEvents(event, {
@@ -910,6 +910,22 @@ describe('invokeIntelligenceCapability', () => {
     })).rejects.toMatchObject({ statusCode: 503, data: { code: 'CAPABILITY_DISABLED' } })
 
     expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+  })
+
+  it('refuses a capability no provider can serve before holding any credits', async () => {
+    // Every provider serves text.chat only; nothing can translate.
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValueOnce([])
+
+    await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })).rejects.toThrow(/No configured provider is available/)
+
+    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
   })
 

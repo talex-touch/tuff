@@ -776,10 +776,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           :description="t('themeStyle.copyToLibraryDesc')"
         >
           <template #tags>
-            <TxTooltip
-              :content="t('themeStyle.copyToLibraryHint')"
-              :anchor="{ placement: 'top', showArrow: true }"
-            >
+            <TxTooltip :content="t('themeStyle.copyToLibraryHint')" :anchor="{ placement: 'top' }">
               <TxButton variant="bare" native-type="button" class="ThemeStyle-HintBtn" @click.stop>
                 <span class="i-carbon-information text-xs" />
               </TxButton>

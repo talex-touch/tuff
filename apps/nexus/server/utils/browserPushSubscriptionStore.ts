@@ -5,11 +5,10 @@ import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { isPlainObject, normalizeString } from './telemetrySanitizer'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SUBSCRIPTIONS_TABLE = 'browser_push_subscriptions'
 const MAX_MEMORY_ITEMS = 1000
-
-const initializedSchemas = new WeakSet<D1Database>()
 
 export interface BrowserPushSubscriptionPayload {
   endpoint: string
@@ -72,31 +71,29 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return event ? readCloudflareBindings(event)?.DB ?? null : null
 }
 
+const BROWSER_PUSH_SUBSCRIPTION_SCHEMA = defineD1Schema('browser-push-subscriptions', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SUBSCRIPTIONS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        endpoint_hash TEXT NOT NULL,
+        endpoint TEXT NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        expiration_time INTEGER,
+        endpoint_origin TEXT NOT NULL,
+        endpoint_host TEXT NOT NULL,
+        user_agent TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_${SUBSCRIPTIONS_TABLE}_user_endpoint ON ${SUBSCRIPTIONS_TABLE}(user_id, endpoint_hash)`,
+    `CREATE INDEX IF NOT EXISTS idx_${SUBSCRIPTIONS_TABLE}_user_updated ON ${SUBSCRIPTIONS_TABLE}(user_id, updated_at)`,
+  ],
+})
+
 async function ensureBrowserPushSubscriptionSchema(db: D1Database): Promise<void> {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SUBSCRIPTIONS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      endpoint_hash TEXT NOT NULL,
-      endpoint TEXT NOT NULL,
-      p256dh TEXT NOT NULL,
-      auth TEXT NOT NULL,
-      expiration_time INTEGER,
-      endpoint_origin TEXT NOT NULL,
-      endpoint_host TEXT NOT NULL,
-      user_agent TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${SUBSCRIPTIONS_TABLE}_user_endpoint ON ${SUBSCRIPTIONS_TABLE}(user_id, endpoint_hash);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${SUBSCRIPTIONS_TABLE}_user_updated ON ${SUBSCRIPTIONS_TABLE}(user_id, updated_at);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, BROWSER_PUSH_SUBSCRIPTION_SCHEMA)
 }
 
 function assertString(value: unknown, field: string, maxLength = 180): string {

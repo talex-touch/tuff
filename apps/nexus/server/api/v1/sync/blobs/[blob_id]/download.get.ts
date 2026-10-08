@@ -1,5 +1,4 @@
-import { Buffer } from 'node:buffer'
-import { getHeader, send, setResponseHeader } from 'h3'
+import { getHeader, sendStream, setResponseHeader } from 'h3'
 import { requireAppAuth } from '../../../../../utils/auth'
 import { readDeviceId } from '../../../../../utils/authStore'
 import { createSyncError } from '../../../../../utils/syncErrors'
@@ -25,13 +24,12 @@ export default defineEventHandler(async (event) => {
   if (!blob)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 404, 'Blob not found')
 
-  const buffer = Buffer.from(blob.data)
   setResponseHeader(event, 'Content-Type', blob.contentType)
-  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Content-Length', blob.byteLength)
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
   setResponseHeader(event, 'Content-Disposition', `attachment; filename="blob-${blobId}"`)
   setResponseHeader(event, 'X-Content-SHA256', blob.sha256)
 
-  return send(event, buffer)
+  return sendStream(event, blob.body)
 })
 

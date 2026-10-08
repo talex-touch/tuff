@@ -9,13 +9,14 @@ function normalizeEmail(value?: string | null): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
   const invitationId = getRouterParam(event, 'id')
   if (!invitationId) {
     throw createError({ statusCode: 400, statusMessage: 'Invitation ID required' })
   }
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   const invite = await getInviteById(event, invitationId)
   if (!user?.email || !invite || normalizeEmail(invite.email) !== normalizeEmail(user.email)) {
     throw createError({ statusCode: 404, statusMessage: 'Invitation not found' })

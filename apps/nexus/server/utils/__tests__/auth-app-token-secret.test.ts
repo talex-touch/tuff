@@ -68,6 +68,14 @@ vi.mock('../authStore', () => ({
   ),
   getUserByEmail: vi.fn(),
   getUserById: vi.fn(async (_event: unknown, userId: string) => users.get(userId) ?? null),
+  getUserWithDevice: vi.fn(async (_event: unknown, userId: string, deviceId: string) => ({
+    user: users.get(userId) ?? null,
+    device: devices.get(`${userId}:${deviceId}`) ?? null,
+  })),
+  getUserAndTouchRequestDevice: vi.fn(async (_event: unknown, userId: string) => {
+    const user = users.get(userId) ?? null
+    return { user, deviceId: user?.status === 'active' ? 'device-1' : null }
+  }),
   readDeviceId: vi.fn(() => 'device-1'),
   readDeviceMetadata: vi.fn(() => ({ deviceName: 'Unit Test CLI', platform: 'test', clientType: 'cli' })),
   upsertDevice: vi.fn(async (_event: unknown, userId: string, deviceId: string) => {
@@ -326,14 +334,20 @@ describe('app auth token secret resolution', () => {
     expect(accessPayload.kind).toBe('access')
     expect(refreshPayload.kind).toBe('refresh')
 
+    // A later request that carries only an app token, no browser session.
     browserSession.state.value = null
     const appOnlyPair = await createAppTokenPair(event, 'user-1', {
       deviceId: 'device-1',
       grantType: 'short',
     })
-    event.node.req.headers.authorization = `Bearer ${appOnlyPair.appToken}`
+    const appOnlyRequest = createEvent({
+      APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456',
+      AUTH_SECRET: 'cloudflare-session-secret-123456',
+    })
+    appOnlyRequest.node.req.headers['x-forwarded-proto'] = 'https'
+    appOnlyRequest.node.req.headers.authorization = `Bearer ${appOnlyPair.appToken}`
 
-    await expect(issueAppSignInToken(event)).rejects.toMatchObject({ statusCode: 401 })
+    await expect(issueAppSignInToken(appOnlyRequest)).rejects.toMatchObject({ statusCode: 401 })
   })
 
   it.each([

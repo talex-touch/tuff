@@ -1,17 +1,16 @@
 import { getHeader, setCookie } from 'h3'
 import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import {
-  createDocChallenge,
-  createDocEngagementSession,
   createDocToken,
   ensureDocAnalyticsSchema,
   expirePendingSessions,
   getDocSecurityState,
-  incrementDocView,
   isAllowedDocPathForSource,
   normalizeDocPath,
   normalizeDocSourceType,
+  openDocViewSession,
   recordDocViolation,
+  type DocSecurityState,
 } from '../../utils/docAnalyticsStore'
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { EvidenceSource } from '../../utils/evidenceSource'
@@ -73,10 +72,14 @@ export default defineEventHandler(async (event) => {
 
   const ip = resolveRequestIp(event) || ''
 
+  // The client's security state: as read before expiring its sessions, or as the violation for the
+  // expired ones just wrote it. The session's risk level comes from it; it used to be read again.
+  let security: DocSecurityState | null = null
+
   // TODO-SEC-1: 接入全局风险引擎后，替换当前 docs 独立风险状态读取逻辑。
   if (ip) {
     if (ENFORCE_DOC_SECURITY) {
-      const security = await getDocSecurityState(db, ip, clientId)
+      security = await getDocSecurityState(db, ip, clientId)
       if (security?.blockedUntil && security.blockedUntil > Date.now()) {
         throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
       }
@@ -88,32 +91,27 @@ export default defineEventHandler(async (event) => {
       now: Date.now(),
     })
     if (ENFORCE_DOC_SECURITY && expiredCount > 0) {
-      const updated = await recordDocViolation(db, {
+      security = await recordDocViolation(db, {
         ip,
         clientId,
         weight: Math.min(expiredCount, EXPIRED_SESSION_VIOLATION_WEIGHT_CAP),
       })
-      if (updated.blockedUntil && updated.blockedUntil > Date.now()) {
+      if (security.blockedUntil && security.blockedUntil > Date.now()) {
         throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
       }
     }
   }
 
-  const views = await incrementDocView(db, {
+  const riskLevel = security?.riskLevel ?? 0
+  const { views, session, challenge } = await openDocViewSession(db, {
     path: normalizedPath,
     title,
-  })
-
-  const security = ip && ENFORCE_DOC_SECURITY ? await getDocSecurityState(db, ip, clientId) : null
-  const riskLevel = security?.riskLevel ?? 0
-
-  const session = await createDocEngagementSession(db, {
-    path: normalizedPath,
     sourceType,
     clientId,
     ip: ip || null,
     riskLevel,
-    ttlMs: SESSION_TTL_MS,
+    sessionTtlMs: SESSION_TTL_MS,
+    challengeTtlMs: CHALLENGE_TTL_MS,
   })
 
   const token = createDocToken(event, {
@@ -125,12 +123,7 @@ export default defineEventHandler(async (event) => {
   })
 
   let challengeInfo: { challengeId: string, seed: string, difficulty: number } | null = null
-  if (riskLevel >= 1) {
-    const challenge = await createDocChallenge(db, {
-      sessionId: session.sessionId,
-      riskLevel,
-      ttlMs: CHALLENGE_TTL_MS,
-    })
+  if (challenge) {
     challengeInfo = {
       challengeId: challenge.challengeId,
       seed: challenge.seed,

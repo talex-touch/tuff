@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
@@ -45,101 +46,79 @@ function resolveCutoff(now: Date, retentionDays: number): string {
   return new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
 }
 
+const DAILY_STATS_SCHEMA = defineD1Schema('telemetry-daily-stats', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${DAILY_STATS_TABLE} (
+        date TEXT NOT NULL,
+        stat_type TEXT NOT NULL,
+        stat_key TEXT NOT NULL DEFAULT '',
+        value INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (date, stat_type, stat_key)
+      )`,
+  ],
+})
+
 async function ensureDailyStatsSchema(db: D1Database) {
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DAILY_STATS_TABLE} (
-      date TEXT NOT NULL,
-      stat_type TEXT NOT NULL,
-      stat_key TEXT NOT NULL DEFAULT '',
-      value INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (date, stat_type, stat_key)
-    );
-  `).run()
+  await ensureD1Schema(db, DAILY_STATS_SCHEMA)
 }
 
-async function countRows(db: D1Database, table: string, timestampColumn: string, cutoff: string): Promise<number> {
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM ${table}
-    WHERE ${timestampColumn} < ?1;
-  `).bind(cutoff).first<{ count?: number }>()
-  return Number(row?.count ?? 0)
+/**
+ * Rolls one table's expiring rows into `daily_stats`. Each statement reads the expiring rows once and
+ * derives every daily stat from that pass; the governance rollup was four statements, each a full
+ * scan (`platform_governance_events` had no index leading with `occurred_at`), about 48k rows read
+ * apiece in production. `DO NOTHING` keeps a day's first rollup, as before.
+ *
+ * The outer `SELECT … WHERE true` is SQLite's required disambiguation between `ON CONFLICT` and a join
+ * constraint after a compound select.
+ */
+const TELEMETRY_ROLLUP_SQL = `
+  INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+  SELECT date, stat_type, stat_key, value FROM (
+    WITH per_type AS (
+      SELECT substr(created_at, 1, 10) AS date, event_type, COUNT(*) AS total
+      FROM ${TELEMETRY_TABLE}
+      WHERE created_at < ?1
+      GROUP BY date, event_type
+    )
+    SELECT date, 'total_events' AS stat_type, '' AS stat_key, SUM(total) AS value FROM per_type GROUP BY date
+    UNION ALL
+    SELECT date, 'events_by_type', event_type, total FROM per_type
+  )
+  WHERE true
+  ON CONFLICT(date, stat_type, stat_key) DO NOTHING
+`
+
+const GOVERNANCE_ROLLUP_SQL = `
+  INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+  SELECT date, stat_type, stat_key, value FROM (
+    WITH per_pair AS (
+      SELECT substr(occurred_at, 1, 10) AS date, scope, action, COUNT(*) AS total
+      FROM ${GOVERNANCE_EVENTS_TABLE}
+      WHERE occurred_at < ?1
+      GROUP BY date, scope, action
+    )
+    SELECT date, 'governance_total_events' AS stat_type, '' AS stat_key, SUM(total) AS value FROM per_pair GROUP BY date
+    UNION ALL
+    SELECT date, 'governance_scope', scope, SUM(total) FROM per_pair GROUP BY date, scope
+    UNION ALL
+    SELECT date, 'governance_action', action, SUM(total) FROM per_pair GROUP BY date, action
+    UNION ALL
+    SELECT date, 'governance_scope_action', scope || ':' || action, total FROM per_pair
+  )
+  WHERE true
+  ON CONFLICT(date, stat_type, stat_key) DO NOTHING
+`
+
+const ROLLUP_SQL: Record<RetentionTableResult['table'], string> = {
+  [TELEMETRY_TABLE]: TELEMETRY_ROLLUP_SQL,
+  [GOVERNANCE_EVENTS_TABLE]: GOVERNANCE_ROLLUP_SQL,
 }
 
-async function deleteRows(db: D1Database, table: string, timestampColumn: string, cutoff: string, limit: number): Promise<number> {
-  const result = await db.prepare(`
-    DELETE FROM ${table}
-    WHERE id IN (
-      SELECT id
-      FROM ${table}
-      WHERE ${timestampColumn} < ?1
-      ORDER BY ${timestampColumn} ASC
-      LIMIT ?2
-    );
-  `).bind(cutoff, limit).run()
-  return Number((result.meta as { changes?: number } | undefined)?.changes ?? 0)
-}
-
-async function backfillTelemetryDailyStats(db: D1Database, cutoff: string) {
-  await ensureDailyStatsSchema(db)
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(created_at, 1, 10), 'total_events', '', COUNT(*)
-    FROM ${TELEMETRY_TABLE}
-    WHERE created_at < ?1
-    GROUP BY substr(created_at, 1, 10)
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(created_at, 1, 10), 'events_by_type', event_type, COUNT(*)
-    FROM ${TELEMETRY_TABLE}
-    WHERE created_at < ?1
-    GROUP BY substr(created_at, 1, 10), event_type
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-}
-
-async function backfillGovernanceDailyStats(db: D1Database, cutoff: string) {
-  await ensureDailyStatsSchema(db)
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(occurred_at, 1, 10), 'governance_total_events', '', COUNT(*)
-    FROM ${GOVERNANCE_EVENTS_TABLE}
-    WHERE occurred_at < ?1
-    GROUP BY substr(occurred_at, 1, 10)
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(occurred_at, 1, 10), 'governance_scope', scope, COUNT(*)
-    FROM ${GOVERNANCE_EVENTS_TABLE}
-    WHERE occurred_at < ?1
-    GROUP BY substr(occurred_at, 1, 10), scope
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(occurred_at, 1, 10), 'governance_action', action, COUNT(*)
-    FROM ${GOVERNANCE_EVENTS_TABLE}
-    WHERE occurred_at < ?1
-    GROUP BY substr(occurred_at, 1, 10), action
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-
-  await db.prepare(`
-    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
-    SELECT substr(occurred_at, 1, 10), 'governance_scope_action', scope || ':' || action, COUNT(*)
-    FROM ${GOVERNANCE_EVENTS_TABLE}
-    WHERE occurred_at < ?1
-    GROUP BY substr(occurred_at, 1, 10), scope, action
-    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
-  `).bind(cutoff).run()
-}
-
+/**
+ * One table's retention pass in one round trip: rollup, count, delete, as a single transaction, so
+ * rows are never deleted without having been rolled up. A dry run only counts. It was up to six
+ * round trips per table, each statement on its own.
+ */
 async function cleanupTable(
   db: D1Database,
   table: RetentionTableResult['table'],
@@ -148,20 +127,42 @@ async function cleanupTable(
   batchLimit: number,
   dryRun: boolean,
 ): Promise<RetentionTableResult> {
-  const matched = await countRows(db, table, timestampColumn, cutoff)
-  const deleted = dryRun || matched === 0
-    ? 0
-    : await deleteRows(db, table, timestampColumn, cutoff, batchLimit)
-  const remainingAfterBatch = dryRun
-    ? matched
-    : Math.max(0, matched - deleted)
+  const count = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM ${table}
+    WHERE ${timestampColumn} < ?1
+  `).bind(cutoff)
+
+  if (dryRun) {
+    const row = await count.first<{ count?: number }>()
+    const matched = Number(row?.count ?? 0)
+    return { table, cutoff, matched, deleted: 0, remainingAfterBatch: matched }
+  }
+
+  await ensureDailyStatsSchema(db)
+  const [, counted, removed] = await db.batch([
+    db.prepare(ROLLUP_SQL[table]).bind(cutoff),
+    count,
+    db.prepare(`
+      DELETE FROM ${table}
+      WHERE id IN (
+        SELECT id
+        FROM ${table}
+        WHERE ${timestampColumn} < ?1
+        ORDER BY ${timestampColumn} ASC
+        LIMIT ?2
+      )
+    `).bind(cutoff, batchLimit),
+  ])
+  const matched = Number((counted?.results?.[0] as { count?: number } | undefined)?.count ?? 0)
+  const deleted = Number((removed?.meta as { changes?: number } | undefined)?.changes ?? 0)
 
   return {
     table,
     cutoff,
     matched,
     deleted,
-    remainingAfterBatch,
+    remainingAfterBatch: Math.max(0, matched - deleted),
   }
 }
 
@@ -184,11 +185,6 @@ export async function runTelemetryRetentionForDatabase(
   const dryRun = input.dryRun !== false
   const telemetryCutoff = resolveCutoff(now, telemetryRetentionDays)
   const governanceCutoff = resolveCutoff(now, governanceRetentionDays)
-
-  if (!dryRun) {
-    await backfillTelemetryDailyStats(db, telemetryCutoff)
-    await backfillGovernanceDailyStats(db, governanceCutoff)
-  }
 
   const tables = [
     await cleanupTable(db, TELEMETRY_TABLE, 'created_at', telemetryCutoff, batchLimit, dryRun),

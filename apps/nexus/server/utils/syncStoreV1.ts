@@ -2,12 +2,13 @@ import type { D1Database, D1PreparedStatement, R2Bucket } from '@cloudflare/work
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
-import { countActiveDevices, getDevice, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
+import { getDevice, prepareActiveDeviceCount, readDeviceId, readDeviceMetadata, touchDevice } from './authStore'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { createSyncError } from './syncErrors'
 import type { SubscriptionPlan } from './subscriptionStore'
 import { getUserSubscription } from './subscriptionStore'
 import { putStorageObject, type StorageObjectMemory } from './storageObjectStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SYNC_ITEMS_TABLE = 'sync_items_v1'
 const SYNC_OPLOG_TABLE = 'sync_oplog_v1'
@@ -43,8 +44,6 @@ function resolveQuotaLimits(plan: SubscriptionPlan) {
 
 const SYNC_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7
 const syncBlobMemoryStorage: StorageObjectMemory = new Map()
-
-let syncSchemaInitialized = false
 
 export type SyncErrorCode =
   | 'QUOTA_STORAGE_EXCEEDED'
@@ -132,117 +131,100 @@ function getSyncBlobBucket(event?: H3Event | null): R2Bucket | null {
   return resolveObjectBucket(event)
 }
 
+/**
+ * `sync_sessions_v1` predates its `last_*` columns. They used to be added by three ALTERs that ran on
+ * every cold isolate and failed with "duplicate column" on every database that already had them.
+ */
+const SYNC_SCHEMA_V1 = defineD1Schema('sync-v1', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SYNC_ITEMS_TABLE} (
+        user_id TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        payload_enc TEXT,
+        payload_ref TEXT,
+        meta_plain TEXT,
+        payload_size INTEGER,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        updated_by_device_id TEXT,
+        PRIMARY KEY (user_id, item_id)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_OPLOG_TABLE} (
+        cursor INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        op_seq INTEGER NOT NULL,
+        op_hash TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        op_type TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        payload_size INTEGER
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_BLOBS_TABLE} (
+        user_id TEXT NOT NULL,
+        blob_id TEXT NOT NULL,
+        object_key TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        content_type TEXT,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        PRIMARY KEY (user_id, blob_id)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_KEYRINGS_TABLE} (
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        key_type TEXT NOT NULL,
+        encrypted_key TEXT NOT NULL,
+        recovery_code_hash TEXT,
+        rotated_at TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE (user_id, device_id, key_type)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_QUOTAS_TABLE} (
+        user_id TEXT PRIMARY KEY,
+        storage_limit_bytes INTEGER NOT NULL,
+        object_limit INTEGER NOT NULL,
+        item_limit INTEGER NOT NULL,
+        device_limit INTEGER NOT NULL,
+        used_storage_bytes INTEGER NOT NULL,
+        used_objects INTEGER NOT NULL,
+        used_devices INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_SESSIONS_TABLE} (
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        sync_token TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_cursor INTEGER NOT NULL,
+        last_push_at TEXT,
+        last_pull_at TEXT,
+        last_error_code TEXT,
+        UNIQUE (user_id, device_id)
+      )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_oplog_unique ON ${SYNC_OPLOG_TABLE}(user_id, device_id, op_seq)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_oplog_cursor ON ${SYNC_OPLOG_TABLE}(user_id, cursor)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_items_user_updated ON ${SYNC_ITEMS_TABLE}(user_id, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_items_user_type ON ${SYNC_ITEMS_TABLE}(user_id, type)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blobs_object ON ${SYNC_BLOBS_TABLE}(user_id, object_key)`,
+  ],
+  columns: [
+    {
+      table: SYNC_SESSIONS_TABLE,
+      columns: [
+        { name: 'last_push_at', ddl: 'last_push_at TEXT' },
+        { name: 'last_pull_at', ddl: 'last_pull_at TEXT' },
+        { name: 'last_error_code', ddl: 'last_error_code TEXT' },
+      ],
+    },
+  ],
+})
+
 async function ensureSyncSchemaV1(db: D1Database) {
-  if (syncSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_ITEMS_TABLE} (
-      user_id TEXT NOT NULL,
-      item_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      schema_version INTEGER NOT NULL,
-      payload_enc TEXT,
-      payload_ref TEXT,
-      meta_plain TEXT,
-      payload_size INTEGER,
-      updated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      updated_by_device_id TEXT,
-      PRIMARY KEY (user_id, item_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_OPLOG_TABLE} (
-      cursor INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      device_id TEXT NOT NULL,
-      op_seq INTEGER NOT NULL,
-      op_hash TEXT NOT NULL,
-      item_id TEXT NOT NULL,
-      op_type TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      payload_size INTEGER
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_BLOBS_TABLE} (
-      user_id TEXT NOT NULL,
-      blob_id TEXT NOT NULL,
-      object_key TEXT NOT NULL,
-      sha256 TEXT NOT NULL,
-      size_bytes INTEGER NOT NULL,
-      content_type TEXT,
-      created_at TEXT NOT NULL,
-      status TEXT NOT NULL,
-      PRIMARY KEY (user_id, blob_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_KEYRINGS_TABLE} (
-      user_id TEXT NOT NULL,
-      device_id TEXT NOT NULL,
-      key_type TEXT NOT NULL,
-      encrypted_key TEXT NOT NULL,
-      recovery_code_hash TEXT,
-      rotated_at TEXT,
-      created_at TEXT NOT NULL,
-      UNIQUE (user_id, device_id, key_type)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_QUOTAS_TABLE} (
-      user_id TEXT PRIMARY KEY,
-      storage_limit_bytes INTEGER NOT NULL,
-      object_limit INTEGER NOT NULL,
-      item_limit INTEGER NOT NULL,
-      device_limit INTEGER NOT NULL,
-      used_storage_bytes INTEGER NOT NULL,
-      used_objects INTEGER NOT NULL,
-      used_devices INTEGER NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SYNC_SESSIONS_TABLE} (
-      user_id TEXT NOT NULL,
-      device_id TEXT NOT NULL,
-      sync_token TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      last_cursor INTEGER NOT NULL,
-      last_push_at TEXT,
-      last_pull_at TEXT,
-      last_error_code TEXT,
-      UNIQUE (user_id, device_id)
-    );
-  `).run()
-
-  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_oplog_unique ON ${SYNC_OPLOG_TABLE}(user_id, device_id, op_seq);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sync_oplog_cursor ON ${SYNC_OPLOG_TABLE}(user_id, cursor);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sync_items_user_updated ON ${SYNC_ITEMS_TABLE}(user_id, updated_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sync_items_user_type ON ${SYNC_ITEMS_TABLE}(user_id, type);`).run()
-  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blobs_object ON ${SYNC_BLOBS_TABLE}(user_id, object_key);`).run()
-
-  // Backward compatibility for existing deployments where sync_sessions_v1 was created without extended columns.
-  for (const statement of [
-    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_push_at TEXT`,
-    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_pull_at TEXT`,
-    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_error_code TEXT`,
-  ]) {
-    try {
-      await db.prepare(statement).run()
-    }
-    catch {
-      // ignore duplicate-column errors
-    }
-  }
-
-  syncSchemaInitialized = true
+  await ensureD1Schema(db, SYNC_SCHEMA_V1)
 }
 
 function normalizeUpdatedAt(value?: string | null) {
@@ -262,11 +244,18 @@ function isNewerUpdate(candidate: string, existing: string, candidateDeviceId: s
 export async function getOrInitQuota(event: H3Event, userId: string): Promise<QuotaInfo> {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
-  const subscription = await getUserSubscription(event, userId)
+  // The plan beside one batch of the device count and the quota row; they were three reads in a row.
+  const [subscription, [deviceResult, quotaResult]] = await Promise.all([
+    getUserSubscription(event, userId),
+    db.batch([
+      prepareActiveDeviceCount(db, userId),
+      db.prepare(`SELECT * FROM ${SYNC_QUOTAS_TABLE} WHERE user_id = ?`).bind(userId),
+    ]),
+  ])
   const plan = subscription.plan
   const limits = resolveQuotaLimits(plan)
-  const deviceCount = await countActiveDevices(event, userId)
-  const row = await db.prepare(`SELECT * FROM ${SYNC_QUOTAS_TABLE} WHERE user_id = ?`).bind(userId).first()
+  const deviceCount = Number((deviceResult?.results?.[0] as { total?: number } | undefined)?.total ?? 0)
+  const row = (quotaResult?.results?.[0] ?? null) as Record<string, unknown> | null
   if (row) {
     const usage = {
       used_storage_bytes: Number(row.used_storage_bytes ?? 0),
@@ -337,8 +326,17 @@ export async function getOrInitQuota(event: H3Event, userId: string): Promise<Qu
   }
 }
 
-export async function validateQuota(event: H3Event, userId: string, payload: { storageDelta: number, objectsDelta: number, itemSize?: number | null }) {
-  const quota = await getOrInitQuota(event, userId)
+/**
+ * Checks a planned change against the user's quota. `knownQuota` is a quota the caller has already
+ * read in this request; without it the quota is read here.
+ */
+export async function validateQuota(
+  event: H3Event,
+  userId: string,
+  payload: { storageDelta: number, objectsDelta: number, itemSize?: number | null },
+  knownQuota?: QuotaInfo,
+) {
+  const quota = knownQuota ?? await getOrInitQuota(event, userId)
   if (payload.itemSize && payload.itemSize > quota.limits.item_limit) {
     return { ok: false, code: 'QUOTA_ITEM_EXCEEDED' as SyncErrorCode, quota }
   }
@@ -385,17 +383,17 @@ export async function handshakeSyncSession(event: H3Event, userId: string, devic
   const now = new Date().toISOString()
   const syncToken = crypto.randomUUID()
   const expiresAt = new Date(Date.now() + SYNC_TOKEN_TTL_MS).toISOString()
-  const cursorRow = await db.prepare(`SELECT MAX(cursor) AS cursor FROM ${SYNC_OPLOG_TABLE} WHERE user_id = ?`).bind(userId).first()
-  const serverCursor = Number(cursorRow?.cursor ?? 0)
-
-  await db.prepare(`
+  // The server cursor is read by the statement that stores it; they were two round trips.
+  const row = await db.prepare(`
     INSERT INTO ${SYNC_SESSIONS_TABLE} (user_id, device_id, sync_token, expires_at, last_cursor)
-    VALUES (?, ?, ?, ?, ?)
+    SELECT ?1, ?2, ?3, ?4, COALESCE(MAX(cursor), 0) FROM ${SYNC_OPLOG_TABLE} WHERE user_id = ?1
     ON CONFLICT(user_id, device_id) DO UPDATE SET
       sync_token = excluded.sync_token,
       expires_at = excluded.expires_at,
       last_cursor = excluded.last_cursor
-  `).bind(userId, deviceId, syncToken, expiresAt, serverCursor).run()
+    RETURNING last_cursor
+  `).bind(userId, deviceId, syncToken, expiresAt).first<{ last_cursor: number }>()
+  const serverCursor = Number(row?.last_cursor ?? 0)
 
   return { syncToken, serverCursor, expiresAt }
 }
@@ -811,7 +809,16 @@ function buildSyncCursorStatement(db: D1Database, userId: string): D1PreparedSta
   `).bind(userId)
 }
 
-export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: string, items: SyncItemInput[]) {
+export async function pushSyncItemsV1(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  items: SyncItemInput[],
+  options: {
+    /** The quota the caller read in this request; the push checks against it instead of reading it again. */
+    quota?: QuotaInfo
+  } = {},
+) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const conflicts: SyncConflictItem[] = []
@@ -926,7 +933,7 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
     storageDelta: plannedStorageDelta,
     objectsDelta: plannedObjectsDelta,
     itemSize: maxItemSize,
-  })
+  }, options.quota)
   if (!quotaCheck.ok)
     return invalidResult(quotaCheck.code ?? 'SYNC_INVALID_PAYLOAD')
 
@@ -983,15 +990,38 @@ export async function pullSyncItemsV1(
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const safeLimit = Math.min(Math.max(limit, 1), 200)
-  const oplogResult = await db.prepare(`
-    SELECT cursor, item_id, op_seq, op_hash, op_type, updated_at, device_id
+  const fallbackCursor = Math.max(0, Math.floor(cursor))
+  // The page, its items and the session's new cursor in one round trip and one transaction; they were
+  // three. The items were read with an `IN` list of the page's item ids — past 99 distinct items, more
+  // parameters than D1 binds, with the 200-entry default page. They are the page's own subquery now.
+  const page = `
+    SELECT cursor, item_id
     FROM ${SYNC_OPLOG_TABLE}
-    WHERE user_id = ? AND cursor > ?
+    WHERE user_id = ?1 AND cursor > ?2
     ORDER BY cursor ASC
-    LIMIT ?
-  `).bind(userId, cursor, safeLimit).all()
+    LIMIT ?3`
+  const [oplogResult, itemResult] = await db.batch([
+    db.prepare(`
+      SELECT cursor, item_id, op_seq, op_hash, op_type, updated_at, device_id
+      FROM ${SYNC_OPLOG_TABLE}
+      WHERE user_id = ?1 AND cursor > ?2
+      ORDER BY cursor ASC
+      LIMIT ?3
+    `).bind(userId, cursor, safeLimit),
+    db.prepare(`
+      SELECT * FROM ${SYNC_ITEMS_TABLE}
+      WHERE user_id = ?1 AND item_id IN (SELECT item_id FROM (${page}))
+    `).bind(userId, cursor, safeLimit),
+    db.prepare(`
+      UPDATE ${SYNC_SESSIONS_TABLE}
+      SET last_cursor = COALESCE((SELECT MAX(cursor) FROM (${page})), ?4),
+        last_pull_at = ?5,
+        last_error_code = NULL
+      WHERE user_id = ?1 AND device_id = ?6
+    `).bind(userId, cursor, safeLimit, fallbackCursor, new Date().toISOString(), deviceId),
+  ])
 
-  const oplog = (oplogResult.results || []).map(row => ({
+  const oplog = ((oplogResult?.results ?? []) as Array<Record<string, unknown>>).map(row => ({
     cursor: Number(row.cursor),
     item_id: row.item_id as string,
     op_seq: Number(row.op_seq),
@@ -1001,36 +1031,21 @@ export async function pullSyncItemsV1(
     device_id: row.device_id as string,
   })) as SyncOplogItem[]
 
-  const itemIds = [...new Set(oplog.map(item => item.item_id))]
-  let items: SyncItemOutput[] = []
-  if (itemIds.length > 0) {
-    const placeholders = itemIds.map(() => '?').join(', ')
-    const result = await db.prepare(`
-      SELECT * FROM ${SYNC_ITEMS_TABLE}
-      WHERE user_id = ? AND item_id IN (${placeholders})
-    `).bind(userId, ...itemIds).all()
-    items = (result.results || []).map(row => ({
-      item_id: row.item_id as string,
-      type: row.type as string,
-      schema_version: Number(row.schema_version),
-      payload_enc: row.payload_enc as string | null,
-      payload_ref: row.payload_ref as string | null,
-      meta_plain: row.meta_plain ? JSON.parse(row.meta_plain as string) : null,
-      payload_size: row.payload_size ? Number(row.payload_size) : null,
-      updated_at: row.updated_at as string,
-      deleted_at: row.deleted_at as string | null,
-      device_id: row.updated_by_device_id as string | null,
-    }))
-  }
+  const items: SyncItemOutput[] = ((itemResult?.results ?? []) as Array<Record<string, unknown>>).map(row => ({
+    item_id: row.item_id as string,
+    type: row.type as string,
+    schema_version: Number(row.schema_version),
+    payload_enc: row.payload_enc as string | null,
+    payload_ref: row.payload_ref as string | null,
+    meta_plain: row.meta_plain ? JSON.parse(row.meta_plain as string) : null,
+    payload_size: row.payload_size ? Number(row.payload_size) : null,
+    updated_at: row.updated_at as string,
+    deleted_at: row.deleted_at as string | null,
+    device_id: row.updated_by_device_id as string | null,
+  }))
 
   const lastOplog = oplog.at(-1)
   const nextCursor = lastOplog ? lastOplog.cursor : cursor
-  await updateSyncSessionState(db, userId, deviceId, {
-    lastCursor: nextCursor,
-    lastPullAt: new Date().toISOString(),
-    lastErrorCode: null,
-  })
-
   return { items, oplog, nextCursor }
 }
 
@@ -1084,8 +1099,13 @@ export async function uploadSyncBlob(event: H3Event, userId: string, file: File)
   }
 }
 
+/**
+ * A blob to stream to its owner: the R2 body is handed through rather than read whole into the
+ * isolate first. `byteLength` is the stored object's own size, for `Content-Length`.
+ */
 export async function getSyncBlob(event: H3Event, userId: string, blobId: string): Promise<{
-  data: ArrayBuffer
+  body: ReadableStream<Uint8Array>
+  byteLength: number
   contentType: string
   sha256: string
   sizeBytes: number
@@ -1110,12 +1130,12 @@ export async function getSyncBlob(event: H3Event, userId: string, blobId: string
   if (!object)
     return null
 
-  const arrayBuffer = await object.arrayBuffer()
   const contentType = row.content_type || object.httpMetadata?.contentType || 'application/octet-stream'
-  const sizeBytes = Number(row.size_bytes ?? arrayBuffer.byteLength)
+  const sizeBytes = Number(row.size_bytes ?? object.size)
 
   return {
-    data: arrayBuffer,
+    body: object.body as unknown as ReadableStream<Uint8Array>,
+    byteLength: object.size,
     contentType,
     sha256: row.sha256,
     sizeBytes,
@@ -1646,5 +1666,5 @@ export async function ensureDeviceForSync(event: H3Event, userId: string) {
   const deviceId = readDeviceId(event)
   if (!deviceId)
     return null
-  return upsertDevice(event, userId, deviceId, readDeviceMetadata(event))
+  return touchDevice(event, userId, deviceId, readDeviceMetadata(event))
 }

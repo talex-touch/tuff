@@ -1,5 +1,6 @@
 import { computed, readonly } from 'vue'
 import { hasSessionHintInCookieString } from '#shared/utils/session-hint'
+import { noteSessionIdentity } from '~/utils/session-generation'
 
 type NexusAuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
@@ -90,6 +91,15 @@ function buildFormBody(values: Record<string, unknown>) {
   return body
 }
 
+/** Who a session belongs to, for telling a sign-out or an account switch from a refresh. */
+function sessionIdentity(session: NexusAuthSession | null): string | null {
+  const user = session?.user
+  if (!user)
+    return null
+  const id = typeof user.id === 'string' ? user.id : ''
+  return id || (typeof user.email === 'string' ? user.email : '') || null
+}
+
 const authFetch = $fetch as unknown as <T>(request: string, options?: NexusAuthFetchOptions & { credentials?: 'include' }) => Promise<T>
 
 /**
@@ -128,6 +138,11 @@ export function useNexusAuth() {
   const loading = useState<boolean>('auth:loading', () => false)
   const lastRefreshedAt = useState<Date | undefined>('auth:lastRefreshedAt', () => undefined)
 
+  function settleSession(session: NexusAuthSession | null) {
+    data.value = session
+    noteSessionIdentity(sessionIdentity(session))
+  }
+
   const status = computed<NexusAuthStatus>(() => {
     if (loading.value || data.value === undefined)
       return 'loading'
@@ -143,7 +158,7 @@ export function useNexusAuth() {
   function settleAnonymousSession() {
     if (data.value !== undefined || loading.value)
       return
-    data.value = null
+    settleSession(null)
   }
 
   async function getSession() {
@@ -156,11 +171,11 @@ export function useNexusAuth() {
           callbackUrl: resolveCurrentCallbackUrl(),
         },
       })
-      data.value = isNonEmptyObject(session) ? session : null
+      settleSession(isNonEmptyObject(session) ? session : null)
       return data.value
     }
     catch {
-      data.value = null
+      settleSession(null)
       return null
     }
     finally {
@@ -236,7 +251,7 @@ export function useNexusAuth() {
       }),
     }).catch((error: any) => error?.data || {})
 
-    data.value = null
+    settleSession(null)
     loading.value = false
     lastRefreshedAt.value = new Date()
 

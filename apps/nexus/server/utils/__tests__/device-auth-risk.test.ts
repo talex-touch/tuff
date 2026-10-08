@@ -1,199 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
-import { evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, recordDeviceAuthAudit } from '../authStore'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSqliteD1, type SqliteD1Database } from '../../../test/helpers/d1-sqlite'
 
-vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: (event: any) => event.context.cloudflare.env, }))
+/** Device-auth risk controls against real SQLite: the limiter's counts are the store's own SQL. */
 
-interface DeviceAuthAuditRow {
-  id: string
-  action: string
-  status: string
-  user_id: string | null
-  device_id: string | null
-  device_code: string | null
-  user_code: string | null
-  client_type: string | null
-  actor_user_id: string | null
-  reason: string | null
-  ip: string | null
-  user_agent: string | null
-  metadata: string | null
-  created_at: string
-}
+vi.mock('../cloudflare', async importOriginal => ({
+  ...(await importOriginal<typeof import('../cloudflare')>()),
+  readCloudflareBindings: (event: any) => event.context.cloudflare.env,
+}))
 
-interface DeviceRow {
-  id: string
-  user_id: string
-  revoked_at: string | null
-  trusted_at: string | null
-}
+let sqlite: SqliteD1Database
+let store: typeof import('../authStore')
 
-interface LoginHistoryRow {
-  user_id: string
-  success: number
-  country_code: string | null
-  region_code: string | null
-  city: string | null
-  created_at: string
-}
-
-class MockStatement {
-  private args: any[] = []
-
-  constructor(
-    private readonly db: MockD1Database,
-    private readonly sql: string
-  ) {}
-
-  bind(...args: any[]) {
-    this.args = args
-    return this
-  }
-
-  async run() {
-    return this.db.run(this.sql, this.args)
-  }
-
-  async first<T>() {
-    return this.db.first(this.sql, this.args) as T
-  }
-
-  async all<T>() {
-    return this.db.all(this.sql, this.args) as T
-  }
-}
-
-class MockD1Database {
-  audits: DeviceAuthAuditRow[] = []
-  devices: DeviceRow[] = []
-  loginHistory: LoginHistoryRow[] = []
-
-  prepare(sql: string) {
-    return new MockStatement(this, sql)
-  }
-
-  run(sql: string, args: any[]) {
-    if (sql.includes('INSERT INTO auth_device_auth_audits')) {
-      const [
-        id,
-        action,
-        status,
-        userId,
-        deviceId,
-        deviceCode,
-        userCode,
-        clientType,
-        actorUserId,
-        reason,
-        ip,
-        userAgent,
-        metadata,
-        createdAt,
-      ] = args
-      this.audits.push({
-        id,
-        action,
-        status,
-        user_id: userId,
-        device_id: deviceId,
-        device_code: deviceCode,
-        user_code: userCode,
-        client_type: clientType,
-        actor_user_id: actorUserId,
-        reason,
-        ip,
-        user_agent: userAgent,
-        metadata,
-        created_at: createdAt,
-      })
-    }
-    return { meta: { changes: 1 } }
-  }
-
-  first(sql: string, args: any[]) {
-    if (sql.includes('PRAGMA table_info')) {
-      return null
-    }
-    if (sql.includes('SELECT COUNT(*) AS total') && sql.includes('FROM auth_device_auth_audits')) {
-      return { total: this.filterAudits(sql, args).length }
-    }
-    if (sql.includes('SELECT revoked_at') && sql.includes('FROM auth_devices')) {
-      const [deviceId, userId] = args
-      return this.devices.find(row => row.id === deviceId && row.user_id === userId) ?? null
-    }
-    if (sql.includes('SELECT created_at') && sql.includes('FROM auth_device_auth_audits')) {
-      const newest = this.filterAudits(sql, args)
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
-      return newest ? { created_at: newest.created_at } : null
-    }
-    return null
-  }
-
-  all(sql: string, args: any[] = []) {
-    if (sql.includes('PRAGMA table_info')) {
-      return { results: [] }
-    }
-    if (sql.includes('SELECT country_code, region_code, city') && sql.includes('FROM auth_login_history')) {
-      const [userId] = args
-      return {
-        results: this.loginHistory
-          .filter(row => row.user_id === userId && row.success === 1)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at)),
-      }
-    }
-    return { results: [] }
-  }
-
-  private filterAudits(sql: string, args: any[]) {
-    if (sql.includes('action = ?') && sql.includes('device_id = ?')) {
-      const [action, deviceId, since] = args
-      return this.audits.filter(row => row.action === action && row.device_id === deviceId && row.created_at >= since)
-    }
-    if (sql.includes('action = ?') && sql.includes('ip = ?')) {
-      const [action, ip, since] = args
-      return this.audits.filter(row => row.action === action && row.ip === ip && row.created_at >= since)
-    }
-    if (sql.includes('action = ?') && sql.includes('user_id = ?')) {
-      const [action, userId, since] = args
-      return this.audits.filter(row => row.action === action && row.user_id === userId && row.created_at >= since)
-    }
-    if (sql.includes('action IN') && sql.includes('device_id = ?')) {
-      const [rejectAction, cancelAction, deviceId, since] = args
-      return this.audits.filter(row =>
-        (row.action === rejectAction || row.action === cancelAction)
-        && (row.status === 'blocked' || row.status === 'success')
-        && row.device_id === deviceId
-        && row.created_at >= since
-      )
-    }
-    if (sql.includes('action IN') && sql.includes('ip = ?')) {
-      const [rejectAction, cancelAction, ip, since] = args
-      return this.audits.filter(row =>
-        (row.action === rejectAction || row.action === cancelAction)
-        && (row.status === 'blocked' || row.status === 'success')
-        && row.ip === ip
-        && row.created_at >= since
-      )
-    }
-    if (sql.includes('action IN') && sql.includes('user_id = ?')) {
-      const [rejectAction, cancelAction, userId, since] = args
-      return this.audits.filter(row =>
-        (row.action === rejectAction || row.action === cancelAction)
-        && (row.status === 'blocked' || row.status === 'success')
-        && row.user_id === userId
-        && row.created_at >= since
-      )
-    }
-    return []
-  }
-}
-
-function createEvent(db: MockD1Database, ip = '203.0.113.10') {
+function createEvent(ip = '203.0.113.10') {
   return {
-    context: {
-      cloudflare: {
-        env: { DB: db },
-      },
-    },
+    context: { cloudflare: { env: { DB: sqlite } } },
     node: {
       req: {
         headers: {
@@ -208,13 +28,41 @@ function createEvent(db: MockD1Database, ip = '203.0.113.10') {
   } as any
 }
 
+function seedUser(id: string) {
+  sqlite.sqlite.prepare(`INSERT INTO auth_users (id, email, status, created_at) VALUES (?, ?, 'active', ?)`)
+    .run(id, `${id}@example.test`, new Date().toISOString())
+}
+
+function seedDevice(id: string, userId: string, trustedAt: string | null) {
+  sqlite.sqlite.prepare(`INSERT INTO auth_devices (id, user_id, trusted_at, created_at) VALUES (?, ?, ?, ?)`)
+    .run(id, userId, trustedAt, new Date().toISOString())
+}
+
+function seedLogin(userId: string) {
+  sqlite.sqlite.prepare(`
+    INSERT INTO auth_login_history (id, user_id, success, country_code, region_code, city, created_at)
+    VALUES (?, ?, 1, 'US', 'CA', 'San Francisco', ?)
+  `).run(crypto.randomUUID(), userId, new Date().toISOString())
+}
+
+beforeEach(async () => {
+  vi.resetModules()
+  store = await import('../authStore')
+  sqlite = createSqliteD1()
+  await store.getUserById(createEvent(), 'warm')
+})
+
 describe('device auth risk controls', () => {
+  it('allows a device with no recent audits', async () => {
+    const decision = await store.evaluateDeviceAuthRateLimit(createEvent(), { deviceId: 'device-0', userId: 'user-0' })
+    expect(decision).toMatchObject({ allowed: true, reason: null, scope: null })
+  })
+
   it('blocks device auth requests when device scoped rate limit is exceeded', async () => {
-    const db = new MockD1Database()
-    const event = createEvent(db)
+    const event = createEvent()
 
     for (let i = 0; i < 6; i++) {
-      await recordDeviceAuthAudit(event, {
+      await store.recordDeviceAuthAudit(event, {
         action: 'request',
         status: 'success',
         deviceId: 'device-1',
@@ -222,20 +70,32 @@ describe('device auth risk controls', () => {
       })
     }
 
-    const decision = await evaluateDeviceAuthRateLimit(event, { deviceId: 'device-1' })
+    const decision = await store.evaluateDeviceAuthRateLimit(event, { deviceId: 'device-1' })
 
     expect(decision.allowed).toBe(false)
     expect(decision.reason).toBe('rate_limited')
     expect(decision.scope).toBe('device')
+    expect(decision.count).toBe(6)
     expect(decision.retryAfterSeconds).toBeGreaterThan(0)
   })
 
+  it('reports the first scope that trips, in check order', async () => {
+    // Twelve requests from one IP across devices trip the IP scope, not the device one.
+    for (let i = 0; i < 12; i++)
+      await store.recordDeviceAuthAudit(createEvent(), { action: 'request', status: 'success', deviceId: `device-${i}`, clientType: 'cli' })
+
+    const decision = await store.evaluateDeviceAuthRateLimit(createEvent(), { deviceId: 'device-new' })
+    expect(decision).toMatchObject({ allowed: false, reason: 'rate_limited', scope: 'ip', count: 12 })
+
+    const elsewhere = await store.evaluateDeviceAuthRateLimit(createEvent('198.51.100.1'), { deviceId: 'device-new' })
+    expect(elsewhere.allowed).toBe(true)
+  })
+
   it('enters cooldown after repeated reject or cancel audit records', async () => {
-    const db = new MockD1Database()
-    const event = createEvent(db)
+    const event = createEvent()
 
     for (let i = 0; i < 3; i++) {
-      await recordDeviceAuthAudit(event, {
+      await store.recordDeviceAuthAudit(event, {
         action: i === 0 ? 'cancel' : 'reject',
         status: i === 0 ? 'success' : 'blocked',
         userId: 'user-1',
@@ -245,7 +105,7 @@ describe('device auth risk controls', () => {
       })
     }
 
-    const decision = await evaluateDeviceAuthRateLimit(event, { deviceId: 'device-2', userId: 'user-1' })
+    const decision = await store.evaluateDeviceAuthRateLimit(event, { deviceId: 'device-2', userId: 'user-1' })
 
     expect(decision.allowed).toBe(false)
     expect(decision.reason).toBe('cooldown')
@@ -253,22 +113,15 @@ describe('device auth risk controls', () => {
   })
 
   it('requires a fresh signed browser session for long-term device authorization', async () => {
-    const db = new MockD1Database()
-    db.devices.push({ id: 'device-3', user_id: 'user-2', revoked_at: null, trusted_at: new Date().toISOString() })
-    db.loginHistory.push({
-      user_id: 'user-2',
-      success: 1,
-      country_code: 'US',
-      region_code: 'CA',
-      city: 'San Francisco',
-      created_at: new Date().toISOString(),
-    })
-    const event = createEvent(db)
+    seedUser('user-2')
+    seedDevice('device-3', 'user-2', new Date().toISOString())
+    seedLogin('user-2')
+    const event = createEvent()
 
-    const stale = await evaluateDeviceAuthLongTermPolicy(event, 'user-2', 'device-3', {
+    const stale = await store.evaluateDeviceAuthLongTermPolicy(event, 'user-2', 'device-3', {
       sessionIssuedAt: Math.floor((Date.now() - 11 * 60 * 1000) / 1000),
     })
-    const fresh = await evaluateDeviceAuthLongTermPolicy(event, 'user-2', 'device-3', {
+    const fresh = await store.evaluateDeviceAuthLongTermPolicy(event, 'user-2', 'device-3', {
       sessionIssuedAt: Math.floor(Date.now() / 1000),
     })
 
@@ -279,19 +132,12 @@ describe('device auth risk controls', () => {
   })
 
   it('requires an explicitly trusted device for long-term device authorization', async () => {
-    const db = new MockD1Database()
-    db.devices.push({ id: 'device-4', user_id: 'user-3', revoked_at: null, trusted_at: null })
-    db.loginHistory.push({
-      user_id: 'user-3',
-      success: 1,
-      country_code: 'US',
-      region_code: 'CA',
-      city: 'San Francisco',
-      created_at: new Date().toISOString(),
-    })
-    const event = createEvent(db)
+    seedUser('user-3')
+    seedDevice('device-4', 'user-3', null)
+    seedLogin('user-3')
+    const event = createEvent()
 
-    const policy = await evaluateDeviceAuthLongTermPolicy(event, 'user-3', 'device-4', {
+    const policy = await store.evaluateDeviceAuthLongTermPolicy(event, 'user-3', 'device-4', {
       sessionIssuedAt: Math.floor(Date.now() / 1000),
     })
 

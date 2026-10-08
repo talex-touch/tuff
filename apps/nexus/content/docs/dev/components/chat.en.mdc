@@ -1,6 +1,6 @@
 ---
 title: "Chat"
-description: "AI message list and message primitives with Markdown, image attachments, staggered entry, and image click events."
+description: "A message list and message row for AI chat transcripts."
 category: AiChat
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### ChatList
+### Basic
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
 ---
 code: |
@@ -32,119 +32,96 @@ code: |
   </script>
 
   <template>
-    <TxChatList :messages="messages" :markdown="true" @image-click="console.log" />
+    <TxChatList :messages="messages" @image-click="openPreview" />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Use stable message ids from the conversation store; do not key rows by array index.
-- Keep remote image URLs normalized at the data boundary; `TxChatMessage` does not validate or rewrite attachment sources.
-- Disable `stagger` for virtualized lists or when the host reorders messages during streaming.
-- Handle `imageClick` in the host so previews, downloads, analytics, and permission checks remain product-specific.
-- Keep Markdown enabled for trusted assistant output; sanitize or normalize untrusted content before it reaches the message array.
-- Prefer the separate `TxChatComposer` and `TxTypingIndicator` docs for input and assistant-pending behavior; this page covers transcript rendering.
+- Use stable ids from the conversation store for `id`, never array indexes.
+- Normalize image URLs at the data boundary; the component doesn't validate or rewrite attachment sources.
+- Turn off `stagger` for virtualized lists or when streaming reorders messages.
+- Handle `imageClick` in the host; there is no built-in preview.
+- To customize a row, render `TxChatMessage` and its slots directly.
 
 ## API Reference
 
-### Data Models
+### TxChatList
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `messages` | `ChatMessageModel[]` | required | Messages, rendered in array order. |
+| `markdown` | `boolean` | `true` | Renders bodies with `TxMarkdownView`; off renders plain text. |
+| `stagger` | `boolean` | `true` | Animates rows in with `TxStagger`. |
+
+#### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | Forwards `imageClick` from `TxChatMessage`. |
+
+### TxChatMessage
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `message` | `ChatMessageModel` | required | The message to render. |
+| `markdown` | `boolean` | `true` | Renders the body as Markdown or plain text. |
+| `attachmentLabel` | `string` | `'Open image attachment'` | Accessible name of an image thumbnail without a `name`. |
+
+#### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | Fires when an image thumbnail is clicked. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `avatar` | `{ message: ChatMessageModel }` | Replaces the avatar. |
+| `header` | `{ message: ChatMessageModel }` | Replaces the timestamp header. |
+| `content` | `{ message: ChatMessageModel }` | Replaces the body rendering. |
+
+### Types
 
 #### ChatMessageModel
 
 | Field | Type | Default | Description |
 |------|------|---------|-------------|
-| `id` | `string` | required | Stable message key used by `TxChatList`. |
-| `role` | `'user' \| 'assistant' \| 'system'` | required | Message role and row alignment. |
-| `content` | `string` | required | Markdown or plain text body. |
-| `createdAt` | `number` | - | Epoch timestamp rendered as `HH:mm` after mount. |
-| `avatarUrl` | `string` | - | Optional avatar image for the row. |
-| `attachments` | `ChatMessageAttachment[]` | - | Image attachments rendered as thumbnails. |
+| `id` | `string` | required | Stable message key. |
+| `role` | `'user' \| 'assistant' \| 'system'` | required | Message role; sets the row alignment. |
+| `content` | `string` | required | Markdown or plain-text body. |
+| `createdAt` | `number` | - | Epoch timestamp, rendered as `HH:mm` after mount. |
+| `avatarUrl` | `string` | - | Avatar image URL. |
+| `attachments` | `ChatMessageAttachment[]` | - | Image attachments, rendered as thumbnails. |
 
 #### ChatMessageAttachment
 
 | Field | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'image'` | required | Current attachment kind. |
-| `url` | `string` | required | Image URL used by the thumbnail and click payload. |
-| `name` | `string` | - | Accessible image alt text and click payload label. |
-
-### Props
-
-#### TxChatList
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `messages` | `ChatMessageModel[]` | required | Transcript messages, rendered in array order. |
-| `markdown` | `boolean` | `true` | Render message content through `TxMarkdownView`. |
-| `stagger` | `boolean` | `true` | Animate rows through `TxStagger`. |
-
-#### TxChatMessage
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `message` | `ChatMessageModel` | required | Single message row. |
-| `markdown` | `boolean` | `true` | Render content as Markdown or plain text. |
-
-### Events
-
-#### TxChatList
-
-| Event | Params | Description |
-|------|--------|-------------|
-| `imageClick` | `{ url: string, name?: string, messageId: string }` | Re-emitted from `TxChatMessage` when an image attachment thumbnail is clicked. |
-
-#### TxChatMessage
-
-| Event | Params | Description |
-|------|--------|-------------|
-| `imageClick` | `{ url: string, name?: string, messageId: string }` | Emitted when an image attachment thumbnail is clicked. |
-
-### Slots
-
-#### TxChatList
-
-No public slots are exposed; customize individual rows through `TxChatMessage` when you need alternate rendering.
-
-#### TxChatMessage
-
-| Slot | Props | Description |
-|------|------|-------------|
-| `avatar` | `{ message: ChatMessageModel }` | Replaces the avatar image/fallback. |
-| `header` | `{ message: ChatMessageModel }` | Replaces the timestamp header. |
-| `content` | `{ message: ChatMessageModel }` | Replaces Markdown/plain body rendering. |
-
-### Exposed Methods
-
-No public instance methods are exposed.
-
-## Related Primitives
-
-- `TxChatComposer` covers text entry, attachments, send guards, and toolbar slots. See [ChatComposer](./chat-composer.en.mdc).
-- `TxTypingIndicator` covers pending assistant states. See [TypingIndicator](./typing-indicator.en.mdc).
-- New AI transcript surfaces that need `tool` messages or streaming states should prefer [AI Elements](./ai-elements.en.mdc).
+| `type` | `'image'` | required | Attachment kind; only images today. |
+| `url` | `string` | required | Thumbnail URL, also sent with `imageClick`. |
+| `name` | `string` | - | Accessible name of the thumbnail button, also sent with `imageClick`. |
 
 ## Overview
 
-- `TxChatList` preserves the order of `messages` and renders each message by its stable `id`.
-- `markdown` defaults to `true`; message bodies are passed to `TxMarkdownView`. Set `markdown=false` to render plain text.
-- `stagger` defaults to `true`; the list wraps rows in `TxStagger`. Disable it for virtualized or frequently re-sorted transcripts.
-- `createdAt` is formatted only after mount, avoiding SSR/client time mismatch.
-- Image attachments render as native `button type="button"` thumbnails with lazy-loaded images.
-- `imageClick` always includes `{ url, name, messageId }`, so the host can open a preview, download, or audit the source message.
+- `TxChatList` renders a `TxChatMessage` per item in `messages` order, keyed by `id`.
+- Image attachments are native `<button type="button">` thumbnails with lazy-loaded images; the button carries the accessible name and the `<img>` is decorative.
+- `createdAt` is formatted only after mount, so SSR and client output match.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/chat/src/types.ts`, `TxChatList.vue`, `TxChatMessage.vue`, `TxChatComposer.vue`, `TxTypingIndicator.vue`, `chat-composer.test.ts`, and `typing-indicator.test.ts`.
-- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, while keeping the message data models explicit.
-- Verified source behavior: `TxChatList` forwards `imageClick`, `TxChatMessage` emits normalized image payloads, Markdown defaults to `true`, stagger defaults to `true`, and timestamps are suppressed until mounted.
-- **Verified coverage:** Coverage: no dedicated `TxChatList` / `TxChatMessage` unit test currently exists; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies this page and `ChatChatListDemo`, while `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` and `typing-indicator.test.ts` cover the related primitives linked from this transcript page.
-- `TxChatComposer` and `TxTypingIndicator` live in the same source folder but are documented as related primitives to avoid duplicating their full API on this transcript page.
+- Source: `packages/tuffex/packages/components/src/chat/` (`TxChatList.vue`, `TxChatMessage.vue`, `types.ts`).
 
-- List source: `packages/tuffex/packages/components/src/chat/src/TxChatList.vue`
-- Message source: `packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue`
-- Types: `packages/tuffex/packages/components/src/chat/src/types.ts`
-- Related sources: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`, `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`
-- Tests: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts`, `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts`
+## Related components
+
+- [ChatComposer](./chat-composer.en.mdc): text entry, attachments, and sending.
+- [TypingIndicator](./typing-indicator.en.mdc): the assistant's pending state.
+- [AI Elements](./ai-elements.en.mdc): prefer it when you need `tool` messages or streaming states.
 
 <TuffDocSourceLink />

@@ -6,8 +6,10 @@ import type {
 } from '@talex-touch/utils'
 import type {
   CatalogVoiceProviderCheckResponse,
+  CatalogVoiceProviderPackSummary,
   CatalogVoiceProviderRollbackRequest,
   CatalogVoiceProviderRollbackResponse,
+  CatalogVoiceProviderStatusResponse,
   CatalogVoiceProviderSyncResponse
 } from '@talex-touch/utils/transport/events/types/catalog'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -24,7 +26,8 @@ import {
   type CatalogPackType,
   type CatalogRollbackReason,
   type DomainLexiconCatalogEntryV1,
-  type DomainLexiconEntry
+  type DomainLexiconEntry,
+  type VoiceProviderRegistry
 } from '@talex-touch/utils/i18n'
 import { app } from 'electron'
 import { createHash } from 'node:crypto'
@@ -167,6 +170,10 @@ class PublishingCatalogService implements CatalogService {
 
   getVoiceProviderStatus() {
     return this.delegate.getVoiceProviderStatus()
+  }
+
+  getVoiceProviderPack() {
+    return this.delegate.getVoiceProviderPack()
   }
 
   downloadVoiceProviderPack(manifest: CatalogManifestV1) {
@@ -410,7 +417,7 @@ export class CatalogModule extends BaseModule {
     this.disposers.push(
       this.transport.on(CatalogEvents.voiceProvider.getStatus, (_payload, context) => {
         this.assertHostOnly(context, 'catalog.voice-provider.status')
-        return { status: this.getService().getVoiceProviderStatus() }
+        return this.voiceProviderSnapshot()
       }),
       this.transport.on(CatalogEvents.voiceProvider.checkUpdates, (_payload, context) => {
         this.assertHostOnly(context, 'catalog.voice-provider.check-updates')
@@ -441,6 +448,38 @@ export class CatalogModule extends BaseModule {
   private hasCloudControlSession(): boolean {
     const state = (this.dependencies.getAuthState ?? getSanitizedAuthSessionState)()
     return state.isLoaded && state.isSignedIn && Boolean(state.user?.id?.trim())
+  }
+
+  private voiceProviderSnapshot(): CatalogVoiceProviderStatusResponse {
+    const service = this.getService()
+    return {
+      status: service.getVoiceProviderStatus(),
+      pack: summarizeVoiceProviderPack(
+        service.getVoiceProviderPack(),
+        service.getVoiceProviderRegistry()
+      ),
+      syncing: this.voiceSyncInFlight !== null
+    }
+  }
+
+  /**
+   * Lets the settings page follow a sync it did not start.
+   *
+   * The one sign-in runs is the case that needs it: the page reads the status the moment the
+   * account appears, while that sync is still on the network, and without a push it stays on
+   * "not downloaded" until someone reopens it.
+   */
+  private publishVoiceProviderStatus(): void {
+    if (!this.transport || !this.service) return
+    try {
+      this.transport.broadcast(
+        CatalogEvents.voiceProvider.statusChanged,
+        this.voiceProviderSnapshot()
+      )
+    } catch {
+      // An undeliverable notice must not fail the sync it reports; the page reads the status again
+      // whenever it mounts or the account changes.
+    }
   }
 
   private async checkVoiceProviderUpdates(): Promise<CatalogVoiceProviderCheckResponse> {
@@ -489,14 +528,12 @@ export class CatalogModule extends BaseModule {
     if (this.voiceSyncInFlight) return this.voiceSyncInFlight
     const task = this.enqueueVoiceMutation(() => this.performVoiceProviderCatalogSync())
     this.voiceSyncInFlight = task
-    void task.then(
-      () => {
-        if (this.voiceSyncInFlight === task) this.voiceSyncInFlight = null
-      },
-      () => {
-        if (this.voiceSyncInFlight === task) this.voiceSyncInFlight = null
-      }
-    )
+    this.publishVoiceProviderStatus()
+    const settle = (): void => {
+      if (this.voiceSyncInFlight === task) this.voiceSyncInFlight = null
+      this.publishVoiceProviderStatus()
+    }
+    void task.then(settle, settle)
     return task
   }
 
@@ -536,7 +573,7 @@ export class CatalogModule extends BaseModule {
   private rollbackVoiceProviderCatalog(
     request: CatalogVoiceProviderRollbackRequest
   ): Promise<CatalogVoiceProviderRollbackResponse> {
-    return this.enqueueVoiceMutation(async () => {
+    const task = this.enqueueVoiceMutation<CatalogVoiceProviderRollbackResponse>(async () => {
       const service = this.getService()
       try {
         const status = await service.rollbackVoiceProvider(request.reason ?? 'manual')
@@ -546,6 +583,9 @@ export class CatalogModule extends BaseModule {
         return { outcome: 'failed', status, errorCode: status.lastErrorCode }
       }
     })
+    const settle = (): void => this.publishVoiceProviderStatus()
+    void task.then(settle, settle)
+    return task
   }
 
   private publishRegistry(registry: DomainLexiconRegistry): void {
@@ -570,6 +610,22 @@ function manifestDiagnostic(manifest: CatalogManifestV1) {
     source: 'remote' as const,
     signatureStatus: 'verified' as const
   })
+}
+
+function summarizeVoiceProviderPack(
+  pack: CatalogStoredPack | null,
+  registry: VoiceProviderRegistry | null
+): CatalogVoiceProviderPackSummary | null {
+  if (!pack || !registry) return null
+  return {
+    payloadBytes: pack.payloadBytes,
+    importedAt: pack.importedAt,
+    expiresAt: registry.expiry ?? null,
+    providers: registry.list().map((provider) => ({
+      id: provider.id,
+      displayName: provider.displayName
+    }))
+  }
 }
 
 export function createBuiltinCatalogPack(): BuiltinCatalogPack {

@@ -1,7 +1,7 @@
 import { getHeader, readBody } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { countActiveDevices, readDeviceId } from '../../../utils/authStore'
+import { readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import {
   ensureDeviceForSync,
@@ -28,9 +28,10 @@ export default defineEventHandler(async (event) => {
     await getSyncSession(event, userId, deviceId, syncToken)
     await ensureDeviceForSync(event, userId)
 
+    // The quota read counts the active devices too, and the push checks against this same read:
+    // the count and the quota were each read a second time before.
     const quota = await getOrInitQuota(event, userId)
-    const deviceCount = await countActiveDevices(event, userId)
-    if (deviceCount > quota.limits.device_limit)
+    if (quota.usage.used_devices > quota.limits.device_limit)
       throw createSyncError('QUOTA_DEVICE_EXCEEDED', 403, 'Device limit exceeded')
 
     const body = await readBody<PushBody>(event)
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
     if (!items)
       throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid payload')
 
-    const result = await pushSyncItemsV1(event, userId, deviceId, items as any)
+    const result = await pushSyncItemsV1(event, userId, deviceId, items as any, { quota })
     if ('errorCode' in result && result.errorCode) {
       const statusCode = result.errorCode.startsWith('QUOTA_') ? 403 : 400
       const statusMessage = result.errorCode.startsWith('QUOTA_') ? 'Quota exceeded' : 'Invalid payload'

@@ -97,6 +97,11 @@ class MockStatement {
   async all<T = any>() {
     return { results: this.db.all(this.sql, this.args) as T[] }
   }
+
+  /** What `batch` runs: rows for a read, the write's result otherwise. */
+  async execute() {
+    return /^\s*(?:SELECT|WITH|PRAGMA)\b/i.test(this.sql) ? this.all() : this.run()
+  }
 }
 
 export class MockD1Database {
@@ -108,6 +113,14 @@ export class MockD1Database {
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
+  }
+
+  /** In order, like D1's batch (without its rollback, which these tests do not exercise). */
+  async batch(statements: MockStatement[]) {
+    const results = []
+    for (const statement of statements)
+      results.push(await statement.execute())
+    return results
   }
 
 
@@ -408,7 +421,36 @@ export class MockD1Database {
     }
 
     if (sql.includes('FROM platform_governance_events')) {
+      // Usage counted by the database: events grouped by action and unit, with their count and sum.
+      if (sql.includes('GROUP BY action, unit')) {
+        let rows = this.filterGovernanceEvents(sql, args)
+        if (sql.includes('action IN (SELECT value FROM json_each(?))')) {
+          const actions = new Set(JSON.parse(String(args.find(value => typeof value === 'string' && value.startsWith('[')))) as string[])
+          rows = rows.filter(row => actions.has(row.action))
+        }
+        if (sql.includes("json_extract(metadata_json, '$.provider') = ?")) {
+          const provider = String(args.at(-1))
+          rows = rows.filter(row => (JSON.parse(row.metadata_json || '{}') as { provider?: string }).provider === provider)
+        }
+        const groups = new Map<string, { action: string, unit: string, events: number, quantity: number }>()
+        for (const row of rows) {
+          const key = `${row.action}\u0000${row.unit}`
+          const group = groups.get(key) ?? { action: row.action, unit: row.unit, events: 0, quantity: 0 }
+          group.events += 1
+          group.quantity += Number(row.quantity) || 0
+          groups.set(key, group)
+        }
+        return [...groups.values()]
+      }
       return this.filterGovernanceEvents(sql, args)
+    }
+
+    // The capabilities of the providers a list selects: the subquery repeats the list's filter.
+    if (sql.includes('FROM provider_capabilities') && sql.includes('IN (SELECT id FROM provider_registry')) {
+      const providerIds = new Set(this.filterProviders(sql, args).map(row => row.id))
+      return [...this.capabilities.values()]
+        .filter(row => providerIds.has(row.provider_id))
+        .sort((a, b) => a.capability.localeCompare(b.capability))
     }
 
     if (sql.includes('FROM provider_registry')) {

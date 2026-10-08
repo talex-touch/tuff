@@ -24,7 +24,6 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PerfSummary } from '../../utils/perf-monitor'
 import type { AnalyticsMessageStore } from './message-store'
 import process from 'node:process'
-import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -41,7 +40,7 @@ import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { pluginModule } from '../plugin/plugin-module'
-import { getMainConfig } from '../storage'
+import { readTelemetryConsent } from './telemetry-consent'
 import { SystemSampler } from './collectors/system-sampler'
 import {
   sanitizeAnalyticsReportMessage,
@@ -472,13 +471,12 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private getMessageReportConfig(): { enabled: boolean; anonymous: boolean } {
-    const config = getMainConfig(StorageList.SENTRY_CONFIG) as
-      | { enabled?: boolean; anonymous?: boolean }
-      | undefined
-    const anonymous = config?.anonymous ?? false
+    // The same switch that gates the Sentry/Nexus outbox. This used to hard-code `enabled: true`,
+    // so diagnostic reports kept uploading after the user turned telemetry off.
+    const consent = readTelemetryConsent()
     return {
-      enabled: true,
-      anonymous: anonymous && this.isSignedIn
+      enabled: consent.enabled,
+      anonymous: consent.anonymous && this.isSignedIn
     }
   }
 

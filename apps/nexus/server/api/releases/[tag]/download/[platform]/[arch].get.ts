@@ -1,14 +1,14 @@
-import { Buffer } from 'node:buffer'
-import { createError, send, sendRedirect, setResponseHeader } from 'h3'
-import { requireReleaseAsset } from '../../../../../utils/releaseAssetStorage'
+import { createError, send, sendRedirect, sendStream, setResponseHeader } from 'h3'
+import { requireReleaseAssetStream } from '../../../../../utils/releaseAssetStorage'
 import { resolveReleaseDownload } from '../../../../../utils/releaseDownload'
 import { incrementDownloadCount } from '../../../../../utils/releasesStore'
+import { runAfterResponse } from '../../../../../utils/afterResponse'
 
 export default defineEventHandler(async (event) => {
   const { tag, platform, arch, asset } = await resolveReleaseDownload(event)
 
-  // Increment download count
-  await incrementDownloadCount(event, asset.id)
+  // Counted after the response: the download does not wait for the counter, nor fail with it.
+  runAfterResponse(event, 'release download count', () => incrementDownloadCount(event, asset.id))
 
   if (!asset.fileKey) {
     if (asset.downloadUrl.startsWith('https://') || asset.downloadUrl.startsWith('http://')) {
@@ -17,16 +17,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Asset file is not available.' })
   }
 
-  const result = await requireReleaseAsset(event, asset.fileKey, {
+  const result = await requireReleaseAssetStream(event, asset.fileKey, {
     governanceResourceId: `release:${tag}:${platform}:${arch}`,
     resourceType: 'release-asset',
   })
-  const buffer = Buffer.isBuffer(result.data) ? result.data : Buffer.from(result.data)
 
   setResponseHeader(event, 'Content-Type', asset.contentType || result.contentType)
-  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Content-Length', result.size)
   setResponseHeader(event, 'Cache-Control', 'public, max-age=3600')
   setResponseHeader(event, 'Content-Disposition', `attachment; filename="${asset.filename}"`)
 
-  return send(event, buffer)
+  return result.body instanceof ReadableStream
+    ? sendStream(event, result.body)
+    : send(event, result.body)
 })

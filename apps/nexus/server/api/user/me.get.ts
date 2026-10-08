@@ -1,13 +1,7 @@
 import type { H3Event } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { requireSessionAuth } from '../../utils/auth'
-import {
-  getAdminBootstrapState,
-  getUserAccountActivitySummary,
-  getUserById,
-  listPasskeys,
-  listUserLinkedAccounts,
-} from '../../utils/authStore'
+import { getUserAccountOverview, getUserById } from '../../utils/authStore'
 import { normalizeLocaleCode } from '../../utils/locale'
 
 function hasBootstrapSecret(event: H3Event) {
@@ -19,17 +13,16 @@ function hasBootstrapSecret(event: H3Event) {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSessionAuth(event)
-
-  const user = await getUserById(event, userId)
+  // Two round trips in all: authentication (which already read the user row) and one batch for the
+  // rest. It was eleven, one after another.
+  const auth = await requireSessionAuth(event)
+  const user = auth.user ?? await getUserById(event, auth.userId)
   if (!user)
     return null
 
-  const passkeys = await listPasskeys(event, userId)
-  const linkedAccounts = await listUserLinkedAccounts(event, userId)
-  const linkedProviders = [...new Set(linkedAccounts.map(account => account.provider))]
-  const accountActivity = await getUserAccountActivitySummary(event, userId)
-  const bootstrap = await getAdminBootstrapState(event, userId)
+  const overview = await getUserAccountOverview(event, user)
+  const linkedProviders = [...new Set(overview.linkedAccounts.map(account => account.provider))]
+  const bootstrap = overview.bootstrap
   const bootstrapEnabled = hasBootstrapSecret(event)
 
   return {
@@ -41,13 +34,13 @@ export default defineEventHandler(async (event) => {
     locale: normalizeLocaleCode(user.locale),
     status: user.status,
     createdAt: user.createdAt,
-    updatedAt: accountActivity.updatedAt,
+    updatedAt: overview.updatedAt,
     emailVerified: Boolean(user.emailVerified),
     emailState: user.emailState,
     isRestricted: user.emailState !== 'verified',
-    passkeyCount: passkeys.length,
+    passkeyCount: overview.passkeyCount,
     linkedProviders,
-    linkedAccounts,
+    linkedAccounts: overview.linkedAccounts,
     adminBootstrap: {
       enabled: bootstrapEnabled,
       required: bootstrap.requiresBootstrap,

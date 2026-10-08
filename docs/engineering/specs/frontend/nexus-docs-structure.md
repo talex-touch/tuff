@@ -41,14 +41,15 @@ A page renders only the sections it has content for, but never reorders them. **
 - **Usage** — one line of what it does, then one `### <variant>` per demo. Best Practices lives at the end of this section as terse bullets, not a separate H2.
 - **API Reference** — the `DocApiTable` blocks and signature tables, unchanged. Facts here are contracts: never reword a prop name, default or type.
 - **Overview** — how it behaves: interaction contract, precedence rules, focus/keyboard/DOM/ARIA behaviour, degradation. This is what used to be `## Interaction Contract` (component docs) / `## 交互要点` (templates) / `## Positioning` (suite pages).
-- **Technologies** — how it is built and where it comes from: drivers (rAF loops, CSS masks, container queries), upstream ports and licences, the source/tests paths that used to sit in `## Review Notes` / `## Source`, and the verified-coverage line. Bullets, no retrospective prose.
+- **Technologies** — 1–3 bullets: the core mechanism when it is not obvious (rAF loop, CSS mask, container query), the upstream port and its licence, and the source path. No change history, rejected designs or test-coverage enumerations; those belong in commit messages and `docs/engineering/reports/`.
 - **Use cases** — 2–4 bullets: the situations the component/template/feature is for. Lifted from the old scenario paragraphs, not invented.
 - **Accessibility / Customization / Related components / FAQ** — only where the page already had that material (`## Accessibility`, `## Style Customization`, `## 改造建议`, cross-links, FAQ).
 
 ## 4. Copy rules
 
-- Descriptions are one line. Section bodies are bullets, tables or code — no paragraph longer than three lines.
-- Do not delete facts: prop/event/slot rows, defaults, code samples, contract bullets, source paths and coverage claims all survive the migration. What goes is repetition, authoring chatter ("reviewed against…", "this section was added because…") and restated headings.
+- Write like Apple's SDK documentation (user instruction, 2026-10-08): declarative, one idea per sentence, no narration of what the demo already shows. Prefer code and tables to prose.
+- `description` is one sentence (zh ≤ 24 字 without a trailing 「。」, en ≤ 14 words). At most one sentence under a variant heading; 3–5 one-line Best Practices; one-clause API descriptions; 3–6 one-line Overview bullets; 1–3 Technologies bullets. Suite overview pages carry an install snippet and the gallery, nothing else.
+- Do not delete contracts: demo references, prop/event/slot rows with their names, types and defaults, links, and code samples survive (code may be trimmed to the essential usage). What goes is repetition, change history, rejected designs, coverage enumerations, authoring chatter ("reviewed against…") and restated headings.
 - zh and en stay section-for-section identical (`check-doc-translation-parity`); zh keeps the Chinese heading names above.
 - Frontmatter keys are unchanged (`title`, `description`, `category`, `status`, `since`, `tags`, `syncStatus`, `verified`). Quote any `description` containing `: `.
 

@@ -4,9 +4,9 @@ import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const HEALTH_TABLE = 'provider_health_checks'
-const initializedSchemas = new WeakSet<D1Database>()
 
 export type ProviderHealthStatus = 'healthy' | 'degraded' | 'unhealthy'
 
@@ -92,34 +92,32 @@ function getD1Database(event: H3Event): D1Database {
   return db
 }
 
+const PROVIDER_HEALTH_SCHEMA = defineD1Schema('provider-health', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${HEALTH_TABLE} (
+        id TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        provider_name TEXT NOT NULL,
+        vendor TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        status TEXT NOT NULL,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        endpoint TEXT NOT NULL,
+        request_id TEXT,
+        degraded_reason TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        checked_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_health_provider ON ${HEALTH_TABLE}(provider_id, checked_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_health_capability ON ${HEALTH_TABLE}(capability, checked_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_health_status ON ${HEALTH_TABLE}(status, checked_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_health_checked_at ON ${HEALTH_TABLE}(checked_at)`,
+  ],
+})
+
 async function ensureProviderHealthSchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${HEALTH_TABLE} (
-      id TEXT PRIMARY KEY,
-      provider_id TEXT NOT NULL,
-      provider_name TEXT NOT NULL,
-      vendor TEXT NOT NULL,
-      capability TEXT NOT NULL,
-      status TEXT NOT NULL,
-      latency_ms INTEGER NOT NULL DEFAULT 0,
-      endpoint TEXT NOT NULL,
-      request_id TEXT,
-      degraded_reason TEXT,
-      error_code TEXT,
-      error_message TEXT,
-      checked_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_health_provider ON ${HEALTH_TABLE}(provider_id, checked_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_health_capability ON ${HEALTH_TABLE}(capability, checked_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_health_status ON ${HEALTH_TABLE}(status, checked_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_health_checked_at ON ${HEALTH_TABLE}(checked_at);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, PROVIDER_HEALTH_SCHEMA)
 }
 
 function clampText(value: unknown, maxLength: number): string | null {
@@ -335,16 +333,24 @@ export async function getLatestProviderHealthChecks(
   await ensureProviderHealthSchema(db)
 
   const capability = readOptionalString(options.capability, 'capability', 160)
-  const placeholders = providerIds.map(() => '?').join(', ')
-  const capabilityClause = capability ? 'AND capability = ?' : ''
+  // Each provider's latest check by an index seek. It read every check ever recorded for the providers
+  // (the table keeps them all) to keep the first of each, on every scene run that sorts by latency,
+  // and bound one parameter per provider, past D1's 100.
+  const capabilityClause = capability ? 'AND capability = ?2' : ''
   const { results } = await db.prepare(`
-    SELECT id, provider_id, provider_name, vendor, capability, status, latency_ms, endpoint,
-      request_id, degraded_reason, error_code, error_message, checked_at
-    FROM ${HEALTH_TABLE}
-    WHERE provider_id IN (${placeholders})
-    ${capabilityClause}
-    ORDER BY checked_at DESC;
-  `).bind(...providerIds, ...(capability ? [capability] : [])).all<ProviderHealthCheckRow>()
+    SELECT h.id, h.provider_id, h.provider_name, h.vendor, h.capability, h.status, h.latency_ms, h.endpoint,
+      h.request_id, h.degraded_reason, h.error_code, h.error_message, h.checked_at
+    FROM json_each(?1) AS requested
+    JOIN ${HEALTH_TABLE} AS h ON h.id = (
+      SELECT id
+      FROM ${HEALTH_TABLE}
+      WHERE provider_id = requested.value
+      ${capabilityClause}
+      ORDER BY checked_at DESC
+      LIMIT 1
+    )
+    ORDER BY h.checked_at DESC;
+  `).bind(JSON.stringify(providerIds), ...(capability ? [capability] : [])).all<ProviderHealthCheckRow>()
 
   const latest = new Map<string, ProviderHealthCheckEntry>()
   for (const row of results ?? []) {

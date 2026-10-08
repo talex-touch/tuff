@@ -1,6 +1,6 @@
 ---
 title: Tag 标签
-description: 用于分类、筛选、语义状态和可移除元数据的紧凑标签。
+description: 用于分类、筛选与状态的紧凑标签
 category: Basic
 status: beta
 since: 0.3.4
@@ -11,26 +11,22 @@ verified: true
 
 ## 用法
 
-### 标签
-
+### 颜色与尺寸
+`color` 决定文字色，并派生背景与边框。
 :::TuffDemoWrapper{demo="TagTagsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="默认" size="sm" />
-      <TxTag label="成功" size="md" color="var(--tx-color-success)" />
-      <TxTag label="警告" size="sm" color="var(--tx-color-warning)" />
-      <TxTag label="危险" size="md" color="var(--tx-color-danger)" />
-    </div>
+    <TxTag label="默认" size="sm" />
+    <TxTag label="成功" size="md" color="var(--tx-color-success)" />
+    <TxTag label="警告" size="sm" color="var(--tx-color-warning)" />
+    <TxTag label="危险" size="md" color="var(--tx-color-danger)" />
   </template>
 ---
 :::
 
 ### 可关闭
-
-可关闭标签适用于可移除筛选项或用户自定义标签。
-
+`closable` 渲染关闭按钮；`close` 只表达移除意图，由宿主更新数据。
 :::TuffDemoWrapper{demo="TagClosableDemo" code-lang="vue"}
 ---
 code: |
@@ -50,31 +46,23 @@ code: |
 :::
 
 ### 图标与自定义色
-
+`background` 与 `border` 覆盖由 `color` 派生的颜色。
 :::TuffDemoWrapper{demo="TagIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="AI 推荐" icon="i-carbon-ai" color="#8b5cf6" />
-      <TxTag label="已同步" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
-      <TxTag label="受保护" icon="i-carbon-locked" color="#f59e0b" background="rgba(245, 158, 11, 0.14)" border="rgba(245, 158, 11, 0.36)" />
-    </div>
+    <TxTag label="AI 推荐" icon="i-carbon-ai" color="#8b5cf6" />
+    <TxTag label="已同步" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+    <TxTag label="受保护" icon="i-carbon-locked" color="#f59e0b" background="rgba(245, 158, 11, 0.14)" border="rgba(245, 158, 11, 0.36)" />
   </template>
 ---
 :::
 
 ### 交互与禁用
-
+绑定 `@click` 后标签成为可聚焦的按钮；`disabled` 阻断 `click` 与 `close`。
 :::TuffDemoWrapper{demo="TagStateDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref(false)
-  </script>
-
   <template>
     <TxTag
       :label="active ? '已选择' : '可点击'"
@@ -87,88 +75,75 @@ code: |
 :::
 
 ### 标签 + 按钮
-
 :::TuffDemoWrapper{demo="TagTagButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="tuff-demo-row">
-      <TxTag label="测试版" size="md" />
-      <TxButton size="sm">升级</TxButton>
-    </div>
+    <TxTag label="测试版" size="md" />
+    <TxButton size="sm">升级</TxButton>
   </template>
 ---
 :::
 
 ### 最佳实践
 
-- 标签用于元数据和状态提示，不要替代主按钮。
-- `label` 保持简短；长文本会破坏表格和筛选行的紧凑节奏。
-- 可移除筛选项、用户标签、临时范围使用 `closable`。
-- 使用原始自定义颜色且对比度不足时，显式提供 `background` / `border`。
-- 删除行为需要宿主确认；`TxTag` 只发出操作意图。
+- 标签用于元数据与状态提示，不要替代主按钮。
+- `label` 保持简短，并且不依赖颜色也能读懂。
+- 可移除的筛选项、用户标签与临时范围使用 `closable`。
+- 原始自定义色对比度不足时，显式提供 `background` / `border`。
+- 删除前由宿主确认；`TxTag` 只发出意图。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `label` | `string \| null` | `''` | 未提供默认插槽时显示的文本。 |
-| `icon` | `string` | `''` | 前置图标 class。 |
-| `color` | `string` | `'var(--tx-color-primary)'` | 主文字/图标色，也作为派生背景和边框的基准色。 |
-| `background` | `string` | `''` | 自定义背景色；默认使用 `color` 的半透明混合。 |
-| `border` | `string` | `''` | 自定义边框色；默认使用 `color` 的半透明混合。 |
+| `label` | `string \| null` | `''` | 无默认插槽时显示的文本；`null` 视为空字符串。 |
+| `icon` | `string` | `''` | 前置图标类名。 |
+| `color` | `string` | `'var(--tx-color-primary)'` | 文字与图标色，也是派生背景与边框的基准色。 |
+| `background` | `string` | `''` | 自定义背景色；默认由 `color` 半透明混合。 |
+| `border` | `string` | `''` | 自定义边框色；默认由 `color` 半透明混合。 |
 | `size` | `'sm' \| 'md'` | `'sm'` | 标签密度。 |
 | `closable` | `boolean` | `false` | 渲染关闭按钮。 |
-| `disabled` | `boolean` | `false` | 禁用标签点击与关闭交互。 |
-| `pill` | `boolean` | `false` | 使用全圆角胶囊外形（根节点加 `.pill` class）；用于筛选芯片等需要与方角标签在形状上区分的场景。 |
+| `closeAriaLabel` | `string` | `'Remove tag'` | 关闭按钮的 `aria-label`，传入本地化文本。 |
+| `disabled` | `boolean` | `false` | 禁用点击与关闭。 |
+| `pill` | `boolean` | `false` | 全圆角胶囊外形，用于需与方角标签区分的筛选芯片。 |
 | `variant` | `'outline' \| 'soft' \| 'plain'` | `'outline'` | 填充配方，见下表。 |
-| `dot` | `string` | - | 前置圆点颜色；不传则不渲染圆点。让标签在保持文字可读的同时携带分类色。 |
-| `dotSize` | `number` | `6` | 圆点直径（像素）。 |
-| `count` | `number` | - | 尾部计数徽标；传 `0` 会渲染，不传则不渲染。 |
+| `dot` | `string` | - | 前置圆点颜色；不传则不渲染。 |
+| `dotSize` | `number` | `6` | 圆点直径（px）。 |
+| `count` | `number` | - | 尾部计数；`0` 也会渲染，不传则不渲染。 |
 
-三种 `variant` 的配方：
-
-| 值 | 填充 | 发丝边 | 文字 | 适用 |
+| `variant` | 填充 | 发丝边 | 文字 | 适用 |
 |------|------|------|------|------|
-| `outline` | 12% | 32% | 原色 | 默认，与既有标签完全一致 |
-| `soft` | 20% | 34% | 92% 原色混入墨色 | 彩色底上的 11px 小字更稳 |
-| `plain` | 中性填充 | 中性发丝边 | 次级墨色 | 忽略 `color`，用于 `+3` 这类溢出计数与不该抢眼的元信息 |
+| `outline` | 12% | 32% | 原色 | 默认 |
+| `soft` | 20% | 34% | 92% 原色混入墨色 | 彩色底上的 11px 小字 |
+| `plain` | 中性填充 | 中性发丝边 | 次级墨色 | 忽略 `color`；用于 `+3` 等溢出计数与次要元信息 |
 
-`background` / `border` 显式传值时仍然优先于任何 variant。
+显式传入的 `background` / `border` 优先于任何 `variant`。
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `click` | `MouseEvent` | `disabled=false` 时点击标签根元素触发。 |
-| `close` | - | `disabled=false` 时点击关闭按钮触发。 |
+| `click` | `MouseEvent` | 未禁用时点击触发；绑定后 Enter / Space 同样触发。 |
+| `close` | - | 未禁用时点击关闭按钮触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | - | 替换标签内容区域中的 `label` 文本。 |
+| `default` | - | 替换 `label` 文本，保留图标与关闭按钮。 |
 
 ## 概述
 
-- 根元素是静态元数据，不带 live region 角色；标签文案必须不依赖颜色也能表达含义。
-- `label` 默认是空字符串；`null` 会归一化为空字符串。
-- 默认插槽会替换 `label` 内容，但保留图标和关闭按钮区域。
-- `color` 默认是 `var(--tx-color-primary)`；未传 `background` 与 `border` 时会基于 `color` 用 `color-mix` 派生。
-- 关闭控件是原生 `button type="button"`，带 `aria-label="Remove tag"`。
-- 点击关闭按钮会阻止冒泡，因此 `close` 不会同时触发标签根部的 `click`。
-- `disabled` 会降低透明度、禁用关闭按钮，并阻断 `click` 与 `close` 事件。
+- 未绑定 `@click` 时根节点是不带角色的静态元数据；绑定后为可聚焦的 `role="button"`，禁用时带 `aria-disabled`。
+- 关闭按钮是原生 `button type="button"`，`aria-label` 取自 `closeAriaLabel`。
+- 关闭点击不冒泡，`close` 不会同时触发 `click`。
+- `disabled` 降低透明度、禁用关闭按钮，并阻断 `click` 与 `close`。
 
 ## 技术实现
 
-- **可访问性说明:** 关闭控件是原生 `button`，但标签级 `click` 绑定在不可聚焦的 `span` 上。`click` 只适合可选的指针交互；必须键盘可达的标签操作应改用按钮或复选模式。
-- **实测覆盖:** `tag.test.ts` 覆盖 label/icon/style 渲染、默认插槽覆盖、click 与 close 事件分离、禁用阻断，以及禁用关闭按钮状态。
-
-- Component source: `packages/tuffex/packages/components/src/tag/src/TxTag.vue`。
-- Types: `packages/tuffex/packages/components/src/tag/src/types.ts` 导出 `TagProps` 与 `TagEmits`。
-- Export alias: `packages/tuffex/packages/components/src/tag/index.ts` 导出 `Tag`、`TxTag`、`TagProps`、`TagEmits` 与 `TxTagInstance`。
-- Coverage: `packages/tuffex/packages/components/src/tag/__tests__/tag.test.ts` 覆盖渲染、插槽、事件与禁用行为。
+- 源码：`packages/tuffex/packages/components/src/tag/`。
 
 <TuffDocSourceLink />

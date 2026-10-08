@@ -23,7 +23,7 @@ code: |
   import { TxFlipBook } from '@talex-touch/tuffex/flip-book'
   const current = ref(0)
   const pages = [
-    { id: 'one', title: '第一页', content: '调用方提供的文字。' },
+    { id: 'one', title: '第一页', content: '晨光从左侧照进来，纸面泛着暖白。' },
     { id: 'two', title: '第二页', content: '纸叶反面的独立内容。' },
     { id: 'three', title: '第三页', content: '第三张纸上研究。' },
   ]

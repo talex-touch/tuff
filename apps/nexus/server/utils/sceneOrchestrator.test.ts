@@ -1531,6 +1531,32 @@ describe('runSceneOrchestrator', () => {
     ]))
   })
 
+  it('reads the bindings\' providers side by side, not one after another', async () => {
+    const providers = ['prv_a', 'prv_b', 'prv_c'].map(id => provider({
+      id,
+      name: id,
+      capabilities: [textTranslateCapability(id)],
+    }))
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      bindings: providers.map((item, index) => binding(item.id, 'text.translate', (index + 1) * 10)),
+    }))
+    let inFlight = 0
+    let maxInFlight = 0
+    storeMocks.getProviderRegistryEntry.mockImplementation(async (_event, providerId: string) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      inFlight -= 1
+      return providers.find(item => item.id === providerId) ?? null
+    })
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', { dryRun: true })
+
+    expect(run.candidates.map(candidate => candidate.providerId)).toEqual(['prv_a', 'prv_b', 'prv_c'])
+    expect(storeMocks.getProviderRegistryEntry).toHaveBeenCalledTimes(3)
+    expect(maxInFlight).toBe(3)
+  })
+
   it('lowest_latency strategy 使用最新 provider health latency 排序', async () => {
     const slow = provider({
       id: 'prv_slow',

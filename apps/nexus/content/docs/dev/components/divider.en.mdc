@@ -1,6 +1,6 @@
 ---
 title: Divider
-description: Content grouping, inline separation, and gradient fade separators
+description: A horizontal or vertical line that separates content.
 category: Basic
 status: beta
 since: 0.3.7
@@ -11,9 +11,8 @@ verified: true
 
 ## Usage
 
-### Basic Divider
-Use a horizontal divider by itself, or pass default slot text as a label.
-
+### Basic
+The default slot adds a label; `textPlacement` sets where it sits.
 :::TuffDemoWrapper{demo="DividerBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -27,43 +26,8 @@ code: |
 ---
 :::
 
-### Best Practices
-
-- Use horizontal dividers to separate semantic sections, not every row. Dense tables and lists should use row spacing or table borders instead.
-- Keep text labels short and only use them for section transitions; long labels become visual headings and should be rendered as headings instead.
-- Use vertical dividers only in inline metadata or toolbar rows where surrounding text already provides context.
-
-## API Reference
-
-### Props
-
-::TuffPropsTable
----
-rows:
-  - name: direction
-    description: 'Divider direction'
-    type: "'horizontal' | 'vertical'"
-    default: "'horizontal'"
-  - name: dashed
-    description: 'Render dashed line'
-    type: 'boolean'
-    default: 'false'
-  - name: textPlacement
-    description: 'Text placement for horizontal dividers'
-    type: "'left' | 'center' | 'right'"
-    default: "'center'"
-  - name: gradient
-    description: 'Gradient fade direction; true is equivalent to both'
-    type: "boolean | 'start' | 'end' | 'both'"
-    default: 'false'
----
-::
-
-## Gradient Divider
-
-### Gradient Divider
-Use `gradient` to fade a divider from one area to another. `true` is equivalent to `both`; explicit modes are `start`, `end`, and `both`.
-
+### Gradient
+`gradient` takes `start`, `end`, or `both`; `true` equals `both`.
 :::TuffDemoWrapper{demo="DividerGradientDemo" code-lang="vue"}
 ---
 code: |
@@ -76,11 +40,8 @@ code: |
 ---
 :::
 
-## Vertical Divider
-
-### Vertical Divider
-Use `direction="vertical"` to separate inline metadata such as tags, status, or ownership. Vertical dividers also support `dashed` and `gradient`.
-
+### Vertical
+`direction="vertical"` separates inline content and also supports `dashed` and `gradient`.
 :::TuffDemoWrapper{demo="DividerVerticalDemo" code-lang="vue"}
 ---
 code: |
@@ -96,34 +57,59 @@ code: |
 ---
 :::
 
-## Slots
+### Best Practices
+
+- Separate semantic sections, not every row; dense tables and lists use row spacing or table borders.
+- Keep labels short; turn long text into a real heading.
+- Use vertical dividers only in inline metadata or toolbars, where surrounding text already gives context.
+- Inside Drawer, Card, and Form surfaces, use `TxDivider` instead of hard-coded borders.
+
+## API Reference
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: direction
+    description: 'Divider direction.'
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+  - name: dashed
+    description: 'Renders a dashed line.'
+    type: 'boolean'
+    default: 'false'
+  - name: textPlacement
+    description: 'Label position on horizontal dividers.'
+    type: "'left' | 'center' | 'right'"
+    default: "'center'"
+  - name: gradient
+    description: 'Fade direction; true equals both.'
+    type: "boolean | 'start' | 'end' | 'both'"
+    default: 'false'
+---
+::
+
+### Slots
 
 ::TuffPropsTable
 ---
 rows:
   - name: default
-    description: 'Text content displayed inside horizontal dividers; ignored for vertical dividers'
+    description: 'Label text on horizontal dividers; not rendered when vertical.'
     type: '-'
     default: '-'
 ---
 ::
 
-### Events
-
-`TxDivider` does not emit component events.
-
 ## Overview
 
-- The root node uses `role="separator"` and sets `aria-orientation` from `direction`.
-- Horizontal dividers span the container width by default; text renders only in horizontal mode.
-- `gradient="start"` fades from transparent to solid, `gradient="end"` fades from solid to transparent, and `gradient` / `gradient="both"` fades both ends while keeping the middle clear.
-- Vertical gradient uses vertical fade and works well in toolbars or metadata rows.
-- Prefer `TxDivider` inside Drawer / Card / Form surfaces instead of duplicating border styles.
+- The root is `role="separator"`, with `aria-orientation` taken from `direction`.
+- Horizontal dividers span the container width; labels render only when horizontal.
+- `start` fades in from transparent, `end` fades out to transparent, and `both` fades both ends around a solid middle; vertical dividers fade along the vertical axis.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/divider/src/TxDivider.vue` confirms `role="separator"`, `aria-orientation`, horizontal-only text slot rendering, dashed styling, and gradient modes.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/divider/__tests__/divider.test.ts` covers horizontal text, vertical text suppression, and gradient class modes.
-- Export: `packages/tuffex/packages/components/src/divider/index.ts` wraps the component with `withInstall` and exports `TxDividerInstance`.
+- Source: `packages/tuffex/packages/components/src/divider/`.
 
 <TuffDocSourceLink />

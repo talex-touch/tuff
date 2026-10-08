@@ -29,6 +29,7 @@ import {
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const TABLE_NAME = 'plugin_publisher_signing_keys'
 const KEY_ID_RE = /^[A-Z0-9][\w.:-]{2,127}$/i
@@ -109,35 +110,32 @@ interface PublisherSigningKeyRow {
 }
 
 const memoryKeys = new Map<string, PublisherSigningKeyRecord>()
-let schemaInitialized = false
-
 function getD1Database(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
 }
 
+const PLUGIN_SIGNING_SCHEMA = defineD1Schema('plugin-signing', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
+        key_id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        algorithm TEXT NOT NULL,
+        public_key_pem TEXT NOT NULL,
+        fingerprint_sha256 TEXT NOT NULL,
+        status TEXT NOT NULL,
+        valid_from TEXT NOT NULL,
+        valid_until TEXT,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_plugin_publisher_keys_owner_status
+      ON ${TABLE_NAME}(owner_id, status, valid_from)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database): Promise<void> {
-  if (schemaInitialized)
-    return
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-      key_id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      algorithm TEXT NOT NULL,
-      public_key_pem TEXT NOT NULL,
-      fingerprint_sha256 TEXT NOT NULL,
-      status TEXT NOT NULL,
-      valid_from TEXT NOT NULL,
-      valid_until TEXT,
-      revoked_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_plugin_publisher_keys_owner_status
-    ON ${TABLE_NAME}(owner_id, status, valid_from);
-  `).run()
-  schemaInitialized = true
+  await ensureD1Schema(db, PLUGIN_SIGNING_SCHEMA)
 }
 
 function sha256(value: string | Buffer): string {
@@ -583,5 +581,4 @@ export async function createPluginAdmissionAttestation(
 
 export function resetPluginSigningStoreForTests(): void {
   memoryKeys.clear()
-  schemaInitialized = false
 }

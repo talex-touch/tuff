@@ -9,12 +9,12 @@ import {
   normalizeSceneCapabilityAdapterKey,
   sceneCapabilityAdapterSupports,
 } from './sceneCapabilityAdapterRegistry'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PROVIDERS_TABLE = 'provider_registry'
 const CAPABILITIES_TABLE = 'provider_capabilities'
 const JSON_LIMIT_BYTES = 64 * 1024
 
-const initializedSchemas = new WeakSet<D1Database>()
 
 export const PROVIDER_REGISTRY_VENDORS = ['tencent-cloud', 'openai', 'deepseek', 'dashscope', 'exchange-rate', 'custom'] as const
 export const PROVIDER_REGISTRY_STATUSES = ['enabled', 'disabled', 'degraded'] as const
@@ -199,54 +199,49 @@ function getD1Database(event: H3Event): D1Database {
   return db
 }
 
+const PROVIDER_REGISTRY_SCHEMA = defineD1Schema('provider-registry', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PROVIDERS_TABLE} (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        vendor TEXT NOT NULL,
+        status TEXT NOT NULL,
+        auth_type TEXT NOT NULL,
+        auth_ref TEXT,
+        owner_scope TEXT NOT NULL,
+        owner_id TEXT,
+        description TEXT,
+        endpoint TEXT,
+        region TEXT,
+        metadata TEXT,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CAPABILITIES_TABLE} (
+        id TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        schema_ref TEXT,
+        metering TEXT,
+        constraints_json TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(provider_id, capability),
+        FOREIGN KEY (provider_id) REFERENCES ${PROVIDERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_registry_vendor ON ${PROVIDERS_TABLE}(vendor)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_registry_status ON ${PROVIDERS_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_registry_owner_scope ON ${PROVIDERS_TABLE}(owner_scope)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_capabilities_provider ON ${CAPABILITIES_TABLE}(provider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_capabilities_capability ON ${CAPABILITIES_TABLE}(capability)`,
+  ],
+})
+
 async function ensureProviderRegistrySchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PROVIDERS_TABLE} (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      vendor TEXT NOT NULL,
-      status TEXT NOT NULL,
-      auth_type TEXT NOT NULL,
-      auth_ref TEXT,
-      owner_scope TEXT NOT NULL,
-      owner_id TEXT,
-      description TEXT,
-      endpoint TEXT,
-      region TEXT,
-      metadata TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CAPABILITIES_TABLE} (
-      id TEXT PRIMARY KEY,
-      provider_id TEXT NOT NULL,
-      capability TEXT NOT NULL,
-      schema_ref TEXT,
-      metering TEXT,
-      constraints_json TEXT,
-      metadata TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(provider_id, capability),
-      FOREIGN KEY (provider_id) REFERENCES ${PROVIDERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_registry_vendor ON ${PROVIDERS_TABLE}(vendor);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_registry_status ON ${PROVIDERS_TABLE}(status);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_registry_owner_scope ON ${PROVIDERS_TABLE}(owner_scope);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_capabilities_provider ON ${CAPABILITIES_TABLE}(provider_id);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_capabilities_capability ON ${CAPABILITIES_TABLE}(capability);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, PROVIDER_REGISTRY_SCHEMA)
 }
 
 function normalizeSensitiveKey(key: string) {
@@ -564,31 +559,17 @@ function buildProviderWhere(options: ListProviderRegistryOptions) {
   }
 }
 
-async function listCapabilitiesForProviders(db: D1Database, providerIds: string[]): Promise<ProviderCapabilityRecord[]> {
-  if (providerIds.length === 0)
-    return []
-
-  const placeholders = providerIds.map(() => '?').join(', ')
-  const { results } = await db.prepare(`
-    SELECT id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
-    FROM ${CAPABILITIES_TABLE}
-    WHERE provider_id IN (${placeholders})
-    ORDER BY capability ASC;
-  `).bind(...providerIds).all<ProviderCapabilityRow>()
-
-  return (results ?? []).map(mapCapability)
-}
-
 async function replaceProviderCapabilities(
   db: D1Database,
   providerId: string,
   capabilities: NormalizedProviderCapabilityInput[],
   now: string,
 ) {
-  await db.prepare(`DELETE FROM ${CAPABILITIES_TABLE} WHERE provider_id = ?;`).bind(providerId).run()
-
-  for (const capability of capabilities) {
-    await db.prepare(`
+  // One transaction: the old set is never half replaced, and it is one round trip rather than one
+  // per capability.
+  await db.batch([
+    db.prepare(`DELETE FROM ${CAPABILITIES_TABLE} WHERE provider_id = ?;`).bind(providerId),
+    ...capabilities.map(capability => db.prepare(`
       INSERT INTO ${CAPABILITIES_TABLE} (
         id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
       )
@@ -603,8 +584,8 @@ async function replaceProviderCapabilities(
       capability.metadataJson,
       now,
       now,
-    ).run()
-  }
+    )),
+  ])
 }
 
 async function getProviderCapabilityRecord(
@@ -645,6 +626,37 @@ async function assertProviderCapabilityNotDuplicated(
   }
 }
 
+/**
+ * How long an isolate may answer provider registry reads from memory. Every AI call and scene run resolves
+ * provider registry entries; they change when an operator edits the registry. A write through this isolate
+ * forgets them at once; other isolates pick it up within this window.
+ */
+const PROVIDER_REGISTRY_CACHE_TTL_MS = 30_000
+
+const providerRegistryCache = new WeakMap<object, Map<string, { value: ProviderRegistryRecord | null, expiresAt: number }>>()
+
+function forgetProviderRegistryCache(event: H3Event): void {
+  const db = readCloudflareBindings(event)?.DB
+  if (db)
+    providerRegistryCache.delete(db)
+}
+
+function readCachedProvider(db: D1Database, id: string): { value: ProviderRegistryRecord | null } | null {
+  const entry = providerRegistryCache.get(db)?.get(id)
+  if (!entry || entry.expiresAt <= Date.now())
+    return null
+  return { value: entry.value ? structuredClone(entry.value) : null }
+}
+
+function writeCachedProvider(db: D1Database, id: string, value: ProviderRegistryRecord | null): void {
+  let entries = providerRegistryCache.get(db)
+  if (!entries) {
+    entries = new Map()
+    providerRegistryCache.set(db, entries)
+  }
+  entries.set(id, { value: value ? structuredClone(value) : null, expiresAt: Date.now() + PROVIDER_REGISTRY_CACHE_TTL_MS })
+}
+
 export async function listProviderRegistryEntries(
   event: H3Event,
   options: ListProviderRegistryOptions = {},
@@ -653,16 +665,27 @@ export async function listProviderRegistryEntries(
   await ensureProviderRegistrySchema(db)
 
   const { clause, values } = buildProviderWhere(options)
-  const { results } = await db.prepare(`
-    SELECT id, name, display_name, vendor, status, auth_type, auth_ref, owner_scope, owner_id,
-      description, endpoint, region, metadata, created_by, created_at, updated_at
-    FROM ${PROVIDERS_TABLE}
-    ${clause}
-    ORDER BY created_at DESC;
-  `).bind(...values).all<ProviderRegistryRow>()
+  // The providers and their capabilities in one round trip. The capabilities used to follow with an
+  // `IN` list of every provider id: a second round trip, and past 100 providers (every user's own
+  // count) more parameters than D1 binds.
+  const [providerResult, capabilityResult] = await db.batch([
+    db.prepare(`
+      SELECT id, name, display_name, vendor, status, auth_type, auth_ref, owner_scope, owner_id,
+        description, endpoint, region, metadata, created_by, created_at, updated_at
+      FROM ${PROVIDERS_TABLE}
+      ${clause}
+      ORDER BY created_at DESC;
+    `).bind(...values),
+    db.prepare(`
+      SELECT id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
+      FROM ${CAPABILITIES_TABLE}
+      WHERE provider_id IN (SELECT id FROM ${PROVIDERS_TABLE} ${clause})
+      ORDER BY capability ASC;
+    `).bind(...values),
+  ])
 
-  const providerRows = results ?? []
-  const capabilities = await listCapabilitiesForProviders(db, providerRows.map(row => row.id))
+  const providerRows = (providerResult?.results ?? []) as ProviderRegistryRow[]
+  const capabilities = ((capabilityResult?.results ?? []) as ProviderCapabilityRow[]).map(mapCapability)
   const capabilitiesByProvider = new Map<string, ProviderCapabilityRecord[]>()
   for (const capability of capabilities) {
     const list = capabilitiesByProvider.get(capability.providerId) ?? []
@@ -673,29 +696,46 @@ export async function listProviderRegistryEntries(
   return providerRows.map(row => mapProvider(row, capabilitiesByProvider.get(row.id) ?? []))
 }
 
-export async function getProviderRegistryEntry(
-  event: H3Event,
-  id: string,
-): Promise<ProviderRegistryRecord | null> {
+/** Reads straight from the database: writers use it to answer with what they just wrote. */
+async function loadProviderRegistryEntry(event: H3Event, id: string): Promise<ProviderRegistryRecord | null> {
   const db = getD1Database(event)
   await ensureProviderRegistrySchema(db)
 
   const safeId = assertNonEmptyString(id, 'id', 120)
-  const provider = await db.prepare(`
-    SELECT id, name, display_name, vendor, status, auth_type, auth_ref, owner_scope, owner_id,
-      description, endpoint, region, metadata, created_by, created_at, updated_at
-    FROM ${PROVIDERS_TABLE}
-    WHERE id = ?;
-  `).bind(safeId).first<ProviderRegistryRow>()
-
-  if (!provider)
-    return null
-
-  const capabilities = await listCapabilitiesForProviders(db, [safeId])
-  return mapProvider(provider, capabilities)
+  // The provider and its capabilities in one round trip; they were two.
+  const [providerResult, capabilityResult] = await db.batch([
+    db.prepare(`
+      SELECT id, name, display_name, vendor, status, auth_type, auth_ref, owner_scope, owner_id,
+        description, endpoint, region, metadata, created_by, created_at, updated_at
+      FROM ${PROVIDERS_TABLE}
+      WHERE id = ?;
+    `).bind(safeId),
+    db.prepare(`
+      SELECT id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
+      FROM ${CAPABILITIES_TABLE}
+      WHERE provider_id = ?
+      ORDER BY capability ASC;
+    `).bind(safeId),
+  ])
+  const provider = (providerResult?.results?.[0] ?? null) as ProviderRegistryRow | null
+  const record = provider
+    ? mapProvider(provider, ((capabilityResult?.results ?? []) as ProviderCapabilityRow[]).map(mapCapability))
+    : null
+  return record
 }
 
-export async function createProviderRegistryEntry(
+export async function getProviderRegistryEntry(event: H3Event, id: string): Promise<ProviderRegistryRecord | null> {
+  const db = getD1Database(event)
+  const safeId = assertNonEmptyString(id, 'id', 120)
+  const cached = readCachedProvider(db, safeId)
+  if (cached)
+    return cached.value
+  const record = await loadProviderRegistryEntry(event, safeId)
+  writeCachedProvider(db, safeId, record)
+  return record
+}
+
+async function createProviderRegistryEntryUncached(
   event: H3Event,
   input: CreateProviderRegistryInput,
   createdBy: string,
@@ -735,19 +775,29 @@ export async function createProviderRegistryEntry(
 
   await replaceProviderCapabilities(db, id, normalized.capabilities, now)
 
-  const created = await getProviderRegistryEntry(event, id)
+  const created = await loadProviderRegistryEntry(event, id)
   if (!created) {
     throw createError({ statusCode: 500, statusMessage: 'Provider registry entry was not created.' })
   }
   return created
 }
 
-export async function updateProviderRegistryEntry(
+/** createProviderRegistryEntry, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function createProviderRegistryEntry(...args: Parameters<typeof createProviderRegistryEntryUncached>): ReturnType<typeof createProviderRegistryEntryUncached> {
+  try {
+    return await createProviderRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
+}
+
+async function updateProviderRegistryEntryUncached(
   event: H3Event,
   id: string,
   input: UpdateProviderRegistryInput,
 ): Promise<ProviderRegistryRecord | null> {
-  const existing = await getProviderRegistryEntry(event, id)
+  const existing = await loadProviderRegistryEntry(event, id)
   if (!existing)
     return null
 
@@ -794,11 +844,21 @@ export async function updateProviderRegistryEntry(
     await replaceProviderCapabilities(db, existing.id, normalized.capabilities, now)
   }
 
-  return await getProviderRegistryEntry(event, existing.id)
+  return await loadProviderRegistryEntry(event, existing.id)
 }
 
-export async function deleteProviderRegistryEntry(event: H3Event, id: string): Promise<boolean> {
-  const existing = await getProviderRegistryEntry(event, id)
+/** updateProviderRegistryEntry, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function updateProviderRegistryEntry(...args: Parameters<typeof updateProviderRegistryEntryUncached>): ReturnType<typeof updateProviderRegistryEntryUncached> {
+  try {
+    return await updateProviderRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
+}
+
+async function deleteProviderRegistryEntryUncached(event: H3Event, id: string): Promise<boolean> {
+  const existing = await loadProviderRegistryEntry(event, id)
   if (!existing)
     return false
 
@@ -807,6 +867,16 @@ export async function deleteProviderRegistryEntry(event: H3Event, id: string): P
   await db.prepare(`DELETE FROM ${CAPABILITIES_TABLE} WHERE provider_id = ?;`).bind(existing.id).run()
   await db.prepare(`DELETE FROM ${PROVIDERS_TABLE} WHERE id = ?;`).bind(existing.id).run()
   return true
+}
+
+/** deleteProviderRegistryEntry, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function deleteProviderRegistryEntry(...args: Parameters<typeof deleteProviderRegistryEntryUncached>): ReturnType<typeof deleteProviderRegistryEntryUncached> {
+  try {
+    return await deleteProviderRegistryEntryUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
 }
 
 export async function listProviderCapabilities(
@@ -856,12 +926,12 @@ function assertProviderAdapterSupportsCapability(provider: ProviderRegistryRecor
   }
 }
 
-export async function createProviderCapability(
+async function createProviderCapabilityUncached(
   event: H3Event,
   providerId: string,
   input: ProviderCapabilityInput,
 ): Promise<ProviderCapabilityRecord | null> {
-  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  const existingProvider = await loadProviderRegistryEntry(event, providerId)
   if (!existingProvider)
     return null
 
@@ -895,13 +965,23 @@ export async function createProviderCapability(
   return await getProviderCapabilityRecord(db, existingProvider.id, id)
 }
 
-export async function updateProviderCapability(
+/** createProviderCapability, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function createProviderCapability(...args: Parameters<typeof createProviderCapabilityUncached>): ReturnType<typeof createProviderCapabilityUncached> {
+  try {
+    return await createProviderCapabilityUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
+}
+
+async function updateProviderCapabilityUncached(
   event: H3Event,
   providerId: string,
   capabilityId: string,
   input: UpdateProviderCapabilityInput,
 ): Promise<ProviderCapabilityRecord | null> {
-  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  const existingProvider = await loadProviderRegistryEntry(event, providerId)
   if (!existingProvider)
     return null
 
@@ -942,12 +1022,22 @@ export async function updateProviderCapability(
   return await getProviderCapabilityRecord(db, existingProvider.id, existing.id)
 }
 
-export async function deleteProviderCapability(
+/** updateProviderCapability, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function updateProviderCapability(...args: Parameters<typeof updateProviderCapabilityUncached>): ReturnType<typeof updateProviderCapabilityUncached> {
+  try {
+    return await updateProviderCapabilityUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
+}
+
+async function deleteProviderCapabilityUncached(
   event: H3Event,
   providerId: string,
   capabilityId: string,
 ): Promise<boolean> {
-  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  const existingProvider = await loadProviderRegistryEntry(event, providerId)
   if (!existingProvider)
     return false
 
@@ -967,4 +1057,14 @@ export async function deleteProviderCapability(
   await touchProviderUpdatedAt(db, existingProvider.id, now)
 
   return true
+}
+
+/** deleteProviderCapability, then the registry cache forgets this database's entries (see `forgetProviderRegistryCache`). */
+export async function deleteProviderCapability(...args: Parameters<typeof deleteProviderCapabilityUncached>): ReturnType<typeof deleteProviderCapabilityUncached> {
+  try {
+    return await deleteProviderCapabilityUncached(...args)
+  }
+  finally {
+    forgetProviderRegistryCache(args[0])
+  }
 }

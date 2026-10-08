@@ -38,6 +38,7 @@ import {
 } from './voice-recognition-store'
 import { assistantModule } from '../assistant/module'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
+import { registerVoiceInputSignInDefault } from './voice-input-sign-in'
 
 const voiceLog = createLogger('Voice')
 
@@ -104,6 +105,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     )
     this.registerChannels()
     await this.adoptInstalledSpeechModel()
+    this.cleanups.push(registerVoiceInputSignInDefault())
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
       (payload) => assistantModule.handleVoiceCommandGesture(payload),

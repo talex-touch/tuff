@@ -1,6 +1,6 @@
 ---
 title: Message Actions
-description: A message toolbar with built-in copy and regenerate, navigated with arrow keys.
+description: A message toolbar with built-in copy and regenerate actions.
 category: AiChat
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Message Actions
+### Basic
 ::::TuffDemoWrapper{demo="MessageActionsMessageActionsDemo" code-lang="vue"}
 ---
 code: |
@@ -30,10 +30,10 @@ code: |
 
 ### Best Practices
 
-- Use native `<button>` elements for custom actions. The roving order is found by tag and `tabindex`, so a wrapping `<div>` is skipped.
-- Do not re-implement the copy as a fallback for clipboard failures — listen to `copy`, which the component already emits in both cases.
-- Override `copyLabel`, `copiedLabel`, `regenerateLabel` and `label` together when localizing; all four affect accessible names only, not the visuals.
-- Hold the toolbar back until a message finishes streaming, or users will copy a half-written answer.
+- Use native `<button>`s, or elements with a `tabindex`, for custom actions; non-focusable elements stay out of the arrow-key order.
+- `copy` fires even when the clipboard write fails; handle any fallback there instead of copying a second time.
+- When localizing, override `copyLabel`, `copiedLabel`, `regenerateLabel`, and `label` together.
+- Mount the toolbar after the message finishes streaming, so nobody copies a half-written answer.
 
 ## API Reference
 
@@ -41,33 +41,30 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `copyText` | `string` | — | The text the copy button writes. The button is not rendered when this is omitted. |
-| `regenerable` | `boolean` | `false` | Whether to show the regenerate button. |
-| `appear` | `boolean` | `true` | Whether to play the blur-fade entrance on mount. |
-| `copyLabel` | `string` | `'Copy'` | Accessible name for the copy button. |
-| `copiedLabel` | `string` | `'Copied'` | Accessible name while in the copied state. |
-| `regenerateLabel` | `string` | `'Regenerate'` | Accessible name for the regenerate button. |
-| `label` | `string` | `'Message actions'` | Accessible name for the toolbar itself. |
+| `copyText` | `string` | — | Text the copy button writes; without it, no copy button renders. |
+| `regenerable` | `boolean` | `false` | Shows the regenerate button. |
+| `appear` | `boolean` | `true` | Plays a blur-fade entrance on mount. |
+| `copyLabel` | `string` | `'Copy'` | Accessible name and hover tooltip of the copy button. |
+| `copiedLabel` | `string` | `'Copied'` | Accessible name and hover tooltip in the copied state. |
+| `regenerateLabel` | `string` | `'Regenerate'` | Accessible name and hover tooltip of the regenerate button. |
+| `label` | `string` | `'Message actions'` | Accessible name of the toolbar. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `copy` | `(text: string)` | Emitted after a copy click with `copyText`, including when the clipboard write failed. |
-| `regenerate` | — | Emitted when regenerate is clicked. |
+| `copy` | `(text: string)` | Fires after a copy click with `copyText`, even if the clipboard write failed. |
+| `regenerate` | — | Fires when regenerate is clicked. |
 
-## Slots
+### Slots
 
 | Name | Description |
 |------|-------------|
-| `default` | Appended after the built-in buttons. Focusable elements placed here join the arrow-key roving order automatically. |
+| `default` | Appended after the built-in buttons; focusable elements in it join the arrow-key order. |
 
 ## Overview
 
-- The copy button renders whenever `copyText` is **defined** — an empty string still renders it, though clicking does nothing. Omit the prop entirely to hide it.
-- Copying writes through `navigator.clipboard`. The `copy` event is emitted even when that write is denied by permissions policy, so the host can route the copy through its own channel.
-- After a copy the button shows its copied state for 1200 ms and ignores repeat clicks during that window.
-- The bar is `role="toolbar"`: a single tab stop, with ← → ↑ ↓ moving between controls and Home / End jumping to the ends.
-- The roving order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so **focusable elements in the default slot join the same order** with no extra wiring.
-- Disabled buttons are excluded from the roving order.
-- With `appear` set, a slow blur-fade entrance plays once on mount. Turn it off explicitly where an entrance is unwanted.
+- An empty-string `copyText` still renders the copy button, but clicking does nothing; omit the prop to hide it.
+- Copying writes through `navigator.clipboard`; the button then shows its copied state for 1200ms and ignores repeat clicks.
+- The bar is a `role="toolbar"`: one Tab stop, arrow keys cycle through the controls, and Home / End jump to the ends.
+- The arrow-key order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so disabled buttons are excluded.

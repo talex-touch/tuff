@@ -10,14 +10,13 @@ import { getPlatformGovernanceD1Readiness } from './platformGovernanceD1Readines
 import { assertStorageChannelPolicyConfig } from './storageChannelCatalog'
 import { isPlainObject, normalizeNumber, normalizeString } from './telemetrySanitizer'
 import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const EVENTS_TABLE = 'platform_governance_events'
 const CONFIGS_TABLE = 'platform_governance_configs'
 const JSON_LIMIT_BYTES = 64 * 1024
 const MAX_MEMORY_EVENTS = 5000
 const UPLOAD_STUCK_ATTEMPT_AGE_MS = 15 * 60 * 1000
-
-const initializedSchemas = new WeakSet<D1Database>()
 
 export const GOVERNANCE_CONFIG_TYPES = [
   'analytics_collection',
@@ -558,6 +557,7 @@ export interface ProviderQuotaActionQueueItem {
 
 export interface StoragePolicyEvaluationOptions {
   days?: number
+  /** No longer read: usage is counted by the database, not from a page of events. */
   limit?: number
 }
 
@@ -1166,55 +1166,52 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return event ? readCloudflareBindings(event)?.DB ?? null : null
 }
 
+const GOVERNANCE_SCHEMA = defineD1Schema('platform-governance', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${EVENTS_TABLE} (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor_hash TEXT,
+        context_hash TEXT,
+        resource_type TEXT,
+        resource_id TEXT,
+        channel TEXT,
+        unit TEXT NOT NULL DEFAULT 'count',
+        quantity REAL NOT NULL DEFAULT 1,
+        metadata_json TEXT,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${CONFIGS_TABLE} (
+        id TEXT PRIMARY KEY,
+        config_type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        owner_scope TEXT NOT NULL DEFAULT 'system',
+        owner_id TEXT NOT NULL DEFAULT '',
+        target_id TEXT NOT NULL DEFAULT '',
+        channel TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        limits_json TEXT,
+        warning_threshold REAL,
+        config_json TEXT,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_scope_action_at ON ${EVENTS_TABLE}(scope, action, occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_resource_at ON ${EVENTS_TABLE}(resource_type, resource_id, occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_channel_at ON ${EVENTS_TABLE}(channel, occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_${CONFIGS_TABLE}_type_target ON ${CONFIGS_TABLE}(config_type, target_id, channel, provider)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_${CONFIGS_TABLE}_unique ON ${CONFIGS_TABLE}(config_type, owner_scope, owner_id, target_id, channel, provider)`,
+    `CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_occurred_at ON ${EVENTS_TABLE}(occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_scope_at ON ${EVENTS_TABLE}(scope, occurred_at)`,
+  ],
+})
+
 async function ensureGovernanceSchema(db: D1Database): Promise<void> {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${EVENTS_TABLE} (
-      id TEXT PRIMARY KEY,
-      scope TEXT NOT NULL,
-      action TEXT NOT NULL,
-      actor_hash TEXT,
-      context_hash TEXT,
-      resource_type TEXT,
-      resource_id TEXT,
-      channel TEXT,
-      unit TEXT NOT NULL DEFAULT 'count',
-      quantity REAL NOT NULL DEFAULT 1,
-      metadata_json TEXT,
-      occurred_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CONFIGS_TABLE} (
-      id TEXT PRIMARY KEY,
-      config_type TEXT NOT NULL,
-      name TEXT NOT NULL,
-      owner_scope TEXT NOT NULL DEFAULT 'system',
-      owner_id TEXT NOT NULL DEFAULT '',
-      target_id TEXT NOT NULL DEFAULT '',
-      channel TEXT NOT NULL DEFAULT '',
-      provider TEXT NOT NULL DEFAULT '',
-      enabled INTEGER NOT NULL DEFAULT 1,
-      limits_json TEXT,
-      warning_threshold REAL,
-      config_json TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_scope_action_at ON ${EVENTS_TABLE}(scope, action, occurred_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_resource_at ON ${EVENTS_TABLE}(resource_type, resource_id, occurred_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${EVENTS_TABLE}_channel_at ON ${EVENTS_TABLE}(channel, occurred_at);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${CONFIGS_TABLE}_type_target ON ${CONFIGS_TABLE}(config_type, target_id, channel, provider);`).run()
-  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${CONFIGS_TABLE}_unique ON ${CONFIGS_TABLE}(config_type, owner_scope, owner_id, target_id, channel, provider);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, GOVERNANCE_SCHEMA)
 }
 
 function hashIdentifier(value: unknown): string | null {
@@ -6309,7 +6306,7 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       modelItem.requests += event.quantity
       modelChannelItem.requests += event.quantity
     }
-    if (event.action === 'provider.usage' && event.unit === 'token') {
+    if (event.action === 'provider.usage' && isTokenUnit(event.unit)) {
       item.tokens += event.quantity
       channelItem.tokens += event.quantity
       trendItem.tokens += event.quantity
@@ -6338,7 +6335,7 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       item.channels.set(event.channel, (item.channels.get(event.channel) ?? 0) + event.quantity)
       modelItem.channels.set(event.channel, (modelItem.channels.get(event.channel) ?? 0) + event.quantity)
     }
-    if (event.action === 'provider.usage' && event.unit === 'token') {
+    if (event.action === 'provider.usage' && isTokenUnit(event.unit)) {
       addMetricBucket(byModel, model, event)
       item.models.set(model, (item.models.get(model) ?? 0) + event.quantity)
       channelItem.models.set(model, (channelItem.models.get(model) ?? 0) + event.quantity)
@@ -6461,7 +6458,7 @@ function createProviderQuotaAnalytics(
   quotas: PlatformGovernanceConfig[],
   topLimit: number,
 ) {
-  const items = evaluateIntelligenceProviderQuotaConfigs(providerEvents, quotas)
+  const items = evaluateIntelligenceProviderQuotaConfigs(quotas, quota => providerQuotaUsageFromEvents(providerEvents, quota))
   const riskItems = createProviderQuotaRiskItems(items, topLimit)
   const actionQueue = createProviderQuotaActionQueue(items, topLimit)
   const smokeEvidence = createProviderQuotaSmokeEvidence(providerEvents, topLimit)
@@ -6850,9 +6847,32 @@ function createProviderQuotaRiskItems(
     .slice(0, topLimit)
 }
 
+/** A provider quota's window usage from events already read (the analytics page's set). */
+function providerQuotaUsageFromEvents(providerEvents: PlatformGovernanceEvent[], quota: PlatformGovernanceConfig) {
+  const providerId = quota.targetId ?? quota.provider ?? 'unknown'
+  const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
+  const start = Date.now() - windowDays * 24 * 60 * 60 * 1000
+  let requests = 0
+  let tokens = 0
+  for (const event of providerEvents) {
+    if (event.resourceId !== providerId)
+      continue
+    if (quota.channel && event.channel !== quota.channel)
+      continue
+    const occurredAt = Date.parse(event.occurredAt)
+    if (Number.isFinite(occurredAt) && occurredAt < start)
+      continue
+    if (event.action === 'provider.request')
+      requests += event.quantity
+    else if (event.action === 'provider.usage' && isTokenUnit(event.unit))
+      tokens += event.quantity
+  }
+  return { requests, tokens }
+}
+
 function evaluateIntelligenceProviderQuotaConfigs(
-  providerEvents: PlatformGovernanceEvent[],
   quotas: PlatformGovernanceConfig[],
+  usageFor: (quota: PlatformGovernanceConfig) => { requests: number, tokens: number },
 ): IntelligenceProviderQuotaEvaluation[] {
   const statusRank: Record<IntelligenceProviderQuotaStatus, number> = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
   return quotas
@@ -6862,23 +6882,7 @@ function evaluateIntelligenceProviderQuotaConfigs(
       const maxRequests = readLimitNumber(quota.limits, ['maxRequests', 'requestLimit'])
       const maxTokens = readLimitNumber(quota.limits, ['maxTokens', 'tokenLimit'])
       const warningThreshold = resolvePolicyWarningPercent(quota)
-      const start = Date.now() - windowDays * 24 * 60 * 60 * 1000
-      let requests = 0
-      let tokens = 0
-
-      for (const event of providerEvents) {
-        if (event.resourceId !== providerId)
-          continue
-        if (quota.channel && event.channel !== quota.channel)
-          continue
-        const occurredAt = Date.parse(event.occurredAt)
-        if (Number.isFinite(occurredAt) && occurredAt < start)
-          continue
-        if (event.action === 'provider.request')
-          requests += event.quantity
-        else if (event.action === 'provider.usage' && event.unit === 'token')
-          tokens += event.quantity
-      }
+      const { requests, tokens } = usageFor(quota)
 
       const requestUtilization = roundUsageRatio(requests, maxRequests)
       const tokenUtilization = roundUsageRatio(tokens, maxTokens)
@@ -7764,6 +7768,107 @@ export async function listPlatformGovernanceEvents(
   return (results ?? []).map(mapEventRow)
 }
 
+/** A unit whose quantity counts tokens: provider-reported `token`, and the invoke meter's `1k_tokens` (priced per thousand, counted in tokens). */
+function isTokenUnit(unit: string | null | undefined): boolean {
+  return unit === 'token' || unit === '1k_tokens'
+}
+
+interface GovernanceUsageGroup {
+  action: string
+  unit: string
+  events: number
+  quantity: number
+}
+
+interface GovernanceUsageFilter extends ListGovernanceEventsOptions {
+  actions?: readonly string[]
+  /** The provider an event's metadata names (storage events carry it there). */
+  metadataProvider?: string
+}
+
+/**
+ * Event counts and quantity totals by action and unit for a filter, counted by the database. The quota
+ * and storage policy checks read the newest event rows instead (at most 5,000, the listing's cap) and
+ * added them up: a limit above 5,000 events could never trip, and a busy window was under-counted.
+ */
+async function aggregateGovernanceUsage(
+  event: H3Event | undefined,
+  filter: GovernanceUsageFilter,
+): Promise<GovernanceUsageGroup[]> {
+  const db = getD1Database(event)
+  if (!db) {
+    const groups = new Map<string, GovernanceUsageGroup>()
+    for (const item of memoryEvents) {
+      if (!eventMatchesOptions(item, filter))
+        continue
+      if (filter.actions && !filter.actions.includes(item.action))
+        continue
+      if (filter.metadataProvider && item.metadata?.provider !== filter.metadataProvider)
+        continue
+      const key = `${item.action}\u0000${item.unit}`
+      const group = groups.get(key) ?? { action: item.action, unit: item.unit, events: 0, quantity: 0 }
+      group.events += 1
+      group.quantity += item.quantity
+      groups.set(key, group)
+    }
+    return [...groups.values()]
+  }
+
+  await ensureGovernanceSchema(db)
+  const { clause, values } = buildEventFilters(filter)
+  const conditions = [clause]
+  const extra: Array<string | number> = []
+  if (filter.actions?.length) {
+    conditions.push(`action IN (SELECT value FROM json_each(?))`)
+    extra.push(JSON.stringify(filter.actions))
+  }
+  if (filter.metadataProvider) {
+    conditions.push(`json_extract(metadata_json, '$.provider') = ?`)
+    extra.push(filter.metadataProvider)
+  }
+  const { results } = await db.prepare(`
+    SELECT action, unit, COUNT(*) AS events, COALESCE(SUM(quantity), 0) AS quantity
+    FROM ${EVENTS_TABLE}
+    ${conditions.join(' AND ')}
+    GROUP BY action, unit;
+  `).bind(...values, ...extra).all<{ action: string, unit: string, events: number, quantity: number }>()
+  return (results ?? []).map(row => ({
+    action: row.action,
+    unit: row.unit,
+    events: Number(row.events) || 0,
+    quantity: Number(row.quantity) || 0,
+  }))
+}
+
+/** A provider quota's window usage, counted exactly: request events and their quantity, and tokens. */
+async function aggregateProviderQuotaUsage(
+  event: H3Event | undefined,
+  providerId: string,
+  quota: PlatformGovernanceConfig,
+): Promise<{ requestEvents: number, requests: number, tokens: number }> {
+  const groups = await aggregateGovernanceUsage(event, {
+    scope: 'intelligence',
+    resourceType: 'provider',
+    resourceId: providerId,
+    days: readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30,
+    channel: quota.channel ?? undefined,
+    actions: ['provider.request', 'provider.usage'],
+  })
+  let requestEvents = 0
+  let requests = 0
+  let tokens = 0
+  for (const group of groups) {
+    if (group.action === 'provider.request') {
+      requestEvents += group.events
+      requests += group.quantity
+    }
+    else if (group.action === 'provider.usage' && isTokenUnit(group.unit)) {
+      tokens += group.quantity
+    }
+  }
+  return { requestEvents, requests, tokens }
+}
+
 export async function getPlatformGovernanceSummary(
   event: H3Event | undefined,
   options: GovernanceSummaryOptions = {},
@@ -7981,7 +8086,65 @@ async function findConfigRow(db: D1Database, input: NormalizedConfigInput): Prom
   ).first<GovernanceConfigRow>()
 }
 
+/**
+ * How long an isolate may answer the hot paths' governance configs from memory. Every object read,
+ * write and delete consulted the storage channel configs twice (once to pick the backend, once for its
+ * policy), and every AI call the provider quota configs, each a round trip before the work itself.
+ * A config written through this isolate is seen at once; other isolates see it within this window.
+ * Only a settled list is kept, never a read in flight.
+ */
+const GOVERNANCE_CONFIG_TTL_MS = 30_000
+const enabledConfigCache = new WeakMap<object, Map<GovernanceConfigType, { configs: PlatformGovernanceConfig[], expiresAt: number }>>()
+/** Moves on with every config write, so a read that started before one does not cache what it replaced. */
+const enabledConfigGenerations = new WeakMap<object, number>()
+
+/** The enabled configs of `configType`, newest first, as `listPlatformGovernanceConfigs` lists them. */
+export async function listEnabledGovernanceConfigs(
+  event: H3Event | undefined,
+  configType: GovernanceConfigType,
+): Promise<PlatformGovernanceConfig[]> {
+  const db = getD1Database(event)
+  if (!db)
+    return listPlatformGovernanceConfigs(event, { configType, enabled: true })
+  const cached = enabledConfigCache.get(db)?.get(configType)
+  if (cached && cached.expiresAt > Date.now())
+    return cached.configs
+  const generation = enabledConfigGenerations.get(db) ?? 0
+  const configs = await listPlatformGovernanceConfigs(event, { configType, enabled: true })
+  if ((enabledConfigGenerations.get(db) ?? 0) === generation) {
+    let entries = enabledConfigCache.get(db)
+    if (!entries) {
+      entries = new Map()
+      enabledConfigCache.set(db, entries)
+    }
+    entries.set(configType, { configs, expiresAt: Date.now() + GOVERNANCE_CONFIG_TTL_MS })
+  }
+  return configs
+}
+
+/** The enabled storage channel configs, newest first. */
+export async function listEnabledStorageChannelConfigs(event: H3Event | undefined): Promise<PlatformGovernanceConfig[]> {
+  return listEnabledGovernanceConfigs(event, 'storage_channel')
+}
+
 export async function upsertPlatformGovernanceConfig(
+  event: H3Event | undefined,
+  input: UpsertPlatformGovernanceConfigInput,
+  createdBy: string,
+): Promise<PlatformGovernanceConfig> {
+  try {
+    return await upsertPlatformGovernanceConfigUncached(event, input, createdBy)
+  }
+  finally {
+    const db = getD1Database(event)
+    if (db) {
+      enabledConfigCache.delete(db)
+      enabledConfigGenerations.set(db, (enabledConfigGenerations.get(db) ?? 0) + 1)
+    }
+  }
+}
+
+async function upsertPlatformGovernanceConfigUncached(
   event: H3Event | undefined,
   input: UpsertPlatformGovernanceConfigInput,
   createdBy: string,
@@ -8247,11 +8410,7 @@ export async function assertStorageChannelPolicy(
 ): Promise<void> {
   const channel = assertString(input.channel, 'channel', 120)
   const provider = input.provider == null ? '' : optionalString(input.provider, 'provider', 120)
-  const policies = await listPlatformGovernanceConfigs(event, {
-    configType: 'storage_channel',
-    channel,
-    enabled: true,
-  })
+  const policies = (await listEnabledStorageChannelConfigs(event)).filter(policy => policy.channel === channel)
   if (!policies.length)
     return
 
@@ -8375,15 +8534,14 @@ export async function evaluateStorageChannelPolicy(
     }
   }
 
-  const events = (await listPlatformGovernanceEvents(event, {
+  // Counted by the database: the newest 5,000 events were read and added up before, so an
+  // operation limit above 5,000 could never trip and traffic was under-counted once a window held more.
+  const groups = await aggregateGovernanceUsage(event, {
     scope: 'storage',
     channel,
     days,
-    limit: options.limit ?? 5000,
-  })).filter((item) => {
-    const providerMatched = !policy.provider || item.metadata?.provider === policy.provider
-    const targetMatched = !policy.targetId || item.resourceType === policy.targetId
-    return providerMatched && targetMatched
+    resourceType: policy.targetId || undefined,
+    metadataProvider: policy.provider || undefined,
   })
   const usage = {
     storedBytes: 0,
@@ -8394,20 +8552,20 @@ export async function evaluateStorageChannelPolicy(
     deletes: 0,
   }
 
-  for (const item of events) {
-    usage.operations += 1
-    if (item.action === 'storage.write') {
-      usage.writes += 1
-      if (item.unit === 'byte')
-        usage.storedBytes += item.quantity
+  for (const group of groups) {
+    usage.operations += group.events
+    if (group.action === 'storage.write') {
+      usage.writes += group.events
+      if (group.unit === 'byte')
+        usage.storedBytes += group.quantity
     }
-    else if (item.action === 'storage.read') {
-      usage.reads += 1
-      if (item.unit === 'byte')
-        usage.trafficBytes += item.quantity
+    else if (group.action === 'storage.read') {
+      usage.reads += group.events
+      if (group.unit === 'byte')
+        usage.trafficBytes += group.quantity
     }
-    else if (item.action === 'storage.delete') {
-      usage.deletes += 1
+    else if (group.action === 'storage.delete') {
+      usage.deletes += group.events
     }
   }
 
@@ -8556,34 +8714,22 @@ export async function assertIntelligenceProviderQuota(
   providerId: string,
   channel?: string,
 ): Promise<void> {
-  const quotas = await listPlatformGovernanceConfigs(event, {
-    configType: 'intelligence_provider_quota',
-    targetId: providerId,
-    enabled: true,
-  })
-  const scopedQuotas = quotas
+  const scopedQuotas = (await listEnabledGovernanceConfigs(event, 'intelligence_provider_quota'))
+    .filter(quota => quota.targetId === providerId)
     .filter(quota => !quota.channel || !channel || quota.channel === channel)
     .sort((left, right) => Number(Boolean(right.channel)) - Number(Boolean(left.channel)))
   if (!scopedQuotas.length)
     return
 
-  for (const quota of scopedQuotas) {
+  // Each quota's window counted by the database, side by side; the first exceeded one (channel
+  // quotas before provider-wide ones) is the answer, as when they were checked one at a time.
+  const usages = await Promise.all(scopedQuotas.map(quota => aggregateProviderQuotaUsage(event, providerId, quota)))
+  for (const [index, quota] of scopedQuotas.entries()) {
     const quotaChannel = quota.channel ?? undefined
     const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
-    const summaryOptions = {
-      scope: 'intelligence' as const,
-      resourceType: 'provider',
-      resourceId: providerId,
-      days: windowDays,
-      limit: 5000,
-      channel: quotaChannel,
-    }
-    const requestSummary = await getPlatformGovernanceSummary(event, {
-      ...summaryOptions,
-      action: 'provider.request',
-    })
+    const usage = usages[index]!
     const maxRequests = readLimitNumber(quota.limits, ['maxRequests', 'requestLimit'])
-    if (maxRequests != null && requestSummary.totalEvents >= maxRequests) {
+    if (maxRequests != null && usage.requestEvents >= maxRequests) {
       throw createError({
         statusCode: 429,
         statusMessage: 'Intelligence provider request quota exceeded.',
@@ -8597,13 +8743,8 @@ export async function assertIntelligenceProviderQuota(
       })
     }
 
-    const usageSummary = await getPlatformGovernanceSummary(event, {
-      ...summaryOptions,
-      action: 'provider.usage',
-    })
-    const tokenUsage = usageSummary.byUnit.find(item => item.unit === 'token')?.quantity ?? 0
     const maxTokens = readLimitNumber(quota.limits, ['maxTokens', 'tokenLimit'])
-    if (maxTokens != null && tokenUsage >= maxTokens) {
+    if (maxTokens != null && usage.tokens >= maxTokens) {
       throw createError({
         statusCode: 429,
         statusMessage: 'Intelligence provider token quota exceeded.',
@@ -8799,18 +8940,9 @@ export async function evaluateIntelligenceProviderQuotas(
   if (!quotas.length)
     return []
 
-  const maxWindowDays = quotas.reduce((maxDays, quota) => {
-    const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
-    return Math.max(maxDays, windowDays)
-  }, 30)
-  const providerEvents = await listPlatformGovernanceEvents(event, {
-    scope: 'intelligence',
-    resourceType: 'provider',
-    resourceId: providerId,
-    days: maxWindowDays,
-    limit: 5000,
-  })
-  return evaluateIntelligenceProviderQuotaConfigs(providerEvents, quotas)
+  const usages = await Promise.all(quotas.map(quota => aggregateProviderQuotaUsage(event, quota.targetId ?? quota.provider ?? providerId, quota)))
+  const usageByQuota = new Map(quotas.map((quota, index) => [quota, usages[index]!]))
+  return evaluateIntelligenceProviderQuotaConfigs(quotas, quota => usageByQuota.get(quota) ?? { requests: 0, tokens: 0 })
 }
 
 export async function recordIntelligenceProviderRequest(

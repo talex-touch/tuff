@@ -81,7 +81,12 @@ const currentHover = computed(() => cursor.value?.datum ?? hover.value)
 const summary = computed(() => currentHover.value?.value ?? scene.value.total)
 const summaryLabel = computed(() => currentHover.value?.label ?? copy.value.total)
 const empty = computed(() => !scene.value.shapes.some(shape => shape.datum))
-const tooltipRows = computed(() => currentHover.value ? [{ name: currentHover.value.label, value: format(currentHover.value.value, currentHover.value.label, dataset.value.series?.find(item => item.id === currentHover.value?.seriesId)), color: 'var(--tx-chart-categorical-1, var(--tx-color-primary, #409eff))' }] : [])
+// The title names the point and the row names its series. Where the datum is
+// the series itself (donut, gauge, legend focus) both would read the same, so
+// the title is dropped rather than printed twice.
+const hoverSeries = computed(() => dataset.value.series?.find(item => item.id === currentHover.value?.seriesId))
+const tooltipRows = computed(() => currentHover.value ? [{ name: hoverSeries.value?.label ?? currentHover.value.label, value: format(currentHover.value.value, currentHover.value.label, hoverSeries.value), color: 'var(--tx-chart-categorical-1, var(--tx-color-primary, #409eff))' }] : [])
+const tooltipTitle = computed(() => currentHover.value && currentHover.value.label !== tooltipRows.value[0]?.name ? currentHover.value.label : undefined)
 const tooltipOpen = computed(() => currentHover.value !== null && (pointer.inside || cursor.value !== undefined))
 
 function format(value: number, label: string, series?: DitherSeries): string {
@@ -288,7 +293,7 @@ defineExpose({ scene, dataset, period, selectedSeries, dateCursor })
             <TxTextMorph :text="`${Math.round(seriesValue(selected) / Math.max(1, selected.capacity ?? 100) * 100)}%`" :disabled="!active" numbers />
             <span>{{ selected.label }}</span>
           </div>
-          <TxChartTooltip :open="tooltipOpen" :title="currentHover?.label" :rows="tooltipRows">
+          <TxChartTooltip :open="tooltipOpen" :title="tooltipTitle" :rows="tooltipRows">
             <template v-if="$slots.tooltip || indicator !== 'dot'" #default>
               <slot name="tooltip" :hover="currentHover">
                 <span class="tx-dither-chart__tooltip-indicator" :class="`is-${indicator}`" />
@@ -366,7 +371,9 @@ defineExpose({ scene, dataset, period, selectedSeries, dateCursor })
   &__y-axis { position: absolute; left: 0; top: 0; width: 36px; color: var(--tx-chart-text-primary, var(--tx-text-color-regular, #606266)); font-size: 12px; }
   &__y-axis span { position: absolute; right: 0; transform: translateY(-50%); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   &:has(.is-sparkline) &__legend { order: -1; }
-  &__stage { position: relative; width: 100%; touch-action: pan-y; isolation: isolate; }
+  // `isolation` keeps the tooltip's z-index inside the stage, so the stage itself
+  // has to sit above the axis row that follows it or the labels paint over the tooltip.
+  &__stage { position: relative; z-index: 1; width: 100%; touch-action: pan-y; isolation: isolate; }
   &__svg, &__canvas, &__cursor { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   &__canvas { opacity: 0; }
   &__canvas.is-visible { opacity: 1; }

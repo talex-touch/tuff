@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSqliteD1, type SqliteD1Database } from '../../test/helpers/d1-sqlite'
 import { getPlatformGovernanceAnalytics, listPlatformGovernanceEvents } from './platformGovernanceStore'
-import { getAnalyticsSummary, recordTelemetryEvent } from './telemetryStore'
+import {
+  buildTelemetryBatchReceiptStatement,
+  commitTelemetryWrite,
+  getAnalyticsSummary,
+  getTelemetryBatchReceipt,
+  prepareTelemetryWrite,
+  recordTelemetryEvent,
+  TelemetryWriteBatch,
+} from './telemetryStore'
 
 interface TelemetryRow {
   id: string
@@ -70,18 +79,96 @@ class MockStatement {
   }
 }
 
+interface ReceiptRow {
+  scope: string
+  idempotency_key: string
+  payload_hash: string
+  response_json: string
+  created_at: string
+  expires_at: string
+}
+
 class MockD1Database {
   telemetryRows: TelemetryRow[] = []
   governanceRows: GovernanceEventRow[] = []
   dailyStats = new Map<string, DailyStatRow>()
+  receiptRows: ReceiptRow[] = []
+  quarantineRows = 0
+  /** Every `batch()` call's statement count, in order (schema DDL batches included). */
+  batchSizes: number[] = []
+  /** Statements run outside any batch, by SQL; the commit path must leave this at zero. */
+  standaloneRuns: string[] = []
+  /** Makes `run` throw for a matching statement, to prove a batch is all-or-nothing. */
+  failOn: ((sql: string) => boolean) | null = null
+  private inBatch = false
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
   }
 
+  /**
+   * D1 semantics: the statements run in order inside one transaction, so a failure anywhere
+   * leaves nothing of the batch behind.
+   */
+  async batch(statements: MockStatement[]) {
+    this.batchSizes.push(statements.length)
+    const snapshot = {
+      telemetryRows: [...this.telemetryRows],
+      governanceRows: [...this.governanceRows],
+      dailyStats: new Map([...this.dailyStats].map(([key, row]) => [key, { ...row }])),
+      receiptRows: [...this.receiptRows],
+      quarantineRows: this.quarantineRows,
+    }
+    this.inBatch = true
+    const results: unknown[] = []
+    try {
+      for (const statement of statements) results.push(await statement.run())
+    }
+    catch (error) {
+      this.telemetryRows = snapshot.telemetryRows
+      this.governanceRows = snapshot.governanceRows
+      this.dailyStats = snapshot.dailyStats
+      this.receiptRows = snapshot.receiptRows
+      this.quarantineRows = snapshot.quarantineRows
+      throw error
+    }
+    finally {
+      this.inBatch = false
+    }
+    return results
+  }
+
   run(sql: string, args: any[]) {
+    if (this.failOn?.(sql)) {
+      throw new Error(`D1 statement failed: ${sql.trim().slice(0, 40)}`)
+    }
+    // Governance rows and the schema DDL are allowed outside a batch; telemetry rows, counters
+    // and receipts are not.
+    if (!this.inBatch && /INSERT INTO (telemetry_events|daily_stats|telemetry_batch_receipts)/.test(sql)) {
+      this.standaloneRuns.push(sql.trim().slice(0, 60))
+    }
     if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX') || sql.includes('ALTER TABLE')) {
       return { meta: { changes: 0 } }
+    }
+
+    if (sql.includes('INSERT INTO telemetry_batch_receipts')) {
+      const [scope, idempotencyKey, payloadHash, responseJson, createdAt, expiresAt] = args
+      if (!this.receiptRows.some(row => row.scope === scope && row.idempotency_key === idempotencyKey)) {
+        this.receiptRows.push({
+          scope: String(scope),
+          idempotency_key: String(idempotencyKey),
+          payload_hash: String(payloadHash),
+          response_json: String(responseJson),
+          created_at: String(createdAt),
+          expires_at: String(expiresAt),
+        })
+      }
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('INSERT INTO telemetry_events_quarantine')) {
+      this.quarantineRows += 1
+      return { meta: { changes: 1 } }
     }
 
     if (sql.includes('INSERT INTO telemetry_events')) {
@@ -195,7 +282,11 @@ class MockD1Database {
     return { meta: { changes: 0 } }
   }
 
-  first(_sql: string, _args: any[]) {
+  first(sql: string, args: any[]) {
+    if (sql.includes('FROM telemetry_batch_receipts')) {
+      const [scope, idempotencyKey] = args
+      return this.receiptRows.find(row => row.scope === scope && row.idempotency_key === idempotencyKey) ?? null
+    }
     return null
   }
 
@@ -240,8 +331,9 @@ class MockD1Database {
 }
 
 const state = vi.hoisted(() => ({
-  db: null as MockD1Database | null,
+  db: null as MockD1Database | SqliteD1Database | null,
   maintenanceSchedules: [] as Array<{ event: unknown, db: unknown }>,
+  rollupSchedules: [] as Array<{ event: unknown, db: unknown }>,
 }))
 
 vi.mock('./cloudflare', async (importOriginal) => ({
@@ -257,6 +349,13 @@ vi.mock('./ipSecurityStore', () => ({
 vi.mock('./telemetryRetentionMaintenance', () => ({
   scheduleTelemetryRetentionMaintenance: (event: unknown, db: unknown) => {
     state.maintenanceSchedules.push({ event, db })
+  },
+}))
+
+vi.mock('./telemetryDailyRollup', async importOriginal => ({
+  ...(await importOriginal<typeof import('./telemetryDailyRollup')>()),
+  scheduleTelemetryDailyRollup: (event: unknown, db: unknown) => {
+    state.rollupSchedules.push({ event, db })
   },
 }))
 
@@ -288,9 +387,14 @@ describe('telemetryStore search provider metrics', () => {
   beforeEach(() => {
     state.db = new MockD1Database()
     state.maintenanceSchedules = []
+    state.rollupSchedules = []
   })
 
   it('records anonymous provider metrics without search query text', async () => {
+    // The summary derives today's search counters from the stored rows with SQL (JSON functions
+    // included), so this one runs against real SQLite rather than the text-matching mock.
+    const db = createSqliteD1()
+    state.db = db
     await recordTelemetryEvent(makeEvent(), {
       eventType: 'search',
       clientId: 'client-a',
@@ -349,7 +453,7 @@ describe('telemetryStore search provider metrics', () => {
       isAnonymous: true,
     })
 
-    const row = state.db!.telemetryRows[0]
+    const row = db.sqlite.prepare('SELECT search_query, metadata FROM telemetry_events').get() as Pick<TelemetryRow, 'search_query' | 'metadata'>
     expect(row.search_query).toBeNull()
     expect(row.metadata).not.toContain('private query')
 
@@ -554,5 +658,140 @@ describe('telemetryStore search provider metrics', () => {
     expect(analytics.visits.byTimezone).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'America/Los_Angeles', events: 1 }),
     ]))
+  })
+})
+
+describe('telemetryStore single-commit writes (#1788)', () => {
+  beforeEach(() => {
+    state.db = new MockD1Database()
+    state.maintenanceSchedules = []
+    state.rollupSchedules = []
+  })
+
+  const searchEvent = (durationMs: number) => ({
+    eventType: 'search' as const,
+    clientId: 'client-a',
+    platform: 'darwin',
+    version: '2.4.14',
+    searchDurationMs: durationMs,
+    searchResultCount: 3,
+    providerTimings: { 'app-provider': durationMs - 10, 'file-provider': durationMs },
+    inputTypes: ['text'],
+    metadata: { queryType: 'text', searchScene: 'corebox', queryLength: 4 },
+    isAnonymous: true,
+  })
+
+  it('commits a whole request as one D1 batch, rows and receipt together', async () => {
+    const db = state.db as MockD1Database
+    // The governance store applies its schema on first use: one batch, once per database. Apply it
+    // up front so the batches counted below are the commit's own.
+    await listPlatformGovernanceEvents(makeEvent(), { limit: 1 })
+    const prepared = await prepareTelemetryWrite(makeEvent(), [searchEvent(120), searchEvent(400)])
+    expect(prepared.db).toBe(db)
+    expect(prepared.results).toEqual([{ status: 'accepted' }, { status: 'accepted' }])
+    // Nothing is written by planning alone.
+    expect(db.telemetryRows).toHaveLength(0)
+    expect(db.dailyStats.size).toBe(0)
+
+    const batchesBeforeCommit = db.batchSizes.length
+    await commitTelemetryWrite(makeEvent(), { db: prepared.db!, batch: prepared.batch! }, {
+      extraStatements: [
+        buildTelemetryBatchReceiptStatement(db, {
+          scope: 'telemetry.batch',
+          idempotencyKey: 'sentry:00000000-0000-4000-8000-000000000001',
+          payloadHash: 'hash-1',
+          response: { success: true, accepted: 2, rejected: 0 },
+        }),
+      ],
+    })
+
+    // Exactly one batch for the commit: the two rows and the receipt. Search counters are no longer
+    // written per event; the daily rollup derives them from these rows.
+    expect(db.batchSizes).toHaveLength(batchesBeforeCommit + 1)
+    expect(db.batchSizes.at(-1)).toBe(3)
+    expect(prepared.batch!.size).toBe(2)
+    expect(db.standaloneRuns).toEqual([])
+
+    expect(db.telemetryRows).toHaveLength(2)
+    expect(db.telemetryRows.every(row => row.search_query === null)).toBe(true)
+    expect(db.dailyStats.size).toBe(0)
+
+    expect(db.receiptRows).toHaveLength(1)
+    expect(db.receiptRows[0]).toMatchObject({ scope: 'telemetry.batch', payload_hash: 'hash-1' })
+    const receipt = await getTelemetryBatchReceipt(makeEvent(), 'telemetry.batch', 'sentry:00000000-0000-4000-8000-000000000001')
+    expect(receipt?.response).toEqual({ success: true, accepted: 2, rejected: 0 })
+
+    // Governance follow-ups, retention maintenance and the rollup check run after the commit (the
+    // governance store schedules maintenance on its own as well, so the count is not exactly one).
+    expect(db.governanceRows).toHaveLength(2)
+    expect(state.maintenanceSchedules.some(schedule => schedule.db === db)).toBe(true)
+    expect(state.rollupSchedules.some(schedule => schedule.db === db)).toBe(true)
+  })
+
+  it('leaves no rows, counters or receipt behind when one statement of the batch fails', async () => {
+    const db = state.db as MockD1Database
+    const prepared = await prepareTelemetryWrite(makeEvent(), [searchEvent(120), { eventType: 'nope' }])
+    expect(prepared.results).toEqual([{ status: 'accepted' }, { status: 'quarantined', reason: 'invalid_event_type' }])
+
+    db.failOn = sql => sql.includes('INSERT INTO telemetry_batch_receipts')
+    await expect(commitTelemetryWrite(makeEvent(), { db: prepared.db!, batch: prepared.batch! }, {
+      extraStatements: [
+        buildTelemetryBatchReceiptStatement(db, {
+          scope: 'telemetry.batch',
+          idempotencyKey: 'sentry:00000000-0000-4000-8000-000000000002',
+          payloadHash: 'hash-2',
+          response: { success: true },
+        }),
+      ],
+    })).rejects.toThrow('D1 statement failed')
+
+    expect(db.telemetryRows).toHaveLength(0)
+    expect(db.quarantineRows).toBe(0)
+    expect(db.dailyStats.size).toBe(0)
+    expect(db.receiptRows).toHaveLength(0)
+    expect(db.governanceRows).toHaveLength(0)
+    expect(state.maintenanceSchedules).toHaveLength(0)
+
+    // The retry then finds no receipt and writes everything, exactly once.
+    db.failOn = null
+    const retried = await prepareTelemetryWrite(makeEvent(), [searchEvent(120), { eventType: 'nope' }])
+    await commitTelemetryWrite(makeEvent(), { db: retried.db!, batch: retried.batch! })
+    expect(db.telemetryRows).toHaveLength(1)
+    expect(db.quarantineRows).toBe(1)
+  })
+
+  it('reports every event as dropped without a database and writes nothing', async () => {
+    state.db = null
+    const prepared = await prepareTelemetryWrite(makeEvent(), [searchEvent(120)])
+    expect(prepared.db).toBeNull()
+    expect(prepared.batch).toBeNull()
+    expect(prepared.results).toEqual([{ status: 'dropped', reason: 'database_unavailable' }])
+    await expect(recordTelemetryEvent(makeEvent(), searchEvent(120))).resolves.toEqual({
+      status: 'dropped',
+      reason: 'database_unavailable',
+    })
+  })
+
+  it('merges increments, maxima and minima per counter before they become statements', () => {
+    const db = state.db as MockD1Database
+    const batch = new TelemetryWriteBatch(db as any)
+    batch.inc('2026-10-08', 'searches', '', 1)
+    batch.inc('2026-10-08', 'searches', '', 1)
+    batch.inc('2026-10-08', 'searches', '', 1)
+    batch.max('2026-10-08', 'search_duration_max', '', 4)
+    batch.max('2026-10-08', 'search_duration_max', '', 9)
+    batch.min('2026-10-08', 'search_duration_min', '', 7)
+    batch.min('2026-10-08', 'search_duration_min', '', 2)
+    batch.inc('2026-10-09', 'searches', '', 5)
+
+    expect(batch.size).toBe(4)
+    const statements = batch.toStatements() as unknown as Array<{ run: () => Promise<unknown> }>
+    expect(statements).toHaveLength(4)
+    return db.batch(statements as any).then(() => {
+      expect(db.dailyStats.get('2026-10-08:searches:')?.value).toBe(3)
+      expect(db.dailyStats.get('2026-10-08:search_duration_max:')?.value).toBe(9)
+      expect(db.dailyStats.get('2026-10-08:search_duration_min:')?.value).toBe(2)
+      expect(db.dailyStats.get('2026-10-09:searches:')?.value).toBe(5)
+    })
   })
 })

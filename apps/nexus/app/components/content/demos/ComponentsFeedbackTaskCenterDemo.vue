@@ -114,7 +114,7 @@ onMounted(() => {
         </label>
         <TxTooltip
           :content="labels.tooltip"
-          :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'glass', panelShadow: 'medium' }"
+          :anchor="{ placement: 'bottom', panelBackground: 'glass', panelShadow: 'medium' }"
         >
           <TxButton variant="secondary" size="sm" icon="i-carbon-information">
             {{ labels.hintAction }}

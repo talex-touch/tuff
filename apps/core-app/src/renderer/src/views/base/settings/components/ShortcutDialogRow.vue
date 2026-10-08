@@ -31,7 +31,7 @@ const emit = defineEmits<{
       </div>
     </div>
     <div class="ShortcutDialog-Id">
-      <TxTooltip :content="row.shortcut.id" :anchor="{ placement: 'top', showArrow: true }">
+      <TxTooltip :content="row.shortcut.id" :anchor="{ placement: 'top' }">
         <TxButton
           variant="bare"
           native-type="button"

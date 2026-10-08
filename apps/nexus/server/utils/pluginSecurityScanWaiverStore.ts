@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const TABLE_NAME = 'plugin_security_scan_waivers'
 const SHA256_RE = /^[a-f0-9]{64}$/
@@ -44,32 +45,30 @@ export interface CreatePluginSecurityScanWaiverInput {
 }
 
 const memoryWaivers = new Map<string, PluginSecurityScanWaiverRecord>()
-let schemaInitialized = false
-
 function getD1Database(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
 }
 
+const SCAN_WAIVER_SCHEMA = defineD1Schema('plugin-security-scan-waivers', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
+        id TEXT PRIMARY KEY,
+        artifact_sha256 TEXT NOT NULL,
+        rule_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        ticket TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_plugin_scan_waivers_artifact
+      ON ${TABLE_NAME}(artifact_sha256, expires_at, revoked_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database): Promise<void> {
-  if (schemaInitialized) return
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-      id TEXT PRIMARY KEY,
-      artifact_sha256 TEXT NOT NULL,
-      rule_id TEXT NOT NULL,
-      owner_id TEXT NOT NULL,
-      reason TEXT NOT NULL,
-      ticket TEXT,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      revoked_at TEXT
-    );
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_plugin_scan_waivers_artifact
-    ON ${TABLE_NAME}(artifact_sha256, expires_at, revoked_at);
-  `).run()
-  schemaInitialized = true
+  await ensureD1Schema(db, SCAN_WAIVER_SCHEMA)
 }
 
 function normalizeBoundedString(value: unknown, field: string, max: number): string {
@@ -268,5 +267,4 @@ export async function revokePluginSecurityScanWaiver(
 
 export function resetPluginSecurityScanWaiverStoreForTests(): void {
   memoryWaivers.clear()
-  schemaInitialized = false
 }

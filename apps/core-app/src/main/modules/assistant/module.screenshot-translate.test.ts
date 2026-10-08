@@ -520,6 +520,7 @@ describe('AssistantModule screenshot translation', () => {
         polishEnabled: true,
         polishStrength: 'natural',
         noiseSuppression: false,
+        historyEnabled: true,
         source: 'hybrid'
       }
     })
@@ -582,6 +583,7 @@ describe('AssistantModule screenshot translation', () => {
           polishEnabled: true,
           polishStrength: 'deep',
           noiseSuppression: false,
+          historyEnabled: true,
           source: 'hybrid'
         }
       })
@@ -623,6 +625,7 @@ describe('AssistantModule screenshot translation', () => {
         polishEnabled: true,
         polishStrength: 'deep',
         noiseSuppression: false,
+        historyEnabled: true,
         source: 'hybrid'
       }
     })

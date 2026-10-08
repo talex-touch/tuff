@@ -8,7 +8,9 @@ import { resolveObjectBucket } from './cloudflare'
 import {
   deleteStorageObject,
   getStorageObject,
+  openStorageObject,
   putStorageObject,
+  type StorageObjectStream,
   type StorageUploadRetryMetadata,
   type StorageObjectMemory,
 } from './storageObjectStore'
@@ -109,6 +111,26 @@ export async function getPluginPackage(
   return object
     ? { data: object.data, contentType: object.contentType }
     : null
+}
+
+/**
+ * A package to pass straight to the client, without reading it into memory: for routes that serve
+ * the bytes and do not check them. The Store download verifies its digest and reads in full.
+ */
+export async function openPluginPackage(
+  event: H3Event,
+  key: string,
+  options: Pick<PluginPackageStorageOptions, 'governanceResourceId'> = {},
+): Promise<StorageObjectStream | null> {
+  return await openStorageObject({
+    event,
+    bucket: getPackageBucket(event),
+    memoryStorage,
+    key,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: 'plugin-package',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 }
 
 export async function deletePluginPackage(

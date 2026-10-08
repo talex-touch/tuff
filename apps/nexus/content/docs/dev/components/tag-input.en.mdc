@@ -1,6 +1,6 @@
 ---
 title: "TagInput"
-description: "Input component for quickly adding tags with separators and Enter confirmation."
+description: "An input that adds tags on Enter or a separator."
 category: Form
 syncStatus: reviewed
 status: beta
@@ -11,6 +11,7 @@ verified: true
 
 ## Usage
 
+### Basic
 ::TuffDemoWrapper{demo="TagInputTagInputDemo" code-lang="vue"}
 ---
 code: |
@@ -26,71 +27,12 @@ code: |
 ---
 ::
 
-### Best Practices
-
-- Keep tags short and searchable. Release notes, approval reasons, and long descriptions belong in text fields or detail forms.
-- Set `max` to the smallest useful limit for the workflow; when the limit is reached the inner input is disabled and the placeholder disappears.
-- Keep `allowDuplicates` off unless duplicate labels are meaningful in the same collection. Duplicate suppression is exact after trimming, not case-insensitive.
-- Add every delimiter you show in help text to `separators`; Enter always confirms the current input, and `confirmOnBlur` controls whether unfinished input is committed on blur.
-
-## API Reference
-
-### TxTagInput Props
-
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `modelValue` | `string[]` | `[]` | Controlled tag list and the single source of truth; every add/remove emits a new array via `update:modelValue`. |
-| `placeholder` | `string` | `'Add tag'` | Placeholder text; cleared once `max` is reached. |
-| `disabled` | `boolean` | `false` | Blocks adding/removing and disables the close button on existing tags. |
-| `max` | `number` | `20` | Hard cap on tag count; set it to the smallest useful limit. Reaching it disables the inner input and hides the placeholder. |
-| `allowDuplicates` | `boolean` | `false` | Whether duplicate tags are allowed; when off, dedup is exact after trimming (case-sensitive). |
-| `separators` | `string[]` | `[',']` | Characters that split pasted / typed text; add every delimiter you show in help text. Enter always confirms the current input. |
-| `confirmOnBlur` | `boolean` | `true` | Whether unfinished input is committed on blur. |
-
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:modelValue` | `(tags: string[])` | Emitted with the next complete tag list. |
-| `change` | `(tags: string[])` | Emitted with the same next list after add/remove. |
-| `add` | `(tags: string[])` | Emitted with tags accepted by the current operation. |
-| `remove` | `(tag: string)` | Emitted with the removed tag value. |
-| `focus` | `(event: FocusEvent)` | Forwarded native input focus event. |
-| `blur` | `(event: FocusEvent)` | Forwarded native input blur event; may commit unfinished input when `confirmOnBlur=true`. |
-
-### Slots
-
-`TxTagInput` does not expose custom slots. Existing tags are rendered with `TxTag`; compose labels, help text, or validation messages outside the component.
-
-## Release Policy Configuration
-
-This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
+### Release Policy
+`TxTagInput` carries searchable metadata; `max` caps the count.
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: 'Desktop',
-      children: [
-        {
-          value: 'stable',
-          label: 'Stable',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
   const riskSegments = [
     { value: 1, label: 'Low' },
     { value: 2, label: 'Med' },
@@ -100,40 +42,61 @@ code: |
   </script>
 
   <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
-      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
-        <TxFlatSelectItem value="signed" label="Signed build" />
-        <TxFlatSelectItem value="archive" label="Archive" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
-        <TxFlatSelectItem value="phased" label="Phased" />
-        <TxFlatSelectItem value="guarded" label="Guarded" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
-    </section>
+    <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+    <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+      <TxFlatSelectItem value="phased" label="Phased" />
+      <TxFlatSelectItem value="guarded" label="Guarded" />
+    </TxFlatSelect>
+    <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+    <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+    <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
   </template>
 ---
 ::
 
+### Best Practices
+
+- Keep tags to short metadata; release notes, approval reasons, and other long text belong in a textarea or detail form.
+- Set `max` to the smallest limit the workflow needs.
+- Keep `allowDuplicates` off unless duplicate tags mean something.
+- Add every delimiter your help text mentions to `separators`.
+- Put labels, help text, and validation messages outside the component.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|------|------|
+| `modelValue` | `string[]` | `[]` | Tag list and single source of truth; every add or remove emits a new array. |
+| `placeholder` | `string` | `'Add tag'` | Placeholder text. |
+| `disabled` | `boolean` | `false` | Blocks adding and removing, including the close buttons on existing tags. |
+| `max` | `number` | `20` | Maximum tag count; reaching it disables the input and hides the placeholder. |
+| `allowDuplicates` | `boolean` | `false` | Allows duplicates; when off, dedup is an exact, case-sensitive match after trimming. |
+| `separators` | `string[]` | `[',']` | Characters that split pasted or typed text. |
+| `confirmOnBlur` | `boolean` | `true` | Commits unfinished input on blur. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `(tags: string[])` | Fires with the next complete list. |
+| `change` | `(tags: string[])` | Fires together with `update:modelValue`. |
+| `add` | `(tags: string[])` | Fires with the tags this operation actually added. |
+| `remove` | `(tag: string)` | Fires with the removed tag. |
+| `focus` | `(event: FocusEvent)` | Forwards the input's focus event. |
+| `blur` | `(event: FocusEvent)` | Forwards the input's blur event. |
+
 ## Overview
 
-- `modelValue` is treated as the source of truth; every add/remove emits both `update:modelValue` and `change` with a new array.
-- Input text is trimmed before insertion. Empty tags are ignored.
-- Duplicate suppression is exact after trimming unless `allowDuplicates=true`.
-- `separators` split pasted or typed input; Enter always confirms the current input.
-- When `confirmOnBlur=true`, blur commits unfinished input after emitting the native blur event.
+- Input is trimmed first; empty tags are ignored.
+- `separators` split pasted or typed text; Enter always confirms the current input.
+- With `confirmOnBlur`, `blur` is emitted first, then the unfinished input is committed.
 - Backspace removes the last tag only when the input is empty.
-- `disabled` prevents adding/removing tags and disables existing chip close actions.
-- Reaching `max` disables the inner input and clears the placeholder.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue` confirms separator splitting, trim normalization, duplicate checks, max-limit behavior, Enter/backspace/blur handling, disabled guards, and `TxTag` close wiring.
-- Type contracts: `packages/tuffex/packages/components/src/tag-input/src/types.ts` exports `TagInputProps` and `TagInputEmits`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/tag-input/__tests__/tag-input.test.ts` verifies Enter insertion and close-button removal.
-- Screenshot: `.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`.
+- Existing tags render with `TxTag`.
+- Source: `packages/tuffex/packages/components/src/tag-input/`; exports the `TagInputProps` and `TagInputEmits` types.
 
 <TuffDocSourceLink />

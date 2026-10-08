@@ -1,24 +1,7 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import { createError, getQuery } from 'h3'
+import { readSessionTokenUserId } from '../../utils/auth'
 import { readCloudflareBindings } from '../../utils/cloudflare'
-
-const DOC_FEEDBACK_TABLE = 'doc_feedback'
-
-let feedbackSchemaInitialized = false
-
-async function ensureFeedbackSchema(db: D1Database) {
-  if (feedbackSchemaInitialized)
-    return
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_FEEDBACK_TABLE} (
-      path TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      helpful INTEGER NOT NULL,
-      created_at INTEGER NOT NULL,
-      PRIMARY KEY (path, user_id)
-    );
-  `).run()
-  feedbackSchemaInitialized = true
-}
+import { DOC_FEEDBACK_TABLE, ensureDocFeedbackSchema, normalizeDocFeedbackPath } from '../../utils/docFeedbackStore'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -28,7 +11,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Missing or invalid path parameter' })
   }
 
-  const normalizedPath = docPath.replace(/^\/+|\/+$/g, '').toLowerCase()
+  const normalizedPath = normalizeDocFeedbackPath(docPath)
 
   const bindings = readCloudflareBindings(event)
   if (!bindings?.DB) {
@@ -36,30 +19,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = bindings.DB
-  await ensureFeedbackSchema(db)
+  // The caller's own vote comes from their session. It used to come from `?userId=`, which answered
+  // for whichever account the query named.
+  const [userId] = await Promise.all([readSessionTokenUserId(event), ensureDocFeedbackSchema(db)])
 
-  const helpfulResult = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${DOC_FEEDBACK_TABLE} WHERE path = ?1 AND helpful = 1`,
-  ).bind(normalizedPath).first<{ cnt: number }>()
-
-  const unhelpfulResult = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${DOC_FEEDBACK_TABLE} WHERE path = ?1 AND helpful = 0`,
-  ).bind(normalizedPath).first<{ cnt: number }>()
-
-  // Check if current user has voted (optional, via query param)
-  let userVote: boolean | null = null
-  const userId = query.userId as string | undefined
-  if (userId) {
-    const userRow = await db.prepare(
-      `SELECT helpful FROM ${DOC_FEEDBACK_TABLE} WHERE path = ?1 AND user_id = ?2`,
-    ).bind(normalizedPath, userId).first<{ helpful: number }>()
-    if (userRow !== null)
-      userVote = userRow.helpful === 1
-  }
+  // Both tallies and the caller's vote in one query; they were three round trips.
+  const row = await db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN helpful = 1 THEN 1 ELSE 0 END), 0) AS helpful,
+      COALESCE(SUM(CASE WHEN helpful = 0 THEN 1 ELSE 0 END), 0) AS unhelpful,
+      (SELECT helpful FROM ${DOC_FEEDBACK_TABLE} WHERE path = ?1 AND user_id = ?2) AS user_vote
+    FROM ${DOC_FEEDBACK_TABLE}
+    WHERE path = ?1
+  `).bind(normalizedPath, userId ?? '').first<{ helpful: number, unhelpful: number, user_vote: number | null }>()
 
   return {
-    helpful: helpfulResult?.cnt ?? 0,
-    unhelpful: unhelpfulResult?.cnt ?? 0,
-    userVote,
+    helpful: Number(row?.helpful ?? 0),
+    unhelpful: Number(row?.unhelpful ?? 0),
+    userVote: row?.user_vote == null ? null : row.user_vote === 1,
   }
 })

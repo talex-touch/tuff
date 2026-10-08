@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { requireDatabase } from './creditsStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 /**
  * Capability-level credit pricing.
@@ -323,10 +324,9 @@ function normalizeRule(row: Record<string, unknown>): CreditPricingRule {
   }
 }
 
-export async function ensureCreditPricingSchema(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS ${CREDIT_PRICING_TABLE} (
+const CREDIT_PRICING_SCHEMA = defineD1Schema('credit-pricing', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${CREDIT_PRICING_TABLE} (
         capability TEXT PRIMARY KEY,
         unit TEXT NOT NULL,
         credits_per_unit REAL NOT NULL,
@@ -338,8 +338,11 @@ export async function ensureCreditPricingSchema(db: D1Database): Promise<void> {
         active INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT NOT NULL
       )`,
-    )
-    .run()
+  ],
+})
+
+export async function ensureCreditPricingSchema(db: D1Database): Promise<void> {
+  await ensureD1Schema(db, CREDIT_PRICING_SCHEMA)
 }
 
 /**
@@ -445,12 +448,53 @@ function isDatabase(value: unknown): value is D1Database {
   return Boolean(value) && typeof (value as D1Database).prepare === 'function'
 }
 
+/**
+ * How long an isolate may answer pricing from memory. Every AI call and every capability of a scene
+ * run reads the price list; it changes when an operator edits it. A hold snapshots the rule it was
+ * admitted under, so a price edit reaches new calls within this window and never re-prices one in
+ * flight. An edit made through this isolate takes effect here at once.
+ */
+const PRICING_CACHE_TTL_MS = 30_000
+
+interface PricingCacheEntry {
+  rules: CreditPricingRule[]
+  expiresAt: number
+}
+
+const pricingCache = new WeakMap<object, PricingCacheEntry>()
+/** Moves on with every edit, so a read that started before one does not cache the list it replaced. */
+const pricingGenerations = new WeakMap<object, number>()
+
+function forgetCachedPricing(db: D1Database): void {
+  pricingCache.delete(db)
+  pricingGenerations.set(db, (pricingGenerations.get(db) ?? 0) + 1)
+}
+
+/**
+ * The price list for the call paths, from memory within `PRICING_CACHE_TTL_MS`.
+ *
+ * Only a settled list is kept, never a read in flight: that read belongs to the request that started
+ * it, and a Worker cancels a request's I/O when its client disconnects, so a promise other requests
+ * share would then never settle for any of them.
+ */
+async function readCachedCreditPricing(event: H3Event | D1Database): Promise<CreditPricingRule[]> {
+  const db = isDatabase(event) ? event : requireDatabase(event as H3Event)
+  const cached = pricingCache.get(db)
+  if (cached && cached.expiresAt > Date.now())
+    return cached.rules
+  const generation = pricingGenerations.get(db) ?? 0
+  const rules = await listCreditPricing(db)
+  if ((pricingGenerations.get(db) ?? 0) === generation)
+    pricingCache.set(db, { rules, expiresAt: Date.now() + PRICING_CACHE_TTL_MS })
+  return rules
+}
+
 /** The effective rule for one capability, resolved against the stored price list. */
 export async function resolveCreditPricingRule(
   event: H3Event | D1Database,
   capability: string,
 ): Promise<CreditPricingRule> {
-  const rules = await listCreditPricing(event)
+  const rules = await readCachedCreditPricing(event)
   return selectCreditPricingRule(capability, rules)
 }
 
@@ -465,7 +509,7 @@ export async function resolveSellableCreditPricingRule(
   event: H3Event | D1Database,
   capability: string,
 ): Promise<CreditPricingRule> {
-  const rules = await listCreditPricing(event)
+  const rules = await readCachedCreditPricing(event)
   const entry = resolveCreditPricingEntry(capability, rules)
   if (entry.disabled) {
     throw createError({
@@ -604,6 +648,7 @@ export async function updateCreditPricing(
     .prepare(`UPDATE ${CREDIT_PRICING_TABLE} SET ${assignments.join(', ')} WHERE capability = ?`)
     .bind(...values)
     .run()
+  forgetCachedPricing(db)
 
   // Re-read rather than patching the snapshot taken before the write: a concurrent
   // change to another field belongs in what the operator is told they now have.

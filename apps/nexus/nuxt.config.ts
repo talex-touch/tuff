@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -92,6 +93,28 @@ const disableSentry = !enableSentry || process.env.NUXT_DISABLE_SENTRY === 'true
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
   && !disableSentry
   && isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY_SOURCEMAPS)
+/**
+ * Which deployment Sentry events come from, and the commit they were built from, for client and
+ * server alike. Without them, Preview and production errors were indistinguishable and no release
+ * tied an event to its source. Pages builds report their branch and commit; the local Preview deploy
+ * names its environment (`build/preview-deploy.mjs`).
+ */
+const sentryEnvironment = process.env.NUXT_PUBLIC_SENTRY_ENVIRONMENT
+  || (process.env.CF_PAGES === '1'
+    ? (['master', 'main'].includes(process.env.CF_PAGES_BRANCH ?? '') ? 'production' : 'preview')
+    : (isProd ? 'production' : 'development'))
+const sentryRelease = process.env.NUXT_PUBLIC_SENTRY_RELEASE
+  || process.env.CF_PAGES_COMMIT_SHA
+  || readGitCommit()
+
+function readGitCommit(): string {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: currentDir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  }
+  catch {
+    return ''
+  }
+}
 const disableNitroMinify = process.env.NUXT_DISABLE_NITRO_MINIFY === 'true'
 const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
 const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
@@ -376,6 +399,8 @@ export default defineNuxtConfig({
       // removed in `app:resolve`, so this is what tells the deferred loader whether Sentry is
       // on for this build at all.
       sentryClientEnabled: !disableSentry,
+      sentryEnvironment,
+      sentryRelease,
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },
@@ -479,6 +504,8 @@ export default defineNuxtConfig({
             '/zh/docs.md',
             '/zh/docs/*',
             '/api/docs/page/*',
+            // The prerendered policy documents (`contentApiPrerenderRoutes`).
+            '/api/content/policy/*',
           ],
         },
       },

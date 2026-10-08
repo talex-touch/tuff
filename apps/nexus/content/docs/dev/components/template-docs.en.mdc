@@ -1,6 +1,6 @@
 ---
 title: Docs
-description: A help center reader with a contents tree, a markdown article, an outline that follows the scroll, ⌘K search and article feedback
+description: A help center reader with a contents tree, outline, and ⌘K search.
 category: TemplateContent
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Three-pane docs
-
-:::TuffDemoWrapper{demo="TemplateDocsDemo" code-lang="vue" title="Three-pane docs" description="Once it scrolls into view, the article scrolls itself to Risk levels and then Choosing at install time, and stops the moment you touch it. With focus inside, ⌘K searches articles and sections; in-site links open inside the template, and external links only say what the host would do."}
+:::TuffDemoWrapper{demo="TemplateDocsDemo" code-lang="vue" description="Once in view the article scrolls itself to two sections and stops when you touch it; ⌘K searches articles and sections."}
 ---
 code: |
   <script setup lang="ts">
@@ -80,33 +79,32 @@ code: |
 
 ## Overview
 
-The Tuff help center: a collapsible contents tree on the left, a markdown article in the middle, and an “On this page” outline on the right that highlights the section being read as the article scrolls. ⌘K searches every article and its sections; the end of each article has “Was this article helpful?”, previous / next and related articles, and the header says who edited it and when. The featured article, “Plugin permissions”, uses the repo’s real permission registry and manifest fields, echoing the Store chapter; every other article is sample content.
+Tuff's three-pane help center; the featured article, "Plugin permissions," uses the real permission registry, and the rest is sample content.
 
-It fits a product help center, developer docs, a team knowledge base or in-app guides — long-form reading that people need to find, finish and give feedback on.
-
-- The first time the stage scrolls into view, the article scrolls to Risk levels after about 1.2 seconds and to Choosing at install time after about 3.4 seconds, then stops; a click, key press, wheel or touch inside the template ends the tour at once. With reduced motion nothing plays and the article simply sits at Choosing at install time. The tour only moves the article’s own scroller, never the page, and never moves focus.
-- The outline is parsed from the markdown source and matched to the rendered headings by position. TxMarkdownView headings have no id, and the template does not add one: the docs page collects id’d headings for its own outline and scrolls the whole page to them when the hash changes.
-- Picking an outline entry scrolls smoothly to that section and keeps it highlighted until you scroll the article yourself: a short section at the end that cannot reach the top keeps its highlight, and once the stage expands or collapses and the text rewraps, the section is aligned to the top again.
-- Links in the body are intercepted in one place: `#kb:` links open the article inside the template and move focus to its title; external links, middle clicks and ⌘-clicks never leave the docs page and only report what the host would open.
-- In the column (640–959px) the tree sits on the left and the outline moves into a toolbar dropdown; expanded, it is three panes with a capped article width; below 640px the tree becomes a panel that slides in from the left (not a TxDrawer), closed by Esc or the backdrop, and picking an article puts focus on its title.
-- ⌘K works while focus is inside the template, bound on its root so it never takes the docs site’s own shortcut; closing the palette returns focus to the search button.
+- The first time it scrolls into view, the article scrolls to Risk levels and then Choosing at install time; a click, key, wheel, or touch ends it, and reduced motion starts at the second section.
+- The tour moves only the article's own scroller, never the page or focus.
+- The outline is parsed from the markdown source and matched to the rendered headings by position; TxMarkdownView headings have no id, and the template adds none.
+- Picking an outline entry scrolls smoothly to that section and keeps it highlighted until you scroll the article yourself.
+- Body links are intercepted in one place: `#kb:` links open the article inside the template; external links, middle clicks, and ⌘-clicks only report what the host would open.
+- In the column (640–959px) the outline moves into a toolbar dropdown; expanded, it is three panes; below 640px the tree becomes a panel that slides in from the left.
+- ⌘K is bound on the template root and works only while focus is inside; closing the palette returns focus to the search button.
 
 ## Customization
 
-- With real docs, keep parsing the outline from the source; if you switch to a renderer that adds heading ids, first make sure no other script on the page scrolls the whole document by id.
-- For highlighted code, render the whole article with TxStreamMarkdown (not streaming) rather than mixing several renderers in one body, which breaks the heading positions.
-- With many articles, run the ⌘K search remotely as the reader types, and index only second-level sections.
-- Have the feedback endpoint record the article id, the reasons chosen and the article version, so “Out of date” can be traced to a specific revision.
+- With real docs, keep parsing the outline from the source; before switching to a renderer that adds heading ids, make sure no script on the page scrolls the document by id.
+- For highlighted code, render the whole article with TxStreamMarkdown (not streaming); mixing renderers in one body breaks the heading positions.
+- With many articles, run ⌘K search remotely as the reader types, and index only second-level sections.
+- Have the feedback endpoint record the article id, the chosen reasons, and the article version.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Top bar | [TxKbd](/docs/dev/components/kbd), [TxCommandPalette](/docs/dev/components/command-palette) | A search-field button opens the ⌘K palette over articles, each article’s sections and two quick actions; a pick opens the article at that section |
-| Contents | [TxSearchInput](/docs/dev/components/search-input), [TxTree](/docs/dev/components/tree), [TxBadge](/docs/dev/components/badge) | Collapsible groups that open up around filter matches; the current article is highlighted under control, and new or updated articles carry a badge |
-| Toolbar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxProgressBar](/docs/dev/components/progress-bar) | Breadcrumbs lead back up; without a right rail the outline lives in a dropdown; a hairline shows reading progress |
-| Article | [TxMarkdownView](/docs/dev/components/markdown-view), [TxAvatar](/docs/dev/components/avatar) | Headings, callouts, code blocks, tables and inline code; under the title, contributor avatars, the update date and reading time |
-| Article feedback | [TxFlatRadio](/docs/dev/components/flat-radio), [TxCheckbox](/docs/dev/components/checkbox), [TxTextarea](/docs/dev/components/textarea), [TxButton](/docs/dev/components/button) | Yes is recorded at once; No opens reasons and a note |
-| Previous / next and related | [TxCardItem](/docs/dev/components/card-item) | Neighbours follow the contents order; related articles come from each article’s list or its group |
-| On this page (expanded) | Hand-built list + `useIndicatorBox` | Highlights the section being read as the article scrolls; the sliding marker is measured the way TxSidebarNav measures its highlight |
-| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Results for external links, Edit this page and article feedback, kept inside the article area |
+| Top bar | [TxKbd](/docs/dev/components/kbd), [TxCommandPalette](/docs/dev/components/command-palette) | ⌘K search over articles and sections |
+| Contents | [TxSearchInput](/docs/dev/components/search-input), [TxTree](/docs/dev/components/tree), [TxBadge](/docs/dev/components/badge) | Filterable, collapsible contents tree |
+| Toolbar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxProgressBar](/docs/dev/components/progress-bar) | Breadcrumbs, outline menu, reading progress |
+| Article | [TxMarkdownView](/docs/dev/components/markdown-view), [TxAvatar](/docs/dev/components/avatar) | Body, contributors, and update date |
+| Article feedback | [TxFlatRadio](/docs/dev/components/flat-radio), [TxCheckbox](/docs/dev/components/checkbox), [TxTextarea](/docs/dev/components/textarea), [TxButton](/docs/dev/components/button) | Helpful or not, with reasons |
+| Previous / next and related | [TxCardItem](/docs/dev/components/card-item) | Neighbors and related articles |
+| On this page (expanded) | Hand-built list + `useIndicatorBox` | Highlights the section being read |
+| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Results of links, edits, and feedback |

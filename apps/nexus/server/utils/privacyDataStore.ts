@@ -21,6 +21,7 @@ import {
   putStorageObject,
   type StorageObjectMemory,
 } from './storageObjectStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const EXPORT_JOBS_TABLE = 'privacy_export_jobs'
 const DELETION_TERMS_TABLE = 'account_deletion_terms_sessions'
@@ -33,8 +34,6 @@ export const ACCOUNT_DELETION_TERMS_MIN_READ_SECONDS = 30
 const PRIVATE_EXPORT_FIELD_PATTERN = /(secret|token|hash|password|credential)/i
 
 const memoryStorage: StorageObjectMemory = new Map()
-let privacyDataSchemaInitialized = false
-
 export type PrivacyExportJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'expired'
 
 export interface PrivacyExportJob {
@@ -69,46 +68,36 @@ function getExportBucket(event: H3Event): R2Bucket | null {
   return resolveObjectBucket(event)
 }
 
+const PRIVACY_DATA_SCHEMA = defineD1Schema('privacy-data', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${EXPORT_JOBS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        result_key TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_privacy_export_jobs_user
+      ON ${EXPORT_JOBS_TABLE}(user_id, created_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS ${DELETION_TERMS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        terms_version TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        earliest_confirm_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        consumed_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_account_deletion_terms_user
+      ON ${DELETION_TERMS_TABLE}(user_id, started_at DESC)`,
+  ],
+})
+
 async function ensurePrivacyDataSchema(db: D1Database) {
-  if (privacyDataSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${EXPORT_JOBS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      result_key TEXT,
-      error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_privacy_export_jobs_user
-    ON ${EXPORT_JOBS_TABLE}(user_id, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DELETION_TERMS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      terms_version TEXT NOT NULL,
-      started_at TEXT NOT NULL,
-      earliest_confirm_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      consumed_at TEXT
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_account_deletion_terms_user
-    ON ${DELETION_TERMS_TABLE}(user_id, started_at DESC);
-  `).run()
-
-  privacyDataSchemaInitialized = true
+  await ensureD1Schema(db, PRIVACY_DATA_SCHEMA)
 }
 
 function mapExportJob(row: Record<string, any> | null | undefined): PrivacyExportJob | null {

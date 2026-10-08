@@ -17,8 +17,10 @@ export interface ResolveOauthScopeOptions {
 }
 
 export async function requireOauthManager(event: H3Event): Promise<OauthManagementContext> {
-  const { userId } = await requireAuth(event)
-  const user = await getUserById(event, userId)
+  const auth = await requireAuth(event)
+  const { userId } = auth
+  // Authentication already read the user row.
+  const user = auth.user ?? await getUserById(event, userId)
   const isNexusAdmin = Boolean(user?.status === 'active' && user.role === 'admin')
 
   let isTeamAdmin = false

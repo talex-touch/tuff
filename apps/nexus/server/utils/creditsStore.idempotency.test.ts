@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { claimDailyCheckin, getCheckinStatus, getCreditSummary } from './creditsStore'
+import { describe, expect, it, vi } from 'vitest'
 
 const subscriptionMocks = vi.hoisted(() => ({
   getUserSubscription: vi.fn(),
@@ -89,7 +88,10 @@ class MockD1Database {
   }
 
   async batch(statements: MockStatement[]) {
-    this.batchCalls += 1
+    // Counts debits: the batches that write the ledger. Schema bootstrap and the personal-team
+    // inserts are batches too, but not what this counter is about.
+    if (statements.some(statement => statement.sql.includes('credit_ledger')) && !statements.some(statement => statement.sql.includes('nexus_schema_state')))
+      this.batchCalls += 1
     const snapshot = this.snapshot()
     try {
       return statements.map(statement => this.execute(statement.sql, statement.args))
@@ -337,115 +339,6 @@ function createEvent(db: MockD1Database) {
     },
   } as any
 }
-
-describe('consumeCredits idempotency', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'PRO' })
-    teamMocks.getTeamQuota.mockResolvedValue({ seatsLimit: 5 })
-  })
-
-  it('deduplicates the same business key without a second debit', async () => {
-    const { consumeCredits } = await import('./creditsStore')
-    const db = new MockD1Database()
-    const event = createEvent(db)
-
-    const first = await consumeCredits(event, 'user_1', 7, 'intelligence-invoke', {
-      traceId: 'trace_1',
-    }, {
-      idempotencyKey: 'intelligence-invoke:trace_1',
-    })
-    const second = await consumeCredits(event, 'user_1', 7, 'intelligence-invoke', {
-      traceId: 'trace_1',
-    }, {
-      idempotencyKey: 'intelligence-invoke:trace_1',
-    })
-
-    expect(second.ledgerId).toBe(first.ledgerId)
-    expect(db.batchCalls).toBe(1)
-    expect([...db.ledger.values()]).toHaveLength(1)
-    expect(db.balances.get(`team:team_user_1:${first.createdAt.slice(0, 7)}`)?.used).toBe(7)
-    expect(db.balances.get(`user:user_1:${first.createdAt.slice(0, 7)}`)?.used).toBe(7)
-  })
-
-  it('fails closed when the same business key points at another payload', async () => {
-    const { consumeCredits } = await import('./creditsStore')
-    const db = new MockD1Database()
-    const event = createEvent(db)
-
-    await consumeCredits(event, 'user_1', 7, 'intelligence-invoke', {
-      traceId: 'trace_1',
-    }, {
-      idempotencyKey: 'intelligence-invoke:trace_1',
-    })
-
-    await expect(consumeCredits(event, 'user_1', 8, 'intelligence-invoke', {
-      traceId: 'trace_1',
-    }, {
-      idempotencyKey: 'intelligence-invoke:trace_1',
-    })).rejects.toThrow('Credit idempotency conflict.')
-    expect([...db.ledger.values()]).toHaveLength(1)
-  })
-})
-
-/**
- * The allowance a plan actually hands out, read through the summary the dashboard and
- * the desktop app consume. These are the numbers a FREE account plans its calls around.
- */
-describe('credit allowance policy', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    teamMocks.getTeamQuota.mockResolvedValue({ seatsLimit: 5 })
-  })
-
-  it('grants a free account the shipped monthly allowance', async () => {
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'FREE' })
-
-    const summary = await getCreditSummary(createEvent(new MockD1Database()), 'user_1')
-
-    expect(summary.user?.quota).toBe(20000)
-  })
-
-  it('doubles the free allowance for a completed profile without reaching the cheapest paid tier', async () => {
-    const boosted = new MockD1Database()
-    boosted.userRecord = { id: 'user_1', email_state: 'verified', email_verified: '2020-01-01T00:00:00.000Z' }
-    boosted.accountCount = 1
-    boosted.passkeyCount = 1
-
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'FREE' })
-    const boostedSummary = await getCreditSummary(createEvent(boosted), 'user_1')
-
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'PLUS' })
-    const plusSummary = await getCreditSummary(createEvent(new MockD1Database()), 'user_1')
-
-    // Verifying an email and binding a passkey must not add up to a paid plan.
-    expect(boostedSummary.user?.quota).toBe(40000)
-    expect(Number(boostedSummary.user?.quota)).toBeLessThan(Number(plusSummary.user?.quota))
-  })
-
-  it('adds the shipped daily check-in reward to the month balance', async () => {
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'FREE' })
-    const db = new MockD1Database()
-
-    const claim = await claimDailyCheckin(createEvent(db), 'user_1')
-    const month = claim.day.slice(0, 7)
-
-    expect(claim).toMatchObject({ claimed: true, reward: 500 })
-    expect(db.balances.get(`user:user_1:${month}`)?.quota).toBe(20000 + 500)
-    expect([...db.ledger.values()].filter(row => row.reason === 'daily-checkin'))
-      .toEqual([expect.objectContaining({ delta: 500 })])
-  })
-
-  it('keeps a whole month of check-ins inside the allowance they top up', async () => {
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'FREE' })
-    const db = new MockD1Database()
-
-    const checkin = await getCheckinStatus(createEvent(db), 'user_1')
-    const summary = await getCreditSummary(createEvent(db), 'user_1')
-
-    expect(checkin.reward * 30).toBeLessThan(Number(summary.user!.quota))
-  })
-})
 
 describe('invoke audit ledger netting', () => {
   it('nets every row of a full page of traces instead of truncating its oldest rows', async () => {

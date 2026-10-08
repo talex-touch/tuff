@@ -17,6 +17,7 @@ import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { normalizeVoiceHistoryEnabled } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -865,8 +866,10 @@ function openRecords(): void {
  * identical from here: nothing has been dictated yet, or nothing was ever allowed to be kept.
  * The drawer has to be able to tell the reader which one it is looking at.
  */
-const historyRetentionEnabled = computed(
-  () => (appSetting.voiceInput as { historyEnabled?: boolean } | undefined)?.historyEnabled === true
+const historyRetentionEnabled = computed(() =>
+  normalizeVoiceHistoryEnabled(
+    (appSetting.voiceInput as { historyEnabled?: unknown } | undefined)?.historyEnabled
+  )
 )
 
 /** The switch lives in settings; this drawer only points at it. */

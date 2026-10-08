@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type {
   PluginAdmissionAttestationV1,
   PluginPublisherSignatureV1,
@@ -29,6 +29,7 @@ import {
   failUploadGovernance,
   startUploadGovernance,
 } from './uploadGovernance'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PLUGINS_KEY = 'dashboard:plugins'
 const PLUGIN_VERSIONS_KEY = 'dashboard:pluginVersions'
@@ -40,7 +41,6 @@ const PLUGIN_TIMELINE_TABLE = 'dashboard_plugin_timeline'
 const MAX_PLUGINS_PER_USER = 10
 const SUBMISSION_COOLDOWN_MS = 5 * 60 * 1000
 
-let schemaInitialized = false
 let hasLoggedPluginsDb = false
 let hasLoggedPluginsFallback = false
 let hasLoggedShaFallback = false
@@ -268,6 +268,11 @@ export interface DashboardPlugin {
   author?: DashboardPluginAuthor | null
   status: PluginStatus
   readmeMarkdown?: string | null
+  /**
+   * Whether the plugin has a readme, where the text itself was not read (`withoutReadme`); absent
+   * wherever `readmeMarkdown` is the text.
+   */
+  hasReadme?: boolean
   iconKey?: string | null
   iconUrl?: string | null
   createdAt: string
@@ -298,6 +303,8 @@ interface D1PluginRow {
   slug: string | null
   status: string | null
   readme_markdown: string | null
+  /** Only selected in place of the readme text (`withoutReadme`). */
+  has_readme?: number | null
   icon_key: string | null
   icon_url: string | null
   created_at: string
@@ -382,6 +389,12 @@ interface PluginVisibilityOptions {
   forStore?: boolean
   audience?: PluginReleaseAudience
   statuses?: PluginStatus[]
+  /**
+   * For listings that only link to readmes: whether each plugin has one is read (`hasReadme`), not
+   * the text, and its versions' readmes are not read at all. Readmes are the widest columns of both
+   * tables, and a Store listing read every one of them.
+   */
+  withoutReadme?: boolean
 }
 
 export interface StorePluginSearchOptions {
@@ -390,6 +403,8 @@ export interface StorePluginSearchOptions {
   limit?: number
   offset?: number
   audience?: PluginReleaseAudience
+  /** Whether the results carry readme text. Without it they carry `hasReadme`. Defaults to true. */
+  includeReadme?: boolean
 }
 
 export interface StorePluginSearchPlugin extends DashboardPlugin {
@@ -535,176 +550,205 @@ function getD1Database(event?: H3Event | null): D1Database | null {
   return db
 }
 
+const PLUGIN_SCHEMA = defineD1Schema('plugins', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PLUGINS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        owner_org_id TEXT,
+        name TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        category TEXT NOT NULL,
+        artifact_type TEXT NOT NULL DEFAULT 'plugin',
+        installs INTEGER NOT NULL DEFAULT 0,
+        homepage TEXT,
+        icon TEXT,
+        image_url TEXT,
+        last_updated TEXT,
+        version TEXT,
+        is_official INTEGER NOT NULL DEFAULT 0,
+        badges TEXT NOT NULL,
+        author TEXT,
+        slug TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'draft',
+        readme_markdown TEXT,
+        icon_key TEXT,
+        icon_url TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        latest_version_id TEXT
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${PLUGIN_VERSIONS_TABLE} (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        version TEXT NOT NULL,
+        signature TEXT NOT NULL,
+        artifact_sha256 TEXT,
+        publisher_signature TEXT,
+        publisher_key TEXT,
+        publisher_key_id TEXT,
+        publisher_verified_at TEXT,
+        nexus_attestation TEXT,
+        admission_status TEXT NOT NULL DEFAULT 'pending',
+        policy_decision TEXT NOT NULL DEFAULT 'not-evaluated',
+        artifact_state TEXT NOT NULL DEFAULT 'available',
+        revoked_at TEXT,
+        eligibility_revision INTEGER NOT NULL DEFAULT 0,
+        eligibility_evaluated_at TEXT,
+        eligibility_reasons TEXT,
+        package_key TEXT NOT NULL,
+        package_url TEXT NOT NULL,
+        package_size INTEGER NOT NULL,
+        icon_key TEXT NOT NULL,
+        icon_url TEXT NOT NULL,
+        readme_markdown TEXT,
+        manifest TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reviewed_at TEXT,
+        reject_reason TEXT,
+        security_scan_decision TEXT,
+        security_scan_report_digest TEXT,
+        security_scanner_version TEXT,
+        security_rule_set_version TEXT,
+        security_scan_finding_count INTEGER,
+        security_scan_completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${PLUGIN_TIMELINE_TABLE} (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        version_id TEXT,
+        event_type TEXT NOT NULL,
+        actor_id TEXT,
+        actor_role TEXT NOT NULL,
+        from_status TEXT,
+        to_status TEXT,
+        reason TEXT,
+        meta TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_created ON ${PLUGINS_TABLE}(status, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_category_created ON ${PLUGINS_TABLE}(status, category, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_publisher_key ON ${PLUGIN_VERSIONS_TABLE}(publisher_key_id, admission_status)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_plugin_created ON ${PLUGIN_TIMELINE_TABLE}(plugin_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_version_created ON ${PLUGIN_TIMELINE_TABLE}(version_id, created_at DESC)`,
+    // The install path resolves a package key back to its version on every download, and none of the
+    // indexes covered it.
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_package_key ON ${PLUGIN_VERSIONS_TABLE}(package_key)`,
+  ],
+  columns: [
+    {
+      table: PLUGINS_TABLE,
+      columns: [
+        { name: 'user_id', ddl: 'user_id TEXT' },
+        { name: 'owner_org_id', ddl: 'owner_org_id TEXT' },
+        { name: 'name', ddl: 'name TEXT' },
+        { name: 'summary', ddl: 'summary TEXT' },
+        { name: 'category', ddl: 'category TEXT' },
+        { name: 'artifact_type', ddl: "artifact_type TEXT DEFAULT 'plugin'" },
+        { name: 'installs', ddl: 'installs INTEGER DEFAULT 0' },
+        { name: 'homepage', ddl: 'homepage TEXT' },
+        { name: 'icon', ddl: 'icon TEXT' },
+        { name: 'image_url', ddl: 'image_url TEXT' },
+        { name: 'last_updated', ddl: 'last_updated TEXT' },
+        { name: 'version', ddl: 'version TEXT' },
+        { name: 'is_official', ddl: 'is_official INTEGER DEFAULT 0' },
+        { name: 'badges', ddl: 'badges TEXT' },
+        { name: 'author', ddl: 'author TEXT' },
+        { name: 'slug', ddl: 'slug TEXT' },
+        { name: 'status', ddl: "status TEXT DEFAULT 'draft'" },
+        { name: 'readme_markdown', ddl: 'readme_markdown TEXT' },
+        { name: 'icon_key', ddl: 'icon_key TEXT' },
+        { name: 'icon_url', ddl: 'icon_url TEXT' },
+        { name: 'created_at', ddl: 'created_at TEXT' },
+        { name: 'updated_at', ddl: 'updated_at TEXT' },
+        { name: 'latest_version_id', ddl: 'latest_version_id TEXT' },
+      ],
+    },
+    {
+      table: PLUGIN_VERSIONS_TABLE,
+      columns: [
+        { name: 'notes', ddl: 'notes TEXT' },
+        { name: 'status', ddl: "status TEXT NOT NULL DEFAULT 'pending'" },
+        { name: 'reviewed_at', ddl: 'reviewed_at TEXT' },
+        { name: 'reject_reason', ddl: 'reject_reason TEXT' },
+        { name: 'artifact_sha256', ddl: 'artifact_sha256 TEXT' },
+        { name: 'publisher_signature', ddl: 'publisher_signature TEXT' },
+        { name: 'publisher_key', ddl: 'publisher_key TEXT' },
+        { name: 'publisher_key_id', ddl: 'publisher_key_id TEXT' },
+        { name: 'publisher_verified_at', ddl: 'publisher_verified_at TEXT' },
+        { name: 'nexus_attestation', ddl: 'nexus_attestation TEXT' },
+        { name: 'admission_status', ddl: "admission_status TEXT NOT NULL DEFAULT 'pending'" },
+        { name: 'policy_decision', ddl: "policy_decision TEXT NOT NULL DEFAULT 'not-evaluated'" },
+        { name: 'artifact_state', ddl: "artifact_state TEXT NOT NULL DEFAULT 'available'" },
+        { name: 'revoked_at', ddl: 'revoked_at TEXT' },
+        { name: 'eligibility_revision', ddl: 'eligibility_revision INTEGER NOT NULL DEFAULT 0' },
+        { name: 'eligibility_evaluated_at', ddl: 'eligibility_evaluated_at TEXT' },
+        { name: 'eligibility_reasons', ddl: 'eligibility_reasons TEXT' },
+        { name: 'security_scan_decision', ddl: 'security_scan_decision TEXT' },
+        { name: 'security_scan_report_digest', ddl: 'security_scan_report_digest TEXT' },
+        { name: 'security_scanner_version', ddl: 'security_scanner_version TEXT' },
+        { name: 'security_rule_set_version', ddl: 'security_rule_set_version TEXT' },
+        { name: 'security_scan_finding_count', ddl: 'security_scan_finding_count INTEGER' },
+        { name: 'security_scan_completed_at', ddl: 'security_scan_completed_at TEXT' },
+      ],
+    },
+  ],
+})
+
+/**
+ * Every column of a version except its readme, for listings that do not show readmes
+ * (`withoutReadme`). A version maps from these exactly as from `SELECT *`, readme aside; a test holds
+ * the list to the table, so a column added to the table cannot silently go missing here.
+ */
+export const PLUGIN_VERSION_COLUMNS_WITHOUT_README = [
+  'id',
+  'plugin_id',
+  'created_by',
+  'channel',
+  'version',
+  'signature',
+  'artifact_sha256',
+  'publisher_signature',
+  'publisher_key',
+  'publisher_key_id',
+  'publisher_verified_at',
+  'nexus_attestation',
+  'admission_status',
+  'policy_decision',
+  'artifact_state',
+  'revoked_at',
+  'eligibility_revision',
+  'eligibility_evaluated_at',
+  'eligibility_reasons',
+  'package_key',
+  'package_url',
+  'package_size',
+  'icon_key',
+  'icon_url',
+  'manifest',
+  'notes',
+  'status',
+  'reviewed_at',
+  'reject_reason',
+  'security_scan_decision',
+  'security_scan_report_digest',
+  'security_scanner_version',
+  'security_rule_set_version',
+  'security_scan_finding_count',
+  'security_scan_completed_at',
+  'created_at',
+  'updated_at',
+] as const
+
 async function ensurePluginSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGINS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      owner_org_id TEXT,
-      name TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      category TEXT NOT NULL,
-      artifact_type TEXT NOT NULL DEFAULT 'plugin',
-      installs INTEGER NOT NULL DEFAULT 0,
-      homepage TEXT,
-      icon TEXT,
-      image_url TEXT,
-      last_updated TEXT,
-      version TEXT,
-      is_official INTEGER NOT NULL DEFAULT 0,
-      badges TEXT NOT NULL,
-      author TEXT,
-      slug TEXT NOT NULL UNIQUE,
-      status TEXT NOT NULL DEFAULT 'draft',
-      readme_markdown TEXT,
-      icon_key TEXT,
-      icon_url TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      latest_version_id TEXT
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGIN_VERSIONS_TABLE} (
-      id TEXT PRIMARY KEY,
-      plugin_id TEXT NOT NULL,
-      created_by TEXT NOT NULL,
-      channel TEXT NOT NULL,
-      version TEXT NOT NULL,
-      signature TEXT NOT NULL,
-      artifact_sha256 TEXT,
-      publisher_signature TEXT,
-      publisher_key TEXT,
-      publisher_key_id TEXT,
-      publisher_verified_at TEXT,
-      nexus_attestation TEXT,
-      admission_status TEXT NOT NULL DEFAULT 'pending',
-      policy_decision TEXT NOT NULL DEFAULT 'not-evaluated',
-      artifact_state TEXT NOT NULL DEFAULT 'available',
-      revoked_at TEXT,
-      eligibility_revision INTEGER NOT NULL DEFAULT 0,
-      eligibility_evaluated_at TEXT,
-      eligibility_reasons TEXT,
-      package_key TEXT NOT NULL,
-      package_url TEXT NOT NULL,
-      package_size INTEGER NOT NULL,
-      icon_key TEXT NOT NULL,
-      icon_url TEXT NOT NULL,
-      readme_markdown TEXT,
-      manifest TEXT,
-      notes TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      reviewed_at TEXT,
-      reject_reason TEXT,
-      security_scan_decision TEXT,
-      security_scan_report_digest TEXT,
-      security_scanner_version TEXT,
-      security_rule_set_version TEXT,
-      security_scan_finding_count INTEGER,
-      security_scan_completed_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGIN_TIMELINE_TABLE} (
-      id TEXT PRIMARY KEY,
-      plugin_id TEXT NOT NULL,
-      version_id TEXT,
-      event_type TEXT NOT NULL,
-      actor_id TEXT,
-      actor_role TEXT NOT NULL,
-      from_status TEXT,
-      to_status TEXT,
-      reason TEXT,
-      meta TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  // Add missing columns for backward compatibility
-  const pluginColumns = await db.prepare(`PRAGMA table_info(${PLUGINS_TABLE});`).all<{ name: string }>()
-  const columnNames = new Set((pluginColumns.results ?? []).map(col => col.name))
-
-  const addColumnIfMissing = async (column: string, ddl: string) => {
-    if (!columnNames.has(column)) {
-      await db.prepare(`ALTER TABLE ${PLUGINS_TABLE} ADD COLUMN ${ddl};`).run()
-    }
-  }
-
-  // Ensure all columns exist for backward compatibility
-  await addColumnIfMissing('user_id', 'user_id TEXT')
-  await addColumnIfMissing('owner_org_id', 'owner_org_id TEXT')
-  await addColumnIfMissing('name', 'name TEXT')
-  await addColumnIfMissing('summary', 'summary TEXT')
-  await addColumnIfMissing('category', 'category TEXT')
-  await addColumnIfMissing('artifact_type', 'artifact_type TEXT DEFAULT \'plugin\'')
-  await addColumnIfMissing('installs', 'installs INTEGER DEFAULT 0')
-  await addColumnIfMissing('homepage', 'homepage TEXT')
-  await addColumnIfMissing('icon', 'icon TEXT')
-  await addColumnIfMissing('image_url', 'image_url TEXT')
-  await addColumnIfMissing('last_updated', 'last_updated TEXT')
-  await addColumnIfMissing('version', 'version TEXT')
-  await addColumnIfMissing('is_official', 'is_official INTEGER DEFAULT 0')
-  await addColumnIfMissing('badges', 'badges TEXT')
-  await addColumnIfMissing('author', 'author TEXT')
-  await addColumnIfMissing('slug', 'slug TEXT')
-  await addColumnIfMissing('status', 'status TEXT DEFAULT \'draft\'')
-  await addColumnIfMissing('readme_markdown', 'readme_markdown TEXT')
-  await addColumnIfMissing('icon_key', 'icon_key TEXT')
-  await addColumnIfMissing('icon_url', 'icon_url TEXT')
-  await addColumnIfMissing('created_at', 'created_at TEXT')
-  await addColumnIfMissing('updated_at', 'updated_at TEXT')
-  await addColumnIfMissing('latest_version_id', 'latest_version_id TEXT')
-
-  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_created ON ${PLUGINS_TABLE}(status, created_at DESC);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_category_created ON ${PLUGINS_TABLE}(status, category, created_at DESC);`).run()
-
-  const versionColumns = await db.prepare(`PRAGMA table_info(${PLUGIN_VERSIONS_TABLE});`).all<{ name: string }>()
-  const versionColumnNames = new Set((versionColumns.results ?? []).map(col => col.name))
-
-  const addVersionColumnIfMissing = async (column: string, ddl: string) => {
-    if (!versionColumnNames.has(column))
-      await db.prepare(`ALTER TABLE ${PLUGIN_VERSIONS_TABLE} ADD COLUMN ${ddl};`).run()
-  }
-
-  await addVersionColumnIfMissing('notes', 'notes TEXT')
-  await addVersionColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'pending\'')
-  await addVersionColumnIfMissing('reviewed_at', 'reviewed_at TEXT')
-  await addVersionColumnIfMissing('reject_reason', 'reject_reason TEXT')
-  await addVersionColumnIfMissing('artifact_sha256', 'artifact_sha256 TEXT')
-  await addVersionColumnIfMissing('publisher_signature', 'publisher_signature TEXT')
-  await addVersionColumnIfMissing('publisher_key', 'publisher_key TEXT')
-  await addVersionColumnIfMissing('publisher_key_id', 'publisher_key_id TEXT')
-  await addVersionColumnIfMissing('publisher_verified_at', 'publisher_verified_at TEXT')
-  await addVersionColumnIfMissing('nexus_attestation', 'nexus_attestation TEXT')
-  await addVersionColumnIfMissing('admission_status', 'admission_status TEXT NOT NULL DEFAULT \'pending\'')
-  await addVersionColumnIfMissing('policy_decision', 'policy_decision TEXT NOT NULL DEFAULT \'not-evaluated\'')
-  await addVersionColumnIfMissing('artifact_state', 'artifact_state TEXT NOT NULL DEFAULT \'available\'')
-  await addVersionColumnIfMissing('revoked_at', 'revoked_at TEXT')
-  await addVersionColumnIfMissing('eligibility_revision', 'eligibility_revision INTEGER NOT NULL DEFAULT 0')
-  await addVersionColumnIfMissing('eligibility_evaluated_at', 'eligibility_evaluated_at TEXT')
-  await addVersionColumnIfMissing('eligibility_reasons', 'eligibility_reasons TEXT')
-  await addVersionColumnIfMissing('security_scan_decision', 'security_scan_decision TEXT')
-  await addVersionColumnIfMissing('security_scan_report_digest', 'security_scan_report_digest TEXT')
-  await addVersionColumnIfMissing('security_scanner_version', 'security_scanner_version TEXT')
-  await addVersionColumnIfMissing('security_rule_set_version', 'security_rule_set_version TEXT')
-  await addVersionColumnIfMissing('security_scan_finding_count', 'security_scan_finding_count INTEGER')
-  await addVersionColumnIfMissing('security_scan_completed_at', 'security_scan_completed_at TEXT')
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_publisher_key ON ${PLUGIN_VERSIONS_TABLE}(publisher_key_id, admission_status);`).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_plugin_created ON ${PLUGIN_TIMELINE_TABLE}(plugin_id, created_at DESC);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_version_created ON ${PLUGIN_TIMELINE_TABLE}(version_id, created_at DESC);`).run()
-
-  schemaInitialized = true
+  await ensureD1Schema(db, PLUGIN_SCHEMA)
 }
 
 function parseJsonArray(value: string | null): string[] {
@@ -784,6 +828,7 @@ function mapPluginRow(row: D1PluginRow): DashboardPlugin {
     author: parseJsonObject<DashboardPluginAuthor>(row.author),
     status: (row.status as PluginStatus) || 'draft',
     readmeMarkdown: row.readme_markdown,
+    ...(row.has_readme == null ? {} : { hasReadme: Boolean(row.has_readme) }),
     iconKey: row.icon_key ?? row.icon ?? null,
     iconUrl: row.icon_url ?? row.image_url ?? null,
     createdAt: row.created_at,
@@ -1206,9 +1251,8 @@ async function writeStoredPluginTimeline(events: PluginTimelineEvent[]) {
   await writeCollection(PLUGIN_TIMELINE_KEY, normalized)
 }
 
-async function appendPluginTimelineEvent(event: H3Event, input: AddTimelineEventInput): Promise<PluginTimelineEvent> {
-  const createdAt = input.createdAt ?? new Date().toISOString()
-  const record: PluginTimelineEvent = {
+function buildPluginTimelineRecord(input: AddTimelineEventInput): PluginTimelineEvent {
+  return {
     id: randomUUID(),
     pluginId: input.pluginId,
     versionId: input.versionId ?? null,
@@ -1219,39 +1263,47 @@ async function appendPluginTimelineEvent(event: H3Event, input: AddTimelineEvent
     toStatus: input.toStatus ?? null,
     reason: input.reason?.trim() || null,
     meta: sanitizeManifest(input.meta ?? undefined),
-    createdAt,
+    createdAt: input.createdAt ?? new Date().toISOString(),
   }
+}
+
+function prepareTimelineInsert(db: D1Database, record: PluginTimelineEvent): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO ${PLUGIN_TIMELINE_TABLE} (
+      id,
+      plugin_id,
+      version_id,
+      event_type,
+      actor_id,
+      actor_role,
+      from_status,
+      to_status,
+      reason,
+      meta,
+      created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+  `).bind(
+    record.id,
+    record.pluginId,
+    record.versionId ?? null,
+    record.eventType,
+    record.actorId ?? null,
+    record.actorRole,
+    record.fromStatus ?? null,
+    record.toStatus ?? null,
+    record.reason ?? null,
+    record.meta ? JSON.stringify(record.meta) : null,
+    record.createdAt,
+  )
+}
+
+async function appendPluginTimelineEvent(event: H3Event, input: AddTimelineEventInput): Promise<PluginTimelineEvent> {
+  const record = buildPluginTimelineRecord(input)
 
   const db = getD1Database(event)
   if (db) {
     await ensurePluginSchema(db)
-    await db.prepare(`
-      INSERT INTO ${PLUGIN_TIMELINE_TABLE} (
-        id,
-        plugin_id,
-        version_id,
-        event_type,
-        actor_id,
-        actor_role,
-        from_status,
-        to_status,
-        reason,
-        meta,
-        created_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
-    `).bind(
-      record.id,
-      record.pluginId,
-      record.versionId ?? null,
-      record.eventType,
-      record.actorId ?? null,
-      record.actorRole,
-      record.fromStatus ?? null,
-      record.toStatus ?? null,
-      record.reason ?? null,
-      record.meta ? JSON.stringify(record.meta) : null,
-      record.createdAt,
-    ).run()
+    await prepareTimelineInsert(db, record).run()
     return record
   }
 
@@ -1361,7 +1413,10 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
         badges,
         author,
         status,
-        readme_markdown,
+        ${options.withoutReadme
+          ? `NULL AS readme_markdown,
+        (readme_markdown IS NOT NULL AND readme_markdown <> '') AS has_readme`
+          : 'readme_markdown'},
         icon,
         icon_key,
         icon_url,
@@ -1373,38 +1428,45 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
         latest_version_id
       FROM ${PLUGINS_TABLE}`
 
+    // The rows `pluginIsVisible` would drop for these filters stay in the database; it still decides
+    // the rest (a viewer's own and their organizations' plugins).
+    const conditions: string[] = []
     const bindings: unknown[] = []
-
     if (options.ownerId) {
-      query += ` WHERE user_id = ?1`
       bindings.push(options.ownerId)
+      conditions.push(`user_id = ?${bindings.length}`)
     }
+    if (options.statuses?.length) {
+      bindings.push(JSON.stringify(options.statuses))
+      conditions.push(`status IN (SELECT value FROM json_each(?${bindings.length}))`)
+    }
+    if (options.forStore)
+      conditions.push(`status = 'approved'`)
+    const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''
+    const bound = (sql: string) => bindings.length ? db.prepare(sql).bind(...bindings) : db.prepare(sql)
 
-    query += ` ORDER BY datetime(created_at) DESC;`
+    // The plugins and their versions in one round trip. The versions used to follow with an `IN` list of
+    // every visible plugin's id: a second round trip, and past 100 plugins more parameters than D1 binds.
+    const needVersions = Boolean(options.includeVersions || options.forStore)
+    const [pluginResult, versionResult] = await db.batch([
+      bound(`${query}${where} ORDER BY datetime(created_at) DESC;`),
+      ...(needVersions
+        ? [bound(`
+            SELECT ${options.withoutReadme ? PLUGIN_VERSION_COLUMNS_WITHOUT_README.join(', ') : '*'}
+            FROM ${PLUGIN_VERSIONS_TABLE}
+            WHERE plugin_id IN (SELECT id FROM ${PLUGINS_TABLE}${where})
+            ORDER BY datetime(created_at) DESC;
+          `)]
+        : []),
+    ])
 
-    const stmt = db.prepare(query)
-    const { results } = bindings.length
-      ? await stmt.bind(...bindings).all<D1PluginRow>()
-      : await stmt.all<D1PluginRow>()
-
-    const plugins = (results ?? []).map(mapPluginRow)
+    const plugins = ((pluginResult?.results ?? []) as D1PluginRow[]).map(mapPluginRow)
     const visiblePlugins = plugins.filter(plugin => pluginIsVisible(plugin, options))
 
-    if ((!options.includeVersions && !options.forStore) || !visiblePlugins.length)
+    if (!needVersions || !visiblePlugins.length)
       return visiblePlugins
 
-    const ids = visiblePlugins.map(plugin => plugin.id)
-    const placeholders = ids.map((_, idx) => `?${idx + 1}`).join(', ')
-
-    const versionsQuery = `
-      SELECT *
-      FROM ${PLUGIN_VERSIONS_TABLE}
-      WHERE plugin_id IN (${placeholders})
-      ORDER BY datetime(created_at) DESC;
-    `
-
-    const versionResults = await db.prepare(versionsQuery).bind(...ids).all<D1PluginVersionRow>()
-    const versions = (versionResults.results ?? []).map(mapPluginVersionRow)
+    const versions = ((versionResult?.results ?? []) as D1PluginVersionRow[]).map(mapPluginVersionRow)
 
     const byPlugin = new Map<string, DashboardPluginVersion[]>()
     for (const version of versions) {
@@ -1466,6 +1528,7 @@ export async function searchStorePlugins(
     includeVersions: true,
     forStore: true,
     audience: options.audience,
+    withoutReadme: options.includeReadme === false,
   })
 
   const filtered = plugins
@@ -1510,7 +1573,68 @@ export async function listStorePlugins(
 ): Promise<StorePluginListResult> {
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 100)
   const offset = Math.max(Math.floor(options.offset ?? 0), 0)
-  return searchStorePlugins(event, { limit, offset, audience: options.audience })
+  // The listing links to each readme rather than carrying it.
+  return searchStorePlugins(event, { limit, offset, audience: options.audience, includeReadme: false })
+}
+
+/**
+ * The plugins whose `column` is one of `keys`, each as `getPluginById` answers for it (`null` when it
+ * is missing or hidden), in one round trip however many: the rows and, when the caller needs them,
+ * their versions. A plugin was a read and then a read of its versions, and by slug a read for its id
+ * before both.
+ */
+async function readPluginsFromDatabase(
+  db: D1Database,
+  column: 'id' | 'slug',
+  keys: string[],
+  options: PluginVisibilityOptions,
+): Promise<Map<string, DashboardPlugin | null>> {
+  const answers = new Map<string, DashboardPlugin | null>()
+  const unique = [...new Set(keys)]
+  if (!unique.length)
+    return answers
+
+  const needVersions = Boolean(options.includeVersions || options.forStore)
+  const keysJson = JSON.stringify(unique)
+  const [pluginResult, versionResult] = await db.batch([
+    db.prepare(`
+      SELECT *
+      FROM ${PLUGINS_TABLE}
+      WHERE ${column} IN (SELECT value FROM json_each(?1));
+    `).bind(keysJson),
+    ...(needVersions
+      ? [db.prepare(`
+          SELECT *
+          FROM ${PLUGIN_VERSIONS_TABLE}
+          WHERE plugin_id IN (SELECT id FROM ${PLUGINS_TABLE} WHERE ${column} IN (SELECT value FROM json_each(?1)))
+          ORDER BY datetime(created_at) DESC;
+        `).bind(keysJson)]
+      : []),
+  ])
+
+  const versionsByPlugin = new Map<string, DashboardPluginVersion[]>()
+  for (const row of (versionResult?.results ?? []) as D1PluginVersionRow[]) {
+    const list = versionsByPlugin.get(row.plugin_id) ?? []
+    list.push(mapPluginVersionRow(row))
+    versionsByPlugin.set(row.plugin_id, list)
+  }
+
+  const rowsByKey = new Map(((pluginResult?.results ?? []) as D1PluginRow[]).map(row => [String(row[column]), row]))
+  for (const key of unique) {
+    const row = rowsByKey.get(key)
+    if (!row) {
+      answers.set(key, null)
+      continue
+    }
+    const plugin = mapPluginRow(row)
+    if (options.forStore && !pluginIsVisible(plugin, options))
+      answers.set(key, null)
+    else if (!needVersions)
+      answers.set(key, plugin)
+    else
+      answers.set(key, projectPluginVersions(plugin, versionsByPlugin.get(row.id) ?? [], options))
+  }
+  return answers
 }
 
 export async function getPluginById(event: H3Event | undefined, id: string, options: PluginVisibilityOptions = {}) {
@@ -1518,29 +1642,7 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
 
   if (db) {
     await ensurePluginSchema(db)
-    const row = await db.prepare(`
-      SELECT *
-      FROM ${PLUGINS_TABLE}
-      WHERE id = ?1;
-    `).bind(id).first<D1PluginRow>()
-
-    if (!row)
-      return null
-
-    const plugin = mapPluginRow(row)
-    if (options.forStore && !pluginIsVisible(plugin, options))
-      return null
-    if (!options.includeVersions && !options.forStore)
-      return plugin
-
-    const versionResults = await db.prepare(`
-      SELECT *
-      FROM ${PLUGIN_VERSIONS_TABLE}
-      WHERE plugin_id = ?1
-      ORDER BY datetime(created_at) DESC;
-    `).bind(id).all<D1PluginVersionRow>()
-    const versions = (versionResults.results ?? []).map(mapPluginVersionRow)
-    return projectPluginVersions(plugin, versions, options)
+    return (await readPluginsFromDatabase(db, 'id', [id], options)).get(id) ?? null
   }
 
   const storedPlugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
@@ -1573,17 +1675,7 @@ export async function getPluginBySlug(event: H3Event | undefined, slug: string, 
 
   if (db) {
     await ensurePluginSchema(db)
-    const row = await db.prepare(`
-      SELECT id
-      FROM ${PLUGINS_TABLE}
-      WHERE slug = ?1
-      LIMIT 1;
-    `).bind(slug).first<{ id: string }>()
-
-    if (!row)
-      return null
-
-    return getPluginById(event, row.id, options)
+    return (await readPluginsFromDatabase(db, 'slug', [slug], options)).get(slug) ?? null
   }
 
   const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
@@ -1592,6 +1684,22 @@ export async function getPluginBySlug(event: H3Event | undefined, slug: string, 
     return null
 
   return getPluginById(event, match.id, options)
+}
+
+/** `getPluginBySlug` for many slugs at once: one round trip for all of them. */
+export async function getPluginsBySlugs(
+  event: H3Event | undefined,
+  slugs: string[],
+  options: PluginVisibilityOptions = {},
+): Promise<Map<string, DashboardPlugin | null>> {
+  const db = getD1Database(event)
+  if (db) {
+    await ensurePluginSchema(db)
+    return await readPluginsFromDatabase(db, 'slug', slugs, options)
+  }
+
+  const unique = [...new Set(slugs)]
+  return new Map(await Promise.all(unique.map(async slug => [slug, await getPluginBySlug(event, slug, options)] as const)))
 }
 
 export async function createPlugin(event: H3Event, input: CreatePluginInput & { userId: string, ownerOrgId?: string | null }) {
@@ -1858,23 +1966,23 @@ async function updatePluginIcon(event: H3Event, pluginId: string, iconKey: strin
 }
 
 export async function deletePlugin(event: H3Event, id: string) {
-  const plugin = await getPluginById(event, id, { includeVersions: true })
-
-  if (!plugin)
-    throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
-
   const db = getD1Database(event)
 
   if (db) {
     await ensurePluginSchema(db)
 
-    const versionRows = await db.prepare(`
-      SELECT *
-      FROM ${PLUGIN_VERSIONS_TABLE}
-      WHERE plugin_id = ?1;
-    `).bind(id).all<D1PluginVersionRow>()
+    // The plugin and its versions in one round trip; they were read twice over two.
+    const [pluginResult, versionResult] = await db.batch([
+      db.prepare(`SELECT * FROM ${PLUGINS_TABLE} WHERE id = ?1;`).bind(id),
+      db.prepare(`SELECT * FROM ${PLUGIN_VERSIONS_TABLE} WHERE plugin_id = ?1 ORDER BY datetime(created_at) DESC;`).bind(id),
+    ])
+    const row = (pluginResult?.results?.[0] ?? null) as D1PluginRow | null
+    if (!row)
+      throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
 
-    const versions = (versionRows.results ?? []).map(mapPluginVersionRow)
+    const versions = ((versionResult?.results ?? []) as D1PluginVersionRow[]).map(mapPluginVersionRow)
+    // What `getPluginById(event, id, { includeVersions: true })` answered with.
+    const plugin = projectPluginVersions(mapPluginRow(row), versions, { includeVersions: true })!
 
     for (const version of versions) {
       await deletePluginPackage(event, version.packageKey, {
@@ -1883,48 +1991,45 @@ export async function deletePlugin(event: H3Event, id: string) {
       await deleteImage(event, version.iconKey)
     }
 
-    await db.prepare(`
-      DELETE FROM ${PLUGIN_VERSIONS_TABLE}
-      WHERE plugin_id = ?1;
-    `).bind(id).run()
-
-    await db.prepare(`
-      DELETE FROM ${PLUGIN_TIMELINE_TABLE}
-      WHERE plugin_id = ?1;
-    `).bind(id).run()
-
-    await db.prepare(`
-      DELETE FROM ${PLUGINS_TABLE}
-      WHERE id = ?1;
-    `).bind(id).run()
+    // The rows go together, in one round trip: three deletes in a row could stop part way.
+    await db.batch([
+      db.prepare(`DELETE FROM ${PLUGIN_VERSIONS_TABLE} WHERE plugin_id = ?1;`).bind(id),
+      db.prepare(`DELETE FROM ${PLUGIN_TIMELINE_TABLE} WHERE plugin_id = ?1;`).bind(id),
+      db.prepare(`DELETE FROM ${PLUGINS_TABLE} WHERE id = ?1;`).bind(id),
+    ])
     if (plugin.iconKey)
       await deleteImage(event, plugin.iconKey)
+    return plugin
   }
-  else {
-    const versions = await readStoredPluginVersions()
-    const remainingVersions = versions.filter(version => version.pluginId !== id)
 
-    const orphaned = versions.filter(version => version.pluginId === id)
-    for (const version of orphaned) {
-      await deletePluginPackage(event, version.packageKey, {
-        governanceResourceId: buildPluginPackageGovernanceResourceId(version),
-      })
-      await deleteImage(event, version.iconKey)
-    }
+  const plugin = await getPluginById(event, id, { includeVersions: true })
 
-    await writeStoredPluginVersions(remainingVersions)
-    const timeline = await readStoredPluginTimeline()
-    await writeStoredPluginTimeline(timeline.filter(item => item.pluginId !== id))
+  if (!plugin)
+    throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
 
-    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
-    const pluginToDelete = plugins.find(item => item.id === id)
-    await writeCollection(
-      PLUGINS_KEY,
-      plugins.filter(item => item.id !== id),
-    )
-    if (pluginToDelete?.iconKey)
-      await deleteImage(event, pluginToDelete.iconKey)
+  const versions = await readStoredPluginVersions()
+  const remainingVersions = versions.filter(version => version.pluginId !== id)
+
+  const orphaned = versions.filter(version => version.pluginId === id)
+  for (const version of orphaned) {
+    await deletePluginPackage(event, version.packageKey, {
+      governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+    })
+    await deleteImage(event, version.iconKey)
   }
+
+  await writeStoredPluginVersions(remainingVersions)
+  const timeline = await readStoredPluginTimeline()
+  await writeStoredPluginTimeline(timeline.filter(item => item.pluginId !== id))
+
+  const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+  const pluginToDelete = plugins.find(item => item.id === id)
+  await writeCollection(
+    PLUGINS_KEY,
+    plugins.filter(item => item.id !== id),
+  )
+  if (pluginToDelete?.iconKey)
+    await deleteImage(event, pluginToDelete.iconKey)
 
   return plugin
 }
@@ -1939,6 +2044,10 @@ export async function setPluginStatus(
     reason?: string | null
   } = {},
 ) {
+  const db = getD1Database(event)
+  if (db)
+    return await setPluginStatusInDatabase(db, id, status, options)
+
   const plugin = await getPluginById(event, id)
   if (!plugin)
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
@@ -1951,92 +2060,124 @@ export async function setPluginStatus(
     status,
     updatedAt: now,
   }
-  const db = getD1Database(event)
-  let versions: DashboardPluginVersion[]
 
-  if (db) {
-    await ensurePluginSchema(db)
-    await db.prepare(`
-      UPDATE ${PLUGINS_TABLE}
-      SET status = ?1, updated_at = ?2
-      WHERE id = ?3;
-    `).bind(status, now, id).run()
+  const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+  const index = plugins.findIndex(item => item.id === id)
+  if (index === -1)
+    throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
 
-    const rows = await db.prepare(`
-      SELECT *
-      FROM ${PLUGIN_VERSIONS_TABLE}
-      WHERE plugin_id = ?1;
-    `).bind(id).all<D1PluginVersionRow>()
-    versions = (rows.results ?? []).map(mapPluginVersionRow)
-    for (const version of versions) {
-      version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
-      version.eligibilityEvaluatedAt = now
-      version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
-      await db.prepare(`
-        UPDATE ${PLUGIN_VERSIONS_TABLE}
-        SET eligibility_revision = ?1, eligibility_evaluated_at = ?2, eligibility_reasons = ?3
-        WHERE id = ?4;
-      `).bind(
-        version.eligibilityRevision,
-        version.eligibilityEvaluatedAt,
-        JSON.stringify(version.eligibilityReasons),
-        version.id,
-      ).run()
-    }
+  const storedVersions = await readStoredPluginVersions()
+  const versions = storedVersions.filter(version => version.pluginId === id)
+  for (const version of versions) {
+    version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
+    version.eligibilityEvaluatedAt = now
+    version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
   }
-  else {
-    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
-    const index = plugins.findIndex(item => item.id === id)
-    if (index === -1)
-      throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
-
-    const storedVersions = await readStoredPluginVersions()
-    versions = storedVersions.filter(version => version.pluginId === id)
-    for (const version of versions) {
-      version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
-      version.eligibilityEvaluatedAt = now
-      version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
-    }
-    await writeStoredPluginVersions(storedVersions)
-    plugins[index] = updatedPlugin
-    await writeCollection(PLUGINS_KEY, plugins)
-  }
+  await writeStoredPluginVersions(storedVersions)
+  plugins[index] = updatedPlugin
+  await writeCollection(PLUGINS_KEY, plugins)
 
   const latest = selectLatestVisibleVersion(versions, updatedPlugin, { forStore: true })
   updatedPlugin.latestVersionId = latest?.id ?? null
-  if (db) {
-    await db.prepare(`
-      UPDATE ${PLUGINS_TABLE}
-      SET latest_version_id = ?1
-      WHERE id = ?2;
-    `).bind(updatedPlugin.latestVersionId, id).run()
-  }
-  else {
-    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
-    const index = plugins.findIndex(item => item.id === id)
-    if (index !== -1 && plugins[index]) {
-      plugins[index] = updatedPlugin
-      await writeCollection(PLUGINS_KEY, plugins)
+  {
+    const stored = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const storedIndex = stored.findIndex(item => item.id === id)
+    if (storedIndex !== -1 && stored[storedIndex]) {
+      stored[storedIndex] = updatedPlugin
+      await writeCollection(PLUGINS_KEY, stored)
     }
   }
 
-  await appendPluginTimelineEvent(event, {
-    pluginId: id,
+  await appendPluginTimelineEvent(event, statusChangeTimelineInput(id, plugin.status, status, updatedPlugin.latestVersionId, versions, now, options))
+
+  return updatedPlugin
+}
+
+function statusChangeTimelineInput(
+  pluginId: string,
+  fromStatus: PluginStatus,
+  toStatus: PluginStatus,
+  latestVersionId: string | null | undefined,
+  versions: DashboardPluginVersion[],
+  createdAt: string,
+  options: { actorId?: string | null, actorRole?: PluginTimelineActorRole, reason?: string | null },
+): AddTimelineEventInput {
+  return {
+    pluginId,
     eventType: 'plugin.status.changed',
     actorId: options.actorId ?? null,
     actorRole: options.actorRole ?? 'system',
-    fromStatus: plugin.status,
-    toStatus: status,
+    fromStatus,
+    toStatus,
     reason: options.reason ?? null,
     meta: {
-      latestVersionId: updatedPlugin.latestVersionId,
+      latestVersionId,
       eligibilityRevisions: versions.map(version => ({
         versionId: version.id,
         revision: version.eligibilityRevision,
       })),
     },
-    createdAt: now,
-  })
+    createdAt,
+  }
+}
+
+/**
+ * The plugin and its versions in one round trip, and every write in one more: the status, each
+ * version's re-evaluated eligibility, the latest version and the timeline entry. They were a read, a
+ * write, a read, one write per version, a write and a write, and a failure part way left the status
+ * changed with stale eligibility; the batch is one transaction.
+ */
+async function setPluginStatusInDatabase(
+  db: D1Database,
+  id: string,
+  status: PluginStatus,
+  options: { actorId?: string | null, actorRole?: PluginTimelineActorRole, reason?: string | null },
+): Promise<DashboardPlugin> {
+  await ensurePluginSchema(db)
+  const [pluginResult, versionResult] = await db.batch([
+    db.prepare(`SELECT * FROM ${PLUGINS_TABLE} WHERE id = ?1;`).bind(id),
+    db.prepare(`SELECT * FROM ${PLUGIN_VERSIONS_TABLE} WHERE plugin_id = ?1;`).bind(id),
+  ])
+  const row = (pluginResult?.results?.[0] ?? null) as D1PluginRow | null
+  if (!row)
+    throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
+  const plugin = mapPluginRow(row)
+  if (plugin.status === status)
+    return plugin
+
+  const now = new Date().toISOString()
+  const updatedPlugin: DashboardPlugin = {
+    ...plugin,
+    status,
+    updatedAt: now,
+  }
+  const versions = ((versionResult?.results ?? []) as D1PluginVersionRow[]).map(mapPluginVersionRow)
+  for (const version of versions) {
+    version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
+    version.eligibilityEvaluatedAt = now
+    version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
+  }
+  updatedPlugin.latestVersionId = selectLatestVisibleVersion(versions, updatedPlugin, { forStore: true })?.id ?? null
+
+  const timeline = buildPluginTimelineRecord(statusChangeTimelineInput(id, plugin.status, status, updatedPlugin.latestVersionId, versions, now, options))
+  await db.batch([
+    db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET status = ?1, updated_at = ?2, latest_version_id = ?3
+      WHERE id = ?4;
+    `).bind(status, now, updatedPlugin.latestVersionId, id),
+    ...versions.map(version => db.prepare(`
+      UPDATE ${PLUGIN_VERSIONS_TABLE}
+      SET eligibility_revision = ?1, eligibility_evaluated_at = ?2, eligibility_reasons = ?3
+      WHERE id = ?4;
+    `).bind(
+      version.eligibilityRevision,
+      version.eligibilityEvaluatedAt,
+      JSON.stringify(version.eligibilityReasons),
+      version.id,
+    )),
+    prepareTimelineInsert(db, timeline),
+  ])
 
   return updatedPlugin
 }
@@ -3363,14 +3504,12 @@ export async function incrementPluginInstalls(event: H3Event, pluginId: string):
   if (db) {
     await ensurePluginSchema(db)
 
-    await db.prepare(`
+    // The count comes back with the write; it was read back in a second round trip.
+    const row = await db.prepare(`
       UPDATE ${PLUGINS_TABLE}
       SET installs = installs + 1
-      WHERE id = ?1;
-    `).bind(pluginId).run()
-
-    const row = await db.prepare(`
-      SELECT installs FROM ${PLUGINS_TABLE} WHERE id = ?1;
+      WHERE id = ?1
+      RETURNING installs;
     `).bind(pluginId).first<{ installs: number }>()
 
     const installs = Number(row?.installs ?? 0)
@@ -3419,14 +3558,11 @@ export async function decrementPluginInstalls(event: H3Event, pluginId: string):
   if (db) {
     await ensurePluginSchema(db)
 
-    await db.prepare(`
+    const row = await db.prepare(`
       UPDATE ${PLUGINS_TABLE}
       SET installs = MAX(0, installs - 1)
-      WHERE id = ?1;
-    `).bind(pluginId).run()
-
-    const row = await db.prepare(`
-      SELECT installs FROM ${PLUGINS_TABLE} WHERE id = ?1;
+      WHERE id = ?1
+      RETURNING installs;
     `).bind(pluginId).first<{ installs: number }>()
 
     return Number(row?.installs ?? 0)

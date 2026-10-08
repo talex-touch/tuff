@@ -121,12 +121,10 @@ interface CachedSpeechCatalog {
 }
 
 const cachedCatalogs = new Map<string, CachedSpeechCatalog>()
-const catalogBuilds = new Map<string, Promise<CachedSpeechCatalog>>()
 
-/** Test seam: drop the in-process cache and any completed build references. */
+/** Test seam: drop the in-process cache. */
 export function resetSpeechCatalogCache(): void {
   cachedCatalogs.clear()
-  catalogBuilds.clear()
 }
 
 function validateCatalogEntries(entries: UpstreamCatalogEntry[]): UpstreamCatalogEntry[] {
@@ -250,7 +248,14 @@ export async function buildSpeechCatalog(source = SPEECH_MODEL_CATALOG_SOURCE): 
   }
 }
 
-/** The catalog plus the digest a client can pin, cached in-process for {@link SPEECH_CATALOG_CACHE_MS}. */
+/**
+ * The catalog plus the digest a client can pin, cached in-process for {@link SPEECH_CATALOG_CACHE_MS}.
+ *
+ * Only a finished build is kept, never one in flight. A build's fetches belong to the request that
+ * started it, and a Worker cancels a request's I/O when its client disconnects: a build shared with
+ * other requests would then never settle for any of them, and every later read in the isolate would
+ * wait on it. Readers that miss at the same moment each build on their own, side by side.
+ */
 export async function readSpeechCatalog(
   source = SPEECH_MODEL_CATALOG_SOURCE,
   now = Date.now(),
@@ -258,22 +263,12 @@ export async function readSpeechCatalog(
   const cached = cachedCatalogs.get(source)
   if (cached && now - cached.at < SPEECH_CATALOG_CACHE_MS) return cached
 
-  const activeBuild = catalogBuilds.get(source)
-  if (activeBuild) return await activeBuild
-
-  const build = (async (): Promise<CachedSpeechCatalog> => {
-    const payload = await buildSpeechCatalog(source)
-    const bytes = new TextEncoder().encode(JSON.stringify(payload))
-    const sha256 = createHash('sha256').update(bytes).digest('hex')
-    const next = { payload, bytes, sha256, at: now }
-    cachedCatalogs.set(source, next)
-    return next
-  })()
-  catalogBuilds.set(source, build)
-
-  try {
-    return await build
-  } finally {
-    if (catalogBuilds.get(source) === build) catalogBuilds.delete(source)
-  }
+  const payload = await buildSpeechCatalog(source)
+  const bytes = new TextEncoder().encode(JSON.stringify(payload))
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  const next = { payload, bytes, sha256, at: now }
+  // A slower build that started earlier must not replace a newer copy.
+  const current = cachedCatalogs.get(source)
+  if (!current || current.at <= now) cachedCatalogs.set(source, next)
+  return next
 }

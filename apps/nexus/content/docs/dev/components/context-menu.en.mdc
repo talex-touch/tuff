@@ -72,7 +72,6 @@ code: |
         :x="x"
         :y="y"
         :animation="animationOptions"
-        show-arrow
       >
         <template #menu>
           <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">

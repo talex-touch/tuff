@@ -1,6 +1,6 @@
 ---
 title: "TreeSelect 树选择器"
-description: "用于在下拉浮层中选择树形数据，支持搜索、单选/多选。"
+description: "在下拉浮层中选择树形数据的选择器"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,17 +11,18 @@ verified: true
 
 ## 用法
 
-### TreeSelect
+### 基础
 :::TuffDemoWrapper{demo="TreeSelectTreeSelectDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import type { TreeSelectNode, TreeSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
 
   const multiple = ref(false)
-  const value = ref<string | number | Array<string | number> | undefined>(undefined)
+  const value = ref<TreeSelectValue>(undefined)
 
-  const nodes = [
+  const nodes: TreeSelectNode[] = [
     {
       key: 'general',
       label: 'General',
@@ -31,148 +32,25 @@ code: |
       ],
     },
     {
-      key: 'account',
-      label: 'Account',
-      children: [
-        { key: 'profile', label: 'Profile' },
-        { key: 'billing', label: 'Billing' },
-      ],
-    },
-    {
       key: 'danger',
       label: 'Danger Zone',
       disabled: true,
-      children: [
-        { key: 'delete', label: 'Delete account', disabled: true },
-      ],
+      children: [{ key: 'delete', label: 'Delete account', disabled: true }],
     },
   ]
-
-  const placeholder = computed(() => (multiple.value ? 'Select multiple' : 'Select one'))
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton size="sm" variant="secondary" @click="multiple = !multiple">
-          Toggle multiple
-        </TxButton>
-        <TxButton size="sm" variant="secondary" @click="value = multiple ? [] : undefined">
-          Clear
-        </TxButton>
-      </div>
-
-      <TxTreeSelect
-        v-model="value"
-        :nodes="nodes"
-        :multiple="multiple"
-        :placeholder="placeholder"
-        :dropdown-max-height="260"
-      />
-
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        value: {{ value }}
-      </div>
-    </div>
+    <TxTreeSelect v-model="value" :nodes="nodes" :multiple="multiple" :dropdown-max-height="260" />
   </template>
 ---
 :::
 
-- `TxTreeSelect` 内部复用 `TxTree`。下拉树只接收 `defaultExpandedKeys`、`filterText` 和 `multiple`；当前不透出 `expandedKeys` 或 `filterMethod`。
-- `multiple=true` 时，`modelValue` 必须是数组，触发器会把选中 label 渲染为标签；清空回传 `[]`。
-- `multiple=false` 时，`modelValue` 是单个 key 或 `undefined`；选择节点后会关闭下拉层，清空回传 `undefined`。
-- 禁用节点不可选择，但有子节点时 caret 仍可展开。
-
-### 最佳实践
-
-- 用 `TxTreeSelect` 承载紧凑的归属、命名空间、分类和组织单元选择；需要常驻上下文、批量树操作或自定义行控件时用完整 `TxTree`。
-- 保持 `key` 稳定且不依赖本地化 label；文案变化不应影响已保存选择。
-- 渲染前让值形态匹配 `multiple`。运行时切换 `multiple` 不会把已有标量自动转换成数组，反之亦然。
-- 默认展开保持浅层，例如根部门或产品域；过深的下拉树更难浏览和滚动。
-- `node` 插槽适合补充徽标或副标题，不要添加与行选择行为竞争的独立点击目标。
-- 需要领域搜索时，在外层组合搜索体验，或在 `filterMethod` 暴露前直接使用 `TxTree`。
-
-## API 参考
-
-### TxTreeSelect 属性
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | 单选时为选中 key；`multiple` 模式下为选中 key 数组。 |
-| `nodes` | `TreeSelectNode[]` | `[]` | 下拉树节点，同时用于解析触发器里展示的 label。 |
-| `multiple` | `boolean` | `false` | 启用 checkbox 多选，并在触发器中以标签展示已选 label。 |
-| `disabled` | `boolean` | `false` | 禁用触发器、下拉交互、键盘切换和清空动作。 |
-| `placeholder` | `string` | `'请选择'` | 没有选中 key 解析到 label 时显示的占位文本。 |
-| `searchable` | `boolean` | `true` | 显示搜索输入框，并把搜索文本作为 `filterText` 传给内部 `TxTree`。 |
-| `clearable` | `boolean` | `true` | 存在选中 key 且组件未禁用时显示清空按钮。 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 下拉层的 `TxPopover` 位置。 |
-| `dropdownOffset` | `number` | `6` | 下拉层相对触发器的偏移。 |
-| `dropdownWidth` | `number` | `0` | 显式下拉层宽度；`0` 表示交给 `TxPopover` 处理。 |
-| `dropdownMaxWidth` | `number` | `480` | 下拉层最大宽度。 |
-| `dropdownMaxHeight` | `number` | `320` | 下拉树最大高度，列表会在该高度内滚动。 |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 传给内部 `TxTree` 的初始展开 key。 |
-
-### TreeSelectNode
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `key` | `string \| number` | 稳定唯一 key，用作选中值。 |
-| `label` | `string` | 可见节点文本、默认搜索目标和触发器展示文本。 |
-| `disabled` | `boolean` | 禁用该节点选择。 |
-| `children` | `TreeSelectNode[]` | 可选子节点。 |
-
-### TxTreeSelect 事件
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `value: TreeSelectValue` | 选择、清空或调用 `setValue()` 后触发的 v-model 更新。 |
-| `change` | `value: TreeSelectValue` | 紧跟 `update:modelValue` 以相同值触发。 |
-| `open` | - | 下拉层打开时触发。 |
-| `close` | - | 下拉层关闭时触发。 |
-
-### TxTreeSelect 插槽
-
-| 插槽名 | 参数 | 说明 |
-|------|------|------|
-| `node` | `{ node, level, expanded, selected }` | 替换内置 `TxCardItem` 行里的节点标签区域。caret、checkbox、缩进和点击处理仍由组件维护。 |
-
-### 暴露方法
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `open()` | `() => void` | 打开下拉层。 |
-| `close()` | `() => void` | 关闭下拉层。 |
-| `toggle()` | `() => void` | 切换下拉层开关状态。 |
-| `focus()` | `() => void` | 聚焦 combobox 触发器。 |
-| `blur()` | `() => void` | 让 combobox 触发器失焦。 |
-| `clear()` | `() => void` | 未禁用时，单选发出 `undefined`，多选发出 `[]`。 |
-| `setValue(value)` | `(value: TreeSelectValue) => void` | 通过 `update:modelValue` 和 `change` 发出传入值；不会校验该值是否存在于 `nodes`。 |
-| `getValue()` | `() => TreeSelectValue` | 返回当前 `modelValue` prop。 |
-| `getCheckedKeys()` | `() => Array<string \| number>` | 单选和多选模式都以数组返回当前选中 key。 |
-
-## 后台归属选择
-
-在权限、成员、发布策略页面中，`TxTreeSelect` 更适合放“归属团队/命名空间/组织单元”这类层级选择；它比完整树更节省空间，也能和 `TxTransfer`、`TxTimeline` 共同构成授权流程。
-
-:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的归属团队选择、资源授权和审计流程。"}
+### 权限编排
+`TxTreeSelect` 选择归属团队，与 `TxTransfer`、`TxTimeline` 组成授权流程。
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const ownerTeam = ref<string | number | undefined>('docs')
-  const nodes = [
-    {
-      key: 'ops',
-      label: '运营组',
-      children: [
-        { key: 'docs', label: '文档维护' },
-        { key: 'release', label: '发布管理' },
-      ],
-    },
-  ]
-  </script>
-
   <template>
     <TxTreeSelect
       v-model="ownerTeam"
@@ -185,24 +63,91 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 紧凑的归属、命名空间、分类与组织单元选择用 `TxTreeSelect`；需要常驻上下文、批量操作或自定义行控件时用 `TxTree`。
+- `nodes` 用稳定的 `key` 与 `label`，不要沿用旧选择器的 `value` 字段；`key` 不依赖本地化文案。
+- 渲染前让值的形态匹配 `multiple`；运行时切换不会在标量与数组间自动转换。
+- 默认展开保持浅层，例如根部门或产品域。
+- `node` 插槽只放徽标或副标题，不要加与行选择竞争的点击目标。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | 单选时为选中 key；`multiple` 时为 key 数组。 |
+| `nodes` | `TreeSelectNode[]` | `[]` | 下拉树节点，也用于解析触发器文本。 |
+| `multiple` | `boolean` | `false` | 启用复选框多选，触发器以标签显示选中项。 |
+| `disabled` | `boolean` | `false` | 禁用触发器、下拉交互、键盘切换与清空。 |
+| `placeholder` | `string` | `'请选择'` | 没有可显示的选中 label 时的占位文本。 |
+| `searchable` | `boolean` | `true` | 显示搜索框，文本作为 `filterText` 传给内部 `TxTree`。 |
+| `clearable` | `boolean` | `true` | 有选中项且未禁用时显示清空按钮。 |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | 下拉层的位置。 |
+| `dropdownOffset` | `number` | `6` | 下拉层与触发器的距离。 |
+| `dropdownWidth` | `number` | `0` | 下拉层宽度；`0` 交给 `TxPopover` 决定。 |
+| `dropdownMaxWidth` | `number` | `480` | 下拉层最大宽度。 |
+| `dropdownMaxHeight` | `number` | `320` | 下拉树最大高度，超出后滚动。 |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 内部 `TxTree` 的初始展开 key。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `value: TreeSelectValue` | 选择、清空或调用 `setValue()` 后触发。 |
+| `change` | `value: TreeSelectValue` | 紧随 `update:modelValue`，值相同。 |
+| `open` | - | 下拉层打开时触发。 |
+| `close` | - | 下拉层关闭时触发。 |
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `node` | `{ node, level, expanded, selected }` | 替换行内的节点标签区；箭头、复选框、缩进与点击仍由组件处理。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open()` | `() => void` | 打开下拉层。 |
+| `close()` | `() => void` | 关闭下拉层。 |
+| `toggle()` | `() => void` | 切换下拉层。 |
+| `focus()` | `() => void` | 聚焦 combobox 触发器。 |
+| `blur()` | `() => void` | 使 combobox 触发器失焦。 |
+| `clear()` | `() => void` | 未禁用时清空：单选派发 `undefined`，多选派发 `[]`。 |
+| `setValue(value)` | `(value: TreeSelectValue) => void` | 经 `update:modelValue` 与 `change` 派发传入值，不校验它是否在 `nodes` 中。 |
+| `getValue()` | `() => TreeSelectValue` | 返回当前的 `modelValue`。 |
+| `getCheckedKeys()` | `() => Array<string \| number>` | 以数组返回选中 key，单选模式亦然。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type TreeSelectValue = string | number | Array<string | number> | undefined
+
+  interface TreeSelectNode {
+    key: string | number // 稳定唯一，用作选中值
+    label: string // 节点文本、默认搜索目标与触发器文本
+    disabled?: boolean // 禁止选择该节点
+    children?: TreeSelectNode[]
+  }
+---
+:::
+
 ## 概述
 
-- 触发器是可聚焦的 `role="combobox"`，带 `aria-haspopup="tree"` 且 `aria-controls` 指向浮层；浮层内是 `TxTree`（`role="tree"`），不是 listbox。`Enter` 和 `Space` 切换下拉层，`Escape` 关闭下拉层。
-- 下拉层由 `TxPopover` 承载；位置和宽度类属性会透传给该组件。
-- 搜索使用内部 `TxTree` 的默认 label 过滤；当前没有 prop 可把自定义 `filterMethod` 传给 `TxTreeSelect`。
-- 单选在发出值事件后关闭下拉层；多选会保持打开，便于继续勾选。
-- 触发器文案从当前 `nodes` 树解析。未知已选 key 会保留在选中集合里，但不会渲染可见 label。
-- `setValue()` 是发事件的辅助方法，不是内部状态源；父级仍通过 v-model 持有 `modelValue`。
-- `setValue` 和 `getCheckedKeys` 是供表单封装与测试夹具使用的轻量暴露方法；常规产品代码优先使用 v-model。
+- 触发器是可聚焦的 `role="combobox"`（`aria-haspopup="tree"`，`aria-controls` 指向浮层），浮层内是 `role="tree"` 的 `TxTree`；Enter 与 Space 开合下拉层，Escape 关闭。
+- 单选选中后关闭下拉层，清空为 `undefined`；多选保持打开，清空为 `[]`。
+- 禁用节点不可选，但有子节点时仍可展开。
+- 搜索使用 `TxTree` 默认的 label 过滤，不支持自定义 `filterMethod` 或受控 `expandedKeys`；需要领域搜索时在外层组合，或直接用 `TxTree`。
+- 触发器文本从当前 `nodes` 解析；未知的选中 key 仍留在选中集合中，但不显示文本。
+- `setValue()` 只派发事件，`modelValue` 仍由父级经 `v-model` 持有；常规代码优先用 `v-model`。
 
 ## 技术实现
 
-- 已对照 `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` 和 `types.ts` 核对。
-- 现有测试覆盖选择事件、空状态渲染和清空行为。
-- 建议：`nodes` 使用 `key`/`label`，不要沿用旧选择器的 `value` 字段；单选清空为 `undefined`，多选清空为空数组。
-
-- Component source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
-- Types: `packages/tuffex/packages/components/src/tree-select/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tree-select/__tests__/tree-select.test.ts` 覆盖选择值发出、缺少节点时的空状态渲染，以及单选清空值发出。
+- 下拉层由 `TxPopover` 承载，位置与宽度属性透传给它；树复用 `TxTree`，只传入 `defaultExpandedKeys`、`filterText` 与 `multiple`。
+- 源码：`packages/tuffex/packages/components/src/tree-select/`。
 
 <TuffDocSourceLink />

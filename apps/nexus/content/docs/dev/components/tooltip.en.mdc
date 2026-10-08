@@ -105,7 +105,7 @@ code: |
 | `keepAliveContent` | `boolean` | `false` | Passes through to `TxBaseAnchor` to keep floating content mounted after close. |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Overrides outside-click close behavior. Anchor config is used next, then click mode defaults to `true`. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Overrides reference click toggle behavior. Anchor config is used next, then click mode defaults to `true`. |
-| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; `modelValue` / `disabled` are owned by Tooltip (set them via `v-model` / the `disabled` prop, not `anchor`); tooltip supplies placement, arrow, panel, and animation defaults first. |
+| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; `modelValue` / `disabled` are owned by Tooltip (set them via `v-model` / the `disabled` prop, not `anchor`); tooltip supplies placement, panel, and animation defaults first; it draws no arrow unless you pass `anchor.showArrow: true`. |
 
 ### Events
 
@@ -130,7 +130,7 @@ code: |
   <template>
     <TxTooltip
       content="Bottom tooltip"
-      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
+      :anchor="{ placement: 'bottom', panelBackground: 'mask' }"
     >
       <TxButton variant="ghost">Bottom</TxButton>
     </TxTooltip>
@@ -148,7 +148,6 @@ code: |
       v-model="open"
       trigger="click"
       content="Click to toggle, click outside to close"
-      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">Click me</TxButton>
     </TxTooltip>
@@ -167,7 +166,6 @@ code: |
       trigger="click"
       :close-on-click-outside="false"
       content="Click to toggle, outside click will not close"
-      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">Pinned tooltip</TxButton>
     </TxTooltip>
@@ -185,7 +183,7 @@ code: |
   <template>
     <TxTooltip
       content="Tooltip explains the current action only."
-      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'glass' }"
+      :anchor="{ placement: 'bottom', panelBackground: 'glass' }"
     >
       <TxButton variant="secondary">Send toast</TxButton>
     </TxTooltip>
@@ -201,6 +199,7 @@ code: |
 - A pointer that leaves the reference towards the panel is in transit. While it stays inside the triangle from its exit point to the panel's facing edge (the safe triangle) and keeps moving, the panel does not close on `closeDelay`, a parent panel does not close because the path crossed out of it, and no other hover trigger along the way opens. A stop longer than 100ms, or a step out of the triangle, gives the trip up: the panel closes on its usual `closeDelay`, and the trigger the pointer stopped on opens. Leaving through the edge facing away from the panel is not a trip and closes on the delay as before. Plain hints (not `interactive`) are unchanged.
 - Tooltip sets `role="tooltip"` on the floating body and exposes `data-side` for placement-aware styling.
 - The default anchor animation is `{ type: 'boom' }` (a symmetric focus zoom in and out); an `anchor.animation` override replaces it entirely.
+- There is no arrow by default (`anchor.showArrow` defaults to `false`), as across the whole anchor family; once enabled it moves with the panel, and the gap to the trigger stays `offset` (8px by default).
 
 ## Technologies
 

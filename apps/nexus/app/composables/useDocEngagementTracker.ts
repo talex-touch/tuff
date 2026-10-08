@@ -10,6 +10,12 @@ import { requestJson } from '~/utils/request'
 
 const FLUSH_INTERVAL_MS = 15_000
 const ACTIVE_WINDOW_MS = 20_000
+/**
+ * A page nobody has scrolled, clicked, typed in or moved the pointer over for this long counts as left
+ * alone: its time stops counting and its reports stop until someone comes back. A docs tab left open on
+ * a second screen used to report every 15 s for as long as it stayed open — a write to D1 each time.
+ */
+const IDLE_STOP_MS = 3 * 60_000
 const SECTION_BUCKETS = 20
 const MAX_ACTIONS_PER_FLUSH = 80
 const MAX_HEAT_BUCKETS_PER_FLUSH = 200
@@ -316,7 +322,8 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       return
     }
 
-    const elapsed = now - lastTickAt
+    // Time past the idle limit is not reading time: it counts only up to the limit.
+    const elapsed = Math.min(now, lastInteractionAt + IDLE_STOP_MS) - lastTickAt
     lastTickAt = now
 
     if (elapsed <= 0 || document.hidden)
@@ -342,8 +349,17 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     section.buckets.set(bucket, current)
   }
 
+  function isIdle(now = Date.now()) {
+    return now - lastInteractionAt > IDLE_STOP_MS
+  }
+
   function markInteraction() {
-    lastInteractionAt = Date.now()
+    const now = Date.now()
+    // Back after the idle limit: settle the time before it, so the gap is not counted as reading.
+    if (isIdle(now))
+      applyElapsed(now)
+    lastInteractionAt = now
+    resumeTimer()
   }
 
   function resolveSectionTitle(sectionId?: string) {
@@ -590,12 +606,16 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     if (!import.meta.client || !hasSession.value)
       return
 
-    applyElapsed(Date.now())
-
+    // One flush at a time, from its snapshot until the server has the report, and no time is added
+    // while one is out. The guard used to start only at the request: a timer firing during the
+    // hashing before it took a second snapshot of the same time, and both reports counted it. The
+    // pending flush picks up everything since this snapshot once this one lands.
     if (flushInFlight) {
       flushPending = true
       return
     }
+
+    applyElapsed(Date.now())
 
     const sectionsPayload = flushableSectionPayload()
     const actionsPayload = actionQueue.value.slice(0, MAX_ACTIONS_PER_FLUSH)
@@ -618,39 +638,39 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       actions: actionsPayload,
     }
 
-    const payloadHash = await sha256Hex(stableSerialize(payloadForHash))
-    const nonce = randomNonce()
-
-    let proof = ''
-    let powNonce = ''
-
-    if (session.value?.challenge) {
-      proof = await sha256Hex(`${session.value.challenge.seed}${nonce}${payloadHash}`)
-      if ((session.value.challenge.difficulty || 0) > 0)
-        powNonce = await minePowNonce(proof, session.value.challenge.difficulty)
-    }
-
-    const requestBody: Record<string, unknown> = {
-      path: normalizedPath.value,
-      title: normalizedTitle.value,
-      source: sourceType.value,
-      sessionId: session.value?.sessionId,
-      token: session.value?.token,
-      clientId: clientId.value,
-      nonce,
-      payloadHash,
-      proof,
-      powNonce,
-      activeDurationMs: snapshotActiveMs,
-      totalDurationMs: snapshotTotalMs,
-      sections: sectionsPayload,
-      actions: actionsPayload,
-      reason,
-      truncated: hasOverflowActions || hasOverflowBuckets,
-    }
-
     flushInFlight = true
     try {
+      const payloadHash = await sha256Hex(stableSerialize(payloadForHash))
+      const nonce = randomNonce()
+
+      let proof = ''
+      let powNonce = ''
+
+      if (session.value?.challenge) {
+        proof = await sha256Hex(`${session.value.challenge.seed}${nonce}${payloadHash}`)
+        if ((session.value.challenge.difficulty || 0) > 0)
+          powNonce = await minePowNonce(proof, session.value.challenge.difficulty)
+      }
+
+      const requestBody: Record<string, unknown> = {
+        path: normalizedPath.value,
+        title: normalizedTitle.value,
+        source: sourceType.value,
+        sessionId: session.value?.sessionId,
+        token: session.value?.token,
+        clientId: clientId.value,
+        nonce,
+        payloadHash,
+        proof,
+        powNonce,
+        activeDurationMs: snapshotActiveMs,
+        totalDurationMs: snapshotTotalMs,
+        sections: sectionsPayload,
+        actions: actionsPayload,
+        reason,
+        truncated: hasOverflowActions || hasOverflowBuckets,
+      }
+
       await requestJson('/api/docs/engagement', {
         method: 'POST',
         body: requestBody,
@@ -758,7 +778,17 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
 
     flushTimer = setInterval(() => {
       void flush('interval')
+      // That flush reported the time up to the idle limit; nothing more until someone is back.
+      if (isIdle())
+        stopTimer()
     }, FLUSH_INTERVAL_MS)
+  }
+
+  /** Restarts reporting stopped by idling or a hidden tab, for a page that is still being tracked. */
+  function resumeTimer() {
+    if (!import.meta.client || flushTimer || !isEnabled.value || !hasSession.value || document.hidden)
+      return
+    startTimer()
   }
 
   function stopTimer() {
@@ -783,10 +813,15 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       }, { passive: true })
 
       useEventListener(document, 'visibilitychange', () => {
-        if (document.hidden)
+        if (document.hidden) {
           void flush('visibility-hidden')
-        else
-          markInteraction()
+          // A hidden page counts no time, so it has nothing to report until it is shown again.
+          stopTimer()
+          return
+        }
+        // Nor is the time it spent hidden reading time.
+        lastTickAt = Date.now()
+        markInteraction()
       })
 
       useEventListener(window, 'pagehide', () => {

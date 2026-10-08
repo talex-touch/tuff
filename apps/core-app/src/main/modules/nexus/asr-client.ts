@@ -7,15 +7,18 @@ import {
 } from '@talex-touch/utils/transport/events/types'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
+import { createLogger } from '../../utils/logger'
 import { performNexusRequestWithAuth } from '../auth'
 import { getRuntimeNexusBaseUrl } from './runtime-base'
 
+const asrLog = createLogger('NexusASR')
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024
 const MAX_AUDIO_SECONDS = 600
 const MAX_POLL_DEADLINE_MS = 10 * 60 * 1000
 const POLL_INTERVAL_MS = 500
 const MAX_TRANSCRIPT_LENGTH = 1_000_000
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/
+const SERVER_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,63}$/
 const IDEMPOTENCY_KEY_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -59,6 +62,8 @@ type NexusAudioResponse = {
 type NexusError = Error & {
   code?: IntelligenceErrorCode
   reason?: string
+  /** The error code Nexus put in its error body, when it named one. */
+  serverCode?: string
 }
 
 function createError(code: IntelligenceErrorCode, reason: string): NexusError {
@@ -80,7 +85,40 @@ function resolveIdempotencyKey(value: unknown): string {
   return typeof value === 'string' && IDEMPOTENCY_KEY_PATTERN.test(value) ? value : randomUUID()
 }
 
-function mapHttpError(status: number): NexusError {
+/** The code an H3 error body names (`data.errorCode`, else a code-shaped `statusMessage`). */
+function readServerErrorCode(body: unknown): string | undefined {
+  if (typeof body !== 'string' || !body || body.length > 64_000) return undefined
+  try {
+    const value: unknown = JSON.parse(body)
+    if (!value || typeof value !== 'object') return undefined
+    const { data, statusMessage } = value as { data?: unknown; statusMessage?: unknown }
+    const errorCode =
+      data && typeof data === 'object' ? (data as { errorCode?: unknown }).errorCode : undefined
+    const candidate = typeof errorCode === 'string' ? errorCode : statusMessage
+    return typeof candidate === 'string' && SERVER_ERROR_CODE_PATTERN.test(candidate)
+      ? candidate
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Maps a Nexus answer outside 2xx.
+ *
+ * A 5xx is Nexus reporting its own failure, so it is the service that is unavailable, not the
+ * network: labelled NETWORK_FAILURE, it sent people to check a connection that worked while Nexus
+ * answered every submission with 500 (its database had run out of daily writes, 2026-10-08).
+ * NETWORK_FAILURE stays for requests that got no answer at all.
+ */
+function mapHttpError(status: number, body?: string): NexusError {
+  const error = mapHttpStatus(status)
+  const serverCode = readServerErrorCode(body)
+  if (serverCode) error.serverCode = serverCode
+  return error
+}
+
+function mapHttpStatus(status: number): NexusError {
   if (status === 401)
     return createError('NEXUS_AUTH_REQUIRED', 'Nexus requires a signed-in account.')
   if (status === 402 || status === 429)
@@ -93,10 +131,21 @@ function mapHttpError(status: number): NexusError {
     return createError('INVALID_REQUEST', 'Nexus rejected the transcription request as a conflict.')
   if (status >= 400 && status < 500)
     return createError('INVALID_REQUEST', 'Nexus rejected the transcription request.')
+  // "provider unavailable" is the phrase the Intelligence error normalizer classifies on, and the
+  // `audio.stt` route reaches this client through it.
   return createError(
-    'NETWORK_FAILURE',
-    'Nexus transcription request failed before a valid response.'
+    'PROVIDER_UNAVAILABLE',
+    `Nexus transcription provider unavailable (HTTP ${status}).`
   )
+}
+
+/** The log is the one place the HTTP status survives: the error carries only an app-level code. */
+function rejectNexusResponse(stage: 'submit' | 'poll', status: number, body: string): never {
+  const error = mapHttpError(status, body)
+  asrLog.warn('Nexus transcription request rejected', {
+    meta: { stage, status, code: error.code ?? '', serverCode: error.serverCode ?? '' }
+  })
+  throw error
 }
 
 function resolveAudioRoute(descriptor?: VoiceProviderDescriptorV1): ResolvedNexusAudioRoute {
@@ -436,7 +485,8 @@ export async function transcribeNexusAudio(
     )
     throwIfAborted(signal)
     if (!submit) throw createError('NEXUS_AUTH_REQUIRED', 'Nexus requires a signed-in account.')
-    if (submit.status < 200 || submit.status >= 300) throw mapHttpError(submit.status)
+    if (submit.status < 200 || submit.status >= 300)
+      rejectNexusResponse('submit', submit.status, submit.body)
     const initial = parseResponse(submit.body)
     const requestId = normalizeRequestId(initial.requestId)
     let state = normalizeState(initial.status)
@@ -468,7 +518,8 @@ export async function transcribeNexusAudio(
       )
       throwIfAborted(signal)
       if (!response) throw createError('NEXUS_AUTH_REQUIRED', 'Nexus requires a signed-in account.')
-      if (response.status < 200 || response.status >= 300) throw mapHttpError(response.status)
+      if (response.status < 200 || response.status >= 300)
+        rejectNexusResponse('poll', response.status, response.body)
       const parsed = parseResponse(response.body)
       if (normalizeRequestId(parsed.requestId) !== requestId) {
         throw createError('INVALID_REQUEST', 'Nexus returned an invalid transcription request.')

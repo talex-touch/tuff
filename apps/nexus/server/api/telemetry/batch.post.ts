@@ -1,10 +1,13 @@
 import { createError, getHeader, readBody } from 'h3'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 import {
+  buildTelemetryBatchReceiptStatement,
+  commitTelemetryWrite,
   digestTelemetryBatchPayload,
   getTelemetryBatchReceipt,
-  recordTelemetryEvent,
-  storeTelemetryBatchReceipt,
+  normalizeTelemetryIdempotencyKey,
+  prepareTelemetryWrite,
+  type TelemetryEventInput,
 } from '../../utils/telemetryStore'
 import { DEFAULT_USER_PRIVACY_SETTINGS, getUserById, type UserPrivacySettings } from '../../utils/authStore'
 import { resolveTelemetryUserId } from '../../utils/telemetryIdentity'
@@ -37,14 +40,6 @@ interface TelemetryBatchAck extends Record<string, unknown> {
 }
 
 const TELEMETRY_BATCH_SCOPE = 'telemetry.batch'
-const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/
-
-function normalizeIdempotencyKey(value: unknown): string | null {
-  if (typeof value !== 'string')
-    return null
-  const trimmed = value.trim()
-  return IDEMPOTENCY_KEY_PATTERN.test(trimmed) ? trimmed : null
-}
 
 async function resolveTelemetryPrivacySettings(event: Parameters<typeof getUserById>[0], userId: string | null): Promise<UserPrivacySettings | null> {
   if (!userId) return null
@@ -72,7 +67,7 @@ export default defineEventHandler(async (event) => {
   const maxBatchSize = 100
   const eventsToProcess = events.slice(0, maxBatchSize)
   const dropped = Math.max(0, events.length - maxBatchSize)
-  const idempotencyKey = normalizeIdempotencyKey(getHeader(event, 'x-idempotency-key'))
+  const idempotencyKey = normalizeTelemetryIdempotencyKey(getHeader(event, 'x-idempotency-key'))
 
   if (!idempotencyKey) {
     throw createError({ statusCode: 400, statusMessage: 'X-Idempotency-Key header required' })
@@ -103,10 +98,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  let accepted = 0
   let rejected = 0
 
-  const payloads = eventsToProcess.map((e) => {
+  const payloads = eventsToProcess.map((e): TelemetryEventInput | null => {
     if (!e.eventType || !['search', 'visit', 'error', 'feature_use', 'performance'].includes(e.eventType)) {
       rejected += 1
       return null
@@ -117,9 +111,14 @@ export default defineEventHandler(async (event) => {
       return null
     }
 
+    // The event's own flag decides attribution, not just the connection's credentials: a signed-in
+    // client in anonymous mode sends `isAnonymous: true`, and that choice has to survive the fact
+    // that its request carried a token. Only an explicit `false` attributes.
+    const anonymous = !resolvedUserId || e.isAnonymous !== false
+
     return {
       eventType: e.eventType,
-      userId: resolvedUserId || undefined,
+      userId: anonymous ? undefined : resolvedUserId || undefined,
       clientId: e.clientId || undefined,
       deviceFingerprint: e.deviceFingerprint || undefined,
       platform: e.platform || undefined,
@@ -131,14 +130,18 @@ export default defineEventHandler(async (event) => {
       providerTimings: e.providerTimings || undefined,
       inputTypes: Array.isArray(e.inputTypes) ? e.inputTypes : undefined,
       metadata: e.metadata || undefined,
-      isAnonymous: resolvedUserId ? e.isAnonymous !== false : true,
+      isAnonymous: anonymous,
     }
   })
 
-  for (const payload of payloads) {
-    if (!payload)
-      continue
-    const result = await recordTelemetryEvent(event, payload)
+  const toWrite = payloads.filter((payload): payload is TelemetryEventInput => payload !== null)
+  const prepared = await prepareTelemetryWrite(event, toWrite)
+  if (!prepared.db || !prepared.batch) {
+    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+  }
+
+  let accepted = 0
+  for (const result of prepared.results) {
     if (result.status === 'accepted') {
       accepted += 1
     }
@@ -158,11 +161,18 @@ export default defineEventHandler(async (event) => {
     dropped,
     processed: accepted,
   }
-  await storeTelemetryBatchReceipt(event, {
-    scope: TELEMETRY_BATCH_SCOPE,
-    idempotencyKey,
-    payloadHash,
-    response,
+
+  // Rows, counters and the receipt that acknowledges them commit in one D1 batch: a retry after a
+  // failure finds either everything (and gets the stored ACK back) or nothing (and writes it all).
+  await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
+    extraStatements: [
+      buildTelemetryBatchReceiptStatement(prepared.db, {
+        scope: TELEMETRY_BATCH_SCOPE,
+        idempotencyKey,
+        payloadHash,
+        response,
+      }),
+    ],
   })
 
   return response

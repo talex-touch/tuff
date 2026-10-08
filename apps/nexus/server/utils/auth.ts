@@ -6,12 +6,14 @@ import { useRuntimeConfig } from '#imports'
 import { getToken } from '#auth'
 import { createError, getHeader, getRequestProtocol } from 'h3'
 import {
+  type AuthUser,
   consumeLoginToken,
   createUser,
   ensureDeviceForRequest,
-  getDevice,
+  getUserAndTouchRequestDevice,
   getUserByEmail,
   getUserById,
+  getUserWithDevice,
   readDeviceId,
   readDeviceMetadata,
   upsertDevice,
@@ -389,16 +391,45 @@ export interface AuthContext {
   authSource: 'session' | 'app'
   tokenGrantType?: 'short' | 'long' | null
   sessionIssuedAt?: number | null
+  /**
+   * The user row authentication already read, so a handler need not read it again. Optional only
+   * because tests and older call sites build contexts by hand.
+   */
+  user?: AuthUser
+}
+
+const AUTH_MEMO_KEY = '__nexusAuthMemo'
+
+/**
+ * Authentication runs once per request and credential: a handler and the helpers it calls often each
+ * ask for it, and every repeat was another user read and device write. The promise is kept on the
+ * event, failure included (a 401 is not retried within the request either), keyed by the credential
+ * the request presents so a different credential is never answered from another one's result.
+ */
+function memoizeOnEvent<T>(event: H3Event, kind: string, credential: string | undefined, resolve: () => Promise<T>): Promise<T> {
+  const context = event.context as Record<string, unknown> | undefined
+  if (!context)
+    return resolve()
+  const memo = (context[AUTH_MEMO_KEY] ??= new Map<string, Promise<unknown>>()) as Map<string, Promise<unknown>>
+  const key = `${kind}:${credential ?? ''}`
+  const existing = memo.get(key) as Promise<T> | undefined
+  if (existing)
+    return existing
+  const pending = resolve()
+  memo.set(key, pending)
+  return pending
 }
 
 async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload): Promise<AuthContext> {
-  const user = await getUserById(event, payload.sub)
+  // The user and the token's device in one round trip; they were two.
+  const { user, device } = payload.deviceId
+    ? await getUserWithDevice(event, payload.sub, payload.deviceId)
+    : { user: await getUserById(event, payload.sub), device: null }
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
   }
 
   if (payload.deviceId) {
-    const device = await getDevice(event, payload.sub, payload.deviceId)
     if (!device || device.revokedAt) {
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
     }
@@ -412,6 +443,7 @@ async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload):
     deviceId: payload.deviceId ?? null,
     authSource: 'app',
     tokenGrantType: payload.gt ?? null,
+    user,
   }
 }
 
@@ -430,7 +462,7 @@ async function requireAppTokenKind(event: H3Event, expectedKind: AppTokenKind): 
 }
 
 export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
-  return await requireAppTokenKind(event, 'access')
+  return await memoizeOnEvent(event, 'app-access', getHeader(event, 'authorization'), () => requireAppTokenKind(event, 'access'))
 }
 
 export async function requireAppRefreshAuth(event: H3Event): Promise<AuthContext> {
@@ -493,13 +525,38 @@ async function resolveBrowserSessionToken(event: H3Event): Promise<JWT | null> {
   }
 }
 
+/**
+ * The signed-in browser user's id from the session token alone, without reading the database.
+ *
+ * For reads scoped to the caller's own rows (their vote, their bookmark state): the token is signed,
+ * so the id is the caller's, and an account disabled since the token was issued can still only see
+ * its own data — no worse than the cookie that carries it. Anything that writes, or that depends on
+ * the account being active, uses `requireSessionAuth`.
+ */
+export async function readSessionTokenUserId(event: H3Event): Promise<string | null> {
+  const token = await resolveBrowserSessionToken(event)
+  if (!token)
+    return null
+  return readSessionTokenString(token, 'userId') || readSessionTokenString(token, 'sub') || null
+}
+
 export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
+  return await memoizeOnEvent(event, 'session', getHeader(event, 'cookie'), () => resolveSessionAuth(event))
+}
+
+async function resolveSessionAuth(event: H3Event): Promise<AuthContext> {
   const token = await resolveBrowserSessionToken(event)
   const sessionIssuedAt = typeof token?.iat === 'number' ? token.iat : null
   const directUserId = token
     ? readSessionTokenString(token, 'userId') || readSessionTokenString(token, 'sub')
     : ''
-  let user = directUserId ? await getUserById(event, directUserId) : null
+
+  // The user and the request's device in one round trip. It was a user read and then five device
+  // statements, on every request from the web client (it sends `x-device-id` on all of them).
+  let user: AuthUser | null = null
+  let deviceId: string | null = null
+  if (directUserId)
+    ({ user, deviceId } = await getUserAndTouchRequestDevice(event, directUserId))
 
   if (!user) {
     const email = token ? readSessionTokenString(token, 'email').toLowerCase() : ''
@@ -519,6 +576,9 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
     if (!user) {
       logSessionDebug('email-not-found', event, { email })
     }
+    else if (user.status === 'active') {
+      deviceId = await ensureDeviceForRequest(event, user.id)
+    }
   }
 
   if (!user) {
@@ -529,13 +589,13 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
   }
 
   logSessionDebug('resolved', event, { userId: user.id, via: directUserId ? 'id' : 'email' })
-  const device = await ensureDeviceForRequest(event, user.id)
   return {
     userId: user.id,
-    deviceId: device?.id ?? null,
+    deviceId,
     authSource: 'session',
     tokenGrantType: null,
     sessionIssuedAt,
+    user,
   }
 }
 
@@ -558,7 +618,7 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
 
 export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext> {
   const context = await requireAuth(event)
-  const user = await getUserById(event, context.userId)
+  const user = context.user ?? await getUserById(event, context.userId)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
   }
@@ -577,8 +637,8 @@ export async function getOptionalAuth(event: H3Event): Promise<AuthContext | nul
 }
 
 export async function requireAdmin(event: H3Event) {
-  const { userId } = await requireSessionAuth(event)
-  const user = await getUserById(event, userId)
+  const { userId, user: sessionUser } = await requireSessionAuth(event)
+  const user = sessionUser ?? await getUserById(event, userId)
   if (!user || user.status !== 'active' || user.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
   }

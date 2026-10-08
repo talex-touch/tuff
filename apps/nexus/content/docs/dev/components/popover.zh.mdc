@@ -33,6 +33,7 @@ code: |
 - reference 内包含输入框或自定义焦点行为时使用 `toggleOnReferenceClick=false`，`TxSearchSelect` 就是这个模式。
 - 小表单或带本地状态的筛选器保留 `keepAliveContent=true`；纯静态说明才建议设为 `false`。
 - 选项面板使用 `maxHeight` 或内部滚动，不要让 Popover 覆盖整个视口。
+- 默认不带箭头。只有几个触发器挨得很近、面板需要指明属于哪一个时才开 `showArrow`；不传 `offset` 时间距会随箭头自动加大。
 
 ## API 参考
 
@@ -44,7 +45,7 @@ code: |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `eager` | `boolean` | `false` | 通过 `TxBaseAnchor` 提前挂载锚点内容。 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
-| `offset` | `number` | 自动计算 | 间距（有箭头时按 `arrowSize` 计算，无箭头为 `2`） |
+| `offset` | `number` | 自动计算 | 间距：无箭头为 `6`（与 DropdownMenu、Select 一致），开启箭头时为 `max(8, arrowSize / 2 + 2)` |
 | `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
 | `minWidth` | `number` | `0` | 最小宽度 |
 | `maxWidth` | `number` | `360` | 最大宽度 |
@@ -52,7 +53,7 @@ code: |
 | `unlimitedHeight` | `boolean` | `false` | 关闭最大高度限制，适合内部自行管理滚动的面板。 |
 | `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度 |
 | `referenceClass` | `BaseAnchorClassValue` | - | 额外透传到 BaseAnchor reference 包装层的 class。 |
-| `showArrow` | `boolean` | `true` | 是否显示箭头 |
+| `showArrow` | `boolean` | `false` | 是否显示箭头；锚点家族默认都不画箭头，需要时逐个开启 |
 | `arrowSize` | `number` | `12` | 箭头尺寸 |
 | `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
 | `openDelay` | `number` | 见 `menu` 预设（`120`） | hover 模式打开延迟（ms）。不传时由共享延迟服务供给 |
@@ -97,7 +98,7 @@ code: |
   const background = ref<'refraction' | 'pure' | 'mask' | 'blur' | 'glass'>('refraction')
   const placement = ref<'bottom-start' | 'bottom' | 'top' | 'right'>('bottom-start')
   const trigger = ref<'click' | 'hover'>('click')
-  const showArrow = ref(true)
+  const showArrow = ref(false)
   const keepAliveContent = ref(true)
   </script>
 
@@ -156,6 +157,7 @@ code: |
           :panel-background="background"
           panel-shadow="soft"
           :panel-padding="12"
+          :width="284"
         >
           <template #reference>
             <TxButton>Click me</TxButton>
@@ -229,11 +231,12 @@ code: |
 ## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/popover/src/types.ts`、`TxPopover.vue` 与 `popover.test.ts` 核对。
-- 未传 `offset` 时会根据 `arrowSize` 自动计算；示例不应暗示固定默认间距。
+- 未传 `offset` 时：无箭头为 6px，开启箭头时按 `arrowSize` 计算；示例不应暗示固定默认间距。
+- 被否掉的做法：默认关掉箭头后沿用原来无箭头时的 2px 间距。实测面板上沿离触发器 1.8px，压住了触发器 3px 的焦点描边，所以改用菜单家族通用的 6px。
 - `closeOnClickOutside` 仅对 click 触发模式生效，因为 hover 模式通过指针/焦点离开延迟控制关闭。
 
 - Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
 - Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` 验证默认 BaseAnchor props 透传、offset 推导、hover 触发时序、悬停区覆盖整个浮层（离开内容层进入卡片内边距不会关闭）、禁用时关闭、全宽 reference class 与内容 side slot 参数。
+- **实测覆盖:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` 验证默认 BaseAnchor props 透传（含默认无箭头）、offset 推导（无箭头 6、默认箭头 8、自定义箭头尺寸、显式值）、hover 触发时序、悬停区覆盖整个浮层（离开内容层进入卡片内边距不会关闭）、禁用时关闭、全宽 reference class 与内容 side slot 参数。
 
 <TuffDocSourceLink />

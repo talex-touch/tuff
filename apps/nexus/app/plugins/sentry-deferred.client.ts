@@ -26,7 +26,8 @@ const SENTRY_DEFERRED_INIT_TIMEOUT_MS = 2000
 export default defineNuxtPlugin({
   name: 'nexus:sentry-deferred',
   setup(nuxtApp) {
-    if (!useRuntimeConfig().public.sentryClientEnabled)
+    const config = useRuntimeConfig().public
+    if (!config.sentryClientEnabled)
       return
 
     const buffer = installErrorBuffer(window)
@@ -42,7 +43,10 @@ export default defineNuxtPlugin({
           import('../../sentry.client.config'),
         ])
 
-        initSentryClient(Sentry)
+        initSentryClient(Sentry, {
+          environment: config.sentryEnvironment,
+          release: config.sentryRelease,
+        })
 
         // The module's plugin also attached @sentry/vue's integration with
         // `attachErrorHandler: false`. Under that option it only installs component-tracing

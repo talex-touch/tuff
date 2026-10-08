@@ -16,8 +16,15 @@ export const sentryClientOptions = {
   sendDefaultPii: true,
 } satisfies Parameters<typeof SentryNuxt.init>[0]
 
-export function initSentryClient(Sentry: Pick<typeof SentryNuxt, 'init' | 'getClient'>) {
+export function initSentryClient(
+  Sentry: Pick<typeof SentryNuxt, 'init' | 'getClient'>,
+  deployment: { environment?: string, release?: string } = {},
+) {
   if (Sentry.getClient())
     return
-  Sentry.init(sentryClientOptions)
+  Sentry.init({
+    ...sentryClientOptions,
+    environment: deployment.environment || undefined,
+    release: deployment.release || undefined,
+  })
 }

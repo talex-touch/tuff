@@ -9,7 +9,8 @@ import {
 const OAUTH_PROVIDERS = new Set(['github', 'linuxdo'])
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
   const provider = (getRouterParam(event, 'provider') || '').toLowerCase()
 
   if (!OAUTH_PROVIDERS.has(provider)) {
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const remainingOauthCount = linkedAccounts.filter(account => account.provider !== provider).length
   const passkeys = await listPasskeys(event, userId)
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
 
   const config = useRuntimeConfig()
   const emailProviderEnabled = Boolean(config.auth?.email?.from)

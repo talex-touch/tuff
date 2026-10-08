@@ -1,6 +1,6 @@
 ---
 title: "PromptBar"
-description: "A compact composer with @ sources, / commands, a model picker, dictation and attachments inlined into the input."
+description: "A compact composer with inline sources, commands, models, and dictation."
 category: AiChat
 status: beta
 since: 0.3.9
@@ -12,10 +12,8 @@ verified: true
 ## Usage
 
 ### The Full Bar
-
-Type `@` for sources or `/` for commands; ↑↓ moves, Enter or Tab picks, Esc dismisses. As the draft grows the textarea grows with it, then takes a row of its own above the controls.
-
-:::TuffDemoWrapper{demo="PromptBarPromptBarDemo" code-lang="vue" title="Prompt bar" description="Sources, commands, models, dictation, attachments and both Rounded / Pill shapes."}
+Type `@` for sources or `/` for commands; ↑↓ moves, Enter or Tab picks, and Esc dismisses.
+:::TuffDemoWrapper{demo="PromptBarPromptBarDemo" code-lang="vue" description="Rounded and Pill shapes"}
 ---
 code: |
   <script setup lang="ts">
@@ -28,13 +26,9 @@ code: |
 
   const sources = [
     { key: 'attach', name: 'Add photos & files', desc: 'Upload from your computer', attach: true },
-    { key: 'scoop', name: 'Scoop Data', desc: 'Sales & churn metrics' },
     { key: 'gmail', name: 'Gmail', desc: 'Read and manage Gmail', connectable: true },
   ]
-  const commands = [
-    { key: 'compare', name: '/compare', desc: 'Flavor vs. last summer' },
-    { key: 'restock', name: '/restock', desc: 'Build a reorder list' },
-  ]
+  const commands = [{ key: 'compare', name: '/compare', desc: 'Flavor vs. last summer' }]
   const models = [
     { key: 'sprinkles', name: 'Sprinkles 5', tag: 'Flagship' },
     { key: 'vanilla', name: 'Vanilla 1', tag: 'Basic' },
@@ -61,12 +55,11 @@ code: |
 
 ### Best Practices
 
-- Attachments are controlled: after `send` the bar clears only its text, so clear the attachment array on your side.
-- Dictation is presentation only. Keep recognition in the host and put the transcript back through `insert()` or the `v-model`.
-- Put brand glyphs through the `#source-icon` slot rather than into the component — third-party marks are product assets, not component assets.
-- Menus are positioned against the bar itself, so an ancestor with `overflow: hidden` will clip them and they do not flip near the viewport edge. Keep the bar outside clipping scroll containers.
-- When you want the block composer (multi-line draft with a button row beneath) and no menus, use `TxChatComposer`. The two coexist; neither replaces the other.
-- Override the text props for non-English surfaces; every default is English.
+- Attachments are controlled: after `send` the bar clears only its text, so clear the attachments yourself.
+- Dictation is presentation only; recognize speech in the host and write the result back with `insert()` or the `v-model`.
+- Pass brand glyphs through the `#source-icon` slot; the component ships no third-party SVGs.
+- Menus are absolutely positioned against the bar, so an `overflow: hidden` ancestor clips them and they never flip; keep the bar out of clipping scroll containers.
+- When you want a block composer without menus, use `TxChatComposer`.
 
 ## API Reference
 
@@ -74,26 +67,26 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `string` | — | The draft. Unbound, the bar holds it itself and still accepts typing. |
+| `modelValue` | `string` | — | The draft; unbound, the bar keeps its own. |
 | `variant` | `'rounded' \| 'pill'` | `'rounded'` | Shell and control radius. |
 | `placeholder` | `string` | `'Write a message…'` | Placeholder text, and the fallback accessible name. |
-| `ariaLabel` | `string` | — | Accessible name for the textarea; falls back to `placeholder`. |
+| `ariaLabel` | `string` | — | Accessible name of the textarea; falls back to `placeholder`. |
 | `disabled` | `boolean` | `false` | Disables the whole bar. |
 | `submitting` | `boolean` | `false` | A turn is in flight: blocks sending, never typing. |
-| `sources` | `PromptBarSource[]` | — | Rows for the `@` menu. Omitting them also hides the + button. |
-| `commands` | `PromptBarCommand[]` | — | Rows for the `/` menu. `name` carries its own leading slash. |
-| `attachments` | `AiAttachment[]` | `[]` | Chips to display; uploading and mutation stay with the host. |
-| `models` | `PromptBarModel[]` | `[]` | Model list. Empty hides the model button. |
-| `model` | `string` | first entry | Selected model key, paired with `v-model:model`. |
+| `sources` | `PromptBarSource[]` | — | Rows of the `@` menu; omitting them also hides the + button. |
+| `commands` | `PromptBarCommand[]` | — | Rows of the `/` menu; `name` carries its own leading slash. |
+| `attachments` | `AiAttachment[]` | `[]` | Chips to display; uploads and changes stay with the host. |
+| `models` | `PromptBarModel[]` | `[]` | Model list; when empty, no model button renders. |
+| `model` | `string` | first entry | Selected model key, for `v-model:model`. |
 | `dictatable` | `boolean` | `false` | Renders the dictation button. |
-| `listening` | `boolean` | — | Dictation state via `v-model:listening`. Recognition stays with the host. |
+| `listening` | `boolean` | — | Dictation state, for `v-model:listening`; recognition stays with the host. |
 | `listeningPlaceholder` | `string` | `'Listening…'` | Placeholder while listening. |
 | `minHeight` | `number` | `28` | Collapsed textarea height in px. |
 | `maxHeight` | `number` | `100` | Growth ceiling in px; past it the textarea scrolls. |
-| `sendOnEnter` | `boolean` | `true` | Enter sends, Shift+Enter breaks the line. |
+| `sendOnEnter` | `boolean` | `true` | Enter sends; Shift+Enter breaks the line. |
 | `allowEmptySend` | `boolean` | `false` | Allows sending with neither text nor attachments. |
 
-Every string is a prop with an English default and can be overridden one by one: `sourcesHintText`, `commandsHintText`, `emptyTextFormatter`, `connectText`, `connectedText`, `sendLabel`, `attachLabel`, `modelLabel`, `startDictationLabel`, `stopDictationLabel`, `attachmentFallbackLabel`, `removeAttachmentLabelFormatter`.
+Every string is a prop with an English default, overridable one by one: `sourcesHintText`, `commandsHintText`, `emptyTextFormatter`, `connectText`, `connectedText`, `sendLabel`, `attachLabel`, `modelLabel`, `startDictationLabel`, `stopDictationLabel`, `attachmentFallbackLabel`, `removeAttachmentLabelFormatter`.
 
 `PromptBarSource` is `{ key, name, desc?, attach?, connectable?, connected? }`; `PromptBarCommand` is `{ key, name, desc? }`; `PromptBarModel` is `{ key, name, tag? }`.
 
@@ -101,39 +94,39 @@ Every string is a prop with an English default and can be overridden one by one:
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `(value: string)` | The draft changed. |
-| `update:model` | `(key: string)` | The selected model changed. |
-| `update:listening` | `(listening: boolean)` | Dictation was toggled. |
-| `send` | `({ text, attachments })` | Sent. The bar clears its text; attachments are the host's to clear. |
-| `attach` | `()` | The attach row was picked — open your file dialog. |
-| `attachmentRemove` | `(id: string)` | The remove control on a chip was clicked. |
-| `attachmentAdd` | `(files: File[])` | Files arriving by paste or drag-and-drop. |
-| `sourceSelect` | `(source: PromptBarSource)` | Emitted once a mention has been inserted. |
-| `commandSelect` | `(command: PromptBarCommand)` | Emitted once a command has been inserted. |
-| `connectToggle` | `(source: PromptBarSource)` | A connectable row that is not connected yet was activated. |
-| `paste` | `(event: ClipboardEvent)` | The raw paste event; the default is not prevented. |
-| `focus` / `blur` | `(event: FocusEvent)` | Textarea focus changes. |
+| `update:modelValue` | `(value: string)` | Fires when the draft changes. |
+| `update:model` | `(key: string)` | Fires when the selected model changes. |
+| `update:listening` | `(listening: boolean)` | Fires when dictation is toggled. |
+| `send` | `({ text, attachments })` | Fires on send; the bar clears its text, the host clears attachments. |
+| `attach` | `()` | Fires when the attach row is picked; open your file dialog. |
+| `attachmentRemove` | `(id: string)` | Fires when a chip's remove control is clicked. |
+| `attachmentAdd` | `(files: File[])` | Fires for pasted or dropped files. |
+| `sourceSelect` | `(source: PromptBarSource)` | Fires after a mention is inserted. |
+| `commandSelect` | `(command: PromptBarCommand)` | Fires after a command is inserted. |
+| `connectToggle` | `(source: PromptBarSource)` | Fires when an unconnected connectable row is activated. |
+| `paste` | `(event: ClipboardEvent)` | The raw paste event; the default isn't prevented. |
+| `focus` / `blur` | `(event: FocusEvent)` | Fire on textarea focus changes. |
 
 ### Slots
 
 | Name | Scope | Description |
 |------|-------|-------------|
-| `source-icon` | `{ source }` | The 22×22 leading glyph slot for an `@` row. Brand SVGs are host assets, so none ship with the component. |
-| `attachments` | `{ attachments }` | Replaces the chip strip wholesale. |
-| `actions` | `{ send, canSend }` | Inserts custom controls just before the send button. |
+| `source-icon` | `{ source }` | Leading 22×22 glyph of an `@` row. |
+| `attachments` | `{ attachments }` | Replaces the whole chip strip. |
+| `actions` | `{ send, canSend }` | Custom controls just before the send button. |
 
-### Expose
+### Exposed Methods
 
 | Name | Type | Description |
 |------|------|-------------|
 | `focus` | `() => void` | Focuses the textarea. |
-| `insert` | `(text: string) => void` | Appends text to the draft, keeping a word separator. |
-| `closeMenus` | `() => void` | Closes both the + menu and the model menu. |
-| `menuOpen` | `boolean` | Whether any menu is open. The instance proxy unwraps the ref, so this reads as a boolean. |
+| `insert` | `(text: string) => void` | Appends text to the draft, adding a space if needed. |
+| `closeMenus` | `() => void` | Closes the + menu and the model menu. |
+| `menuOpen` | `boolean` | Whether any menu is open. Read-only. |
 
 ## Using the Token Menu on Its Own
 
-Parsing `@` / `/` and running the menu is pure state, exported separately as `useTokenMenu` — for adding mentions to your own input without adopting the whole bar. It touches no DOM and performs no side effects.
+`useTokenMenu` exports the `@` / `/` parser and menu state machine on their own, with no DOM, for adding mentions to your own input.
 
 ```ts
 import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
@@ -149,31 +142,20 @@ const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useT
 draft.value = insert(`@${row.name}`)
 ```
 
-The two matching strategies differ on purpose: sources match as a **substring** of the name, commands match as a **prefix** once the leading slash is stripped, so `/comp` narrows to `/compare`. `parseToken` is exported too; it only recognises a trailing token at a word boundary, so `you@host` is never read as a mention.
+Sources match as a substring of the name; commands match as a prefix once the slash is stripped (`/comp` narrows to `/compare`). `parseToken` only reads a trailing token at a word boundary, so `you@host` is never a mention.
 
 ## Overview
 
-- **Composition input comes first.** While an IME is composing, Enter only confirms the candidate — it neither sends nor picks a menu row, guarded three ways by `isComposing`, `keyCode === 229` and `compositionstart` / `compositionend`.
-- The menus follow the combobox pattern: the textarea carries `role="combobox"`, `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant`, the menu is a `listbox` and each row an `option`. **With nothing to offer it does not claim to be a combobox** and stays a plain multi-line text box.
-- The highlight appears only after a reader has actually aimed at a row, by hover or arrow key, so nothing pretends to be pre-selected. The first ↑ / ↓ lands on an end of the list rather than stepping one past the index it was parked at.
-- Menu rows `preventDefault` on mousedown so focus never leaves the textarea — without that, the caret disappears the moment you click a row.
-- A connectable row that is not connected yet connects when activated, emitting `connectToggle` instead of inserting a mention; activating it again once connected inserts as usual. One action per row keeps keyboard and pointer reach identical.
-- Pointing outside the bar closes the menus, and so does Esc — which is swallowed only when it actually closed something, so a host dialog still sees it otherwise.
-- `@` only triggers on a trailing token after a word boundary, so an address like `you@host` never opens the menu.
-- The send button fills with ink rather than the theme accent. That is this family's signature; the accent is spent on live dictation and the Connect affordance instead.
-- Under reduced motion the pop and the press both stop, but the three dictation bars freeze rather than vanish — they are the only visible sign that the mic is live.
+- While an IME is composing, Enter only confirms the candidate; it neither sends nor picks a menu row.
+- The menus follow the combobox pattern: the textarea is a `role="combobox"` with `aria-activedescendant`, the menu a `listbox`; with nothing to offer, it stays a plain text box.
+- The highlight appears only after a hover or an arrow key, and the first ↑ / ↓ lands on an end of the list; pressing a row never blurs the textarea.
+- Activating an unconnected connectable row emits `connectToggle` instead of inserting a mention; once connected, it inserts.
+- Clicking outside or pressing Esc closes the menus; Esc is consumed only when it closed something, so it otherwise bubbles.
+- Under reduced motion the pop and press animations stop, and the three dictation bars freeze rather than vanish.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/prompt-bar/src/TxPromptBar.vue`.
-- Types: `packages/tuffex/packages/components/src/prompt-bar/src/types.ts`.
-- Composables: `use-token-menu.ts` (exported) and `use-autosize.ts` (private).
-- **Tested behaviour:** `prompt-bar.test.ts` (36 cases) and `token-menu.test.ts` (17 cases) cover both filter strategies, the combobox semantics and when `aria-activedescendant` appears, both IME paths, connect-row activation, the send gate and `submitting`, attachment add/remove, the model menu by pointer and by keyboard, outside-click dismissal, and releasing the document listener on unmount.
-- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/prompt-bar/`.
 
 <TuffDocSourceLink />
-
-- **Division of labour with `TxChatComposer`:** that one is the block composer (multi-line input, an icon action row beneath, an optional context tray) and its contract is settled. This is the compact bar with controls inlined into the input, plus `@` / `/` menus, models and dictation. Parallel components rather than one variant-heavy component, which is how this repo already splits `input` / `sensitive-input` and `select` / `flat-select`.
-- **Not ported:** the upstream WebGL rainbow sweep that fires when the flagship model is chosen. It depends on React-only `glimm`, and a shader pipeline for a one-shot celebration is not a trade worth making.
-- **Fixes beyond upstream:** combobox semantics (upstream has only `aria-expanded`), outside-click dismissal, the IME guard extended to the menu path, where the first arrow key lands, and dropping the second, unreachable control nested inside a connectable row.
-- **Known limitation:** the menus use absolute positioning rather than a floating-UI layer, so they do not flip and can be clipped by an ancestor — see the interaction contract.

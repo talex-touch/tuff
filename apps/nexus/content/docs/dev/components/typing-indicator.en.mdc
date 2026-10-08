@@ -1,6 +1,6 @@
 ---
 title: "TypingIndicator"
-description: "Inline typing and loading status indicators for chat surfaces."
+description: "An inline typing and loading indicator for chat."
 category: AiChat
 status: beta
 since: 1.0.0
@@ -9,7 +9,9 @@ syncStatus: reviewed
 verified: true
 ---
 
-### TypingIndicator
+## Usage
+
+### Basic
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---
 code: |
@@ -19,69 +21,29 @@ code: |
 ---
 :::
 
-## Usage
-
-### TypingIndicator variants
+### Variants
+`variant` picks the style; each variant has its own size props.
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">dots</code>
-        <TxTypingIndicator text="Typing…" />
-        <TxTypingIndicator :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">ai</code>
-        <TxTypingIndicator variant="ai" text="Generating…" />
-        <TxTypingIndicator variant="ai" :loader-size="32" text="32px" />
-        <TxTypingIndicator variant="ai" :loader-size="24" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">pure</code>
-        <TxTypingIndicator variant="pure" text="Loading" />
-        <TxTypingIndicator variant="pure" :pure-size="12" text="12px" />
-        <div style="display: inline-flex; gap: 6px; align-items: center; color: var(--tx-text-color-secondary);">
-          <span style="width: 16px; height: 16px; border-radius: 4px; background: var(--tx-fill-color); display: inline-block;" />
-          <TxTypingIndicator variant="pure" :pure-size="12" :show-text="false" />
-          <span style="font-size: 12px;">Icon</span>
-        </div>
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">ring</code>
-        <TxTypingIndicator variant="ring" :show-text="false" />
-        <TxTypingIndicator variant="ring" :ring-size="14" :show-text="false" />
-        <TxTypingIndicator variant="ring" :ring-size="22" :ring-thickness="3" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">circle-dash</code>
-        <TxTypingIndicator variant="circle-dash" :show-text="false" />
-        <TxTypingIndicator variant="circle-dash" :circle-dash-size="14" :show-text="false" />
-        <TxTypingIndicator variant="circle-dash" :circle-dash-size="22" :circle-dash-thickness="3" :circle-dash-dash-deg="10" :circle-dash-gap-deg="10" :show-text="false" />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--tx-border-color-light); border-radius: 12px;">
-        <code style="width: 90px; color: var(--tx-text-color-secondary);">bars</code>
-        <TxTypingIndicator variant="bars" :show-text="false" />
-        <TxTypingIndicator variant="bars" :bars-size="16" :show-text="false" />
-      </div>
-    </div>
+    <TxTypingIndicator text="Typing…" />
+    <TxTypingIndicator variant="ai" :loader-size="32" text="Generating…" />
+    <TxTypingIndicator variant="pure" :pure-size="12" text="Loading" />
+    <TxTypingIndicator variant="ring" :ring-size="22" :ring-thickness="3" :show-text="false" />
+    <TxTypingIndicator variant="circle-dash" :circle-dash-dash-deg="10" :circle-dash-gap-deg="10" :show-text="false" />
+    <TxTypingIndicator variant="bars" :bars-size="16" :show-text="false" />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Prefer the default `dots` variant for inline chat rows and compact assistant placeholders.
-- Use `ai` for brand-led generation states where the larger animated loader has enough room.
-- Use `pure`, `ring`, `circle-dash`, or `bars` for dense toolbars, message metadata rows, or skeleton-adjacent loading states.
-- Keep `showText=true` unless another visible label already names the pending operation.
-- Tune numeric size props in pixels; avoid mixing many variants in the same chat transcript.
+- Use the default `dots` for inline chat rows and compact assistant placeholders.
+- Use `ai` for brand-led generation states with room for the larger loader.
+- Use `pure`, `ring`, `circle-dash`, or `bars` in toolbars, message metadata rows, or next to skeletons.
+- Keep `showText=true` unless a visible label nearby already names the pending operation.
+- Don't mix many variants in one transcript.
 
 ## API Reference
 
@@ -89,40 +51,36 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | Visual loader style rendered inside the status region. |
-| `text` | `string` | `'Typing…'` | Visible status label shown when `showText` is enabled. |
-| `showText` | `boolean` | `true` | Controls whether the text label is rendered next to the indicator. |
-| `size` | `number` | `6` | Dot diameter in pixels for the `dots` variant. |
-| `gap` | `number` | `5` | Gap in pixels between dots in the `dots` variant. |
-| `loaderSize` | `number` | `44` | Outer size in pixels for the `ai` loader. |
-| `pureSize` | `number` | `14` | Diameter in pixels for the `pure` spinner. |
-| `ringSize` | `number` | `18` | Diameter in pixels for the `ring` spinner. |
-| `ringThickness` | `number` | `2` | Stroke thickness in pixels for the `ring` spinner. |
-| `circleDashSize` | `number` | `18` | Diameter in pixels for the `circle-dash` spinner. |
-| `circleDashThickness` | `number` | `2` | Stroke thickness in pixels for the `circle-dash` spinner. |
-| `circleDashDashDeg` | `number` | `12` | Dash angle in degrees for the repeating conic pattern. |
-| `circleDashGapDeg` | `number` | `12` | Gap angle in degrees for the repeating conic pattern. |
-| `barsSize` | `number` | `12` | Height in pixels for the `bars` loader. |
+| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | Indicator style. |
+| `text` | `string` | `'Typing…'` | Label shown while `showText` is on. |
+| `showText` | `boolean` | `true` | Shows the label. |
+| `ariaLabel` | `string` | - | Screen-reader text while `showText` is off; falls back to `text`. |
+| `size` | `number` | `6` | Dot diameter of `dots`, in px. |
+| `gap` | `number` | `5` | Gap between `dots`, in px. |
+| `loaderSize` | `number` | `44` | Size of `ai`, in px. |
+| `pureSize` | `number` | `14` | Diameter of `pure`, in px. |
+| `ringSize` | `number` | `18` | Diameter of `ring`, in px. |
+| `ringThickness` | `number` | `2` | Stroke width of `ring`, in px. |
+| `circleDashSize` | `number` | `18` | Diameter of `circle-dash`, in px. |
+| `circleDashThickness` | `number` | `2` | Stroke width of `circle-dash`, in px. |
+| `circleDashDashDeg` | `number` | `12` | Dash angle of `circle-dash`, in degrees. |
+| `circleDashGapDeg` | `number` | `12` | Gap angle of `circle-dash`, in degrees. |
+| `barsSize` | `number` | `12` | Height of `bars`, in px. |
 
 ### CSS Variables
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | Color for the whole indicator. Every variant, dots included, derives from it, so a host on its own token layer recolors the loader in one place. |
+| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | Colour of every variant, recolored in one place. |
 
-## Events
+## Overview
 
-`TxTypingIndicator` does not emit component events. It is a passive `role="status"` indicator.
-
-## Slots
-
-`TxTypingIndicator` does not expose slots. Use `text` for the accessible status label and `showText=false` only when adjacent UI already communicates the pending state.
+- The root is `role="status"` with `aria-live="polite"`; every loader graphic is `aria-hidden`.
+- With `showText` off, a visually hidden label (`ariaLabel`, else `text`) still renders, so screen readers announce it.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue` confirms `role="status"`, `aria-live="polite"`, hidden decorative loaders, variant-specific CSS variables, scoped AI mask ids, and optional text rendering.
-- Type contracts: `packages/tuffex/packages/components/src/chat/src/types.ts` defines `TypingIndicatorProps` and every variant size prop.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts` covers status semantics, dot sizing, hidden labels, AI mask sizing, spinner variants, and bars rendering.
-- Export: `packages/tuffex/packages/components/src/chat/index.ts` exports `TypingIndicator`, `TxTypingIndicator`, and `TypingIndicatorProps`.
+- The `ai` variant draws through an SVG mask with a per-instance id, so several instances on a page don't collide.
+- Source: `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`.
 
 <TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/index.ts" />

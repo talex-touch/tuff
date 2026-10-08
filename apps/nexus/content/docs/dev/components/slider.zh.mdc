@@ -1,6 +1,6 @@
 ---
 title: "Slider 滑块"
-description: "用于在区间内选择数值的滑块组件。"
+description: "在区间内选择数值的滑块"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### Slider
+### 基础
 :::TuffDemoWrapper{demo="SliderSliderDemo" code-lang="vue"}
 ---
 code: |
@@ -22,170 +22,57 @@ code: |
   </script>
 
   <template>
-    <div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxSlider v-model="value" :min="0" :max="100" :step="1" />
-      <div style="margin-top: 8px; color: var(--tx-text-color-secondary);">
-        Value: {{ value }}
-      </div>
-    </div>
+    <TxSlider v-model="value" :min="0" :max="100" :step="1" />
   </template>
 ---
 :::
 
-### 最佳实践
-
-- Slider 用于连续或近似连续的数值；如果每个停靠点都有独立语义，请使用 `TxSegmentedSlider`。
-- 单位说明放在相邻文案中，并用 `formatValue` / `tooltipFormatter` 处理 `%`、`ms` 或配额单位，不要把单位塞进 `modelValue`。
-- 用户拖动期间保持 `min`、`max` 和 `step` 稳定；中途改变范围计算会让 thumb 跳动。
-- `tooltipTilt` / jelly 动效适合探索式调参界面，不适合高密度企业表单。
-- 缓存或不可见的容器可传 `active=false` 暂停观测、全局指针追踪和持续动效；不要把减少动态效果或关闭装饰动效等同于停用布局，原生 range 的值与键盘语义仍由调用方保有。
-- 定制胶囊尺寸改 `--tx-slider-surface-width` / `--tx-slider-surface-size`，不要单独覆盖 `--tx-slider-thumb-size`：默认路径下它跟随胶囊宽，单独改小会让命中区窄于胶囊、两端出轨道。不想要拖钮时先传 `thumbSurface=false` 再把它归零。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `number` | `0` | 当前值 |
-| `min` | `number` | `0` | 最小值 |
-| `max` | `number` | `100` | 最大值 |
-| `step` | `number` | `1` | 步长 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `active` | `boolean` | `true` | 暂停外部观测、全局追踪与持续动效，不改变 `disabled` 或业务值；恢复时重读布局 |
-| `showValue` | `boolean` | `false` | 右侧显示当前值 |
-| `formatValue` | `(value: number) => string` | - | 格式化显示值 |
-| `thumbSurface` | `boolean` | `true` | 常驻的胶囊拖钮，整体借自 Radio 按钮组的滑动指示条：同样 28px 高的胶囊、同样的 88% 浮层底色、发丝描边与顶部高光，拖拽时同一套果冻形变（按下鼓起、快拖拉伸、反向 / 到头 / 快放时拍扁）。原生 thumb 只保留命中区。传 `false` 得到扁平圆钮 |
-| `thumbVariant` | `'solid' \| 'blur' \| 'glass'` | `'blur'` | 胶囊的三种身体，对应 Radio 按钮组 `indicatorVariant` 的三种：`solid` 是 88% 浮层底的实心胶囊；`blur` 把底色薄到 22%，对压住的轨道与填充条做模糊增彩，静止时也开着——蓝色从胶囊里透上来靠的就是它；`glass` 静止时是实心胶囊，按住时换上指示条同款 `TxGlassSurface` 折射体，松手后随果冻一起收场 |
-| `showTooltip` | `boolean` | `true` | 是否显示 tooltip |
-| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 显示触发方式 |
-| `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |
-| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip 位置 |
-| `tooltipTilt` | `boolean` | `false` | tooltip 是否启用倾斜与偏移动效 |
-| `tooltipTiltMaxDeg` | `number` | `18` | tooltip 最大倾斜角度 |
-| `tooltipOffsetMaxPx` | `number` | `28` | tooltip 最大水平偏移 |
-| `tooltipAccelBoost` | `number` | `0.65` | 加速度对动效强度的加成 |
-| `tooltipSpringStiffness` | `number` | `320` | 弹簧刚度 |
-| `tooltipSpringDamping` | `number` | `24` | 弹簧阻尼 |
-| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | tooltip 显示/隐藏动效 |
-| `tooltipMotionDuration` | `number` | `160` | tooltip 显示/隐藏动效时长（ms） |
-| `tooltipMotionBlurPx` | `number` | `10` | tooltip 显示/隐藏动效模糊强度（px） |
-| `tooltipDistortSkewDeg` | `number` | `8` | tooltip 扭曲挤压（skew）最大角度 |
-| `tooltipJelly` | `boolean` | `true` | tooltip 果冻 Q 弹扭曲回弹 |
-| `tooltipJellyFrequency` | `number` | `8.5` | 果冻 wobble 频率（Hz） |
-| `tooltipJellyDecay` | `number` | `10` | 果冻 wobble 衰减（越大越快停） |
-| `tooltipJellyRotateDeg` | `number` | `10` | wobble 旋转最大角度 |
-| `tooltipJellySkewDeg` | `number` | `12` | wobble 扭曲最大角度 |
-| `tooltipJellySquash` | `number` | `0.16` | wobble 挤压强度 |
-| `tooltipJellyTriggerAccel` | `number` | `2800` | 触发 wobble 的加速度阈值 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `number` | v-model 更新 |
-| `change` | `number` | change 事件 |
-
-### 插槽
-
-`TxSlider` 不暴露公共插槽。tooltip、thumb、track 与数值展示都由组件内部控制，以保持指针计算和弹性 tooltip transform 同步。
-
-## 禁用
-
-### Slider (disabled)
-:::TuffDemoWrapper{demo="SliderSliderDisabledDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref(42)
-  </script>
-
-  <template>
-    <div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxSlider v-model="value" disabled show-value />
-    </div>
-  </template>
----
-:::
-
-## 格式化显示
-
-### Slider (formatValue)
-:::TuffDemoWrapper{demo="SliderSliderFormatValueDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref(30)
-  const formatValue = (next: number) => `${next}%`
-  </script>
-
-  <template>
-    <div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxSlider
-        v-model="value"
-        :min="0"
-        :max="100"
-        show-value
-        :format-value="formatValue"
-      />
-    </div>
-  </template>
----
-:::
-
-## 显示数值
-
-### Slider (show value)
+### 显示数值
 :::TuffDemoWrapper{demo="SliderSliderShowValueDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref(60)
-  </script>
-
   <template>
-    <div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxSlider v-model="value" :min="0" :max="100" :step="1" show-value />
-    </div>
+    <TxSlider v-model="value" :min="0" :max="100" :step="1" show-value />
   </template>
 ---
 :::
 
-## 弹性 tooltip（速度 + 加速度）
+### 格式化显示
+`formatValue` 格式化右侧读数；未传 `tooltipFormatter` 时也用于 tooltip。
+:::TuffDemoWrapper{demo="SliderSliderFormatValueDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider v-model="value" show-value :format-value="value => `${value}%`" />
+  </template>
+---
+:::
 
-拖动时 tooltip 会按指针速度/加速度产生倾斜、追尾偏移和果冻回弹。下方 demo 用 6 组预设驱动全部 `tooltip-*` 参数；这里只展示最小绑定方式，完整可交互面板见 demo 源码，各参数含义见下方 API。
+### 禁用
+:::TuffDemoWrapper{demo="SliderSliderDisabledDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider v-model="value" disabled show-value />
+  </template>
+---
+:::
 
-### Slider (elastic tooltip)
+### 弹性 tooltip
+`tooltipTilt` 让 tooltip 随指针速度与加速度倾斜、追尾，`tooltipJelly` 叠加果冻回弹。
 :::TuffDemoWrapper{demo="SliderSliderElasticTooltipDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref(30)
-  </script>
-
   <template>
     <TxSlider
       v-model="value"
-      :min="0"
-      :max="100"
       show-value
       tooltip-tilt
-      tooltip-trigger="drag"
-      tooltip-motion="blur"
+      tooltip-jelly
       :tooltip-tilt-max-deg="22"
       :tooltip-offset-max-px="36"
-      :tooltip-accel-boost="0.8"
       :tooltip-spring-stiffness="420"
       :tooltip-spring-damping="26"
-      tooltip-jelly
       :tooltip-jelly-frequency="11"
       :tooltip-jelly-squash="0.32"
     />
@@ -193,27 +80,69 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 连续或近似连续的数值用 Slider；每个停靠点有独立语义时用 `TxSegmentedSlider`。
+- 单位写在相邻文案或 `formatValue` / `tooltipFormatter` 中，不要塞进 `modelValue`。
+- 拖动期间保持 `min`、`max`、`step` 稳定，否则拖钮会跳动。
+- 倾斜与果冻动效用于探索式调参界面，不用于高密度表单。
+- 改胶囊尺寸用 `--tx-slider-surface-width` / `--tx-slider-surface-size`，不要单独覆盖 `--tx-slider-thumb-size`；不要拖钮时先设 `thumbSurface=false` 再将其归零。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number` | `0` | 当前值；显示时夹在 `min..max` 内。 |
+| `min` | `number` | `0` | 最小值。 |
+| `max` | `number` | `100` | 最大值。 |
+| `step` | `number` | `1` | 步长。 |
+| `disabled` | `boolean` | `false` | 禁用滑块并隐藏 tooltip。 |
+| `active` | `boolean` | `true` | `false` 时暂停观测、全局追踪与动效，值与 `disabled` 不变。 |
+| `showValue` | `boolean` | `false` | 在右侧显示当前值。 |
+| `formatValue` | `(value: number) => string` | - | 格式化右侧读数。 |
+| `thumbSurface` | `boolean` | `true` | 常驻胶囊拖钮，材质与形变同 Radio 指示器；`false` 为扁平圆钮。 |
+| `thumbVariant` | `'solid' \| 'blur' \| 'glass'` | `'blur'` | 胶囊本体：`solid` 实心，`blur` 薄底并模糊下方轨道，`glass` 按住时折射。 |
+| `showTooltip` | `boolean` | `true` | 满足触发条件时显示 tooltip。 |
+| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 的触发方式。 |
+| `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化。 |
+| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip 位于拖钮上方或下方。 |
+| `tooltipTilt` | `boolean` | `false` | 启用随速度倾斜、偏移、挤压与扭曲的 tooltip 动效。 |
+| `tooltipTiltMaxDeg` | `number` | `18` | 最大倾斜角度。 |
+| `tooltipOffsetMaxPx` | `number` | `28` | 最大水平偏移。 |
+| `tooltipAccelBoost` | `number` | `0.65` | 加速度对动效强度的加成。 |
+| `tooltipSpringStiffness` | `number` | `320` | 跟随、偏移与倾斜的弹簧刚度。 |
+| `tooltipSpringDamping` | `number` | `24` | 跟随、偏移与倾斜的弹簧阻尼。 |
+| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | 显示 / 隐藏动效；`none` 不包过渡。 |
+| `tooltipMotionDuration` | `number` | `160` | 显示 / 隐藏动效时长（ms），负值按 0 处理。 |
+| `tooltipMotionBlurPx` | `number` | `10` | `blur` 动效的模糊半径（px），负值按 0 处理。 |
+| `tooltipDistortSkewDeg` | `number` | `8` | 移动时扭曲（skew）的最大角度。 |
+| `tooltipJelly` | `boolean` | `true` | 在倾斜之上叠加由加速度触发的果冻回弹。 |
+| `tooltipJellyFrequency` | `number` | `8.5` | 回弹频率（Hz）。 |
+| `tooltipJellyDecay` | `number` | `10` | 回弹衰减，越大越快停。 |
+| `tooltipJellyRotateDeg` | `number` | `10` | 回弹的最大旋转角度。 |
+| `tooltipJellySkewDeg` | `number` | `12` | 回弹的最大扭曲角度。 |
+| `tooltipJellySquash` | `number` | `0.16` | 回弹的挤压强度。 |
+| `tooltipJellyTriggerAccel` | `number` | `2800` | 触发回弹的加速度阈值。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `number` | 原生 `input` 时以夹取后的值触发。 |
+| `change` | `number` | 原生 `change` 时触发。 |
+
 ## 概述
 
-- 原生 range 输入会把 `modelValue` 夹在 `min..max` 范围内展示。
-- `thumbSurface`（默认）下可见的拖钮是常驻的胶囊（`.tx-slider__surface`），原生 thumb 退化为与胶囊等宽的命中区；键盘焦点（`:focus-visible`，拖拽发起的聚焦除外）的焦点环画在胶囊上。`thumbSurface=false` 回到扁平圆钮，焦点环也回到圆钮。
-- 原生 `input` 触发 `update:modelValue`，原生 `change` 触发 `change`。
-- `disabled` 会阻止值更新并隐藏 tooltip。
-- `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
-- tooltip 显示遵循 `tooltipTrigger`：`drag`、`hover` 或 `always`；`showTooltip=false` 会完全禁用。
-- 负数 `tooltipMotionDuration` 与 `tooltipMotionBlurPx` 会分别夹到 `0ms` 与 `0px`。
-- `active=false`、KeepAlive 失活和卸载都会停止果冻/tooltip 帧任务、移除全局 pointer 监听并断开尺寸观察；恢复后按当前布局重新建立一次观测。
-- 减少动态效果偏好动态生效：按住期间切换也会停止形变，保留原生 range 输入与静态读数。
+- 默认的 `thumbSurface` 下，原生 thumb 退化为与胶囊等宽的命中区；键盘焦点环画在胶囊上，拖拽引起的聚焦除外。
+- `active=false`、KeepAlive 失活与卸载都会停止帧任务、移除全局 pointer 监听并断开尺寸观察；恢复后按当前布局重新观测。
+- 减弱动效偏好即时生效：按住期间切换也会停止形变，原生输入与静态读数保留。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/slider/src/TxSlider.vue`。
-- 截图：`.codex-screenshots/nexus-slider-release-policy-demo-playwright-2026-05-28.png`。
-- 拖钮（2026-09-06）：胶囊改为整体借用 `TxRadioGroup type="button"` 的指示条——36 × 28、88% 浮层底、50% 描边、17% 顶部高光、`0 2px 8px` 投影；身体同样是指示条的三种（`thumbVariant`）：`solid` 实心、`blur`（默认）22% 底 + 8px 模糊（拖拽 10px）、`glass` 按住时挂上 `TxGlassSurface`。形变走指示条同一份果冻数学（`packages/tuffex/packages/utils/animation/jelly.ts` 的 `jellyScale` 与 `JELLY` 常量，Radio 与 Slider 共用）：按下 1.08 鼓起 110ms，按住时基准 1.08 走刚度 110 / 阻尼 12 的弹簧，拉伸随指针速度，反向、撞到两端、快速松手时沿轨道拍扁，松手后弹簧带回 1 并以 0.97 的落地收尾；`prefers-reduced-motion` 下不形变。上一版（2026-09-01）是 40 × 20 的半透明模糊胶囊加一条编译成 `linear()` 的 CSS 弹簧过渡，被替换的原因是它与 Radio 指示条不是同一种材质。
-- 建议：滑块只表达连续阈值；发布流量、容量比例和采样率适合用它，风险档位应交给 `TxSegmentedSlider`。
-
-- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
-- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染、全局指针监听器清理，以及胶囊拖钮（几何与配方逐项锁定到 Radio 指示条源码：28px 高、88% 底色、50% 描边、17% 高光与同一条投影；三种身体的类名与变量、`glass` 只在按住与收场期间挂载；无尺寸过渡、无关键帧；命中宽度等于胶囊宽；焦点环追加在胶囊阴影列表末尾；按下后果冻通过内联 transform 缩放、静止按住时稳定在 1.08、松手静止后内联 transform 移除；reduced-motion 下不形变）。
+- 拖钮形变与 Radio 指示器共用 `packages/tuffex/packages/utils/animation/jelly.ts` 的果冻数学。
+- 不开放插槽：tooltip、拖钮、轨道与读数由内部渲染，以保持指针计算与 tooltip 变换同步。
+- 源码：`packages/tuffex/packages/components/src/slider/`。
 
 <TuffDocSourceLink />

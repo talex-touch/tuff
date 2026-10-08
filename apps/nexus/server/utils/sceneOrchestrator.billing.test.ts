@@ -384,7 +384,7 @@ describe('runSceneOrchestrator credit metering', () => {
       3,
       'scene-run-release',
       expect.objectContaining({ sceneId: SCENE_ID, runId: run.runId, chargedCredits: 2 }),
-      { idempotencyKey: `scene-run-release:${run.runId}` },
+      { idempotencyKey: `scene-run-release:${run.runId}`, reservationLedgerId: 'ledger_1' },
     )
     expect(run.billing).toEqual({
       reservedCredits: 5,
@@ -460,7 +460,7 @@ describe('runSceneOrchestrator credit metering', () => {
         runId: failure.data.run.runId,
         failureCode: 'PROVIDER_ADAPTER_FAILED',
       }),
-      { idempotencyKey: `scene-run-release:${failure.data.run.runId}` },
+      { idempotencyKey: `scene-run-release:${failure.data.run.runId}`, reservationLedgerId: 'ledger_1' },
     )
   })
 

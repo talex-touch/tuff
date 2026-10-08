@@ -2,12 +2,11 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PROVIDER_REGISTRY_TABLE = 'provider_registry'
 const AUDITS_TABLE = 'intelligence_audits'
 const IP_BANS_TABLE = 'intelligence_ip_bans'
-
-let schemaInitialized = false
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
@@ -20,88 +19,53 @@ function requireDatabase(event: H3Event): D1Database {
   return db
 }
 
+const INTELLIGENCE_SCHEMA = defineD1Schema('intelligence', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${AUDITS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        provider_type TEXT NOT NULL,
+        model TEXT NOT NULL,
+        endpoint TEXT,
+        status INTEGER,
+        latency INTEGER,
+        success INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        trace_id TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${IP_BANS_TABLE} (
+        id TEXT PRIMARY KEY,
+        ip TEXT NOT NULL,
+        reason TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_intelligence_audits_user_id
+      ON ${AUDITS_TABLE}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_intelligence_audits_provider_id
+      ON ${AUDITS_TABLE}(provider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_intelligence_audits_created_at
+      ON ${AUDITS_TABLE}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_intelligence_ip_bans_ip
+      ON ${IP_BANS_TABLE}(ip)`,
+  ],
+  columns: [
+    {
+      table: AUDITS_TABLE,
+      columns: [
+        { name: 'metadata', ddl: 'metadata TEXT' },
+      ],
+    },
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (schemaInitialized) return
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${AUDITS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      provider_id TEXT NOT NULL,
-      provider_type TEXT NOT NULL,
-      model TEXT NOT NULL,
-      endpoint TEXT,
-      status INTEGER,
-      latency INTEGER,
-      success INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      trace_id TEXT,
-      metadata TEXT,
-      created_at TEXT NOT NULL
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${IP_BANS_TABLE} (
-      id TEXT PRIMARY KEY,
-      ip TEXT NOT NULL,
-      reason TEXT,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      expires_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_intelligence_audits_user_id
-    ON ${AUDITS_TABLE}(user_id);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_intelligence_audits_provider_id
-    ON ${AUDITS_TABLE}(provider_id);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_intelligence_audits_created_at
-    ON ${AUDITS_TABLE}(created_at);
-  `,
-    )
-    .run()
-
-  await db
-    .prepare(
-      `
-    CREATE INDEX IF NOT EXISTS idx_intelligence_ip_bans_ip
-    ON ${IP_BANS_TABLE}(ip);
-  `,
-    )
-    .run()
-
-  try {
-    await db.prepare(`ALTER TABLE ${AUDITS_TABLE} ADD COLUMN metadata TEXT;`).run()
-  } catch {}
-
-  schemaInitialized = true
+  await ensureD1Schema(db, INTELLIGENCE_SCHEMA)
 }
 
 // ---------- Types ----------

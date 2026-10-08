@@ -4,10 +4,9 @@ import { createError } from 'h3'
 import { createHash, randomBytes, timingSafeEqual, randomUUID  } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const OAUTH_CLIENTS_TABLE = 'oauth_clients'
-
-let oauthClientSchemaInitialized = false
 
 export type OauthOwnerScope = 'nexus' | 'team'
 export type OauthClientStatus = 'active' | 'revoked'
@@ -117,43 +116,35 @@ function mapOauthClientRow(row: D1OauthClientRow): OauthClientRecord {
   }
 }
 
+const OAUTH_CLIENT_SCHEMA = defineD1Schema('oauth-clients', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${OAUTH_CLIENTS_TABLE} (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL UNIQUE,
+        client_secret_hash TEXT NOT NULL,
+        client_secret_hint TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        redirect_uris TEXT NOT NULL,
+        owner_scope TEXT NOT NULL,
+        owner_user_id TEXT NOT NULL,
+        owner_team_id TEXT,
+        created_by_role TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        last_used_at TEXT,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_oauth_clients_owner_scope
+      ON ${OAUTH_CLIENTS_TABLE}(owner_scope, owner_user_id, owner_team_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id
+      ON ${OAUTH_CLIENTS_TABLE}(client_id, status)`,
+  ],
+})
+
 async function ensureOauthClientSchema(db: D1Database) {
-  if (oauthClientSchemaInitialized) {
-    return
-  }
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${OAUTH_CLIENTS_TABLE} (
-      id TEXT PRIMARY KEY,
-      client_id TEXT NOT NULL UNIQUE,
-      client_secret_hash TEXT NOT NULL,
-      client_secret_hint TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      redirect_uris TEXT NOT NULL,
-      owner_scope TEXT NOT NULL,
-      owner_user_id TEXT NOT NULL,
-      owner_team_id TEXT,
-      created_by_role TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      last_used_at TEXT,
-      revoked_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_oauth_clients_owner_scope
-    ON ${OAUTH_CLIENTS_TABLE}(owner_scope, owner_user_id, owner_team_id, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id
-    ON ${OAUTH_CLIENTS_TABLE}(client_id, status);
-  `).run()
-
-  oauthClientSchemaInitialized = true
+  await ensureD1Schema(db, OAUTH_CLIENT_SCHEMA)
 }
 
 function normalizeRedirectUris(input: string[]): string[] {

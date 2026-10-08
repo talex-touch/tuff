@@ -4,9 +4,12 @@ import { resolveActiveTeamContext } from '../../utils/teamContext'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
-  const subscription = await getUserSubscription(event, userId)
+  // Independent reads, side by side: the team context's two round trips cover the subscription's one.
+  const [subscription, teamContext] = await Promise.all([
+    getUserSubscription(event, userId),
+    resolveActiveTeamContext(event, userId),
+  ])
   const features = getPlanFeatures(subscription.plan)
-  const teamContext = await resolveActiveTeamContext(event, userId)
 
   return {
     plan: subscription.plan,

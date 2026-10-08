@@ -253,33 +253,82 @@ describe('speech catalog store', () => {
     expect(payload.models.map(model => model.descriptor)).toEqual(entries.map((_, index) => descriptorFor(index)))
   })
 
-  it('coalesces simultaneous reads of one source into a single upstream build', async () => {
-    const catalogGate = Promise.withResolvers<Response>()
-    const catalogRequests: string[] = []
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url === `${SOURCE}/catalog.json`) {
-        catalogRequests.push(url)
-        return await catalogGate.promise
-      }
-      return jsonResponse({ ...DESCRIPTOR, id: url })
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('does not make a later reader wait on a build that never settles', async () => {
+    // A Worker cancels a request's I/O when its client disconnects, and the build that request
+    // started then never settles. A reader that joined it would wait for good, and so would every
+    // reader after it in the isolate.
+    let catalogCalls = 0
+    const stalled = Promise.withResolvers<Response>()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === `${SOURCE}/catalog.json`) {
+          catalogCalls += 1
+          if (catalogCalls === 1) return await stalled.promise
+          return jsonResponse(CATALOG)
+        }
+        return jsonResponse({ ...DESCRIPTOR, id: url })
+      }),
+    )
 
-    const first = readSpeechCatalog(SOURCE, 1_000)
-    const second = readSpeechCatalog(SOURCE, 1_000)
+    void readSpeechCatalog(SOURCE, 1_000).catch(() => {})
     await flushMicrotasks()
 
-    expect(catalogRequests).toHaveLength(1)
+    const second = await Promise.race([
+      readSpeechCatalog(SOURCE, 1_000),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('waited on the stalled build')), 1_000)),
+    ])
 
-    catalogGate.resolve(jsonResponse(CATALOG))
-    const [a, b] = await Promise.all([first, second])
+    expect(second.payload.models.map(model => model.id)).toEqual(['demo-model', 'other-model'])
+    expect(catalogCalls).toBe(2)
+  })
 
-    expect(catalogRequests).toHaveLength(1)
+  it('builds once per reader that misses, then serves the finished copy to the rest', async () => {
+    const fetchMock = serve({
+      [`${SOURCE}/catalog.json`]: CATALOG,
+      [`${SOURCE}/models/demo-model/1.0.0/model.json`]: DESCRIPTOR,
+      [`${SOURCE}/models/other-model/2.0.0/model.json`]: { ...DESCRIPTOR, id: 'other-model' },
+    })
+
+    const [a, b] = await Promise.all([readSpeechCatalog(SOURCE, 1_000), readSpeechCatalog(SOURCE, 1_000)])
+    const callsAfterBoth = fetchMock.mock.calls.length
+    // Two readers that missed together each built: one catalog read and one per descriptor apiece.
+    expect(callsAfterBoth).toBe(2 * (1 + CATALOG.models.length))
     expect(a.sha256).toBe(b.sha256)
-    // One catalog read plus one descriptor read per model: the second caller joined the first's
-    // in-flight build instead of starting its own.
-    expect(fetchMock.mock.calls).toHaveLength(1 + CATALOG.models.length)
+
+    await readSpeechCatalog(SOURCE, 2_000)
+    expect(fetchMock.mock.calls.length).toBe(callsAfterBoth)
+  })
+
+  it('keeps the newer copy when an older build finishes last', async () => {
+    const gates: Array<PromiseWithResolvers<Response>> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === `${SOURCE}/catalog.json`) {
+          const gate = Promise.withResolvers<Response>()
+          gates.push(gate)
+          return await gate.promise
+        }
+        return jsonResponse({ ...DESCRIPTOR, id: url })
+      }),
+    )
+
+    const older = readSpeechCatalog(SOURCE, 1_000)
+    await flushMicrotasks()
+    const newer = readSpeechCatalog(SOURCE, 2_000)
+    await flushMicrotasks()
+    expect(gates).toHaveLength(2)
+
+    gates[1]!.resolve(jsonResponse({ ...CATALOG, generatedAt: 'newer' }))
+    await newer
+    gates[0]!.resolve(jsonResponse({ ...CATALOG, generatedAt: 'older' }))
+    await older
+
+    const served = await readSpeechCatalog(SOURCE, 2_500)
+    expect(served.payload.generatedAt).toBe('newer')
   })
 
   it('does not share one build across different sources', async () => {

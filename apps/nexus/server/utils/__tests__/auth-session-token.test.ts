@@ -64,6 +64,15 @@ vi.mock('../authStore', () => ({
   getDevice: vi.fn(async () => null),
   getUserByEmail: vi.fn(async (_event: unknown, email: string) => usersByEmail.get(email) ?? null),
   getUserById: vi.fn(async (_event: unknown, userId: string) => users.get(userId) ?? null),
+  // The real statement records the device only for an active user, in the same round trip as the read.
+  getUserAndTouchRequestDevice: vi.fn(async (_event: unknown, userId: string) => {
+    const user = users.get(userId) ?? null
+    if (user?.status !== 'active')
+      return { user, deviceId: null }
+    deviceRegistrations.push({ userId, deviceId: 'device-1' })
+    return { user, deviceId: 'device-1' }
+  }),
+  getUserWithDevice: vi.fn(async (_event: unknown, userId: string) => ({ user: users.get(userId) ?? null, device: null })),
   readDeviceId: vi.fn(() => 'device-1'),
   readDeviceMetadata: vi.fn(() => ({ deviceName: 'Unit Test Browser', platform: 'test', clientType: 'web' })),
   upsertDevice: vi.fn(),
@@ -148,10 +157,11 @@ describe('browser session token authentication', () => {
     const { requireSessionAuth } = await import('../auth')
     await expect(requireSessionAuth(event)).resolves.toEqual({
       userId: 'direct-user',
-      deviceId: null,
+      deviceId: 'device-1',
       authSource: 'session',
       tokenGrantType: null,
       sessionIssuedAt: 1700000123,
+      user: users.get('direct-user'),
     })
 
     expect(auth.getToken.mock.calls).toEqual([[

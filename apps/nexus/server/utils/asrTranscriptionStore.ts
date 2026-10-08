@@ -12,6 +12,7 @@ import {
   type CreditPricingRule,
 } from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const ASR_REQUESTS_TABLE = 'asr_transcription_requests'
 const ASR_HANDOFF_TTL_MS = 15 * 60 * 1000
@@ -22,13 +23,9 @@ const ASR_RESULT_OBJECT_PREFIX = 'asr-result'
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
 const ASR_RESULT_CLEANUP_BATCH_LIMIT = 100
 const ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT = 500
-const ASR_RESULT_CLEANUP_THROTTLE_MS = 60 * 1000
 const CREDIT_LEDGER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const memoryStorage: StorageObjectMemory = new Map()
-const initializedSchemas = new WeakSet<D1Database>()
-let nextAsrResultCleanupAt = 0
-let asrResultCleanupScheduled = false
 
 export type AsrRequestStatus = 'pending' | 'reserved' | 'dispatching' | 'settled' | 'released' | 'failed'
 
@@ -148,100 +145,72 @@ function requireAsrResultBucket(event: H3Event): R2Bucket {
   return bucket
 }
 
-function getWaitUntil(event: H3Event): ((promise: Promise<unknown>) => void) | null {
-  const context = event.context as Record<string, any>
-  if (typeof context.waitUntil === 'function') return context.waitUntil.bind(context)
-  const cloudflareContext = context.cloudflare?.context
-  if (typeof cloudflareContext?.waitUntil === 'function')
-    return cloudflareContext.waitUntil.bind(cloudflareContext)
-  const platformContext = context._platform?.cloudflare?.context
-  if (typeof platformContext?.waitUntil === 'function')
-    return platformContext.waitUntil.bind(platformContext)
-  return null
-}
+/**
+ * `pricing_snapshot`, `result_deleted_at`, `reservation_ledger_id` and `credits_released_at` were added
+ * after the table shipped. A request admitted before `pricing_snapshot` existed has no quote to settle
+ * against and falls back to the live price list, which the handoff TTL bounds to the 15 minutes it can
+ * stay in flight.
+ *
+ * The backfill marks legacy settled rows released: before the marker existed every settled transition
+ * happened only after the remainder release completed. New requests persist a reservation ledger id,
+ * so it only ever matched rows from before then — and it ran on every cold isolate (3,424 times in a
+ * week of production) until it moved here.
+ */
+const ASR_SCHEMA = defineD1Schema('asr-transcriptions', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${ASR_REQUESTS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        object_key TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        duration_seconds INTEGER NOT NULL,
+        delivery_token_hash TEXT NOT NULL,
+        delivery_expires_at TEXT NOT NULL,
+        provider_task_id TEXT,
+        status TEXT NOT NULL,
+        reserved_credits INTEGER NOT NULL DEFAULT 0,
+        reservation_ledger_id TEXT,
+        charged_credits INTEGER,
+        credits_released_at TEXT,
+        billed_seconds INTEGER,
+        provider_cost_cny REAL,
+        failure_code TEXT,
+        pricing_snapshot TEXT,
+        result_deleted_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(user_id, idempotency_key)
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_asr_settlement_maintenance ON ${ASR_REQUESTS_TABLE}(status, credits_released_at, delivery_expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_asr_result_cleanup ON ${ASR_REQUESTS_TABLE}(status, provider_task_id, result_deleted_at, delivery_expires_at)`,
+  ],
+  columns: [
+    {
+      table: ASR_REQUESTS_TABLE,
+      columns: [
+        { name: 'pricing_snapshot', ddl: 'pricing_snapshot TEXT' },
+        { name: 'result_deleted_at', ddl: 'result_deleted_at TEXT' },
+        { name: 'reservation_ledger_id', ddl: 'reservation_ledger_id TEXT' },
+        { name: 'credits_released_at', ddl: 'credits_released_at TEXT' },
+      ],
+    },
+  ],
+  backfills: [
+    `UPDATE ${ASR_REQUESTS_TABLE}
+      SET credits_released_at = COALESCE(credits_released_at, updated_at)
+      WHERE status = 'settled' AND credits_released_at IS NULL AND reservation_ledger_id IS NULL`,
+  ],
+})
 
 async function ensureAsrSchema(database: D1Database) {
-  if (initializedSchemas.has(database)) return
-
-  await database
-    .prepare(
-      `
-    CREATE TABLE IF NOT EXISTS ${ASR_REQUESTS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      provider_id TEXT NOT NULL,
-      capability TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL,
-      request_hash TEXT NOT NULL,
-      object_key TEXT NOT NULL,
-      content_type TEXT NOT NULL,
-      byte_size INTEGER NOT NULL,
-      duration_seconds INTEGER NOT NULL,
-      delivery_token_hash TEXT NOT NULL,
-      delivery_expires_at TEXT NOT NULL,
-      provider_task_id TEXT,
-      status TEXT NOT NULL,
-      reserved_credits INTEGER NOT NULL DEFAULT 0,
-      reservation_ledger_id TEXT,
-      charged_credits INTEGER,
-      credits_released_at TEXT,
-      billed_seconds INTEGER,
-      provider_cost_cny REAL,
-      failure_code TEXT,
-      pricing_snapshot TEXT,
-      result_deleted_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(user_id, idempotency_key)
-    );
-  `,
-    )
-    .run()
-  await database
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`,
-    )
-    .run()
-  await database
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`,
-    )
-    .run()
-
-  // Added after the table shipped: a request admitted before this column existed has no
-  // quote to settle against and falls back to the live price list, which the handoff
-  // TTL bounds to the 15 minutes it can stay in flight.
-  const columns = await database.prepare(`PRAGMA table_info(${ASR_REQUESTS_TABLE});`).all<{ name: string }>()
-  const columnNames = new Set((columns?.results ?? []).map(column => String(column.name)))
-  if (!columnNames.has('pricing_snapshot'))
-    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN pricing_snapshot TEXT;`).run()
-  if (!columnNames.has('result_deleted_at'))
-    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN result_deleted_at TEXT;`).run()
-  if (!columnNames.has('reservation_ledger_id'))
-    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN reservation_ledger_id TEXT;`).run()
-  if (!columnNames.has('credits_released_at'))
-    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN credits_released_at TEXT;`).run()
-  // Before this marker existed, every settled transition happened only after the remainder
-  // release completed. Backfill only those legacy rows; new requests persist a reservation ledger.
-  await database
-    .prepare(
-      `UPDATE ${ASR_REQUESTS_TABLE}
-       SET credits_released_at = COALESCE(credits_released_at, updated_at)
-       WHERE status = 'settled' AND credits_released_at IS NULL AND reservation_ledger_id IS NULL`,
-    )
-    .run()
-  await database
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_asr_settlement_maintenance ON ${ASR_REQUESTS_TABLE}(status, credits_released_at, delivery_expires_at);`,
-    )
-    .run()
-  await database
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_asr_result_cleanup ON ${ASR_REQUESTS_TABLE}(status, provider_task_id, result_deleted_at, delivery_expires_at);`,
-    )
-    .run()
-
-  initializedSchemas.add(database)
+  await ensureD1Schema(database, ASR_SCHEMA)
 }
 
 function mapRequest(row: AsrRequestRow): AsrRequestRecord {
@@ -504,9 +473,6 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   await ensureAsrSchema(database)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
   const requestHash = hashAsrRequest(input)
-  const existing = await readExistingAsrRequest(database, input)
-  if (existing) return { request: existing, deliveryToken: null, created: false }
-
   const durationSeconds = Number(input.durationSeconds)
   const reservedCredits = calculateFiletransReservation(input.pricing, durationSeconds)
   const id = `asr_${randomUUID()}`
@@ -550,6 +516,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
       reserved_credits, reservation_ledger_id, charged_credits, credits_released_at, billed_seconds,
       provider_cost_cny, failure_code, created_at, updated_at, pricing_snapshot
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, idempotency_key) DO NOTHING
   `,
     )
     .bind(
@@ -579,8 +546,14 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
       serializeCreditPricingRule(input.pricing),
     )
     .run()
-  if (Number(insert.meta?.changes ?? 0) !== 1)
+  if (Number(insert.meta?.changes ?? 0) !== 1) {
+    // The key is taken: a replay (or a concurrent first request) finds that request. Callers read
+    // it before admitting a new one, so this read was the second on every new request; now it runs
+    // only when the insert loses.
+    const existing = await readExistingAsrRequest(database, input)
+    if (existing) return { request: existing, deliveryToken: null, created: false }
     throw createError({ statusCode: 500, statusMessage: 'ASR request could not be created.' })
+  }
 
   if (input.storeHandoff !== false) {
     try {
@@ -625,14 +598,17 @@ export async function setAsrReservationLedgerId(
   const database = getD1Database(event)
   await ensureAsrSchema(database)
   const id = assertAsrId(requestId)
-  await database
+  const row = await database
     .prepare(
       `UPDATE ${ASR_REQUESTS_TABLE}
        SET reservation_ledger_id = ?, updated_at = ?
-       WHERE id = ? AND status IN ('reserved', 'dispatching') AND reservation_ledger_id IS NULL`,
+       WHERE id = ? AND status IN ('reserved', 'dispatching') AND reservation_ledger_id IS NULL
+       RETURNING *`,
     )
     .bind(reservationLedgerId, new Date().toISOString(), id)
-    .run()
+    .first<AsrRequestRow>()
+  if (row) return mapRequest(row)
+  // Nothing to set: the same ledger was recorded before, or the request moved on.
   const request = await getAsrRequest(event, id)
   if (!request || request.reservationLedgerId !== reservationLedgerId)
     throw new Error('ASR_REQUEST_STATE_CONFLICT')
@@ -700,17 +676,19 @@ export async function markAsrCreditsReleased(event: H3Event, requestId: string):
   await ensureAsrSchema(database)
   const id = assertAsrId(requestId)
   const releasedAt = new Date().toISOString()
-  const result = await database
+  const row = await database
     .prepare(
       `UPDATE ${ASR_REQUESTS_TABLE}
        SET credits_released_at = ?, updated_at = ?
-       WHERE id = ? AND status = 'settled' AND credits_released_at IS NULL`,
+       WHERE id = ? AND status = 'settled' AND credits_released_at IS NULL
+       RETURNING *`,
     )
     .bind(releasedAt, releasedAt, id)
-    .run()
+    .first<AsrRequestRow>()
+  if (row) return mapRequest(row)
+  // Nothing to mark: released before (a resumed settlement), or not settled at all.
   const request = await getAsrRequest(event, id)
-  if (!request || request.status !== 'settled') throw new Error('ASR_REQUEST_STATE_CONFLICT')
-  if (Number(result.meta?.changes ?? 0) !== 1 && !request.creditsReleasedAt)
+  if (!request || request.status !== 'settled' || !request.creditsReleasedAt)
     throw new Error('ASR_REQUEST_STATE_CONFLICT')
   return request
 }
@@ -750,7 +728,8 @@ async function transitionAsrRequest(
   const id = assertAsrId(requestId)
   const now = new Date().toISOString()
   const placeholders = from.map(() => '?').join(', ')
-  const result = await database
+  // The row as this transition left it, in the same statement: it was the update and then a re-read.
+  const row = await database
     .prepare(
       `
     UPDATE ${ASR_REQUESTS_TABLE}
@@ -759,6 +738,7 @@ async function transitionAsrRequest(
       billed_seconds = COALESCE(?, billed_seconds), provider_cost_cny = COALESCE(?, provider_cost_cny),
       failure_code = COALESCE(?, failure_code), updated_at = ?
     WHERE id = ? AND status IN (${placeholders})
+    RETURNING *
   `,
     )
     .bind(
@@ -773,11 +753,9 @@ async function transitionAsrRequest(
       id,
       ...from,
     )
-    .run()
-  if (Number(result.meta?.changes ?? 0) !== 1) throw new Error('ASR_REQUEST_STATE_CONFLICT')
-  const request = await getAsrRequest(event, id)
-  if (!request) throw new Error('ASR_REQUEST_MISSING')
-  return request
+    .first<AsrRequestRow>()
+  if (!row) throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  return mapRequest(row)
 }
 
 export async function getAsrHandoffObject(
@@ -1015,37 +993,6 @@ export async function cleanupExpiredReleasedAsrRequests(
     }
   }
   return { scanned: rows.results?.length ?? 0, deleted, failed }
-}
-
-/** Schedules bounded retention work from ordinary Nexus traffic without extending request latency. */
-export function scheduleExpiredAsrResultCleanup(
-  event: H3Event,
-  reconcileSettlements?: () => Promise<unknown>,
-): void {
-  const now = Date.now()
-  if (asrResultCleanupScheduled || now < nextAsrResultCleanupAt) return
-  asrResultCleanupScheduled = true
-  nextAsrResultCleanupAt = now + ASR_RESULT_CLEANUP_THROTTLE_MS
-
-  const cleanup = Promise.resolve()
-    .then(() => reconcileSettlements?.())
-    .then(() => Promise.all([
-      cleanupExpiredAsrResultObjects(event),
-      cleanupExpiredReleasedAsrRequests(event),
-    ]))
-    .then(() => undefined)
-    .catch(() => {
-      console.warn('[asr-result-cleanup] scheduled cleanup failed')
-    })
-    .finally(() => {
-      asrResultCleanupScheduled = false
-    })
-  const waitUntil = getWaitUntil(event)
-  if (waitUntil) {
-    waitUntil(cleanup)
-    return
-  }
-  void cleanup
 }
 
 export function toAsrSafeStatus(request: AsrRequestRecord) {

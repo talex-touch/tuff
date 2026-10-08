@@ -27,6 +27,7 @@ import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
+import { getAuthToken } from '../auth'
 import { ReportQueueStore } from '../analytics/report-queue-store'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
@@ -138,31 +139,27 @@ export interface SentryConfig {
   anonymous: boolean
 }
 
-interface SearchMetrics {
-  totalDuration: number
-  providerTimings: Record<string, number>
-  providerResults: Record<string, number>
-  sortingDuration: number
-  inputTypes: string[]
-  resultCount: number
-  sessionId: string
-}
-
 // Nexus telemetry batch upload settings
 const NEXUS_TELEMETRY_BATCH_SIZE = 20
 const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000
 const NEXUS_TELEMETRY_OUTBOX_KIND = 'sentry.nexus.batch'
+/** The startup report's outbox kind (`startup-analytics.ts`); shares the queue and the consent switch. */
+const STARTUP_ANALYTICS_OUTBOX_KIND = 'startup'
 const NEXUS_TELEMETRY_OUTBOX_MAX_AGE = 14 * 24 * 60 * 60 * 1000
 const NEXUS_TELEMETRY_OUTBOX_MAX_COUNT = 2000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS = 30_000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS = 10 * 60_000
 const NEXUS_TELEMETRY_STARTUP_GRACE_MS = 45_000
 const NEXUS_TELEMETRY_REQUEST_TIMEOUT_MS = 15_000
-/**
- * Wall-clock budget for one outbox drain, kept under the polling service's own
- * bound so the task finishes on its own terms instead of being timed out.
- */
+/** Wall-clock budget for one outbox drain; checked between items, so one more request may follow. */
 const NEXUS_TELEMETRY_FLUSH_BUDGET_MS = 20_000
+/**
+ * The polling task's own bound. Budget plus one in-flight request plus slack: the task has to
+ * finish on its own terms. Left at the polling default (30s) it was timed out at 30,002ms with a
+ * request still running (packaged profile, 2026-10-06), and the io lane sat on a dead task.
+ */
+const NEXUS_TELEMETRY_FLUSH_TASK_TIMEOUT_MS =
+  NEXUS_TELEMETRY_FLUSH_BUDGET_MS + NEXUS_TELEMETRY_REQUEST_TIMEOUT_MS + 5_000
 const SENTRY_SHUTDOWN_GRACE_MS = 1_500
 
 interface NexusTelemetryEvent {
@@ -239,6 +236,28 @@ function getEnvironmentContext(): Record<string, unknown> {
   }
 }
 
+/** True when at least one queued event was stamped non-anonymous at queue time. */
+function batchRequestsAttribution(events: unknown[]): boolean {
+  return events.some(
+    (event) =>
+      !!event &&
+      typeof event === 'object' &&
+      (event as { isAnonymous?: unknown }).isAnonymous === false
+  )
+}
+
+/** The signed-in account's access token, or null; never throws into the upload path. */
+function readAttributionToken(): string | null {
+  try {
+    const token = getAuthToken()
+    if (typeof token !== 'string') return null
+    const trimmed = token.trim().replace(/^Bearer\s+/i, '')
+    return trimmed || null
+  } catch {
+    return null
+  }
+}
+
 function resolveTelemetryApiBase(): string {
   return getRuntimeNexusBaseUrl()
 }
@@ -259,7 +278,6 @@ export class SentryServiceModule extends BaseModule {
   private currentUserId: string | null = null
   private authUser: AuthUserSnapshot | null = null
   private searchCount = 0
-  private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
   private destroying = false
   /** Detached in `onDestroy`; a late storage push must not re-arm teardown work. */
@@ -533,15 +551,31 @@ export class SentryServiceModule extends BaseModule {
     return Date.now() - item.lastAttemptAt >= this.getOutboxBackoffMs(item.retryCount)
   }
 
-  private isNexusBatchPayload(payload: Record<string, unknown>): boolean {
-    if (!payload || typeof payload !== 'object') return false
-    // analytics_report_queue is shared by startup analytics and sentry telemetry.
-    // Keep strict kind filtering to avoid cross-consuming unrelated outbox records.
+  private readOutboxPayloadKind(payload: Record<string, unknown>): string | null {
+    if (!payload || typeof payload !== 'object') return null
     const metadata =
       payload.metadata && typeof payload.metadata === 'object'
         ? (payload.metadata as Record<string, unknown>)
         : null
-    return metadata?.kind === NEXUS_TELEMETRY_OUTBOX_KIND
+    return typeof metadata?.kind === 'string' ? metadata.kind : null
+  }
+
+  private isNexusBatchPayload(payload: Record<string, unknown>): boolean {
+    // analytics_report_queue is shared by startup analytics and sentry telemetry.
+    // Keep strict kind filtering to avoid cross-consuming unrelated outbox records.
+    return this.readOutboxPayloadKind(payload) === NEXUS_TELEMETRY_OUTBOX_KIND
+  }
+
+  /**
+   * Every outbox row the telemetry switch covers.
+   *
+   * The startup report shares this queue under its own kind and is gated by the same consent, so
+   * an opt-out has to take its queued rows too; filtering on our own kind alone left them to upload
+   * on the next launch.
+   */
+  private isConsentGatedOutboxPayload(payload: Record<string, unknown>): boolean {
+    const kind = this.readOutboxPayloadKind(payload)
+    return kind === NEXUS_TELEMETRY_OUTBOX_KIND || kind === STARTUP_ANALYTICS_OUTBOX_KIND
   }
 
   private async discardQueuedNexusTelemetryOutbox(): Promise<void> {
@@ -550,7 +584,7 @@ export class SentryServiceModule extends BaseModule {
 
     try {
       const queued = await store.list()
-      const telemetryItems = queued.filter((item) => this.isNexusBatchPayload(item.payload))
+      const telemetryItems = queued.filter((item) => this.isConsentGatedOutboxPayload(item.payload))
       await Promise.allSettled(telemetryItems.map((item) => store.remove(item.id)))
     } catch (error) {
       this.recordTelemetryFailure('Telemetry outbox discard failed', {
@@ -1190,99 +1224,11 @@ export class SentryServiceModule extends BaseModule {
     }
   }
 
-  /**
-   * Record search metrics
-   */
-  recordSearchMetrics(metrics: SearchMetrics): void {
-    if (!this.config.enabled || !this.isInitialized) {
-      return
-    }
-
-    this.searchCount++
-    this.searchMetricsBuffer.push(metrics)
-
-    // Report every 20 searches
-    if (this.searchCount % 20 === 0) {
-      this.reportSearchAnalytics()
-    }
-  }
-
-  /**
-   * Report search analytics to Sentry
-   */
-  private reportSearchAnalytics(): void {
-    if (this.searchMetricsBuffer.length === 0) {
-      return
-    }
-
-    try {
-      // Calculate aggregated metrics
-      const totalSearches = this.searchMetricsBuffer.length
-      const avgDuration =
-        this.searchMetricsBuffer.reduce((sum, m) => sum + m.totalDuration, 0) / totalSearches
-      const totalResults = this.searchMetricsBuffer.reduce((sum, m) => sum + m.resultCount, 0)
-      const avgResults = totalResults / totalSearches
-
-      // Calculate provider timing percentages
-      const providerTotalTimes: Record<string, number> = {}
-      const providerTotalResults: Record<string, number> = {}
-
-      for (const metrics of this.searchMetricsBuffer) {
-        for (const [provider, time] of Object.entries(metrics.providerTimings)) {
-          providerTotalTimes[provider] = (providerTotalTimes[provider] || 0) + time
-        }
-        for (const [provider, count] of Object.entries(metrics.providerResults)) {
-          providerTotalResults[provider] = (providerTotalResults[provider] || 0) + count
-        }
-      }
-
-      const totalProviderTime = Object.values(providerTotalTimes).reduce((sum, t) => sum + t, 0)
-      const providerPercentages: Record<string, number> = {}
-      for (const [provider, time] of Object.entries(providerTotalTimes)) {
-        providerPercentages[provider] = totalProviderTime > 0 ? (time / totalProviderTime) * 100 : 0
-      }
-
-      // Create event with search analytics data
-      Sentry.withScope((scope) => {
-        scope.setTag('analytics.type', 'search_batch')
-        scope.setLevel('info')
-        scope.setContext('search_analytics', {
-          search_count: this.searchCount,
-          batch_size: totalSearches,
-          avg_duration_ms: Math.round(avgDuration),
-          avg_results: Math.round(avgResults),
-          total_results: totalResults,
-          provider_timing_percentages: providerPercentages,
-          provider_total_results: providerTotalResults,
-          provider_avg_times_ms: Object.fromEntries(
-            Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)])
-          ),
-          sample_queries: this.searchMetricsBuffer.slice(-5).map((m) => ({
-            inputTypes: m.inputTypes,
-            duration: m.totalDuration,
-            results: m.resultCount
-          }))
-        })
-
-        Sentry.captureMessage('Search analytics batch report', 'info')
-      })
-
-      // Clear buffer
-      this.searchMetricsBuffer = []
-
-      sentryLog.debug('Search analytics reported', {
-        meta: {
-          searchCount: this.searchCount,
-          batchSize: totalSearches,
-          avgDuration: avgDuration.toFixed(2)
-        }
-      })
-    } catch {
-      sentryLog.error('Failed to report search analytics', {
-        meta: { code: 'SENTRY_SEARCH_ANALYTICS_FAILED' }
-      })
-    }
-  }
+  // `recordSearchMetrics` / `reportSearchAnalytics` used to send a "Search analytics batch report"
+  // message to Sentry every 20 searches. The final-event sanitizer drops every context except
+  // environment/operational/corebox_focus and replaces the message with "redacted", so what
+  // arrived was an empty info event: pure quota. The same aggregate reaches Nexus through the
+  // `search` telemetry event (2026-10-08 telemetry audit).
 
   /**
    * Report error to Sentry
@@ -1517,6 +1463,7 @@ export class SentryServiceModule extends BaseModule {
         backpressure: 'latest_wins',
         dedupeKey: SENTRY_NEXUS_TASK_ID,
         maxInFlight: 1,
+        timeoutMs: NEXUS_TELEMETRY_FLUSH_TASK_TIMEOUT_MS,
         jitterMs: 1000
       }
     )
@@ -1628,6 +1575,14 @@ export class SentryServiceModule extends BaseModule {
         if (idempotencyKey) {
           headers['X-Idempotency-Key'] = idempotencyKey
         }
+        // Attribution needs the connection to prove who is uploading: Nexus ignores a body
+        // userId (#901) and attributes only events that explicitly opted out of anonymity, so
+        // the token travels exactly when such an event is in the batch. Without it every
+        // desktop event was stored anonymous and the per-user dashboard stayed empty.
+        const token = batchRequestsAttribution(events) ? readAttributionToken() : null
+        if (token) {
+          headers.Authorization = `Bearer ${token}`
+        }
         const response = await getNetworkService().request<string>({
           method: 'POST',
           url: endpoint,
@@ -1642,11 +1597,18 @@ export class SentryServiceModule extends BaseModule {
         })
 
         if (response.status < 200 || response.status >= 300) {
-          if (response.status === 403) {
-            this.telemetryCooldownUntil = Date.now() + 60 * 60_000
-          } else if (response.status === 429) {
-            this.telemetryCooldownUntil = Date.now() + 5 * 60_000
-          }
+          // A refusal, a rate limit or a server failure is about the endpoint, not this batch, so it
+          // ends the round like the exception below. Walking on repeated it for every due batch:
+          // while Nexus answered 500 (its database out of daily writes, 2026-10-08) each client
+          // sent about one batch a second, all failing. Any other 4xx is this batch's own problem,
+          // and the next one may still go through.
+          const cooldownMs =
+            response.status === 403
+              ? 60 * 60_000
+              : response.status === 429 || response.status >= 500
+                ? 5 * 60_000
+                : 0
+          if (cooldownMs) this.telemetryCooldownUntil = Date.now() + cooldownMs
           this.failedNexusUploads++
           this.schedulePersistTelemetryStats()
           const failureCode = `HTTP_${response.status}`
@@ -1655,6 +1617,7 @@ export class SentryServiceModule extends BaseModule {
             code: failureCode
           })
           await store.markAttempt(item.id, failureCode)
+          if (cooldownMs) break
           continue
         }
 

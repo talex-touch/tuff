@@ -1,6 +1,6 @@
 ---
 title: Launcher
-description: A CoreBox-style launcher with cross-type search, keyboard selection, inline maths and a live preview
+description: A keyboard-first, CoreBox-style launcher with a live preview.
 category: TemplateApp
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### CoreBox-style launcher
-
-:::TuffDemoWrapper{demo="TemplateLauncherDemo" code-lang="vue" title="CoreBox-style launcher" description="Results as you type; ↑ ↓ move the highlight, ↵ runs it, ⌘K opens actions, Esc clears the query and then the scope; a sum is answered inline."}
+:::TuffDemoWrapper{demo="TemplateLauncherDemo" code-lang="vue" description="Results as you type; ↑ ↓ move the highlight, ↵ runs it, ⌘K opens actions."}
 ---
 code: |
   <script setup lang="ts">
@@ -93,32 +92,30 @@ code: |
 
 ## Overview
 
-A launcher modelled on Tuff's CoreBox, summoned over the desktop. One field searches apps, plugins, files, the clipboard, AI and system actions at once; whatever is highlighted is previewed on the right, and nothing needs the mouse.
+A launcher modeled on Tuff's CoreBox: one field searches every type, the highlighted result is previewed, and nothing needs the mouse.
 
-It suits launchers, global search, Spotlight-style command entries and any keyboard-first "type, pick, run" interface.
-
-- Results arrive as you type, across apps, plugins, files, the clipboard, AI and system actions, and the counts on the scope row follow the query. Type a sum such as `128*4` and the first row is the answer, with hex and binary in the preview.
-- ↑ ↓ move the highlight and the preview follows; the list keeps the highlight in view inside its own scroll area. ↵ runs the item and the footer says "Opened …" for 1.6 seconds. ⌘K opens the actions for the current result — Open, Reveal in Finder, Pin to suggestions, Disable plugin — and a pinned item moves to the top of the suggestions.
-- Esc works in two steps: first it clears the query, then it resets the scope to All; after that it is left alone.
-- With no results, Ask Tuff Intelligence appears; clicking it switches to the AI scope, where the query itself becomes a prompt.
-- Once in view it plays once: it types "clip" letter by letter (writing the field's value without focusing it, so the page does not scroll), moves the highlight down twice and settles on the Plugins scope. Typing or clicking stops it; with reduced motion on, the final state shows straight away.
-- ⌘1–⌘5 are hints only: the browser reserves ⌘ plus a digit and the page cannot intercept it. Wide (≥ 960px) enlarges the window and shows the Dock; narrow (< 640px) drops the preview and lets the scope row scroll sideways.
+- Search covers apps, plugins, files, the clipboard, AI, and system actions, with scope counts that follow the query; a sum such as `128*4` is answered in the first row.
+- ↑ ↓ move the highlight and the preview follows; ↵ runs it; ⌘K opens the result's actions, and a pinned item moves to the top of the suggestions.
+- Esc works in two steps: it clears the query, then resets the scope to All.
+- With no results, Ask Tuff Intelligence turns the query into an AI prompt.
+- It plays once in view without focusing the field; typing or clicking stops it, and reduced motion shows the final state.
+- ⌘1–⌘5 are hints only, since the browser reserves ⌘ plus a digit; wide (≥ 960px) shows the Dock, and narrow (< 640px) drops the preview.
 
 ## Customization
 
-- Real data: replace `CATALOG` with your index's response and keep the `kind`, `tone` and `keywords` fields. Ranking lives in `scoreEntry()`: 3 when the title starts with the query, 2 when it contains it, 1 for a keyword or subtitle hit.
-- Why not TxSearchPanel: it neither reports the highlighted item nor exposes its input, so neither the preview nor the scripted demo could follow it. For an inline search with no preview, TxSearchPanel is the shorter path.
-- To summon it globally, put the window in a TxModal or your own Teleport overlay; the keyboard logic stays as it is. Bind the summon shortcut on the host's own root as well, not on `window`.
-- Keep links out of preview markdown: TxMarkdownView renders real `<a>` elements and a click navigates the page away. In a desktop app, intercept the click and let the host open it.
+- For real data, replace `CATALOG` with your index's response and keep `kind`, `tone`, and `keywords`; `scoreEntry()` scores a title prefix 3, a title match 2, and a keyword or subtitle hit 1.
+- It skips TxSearchPanel, which neither reports the highlight nor exposes its input; for an inline search without a preview, use TxSearchPanel.
+- To summon it globally, put the window in a TxModal or your own Teleport overlay; bind the summon shortcut on the host's root, not `window`.
+- Keep links out of preview markdown, since TxMarkdownView renders real `<a>` elements; in a desktop app, intercept the click and let the host open it.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Desktop | [TxIconChip](/docs/dev/components/icon-chip), a hand-drawn wallpaper and menu bar | A token-gradient wallpaper with a light and a dark variant; a Dock along the bottom when wide |
-| Window | [TxGlassSurface](/docs/dev/components/glass-surface) | The refracting glass window; a translucent tint inside keeps text legible in every browser |
-| Input | [TxSearchInput](/docs/dev/components/search-input), [TxKbd](/docs/dev/components/kbd) | A combobox field that handles the arrow keys, ↵ and Esc |
-| Scope | [TxFilterChips](/docs/dev/components/filter-chips) | All, Apps, Plugins, Files, Clipboard, AI, System; per-scope hit counts while searching |
-| Results | A hand-built listbox, [TxIconChip](/docs/dev/components/icon-chip), [TxTag](/docs/dev/components/tag), [TxKbd](/docs/dev/components/kbd), [TxSearchEmpty](/docs/dev/components/search-empty) | Best matches first with the matched text highlighted; ⌘1–⌘5 hints on the first five; Ask Tuff Intelligence when nothing matches |
-| Preview | [TxMarkdownView](/docs/dev/components/markdown-view) | Details that follow the highlight; a single instance whose `content` alone changes |
-| Footer | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxStatusBadge](/docs/dev/components/status-badge) | Outcome of the last action, the ⌘K actions menu, indexing progress |
+| Desktop | [TxIconChip](/docs/dev/components/icon-chip), a hand-drawn wallpaper and menu bar | Wallpaper; a Dock when wide |
+| Window | [TxGlassSurface](/docs/dev/components/glass-surface) | Refracting glass window |
+| Input | [TxSearchInput](/docs/dev/components/search-input), [TxKbd](/docs/dev/components/kbd) | Handles arrow keys, ↵, and Esc |
+| Scope | [TxFilterChips](/docs/dev/components/filter-chips) | Scopes with hit counts |
+| Results | A hand-built listbox, [TxIconChip](/docs/dev/components/icon-chip), [TxTag](/docs/dev/components/tag), [TxKbd](/docs/dev/components/kbd), [TxSearchEmpty](/docs/dev/components/search-empty) | Ranked matches, hints, and empty state |
+| Preview | [TxMarkdownView](/docs/dev/components/markdown-view) | Details that follow the highlight |
+| Footer | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxStatusBadge](/docs/dev/components/status-badge) | Feedback, actions menu, indexing progress |

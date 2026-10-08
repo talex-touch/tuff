@@ -14,6 +14,7 @@ vi.mock('#imports', () => ({
 
 const getLatestSnapshot = vi.fn()
 const saveSnapshotWithRates = vi.fn()
+const claimSnapshotRefresh = vi.fn(async () => true)
 const cleanupHistory = vi.fn()
 const listRateHistory = vi.fn()
 const listSnapshotHistory = vi.fn()
@@ -21,6 +22,7 @@ const listSnapshotHistory = vi.fn()
 vi.mock('../exchangeRateStore', () => ({
   getLatestSnapshot: (...args: unknown[]) => getLatestSnapshot(...args),
   saveSnapshotWithRates: (...args: unknown[]) => saveSnapshotWithRates(...args),
+  claimSnapshotRefresh: (...args: unknown[]) => claimSnapshotRefresh(...args as []),
   cleanupHistory: (...args: unknown[]) => cleanupHistory(...args),
   listRateHistory: (...args: unknown[]) => listRateHistory(...args),
   listSnapshotHistory: (...args: unknown[]) => listSnapshotHistory(...args),
@@ -87,6 +89,20 @@ describe('exchangeRateService', () => {
     }), expect.objectContaining({
       storeRateRows: true,
     }))
+  })
+
+  it('answers with the stale snapshot while another request refreshes it', async () => {
+    const snapshot = buildSnapshot({ fetchedAt: Date.now() - 120_000 })
+    getLatestSnapshot.mockResolvedValueOnce(snapshot)
+    claimSnapshotRefresh.mockResolvedValueOnce(false)
+    networkRequest.mockClear()
+    saveSnapshotWithRates.mockClear()
+
+    const result = await getUsdRates({} as any)
+
+    expect(result).toEqual({ snapshot, source: 'cache' })
+    expect(networkRequest).not.toHaveBeenCalled()
+    expect(saveSnapshotWithRates).not.toHaveBeenCalled()
   })
 
   it('上游失败时无缓存会抛错', async () => {

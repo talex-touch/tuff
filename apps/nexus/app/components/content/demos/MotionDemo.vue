@@ -8,14 +8,14 @@ const copy = computed(() => locale.value === 'zh' ? {
   filter: '筛选变体', all: '全部变体',
   pointer: '移动指针观察坐标', entrances: '7 个独立入场', hover: '4 个悬停交互', cursor: '3 个指针效果', scroll: '滚动进度、揭示与固定内容', helpers: '状态与辅助能力',
   click: '点击次数', selected: '选择', hint: '在下方容器内滚动，比较内容与固定面板。',
-  titles: ['草稿', '复核', '发布'], descriptions: ['先整理调用方内容。', '检查模型与实际输入。', '由调用方提交发布操作。'],
+  titles: ['草稿', '复核', '发布'], descriptions: ['先把要发的内容整理好。', '检查文字和配图。', '确认无误后提交发布。'],
   swap: '切换图标', mounted: '进入视口后挂载的内容', viewport: '视口', mobile: '窄屏', reduced: '减少动态效果', loop: '可见时循环次数', haptic: '请求触觉反馈', unsupported: '浏览器不支持 Vibration API', accepted: '浏览器接受请求；无法确认设备实际震动', rejected: '浏览器未接受请求',
 } : {
   replay: 'Replay entrances', enabled: 'Enable motion', global: 'Global cursors (follow across the page)',
   filter: 'Filter variant', all: 'All variants',
   pointer: 'Move the pointer to inspect coordinates', entrances: '7 independent entrances', hover: '4 hover interactions', cursor: '3 cursor effects', scroll: 'Scroll progress, reveal and sticky content', helpers: 'State and supporting APIs',
   click: 'Clicks', selected: 'Selected', hint: 'Scroll inside the container to compare content and its sticky panel.',
-  titles: ['Draft', 'Review', 'Publish'], descriptions: ['Arrange caller-provided content.', 'Inspect the model and actual inputs.', 'Let the caller submit the publishing action.'],
+  titles: ['Draft', 'Review', 'Publish'], descriptions: ['Gather what you plan to post.', 'Check the copy and images.', 'Publish once it all looks right.'],
   swap: 'Swap icon', mounted: 'Content mounted after entering the viewport', viewport: 'Viewport', mobile: 'Narrow viewport', reduced: 'Reduced motion', loop: 'Visible loop count', haptic: 'Request haptic feedback', unsupported: 'Vibration API unavailable', accepted: 'Browser accepted the request; physical vibration is not confirmed', rejected: 'Browser rejected the request',
 })
 const host = ref<HTMLElement | null>(null)

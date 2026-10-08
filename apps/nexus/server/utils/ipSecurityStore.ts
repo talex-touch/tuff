@@ -3,6 +3,7 @@ import type { H3Event } from 'h3'
 import { createError, getHeader } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { recordTelemetryMessages } from './messageStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SECURITY_TABLE = 'telemetry_ip_security'
 
@@ -11,39 +12,30 @@ const MAX_EVENTS_PER_WINDOW = 1_000
 const BASE_BLOCK_MS = 10 * 60_000
 const MAX_BLOCK_MS = 24 * 60 * 60_000
 
-let securitySchemaInitialized = false
-
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
 }
 
+const IP_SECURITY_SCHEMA = defineD1Schema('telemetry-ip-security', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SECURITY_TABLE} (
+        ip TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        window_count INTEGER NOT NULL DEFAULT 0,
+        violation_count INTEGER NOT NULL DEFAULT 0,
+        blocked_until INTEGER,
+        block_reason TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_ip_security_blocked_until ON ${SECURITY_TABLE}(blocked_until)`,
+    `CREATE INDEX IF NOT EXISTS idx_ip_security_updated_at ON ${SECURITY_TABLE}(updated_at)`,
+  ],
+})
+
 async function ensureSecuritySchema(db: D1Database) {
-  if (securitySchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SECURITY_TABLE} (
-      ip TEXT PRIMARY KEY,
-      window_start INTEGER NOT NULL,
-      window_count INTEGER NOT NULL DEFAULT 0,
-      violation_count INTEGER NOT NULL DEFAULT 0,
-      blocked_until INTEGER,
-      block_reason TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_ip_security_blocked_until ON ${SECURITY_TABLE}(blocked_until);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_ip_security_updated_at ON ${SECURITY_TABLE}(updated_at);
-  `).run()
-
-  securitySchemaInitialized = true
+  await ensureD1Schema(db, IP_SECURITY_SCHEMA)
 }
 
 export function resolveRequestIp(event: H3Event): string | undefined {

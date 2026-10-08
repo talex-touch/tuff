@@ -1,12 +1,11 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SESSION_TABLE = 'doc_assistant_sessions'
 const MESSAGE_TABLE = 'doc_assistant_messages'
 const DOC_CONTEXT_LIMIT = 8000
-
-let schemaInitialized = false
 
 export interface DocAssistantSession {
   id: string
@@ -40,45 +39,35 @@ function requireDatabase(event: H3Event): D1Database {
   return db
 }
 
+const DOC_ASSISTANT_SCHEMA = defineD1Schema('doc-assistant', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${SESSION_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        doc_title TEXT,
+        doc_path TEXT,
+        doc_context TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_message_at INTEGER NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${MESSAGE_TABLE} (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_assistant_sessions_user_id
+      ON ${SESSION_TABLE}(user_id, updated_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_assistant_messages_session_id
+      ON ${MESSAGE_TABLE}(session_id, created_at ASC)`,
+  ],
+})
+
 async function ensureAssistantSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${SESSION_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      doc_title TEXT,
-      doc_path TEXT,
-      doc_context TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      last_message_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${MESSAGE_TABLE} (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_assistant_sessions_user_id
-    ON ${SESSION_TABLE}(user_id, updated_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_assistant_messages_session_id
-    ON ${MESSAGE_TABLE}(session_id, created_at ASC);
-  `).run()
-
-  schemaInitialized = true
+  await ensureD1Schema(db, DOC_ASSISTANT_SCHEMA)
 }
 
 function sanitizeDocContext(context?: string | null): string | null {

@@ -1,6 +1,6 @@
 ---
 title: Kbd
-description: Keyboard shortcut token for command hints and menus.
+description: A token that shows a keyboard key.
 category: Basic
 status: beta
 since: 0.3.7
@@ -11,25 +11,23 @@ verified: true
 
 ## Usage
 
-### Kbd
+### Shortcuts
 ::::TuffDemoWrapper{demo="KbdKbdDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <span class="flex items-center gap-1">
-      <TxKbd tone="primary">⌘</TxKbd>
-      <TxKbd tone="primary">K</TxKbd>
-    </span>
+    <TxKbd tone="primary">⌘</TxKbd>
+    <TxKbd tone="primary">K</TxKbd>
   </template>
 ---
 ::::
 
 ### Best Practices
 
-- Render key combinations as separate `TxKbd` tokens rather than one long string when spacing matters.
-- Keep labels platform-aware in host copy: `⌘` for macOS, `Ctrl` for Windows/Linux.
-- Use `tone="primary"` sparingly for the main shortcut on a page or command.
-- Pair shortcut tokens with visible action text; shortcuts alone are not discoverable enough.
+- Render a key combination as separate `TxKbd` tokens, not one long string.
+- Make key names platform-aware: `⌘` on macOS, `Ctrl` on Windows / Linux.
+- Reserve `tone="primary"` for the main shortcut of a page or command, at most one group per screen.
+- Pair shortcuts with visible action text; on their own they are hard to discover.
 
 ## API Reference
 
@@ -37,14 +35,10 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `size` | `'sm' \| 'md'` | `'sm'` | Token size: `sm` (default) for inline help and menu shortcuts; `md` is larger for shortcuts shown on their own. |
-| `tone` | `'default' \| 'primary'` | `'default'` | Visual tone: use `primary` only for the main shortcut on a page or command, at most one group per screen. |
+| `size` | `'sm' \| 'md'` | `'sm'` | `sm` for inline help and menu shortcuts; `md` for shortcuts shown on their own. |
+| `tone` | `'default' \| 'primary'` | `'default'` | `primary` highlights the main shortcut. |
 
-### Events
-
-`TxKbd` does not emit component events.
-
-## Slots
+### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
@@ -52,15 +46,12 @@ code: |
 
 ## Overview
 
-- The root element is `<kbd>`, so it carries native keyboard-token semantics.
-- `size="sm"` is the compact default for inline help and menu shortcuts.
-- `tone="primary"` highlights product shortcuts without changing the slot content.
-- The component has no events and no internal state.
+- The root is a native `<kbd>`.
+- It renders only its default slot and holds no state.
+- `tone="primary"` changes only the appearance, never the slot text.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` confirms the semantic `<kbd>` root, `size` / `tone` classes, and default slot-only content.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/kbd/__tests__/kbd.test.ts` covers rendered shortcut content, root tag, and variant classes.
-- Export: `packages/tuffex/packages/components/src/kbd/index.ts` wraps the component with `withInstall` and exports `TxKbdInstance`.
+- Source: `packages/tuffex/packages/components/src/kbd/`.
 
 <TuffDocSourceLink />

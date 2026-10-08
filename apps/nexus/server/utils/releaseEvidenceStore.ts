@@ -3,12 +3,12 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const RUNS_TABLE = 'release_evidence_runs'
 const ITEMS_TABLE = 'release_evidence_items'
 const EVIDENCE_JSON_LIMIT_BYTES = 128 * 1024
 
-const initializedSchemas = new WeakSet<D1Database>()
 
 export const RELEASE_EVIDENCE_PLATFORMS = ['windows', 'macos', 'linux', 'all'] as const
 export const RELEASE_EVIDENCE_SCOPES = ['core-app', 'nexus', 'docs', 'release'] as const
@@ -173,47 +173,42 @@ function getD1Database(event: H3Event): D1Database {
   return db
 }
 
+const RELEASE_EVIDENCE_SCHEMA = defineD1Schema('release-evidence', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${RUNS_TABLE} (
+        id TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${ITEMS_TABLE} (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        case_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        required_for_release INTEGER NOT NULL DEFAULT 1,
+        evidence_json TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(run_id, case_id),
+        FOREIGN KEY (run_id) REFERENCES ${RUNS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_release_evidence_runs_version ON ${RUNS_TABLE}(version)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_evidence_runs_filters ON ${RUNS_TABLE}(version, platform, scope, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_evidence_items_run_id ON ${ITEMS_TABLE}(run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_evidence_items_case_id ON ${ITEMS_TABLE}(case_id)`,
+  ],
+})
+
 async function ensureReleaseEvidenceSchema(db: D1Database) {
-  if (initializedSchemas.has(db))
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${RUNS_TABLE} (
-      id TEXT PRIMARY KEY,
-      version TEXT NOT NULL,
-      platform TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_by TEXT NOT NULL,
-      notes TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${ITEMS_TABLE} (
-      id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL,
-      category TEXT NOT NULL,
-      case_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      required_for_release INTEGER NOT NULL DEFAULT 1,
-      evidence_json TEXT NOT NULL,
-      notes TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(run_id, case_id),
-      FOREIGN KEY (run_id) REFERENCES ${RUNS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_runs_version ON ${RUNS_TABLE}(version);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_runs_filters ON ${RUNS_TABLE}(version, platform, scope, status);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_items_run_id ON ${ITEMS_TABLE}(run_id);`).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_items_case_id ON ${ITEMS_TABLE}(case_id);`).run()
-
-  initializedSchemas.add(db)
+  await ensureD1Schema(db, RELEASE_EVIDENCE_SCHEMA)
 }
 
 function assertNonEmptyString(value: unknown, field: string): string {
@@ -628,13 +623,12 @@ export async function getReleaseEvidenceMatrix(
     }
   }
 
-  const placeholders = runs.map(() => '?').join(', ')
   const { results } = await db.prepare(`
     SELECT id, run_id, category, case_id, status, required_for_release, evidence_json, notes, created_at, updated_at
     FROM ${ITEMS_TABLE}
-    WHERE run_id IN (${placeholders})
+    WHERE run_id IN (SELECT value FROM json_each(?1))
     ORDER BY updated_at DESC;
-  `).bind(...runs.map(run => run.id)).all<ReleaseEvidenceItemRow>()
+  `).bind(JSON.stringify(runs.map(run => run.id))).all<ReleaseEvidenceItemRow>()
 
   const runById = new Map(runs.map(run => [run.id, run]))
   const latestEntries = new Map<string, ReleaseEvidenceMatrixEntry>()

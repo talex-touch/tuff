@@ -1,6 +1,6 @@
 ---
 title: "Tabs"
-description: "Composable tab navigation with placement, grouped items, animated indicators, and measured content panels."
+description: "A view that switches between panels using interactive tabs."
 category: Navigation
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Tabs
+### Basic
 :::TuffDemoWrapper{demo="TabsTabsDemo" code-lang="vue"}
 ---
 code: |
@@ -22,665 +22,283 @@ code: |
   </script>
 
   <template>
-    <div style="height: 320px;">
-      <TxTabs v-model="active">
-        <TxTabItem name="General" icon-class="i-carbon-settings" activation>
-          <div style="padding: 8px;">
-            <h3 style="margin: 0 0 8px;">
-              General
-            </h3>
-            <p style="margin: 0; color: var(--tx-text-color-secondary);">
-              Basic settings content
-            </p>
-          </div>
-        </TxTabItem>
-        <TxTabItem name="Account" icon-class="i-carbon-user">
-          <div style="padding: 8px;">
-            <h3 style="margin: 0 0 8px;">
-              Account
-            </h3>
-            <p style="margin: 0; color: var(--tx-text-color-secondary);">
-              Account settings content
-            </p>
-          </div>
-        </TxTabItem>
-        <TxTabItem name="About" icon-class="i-carbon-information">
-          <div style="padding: 8px;">
-            <h3 style="margin: 0 0 8px;">
-              About
-            </h3>
-            <p style="margin: 0; color: var(--tx-text-color-secondary);">
-              About content
-            </p>
-          </div>
-        </TxTabItem>
-      </TxTabs>
-    </div>
+    <TxTabs v-model="active">
+      <TxTabItem name="General" icon-class="i-carbon-settings" activation>
+        General settings
+      </TxTabItem>
+      <TxTabItem name="Account" icon-class="i-carbon-user">
+        Account settings
+      </TxTabItem>
+      <TxTabItem name="About" icon-class="i-carbon-information">
+        About
+      </TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Indicator Showcase
-
-- One pointer marks the active tab and glides to the next one: its two ends ride springs, so it lengthens a little on the way and gathers on the new tab, and it never squashes or scales. `indicatorVariant` only changes how it is painted and `indicatorMotion` picks the springs; `pill` is a raised surface behind the item (a thick line before 2026-09-26).
-- The five rows share one `v-model`, so a click in any row, or `Next`, moves every pointer at once. Turn the indicator off to see the fallback, where the active item paints its own fill.
-
-#### Indicator variants & motions
+### Indicator
+`indicatorVariant` sets how the indicator is drawn and `indicatorMotion` how it travels. With `showIndicator` off, the active item paints its own fill.
 :::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  type Motion = 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
-  type ContentMotion = 'fade' | 'slide' | 'zoom' | 'blur' | 'scale' | 'none'
-
-  type TabValue = 'A' | 'B' | 'C'
-
-  const motion = ref<Motion>('stretch')
-  const contentMotion = ref<ContentMotion>('zoom')
-  const showIndicator = ref(true)
-  const active = ref<TabValue>('A')
-
-  const variants = computed(() => {
-    return [
-      { value: 'line', label: 'line' },
-      { value: 'pill', label: 'pill' },
-      { value: 'block', label: 'block' },
-      { value: 'dot', label: 'dot' },
-      { value: 'outline', label: 'outline' },
-    ] as const
-  })
-
-  const motionOptions = [
-    { value: 'stretch', label: 'stretch' },
-    { value: 'warp', label: 'warp' },
-    { value: 'glide', label: 'glide' },
-    { value: 'snap', label: 'snap' },
-    { value: 'spring', label: 'spring' },
-  ] as const
-
-  const contentMotionOptions = [
-    { value: 'zoom', label: 'zoom' },
-    { value: 'fade', label: 'fade' },
-    { value: 'slide', label: 'slide' },
-    { value: 'blur', label: 'blur' },
-    { value: 'scale', label: 'scale' },
-    { value: 'none', label: 'none' },
-  ] as const
-
-  function next() {
-    active.value = active.value === 'A' ? 'B' : active.value === 'B' ? 'C' : 'A'
-  }
-  </script>
-
   <template>
-    <div class="tx-demo tx-demo__col" style="max-width: 860px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">motion</span>
-            <TuffSelect v-model="motion" style="min-width: 190px;">
-              <TuffSelectItem v-for="opt in motionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-            </TuffSelect>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">content</span>
-            <TuffSelect v-model="contentMotion" style="min-width: 150px;">
-              <TuffSelectItem v-for="opt in contentMotionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-            </TuffSelect>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">indicator</span>
-            <TxButton size="sm" @click="showIndicator = !showIndicator">
-              {{ showIndicator ? 'on' : 'off' }}
-            </TxButton>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">auto</span>
-            <TxButton size="sm" @click="next">Next</TxButton>
-          </label>
-
-          <div style="opacity: 0.7; font-size: 12px;">
-            active: <b>{{ active }}</b>
-          </div>
-        </div>
-      </TxCard>
-
-      <div class="tx-demo__col" style="gap: 12px;">
-        <TxCard
-          v-for="v in variants"
-          :key="v.value"
-          variant="plain"
-          background="mask"
-          :padding="12"
-          :radius="14"
-        >
-          <div class="tx-demo__label" style="margin-bottom: 8px;">
-            {{ v.label }}
-          </div>
-
-          <TxTabs
-            v-model="active"
-            placement="top"
-            :content-scrollable="false"
-            :show-indicator="showIndicator"
-            :indicator-variant="v.value"
-            :indicator-motion="motion"
-            :animation="{ indicator: { durationMs: 350 }, content: { type: contentMotion, durationRatio: 0.5 } }"
-          >
-            <TxTabItem name="A" activation>
-              Overview
-            </TxTabItem>
-            <TxTabItem name="B">
-              Features
-            </TxTabItem>
-            <TxTabItem name="C">
-              Pricing
-            </TxTabItem>
-          </TxTabs>
-        </TxCard>
-      </div>
-    </div>
+    <TxTabs
+      v-model="active"
+      placement="top"
+      indicator-variant="pill"
+      indicator-motion="stretch"
+      :animation="{ content: { type: 'zoom', durationRatio: 0.5 } }"
+    >
+      <TxTabItem name="A" activation>Overview</TxTabItem>
+      <TxTabItem name="B">Features</TxTabItem>
+      <TxTabItem name="C">Pricing</TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Dynamic Content Size (manual, rich content)
-
-#### Dynamic Content (manual)
+### Dynamic Content Size
+`animation.size` keeps the tabs' size in step as panel content grows or shrinks.
 :::TuffDemoWrapper{demo="TabsDynamicContentManualDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const active = ref<'Overview' | 'Details' | 'Form'>('Overview')
-
-  const expanded = ref(false)
-  const count = ref(3)
-  const items = computed(() => Array.from({ length: count.value }).map((_, i) => `Item ${i + 1}`))
-
-  const query = ref('')
-  </script>
-
   <template>
-    <div style="display: grid; gap: 10px; min-height: 120px; max-width: 100%;">
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <TxButton size="sm" @click="expanded = !expanded">
-          Toggle details
-        </TxButton>
-        <TxButton size="sm" :disabled="count <= 0" @click="count--">
-          - Item
-        </TxButton>
-        <TxButton size="sm" @click="count++">
-          + Item
-        </TxButton>
-      </div>
-
-      <TxTabs
-        v-model="active"
-        placement="left"
-        :content-scrollable="false"
-        auto-width
-        :animation="{ size: { enabled: true, durationMs: 260, easing: 'ease' } }"
-      >
-        <TxTabItem name="Overview" activation icon-class="i-carbon-dashboard">
-          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <div style="font-weight: 650;">
-                Overview
-              </div>
-              <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-                This tab is intentionally compact.
-              </div>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <div style="font-size: 12px;">
-                  Search
-                </div>
-                <div style="width: 220px; max-width: 100%;">
-                  <TxSearchInput v-model="query" placeholder="Try typing..." />
-                </div>
-              </div>
-            </div>
-          </TxCard>
-        </TxTabItem>
-
-        <TxTabItem name="Details" icon-class="i-carbon-list">
-          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                <div style="font-weight: 650;">
-                  Details
-                </div>
-                <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-                  Items: {{ items.length }}
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
-                <div
-                  v-for="it in items"
-                  :key="it"
-                  style="border-radius: 12px; padding: 10px; border: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 65%, transparent);"
-                >
-                  <div style="font-weight: 600;">
-                    {{ it }}
-                  </div>
-                  <div style="margin-top: 4px; font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-                    Dynamic grid cell
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="expanded" style="display: flex; flex-direction: column; gap: 6px;">
-                <div style="font-weight: 600;">
-                  Expanded block
-                </div>
-                <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-                  This area appears/disappears and should trigger AutoSizer refresh.
-                </div>
-                <div
-                  style="height: 110px; border-radius: 12px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);"
-                />
-              </div>
-            </div>
-          </TxCard>
-        </TxTabItem>
-
-        <TxTabItem name="Form" icon-class="i-carbon-settings">
-          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <div style="font-weight: 650;">
-                Form
-              </div>
-              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
-                <TxSearchInput v-model="query" placeholder="Field A" />
-                <TxSearchInput v-model="query" placeholder="Field B" />
-              </div>
-
-              <div
-                style="height: 160px; border-radius: 12px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 10%, transparent);"
-              />
-            </div>
-          </TxCard>
-        </TxTabItem>
-      </TxTabs>
-    </div>
+    <TxTabs
+      v-model="active"
+      placement="left"
+      :content-scrollable="false"
+      auto-width
+      :animation="{ size: { enabled: true, durationMs: 260 } }"
+    >
+      <TxTabItem name="Overview" activation>…</TxTabItem>
+      <TxTabItem name="Details">
+        <div v-for="item in items" :key="item">{{ item }}</div>
+      </TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Layout Direction (placement)
-
-#### Placement + Header Slot
+### Placement and Header
+`placement` takes four directions. `TxTabHeader` renders a sticky header above the panel, and the `nav-right` slot holds actions at the end of the nav bar.
 :::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const activeTop = ref('A')
-  const activeRight = ref('General')
-  const actionWide = ref(false)
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
-      <div style="height: 240px;">
-        <TxTabs v-model="activeTop" placement="top" auto-width :animation="{ indicator: { durationMs: 220, easing: 'ease' } }">
-          <TxTabHeader v-slot="{ props }">
-            <div style="display: flex; align-items: center; width: 100%; padding: 10px 12px;">
-              <div style="font-weight: 600;">
-                {{ props.node?.props?.name }}
-              </div>
-            </div>
-          </TxTabHeader>
+    <TxTabs v-model="active" placement="top">
+      <TxTabHeader v-slot="{ props }">
+        {{ props.node?.props?.name }}
+      </TxTabHeader>
 
-          <template #nav-right>
-            <TxButton size="sm" type="primary" @click="actionWide = !actionWide">
-              {{ actionWide ? 'More Actions' : 'Action' }}
-            </TxButton>
-          </template>
+      <template #nav-right>
+        <TxButton size="sm">Action</TxButton>
+      </template>
 
-          <TxTabItem name="A" activation>
-            <div style="padding: 8px;">
-              Top - A
-            </div>
-          </TxTabItem>
-          <TxTabItem name="B">
-            <div style="padding: 8px;">
-              Top - B
-            </div>
-          </TxTabItem>
-          <TxTabItem name="C">
-            <div style="padding: 8px;">
-              Top - C
-            </div>
-          </TxTabItem>
-        </TxTabs>
-      </div>
-
-      <div style="height: 240px;">
-        <TxTabs v-model="activeRight" placement="right">
-          <TxTabItem name="General" icon-class="i-carbon-settings" activation>
-            <div style="padding: 8px;">
-              Right - General
-            </div>
-          </TxTabItem>
-          <TxTabItem name="Account" icon-class="i-carbon-user">
-            <div style="padding: 8px;">
-              Right - Account
-            </div>
-          </TxTabItem>
-        </TxTabs>
-      </div>
-    </div>
+      <TxTabItem name="A" activation>A</TxTabItem>
+      <TxTabItem name="B">B</TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Height Follows Content (animation.size)
-
-#### Auto Size (contentScrollable=false)
+### Height Follows Content
 :::TuffDemoWrapper{demo="TabsAutoSizeContentScrollableFalseDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Long')
-  </script>
-
   <template>
-    <div style="min-height: 120px;">
-      <TxTabs
-        v-model="active"
-        placement="left"
-        :content-scrollable="false"
-        :animation="{ size: { enabled: true, durationMs: 260, easing: 'ease' } }"
-      >
-        <TxTabItem name="Long" activation>
-          <div style="padding: 10px;">
-            <div style="font-weight: 600; margin-bottom: 8px;">
-              Long Content
-            </div>
-            <div style="height: 260px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);" />
-          </div>
-        </TxTabItem>
-        <TxTabItem name="Short">
-          <div style="padding: 10px;">
-            <div style="font-weight: 600; margin-bottom: 8px;">
-              Short Content
-            </div>
-            <div style="height: 90px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);" />
-          </div>
-        </TxTabItem>
-      </TxTabs>
-    </div>
+    <TxTabs
+      v-model="active"
+      :content-scrollable="false"
+      :animation="{ size: { enabled: true, durationMs: 260 } }"
+    >
+      <TxTabItem name="Long" activation>…</TxTabItem>
+      <TxTabItem name="Short">…</TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Closing Animations (indicator/content)
-
-#### Disable Animations
+### Disabling Animations
 :::TuffDemoWrapper{demo="TabsDisableAnimationsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Left1')
-  </script>
-
   <template>
-    <div style="height: 240px;">
-      <TxTabs
-        v-model="active"
-        placement="bottom"
-        :animation="{ indicator: false, content: false }"
-      >
-        <TxTabItem name="Left1" activation>
-          <div style="padding: 10px;">
-            Bottom - No animations
-          </div>
-        </TxTabItem>
-        <TxTabItem name="Left2">
-          <div style="padding: 10px;">
-            Bottom - No animations 2
-          </div>
-        </TxTabItem>
-        <TxTabItem name="Left3">
-          <div style="padding: 10px;">
-            Bottom - No animations 3
-          </div>
-        </TxTabItem>
-      </TxTabs>
-    </div>
+    <TxTabs v-model="active" placement="bottom" :animation="{ indicator: false, content: false }">
+      <TxTabItem name="One" activation>…</TxTabItem>
+      <TxTabItem name="Two">…</TxTabItem>
+    </TxTabs>
   </template>
 ---
 :::
 
-### Dashboard Navigation Composition
-
-Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
-
-:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
+### Dashboard Navigation
+Tabs hold the top-level sections; light actions go in `TxDropdownMenu`, short notes in `TxPopover`, and dense settings in `TxDrawer`.
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Overview')
-  const drawerVisible = ref(false)
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxDropdownMenu>
-        <template #trigger>
-          <TxButton>Release actions</TxButton>
-        </template>
-        <TxDropdownItem>Quick release</TxDropdownItem>
-      </TxDropdownMenu>
+    <TxTabs
+      v-model="active"
+      placement="left"
+      :nav-min-width="176"
+      indicator-variant="pill"
+      indicator-motion="glide"
+      auto-height
+    >
+      <TxTabItem name="Overview" icon-class="i-carbon-dashboard" activation>…</TxTabItem>
+      <TxTabItem name="Release" icon-class="i-carbon-rocket">…</TxTabItem>
+    </TxTabs>
 
-      <TxPopover>
-        <template #reference>
-          <TxButton variant="secondary">Policy notes</TxButton>
-        </template>
-        Keep popovers short and action-light.
-      </TxPopover>
-
-      <TxTabs
-        v-model="active"
-        placement="left"
-        :nav-min-width="176"
-        :content-scrollable="false"
-        indicator-variant="pill"
-        indicator-motion="glide"
-        auto-height
-        :animation="{ size: { enabled: true, durationMs: 220 }, content: true }"
-      >
-        <TxTabItem name="Overview" icon-class="i-carbon-dashboard" activation>
-          <TxStatusBadge text="Running" status="success" size="sm" />
-        </TxTabItem>
-        <TxTabItem name="Releases" icon-class="i-carbon-rocket">
-          <TxProgressBar :percentage="82" status="success" show-text height="10px" />
-        </TxTabItem>
-        <TxTabItem name="Security" icon-class="i-carbon-security">
-          <TxStatusBadge text="Pending approval" status="warning" size="sm" />
-        </TxTabItem>
-      </TxTabs>
-
-      <TxDrawer v-model:visible="drawerVisible" title="Release policy">
-        <p>The drawer hosts heavy settings forms; the shell only switches sections.</p>
-      </TxDrawer>
-    </section>
+    <TxDrawer v-model:visible="drawerVisible" title="Release policy">…</TxDrawer>
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Keep `TxTabItem name` values stable, unique, and equal to the values used in `modelValue` / `defaultValue`.
-- Prefer `placement="left"` for Dashboard settings and dense admin surfaces; use top/bottom tabs for short secondary switches.
-- Use `defaultValue` only when the matching tab is guaranteed to exist. Use `activation` for static uncontrolled examples.
-- Do not put long-lived form state only inside inactive panels; inactive tab content is unmounted during switches.
-- For panels whose height changes after async data or image load, combine direct measurement (`contentScrollable=false` or `autoHeight`) with `refresh()` after the content settles.
-- Keep `nav-right` compact. Move dense actions into `TxDropdownMenu`, `TxPopover`, or `TxDrawer` instead of growing the tab bar.
+- Keep each `TxTabItem` `name` stable, unique, and equal to the values in `modelValue` / `defaultValue`.
+- Prefer `placement="left"` for settings and admin pages; top and bottom tabs suit short secondary switches.
+- Inactive panels unmount, so keep state that must survive outside them.
+- When a panel's height changes after loading, enable direct measurement (`contentScrollable=false` or `autoHeight`) and call `refresh()` once content settles.
+- Keep `nav-right` compact; move dense actions into a dropdown menu or drawer.
 
 ## API Reference
 
-### TxTabs Props
+### TxTabs
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | - | Controlled active tab name. Prop-driven changes update the active panel without emitting `change`. |
-| `defaultValue` | `string` | - | Initial uncontrolled active tab. It must match a `TxTabItem name`; otherwise no tab is selected. |
-| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Navigation placement; invalid values fall back to `left`. |
-| `offset` | `number` | `0` | Extra shift (px) of the `line` indicator along the tab axis. Other variants ignore it; `pill` stopped taking it when it became a surface. |
-| `navMinWidth` | `number` | `220` | Minimum navigation width for vertical placements. |
-| `navMaxWidth` | `number` | `320` | Maximum navigation width for vertical placements. |
-| `contentPadding` | `number` | `12` | Padding applied to the main content panel. |
-| `contentScrollable` | `boolean` | `true` | Wrap content in an internal scroll container; height animation disables the wrapper for direct measurement. |
-| `borderless` | `boolean` | `false` | Remove the outer border and background for embedded layouts. |
-| `autoHeight` | `boolean` | `false` | Enable AutoSizer height animation through the default `animation.size` configuration. |
-| `autoWidth` | `boolean` | `false` | Enable AutoSizer width animation through the default `animation.size` configuration. |
-| `showIndicator` | `boolean` | `true` | Render the active-tab pointer, which is then the only selection highlight: the active item paints no fill of its own. Set to `false` for text-only navigation; the active item falls back to its own `--tx-fill-color` fill. |
-| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | How the pointer is painted. `line`: a 2px primary rule from icon to text — never shorter than 16px, centred under a shorter label — resting on the nav divider (on the nav's outer edge for `left` / `right`). `pill`: a raised surface behind the whole item, like TxTabBar's `pill` and TxFlatRadio's thumb (a 6px thick line before 2026-09-26). `block`: a 14% primary tint, no shadow. `outline`: an inset 1.5px primary ring. `dot`: a 6px primary dot 4px in from the divider (from the outer edge for `left` / `right`). `line` and `dot` carry a soft primary glow once they land and drop it while they travel. Invalid values fall back to `line`. |
-| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | Variation of the glide the pointer travels on (springs in Technologies): `stretch` lengthens a little on the way and gathers, with no visible overshoot; `spring` damps less and passes the tab once before coming back; `warp` lengthens further; `glide` moves both ends together, a rigid slide that never lengthens; `snap` is quicker, damped harder, and rests first. Invalid values fall back to `stretch`. |
-| `indicatorMotionStrength` | `number` | `1` | Scales how far the pointer lengthens on the way (it multiplies the motion's lag, which stops at 0.85); `0` slides it rigidly at its own length. Negative values clamp to `0`. Mirrored on the root as `--tx-tabs-indicator-strength`. |
-| `animation` | `TabsAnimation` | - | Per-area animation configuration for size, nav, indicator, and content transitions. |
-| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | derives from `autoHeight` / `autoWidth` | Enable and configure AutoSizer size animation; defaults to `autoHeightDurationMs` / `autoHeightEasing`. |
-| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | enabled, `220ms ease` | Enable and configure nav width/layout transition variables. |
-| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | enabled, `350ms cubic-bezier(...)` | Pointer travel. `durationMs` time-scales the glide's springs (`350` is the reference; below `100` plays as `100`). `easing` no longer shapes travel and only reaches `--tx-tabs-indicator-easing`. `false` / `enabled: false` lands every change in place. |
-| `animation.content` | `boolean \| { enabled?; type?; durationMs?; durationRatio?; easing? }` | enabled `zoom`, `180ms ease` | Configure active-panel entry animation. `type` supports `fade`, `slide`, `zoom`, `blur`, `scale`, and `none`; `durationRatio` derives duration from indicator duration. |
-| `autoHeightDurationMs` | `number` | `250` | Default size animation duration when `animation.size.durationMs` is omitted. |
-| `autoHeightEasing` | `string` | `ease` | Default size animation easing when `animation.size.easing` is omitted. |
+| `modelValue` | `string` | - | Name of the active tab (controlled). |
+| `defaultValue` | `string` | - | Initial tab when uncontrolled; selects nothing if no tab matches. |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Where the navigation sits. |
+| `offset` | `number` | `0` | Shift (px) of the `line` indicator along the nav axis. |
+| `navMinWidth` | `number` | `220` | Minimum nav width for vertical placements. |
+| `navMaxWidth` | `number` | `320` | Maximum nav width for vertical placements. |
+| `contentPadding` | `number` | `12` | Padding of the content panel. |
+| `contentScrollable` | `boolean` | `true` | Wraps content in a scroll container; removed automatically when size animation is on. |
+| `borderless` | `boolean` | `false` | Removes the outer border and background. |
+| `autoHeight` | `boolean` | `false` | Animates height changes. |
+| `autoWidth` | `boolean` | `false` | Animates width changes. |
+| `showIndicator` | `boolean` | `true` | Shows the indicator; when off, the active item paints its own fill. |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | How the indicator is drawn: a line, a raised surface, a tint, a dot, or an inset ring. |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | How it travels: `stretch` lengthens slightly, `warp` lengthens further, `glide` slides rigidly, `snap` settles fastest, `spring` passes the target once and returns. |
+| `indicatorMotionStrength` | `number` | `1` | How far the indicator lengthens on the way; `0` slides rigidly. |
+| `animation` | `TabsAnimation` | - | Configures the `size`, `nav`, `indicator`, and `content` animations. |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | derived from `autoHeight` / `autoWidth` | Size animation. |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | on, `220ms ease` | Nav width transition. |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | on, `350ms` | Indicator travel; `durationMs` time-scales the springs, `false` lands in place. |
+| `animation.content` | `boolean \| { enabled?; type?; durationMs?; durationRatio?; easing? }` | on, `zoom`, `180ms ease` | Panel entrance; `type` is `fade`, `slide`, `zoom`, `blur`, `scale`, or `none`. |
+| `autoHeightDurationMs` | `number` | `250` | Default size-animation duration. |
+| `autoHeightEasing` | `string` | `ease` | Default size-animation easing. |
 
-### TxTabs Events
+#### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `value: string` | Emitted when user activation, `defaultValue`, or `activation` changes the active tab in uncontrolled flow. |
-| `change` | `value: string` | Mirrors the same active tab name after activation. Prop-driven `modelValue` updates do not emit it. |
+| `update:modelValue` | `value: string` | Fires when the active tab changes. |
+| `change` | `value: string` | Fires after a user activates a tab; not on parent-driven `modelValue` changes. |
 
-### TxTabs Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|------|
-| `default` | - | Provide direct `TxTabItem`, optional `TxTabItemGroup`, and optional `TxTabHeader` nodes. Fragments are unwrapped; unrelated nodes are ignored. |
-| `nav-right` | - | Render compact controls at the end of the nav bar, commonly used for horizontal tabs. |
+| `default` | - | `TxTabItem`, `TxTabItemGroup`, and `TxTabHeader` nodes; anything else is ignored. |
+| `nav-right` | - | Actions at the end of the nav bar. |
 
-### TxTabs Exposed Methods
+#### Exposed Methods
 
 | Name | Type | Description |
 |------|------|------|
-| `refresh` | `() => void` | Forward to the internal AutoSizer `refresh()`. |
-| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | Run an action inside the internal AutoSizer FLIP transition when available. |
-| `action` | `(fn: (el: HTMLElement \| undefined) => void \| Promise<void>, optionsOrDetect?: any) => Promise<{ changedKeys: string[] } \| any>` | Forward to the internal AutoSizer action helper; falls back to calling `fn(undefined)`. |
-| `size` | `() => { width: number; height: number } \| undefined` | Return the latest measured AutoSizer size. |
+| `refresh` | `() => void` | Re-measures the size. |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | Runs a change inside a FLIP transition. |
+| `action` | `(fn: (el: HTMLElement \| undefined) => void \| Promise<void>, optionsOrDetect?: any) => Promise<{ changedKeys: string[] } \| any>` | Forwards to the internal AutoSizer `action`. |
+| `size` | `() => { width: number; height: number } \| undefined` | The last measured size. |
 
-### TxTabItem Props
+### TxTabItem
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `name` | `string` | *required* | Unique tab name used as the active value and lookup key. |
-| `iconClass` | `string` | `''` | Optional icon class rendered before the nav label, inside an `inline-flex` box so a glyph class that sizes itself with `width` / `height` (UnoCSS icons) shows in any host. |
-| `disabled` | `boolean` | `false` | Block click activation and render a disabled native button. |
-| `activation` | `boolean` | `false` | Mark this tab as the uncontrolled default when neither `modelValue` nor `defaultValue` selects a tab. |
-| `active` | `boolean` | `false` | Whether the item is active; injected automatically by TxTabs — set manually only when using TxTabItem standalone. |
+| `name` | `string` | *required* | Unique name, also the active value. |
+| `iconClass` | `string` | `''` | Icon class shown before the label. |
+| `disabled` | `boolean` | `false` | Prevents activation. |
+| `activation` | `boolean` | `false` | Default tab when neither `modelValue` nor `defaultValue` selects one. |
+| `active` | `boolean` | `false` | Whether it is active; injected by TxTabs, set it only when used standalone. |
 
-### TxTabItem Events
+#### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `click` | - | Emitted by standalone `TxTabItem` when not disabled; `TxTabs` consumes it to update active state. |
+| `click` | - | Fires when used standalone and not disabled. |
 
-### TxTabItem Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|------|
-| `default` | - | Active panel content rendered by `TxTabs`. Inactive panels are not mounted. |
-| `icon` | - | Custom navigation icon; replaces `iconClass`. |
-| `name` | - | Custom navigation label; falls back to the `name` prop. |
+| `default` | - | Panel content; not mounted while inactive. |
+| `icon` | - | Custom icon, replacing `iconClass`. |
+| `name` | - | Custom label; defaults to `name`. |
 
-### TxTabHeader Props
+### TxTabHeader
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `node` | `unknown` | - | Active `TxTabItem` VNode passed by `TxTabs`; use `node?.props` defensively. |
+| `node` | `unknown` | - | The active `TxTabItem` VNode, passed by TxTabs. |
 
-### TxTabHeader Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|------|
-| `default` | `{ props: { node?: unknown } }` | Sticky content header rendered above the active panel. |
+| `default` | `{ props: { node?: unknown } }` | Sticky header above the panel. |
 
-### TxTabItemGroup Props
+### TxTabItemGroup
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `name` | `string` | - | Optional group label rendered in the navigation column. |
+| `name` | `string` | - | Group label in the navigation. |
 
-### TxTabItemGroup Slots
+#### Slots
 
 | Slot | Props | Description |
 |------|------|------|
-| `default` | - | Child `TxTabItem` nodes. The group component itself renders no DOM outside `TxTabs`. |
+| `default` | - | Child `TxTabItem` nodes. |
 
 ## Overview
 
-- `modelValue` is the controlled source. Parent-driven `modelValue` updates do not emit `change` or `update:modelValue` again.
-- Without `modelValue`, `defaultValue` wins over `activation`. If `defaultValue` does not match a tab, `TxTabs` renders the empty state instead of falling back to `activation`.
-- Only `TxTabItem`, `TxTabItemGroup`, and `TxTabHeader` nodes are collected from the default slot; fragments are supported, arbitrary wrappers are ignored.
-- `TxTabItemGroup` is a navigation grouping marker; panel content still comes from each child `TxTabItem`.
-- `showIndicator=false` removes the pointer DOM and pointer animation work, and the active item falls back to its own `--tx-fill-color` fill. While a pointer is shown it is the only highlight: the active item drops its fill (on hover too) and changes only its ink. Size animation still observes content/nav when enabled.
-- The pointer is `.tx-tabs__pointer > .tx-tabs__pointer-inner`, an absolutely positioned child of the tablist, so it scrolls with an overflowing row. The inner element carries `.is-moving` while it travels, which hides the `line` / `dot` glow — a radial pool of the primary colour reaching 4–5px past the mark at 45% opacity — until it fades back over 0.4s after landing. The root keeps `tx-tabs--indicator-<variant>`, `tx-tabs--motion-<motion>` and the `-hidden` / `-pending` / `-visible` / `-anim` state classes.
-- Geometry is measured, not assumed: `line` is inset by the active item's computed padding and the box variants take its computed `border-radius`, so hosts that restyle `.tx-tab-item` keep a matching indicator. A label narrower than 16px still gets a 16px `line`, centred under it. For `top` / `bottom` the tablist fills the bar's height with its items centred, so `line` stays on the divider when `nav-right` content or a host `min-height` makes the bar taller.
-- The first measurement lands the pointer in place and fades it in, including when the active tab comes from `modelValue`, `defaultValue` or `activation` — no click is needed to bring it out. It is held at `opacity: 0` until the active tab has a non-zero box, and the root carries `tx-tabs--indicator-pending` for exactly that window. An active tab that later measures 0×0 (the tabs sit in a container that was hidden) hides the pointer until the next real measurement lands it again.
-- A click, an arrow key, a parent `modelValue` change, and a change of `indicatorVariant` / `placement` / `offset` glide the pointer to its new box. The end facing the target leads and the trailing end follows on a slower spring, so the pointer lengthens a little on the way and gathers as it lands; across the travel its position and size ride the leading spring, so a variant change reshapes it on the way. It never squashes, stretches or scales. `left` / `right` glide on the vertical axis, with the top and bottom ends in place of left and right.
-- A resize (the panel's and nav's `ResizeObserver`) and turning `showIndicator` back on land in place; a resize during a trip only retargets it. `animation.indicator: false` (or `enabled: false`) lands every change and skips the fade-in. Under `prefers-reduced-motion: reduce` every change lands too, and the fade-in and glow transitions are cut.
-- Height animation removes the internal scroll wrapper so AutoSizer can measure panel height directly; use `contentScrollable=false` for manual direct-measurement layouts.
-- Inactive tab panels are not mounted. Store persistent panel state outside the panel subtree when it must survive switching.
+- When controlled, `modelValue` wins; otherwise `defaultValue`, then `activation`.
+- Only direct `TxTabItem`, `TxTabItemGroup`, and `TxTabHeader` children count (fragments included); custom wrappers are ignored.
+- Inactive panels are not mounted.
+- The indicator is the only selection highlight. It glides to the target with each end on its own spring and never scales.
+- The indicator lands in place on first measure, on size changes, with `animation.indicator: false`, and under reduced motion.
+- Size animation removes the inner scroll container so the panel can be measured directly.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, `TxTabItemGroup.vue`, and `types.ts`.
-- `indicatorMotionStrength` is a runtime prop on `TxTabs` and is now present in the exported `TabsProps` interface.
-- `TxTabItemGroup.vue` intentionally renders an empty template; `TxTabs` reads its child `TxTabItem` VNodes and creates the group DOM.
-- `TxTabs` filters the default slot by component name, so docs should not show arbitrary wrapper components around tab items.
-- **Pointer engine:** `useJellyIndicator` (`packages/tuffex/packages/utils/use-jelly-indicator.ts`), lifted out of TxRadioGroup's button indicator, on its `glide` material. TxTabs passes `springSteps` (`packages/tuffex/packages/components/src/liquid/src/spring.ts`, 1/240 s substeps: the library's frame spring) as the engine's `integrate`, because utils cannot import from components. The glide's defaults (`GLIDE`) and `timeScaleSpring` live in `packages/tuffex/packages/utils/animation/jelly.ts`, beside Radio's jelly material. TxTabs only measures — the active item in the tablist's own coordinates, scroll offset included, normalised against an ancestor transform — and hands the variant's target box to `moveTo()`. The `requestAnimationFrame` loop runs only while the pointer moves.
-- **Imperative paint:** the engine's `onFrame` writes `opacity`, `width`, `height` and `transform: translate3d(…) scale(…)` straight onto `.tx-tabs__pointer`; on the glide the scale is always `1.000`. The render function reads none of the engine's state, so a trip never re-renders the tab slots, and no CSS transition touches the geometry — only the fade-in's `opacity`.
-- **Switch timing:** a click or a parent `modelValue` change sends the pointer in the tick after the switch renders, from inside the size-animation wrapper rather than once it resolves. With `autoHeight` / `autoWidth` / `animation.size` that wrapper is TxAutoSizer's FLIP, which resolves a frame or more later; waiting for it let the new panel's layout refresh reach the engine first with `animate: false`, which lands, so size-animated tabs jumped instead of travelling. Hiding the pointer calls `moveTo(null)`, so no frame loop outlives it.
-- **Motion mapping:** each `indicatorMotion` is a row of `MOTION_GLIDE` — the leading end's stiffness / damping, then the lag: `stretch` 420 / 38 / 0.45, `spring` 420 / 24 / 0.3, `warp` 420 / 38 / 0.7, `glide` 380 / 38 / 0, `snap` 720 / 50 / 0.25. The trailing end rides the same spring played `1 − lag / 2` as fast (0.775× for `stretch`), so it falls behind and catches up; a lag of 0 puts both ends on one spring. `timeScaleSpring(…, durationMs, 350)` plays the springs faster or slower with their damping ratio kept (under 100ms plays as 100ms), so a longer `durationMs` is the same glide, only slower; `indicatorMotionStrength` multiplies the lag (capped at 0.85). Measured on a 100px trip of a 60px `line`: `stretch` reaches about 74px and rests in about 0.45s, `warp` about 84px, `spring` passes the target once by about 9px, `snap` rests first (about 0.32s), `glide` stays 60px. The tablist clips its overflow, so the engine also gets `bounds` — the tablist's scrollable extent along the travel — and an end that would leave it stops at that wall; a `spring` pill 8px from the edge would otherwise reach 1px past it.
-- **2026-09-26 change:** the five `tx-tabs-pointer-*` keyframe motions, the CSS transitions on the pointer's geometry and the timer-toggled glow class were replaced by the shared spring. `pill` went from a 6px line to a raised surface, `outline` from a border to an inset ring, `block` lost its shadow, and `line` went from a 3px bar across the middle 60% of the item to a 2px rule from icon to text, never shorter than 16px. The glow, which had sat blurred behind every variant and faded in over a second once a timer fired, became a tight radial pool under `line` / `dot` only. Under an indicator the active item stopped painting a fill, and `iconClass` icons got an `inline-flex` box to size in (an inline `<i>` ignores the glyph class's `width` / `height` and had measured 0×0).
-- **2026-09-26, same day — jelly → glide:** the pointer first moved onto Radio's jelly material, which was rejected in review: 不够丝滑、简单 (not silky, not simple). The tabs family — TxTabs, TxTabBar, TxFlatRadio, TxSidebarNav — now rides the glide material, and those four hosts no longer pass `maxGrowth` or `deform`; Radio keeps the jelly.
-- **Fixed with it:** the pointer slid in from the nav's top-left corner on first paint and replayed a keyframe on mount; arrow keys moved it only when the panel's ResizeObserver happened to re-measure; four of the five keyframes were cut short by the timer that removed their class at `durationMs`.
-- **Rejected alternative:** keeping a keyframe per motion. `warp`, `snap` and `spring` were multi-stop `@keyframes` with an overshooting bezier on every segment, which reverses velocity at each keyframe boundary and reads as jitter at any amplitude (component-guidelines, "State motion"). The five names survive as variations of the glide instead.
-- **Rejected alternative:** Radio's jelly for the tabs family. Its phases are discrete uniform scales — a 1.06 × 1.08 ≈ 1.145 pop as a trip starts, a 0.97 thud as it lands — and its stretch saturates with speed (−21% along the travel, +36% across it), so the shape jumped from frame to frame instead of flowing, and a tab pill turned into a tall capsule mid-trip. `maxGrowth` and `deform` capped the amplitude, never the discontinuities. The glide changes only position and size, and both continuously.
-
-- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
-- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` (48 cases) covers activation rendering, enabled and disabled switching, controlled updates, fragments, async tab items, groups, content-animation variants, hidden indicators, visual-prop normalization, exposed AutoSizer methods, tablist ARIA and arrow-key navigation, and that the indicator reveals on first layout while staying hidden until a real measurement exists. On the glide (fake timers, stubbed layout) it checks that the first measurement lands in place on the divider; where `line`, `dot` and the box variants rest in all four placements; the 16px `line` minimum, `offset`, and measuring through an ancestor transform; a click gliding between the tabs, running longer than it starts or ends without ever scaling, and settling exactly on the target, including a click and a parent `modelValue` change while a size animation holds the switch across frames; arrow keys moving the pointer; a variant change reshaping on the way; `.is-moving` only while travelling; the `spring` overshoot stopped exactly at the clipping tablist's edge; `animation.indicator: false` and reduced motion landing without travel; hiding mid-trip, then showing, landing in place; each `indicatorMotion`'s profile (`glide` never lengthens, `warp` lengthens more than `stretch`, only `spring` passes the target, once, and `snap` rests first); `durationMs` time-scaling the trip without changing how far it lengthens; and `indicatorMotionStrength` scaling the lengthening, with `0` a rigid slide. Source contracts pin the single-highlight rule, the absence of pointer keyframes and CSS-eased geometry, and the icon's `inline-flex` box; on the compiled sheet, every pointer transition has a reduced-motion rule repeating its exact selector (a shorter one loses on specificity, which had left the glow's fade running).
-
-<TuffDocSourceLink />
+- The indicator runs on the glide material of `useJellyIndicator`; its `requestAnimationFrame` loop runs only while moving and writes styles directly, without re-rendering.
+- `TxTabItemGroup` renders no DOM; TxTabs reads its children and builds the group.
+- Source: `packages/tuffex/packages/components/src/tabs/`.
 
 ## Customization
 
-| Theme token / CSS variable | Used for |
+| CSS variable | Used for |
 |----------------------------|----------|
-| `--tx-border-color` | Outer border and placement-specific nav divider; the `line` indicator rests on the divider. |
-| `--tx-bg-color` | Tabs container background. |
-| `--tx-fill-color` / `--tx-fill-color-light` | Inactive item hover surface (`-light`); the active item's own fill (`--tx-fill-color`), shown only when `showIndicator` is `false`. |
-| `--tx-color-primary` | `line` / `dot` fill and their glow once landed, the `block` tint (14%), the `outline` ring (60%), the active icon under those four variants, and demo accent fills. |
-| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | The `pill` surface (falling back to `--tx-bg-color-overlay`), its shadow, and its inset 1px ring. |
-| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | Active label and icon (`primary`; colour only, no weight change), resting label (`regular`), resting icon, group labels and empty-state text (`secondary`). |
-| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | Label and icon ink, set on `.tx-tab-item`. The active state and the indicator variants switch these instead of restyling the children, so a host that recolours `.tx-tab-item__name` under a class of its own still wins. |
-| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Still generated from the indicator props for hosts to read. TxTabs' own styles no longer use them: the engine takes the duration and strength directly, and the easing no longer shapes travel. |
-| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Runtime variables generated from content animation props. |
-| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Runtime variables generated from nav animation props. |
+| `--tx-border-color` | Outer border and nav divider. |
+| `--tx-bg-color` | Container background. |
+| `--tx-fill-color` / `--tx-fill-color-light` | Active fill (without indicator) / hover fill. |
+| `--tx-color-primary` | The `line`, `dot`, `block`, and `outline` indicators and the active icon. |
+| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | The `pill` surface, its shadow, and its inset ring. |
+| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | Active text, resting text, icons and group labels. |
+| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | Text and icon color of `.tx-tab-item`. |
+| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Generated from the indicator props, for hosts to read. |
+| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Generated from the content animation props. |
+| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Generated from the nav animation props. |
+
+<TuffDocSourceLink />

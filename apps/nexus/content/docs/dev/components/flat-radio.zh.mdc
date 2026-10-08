@@ -1,6 +1,6 @@
 ---
 title: "FlatRadio 平铺选择器"
-description: "用于 2-5 个选项的平铺选择（`TxFlatRadio` + `TxFlatRadioItem`）。提供指示器滑动动画、键盘导航和完整的 TypeScript 类型支持。"
+description: "在 2–5 个选项间平铺选择的分段控件"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,9 +11,7 @@ verified: true
 
 ## 用法
 
-最简单的平铺选择器，适合少量选项的场景。
-
-### FlatRadio (basic)
+### 基础
 :::TuffDemoWrapper{demo="FlatRadioBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -33,128 +31,33 @@ code: |
 ---
 :::
 
-支持整组禁用和单项禁用。
-
-### FlatRadio (disabled)
+### 禁用
+`disabled` 可设在整组或单项上。
 :::TuffDemoWrapper{demo="FlatRadioDisabledDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('a')
-  </script>
-
   <template>
-    <!-- 单项禁用 -->
     <TxFlatRadio v-model="value">
       <TxFlatRadioItem value="a" label="Option A" />
       <TxFlatRadioItem value="b" label="Option B" disabled />
       <TxFlatRadioItem value="c" label="Option C" />
     </TxFlatRadio>
 
-    <!-- 整组禁用 -->
     <TxFlatRadio v-model="value" disabled>
       <TxFlatRadioItem value="a" label="Option A" />
       <TxFlatRadioItem value="b" label="Option B" />
-      <TxFlatRadioItem value="c" label="Option C" />
     </TxFlatRadio>
   </template>
 ---
 :::
 
-### 最佳实践
-
-- FlatRadio 适合 2 到 5 个短选项，且用户需要直接比较选项的场景；更长列表使用 `TxSelect`。
-- 标签尽量保持单行；item 布局有意使用 `white-space: nowrap`。
-- 在紧凑 `sm` 尺寸中避免混用过长自定义插槽内容和图标。
-- 设置页、落地页里这个控件是当前屏幕的主选择时用 `xl`；行内和工具栏仍然用默认的 `md`。
-- 不要在自定义插槽内容里恢复"仅选中时加粗"的写法 —— 那会把组件刚修掉的重排又带回来。
-- 只有当多个值是彼此独立的开关项时才使用 `multiple`；否则用独立开关或复选框表达更清晰。
-- `value` 应在渲染间保持稳定，因为父级会按 value 注册 item DOM，用于指示器和键盘顺序。
-
-## API 参考
-
-### TxFlatRadio
-
-#### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | *必填* |
-| `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
-| `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
-| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` |
-| `bordered` | 为选择器添加外边框。 | `boolean` | `false` |
-
-#### Events
-
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| `update:modelValue` | 以新的单选值或多选值数组触发。 | `(value: string \| number \| (string \| number)[]) => void` |
-| `change` | 选择变化后以相同载荷触发。 | `(value: string \| number \| (string \| number)[]) => void` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | `TxFlatRadioItem` 子组件。 |
-
-### TxFlatRadioItem
-
-#### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| `value` | 注册到父选择器的当前项值。 | `string \| number` | *必填* |
-| `label` | 未提供默认插槽时的可见文本。 | `string` | - |
-| `icon` | 未提供 `icon` 插槽时使用的图标 CSS class。 | `string` | - |
-| `disabled` | 禁用当前项，并在键盘导航中跳过。 | `boolean` | `false` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | 自定义可见内容，替代 `label`。 |
-| `icon` | 自定义图标内容，替代 `icon` class。 |
-
-## 尺寸
-
-支持 `sm`、`md`（默认）、`lg`、`xl` 四种尺寸。
-
-### FlatRadio (sizes)
+### 尺寸
+`size` 可选 `sm`、`md`（默认）、`lg`、`xl`。
 :::TuffDemoWrapper{demo="FlatRadioSizesDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const sm = ref('a')
-  const md = ref('a')
-  const lg = ref('a')
-  const xl = ref('a')
-  </script>
-
   <template>
-    <TxFlatRadio v-model="sm" size="sm">
-      <TxFlatRadioItem value="a" label="Option A" />
-      <TxFlatRadioItem value="b" label="Option B" />
-      <TxFlatRadioItem value="c" label="Option C" />
-    </TxFlatRadio>
-
-    <TxFlatRadio v-model="md" size="md">
-      <TxFlatRadioItem value="a" label="Option A" />
-      <TxFlatRadioItem value="b" label="Option B" />
-      <TxFlatRadioItem value="c" label="Option C" />
-    </TxFlatRadio>
-
-    <TxFlatRadio v-model="lg" size="lg">
-      <TxFlatRadioItem value="a" label="Option A" />
-      <TxFlatRadioItem value="b" label="Option B" />
-      <TxFlatRadioItem value="c" label="Option C" />
-    </TxFlatRadio>
-
-    <TxFlatRadio v-model="xl" size="xl">
+    <TxFlatRadio v-for="size in ['sm', 'md', 'lg', 'xl']" :key="size" v-model="value" :size="size">
       <TxFlatRadioItem value="a" label="Option A" />
       <TxFlatRadioItem value="b" label="Option B" />
       <TxFlatRadioItem value="c" label="Option C" />
@@ -163,22 +66,13 @@ code: |
 ---
 :::
 
-## 图标
-
-通过 `icon` 属性可以为选项添加图标（CSS class 方式，如 UnoCSS 图标）。
-
-### FlatRadio (icon)
+### 图标
+`icon` 接收图标 class，例如 UnoCSS 图标。
 :::TuffDemoWrapper{demo="FlatRadioIconDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('grid')
-  </script>
-
   <template>
-    <TxFlatRadio v-model="value">
+    <TxFlatRadio v-model="view">
       <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
       <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
       <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
@@ -187,20 +81,10 @@ code: |
 ---
 :::
 
-## 带边框
-
-设置 `bordered` 属性可以为选择器添加外边框。
-
-### FlatRadio (bordered)
+### 边框
 :::TuffDemoWrapper{demo="FlatRadioBorderedDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('a')
-  </script>
-
   <template>
     <TxFlatRadio v-model="value" bordered>
       <TxFlatRadioItem value="a" label="Option A" />
@@ -211,11 +95,8 @@ code: |
 ---
 :::
 
-## 多选模式
-
-设置 `multiple` 后，组件会从单选切换为类似复选的多选行为。
-
-### FlatRadio (multiple)
+### 多选
+`multiple` 时值为数组，各项像复选框一样切换，不显示滑块。
 :::TuffDemoWrapper{demo="FlatRadioMultipleDemo" code-lang="vue"}
 ---
 code: |
@@ -236,19 +117,11 @@ code: |
 ---
 :::
 
-## 键盘导航
-
-### FlatRadio (keyboard)
+### 键盘导航
+容器获得焦点后响应下表按键。
 :::TuffDemoWrapper{demo="FlatRadioKeyboardDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const single = ref('overview')
-  const multiple = ref(['email'])
-  </script>
-
   <template>
     <TxFlatRadio v-model="single">
       <TxFlatRadioItem value="overview" label="Overview" />
@@ -256,7 +129,7 @@ code: |
       <TxFlatRadioItem value="settings" label="Settings" />
     </TxFlatRadio>
 
-    <TxFlatRadio v-model="multiple" multiple>
+    <TxFlatRadio v-model="channels" multiple>
       <TxFlatRadioItem value="email" label="Email" />
       <TxFlatRadioItem value="push" label="Push" />
       <TxFlatRadioItem value="sms" label="SMS" />
@@ -265,46 +138,87 @@ code: |
 ---
 :::
 
-容器聚焦后可通过键盘控制：
-
 | 按键 | 行为 |
 |------|------|
-| `→` / `↓` | 选中下一个非禁用项（循环） |
-| `←` / `↑` | 选中上一个非禁用项（循环） |
-| `Home` | 选中第一个非禁用项 |
-| `End` | 选中最后一个非禁用项 |
-| `Enter` / `Space` | 多选模式下切换当前聚焦项 |
+| `→` / `↓` | 下一个非禁用项（循环） |
+| `←` / `↑` | 上一个非禁用项（循环） |
+| `Home` | 第一个非禁用项 |
+| `End` | 最后一个非禁用项 |
+| `Enter` / `Space` | 多选时切换当前项 |
+
+### 最佳实践
+
+- 用于 2–5 个需要直接比较的短选项（标签不换行）；更多选项用 `TxSelect`。
+- 页面上的主选择用 `xl`；行内与工具栏保持默认 `md`。
+- 自定义插槽内容不要只在选中时加粗：每一项本就带选中字重，再加粗会引起重排。
+- 只有各值相互独立时才用 `multiple`；否则用开关或复选框。
+- `value` 在渲染间保持稳定：父级按 value 注册项，用于滑块定位与键盘顺序。
+
+## API 参考
+
+### TxFlatRadio
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `modelValue` / `v-model` | `string \| number \| (string \| number)[]` | *必填* | 单选为单值，多选为数组。 |
+| `multiple` | `boolean` | `false` | 多选：各项像复选框一样切换，不显示滑块。 |
+| `disabled` | `boolean` | `false` | 禁用整组，移出 Tab 序列并阻止变更。 |
+| `size` | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` | 尺寸。 |
+| `bordered` | `boolean` | `false` | 添加外边框。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| `update:modelValue` | `(value: string \| number \| (string \| number)[]) => void` | 选择变化后触发，参数为新值。 |
+| `change` | `(value: string \| number \| (string \| number)[]) => void` | 与 `update:modelValue` 同时触发。 |
+
+#### 插槽
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | `TxFlatRadioItem` 子项。 |
+
+### TxFlatRadioItem
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `value` | `string \| number` | *必填* | 项的值，注册到父级。 |
+| `label` | `string` | - | 无默认插槽时显示的文本。 |
+| `icon` | `string` | - | 无 `icon` 插槽时使用的图标 class。 |
+| `disabled` | `boolean` | `false` | 禁用该项，键盘导航时跳过。 |
+
+#### 插槽
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 自定义内容，替代 `label`。 |
+| `icon` | 自定义图标，替代 `icon`。 |
 
 ## 概述
 
-- 滑块与多选态 chip 的底色都取自 `--tx-surface-raised`，而它是相对 `--tx-fill-color`（也就是轨道本身）定义的。两次以页面为锚点的尝试都失败了：只用 `--tx-bg-color-overlay` 时浅色下是白色、深色下却比轨道更暗；把文字色混进去之后，滑块在明暗两种主题下都落在距轨道四个色阶以内。
-- `--tx-flat-radio-track-bg`、`--tx-flat-radio-indicator-bg`、`--tx-flat-radio-indicator-shadow` 可分别覆写这三项，宿主不必再去压 scoped 样式的特异度。
-- 滑块由共享的指示器引擎（`useJellyIndicator`）驱动，用的是 `TxTabs`、`TxTabBar`、`TxSidebarNav` 同样在用的滑行材质（Radio 按钮组保留果冻）。选中新的一项时它滑过去：领先的一边走 `GLIDE` 弹簧，落后的一边走同一根弹簧的慢放版本，所以途中略微拉长、到位时收拢——两个宽度不等的标签之间是 40px、约 54px、再到 50px。宽度就是两边之间的距离，所以滑块到位和变宽是一个整体，而且从不缩放。
-- 挂载、容器尺寸变化、选项注册都让滑块直接落位，不带淡入。它的高度始终是 CSS 给的高度，不会长进轨道的内边距。
-- 到了第一项和最后一项，要离开轨道的那一边停在轨道末端：引擎的墙就是轨道的 padding box 宽度（`clientWidth`）。
-- 选项几何尺寸从带小数的 rect 读取，不再用 `offsetLeft` / `offsetWidth` —— 后者取整到整像素，滑块最多偏 1px，而且每一项偏的量还不一样。
-- 选中字重挂在每一个选项上，所以选中不会改变任何一项的实测宽度。把字重挂在选中态上会让该项重排、挤动兄弟项，并在滑块飞行途中改掉它的目标宽度。
-- 按压缩放的是标签和图标，不是选项盒子 —— 盒子正是滑块用来测量的那个。
-- `prefers-reduced-motion: reduce` 下滑块直接落位，按压缩放也去掉；透明度淡入保留，让它仍然是"显现"而不是"弹出"。
-- 选项自带键盘焦点环，浏览器默认的 outline 不会再压在滑块上面。
-
-- 单选模式下 `TxFlatRadio` 使用 `role="radiogroup"`，每个 item 使用 `role="radio"`。
-- 多选模式下容器使用 `role="group"`，每个 item 使用 `role="checkbox"`，并隐藏滑动指示器。
-- item 按钮保持 `tabindex="-1"`；焦点停留在容器上，由方向键驱动整组选择。
-- 方向键、Home、End 会跳过禁用项，并在可用项之间循环。
-- 多选模式下方向键移动当前聚焦值，Enter / Space 切换该值；单选模式下方向键会立即选中下一个值。
-- 整组 `disabled` 会把容器 `tabindex` 设为 `-1`，让所有 item 进入禁用态，并阻止点击/键盘变化。
+- 单选时容器为 `role="radiogroup"`、项为 `role="radio"`；多选时为 `role="group"` 与 `role="checkbox"`。
+- 只有容器进入 Tab 序列，项保持 `tabindex="-1"`；用相邻字段文案或外部 label 为整组命名。
+- 单选时方向键直接选中；多选时方向键只移动焦点，Enter / Space 切换。
+- 滑块从不缩放：挂载、尺寸变化与注册新项时直接落位，选中新项时滑过去，两端不越出轨道。
+- 按压只缩放文字与图标，不缩放项本身。
+- 减少动态效果时，滑块直接落位并去掉按压缩放，保留淡入。
 
 ## 技术实现
 
-- **可访问性说明：** 整组只有容器进入 Tab 顺序；item 按钮保持 `tabindex="-1"`，从而集中处理方向键。需要用邻近字段文案或外部 label 为整组命名。
-- **指示器说明：** 引擎每帧直接写滑块的 `transform`、`width` 与 `opacity`，模板不绑定其中任何一项，所以一次移动不会让整组重新渲染；`top` 与 `height` 仍交给 CSS。滑行由 `springSteps`（`packages/tuffex/packages/components/src/liquid/src/spring.ts`，按 1/240 s 分步积分）作为 `integrate` 传入驱动，写出的缩放恒为 `1.000`。transform 与宽度上不挂 CSS transition：它会把引擎写入的每一帧再缓动一遍。
-- **接入引擎之前：** 位移与改变宽度共用一条 CSS 曲线，由 `--tx-flat-radio-duration` / `--tx-flat-radio-ease` 控制，这两个变量现在不再参与移动。更早则是两条（0.25s 回弹对 0.2s 缓动），滑块会先到位、再慢慢补完宽度。
-- **动效说明：** 先试过用隐藏的加粗副本撑住选中宽度，被否掉了：它只对 `label` prop 有效，而真正要紧的调用点传的是插槽内容；为撑宽度把插槽渲染两遍则会让用户内容挂载两次。
-- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择、`multiple` 模式下 Enter/Space 切换，以及滑块不带会和引擎打架的 transform / 宽度过渡（只留淡入，减弱动效下同样如此）、选中无关的选项宽度、小数级滑块几何、减弱动效路径和 `sm`/`md`/`lg`/`xl` 尺寸梯度。桩化 rect 并使用假计时器后，还验证：首次测量让滑块直接落位，`top` 与高度仍交给 CSS；选中新的一项时在两项之间滑行——途中比两项都长、从不缩放——最终精确停在该项上；在 `xl` 轨道上往返两端时滑块每一帧都在轨道内，高度仍是 CSS 的高度；`prefers-reduced-motion: reduce` 下新的选中项直接落位。
+- 滑块由共享的 `useJellyIndicator` 滑行材质驱动（与 `TxTabs`、`TxTabBar`、`TxSidebarNav` 相同），每帧直接写 `transform`、`width`、`opacity`，不触发重渲染。
+- 源码：`packages/tuffex/packages/components/src/flat-radio/`。
 
-- Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
-- Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, Enter / Space toggles in multiple mode, and the thumb's travel, landings and containment.
+## 自定义
+
+| CSS 变量 | 用途 |
+|----------|------|
+| `--tx-flat-radio-track-bg` | 轨道底色，默认 `--tx-fill-color`。 |
+| `--tx-flat-radio-indicator-bg` | 滑块与多选项底色，默认 `--tx-surface-raised`。 |
+| `--tx-flat-radio-indicator-shadow` | 滑块投影。 |
 
 <TuffDocSourceLink />

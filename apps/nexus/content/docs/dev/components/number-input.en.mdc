@@ -1,6 +1,6 @@
 ---
 title: NumberInput
-description: Numeric input with step controls, clamping, and precision normalization.
+description: A numeric field with step buttons, clamping, and precision.
 category: Form
 status: beta
 since: 0.3.7
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### NumberInput
+### Range and Precision
+`min` / `max` set the range, `step` the increment, and `precision` the decimal places.
 ::::TuffDemoWrapper{demo="NumberInputNumberInputDemo" code-lang="vue"}
 ---
 code: |
@@ -29,10 +30,10 @@ code: |
 
 ### Best Practices
 
-- Prefer explicit `min`, `max`, and `step` for percentages, quotas, and pagination controls.
-- Use `precision` for decimals rather than rounding in the consumer after every event.
-- Hide controls for dense table filters where keyboard entry is faster.
-- Treat `null` as the unset state in validation and API payload mapping.
+- Pass explicit `min`, `max`, and `step` for percentages, quotas, and pagination.
+- Handle decimals with `precision` instead of rounding in the consumer after every event.
+- Set `controls=false` in dense table filters, where typing is faster.
+- Treat `null` as unset in validation and API mapping.
 
 ## API Reference
 
@@ -40,50 +41,44 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `number \| null` | `null` | Current numeric value. |
+| `modelValue` / `v-model` | `number \| null` | `null` | The number; `null` when the field is empty. |
 | `min` | `number` | - | Minimum value. |
 | `max` | `number` | - | Maximum value. |
-| `step` | `number` | `1` | Step size used by controls and native input. |
-| `precision` | `number` | - | Decimal precision after normalization. |
-| `placeholder` | `string` | `''` | Native input placeholder. |
-| `disabled` | `boolean` | `false` | Disable input and controls. |
-| `readonly` | `boolean` | `false` | Make input read-only and block controls. |
-| `controls` | `boolean` | `true` | Show decrease/increase buttons. |
+| `step` | `number` | `1` | Increment of the step buttons and the native input. |
+| `precision` | `number` | - | Decimal places to keep. |
+| `placeholder` | `string` | `''` | Placeholder text. |
+| `disabled` | `boolean` | `false` | Disables the field and the buttons. |
+| `readonly` | `boolean` | `false` | Makes the field read-only and blocks stepping. |
+| `controls` | `boolean` | `true` | Shows the decrease and increase buttons. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `update:modelValue` | `(value: number \| null)` | v-model update after normalization. |
-| `change` | `(value: number \| null)` | Emitted with the same normalized value. |
-| `focus` | `(event: FocusEvent)` | Native focus event. |
-| `blur` | `(event: FocusEvent)` | Native blur event; also re-normalizes the field. |
+| `update:modelValue` | `(value: number \| null)` | Fires with the normalized value. |
+| `change` | `(value: number \| null)` | Fires together with `update:modelValue`. |
+| `focus` | `(event: FocusEvent)` | The native focus event. |
+| `blur` | `(event: FocusEvent)` | The native blur event; the field re-normalizes on blur. |
 
 ### Exposed Methods
 
-| Method | Description |
+| Name | Description |
 |------|-------------|
-| `focus()` | Focus the native input. |
-| `blur()` | Blur the native input. |
-| `inputRef` | Native input ref. |
-
-## Slots
-
-`TxNumberInput` does not expose slots. Use adjacent form help text or wrapper layout for labels, prefixes, suffixes, and validation copy.
+| `focus()` | Focuses the native input. |
+| `blur()` | Blurs the native input. |
+| `inputRef` | Ref to the native input. |
 
 ## Overview
 
 - Empty input normalizes to `null`.
-- Non-finite input falls back to the previous value, or `null` when no value exists.
-- `min` / `max` clamp typed values and step button results.
-- `precision` applies `Number(value.toFixed(precision))` after clamping.
-- `controls=false` hides both step buttons and keeps the native numeric field.
-- `readonly` and `disabled` block step buttons; `disabled` also disables the input.
+- Typed values clamp to `min` / `max` on blur, step results right away; `precision` rounds after clamping.
+- Unparseable text left at blur falls back to the current value, or `null` if there is none.
+- `controls=false` hides the step buttons and keeps the native numeric field.
+- `readonly` and `disabled` both block stepping; `disabled` also disables the field.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` confirms normalization, clamping, precision handling, attr forwarding, step controls, focus state, and exposed helpers.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/number-input/__tests__/number-input.test.ts` covers numeric attrs, normalized input, clamped step controls, hidden controls, and focus helper exposure.
-- Export: `packages/tuffex/packages/components/src/number-input/index.ts` wraps the component with `withInstall` and exports `TxNumberInputInstance`.
+- Attrs other than `class` / `style` go to the native input.
+- Source: `packages/tuffex/packages/components/src/number-input/`.
 
 <TuffDocSourceLink />

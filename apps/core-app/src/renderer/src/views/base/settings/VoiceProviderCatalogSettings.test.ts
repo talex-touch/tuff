@@ -1,18 +1,30 @@
 // @vitest-environment jsdom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import type { CatalogPackDiagnostic, CatalogStatus } from '@talex-touch/utils/i18n'
-import type { CatalogVoiceProviderSyncResponse } from '@talex-touch/utils/transport/events/types/catalog'
+import type {
+  CatalogVoiceProviderPackSummary,
+  CatalogVoiceProviderStatusResponse,
+  CatalogVoiceProviderSyncResponse
+} from '@talex-touch/utils/transport/events/types/catalog'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as VueModule from 'vue'
 
 const mocks = vi.hoisted(() => {
   const { ref } = require('vue') as typeof VueModule
+  const statusListeners: Array<(snapshot: unknown) => void> = []
   return {
+    statusListeners,
     catalog: {
       getStatus: vi.fn(),
       checkUpdates: vi.fn(),
       sync: vi.fn(),
-      rollback: vi.fn()
+      rollback: vi.fn(),
+      onStatusChanged: vi.fn((listener: (snapshot: unknown) => void) => {
+        statusListeners.push(listener)
+        return () => {
+          statusListeners.splice(statusListeners.indexOf(listener), 1)
+        }
+      })
     },
     toast: {
       error: vi.fn(),
@@ -44,10 +56,18 @@ vi.mock('@talex-touch/tuffex/button', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/tag', () => ({
+  TxTag: {
+    props: ['variant'],
+    template: '<span :data-variant="variant"><slot /></span>'
+  }
+}))
+
 vi.mock('~/components/tuff/TuffBlockSlot.vue', () => ({
   default: {
     props: ['title', 'description'],
-    template: '<section><span>{{ title }}</span><span>{{ description }}</span><slot /></section>'
+    template:
+      '<section><span>{{ title }}</span><slot name="tags" /><span>{{ description }}</span><slot /></section>'
   }
 }))
 
@@ -65,6 +85,7 @@ vi.mock('vue-sonner', () => ({ toast: mocks.toast }))
 vi.mock('vue-i18n', () => {
   return {
     useI18n: () => ({
+      locale: { value: 'en-US' },
       t: (key: string, params?: Record<string, unknown>) => {
         return params ? `${key}(${Object.values(params).join(',')})` : key
       }
@@ -74,23 +95,22 @@ vi.mock('vue-i18n', () => {
 
 import VoiceProviderCatalogSettings from './VoiceProviderCatalogSettings.vue'
 
-const ACTIVE = '[data-testid="voice-provider-catalog-active"]'
 const STATUS = '[data-testid="voice-provider-catalog-status"]'
+const BADGE = '[data-testid="voice-provider-catalog-badge"]'
 const ROLLBACK_ROW = '[data-testid="voice-provider-catalog-rollback-row"]'
-const REFRESH = '[data-testid="voice-provider-catalog-refresh"]'
-const CHECK = '[data-testid="voice-provider-catalog-check"]'
 const SYNC = '[data-testid="voice-provider-catalog-sync"]'
 const LOGIN = '[data-testid="voice-provider-catalog-login"]'
 const ROLLBACK = '[data-testid="voice-provider-catalog-rollback"]'
 
 const PACK_ID = 'voice-provider.cloud'
 const CHECKED_AT = 1_700_000_000_000
-const CHECK_FAILED = 'settingSpeechRecognition.catalog.checkFailed'
 const SYNC_FAILED = 'settingSpeechRecognition.catalog.syncFailed'
-const LOGIN_REQUIRED = 'settingSpeechRecognition.catalog.loginRequiredDescription'
-const NOT_CHECKED = 'settingSpeechRecognition.catalog.notCheckedDescription'
-const CURRENT = 'settingSpeechRecognition.catalog.currentDescription'
-const UP_TO_DATE = 'settingSpeechRecognition.catalog.upToDate'
+const ACTIVATED = 'settingSpeechRecognition.catalog.activated'
+const DOWNLOADED = 'settingSpeechRecognition.catalog.badge.downloaded'
+const NOT_DOWNLOADED = 'settingSpeechRecognition.catalog.badge.notDownloaded'
+const SYNCING = 'settingSpeechRecognition.catalog.badge.syncing'
+const SIGNED_OUT = 'settingSpeechRecognition.catalog.signedOutDescription'
+const SYNCING_DESCRIPTION = 'settingSpeechRecognition.catalog.syncingDescription'
 
 // Values the UI must never surface: only the safe pack identity (packId, version, digest prefix) may
 // reach the DOM. Key material and the raw envelope are never allowed out.
@@ -123,6 +143,15 @@ function diagnostic(packId: string, version: string): CatalogPackDiagnostic {
   } as unknown as CatalogPackDiagnostic
 }
 
+function summary(): CatalogVoiceProviderPackSummary {
+  return {
+    payloadBytes: 1200,
+    importedAt: CHECKED_AT,
+    expiresAt: null,
+    providers: [{ id: 'tuff-nexus-default', displayName: { default: 'Nexus Voice' } }]
+  }
+}
+
 function statusOf(overrides: Partial<CatalogStatus> = {}): CatalogStatus {
   return {
     databaseAvailable: true,
@@ -135,6 +164,13 @@ function statusOf(overrides: Partial<CatalogStatus> = {}): CatalogStatus {
     lastErrorCode: null,
     ...overrides
   }
+}
+
+function snapshotOf(
+  status: CatalogStatus,
+  extra: Partial<CatalogVoiceProviderStatusResponse> = {}
+): CatalogVoiceProviderStatusResponse {
+  return { status, pack: status.active ? summary() : null, syncing: false, ...extra }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -156,6 +192,11 @@ async function click(wrapper: VueWrapper, testId: string): Promise<void> {
   await flushPromises()
 }
 
+async function push(snapshot: CatalogVoiceProviderStatusResponse): Promise<void> {
+  for (const listener of [...mocks.statusListeners]) listener(snapshot)
+  await flushPromises()
+}
+
 function expectNoCanaries(wrapper: VueWrapper): void {
   const text = wrapper.text()
   for (const canary of CANARIES) {
@@ -166,39 +207,59 @@ function expectNoCanaries(wrapper: VueWrapper): void {
 describe('VoiceProviderCatalogSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.statusListeners.length = 0
     mocks.auth.isLoggedIn.value = true
   })
 
-  it('projects the active pack version on load without leaking diagnostic payloads', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
+  it('shows what is on this machine — name, version, size — without leaking diagnostics', async () => {
+    mocks.catalog.getStatus.mockResolvedValue(
+      snapshotOf(statusOf({ active: diagnostic(PACK_ID, '2.1.0') }))
+    )
 
     const wrapper = await mountCatalog()
 
-    const active = wrapper.get(ACTIVE)
-    expect(active.text()).toContain('2.1.0')
-    expect(active.text()).not.toContain(PACK_ID)
+    const row = wrapper.get(STATUS)
+    expect(row.text()).toContain('Nexus Voice')
+    expect(row.text()).toContain('2.1.0')
+    expect(row.text()).toContain('1.2 KB')
+    expect(row.text()).not.toContain(PACK_ID)
+    expect(wrapper.get(BADGE).text()).toBe(DOWNLOADED)
     expectNoCanaries(wrapper)
     expect(wrapper.findAll(ROLLBACK_ROW)).toHaveLength(0)
 
     wrapper.unmount()
   })
 
-  it('offers rollback only when the status carries a previous pack', async () => {
-    mocks.catalog.getStatus.mockResolvedValueOnce({
+  it('still names the version when main sends no summary', async () => {
+    mocks.catalog.getStatus.mockResolvedValue({
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
     })
+
+    const wrapper = await mountCatalog()
+
+    expect(wrapper.get(STATUS).text()).toContain('2.1.0')
+    expect(wrapper.get(STATUS).text()).not.toContain('KB')
+    expect(wrapper.get(BADGE).text()).toBe(DOWNLOADED)
+
+    wrapper.unmount()
+  })
+
+  it('offers rollback only when the status carries a previous pack', async () => {
+    mocks.catalog.getStatus.mockResolvedValueOnce(
+      snapshotOf(statusOf({ active: diagnostic(PACK_ID, '2.1.0') }))
+    )
     const withoutPrevious = await mountCatalog()
     expect(withoutPrevious.findAll(ROLLBACK_ROW)).toHaveLength(0)
     withoutPrevious.unmount()
 
-    mocks.catalog.getStatus.mockResolvedValueOnce({
-      status: statusOf({
-        active: diagnostic(PACK_ID, '2.1.0'),
-        previous: diagnostic(PACK_ID, '1.4.0')
-      })
-    })
+    mocks.catalog.getStatus.mockResolvedValueOnce(
+      snapshotOf(
+        statusOf({
+          active: diagnostic(PACK_ID, '2.1.0'),
+          previous: diagnostic(PACK_ID, '1.4.0')
+        })
+      )
+    )
     const withPrevious = await mountCatalog()
     const row = withPrevious.get(ROLLBACK_ROW)
     expect(row.text()).toContain(PACK_ID)
@@ -207,62 +268,31 @@ describe('VoiceProviderCatalogSettings', () => {
     withPrevious.unmount()
   })
 
-  it('only claims the catalogue is current after a completed check', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
-    mocks.catalog.checkUpdates.mockResolvedValue({
-      outcome: 'no-update',
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0'), lastCheckedAt: CHECKED_AT }),
-      candidate: null,
-      errorCode: null
-    })
+  it('follows the sync main runs on its own, such as the one after sign-in', async () => {
+    mocks.catalog.getStatus.mockResolvedValue(snapshotOf(statusOf()))
 
     const wrapper = await mountCatalog()
+    expect(wrapper.get(BADGE).text()).toBe(NOT_DOWNLOADED)
 
-    const untouched = wrapper.get(STATUS).text()
-    expect(untouched).toContain(NOT_CHECKED)
-    expect(untouched).not.toContain(CURRENT)
-    expect(mocks.toast.success).not.toHaveBeenCalled()
+    await push(snapshotOf(statusOf({ lastCheckedAt: CHECKED_AT }), { syncing: true }))
+    expect(wrapper.get(BADGE).text()).toBe(SYNCING)
+    expect(wrapper.get(STATUS).text()).toContain(SYNCING_DESCRIPTION)
+    expect(wrapper.get(SYNC).attributes('disabled')).toBeDefined()
 
-    await click(wrapper, CHECK)
-
-    const checked = wrapper.get(STATUS).text()
-    expect(checked).toContain(CURRENT)
-    expect(checked).not.toContain(NOT_CHECKED)
-    expect(mocks.toast.success).toHaveBeenCalledWith(UP_TO_DATE)
-
-    wrapper.unmount()
-  })
-
-  it('renders the checked candidate version instead of the active pack when an update exists', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
-    mocks.catalog.checkUpdates.mockResolvedValue({
-      outcome: 'update-available',
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0'), lastCheckedAt: CHECKED_AT }),
-      candidate: diagnostic(PACK_ID, '3.0.0'),
-      errorCode: null
-    })
-
-    const wrapper = await mountCatalog()
-    await click(wrapper, CHECK)
-
-    expect(mocks.catalog.checkUpdates).toHaveBeenCalledTimes(1)
-    const status = wrapper.get(STATUS)
-    expect(status.text()).toContain('3.0.0')
-    expect(status.text()).not.toContain(PACK_ID)
-    expect(status.text()).not.toContain('2.1.0')
-    expectNoCanaries(wrapper)
+    await push(snapshotOf(statusOf({ active: diagnostic(PACK_ID, '2.1.0') })))
+    expect(wrapper.get(BADGE).text()).toBe(DOWNLOADED)
+    expect(wrapper.get(STATUS).text()).toContain('2.1.0')
+    expect(wrapper.get(SYNC).attributes('disabled')).toBeUndefined()
+    expect(mocks.catalog.sync).not.toHaveBeenCalled()
 
     wrapper.unmount()
+    expect(mocks.statusListeners).toHaveLength(0)
   })
 
   it('syncs once and replaces the active pack with the returned status', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
+    mocks.catalog.getStatus.mockResolvedValue(
+      snapshotOf(statusOf({ active: diagnostic(PACK_ID, '2.1.0') }))
+    )
     mocks.catalog.sync.mockResolvedValue({
       outcome: 'activated',
       status: statusOf({ active: diagnostic(PACK_ID, '3.0.0'), lastCheckedAt: CHECKED_AT }),
@@ -271,25 +301,29 @@ describe('VoiceProviderCatalogSettings', () => {
     })
 
     const wrapper = await mountCatalog()
-    expect(wrapper.get(ACTIVE).text()).toContain('2.1.0')
+    expect(wrapper.get(STATUS).text()).toContain('2.1.0')
 
     await click(wrapper, SYNC)
 
     expect(mocks.catalog.sync).toHaveBeenCalledTimes(1)
     expect(mocks.catalog.sync).toHaveBeenCalledWith()
-    expect(wrapper.get(ACTIVE).text()).toContain('3.0.0')
-    expect(wrapper.get(ACTIVE).text()).not.toContain('2.1.0')
+    expect(mocks.catalog.checkUpdates).not.toHaveBeenCalled()
+    expect(wrapper.get(STATUS).text()).toContain('3.0.0')
+    expect(wrapper.get(STATUS).text()).not.toContain('2.1.0')
+    expect(mocks.toast.success).toHaveBeenCalledWith(ACTIVATED)
 
     wrapper.unmount()
   })
 
   it('rolls back with the manual reason and shows the returned active pack', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({
-        active: diagnostic(PACK_ID, '3.0.0'),
-        previous: diagnostic(PACK_ID, '2.1.0')
-      })
-    })
+    mocks.catalog.getStatus.mockResolvedValue(
+      snapshotOf(
+        statusOf({
+          active: diagnostic(PACK_ID, '3.0.0'),
+          previous: diagnostic(PACK_ID, '2.1.0')
+        })
+      )
+    )
     mocks.catalog.rollback.mockResolvedValue({
       outcome: 'rolled-back',
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0'), lastCheckedAt: CHECKED_AT }),
@@ -303,41 +337,16 @@ describe('VoiceProviderCatalogSettings', () => {
 
     expect(mocks.catalog.rollback).toHaveBeenCalledTimes(1)
     expect(mocks.catalog.rollback).toHaveBeenCalledWith({ reason: 'manual' })
-    expect(wrapper.get(ACTIVE).text()).toContain('2.1.0')
+    expect(wrapper.get(STATUS).text()).toContain('2.1.0')
     expect(wrapper.findAll(ROLLBACK_ROW)).toHaveLength(0)
 
     wrapper.unmount()
   })
 
-  it('keeps the returned active pack and surfaces the error code when a check fails', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
-    mocks.catalog.checkUpdates.mockResolvedValue({
-      outcome: 'failed',
-      status: statusOf({
-        active: diagnostic(PACK_ID, '2.1.0'),
-        lastErrorCode: 'CATALOG_SIGNATURE_INVALID'
-      }),
-      candidate: null,
-      errorCode: 'CATALOG_SIGNATURE_INVALID'
-    })
-
-    const wrapper = await mountCatalog()
-    await click(wrapper, CHECK)
-
-    expect(wrapper.get(ACTIVE).text()).toContain('2.1.0')
-    expect(wrapper.get(STATUS).text()).toContain('CATALOG_SIGNATURE_INVALID')
-    expect(mocks.toast.error).toHaveBeenCalledWith(CHECK_FAILED)
-    expectNoCanaries(wrapper)
-
-    wrapper.unmount()
-  })
-
   it('keeps the returned active pack and surfaces the error code when a sync fails', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
+    mocks.catalog.getStatus.mockResolvedValue(
+      snapshotOf(statusOf({ active: diagnostic(PACK_ID, '2.1.0') }))
+    )
     mocks.catalog.sync.mockResolvedValue({
       outcome: 'failed',
       status: statusOf({
@@ -351,23 +360,22 @@ describe('VoiceProviderCatalogSettings', () => {
     const wrapper = await mountCatalog()
     await click(wrapper, SYNC)
 
-    expect(wrapper.get(ACTIVE).text()).toContain('2.1.0')
+    expect(wrapper.get(STATUS).text()).toContain('2.1.0')
     expect(wrapper.get(STATUS).text()).toContain('CATALOG_ACTIVATION_FAILED')
     expect(mocks.toast.error).toHaveBeenCalledWith(SYNC_FAILED)
+    expectNoCanaries(wrapper)
 
     wrapper.unmount()
   })
 
-  it('gates remote controls behind sign-in and offers a working login', async () => {
+  it('says the pack syncs after sign-in and offers a working login while signed out', async () => {
     mocks.auth.isLoggedIn.value = false
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
+    mocks.catalog.getStatus.mockResolvedValue(snapshotOf(statusOf()))
 
     const wrapper = await mountCatalog()
 
-    expect(wrapper.get(STATUS).text()).toContain(LOGIN_REQUIRED)
-    expect(wrapper.findAll(CHECK)).toHaveLength(0)
+    expect(wrapper.get(STATUS).text()).toContain(SIGNED_OUT)
+    expect(wrapper.get(BADGE).text()).toBe(NOT_DOWNLOADED)
     expect(wrapper.findAll(SYNC)).toHaveLength(0)
 
     await click(wrapper, LOGIN)
@@ -378,9 +386,14 @@ describe('VoiceProviderCatalogSettings', () => {
   })
 
   it('disables every catalog control while an operation is in flight', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
+    mocks.catalog.getStatus.mockResolvedValue(
+      snapshotOf(
+        statusOf({
+          active: diagnostic(PACK_ID, '2.1.0'),
+          previous: diagnostic(PACK_ID, '1.4.0')
+        })
+      )
+    )
     const pending = deferred<CatalogVoiceProviderSyncResponse>()
     mocks.catalog.sync.mockReturnValue(pending.promise)
 
@@ -389,20 +402,23 @@ describe('VoiceProviderCatalogSettings', () => {
 
     await wrapper.get(SYNC).trigger('click')
 
-    expect(wrapper.get(CHECK).attributes('disabled')).toBeDefined()
-    expect(wrapper.get(REFRESH).attributes('disabled')).toBeDefined()
     expect(wrapper.get(SYNC).attributes('disabled')).toBeDefined()
+    expect(wrapper.get(ROLLBACK).attributes('disabled')).toBeDefined()
 
     pending.resolve({
       outcome: 'no-update',
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0'), lastCheckedAt: CHECKED_AT }),
+      status: statusOf({
+        active: diagnostic(PACK_ID, '2.1.0'),
+        previous: diagnostic(PACK_ID, '1.4.0'),
+        lastCheckedAt: CHECKED_AT
+      }),
       activated: null,
       errorCode: null
     })
     await flushPromises()
 
-    expect(wrapper.get(CHECK).attributes('disabled')).toBeUndefined()
     expect(wrapper.get(SYNC).attributes('disabled')).toBeUndefined()
+    expect(wrapper.get(ROLLBACK).attributes('disabled')).toBeUndefined()
 
     wrapper.unmount()
   })

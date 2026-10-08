@@ -1,7 +1,7 @@
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord } from './sceneRegistryStore'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureDefaultProviderSceneSeed } from './providerSceneSeed'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ensureDefaultProviderSceneSeed, ensureDefaultProviderSceneSeedForMiss } from './providerSceneSeed'
 
 const storeMocks = vi.hoisted(() => ({
   listProviderRegistryEntries: vi.fn(),
@@ -320,5 +320,45 @@ describe('providerSceneSeed', () => {
     await ensureDefaultProviderSceneSeed(event)
 
     expect(storeMocks.createProviderRegistryEntry).toHaveBeenCalled()
+  })
+})
+
+describe('ensureDefaultProviderSceneSeedForMiss', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-15T08:00:00.000Z'))
+    storeMocks.listProviderRegistryEntries.mockResolvedValue([provider('prv_overlay', 'overlay.render', { name: 'custom-local-overlay', metadata: { source: 'nexus-provider-scene-seed', seedId: 'custom-local-overlay', adapterKey: 'local-overlay' } })])
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function eventWithDatabase(db: object) {
+    return { context: { cloudflare: { env: { DB: db } } } } as any
+  }
+
+  it('runs the seed once per window for lookups that keep missing a scene', async () => {
+    const missEvent = eventWithDatabase({})
+
+    await ensureDefaultProviderSceneSeedForMiss(missEvent)
+    await ensureDefaultProviderSceneSeedForMiss(missEvent)
+    expect(storeMocks.listProviderRegistryEntries).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(new Date('2026-10-15T08:00:31.000Z'))
+    await ensureDefaultProviderSceneSeedForMiss(missEvent)
+    expect(storeMocks.listProviderRegistryEntries).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs it again after a run that failed', async () => {
+    const missEvent = eventWithDatabase({})
+    storeMocks.listProviderRegistryEntries.mockRejectedValueOnce(new Error('D1_ERROR: network connection lost'))
+
+    await expect(ensureDefaultProviderSceneSeedForMiss(missEvent)).rejects.toThrow(/network connection lost/)
+    await ensureDefaultProviderSceneSeedForMiss(missEvent)
+
+    expect(storeMocks.listProviderRegistryEntries).toHaveBeenCalledTimes(2)
   })
 })

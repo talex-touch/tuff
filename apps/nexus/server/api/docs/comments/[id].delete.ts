@@ -3,7 +3,8 @@ import { getUserById } from '../../../utils/authStore'
 import { deleteComment, ensureCommentsSchema, getCommentOwner, getD1Database } from '../../../utils/docCommentsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
 
   const id = getRouterParam(event, 'id')
   if (!id || typeof id !== 'string') {
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Comment not found' })
   }
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
 
   if (ownerId !== userId && !isAdmin) {

@@ -801,7 +801,7 @@ export const recommendationExposureDaily = sqliteTable(
 /**
  * Main-owned voice aggregates and optional detailed recognition records. Aggregate tables keep
  * only counters and opaque successful-capture ids; detailed transcript/audio rows live separately
- * and are written only when the user enables voiceInput.historyEnabled.
+ * and are written while voiceInput.historyEnabled is on (the default; the user can turn it off).
  */
 export const voiceInsightsState = sqliteTable('voice_insights_state', {
   id: integer('id').primaryKey(),

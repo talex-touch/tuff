@@ -1429,7 +1429,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 :disabled="!hasPluginPendingReview(plugin)"
                 :open-delay="0"
                 :close-delay="0"
-                :anchor="{ placement: 'top', showArrow: true }"
+                :anchor="{ placement: 'top' }"
               >
                 <TxStatusBadge
                   class="DashboardAssetStatusBadge"
@@ -1447,7 +1447,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 :disabled="!hasPluginPendingReview(plugin)"
                 :open-delay="0"
                 :close-delay="0"
-                :anchor="{ placement: 'top', showArrow: true }"
+                :anchor="{ placement: 'top' }"
               >
                 <TxTag
                   class="DashboardAssetVersionTag"

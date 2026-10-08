@@ -3,6 +3,8 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
+import { runAfterResponse } from './afterResponse'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 import { normalizeLocaleCode, type SupportedLocaleCode } from './locale'
 import { resolveRequestGeo } from './requestGeo'
 
@@ -27,8 +29,6 @@ const DEVICE_AUTH_COOLDOWN_WINDOW_MS = 10 * 60 * 1000
 const DEVICE_AUTH_COOLDOWN_THRESHOLD = 3
 const DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS = 10 * 60 * 1000
 const ACCOUNT_DELETION_RECOVERY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
-
-let authSchemaInitialized = false
 
 export interface UserPrivacySettings {
   analytics: boolean
@@ -57,358 +57,294 @@ function requireDatabase(event: H3Event): D1Database {
   return db
 }
 
+/**
+ * Applied by `ensureD1Schema` only when the database has not recorded this definition.
+ *
+ * The backfill repairs users written before `email_state` existed; every writer sets both columns now
+ * (`createUser`, `setEmailVerified`, the adapter's `updateUser`). Its old companion
+ * (`SET email_state = 'unverified' WHERE email_state IS NULL`) is gone: the column is NOT NULL with a
+ * default, so it could never match a row.
+ */
+const AUTH_SCHEMA = defineD1Schema('auth', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${USERS_TABLE} (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT,
+        image TEXT,
+        email_verified TEXT,
+        email_state TEXT NOT NULL DEFAULT 'unverified',
+        role TEXT NOT NULL DEFAULT 'user',
+        locale TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        merged_to_user_id TEXT,
+        merged_at TEXT,
+        merged_by_user_id TEXT,
+        disabled_at TEXT,
+        privacy_analytics INTEGER NOT NULL DEFAULT 1,
+        privacy_crash_reports INTEGER NOT NULL DEFAULT 1,
+        privacy_usage_data INTEGER NOT NULL DEFAULT 0,
+        privacy_personalization INTEGER NOT NULL DEFAULT 1,
+        allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0,
+        deletion_requested_at TEXT,
+        deletion_scheduled_at TEXT,
+        deletion_cancelled_at TEXT,
+        deletion_terms_version TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${ACCOUNTS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        provider_account_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(provider, provider_account_id),
+        FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${VERIFICATION_TABLE} (
+        identifier TEXT NOT NULL,
+        token TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        PRIMARY KEY (identifier, token)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${LOGIN_TOKEN_TABLE} (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        reason TEXT,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${PASSKEYS_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        credential_id TEXT NOT NULL UNIQUE,
+        public_key TEXT NOT NULL,
+        counter INTEGER NOT NULL DEFAULT 0,
+        transports TEXT,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_TABLE} (
+        device_code TEXT PRIMARY KEY,
+        user_code TEXT NOT NULL UNIQUE,
+        device_id TEXT NOT NULL,
+        device_name TEXT,
+        device_platform TEXT,
+        client_type TEXT,
+        request_ip TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        grant_type TEXT NOT NULL DEFAULT 'short',
+        reject_reason TEXT,
+        reject_message TEXT,
+        reject_request_ip TEXT,
+        reject_current_ip TEXT,
+        rejected_at TEXT,
+        browser_state TEXT NOT NULL DEFAULT 'unknown',
+        browser_seen_at TEXT,
+        browser_closed_at TEXT,
+        user_id TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        approved_at TEXT,
+        cancelled_at TEXT
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_AUDIT_TABLE} (
+        id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        status TEXT NOT NULL,
+        user_id TEXT,
+        device_id TEXT,
+        device_code TEXT,
+        user_code TEXT,
+        client_type TEXT,
+        actor_user_id TEXT,
+        reason TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${WEBAUTHN_CHALLENGE_TABLE} (
+        challenge TEXT PRIMARY KEY,
+        user_id TEXT,
+        type TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${DEVICES_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        device_name TEXT,
+        platform TEXT,
+        client_type TEXT,
+        trusted_at TEXT,
+        user_agent TEXT,
+        last_seen_at TEXT,
+        last_seen_ip TEXT,
+        last_seen_country_code TEXT,
+        last_seen_region_code TEXT,
+        last_seen_region_name TEXT,
+        last_seen_city TEXT,
+        last_seen_latitude REAL,
+        last_seen_longitude REAL,
+        last_seen_timezone TEXT,
+        last_seen_geo_source TEXT,
+        created_at TEXT NOT NULL,
+        revoked_at TEXT,
+        token_version INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${LOGIN_HISTORY_TABLE} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        device_id TEXT,
+        ip TEXT,
+        country_code TEXT,
+        region_code TEXT,
+        region_name TEXT,
+        city TEXT,
+        latitude REAL,
+        longitude REAL,
+        timezone TEXT,
+        geo_source TEXT,
+        client_type TEXT,
+        user_agent TEXT,
+        success INTEGER NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${OAUTH_CODE_TABLE} (
+        code TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        consumed_at TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_users_email ON ${USERS_TABLE}(email)`,
+    `CREATE TABLE IF NOT EXISTS ${MERGE_LOGS_TABLE} (
+        id TEXT PRIMARY KEY,
+        source_user_id TEXT NOT NULL,
+        target_user_id TEXT NOT NULL,
+        merged_by_user_id TEXT,
+        reason TEXT,
+        metadata TEXT,
+        merged_at TEXT NOT NULL,
+        FOREIGN KEY (source_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
+        FOREIGN KEY (target_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
+        FOREIGN KEY (merged_by_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_merges_source ON ${MERGE_LOGS_TABLE}(source_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_merges_target ON ${MERGE_LOGS_TABLE}(target_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_accounts_user ON ${ACCOUNTS_TABLE}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_devices_user ON ${DEVICES_TABLE}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_device
+      ON ${DEVICE_AUTH_AUDIT_TABLE}(device_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_user
+      ON ${DEVICE_AUTH_AUDIT_TABLE}(user_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_ip
+      ON ${DEVICE_AUTH_AUDIT_TABLE}(ip, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_action_status
+      ON ${DEVICE_AUTH_AUDIT_TABLE}(action, status, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_oauth_codes_client_user
+      ON ${OAUTH_CODE_TABLE}(client_id, user_id, created_at DESC)`,
+    // Per-user reads that used to scan: passkeys (`/api/user/me`, the FREE boost check), login
+    // history (dashboard, device list), the bootstrap check (`/api/user/me`), and the retention
+    // delete by age.
+    `CREATE INDEX IF NOT EXISTS idx_auth_passkeys_user ON ${PASSKEYS_TABLE}(user_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_login_history_user_created ON ${LOGIN_HISTORY_TABLE}(user_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_login_history_user_device ON ${LOGIN_HISTORY_TABLE}(user_id, device_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_login_history_created ON ${LOGIN_HISTORY_TABLE}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_users_status_role ON ${USERS_TABLE}(status, role)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_users_status_created ON ${USERS_TABLE}(status, created_at, id)`,
+  ],
+  columns: [
+    {
+      table: USERS_TABLE,
+      columns: [
+        { name: 'status', ddl: "status TEXT NOT NULL DEFAULT 'active'" },
+        { name: 'email_state', ddl: "email_state TEXT NOT NULL DEFAULT 'unverified'" },
+        { name: 'merged_to_user_id', ddl: 'merged_to_user_id TEXT' },
+        { name: 'merged_at', ddl: 'merged_at TEXT' },
+        { name: 'merged_by_user_id', ddl: 'merged_by_user_id TEXT' },
+        { name: 'disabled_at', ddl: 'disabled_at TEXT' },
+        { name: 'privacy_analytics', ddl: 'privacy_analytics INTEGER NOT NULL DEFAULT 1' },
+        { name: 'privacy_crash_reports', ddl: 'privacy_crash_reports INTEGER NOT NULL DEFAULT 1' },
+        { name: 'privacy_usage_data', ddl: 'privacy_usage_data INTEGER NOT NULL DEFAULT 0' },
+        { name: 'privacy_personalization', ddl: 'privacy_personalization INTEGER NOT NULL DEFAULT 1' },
+        { name: 'allow_cli_ip_mismatch', ddl: 'allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0' },
+        { name: 'deletion_requested_at', ddl: 'deletion_requested_at TEXT' },
+        { name: 'deletion_scheduled_at', ddl: 'deletion_scheduled_at TEXT' },
+        { name: 'deletion_cancelled_at', ddl: 'deletion_cancelled_at TEXT' },
+        { name: 'deletion_terms_version', ddl: 'deletion_terms_version TEXT' },
+      ],
+    },
+    {
+      table: DEVICE_AUTH_TABLE,
+      columns: [
+        { name: 'grant_type', ddl: "grant_type TEXT NOT NULL DEFAULT 'short'" },
+        { name: 'cancelled_at', ddl: 'cancelled_at TEXT' },
+        { name: 'client_type', ddl: 'client_type TEXT' },
+        { name: 'request_ip', ddl: 'request_ip TEXT' },
+        { name: 'reject_reason', ddl: 'reject_reason TEXT' },
+        { name: 'reject_message', ddl: 'reject_message TEXT' },
+        { name: 'reject_request_ip', ddl: 'reject_request_ip TEXT' },
+        { name: 'reject_current_ip', ddl: 'reject_current_ip TEXT' },
+        { name: 'rejected_at', ddl: 'rejected_at TEXT' },
+        { name: 'browser_state', ddl: "browser_state TEXT NOT NULL DEFAULT 'unknown'" },
+        { name: 'browser_seen_at', ddl: 'browser_seen_at TEXT' },
+        { name: 'browser_closed_at', ddl: 'browser_closed_at TEXT' },
+      ],
+    },
+    {
+      table: DEVICES_TABLE,
+      columns: [
+        { name: 'client_type', ddl: 'client_type TEXT' },
+        { name: 'trusted_at', ddl: 'trusted_at TEXT' },
+        { name: 'last_seen_ip', ddl: 'last_seen_ip TEXT' },
+        { name: 'last_seen_country_code', ddl: 'last_seen_country_code TEXT' },
+        { name: 'last_seen_region_code', ddl: 'last_seen_region_code TEXT' },
+        { name: 'last_seen_region_name', ddl: 'last_seen_region_name TEXT' },
+        { name: 'last_seen_city', ddl: 'last_seen_city TEXT' },
+        { name: 'last_seen_latitude', ddl: 'last_seen_latitude REAL' },
+        { name: 'last_seen_longitude', ddl: 'last_seen_longitude REAL' },
+        { name: 'last_seen_timezone', ddl: 'last_seen_timezone TEXT' },
+        { name: 'last_seen_geo_source', ddl: 'last_seen_geo_source TEXT' },
+      ],
+    },
+    {
+      table: LOGIN_HISTORY_TABLE,
+      columns: [
+        { name: 'country_code', ddl: 'country_code TEXT' },
+        { name: 'region_code', ddl: 'region_code TEXT' },
+        { name: 'region_name', ddl: 'region_name TEXT' },
+        { name: 'city', ddl: 'city TEXT' },
+        { name: 'latitude', ddl: 'latitude REAL' },
+        { name: 'longitude', ddl: 'longitude REAL' },
+        { name: 'timezone', ddl: 'timezone TEXT' },
+        { name: 'geo_source', ddl: 'geo_source TEXT' },
+        { name: 'client_type', ddl: 'client_type TEXT' },
+      ],
+    },
+  ],
+  backfills: [
+    `UPDATE ${USERS_TABLE}
+      SET email_state = 'verified'
+      WHERE email_verified IS NOT NULL AND email_state != 'verified'`,
+    // Roles are written lower-case (createUser, the role PATCH, the bootstrap promotion) and
+    // `requireAdmin` compares exactly; this makes old rows agree, so the bootstrap check can match
+    // `role = 'admin'` on its index instead of scanning every user for `LOWER(role)`.
+    `UPDATE ${USERS_TABLE} SET role = LOWER(role) WHERE role <> LOWER(role)`,
+  ],
+})
+
 async function ensureAuthSchema(db: D1Database) {
-  if (authSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${USERS_TABLE} (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      name TEXT,
-      image TEXT,
-      email_verified TEXT,
-      email_state TEXT NOT NULL DEFAULT 'unverified',
-      role TEXT NOT NULL DEFAULT 'user',
-      locale TEXT,
-      status TEXT NOT NULL DEFAULT 'active',
-      merged_to_user_id TEXT,
-      merged_at TEXT,
-      merged_by_user_id TEXT,
-      disabled_at TEXT,
-      privacy_analytics INTEGER NOT NULL DEFAULT 1,
-      privacy_crash_reports INTEGER NOT NULL DEFAULT 1,
-      privacy_usage_data INTEGER NOT NULL DEFAULT 0,
-      privacy_personalization INTEGER NOT NULL DEFAULT 1,
-      allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0,
-      deletion_requested_at TEXT,
-      deletion_scheduled_at TEXT,
-      deletion_cancelled_at TEXT,
-      deletion_terms_version TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${ACCOUNTS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      provider TEXT NOT NULL,
-      provider_account_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      UNIQUE(provider, provider_account_id),
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${VERIFICATION_TABLE} (
-      identifier TEXT NOT NULL,
-      token TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      PRIMARY KEY (identifier, token)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${LOGIN_TOKEN_TABLE} (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      reason TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PASSKEYS_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      credential_id TEXT NOT NULL UNIQUE,
-      public_key TEXT NOT NULL,
-      counter INTEGER NOT NULL DEFAULT 0,
-      transports TEXT,
-      created_at TEXT NOT NULL,
-      last_used_at TEXT,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_TABLE} (
-      device_code TEXT PRIMARY KEY,
-      user_code TEXT NOT NULL UNIQUE,
-      device_id TEXT NOT NULL,
-      device_name TEXT,
-      device_platform TEXT,
-      client_type TEXT,
-      request_ip TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      grant_type TEXT NOT NULL DEFAULT 'short',
-      reject_reason TEXT,
-      reject_message TEXT,
-      reject_request_ip TEXT,
-      reject_current_ip TEXT,
-      rejected_at TEXT,
-      browser_state TEXT NOT NULL DEFAULT 'unknown',
-      browser_seen_at TEXT,
-      browser_closed_at TEXT,
-      user_id TEXT,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      approved_at TEXT,
-      cancelled_at TEXT
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_AUDIT_TABLE} (
-      id TEXT PRIMARY KEY,
-      action TEXT NOT NULL,
-      status TEXT NOT NULL,
-      user_id TEXT,
-      device_id TEXT,
-      device_code TEXT,
-      user_code TEXT,
-      client_type TEXT,
-      actor_user_id TEXT,
-      reason TEXT,
-      ip TEXT,
-      user_agent TEXT,
-      metadata TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${WEBAUTHN_CHALLENGE_TABLE} (
-      challenge TEXT PRIMARY KEY,
-      user_id TEXT,
-      type TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DEVICES_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      device_name TEXT,
-      platform TEXT,
-      client_type TEXT,
-      trusted_at TEXT,
-      user_agent TEXT,
-      last_seen_at TEXT,
-      last_seen_ip TEXT,
-      last_seen_country_code TEXT,
-      last_seen_region_code TEXT,
-      last_seen_region_name TEXT,
-      last_seen_city TEXT,
-      last_seen_latitude REAL,
-      last_seen_longitude REAL,
-      last_seen_timezone TEXT,
-      last_seen_geo_source TEXT,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT,
-      token_version INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${LOGIN_HISTORY_TABLE} (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      device_id TEXT,
-      ip TEXT,
-      country_code TEXT,
-      region_code TEXT,
-      region_name TEXT,
-      city TEXT,
-      latitude REAL,
-      longitude REAL,
-      timezone TEXT,
-      geo_source TEXT,
-      client_type TEXT,
-      user_agent TEXT,
-      success INTEGER NOT NULL,
-      reason TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${OAUTH_CODE_TABLE} (
-      code TEXT PRIMARY KEY,
-      client_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      redirect_uri TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      consumed_at TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_users_email ON ${USERS_TABLE}(email);
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${MERGE_LOGS_TABLE} (
-      id TEXT PRIMARY KEY,
-      source_user_id TEXT NOT NULL,
-      target_user_id TEXT NOT NULL,
-      merged_by_user_id TEXT,
-      reason TEXT,
-      metadata TEXT,
-      merged_at TEXT NOT NULL,
-      FOREIGN KEY (source_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
-      FOREIGN KEY (target_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
-      FOREIGN KEY (merged_by_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_merges_source ON ${MERGE_LOGS_TABLE}(source_user_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_merges_target ON ${MERGE_LOGS_TABLE}(target_user_id);
-  `).run()
-
-  const userColumns = await db.prepare(`PRAGMA table_info(${USERS_TABLE});`).all<{ name: string }>()
-  const addUserColumnIfMissing = async (column: string, ddl: string) => {
-    if (!userColumns.results?.some(item => item.name === column)) {
-      await db.prepare(`ALTER TABLE ${USERS_TABLE} ADD COLUMN ${ddl};`).run()
-    }
-  }
-
-  await addUserColumnIfMissing('status', "status TEXT NOT NULL DEFAULT 'active'")
-  await addUserColumnIfMissing('email_state', "email_state TEXT NOT NULL DEFAULT 'unverified'")
-  await addUserColumnIfMissing('merged_to_user_id', 'merged_to_user_id TEXT')
-  await addUserColumnIfMissing('merged_at', 'merged_at TEXT')
-  await addUserColumnIfMissing('merged_by_user_id', 'merged_by_user_id TEXT')
-  await addUserColumnIfMissing('disabled_at', 'disabled_at TEXT')
-  await addUserColumnIfMissing('privacy_analytics', 'privacy_analytics INTEGER NOT NULL DEFAULT 1')
-  await addUserColumnIfMissing('privacy_crash_reports', 'privacy_crash_reports INTEGER NOT NULL DEFAULT 1')
-  await addUserColumnIfMissing('privacy_usage_data', 'privacy_usage_data INTEGER NOT NULL DEFAULT 0')
-  await addUserColumnIfMissing('privacy_personalization', 'privacy_personalization INTEGER NOT NULL DEFAULT 1')
-  await addUserColumnIfMissing('allow_cli_ip_mismatch', 'allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0')
-  await addUserColumnIfMissing('deletion_requested_at', 'deletion_requested_at TEXT')
-  await addUserColumnIfMissing('deletion_scheduled_at', 'deletion_scheduled_at TEXT')
-  await addUserColumnIfMissing('deletion_cancelled_at', 'deletion_cancelled_at TEXT')
-  await addUserColumnIfMissing('deletion_terms_version', 'deletion_terms_version TEXT')
-
-  const deviceAuthColumns = await db.prepare(`PRAGMA table_info(${DEVICE_AUTH_TABLE});`).all<{ name: string }>()
-  const addDeviceAuthColumnIfMissing = async (column: string, ddl: string) => {
-    if (!deviceAuthColumns.results?.some(item => item.name === column)) {
-      await db.prepare(`ALTER TABLE ${DEVICE_AUTH_TABLE} ADD COLUMN ${ddl};`).run()
-    }
-  }
-
-  await addDeviceAuthColumnIfMissing('grant_type', "grant_type TEXT NOT NULL DEFAULT 'short'")
-  await addDeviceAuthColumnIfMissing('cancelled_at', 'cancelled_at TEXT')
-  await addDeviceAuthColumnIfMissing('client_type', 'client_type TEXT')
-  await addDeviceAuthColumnIfMissing('request_ip', 'request_ip TEXT')
-  await addDeviceAuthColumnIfMissing('reject_reason', 'reject_reason TEXT')
-  await addDeviceAuthColumnIfMissing('reject_message', 'reject_message TEXT')
-  await addDeviceAuthColumnIfMissing('reject_request_ip', 'reject_request_ip TEXT')
-  await addDeviceAuthColumnIfMissing('reject_current_ip', 'reject_current_ip TEXT')
-  await addDeviceAuthColumnIfMissing('rejected_at', 'rejected_at TEXT')
-  await addDeviceAuthColumnIfMissing('browser_state', "browser_state TEXT NOT NULL DEFAULT 'unknown'")
-  await addDeviceAuthColumnIfMissing('browser_seen_at', 'browser_seen_at TEXT')
-  await addDeviceAuthColumnIfMissing('browser_closed_at', 'browser_closed_at TEXT')
-
-  await db.prepare(`
-    UPDATE ${USERS_TABLE}
-    SET email_state = 'verified'
-    WHERE email_verified IS NOT NULL AND email_state != 'verified'
-  `).run()
-  await db.prepare(`
-    UPDATE ${USERS_TABLE}
-    SET email_state = 'unverified'
-    WHERE email_state IS NULL
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_accounts_user ON ${ACCOUNTS_TABLE}(user_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_devices_user ON ${DEVICES_TABLE}(user_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_device
-    ON ${DEVICE_AUTH_AUDIT_TABLE}(device_id, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_user
-    ON ${DEVICE_AUTH_AUDIT_TABLE}(user_id, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_ip
-    ON ${DEVICE_AUTH_AUDIT_TABLE}(ip, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_action_status
-    ON ${DEVICE_AUTH_AUDIT_TABLE}(action, status, created_at DESC);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_oauth_codes_client_user
-    ON ${OAUTH_CODE_TABLE}(client_id, user_id, created_at DESC);
-  `).run()
-
-  const deviceColumns = await db.prepare(`PRAGMA table_info(${DEVICES_TABLE});`).all<{ name: string }>()
-  const addDeviceColumnIfMissing = async (column: string, ddl: string) => {
-    if (!deviceColumns.results?.some(item => item.name === column)) {
-      await db.prepare(`ALTER TABLE ${DEVICES_TABLE} ADD COLUMN ${ddl};`).run()
-    }
-  }
-
-  await addDeviceColumnIfMissing('client_type', 'client_type TEXT')
-  await addDeviceColumnIfMissing('trusted_at', 'trusted_at TEXT')
-  await addDeviceColumnIfMissing('last_seen_ip', 'last_seen_ip TEXT')
-  await addDeviceColumnIfMissing('last_seen_country_code', 'last_seen_country_code TEXT')
-  await addDeviceColumnIfMissing('last_seen_region_code', 'last_seen_region_code TEXT')
-  await addDeviceColumnIfMissing('last_seen_region_name', 'last_seen_region_name TEXT')
-  await addDeviceColumnIfMissing('last_seen_city', 'last_seen_city TEXT')
-  await addDeviceColumnIfMissing('last_seen_latitude', 'last_seen_latitude REAL')
-  await addDeviceColumnIfMissing('last_seen_longitude', 'last_seen_longitude REAL')
-  await addDeviceColumnIfMissing('last_seen_timezone', 'last_seen_timezone TEXT')
-  await addDeviceColumnIfMissing('last_seen_geo_source', 'last_seen_geo_source TEXT')
-
-  const loginHistoryColumns = await db.prepare(`PRAGMA table_info(${LOGIN_HISTORY_TABLE});`).all<{ name: string }>()
-  const addLoginHistoryColumnIfMissing = async (column: string, ddl: string) => {
-    if (!loginHistoryColumns.results?.some(item => item.name === column)) {
-      await db.prepare(`ALTER TABLE ${LOGIN_HISTORY_TABLE} ADD COLUMN ${ddl};`).run()
-    }
-  }
-
-  await addLoginHistoryColumnIfMissing('country_code', 'country_code TEXT')
-  await addLoginHistoryColumnIfMissing('region_code', 'region_code TEXT')
-  await addLoginHistoryColumnIfMissing('region_name', 'region_name TEXT')
-  await addLoginHistoryColumnIfMissing('city', 'city TEXT')
-  await addLoginHistoryColumnIfMissing('latitude', 'latitude REAL')
-  await addLoginHistoryColumnIfMissing('longitude', 'longitude REAL')
-  await addLoginHistoryColumnIfMissing('timezone', 'timezone TEXT')
-  await addLoginHistoryColumnIfMissing('geo_source', 'geo_source TEXT')
-  await addLoginHistoryColumnIfMissing('client_type', 'client_type TEXT')
-
-  authSchemaInitialized = true
+  await ensureD1Schema(db, AUTH_SCHEMA)
 }
 
 export type UserStatus = 'active' | 'merged' | 'disabled' | 'deletion_pending'
@@ -795,15 +731,15 @@ export async function setEmailVerified(event: H3Event, userId: string): Promise<
 export async function setEmailState(event: H3Event, userId: string, emailState: EmailState): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  await db.prepare(`UPDATE ${USERS_TABLE} SET email_state = ? WHERE id = ?`).bind(emailState, userId).run()
-  return getUserById(event, userId)
+  const row = await db.prepare(`UPDATE ${USERS_TABLE} SET email_state = ? WHERE id = ? RETURNING *`).bind(emailState, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function setAllowCliIpMismatch(event: H3Event, userId: string, allowed: boolean): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  await db.prepare(`UPDATE ${USERS_TABLE} SET allow_cli_ip_mismatch = ? WHERE id = ?`).bind(allowed ? 1 : 0, userId).run()
-  return getUserById(event, userId)
+  const row = await db.prepare(`UPDATE ${USERS_TABLE} SET allow_cli_ip_mismatch = ? WHERE id = ? RETURNING *`).bind(allowed ? 1 : 0, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function setUserPrivacySettings(
@@ -831,17 +767,16 @@ export async function setUserPrivacySettings(
   if (!sets.length)
     return getUserById(event, userId)
 
-  await db.prepare(`UPDATE ${USERS_TABLE} SET ${sets.join(', ')} WHERE id = ?`).bind(...values, userId).run()
-  return getUserById(event, userId)
+  const row = await db.prepare(`UPDATE ${USERS_TABLE} SET ${sets.join(', ')} WHERE id = ? RETURNING *`).bind(...values, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function setUserEmail(event: H3Event, userId: string, email: string, emailState: EmailState, emailVerified: string | null = null): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  await db.prepare(`UPDATE ${USERS_TABLE} SET email = ?, email_verified = ?, email_state = ? WHERE id = ?`)
-    .bind(normalizeEmail(email), emailVerified, emailState, userId)
-    .run()
-  return getUserById(event, userId)
+  const row = await db.prepare(`UPDATE ${USERS_TABLE} SET email = ?, email_verified = ?, email_state = ? WHERE id = ? RETURNING *`)
+    .bind(normalizeEmail(email), emailVerified, emailState, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function updateUserProfile(event: H3Event, userId: string, payload: { name?: string | null, image?: string | null, locale?: string | null }): Promise<AuthUser | null> {
@@ -852,12 +787,13 @@ export async function updateUserProfile(event: H3Event, userId: string, payload:
   const hasLocale = Object.prototype.hasOwnProperty.call(payload, 'locale')
   const locale = hasLocale ? normalizeLocaleCode(payload.locale ?? null) : null
 
-  await db.prepare(`
+  const row = await db.prepare(`
     UPDATE ${USERS_TABLE}
     SET name = CASE WHEN ? = 1 THEN ? ELSE name END,
         image = CASE WHEN ? = 1 THEN ? ELSE image END,
         locale = CASE WHEN ? = 1 THEN ? ELSE locale END
     WHERE id = ?
+    RETURNING *
   `).bind(
     hasName ? 1 : 0,
     hasName ? payload.name ?? null : null,
@@ -866,15 +802,15 @@ export async function updateUserProfile(event: H3Event, userId: string, payload:
     hasLocale ? 1 : 0,
     hasLocale ? locale : null,
     userId,
-  ).run()
-  return getUserById(event, userId)
+  ).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function setUserRole(event: H3Event, userId: string, role: string): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  await db.prepare(`UPDATE ${USERS_TABLE} SET role = ? WHERE id = ?`).bind(role, userId).run()
-  return getUserById(event, userId)
+  const row = await db.prepare(`UPDATE ${USERS_TABLE} SET role = ? WHERE id = ? RETURNING *`).bind(role, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export interface AdminBootstrapState {
@@ -895,28 +831,21 @@ function hasMutationChanges(result: any): boolean {
   return changes > 0
 }
 
-export async function getAdminBootstrapState(event: H3Event, userId?: string | null): Promise<AdminBootstrapState> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
+/**
+ * Whether an admin exists and who the first active user is. Both answers come from indexes
+ * (`status, role` and `status, created_at, id`): it used to filter on `LOWER(role)` and sort every
+ * user, a full scan of `auth_users` on each `/api/user/me`.
+ */
+const ADMIN_BOOTSTRAP_SQL = `
+  SELECT
+    (SELECT COUNT(*) FROM ${USERS_TABLE} WHERE status = 'active' AND role = 'admin') AS admin_count,
+    (SELECT id FROM ${USERS_TABLE} WHERE status = 'active' ORDER BY created_at ASC, id ASC LIMIT 1) AS first_user_id
+`
 
-  const row = await db.prepare(`
-    WITH admin_count AS (
-      SELECT COUNT(*) AS total
-      FROM ${USERS_TABLE}
-      WHERE status = 'active' AND LOWER(role) = 'admin'
-    ),
-    first_user AS (
-      SELECT id
-      FROM ${USERS_TABLE}
-      WHERE status = 'active'
-      ORDER BY created_at ASC, id ASC
-      LIMIT 1
-    )
-    SELECT
-      (SELECT total FROM admin_count) AS admin_count,
-      (SELECT id FROM first_user) AS first_user_id;
-  `).first<{ admin_count?: number | string, first_user_id?: string | null }>()
-
+function mapAdminBootstrapState(
+  row: { admin_count?: number | string, first_user_id?: string | null } | null | undefined,
+  userId?: string | null,
+): AdminBootstrapState {
   const adminCount = toSafeInteger(row?.admin_count)
   const firstUserId = typeof row?.first_user_id === 'string' ? row.first_user_id : null
   const normalizedUserId = typeof userId === 'string' ? userId.trim() : ''
@@ -930,6 +859,13 @@ export async function getAdminBootstrapState(event: H3Event, userId?: string | n
     isFirstUser,
     requiresBootstrap: !adminExists,
   }
+}
+
+export async function getAdminBootstrapState(event: H3Event, userId?: string | null): Promise<AdminBootstrapState> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(ADMIN_BOOTSTRAP_SQL).first<{ admin_count?: number | string, first_user_id?: string | null }>()
+  return mapAdminBootstrapState(row, userId)
 }
 
 export async function promoteFirstUserToAdmin(event: H3Event, userId: string): Promise<boolean> {
@@ -967,12 +903,13 @@ export async function setUserStatus(event: H3Event, userId: string, status: User
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const disabledAt = status === 'disabled' ? new Date().toISOString() : null
-  await db.prepare(`
+  const row = await db.prepare(`
     UPDATE ${USERS_TABLE}
     SET status = ?, disabled_at = ?
     WHERE id = ?
-  `).bind(status, disabledAt, userId).run()
-  return getUserById(event, userId)
+    RETURNING *
+  `).bind(status, disabledAt, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function requestUserDeletion(
@@ -1204,32 +1141,35 @@ function blockedDeviceAuthActions(): DeviceAuthAuditAction[] {
   return ['reject', 'cancel']
 }
 
-async function countDeviceAuthAudits(
-  db: D1Database,
-  whereSql: string,
-  params: Array<string | number | null>,
-): Promise<number> {
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS total
-    FROM ${DEVICE_AUTH_AUDIT_TABLE}
-    WHERE ${whereSql}
-  `).bind(...params).first<{ total?: number | string }>()
-  return toSafeInteger(row?.total)
+interface AuditCountCheck {
+  whereSql: string
+  params: Array<string | number | null>
 }
 
-async function newestDeviceAuthAudit(
+/**
+ * Counts device-auth audits for several limit scopes at once — each check's count and newest
+ * timestamp — in one query. The limiters used to count scope after scope, and look the newest row
+ * up again when one tripped: up to seven round trips before a device code was issued or approved.
+ */
+async function countDeviceAuthAuditsBatch(
   db: D1Database,
-  whereSql: string,
-  params: Array<string | number | null>,
-): Promise<number | null> {
-  const row = await db.prepare(`
-    SELECT created_at
+  checks: AuditCountCheck[],
+): Promise<Array<{ total: number, newestMs: number | null }>> {
+  if (checks.length === 0)
+    return []
+  const sql = checks.map((check, index) => `
+    SELECT ${index} AS idx, COUNT(*) AS total, MAX(created_at) AS created_at
     FROM ${DEVICE_AUTH_AUDIT_TABLE}
-    WHERE ${whereSql}
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).bind(...params).first<{ created_at?: string | null }>()
-  return newestAuditMs(row)
+    WHERE ${check.whereSql}
+  `).join(' UNION ALL ')
+  const { results } = await db.prepare(sql)
+    .bind(...checks.flatMap(check => check.params))
+    .all<{ idx: number, total?: number | string, created_at?: string | null }>()
+  const byIndex = new Map((results ?? []).map(row => [Number(row.idx), row]))
+  return checks.map((_, index) => {
+    const row = byIndex.get(index)
+    return { total: toSafeInteger(row?.total), newestMs: newestAuditMs(row) }
+  })
 }
 
 export async function recordDeviceAuthAudit(event: H3Event, payload: {
@@ -1369,9 +1309,9 @@ export async function evaluateRecoveryRateLimit(event: H3Event, payload: {
     params: ['recover', 'failed', payload.userId, since],
   })
 
-  for (const check of checks) {
-    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
-    if (count >= check.limit) {
+  const counts = await countDeviceAuthAuditsBatch(db, checks)
+  for (const [index, check] of checks.entries()) {
+    if (counts[index]!.total >= check.limit) {
       return { allowed: false, scope: check.scope, retryAfterMs: RECOVERY_RATE_LIMIT_WINDOW_MS }
     }
   }
@@ -1422,21 +1362,6 @@ export async function evaluateDeviceAuthRateLimit(event: H3Event, payload: {
     })
   }
 
-  for (const check of rateChecks) {
-    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
-    if (count >= check.limit) {
-      const newestMs = await newestDeviceAuthAudit(db, check.whereSql, check.params)
-      return {
-        allowed: false,
-        retryAfterSeconds: secondsUntil((newestMs ?? Date.now()) + DEVICE_AUTH_RATE_LIMIT_WINDOW_MS),
-        reason: 'rate_limited',
-        scope: check.scope,
-        limit: check.limit,
-        count,
-      }
-    }
-  }
-
   const cooldownChecks: Array<{
     scope: DeviceAuthRateLimitDecision['scope']
     whereSql: string
@@ -1464,10 +1389,25 @@ export async function evaluateDeviceAuthRateLimit(event: H3Event, payload: {
     })
   }
 
-  for (const check of cooldownChecks) {
-    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
+  // Every scope in one query; the first that trips decides, in the order the checks were listed.
+  const counts = await countDeviceAuthAuditsBatch(db, [...rateChecks, ...cooldownChecks])
+  for (const [index, check] of rateChecks.entries()) {
+    const { total: count, newestMs } = counts[index]!
+    if (count >= check.limit) {
+      return {
+        allowed: false,
+        retryAfterSeconds: secondsUntil((newestMs ?? Date.now()) + DEVICE_AUTH_RATE_LIMIT_WINDOW_MS),
+        reason: 'rate_limited',
+        scope: check.scope,
+        limit: check.limit,
+        count,
+      }
+    }
+  }
+
+  for (const [index, check] of cooldownChecks.entries()) {
+    const { total: count, newestMs } = counts[rateChecks.length + index]!
     if (count >= DEVICE_AUTH_COOLDOWN_THRESHOLD) {
-      const newestMs = await newestDeviceAuthAudit(db, check.whereSql, check.params)
       return {
         allowed: false,
         retryAfterSeconds: secondsUntil((newestMs ?? Date.now()) + DEVICE_AUTH_COOLDOWN_WINDOW_MS),
@@ -1605,6 +1545,27 @@ export async function getDeviceAuthByUserCode(event: H3Event, userCode: string):
   return mapDeviceAuthRow(row as Record<string, any>)
 }
 
+/**
+ * Moves a pending, unexpired device-auth request to another state in one statement and returns the
+ * updated row, or null when it was not pending (or had expired) at that moment. Approve, cancel and
+ * reject each read the row and then updated it unconditionally, so a request cancelled between the
+ * two could still be approved; the guard in the UPDATE closes that, and saves the read.
+ */
+async function transitionPendingDeviceAuth(
+  db: D1Database,
+  match: { column: 'user_code' | 'device_code', value: string },
+  setSql: string,
+  values: Array<string | null>,
+): Promise<DeviceAuthRequest | null> {
+  const row = await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET ${setSql}
+    WHERE ${match.column} = ? AND status = 'pending' AND expires_at > ?
+    RETURNING *
+  `).bind(...values, match.value, new Date().toISOString()).first()
+  return row ? mapDeviceAuthRow(row as Record<string, any>) : null
+}
+
 export async function approveDeviceAuthRequest(
   event: H3Event,
   userCode: string,
@@ -1613,33 +1574,10 @@ export async function approveDeviceAuthRequest(
 ): Promise<DeviceAuthRequest | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
-  `).bind(userCode).first()
-  if (!row)
-    return null
-  const request = mapDeviceAuthRow(row as Record<string, any>)
-  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
-    return null
-  const approvedAt = new Date().toISOString()
-  await db.prepare(`
-    UPDATE ${DEVICE_AUTH_TABLE}
-    SET status = ?, user_id = ?, approved_at = ?, grant_type = ?, cancelled_at = NULL,
-        reject_reason = NULL, reject_message = NULL, reject_request_ip = NULL, reject_current_ip = NULL, rejected_at = NULL
-    WHERE user_code = ?
-  `).bind('approved', userId, approvedAt, grantType, userCode).run()
-  return {
-    ...request,
-    status: 'approved',
-    userId,
-    approvedAt,
-    grantType,
-    rejectReason: null,
-    rejectMessage: null,
-    rejectRequestIp: null,
-    rejectCurrentIp: null,
-    rejectedAt: null,
-  }
+  return transitionPendingDeviceAuth(db, { column: 'user_code', value: userCode }, `
+    status = 'approved', user_id = ?, approved_at = ?, grant_type = ?, cancelled_at = NULL,
+    reject_reason = NULL, reject_message = NULL, reject_request_ip = NULL, reject_current_ip = NULL, rejected_at = NULL
+  `, [userId, new Date().toISOString(), grantType])
 }
 
 export async function deleteDeviceAuthRequest(event: H3Event, deviceCode: string): Promise<void> {
@@ -1651,41 +1589,15 @@ export async function deleteDeviceAuthRequest(event: H3Event, deviceCode: string
 export async function cancelDeviceAuthRequest(event: H3Event, userCode: string): Promise<DeviceAuthRequest | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
-  `).bind(userCode).first()
-  if (!row)
-    return null
-  const request = mapDeviceAuthRow(row as Record<string, any>)
-  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
-    return null
-  const cancelledAt = new Date().toISOString()
-  await db.prepare(`
-    UPDATE ${DEVICE_AUTH_TABLE}
-    SET status = ?, cancelled_at = ?
-    WHERE user_code = ?
-  `).bind('cancelled', cancelledAt, userCode).run()
-  return { ...request, status: 'cancelled', cancelledAt }
+  return transitionPendingDeviceAuth(db, { column: 'user_code', value: userCode },
+    `status = 'cancelled', cancelled_at = ?`, [new Date().toISOString()])
 }
 
 export async function cancelDeviceAuthRequestByDeviceCode(event: H3Event, deviceCode: string): Promise<DeviceAuthRequest | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE device_code = ? LIMIT 1
-  `).bind(deviceCode).first()
-  if (!row)
-    return null
-  const request = mapDeviceAuthRow(row as Record<string, any>)
-  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
-    return null
-  const cancelledAt = new Date().toISOString()
-  await db.prepare(`
-    UPDATE ${DEVICE_AUTH_TABLE}
-    SET status = ?, cancelled_at = ?
-    WHERE device_code = ?
-  `).bind('cancelled', cancelledAt, deviceCode).run()
-  return { ...request, status: 'cancelled', cancelledAt }
+  return transitionPendingDeviceAuth(db, { column: 'device_code', value: deviceCode },
+    `status = 'cancelled', cancelled_at = ?`, [new Date().toISOString()])
 }
 
 export async function rejectDeviceAuthRequest(
@@ -1700,37 +1612,9 @@ export async function rejectDeviceAuthRequest(
 ): Promise<DeviceAuthRequest | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
-  `).bind(userCode).first()
-  if (!row)
-    return null
-  const request = mapDeviceAuthRow(row as Record<string, any>)
-  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
-    return null
-  const rejectedAt = new Date().toISOString()
-  await db.prepare(`
-    UPDATE ${DEVICE_AUTH_TABLE}
-    SET status = ?, reject_reason = ?, reject_message = ?, reject_request_ip = ?, reject_current_ip = ?, rejected_at = ?
-    WHERE user_code = ?
-  `).bind(
-    'rejected',
-    payload.reason,
-    payload.message ?? null,
-    payload.requestIp ?? null,
-    payload.currentIp ?? null,
-    rejectedAt,
-    userCode,
-  ).run()
-  return {
-    ...request,
-    status: 'rejected',
-    rejectReason: payload.reason,
-    rejectMessage: payload.message ?? null,
-    rejectRequestIp: payload.requestIp ?? null,
-    rejectCurrentIp: payload.currentIp ?? null,
-    rejectedAt,
-  }
+  return transitionPendingDeviceAuth(db, { column: 'user_code', value: userCode }, `
+    status = 'rejected', reject_reason = ?, reject_message = ?, reject_request_ip = ?, reject_current_ip = ?, rejected_at = ?
+  `, [payload.reason, payload.message ?? null, payload.requestIp ?? null, payload.currentIp ?? null, new Date().toISOString()])
 }
 
 export async function updateDeviceAuthBrowserState(
@@ -1747,6 +1631,12 @@ export async function updateDeviceAuthBrowserState(
     return null
   const request = mapDeviceAuthRow(row as Record<string, any>)
   if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return request
+
+  // The sign-in page beats every five seconds while it is open. Only a change of state is worth a
+  // write: nothing reads `browser_seen_at`, and every heartbeat used to rewrite it.
+  const nextState = state === 'closed' ? 'closed' : 'opened'
+  if (request.browserState === nextState)
     return request
 
   const now = new Date().toISOString()
@@ -1857,42 +1747,28 @@ export async function consumeOAuthCode(
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
 
+  // One statement consumes the code only if it is unused, unexpired and presented by its own client
+  // for its own redirect; anything else leaves it untouched, as the read-then-update did.
+  const consumedAt = new Date().toISOString()
   const row = await db.prepare(`
-    SELECT code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at
-    FROM ${OAUTH_CODE_TABLE}
-    WHERE code = ?1
-    LIMIT 1
-  `).bind(payload.code).first<{
+    UPDATE ${OAUTH_CODE_TABLE}
+    SET consumed_at = ?1
+    WHERE code = ?2
+      AND consumed_at IS NULL
+      AND expires_at > ?1
+      AND client_id = ?3
+      AND redirect_uri = ?4
+    RETURNING code, client_id, user_id, redirect_uri, expires_at, created_at
+  `).bind(consumedAt, payload.code, payload.clientId, payload.redirectUri).first<{
     code: string
     client_id: string
     user_id: string
     redirect_uri: string
     expires_at: string
-    consumed_at: string | null
     created_at: string
   }>()
 
   if (!row) {
-    return null
-  }
-
-  const expiresAt = Date.parse(row.expires_at)
-  if (row.consumed_at || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
-    return null
-  }
-  if (row.client_id !== payload.clientId || row.redirect_uri !== payload.redirectUri) {
-    return null
-  }
-
-  const consumedAt = new Date().toISOString()
-  const result = await db.prepare(`
-    UPDATE ${OAUTH_CODE_TABLE}
-    SET consumed_at = ?1
-    WHERE code = ?2 AND consumed_at IS NULL
-  `).bind(consumedAt, payload.code).run()
-
-  const changed = Number(result.meta?.changes ?? 0)
-  if (changed <= 0) {
     return null
   }
 
@@ -1923,34 +1799,41 @@ export async function createWebAuthnChallenge(event: H3Event, payload: { userId?
 export async function consumeWebAuthnChallenge(event: H3Event, challenge: string, type: 'register' | 'login'): Promise<{ userId: string | null } | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  // Read-then-delete let two concurrent verifications both accept one challenge; the delete itself
+  // is the check now. An expired challenge is left in place, as before.
   const row = await db.prepare(`
-    SELECT user_id, expires_at FROM ${WEBAUTHN_CHALLENGE_TABLE}
-    WHERE challenge = ? AND type = ?
-  `).bind(challenge, type).first()
+    DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE}
+    WHERE challenge = ? AND type = ? AND expires_at > ?
+    RETURNING user_id
+  `).bind(challenge, type, new Date().toISOString()).first<{ user_id: string | null }>()
   if (!row)
     return null
-  const expires = Date.parse(row.expires_at as string)
-  if (Number.isNaN(expires) || expires <= Date.now())
-    return null
-  await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE challenge = ?`).bind(challenge).run()
-  return { userId: (row.user_id as string | null) ?? null }
+  return { userId: row.user_id ?? null }
 }
 
 export async function consumeLoginToken(event: H3Event, token: string, reason?: string | null): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT user_id, expires_at, reason FROM ${LOGIN_TOKEN_TABLE} WHERE token = ?
-  `).bind(token).first()
-  if (!row)
+  // One transaction: read the token's user while the token still exists, then delete the token.
+  // The delete decides — if it removed nothing (wrong reason, expired, or another request consumed
+  // it first) the user read is discarded. It was a read, a delete and a user read, and two requests
+  // could both pass the read before either deleted.
+  const now = new Date().toISOString()
+  const [userResult, deleted] = await db.batch([
+    db.prepare(`
+      SELECT u.* FROM ${USERS_TABLE} u
+      JOIN ${LOGIN_TOKEN_TABLE} t ON t.user_id = u.id
+      WHERE t.token = ?1
+    `).bind(token),
+    db.prepare(`
+      DELETE FROM ${LOGIN_TOKEN_TABLE}
+      WHERE token = ?1 AND (?2 IS NULL OR reason = ?2) AND expires_at > ?3
+      RETURNING user_id
+    `).bind(token, reason || null, now),
+  ])
+  if (!deleted?.results?.length)
     return null
-  if (reason && row.reason !== reason)
-    return null
-  const expires = Date.parse(row.expires_at as string)
-  if (Number.isNaN(expires) || expires <= Date.now())
-    return null
-  await db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE token = ?`).bind(token).run()
-  return getUserById(event, row.user_id as string)
+  return mapUser((userResult?.results?.[0] ?? null) as Record<string, any> | null)
 }
 
 
@@ -2019,6 +1902,56 @@ export async function getUserAccountActivitySummary(event: H3Event, userId: stri
 
   return {
     updatedAt: row?.updated_at ?? null,
+  }
+}
+
+export interface UserAccountOverview {
+  passkeyCount: number
+  linkedAccounts: LinkedAccount[]
+  /** Latest of the user's creation, a linked account's creation, a passkey's creation or last use. */
+  updatedAt: string | null
+  bootstrap: AdminBootstrapState
+}
+
+/**
+ * What `/api/user/me` adds to the user row, in one round trip: it was four (passkeys, linked
+ * accounts, a UNION over three tables for the activity time, and the bootstrap check). The activity
+ * time is derived from rows this batch already returns.
+ */
+export async function getUserAccountOverview(event: H3Event, user: AuthUser): Promise<UserAccountOverview> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const [passkeyResult, accountResult, bootstrapResult] = await db.batch([
+    db.prepare(`
+      SELECT COUNT(*) AS total, MAX(created_at) AS latest_created_at, MAX(last_used_at) AS latest_used_at
+      FROM ${PASSKEYS_TABLE}
+      WHERE user_id = ?
+    `).bind(user.id),
+    db.prepare(`
+      SELECT provider, provider_account_id, created_at
+      FROM ${ACCOUNTS_TABLE}
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).bind(user.id),
+    db.prepare(ADMIN_BOOTSTRAP_SQL),
+  ])
+
+  const passkeys = (passkeyResult?.results?.[0] ?? {}) as { total?: number, latest_created_at?: string | null, latest_used_at?: string | null }
+  const accountRows = (accountResult?.results ?? []) as Array<{ provider?: string, provider_account_id?: string, created_at?: string | null }>
+  const linkedAccounts = accountRows
+    .filter(row => typeof row.provider === 'string' && typeof row.provider_account_id === 'string')
+    .map(row => ({ provider: row.provider as string, providerAccountId: row.provider_account_id as string }))
+
+  // The same answer as SQLite's MAX over TEXT: the greatest non-null string.
+  const candidates = [user.createdAt, passkeys.latest_created_at, passkeys.latest_used_at, ...accountRows.map(row => row.created_at)]
+    .filter((value): value is string => typeof value === 'string')
+  const updatedAt = candidates.reduce<string | null>((latest, value) => (latest === null || value > latest ? value : latest), null)
+
+  return {
+    passkeyCount: Number(passkeys.total ?? 0),
+    linkedAccounts,
+    updatedAt,
+    bootstrap: mapAdminBootstrapState(bootstrapResult?.results?.[0] as { admin_count?: number, first_user_id?: string | null } | undefined, user.id),
   }
 }
 
@@ -2343,165 +2276,217 @@ function getUserAgent(event: H3Event): string | null {
   return typeof ua === 'string' ? ua : null
 }
 
+interface DeviceMetadata {
+  deviceName?: string | null
+  platform?: string | null
+  clientType?: AuthClientType | null
+  reactivateRevoked?: boolean | null
+}
+
+/** How long a device's `last_seen_*` may lag before an ordinary request refreshes it. */
+const DEVICE_TOUCH_INTERVAL_MS = 5 * 60 * 1000
+
+/**
+ * One statement that records the request's device, whatever the row's state: insert it, refresh it
+ * for the same owner, or hand it to a new owner. It replaces a SELECT, an UPDATE or INSERT, a COUNT
+ * of active devices, an UPDATE of `trusted_at` and a re-read — five round trips on every signed-in
+ * request, since the web client sends `x-device-id` on each one.
+ *
+ * What it keeps:
+ * - Same owner: metadata the request omits is kept (`COALESCE`); `last_seen_*` is overwritten,
+ *   geo included. `reactivateRevoked` clears `revoked_at` and, if the device was revoked, bumps
+ *   `token_version`.
+ * - New owner (the row exists under another user): the metadata is replaced, `created_at` restarts,
+ *   `revoked_at` clears, `trusted_at` clears and `token_version` bumps, so the old owner's app tokens
+ *   for this device stop working.
+ * - The only active device of its user is trusted: `trusted_at` is set when no other active device
+ *   exists — on insert, on a hand-over, and on any later request that finds it alone, as the COUNT
+ *   step did.
+ * - Nothing is written for a user that does not exist or is not active (the request is rejected
+ *   right after).
+ *
+ * Unless `force` is set, a row with the same owner is left alone when nothing about it would change:
+ * `last_seen_at` is younger than `DEVICE_TOUCH_INTERVAL_MS`, the IP and the metadata are the same,
+ * and trust would not change. `RETURNING` then yields no row. Callers that need the row (its
+ * `token_version` goes into app tokens) force the write.
+ */
+function prepareDeviceUpsert(
+  db: D1Database,
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  data: DeviceMetadata | undefined,
+  options: { force: boolean },
+): D1PreparedStatement {
+  const now = new Date()
+  const geo = resolveRequestGeo(event)
+  return db.prepare(`
+    INSERT INTO ${DEVICES_TABLE} (
+      id, user_id, device_name, platform, client_type, user_agent,
+      last_seen_at, last_seen_ip, last_seen_country_code, last_seen_region_code,
+      last_seen_region_name, last_seen_city, last_seen_latitude, last_seen_longitude,
+      last_seen_timezone, last_seen_geo_source, created_at, trusted_at
+    )
+    SELECT
+      ?1, ?2, ?3, ?4, ?5, ?6,
+      ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?7,
+      CASE WHEN NOT EXISTS (
+        SELECT 1 FROM ${DEVICES_TABLE} other
+        WHERE other.user_id = ?2 AND other.revoked_at IS NULL AND other.id <> ?1
+      ) THEN ?7 END
+    WHERE EXISTS (SELECT 1 FROM ${USERS_TABLE} WHERE id = ?2 AND status = 'active')
+    ON CONFLICT(id) DO UPDATE SET
+      user_id = excluded.user_id,
+      device_name = CASE WHEN ${DEVICES_TABLE}.user_id = excluded.user_id
+        THEN COALESCE(excluded.device_name, ${DEVICES_TABLE}.device_name) ELSE excluded.device_name END,
+      platform = CASE WHEN ${DEVICES_TABLE}.user_id = excluded.user_id
+        THEN COALESCE(excluded.platform, ${DEVICES_TABLE}.platform) ELSE excluded.platform END,
+      client_type = CASE WHEN ${DEVICES_TABLE}.user_id = excluded.user_id
+        THEN COALESCE(excluded.client_type, ${DEVICES_TABLE}.client_type) ELSE excluded.client_type END,
+      user_agent = CASE WHEN ${DEVICES_TABLE}.user_id = excluded.user_id
+        THEN COALESCE(excluded.user_agent, ${DEVICES_TABLE}.user_agent) ELSE excluded.user_agent END,
+      last_seen_at = excluded.last_seen_at,
+      last_seen_ip = excluded.last_seen_ip,
+      last_seen_country_code = excluded.last_seen_country_code,
+      last_seen_region_code = excluded.last_seen_region_code,
+      last_seen_region_name = excluded.last_seen_region_name,
+      last_seen_city = excluded.last_seen_city,
+      last_seen_latitude = excluded.last_seen_latitude,
+      last_seen_longitude = excluded.last_seen_longitude,
+      last_seen_timezone = excluded.last_seen_timezone,
+      last_seen_geo_source = excluded.last_seen_geo_source,
+      created_at = CASE WHEN ${DEVICES_TABLE}.user_id = excluded.user_id
+        THEN ${DEVICES_TABLE}.created_at ELSE excluded.created_at END,
+      revoked_at = CASE
+        WHEN ${DEVICES_TABLE}.user_id <> excluded.user_id THEN NULL
+        WHEN ?17 THEN NULL
+        ELSE ${DEVICES_TABLE}.revoked_at
+      END,
+      token_version = CASE
+        WHEN ${DEVICES_TABLE}.user_id <> excluded.user_id THEN ${DEVICES_TABLE}.token_version + 1
+        WHEN ?17 AND ${DEVICES_TABLE}.revoked_at IS NOT NULL THEN ${DEVICES_TABLE}.token_version + 1
+        ELSE ${DEVICES_TABLE}.token_version
+      END,
+      trusted_at = CASE
+        WHEN ${DEVICES_TABLE}.user_id <> excluded.user_id THEN excluded.trusted_at
+        WHEN (?17 OR ${DEVICES_TABLE}.revoked_at IS NULL) AND excluded.trusted_at IS NOT NULL
+          THEN COALESCE(${DEVICES_TABLE}.trusted_at, excluded.trusted_at)
+        ELSE ${DEVICES_TABLE}.trusted_at
+      END
+    WHERE ?18
+      OR ${DEVICES_TABLE}.user_id <> excluded.user_id
+      OR (?17 AND ${DEVICES_TABLE}.revoked_at IS NOT NULL)
+      OR ${DEVICES_TABLE}.last_seen_at IS NULL
+      OR ${DEVICES_TABLE}.last_seen_at < ?19
+      OR ${DEVICES_TABLE}.last_seen_ip IS NOT excluded.last_seen_ip
+      OR (excluded.device_name IS NOT NULL AND excluded.device_name IS NOT ${DEVICES_TABLE}.device_name)
+      OR (excluded.platform IS NOT NULL AND excluded.platform IS NOT ${DEVICES_TABLE}.platform)
+      OR (excluded.client_type IS NOT NULL AND excluded.client_type IS NOT ${DEVICES_TABLE}.client_type)
+      OR (excluded.user_agent IS NOT NULL AND excluded.user_agent IS NOT ${DEVICES_TABLE}.user_agent)
+      OR (${DEVICES_TABLE}.trusted_at IS NULL AND ${DEVICES_TABLE}.revoked_at IS NULL AND excluded.trusted_at IS NOT NULL)
+    RETURNING *
+  `).bind(
+    deviceId,
+    userId,
+    data?.deviceName ?? null,
+    data?.platform ?? null,
+    data?.clientType ?? null,
+    getUserAgent(event),
+    now.toISOString(),
+    getRequestIp(event),
+    geo.countryCode,
+    geo.regionCode,
+    geo.regionName,
+    geo.city,
+    geo.latitude,
+    geo.longitude,
+    geo.timezone,
+    geo.source,
+    data?.reactivateRevoked ? 1 : 0,
+    options.force ? 1 : 0,
+    new Date(now.getTime() - DEVICE_TOUCH_INTERVAL_MS).toISOString(),
+  )
+}
+
+/**
+ * Records the device and returns its row, always writing: the caller needs the current
+ * `token_version` (it goes into the app tokens being issued). One round trip.
+ */
 export async function upsertDevice(
   event: H3Event,
   userId: string,
   deviceId: string,
-  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null, reactivateRevoked?: boolean | null },
-  retriedAfterConflict = false
+  data?: DeviceMetadata,
 ): Promise<AuthDevice> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const now = new Date().toISOString()
-  const geo = resolveRequestGeo(event)
-  const requestIp = getRequestIp(event)
-  const existing = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ?`).bind(deviceId).first<Record<string, any>>()
-  if (existing?.user_id === userId) {
-    await db.prepare(`
-      UPDATE ${DEVICES_TABLE}
-      SET device_name = COALESCE(?, device_name),
-          platform = COALESCE(?, platform),
-          client_type = COALESCE(?, client_type),
-          user_agent = COALESCE(?, user_agent),
-          last_seen_at = ?,
-          last_seen_ip = ?,
-          last_seen_country_code = ?,
-          last_seen_region_code = ?,
-          last_seen_region_name = ?,
-          last_seen_city = ?,
-          last_seen_latitude = ?,
-          last_seen_longitude = ?,
-          last_seen_timezone = ?,
-          last_seen_geo_source = ?,
-          revoked_at = CASE WHEN ? THEN NULL ELSE revoked_at END,
-          token_version = CASE WHEN ? AND revoked_at IS NOT NULL THEN token_version + 1 ELSE token_version END
-      WHERE id = ? AND user_id = ?
-    `).bind(
-      data?.deviceName ?? null,
-      data?.platform ?? null,
-      data?.clientType ?? null,
-      getUserAgent(event),
-      now,
-      requestIp,
-      geo.countryCode,
-      geo.regionCode,
-      geo.regionName,
-      geo.city,
-      geo.latitude,
-      geo.longitude,
-      geo.timezone,
-      geo.source,
-      data?.reactivateRevoked ? 1 : 0,
-      data?.reactivateRevoked ? 1 : 0,
-      deviceId,
-      userId
-    ).run()
-  }
-  else if (existing) {
-    await db.prepare(`
-      UPDATE ${DEVICES_TABLE}
-      SET user_id = ?,
-          device_name = ?,
-          platform = ?,
-          client_type = ?,
-          user_agent = ?,
-          trusted_at = NULL,
-          last_seen_at = ?,
-          last_seen_ip = ?,
-          last_seen_country_code = ?,
-          last_seen_region_code = ?,
-          last_seen_region_name = ?,
-          last_seen_city = ?,
-          last_seen_latitude = ?,
-          last_seen_longitude = ?,
-          last_seen_timezone = ?,
-          last_seen_geo_source = ?,
-          created_at = ?,
-          revoked_at = NULL,
-          token_version = token_version + 1
-      WHERE id = ?
-    `).bind(
-      userId,
-      data?.deviceName ?? null,
-      data?.platform ?? null,
-      data?.clientType ?? null,
-      getUserAgent(event),
-      now,
-      requestIp,
-      geo.countryCode,
-      geo.regionCode,
-      geo.regionName,
-      geo.city,
-      geo.latitude,
-      geo.longitude,
-      geo.timezone,
-      geo.source,
-      now,
-      deviceId
-    ).run()
-  }
-  else {
-    try {
-      await db.prepare(`
-        INSERT INTO ${DEVICES_TABLE} (
-          id, user_id, device_name, platform, client_type, user_agent,
-          last_seen_at, last_seen_ip, last_seen_country_code, last_seen_region_code,
-          last_seen_region_name, last_seen_city, last_seen_latitude, last_seen_longitude,
-          last_seen_timezone, last_seen_geo_source, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        deviceId,
-        userId,
-        data?.deviceName ?? null,
-        data?.platform ?? null,
-        data?.clientType ?? null,
-        getUserAgent(event),
-        now,
-        requestIp,
-        geo.countryCode,
-        geo.regionCode,
-        geo.regionName,
-        geo.city,
-        geo.latitude,
-        geo.longitude,
-        geo.timezone,
-        geo.source,
-        now
-      ).run()
-    }
-    catch (error) {
-      // A page's first burst of parallel requests all pass the SELECT above
-      // before any of them inserts; the losers land here. One retry re-reads
-      // the row the winner created and takes the UPDATE branch instead.
-      const message = error instanceof Error ? error.message : String(error)
-      if (retriedAfterConflict || !message.includes('UNIQUE constraint failed')) {
-        throw error
-      }
-      return upsertDevice(event, userId, deviceId, data, true)
-    }
-  }
-
-  const activeDeviceCountRow = await db.prepare(`
-    SELECT COUNT(*) as total
-    FROM ${DEVICES_TABLE}
-    WHERE user_id = ? AND revoked_at IS NULL
-  `).bind(userId).first<{ total: number }>()
-  const activeDeviceCount = Number(activeDeviceCountRow?.total ?? 0)
-  if (activeDeviceCount === 1) {
-    await db.prepare(`
-      UPDATE ${DEVICES_TABLE}
-      SET trusted_at = COALESCE(trusted_at, ?)
-      WHERE id = ? AND user_id = ? AND revoked_at IS NULL
-    `).bind(now, deviceId, userId).run()
-  }
-
-  const row = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ? AND user_id = ?`).bind(deviceId, userId).first()
+  const row = await prepareDeviceUpsert(db, event, userId, deviceId, data, { force: true }).first()
   const device = mapDevice(row as Record<string, any> | null)
   if (!device) {
     throw new Error('Failed to upsert device.')
   }
   return device
+}
+
+/**
+ * Records the device of an ordinary request, writing only when something changed or `last_seen_at`
+ * is older than `DEVICE_TOUCH_INTERVAL_MS`. Resolves to the device id, which belongs to `userId`
+ * afterwards whether or not a write happened.
+ */
+export async function touchDevice(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  data?: DeviceMetadata,
+): Promise<string> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await prepareDeviceUpsert(db, event, userId, deviceId, data, { force: false }).run()
+  return deviceId
+}
+
+/**
+ * The user row, and the request's device recorded for that user, in one round trip: what every
+ * signed-in request needs before its handler runs. The device statement writes only for an active
+ * user, so `deviceId` is returned only then.
+ */
+export async function getUserAndTouchRequestDevice(
+  event: H3Event,
+  userId: string,
+): Promise<{ user: AuthUser | null, deviceId: string | null }> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const userStatement = db.prepare(`SELECT * FROM ${USERS_TABLE} WHERE id = ?`).bind(userId)
+  const deviceId = readDeviceId(event)
+  if (!deviceId) {
+    const row = await userStatement.first()
+    return { user: mapUser(row as Record<string, any> | null), deviceId: null }
+  }
+
+  const [userResult] = await db.batch([
+    userStatement,
+    prepareDeviceUpsert(db, event, userId, deviceId, readDeviceMetadata(event), { force: false }),
+  ])
+  const user = mapUser((userResult?.results?.[0] ?? null) as Record<string, any> | null)
+  return { user, deviceId: user?.status === 'active' ? deviceId : null }
+}
+
+/** The user and one of their devices, in one round trip (app-token requests check both). */
+export async function getUserWithDevice(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+): Promise<{ user: AuthUser | null, device: AuthDevice | null }> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const [userResult, deviceResult] = await db.batch([
+    db.prepare(`SELECT * FROM ${USERS_TABLE} WHERE id = ?`).bind(userId),
+    db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ? AND user_id = ?`).bind(deviceId, userId),
+  ])
+  return {
+    user: mapUser((userResult?.results?.[0] ?? null) as Record<string, any> | null),
+    device: mapDevice((deviceResult?.results?.[0] ?? null) as Record<string, any> | null),
+  }
 }
 
 export async function getDevice(event: H3Event, userId: string, deviceId: string): Promise<AuthDevice | null> {
@@ -2544,14 +2529,19 @@ export async function listDevices(event: H3Event, userId: string): Promise<AuthD
   return result.results.map(row => mapDevice(row as Record<string, any>)!).filter(Boolean)
 }
 
-export async function countActiveDevices(event: H3Event, userId: string): Promise<number> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const row = await db.prepare(`
+/** The user's active devices, as `{ total }`: for callers batching it. */
+export function prepareActiveDeviceCount(db: D1Database, userId: string): D1PreparedStatement {
+  return db.prepare(`
     SELECT COUNT(*) as total
     FROM ${DEVICES_TABLE}
     WHERE user_id = ? AND revoked_at IS NULL
-  `).bind(userId).first<{ total: number }>()
+  `).bind(userId)
+}
+
+export async function countActiveDevices(event: H3Event, userId: string): Promise<number> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await prepareActiveDeviceCount(db, userId).first<{ total: number }>()
   return Number(row?.total ?? 0)
 }
 
@@ -2603,61 +2593,56 @@ export async function revokeOldestDevices(
   }
 
   const now = new Date().toISOString()
-  const placeholders = ids.map(() => '?').join(', ')
   await db.prepare(`
     UPDATE ${DEVICES_TABLE}
-    SET revoked_at = ?, token_version = token_version + 1
-    WHERE user_id = ? AND id IN (${placeholders})
-  `).bind(now, userId, ...ids).run()
+    SET revoked_at = ?1, token_version = token_version + 1
+    WHERE user_id = ?2 AND id IN (SELECT value FROM json_each(?3))
+  `).bind(now, userId, JSON.stringify(ids)).run()
 
   return summaries
 }
 
-export async function revokeInactiveDevices(
+/**
+ * Revokes the user's devices not seen since `inactiveBefore` (all but `keepDeviceId`) and counts the
+ * active devices left, in one round trip: the revocation answers with the rows it revoked, which a
+ * read and an update by id (an `IN` list of every inactive device) used to take, and the count was a
+ * third.
+ */
+export async function revokeInactiveDevicesAndCountActive(
   event: H3Event,
   userId: string,
   options: { inactiveBefore: string; keepDeviceId?: string | null }
-): Promise<EvictedDeviceSummary[]> {
+): Promise<{ evicted: EvictedDeviceSummary[], activeCount: number }> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const inactiveBefore = options.inactiveBefore
-  if (!inactiveBefore) {
-    return []
+  const statements: D1PreparedStatement[] = []
+  if (options.inactiveBefore) {
+    const keepDeviceId = options.keepDeviceId ?? null
+    statements.push(db.prepare(`
+      UPDATE ${DEVICES_TABLE}
+      SET revoked_at = ?1, token_version = token_version + 1
+      WHERE user_id = ?2 AND revoked_at IS NULL
+        AND COALESCE(last_seen_at, created_at) < ?3${keepDeviceId ? ' AND id != ?4' : ''}
+      RETURNING id, device_name, platform, last_seen_at, created_at
+    `).bind(new Date().toISOString(), userId, options.inactiveBefore, ...(keepDeviceId ? [keepDeviceId] : [])))
   }
+  statements.push(prepareActiveDeviceCount(db, userId))
 
-  const params: Array<string | number> = [userId, inactiveBefore]
-  const keepDeviceId = options.keepDeviceId ?? null
-  const keepCondition = keepDeviceId ? ' AND id != ?' : ''
-  if (keepDeviceId) {
-    params.push(keepDeviceId)
-  }
-
-  const candidates = await db.prepare(`
-    SELECT id, device_name, platform, last_seen_at
-    FROM ${DEVICES_TABLE}
-    WHERE user_id = ? AND revoked_at IS NULL
-      AND COALESCE(last_seen_at, created_at) < ?${keepCondition}
-    ORDER BY COALESCE(last_seen_at, created_at) ASC, created_at ASC
-  `).bind(...params).all<Record<string, any>>()
-
-  const summaries = (candidates.results ?? [])
+  const results = await db.batch(statements)
+  const countResult = results.at(-1)
+  // Longest unseen first, as the read before the update ordered them.
+  const revoked = (statements.length > 1 ? (results[0]?.results ?? []) : []) as Array<Record<string, any>>
+  const evicted = [...revoked]
+    .sort((left, right) => {
+      const leftSeen = String(left.last_seen_at ?? left.created_at ?? '')
+      const rightSeen = String(right.last_seen_at ?? right.created_at ?? '')
+      if (leftSeen !== rightSeen)
+        return leftSeen < rightSeen ? -1 : 1
+      return String(left.created_at ?? '') < String(right.created_at ?? '') ? -1 : String(left.created_at ?? '') > String(right.created_at ?? '') ? 1 : 0
+    })
     .map(row => mapEvictedDeviceSummary(row))
     .filter((item): item is EvictedDeviceSummary => Boolean(item))
-
-  const ids = summaries.map(item => item.id)
-  if (!ids.length) {
-    return []
-  }
-
-  const now = new Date().toISOString()
-  const placeholders = ids.map(() => '?').join(', ')
-  await db.prepare(`
-    UPDATE ${DEVICES_TABLE}
-    SET revoked_at = ?, token_version = token_version + 1
-    WHERE user_id = ? AND id IN (${placeholders})
-  `).bind(now, userId, ...ids).run()
-
-  return summaries
+  return { evicted, activeCount: Number((countResult?.results?.[0] as { total?: number } | undefined)?.total ?? 0) }
 }
 
 export async function renameDevice(
@@ -2768,17 +2753,36 @@ export async function logLoginAttempt(event: H3Event, payload: {
   ).run()
 }
 
-export async function listLoginHistory(event: H3Event, userId: string, days = 90): Promise<AuthLoginHistoryRecord[]> {
+const LOGIN_HISTORY_RETENTION_DAYS = 90
+const LOGIN_HISTORY_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000
+let nextLoginHistoryPruneAt = 0
+
+/**
+ * Retention for every user's login history used to run inside this read: a DELETE across the whole
+ * table, before the SELECT, on each dashboard overview and account page. It runs at most every six
+ * hours per isolate now, after the response, and the read applies its own cutoff.
+ */
+function scheduleLoginHistoryRetention(event: H3Event, db: D1Database): void {
+  const now = Date.now()
+  if (now < nextLoginHistoryPruneAt)
+    return
+  nextLoginHistoryPruneAt = now + LOGIN_HISTORY_PRUNE_INTERVAL_MS
+  const cutoff = new Date(now - LOGIN_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  runAfterResponse(event, 'login history retention', () =>
+    db.prepare(`DELETE FROM ${LOGIN_HISTORY_TABLE} WHERE created_at < ?`).bind(cutoff).run())
+}
+
+export async function listLoginHistory(event: H3Event, userId: string, days = LOGIN_HISTORY_RETENTION_DAYS): Promise<AuthLoginHistoryRecord[]> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-  await db.prepare(`DELETE FROM ${LOGIN_HISTORY_TABLE} WHERE created_at < ?`).bind(cutoff).run()
+  scheduleLoginHistoryRetention(event, db)
   const result = await db.prepare(`
     SELECT * FROM ${LOGIN_HISTORY_TABLE}
-    WHERE user_id = ?
+    WHERE user_id = ? AND created_at >= ?
     ORDER BY created_at DESC
     LIMIT 200
-  `).bind(userId).all()
+  `).bind(userId, cutoff).all()
   return (result.results as Record<string, any>[]).map((row) => {
     const location = resolveLocationFromRow(row)
     return {
@@ -2908,9 +2912,10 @@ export function readDeviceMetadata(event: H3Event): { deviceName?: string | null
   return { deviceName, platform, clientType }
 }
 
-export async function ensureDeviceForRequest(event: H3Event, userId: string): Promise<AuthDevice | null> {
+/** Records the request's device for `userId` (throttled, see `touchDevice`); resolves to its id. */
+export async function ensureDeviceForRequest(event: H3Event, userId: string): Promise<string | null> {
   const deviceId = readDeviceId(event)
   if (!deviceId)
     return null
-  return upsertDevice(event, userId, deviceId, readDeviceMetadata(event))
+  return touchDevice(event, userId, deviceId, readDeviceMetadata(event))
 }

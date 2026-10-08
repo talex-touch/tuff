@@ -1,6 +1,6 @@
 ---
 title: Conversation Stream
-description: 虚拟滚动的会话流，自动吸底并向上翻取历史。
+description: 虚拟滚动、自动吸底、向上加载历史的会话流
 category: AiChat
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### Conversation Stream
+### 基础
 ::::TuffDemoWrapper{demo="ConversationStreamConversationStreamDemo" code-lang="vue"}
 ---
 code: |
@@ -44,66 +44,63 @@ code: |
 
 ### 最佳实践
 
-- `itemKey` 用消息自身的 id，不要用下标——这是虚拟化正确性的前提，不是优化项。
-- `loadOlder` 里要自己前插数据；只 resolve 不改 `items` 会让组件一直以为还有历史可加载。
-- 确认没有更早消息时显式传 `hasMoreInitial: false`，不要依赖默认值——默认的 `undefined` 表示「未知」。
-- `estimatedItemHeight` 尽量贴近真实平均高度，差得太远时首屏滚动条会明显跳动。
-- 需要程序化跳转时用暴露的 `scrollToBottom` / `scrollToIndex`，不要自己去操作滚动容器，否则会与吸底逻辑打架。
+- `itemKey` 用消息自身的 id，不用下标；虚拟化依赖稳定的 key。
+- 在 `loadOlder` 中自行前插数据，再 resolve `{ hasMore }`；组件不持有消息数组。
+- 确认没有历史时显式传 `hasMoreInitial: false`；默认的 `undefined` 表示未知。
+- `estimatedItemHeight` 贴近真实平均高度，避免首屏滚动条跳动。
+- 程序化滚动用暴露的 `scrollToBottom`、`scrollToIndex`，不要直接操作滚动容器。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `items` | `T[]` | — | 消息数组。必填。 |
-| `itemKey` | `ConversationStreamItemKey<T>` | — | 取稳定 key 的函数。必填。 |
-| `estimatedItemHeight` | `number` | `96` | 未测量元素的假定高度。 |
+| `items` | `T[]` | — | 消息数组，必填。 |
+| `itemKey` | `ConversationStreamItemKey<T>` | — | 稳定 key：字段名，或返回 key 的函数。必填。 |
+| `estimatedItemHeight` | `number` | `96` | 未测量项的假定高度，测量后自动校正。 |
 | `overscan` | `number` | `4` | 可视区上下各多渲染的条数。 |
 | `loadOlder` | `() => Promise<ConversationStreamLoadResult>` | — | 接近顶部时调用；前插数据后 resolve `{ hasMore }`。 |
-| `hasMoreInitial` | `boolean` | `undefined` | 首次 `loadOlder` 返回前是否可能存在历史。 |
-| `streaming` | `boolean` | `false` | 驱动「回到底部」提示的新内容状态。 |
+| `hasMoreInitial` | `boolean` | `undefined` | 首次 `loadOlder` 返回前是否可能有历史。 |
+| `streaming` | `boolean` | `false` | 驱动「回到底部」按钮的新内容状态。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `at-bottom-change` | `(atBottom: boolean)` | 吸底状态变化时派发。 |
-| `load-error` | `(error: unknown)` | `loadOlder` 抛错时派发。 |
+| `at-bottom-change` | `(atBottom: boolean)` | 吸底状态变化时触发。 |
+| `load-error` | `(error: unknown)` | `loadOlder` 抛错时触发。 |
 
-### Exposed
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `scrollToBottom` | `() => void` | 滚动到底部。 |
-| `scrollToIndex` | `(index: number) => void` | 滚动到指定索引。 |
-| `atBottom` | `ComputedRef<boolean>` | 当前是否处于底部，只读。 |
-
-## Slots
+### 插槽
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
 | `item` | `{ item: T, index: number }` | 渲染单条消息。 |
 | `empty` | — | `items` 为空时的占位。 |
-| `top-loading` | — | 正在加载更早消息。 |
-| `top-error` | `{ retry: () => void }` | 加载失败，带重试回调。 |
-| `top-done` | — | 已无更早消息。 |
-| `scroll-to-bottom` | `{ streaming: boolean }` | 自定义「回到底部」提示。 |
+| `top-loading` | — | 加载更早消息时显示。 |
+| `top-error` | `{ retry: () => void }` | 加载失败时显示，带重试回调。 |
+| `top-done` | — | 没有更早消息时显示。 |
+| `scroll-to-bottom` | `{ streaming: boolean }` | 替换「回到底部」按钮的内容。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `scrollToBottom` | `(behavior?: ScrollBehavior) => void` | 滚动到底部。 |
+| `scrollToIndex` | `(index: number) => void` | 滚动到指定索引。 |
+| `tweenToBottom` | `(duration?: number) => Promise<boolean>` | 以固定时长滑到底部；被打断时 resolve `false`。 |
+| `atBottom` | `boolean` | 当前是否在底部，只读。 |
 
 ## 概述
 
-- 组件是泛型的（`<T>`）：`items` 的元素类型会一路传到 `item` 插槽的作用域参数上，无需另行断言。
-- `itemKey` 必填。虚拟化依赖稳定的 key 做位置缓存，用数组下标会在插入消息时错位。
-- `estimatedItemHeight` 只是首次布局的估值；元素真实高度测出来后会自动校正。
-- 吸底是有条件的：用户停在底部时新消息会跟随；一旦向上滚动就不再强行拉回，改为显示「回到底部」提示。
-- `streaming` 只影响这个提示的「有新内容」状态，不影响是否吸底。
-- `loadOlder` 在接近顶部时被调用，约定是**消费方自己把数据前插进 `items`**，然后 resolve `{ hasMore }`。组件不持有消息数组。
-- 前插历史后会保持视口锚点，不会把用户弹到别处。
-- `hasMoreInitial` 的默认值是显式的 `undefined` 而非 `false`：这是为了绕开 Vue 对缺省 Boolean prop 的 `false` 转换，让「还没问过」与「确实没有更早的了」保持可区分。若你确定没有历史，请显式传 `false`。
-- `loadOlder` 抛错时派发 `load-error`，并渲染 `top-error` 插槽，其作用域参数带 `retry`。
+- 泛型组件：`items` 的元素类型直接传到 `item` 插槽的作用域，无需断言。
+- 停在底部时新内容自动跟随；用户向上滚动后不再拉回，改为显示「回到底部」按钮。
+- `streaming` 只影响按钮的新内容状态，不决定是否吸底。
+- 组件自己滑向底部时（发送后、程序化滚动），不显示「回到底部」按钮。
+- 前插历史后保持视口锚点。
+- `hasMoreInitial` 的默认值是显式的 `undefined` 而非 `false`，以区分「未知」与「没有历史」。
 
 ## 技术实现
 
-- 可视窗口按滚动位置从位置缓存（按 key 记录测得高度的前缀和）里取 `{ start, end }`；起止下标不变时沿用上一帧的同一个对象，所以没有跨过行边界的滚动帧（包括 `tweenToBottom` 滑动的每一帧）不会重建窗口，也不会重新调用可见行的 `item` 插槽。
-- 「回到底部」按钮只在读者自己离开底部时出现（没有在跟随、且不在底部）。组件自己滑向底部时（发送后的 `tweenToBottom`、程序化滚动），中途虽然还没到底，也不会闪出这个按钮。
-- 覆盖：`__tests__/conversation-stream.test.ts` 断言同一行内连续的小幅滚动不调用插槽，跨入下一行才重新渲染；并断言滑向底部的途中不出现「回到底部」按钮。
+- 可视窗口从位置缓存（按 key 记录测得高度的前缀和）取 `{ start, end }`；未跨过行边界的滚动帧沿用上一窗口，不重新调用 `item` 插槽。
+- 源码：`packages/tuffex/packages/components/src/conversation-stream/`。

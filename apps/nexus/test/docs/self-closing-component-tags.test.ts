@@ -21,8 +21,12 @@ const nexusRoot = join(import.meta.dirname, '../..')
 const docsRoot = join(nexusRoot, 'content/docs')
 const componentDocsRoot = join(docsRoot, 'dev/components')
 
-/** Pages whose sections after the source link went missing (reported 2026-09-26). */
-const SPOT_CHECK_PAGES = ['fusion-surface', 'choice-card', 'button'].flatMap(slug =>
+/**
+ * Pages that still carry sections after the source link. The 2026-09-26 report named
+ * fusion-surface, choice-card and button; the 2026-10-08 docs rewrite removed those sections from
+ * the last two, so stream-text and terminal stand in for them.
+ */
+const SPOT_CHECK_PAGES = ['fusion-surface', 'stream-text', 'terminal'].flatMap(slug =>
   (['zh', 'en'] as const).map(locale => `${slug}.${locale}.mdc`))
 
 type RemarkPlugins = NonNullable<NonNullable<MDCParseOptions['remark']>['plugins']>

@@ -1,5 +1,7 @@
 # ModuleManager 生命周期隔离 + Nexus 启动指标上报 变更记录
 
+> 2026-10-08 更新：生命周期 `success` 事件不再上传 Nexus，只保留 `failed`（`error` 事件）。原因：每次启动约 120 条 `performance` 事件，Nexus 端没有任何读取方（日统计只折叠 longTask / rafJank / eventLoop / unresponsive 字段），逐模块启动耗时已由启动上报的 `mainProcess.moduleDetails` 覆盖。下文「success → performance」的描述为历史记录。
+
 ## 目标
 - ModuleManager 生命周期 created/init/start/stop/destroy 统一隔离，失败可回滚，避免污染全局状态
 - 生命周期与启动指标上报 Nexus（成功/失败 + 耗时）
