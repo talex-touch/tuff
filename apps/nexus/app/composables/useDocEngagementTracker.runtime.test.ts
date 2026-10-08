@@ -106,6 +106,7 @@ afterEach(() => {
   stopScope()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('docs engagement reports', () => {
@@ -146,5 +147,25 @@ describe('docs engagement reports', () => {
     await advance(15_000)
     expect(reports).toHaveLength(1)
     expect(reports[0]!.totalDurationMs).toBeLessThanOrEqual(15_000)
+  })
+
+  it('does not report the same time twice when the next flush starts while one is still hashing', async () => {
+    // Hashing a report is asynchronous; hold every hash until the next interval has fired.
+    const subtle = globalThis.crypto.subtle
+    const digest = subtle.digest.bind(subtle)
+    const held: Array<() => void> = []
+    vi.spyOn(subtle, 'digest').mockImplementation((algorithm, data) =>
+      new Promise(resolve => held.push(() => resolve(digest(algorithm, data)))))
+
+    await advance(15_000)
+    await advance(15_000)
+    while (held.length > 0) {
+      held.shift()!()
+      await drain()
+    }
+
+    const counted = reports.reduce((sum, report) => sum + report.totalDurationMs, 0)
+    expect(counted).toBeGreaterThan(0)
+    expect(counted).toBeLessThanOrEqual(30_000)
   })
 })

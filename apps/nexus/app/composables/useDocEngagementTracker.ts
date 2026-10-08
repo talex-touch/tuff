@@ -606,12 +606,16 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     if (!import.meta.client || !hasSession.value)
       return
 
-    applyElapsed(Date.now())
-
+    // One flush at a time, from its snapshot until the server has the report, and no time is added
+    // while one is out. The guard used to start only at the request: a timer firing during the
+    // hashing before it took a second snapshot of the same time, and both reports counted it. The
+    // pending flush picks up everything since this snapshot once this one lands.
     if (flushInFlight) {
       flushPending = true
       return
     }
+
+    applyElapsed(Date.now())
 
     const sectionsPayload = flushableSectionPayload()
     const actionsPayload = actionQueue.value.slice(0, MAX_ACTIONS_PER_FLUSH)
@@ -634,39 +638,39 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       actions: actionsPayload,
     }
 
-    const payloadHash = await sha256Hex(stableSerialize(payloadForHash))
-    const nonce = randomNonce()
-
-    let proof = ''
-    let powNonce = ''
-
-    if (session.value?.challenge) {
-      proof = await sha256Hex(`${session.value.challenge.seed}${nonce}${payloadHash}`)
-      if ((session.value.challenge.difficulty || 0) > 0)
-        powNonce = await minePowNonce(proof, session.value.challenge.difficulty)
-    }
-
-    const requestBody: Record<string, unknown> = {
-      path: normalizedPath.value,
-      title: normalizedTitle.value,
-      source: sourceType.value,
-      sessionId: session.value?.sessionId,
-      token: session.value?.token,
-      clientId: clientId.value,
-      nonce,
-      payloadHash,
-      proof,
-      powNonce,
-      activeDurationMs: snapshotActiveMs,
-      totalDurationMs: snapshotTotalMs,
-      sections: sectionsPayload,
-      actions: actionsPayload,
-      reason,
-      truncated: hasOverflowActions || hasOverflowBuckets,
-    }
-
     flushInFlight = true
     try {
+      const payloadHash = await sha256Hex(stableSerialize(payloadForHash))
+      const nonce = randomNonce()
+
+      let proof = ''
+      let powNonce = ''
+
+      if (session.value?.challenge) {
+        proof = await sha256Hex(`${session.value.challenge.seed}${nonce}${payloadHash}`)
+        if ((session.value.challenge.difficulty || 0) > 0)
+          powNonce = await minePowNonce(proof, session.value.challenge.difficulty)
+      }
+
+      const requestBody: Record<string, unknown> = {
+        path: normalizedPath.value,
+        title: normalizedTitle.value,
+        source: sourceType.value,
+        sessionId: session.value?.sessionId,
+        token: session.value?.token,
+        clientId: clientId.value,
+        nonce,
+        payloadHash,
+        proof,
+        powNonce,
+        activeDurationMs: snapshotActiveMs,
+        totalDurationMs: snapshotTotalMs,
+        sections: sectionsPayload,
+        actions: actionsPayload,
+        reason,
+        truncated: hasOverflowActions || hasOverflowBuckets,
+      }
+
       await requestJson('/api/docs/engagement', {
         method: 'POST',
         body: requestBody,
