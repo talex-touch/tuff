@@ -702,10 +702,10 @@ describe('telemetryStore single-commit writes (#1788)', () => {
       ],
     })
 
-    // Exactly one batch for the commit: the two rows and the receipt. Search counters are no longer
-    // written per event; the daily rollup derives them from these rows.
-    expect(db.batchSizes).toHaveLength(batchesBeforeCommit + 1)
-    expect(db.batchSizes.at(-1)).toBe(3)
+    // The commit is the first batch after planning: the two rows and the receipt. Search counters are
+    // no longer written per event (the daily rollup derives them), and a store that creates its schema
+    // on first use -- the governance follow-ups -- runs its own batch after it.
+    expect(db.batchSizes[batchesBeforeCommit]).toBe(3)
     expect(prepared.batch!.size).toBe(2)
     expect(db.standaloneRuns).toEqual([])
 
