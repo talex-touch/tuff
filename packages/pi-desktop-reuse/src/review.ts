@@ -51,10 +51,10 @@ export interface ReviewDiff {
  * One side of a preview: absent, content read within the preview bound, or a file whose size
  * exceeded the preview bound (`oversize`) so it was deliberately not read.
  */
-export type ReviewPreviewSide =
-  | { kind: 'absent' }
-  | { kind: 'content', bytes: Uint8Array }
-  | { kind: 'oversize' }
+export type ReviewPreviewSide
+  = | { kind: 'absent' }
+    | { kind: 'content', bytes: Uint8Array }
+    | { kind: 'oversize' }
 
 /** Existence plus full-content hash; `exists: null` is an unknown capture. */
 export interface ReviewFileState {
@@ -77,22 +77,27 @@ const utf8 = new TextDecoder('utf-8', { fatal: true })
 
 /** Upstream rule: any NUL byte or invalid UTF-8 makes the content binary. */
 export function decodeReviewText(bytes: Uint8Array): string | null {
-  if (bytes.includes(0)) return null
+  if (bytes.includes(0))
+    return null
   try {
     return utf8.decode(bytes)
-  } catch {
+  }
+  catch {
     return null
   }
 }
 
 /** Rust `str::lines`: split on `\n`, strip one trailing `\r`, no final empty line. */
 export function splitReviewLines(text: string): string[] {
-  if (text.length === 0) return []
+  if (text.length === 0)
+    return []
   const lines = text.split('\n')
-  if (lines[lines.length - 1] === '') lines.pop()
+  if (lines[lines.length - 1] === '')
+    lines.pop()
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!
-    if (line.endsWith('\r')) lines[index] = line.slice(0, -1)
+    if (line.endsWith('\r'))
+      lines[index] = line.slice(0, -1)
   }
   return lines
 }
@@ -100,7 +105,8 @@ export function splitReviewLines(text: string): string[] {
 function diffOps(before: readonly string[], after: readonly string[]): DiffOps | null {
   const rows = before.length + 1
   const columns = after.length + 1
-  if (rows * columns > REVIEW_MAX_DIFF_CELLS) return null
+  if (rows * columns > REVIEW_MAX_DIFF_CELLS)
+    return null
   const lcs = new Uint32Array(rows * columns)
   for (let old = before.length - 1; old >= 0; old -= 1) {
     for (let next = after.length - 1; next >= 0; next -= 1) {
@@ -144,7 +150,8 @@ function diffOps(before: readonly string[], after: readonly string[]): DiffOps |
 function makeHunks(ops: DiffOps, before: readonly string[], after: readonly string[]): ReviewDiffHunk[] {
   const ranges: Array<[start: number, end: number]> = []
   for (let index = 0; index < ops.length; index += 1) {
-    if (ops.kinds[index] === OP_EQUAL) continue
+    if (ops.kinds[index] === OP_EQUAL)
+      continue
     const start = Math.max(0, index - REVIEW_CONTEXT_LINES)
     const end = Math.min(ops.length, index + REVIEW_CONTEXT_LINES + 1)
     const previous = ranges[ranges.length - 1]
@@ -161,8 +168,10 @@ function makeHunks(ops: DiffOps, before: readonly string[], after: readonly stri
   let newBefore = 0
   for (const [start, end] of ranges) {
     for (; cursor < start; cursor += 1) {
-      if (ops.kinds[cursor] !== OP_ADD) oldBefore += 1
-      if (ops.kinds[cursor] !== OP_DEL) newBefore += 1
+      if (ops.kinds[cursor] !== OP_ADD)
+        oldBefore += 1
+      if (ops.kinds[cursor] !== OP_DEL)
+        newBefore += 1
     }
     let oldLength = 0
     let newLength = 0
@@ -193,8 +202,10 @@ function makeHunks(ops: DiffOps, before: readonly string[], after: readonly stri
 }
 
 function previewText(side: ReviewPreviewSide): string | null | 'oversize' {
-  if (side.kind === 'absent') return ''
-  if (side.kind === 'oversize' || side.bytes.byteLength > REVIEW_MAX_DIFF_BYTES) return 'oversize'
+  if (side.kind === 'absent')
+    return ''
+  if (side.kind === 'oversize' || side.bytes.byteLength > REVIEW_MAX_DIFF_BYTES)
+    return 'oversize'
   return decodeReviewText(side.bytes)
 }
 
@@ -214,12 +225,15 @@ export function buildReviewDiff(before: ReviewPreviewSide, after: ReviewPreviewS
     return { binary: false, truncated: true, tooLarge: false, hunks: [] }
   }
   const ops = diffOps(beforeLines, afterLines)
-  if (!ops) return { binary: false, truncated: true, tooLarge: false, hunks: [] }
+  if (!ops)
+    return { binary: false, truncated: true, tooLarge: false, hunks: [] }
   let additions = 0
   let deletions = 0
   for (let index = 0; index < ops.length; index += 1) {
-    if (ops.kinds[index] === OP_ADD) additions += 1
-    else if (ops.kinds[index] === OP_DEL) deletions += 1
+    if (ops.kinds[index] === OP_ADD)
+      additions += 1
+    else if (ops.kinds[index] === OP_DEL)
+      deletions += 1
   }
   return {
     binary: false,
@@ -236,17 +250,24 @@ export function buildReviewDiff(before: ReviewPreviewSide, after: ReviewPreviewS
  * Unknown existence on either side is never treated as unchanged.
  */
 export function isUnchangedSince(expected: ReviewFileState, current: ReviewFileState): boolean {
-  if (expected.exists === null || current.exists === null) return false
-  if (expected.exists !== current.exists) return false
-  if (!expected.exists) return true
+  if (expected.exists === null || current.exists === null)
+    return false
+  if (expected.exists !== current.exists)
+    return false
+  if (!expected.exists)
+    return true
   return expected.hash !== undefined && expected.hash === current.hash
 }
 
 /** Whether an operation changed a path, judged only on known existence and hashes. */
 export function didReviewStateChange(before: ReviewFileState, after: ReviewFileState): boolean | null {
-  if (before.exists === null || after.exists === null) return null
-  if (before.exists !== after.exists) return true
-  if (!before.exists) return false
-  if (before.hash === undefined || after.hash === undefined) return null
+  if (before.exists === null || after.exists === null)
+    return null
+  if (before.exists !== after.exists)
+    return true
+  if (!before.exists)
+    return false
+  if (before.hash === undefined || after.hash === undefined)
+    return null
   return before.hash !== after.hash
 }

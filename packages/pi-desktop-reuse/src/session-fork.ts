@@ -28,30 +28,59 @@ interface ForkPartReferences {
 }
 
 const PUBLIC_META_KEYS = [
-  'provider', 'model', 'promptTokens', 'completionTokens', 'totalTokens', 'latencyMs',
-  'compactions', 'reasoningRequested', 'reasoningApplied', 'reasoningStatus', 'usageSource',
-  'turnId', 'traceId', 'outcome', 'errorCode', 'leadNote', 'parts',
-  'compactionId', 'checkpointId', 'snapshotId', 'modelSystem'
+  'provider',
+  'model',
+  'promptTokens',
+  'completionTokens',
+  'totalTokens',
+  'latencyMs',
+  'compactions',
+  'reasoningRequested',
+  'reasoningApplied',
+  'reasoningStatus',
+  'usageSource',
+  'turnId',
+  'traceId',
+  'outcome',
+  'errorCode',
+  'leadNote',
+  'parts',
+  'compactionId',
+  'checkpointId',
+  'snapshotId',
+  'modelSystem',
 ] as const
 
 const IDENTITY_KEYS: Record<string, true> = {
-  messageId: true, beforeMessageId: true, afterMessageId: true,
-  firstKeptMessageId: true, throughMessageId: true,
-  callId: true, toolCallId: true, parentToolCallId: true,
-  turnId: true, compactionId: true, checkpointId: true, snapshotId: true
+  messageId: true,
+  beforeMessageId: true,
+  afterMessageId: true,
+  firstKeptMessageId: true,
+  throughMessageId: true,
+  callId: true,
+  toolCallId: true,
+  parentToolCallId: true,
+  turnId: true,
+  compactionId: true,
+  checkpointId: true,
+  snapshotId: true,
 }
-
 
 /** Public content only; native pointers, queue, paths and approval/revert authority are local. */
 export function portableMessageMeta(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  if (!value) return undefined
+  if (!value)
+    return undefined
   const meta: Record<string, unknown> = {}
-  for (const key of PUBLIC_META_KEYS) if (value[key] !== undefined) meta[key] = value[key]
+  for (const key of PUBLIC_META_KEYS) {
+    if (value[key] !== undefined)
+      meta[key] = value[key]
+  }
   return Object.keys(meta).length ? meta : undefined
 }
 
 export function cloneMessagesForFork<T extends ForkMessageRecord>(
-  records: readonly T[], mintId: () => string
+  records: readonly T[],
+  mintId: () => string,
 ): ForkClone<T> {
   const messageIds = new Map<string, string>()
   const toolCallIds = new Map<string, string>()
@@ -60,43 +89,58 @@ export function cloneMessagesForFork<T extends ForkMessageRecord>(
   for (const record of records) {
     messageIds.set(record.id, mintId())
     const turn = record.meta?.turnId
-    if (typeof turn === 'string' && !turnIds.has(turn)) turnIds.set(turn, mintId())
+    if (typeof turn === 'string' && !turnIds.has(turn))
+      turnIds.set(turn, mintId())
     for (const key of ['compactionId', 'checkpointId', 'snapshotId']) {
       const id = record.meta?.[key]
-      if (typeof id === 'string' && !otherIds.has(id)) otherIds.set(id, mintId())
+      if (typeof id === 'string' && !otherIds.has(id))
+        otherIds.set(id, mintId())
     }
     for (const part of Array.isArray(record.meta?.parts) ? record.meta.parts : []) {
-      if (part === null || typeof part !== 'object' || Array.isArray(part)) continue
+      if (part === null || typeof part !== 'object' || Array.isArray(part))
+        continue
       // Main passed parsed JSON; the structural fields remain unknown until each check below.
       const fields = part as ForkPartReferences
       for (const key of (fields.type === 'tool-call' ? ['id', 'callId', 'toolCallId'] : ['callId', 'toolCallId']) as Array<keyof ForkPartReferences>) {
         const id = fields[key]
-        if (typeof id === 'string' && !toolCallIds.has(id)) toolCallIds.set(id, mintId())
+        if (typeof id === 'string' && !toolCallIds.has(id))
+          toolCallIds.set(id, mintId())
       }
     }
   }
   const identity = new Map([...messageIds, ...toolCallIds, ...turnIds, ...otherIds])
   const remap = (value: unknown, depth = 0): unknown => {
-    if (depth > 16) throw new Error('WORKSPACE_FORK_ANCHOR_INVALID')
-    if (Array.isArray(value)) return value.map((item) => remap(item, depth + 1))
-    if (value === null || typeof value !== 'object') return value
+    if (depth > 16)
+      throw new Error('WORKSPACE_FORK_ANCHOR_INVALID')
+    if (Array.isArray(value))
+      return value.map(item => remap(item, depth + 1))
+    if (value === null || typeof value !== 'object')
+      return value
     // A JSON object, not a domain assertion: every value below still has type unknown.
     const fields = value as Record<string, unknown>
     const next: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(fields)) {
-      if (key === 'reversible' || key === 'rollbackAllowed') { next[key] = false; continue }
-      if (key === 'snapshotRef' || key === 'rollbackToken' || key === 'requestId' || key === 'runId' || key === 'nativeEntryId') continue
+      if (key === 'reversible' || key === 'rollbackAllowed') {
+        next[key] = false
+        continue
+      }
+      if (key === 'snapshotRef' || key === 'rollbackToken' || key === 'requestId' || key === 'runId' || key === 'nativeEntryId')
+        continue
       if ((IDENTITY_KEYS[key] || (key === 'id' && fields.type === 'tool-call')) && typeof item === 'string') {
         const mapped = identity.get(item)
-        if (mapped) next[key] = mapped
-      } else next[key] = remap(item, depth + 1)
+        if (mapped)
+          next[key] = mapped
+      }
+      else {
+        next[key] = remap(item, depth + 1)
+      }
     }
     return next
   }
-  const messages = records.map((record) => ({
+  const messages = records.map(record => ({
     ...record,
     id: messageIds.get(record.id)!,
-    meta: remap(portableMessageMeta(record.meta)) as Record<string, unknown> | undefined
+    meta: remap(portableMessageMeta(record.meta)) as Record<string, unknown> | undefined,
   }))
   return { messages, messageIds, toolCallIds, turnIds }
 }

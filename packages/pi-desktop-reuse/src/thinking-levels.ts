@@ -11,11 +11,12 @@
 // Settings, the Home picker and Main's request planner reach it through
 // `@talex-touch/utils/intelligence/model-binding`.
 
+import type { SessionThinkingLevel, ThinkingLevel } from './types/models'
 import {
   SESSION_THINKING_LEVELS,
+
   THINKING_LEVELS,
-  type SessionThinkingLevel,
-  type ThinkingLevel,
+
 } from './types/models'
 
 export function isSessionThinkingLevel(value: unknown): value is SessionThinkingLevel {
@@ -31,12 +32,13 @@ export function canonicalThinkingLevel(level: SessionThinkingLevel): ThinkingLev
 export function sessionThinkingMenuLevels(
   available: readonly ThinkingLevel[] | undefined,
 ): SessionThinkingLevel[] {
-  if (!available || available.length === 0) return ['off']
+  if (!available || available.length === 0)
+    return ['off']
   return ['omit', ...available]
 }
 
 function enablesReasoning(levels: readonly ThinkingLevel[] | undefined): boolean {
-  return Boolean(levels?.some((level) => level !== 'off'))
+  return Boolean(levels?.some(level => level !== 'off'))
 }
 
 /**
@@ -47,7 +49,8 @@ export function bindingDefaultThinkingMenuLevels(
   enabled: readonly ThinkingLevel[] | undefined,
 ): SessionThinkingLevel[] {
   const levels = enabled?.length ? [...enabled] : []
-  if (!enablesReasoning(levels)) return levels.length > 0 ? levels : ['off']
+  if (!enablesReasoning(levels))
+    return levels.length > 0 ? levels : ['off']
   return ['omit', ...levels]
 }
 
@@ -57,7 +60,8 @@ export function resolveBindingDefaultThinkingLevel(
   enabled: readonly ThinkingLevel[] | undefined,
 ): SessionThinkingLevel | null {
   const choices = bindingDefaultThinkingMenuLevels(enabled)
-  if (stored && choices.includes(stored)) return stored
+  if (stored && choices.includes(stored))
+    return stored
   return enabled?.[0] ?? null
 }
 
@@ -67,13 +71,14 @@ export function highestSupportedThinkingLevel(
   const supported = new Set(levels ?? [])
   for (let index = THINKING_LEVELS.length - 1; index >= 0; index -= 1) {
     const level = THINKING_LEVELS[index]!
-    if (supported.has(level)) return level
+    if (supported.has(level))
+      return level
   }
   return 'off'
 }
 
 /** Binding fields that seed a new draft or session thinking level. */
-export type ThinkingLevelBindingSource = {
+export interface ThinkingLevelBindingSource {
   thinkingLevels?: readonly ThinkingLevel[] | null
   defaultThinkingLevel?: SessionThinkingLevel | null
 }
@@ -87,16 +92,20 @@ export function nearestSupportedThinkingLevel(
   levels: readonly ThinkingLevel[] | undefined,
 ): ThinkingLevel {
   const supported = new Set(levels ?? [])
-  if (supported.size === 0) return 'off'
-  if (supported.has(requested)) return requested
+  if (supported.size === 0)
+    return 'off'
+  if (supported.has(requested))
+    return requested
   const requestedIndex = THINKING_LEVELS.indexOf(requested)
   for (let index = requestedIndex; index < THINKING_LEVELS.length; index += 1) {
     const candidate = THINKING_LEVELS[index]!
-    if (supported.has(candidate)) return candidate
+    if (supported.has(candidate))
+      return candidate
   }
   for (let index = requestedIndex - 1; index >= 0; index -= 1) {
     const candidate = THINKING_LEVELS[index]!
-    if (supported.has(candidate)) return candidate
+    if (supported.has(candidate))
+      return candidate
   }
   return 'off'
 }
@@ -108,8 +117,10 @@ function initialThinkingLevelForBindingInternal(
 ): SessionThinkingLevel {
   const enabled = binding?.thinkingLevels ?? fallbackLevels
   const stored = binding?.defaultThinkingLevel
-  if (stored === 'omit') return enablesReasoning(enabled) ? 'omit' : 'off'
-  if (stored != null) return nearestSupportedThinkingLevel(stored, enabled)
+  if (stored === 'omit')
+    return enablesReasoning(enabled) ? 'omit' : 'off'
+  if (stored != null)
+    return nearestSupportedThinkingLevel(stored, enabled)
   return defaultToOff ? 'off' : highestSupportedThinkingLevel(enabled)
 }
 
@@ -151,7 +162,7 @@ export function initialThinkingLevelForUnmatchedModel(
 }
 
 /** Published record a thinking-level candidate list can be derived from. */
-export type PublishedThinkingSource = {
+export interface PublishedThinkingSource {
   reasoning?: boolean
   supportedThinkingLevels?: readonly ThinkingLevel[]
   thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>
@@ -167,20 +178,23 @@ export type PublishedThinkingSource = {
 export function publishedThinkingLevels(
   model?: PublishedThinkingSource | null,
 ): ThinkingLevel[] {
-  if (!model) return []
+  if (!model)
+    return []
   // ADR 0114: no published reasoning support is an empty list, never a token
   // `off` entry.
   // Capability projections spell a non-reasoning model as `['off']`, which would
   // otherwise surface as one enableable level.
-  if (model.reasoning === false) return []
+  if (model.reasoning === false)
+    return []
   const published = new Set<ThinkingLevel>(model.supportedThinkingLevels ?? [])
   if (published.size === 0 && model.thinkingLevelMap) {
     for (const [level, value] of Object.entries(model.thinkingLevelMap)) {
-      if (value !== null && value !== undefined) published.add(level as ThinkingLevel)
+      if (value !== null && value !== undefined)
+        published.add(level as ThinkingLevel)
     }
   }
   if (published.size === 0) {
     return model.reasoning === true ? ['low', 'medium', 'high'] : []
   }
-  return THINKING_LEVELS.filter((level) => published.has(level))
+  return THINKING_LEVELS.filter(level => published.has(level))
 }

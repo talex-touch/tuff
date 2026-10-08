@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 /* eslint-disable vue/one-component-per-file */
-
 import type {
   LocalAiCliProviderId,
   LocalAiCliProviderStatus,
@@ -38,16 +37,23 @@ function emitTerminal(event: unknown, payload: unknown): void {
   terminalListeners.get(event)?.forEach((listener) => listener(payload))
 }
 function registerTerminalCreation(payload: unknown, sessionId: string): void {
-  if (!payload || typeof payload !== 'object' || !('creationToken' in payload) || typeof payload.creationToken !== 'string')
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('creationToken' in payload) ||
+    typeof payload.creationToken !== 'string'
+  )
     throw new Error('Missing SDK creation cancellation token')
   terminalCreations.set(payload.creationToken, sessionId)
 }
 function finishTerminalKill(payload: unknown): void {
   if (!payload || typeof payload !== 'object') return
-  const sessionId = 'sessionId' in payload && typeof payload.sessionId === 'string'
-    ? payload.sessionId
-    : 'creationToken' in payload && typeof payload.creationToken === 'string'
-      ? terminalCreations.get(payload.creationToken) : undefined
+  const sessionId =
+    'sessionId' in payload && typeof payload.sessionId === 'string'
+      ? payload.sessionId
+      : 'creationToken' in payload && typeof payload.creationToken === 'string'
+        ? terminalCreations.get(payload.creationToken)
+        : undefined
   if (!sessionId || ![...terminalCreations.values()].includes(sessionId)) return
   for (const [token, id] of terminalCreations) if (id === sessionId) terminalCreations.delete(token)
   killedSessions.push(sessionId)
@@ -112,13 +118,21 @@ vi.mock('@talex-touch/tuffex/markdown-view', () => ({
 vi.mock('@talex-touch/tuffex/terminal', () => ({
   TxTerminal: defineComponent({
     name: 'TxTerminal',
-    props: ['readOnly', 'cols', 'rows'],
+    props: {
+      readOnly: Boolean,
+      cols: Number,
+      rows: Number
+    },
     emits: ['ready', 'data', 'resize'],
     setup(_props, { expose, emit }) {
       const output = ref('')
       const api = {
-        write: async (data: string) => { output.value += data },
-        reset: () => { output.value = '' },
+        write: async (data: string) => {
+          output.value += data
+        },
+        reset: () => {
+          output.value = ''
+        },
         getSize: () => ({ cols: 92, rows: 24 }),
         focus: () => undefined
       }
@@ -229,7 +243,10 @@ beforeEach(() => {
       registerTerminalCreation(payload, 'term-1')
       return { sessionId: 'term-1' }
     }
-    if (event === LocalAiCliEvents.terminal.kill) { finishTerminalKill(payload); return undefined }
+    if (event === LocalAiCliEvents.terminal.kill) {
+      finishTerminalKill(payload)
+      return undefined
+    }
     if (event === LocalAiCliEvents.terminal.resize) return undefined
     throw new Error('Unexpected transport event from LocalAiCliPanel')
   })
@@ -346,7 +363,7 @@ describe('localAiCliPanel native session continuation', () => {
       provider: 'pi',
       access: 'answer-only',
       projectId: 'p1',
-      sessionRef: 'ref-9',
+      sessionRef: 'ref-9'
     })
   })
 
@@ -463,7 +480,6 @@ describe('localAiCliPanel agent named by the project menu', () => {
       }
     ])
   })
-
 })
 
 describe('localAiCliPanel terminal lifecycle', () => {
@@ -503,10 +519,17 @@ describe('localAiCliPanel terminal lifecycle', () => {
     const wrapper = await readyPanel()
     let complete!: (result: { sessionId: string }) => void
     let creationToken: string | undefined
-    const pending = new Promise<{ sessionId: string }>((resolve) => { complete = resolve })
+    const pending = new Promise<{ sessionId: string }>((resolve) => {
+      complete = resolve
+    })
     transportSendMock.mockImplementation(async (event: unknown, payload: unknown) => {
       if (event === LocalAiCliEvents.terminal.create) {
-        if (!payload || typeof payload !== 'object' || !('creationToken' in payload) || typeof payload.creationToken !== 'string')
+        if (
+          !payload ||
+          typeof payload !== 'object' ||
+          !('creationToken' in payload) ||
+          typeof payload.creationToken !== 'string'
+        )
           throw new Error('Missing SDK creation cancellation token')
         creationToken = payload.creationToken
         registerTerminalCreation(payload, 'abandoned')
@@ -519,7 +542,9 @@ describe('localAiCliPanel terminal lifecycle', () => {
     await flushPromises()
     if (creationToken === undefined) throw new Error('Missing process cancellation identity')
     await panelApi(wrapper).reset()
-    const cleanupAttempts = transportSendMock.mock.calls.filter(([event]) => event === LocalAiCliEvents.terminal.kill).length
+    const cleanupAttempts = transportSendMock.mock.calls.filter(
+      ([event]) => event === LocalAiCliEvents.terminal.kill
+    ).length
     expect(cleanupAttempts).toBe(1)
     expect(terminalCreations.has(creationToken)).toBe(false)
     expect(killedSessions).toEqual(['abandoned'])
@@ -528,7 +553,9 @@ describe('localAiCliPanel terminal lifecycle', () => {
 
     expect(wrapper.find('[data-terminal-output]').exists()).toBe(false)
     expect(killedSessions).toEqual(['abandoned'])
-    expect(transportSendMock.mock.calls.filter(([event]) => event === LocalAiCliEvents.terminal.kill)).toHaveLength(cleanupAttempts)
+    expect(
+      transportSendMock.mock.calls.filter(([event]) => event === LocalAiCliEvents.terminal.kill)
+    ).toHaveLength(cleanupAttempts)
   })
 
   it('isolates replacement output and removes subscriptions on unmount', async () => {
