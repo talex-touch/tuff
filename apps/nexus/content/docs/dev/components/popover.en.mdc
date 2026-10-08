@@ -33,6 +33,7 @@ code: |
 - Use `toggleOnReferenceClick=false` when the reference contains an input or custom focus behavior, as `TxSearchSelect` does.
 - Leave `keepAliveContent=true` for small forms or stateful filters; set it to `false` only for static copy.
 - Use `maxHeight` or internal scrolling for option panels instead of allowing a popover to cover the viewport.
+- There is no arrow by default. Turn on `showArrow` only when several triggers sit close together and the panel has to show which one it belongs to; with `offset` unset, the gap grows to fit the arrow.
 
 ## API Reference
 
@@ -44,7 +45,7 @@ code: |
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `eager` | `boolean` | `false` | Mounts anchor content eagerly through `TxBaseAnchor`. |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | Floating placement |
-| `offset` | `number` | auto | Gap (computed from `arrowSize` when arrow is enabled; otherwise `2`) |
+| `offset` | `number` | auto | Gap: `6` without an arrow (matching DropdownMenu and Select), `max(8, arrowSize / 2 + 2)` with one |
 | `width` | `number` | `0` | Panel width (`0` follows reference width) |
 | `minWidth` | `number` | `0` | Minimum panel width |
 | `maxWidth` | `number` | `360` | Maximum panel width |
@@ -52,7 +53,7 @@ code: |
 | `unlimitedHeight` | `boolean` | `false` | Disables the max-height cap for panels that manage their own scrolling. |
 | `referenceFullWidth` | `boolean` | `false` | Stretch reference container to full width |
 | `referenceClass` | `BaseAnchorClassValue` | - | Additional class value forwarded to the BaseAnchor reference wrapper. |
-| `showArrow` | `boolean` | `true` | Show arrow |
+| `showArrow` | `boolean` | `false` | Show arrow. The anchor family draws no arrow by default; opt in per instance |
 | `arrowSize` | `number` | `12` | Arrow size |
 | `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
 | `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay (ms). Left unset, the shared delay service supplies it. |
@@ -97,7 +98,7 @@ code: |
   const background = ref<'refraction' | 'pure' | 'mask' | 'blur' | 'glass'>('refraction')
   const placement = ref<'bottom-start' | 'bottom' | 'top' | 'right'>('bottom-start')
   const trigger = ref<'click' | 'hover'>('click')
-  const showArrow = ref(true)
+  const showArrow = ref(false)
   const keepAliveContent = ref(true)
   </script>
 
@@ -229,11 +230,12 @@ code: |
 ## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/popover/src/types.ts`, `TxPopover.vue`, and `popover.test.ts`.
-- `offset` is computed from `arrowSize` when omitted; examples should not imply a fixed default gap.
+- With `offset` unset, the gap is 6px without an arrow and derived from `arrowSize` with one; examples should not imply a fixed default gap.
+- Rejected design: keeping the old 2px no-arrow gap once the arrow went off by default. Measured, the panel's top edge sat 1.8px from the trigger, over the trigger's 3px focus outline, so it uses the menu family's 6px instead.
 - `closeOnClickOutside` is click-trigger only because hover mode owns close timing through pointer/focus leave delays.
 
 - Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
 - Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding, offset derivation, hover trigger timing, the hover zone spanning the whole floating layer (leaving the content for the card padding does not close), disabled-close behavior, full-width reference classes, and content side slot props.
+- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding (no arrow by default), offset derivation (6 without an arrow, 8 with the default arrow, a custom arrow size, an explicit value), hover trigger timing, the hover zone spanning the whole floating layer (leaving the content for the card padding does not close), disabled-close behavior, full-width reference classes, and content side slot props.
 
 <TuffDocSourceLink />

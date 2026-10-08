@@ -11,7 +11,7 @@ const open = ref(false)
 const background = ref<PanelBackground>('refraction')
 const placement = ref<PopoverPlacement>('bottom-start')
 const trigger = ref<PopoverTrigger>('click')
-const showArrow = ref(true)
+const showArrow = ref(false)
 const keepAliveContent = ref(true)
 
 const labels = computed(() => {

@@ -255,7 +255,8 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     panelShadow: 'soft',
     panelRadius: 10,
     panelPadding: 8,
-    showArrow: true,
+    // No arrow anywhere in the anchor family unless the host opts in.
+    showArrow: false,
     arrowSize: 10,
     keepAliveContent: props.keepAliveContent,
     closeOnEsc: true,

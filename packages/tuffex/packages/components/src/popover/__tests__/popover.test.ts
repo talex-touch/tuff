@@ -87,7 +87,7 @@ describe('txPopover', () => {
       disabled: false,
       eager: false,
       placement: 'bottom-start',
-      offset: 8,
+      offset: 6,
       width: 0,
       minWidth: 0,
       maxWidth: 360,
@@ -101,7 +101,8 @@ describe('txPopover', () => {
       panelShadow: 'soft',
       panelRadius: 18,
       panelPadding: 10,
-      showArrow: true,
+      // The anchor family draws no arrow unless the host opts in.
+      showArrow: false,
       arrowSize: 12,
       keepAliveContent: true,
       closeOnClickOutside: true,
@@ -115,10 +116,12 @@ describe('txPopover', () => {
 
   it('derives offset from arrow settings and supports fixed width panels', () => {
     const noArrow = mountPopover({ showArrow: false })
-    const customArrow = mountPopover({ arrowSize: 18 })
+    const withArrow = mountPopover({ showArrow: true })
+    const customArrow = mountPopover({ showArrow: true, arrowSize: 18 })
     const explicit = mountPopover({ offset: 24, width: 280 })
 
-    expect(noArrow.findComponent(BaseAnchorStub).props('offset')).toBe(2)
+    expect(noArrow.findComponent(BaseAnchorStub).props('offset')).toBe(6)
+    expect(withArrow.findComponent(BaseAnchorStub).props('offset')).toBe(8)
     expect(customArrow.findComponent(BaseAnchorStub).props('offset')).toBe(11)
     expect(explicit.findComponent(BaseAnchorStub).props('offset')).toBe(24)
     expect(explicit.findComponent(BaseAnchorStub).props('width')).toBe(280)

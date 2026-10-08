@@ -19,6 +19,7 @@ export interface PopoverProps {
   disabled?: boolean
   eager?: boolean
   placement?: PopoverPlacement
+  /** Gap to the reference. Unset: 6 without an arrow, `max(8, arrowSize / 2 + 2)` with one. */
   offset?: number
   width?: number
   minWidth?: number
@@ -28,6 +29,7 @@ export interface PopoverProps {
   referenceFullWidth?: boolean
   referenceClass?: BaseAnchorClassValue
 
+  /** Like the rest of the anchor family, no arrow unless opted in. @default false */
   showArrow?: boolean
   arrowSize?: number
 

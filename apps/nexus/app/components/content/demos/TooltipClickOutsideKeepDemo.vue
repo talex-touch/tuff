@@ -22,7 +22,6 @@ const labels = computed(() => (locale.value === 'zh'
       trigger="click"
       :close-on-click-outside="false"
       :content="labels.content"
-      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">
         {{ labels.trigger }}
