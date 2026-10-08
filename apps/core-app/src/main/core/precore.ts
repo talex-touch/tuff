@@ -31,6 +31,13 @@ import { stopWatchersBeforeQuit } from './before-quit-stop-watchers'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
 import { finalizeBeforeQuit } from './before-quit-finalize'
+import {
+  isIsolatedAcceptanceMode,
+  isStartupBenchmarkMode,
+  resolveStartupBenchmarkDiagPath,
+  resolveStartupBenchmarkUserDataDir
+} from './acceptance-mode'
+import { getBooleanEnv } from '@talex-touch/utils/env'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -56,7 +63,7 @@ function registerEarlyUnhandledRejectionHandler(): void {
 }
 
 function applyDeprecationTraceSwitch(): void {
-  if (process.env.TUFF_TRACE_DEPRECATION !== '1') return
+  if (!getBooleanEnv('TUFF_TRACE_DEPRECATION')) return
   process.traceDeprecation = true
   mainLog.warn('Node deprecation trace enabled via TUFF_TRACE_DEPRECATION=1')
 }
@@ -106,12 +113,6 @@ function markAppQuitting(reason: string): void {
   mainLog.debug('Marked app quitting state', { meta: { reason } })
 }
 
-function parseBooleanEnv(value: string | undefined): boolean {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-}
-
 function safeGetUserDataPath(): string | undefined {
   try {
     return app.getPath('userData')
@@ -125,7 +126,7 @@ function writeStartupBenchmarkPrecoreDiagnostic(
   userDataBefore: string | undefined,
   userDataAfter: string | undefined
 ): void {
-  const diagPath = process.env.TUFF_STARTUP_BENCHMARK_DIAG_PATH?.trim()
+  const diagPath = resolveStartupBenchmarkDiagPath()
   if (!diagPath) return
 
   try {
@@ -153,7 +154,7 @@ function writeStartupBenchmarkPrecoreDiagnostic(
 }
 
 function applyStartupBenchmarkUserDataOverride(): void {
-  const benchmarkUserDataPath = process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim()
+  const benchmarkUserDataPath = resolveStartupBenchmarkUserDataDir()
   const userDataBefore = safeGetUserDataPath()
   if (!benchmarkUserDataPath) {
     writeStartupBenchmarkPrecoreDiagnostic(undefined, userDataBefore, userDataBefore)
@@ -241,7 +242,7 @@ const v8JsFlags: string[] = []
 // (electron/electron#51351): `--jitless` removes the executable MAP_JIT pages
 // that the OS revokes RX permission on, at the cost of slower JS. Off by
 // default; enable with TUFF_V8_JITLESS=1 only when hitting that crash.
-if (parseBooleanEnv(process.env.TUFF_V8_JITLESS)) {
+if (getBooleanEnv('TUFF_V8_JITLESS')) {
   v8JsFlags.push('--jitless')
   mainLog.warn('V8 JIT disabled via TUFF_V8_JITLESS (slower JS; Tahoe crash workaround)')
 }
@@ -259,10 +260,8 @@ if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHard
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
-const isolatedAcceptanceMode =
-  parseBooleanEnv(process.env.TUFF_PACKAGED_ACCEPTANCE_ISOLATED) &&
-  Boolean(process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim())
+const startupBenchmarkMode = isStartupBenchmarkMode()
+const isolatedAcceptanceMode = isIsolatedAcceptanceMode()
 const hasSingleInstanceLock = setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
@@ -376,10 +375,6 @@ let beforeQuitFlowPromise: Promise<void> | null = null
 
 type ShutdownObservationProvider = {
   getShutdownObservation?: () => unknown
-}
-
-function isStartupBenchmarkMode(): boolean {
-  return parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
 }
 
 function getBeforeQuitTimeoutHint(): unknown {

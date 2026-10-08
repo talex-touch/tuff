@@ -5,10 +5,11 @@ import { app } from 'electron'
 import fse from 'fs-extra'
 import * as log4js from 'log4js'
 import packageJson from '../../package.json'
+import { resolveStartupBenchmarkUserDataDir } from './core/acceptance-mode'
 
 globalThis.$pkg = packageJson
 
-const isolatedUserDataPath = process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim()
+const isolatedUserDataPath = resolveStartupBenchmarkUserDataDir()
 if (isolatedUserDataPath) {
   const isolatedRoot = path.resolve(isolatedUserDataPath)
   fse.ensureDirSync(isolatedRoot)

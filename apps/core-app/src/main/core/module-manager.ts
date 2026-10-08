@@ -16,9 +16,9 @@ import type {
 import type { Buffer } from 'node:buffer'
 import type { ITouchEventBus } from 'packages/utils/eventbus'
 import { TalexEvents } from './eventbus/touch-event'
+import { getBooleanEnv } from '@talex-touch/utils/env'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import process from 'node:process'
 import { moduleLog } from '../utils/logger'
 import { getSentryService } from '../modules/sentry/sentry-service'
 import { operationalErrorService } from '../modules/observability'
@@ -891,14 +891,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   }
 
   private isEnvFlagEnabled(flag: string): boolean {
-    const value = process.env[flag]
-    if (!value) {
-      return false
-    }
-    const normalized = value.trim().toLowerCase()
-    return (
-      normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-    )
+    return getBooleanEnv(flag)
   }
 
   /**

@@ -15,6 +15,7 @@ import {
   resolveWidgetRuntime,
   resolveWidgetRuntimeStage
 } from '@talex-touch/utils/plugin/widget'
+import { getBooleanEnv } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import crypto from 'node:crypto'
@@ -126,8 +127,7 @@ function resolvePackagedWidgetPackagePath(
 }
 
 function isRuntimeCompileExplicitlyEnabled(): boolean {
-  const value = process.env[WIDGET_RUNTIME_COMPILE_ENV]?.trim().toLowerCase()
-  return value === '1' || value === 'true' || value === 'yes'
+  return getBooleanEnv(WIDGET_RUNTIME_COMPILE_ENV)
 }
 
 function canRuntimeCompileWidget(plugin: ITouchPlugin): boolean {
