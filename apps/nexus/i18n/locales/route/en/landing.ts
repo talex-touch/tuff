@@ -283,6 +283,9 @@ export default {
         },
       },
     },
+      rail: {
+        label: 'Page sections',
+      },
       plugins: {
         eyebrow: 'Plugins',
         headline: 'One plugin, one more trick.',

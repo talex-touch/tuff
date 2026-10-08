@@ -282,6 +282,9 @@ export default {
           },
         },
       },
+      rail: {
+        label: '页面导航',
+      },
       plugins: {
         eyebrow: '插件',
         headline: '装一个，多一招。',
