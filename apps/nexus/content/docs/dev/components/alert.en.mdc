@@ -1,6 +1,6 @@
 ---
 title: Alert
-description: Inline status banner for contextual feedback, semantic alert messaging, and dismissible notices.
+description: An inline banner that displays a contextual status message.
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,25 +11,22 @@ verified: true
 
 ## Usage
 
-### Alert Variants
-
+### Types
+`type` sets the color and the default icon.
 :::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div>
-      <TxAlert title="Heads up" message="Check your configuration." type="info" />
-      <TxAlert title="Success" message="Saved successfully." type="success" />
-      <TxAlert title="Warning" message="Something needs your attention." type="warning" />
-      <TxAlert title="Error" message="Save failed." type="error" />
-    </div>
+    <TxAlert title="Heads up" message="Check your configuration." type="info" />
+    <TxAlert title="Success" message="Saved successfully." type="success" />
+    <TxAlert title="Warning" message="Something needs your attention." type="warning" />
+    <TxAlert title="Error" message="Save failed." type="error" />
   </template>
 ---
 :::
 
 ### Persistent Notice
-
-Use `closable=false` when the message is part of the page state and should not disappear locally.
+Set `closable=false` when the message is page state and must not be dismissed.
 
 ```vue
 <template>
@@ -58,7 +55,7 @@ Use `closable=false` when the message is part of the page state and should not d
 </template>
 ```
 
-### Text-only Banner
+### Text Only
 
 ```vue
 <template>
@@ -68,11 +65,11 @@ Use `closable=false` when the message is part of the page state and should not d
 
 ### Best Practices
 
-- Use alerts for contextual page feedback, not as a toast replacement.
-- Keep `type` aligned with the user impact: `error` for failed actions, `warning` for risk, `info` for neutral guidance.
-- Handle `close` in the host by removing the alert or persisting dismissal state.
-- Use `closable=false` for compliance, blocking, or always-relevant notices.
-- Do not put primary workflows inside the alert body; place action buttons after the alert where layout and semantics are clearer.
+- Use an alert for contextual page feedback; use a toast for a transient action result.
+- Match `type` to the user impact: `error` for failed actions, `warning` for risk, `info` for neutral guidance.
+- Set `closable=false` for compliance, blocking, or always-relevant notices; persist dismissal in `close` when it must stick.
+- Keep copy short and actionable, and don't mount several new alerts at once.
+- Place action buttons after the alert, not inside its body.
 
 ## API Reference
 
@@ -80,47 +77,44 @@ Use `closable=false` when the message is part of the page state and should not d
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | Visual intent and default icon mapping. |
-| `title` | `string` | - | Optional title text. Hidden when absent and no `title` slot is provided. |
-| `message` | `string` | - | Body message used when no default slot is provided. |
-| `closable` | `boolean` | `true` | Render the close button and close padding. |
-| `showIcon` | `boolean` | `true` | Render the semantic leading icon. |
+| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | Semantic intent; sets the color and default icon. |
+| `title` | `string` | - | Title; the title row is skipped when neither it nor the `title` slot is set. |
+| `message` | `string` | - | Body text; the default slot takes precedence. |
+| `closable` | `boolean` | `true` | Shows the close button. |
+| `showIcon` | `boolean` | `true` | Shows the leading semantic icon. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `close` | - | Emitted when the close button is clicked. |
+| `close` | - | Fires when the close button is clicked. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
 | `title` | - | Custom title content. |
-| `default` | - | Custom body content. Replaces `message`. |
+| `default` | - | Custom body content; replaces `message`. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `open` | `() => void` | Shows a dismissed alert again. |
+| `close` | `() => void` | Hides the alert and emits `close`. |
 
 ## Overview
 
-- The root renders `role="alert"` and a type class (`tx-alert--info`, `--success`, `--warning`, or `--error`).
-- `type` selects the leading icon name: `info`, `check-circle`, `alert-triangle`, or `x-circle`. All four are `TxIcon` built-ins, so the glyph renders without an icon font or preset.
-- `showIcon=false` removes the leading icon container.
-- The title row renders only when `title` or the `title` slot is present.
-- The default slot replaces `message` inside `.tx-alert__message`.
-- `closable=true` renders the close button, adds `tx-alert--closable`, and reserves right padding.
-- Clicking the close button emits `close` **and** hides the alert, so the leave transition has something to play on. A host driving it with `v-if` still works; it no longer has to.
-- The root is a `<Transition name="tx-alert" appear>`: the alert fades and rises in over 0.26s on mount and leaves in 0.16s. Fallthrough attributes still land on `.tx-alert`, and the element remains the rendered root.
-- `open()` and `close()` are exposed on the instance, so a dismissed alert can be brought back — the docs gallery uses `open()` behind a reset control.
-- Only opacity and transform animate. The root is `display: flex`, so a height collapse would have to re-stack the icon, body and close button mid-flight. Wrap a stack in `<TransitionGroup>` when the gap left behind should close.
-- Under `prefers-reduced-motion: reduce` the alert cross-fades in 0.01s with no transform.
-- Close button text is icon-only and uses `aria-label="Close"`.
+- The root has `role="alert"`, so screen readers announce it as soon as it mounts.
+- The `type` icons are `info`, `check-circle`, `alert-triangle`, and `x-circle`, all `TxIcon` built-ins that need no icon font.
+- Clicking the close button hides the alert and emits `close`; a host can still drive it with `v-if`.
+- Only opacity and transform animate; height does not collapse. Wrap a stack in `<TransitionGroup>` to close the gap.
+- Under reduced motion, the alert only fades, without moving.
+- The close button is icon-only and carries `aria-label="Close"`.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`, `types.ts`, and `alert.test.ts`.
-- **Verified coverage:** `alert.test.ts` covers semantic alert role, type class, title/message rendering, icon visibility, title/default slots, closable hiding, `close` emit behavior, that each `type` resolves a real `builtin` glyph, that closing hides the alert and `open()` restores it, and that fallthrough attributes reach `.tx-alert` rather than the transition.
-- Accessibility note: `role="alert"` announces content assertively. Use short, actionable copy and avoid mounting multiple new alerts at once.
+- The root carries `tx-alert--<type>` and `tx-alert--closable` and sits in `<Transition name="tx-alert" appear>`; fallthrough attributes land on `.tx-alert`.
+- Source: `packages/tuffex/packages/components/src/alert/`.
 
-- Component source: `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`.
-- Types: `packages/tuffex/packages/components/src/alert/src/types.ts` exports `AlertProps`, `AlertEmits`, and `AlertType`.
-- Coverage: `packages/tuffex/packages/components/src/alert/__tests__/alert.test.ts` verifies role/class rendering, slots, close controls, close events, per-type built-in glyph resolution, close/`open()` visibility, and attribute fallthrough.
 <TuffDocSourceLink />

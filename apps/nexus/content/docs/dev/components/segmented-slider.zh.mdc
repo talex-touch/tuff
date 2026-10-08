@@ -1,6 +1,6 @@
 ---
 title: "SegmentedSlider 分段滑块"
-description: "用于在预定义的离散选项中进行选择的分段滑块组件。"
+description: "在一组离散档位中选择一项的滑块"
 category: Form
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### SegmentedSlider
+### 基础
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderDemo" code-lang="vue"}
 ---
 code: |
@@ -28,137 +28,44 @@ code: |
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 16px; width: 400px;">
-      <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          当前值: {{ value }}
-        </div>
-        <TxSegmentedSlider v-model="value" :segments="segments" />
-      </div>
-    </div>
+    <TxSegmentedSlider v-model="value" :segments="segments" />
   </template>
 ---
 :::
 
-### 最佳实践
-
-- 使用 3 到 7 个稳定分段；长列表或动态选项应改用 `TxSelect` 或 `TxSearchSelect`。
-- 分段值保持 primitive 且唯一；重复 value 会让选中状态变得不明确。
-- 只有在相邻文案已经清楚解释每个刻度时才关闭标签；否则标签就是用户理解离散选择的地图。
-- 连续值用 `TxSlider`，有序策略状态用 `TxSegmentedSlider`。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `number \| string \| null` | `0` | 当前选中的分段值；传入 `null` 时会在挂载后自动选中第一个分段。 |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | 沿轨道渲染的有序分段定义。 |
-| `disabled` | `boolean` | `false` | 禁用后点击与键盘都不再改变选择（不再触发 `update:modelValue`）。 |
-| `showLabels` | `boolean` | `true` | 仅当某个 segment 提供 `label` 时才显示文字。 |
-| `vertical` | `boolean` | `false` | 改为垂直轨道，进度自下而上。 |
-
-### SegmentedSliderSegment
-
-| 属性名 | 类型 | 说明 |
-|------|------|------|
-| `value` | `number \| string` | 分段被选中时发出的值。 |
-| `label` | `string` | 可选，渲染在分段标记旁的文字。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value: number \| string)` | 启用的分段请求新值时触发。 |
-| `change` | `(value: number \| string)` | 与 `update:modelValue` 携带同一选中值同步触发，供 change 监听使用。 |
-
-### 插槽
-
-`TxSegmentedSlider` 不暴露公共插槽。标签来自 `segments[].label`，这样可以保持键盘、指针与垂直布局渲染的确定性。
-
-## 自定义选项
-
-### SegmentedSlider (custom)
+### 自定义分段
+`value` 可以是字符串，`label` 可以是任意文本，包括 emoji。
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderCustomDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const priceValue = ref('pro')
-  const priceSegments = [
+  const plan = ref('pro')
+  const planSegments = [
     { value: 'free', label: 'Free' },
     { value: 'pro', label: 'Pro' },
     { value: 'team', label: 'Team' },
     { value: 'enterprise', label: 'Enterprise' },
   ]
 
-  const ratingValue = ref(3)
-  const ratingSegments = [
-    { value: 1, label: '⭐' },
-    { value: 2, label: '⭐⭐' },
-    { value: 3, label: '⭐⭐⭐' },
-    { value: 4, label: '⭐⭐⭐⭐' },
-    { value: 5, label: '⭐⭐⭐⭐⭐' },
-  ]
+  const rating = ref(3)
+  const ratingSegments = [1, 2, 3, 4, 5].map(n => ({ value: n, label: '⭐'.repeat(n) }))
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 24px; width: 400px;">
-      <div>
-        <div style="font-size: 14px; margin-bottom: 12px;">
-          价格档位选择
-        </div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          当前: {{ priceValue }}
-        </div>
-        <TxSegmentedSlider v-model="priceValue" :segments="priceSegments" />
-      </div>
-
-      <div>
-        <div style="font-size: 14px; margin-bottom: 12px;">
-          评分选择
-        </div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
-          当前: {{ ratingValue }} 星
-        </div>
-        <TxSegmentedSlider v-model="ratingValue" :segments="ratingSegments" />
-      </div>
-    </div>
+    <TxSegmentedSlider v-model="plan" :segments="planSegments" />
+    <TxSegmentedSlider v-model="rating" :segments="ratingSegments" />
   </template>
 ---
 :::
 
-## 发布策略配置
-
-这组组件适合后台“先选范围，再定策略，再给阈值和标签”的配置流：`TxCascader` 负责层级范围，`TxFlatSelect` 负责低噪音单选，`TxSegmentedSlider` / `TxSlider` 负责离散风险和连续比例，`TxTagInput` 负责检索元数据。
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="截图验证的 Cascader / FlatSelect / SegmentedSlider / Slider / TagInput 后台配置组合。"}
+### 发布策略配置
+风险档位用 `TxSegmentedSlider`，流量比例用 `TxSlider`。
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: '桌面端',
-      children: [
-        {
-          value: 'stable',
-          label: '稳定通道',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
   const riskSegments = [
     { value: 1, label: '低' },
     { value: 2, label: '中' },
@@ -168,40 +75,64 @@ code: |
   </script>
 
   <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
-      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
-        <TxFlatSelectItem value="signed" label="签名构建" />
-        <TxFlatSelectItem value="archive" label="归档包" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
-        <TxFlatSelectItem value="phased" label="分阶段" />
-        <TxFlatSelectItem value="guarded" label="护栏发布" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
-    </section>
+    <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+    <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
+      <TxFlatSelectItem value="phased" label="分阶段" />
+      <TxFlatSelectItem value="guarded" label="护栏发布" />
+    </TxFlatSelect>
+    <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+    <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+    <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
   </template>
 ---
 ::
 
+### 最佳实践
+
+- 使用 3–7 个稳定分段；长列表或动态选项改用 `TxSelect` 或 `TxSearchSelect`。
+- 每个分段的 `value` 用原始类型且唯一。
+- 只有相邻文案已解释每个刻度时才关闭 `showLabels`。
+- 连续数值用 `TxSlider`；风险、套餐、质量门禁等有序档位用 `TxSegmentedSlider`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number \| string \| null` | `0` | 选中的分段值；为 `null` 时挂载后自动选中第一段。 |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | 沿轨道依次排列的分段。 |
+| `disabled` | `boolean` | `false` | 禁止点击与键盘改变选择。 |
+| `showLabels` | `boolean` | `true` | 显示分段的 `label`（若提供）。 |
+| `vertical` | `boolean` | `false` | 改为纵向轨道，进度自下而上。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number \| string)` | 点击或用键盘选择分段时触发。 |
+| `change` | `(value: number \| string)` | 与 `update:modelValue` 同时触发。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export interface SegmentedSliderSegment {
+    value: number | string // 选中时发出的值
+    label?: string // 分段旁的文字
+  }
+---
+:::
+
 ## 概述
 
-- 整行是一个 `radiogroup`，每个停靠点是 `radio`，读屏会把它读成一组互斥选项，而不是一排开关。
-- 漫游 tabindex：Tab 只进入该行一次，落在当前值上。方向键移动并在两端夹住，Home / End 直达首尾。纵向布局自下而上，因此向上是前进方向。
-- 停靠点是圆的，因为圆点现在是块级元素：作为行内 `<span>` 时宽高会被丢弃，2px 边框直接渲染成轨道上的一根竖线。
-- 轨道颜色由文字色调出——这一对才会随主题真正反转——所以在深色背景上依然可见。
-- 焦点环只在键盘操作时出现；悬停会把未选中的点略微放大作为预览。两者在 `prefers-reduced-motion` 下都会停止。
+- 整行是 `radiogroup`，每个停靠点是 `radio`。
+- Tab 只进入一次，落在当前值；方向键移动并在两端停住，Home / End 直达首尾。纵向布局中向上为前进。
+- 焦点环只在键盘操作时出现；悬停时未选中的点略微放大。减弱动效下两者都停止。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`。
-- 截图：`.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`。
-- 建议：只在选项天然离散且数量稳定时使用；风险档位、套餐档位和质量门禁比连续数值更适合分段滑块。
-
-- Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
-- Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts` 验证横向进度与分段位置、按钮语义、active/completed 状态、垂直渲染、model/change 事件、禁用拦截、隐藏标签，以及 null model 时自动选择第一段。
+- 源码：`packages/tuffex/packages/components/src/segmented-slider/`。
 
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: 图标体系
-description: TxIcon 如何解析 name，以及应用如何教它加载自己的图标
+description: TxIcon 的图标解析顺序与加载配置
 category: Foundations
 status: beta
 since: 0.4.0
@@ -9,19 +9,18 @@ syncStatus: reviewed
 verified: false
 ---
 
-## 一个 prop，五种来源
+## 五种来源
 
-图标以 `name` 字符串的形式传进组件，由 `TxIcon` 判断这个字符串**是什么**，而不需要调用方声明。判断顺序固定，先命中先生效：
+`name` 只解析为 `class` 或 `builtin`，按表中顺序先命中先生效；`emoji`、`url`、`file` 只能经 `icon` 显式传入，`icon` 优先于 `name`。
 
-| `name` 形态 | 解析为 | 渲染方式 |
-|-------------|--------|----------|
-| `i-carbon-search` | `class` | 带该 class 的 `<i>`——Iconify / UnoCSS 预设图标 |
-| `chevron-down` | `builtin` | Tuffex 自带表里的内联 `<svg>` |
-| 其他 | `emoji` | 按文本直接输出 |
-| — | `url` | 拉取后绘制（见下） |
-| — | `file` | 同上，先套本地文件协议 |
-
-`url` 和 `file` 永远不会从裸字符串推断出来：它们通过 `icon` prop 显式传入来源。
+| 写法 | 类型 | 渲染 |
+|------|------|------|
+| `name="i-carbon-search"` | `class` | 带该 class 的 `<i>`：Iconify / UnoCSS 预设图标 |
+| `name="chevron-down"` | `builtin` | 内置表里的内联 `<svg>` |
+| `name` 为其他字符串 | `class` | 同第一行，字符串直接作 class 名 |
+| `:icon="{ type: 'emoji', value }"` | `emoji` | 按文本输出 |
+| `:icon="{ type: 'url', value }"` | `url` | 拉取后绘制 |
+| `:icon="{ type: 'file', value }"` | `file` | 先套本地文件协议，再拉取绘制 |
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -30,13 +29,11 @@ code: |
     <!-- class：构建里带的任意 Iconify 图标集 -->
     <TxIcon name="i-carbon-search" />
 
-    <!-- builtin：不需要任何图标集 -->
+    <!-- builtin：不需要图标集 -->
     <TxIcon name="chevron-down" />
 
-    <!-- emoji：兜底，也常常正是想要的效果 -->
-    <TxIcon name="🚀" />
-
     <!-- 显式来源 -->
+    <TxIcon :icon="{ type: 'emoji', value: '🚀' }" />
     <TxIcon :icon="{ type: 'url', value: '/icons/plugin.svg' }" />
     <TxIcon :icon="{ type: 'file', value: '/Users/me/icon.png', colorful: true }" />
   </template>
@@ -45,24 +42,25 @@ code: |
 
 ## 内置图标表
 
-组件内置了七个字形，让核心交互不依赖「装没装图标集」：`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`。
+`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`、`info`、`check-circle`、`x-circle`、`alert-triangle` 内置在组件中，未配置任何图标集时核心交互也能渲染。
 
-数量刻意保持很少。这张表的存在只是为了让折叠箭头、评分星星在一个完全没配置图标集的应用里也能渲染出来，它不是一个通用图标库。七个之外的图标应当来自 Iconify class 或显式来源。
-
-表里的条目要么画成实心剪影，要么画成开放描边路径。`chevron-down` 走描边：它是折叠、下拉、子菜单里 12–14px 的展开指示，实心楔形在那个尺寸下会在标签旁边糊成一团。
+- 内置表不是通用图标库；其他图标用 Iconify class 或显式来源。
+- 条目画成实心剪影或开放描边。`chevron-down` 用描边：它在 12–14px 下作展开指示，实心楔形会在标签旁糊成一团。
 
 ## 颜色、蒙版与 `colorful`
 
-可寻址图标（`url` / `file`）有两种渲染方式：
+适用于 `url` / `file` 来源。
 
-- **单色（默认）。** 单色 SVG 以 CSS mask 绘制，因此取 `currentColor`、继承周围文字颜色——切换主题时也跟随。
-- **`colorful: true`。** 文件以 `<img>` 渲染，保留自身颜色。Logo、应用图标用这种，重新着色反而是错的。
+| 模式 | 渲染 | 用于 |
+|------|------|------|
+| 单色（默认） | 单色 SVG 以 CSS mask 绘制，取 `currentColor`，随主题变色 | 界面图标 |
+| `colorful: true` | `<img>`，保留原色 | Logo、应用图标 |
 
-来源上的 `color` 可以覆盖单色渲染时的墨色。
+来源上的 `color` 覆盖单色墨色。
 
-## 让它加载你的图标
+## 加载应用图标
 
-应用的图标往往放在 `<img src>` 直接够不到的地方——自定义协议后面、需要鉴权的接口、或者某个传输层。与其在每个组件里特判，不如 provide 一次配置，其下所有 `TxIcon` 都会读到：
+图标在自定义协议、鉴权接口或传输层后面时，provide 一次配置，其下所有 `TxIcon` 生效：
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -80,20 +78,16 @@ code: |
 ---
 :::
 
-单个 `TxIcon` 也可以用自己的 `urlResolver` / `svgFetcher` prop 覆盖注入的配置——某一块界面的图标来自另一个源时很有用。
+单个 `TxIcon` 可用自己的 `urlResolver` / `svgFetcher` prop 覆盖注入的配置。
 
 ## 动效图标
 
-Iconify 图标集里都是静态字形。当某处界面需要一个**会动**的图标——hover、focus，或者由状态驱动——可以用 [AnimateIcons](https://animateicons.in/)：542 个 MIT 协议的动效图标，基于 Lucide 的几何形状。
+需要会动的图标时，可参考 [AnimateIcons](https://animateicons.in/)：542 个基于 Lucide 几何的 MIT 动效图标。
 
-它以 **React 组件**（`motion/react`）的形式分发，所以并不是一个能直接装进 Tuffex 或 Vue 应用的依赖。真正可用的是素材本身：SVG 几何路径和每条路径的动画时序都是公开的，移植成 Vue 组件、或者交给 Tuffex 已有的动效原语，都很直接。
-
-动手之前有两点要讲清楚：
-
-- **它不是 Iconify 图标集。** 没有 `i-animateicons-*` 这种 class。每个图标都是带自己结构的组件，走不通 `TxIcon` 的 `name` 解析——它是你写的一个组件，不是你传的一个字符串。
-- **先看静态方案。** 如果这个图标其实并不需要动，从构建里已经带的图标集（`carbon`、`ri`、`simple-icons`……）挑一个字形是更小的答案。
-
-复制了几何路径，就要一并带上署名与 MIT 声明。
+- 以 React 组件（`motion/react`）分发，不能直接作为 Tuffex 或 Vue 依赖；可移植的是 SVG 路径与逐路径动画时序。
+- 不是 Iconify 图标集：没有 `i-animateicons-*` class，移植结果是组件，不走 `name` 解析。
+- 图标不需要动时，优先用构建已带的图标集（`carbon`、`ri`、`simple-icons`……）。
+- 复制几何路径时一并保留署名与 MIT 声明。
 
 ## 技术实现
 
@@ -104,6 +98,6 @@ Iconify 图标集里都是静态字形。当某处界面需要一个**会动**�
 
 | 组件 | 用途 |
 |------|------|
-| 《[Icon 图标](./icon.zh.mdc)》 | 通用场景与完整 prop 列表 |
-| 《[IconChip 图标徽标](./icon-chip.zh.mdc)》 | 承载字形或短标签的小色块 |
-| Status icon | 成功 / 警告 / 错误状态的语义色字形 |
+| 《[Icon 图标](./icon.zh.mdc)》 | 通用场景与完整属性 |
+| 《[IconChip 图标徽标](./icon-chip.zh.mdc)》 | 承载字形或短标签的色块 |
+| Status icon | 状态语义色字形 |

@@ -1,6 +1,6 @@
 ---
 title: Theming
-description: The four layers you can override, from global tokens down to a single component
+description: Four override layers, from global tokens down to a single component.
 category: Foundations
 status: beta
 since: 0.4.0
@@ -9,14 +9,9 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Usage
-
-- Set tokens, not `background-color`, when a component already exposes a fill hook. Some fills are `background-image` gradients, and a `background-color` override paints behind them.
-- Import `base.css` exactly once. Two copies mean whichever loads last wins, which is rarely the one you edited.
-
 ## The model
 
-No Tuffex component hard-codes a colour. Every visual reads a CSS custom property, which means re-theming is a stylesheet change and never a fork. The properties come in four layers, widest first — pick the narrowest one that solves your problem.
+No component hard-codes a color; every visual reads a CSS custom property, so re-theming is a stylesheet change. The four layers run widest first. Pick the **narrowest** one that solves the problem.
 
 | Layer | Where it lives | Scope |
 |-------|----------------|-------|
@@ -25,11 +20,11 @@ No Tuffex component hard-codes a colour. Every visual reads a CSS custom propert
 | BUI tokens | `--tx-bui-*` | The AI suite |
 | Component hooks | `--tx-<component>-*` | One component, or one subtree |
 
-The token inventory itself — the typography scale and the full colour ramp — is documented in [Design Foundations](./foundations.en.mdc). This page is about overriding it.
+The token inventory is in [Design Foundations](./foundations.en.mdc).
 
 ## Global tokens
 
-Redefine any token after importing `base.css`. Because the components resolve them at paint time, an override anywhere up the tree wins for everything below it.
+Redefine tokens after importing `base.css`. Components resolve them at paint time, so an override applies to the whole subtree below it.
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -44,11 +39,11 @@ code: |
 ---
 :::
 
-Overriding `--tx-color-primary` is usually enough to rebrand: the derived tokens (`--tx-color-primary-soft`, `--tx-coloring-border-color`, `--tx-focus-ring-shadow`) are `color-mix()` expressions built on it, so they follow.
+`--tx-color-primary-soft` and `--tx-coloring-border-color` are `color-mix()` expressions on `--tx-color-primary`, so they follow it. The primary ramp (`--tx-color-primary-light-*`, `--tx-color-primary-dark-2`) is fixed hex, and the default focus ring reads from it; override the ramp too when rebranding.
 
 ## Dark mode
 
-Dark is a selector, not a media query — the app decides when it applies. Set **either** `data-theme="dark"` or the `dark` class on any ancestor:
+Dark is a selector, not a media query: set `data-theme="dark"` or the `dark` class on any ancestor.
 
 :::TuffCodeBlock{lang="html"}
 ---
@@ -59,23 +54,24 @@ code: |
 ---
 :::
 
-Both selectors are equivalent, which is what lets Tuffex drop into a Tailwind app (`.dark`) and a `data-theme` app without an adapter. Since they are ordinary selectors, scoping one to a subtree gives you a dark island on a light page.
+- The two are equivalent, so Tuffex drops into a Tailwind app (`.dark`) or a `data-theme` app without an adapter.
+- Set either on a subtree to get a dark island on a light page.
 
 ## High contrast
 
-Tuffex ships a fourth palette that raises text and border contrast in both light and dark. It turns on three ways:
+A fourth palette that raises text and border contrast in light and dark.
 
 | Trigger | Effect |
 |---------|--------|
-| `html[data-tx-contrast='high']` or `html.contrast` | High contrast, explicitly |
-| `@media (prefers-contrast: more)` | High contrast automatically |
+| `html[data-tx-contrast='high']` or `html.contrast` | On, explicitly |
+| `@media (prefers-contrast: more)` | On, following the OS |
 | `html[data-tx-contrast='normal']` | Opts **out** of the media query |
 
-The pairing matters: the OS preference is honoured by default, and `data-tx-contrast="normal"` is the escape hatch for an app that wants to override the system. Combining `data-theme="dark"` with either high-contrast trigger selects the dark high-contrast palette rather than layering two themes.
+With `data-theme="dark"` and either high-contrast trigger, the dark high-contrast palette applies; the two themes don't stack.
 
 ## AI suite tokens
 
-The AI suite carries its own `--tx-bui-*` layer — surface, inset, field, ink, and the accent/green/orange/red families with matching tints — ported alongside the Beautiful UI components so their density and hairline system stays intact. It has its own dark block under the same `[data-theme='dark']` / `.dark` selectors, so a dark toggle moves both layers together. Retheme it separately when the AI surfaces should not inherit your brand hue:
+`--tx-bui-*` came over with the Beautiful UI components (surface, inset, field, ink, and accent / green / orange / red with matching tints) and has its own dark block under the same `[data-theme='dark']` / `.dark` selectors. Override it when AI surfaces shouldn't inherit your brand hue:
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -89,9 +85,7 @@ code: |
 
 ## Component hooks
 
-Around three hundred `--tx-<component>-*` properties let one component be restyled without touching the global palette. They follow a predictable shape — `--tx-collapse-header-bg`, `--tx-avatar-ring-color`, `--tx-progress-height` — and each is declared with a fallback, so setting none of them is always valid.
-
-Because they are inherited custom properties, setting them on a wrapper themes that subtree only:
+`--tx-<component>-*` restyles one component without touching the global palette. Names are predictable (`--tx-collapse-header-bg`, `--tx-avatar-ring-color`, `--tx-progress-height`), and each has a fallback. They inherit, so setting them on a wrapper themes that subtree only.
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -114,10 +108,15 @@ code: |
 ---
 :::
 
-Each component page lists the hooks it reads. Prefer these over descendant selectors into component internals: the custom properties are the supported surface, the class names are not.
+Each component page lists the hooks it reads. Use them instead of descendant selectors into component internals: custom properties are the supported surface, class names are not.
+
+## Caveats
+
+- When a component exposes a fill hook, set the token, not `background-color`: some fills are `background-image` gradients, and `background-color` paints behind them.
+- Import `base.css` exactly once. With two copies, the one that loads last wins, which is rarely the one you edited.
 
 ## Technologies
 
-- Token and theme selectors: `packages/tuffex/packages/components/style/variables.scss`.
+- Tokens and theme selectors: `packages/tuffex/packages/components/style/variables.scss`.
 - AI suite tokens: `packages/tuffex/packages/components/style/bui-tokens.scss`.
 - Runtime entry: `@talex-touch/tuffex/base.css`.

@@ -1,6 +1,6 @@
 ---
 title: 组件变更历程
-description: TuffEx 组件库版本发布历程、各版本组件变动明细与全量组件引入版本 (Since) 索引
+description: TuffEx 版本历程与各组件的引入版本
 category: Foundations
 status: beta
 since: 0.3.4
@@ -9,329 +9,325 @@ syncStatus: reviewed
 verified: false
 ---
 
-# 组件变更历程
-
-当前源码的全部 181 个导出组件模块均有明确的 Since 版本。现有 charts 聚合模块还导出 MonoChart 和 DitherChart，它们属于该模块内的图表组件，不额外计作两个根模块。每次版本变更由 `audit:changelog` 校验模块清单、变更详情和引入版本。
-
 ## 版本概览
 
-当前源码版本为 **v0.6.3**，随 Tuff beta 测试，尚未独立发布 npm；最新 npm 发布版本仍为 **v0.6.2**。当前源码导出 **181** 个组件模块。
-
-- **基础套件 (Base)**: 94 个日常通用、表单、布局与导航组件
-- **进阶套件（Pro）**：53 个高级交互、视觉效果、动效和底层原语模块
-- **AI 套件 (Ai)**: 34 个 AI 聊天、智能体、推理与上下文组件
-- **门禁保护**: 新版本发布若未包含版本章节、未声明变动组件或组件 Since 版本缺失，CI 与发布流程将自动拦截阻断
+| 项目 | 值 |
+|------|----|
+| 源码版本 | **0.6.3**，随 Tuff beta 测试，未独立发布 npm |
+| npm 最新版本 | **0.6.2** |
+| 组件模块 | **182**：基础 94 · 进阶 54 · AI 34 |
 
 ## 版本更新历程
 
 ### Unreleased 未发布
 
-源码版本保持 0.6.3，下列新增能力不代表独立 npm 发版。
+源码版本保持 0.6.3，以下内容不是独立 npm 发版。
 
-- **Motion 文档套件**：八套件导航新增[动效套件](./motion-suite.zh.mdc)，包含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册。
-- **新增组件模块（14 个）**：[motion-button](./motion-button.zh.mdc)、[card-spread](./card-spread.zh.mdc)、[carousel-3d](./carousel-3d.zh.mdc)、[flip-book](./flip-book.zh.mdc)、[motion-loader](./motion-loader.zh.mdc)、[motion-text](./motion-text.zh.mdc)、[physics-motion](./physics-motion.zh.mdc)、[motion-dock](./motion-dock.zh.mdc)、[motion](./motion.zh.mdc)、[motion-toggle](./motion-toggle.zh.mdc)、[motion-transition](./motion-transition.zh.mdc)、[motion-form](./motion-form.zh.mdc)、[motion-control](./motion-control.zh.mdc)、[motion-metric](./motion-metric.zh.mdc)。
-- **现有 charts 模块新增**：Motion 中的 [dither-chart](./dither-chart.zh.mdc) 和 Data 中的 [mono-chart](./mono-chart.zh.mdc)，均从 `@talex-touch/tuffex/charts` 导出。
-- **安装边界**：保持 Base、Pro 和 AI 三套安装 barrel。Motion 只新增文档套件；合法的 `/motion` 单组件子路径引入 `TxMotion`，不是第四套安装 barrel。复合表单、控件和指标归 Pro，现有文档入口全部保留。
-- **来源行为**：标签、内容、条目、模型和数据由调用方驱动，保留原始命名展示与交互。持续动效共享可见性、减少动态效果和清理处理；spring 和文字值变化复用现有 TuffEx 引擎。改编保留 Amicro 的 MIT 署名和源文件级 Apache-2.0 声明。保留的 46 个 Lucide 图标另保留 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖。
+- **Motion 文档套件**：导航新增[动效套件](./motion-suite.zh.mdc)，含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册
+- **新增组件模块（14 个）**：[motion-button](./motion-button.zh.mdc)、[card-spread](./card-spread.zh.mdc)、[carousel-3d](./carousel-3d.zh.mdc)、[flip-book](./flip-book.zh.mdc)、[motion-loader](./motion-loader.zh.mdc)、[motion-text](./motion-text.zh.mdc)、[physics-motion](./physics-motion.zh.mdc)、[motion-dock](./motion-dock.zh.mdc)、[motion](./motion.zh.mdc)、[motion-toggle](./motion-toggle.zh.mdc)、[motion-transition](./motion-transition.zh.mdc)、[motion-form](./motion-form.zh.mdc)、[motion-control](./motion-control.zh.mdc)、[motion-metric](./motion-metric.zh.mdc)
+- **现有 charts 模块新增**：Motion 中的 [dither-chart](./dither-chart.zh.mdc) 与 Data 中的 [mono-chart](./mono-chart.zh.mdc)，均从 `@talex-touch/tuffex/charts` 导出
+- **安装边界**：仍为 Base、Pro、AI 三套 barrel；Motion 只是文档套件，`/motion` 单组件子路径引入 `TxMotion`，不是第四套 barrel；复合表单、控件和指标归 Pro
+- **来源与授权**：标签、内容、条目、模型和数据由调用方驱动；持续动效共享可见性、减少动态效果与清理处理，spring 与文字变化复用现有引擎。保留 Amicro 的 MIT 署名与源文件级 Apache-2.0 声明；保留的 46 个 Lucide 图标附 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖
 
 ### 0.6.3 源码版本（2026-10-01）
 
-流式内容组件与菜单确认反馈。当前随客户端 beta 测试，尚未独立发布 npm。
+流式内容组件与菜单确认反馈；随客户端 beta 测试，未独立发布 npm。
 
-- **新增组件（3 个）**：[descriptions](./descriptions.zh.mdc)、[stream-element](./stream-element.zh.mdc)、[stream-text](./stream-text.zh.mdc)。
-- **更新组件（6 个）**：[code-stream](./code-stream.zh.mdc)、[context-menu](./context-menu.zh.mdc)、[data-table](./data-table.zh.mdc)、[dropdown-menu](./dropdown-menu.zh.mdc)、[pagination](./pagination.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)。
-- **关键特性**：共享节奏的文字、代码与回答展示，引用和插槽支持，以及关闭型菜单项的确认反馈；用于记录详情的标签/值列表、数据表格的骨架加载态，以及分页的每页条数选择。
+- **新增组件（3 个）**：[descriptions](./descriptions.zh.mdc)、[stream-element](./stream-element.zh.mdc)、[stream-text](./stream-text.zh.mdc)
+- **更新组件（6 个）**：[code-stream](./code-stream.zh.mdc)、[context-menu](./context-menu.zh.mdc)、[data-table](./data-table.zh.mdc)、[dropdown-menu](./dropdown-menu.zh.mdc)、[pagination](./pagination.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)
+- **关键特性**：文字、代码与回答共享流式节奏，支持引用与插槽；关闭型菜单项的确认反馈；记录详情的标签/值列表；数据表格骨架加载；分页每页条数选择
 
-### 0.6.2 版本 (2026-09-28)
+### 0.6.2 版本（2026-09-28）
 
-交互视觉特效套件与后台数据容器增强。
+交互视觉特效与后台数据容器增强。
 
-- **新增组件 (4 个)**: [bot-avatar](./bot-avatar.zh.mdc), [image-generation](./image-generation.zh.mdc), [metal-fx](./metal-fx.zh.mdc), [voice-beam](./voice-beam.zh.mdc)
-- **更新组件 (4 个)**: [card](./card.zh.mdc), [empty-state](./empty-state.zh.mdc), [progress-bar](./progress-bar.zh.mdc), [status-badge](./status-badge.zh.mdc)
-- **关键特性**:
-  - 提供智能体头像、图像生成揭示、液态金属与语音响应光束；
-  - TxProgressBar 支持多段聚合，后台卡片与空状态容器完成统一。
+- **新增组件（4 个）**：[bot-avatar](./bot-avatar.zh.mdc)、[image-generation](./image-generation.zh.mdc)、[metal-fx](./metal-fx.zh.mdc)、[voice-beam](./voice-beam.zh.mdc)
+- **更新组件（4 个）**：[card](./card.zh.mdc)、[empty-state](./empty-state.zh.mdc)、[progress-bar](./progress-bar.zh.mdc)、[status-badge](./status-badge.zh.mdc)
+- **关键特性**：
+  - 智能体头像、图像生成揭示、液态金属与语音响应光束
+  - TxProgressBar 支持多段聚合；后台卡片与空状态容器统一
 
-### 0.6.1 版本 (2026-09-28)
+### 0.6.1 版本（2026-09-28）
 
-操作结果反馈组件发布，为复制、固定、失败等短时状态提供统一的可访问提示。
+为复制、固定、失败等短时操作结果提供统一的无障碍提示。
 
-- **新增组件 (1 个)**: [status-hint](./status-hint.zh.mdc)
-- **关键特性**:
-  - TxStatusHint 支持语气色带、字符级文字形变与重复触发强调；
-  - 支持深浅色、减少动态效果偏好与单一无障碍 live region。
+- **新增组件（1 个）**：[status-hint](./status-hint.zh.mdc)
+- **关键特性**：
+  - TxStatusHint 支持语气色带、字符级文字形变与重复触发强调
+  - 支持深浅色、减少动态效果与单一无障碍 live region
 
-### 0.6.0 版本 (2026-09-12)
+### 0.6.0 版本（2026-09-12）
 
-触感系统重构与视觉特效套件发布，重构通知栈并补齐多个交互控件能力。
+触感系统重构、视觉特效套件与通知栈重写。
 
-- **新增组件 (12 个)**: [agent-screen](./agent-screen.zh.mdc), [charts](./charts.zh.mdc), [choice-card](./choice-card.zh.mdc), [flowchart](./flowchart.zh.mdc), [fusion-surface](./fusion-surface.zh.mdc), [icon-morph](./icon-morph.zh.mdc), [icon-picker](./icon-picker.zh.mdc), [mode-chip](./mode-chip.zh.mdc), [prism-glow](./prism-glow.zh.mdc), [sensitive-input](./sensitive-input.zh.mdc), [text-morph](./text-morph.zh.mdc), [toast-panel](./toast-panel.zh.mdc)
-- **更新组件 (17 个)**: [alert](./alert.zh.mdc), [badge](./badge.zh.mdc), [cascader](./cascader.zh.mdc), [date-picker](./date-picker.zh.mdc), [flat-radio](./flat-radio.zh.mdc), [group-block](./group-block.zh.mdc), [picker](./picker.zh.mdc), [progress-bar](./progress-bar.zh.mdc), [slider](./slider.zh.mdc), [sortable-list](./sortable-list.zh.mdc), [stream-markdown](./stream-markdown.zh.mdc), [tab-bar](./tab-bar.zh.mdc), [text-transformer](./text-transformer.zh.mdc), [toast](./toast.zh.mdc), [toast-panel](./toast-panel.zh.mdc), [transfer](./transfer.zh.mdc), [tree](./tree.zh.mdc)
-- **关键特性**:
-  - 新增 TxTextMorph 字符形变过渡，移除第三方数字流依赖；
-  - TxToastHost 重构为可堆叠通知栈，支持拖拽滑落与倒计时暂停；
-  - TxSortableList 支持握柄与键盘排序，增强实时重排反馈；
-  - TxDatePicker 与 TxCascader 支持区间选择与多级浮层；
-  - 新增 TxPrismGlow 棱镜光效。
+- **新增组件（12 个）**：[agent-screen](./agent-screen.zh.mdc)、[charts](./charts.zh.mdc)、[choice-card](./choice-card.zh.mdc)、[flowchart](./flowchart.zh.mdc)、[fusion-surface](./fusion-surface.zh.mdc)、[icon-morph](./icon-morph.zh.mdc)、[icon-picker](./icon-picker.zh.mdc)、[mode-chip](./mode-chip.zh.mdc)、[prism-glow](./prism-glow.zh.mdc)、[sensitive-input](./sensitive-input.zh.mdc)、[text-morph](./text-morph.zh.mdc)、[toast-panel](./toast-panel.zh.mdc)
+- **更新组件（17 个）**：[alert](./alert.zh.mdc)、[badge](./badge.zh.mdc)、[cascader](./cascader.zh.mdc)、[date-picker](./date-picker.zh.mdc)、[flat-radio](./flat-radio.zh.mdc)、[group-block](./group-block.zh.mdc)、[picker](./picker.zh.mdc)、[progress-bar](./progress-bar.zh.mdc)、[slider](./slider.zh.mdc)、[sortable-list](./sortable-list.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)、[tab-bar](./tab-bar.zh.mdc)、[text-transformer](./text-transformer.zh.mdc)、[toast](./toast.zh.mdc)、[toast-panel](./toast-panel.zh.mdc)、[transfer](./transfer.zh.mdc)、[tree](./tree.zh.mdc)
+- **关键特性**：
+  - TxTextMorph 字符形变过渡，移除第三方数字流依赖
+  - TxToastHost 重构为可堆叠通知栈，支持拖拽滑落与倒计时暂停
+  - TxSortableList 支持握柄与键盘排序，实时重排反馈
+  - TxDatePicker 与 TxCascader 支持区间选择与多级浮层
+  - 新增 TxPrismGlow 棱镜光效
 
-### 0.5.0 版本 (2026-09-07)
+### 0.5.0 版本（2026-09-07）
 
 交互反馈打磨与性能优化。
 
-- **更新组件 (5 个)**: [card-item](./card-item.zh.mdc), [dropdown-menu](./dropdown-menu.zh.mdc), [filter-chips](./filter-chips.zh.mdc), [slider](./slider.zh.mdc), [stream-markdown](./stream-markdown.zh.mdc)
-- **关键特性**:
-  - TxFilterChips 增加滑动填充与 icon-only 模式；
-  - 浮层面板改用 transform 定位，优化尺寸测量；
-  - 全面规范交互光标样式与 PostCSS 产物构建。
+- **更新组件（5 个）**：[card-item](./card-item.zh.mdc)、[dropdown-menu](./dropdown-menu.zh.mdc)、[filter-chips](./filter-chips.zh.mdc)、[slider](./slider.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)
+- **关键特性**：
+  - TxFilterChips 增加滑动填充与 icon-only 模式
+  - 浮层面板改用 transform 定位，优化尺寸测量
+  - 统一交互光标样式与 PostCSS 产物构建
 
-### 0.4.0 版本 (2026-09-01)
+### 0.4.0 版本（2026-09-01）
 
-组件族架构收拢与文档站迁移。
+组件族收拢与文档站迁移。
 
-- **更新组件 (2 个)**: [button](./button.zh.mdc), [icon](./icon.zh.mdc)
-- **关键特性**:
-  - 收拢 TxButton 与 TxIcon 组件族，移除冗余子路径；
-  - 移除弃用组件 TuffFlatButton，统一使用 TxButton variant="flat"；
-  - 运行时 Demo 与公开文档全面迁移至 Nexus 承载。
+- **更新组件（2 个）**：[button](./button.zh.mdc)、[icon](./icon.zh.mdc)
+- **关键特性**：
+  - 收拢 TxButton 与 TxIcon 组件族，移除冗余子路径
+  - 移除弃用的 TuffFlatButton，改用 TxButton variant="flat"
+  - 运行时 Demo 与公开文档迁移至 Nexus
 
-### 0.3.9 版本 (2026-06-12)
+### 0.3.9 版本（2026-06-12）
 
-AI 原生套件与按需子路径样式支持。
+AI 原生套件与按需子路径样式。
 
-- **新增组件 (43 个)**: [agent-trace](./agent-trace.zh.mdc), [ai-elements](./ai-elements.zh.mdc), [allocation-bar](./allocation-bar.zh.mdc), [approval-card](./approval-card.zh.mdc), [attachment-tray](./attachment-tray.zh.mdc), [border-beam](./border-beam.zh.mdc), [cell-link](./cell-link.zh.mdc), [chain-of-thought](./chain-of-thought.zh.mdc), [code-stream](./code-stream.zh.mdc), [context-cards](./context-cards.zh.mdc), [context-indicator](./context-indicator.zh.mdc), [conversation-stream](./conversation-stream.zh.mdc), [diff-table](./diff-table.zh.mdc), [dot-indicator](./dot-indicator.zh.mdc), [filter-chips](./filter-chips.zh.mdc), [fine-tune-card](./fine-tune-card.zh.mdc), [flat-dropdown](./flat-dropdown.zh.mdc), [icon-chip](./icon-chip.zh.mdc), [inline-citation](./inline-citation.zh.mdc), [insight-cards](./insight-cards.zh.mdc), [liquid](./liquid.zh.mdc), [markdown-editor](./markdown-editor.zh.mdc), [message-actions](./message-actions.zh.mdc), [prompt-bar](./prompt-bar.zh.mdc), [reasoning-disclosure](./reasoning-disclosure.zh.mdc), [recommendation-card](./recommendation-card.zh.mdc), [resize-box](./resize-box.zh.mdc), [scrub-field](./scrub-field.zh.mdc), [search-panel](./search-panel.zh.mdc), [selection-actions](./selection-actions.zh.mdc), [sidebar-nav](./sidebar-nav.zh.mdc), [signal-meter](./signal-meter.zh.mdc), [sources](./sources.zh.mdc), [spark-chart](./spark-chart.zh.mdc), [stream-markdown](./stream-markdown.zh.mdc), [suggestion-chips](./suggestion-chips.zh.mdc), [task-rows](./task-rows.zh.mdc), [thinking-orb](./thinking-orb.zh.mdc), [tool-call-card](./tool-call-card.zh.mdc), [tool-chips](./tool-chips.zh.mdc), [tool-confirmation](./tool-confirmation.zh.mdc), [version-capsule](./version-capsule.zh.mdc), [working-indicator](./working-indicator.zh.mdc)
-- **更新组件 (8 个)**: [base-anchor](./base-anchor.zh.mdc), [base-surface](./base-surface.zh.mdc), [code-editor](./code-editor.zh.mdc), [empty-state](./empty-state.zh.mdc), [flip-overlay](./flip-overlay.zh.mdc), [radio](./radio.zh.mdc), [scroll](./scroll.zh.mdc), [tabs](./tabs.zh.mdc)
-- **关键特性**:
-  - 批量上线 AI 聊天、智能体屏幕、推理展示等 43 个现代化界面组件；
-  - 提供 @talex-touch/tuffex/<component> 子路径按需导出；
-  - 导出 base.css 基础样式，支持独立加载全局 Token。
+- **新增组件（43 个）**：[agent-trace](./agent-trace.zh.mdc)、[ai-elements](./ai-elements.zh.mdc)、[allocation-bar](./allocation-bar.zh.mdc)、[approval-card](./approval-card.zh.mdc)、[attachment-tray](./attachment-tray.zh.mdc)、[border-beam](./border-beam.zh.mdc)、[cell-link](./cell-link.zh.mdc)、[chain-of-thought](./chain-of-thought.zh.mdc)、[code-stream](./code-stream.zh.mdc)、[context-cards](./context-cards.zh.mdc)、[context-indicator](./context-indicator.zh.mdc)、[conversation-stream](./conversation-stream.zh.mdc)、[diff-table](./diff-table.zh.mdc)、[dot-indicator](./dot-indicator.zh.mdc)、[filter-chips](./filter-chips.zh.mdc)、[fine-tune-card](./fine-tune-card.zh.mdc)、[flat-dropdown](./flat-dropdown.zh.mdc)、[icon-chip](./icon-chip.zh.mdc)、[inline-citation](./inline-citation.zh.mdc)、[insight-cards](./insight-cards.zh.mdc)、[liquid](./liquid.zh.mdc)、[markdown-editor](./markdown-editor.zh.mdc)、[message-actions](./message-actions.zh.mdc)、[prompt-bar](./prompt-bar.zh.mdc)、[reasoning-disclosure](./reasoning-disclosure.zh.mdc)、[recommendation-card](./recommendation-card.zh.mdc)、[resize-box](./resize-box.zh.mdc)、[scrub-field](./scrub-field.zh.mdc)、[search-panel](./search-panel.zh.mdc)、[selection-actions](./selection-actions.zh.mdc)、[sidebar-nav](./sidebar-nav.zh.mdc)、[signal-meter](./signal-meter.zh.mdc)、[sources](./sources.zh.mdc)、[spark-chart](./spark-chart.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)、[suggestion-chips](./suggestion-chips.zh.mdc)、[task-rows](./task-rows.zh.mdc)、[thinking-orb](./thinking-orb.zh.mdc)、[tool-call-card](./tool-call-card.zh.mdc)、[tool-chips](./tool-chips.zh.mdc)、[tool-confirmation](./tool-confirmation.zh.mdc)、[version-capsule](./version-capsule.zh.mdc)、[working-indicator](./working-indicator.zh.mdc)
+- **更新组件（8 个）**：[base-anchor](./base-anchor.zh.mdc)、[base-surface](./base-surface.zh.mdc)、[code-editor](./code-editor.zh.mdc)、[empty-state](./empty-state.zh.mdc)、[flip-overlay](./flip-overlay.zh.mdc)、[radio](./radio.zh.mdc)、[scroll](./scroll.zh.mdc)、[tabs](./tabs.zh.mdc)
+- **关键特性**：
+  - 上线 AI 聊天、智能体屏幕、推理展示等 43 个组件
+  - 提供 `@talex-touch/tuffex/<component>` 子路径按需导出
+  - 导出 `base.css`，可独立加载全局 token
 
-### 0.3.8 版本 (2026-05-29)
+### 0.3.8 版本（2026-05-29）
 
-抽屉与分割线组件增强。
+抽屉与分割线增强。
 
-- **更新组件 (2 个)**: [divider](./divider.zh.mdc), [drawer](./drawer.zh.mdc)
-- **关键特性**:
-  - TxDrawer 支持四方向滑出与全屏模态；
-  - TxDivider 增加渐变透明分割模式。
+- **更新组件（2 个）**：[divider](./divider.zh.mdc)、[drawer](./drawer.zh.mdc)
+- **关键特性**：
+  - TxDrawer 支持四方向滑出与全屏模态
+  - TxDivider 增加渐变透明分割模式
 
-### 0.3.7 版本 (2026-05-28)
+### 0.3.7 版本（2026-05-28）
 
 基础录入与排版组件补齐。
 
-- **新增组件 (4 个)**: [divider](./divider.zh.mdc), [kbd](./kbd.zh.mdc), [number-input](./number-input.zh.mdc), [textarea](./textarea.zh.mdc)
-- **更新组件 (16 个)**: [avatar](./avatar.zh.mdc), [chat](./chat.zh.mdc), `flat-input`, [flat-radio](./flat-radio.zh.mdc), [flat-select](./flat-select.zh.mdc), [flip-overlay](./flip-overlay.zh.mdc), [glass-surface](./glass-surface.zh.mdc), [group-block](./group-block.zh.mdc), [icon](./icon.zh.mdc), [input](./input.zh.mdc), [scroll](./scroll.zh.mdc), [slider](./slider.zh.mdc), [stagger](./stagger.zh.mdc), [stat-card](./stat-card.zh.mdc), [tabs](./tabs.zh.mdc), [transfer](./transfer.zh.mdc)
-- **关键特性**:
-  - 补齐 TxTextarea、TxNumberInput、TxDivider、TxKbd 等基础录入组件；
-  - 修复 SSR hydration 场景下的客户端结构同步问题。
+- **新增组件（4 个）**：[divider](./divider.zh.mdc)、[kbd](./kbd.zh.mdc)、[number-input](./number-input.zh.mdc)、[textarea](./textarea.zh.mdc)
+- **更新组件（16 个）**：[avatar](./avatar.zh.mdc)、[chat](./chat.zh.mdc)、`flat-input`、[flat-radio](./flat-radio.zh.mdc)、[flat-select](./flat-select.zh.mdc)、[flip-overlay](./flip-overlay.zh.mdc)、[glass-surface](./glass-surface.zh.mdc)、[group-block](./group-block.zh.mdc)、[icon](./icon.zh.mdc)、[input](./input.zh.mdc)、[scroll](./scroll.zh.mdc)、[slider](./slider.zh.mdc)、[stagger](./stagger.zh.mdc)、[stat-card](./stat-card.zh.mdc)、[tabs](./tabs.zh.mdc)、[transfer](./transfer.zh.mdc)
+- **关键特性**：
+  - 补齐 TxTextarea、TxNumberInput、TxDivider、TxKbd 等基础录入组件
+  - 修复 SSR hydration 场景下的客户端结构同步
 
-### 0.3.4 版本 (2026-03-08)
+### 0.3.4 版本（2026-03-08）
 
-TuffEx 独立包初始基线建立。
+TuffEx 独立包初始基线。
 
-- **初始组件 (101 个)**: 建立首批 101 个核心导出组件基线，覆盖通用基础、表单、布局与导航。
+- **初始组件（101 个）**：首批 101 个核心导出组件，覆盖通用基础、表单、布局与导航
 
 ## 全组件引入版本索引
 
-下表列出当前源码全部 181 个组件模块的引入版本与安装 barrel。文档套件分类见[组件中心页](./index.zh.mdc)；0.6.3 为源码版本，尚未独立发布 npm。
+全部 182 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](./index.zh.mdc)。
 
-| 组件（Slug）| 安装 barrel | 引入版本（Since）| 文档入口 |
-|---|---|---|---|
-| `agent-screen` | ai | **0.6.0** | [查看文档](./agent-screen.zh.mdc) |
-| `agent-trace` | ai | **0.3.9** | [查看文档](./agent-trace.zh.mdc) |
-| `agents` | ai | **0.3.4** | [查看文档](./agents.zh.mdc) |
-| `ai-elements` | ai | **0.3.9** | [查看文档](./ai-elements.zh.mdc) |
-| `alert` | base | **0.3.4** | [查看文档](./alert.zh.mdc) |
-| `allocation-bar` | pro | **0.3.9** | [查看文档](./allocation-bar.zh.mdc) |
-| `approval-card` | ai | **0.3.9** | [查看文档](./approval-card.zh.mdc) |
-| `attachment-tray` | ai | **0.3.9** | [查看文档](./attachment-tray.zh.mdc) |
-| `auto-sizer` | pro | **0.3.4** | [查看文档](./auto-sizer.zh.mdc) |
-| `avatar` | base | **0.3.4** | [查看文档](./avatar.zh.mdc) |
-| `badge` | base | **0.3.4** | [查看文档](./badge.zh.mdc) |
-| `base-anchor` | pro | **0.3.4** | [查看文档](./base-anchor.zh.mdc) |
-| `base-surface` | pro | **0.3.4** | [查看文档](./base-surface.zh.mdc) |
-| `blank-slate` | base | **0.3.4** | [查看文档](./blank-slate.zh.mdc) |
-| `border-beam` | pro | **0.3.9** | [查看文档](./border-beam.zh.mdc) |
-| `bot-avatar` | ai | **0.6.2** | [查看文档](./bot-avatar.zh.mdc) |
-| `breadcrumb` | base | **0.3.4** | [查看文档](./breadcrumb.zh.mdc) |
-| `button` | base | **0.3.4** | [查看文档](./button.zh.mdc) |
-| `card` | base | **0.3.4** | [查看文档](./card.zh.mdc) |
-| `card-item` | base | **0.3.4** | [查看文档](./card-item.zh.mdc) |
-| `card-spread` | pro | **0.6.3** | [查看文档](./card-spread.zh.mdc) |
-| `carousel-3d` | pro | **0.6.3** | [查看文档](./carousel-3d.zh.mdc) |
-| `cascader` | base | **0.3.4** | [查看文档](./cascader.zh.mdc) |
-| `cell-link` | base | **0.3.9** | [查看文档](./cell-link.zh.mdc) |
-| `chain-of-thought` | ai | **0.3.9** | [查看文档](./chain-of-thought.zh.mdc) |
-| `charts` | pro | **0.6.0** | [查看文档](./charts.zh.mdc) |
-| `chat` | ai | **0.3.4** | [查看文档](./chat.zh.mdc) |
-| `checkbox` | base | **0.3.4** | [查看文档](./checkbox.zh.mdc) |
-| `choice-card` | ai | **0.6.0** | [查看文档](./choice-card.zh.mdc) |
-| `code-editor` | pro | **0.3.4** | [查看文档](./code-editor.zh.mdc) |
-| `code-stream` | ai | **0.3.9** | [查看文档](./code-stream.zh.mdc) |
-| `collapse` | base | **0.3.4** | [查看文档](./collapse.zh.mdc) |
-| `command-palette` | pro | **0.3.4** | [查看文档](./command-palette.zh.mdc) |
-| `container` | base | **0.3.4** | [查看文档](./container.zh.mdc) |
-| `context-cards` | ai | **0.3.9** | [查看文档](./context-cards.zh.mdc) |
-| `context-indicator` | ai | **0.3.9** | [查看文档](./context-indicator.zh.mdc) |
-| `context-menu` | base | **0.3.4** | [查看文档](./context-menu.zh.mdc) |
-| `conversation-stream` | ai | **0.3.9** | [查看文档](./conversation-stream.zh.mdc) |
-| `corner-overlay` | pro | **0.3.4** | [查看文档](./corner-overlay.zh.mdc) |
-| `data-table` | base | **0.3.4** | [查看文档](./data-table.zh.mdc) |
-| `date-picker` | base | **0.3.4** | [查看文档](./date-picker.zh.mdc) |
-| `descriptions` | base | **0.6.3** | [查看文档](./descriptions.zh.mdc) |
-| `dialog` | base | **0.3.4** | [查看文档](./dialog.zh.mdc) |
-| `diff-table` | pro | **0.3.9** | [查看文档](./diff-table.zh.mdc) |
-| `divider` | base | **0.3.7** | [查看文档](./divider.zh.mdc) |
-| `dot-indicator` | base | **0.3.9** | [查看文档](./dot-indicator.zh.mdc) |
-| `drawer` | base | **0.3.4** | [查看文档](./drawer.zh.mdc) |
-| `dropdown-menu` | base | **0.3.4** | [查看文档](./dropdown-menu.zh.mdc) |
-| `edge-fade-mask` | pro | **0.3.4** | [查看文档](./edge-fade-mask.zh.mdc) |
-| `empty` | base | **0.3.4** | [查看文档](./empty.zh.mdc) |
-| `empty-state` | base | **0.3.4** | [查看文档](./empty-state.zh.mdc) |
-| `error-state` | base | **0.3.4** | [查看文档](./error-state.zh.mdc) |
-| `file-uploader` | base | **0.3.4** | [查看文档](./file-uploader.zh.mdc) |
-| `filter-chips` | base | **0.3.9** | [查看文档](./filter-chips.zh.mdc) |
-| `fine-tune-card` | ai | **0.3.9** | [查看文档](./fine-tune-card.zh.mdc) |
-| `flat-dropdown` | base | **0.3.9** | [查看文档](./flat-dropdown.zh.mdc) |
-| `flat-radio` | base | **0.3.4** | [查看文档](./flat-radio.zh.mdc) |
-| `flat-select` | base | **0.3.4** | [查看文档](./flat-select.zh.mdc) |
-| `flex` | base | **0.3.4** | [查看文档](./flex.zh.mdc) |
-| `flip-book` | pro | **0.6.3** | [查看文档](./flip-book.zh.mdc) |
-| `flip-overlay` | pro | **0.3.4** | [查看文档](./flip-overlay.zh.mdc) |
-| `floating` | pro | **0.3.4** | [查看文档](./floating.zh.mdc) |
-| `flowchart` | ai | **0.6.0** | [查看文档](./flowchart.zh.mdc) |
-| `form` | base | **0.3.4** | [查看文档](./form.zh.mdc) |
-| `fusion` | pro | **0.3.4** | [查看文档](./fusion.zh.mdc) |
-| `fusion-surface` | pro | **0.6.0** | [查看文档](./fusion-surface.zh.mdc) |
-| `glass-surface` | pro | **0.3.4** | [查看文档](./glass-surface.zh.mdc) |
-| `glow-text` | pro | **0.3.4** | [查看文档](./glow-text.zh.mdc) |
-| `gradient-border` | pro | **0.3.4** | [查看文档](./gradient-border.zh.mdc) |
-| `gradual-blur` | pro | **0.3.4** | [查看文档](./gradual-blur.zh.mdc) |
-| `grid` | base | **0.3.4** | [查看文档](./grid.zh.mdc) |
-| `grid-layout` | base | **0.3.4** | [查看文档](./grid-layout.zh.mdc) |
-| `group-block` | base | **0.3.4** | [查看文档](./group-block.zh.mdc) |
-| `guide-state` | base | **0.3.4** | [查看文档](./guide-state.zh.mdc) |
-| `icon` | base | **0.3.4** | [查看文档](./icon.zh.mdc) |
-| `icon-chip` | base | **0.3.9** | [查看文档](./icon-chip.zh.mdc) |
-| `icon-morph` | pro | **0.6.0** | [查看文档](./icon-morph.zh.mdc) |
-| `icon-picker` | base | **0.6.0** | [查看文档](./icon-picker.zh.mdc) |
-| `image-gallery` | base | **0.3.4** | [查看文档](./image-gallery.zh.mdc) |
-| `image-generation` | pro | **0.6.2** | [查看文档](./image-generation.zh.mdc) |
-| `image-uploader` | base | **0.3.4** | [查看文档](./image-uploader.zh.mdc) |
-| `inline-citation` | ai | **0.3.9** | [查看文档](./inline-citation.zh.mdc) |
-| `input` | base | **0.3.4** | [查看文档](./input.zh.mdc) |
-| `insight-cards` | ai | **0.3.9** | [查看文档](./insight-cards.zh.mdc) |
-| `kbd` | base | **0.3.7** | [查看文档](./kbd.zh.mdc) |
-| `keyframe-stroke-text` | pro | **0.3.4** | [查看文档](./keyframe-stroke-text.zh.mdc) |
-| `layout-skeleton` | base | **0.3.4** | [查看文档](./layout-skeleton.zh.mdc) |
-| `liquid` | pro | **0.3.9** | [查看文档](./liquid.zh.mdc) |
-| `loading-overlay` | base | **0.3.4** | [查看文档](./loading-overlay.zh.mdc) |
-| `loading-state` | base | **0.3.4** | [查看文档](./loading-state.zh.mdc) |
-| `markdown-editor` | pro | **0.3.9** | [查看文档](./markdown-editor.zh.mdc) |
-| `markdown-view` | base | **0.3.4** | [查看文档](./markdown-view.zh.mdc) |
-| `message-actions` | ai | **0.3.9** | [查看文档](./message-actions.zh.mdc) |
-| `metal-fx` | pro | **0.6.2** | [查看文档](./metal-fx.zh.mdc) |
-| `modal` | base | **0.3.4** | [查看文档](./modal.zh.mdc) |
-| `mode-chip` | ai | **0.6.0** | [查看文档](./mode-chip.zh.mdc) |
-| `motion` | pro | **0.6.3** | [查看文档](./motion.zh.mdc) |
-| `motion-button` | pro | **0.6.3** | [查看文档](./motion-button.zh.mdc) |
-| `motion-control` | pro | **0.6.3** | [查看文档](./motion-control.zh.mdc) |
-| `motion-dock` | pro | **0.6.3** | [查看文档](./motion-dock.zh.mdc) |
-| `motion-form` | pro | **0.6.3** | [查看文档](./motion-form.zh.mdc) |
-| `motion-loader` | pro | **0.6.3** | [查看文档](./motion-loader.zh.mdc) |
-| `motion-metric` | pro | **0.6.3** | [查看文档](./motion-metric.zh.mdc) |
-| `motion-text` | pro | **0.6.3** | [查看文档](./motion-text.zh.mdc) |
-| `motion-toggle` | pro | **0.6.3** | [查看文档](./motion-toggle.zh.mdc) |
-| `motion-transition` | pro | **0.6.3** | [查看文档](./motion-transition.zh.mdc) |
-| `nav-bar` | base | **0.3.4** | [查看文档](./nav-bar.zh.mdc) |
-| `no-data` | base | **0.3.4** | [查看文档](./no-data.zh.mdc) |
-| `no-selection` | base | **0.3.4** | [查看文档](./no-selection.zh.mdc) |
-| `number-input` | base | **0.3.7** | [查看文档](./number-input.zh.mdc) |
-| `offline-state` | base | **0.3.4** | [查看文档](./offline-state.zh.mdc) |
-| `outline-border` | pro | **0.3.4** | [查看文档](./outline-border.zh.mdc) |
-| `pagination` | base | **0.3.4** | [查看文档](./pagination.zh.mdc) |
-| `permission-state` | base | **0.3.4** | [查看文档](./permission-state.zh.mdc) |
-| `physics-motion` | pro | **0.6.3** | [查看文档](./physics-motion.zh.mdc) |
-| `picker` | base | **0.3.4** | [查看文档](./picker.zh.mdc) |
-| `popover` | base | **0.3.4** | [查看文档](./popover.zh.mdc) |
-| `prism-glow` | pro | **0.6.0** | [查看文档](./prism-glow.zh.mdc) |
-| `progress` | base | **0.3.4** | [查看文档](./progress.zh.mdc) |
-| `progress-bar` | base | **0.3.4** | [查看文档](./progress-bar.zh.mdc) |
-| `prompt-bar` | ai | **0.3.9** | [查看文档](./prompt-bar.zh.mdc) |
-| `radio` | base | **0.3.4** | [查看文档](./radio.zh.mdc) |
-| `rating` | base | **0.3.4** | [查看文档](./rating.zh.mdc) |
-| `reasoning-disclosure` | ai | **0.3.9** | [查看文档](./reasoning-disclosure.zh.mdc) |
-| `recommendation-card` | ai | **0.3.9** | [查看文档](./recommendation-card.zh.mdc) |
-| `resize-box` | pro | **0.3.9** | [查看文档](./resize-box.zh.mdc) |
-| `scroll` | base | **0.3.4** | [查看文档](./scroll.zh.mdc) |
-| `scrub-field` | base | **0.3.9** | [查看文档](./scrub-field.zh.mdc) |
-| `search-empty` | base | **0.3.4** | [查看文档](./search-empty.zh.mdc) |
-| `search-input` | base | **0.3.4** | [查看文档](./search-input.zh.mdc) |
-| `search-panel` | pro | **0.3.9** | [查看文档](./search-panel.zh.mdc) |
-| `search-select` | base | **0.3.4** | [查看文档](./search-select.zh.mdc) |
-| `segmented-slider` | base | **0.3.4** | [查看文档](./segmented-slider.zh.mdc) |
-| `select` | base | **0.3.4** | [查看文档](./select.zh.mdc) |
-| `selection-actions` | base | **0.3.9** | [查看文档](./selection-actions.zh.mdc) |
-| `sensitive-input` | base | **0.6.0** | [查看文档](./sensitive-input.zh.mdc) |
-| `sidebar-nav` | base | **0.3.9** | [查看文档](./sidebar-nav.zh.mdc) |
-| `signal-meter` | pro | **0.3.9** | [查看文档](./signal-meter.zh.mdc) |
-| `skeleton` | base | **0.3.4** | [查看文档](./skeleton.zh.mdc) |
-| `slider` | base | **0.3.4** | [查看文档](./slider.zh.mdc) |
-| `sortable-list` | base | **0.3.4** | [查看文档](./sortable-list.zh.mdc) |
-| `sources` | ai | **0.3.9** | [查看文档](./sources.zh.mdc) |
-| `spark-chart` | pro | **0.3.9** | [查看文档](./spark-chart.zh.mdc) |
-| `spinner` | base | **0.3.4** | [查看文档](./spinner.zh.mdc) |
-| `splitter` | base | **0.3.4** | [查看文档](./splitter.zh.mdc) |
-| `stack` | base | **0.3.4** | [查看文档](./stack.zh.mdc) |
-| `stagger` | pro | **0.3.4** | [查看文档](./stagger.zh.mdc) |
-| `stat-card` | base | **0.3.4** | [查看文档](./stat-card.zh.mdc) |
-| `status-badge` | base | **0.3.4** | [查看文档](./status-badge.zh.mdc) |
-| `status-hint` | base | **0.6.1** | [查看文档](./status-hint.zh.mdc) |
-| `steps` | base | **0.3.4** | [查看文档](./steps.zh.mdc) |
-| `stream-element` | ai | **0.6.3** | [查看文档](./stream-element.zh.mdc) |
-| `stream-markdown` | ai | **0.3.9** | [查看文档](./stream-markdown.zh.mdc) |
-| `stream-text` | ai | **0.6.3** | [查看文档](./stream-text.zh.mdc) |
-| `suggestion-chips` | ai | **0.3.9** | [查看文档](./suggestion-chips.zh.mdc) |
-| `switch` | base | **0.3.4** | [查看文档](./switch.zh.mdc) |
-| `tab-bar` | base | **0.3.4** | [查看文档](./tab-bar.zh.mdc) |
-| `tabs` | base | **0.3.4** | [查看文档](./tabs.zh.mdc) |
-| `tag` | base | **0.3.4** | [查看文档](./tag.zh.mdc) |
-| `tag-input` | base | **0.3.4** | [查看文档](./tag-input.zh.mdc) |
-| `task-rows` | ai | **0.3.9** | [查看文档](./task-rows.zh.mdc) |
-| `text-morph` | pro | **0.6.0** | [查看文档](./text-morph.zh.mdc) |
-| `text-transformer` | pro | **0.3.4** | [查看文档](./text-transformer.zh.mdc) |
-| `textarea` | base | **0.3.7** | [查看文档](./textarea.zh.mdc) |
-| `thinking-orb` | ai | **0.3.9** | [查看文档](./thinking-orb.zh.mdc) |
-| `timeline` | base | **0.3.4** | [查看文档](./timeline.zh.mdc) |
-| `toast` | base | **0.3.4** | [查看文档](./toast.zh.mdc) |
-| `toast-panel` | base | **0.6.0** | [查看文档](./toast-panel.zh.mdc) |
-| `tool-call-card` | ai | **0.3.9** | [查看文档](./tool-call-card.zh.mdc) |
-| `tool-chips` | ai | **0.3.9** | [查看文档](./tool-chips.zh.mdc) |
-| `tool-confirmation` | ai | **0.3.9** | [查看文档](./tool-confirmation.zh.mdc) |
-| `tooltip` | base | **0.3.4** | [查看文档](./tooltip.zh.mdc) |
-| `transfer` | base | **0.3.4** | [查看文档](./transfer.zh.mdc) |
-| `transition` | pro | **0.3.4** | [查看文档](./transition.zh.mdc) |
-| `tree` | base | **0.3.4** | [查看文档](./tree.zh.mdc) |
-| `tree-select` | base | **0.3.4** | [查看文档](./tree-select.zh.mdc) |
-| `tuff-logo-stroke` | pro | **0.3.4** | [查看文档](./tuff-logo-stroke.zh.mdc) |
-| `version-capsule` | pro | **0.3.9** | [查看文档](./version-capsule.zh.mdc) |
-| `virtual-list` | pro | **0.3.4** | [查看文档](./virtual-list.zh.mdc) |
-| `voice-beam` | pro | **0.6.2** | [查看文档](./voice-beam.zh.mdc) |
-| `working-indicator` | ai | **0.3.9** | [查看文档](./working-indicator.zh.mdc) |
+| 组件 | 安装 barrel | 引入版本 |
+|---|---|---|
+| [`agent-screen`](./agent-screen.zh.mdc) | ai | 0.6.0 |
+| [`agent-trace`](./agent-trace.zh.mdc) | ai | 0.3.9 |
+| [`agents`](./agents.zh.mdc) | ai | 0.3.4 |
+| [`ai-elements`](./ai-elements.zh.mdc) | ai | 0.3.9 |
+| [`alert`](./alert.zh.mdc) | base | 0.3.4 |
+| [`allocation-bar`](./allocation-bar.zh.mdc) | pro | 0.3.9 |
+| [`approval-card`](./approval-card.zh.mdc) | ai | 0.3.9 |
+| [`attachment-tray`](./attachment-tray.zh.mdc) | ai | 0.3.9 |
+| [`auto-sizer`](./auto-sizer.zh.mdc) | pro | 0.3.4 |
+| [`avatar`](./avatar.zh.mdc) | base | 0.3.4 |
+| [`badge`](./badge.zh.mdc) | base | 0.3.4 |
+| [`base-anchor`](./base-anchor.zh.mdc) | pro | 0.3.4 |
+| [`base-surface`](./base-surface.zh.mdc) | pro | 0.3.4 |
+| [`blank-slate`](./blank-slate.zh.mdc) | base | 0.3.4 |
+| [`border-beam`](./border-beam.zh.mdc) | pro | 0.3.9 |
+| [`bot-avatar`](./bot-avatar.zh.mdc) | ai | 0.6.2 |
+| [`breadcrumb`](./breadcrumb.zh.mdc) | base | 0.3.4 |
+| [`button`](./button.zh.mdc) | base | 0.3.4 |
+| [`card`](./card.zh.mdc) | base | 0.3.4 |
+| [`card-item`](./card-item.zh.mdc) | base | 0.3.4 |
+| [`card-spread`](./card-spread.zh.mdc) | pro | 0.6.3 |
+| [`carousel-3d`](./carousel-3d.zh.mdc) | pro | 0.6.3 |
+| [`cascader`](./cascader.zh.mdc) | base | 0.3.4 |
+| [`cell-link`](./cell-link.zh.mdc) | base | 0.3.9 |
+| [`chain-of-thought`](./chain-of-thought.zh.mdc) | ai | 0.3.9 |
+| [`charts`](./charts.zh.mdc) | pro | 0.6.0 |
+| [`chat`](./chat.zh.mdc) | ai | 0.3.4 |
+| [`checkbox`](./checkbox.zh.mdc) | base | 0.3.4 |
+| [`choice-card`](./choice-card.zh.mdc) | ai | 0.6.0 |
+| [`code-editor`](./code-editor.zh.mdc) | pro | 0.3.4 |
+| [`code-stream`](./code-stream.zh.mdc) | ai | 0.3.9 |
+| [`collapse`](./collapse.zh.mdc) | base | 0.3.4 |
+| [`command-palette`](./command-palette.zh.mdc) | pro | 0.3.4 |
+| [`container`](./container.zh.mdc) | base | 0.3.4 |
+| [`context-cards`](./context-cards.zh.mdc) | ai | 0.3.9 |
+| [`context-indicator`](./context-indicator.zh.mdc) | ai | 0.3.9 |
+| [`context-menu`](./context-menu.zh.mdc) | base | 0.3.4 |
+| [`conversation-stream`](./conversation-stream.zh.mdc) | ai | 0.3.9 |
+| [`corner-overlay`](./corner-overlay.zh.mdc) | pro | 0.3.4 |
+| [`data-table`](./data-table.zh.mdc) | base | 0.3.4 |
+| [`date-picker`](./date-picker.zh.mdc) | base | 0.3.4 |
+| [`descriptions`](./descriptions.zh.mdc) | base | 0.6.3 |
+| [`dialog`](./dialog.zh.mdc) | base | 0.3.4 |
+| [`diff-table`](./diff-table.zh.mdc) | pro | 0.3.9 |
+| [`divider`](./divider.zh.mdc) | base | 0.3.7 |
+| [`dot-indicator`](./dot-indicator.zh.mdc) | base | 0.3.9 |
+| [`drawer`](./drawer.zh.mdc) | base | 0.3.4 |
+| [`dropdown-menu`](./dropdown-menu.zh.mdc) | base | 0.3.4 |
+| [`edge-fade-mask`](./edge-fade-mask.zh.mdc) | pro | 0.3.4 |
+| [`empty`](./empty.zh.mdc) | base | 0.3.4 |
+| [`empty-state`](./empty-state.zh.mdc) | base | 0.3.4 |
+| [`error-state`](./error-state.zh.mdc) | base | 0.3.4 |
+| [`file-uploader`](./file-uploader.zh.mdc) | base | 0.3.4 |
+| [`filter-chips`](./filter-chips.zh.mdc) | base | 0.3.9 |
+| [`fine-tune-card`](./fine-tune-card.zh.mdc) | ai | 0.3.9 |
+| [`flat-dropdown`](./flat-dropdown.zh.mdc) | base | 0.3.9 |
+| [`flat-radio`](./flat-radio.zh.mdc) | base | 0.3.4 |
+| [`flat-select`](./flat-select.zh.mdc) | base | 0.3.4 |
+| [`flex`](./flex.zh.mdc) | base | 0.3.4 |
+| [`flip-book`](./flip-book.zh.mdc) | pro | 0.6.3 |
+| [`flip-overlay`](./flip-overlay.zh.mdc) | pro | 0.3.4 |
+| [`floating`](./floating.zh.mdc) | pro | 0.3.4 |
+| [`flowchart`](./flowchart.zh.mdc) | ai | 0.6.0 |
+| [`form`](./form.zh.mdc) | base | 0.3.4 |
+| [`fusion`](./fusion.zh.mdc) | pro | 0.3.4 |
+| [`fusion-surface`](./fusion-surface.zh.mdc) | pro | 0.6.0 |
+| [`glass-surface`](./glass-surface.zh.mdc) | pro | 0.3.4 |
+| [`glow-text`](./glow-text.zh.mdc) | pro | 0.3.4 |
+| [`gradient-border`](./gradient-border.zh.mdc) | pro | 0.3.4 |
+| [`gradual-blur`](./gradual-blur.zh.mdc) | pro | 0.3.4 |
+| [`grid`](./grid.zh.mdc) | base | 0.3.4 |
+| [`grid-layout`](./grid-layout.zh.mdc) | base | 0.3.4 |
+| [`group-block`](./group-block.zh.mdc) | base | 0.3.4 |
+| [`guide-state`](./guide-state.zh.mdc) | base | 0.3.4 |
+| [`icon`](./icon.zh.mdc) | base | 0.3.4 |
+| [`icon-chip`](./icon-chip.zh.mdc) | base | 0.3.9 |
+| [`icon-morph`](./icon-morph.zh.mdc) | pro | 0.6.0 |
+| [`icon-picker`](./icon-picker.zh.mdc) | base | 0.6.0 |
+| [`image-gallery`](./image-gallery.zh.mdc) | base | 0.3.4 |
+| [`image-generation`](./image-generation.zh.mdc) | pro | 0.6.2 |
+| [`image-uploader`](./image-uploader.zh.mdc) | base | 0.3.4 |
+| [`inline-citation`](./inline-citation.zh.mdc) | ai | 0.3.9 |
+| [`input`](./input.zh.mdc) | base | 0.3.4 |
+| [`insight-cards`](./insight-cards.zh.mdc) | ai | 0.3.9 |
+| [`kbd`](./kbd.zh.mdc) | base | 0.3.7 |
+| [`keyframe-stroke-text`](./keyframe-stroke-text.zh.mdc) | pro | 0.3.4 |
+| [`layout-skeleton`](./layout-skeleton.zh.mdc) | base | 0.3.4 |
+| [`liquid`](./liquid.zh.mdc) | pro | 0.3.9 |
+| [`loading-overlay`](./loading-overlay.zh.mdc) | base | 0.3.4 |
+| [`loading-state`](./loading-state.zh.mdc) | base | 0.3.4 |
+| [`markdown-editor`](./markdown-editor.zh.mdc) | pro | 0.3.9 |
+| [`markdown-view`](./markdown-view.zh.mdc) | base | 0.3.4 |
+| [`message-actions`](./message-actions.zh.mdc) | ai | 0.3.9 |
+| [`metal-fx`](./metal-fx.zh.mdc) | pro | 0.6.2 |
+| [`modal`](./modal.zh.mdc) | base | 0.3.4 |
+| [`mode-chip`](./mode-chip.zh.mdc) | ai | 0.6.0 |
+| [`motion`](./motion.zh.mdc) | pro | 0.6.3 |
+| [`motion-button`](./motion-button.zh.mdc) | pro | 0.6.3 |
+| [`motion-control`](./motion-control.zh.mdc) | pro | 0.6.3 |
+| [`motion-dock`](./motion-dock.zh.mdc) | pro | 0.6.3 |
+| [`motion-form`](./motion-form.zh.mdc) | pro | 0.6.3 |
+| [`motion-loader`](./motion-loader.zh.mdc) | pro | 0.6.3 |
+| [`motion-metric`](./motion-metric.zh.mdc) | pro | 0.6.3 |
+| [`motion-text`](./motion-text.zh.mdc) | pro | 0.6.3 |
+| [`motion-toggle`](./motion-toggle.zh.mdc) | pro | 0.6.3 |
+| [`motion-transition`](./motion-transition.zh.mdc) | pro | 0.6.3 |
+| [`nav-bar`](./nav-bar.zh.mdc) | base | 0.3.4 |
+| [`no-data`](./no-data.zh.mdc) | base | 0.3.4 |
+| [`no-selection`](./no-selection.zh.mdc) | base | 0.3.4 |
+| [`number-input`](./number-input.zh.mdc) | base | 0.3.7 |
+| [`offline-state`](./offline-state.zh.mdc) | base | 0.3.4 |
+| [`outline-border`](./outline-border.zh.mdc) | pro | 0.3.4 |
+| [`pagination`](./pagination.zh.mdc) | base | 0.3.4 |
+| [`permission-state`](./permission-state.zh.mdc) | base | 0.3.4 |
+| [`physics-motion`](./physics-motion.zh.mdc) | pro | 0.6.3 |
+| [`picker`](./picker.zh.mdc) | base | 0.3.4 |
+| [`popover`](./popover.zh.mdc) | base | 0.3.4 |
+| [`prism-glow`](./prism-glow.zh.mdc) | pro | 0.6.0 |
+| [`progress`](./progress.zh.mdc) | base | 0.3.4 |
+| [`progress-bar`](./progress-bar.zh.mdc) | base | 0.3.4 |
+| [`prompt-bar`](./prompt-bar.zh.mdc) | ai | 0.3.9 |
+| [`radio`](./radio.zh.mdc) | base | 0.3.4 |
+| [`rating`](./rating.zh.mdc) | base | 0.3.4 |
+| [`reasoning-disclosure`](./reasoning-disclosure.zh.mdc) | ai | 0.3.9 |
+| [`recommendation-card`](./recommendation-card.zh.mdc) | ai | 0.3.9 |
+| [`resize-box`](./resize-box.zh.mdc) | pro | 0.3.9 |
+| [`scroll`](./scroll.zh.mdc) | base | 0.3.4 |
+| [`scrub-field`](./scrub-field.zh.mdc) | base | 0.3.9 |
+| [`search-empty`](./search-empty.zh.mdc) | base | 0.3.4 |
+| [`search-input`](./search-input.zh.mdc) | base | 0.3.4 |
+| [`search-panel`](./search-panel.zh.mdc) | pro | 0.3.9 |
+| [`search-select`](./search-select.zh.mdc) | base | 0.3.4 |
+| [`segmented-slider`](./segmented-slider.zh.mdc) | base | 0.3.4 |
+| [`select`](./select.zh.mdc) | base | 0.3.4 |
+| [`selection-actions`](./selection-actions.zh.mdc) | base | 0.3.9 |
+| [`sensitive-input`](./sensitive-input.zh.mdc) | base | 0.6.0 |
+| [`sidebar-nav`](./sidebar-nav.zh.mdc) | base | 0.3.9 |
+| [`signal-meter`](./signal-meter.zh.mdc) | pro | 0.3.9 |
+| [`skeleton`](./skeleton.zh.mdc) | base | 0.3.4 |
+| [`slider`](./slider.zh.mdc) | base | 0.3.4 |
+| [`sortable-list`](./sortable-list.zh.mdc) | base | 0.3.4 |
+| [`sources`](./sources.zh.mdc) | ai | 0.3.9 |
+| [`spark-chart`](./spark-chart.zh.mdc) | pro | 0.3.9 |
+| [`spinner`](./spinner.zh.mdc) | base | 0.3.4 |
+| [`splitter`](./splitter.zh.mdc) | base | 0.3.4 |
+| [`stack`](./stack.zh.mdc) | base | 0.3.4 |
+| [`stagger`](./stagger.zh.mdc) | pro | 0.3.4 |
+| [`stat-card`](./stat-card.zh.mdc) | base | 0.3.4 |
+| [`status-badge`](./status-badge.zh.mdc) | base | 0.3.4 |
+| [`status-hint`](./status-hint.zh.mdc) | base | 0.6.1 |
+| [`steps`](./steps.zh.mdc) | base | 0.3.4 |
+| [`stream-element`](./stream-element.zh.mdc) | ai | 0.6.3 |
+| [`stream-markdown`](./stream-markdown.zh.mdc) | ai | 0.3.9 |
+| [`stream-text`](./stream-text.zh.mdc) | ai | 0.6.3 |
+| [`suggestion-chips`](./suggestion-chips.zh.mdc) | ai | 0.3.9 |
+| [`switch`](./switch.zh.mdc) | base | 0.3.4 |
+| [`tab-bar`](./tab-bar.zh.mdc) | base | 0.3.4 |
+| [`tabs`](./tabs.zh.mdc) | base | 0.3.4 |
+| [`tag`](./tag.zh.mdc) | base | 0.3.4 |
+| [`tag-input`](./tag-input.zh.mdc) | base | 0.3.4 |
+| [`task-rows`](./task-rows.zh.mdc) | ai | 0.3.9 |
+| [`terminal`](./terminal.zh.mdc) | pro | 0.6.3 |
+| [`text-morph`](./text-morph.zh.mdc) | pro | 0.6.0 |
+| [`text-transformer`](./text-transformer.zh.mdc) | pro | 0.3.4 |
+| [`textarea`](./textarea.zh.mdc) | base | 0.3.7 |
+| [`thinking-orb`](./thinking-orb.zh.mdc) | ai | 0.3.9 |
+| [`timeline`](./timeline.zh.mdc) | base | 0.3.4 |
+| [`toast`](./toast.zh.mdc) | base | 0.3.4 |
+| [`toast-panel`](./toast-panel.zh.mdc) | base | 0.6.0 |
+| [`tool-call-card`](./tool-call-card.zh.mdc) | ai | 0.3.9 |
+| [`tool-chips`](./tool-chips.zh.mdc) | ai | 0.3.9 |
+| [`tool-confirmation`](./tool-confirmation.zh.mdc) | ai | 0.3.9 |
+| [`tooltip`](./tooltip.zh.mdc) | base | 0.3.4 |
+| [`transfer`](./transfer.zh.mdc) | base | 0.3.4 |
+| [`transition`](./transition.zh.mdc) | pro | 0.3.4 |
+| [`tree`](./tree.zh.mdc) | base | 0.3.4 |
+| [`tree-select`](./tree-select.zh.mdc) | base | 0.3.4 |
+| [`tuff-logo-stroke`](./tuff-logo-stroke.zh.mdc) | pro | 0.3.4 |
+| [`version-capsule`](./version-capsule.zh.mdc) | pro | 0.3.9 |
+| [`virtual-list`](./virtual-list.zh.mdc) | pro | 0.3.4 |
+| [`voice-beam`](./voice-beam.zh.mdc) | pro | 0.6.2 |
+| [`working-indicator`](./working-indicator.zh.mdc) | ai | 0.3.9 |
 
 ### Charts 模块新增
 
-这些公共图表组件在现有 `charts` 聚合模块内引入，使用 `@talex-touch/tuffex/charts` 入口，不增加根模块计数。
+以下图表组件属于现有 `charts` 聚合模块，经 `@talex-touch/tuffex/charts` 引入，不计入模块数。
 
-| 图表组件 | 文档套件 | 引入版本 | 文档入口 |
-| --- | --- | --- | --- |
-| `dither-chart` | Motion | **0.6.3** | [查看文档](./dither-chart.zh.mdc) |
-| `mono-chart` | Data | **0.6.3** | [查看文档](./mono-chart.zh.mdc) |
+| 图表组件 | 文档套件 | 引入版本 |
+| --- | --- | --- |
+| [`dither-chart`](./dither-chart.zh.mdc) | Motion | 0.6.3 |
+| [`mono-chart`](./mono-chart.zh.mdc) | Data | 0.6.3 |
 
 ## 版本门禁与规范
 
-TuffEx 设立了发布前自动化门禁，确保每次迭代对开发者透明可靠：
-
-- **版本章节必须同步**: 每次 bump package.json 版本，CHANGELOG.md 与本页面必须增加对应版本章节；
-- **组件变动必须列明**: 每个版本章节必须精确记录新增哪些组件、更新哪些组件；
-- **Since 版本真实有效**: 每个组件文档顶部的 Since 标牌与本索引必须一致，严禁出现超越当前版本的占位号；
-- **多端与双语同步**: 英文与中文文档页面标题结构严格对齐，通过 CI 静态对账。
+| 规则 | 校验 |
+|------|------|
+| 版本号变更时，`CHANGELOG.md` 与本页新增对应版本章节 | `audit:changelog`，在 CI 与发布流程中拦截 |
+| 版本章节列明新增与更新的组件 | `audit:changelog` |
+| 组件文档的 Since 与本索引一致，且不高于当前版本 | `audit:changelog` |
+| 中英文页面标题结构对齐 | CI 静态对账 |

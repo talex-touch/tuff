@@ -1,6 +1,6 @@
 ---
 title: "SearchInput"
-description: "Search input with a built-in icon, clear affordance, Enter search, and optional debounced remote search."
+description: "An input with a built-in search icon that searches on Enter."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,40 +11,19 @@ verified: true
 
 ## Usage
 
-### SearchInput
+### Basic
+Enter emits `search` immediately.
 :::TuffDemoWrapper{demo="SearchInputSearchInputDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('')
-  const last = ref('')
-  function onSearch(next: string) {
-    last.value = next
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
-      <TxSearchInput
-        v-model="value"
-        placeholder="Search anything"
-        @search="onSearch"
-      />
-
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        value: {{ value }}
-      </div>
-      <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-        last search: {{ last }}
-      </div>
-    </div>
+    <TxSearchInput v-model="value" placeholder="Search anything" @search="onSearch" />
   </template>
 ---
 :::
 
-### SearchInput (remote)
+### Remote Search
+`remote` emits `search` once typing pauses for `searchDebounce` ms; the host renders the results panel.
 :::TuffDemoWrapper{demo="SearchInputSearchInputRemoteDemo" code-lang="vue"}
 ---
 code: |
@@ -52,182 +31,99 @@ code: |
   import { ref } from 'vue'
 
   const value = ref('')
-  const loading = ref(false)
   const hits = ref<string[]>([])
   const open = ref(false)
 
-  async function onSearch(q: string) {
-    const query = q.trim().toLowerCase()
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 200))
-    hits.value = Array.from({ length: 12 })
-      .map((_, i) => `Result ${i + 1}`)
-      .filter(s => s.toLowerCase().includes(query))
-    loading.value = false
+  async function onSearch(query: string) {
+    hits.value = await searchApi(query)
     open.value = true
-  }
-
-  function onPick(h: string) {
-    value.value = h
-    open.value = false
   }
   </script>
 
   <template>
-    <div style="width: 320px;">
-      <TxPopover v-model="open" :offset="6" :close-on-click-outside="true" :reference-full-width="true">
-        <template #reference>
-          <TxSearchInput
-            v-model="value"
-            remote
-            :search-debounce="250"
-            placeholder="Type to remote-search"
-            @focus="open = true"
-            @search="onSearch"
-          />
-        </template>
+    <TxPopover v-model="open" reference-full-width>
+      <template #reference>
+        <TxSearchInput
+          v-model="value"
+          remote
+          :search-debounce="250"
+          @focus="open = true"
+          @search="onSearch"
+        />
+      </template>
 
-        <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="10">
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-              <span v-if="loading">Loading...</span>
-              <span v-else>Hits: {{ hits.length }}</span>
-            </div>
+      <button v-for="hit in hits" :key="hit" @click="value = hit">
+        {{ hit }}
+      </button>
+    </TxPopover>
+  </template>
+---
+:::
 
-            <div style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto;">
-              <button
-                v-for="h in hits"
-                :key="h"
-                type="button"
-                style="text-align: left; padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; background: transparent; cursor: pointer;"
-                @click="onPick(h)"
-              >
-                {{ h }}
-              </button>
-
-              <div v-if="!loading && value.trim() && !hits.length" style="color: var(--tx-text-color-secondary, #909399); font-size: 12px; padding: 6px 2px;">
-                No results
-              </div>
-            </div>
-          </div>
-        </TxCard>
-      </TxPopover>
-    </div>
+### Filter Toolbar
+`TxSearchInput` takes the keyword, `TxSearchSelect` the scope, and `TxSearchEmpty` shows when nothing matches.
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSearchInput
+      v-model="query"
+      remote
+      :search-debounce="180"
+      placeholder="Search plugins / docs / tasks"
+      @search="onSearch"
+    />
+    <TxSearchSelect v-model="scope" :options="scopeOptions" placeholder="Filter scope" />
+    <TxSearchEmpty v-if="!filteredRecords.length" description="Try another keyword or filter scope." />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
-- `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately. Keep API callers idempotent because both paths can produce the same query.
-- Do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.
-- Set `searchDebounce` to `0` only for local or fully cached searches. Network-backed search should keep a debounce to avoid request storms.
+- Use `TxSearchInput` for keyword-and-Enter flows; use `TxSearchSelect` when results need a panel or the picked value fills the field.
+- With `remote`, Enter and the debounce can emit the same query, so keep request handling idempotent.
+- Don't rely on the placeholder alone for meaning; give dense toolbars an external label or context.
+- Set `searchDebounce` to `0` only for local or fully cached searches.
+- Use `TuffInput` directly when you need a custom prefix or suffix.
 
 ## API Reference
 
-### TxSearchInput Props
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | Input value used by `v-model`. |
-| `placeholder` | `string` | `'Search'` | Placeholder text shown when the input is empty. |
-| `disabled` | `boolean` | `false` | Disables typing, clearing, and remote search emission. |
-| `clearable` | `boolean` | `true` | Shows the clear control when the input has a value. |
+| `modelValue` | `string` | `''` | Input value, bound with `v-model`. |
+| `placeholder` | `string` | `'Search'` | Placeholder text. |
+| `disabled` | `boolean` | `false` | Blocks typing, clearing, and remote search. |
+| `clearable` | `boolean` | `true` | Shows the clear button when there is a value. |
 | `remote` | `boolean` | `false` | Emits debounced `search` events while typing. |
-| `searchDebounce` | `number` | `200` | Delay in milliseconds before emitting remote search. |
+| `searchDebounce` | `number` | `200` | Remote-search debounce in milliseconds. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string)` | Emitted when the input value changes. |
-| `input` | `(v: string)` | Mirrors native input changes with the normalized string value. |
-| `focus` | `(e: FocusEvent)` | Emitted when the inner input receives focus. |
-| `blur` | `(e: FocusEvent)` | Emitted when the inner input loses focus. |
-| `clear` | - | Emitted after the clear control resets the value. |
-| `search` | `(v: string)` | Emitted on Enter, or after debounce when `remote` is enabled. |
+| `update:modelValue` | `(v: string)` | Fires when the input value changes. |
+| `input` | `(v: string)` | Fires together with `update:modelValue`. |
+| `focus` | `(e: FocusEvent)` | Fires when the input gains focus. |
+| `blur` | `(e: FocusEvent)` | Fires when the input loses focus. |
+| `clear` | - | Fires after the clear button resets the value. |
+| `search` | `(v: string)` | Fires on Enter, and with `remote` also after the debounce. |
 
-### Expose
+### Exposed Methods
 
 | Name | Type | Description |
 |------|------|------|
-| `focus()` | `() => void` | Focuses the inner input. |
-| `blur()` | `() => void` | Blurs the inner input. |
-| `clear()` | `() => void` | Clears the current value and emits `clear`. |
-| `setValue(v)` | `(v: string) => void` | Sets the current input value. |
-| `getValue()` | `() => string` | Returns the current input value. |
-
-### Slots
-
-`TxSearchInput` does not expose public slots. The prefix search icon is owned by the component; use `TuffInput` directly when a custom prefix or suffix is required.
-
-## Dashboard Filter Toolbar
-
-Use `TxSearchInput` for the keyword field. When a list also needs scope/type filtering, combine it with `TxSearchSelect` and `TxSearchEmpty` so filtering, matching, and recovery states stay in one path.
-
-:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verified composition of search input, search select, and search empty state on the local Tuff page."}
----
-code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('all')
-  const lastSearch = ref('')
-
-  const scopeOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'plugins', label: 'Plugins' },
-    { value: 'docs', label: 'Docs' },
-    { value: 'tasks', label: 'Tasks' },
-  ]
-  const records = [
-    { type: 'plugins', title: 'Plugin release stream' },
-    { type: 'docs', title: 'Tuffex component tutorial' },
-    { type: 'tasks', title: 'Screenshot verification task' },
-  ]
-
-  const filteredRecords = computed(() => {
-    const keyword = query.value.trim().toLowerCase()
-    const scope = String(selectedScope.value)
-    return records.filter((item) => {
-      const matchesScope = scope === 'all' || item.type === scope
-      const matchesQuery = !keyword || item.title.toLowerCase().includes(keyword)
-      return matchesScope && matchesQuery
-    })
-  })
-
-  function onSearch(value: string) {
-    lastSearch.value = value.trim()
-  }
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxSearchInput
-        v-model="query"
-        remote
-        :search-debounce="180"
-        placeholder="Search plugins / docs / tasks"
-        @search="onSearch"
-      />
-      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="Filter scope" />
-      <TxSearchEmpty v-if="!filteredRecords.length" description="Try another keyword or filter scope." />
-    </section>
-  </template>
----
-:::
+| `focus()` | `() => void` | Focuses the input. |
+| `blur()` | `() => void` | Blurs the input. |
+| `clear()` | `() => void` | Clears the value and emits `clear`. |
+| `setValue(v)` | `(v: string) => void` | Sets the input value. |
+| `getValue()` | `() => string` | Returns the input value. |
 
 ## Technologies
 
-- **Search contract:** Enter emits `search` immediately. `remote=true` also emits debounced `search` on input changes, unless the component is disabled.
-- **Clear contract:** the component forwards `TuffInput` clear behavior, emits `clear`, and exposes the same focus/blur/value helpers for wrapper-level integrations.
-- **Composition contract:** the search icon is owned by `TxSearchInput`; use `TuffInput` directly when the field needs custom prefix/suffix slots.
-- **Verified coverage:** `search-input.test.ts` covers input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
-
-- Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
-- Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.
-- Coverage: `packages/tuffex/packages/components/src/search-input/__tests__/search-input.test.ts` verifies input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
+- Wraps `TuffInput` with a built-in search icon; clearing and the exposed methods forward to `TuffInput`.
+- Source: `packages/tuffex/packages/components/src/search-input/`.
 
 <TuffDocSourceLink />

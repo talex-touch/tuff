@@ -1,6 +1,6 @@
 ---
 title: AI Answer
-description: A multi-turn Q&A whose answers stream through TxStreamElement, with citation chips, code and a table written row by row, and actions, sources and follow-ups only once each answer is done
+description: A multi-turn Q&A with streamed answers, numbered citations, and follow-ups.
 category: TemplateAi
 status: beta
 since: 0.6.3
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Multi-turn Q&A
-
-:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" title="Multi-turn Q&A" description="Plays once it scrolls into view and asks one follow-up after the first answer; a click or a key hands it to you. Stop, regenerate or ask your own question at any time."}
+:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" description="Plays once in view and asks one follow-up; a click or key hands it to you. Sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -64,29 +63,28 @@ code: |
 
 ## Overview
 
-The answer assistant is a multi-turn Q&A. The reader asks why the first CoreBox search is slow, and one TxStreamElement writes the answer: a heading, a paragraph with numbered citations, a list and a code block come in word by word on one cadence. Once it is done, the template asks a follow-up for the reader, "How much memory does warming up take?", and that answer hands its table to TxStreamMarkdown, which writes it row by row.
+A multi-turn Q&A with traceable answers, each streamed by one TxStreamElement.
 
-It fits answer engines, help centres and in-product AI assistants: anywhere a question gets an answer whose claims have to be traceable. Every answer in the template is canned text, and the table is sample data for a qualitative comparison only.
-
-- It starts once the template scrolls into view, and the first answer pauses once on the way. About 1.6 seconds after it is done, the template asks one follow-up. A click or any key inside the template stops that and hands the conversation to you.
-- The action row (copy, regenerate, thumbs up and down), the sources and the follow-ups appear only once an answer is done. Picking a follow-up adds a new turn below; a question typed into the input gets a canned answer.
-- While an answer is being written, Stop generating ends the source at once. What has arrived is still revealed, the answer is marked Generation stopped, and it can be regenerated.
-- Clicking a numbered citation opens that turn's source list and shows "The host would open …" above the input; the page never navigates.
-- The conversation follows the newest content and stops following while you scroll up; the page itself never moves. In the docs column (640–959px) answers take the full column, and from 960px they are centred. Narrow (< 640px) hides the header's status and the answers' avatar. With reduced motion both turns render complete, and no timer starts.
+- It plays once in view and asks one follow-up about 1.6 seconds after the first answer; a click or key cancels the follow-up.
+- The action row, sources, and follow-ups appear only once an answer is done; a follow-up adds a turn below.
+- Stop generating ends the source at once; what has arrived is still revealed, and the answer can be regenerated.
+- A numbered citation opens that turn's sources without leaving the page.
+- The conversation follows the newest content and stops while you scroll up; the page never moves.
+- In the docs column (640–959px) answers fill the column, and from 960px they are centered; narrow (< 640px) hides the status and avatars; reduced motion renders both turns complete.
 
 ## Customization
 
-- Wire a real service by appending the model's tokens to `content` and keeping `streaming` true until the source has finished. Stopping is setting `streaming` to false: the element reveals what has arrived.
-- Citations are numbered in the order of `sources`: `[n]` resolves to `sources[n - 1]`, and a marker without a source stays text. Copy and share the full text you hold, never what is on screen, which trails the source by up to `maxLagMs`.
-- Row ids in the conversation must be globally unique. The template takes a new session prefix on every reset and uses it as TxConversationStream's `key`, so measured row heights never carry over into a new conversation.
-- New rows go in front of a permanent last row (the tail). TxConversationStream keeps its last item outside the virtual list and remounts it when a new one arrives; with the tail there, each turn mounts once and an answer being written is never interrupted.
+- To wire a real service, append tokens to `content` and keep `streaming` true until the source ends; stopping sets it to false.
+- Citations follow the order of `sources`, so `[n]` is `sources[n - 1]`; copy and share the full text you hold, not the screen, which trails by up to `maxLagMs`.
+- Keep row ids globally unique: take a new session prefix on every reset and use it as TxConversationStream's `key`.
+- Insert new rows in front of a permanent tail, so each turn mounts once and a streaming answer is never interrupted.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
 | Header | [TxIconButton](/docs/dev/components/button) | The answer state and Start over |
-| Conversation | [TxConversationStream](/docs/dev/components/conversation-stream), [TxChatMessage](/docs/dev/components/chat) | A virtualised multi-turn conversation that follows the newest content; the reader's question bubbles |
-| Answer | [TxStreamElement](/docs/dev/components/stream-element) | A heading, paragraphs, lists and code revealed word by word on one clock, `[n]` turned into citation chips, and the table handed to TxStreamMarkdown and written row by row |
-| After an answer | [TxMessageActions](/docs/dev/components/message-actions), [TxSources](/docs/dev/components/sources), [TxSuggestionChips](/docs/dev/components/suggestion-chips) | Copy, regenerate and thumbs; the cited sources; follow-ups, all in the `footer` slot until the answer is done |
-| Input | [TxPromptBar](/docs/dev/components/prompt-bar), [TxButton](/docs/dev/components/button) | The question input; Stop generating while an answer is written |
+| Conversation | [TxConversationStream](/docs/dev/components/conversation-stream), [TxChatMessage](/docs/dev/components/chat) | Multi-turn conversation and question bubbles |
+| Answer | [TxStreamElement](/docs/dev/components/stream-element) | Word-by-word reveal and citation chips |
+| After an answer | [TxMessageActions](/docs/dev/components/message-actions), [TxSources](/docs/dev/components/sources), [TxSuggestionChips](/docs/dev/components/suggestion-chips) | Actions, sources, and follow-ups when done |
+| Input | [TxPromptBar](/docs/dev/components/prompt-bar), [TxButton](/docs/dev/components/button) | Questions and Stop generating |

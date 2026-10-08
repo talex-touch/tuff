@@ -1,6 +1,6 @@
 ---
 title: "DatePicker"
-description: "Date selector built on TxPicker with a YYYY-MM-DD model."
+description: "A date selector with a YYYY-MM-DD string value."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,82 +11,41 @@ verified: true
 
 ## Usage
 
-### Popup, Bounds, And Inline
-
-The demo shows four common workflows: opening a wheel popup from a form row, using `variant="adaptive"` for a desktop field calendar, constraining selectable days with `min` / `max`, and embedding the picker inline with `popup="false"`.
-
+### Popup, Field, and Inline
+`v-model:visible` controls the popup, `variant` picks the surface, and `popup="false"` renders inline.
 :::TuffDemoWrapper{demo="DatePickerDatePickerDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const popupValue = ref('2026-01-02')
-  const popupVisible = ref(false)
-  const fieldValue = ref('2026-03-18')
-  const boundedValue = ref('2026-05-20')
-  const inlineValue = ref('2026-07-14')
-  </script>
-
   <template>
-    <div style="display: grid; gap: 16px;">
-      <section>
-        <TxButton variant="primary" @click="popupVisible = true">
-          Open date picker
-        </TxButton>
+    <TxButton @click="visible = true">Open date picker</TxButton>
+    <TxDatePicker
+      v-model="releaseDate"
+      v-model:visible="visible"
+      title="Release date"
+      min="2025-01-01"
+      max="2030-12-31"
+    />
 
-        <TxDatePicker
-          v-model="popupValue"
-          v-model:visible="popupVisible"
-          title="Release date"
-          min="2025-01-01"
-          max="2030-12-31"
-          confirm-text="Apply"
-          cancel-text="Cancel"
-        />
-      </section>
+    <TxDatePicker v-model="fieldDate" variant="adaptive" placeholder="Select date" />
 
-      <section>
-        <TxDatePicker
-          v-model="fieldValue"
-          variant="adaptive"
-          placeholder="Select date"
-          min="2026-01-01"
-          max="2026-12-31"
-        />
-      </section>
-
-      <section>
-        <TxDatePicker
-          v-model="boundedValue"
-          :visible="true"
-          :popup="false"
-          :show-toolbar="false"
-          min="2026-05-10"
-          max="2026-05-31"
-        />
-      </section>
-
-      <section>
-        <TxDatePicker
-          v-model="inlineValue"
-          :visible="true"
-          :popup="false"
-          title="Schedule date"
-        />
-      </section>
-    </div>
+    <TxDatePicker
+      v-model="inlineDate"
+      :visible="true"
+      :popup="false"
+      :show-toolbar="false"
+      min="2026-05-10"
+      max="2026-05-31"
+    />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Store dates as `YYYY-MM-DD` strings only. The component does not carry time zone or time-of-day semantics.
-- Use `variant="field"` for dense desktop forms, `variant="picker"` for mobile-first flows, and `variant="adaptive"` only when both surfaces have been reviewed in the same layout.
-- Keep `min` and `max` valid `YYYY-MM-DD` values; invalid bounds are ignored, which can make unavailable dates appear selectable.
-- Use `variant="picker"` with `popup="false"` for inline settings panels where the surrounding card already owns disclosure and spacing; the field surface is popover-based.
-- Set `weekStartsOn` explicitly when locale expectations matter; the default grid starts on Sunday.
+- Store dates only as `YYYY-MM-DD` strings; the component has no time zone or time of day.
+- Use `variant="field"` for dense desktop forms and `variant="picker"` for mobile-first flows; use `adaptive` only after checking both surfaces in the same layout.
+- When the surrounding card already handles disclosure and spacing, render the `picker` surface inline with `popup="false"`.
+- Set `weekStartsOn` explicitly when locale conventions matter.
 
 ## API Reference
 
@@ -94,64 +53,48 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| DateRangeValue` | `''` | Selected date in `YYYY-MM-DD` format. Under `range` it is a `[start, end]` pair instead. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
-| `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
-| `popup` | `boolean` | `true` | Controls only the picker surface: `true` renders the `TxPicker` popup and `false` renders it inline. The field surface renders through `TxPopover`. |
-| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | Selects the surface. `picker` is the wheel picker, `field` is the calendar field, and `adaptive` switches by viewport width. |
-| `title` | `string` | `'Select date'` | Toolbar title forwarded to `TxPicker`. |
-| `placeholder` | `string` | `'Select date'` | Placeholder shown by the field calendar when the model is empty. |
-| `min` | `string` | - | Earliest selectable date in `YYYY-MM-DD` format. Earlier year/month/day options are disabled or clamped. |
-| `max` | `string` | - | Latest selectable date in `YYYY-MM-DD` format. Later year/month/day options are disabled or clamped. |
-| `disabled` | `boolean` | `false` | Disables picker interaction. |
-| `showToolbar` | `boolean` | `true` | Shows or hides the picker toolbar. |
-| `confirmText` | `string` | `'Confirm'` | Confirm button label forwarded to `TxPicker`. |
-| `cancelText` | `string` | `'Cancel'` | Cancel button label forwarded to `TxPicker`. |
-| `closeOnClickMask` | `boolean` | `true` | Allows the popup mask to close the picker when clicked. |
-| `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width where the `adaptive` variant switches to the field calendar. |
-| `weekStartsOn` | `0 \| 1` | `0` | Week start for the field calendar, where `0` is Sunday and `1` is Monday. |
-| `range` | `boolean` | `false` | Field calendar only: pick a start and an end date, and emit `modelValue` as a `[start, end]` pair. The wheel picker has no range surface and ignores it. |
+| `modelValue` | `string \| DateRangeValue` | `''` | A `YYYY-MM-DD` date; a `[start, end]` pair under `range`. |
+| `visible` | `boolean` | `false` | Popup visibility, bound with `v-model:visible`. |
+| `popup` | `boolean` | `true` | Picker surface only: `false` renders it inline. |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` is the wheel, `field` the calendar field, `adaptive` switches by viewport width. |
+| `title` | `string` | `'Select date'` | Toolbar title, forwarded to `TxPicker`. |
+| `placeholder` | `string` | `'Select date'` | Placeholder of the empty field calendar. |
+| `min` | `string` | - | Earliest selectable date (`YYYY-MM-DD`); invalid values are ignored. |
+| `max` | `string` | - | Latest selectable date (`YYYY-MM-DD`); invalid values are ignored. |
+| `disabled` | `boolean` | `false` | Blocks interaction. |
+| `showToolbar` | `boolean` | `true` | Shows the picker toolbar. |
+| `confirmText` | `string` | `'Confirm'` | Confirm button label, forwarded to `TxPicker`. |
+| `cancelText` | `string` | `'Cancel'` | Cancel button label, forwarded to `TxPicker`. |
+| `closeOnClickMask` | `boolean` | `true` | Closes the popup when the mask is clicked. |
+| `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width at which `adaptive` shows the field calendar. |
+| `weekStartsOn` | `0 \| 1` | `0` | First day of the field calendar's week: `0` Sunday, `1` Monday. |
+| `range` | `boolean` | `false` | Field calendar only: picks a start and an end date; the wheel ignores it. |
 | `rangeSeparator` | `string` | `' → '` | Text between the two dates in the field's display value. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value: string)` | Emitted with a formatted `YYYY-MM-DD` value when the picker columns change. |
-| `change` | `(value: string)` | Mirrors picker value changes with the same formatted date. |
-| `update:visible` | `(visible: boolean)` | Emitted when the inner picker requests a visibility change. |
-| `confirm` | `(value: string)` | Emitted with the current formatted date when the user confirms. |
-| `cancel` | - | Emitted when the picker cancel action fires. |
-| `open` | - | Forwarded when the picker opens. |
-| `close` | - | Forwarded when the picker closes. |
-
-### Slots
-
-`TxDatePicker` does not expose custom slots. Use surrounding form layout for labels, helper text, validation messages, or trigger buttons that open the popup via `v-model:visible`.
+| `update:modelValue` | `(value: string \| DateRangeValue)` | Fires with the formatted value when the date changes. |
+| `change` | `(value: string \| DateRangeValue)` | Fires together with `update:modelValue`. |
+| `update:visible` | `(visible: boolean)` | Fires when visibility should change. |
+| `confirm` | `(value: string)` | Fires with the current date when the user confirms. |
+| `cancel` | - | Fires when the user cancels. |
+| `open` | - | Fires on open. |
+| `close` | - | Fires on close. |
 
 ## Overview
 
-- The model is always emitted as `YYYY-MM-DD`.
-- Empty or invalid `modelValue` initializes from the current local date, then clamps to `min` / `max` when present.
-- `min` and `max` use `YYYY-MM-DD`; invalid bounds are ignored.
-- `variant="picker"` keeps the wheel picker, `variant="field"` renders an input-like calendar grid, and `variant="adaptive"` uses the field calendar on desktop width while keeping the wheel picker on narrow screens.
-- With the `picker` surface, popup mode uses `v-model:visible`; `popup="false"` renders that surface inline. The `field` surface always uses `TxPopover` and syncs `update:visible`, `open`, and `close`.
-- `confirm` emits the formatted date and then closes through the underlying picker. Live column changes emit both `update:modelValue` and `change`.
-- The `field` calendar panel is sized to the month grid, not to the field: it opts out of `matchReferenceWidth` and sits between 280px and 360px. A field narrower than the grid previously cut the last weekday column off the panel's edge. The grid's 7 columns are `minmax(0, 1fr)` and the calendar is capped at `100%` of its panel, so a host that pins the panel narrower compresses the columns instead of clipping them.
-- The header title is a button that zooms out: day grid → month grid → year block. Picking a year drops to that year's months, picking a month drops to that month's days. The arrows step whatever the current view shows — one month, one year, or one 12-year block — and the year view keeps one dimmed year of padding on each side. The title stops acting as a control at the year view, which is the top.
-- Stepping slides the grid in the direction of travel; changing zoom level scales in place; landing on a day settles the cell into position. All of it collapses to a short fade under `prefers-reduced-motion`.
-- Hovering the selected day deepens it instead of replacing its fill: `:hover` alone outranks `.is-selected`, so the selection used to disappear under the pointer.
-- `range` turns the calendar into a two-click range. The first click anchors the start and previews the band under the pointer, the second closes the range and emits `[start, end]`; clicking the ends out of order still emits them in order. Nothing is emitted until both ends exist, and closing the panel mid-pick abandons the half-range rather than leaving one end armed. Days between the ends carry `is-in-range`, the ends carry `is-range-start` / `is-range-end`.
-- Closing the panel returns it to the day grid, so the next open starts where a reader expects.
+- The value is always emitted as `YYYY-MM-DD`; an empty or invalid value starts from local today, clamped to `min` / `max`.
+- The `picker` surface opens through `v-model:visible`; the `field` surface renders through `TxPopover` and syncs `update:visible`, `open`, and `close` too.
+- Column changes emit `update:modelValue` and `change` live; `confirm` then closes the way the picker does.
+- The field calendar is sized to the month grid (280–360px), not the field. Its title zooms out day → month → 12-year block, the arrows step the current view, and closing returns to the day grid.
+- `range`: the first click anchors the start and previews the band, the second closes it and emits `[start, end]` in order. Nothing is emitted before both ends exist, and closing mid-pick abandons it.
+- The calendar uses `grid` / `gridcell` with `aria-selected`; under reduced motion, slides and zooms collapse to a short fade.
 
 ## Technologies
 
-- **Source:** `TxDatePicker` parses `YYYY-MM-DD`, initializes missing or invalid values from the local date, clamps against parsable `min` / `max`, and resolves `adaptive` at `adaptiveBreakpoint`.
-- **Types:** `DatePickerProps` declares the documented selection and presentation props; `DatePickerEmits` declares formatted model/change, visibility, confirmation, cancellation, and lifecycle emissions.
-- **Accessibility note:** The field trigger, month navigation, and date cells are disabled native buttons as needed; the calendar exposes `grid` / `gridcell` roles with `aria-selected`, while the picker surface forwards its popup props to `TxPicker`.
-- **Verified coverage:** `date-picker.test.ts` covers model-to-column normalization and presentation-prop forwarding, bound clamping and disabled options, formatted value emits, visibility and lifecycle forwarding, field-calendar selection, and adaptive desktop rendering.
-
-- Component source: `packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue`.
-- Types: `packages/tuffex/packages/components/src/date-picker/src/types.ts` exports `DatePickerProps`, `DatePickerEmits`, and `DatePickerVariant`.
-- Coverage: `packages/tuffex/packages/components/src/date-picker/__tests__/date-picker.test.ts` verifies prop forwarding, bounds clamping, disabled date options, formatted emits, visibility events, field calendar behavior, and adaptive desktop rendering.
+- Days inside a range carry `is-in-range`; the ends carry `is-range-start` / `is-range-end`.
+- Source: `packages/tuffex/packages/components/src/date-picker/`.
 
 <TuffDocSourceLink />

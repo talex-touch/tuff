@@ -1,6 +1,6 @@
 ---
 title: Input 输入
-description: 轻量输入框与搜索态
+description: 接收单行或多行文本的输入框
 category: Form
 status: beta
 since: 0.3.4
@@ -11,8 +11,7 @@ verified: true
 
 ## 用法
 
-### 基础输入
-最常见的文本输入用法。
+### 基础
 :::TuffDemoWrapper{demo="InputBasicInputDemo" code-lang="vue"}
 ---
 code: |
@@ -22,16 +21,7 @@ code: |
 ---
 :::
 
-### 最佳实践
-
-- 聚焦态优先通过边框与阴影的细微变化体现；除非外层表单有统一规范，不要再给包裹层叠加第二套 focus ring。
-- 搜索态更适合保持轻量，用在工具栏与列表筛选；当 Enter 搜索和防抖远程搜索属于契约时，使用 `TxSearchInput`。
-- `type="number"` 在非空输入时发出 number，清空时发出 `''`，持久化前需要在下游 schema 中归一化。
-- 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
-- 插槽内容会覆盖 `prefixIcon` / `suffixIcon`；同一个字段只选择一种路径，避免图标在文档与实现之间漂移。
-
 ### 搜索行
-输入框配合按钮完成快速检索。
 :::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
@@ -42,138 +32,8 @@ code: |
 ---
 :::
 
-## API 参考
-
-### Props
-
-:::TuffPropsTable
----
-rows:
-  - name: modelValue / v-model
-    description: '绑定值'
-    type: 'string | number'
-    default: "''"
-  - name: placeholder
-    description: '占位文本'
-    type: 'string'
-    default: "''"
-  - name: type
-    description: '类型'
-    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
-    default: "'text'"
-  - name: disabled
-    description: '是否禁用'
-    type: 'boolean'
-    default: 'false'
-  - name: readonly
-    description: '是否只读'
-    type: 'boolean'
-    default: 'false'
-  - name: clearable
-    description: '是否可清空'
-    type: 'boolean'
-    default: 'false'
-  - name: rows
-    description: '文本域行数（仅 textarea）'
-    type: 'number'
-    default: '3'
-  - name: prefixIcon
-    description: '前缀图标类名'
-    type: 'string'
-    default: "''"
-  - name: suffixIcon
-    description: '后缀图标类名'
-    type: 'string'
-    default: "''"
-  - name: capsLockText
-    description: '密码输入框大写锁定提示的可本地化文案/title；通过 role="status" 播报。'
-    type: 'string'
-    default: "'CapsLock is on'"
----
-:::
-
-### Events
-
-:::TuffPropsTable
----
-rows:
-  - name: update:modelValue
-    description: 'v-model 更新'
-    type: '(value: string | number) => void'
-    default: '-'
-  - name: input
-    description: '输入时触发'
-    type: '(value: string | number) => void'
-    default: '-'
-  - name: focus
-    description: '聚焦'
-    type: '(event: FocusEvent) => void'
-    default: '-'
-  - name: blur
-    description: '失焦'
-    type: '(event: FocusEvent) => void'
-    default: '-'
-  - name: clear
-    description: '点击清空'
-    type: '() => void'
-    default: '-'
----
-:::
-
-### Exposes
-
-:::TuffPropsTable
----
-rows:
-  - name: focus
-    description: '聚焦原生输入控件'
-    type: '() => void'
-    default: '-'
-  - name: blur
-    description: '让原生输入控件失焦'
-    type: '() => void'
-    default: '-'
-  - name: clear
-    description: '在非禁用且非只读时清空'
-    type: '() => void'
-    default: '-'
-  - name: setValue
-    description: '设置值并触发 input/model 更新'
-    type: '(value: string) => void'
-    default: '-'
-  - name: getValue
-    description: '读取当前值'
-    type: '() => string | number'
-    default: '-'
-  - name: inputEl
-    description: '暴露的原生 input 或 textarea 引用，用于高级聚焦或测量场景'
-    type: 'HTMLInputElement | HTMLTextAreaElement | null'
-    default: '-'
----
-:::
-
-### Slots
-
-:::TuffPropsTable
----
-rows:
-  - name: prefix
-    description: '前缀内容'
-    type: '-'
-    default: '-'
-  - name: suffix
-    description: '后缀内容'
-    type: '-'
-    default: '-'
----
-:::
-
-## 输入框类型
-
-目前支持：`text` / `password` / `textarea` / `date` / `email` / `number`。
-
-### Input Types
-文本、密码与多行文本。
+### 输入类型
+`type` 可选 `text`、`password`、`textarea`、`date`、`email`、`number`；`rows` 设定文本域行数。
 :::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
@@ -185,10 +45,7 @@ code: |
 ---
 :::
 
-## 只读 / 禁用
-
-### Readonly / Disabled
-只读与禁用状态。
+### 只读与禁用
 :::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -199,10 +56,8 @@ code: |
 ---
 :::
 
-## 可清空
-
-### Clearable
-支持一键清空内容。
+### 可清空
+`clearable` 在有值时显示可聚焦的清空按钮，禁用或只读时隐藏。
 :::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
 ---
 code: |
@@ -212,20 +67,18 @@ code: |
 ---
 :::
 
-## 前后缀插槽
-
-### Prefix / Suffix
-使用图标增强提示。
+### 前后缀
+`prefix` / `suffix` 插槽优先于 `prefixIcon` / `suffixIcon`。
 :::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput v-model="withPrefix" placeholder="Search">
+    <TuffInput v-model="keyword" placeholder="Search">
       <template #prefix>
         <TxIcon icon="i-carbon-search" />
       </template>
     </TuffInput>
-    <TuffInput v-model="withSuffix" placeholder="User">
+    <TuffInput v-model="user" placeholder="User">
       <template #suffix>
         <TxIcon icon="i-carbon-user" />
       </template>
@@ -234,9 +87,142 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 焦点只用边框与阴影的细微变化表达；除非外层表单有统一规范，不要在外层再加一圈 focus ring。
+- 工具栏与列表筛选用轻量的搜索态；Enter 搜索与防抖远程搜索属于契约时，改用 `TxSearchInput`。
+- `type="number"` 的值可能是 number 或 `''`，持久化前先在 schema 中归一化。
+- 同一字段的图标只用插槽或图标 prop 其中一种。
+
+## API 参考
+
+### 属性
+
+:::TuffPropsTable
+---
+rows:
+  - name: modelValue / v-model
+    description: '输入值。'
+    type: 'string | number'
+    default: "''"
+  - name: placeholder
+    description: '占位文本。'
+    type: 'string'
+    default: "''"
+  - name: type
+    description: '输入类型；`textarea` 渲染多行文本域。'
+    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
+    default: "'text'"
+  - name: disabled
+    description: '禁用输入。'
+    type: 'boolean'
+    default: 'false'
+  - name: readonly
+    description: '只读。'
+    type: 'boolean'
+    default: 'false'
+  - name: clearable
+    description: '有值时显示清空按钮。'
+    type: 'boolean'
+    default: 'false'
+  - name: rows
+    description: '文本域行数，仅 `textarea` 有效。'
+    type: 'number'
+    default: '3'
+  - name: prefixIcon
+    description: '前缀图标 class；`prefix` 插槽优先。'
+    type: 'string'
+    default: "''"
+  - name: suffixIcon
+    description: '后缀图标 class；`suffix` 插槽优先。'
+    type: 'string'
+    default: "''"
+  - name: capsLockText
+    description: '密码框大写锁定提示的文案，经 `role="status"` 播报。'
+    type: 'string'
+    default: "'CapsLock is on'"
+---
+:::
+
+### 事件
+
+:::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    description: '值变化时触发。'
+    type: '(value: string | number) => void'
+    default: '-'
+  - name: input
+    description: '输入时触发，参数同 `update:modelValue`。'
+    type: '(value: string | number) => void'
+    default: '-'
+  - name: focus
+    description: '原生输入控件聚焦时触发。'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: blur
+    description: '原生输入控件失焦时触发。'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: clear
+    description: '清空后触发。'
+    type: '() => void'
+    default: '-'
+---
+:::
+
+### 插槽
+
+:::TuffPropsTable
+---
+rows:
+  - name: prefix
+    description: '前缀内容，替代 `prefixIcon`。'
+    type: '-'
+    default: '-'
+  - name: suffix
+    description: '后缀内容，替代 `suffixIcon`。'
+    type: '-'
+    default: '-'
+---
+:::
+
+### 暴露方法
+
+:::TuffPropsTable
+---
+rows:
+  - name: focus
+    description: '聚焦原生输入控件。'
+    type: '() => void'
+    default: '-'
+  - name: blur
+    description: '让原生输入控件失焦。'
+    type: '() => void'
+    default: '-'
+  - name: clear
+    description: '清空；禁用或只读时无效。'
+    type: '() => void'
+    default: '-'
+  - name: setValue
+    description: '设置值并派发 `update:modelValue` 与 `input`。'
+    type: '(value: string) => void'
+    default: '-'
+  - name: getValue
+    description: '返回当前值。'
+    type: '() => string | number'
+    default: '-'
+  - name: inputEl
+    description: '原生 input 或 textarea 的引用。'
+    type: 'HTMLInputElement | HTMLTextAreaElement | null'
+    default: '-'
+---
+:::
+
 ## 从 FlatInput 迁移
 
-旧组件 `FlatInput` / `TxFlatInput` 已下线，其全部用法由 `TxInput` 承接。属性一一对应：
+`FlatInput` / `TxFlatInput` 已下线，由 `TxInput` 承接：
 
 | FlatInput | TxInput |
 |-----------|---------|
@@ -245,19 +231,19 @@ code: |
 | `icon="i-…"` | `prefix-icon="i-…"` |
 | 默认插槽（前缀内容） | `#prefix` 插槽 |
 | `disabled` / `readonly` | `disabled` / `readonly` |
-| `nonWin` | 移除——不再保留 Windows 下划线视觉 |
+| `nonWin` | 移除，不再保留 Windows 下划线视觉 |
 
-`update:modelValue` 契约不变；`focus` / `blur` 现在来自原生输入元素。`FlatInput` 没有 `clear` / `suffixIcon` / `rows` 等属性，补齐之后调用方不必再手写前缀标记。
+`update:modelValue` 契约不变；`focus` / `blur` 改由原生输入元素派发。
+
+## 概述
+
+- `type="number"` 非空时派发 `Number(value)`，清空时为 `''`。
+- 清空依次派发 `update:modelValue`、`input`、`clear`；禁用或只读时清空无效。
+- 外层保留 `class` / `style`，其余 attrs 透传给原生 `input` / `textarea`。
 
 ## 技术实现
 
-- **值契约：** `type="number"` 在非空输入时发出 `Number(value)`，清空时保留 `''`，因此持久化层应先做 schema 归一化。
-- **清空契约：** `disabled` 或 `readonly` 时，`clear()` 与清空按钮都会被阻止；其他情况下清空会触发 `update:modelValue`、`input` 和 `clear`。
-- **组合契约：** wrapper 的 `class` / `style` 保留在外层，其余 attrs 透传给原生 `input` / `textarea`；前后缀插槽优先于图标 props。
-- **实测覆盖:** `input.test.ts` 覆盖文本事件、数字归一化、textarea attrs 透传、清空按钮无障碍、禁用/只读阻断和插槽优先级。
-
-- Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
-- Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.
-- Coverage: `packages/tuffex/packages/components/src/input/__tests__/input.test.ts` verifies text emits, number normalization, textarea attr forwarding, accessible clear button behavior, disabled/readonly clear blocking, and prefix/suffix slot precedence.
+- `index.ts` 同时导出 `TuffInput` 与 `TxInput`。
+- 源码：`packages/tuffex/packages/components/src/input/`。
 
 <TuffDocSourceLink />

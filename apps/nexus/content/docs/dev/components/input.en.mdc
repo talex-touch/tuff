@@ -1,6 +1,6 @@
 ---
 title: Input
-description: Lightweight inputs and search states
+description: A field that accepts single-line or multiline text.
 category: Form
 status: beta
 since: 0.3.4
@@ -11,8 +11,7 @@ verified: true
 
 ## Usage
 
-### Basic Input
-The most common text input usage.
+### Basic
 :::TuffDemoWrapper{demo="InputBasicInputDemo" code-lang="vue"}
 ---
 code: |
@@ -22,16 +21,7 @@ code: |
 ---
 :::
 
-### Best Practices
-
-- Use subtle border and shadow shifts to express focus; do not add a second focus ring around the wrapper unless the surrounding form requires it.
-- Search states should stay lightweight for toolbars and lists. Use `TxSearchInput` when Enter search and debounced remote search are part of the contract.
-- `type="number"` emits numbers for non-empty values and `''` when cleared. Normalize downstream schemas before persistence.
-- The clear control is a keyboard-focusable button and is hidden for disabled or readonly input.
-- Slot content overrides `prefixIcon` / `suffixIcon`; choose one path per field so icons do not drift between docs and implementation.
-
 ### Search Row
-Input paired with an action button.
 :::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
@@ -42,138 +32,8 @@ code: |
 ---
 :::
 
-## API Reference
-
-### Props
-
-:::TuffPropsTable
----
-rows:
-  - name: modelValue / v-model
-    description: 'Bound value'
-    type: 'string | number'
-    default: "''"
-  - name: placeholder
-    description: 'Placeholder text'
-    type: 'string'
-    default: "''"
-  - name: type
-    description: 'Input type'
-    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
-    default: "'text'"
-  - name: disabled
-    description: 'Disabled state'
-    type: 'boolean'
-    default: 'false'
-  - name: readonly
-    description: 'Readonly state'
-    type: 'boolean'
-    default: 'false'
-  - name: clearable
-    description: 'Clearable content'
-    type: 'boolean'
-    default: 'false'
-  - name: rows
-    description: 'Textarea rows (only textarea)'
-    type: 'number'
-    default: '3'
-  - name: prefixIcon
-    description: 'Prefix icon class'
-    type: 'string'
-    default: "''"
-  - name: suffixIcon
-    description: 'Suffix icon class'
-    type: 'string'
-    default: "''"
-  - name: capsLockText
-    description: 'Localizable label/title for the CapsLock warning on password inputs; announced via role="status".'
-    type: 'string'
-    default: "'CapsLock is on'"
----
-:::
-
-### Events
-
-:::TuffPropsTable
----
-rows:
-  - name: update:modelValue
-    description: 'v-model update'
-    type: '(value: string | number) => void'
-    default: '-'
-  - name: input
-    description: 'Triggered on input'
-    type: '(value: string | number) => void'
-    default: '-'
-  - name: focus
-    description: 'Focus event'
-    type: '(event: FocusEvent) => void'
-    default: '-'
-  - name: blur
-    description: 'Blur event'
-    type: '(event: FocusEvent) => void'
-    default: '-'
-  - name: clear
-    description: 'Clear action'
-    type: '() => void'
-    default: '-'
----
-:::
-
-### Exposes
-
-:::TuffPropsTable
----
-rows:
-  - name: focus
-    description: 'Focus the native input'
-    type: '() => void'
-    default: '-'
-  - name: blur
-    description: 'Blur the native input'
-    type: '() => void'
-    default: '-'
-  - name: clear
-    description: 'Clear when not disabled or readonly'
-    type: '() => void'
-    default: '-'
-  - name: setValue
-    description: 'Set value and emit input/model updates'
-    type: '(value: string) => void'
-    default: '-'
-  - name: getValue
-    description: 'Read current value'
-    type: '() => string | number'
-    default: '-'
-  - name: inputEl
-    description: 'Native input or textarea element ref exposed for advanced focus/measurement cases'
-    type: 'HTMLInputElement | HTMLTextAreaElement | null'
-    default: '-'
----
-:::
-
-### Slots
-
-:::TuffPropsTable
----
-rows:
-  - name: prefix
-    description: 'Prefix content'
-    type: '-'
-    default: '-'
-  - name: suffix
-    description: 'Suffix content'
-    type: '-'
-    default: '-'
----
-:::
-
-## Input Types
-
-Supported: `text` / `password` / `textarea` / `date` / `email` / `number`.
-
 ### Input Types
-Text, password, and textarea.
+`type` takes `text`, `password`, `textarea`, `date`, `email`, or `number`; `rows` sets the textarea height.
 :::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
@@ -185,10 +45,7 @@ code: |
 ---
 :::
 
-## Readonly / Disabled
-
-### Readonly / Disabled
-Readonly and disabled states.
+### Readonly and Disabled
 :::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -199,10 +56,8 @@ code: |
 ---
 :::
 
-## Clearable
-
 ### Clearable
-One-click clear for content.
+`clearable` shows a focusable clear button while there is a value; it hides when disabled or readonly.
 :::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
 ---
 code: |
@@ -212,20 +67,18 @@ code: |
 ---
 :::
 
-## Prefix / Suffix Slots
-
-### Prefix / Suffix
-Icons help reinforce context.
+### Prefix and Suffix
+The `prefix` / `suffix` slots take precedence over `prefixIcon` / `suffixIcon`.
 :::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput v-model="withPrefix" placeholder="Search">
+    <TuffInput v-model="keyword" placeholder="Search">
       <template #prefix>
         <TxIcon icon="i-carbon-search" />
       </template>
     </TuffInput>
-    <TuffInput v-model="withSuffix" placeholder="User">
+    <TuffInput v-model="user" placeholder="User">
       <template #suffix>
         <TxIcon icon="i-carbon-user" />
       </template>
@@ -234,9 +87,142 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Show focus only through the subtle border and shadow shift; don't add a second focus ring around the wrapper unless the surrounding form requires one.
+- Keep search states light for toolbars and list filters; use `TxSearchInput` when Enter search or debounced remote search is part of the contract.
+- With `type="number"` the value is a number or `''`; normalize it in your schema before persisting.
+- Give each field's icons one path: the slot or the icon prop.
+
+## API Reference
+
+### Props
+
+:::TuffPropsTable
+---
+rows:
+  - name: modelValue / v-model
+    description: 'The input value.'
+    type: 'string | number'
+    default: "''"
+  - name: placeholder
+    description: 'Placeholder text.'
+    type: 'string'
+    default: "''"
+  - name: type
+    description: 'Input type; `textarea` renders a multiline field.'
+    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
+    default: "'text'"
+  - name: disabled
+    description: 'Disables input.'
+    type: 'boolean'
+    default: 'false'
+  - name: readonly
+    description: 'Makes the field read-only.'
+    type: 'boolean'
+    default: 'false'
+  - name: clearable
+    description: 'Shows a clear button while there is a value.'
+    type: 'boolean'
+    default: 'false'
+  - name: rows
+    description: 'Textarea rows; `textarea` only.'
+    type: 'number'
+    default: '3'
+  - name: prefixIcon
+    description: 'Prefix icon class; the `prefix` slot wins.'
+    type: 'string'
+    default: "''"
+  - name: suffixIcon
+    description: 'Suffix icon class; the `suffix` slot wins.'
+    type: 'string'
+    default: "''"
+  - name: capsLockText
+    description: 'Text of the CapsLock warning on password fields, announced via `role="status"`.'
+    type: 'string'
+    default: "'CapsLock is on'"
+---
+:::
+
+### Events
+
+:::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    description: 'Fires when the value changes.'
+    type: '(value: string | number) => void'
+    default: '-'
+  - name: input
+    description: 'Fires on input, with the same value as `update:modelValue`.'
+    type: '(value: string | number) => void'
+    default: '-'
+  - name: focus
+    description: 'Fires when the native control gains focus.'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: blur
+    description: 'Fires when the native control loses focus.'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: clear
+    description: 'Fires after a clear.'
+    type: '() => void'
+    default: '-'
+---
+:::
+
+### Slots
+
+:::TuffPropsTable
+---
+rows:
+  - name: prefix
+    description: 'Prefix content, replacing `prefixIcon`.'
+    type: '-'
+    default: '-'
+  - name: suffix
+    description: 'Suffix content, replacing `suffixIcon`.'
+    type: '-'
+    default: '-'
+---
+:::
+
+### Exposed Methods
+
+:::TuffPropsTable
+---
+rows:
+  - name: focus
+    description: 'Focuses the native control.'
+    type: '() => void'
+    default: '-'
+  - name: blur
+    description: 'Blurs the native control.'
+    type: '() => void'
+    default: '-'
+  - name: clear
+    description: 'Clears the value; no-op when disabled or readonly.'
+    type: '() => void'
+    default: '-'
+  - name: setValue
+    description: 'Sets the value and emits `update:modelValue` and `input`.'
+    type: '(value: string) => void'
+    default: '-'
+  - name: getValue
+    description: 'Returns the current value.'
+    type: '() => string | number'
+    default: '-'
+  - name: inputEl
+    description: 'Ref to the native input or textarea.'
+    type: 'HTMLInputElement | HTMLTextAreaElement | null'
+    default: '-'
+---
+:::
+
 ## Migration from FlatInput
 
-The legacy `FlatInput` / `TxFlatInput` component has been retired; `TxInput` covers every case it served. Migrate the props one-to-one:
+`FlatInput` / `TxFlatInput` is retired; `TxInput` covers it:
 
 | FlatInput | TxInput |
 |-----------|---------|
@@ -245,19 +231,19 @@ The legacy `FlatInput` / `TxFlatInput` component has been retired; `TxInput` cov
 | `icon="i-…"` | `prefix-icon="i-…"` |
 | default slot (prefix content) | `#prefix` slot |
 | `disabled` / `readonly` | `disabled` / `readonly` |
-| `nonWin` | dropped — the Windows-underline visual is gone |
+| `nonWin` | dropped; the Windows-underline visual is gone |
 
-`update:modelValue` keeps the same contract, and `focus` / `blur` now come from the native input element. `FlatInput` had no `clear`/`suffixIcon`/`rows` props; adding them replaces the hand-rolled prefix markup callers used to write.
+`update:modelValue` keeps its contract; `focus` / `blur` now come from the native input element.
+
+## Overview
+
+- `type="number"` emits `Number(value)` for non-empty input and `''` when cleared.
+- Clearing emits `update:modelValue`, `input`, then `clear`; it is a no-op when disabled or readonly.
+- `class` / `style` stay on the wrapper; all other attrs go to the native `input` / `textarea`.
 
 ## Technologies
 
-- **Value contract:** `type="number"` emits `Number(value)` for non-empty input and preserves `''` when cleared, so persistence layers should normalize before saving.
-- **Clear contract:** `clear()` and the clear button are blocked while `disabled` or `readonly`; otherwise clearing emits `update:modelValue`, `input`, and `clear`.
-- **Composition contract:** wrapper `class` / `style` stay on the outer shell while remaining attrs forward to the native `input` / `textarea`; prefix/suffix slots take precedence over icon props.
-- **Verified coverage:** `input.test.ts` covers text emits, number normalization, textarea attr forwarding, clear button accessibility, disabled/readonly clear blocking, and slot precedence.
-
-- Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
-- Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.
-- Coverage: `packages/tuffex/packages/components/src/input/__tests__/input.test.ts` verifies text emits, number normalization, textarea attr forwarding, accessible clear button behavior, disabled/readonly clear blocking, and prefix/suffix slot precedence.
+- `index.ts` exports both `TuffInput` and `TxInput`.
+- Source: `packages/tuffex/packages/components/src/input/`.
 
 <TuffDocSourceLink />

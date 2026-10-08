@@ -1,6 +1,6 @@
 ---
 title: "FlatSelect"
-description: "ComboBox-style dropdown selector (`TxFlatSelect` + `TxFlatSelectItem`). Options overlay the trigger, selected item anchors at trigger position, smooth clip-path expand/collapse animation."
+description: "A dropdown whose options expand over the trigger from the selected item."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,9 +11,7 @@ verified: true
 
 ## Usage
 
-Click the trigger — the dropdown expands outward from the selected item position. The selected item displays a checkmark.
-
-### FlatSelect (basic)
+### Basic
 :::TuffDemoWrapper{demo="FlatSelectBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -33,26 +31,17 @@ code: |
 ---
 :::
 
-Supports both group-level and item-level disabling.
-
-### FlatSelect (disabled)
+### Disabled
+Set `disabled` on the whole group or on single items.
 :::TuffDemoWrapper{demo="FlatSelectDisabledDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('')
-  </script>
-
   <template>
-    <!-- Group disabled -->
     <TxFlatSelect v-model="value" placeholder="Select" disabled>
       <TxFlatSelectItem value="a" label="Option A" />
       <TxFlatSelectItem value="b" label="Option B" />
     </TxFlatSelect>
 
-    <!-- Item disabled -->
     <TxFlatSelect v-model="value" placeholder="Select">
       <TxFlatSelectItem value="a" label="Option A" />
       <TxFlatSelectItem value="b" label="Option B" disabled />
@@ -62,14 +51,35 @@ code: |
 ---
 :::
 
+### Release Policy
+An admin flow: Cascader sets the scope, FlatSelect the policy, sliders the thresholds, and TagInput the labels.
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+    <TxFlatSelect v-model="packageFormat" placeholder="Package format">
+      <TxFlatSelectItem value="signed" label="Signed build" />
+      <TxFlatSelectItem value="archive" label="Archive" />
+    </TxFlatSelect>
+    <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+      <TxFlatSelectItem value="phased" label="Phased" />
+      <TxFlatSelectItem value="guarded" label="Guarded" />
+    </TxFlatSelect>
+    <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+    <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+    <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
+  </template>
+---
+::
+
 ### Best Practices
 
-- Use `TxFlatSelect` for short, stable option sets where the selected value should stay visually anchored during expansion.
-- Keep item labels concise. The trigger and items both use single-line truncation, so long labels should move to `TxSelect` or a custom popover.
-- Prefer three to six options. Use `TxSelect` when the list needs search, remote data, grouping, virtualization, or rich option metadata.
-- Keep `value` stable and unique per item. The parent registry matches by `value`; duplicate values make selection labels and keyboard navigation ambiguous.
-- Do not mount interactive controls inside `TxFlatSelectItem`; the item itself is a button with `role="option"`.
-- Preserve disabled item props instead of filtering them out when options are unavailable. Keyboard navigation intentionally skips disabled items.
+- Use for three to six short, stable options; use `TxSelect` for search, remote data, grouping, or virtualization.
+- Keep labels short: the trigger and the items both truncate to one line.
+- Keep each `value` stable and unique: the parent matches selection and keyboard order by `value`.
+- Don't put interactive controls inside `TxFlatSelectItem`; the item is already a button with `role="option"`.
+- Mark unavailable options `disabled` instead of filtering them out.
 
 ## API Reference
 
@@ -77,124 +87,61 @@ code: |
 
 #### Props
 
-| Prop | Description | Type | Default |
-|------|-------------|------|---------|
-| modelValue / v-model | Selected value; matches the `value` of one `TxFlatSelectItem`, or shows the placeholder when unset. | `string \| number` | `''` |
-| placeholder | Text shown in the trigger while nothing is selected. | `string` | `''` |
-| disabled | Disable the whole group: the trigger becomes a disabled button, the dropdown no longer opens, and keyboard navigation is inert. | `boolean` | `false` |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` / `v-model` | `string \| number` | `''` | The selected value, matching one item's `value`; shows the placeholder when nothing matches. |
+| `placeholder` | `string` | `''` | Trigger text while nothing is selected. |
+| `disabled` | `boolean` | `false` | Disables the group: the trigger can't be clicked and the dropdown won't open. |
 
 #### Events
 
-| Event | Description | Params |
-|-------|-------------|--------|
-| update:modelValue | Emitted on commit for v-model. | `(value: string \| number) => void` |
-| change | Emitted together with `update:modelValue` on every commit, including ArrowUp/ArrowDown keyboard navigation; the two are equivalent today, so listen to either. | `(value: string \| number) => void` |
+| Event | Params | Description |
+|-------|--------|-------------|
+| `update:modelValue` | `(value: string \| number) => void` | Fires on every commit, including ArrowUp/ArrowDown navigation. |
+| `change` | `(value: string \| number) => void` | Fires together with `update:modelValue`. |
 
 #### Slots
 
 | Slot | Description |
 |------|-------------|
-| default | `TxFlatSelectItem` children |
+| `default` | `TxFlatSelectItem` children. |
 
 ### TxFlatSelectItem
 
 #### Props
 
-| Prop | Description | Type | Default |
-|------|-------------|------|---------|
-| value | Option value; keep it stable and unique since the parent registry matches selection by it. | `string \| number` | - |
-| label | Text shown in the trigger and option; override it with the default slot. | `string` | - |
-| disabled | Disable a single option: it cannot be selected and keyboard navigation skips it. | `boolean` | `false` |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string \| number` | - | The option value; keep it stable and unique. |
+| `label` | `string` | - | Text shown in the trigger and the option. |
+| `disabled` | `boolean` | `false` | Makes the option unselectable and skipped by the keyboard. |
 
 #### Slots
 
 | Slot | Description |
 |------|-------------|
-| default | Custom content (overrides label) |
-
-## Release Policy Configuration
-
-This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: 'Desktop',
-      children: [
-        {
-          value: 'stable',
-          label: 'Stable',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
-  const riskSegments = [
-    { value: 1, label: 'Low' },
-    { value: 2, label: 'Med' },
-    { value: 3, label: 'High' },
-    { value: 4, label: 'Freeze' },
-  ]
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
-      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
-        <TxFlatSelectItem value="signed" label="Signed build" />
-        <TxFlatSelectItem value="archive" label="Archive" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
-        <TxFlatSelectItem value="phased" label="Phased" />
-        <TxFlatSelectItem value="guarded" label="Guarded" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
-    </section>
-  </template>
----
-::
+| `default` | Custom content, replacing `label`. |
 
 ## Comparison with TxSelect
 
 | Feature | TxSelect | TxFlatSelect |
 |---------|----------|-------------|
-| Positioning | floating-ui (Teleport to body) | CSS absolute + clip-path |
-| Expand effect | Dropdown appears below trigger | ComboBox: options overlay trigger, expand from selected item |
-| Animation | None (avoids scroll lag) | Smooth clip-path expand/collapse |
+| Positioning | floating-ui, teleported to body | CSS absolute + clip-path |
+| Expansion | Panel appears below the trigger | Options overlay the trigger, expanding from the selected item |
+| Animation | None (avoids scroll lag) | clip-path expand / collapse |
 | Search | Supported | Not supported |
-| Use case | General purpose, complex forms | Settings pages, simple dropdowns |
-| Trigger | Input-style with icon | Button-style with arrow |
+| Use case | General and complex forms | Settings pages, simple dropdowns |
+| Trigger | Input-style | Button-style with arrow |
 
 ## Overview
 
-- Closing collapses the panel back onto the trigger and fades its chrome out over the same 200ms: surface, border, shadow and the selected row's accent all animate away. Dropping them on the frame the panel hides made the label appear to blink as it settled.
-
-`TxFlatSelect` exposes the trigger as a combobox and the dropdown as a listbox. Items expose option selection state, disabled items cannot be selected, and ArrowUp/ArrowDown navigation skips disabled options while the dropdown is open.
+- The trigger is `role="combobox"`, the panel `role="listbox"`, and each item a `role="option"` with `aria-selected`.
+- Options overlay the trigger, with the selected item anchored at the trigger's position.
+- While open, ArrowUp / ArrowDown move and commit immediately, skipping disabled items.
+- Closing collapses the panel onto the trigger and fades its surface, border, shadow, and selected accent over the same 200ms.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`, `TxFlatSelectItem.vue`, `types.ts`, and `flat-select.test.ts`.
-- **Verified coverage:** placeholder display, selected-label synchronization, enabled item selection, group/item disabled blocking, ArrowUp/ArrowDown navigation over disabled items, and combobox/listbox ARIA state.
-- Screenshot: `.codex-screenshots/nexus-flat-select-release-policy-demo-playwright-2026-05-28.png`.
-- Recommendation: use `TxFlatSelect` for three to six simple options; prefer `TxSelect` when search, remote data, or rich option rendering is required.
-
-- Component source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`.
-- Item source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`.
-- Types: `packages/tuffex/packages/components/src/flat-select/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/flat-select/__tests__/flat-select.test.ts`.
+- Source: `packages/tuffex/packages/components/src/flat-select/`.
 
 <TuffDocSourceLink />

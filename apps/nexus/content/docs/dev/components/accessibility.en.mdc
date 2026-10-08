@@ -1,6 +1,6 @@
 ---
 title: Accessibility
-description: The four conventions Tuffex components follow, and where coverage stops
+description: The accessibility conventions Tuffex components share, and where coverage stops.
 category: Foundations
 status: beta
 since: 0.4.0
@@ -11,48 +11,58 @@ verified: false
 
 ## Scope
 
-Tuffex targets WCAG 2.1 AA. That is the goal the components are built against, not a certification — this page describes the conventions they follow and says plainly where coverage is still partial.
+WCAG 2.1 AA is the build target, not a certification.
 
 ## Focus
 
-Focus rings are drawn on `:focus-visible`, never on `:focus`, so a mouse click does not leave a ring behind while keyboard traversal always does. The ring itself is two tokens rather than a hard-coded outline:
+Focus rings appear on `:focus-visible` only: a mouse click leaves no ring, keyboard traversal always shows one.
 
 | Token | Role |
 |-------|------|
-| `--tx-focus-ring-color` | The ring's own colour |
+| `--tx-focus-ring-color` | The ring's color |
 | `--tx-focus-ring-shadow` | The halo around it |
 
-Both are redefined by the dark and high-contrast palettes, so a ring stays visible when the surface under it changes. Around fifty component stylesheets carry an explicit `:focus-visible` rule; the rest either aren't focusable or delegate to a focusable child.
-
-Components clipped by a rounded frame draw the ring **inset** instead of outside — a browser's own outline sits outside the element and gets cut into square corners by the parent's `overflow: hidden`. The collapse header is the worked example.
+- The dark and high-contrast palettes redefine both tokens.
+- A component without a `:focus-visible` rule is either not focusable or delegates focus to a focusable child.
+- Components clipped by a rounded frame draw the ring inset, so the parent's `overflow: hidden` can't cut it into square corners. The collapse header is the reference.
 
 ## Motion
 
-Every animation is expected to answer `prefers-reduced-motion: reduce`, and roughly sixty component stylesheets carry that block today. The convention is to keep the *state* and drop the *travel*: an indeterminate progress bar stops sweeping but stays a filled translucent track, so it still reads as "busy"; a disclosure opens instantly instead of easing.
-
-Animate composited properties — `transform` and `opacity`. Where a component must animate layout (height from `0` to `auto` cannot be tweened in CSS), it measures and drives the value in JavaScript rather than animating `height` from a fixed guess.
+| Convention | Practice |
+|------------|----------|
+| Honor `prefers-reduced-motion: reduce` | Keep the state, drop the travel: an indeterminate bar stops sweeping but keeps its translucent track; a disclosure opens instantly |
+| Animate composited properties only | `transform` and `opacity` |
+| When layout must animate (height `0` ↔ `auto`) | Measure, then drive the value in JavaScript; never tween `height` from a guessed fixed value |
 
 ## Contrast
 
-Beyond the default palette, Tuffex ships a high-contrast one that raises text and border contrast in both light and dark. It follows the OS preference automatically through `@media (prefers-contrast: more)`, and an app can force it on or opt out — see [Theming](./theming.en.mdc) for the selectors.
+The high-contrast palette raises text and border contrast in light and dark, and follows the OS through `@media (prefers-contrast: more)`. Selectors that force it on or opt out are in [Theming](./theming.en.mdc).
 
-Contrast ratios are treated as a reviewable property, not a guess: token pairs that are easy to get wrong (a tinted badge on its own tint, a version pill on a dark page) carry their measured ratio in a comment beside the declaration.
+Token pairs that are easy to get wrong (a tinted badge on its own tint, a version pill on a dark page) carry their measured ratio in a comment beside the declaration.
 
 ## Semantics
 
-Roughly nine in ten components set an explicit `role` or ARIA attributes. The recurring patterns:
+| Pattern | Practice |
+|---------|----------|
+| Named by visible text | The accessible name comes from the visible label; controls that would need printed text (a progress bar) take an `ariaLabel` prop |
+| Decoration hidden | Glyphs that duplicate adjacent text carry `aria-hidden`, so the label is read once |
+| Disclosures wired | The trigger sets `aria-expanded`; `aria-controls` points at the panel's generated id |
 
-- **Named by their own text.** A component's accessible name comes from its visible label. Where a bar could only be named by printing text across it, an `ariaLabel` prop exists so the name is not forced to become visible copy.
-- **Decorative parts are hidden.** Glyphs and ornaments that duplicate adjacent text carry `aria-hidden`, so a screen reader hears the label once, not twice.
-- **Disclosures are wired.** Expandable rows pair `aria-expanded` on the trigger with `aria-controls` pointing at the panel's generated id.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar :percentage="40" aria-label="Upload progress" />
+  </template>
+---
+:::
 
 ## Where coverage stops
 
-- There is **no automated accessibility test suite**. The package's cross-cutting tests cover suite barrels and the global install path; a11y behaviour is verified per component in its own tests and by review, so gaps are possible.
-- The conventions above are followed by most, not all, components. A component whose docs page is still marked `In progress` in the sidebar has not been through review.
-- Screen-reader testing is manual and not yet run against a fixed matrix.
-
-If you find a gap, the component's own doc page links to its source — a fix there lands for every consumer at once.
+- There is no automated accessibility suite; each component's own tests and review cover a11y behavior, so gaps are possible.
+- Components still marked `In progress` in the sidebar have not been reviewed.
+- Screen-reader testing is manual, with no fixed test matrix.
+- Every component page links its source; a fix there reaches every consumer.
 
 ## Technologies
 

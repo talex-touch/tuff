@@ -1,6 +1,6 @@
 ---
 title: Design Foundations
-description: Typography and color tokens aligned with Tuffex variables
+description: The typography and color tokens every Tuffex component reads.
 category: Foundations
 status: beta
 since: 1.0.0
@@ -11,12 +11,10 @@ verified: true
 
 ## Usage
 
-- Tokens follow the Tuffex default palette.
-- Dark mode uses `[data-theme='dark']` or `.dark`.
+- Values are the defaults; to override them, see [Theming](./theming.en.mdc).
+- The Dark column applies under `[data-theme='dark']` or `.dark`.
 
 ## Typography
-
-**Primary font stack**
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -24,14 +22,7 @@ code: |
   --tx-font-family:
     "Inter", "PingFang SC", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
----
-:::
 
-**Sizing + weight**
-
-:::TuffCodeBlock{lang="css"}
----
-code: |
   --tx-font-size-base: 14px;
   --tx-font-size-small: 12px;
   --tx-font-size-large: 16px;
@@ -90,13 +81,8 @@ code: |
 
 ## Technologies
 
-- **Token note:** The tables document the default light/dark variables from `variables.scss`. High-contrast mixins define alternate values and should be documented separately when Tuff exposes that mode.
-- **Import note:** New pages should use `@talex-touch/tuffex/base.css` plus per-component style imports. The full `@talex-touch/tuffex/style.css` bundle remains a migration compatibility entry, not the preferred docs pattern.
-- **Verified coverage:** This page was manually checked against `variables.scss`; docs smoke coverage is provided by the component-docs coverage test and demo lazy/client-boundary tests.
-
-- Token source: `packages/tuffex/packages/components/style/variables.scss`.
-- Runtime entry: `@talex-touch/tuffex/base.css` for variables/base styles, and `@talex-touch/tuffex/<component>/style.css` for component-level CSS.
-- Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies component doc registration; `apps/nexus/app/components/content/demo-lazy.test.ts` and `demo-client-boundary.test.ts` verify demo loading boundaries.
+- Source: `packages/tuffex/packages/components/style/variables.scss`, shipped as `@talex-touch/tuffex/base.css`.
+- The high-contrast palette has its own values; see [Theming](./theming.en.mdc).
 
 <style scoped>
 .tuff-swatch {

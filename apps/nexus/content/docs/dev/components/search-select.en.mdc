@@ -1,6 +1,6 @@
 ---
 title: "SearchSelect"
-description: "Searchable select input with local filtering, remote search events, and Popover-backed options panel."
+description: "A select that searches as you type and fills in the picked option."
 category: Form
 status: beta
 since: 0.3.4
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### SearchSelect
+### Basic
+Local mode filters `options` by `label` and shows them all when the input is empty.
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectDemo" code-lang="vue"}
 ---
 code: |
@@ -29,19 +30,13 @@ code: |
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
-      <TxSearchSelect v-model="value" :options="options" placeholder="Search and pick" />
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-        Value: {{ value }}
-      </div>
-    </div>
+    <TxSearchSelect v-model="value" :options="options" placeholder="Search and pick" />
   </template>
 ---
 :::
 
-When `remote=true`, input changes (debounced) and Enter trigger the `search` event; fetch externally and write results back to `options`.
-
-### SearchSelect (remote)
+### Remote Search
+`remote` turns off local filtering and emits `search` after the debounce or on Enter; write the results back to `options`.
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectRemoteDemo" code-lang="vue"}
 ---
 code: |
@@ -49,55 +44,52 @@ code: |
   import { ref } from 'vue'
 
   const value = ref<string | number>('')
-  const query = ref('')
+  const options = ref<Array<{ value: string, label: string }>>([])
   const loading = ref(false)
 
-  const options = ref<Array<{ value: string, label: string }>>([])
-
-  async function onSearch(q: string) {
-    query.value = q
+  async function onSearch(query: string) {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 220))
-
-    const base = Array.from({ length: 18 }).map((_, i) => `Result ${i + 1}`)
-    const list = base
-      .filter(s => s.toLowerCase().includes(q.trim().toLowerCase()))
-      .slice(0, 12)
-
-    options.value = list.map(s => ({ value: s, label: s }))
+    options.value = await searchApi(query)
     loading.value = false
   }
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
-      <TxSearchSelect
-        v-model="value"
-        remote
-        :loading="loading"
-        :options="options"
-        placeholder="Type to remote-search"
-        @search="onSearch"
-      />
-
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-        Query: {{ query || '-' }}
-      </div>
-    </div>
+    <TxSearchSelect
+      v-model="value"
+      remote
+      :loading="loading"
+      :options="options"
+      @search="onSearch"
+    />
   </template>
 ---
 :::
 
-- Local mode filters by `options.label` and shows all when input is empty.
-- Remote mode requires updating `options` in the `search` event; results are not cached.
-- Closing the dropdown keeps input and panel state; reopening does not auto-reset.
+### Filter Toolbar
+`TxSearchSelect` holds structured filters such as scope, type, or status; the keyword goes to `TxSearchInput`, and `TxSearchEmpty` shows when nothing matches.
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSearchInput v-model="query" placeholder="Search plugins / docs / tasks" remote />
+    <TxSearchSelect
+      v-model="scope"
+      :options="scopeOptions"
+      placeholder="Filter scope"
+      panel-background="glass"
+    />
+    <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+  </template>
+---
+:::
 
 ### Best Practices
 
-- Keep `options` small in local mode; large remote sources should use `remote`, `searchDebounce`, and external result hydration.
-- Keep `label` stable and human-readable because local filtering only checks `option.label`.
-- Do not put free-form keyword search here when the value is not selected from a controlled option list; use `TxSearchInput` instead.
-- Treat disabled options as explanatory entries only. They remain visible but cannot be selected and should not be the only available result.
+- Keep `options` small in local mode; for large sources use `remote` and write results back from outside.
+- Keep each `label` stable and readable; local filtering matches only the label.
+- Pick only from a controlled option list; use `TxSearchInput` for free-form keyword search.
+- Treat disabled options as explanatory entries, never as the only result.
 
 ## API Reference
 
@@ -105,32 +97,42 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | Selected option value controlled by v-model. |
-| `placeholder` | `string` | `'Search'` | Placeholder forwarded to the search input. |
-| `disabled` | `boolean` | `false` | Disables the input, popover, focus open, and remote search emission. |
-| `clearable` | `boolean` | `true` | Shows the input clear affordance and allows clearing the selected value. |
-| `options` | `TxSearchSelectOption[]` | `[]` | Option records displayed in the dropdown; disabled options cannot be picked. |
-| `loading` | `boolean` | `false` | Shows a small spinner in the input suffix while results are loading. |
-| `remote` | `boolean` | `false` | Disables local filtering and emits `search` so the caller can provide external results. |
-| `searchDebounce` | `number` | `200` | Debounce delay in milliseconds before emitting remote `search` after input changes. |
-| `dropdownMaxHeight` | `number` | `280` | Maximum options panel height in pixels. |
-| `dropdownOffset` | `number` | `6` | Popover offset from the input reference. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Card background style |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
-| `panelRadius` | `number` | `18` | Popover panel corner radius. |
-| `panelPadding` | `number` | `6` | Popover panel inner padding. |
+| `modelValue` | `string \| number` | `''` | Selected value, bound with `v-model`. |
+| `placeholder` | `string` | `'Search'` | Placeholder of the input. |
+| `disabled` | `boolean` | `false` | Disables the input, panel, and focus-to-open; no remote `search` is emitted. |
+| `clearable` | `boolean` | `true` | Shows the clear button, which clears the selected value. |
+| `options` | `TxSearchSelectOption[]` | `[]` | Options to choose from; disabled options can't be picked. |
+| `loading` | `boolean` | `false` | Shows a spinner in the input suffix. |
+| `remote` | `boolean` | `false` | Turns off local filtering and emits `search` instead. |
+| `searchDebounce` | `number` | `200` | Debounce of the remote `search`, in milliseconds. |
+| `dropdownMaxHeight` | `number` | `280` | Maximum panel height (px); taller content scrolls inside. |
+| `dropdownOffset` | `number` | `6` | Gap between the panel and the input. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style, as TxCard `variant`. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background, as TxCard `background`. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow, as TxCard `shadow`. |
+| `panelRadius` | `number` | `18` | Panel corner radius, as TxCard `radius`. |
+| `panelPadding` | `number` | `6` | Panel padding, as TxCard `padding`. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string \| number)` | v-model update emitted after selecting an enabled option or clearing. |
-| `change` | `(v: string \| number)` | Emitted with the same value after selection or clear. |
-| `search` | `(q: string)` | Emitted in remote mode after debounce, and immediately on Enter. |
-| `select` | `(opt: TxSearchSelectOption)` | Emitted with the picked enabled option before the dropdown closes. |
-| `open` | - | Emitted when the options panel opens. |
-| `close` | - | Emitted when the options panel closes; pending remote-search debounce is cleared. |
+| `update:modelValue` | `(v: string \| number)` | Fires after an enabled option is picked or the value is cleared. |
+| `change` | `(v: string \| number)` | Fires together with `update:modelValue`. |
+| `search` | `(q: string)` | In remote mode, fires after the debounce or on Enter. |
+| `select` | `(opt: TxSearchSelectOption)` | Fires with the picked enabled option, before the panel closes. |
+| `open` | - | Fires when the panel opens. |
+| `close` | - | Fires when the panel closes; cancels any pending remote `search`. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `open()` | `() => void` | Opens the panel unless disabled. |
+| `close()` | `() => void` | Closes the panel. |
+| `focus()` | `() => void` | Focuses the internal `TxInput`. |
+| `blur()` | `() => void` | Blurs the internal `TxInput`. |
+| `clear()` | `() => void` | Clears the input and the selected value. |
 
 ### Types
 
@@ -145,64 +147,15 @@ code: |
 ---
 :::
 
-### Slots
+## Overview
 
-`TxSearchSelect` does not expose public slots. The input prefix, loading suffix, empty state, and option rows are internal so keyboard and Popover behavior stay consistent.
-
-### Expose
-
-| Name | Type | Description |
-|------|------|-------------|
-| `open()` | `() => void` | Opens the options panel unless the component is disabled. |
-| `close()` | `() => void` | Closes the options panel. |
-| `focus()` | `() => void` | Focuses the internal `TxInput`. |
-| `blur()` | `() => void` | Blurs the internal `TxInput`. |
-| `clear()` | `() => void` | Calls the internal input clear affordance. |
-
-## Dashboard Filter Toolbar
-
-In dashboard list filters, `TxSearchSelect` works best for structured scopes such as range, type, or status. Keep keyword entry in `TxSearchInput`, and use `TxSearchEmpty` for the no-match recovery path.
-
-:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verifiable composition of search input, search select, and search empty state."}
----
-code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('all')
-  const scopeOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'docs', label: 'Docs' },
-    { value: 'tasks', label: 'Tasks' },
-  ]
-  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxSearchInput v-model="query" placeholder="Search plugins / docs / tasks" remote />
-      <TxSearchSelect
-        v-model="selectedScope"
-        :options="scopeOptions"
-        placeholder="Filter scope"
-        panel-background="glass"
-      />
-      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
-    </section>
-  </template>
----
-:::
+- Remote mode shows `options` as given and caches nothing.
+- Clearing emits `update:modelValue` and `change` with `''`.
+- The input text survives closing the panel; reopening does not reset it.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
-- Recommendation: pass `options` directly for small local lists; use `remote` + `search` for external data sources and write results back through `options`.
-- Interaction: disabled options remain visible but cannot be selected; clearing emits both `update:modelValue` and `change` with an empty value.
-- Surface: the panel is hosted by `TxPopover`; use `panelBackground`, `panelShadow`, and `panelRadius` to align with the surrounding surface hierarchy.
-
-- Component source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`.
-- Types: `packages/tuffex/packages/components/src/search-select/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/search-select/__tests__/search-select.test.ts` verifies local filtering with option selection, debounced remote search emission, and empty-state rendering when no results match.
+- The panel is hosted by `TxPopover`. No slots are exposed: the prefix, loading suffix, empty state, and option rows render internally to keep keyboard and popover behavior consistent.
+- Source: `packages/tuffex/packages/components/src/search-select/`.
 
 <TuffDocSourceLink />

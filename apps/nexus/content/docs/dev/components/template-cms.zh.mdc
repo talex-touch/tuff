@@ -1,6 +1,6 @@
 ---
 title: CMS 内容管理
-description: 状态筛选、受控排序与分页、批量操作、抽屉编辑与可撤销提示组成的内容后台
+description: 带状态筛选、批量操作与抽屉编辑的内容后台
 category: TemplateContent
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## 用法
 
 ### 内容工作台
-
-:::TuffDemoWrapper{demo="TemplateCmsDemo" code-lang="vue" title="内容工作台" description="点状态筛选、表头排序或翻页会模拟一次取数；勾选多行后底栏换成批量操作；点一行打开编辑抽屉。展开后右侧出现详情栏。图中均为示例数据。"}
+:::TuffDemoWrapper{demo="TemplateCmsDemo" code-lang="vue" description="筛选、排序与翻页模拟取数；点一行打开编辑抽屉。图中为示例数据。"}
 ---
 code: |
   <script setup lang="ts">
@@ -86,10 +85,8 @@ code: |
 :::
 
 ### 看板排期
-
-草稿 → 审核中 → 已排期 → 已发布四列，卡片拖到下一列就换了状态，展开后还能拖到本周的某一天完成排期。和表格版相比，它不适合逐条改字段，适合每周排期会上看全局：哪一列堆积了、哪篇逾期了、这周每天发什么。
-
-:::TuffDemoWrapper{demo="TemplateCmsBoardDemo" code-lang="vue" title="看板排期" description="拖动卡片在列内排序或换列；焦点在卡片上时空格拿起、↑ / ↓ 移动、← / → 换列；点卡片打开详情。展开后下方出现本周排期，把卡片拖到某一天即可排期。滚进视口后会有一位协作者上线并移动一张卡片。图中均为示例数据。"}
+按流转看同一批文章的四列看板，适合每周排期会看全局，不适合逐条改字段。
+:::TuffDemoWrapper{demo="TemplateCmsBoardDemo" code-lang="vue" description="拖动卡片排序或换列，展开后可拖到本周某天排期。图中为示例数据。"}
 ---
 code: |
   <script setup lang="ts">
@@ -154,43 +151,40 @@ code: |
 
 ## 概述
 
-Tuff 文档与博客的内容工作台。编辑按状态找出草稿和待审稿件，批量发布或归档，在抽屉里改标题、链接和正文；每一次改动都能从提示里撤销。看板排期把同一批文章换成按流转来看：从草稿推到发布，并排进本周的某一天。
+Tuff 文档与博客的内容工作台：按状态找稿件、批量发布或归档、在抽屉里编辑，每次改动都可撤销。
 
-适合「表格 + 详情 + 表单」形态的后台：插件市场的条目审核、帮助中心、公告与更新日志管理。
-
-- 切换状态、搜索、排序和翻页都走一次约 350ms 的模拟取数：控件立即响应，表格先留着旧数据，超过 120ms 才换成同版式的骨架行，数据到了一次替换，版面不跳。
-- 排序作用在过滤后的全部文章上，再切出当前页；翻页或换筛选会清空选择，因为表头的全选只覆盖当前页。
-- 编辑、复制、发布、归档与删除立即生效，结果提示停留约 5 秒，点「撤销」回到操作之前。
-- 抽屉只在保存时校验：标题必填；链接只允许小写字母、数字和连字符，且不能和其他文章重复；摘要最多 160 字。
-- 列内宽度下点行直接打开抽屉。展开后（≥ 960px）增加栏目、语言、浏览三列和右侧详情栏：单击行看详情，再点一次或点「编辑」打开抽屉。窄于 640px 时只留标题列，状态和时间收到标题下方。
-- 看板排期：列内拖动重排，拖到另一列即换状态；展开后拖到下方本周的某一天即排期到那天 10:00（今天则是 16:00），已发布的卡片不能排期，过去的日期也不接收。每次移动都能从提示里撤销。键盘上每列是一个停靠点：空格拿起，↑ / ↓ 移动，再按空格放下，Esc 取消；← / → 把卡片换到相邻的列；卡片的 ⋯ 菜单里也有「移到」。触屏没有原生拖放，窄于 640px 时只显示一列，用顶部的列切换和菜单来移动。
-- 看板排期：快捷筛选和搜索只把不匹配的卡片淡化，列头显示「匹配数 / 总数」；拖进已满的「审核中」可以，但提示会写明超出在制上限。点卡片打开详情对话框，改阶段、日期、清单或发评论都立即生效，关闭时一次撤销整次修改；底部的主按钮把卡片推进到下一阶段。
-- 看板排期：第一次滚进视口后，第 1 秒 Mara 上线，第 1.8 秒她把《sdkapi 260713 变更日志》移到「已排期」（卡片闪一圈高亮，提示里点「查看」打开它），第 3.4 秒另一张卡片多了一条新评论。在模板里点一下或按任意键就停止；开启「减弱动态效果」时直接显示最终状态，不弹提示。
+- 筛选、搜索、排序与翻页各模拟约 350ms 的取数：表格先留旧数据，超过 120ms 才换成同版式的骨架行，版面不跳。
+- 排序作用于过滤后的全部文章，再切出当前页；翻页或换筛选会清空选择，因为表头全选只覆盖当前页。
+- 编辑、发布、归档与删除立即生效，提示停留约 5 秒可「撤销」；抽屉只在保存时校验。
+- 列内点行直接打开抽屉；展开后（≥ 960px）增加三列与详情栏；窄于 640px 时只留标题列。
+- 看板排期：列内拖动重排，拖到另一列即换状态，展开后拖到本周某天即排期；每次移动都可撤销。
+- 看板排期：键盘上每列一个停靠点，空格拿起、↑ / ↓ 移动、← / → 换列、Esc 取消；窄于 640px 时一次只显示一列。
+- 看板排期：进入视口后有协作者上线并移动一张卡片；点击或按键即停止；减少动态效果时直接显示最终状态。
 
 ## 自定义
 
-- 接真实接口时，把模拟取数换成请求，并在下一次查询发出时取消上一次；骨架、空态和提示的写法都不用改。
-- 后端分页就继续关闭 `sort-on-client`，把排序、筛选和页码一起交给接口，表格只负责展示。
-- 新字段优先放进抽屉和详情栏，表格只保留扫读要用的列；窄容器里按优先级删列，而不是横向滚动。
-- 正文需要所见即所得时可以换成 TxMarkdownEditor；它用类名绘制工具栏图标，宿主要能生成这些图标类。
-- 看板排期：TxSortableList 的拖拽状态只属于它自己，跨列拖放由宿主补：列容器上放行 `dragover`，`drop` 里只记下目标，等看板根节点收到 `dragend` 再改数据，这时源列表已经收尾、源卡片也还在。卡片里的按钮都要拦下 Enter 和空格（`@keydown.enter.stop` / `@keydown.space.stop`），否则会被列表当成「拿起」。
+- 接真实接口时，用请求替换模拟取数，并在下一次查询发出时取消上一次。
+- 后端分页时保持关闭 `sort-on-client`，把排序、筛选与页码一起交给接口。
+- 新字段优先放进抽屉与详情栏；窄容器里按优先级删列，不横向滚动。
+- 需要所见即所得时可换成 TxMarkdownEditor，前提是宿主能生成它的工具栏图标类。
+- 看板排期：跨列拖放由宿主处理（放行 `dragover`、`drop` 只记目标、根节点 `dragend` 时改数据）；卡片内的按钮要拦下 Enter 与空格。
 
 ## 相关组件
 
 | 区域 | 组件 | 作用 |
 |---|---|---|
-| 顶栏 | [TxSearchInput](/docs/dev/components/search-input)、[TxButton](/docs/dev/components/button) | 按标题或 slug 搜索；新建文章 |
-| 状态筛选 | [TxFilterChips](/docs/dev/components/filter-chips) | 单选状态，色点和计数都从文章数据推导 |
-| 文章表格 | [TxDataTable](/docs/dev/components/data-table)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxTag](/docs/dev/components/tag)、[TxAvatar](/docs/dev/components/avatar) | 多选、受控排序、吸顶表头；单元格放状态、栏目、作者与相对时间 |
-| 行菜单 | [TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxIconButton](/docs/dev/components/button) | 编辑、复制为草稿、发布或撤回、归档、删除 |
-| 加载与空态 | [TxSkeleton](/docs/dev/components/skeleton)、[TxSearchEmpty](/docs/dev/components/search-empty) | 取数时的占位行走同一张表；没有结果时给出「清除筛选」 |
-| 底栏 | [TxPagination](/docs/dev/components/pagination)、[TxButton](/docs/dev/components/button) | 分页；有选中行时换成批量发布、归档、删除 |
-| 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 挂在底栏上方，保存、发布、归档、删除后都能撤销 |
-| 详情栏（展开后） | [TxCellLink](/docs/dev/components/cell-link)、[TxMarkdownView](/docs/dev/components/markdown-view)、[TxNoSelection](/docs/dev/components/no-selection) | 摘要、元数据、文章链接与正文预览 |
-| 编辑抽屉 | [TxDrawer](/docs/dev/components/drawer)、[TxForm](/docs/dev/components/form)、[TxInput](/docs/dev/components/input)、[TxSelect](/docs/dev/components/select)、[TxTagInput](/docs/dev/components/tag-input)、[TxDatePicker](/docs/dev/components/date-picker)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TuffSwitch](/docs/dev/components/switch)、[TxTextarea](/docs/dev/components/textarea)、[TxSplitButton](/docs/dev/components/button) | 带校验的编辑表单；保存按钮的菜单里可选「保存为草稿 / 提交审核 / 立即发布」 |
-| 顶栏（看板排期） | [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar) | 在线协作者；搜标题时匹配的卡片保持高亮 |
-| 快捷筛选（看板排期） | [TxFilterChips](/docs/dev/components/filter-chips)、[TxDropdownMenu](/docs/dev/components/dropdown-menu) | 全部、我负责、本周到期、有新评论，计数从卡片推导；栏目可多选；不匹配的卡片淡化而不隐藏 |
-| 看板列（看板排期） | [TxSortableList](/docs/dev/components/sortable-list)、[TxBadge](/docs/dev/components/badge)、[TxTooltip](/docs/dev/components/tooltip) | 每列一个可排序列表，负责列内拖动、键盘拿起与读屏播报；列头计数，「审核中」在制上限 3，超出时标黄并写明「超限」 |
-| 卡片（看板排期） | [TxTag](/docs/dev/components/tag)、[TxAvatar](/docs/dev/components/avatar)、[TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu)、[TxProgressBar](/docs/dev/components/progress-bar) | 栏目色条与标签、作者、截止或发布时间、评论数；⋯ 菜单里打开详情、移到、复制链接、删除；展开后多一行摘要和发布前清单进度 |
-| 本周排期（看板排期，展开后） | [TxIconButton](/docs/dev/components/button)、[TxButton](/docs/dev/components/button) | 七天的放置格，按天列出要发布的文章；把卡片拖到某一天即排期，过去的日期不接收；可翻到上一周、下一周 |
-| 卡片详情（看板排期） | [TxModal](/docs/dev/components/modal)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxDatePicker](/docs/dev/components/date-picker)、[TxCheckbox](/docs/dev/components/checkbox)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxInput](/docs/dev/components/input) | 切换阶段、截止与发布日期、发布前清单、评论；底部是删除和推进到下一阶段的按钮 |
+| 顶栏 | [TxSearchInput](/docs/dev/components/search-input)、[TxButton](/docs/dev/components/button) | 搜索与新建文章 |
+| 状态筛选 | [TxFilterChips](/docs/dev/components/filter-chips) | 单选状态与计数 |
+| 文章表格 | [TxDataTable](/docs/dev/components/data-table)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxTag](/docs/dev/components/tag)、[TxAvatar](/docs/dev/components/avatar) | 多选、受控排序与吸顶表头 |
+| 行菜单 | [TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxIconButton](/docs/dev/components/button) | 单行编辑、发布与删除 |
+| 加载与空态 | [TxSkeleton](/docs/dev/components/skeleton)、[TxSearchEmpty](/docs/dev/components/search-empty) | 骨架行与清除筛选 |
+| 底栏 | [TxPagination](/docs/dev/components/pagination)、[TxButton](/docs/dev/components/button) | 分页与批量操作 |
+| 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 可撤销的结果提示 |
+| 详情栏（展开后） | [TxCellLink](/docs/dev/components/cell-link)、[TxMarkdownView](/docs/dev/components/markdown-view)、[TxNoSelection](/docs/dev/components/no-selection) | 摘要、元数据与正文预览 |
+| 编辑抽屉 | [TxDrawer](/docs/dev/components/drawer)、[TxForm](/docs/dev/components/form)、[TxInput](/docs/dev/components/input)、[TxSelect](/docs/dev/components/select)、[TxTagInput](/docs/dev/components/tag-input)、[TxDatePicker](/docs/dev/components/date-picker)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TuffSwitch](/docs/dev/components/switch)、[TxTextarea](/docs/dev/components/textarea)、[TxSplitButton](/docs/dev/components/button) | 带校验的编辑表单 |
+| 顶栏（看板排期） | [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar) | 在线协作者 |
+| 快捷筛选（看板排期） | [TxFilterChips](/docs/dev/components/filter-chips)、[TxDropdownMenu](/docs/dev/components/dropdown-menu) | 淡化不匹配的卡片 |
+| 看板列（看板排期） | [TxSortableList](/docs/dev/components/sortable-list)、[TxBadge](/docs/dev/components/badge)、[TxTooltip](/docs/dev/components/tooltip) | 列内拖动与在制上限 |
+| 卡片（看板排期） | [TxTag](/docs/dev/components/tag)、[TxAvatar](/docs/dev/components/avatar)、[TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu)、[TxProgressBar](/docs/dev/components/progress-bar) | 栏目、作者、时间与菜单 |
+| 本周排期（看板排期，展开后） | [TxIconButton](/docs/dev/components/button)、[TxButton](/docs/dev/components/button) | 拖到某天即排期 |
+| 卡片详情（看板排期） | [TxModal](/docs/dev/components/modal)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxDatePicker](/docs/dev/components/date-picker)、[TxCheckbox](/docs/dev/components/checkbox)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxInput](/docs/dev/components/input) | 阶段、日期、清单与评论 |

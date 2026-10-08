@@ -1,6 +1,6 @@
 ---
 title: "Card 卡片"
-description: "带插槽、材质背景、加载、点击、惯性和折射模式的 surface 容器。"
+description: "带头部、正文与底部插槽的表面容器"
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,33 +11,31 @@ verified: true
 
 ## 用法
 
-### Basic
+### 基础
 :::TuffDemoWrapper{demo="CardBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 最简用法：solid 变体 + glass 背景。 -->
-    <TxCard variant="solid" background="glass" shadow="none" :padding="14">
+    <TxCard background="glass">
       A generic container for content.
     </TxCard>
   </template>
 ---
 :::
 
-### Basic slots
+### 头部与底部
 :::TuffDemoWrapper{demo="CardBasicSlotsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- header / default / footer 三个插槽；完整样式见 demo 源码。 -->
-    <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
+    <TxCard background="glass" shadow="soft">
       <template #header>
         Card title
-        <TxButton size="sm" variant="text">Action</TxButton>
+        <TxButton size="sm" variant="ghost">Action</TxButton>
       </template>
       Slots: header / default / footer
       <template #footer>
-        <TxButton size="sm" variant="outline">Cancel</TxButton>
+        <TxButton size="sm" variant="secondary">Cancel</TxButton>
         <TxButton size="sm" variant="primary">Confirm</TxButton>
       </template>
     </TxCard>
@@ -45,45 +43,25 @@ code: |
 ---
 :::
 
-### 惯性跟随回弹（inertial）
-
-#### inertial
+### 惯性
+`inertial` 让卡片跟随指针位移，离开后回弹；`inertialMaxOffset` 限制位移，`inertialRebound` 调节弹性。
 :::TuffDemoWrapper{demo="CardInertialDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const rebound = ref(0.12)
-  const maxOffset = ref(26)
-  </script>
-
   <template>
-    <!-- inertial 开启指针跟随位移；maxOffset / rebound 可用滑块实时调节，见 demo 源码。 -->
-    <TxCard
-      variant="solid"
-      background="glass"
-      shadow="none"
-      inertial
-      :inertial-max-offset="maxOffset"
-      :inertial-rebound="rebound"
-      :padding="14"
-    >
-      Inertial drag (move the mouse on hover, leave to snap back).
+    <TxCard inertial :inertial-max-offset="26" :inertial-rebound="0.12">
+      Inertial drag
     </TxCard>
   </template>
 ---
 :::
 
-### 带标题的卡片
-
-#### Header
+### 标题
 :::TuffDemoWrapper{demo="CardHeaderDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 仅用 header 插槽承载标题。 -->
-    <TxCard variant="solid" background="glass" shadow="none" :padding="14">
+    <TxCard>
       <template #header>Card title</template>
       Using header slot
     </TxCard>
@@ -91,22 +69,19 @@ code: |
 ---
 :::
 
-### 带操作按钮的卡片
-
-#### Header + Footer actions
+### 操作按钮
 :::TuffDemoWrapper{demo="CardHeaderFooterActionsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- header 放标题 + 操作，footer 放确认 / 取消；完整用户信息卡样式见 demo 源码。 -->
-    <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
+    <TxCard shadow="soft">
       <template #header>
         User info
-        <TxButton size="sm" variant="text">More</TxButton>
+        <TxButton size="sm" variant="ghost">More</TxButton>
       </template>
-      <!-- 头像 + 姓名 / 职位 -->
+      Zhang San · Frontend Engineer
       <template #footer>
-        <TxButton size="sm" variant="outline">Cancel</TxButton>
+        <TxButton size="sm" variant="secondary">Cancel</TxButton>
         <TxButton size="sm" variant="primary">Confirm</TxButton>
       </template>
     </TxCard>
@@ -114,90 +89,41 @@ code: |
 ---
 :::
 
-### 卡片变体
-
-提供不同的视觉样式：
-
-#### variants
+### 变体
+`plain` 去掉边框与悬停反馈。
 :::TuffDemoWrapper{demo="CardVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 三种边框形态：solid / dashed / plain（plain 无边框、无 hover）。 -->
-    <TxCard variant="solid" background="glass" shadow="none" :padding="14">solid</TxCard>
-    <TxCard variant="dashed" background="glass" shadow="none" :padding="14">dashed</TxCard>
-    <TxCard variant="plain" background="glass" shadow="none" :padding="14">plain</TxCard>
+    <TxCard variant="solid">solid</TxCard>
+    <TxCard variant="dashed">dashed</TxCard>
+    <TxCard variant="plain">plain</TxCard>
   </template>
 ---
 :::
 
-### 不同背景下的效果（refraction / glass / blur）
-
-单卡片对比：背后提供文本与图形内容，通过开关切换 background（refraction / glass / blur / mask）。推荐优先使用 `refraction`。
-
-#### Card backgrounds (scroll)
+### 背景材质
+`background` 选择表面材质，推荐 `refraction`。
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  type Background = 'refraction' | 'glass' | 'blur' | 'mask'
-  type RefractionProfile = 'soft' | 'filmic' | 'cinematic'
-  type RefractionTone = 'mist' | 'balanced' | 'vivid'
-
-  const bg = ref<Background>('refraction')
-  const refractionStrength = ref(62)
-  const refractionProfile = ref<RefractionProfile>('filmic')
-  const refractionTone = ref<RefractionTone>('vivid')
-  const refractionAngle = ref(-24)
-  </script>
-
   <template>
-    <div style="display: grid; gap: 12px;">
-      <!-- Switch the card background; refraction is recommended for scroll surfaces. -->
-      <TxRadioGroup v-model="bg">
-        <TxRadio value="refraction">refraction</TxRadio>
-        <TxRadio value="glass">glass</TxRadio>
-        <TxRadio value="blur">blur</TxRadio>
-        <TxRadio value="mask">mask</TxRadio>
-      </TxRadioGroup>
-
-      <!-- Only when background='refraction': tone tunes color richness (mist / balanced / vivid). -->
-      <TxRadioGroup v-if="bg === 'refraction'" v-model="refractionTone" size="small">
-        <TxRadio value="vivid">vivid</TxRadio>
-        <TxRadio value="balanced">balanced</TxRadio>
-        <TxRadio value="mist">mist</TxRadio>
-      </TxRadioGroup>
-
-      <TxCard
-        :background="bg"
-        :refraction-strength="refractionStrength"
-        :refraction-profile="refractionProfile"
-        :refraction-tone="refractionTone"
-        :refraction-angle="refractionAngle"
-        :padding="16"
-        :radius="16"
-      >
-        <template #header>
-          <div>bg={{ bg }} · {{ refractionProfile }} / {{ refractionTone }}</div>
-        </template>
-        <p>Content sits behind the card surface; refraction bends and disperses it.</p>
-      </TxCard>
-    </div>
+    <TxCard background="refraction" refraction-profile="filmic" refraction-tone="vivid">
+      refraction
+    </TxCard>
+    <TxCard background="glass">glass</TxCard>
+    <TxCard background="blur">blur</TxCard>
+    <TxCard background="mask">mask</TxCard>
   </template>
 ---
 :::
 
-### Empty 布局
-
-#### Card with Empty
+### 空状态
 :::TuffDemoWrapper{demo="CardCardWithEmptyDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- background="mask" 的卡片承载空状态；下方是不带卡片的裸 TxEmpty 对比。 -->
-    <TxCard variant="plain" background="mask" shadow="none" :padding="16">
+    <TxCard variant="plain" background="mask" :padding="16">
       <TxEmpty title="Nothing here" description="Create your first item to get started.">
         <template #action>
           <TxButton variant="primary" size="sm">Create</TxButton>
@@ -209,23 +135,13 @@ code: |
 ---
 :::
 
-### 与组件结合方式（Popover / SearchSelect）
-
-#### Card compositions
+### 浮层面板
+Popover、SearchSelect 等浮层的面板由 TxCard 渲染，用 `panel-*` 属性配置。
 :::TuffDemoWrapper{demo="CardCardCompositionsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  const value = ref('')
-  </script>
-
   <template>
-    <!-- TxCard 的 panel-* API 透传到 Popover / SearchSelect 等浮层；完整含 Select / Cascader / TreeSelect 见 demo 源码。 -->
     <TxPopover
-      v-model="open"
       panel-variant="solid"
       panel-background="glass"
       panel-shadow="soft"
@@ -239,9 +155,7 @@ code: |
     </TxPopover>
     <TxSearchSelect
       v-model="value"
-      placeholder="Search..."
-      :options="[{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]"
-      panel-variant="solid"
+      :options="options"
       panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
@@ -251,168 +165,120 @@ code: |
 ---
 :::
 
-### 卡片尺寸
-
-#### size
+### 尺寸
+未传 `padding` 时，`size` 取 `10` / `12` / `16` px 内边距。
 :::TuffDemoWrapper{demo="CardSizeDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- size 预设内边距：small / medium / large（未显式传 padding 时按 size 取 10 / 12 / 16）。 -->
-    <TxCard size="small" variant="solid" background="glass" shadow="none" :padding="undefined">size=small</TxCard>
-    <TxCard size="medium" variant="solid" background="glass" shadow="none">size=medium</TxCard>
-    <TxCard size="large" variant="solid" background="glass" shadow="none">size=large</TxCard>
+    <TxCard size="small">size=small</TxCard>
+    <TxCard size="medium">size=medium</TxCard>
+    <TxCard size="large">size=large</TxCard>
   </template>
 ---
 :::
 
-### 布局属性（padding / radius）
-
-#### layout props
+### 内边距与圆角
 :::TuffDemoWrapper{demo="CardLayoutPropsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- padding 控制内边距，radius 控制圆角。 -->
-    <TxCard variant="solid" background="glass" shadow="none" :padding="10" :radius="10">padding=10</TxCard>
-    <TxCard variant="solid" background="glass" shadow="none" :padding="18" :radius="10">padding=18</TxCard>
-    <TxCard variant="plain" background="glass" shadow="none" :padding="14" :radius="22">radius=22</TxCard>
+    <TxCard :padding="10" :radius="10">padding=10</TxCard>
+    <TxCard :padding="18" :radius="10">padding=18</TxCard>
+    <TxCard variant="plain" :padding="14" :radius="22">radius=22</TxCard>
   </template>
 ---
 :::
 
-### 状态（clickable / loading / disabled）
-
-#### states
+### 状态
 :::TuffDemoWrapper{demo="CardStatesDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  function onClick() {}
-  </script>
-
   <template>
-    <!-- 状态：clickable / loading（可配 loadingSpinnerSize）/ disabled。 -->
-    <TxCard variant="solid" background="glass" shadow="none" clickable :padding="14" @click="onClick">clickable</TxCard>
-    <TxCard variant="solid" background="glass" shadow="none" :loading="true" :padding="14" :loading-spinner-size="12">loading (spinner=12)</TxCard>
-    <TxCard variant="solid" background="glass" shadow="none" :loading="true" :padding="14" :loading-spinner-size="20">loading (spinner=20)</TxCard>
-    <TxCard variant="solid" background="glass" shadow="none" disabled :padding="14">disabled</TxCard>
+    <TxCard clickable @click="open">clickable</TxCard>
+    <TxCard loading :loading-spinner-size="20">loading</TxCard>
+    <TxCard disabled>disabled</TxCard>
   </template>
 ---
 :::
 
 ### 最佳实践
 
-### 使用建议
-
-1. **内容组织**：合理使用 header、body、footer 区域组织内容
-2. **视觉层次**：通过不同的卡片变体创建视觉层次
-3. **交互反馈**：为可点击卡片提供明确的视觉反馈
-4. **响应式设计**：确保卡片在不同屏幕尺寸下的良好表现
-
-### 布局示例
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="card-grid">
-      <TxCard 
-        v-for="item in items" 
-        :key="item.id"
-        clickable
-        @click="handleItemClick(item)"
-      >
-        <template #header>
-          <h3>{{ item.title }}</h3>
-        </template>
-
-        <p>{{ item.description }}</p>
-
-        <template #footer>
-          <div class="card-actions">
-            <TxButton size="sm" variant="text">编辑</TxButton>
-            <TxButton size="sm" variant="text">删除</TxButton>
-          </div>
-        </template>
-      </TxCard>
-    </div>
-  </template>
----
-:::
-
-### 选型建议（TxBaseSurface vs TxCard）
-
-- 需要更高封装与业务直出：优先用 `TxCard`。它已包含 `variant/shadow/slots/loading/inertial` 与 pointer-light + spring 的交互能力。
-- 需要底层材质细调：改用 `TxBaseSurface`。尤其是折射与滤镜底层参数（`displace`、`distortionScale`、`redOffset/greenOffset/blueOffset`、`filterSaturation/filterContrast/filterBrightness`、`refractionHaloOpacity`）。
-- 约定：`TxCard` 维持"开箱即用"稳定 API；材质实验或品牌化渲染直接在 `TxBaseSurface` 层完成。
+- 整卡导航或选择时才用 `clickable`；独立动作放进插槽里的真实按钮或链接。
+- 外观优先用 `variant`、`shadow`、`size`、`radius`、`padding` 调整，CSS 变量只用于对齐插槽内容或遮罩底色。
+- 需要折射或滤镜的底层参数（`displace`、`distortionScale`、`redOffset` 等）时改用 `TxBaseSurface`。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `variant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态；`plain` 会移除标准边框。 |
-| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | 转发给 `TxBaseSurface` 的 surface 模式；`mask` 使用卡片颜色/透明度，`glass` 与 `refraction` 启用光学层。 |
-| `shadow` | `'none' \| 'soft' \| 'medium'` | `'none'` | 卡片包装器的阴影强度。 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 未显式传入 `padding` 时使用的内边距预设。 |
-| `radius` | `number` | `18` | px 圆角，转发给视觉 surface 并写入根 CSS 变量。 |
-| `padding` | `number` | - | 显式 px 内边距。默认由 `size` 决定为 `10`、`12` 或 `16`。 |
-| `glassBlur` | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：启用 blur。 |
-| `glassBlurAmount` | `number` | `22` | 仅 `background='glass' \| 'refraction'`：blur 强度，单位 px。 |
-| `glassOverlay` | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：启用高光 overlay。 |
-| `glassOverlayOpacity` | `number` | `0.18` | 仅 `background='glass' \| 'refraction'`：高光 overlay 透明度。 |
-| `maskOpacity` | `number` | `0.75` | 仅 `background='mask'`：转发给 `TxBaseSurface` 的透明度，会收敛到 `0..1`。 |
-| `fallbackMaskOpacity` | `number` | `0.26` | 运动降级到 mask 时的遮罩透明度（0-1）。 |
-| `surfaceMoving` | `boolean` | `false` | 外部 moving 标记，会与内部惯性 motion 合并后转发给 `TxBaseSurface`。|
-| `refractionStrength` | `number` | `62` | 仅 `background='refraction'`：折射强度（0-100），主控色散与扭曲强度 |
-| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 仅 `background='refraction'`：折射风格预设 |
-| `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | 仅 `background='refraction'`：折射色调预设（默认 `vivid`，减少发灰） |
-| `refractionAngle` | `number` | `-24` | 仅 `background='refraction'`：色散主方向角度（度） |
-| `refractionLightFollowMouse` | `boolean` | `false` | 仅 `background='refraction'`：是否将高光锚点与鼠标位置绑定 |
-| `refractionLightFollowIntensity` | `number` | `0.45` | 仅 `background='refraction'`：鼠标绑定强度（0-1），控制 angle/strength 跟随权重 |
-| `refractionLightSpring` | `boolean` | `true` | 仅 `background='refraction'`：鼠标光源是否使用弹簧过渡 |
-| `refractionLightSpringStiffness` | `number` | `0.18` | 仅 `background='refraction'`：鼠标光源弹簧刚度（建议 0.01-0.55） |
-| `refractionLightSpringDamping` | `number` | `0.84` | 仅 `background='refraction'`：鼠标光源弹簧阻尼（建议 0.55-0.99） |
-| `clickable` | `boolean` | `false` | 启用 hover 与**按压**反馈；未禁用时允许卡片发出 `click`。按下时缩到 `0.985`——卡片是大面积，按钮上读作轻推的比例放到这里会像整页在晃。只有可点击的卡片有按压态：给每张卡都加会许诺一个普通表面并不具备的动作。 |
-| `loading` | `boolean` | `false` | 显示带 `TxSpinner` 的加载遮罩。 |
-| `loadingSpinnerSize` | `number` | - | spinner 尺寸（px）；省略时默认为 `12`。 |
-| `disabled` | `boolean` | `false` | 应用禁用样式，并阻止卡片发出 click 与指针驱动的 motion 更新。 |
-| `inertial` | `boolean` | `false` | 启用指针跟随位移与弹簧式回弹动效。 |
-| `inertialMaxOffset` | `number` | `22` | 指针跟随的最大位移（px）。 |
-| `inertialRebound` | `number` | `0.12` | 回弹系数，收敛到 `0..1`；数值越大越有弹性。 |
+| `variant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框形态；`plain` 无边框、无悬停反馈。 |
+| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | 表面材质，转发给 `TxBaseSurface`。 |
+| `shadow` | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 内边距预设：`10` / `12` / `16` px。 |
+| `radius` | `number` | `18` | 圆角（px）。 |
+| `padding` | `number` | - | 内边距（px），优先于 `size`。 |
+| `glassBlur` | `boolean` | `true` | `glass` / `refraction` 下启用模糊。 |
+| `glassBlurAmount` | `number` | `22` | `glass` / `refraction` 下的模糊半径（px）。 |
+| `glassOverlay` | `boolean` | `true` | `glass` / `refraction` 下启用高光层。 |
+| `glassOverlayOpacity` | `number` | `0.18` | 高光层透明度。 |
+| `maskOpacity` | `number` | `0.75` | `mask` 下的表面透明度，收敛到 `0..1`。 |
+| `fallbackMaskOpacity` | `number` | `0.26` | 运动中降级为遮罩时的透明度（0–1）。 |
+| `surfaceMoving` | `boolean` | `false` | 外部运动标记，与惯性运动合并后转发给表面。|
+| `refractionStrength` | `number` | `62` | 折射强度（0–100），驱动色散与扭曲。 |
+| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 折射风格预设。 |
+| `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | 折射色调预设；`vivid` 避免发灰。 |
+| `refractionAngle` | `number` | `-24` | 色散主方向（度）。 |
+| `refractionLightFollowMouse` | `boolean` | `false` | 高光锚点跟随指针。 |
+| `refractionLightFollowIntensity` | `number` | `0.45` | 跟随权重（0–1），影响色散角度与强度。 |
+| `refractionLightSpring` | `boolean` | `true` | 光源跟随使用弹簧过渡。 |
+| `refractionLightSpringStiffness` | `number` | `0.18` | 光源弹簧刚度，收敛到 `0.01–0.55`。 |
+| `refractionLightSpringDamping` | `number` | `0.84` | 光源弹簧阻尼，收敛到 `0.55–0.99`。 |
+| `clickable` | `boolean` | `false` | 启用悬停与按压反馈（缩至 `0.985`），并派发 `click`。 |
+| `loading` | `boolean` | `false` | 用 `TxSpinner` 遮罩覆盖卡片。 |
+| `loadingSpinnerSize` | `number` | - | Spinner 尺寸（px），省略时为 `12`。 |
+| `disabled` | `boolean` | `false` | 禁用样式，阻止 `click` 与指针动效。 |
+| `inertial` | `boolean` | `false` | 跟随指针位移，离开后弹簧回弹。 |
+| `inertialMaxOffset` | `number` | `22` | 最大跟随位移（px）。 |
+| `inertialRebound` | `number` | `0.12` | 回弹系数，收敛到 `0..1`；越大越有弹性。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |--------|------|------|
-| `click` | `(event: MouseEvent)` | 仅在 `clickable=true` 且 `disabled=false` 时发出。 |
+| `click` | `(event: MouseEvent)` | 可点击且未禁用时，点击或按 Enter / Space 触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |--------|-------|------|
-| `default` | - | 卡片主要内容。 |
-| `header` | - | 可选头部区域，渲染在 body 上方。 |
-| `footer` | - | 可选底部区域，渲染在 body 下方。 |
-| `cover` | - | 可选封面区域，渲染在 header 和 body 之前。 |
+| `default` | - | 正文。 |
+| `header` | - | 正文上方的头部。 |
+| `footer` | - | 正文下方的底部。 |
+| `cover` | - | 头部与正文之前的封面。 |
 
-### Exposed Methods
+## 概述
 
-不暴露公开实例方法。
+- 可点击时根节点带 `role="button"` 与 `tabindex="0"`，Enter / Space 与点击一样触发 `click`；否则是无语义的 `div`。
+- 可点击卡片禁用时设置 `aria-disabled` 并移出 Tab 序列。
+- 只响应卡片自身的 Enter / Space，插槽内控件的按键不会触发卡片。
+- `loading` 的遮罩带 `aria-hidden`，读屏或表单忙碌提示由调用方负责。
+- `background` 作为表面模式转发给 `TxBaseSurface`：`mask` 使用 `maskOpacity`，`glass` 与 `refraction` 使用模糊与高光参数；`refraction*` 只在 `refraction` 下生效。
 
-### 样式定制
+## 技术实现
 
-#### CSS 变量
+- 表面是 `aria-hidden` 的 `TxBaseSurface`；惯性由 `requestAnimationFrame` 弹簧写入 `--tx-card-dx` / `--tx-card-dy`，静止后停止。
+- 源码：`packages/tuffex/packages/components/src/card/`。
 
-`TxCard` 只在根节点暴露少量运行时变量。大部分视觉调整应优先使用 props；只有当包装层需要和插槽内容或底层 `TxBaseSurface` mask 颜色对齐时，才建议覆盖变量。
+## 自定义
 
 :::TuffCodeBlock{lang="css"}
 ---
 code: |
   .custom-card {
-    /* mask / refraction fallback surface 采样的背景色。 */
+    /* mask 与折射降级表面采样的底色 */
     --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
   }
 ---
@@ -420,39 +286,12 @@ code: |
 
 | 变量 | 写入方 | 用途 |
 |------|--------|------|
-| `--tx-card-radius` | `radius` prop | 根节点、surface、cover 和 loading overlay 的圆角。 |
-| `--tx-card-padding` | `padding` prop 或 `size` 预设 | 根节点 padding、cover 负 margin 和 cover 底部间距。 |
-| `--tx-card-dx` / `--tx-card-dy` | 内部 inertial motion | 根节点 `translate3d(...)` 偏移；调用方不应手动设置。 |
-| `--tx-card-fake-background` | 调用方 / 主题 | mask 与 refraction fallback surface 采样的背景色。 |
-| `--tx-surface-refraction-mask-color` | 卡片根节点 inline style | 将 `--tx-card-fake-background` 转发给 `TxBaseSurface`；通常只需要覆盖 `--tx-card-fake-background`。 |
+| `--tx-card-radius` | `radius` | 根节点、表面、封面与加载层的圆角。 |
+| `--tx-card-padding` | `padding` 或 `size` | 内边距与封面的负外边距。 |
+| `--tx-card-dx` / `--tx-card-dy` | 惯性动效 | 根节点位移；不要手动设置。 |
+| `--tx-card-fake-background` | 调用方 / 主题 | `mask` 与折射降级表面的底色。 |
+| `--tx-surface-refraction-mask-color` | 根节点内联样式 | 把 `--tx-card-fake-background` 转给 `TxBaseSurface`；改前者即可。 |
 
-#### 主题说明
-
-- 组件源码中没有 `--tx-card-background-*`、`--tx-card-border-*`、`--tx-card-shadow-*` 或 `--tx-card-padding-*` 主题 token。
-- 支持的样式调整优先使用 `variant`、`shadow`、`size`、`radius`、`padding` 和 surface props。
-- 卡片需要跟随应用主题时，应覆盖全局 TuffEx token，例如 `--tx-bg-color-overlay`、`--tx-border-color-light` 和 `--tx-color-primary`。
-
-## 概述
-
-- 根节点是非语义化 `div`。`clickable` 只适合卡片级选择/导航；需要原生语义的动作应放在插槽内的真实按钮或链接上。
-- `click` 只在 `clickable=true` 且 `disabled=false` 时发出；禁用卡片仍渲染内容，但会阻止 click 事件和指针驱动 motion 更新。
-- `loading=true` 会用 `aria-hidden="true"` 的 `TxSpinner` 覆盖卡片；调用方仍负责 live-region 或表单 busy 状态提示。
-- `background` 会作为 surface mode 转发给 `TxBaseSurface`。`mask` 转发 `maskOpacity`；`glass` 和 `refraction` 转发 blur / overlay props。
-- refraction profile、tone、strength、angle 与 light-follow props 只在 `background="refraction"` 时生效。
-- `refractionStrength`、light-follow intensity、spring stiffness、spring damping 和 inertial rebound 在用于派生视觉状态前会被收敛。
-- `inertial=true` 会写入指针跟随 transform 变量，并调度 RAF 直到 motion 稳定；关闭 inertial 会重置 motion 状态。
-
-## 技术实现
-
-- 已人工核对 `packages/tuffex/packages/components/src/card/src/types.ts`、`TxCard.vue` 与 `card.test.ts`。
-- Props 表已覆盖源码中的全部 props，包括此前缺失的 `maskOpacity` 与 `surfaceMoving`。
-- 已修正样式定制内容，只保留源码中真实存在的 CSS 变量；移除了过期的 `--tx-card-background-*`、border、shadow 和 padding theme-token 示例。
-- 已按测试确认关键行为：默认 mode 是 `pure`，size 派生 padding 为 `10/12/16`，只有启用且未禁用的 clickable 卡片才会发出 click，loading 会渲染 spinner overlay，disabled 会阻止 pointer-driven updates。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts` 覆盖默认 class/surface props、结构插槽、clickable gating、loading overlay、mask/glass 映射和 refraction 跟随光源映射。
-- 与 `TxBaseSurface` 的选型说明是刻意保留的边界：底层 refraction / filter 控制仍在 `TxBaseSurface`，`TxCard` 负责稳定的容器 API。
-
-- Component source: `packages/tuffex/packages/components/src/card/src/TxCard.vue`
-- Types: `packages/tuffex/packages/components/src/card/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts`
+跟随应用主题时覆盖全局 token，如 `--tx-bg-color-overlay`、`--tx-border-color-light`、`--tx-color-primary`。
 
 <TuffDocSourceLink />

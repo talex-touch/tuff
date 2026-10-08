@@ -1,6 +1,6 @@
 ---
 title: Store
-description: A plugin store with a featured carousel, categories, search suggestions, permission and version details, and install, update and uninstall flows the reader confirms
+description: A plugin store with featured picks, search, permission details, and install flows.
 category: TemplateContent
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Plugin store
-
-:::TuffDemoWrapper{demo="TemplateStoreDemo" code-lang="vue" title="Plugin store" description="The carousel turns once and stops, pausing on hover or focus; search suggests plugins by name, feature and trigger (try fy); open a card for its details and enlarge the screenshots. Installs, updates and grants only happen after you click; the community plugin Unit Converter fails its first download to show the retry path."}
+:::TuffDemoWrapper{demo="TemplateStoreDemo" code-lang="vue" description="Installs, updates, and grants happen only after you click; Unit Converter fails its first download to show Retry."}
 ---
 code: |
   <script setup lang="ts">
@@ -82,38 +81,36 @@ code: |
 
 ## Overview
 
-The plugin store inside the Tuff client: browse, search, read the details, then install, update, disable or uninstall. Plugin ids, versions, channels, triggers, required and optional permissions and the reason for each come from the repo’s `plugins/*/manifest.json`; permission names and risk levels come from the permission registry, and the install, update and uninstall wording is the client’s own. Ratings, install counts, reviews, release notes and package sizes are sample data, and the three community plugins are fictional. Every plugin installs directly: there is no price, plan or checkout anywhere.
+The plugin store in the Tuff client; manifests and permissions come from the repo, ratings, installs, and reviews are sample data, and nothing is for sale.
 
-It fits an in-app extension marketplace, a theme or template store, an integrations directory — anywhere people switch between Discover and Installed, and permissions have to be explained before anything is installed.
-
-- Installing, updating, granting and uninstalling only ever start from your click. The script does two things: the carousel turns every 5 seconds and stops after one lap, and after about 1.5 seconds it reports that 2 plugins have updates — that toast closes by itself after a few seconds (a pointer or focus on it holds it open), while the “plugins have new versions” banner stays. With reduced motion the carousel stays put, the update notice is simply there, and no toast appears.
-- The carousel art is dark on both the light and the dark docs page, so the whole carousel renders in the dark theme and its buttons look the same either way.
-- The real client downloads and verifies the signature before it asks for permissions; the template asks when you press Install, so the dialog never appears after you have scrolled away. The three choices use the client’s wording — Always allow, Allow this session, Reject install — and a community plugin adds “comes from an unofficial source. Proceed with installation?” at the top.
-- A download can be cancelled. The community plugin Unit Converter times out on its first download; Retry downloads again without asking for permissions a second time.
-- In the column, details replace the list, and Back or Esc returns to the same scroll position and to the card that opened them; expanded, details are a side panel that follows the selected plugin. They are not a TxDrawer: the drawer takes Tab and Esc on the whole document, so a screenshot lightbox or confirmation opened from it would have focus dragged back to the drawer, and one Esc would close both.
-- The carousel is a region with `aria-roledescription="carousel"`, and slides that are not showing are `inert`; announcements are off while it plays and polite once you step through it. With focus inside it, ← / → change slides — bound to the carousel only, never to the page.
-- Risk colours and icons always come with words; the read-only stars are hidden from screen readers, which hear a sentence such as “Rated 4.8, 1,240 reviews” instead.
+- Installing, updating, granting, and uninstalling start only from your click; playback just turns the carousel once and reports updates, and reduced motion keeps the carousel still.
+- The carousel art is dark on both light and dark docs pages, so the whole carousel renders in the dark theme.
+- Install opens the permission dialog at once (the client downloads and verifies first): Always allow, Allow this session, or Reject install; community plugins add an unofficial-source warning.
+- A download can be cancelled; Unit Converter times out on its first download, and Retry doesn't ask for permissions again.
+- In the column, details replace the list, and Back or Esc restores the scroll position; expanded, they are a side panel. They avoid TxDrawer, which would drag focus back and close two layers on one Esc.
+- Hidden carousel slides are `inert`, and nothing is announced while it plays; with focus inside it, ← / → change slides.
+- Risk colors and icons always come with words; read-only stars are hidden from screen readers in favor of a sentence.
 
 ## Customization
 
-- With a real store, read plugins, channels, permissions and reasons straight from the plugin manifests and the store API, and swap the grouping for the store’s own `category` (the template assigns its groups by hand; most manifests say `utilities`).
-- The install table is keyed by plugin id. For real installs, replace the timers with the phases the client reports — queued, downloading, verifying, awaiting confirmation, installing — and every action slot follows along.
-- Put ratings and reviews through moderation: show a submission as Pending first, and count it in the average only once it is approved.
-- For suggestions with icons, swap TxSearchSelect for TxSearchInput with a hand-built list, at the cost of writing the combobox keyboard and screen-reader behaviour yourself.
+- With a real store, read plugins, channels, permissions, and reasons from the manifests and the store API, and group by the store's own `category`.
+- The install table is keyed by plugin id: replace the timers with the phases the client reports, and every action slot follows.
+- Put ratings and reviews through moderation: show a submission as Pending and count it only once approved.
+- For suggestions with icons, replace TxSearchSelect with TxSearchInput and a hand-built list, and write the combobox keyboard and screen-reader behavior yourself.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Header | [TxFilterChips](/docs/dev/components/filter-chips), [TxSearchSelect](/docs/dev/components/search-select) | Discover / Installed switch with tab semantics; search suggests plugins by name, feature and trigger, a pick opens its details, and Enter or a pause filters the list |
-| Categories and sorting | [TxFilterChips](/docs/dev/components/filter-chips), [TxFlatRadio](/docs/dev/components/flat-radio), [TxSidebarNav](/docs/dev/components/sidebar-nav) | Category counts derived from the plugins; sort by installs, last release or rating; expanded, views and categories move into the side navigation |
-| Featured carousel | Hand-built region, [TxButton](/docs/dev/components/button) | tuffex has no carousel: pause, previous and next are always there, dots jump straight to a slide, and the backdrops are generated in code |
-| Plugin cards | [TxCard](/docs/dev/components/card), [TxIconChip](/docs/dev/components/icon-chip), [TxRating](/docs/dev/components/rating), [TxTag](/docs/dev/components/tag) | Icon, author and source, a two-line summary, rating and installs, category and channel; the read-only stars are hidden from screen readers in favour of a sentence |
-| Action slot | [TxButton](/docs/dev/components/button), [TxProgressBar](/docs/dev/components/progress-bar) | Install → progress → Open / Update / Enable / Retry, one state shared by cards, carousel, details and installed rows |
-| Updates notice | [TxStatusBadge](/docs/dev/components/status-badge) | Appears once an update check finishes; View updates goes to the installed list |
-| Details header | [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxTooltip](/docs/dev/components/tooltip), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | Official badge on the icon, source explanation, and disable / uninstall / copy plugin ID under “⋯” |
-| Details tabs | [TxTabs](/docs/dev/components/tabs), [TxImageGallery](/docs/dev/components/image-gallery), [TxKbd](/docs/dev/components/kbd), [TxStatusBadge](/docs/dev/components/status-badge), [TxTimeline](/docs/dev/components/timeline) | Overview (screenshot lightbox, features and triggers), Permissions (reasons and risk), Versions (channel and notes), Reviews |
-| Reviews | [TxRating](/docs/dev/components/rating), [TxProgressBar](/docs/dev/components/progress-bar), [TxAvatar](/docs/dev/components/avatar), [TxTextarea](/docs/dev/components/textarea) | Average and star distribution, review list, Helpful, and a review form whose submissions show as Pending |
-| Installed | [TxCardItem](/docs/dev/components/card-item), [TxSwitch](/docs/dev/components/switch), [TxEmptyState](/docs/dev/components/empty-state) | One row per plugin: the action shows only for an update or work in progress, beside an enable switch and a menu; an empty state once everything is uninstalled |
-| Confirmations | [TxModal](/docs/dev/components/modal) | Permission request, update confirmation (new permissions listed on their own) and uninstall |
-| Empty results and feedback | [TxSearchEmpty](/docs/dev/components/search-empty), [TxToastPanel](/docs/dev/components/toast-panel) | Clear search when nothing matches; install, update and uninstall results stay inside the template, some with Open, Retry or Reinstall |
+| Header | [TxFilterChips](/docs/dev/components/filter-chips), [TxSearchSelect](/docs/dev/components/search-select) | View switch and search suggestions |
+| Categories and sorting | [TxFilterChips](/docs/dev/components/filter-chips), [TxFlatRadio](/docs/dev/components/flat-radio), [TxSidebarNav](/docs/dev/components/sidebar-nav) | Category counts and sorting |
+| Featured carousel | Hand-built region, [TxButton](/docs/dev/components/button) | Hand-built carousel with controls |
+| Plugin cards | [TxCard](/docs/dev/components/card), [TxIconChip](/docs/dev/components/icon-chip), [TxRating](/docs/dev/components/rating), [TxTag](/docs/dev/components/tag) | Icon, summary, rating, channel |
+| Action slot | [TxButton](/docs/dev/components/button), [TxProgressBar](/docs/dev/components/progress-bar) | One shared install state |
+| Updates notice | [TxStatusBadge](/docs/dev/components/status-badge) | Shown after an update check |
+| Details header | [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxTooltip](/docs/dev/components/tooltip), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | Official badge and the ⋯ menu |
+| Details tabs | [TxTabs](/docs/dev/components/tabs), [TxImageGallery](/docs/dev/components/image-gallery), [TxKbd](/docs/dev/components/kbd), [TxStatusBadge](/docs/dev/components/status-badge), [TxTimeline](/docs/dev/components/timeline) | Overview, permissions, versions, reviews |
+| Reviews | [TxRating](/docs/dev/components/rating), [TxProgressBar](/docs/dev/components/progress-bar), [TxAvatar](/docs/dev/components/avatar), [TxTextarea](/docs/dev/components/textarea) | Average, distribution, write a review |
+| Installed | [TxCardItem](/docs/dev/components/card-item), [TxSwitch](/docs/dev/components/switch), [TxEmptyState](/docs/dev/components/empty-state) | Installed rows and enable switches |
+| Confirmations | [TxModal](/docs/dev/components/modal) | Permission, update, uninstall prompts |
+| Empty results and feedback | [TxSearchEmpty](/docs/dev/components/search-empty), [TxToastPanel](/docs/dev/components/toast-panel) | Clear search and result notices |

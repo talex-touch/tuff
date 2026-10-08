@@ -1,6 +1,6 @@
 ---
 title: "IconChip"
-description: "Filled plate carrying a file-type badge, an initial, or a small glyph."
+description: "A filled plate that carries a format badge, an initial, or a glyph."
 category: Basic
 status: beta
 since: 0.3.9
@@ -11,19 +11,20 @@ verified: true
 
 ## Usage
 
-### IconChip
-:::TuffDemoWrapper{demo="IconChipIconChipDemo" code-lang="vue" title="Size ladder and tones" description="14px file badges, 18px tinted plates, the 32px initial plate, and the circle shape."}
+### Sizes and Tones
+:::TuffDemoWrapper{demo="IconChipIconChipDemo" code-lang="vue" description="14, 18, and 32px tiers, a wide label, and the circle shape."}
 ---
 code: |
   <template>
     <TxIconChip :size="14" tone="red" label="PDF" />
     <TxIconChip :size="14" tone="ink" label="JSON" />
     <TxIconChip :size="18" tone="accent" variant="soft">
-      <svg viewBox="0 0 24 24" fill="currentColor">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
       </svg>
     </TxIconChip>
     <TxIconChip :size="32" tone="ink" :font-size="13" label="C" />
+    <TxIconChip :size="14" tone="green" shape="circle" />
   </template>
 ---
 :::
@@ -31,10 +32,10 @@ code: |
 ### Best Practices
 
 - Keep file-type badges at 14px and let `tone` carry the format (red for PDF, green for CSV), consistently across the app.
-- Pass four-letter formats (`JSON`, `YAML`) as `label` like any other; the plate widens. Do not shrink `fontSize` to squeeze them into the square.
-- Use 32px with `tone="ink"` for initial plates — it inverts correctly across light and dark, so do not hard-code a colour.
-- Reach for `TxDotIndicator` when you need a status dot; do not shrink `TxIconChip` to 6px to fake one.
-- Avoid overriding `radius` without a design reason: the derived ladder is the visual language itself.
+- Pass four-letter formats (`JSON`, `YAML`) as `label` like any other; the plate widens, so don't shrink `fontSize` to squeeze them in.
+- Use 32px with `tone="ink"` for initial plates; it inverts across light and dark, so don't hard-code a colour.
+- Use `TxDotIndicator` for a status dot; don't shrink `TxIconChip` to 6px to fake one.
+- Don't override `radius` without a design reason; the derived ladder is the visual language.
 
 ## API Reference
 
@@ -42,50 +43,32 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `size` | `number` | `14` | Edge length in px. Upstream uses 14 (file badge), 18 (glyph plate), and 32 (initial plate). |
-| `radius` | `number \| string` | - | Corner radius; numbers are px. Defaults to `round(size / 4)`, and is ignored when `shape` is `circle`. |
+| `size` | `number` | `14` | Edge length in px; typically 14 (file badge), 18 (glyph plate), or 32 (initial plate). |
+| `radius` | `number \| string` | - | Corner radius, numbers in px; derived from `size` by default, ignored for circles. |
 | `tone` | `'neutral' \| 'ink' \| 'accent' \| 'green' \| 'orange' \| 'red'` | `'neutral'` | Colour role. |
 | `variant` | `'solid' \| 'soft'` | `'solid'` | `solid` fills with the tone; `soft` uses its tint with a 30% hairline ring. |
 | `shape` | `'square' \| 'circle'` | `'square'` | Plate shape. |
-| `label` | `string` | - | Short text such as `PDF`. Past three characters (`JSON`) the plate widens; see below. The default slot wins over it. |
+| `label` | `string` | - | Short text such as `PDF`; past three characters the plate widens; the default slot wins. |
 | `fontSize` | `number` | - | Overrides the derived font size. |
-| `ariaLabel` | `string` | - | Promotes the chip to `role="img"` with that name. Left unset, the chip is `aria-hidden`. |
+| `ariaLabel` | `string` | - | Makes the chip `role="img"` with this name; otherwise it is `aria-hidden`. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `default` | Chip contents, usually an inline SVG or short text. Overrides `label` when provided. |
-
-### Events
-
-`TxIconChip` is a presentational leaf and emits nothing.
-
-## How Size Derives Radius and Type
-
-Neither `radius` nor `fontSize` has to be passed — both derive from `size`:
-
-- Radius is `round(size / 4)`: 14→4, 18→5, 32→8, matching all three real Beautiful UI usages.
-- Font size is `max(7, round(size * 0.4))`: 14→7 (three uppercase letters must fit) and 32→13.
-- Width equals `size` until `label` runs past three characters; then it follows the text, never narrower than `size`, with `size × 0.2` of padding on each side (about 2.8px on a 14px badge). Height, radius and font size do not change. Default-slot content is not measured by this rule.
-
-Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `radius` rather than fighting it.
+| `default` | Chip contents, usually an inline SVG or short text; overrides `label`. |
 
 ## Overview
 
-- The chip is `aria-hidden="true"` by default: it nearly always duplicates adjacent text (a `PDF` badge beside `report.pdf`). Pass `ariaLabel` only when the chip is the sole carrier of the information.
+- Radius defaults to `round(size / 4)` (14→4, 18→5, 32→8) and font size to `max(7, round(size * 0.4))` (14→7, 32→13); passing either overrides it.
+- Width equals `size` until `label` passes three characters; then it follows the text, at least `size` wide with `size × 0.2` padding per side, while height, radius, and font size stay put. Slot content is not measured.
+- The chip is `aria-hidden="true"` by default because it nearly always repeats adjacent text (a `PDF` badge beside `report.pdf`); pass `ariaLabel` only when it is the sole carrier of the information.
 - The `soft` hairline ring is a `box-shadow`, not a `border`, so it takes no layout space and the chip stays `size` tall (a long label only widens it).
-- `neutral` looks the same under both variants (`inset` fill plus hairline ring); it was never a fill colour.
+- `neutral` looks the same under both variants (`inset` fill plus hairline ring).
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/icon-chip/src/TxIconChip.vue`.
-- Types: `packages/tuffex/packages/components/src/icon-chip/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/icon-chip/__tests__/icon-chip.test.ts` verifies the radius/font-size ladder at 14/18/32, explicit overrides winning, the circle shape ignoring `radius`, the `aria-hidden` to `role="img"` switch, and the default slot overriding `label`.
-- Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- Source: `packages/tuffex/packages/components/src/icon-chip/`.
+- Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT; `variant="soft"` is an addition.
 
 <TuffDocSourceLink />
-
-- **Shared primitive:** ContextCards (file badges) and SidebarNav (workspace plate) both consume it, so changing the size derivation moves both.
-- **Divergence from upstream:** `variant="soft"` is an addition. The 18px upstream glyph plate is a tint with a 30% ring rather than a fill, which `solid` alone cannot express.
-- **Accessibility:** Hiding the chip from assistive tech by default is a deliberate choice, not an oversight.

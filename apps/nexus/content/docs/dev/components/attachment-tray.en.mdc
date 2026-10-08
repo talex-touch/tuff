@@ -1,6 +1,6 @@
 ---
 title: Attachment Tray
-description: A message attachment area — images in a grid with a built-in viewer, files as chips, with optional upload progress and removal.
+description: A tray that displays a message's image and file attachments.
 category: AiChat
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Attachment Tray
+### Basic
 ::::TuffDemoWrapper{demo="AttachmentTrayAttachmentTrayDemo" code-lang="vue"}
 ---
 code: |
@@ -24,18 +24,24 @@ code: |
   </script>
 
   <template>
-    <TxAttachmentTray :attachments="attachments" removable @remove="onRemove" @cancel="onCancel" />
+    <TxAttachmentTray
+      :attachments="attachments"
+      removable
+      @remove="onRemove"
+      @cancel="onCancel"
+      @open="onOpen"
+    />
   </template>
 ---
 ::::
 
 ### Best Practices
 
-- Pass `removable` in a composer and omit it on a message — it is the only signal separating "still editable" from "already sent".
-- `remove` and `cancel` give you an `id` only; drop the item from your own list. The component never mutates `attachments`.
-- Set `uploading: true` **and** `progress` together on an in-flight attachment; one without the other leaves the ring at zero.
-- Implement `open` for files, or clicking a file chip does nothing at all.
-- Override the six label props plus `sizeFormatter` on non-English surfaces. `previousText` and `nextText` are visible text, so missing them is the most obvious.
+- Set `removable` in a composer; leave it off on sent messages so they stay read-only.
+- Handle `remove` and `cancel` by dropping that `id` from your list; the component never mutates `attachments`.
+- Give an in-flight attachment both `uploading: true` and `progress` (0–1); without `progress`, no progress shows.
+- Handle `open`; otherwise clicking a file chip does nothing.
+- On non-English surfaces, override every text prop and `sizeFormatter`; `previousText` and `nextText` are visible text.
 
 ## API Reference
 
@@ -44,36 +50,27 @@ code: |
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `attachments` | `AiAttachment[]` | — | Images and files in one list. Required. |
-| `removable` | `boolean` | `false` | Whether to show remove and cancel-upload. True in a composer, false on a message. |
+| `removable` | `boolean` | `false` | Shows remove buttons; cancel-upload buttons don't depend on it. |
 | `previewTitle` | `string` | `'Preview'` | Viewer title when the image has no `name`. |
-| `previousLabel` | `string` | `'Previous image'` | Accessible name for the previous button. |
-| `nextLabel` | `string` | `'Next image'` | Accessible name for the next button. |
-| `previousText` | `string` | `'Prev'` | Visible text on the previous button. |
-| `nextText` | `string` | `'Next'` | Visible text on the next button. |
-| `removeLabel` | `string` | `'Remove attachment'` | Accessible name for remove buttons. |
-| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name for cancel-upload buttons. |
-| `sizeFormatter` | `(bytes: number) => string` | — | Replaces the file size text. Falls back to B/KB/MB. |
+| `previousLabel` | `string` | `'Previous image'` | Accessible name of the previous button. |
+| `nextLabel` | `string` | `'Next image'` | Accessible name of the next button. |
+| `previousText` | `string` | `'Prev'` | Visible text of the previous button. |
+| `nextText` | `string` | `'Next'` | Visible text of the next button. |
+| `removeLabel` | `string` | `'Remove attachment'` | Accessible name of remove buttons. |
+| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of cancel-upload buttons. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Formats file sizes; defaults to B/KB/MB with one decimal. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `remove` | `(id: string)` | Emitted when remove is clicked. |
-| `cancel` | `(id: string)` | Emitted when cancel-upload is clicked. |
-| `open` | `(attachment: AiAttachmentFile)` | Emitted by **file chips only**; images use the built-in viewer. |
-
-## Slots
-
-`TxAttachmentTray` exposes no slots. The image grid and file chip layouts are fixed.
+| `remove` | `(id: string)` | Fires when remove is clicked. |
+| `cancel` | `(id: string)` | Fires when cancel-upload is clicked. |
+| `open` | `(attachment: AiAttachmentFile)` | Fires when a file chip is clicked; images open the built-in viewer. |
 
 ## Overview
 
-- Attachments are split by `kind`: `image` goes to the grid, `file` to the chips. Pass both in the same `attachments` array.
-- `removable` is the switch between the two modes: true shows remove and cancel-upload affordances (composer), false makes the whole area read-only (message).
-- The three events differ in shape. `remove` and `cancel` carry an `id`; `open` is emitted **by file chips only**, carries the whole attachment, and what "open" means is the consumer's call.
-- Images have no `open` event — clicking one opens the built-in viewer (built on `TxModal`), with nothing for the host to wire up.
-- The viewer pages between images only, and the index is clamped to the valid range. Files take no part in it.
-- The viewer title prefers the image's `name` and falls back to `previewTitle`.
-- A thumbnail that fails to load is recorded by `id` and replaced with a placeholder, rather than showing the browser's broken-image glyph or retrying.
-- Upload progress is driven by `uploading` and `progress` (0–1) on the attachment, drawn as a ring.
-- File sizes default to B / KB / MB with one decimal; `sizeFormatter` replaces that entirely.
+- `kind: 'image'` items go to the image grid and `kind: 'file'` items to file chips; pass both in one `attachments` array.
+- Clicking an image opens the built-in viewer (on `TxModal`), which pages through images only and emits nothing.
+- An `uploading` attachment always shows a cancel button: images draw a progress ring, file chips show a percentage.
+- A thumbnail that fails to load becomes a placeholder and is not retried.
