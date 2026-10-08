@@ -44,9 +44,11 @@ import {
   onboardingGate
 } from '../../storage'
 import {
+  describeDarwinRunningApps,
   ForegroundAppActivityTracker,
   subscribeDarwinForegroundActivations
 } from '../../system/foreground-app-activity'
+import { foregroundAppSnapshotStore } from '../../system/foreground-app-snapshot'
 import { appProvider } from '../addon/apps/app-provider'
 import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
@@ -603,15 +605,18 @@ export class SearchEngineCore
   }
 
   /**
-   * Starts the OS foreground tracker the recommendation engine dates "last used" with. Inert off
-   * macOS; nothing is recorded while either recommendation switch is off.
+   * Starts the OS foreground tracker the recommendation engine dates "last used" with, and hands
+   * CoreBox's source-app snapshot the app it already knows is in front. Inert off macOS; nothing is
+   * recorded while either recommendation switch is off.
    */
   private startForegroundActivityTracking(dbUtils: DbUtils): ForegroundAppActivityTracker {
     void this.foregroundActivity?.stop()
     const tracker = new ForegroundAppActivityTracker({
       subscribe: subscribeDarwinForegroundActivations,
-      isEnabled: isForegroundActivityTrackingEnabled
+      isEnabled: isForegroundActivityTrackingEnabled,
+      describe: describeDarwinRunningApps
     })
+    foregroundAppSnapshotStore.setInstantSource(tracker)
     void tracker
       .start({
         load: (since) => dbUtils.getAppForegroundActivity(since),
@@ -2742,6 +2747,7 @@ export class SearchEngineCore
       this.indexingRuntime = null
       this.indexWriterRouter = null
 
+      foregroundAppSnapshotStore.setInstantSource(null)
       await this.foregroundActivity?.stop().catch((error) => {
         searchEngineLog.error('Failed to flush foreground app activity on destroy', { error })
       })

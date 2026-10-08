@@ -1,16 +1,25 @@
+import type { ActiveAppInfo } from './active-app'
+import type { InstantForegroundApp, InstantForegroundAppSource } from './foreground-app-snapshot'
+import { execFile } from 'node:child_process'
 import process from 'node:process'
+import { promisify } from 'node:util'
 import { powerMonitor, systemPreferences } from 'electron'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger } from '../../utils/logger'
 import { isSelfBundleId } from './self-app-identity'
 
 const activityLog = createLogger('ActiveApp').child('Activity')
+const execFileAsync = promisify(execFile)
 
 const ACTIVATION_NOTIFICATION = 'NSWorkspaceDidActivateApplicationNotification'
 const FLUSH_TASK_ID = 'foreground-app-activity.flush'
 /** Reads are served from memory, so the persist cadence only bounds what a crash can lose. */
 const FLUSH_INTERVAL_MS = 5 * 60_000
 const DAY_MS = 86_400_000
+const LSAPPINFO = '/usr/bin/lsappinfo'
+const LSAPPINFO_TIMEOUT_MS = 1_500
+/** A name lookup that failed is not retried on every switch to that app. */
+const NAME_RETRY_MS = 10 * 60_000
 
 /**
  * A stay shorter than this is a pass-through — an app the system activated on the way to another,
@@ -25,6 +34,8 @@ export const FOREGROUND_ACTIVITY_WINDOW_MS = 30 * DAY_MS
 const BUNDLE_ID_PATTERN = /^[\w-]+(?:\.[\w-]+)+$/
 
 export interface ForegroundActivation {
+  /** The bundle id as the OS reports it; usage history stores source apps verbatim. */
+  bundleId: string
   /** Lower-cased bundle id. */
   appKey: string
   pid: number | null
@@ -45,7 +56,11 @@ export function parseRunningApplicationDescription(value: unknown): ForegroundAc
   const match = /\(([^()\s]+) - (\d+)\)/.exec(value)
   if (!match || !BUNDLE_ID_PATTERN.test(match[1])) return null
   const pid = Number.parseInt(match[2], 10)
-  return { appKey: match[1].toLowerCase(), pid: Number.isFinite(pid) ? pid : null }
+  return {
+    bundleId: match[1],
+    appKey: match[1].toLowerCase(),
+    pid: Number.isFinite(pid) ? pid : null
+  }
 }
 
 export interface ForegroundActivationHandlers {
@@ -100,6 +115,56 @@ export const subscribeDarwinForegroundActivations: ForegroundActivationSource = 
   }
 }
 
+/** What an activation does not carry: the app's name, and the app in front before any arrives. */
+export interface ForegroundAppDescriber {
+  nameOf: (bundleId: string) => Promise<string | null>
+  frontmost: () => Promise<{
+    activation: ForegroundActivation
+    name: string | null
+    executablePath: string | null
+  } | null>
+}
+
+/** `"WeChat" ASN:0x0-0x26026: …` — lsappinfo prints the name first, quoted. */
+function parseLsappinfoName(output: string): string | null {
+  return /^"([^"\n]+)"/.exec(output.trim())?.[1]?.trim() || null
+}
+
+/**
+ * Launch Services' view of running apps through `lsappinfo`: one ~25 ms process per lookup, no
+ * Automation permission, and the same process name the AppleScript lookup reported.
+ */
+export const describeDarwinRunningApps: ForegroundAppDescriber = {
+  async nameOf(bundleId) {
+    const { stdout } = await execFileAsync(LSAPPINFO, ['info', '-only', 'name', '-app', bundleId], {
+      timeout: LSAPPINFO_TIMEOUT_MS
+    })
+    return parseLsappinfoName(stdout)
+  },
+  async frontmost() {
+    const { stdout: front } = await execFileAsync(LSAPPINFO, ['front'], {
+      timeout: LSAPPINFO_TIMEOUT_MS
+    })
+    const asn = /ASN:0x[0-9a-f]+-0x[0-9a-f]+:/i.exec(front)?.[0]
+    if (!asn) return null
+    const { stdout } = await execFileAsync(LSAPPINFO, ['info', asn], {
+      timeout: LSAPPINFO_TIMEOUT_MS
+    })
+    const bundleId = /\bbundleID="([^"\n]+)"/.exec(stdout)?.[1]
+    if (!bundleId || !BUNDLE_ID_PATTERN.test(bundleId)) return null
+    const pid = Number.parseInt(/\bpid = (\d+)/.exec(stdout)?.[1] ?? '', 10)
+    return {
+      activation: {
+        bundleId,
+        appKey: bundleId.toLowerCase(),
+        pid: Number.isFinite(pid) ? pid : null
+      },
+      name: parseLsappinfoName(stdout),
+      executablePath: /\bexecutable path="([^"\n]+)"/.exec(stdout)?.[1] ?? null
+    }
+  }
+}
+
 /** One consistent read of the tracker, taken once per recommendation pass. */
 export interface ForegroundActivityView {
   /** Last instant the app was frontmost inside the window, or null when unknown. */
@@ -122,6 +187,8 @@ export interface ForegroundAppActivityDeps {
   subscribe: ForegroundActivationSource
   /** The user's switch; read per event, so turning it off stops recording immediately. */
   isEnabled: () => boolean
+  /** Names apps for CoreBox's source-app snapshot; without it the snapshot carries the bundle id. */
+  describe?: ForegroundAppDescriber
   now?: () => number
 }
 
@@ -136,8 +203,14 @@ function isWithinWindow(timestamp: number, now: number): boolean {
  * A stay is credited when it ends — the app was in use until the next one took over — and the app
  * still in front reads as in use now. Only the latest instant per app is kept: a switch is use, not
  * a launch, so it never becomes a count, a habit or a time-of-day distribution.
+ *
+ * Independently of the recording switches it also knows which app is in front right now — memory
+ * only, never persisted, the same answer an on-demand query gives — so CoreBox's source-app
+ * snapshot reads it instead of waiting on `osascript`.
  */
-export class ForegroundAppActivityTracker implements ForegroundAppActivityReader {
+export class ForegroundAppActivityTracker
+  implements ForegroundAppActivityReader, InstantForegroundAppSource
+{
   private readonly lastActiveAt = new Map<string, number>()
   private readonly dirty = new Set<string>()
   private readonly pollingService = PollingService.getInstance()
@@ -147,6 +220,15 @@ export class ForegroundAppActivityTracker implements ForegroundAppActivityReader
   private unsubscribe: (() => void) | null = null
   private store: ForegroundAppActivityStore | null = null
   private flushing: Promise<void> | null = null
+  /** What the OS last reported in front, whatever the recording switches say. */
+  private frontmost: {
+    activation: ForegroundActivation
+    executablePath: string | null
+    since: number
+  } | null = null
+  private readonly names = new Map<string, string>()
+  private readonly nameLookups = new Map<string, Promise<string | null>>()
+  private readonly nameFailedAt = new Map<string, number>()
 
   constructor(private readonly deps: ForegroundAppActivityDeps) {}
 
@@ -166,6 +248,7 @@ export class ForegroundAppActivityTracker implements ForegroundAppActivityReader
     if (!unsubscribe) return
     this.unsubscribe = unsubscribe
 
+    void this.probeFrontmost()
     await this.load()
     this.pollingService.register(FLUSH_TASK_ID, () => this.flush(), {
       interval: FLUSH_INTERVAL_MS,
@@ -191,7 +274,33 @@ export class ForegroundAppActivityTracker implements ForegroundAppActivityReader
     if (this.deps.isEnabled()) this.closeStay(this.now())
     this.current = null
     this.paused = null
+    this.frontmost = null
     await this.flush()
+  }
+
+  /**
+   * The app in front right now, read without spawning anything; null until the OS (or the startup
+   * probe) has named one, so the caller falls back to its own query. A name not cached yet comes as
+   * the lookup already in flight.
+   */
+  readForegroundApp(): InstantForegroundApp | null {
+    const frontmost = this.frontmost
+    if (!this.unsubscribe || !frontmost) return null
+    const { bundleId, appKey, pid } = frontmost.activation
+    const name = this.names.get(appKey) ?? null
+    const app: ActiveAppInfo = {
+      identifier: name ?? bundleId,
+      displayName: name,
+      bundleId,
+      processId: pid,
+      executablePath: frontmost.executablePath,
+      platform: 'macos',
+      windowTitle: null,
+      url: null,
+      icon: null,
+      lastUpdated: frontmost.since
+    }
+    return { app, pendingName: name === null ? (this.nameLookups.get(appKey) ?? null) : null }
   }
 
   view(now = this.now()): ForegroundActivityView | null {
@@ -239,8 +348,14 @@ export class ForegroundAppActivityTracker implements ForegroundAppActivityReader
     await this.load()
   }
 
-  private handleActivation(activation: ForegroundActivation): void {
+  private handleActivation(
+    activation: ForegroundActivation,
+    executablePath: string | null = null
+  ): void {
     const at = this.now()
+    this.frontmost = { activation, executablePath, since: at }
+    const isSelf = isSelfBundleId(activation.appKey) || activation.pid === process.pid
+    if (!isSelf) void this.lookupName(activation)
     if (!this.deps.isEnabled()) {
       // Switched off: forget the stay in progress rather than credit it after the fact.
       this.current = null
@@ -250,8 +365,54 @@ export class ForegroundAppActivityTracker implements ForegroundAppActivityReader
     this.closeStay(at)
     this.paused = null
     // Touch's own windows end the previous stay but are not "an app the user used".
-    if (isSelfBundleId(activation.appKey) || activation.pid === process.pid) return
+    if (isSelf) return
     this.current = { appKey: activation.appKey, since: at }
+  }
+
+  /** One lookup per app at a time; a failed one is not retried before {@link NAME_RETRY_MS}. */
+  private lookupName(activation: ForegroundActivation): Promise<string | null> | null {
+    const nameOf = this.deps.describe?.nameOf
+    const { appKey, bundleId } = activation
+    if (!nameOf || this.names.has(appKey)) return null
+    const inFlight = this.nameLookups.get(appKey)
+    if (inFlight) return inFlight
+    const failedAt = this.nameFailedAt.get(appKey)
+    if (failedAt !== undefined && this.now() - failedAt < NAME_RETRY_MS) return null
+
+    const lookup = nameOf(bundleId)
+      .catch((error) => {
+        activityLog.debug('Failed to look up app name', { error, meta: { appKey } })
+        return null
+      })
+      .then((name) => {
+        if (name) {
+          this.names.set(appKey, name)
+          this.nameFailedAt.delete(appKey)
+        } else {
+          this.nameFailedAt.set(appKey, this.now())
+        }
+        return name
+      })
+      .finally(() => {
+        this.nameLookups.delete(appKey)
+      })
+    this.nameLookups.set(appKey, lookup)
+    return lookup
+  }
+
+  /** Names the app already in front at startup, before the OS has reported any activation. */
+  private async probeFrontmost(): Promise<void> {
+    const probe = this.deps.describe?.frontmost
+    if (!probe || this.frontmost) return
+    try {
+      const found = await probe()
+      // An activation that arrived meanwhile is newer than anything the probe saw.
+      if (!found || this.frontmost || !this.unsubscribe) return
+      if (found.name) this.names.set(found.activation.appKey, found.name)
+      this.handleActivation(found.activation, found.executablePath)
+    } catch (error) {
+      activityLog.debug('Failed to probe the frontmost app', { error })
+    }
   }
 
   private handlePause(): void {

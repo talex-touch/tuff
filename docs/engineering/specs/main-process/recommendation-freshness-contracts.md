@@ -125,6 +125,16 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   cannot change the original action's source. Explicit `previousApp: null` stays unknown. Clipboard
   apply captures before automation hides. The snapshot path adds no polling; the only OS-wide
   signal is the foreground tracker below.
+- **The source app is read, not queried, on macOS.** `foregroundAppSnapshotStore` takes an
+  `InstantForegroundAppSource` (the foreground tracker, registered by `SearchEngineCore`) and
+  `capture()` reads it synchronously: bundle id (case kept — usage history stores it verbatim) and
+  pid from the last activation, the display name from a per-app cache that one `lsappinfo` call
+  fills on the app's first activation. Only a name still being looked up is pending, so the 300ms
+  `resolve()` wait no longer covers an AppleScript round trip (~265ms of a 279ms first pass,
+  measured 2026-10-07). The tracker knows the frontmost app whatever the recording switches say —
+  memory only, never persisted, the same answer the on-demand query gave — and fills the window
+  before the first activation with one `lsappinfo front`. The AppleScript `queryActiveApp` stays
+  the fallback when the tracker has no app yet, after it stops, and on Windows/Linux.
 - **Foreground use dates "last used", never a count (2026-10-07).** On macOS,
   `ForegroundAppActivityTracker` (`modules/system/foreground-app-activity.ts`) subscribes to
   `NSWorkspaceDidActivateApplicationNotification` through

@@ -20,6 +20,18 @@ export interface ForegroundAppSnapshotDeps {
   now: () => number
 }
 
+/** A foreground app the OS already reported, so capturing it spawns nothing. */
+export interface InstantForegroundApp {
+  app: ActiveAppInfo
+  /** Settles with the display name when it was not known yet at read time. */
+  pendingName: Promise<string | null> | null
+}
+
+export interface InstantForegroundAppSource {
+  /** Null when the source has nothing to report; the store then queries the OS as before. */
+  readForegroundApp: () => InstantForegroundApp | null
+}
+
 /**
  * Whether the resolved frontmost app is Touch itself.
  *
@@ -47,11 +59,17 @@ export class ForegroundAppSnapshotStore {
   private capturePending: Promise<void> | null = null
   private generation = 0
   private active = false
+  private instantSource: InstantForegroundAppSource | null = null
 
   constructor(private readonly deps: ForegroundAppSnapshotDeps) {}
 
   get hasActiveSession(): boolean {
     return this.active
+  }
+
+  /** The macOS activation tracker registers here; without a source, capture queries the OS. */
+  setInstantSource(source: InstantForegroundAppSource | null): void {
+    this.instantSource = source
   }
 
   capture(): void {
@@ -60,6 +78,7 @@ export class ForegroundAppSnapshotStore {
     this.snapshot = null
     const generation = ++this.generation
     const requestedAt = this.deps.now()
+    if (this.captureInstant(generation, requestedAt)) return
 
     this.capturePending = this.deps
       .queryActiveApp()
@@ -77,6 +96,43 @@ export class ForegroundAppSnapshotStore {
       .finally(() => {
         if (generation === this.generation) this.capturePending = null
       })
+  }
+
+  /**
+   * Takes the snapshot from what the OS already reported. The AppleScript query costs ~250 ms that
+   * CoreBox's first recommendation pass used to wait for; here only a display name that is not
+   * cached yet may still be pending, and it settles in one `lsappinfo` call.
+   */
+  private captureInstant(generation: number, requestedAt: number): boolean {
+    let instant: InstantForegroundApp | null = null
+    try {
+      instant = this.instantSource?.readForegroundApp() ?? null
+    } catch (error) {
+      snapshotLog.debug('Failed to read the instant foreground app', { error })
+    }
+    if (!instant) return false
+    if (this.deps.isSelfApp(instant.app)) {
+      snapshotLog.debug('Skipped foreground snapshot resolving to Touch itself')
+      return true
+    }
+
+    this.snapshot = { app: instant.app, capturedAt: requestedAt }
+    const { pendingName } = instant
+    if (!pendingName) return true
+    this.capturePending = pendingName
+      .then((name) => {
+        const snapshot = this.snapshot
+        if (generation !== this.generation || !this.active || !snapshot || !name) return
+        this.snapshot = {
+          ...snapshot,
+          app: { ...snapshot.app, displayName: name, identifier: name }
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (generation === this.generation) this.capturePending = null
+      })
+    return true
   }
 
   get(): ForegroundAppSnapshot | null {
