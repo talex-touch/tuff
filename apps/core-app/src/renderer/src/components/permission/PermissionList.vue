@@ -139,7 +139,7 @@ function handleToggle(id: string, granted: boolean) {
             <TxTooltip
               v-if="perm.required && !perm.granted"
               content="此权限为必需权限"
-              :anchor="{ placement: 'top', showArrow: true }"
+              :anchor="{ placement: 'top' }"
             >
               <i class="i-carbon-warning required-icon text-lg" />
             </TxTooltip>
