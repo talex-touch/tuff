@@ -7,7 +7,10 @@ import { createTerminalSdk } from '../transport/sdk/domains/terminal'
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
-  const promise = new Promise<T>((accept, fail) => { resolve = accept; reject = fail })
+  const promise = new Promise<T>((accept, fail) => {
+    resolve = accept
+    reject = fail
+  })
   return { promise, resolve, reject }
 }
 
@@ -18,8 +21,8 @@ function terminalTransport(closeBarrier?: Promise<void>) {
   const cancellations: string[] = []
   let resourceAlive = false
   let ownedId: string | undefined
-  const written: Array<{ id: string; data: string }> = []
-  const resized: Array<{ id: string; cols: number; rows: number }> = []
+  const written: Array<{ id: string, data: string }> = []
+  const resized: Array<{ id: string, cols: number, rows: number }> = []
   const pending = deferred<{ id: string }>()
   const reclaimed = deferred<void>()
   const acknowledged = deferred<void>()
@@ -30,7 +33,7 @@ function terminalTransport(closeBarrier?: Promise<void>) {
       listeners.set(event, entries)
       return () => entries.delete(listener)
     },
-    async send(event: unknown, payload: { command: string; id: string; data: string; cols: number; rows: number; creationToken?: string }) {
+    async send(event: unknown, payload: { command: string, id: string, data: string, cols: number, rows: number, creationToken?: string }) {
       if (event === TerminalEvents.session.create) {
         creates.push(payload)
         resourceAlive = true
@@ -41,27 +44,48 @@ function terminalTransport(closeBarrier?: Promise<void>) {
       if (event === TerminalEvents.session.close) {
         if (payload.creationToken) {
           cancellations.push(payload.creationToken)
-          if (payload.creationToken === creates[0]?.creationToken) resourceAlive = false
-        } else {
+          if (payload.creationToken === creates[0]?.creationToken)
+            resourceAlive = false
+        }
+        else {
           closed.push(payload.id)
-          if (payload.id === ownedId) resourceAlive = false
+          if (payload.id === ownedId)
+            resourceAlive = false
         }
         reclaimed.resolve()
         await closeBarrier
         return
       }
-      if (event === TerminalEvents.session.write) { written.push(payload); return }
-      if (event === TerminalEvents.session.resize) { resized.push(payload); return }
+      if (event === TerminalEvents.session.write) {
+        written.push(payload)
+        return
+      }
+      if (event === TerminalEvents.session.resize) {
+        resized.push(payload)
+        return
+      }
       throw new Error('Unexpected terminal operation')
-    }
+    },
   }
   return {
     sdk: createTerminalSdk(transport as unknown as ITuffTransport),
-    pending: { ...pending, resolve: (value: { id: string }) => { ownedId = value.id; pending.resolve(value) } },
-    creates, closed, written, resized, cancellations,
-    reclaimed: reclaimed.promise, acknowledged: acknowledged.promise, resourceAlive: () => resourceAlive,
+    pending: {
+      ...pending,
+      resolve: (value: { id: string }) => {
+        ownedId = value.id
+        pending.resolve(value)
+      },
+    },
+    creates,
+    closed,
+    written,
+    resized,
+    cancellations,
+    reclaimed: reclaimed.promise,
+    acknowledged: acknowledged.promise,
+    resourceAlive: () => resourceAlive,
     emit: (event: unknown, payload: unknown) => listeners.get(event)?.forEach(listener => listener(payload)),
-    subscriptions: () => [...listeners.values()].reduce((total, entries) => total + entries.size, 0)
+    subscriptions: () => [...listeners.values()].reduce((total, entries) => total + entries.size, 0),
   }
 }
 
@@ -69,9 +93,10 @@ describe('terminal SDK lifecycle', () => {
   it('preserves complete ordered output and fast exit before create resolves', async () => {
     const fake = terminalTransport()
     const events: unknown[] = []
-    const large = '\u001B[32m你好\u001B[0m' + 'x'.repeat(100_000)
+    const large = `\u001B[32m你好\u001B[0m${'x'.repeat(100_000)}`
     const creating = fake.sdk.create({ command: 'node', args: ['--version'] }, {
-      onData: data => events.push(data), onExit: exit => events.push(exit)
+      onData: data => events.push(data),
+      onExit: exit => events.push(exit),
     })
     fake.emit(TerminalEvents.session.data, { id: 'foreign', data: 'not ours' })
     fake.emit(TerminalEvents.session.data, { id: 'fast', data: large })
@@ -101,7 +126,9 @@ describe('terminal SDK lifecycle', () => {
     const controller = new AbortController()
     const events: unknown[] = []
     const creating = fake.sdk.create({ command: 'node' }, {
-      signal: controller.signal, onData: data => events.push(data), onExit: exit => events.push(exit)
+      signal: controller.signal,
+      onData: data => events.push(data),
+      onExit: exit => events.push(exit),
     })
     const rejection = expect(creating).rejects.toMatchObject({ name: 'AbortError' })
     controller.abort()
@@ -155,14 +182,17 @@ describe('terminal SDK native exit acknowledgement', () => {
     const f = terminalTransport(barrier.promise)
     const received: unknown[] = []
     const creating = f.sdk.create({ command: 'node' }, {
-      onData: data => received.push(data), onExit: exit => received.push(exit)
+      onData: data => received.push(data),
+      onExit: exit => received.push(exit),
     })
     f.pending.resolve({ id: 'closing' })
     const handle = await creating
     try {
       f.emit(TerminalEvents.session.data, { id: 'closing', data: 'head' })
       let settled = false
-      const closing = handle.close().then(() => { settled = true })
+      const closing = handle.close().then(() => {
+        settled = true
+      })
       await Promise.resolve()
       expect(settled).toBe(false)
       await expect(handle.write('late input')).rejects.toThrow('TERMINAL_SESSION_CLOSED')
@@ -176,7 +206,8 @@ describe('terminal SDK native exit acknowledgement', () => {
       expect(f.written).toEqual([])
       expect(f.resized).toEqual([])
       expect(f.subscriptions()).toBe(0)
-    } finally {
+    }
+    finally {
       barrier.resolve()
     }
   })
@@ -191,18 +222,21 @@ describe('terminal SDK unconfirmed cleanup failure', () => {
     const original = trigger === 'send rejection' ? new Error('Create acknowledgement lost') : undefined
     const creating = f.sdk.create({ command: 'node' }, { signal: controller.signal })
     const failure = creating.catch((error: unknown) => error)
-    if (original) f.pending.reject(original)
+    if (original)
+      f.pending.reject(original)
     else controller.abort()
     await f.reclaimed
     barrier.reject(cleanupFailure)
     const error = await failure
     expect(error).toBeInstanceOf(AggregateError)
-    if (!(error instanceof AggregateError)) throw new Error('Missing combined cleanup failure')
+    if (!(error instanceof AggregateError))
+      throw new Error('Missing combined cleanup failure')
     expect(error.name).toBe('AggregateError')
     expect(error.cause).toBe(cleanupFailure)
     expect(error.errors).toHaveLength(2)
     expect(error.errors[1]).toBe(cleanupFailure)
-    if (original) expect(error.errors[0]).toBe(original)
+    if (original)
+      expect(error.errors[0]).toBe(original)
     else expect(error.errors[0]).toMatchObject({ name: 'AbortError' })
     expect(f.subscriptions()).toBe(0)
     expect(f.cancellations).toEqual([f.creates[0].creationToken])
