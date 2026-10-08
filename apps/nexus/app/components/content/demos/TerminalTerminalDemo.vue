@@ -90,12 +90,22 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="terminal-demo not-prose">
-    <p class="terminal-demo__description">{{ copy.description }}</p>
+    <p class="terminal-demo__description">
+      {{ copy.description }}
+    </p>
     <div class="terminal-demo__toolbar">
-      <TxButton size="sm" :disabled="!ready" @click="append">{{ copy.append }}</TxButton>
-      <TxButton size="sm" :disabled="!ready" @click="burst">{{ copy.burst }}</TxButton>
-      <TxButton size="sm" :disabled="!ready" @click="reset">{{ copy.reset }}</TxButton>
-      <TxButton size="sm" @click="compact = !compact">{{ copy.resize }}</TxButton>
+      <TxButton size="sm" :disabled="!ready" @click="append">
+        {{ copy.append }}
+      </TxButton>
+      <TxButton size="sm" :disabled="!ready" @click="burst">
+        {{ copy.burst }}
+      </TxButton>
+      <TxButton size="sm" :disabled="!ready" @click="reset">
+        {{ copy.reset }}
+      </TxButton>
+      <TxButton size="sm" @click="compact = !compact">
+        {{ copy.resize }}
+      </TxButton>
       <label class="terminal-demo__toggle">
         <TxSwitch v-model="readOnly" />
         <span>{{ copy.readOnly }}</span>

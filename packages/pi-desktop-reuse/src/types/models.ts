@@ -107,19 +107,22 @@ export function stripVariantSuffix(value: string): string {
  * and stay part of the id. This is a metadata alias only: the wire id a request
  * is addressed with is never rewritten.
  */
-const RELEASE_SUFFIX_REGEX =
-  /[-._](\d{4})[-._](\d{1,2})[-._](\d{1,2})$|[-._](\d{8})$|[-._](\d{2})(\d{2})$/
+const RELEASE_SUFFIX_REGEX
+  = /[-._](\d{4})[-._](\d{1,2})[-._](\d{1,2})$|[-._](\d{8})$|[-._](\d{2})(\d{2})$/
 
 function isCalendarDate(month: number, day: number): boolean {
-  if (month < 1 || month > 12) return false
-  if (day < 1 || day > 31) return false
+  if (month < 1 || month > 12)
+    return false
+  if (day < 1 || day > 31)
+    return false
   return day <= new Date(Date.UTC(2000, month, 0)).getUTCDate()
 }
 
 /** Drop one trailing release stamp, or return the value unchanged. */
 export function stripReleaseSuffix(value: string): string {
   const match = RELEASE_SUFFIX_REGEX.exec(value)
-  if (!match) return value
+  if (!match)
+    return value
   const [year, month, day] = match[1]
     ? [Number(match[1]), Number(match[2]), Number(match[3])]
     : match[4]
@@ -132,19 +135,28 @@ export function stripReleaseSuffix(value: string): string {
   // A compact stamp is year-month-day too; the leading year is what makes
   // `-20250731` a date rather than an arbitrary eight digits only when its
   // month and day are real.
-  if (match[4] && (year < 1900 || year > 2999)) return value
-  if (!isCalendarDate(month, day)) return value
+  if (match[4] && (year < 1900 || year > 2999))
+    return value
+  if (!isCalendarDate(month, day))
+    return value
   return value.slice(0, match.index)
 }
 
 function canonicalVendor(prefix: string): string {
-  if (prefix === 'deepseek-ai') return 'deepseek'
-  if (prefix === 'gemini') return 'google'
-  if (prefix === 'x-ai') return 'xai'
-  if (prefix === 'z-ai' || prefix === 'zhipuai') return 'zai'
-  if (prefix === 'moonshotai') return 'moonshot'
-  if (prefix === 'meta-llama') return 'meta'
-  if (prefix === 'aws') return 'amazon'
+  if (prefix === 'deepseek-ai')
+    return 'deepseek'
+  if (prefix === 'gemini')
+    return 'google'
+  if (prefix === 'x-ai')
+    return 'xai'
+  if (prefix === 'z-ai' || prefix === 'zhipuai')
+    return 'zai'
+  if (prefix === 'moonshotai')
+    return 'moonshot'
+  if (prefix === 'meta-llama')
+    return 'meta'
+  if (prefix === 'aws')
+    return 'amazon'
   return prefix
 }
 
@@ -152,7 +164,8 @@ function extractKnownVendor(id: string): string | undefined {
   const parts = id.split('/')
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i]!
-    if (MODEL_VENDOR_PREFIXES.has(part)) return canonicalVendor(part)
+    if (MODEL_VENDOR_PREFIXES.has(part))
+      return canonicalVendor(part)
   }
 
   const lastPart = parts[parts.length - 1]!
@@ -167,14 +180,19 @@ function extractKnownVendor(id: string): string | undefined {
 function normalizedMatch(left: string, right: string): boolean {
   const leftVendor = extractKnownVendor(left)
   const rightVendor = extractKnownVendor(right)
-  if (leftVendor && rightVendor && leftVendor !== rightVendor) return false
-  if (left === right) return true
-  if (left.endsWith(`/${right}`) || right.endsWith(`/${left}`)) return true
+  if (leftVendor && rightVendor && leftVendor !== rightVendor)
+    return false
+  if (left === right)
+    return true
+  if (left.endsWith(`/${right}`) || right.endsWith(`/${left}`))
+    return true
 
   for (const separator of ['-', '.'] as const) {
     for (const prefix of MODEL_VENDOR_PREFIXES) {
-      if (left === `${prefix}${separator}${right}`) return true
-      if (right === `${prefix}${separator}${left}`) return true
+      if (left === `${prefix}${separator}${right}`)
+        return true
+      if (right === `${prefix}${separator}${left}`)
+        return true
     }
   }
 
@@ -195,8 +213,10 @@ export function modelWireIdsEqual(left: string, right: string): boolean {
 export function modelIdsMatch(candidate: string, requested: string): boolean {
   const left = candidate.trim().toLowerCase()
   const right = requested.trim().toLowerCase()
-  if (!left || !right) return false
-  if (left.includes('@') && right.includes('@') && left !== right) return false
+  if (!left || !right)
+    return false
+  if (left.includes('@') && right.includes('@') && left !== right)
+    return false
   return normalizedMatch(stripRegion(left), stripRegion(right))
 }
 
@@ -212,7 +232,8 @@ export function modelIdsMatch(candidate: string, requested: string): boolean {
 export function catalogModelIdsMatch(candidate: string, requested: string): boolean {
   const left = candidate.trim().toLowerCase()
   const right = requested.trim().toLowerCase()
-  if (!left || !right) return false
+  if (!left || !right)
+    return false
   return pathLeaf(left) === pathLeaf(right)
 }
 
@@ -222,15 +243,19 @@ export type ModelLimitSource = 'catalog' | 'user'
 export type ContextWindowSource = ModelLimitSource
 
 /** Provider-local model settings persisted with the provider configuration. */
-export type ModelBinding = {
+export interface ModelBinding {
   id: string
-  /** Optional display alias. When set it names the model everywhere the UI
-   * shows a model label; the id remains the wire identity. */
+  /**
+   * Optional display alias. When set it names the model everywhere the UI
+   * shows a model label; the id remains the wire identity.
+   */
   alias?: string
   contextWindow: number
-  /** Provenance of `contextWindow`. Absent on records written before the
+  /**
+   * Provenance of `contextWindow`. Absent on records written before the
    * marker existed; readers then apply the historical rule documented on
-   * `effectiveContextWindow`. */
+   * `effectiveContextWindow`.
+   */
   contextWindowSource?: ContextWindowSource
   maxTokens: number
   /** Provenance of `maxTokens`, independent of `contextWindowSource`. */
@@ -271,7 +296,7 @@ export type ModelBinding = {
 export const MODEL_MODALITIES = ['text', 'image', 'audio', 'video', 'pdf'] as const
 export type ModelModality = (typeof MODEL_MODALITIES)[number]
 
-export type ModelReasoningOption = {
+export interface ModelReasoningOption {
   type: string
   values?: Array<string | null>
   min?: number
@@ -280,26 +305,26 @@ export type ModelReasoningOption = {
 
 export type ModelInterleaved = boolean | { field?: string }
 
-export type ModelModalities = {
+export interface ModelModalities {
   input: readonly ModelModality[]
   output: readonly ModelModality[]
 }
 
-export type ModelLimit = {
+export interface ModelLimit {
   context?: number
   input?: number
   output?: number
 }
 
-export type ModelCostTier = {
+export interface ModelCostTier {
   input?: number
   output?: number
   cacheRead?: number
   cacheWrite?: number
-  tier?: { type?: string; size?: number }
+  tier?: { type?: string, size?: number }
 }
 
-export type ModelCost = {
+export interface ModelCost {
   input?: number
   output?: number
   cacheRead?: number
@@ -316,7 +341,7 @@ export type ModelCost = {
   tiers?: ModelCostTier[]
 }
 
-export type ModelInfo = {
+export interface ModelInfo {
   modelId: string
   displayName: string
   providerId: string

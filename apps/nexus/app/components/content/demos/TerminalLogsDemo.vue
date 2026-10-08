@@ -76,10 +76,18 @@ watch(paused, (value) => {
   <div class="terminal-logs-demo not-prose">
     <p>{{ copy.description }}</p>
     <div class="terminal-logs-demo__toolbar">
-      <TxButton size="sm" @click="append">{{ copy.append }}</TxButton>
-      <TxButton size="sm" @click="edit">{{ copy.edit }}</TxButton>
-      <TxButton size="sm" @click="clear">{{ copy.clear }}</TxButton>
-      <TxButton size="sm" @click="history = !history">{{ copy.history }}</TxButton>
+      <TxButton size="sm" @click="append">
+        {{ copy.append }}
+      </TxButton>
+      <TxButton size="sm" @click="edit">
+        {{ copy.edit }}
+      </TxButton>
+      <TxButton size="sm" @click="clear">
+        {{ copy.clear }}
+      </TxButton>
+      <TxButton size="sm" @click="history = !history">
+        {{ copy.history }}
+      </TxButton>
       <label><TxSwitch v-model="paused" /><span>{{ copy.paused }}</span></label>
       <label><TxSwitch v-model="autoScroll" /><span>{{ copy.scroll }}</span></label>
     </div>
