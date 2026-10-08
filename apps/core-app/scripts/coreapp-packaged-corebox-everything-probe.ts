@@ -51,6 +51,16 @@ const DEFAULT_MODE_TIMEOUT_MS = 25_000
 const DEFAULT_LAUNCH_TIMEOUT_MS = 150_000
 const MODE_MIN_WAIT_MS = 2_000
 const MODE_STABLE_MS = 1_200
+/**
+ * Every wait on the app is bounded. The launched app exits by itself after
+ * `TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS`, and a CDP command it never answered stayed pending: once
+ * its socket closed the event loop drained, Node exited 0 without output, and the Windows gate read
+ * a passing probe that had written no evidence (15 minutes, every run since 2026-09-29).
+ */
+const CDP_CONNECT_TIMEOUT_MS = 10_000
+const CDP_COMMAND_TIMEOUT_MS = 15_000
+const CDP_TARGET_LIST_TIMEOUT_MS = 5_000
+const SCREENSHOT_TIMEOUT_MS = 20_000
 
 interface CliOptions {
   appBundle: string
@@ -300,6 +310,11 @@ function sleep(ms: number): Promise<void> {
   return promise
 }
 
+/** Phase markers on stderr, so a stalled CI step shows where it stopped; stdout keeps the result. */
+function logPhase(message: string): void {
+  console.error(`[corebox-everything-probe] ${new Date().toISOString()} ${message}`)
+}
+
 async function isPortAvailable(port: number): Promise<boolean> {
   const { promise, resolve } = Promise.withResolvers<boolean>()
   const server = createServer()
@@ -320,7 +335,9 @@ async function resolveCdpPort(requestedPort: number): Promise<number> {
 }
 
 async function loadTargets(remoteDebuggingUrl: string): Promise<DevToolsTarget[]> {
-  const response = await fetch(remoteDebuggingUrl)
+  const response = await fetch(remoteDebuggingUrl, {
+    signal: AbortSignal.timeout(CDP_TARGET_LIST_TIMEOUT_MS)
+  })
   if (!response.ok) throw new Error(`Remote debugging endpoint returned HTTP ${response.status}`)
   const payload = (await response.json()) as unknown
   if (!Array.isArray(payload)) {
@@ -344,9 +361,14 @@ interface CdpResponse {
     result?: { value?: unknown; type?: string }
     exceptionDetails?: unknown
   }
+  error?: { message?: string }
 }
 
-type CdpSend = (method: string, params?: Record<string, unknown>) => Promise<CdpResponse>
+type CdpSend = (
+  method: string,
+  params?: Record<string, unknown>,
+  timeoutMs?: number
+) => Promise<CdpResponse>
 
 interface ChildProcessCapture {
   getSummary: () => string
@@ -357,6 +379,10 @@ interface ChildProcessCapture {
   }
 }
 
+/**
+ * One CDP session on `target`. Every command settles: with its response, at its own deadline, or
+ * when the socket goes away — a reply that never comes is an error here, never an endless wait.
+ */
 async function withTarget<T>(
   target: DevToolsTarget,
   callback: (send: CdpSend) => Promise<T>
@@ -365,45 +391,86 @@ async function withTarget<T>(
 
   const socket = new WebSocket(target.webSocketDebuggerUrl)
   let id = 0
-  const pending = new Map<number, (value: CdpResponse) => void>()
+  const pending = new Map<
+    number,
+    {
+      method: string
+      resolve: (value: CdpResponse) => void
+      reject: (error: Error) => void
+      timer: ReturnType<typeof setTimeout>
+    }
+  >()
+  const rejectPending = (error: Error): void => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timer)
+      request.reject(error)
+    }
+    pending.clear()
+  }
 
   socket.onmessage = (event) => {
     const message = JSON.parse(String(event.data)) as CdpResponse & { id?: number }
-    if (typeof message.id === 'number' && pending.has(message.id)) {
-      pending.get(message.id)?.(message)
-      pending.delete(message.id)
+    if (typeof message.id !== 'number') return
+    const request = pending.get(message.id)
+    if (!request) return
+    pending.delete(message.id)
+    clearTimeout(request.timer)
+    if (message.error) {
+      request.reject(
+        new Error(`CDP ${request.method} failed: ${message.error.message ?? 'unknown'}`)
+      )
+      return
     }
+    request.resolve(message)
   }
+  socket.onclose = () => rejectPending(new Error(`CDP target closed: ${target.id}`))
 
   const opened = Promise.withResolvers<void>()
+  const connectTimer = setTimeout(
+    () => opened.reject(new Error(`Timed out connecting to CDP target: ${target.id}`)),
+    CDP_CONNECT_TIMEOUT_MS
+  )
   socket.onopen = () => opened.resolve()
-  socket.onerror = () => opened.reject(new Error(`Failed to connect CDP target: ${target.id}`))
-  await opened.promise
+  socket.onerror = () => {
+    const error = new Error(`CDP target connection failed: ${target.id}`)
+    opened.reject(error)
+    rejectPending(error)
+  }
 
-  const send: CdpSend = (method, params = {}) => {
+  const send: CdpSend = (method, params = {}, timeoutMs = CDP_COMMAND_TIMEOUT_MS) => {
     const response = Promise.withResolvers<CdpResponse>()
+    if (socket.readyState !== WebSocket.OPEN) {
+      response.reject(new Error(`CDP target closed before ${method}: ${target.id}`))
+      return response.promise
+    }
     const nextId = ++id
-    pending.set(nextId, response.resolve)
+    const timer = setTimeout(() => {
+      pending.delete(nextId)
+      response.reject(new Error(`CDP ${method} timed out after ${timeoutMs}ms: ${target.id}`))
+    }, timeoutMs)
+    pending.set(nextId, { method, resolve: response.resolve, reject: response.reject, timer })
     socket.send(JSON.stringify({ id: nextId, method, params }))
     return response.promise
   }
 
   try {
+    await opened.promise
     await send('Runtime.enable')
     await send('Page.enable')
     return await callback(send)
   } finally {
+    clearTimeout(connectTimer)
+    rejectPending(new Error(`CDP session ended: ${target.id}`))
     socket.close()
   }
 }
 
 async function evaluate<T>(send: CdpSend, expression: string, timeoutMs = 30_000): Promise<T> {
-  const response = await Promise.race([
-    send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }),
-    sleep(timeoutMs).then(() => {
-      throw new Error('Timed out waiting for CDP Runtime.evaluate')
-    })
-  ])
+  const response = await send(
+    'Runtime.evaluate',
+    { expression, returnByValue: true, awaitPromise: true },
+    timeoutMs
+  )
   if (response.result?.exceptionDetails) {
     throw new Error(
       `CDP Runtime.evaluate threw: ${JSON.stringify(response.result.exceptionDetails).slice(0, 600)}`
@@ -446,7 +513,11 @@ async function captureScreenshot(send: CdpSend, outputPath: string): Promise<voi
       'Could not clip the CoreBox result surface; refusing a full-window screenshot that could leak user content'
     )
   }
-  const response = await send('Page.captureScreenshot', { format: 'png', clip })
+  const response = await send(
+    'Page.captureScreenshot',
+    { format: 'png', clip },
+    SCREENSHOT_TIMEOUT_MS
+  )
   const data = response.result?.data
   if (!data) throw new Error('CDP screenshot response did not include data')
   await mkdir(path.dirname(outputPath), { recursive: true })
@@ -861,9 +932,15 @@ async function terminateProcessAndWait(child: ChildProcess | null): Promise<void
 async function waitForCoreBoxTarget(
   remoteDebuggingUrl: string,
   timeoutMs: number
-): Promise<{ target: DevToolsTarget | undefined; targets: DevToolsTarget[] }> {
+): Promise<{
+  target: DevToolsTarget | undefined
+  targets: DevToolsTarget[]
+  lastErrors: Map<string, string>
+}> {
   const startedAt = Date.now()
   let targets: DevToolsTarget[] = []
+  // Why each page was passed over, so a missing renderer reports what the probe last saw.
+  const lastErrors = new Map<string, string>()
   while (Date.now() - startedAt < timeoutMs) {
     targets = await loadTargets(remoteDebuggingUrl).catch(() => [])
     const pages = targets.filter(
@@ -874,14 +951,16 @@ async function waitForCoreBoxTarget(
         const hasInput = await withTarget(target, (send) =>
           evaluate<boolean>(send, `Boolean(document.querySelector('#core-box-input'))`, 5_000)
         )
-        if (hasInput) return { target, targets }
-      } catch {
+        if (hasInput) return { target, targets, lastErrors }
+        lastErrors.set(target.id, 'no #core-box-input')
+      } catch (error) {
         // Renderer still booting; keep polling.
+        lastErrors.set(target.id, error instanceof Error ? error.message : String(error))
       }
     }
     await sleep(750)
   }
-  return { target: undefined, targets }
+  return { target: undefined, targets, lastErrors }
 }
 
 interface ProbeResult {
@@ -955,7 +1034,8 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       childOutput = captureChildOutput(child)
     }
 
-    const { target, targets } = await waitForCoreBoxTarget(
+    logPhase(`waiting for the CoreBox renderer at ${remoteDebuggingUrl}`)
+    const { target, targets, lastErrors } = await waitForCoreBoxTarget(
       remoteDebuggingUrl,
       options.launchTimeoutMs
     )
@@ -964,11 +1044,17 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       if (summary) console.error(summary)
       result.failures.push(
         `Packaged CoreBox renderer target was not found. Targets: ${
-          targets.map((entry) => `${entry.type}:${entry.url}`).join(', ') || 'none'
+          targets
+            .map((entry) => {
+              const lastError = lastErrors.get(entry.id)
+              return `${entry.type}:${entry.url}${lastError ? ` (${lastError})` : ''}`
+            })
+            .join(', ') || 'none'
         }`
       )
       return result
     }
+    logPhase(`CoreBox renderer ready (${target.id})`)
     const probeTarget =
       targets.find(
         (entry) =>
@@ -991,6 +1077,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       ? (status?.backend ?? 'unavailable')
       : 'unavailable'
     result.observedBackend = observedBackend
+    logPhase(`Everything backend ${observedBackend}, expected ${options.expectBackend}`)
     if (observedBackend !== options.expectBackend) {
       result.failures.push(
         `Packaged Everything backend is ${observedBackend}, expected ${options.expectBackend}`
@@ -1004,6 +1091,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
     const screenshots: string[] = []
     const domSnapshots: string[] = []
     for (const mode of ['normal', 'explicit-file', 'structured-filter'] as const) {
+      logPhase(`mode ${mode}: searching`)
       await withTarget(probeTarget, (send) =>
         evaluate<unknown>(send, buildShowCoreBoxExpression(), 25_000)
       )
@@ -1057,6 +1145,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
         captureScreenshot(send, path.join(outputDir, screenshotName))
       )
       screenshots.push(screenshotName)
+      logPhase(`mode ${mode}: ${observation.rowCount} rows from ${resultSource}`)
       domSnapshots.push(domName)
       modes.push({
         mode,
@@ -1118,6 +1207,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
     await withTarget(probeTarget, (send) =>
       evaluate<unknown>(send, buildShowCoreBoxExpression(), 25_000)
     )
+    logPhase('empty-state search')
     const emptyObservation = await withTarget(target, (send) =>
       evaluate<CoreBoxModeObservation>(
         send,
@@ -1206,6 +1296,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
     result.failures.push(...gate.failures)
     result.ok = result.failures.length === 0
     await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`)
+    logPhase(`evidence written: ${evidencePath}`)
     return result
   } finally {
     await terminateProcessAndWait(child)
@@ -1225,8 +1316,19 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error))
+  let settled = false
+  // A step that never settles must not read as a pass: Node exits 0 once the event loop drains.
+  process.once('beforeExit', () => {
+    if (settled) return
+    console.error('Probe stopped before finishing: a step it was waiting on never settled')
     process.exitCode = 1
   })
+  main()
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : String(error))
+      process.exitCode = 1
+    })
+    .finally(() => {
+      settled = true
+    })
 }
