@@ -22,6 +22,7 @@
 - `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
 - `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。
 - `TxMotionLoader` 将保留的 React SVG 描边属性转换为标准 SVG 属性，恢复来源中的线宽、端帽、连接和虚线参数；`viewBox` 与滤镜大小写保持不变，SSR 与客户端遵循相同几何。
+- `TxDitherChart` 默认 tooltip 不再把数据点标签打两遍：标题写悬停的数据点（日期或类目），数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）只保留数据行。tooltip 落到图表下半部时也不再被坐标轴文字盖住。
 
 ### 🧩 组件导出
 
