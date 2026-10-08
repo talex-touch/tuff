@@ -8,9 +8,9 @@ const TuffLandingStats = defineAsyncComponent(() => import('./landing/TuffLandin
 const TuffLandingPlugins = defineAsyncComponent(() => import('./landing/TuffLandingPlugins.vue'))
 const TuffLandingAiOverview = defineAsyncComponent(() => import('./landing/TuffLandingAiOverview.vue'))
 const TuffLandingInstantPreview = defineAsyncComponent(() => import('./landing/TuffLandingInstantPreview.vue'))
-const TuffLandingBuiltForYou = defineAsyncComponent(() => import('./landing/TuffLandingBuiltForYou.vue'))
+const TuffLandingFeatureShowcase = defineAsyncComponent(() => import('./landing/TuffLandingFeatureShowcase.vue'))
 const TuffLandingFeatures = defineAsyncComponent(() => import('./landing/TuffLandingFeatures.vue'))
-const TuffLandingEcosystem = defineAsyncComponent(() => import('./landing/TuffLandingEcosystem.vue'))
+const TuffLandingDesignSystem = defineAsyncComponent(() => import('./landing/TuffLandingDesignSystem.vue'))
 const TuffLandingCommunity = defineAsyncComponent(() => import('./landing/TuffLandingCommunity.vue'))
 const TuffLandingFaq = defineAsyncComponent(() => import('./landing/TuffLandingFaq.vue'))
 const TuffLandingWaitlist = defineAsyncComponent(() => import('./landing/TuffLandingWaitlist.vue'))
@@ -106,7 +106,7 @@ useHead({
         class="TuffHome-SmoothSection"
         data-smooth-section
       >
-        <TuffLandingBuiltForYou />
+        <TuffLandingFeatureShowcase />
       </section>
 
       <section
@@ -124,7 +124,7 @@ useHead({
         class="TuffHome-SmoothSection"
         data-smooth-section
       >
-        <TuffLandingEcosystem />
+        <TuffLandingDesignSystem />
       </section>
 
       <section

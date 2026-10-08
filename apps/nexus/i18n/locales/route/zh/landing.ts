@@ -728,6 +728,93 @@ export default {
         },
         copied: '已复制',
       },
+      showcase: {
+        eyebrow: '功能',
+        headlineLead: '一个框，',
+        headlineAccent: '办很多事。',
+        subheadline: '下面这些装好就有，不用另外找插件。',
+        items: {
+          launch: {
+            title: '打开应用',
+            summon: '⌥ Space',
+            copy: '按下 ⌥Space，输入两三个字母就能打开，拼音和缩写都认。',
+            label: '一块键盘的线稿，指针下的按键会沉下去',
+          },
+          files: {
+            title: '找文件',
+            summon: 'report.pdf',
+            copy: 'Windows 接 Everything，macOS 用 Spotlight 加本地索引，文件名打到一半就出来。',
+            label: '三层抽屉柜的线稿，指针选中的抽屉会滑出来',
+          },
+          clipboard: {
+            title: '剪贴板历史',
+            summon: '剪贴板',
+            copy: '文字、图片、文件都留着，还记得是从哪个应用复制的。',
+            label: '一排卡片的线稿，指针下的卡片会立起来',
+          },
+          translate: {
+            title: '翻译',
+            summon: 'fy',
+            copy: '输入 fy 直接翻译；fy-multi 把谷歌、必应、DeepL 等结果并排对比。',
+            label: '一面天线锅的线稿，会转向指针',
+          },
+          quickops: {
+            title: '快捷工具',
+            summon: 'ops',
+            copy: '计时器、番茄钟、防休眠、查端口和 IP，一句命令就办。',
+            label: '一块点阵屏的线稿，指针划过的地方会亮起来',
+          },
+          snippets: {
+            title: '片段库',
+            summon: '片段',
+            copy: '常用的文字、代码和提示词存成片段，要用的时候一搜就有。',
+            label: '一排抽拉式刀片架的线稿，指针附近的刀片会被抽出来',
+          },
+        },
+      },
+      designSystem: {
+        eyebrow: '设计规范',
+        kicker: 'TUFFEX DESIGN',
+        headlineLead: '设计，',
+        headlineAccent: '有章可循。',
+        figure: {
+          index: 'FIG. 01',
+          title: '组件分层',
+          label: '拆成四层的应用窗口线稿：窗口、侧栏、卡片与弹层',
+        },
+        tokens: {
+          type: {
+            title: '字体',
+            note: 'Inter · PingFang SC · 字重 500',
+          },
+          color: {
+            title: '颜色',
+            note: '品牌色与语义色 · 深色值',
+          },
+          curve: {
+            title: '连续曲率',
+            g1: 'G1 圆弧',
+            g2: 'G2 连续',
+            note: 'Tuffex 的 squircle 外形曲率连续：转角从直边平滑弯入，没有一处突然拐弯。左右移动对比。',
+          },
+          motion: {
+            title: '动效',
+            note: '0.2s / 0.3s',
+            strong: '强减速',
+            spring: '弹性',
+          },
+        },
+        stats: {
+          title: '规模',
+          components: '组件',
+          docs: '文档页',
+          themes: '主题',
+          note: '中英双语文档 · 浅色 / 深色 / 高对比',
+        },
+        cta: '打开 Tuffex Design',
+        copyCommand: '复制安装命令',
+        copied: '已复制',
+      },
       openFoundation: {
         eyebrow: '开放基石',
         headline: '开放打造，献给创造者。',

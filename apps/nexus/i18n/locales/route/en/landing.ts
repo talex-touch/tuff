@@ -729,6 +729,93 @@ export default {
         },
         copied: 'Copied',
       },
+      showcase: {
+        eyebrow: 'Features',
+        headlineLead: 'One box. ',
+        headlineAccent: 'A lot done.',
+        subheadline: 'All of this ships with Tuff. No extra plugins to hunt for.',
+        items: {
+          launch: {
+            title: 'Open apps',
+            summon: '⌥ Space',
+            copy: 'Press ⌥Space and type two or three letters. Pinyin and abbreviations match too.',
+            label: 'Line drawing of a keyboard whose key under the pointer sinks',
+          },
+          files: {
+            title: 'Find files',
+            summon: 'report.pdf',
+            copy: 'Everything on Windows, Spotlight plus a local index on macOS. Results show up halfway through the name.',
+            label: 'Line drawing of a three-drawer cabinet whose picked drawer slides out',
+          },
+          clipboard: {
+            title: 'Clipboard history',
+            summon: 'clipboard-history',
+            copy: 'Text, images, and files stay, along with the app they were copied from.',
+            label: 'Line drawing of a tray of cards; the card under the pointer stands up',
+          },
+          translate: {
+            title: 'Translate',
+            summon: 'fy',
+            copy: 'Type fy to translate. fy-multi lines up Google, Bing, DeepL, and more side by side.',
+            label: 'Line drawing of a dish antenna that turns toward the pointer',
+          },
+          quickops: {
+            title: 'QuickOps',
+            summon: 'ops',
+            copy: 'Timers, pomodoro, keep-awake, port and IP checks, one command each.',
+            label: 'Line drawing of a dot-matrix display that glows where the pointer passes',
+          },
+          snippets: {
+            title: 'Snippets',
+            summon: 'snippet',
+            copy: 'Save text, code, and prompts as snippets, and search them up when you need them.',
+            label: 'Line drawing of a rack of blades; the ones near the pointer slide out',
+          },
+        },
+      },
+      designSystem: {
+        eyebrow: 'Design system',
+        kicker: 'TUFFEX DESIGN',
+        headlineLead: 'Design, ',
+        headlineAccent: 'by the book.',
+        figure: {
+          index: 'FIG. 01',
+          title: 'Layers',
+          label: 'Line drawing of an app window taken apart into four layers: surface, sidebar, card, and popover',
+        },
+        tokens: {
+          type: {
+            title: 'Type',
+            note: 'Inter · PingFang SC · weight 500',
+          },
+          color: {
+            title: 'Color',
+            note: 'Brand and semantic · dark values',
+          },
+          curve: {
+            title: 'Continuous curvature',
+            g1: 'G1 arc',
+            g2: 'G2 smooth',
+            note: 'Tuffex squircles keep curvature continuous: corners ease in from the straight edge and never snap. Move across to compare.',
+          },
+          motion: {
+            title: 'Motion',
+            note: '0.2s / 0.3s',
+            strong: 'Strong ease-out',
+            spring: 'Spring',
+          },
+        },
+        stats: {
+          title: 'Scale',
+          components: 'Components',
+          docs: 'Doc pages',
+          themes: 'Themes',
+          note: 'Docs in EN and ZH · light / dark / high contrast',
+        },
+        cta: 'Open Tuffex Design',
+        copyCommand: 'Copy install command',
+        copied: 'Copied',
+      },
       openFoundation: {
         eyebrow: 'Open by Design',
         headline: 'Built in the open. Crafted for builders.',
