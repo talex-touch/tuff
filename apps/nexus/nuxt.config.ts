@@ -15,7 +15,7 @@ import { resolveTuffexDevMode } from './build/tuffex-dev-mode'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
 import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
-import { createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
+import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
 
@@ -504,8 +504,8 @@ export default defineNuxtConfig({
             '/zh/docs.md',
             '/zh/docs/*',
             '/api/docs/page/*',
-            // The prerendered policy documents (`contentApiPrerenderRoutes`).
-            '/api/content/policy/*',
+            // The prerendered policy documents, one pattern each (see `contentApiRouteExcludes`).
+            ...contentApiRouteExcludes,
           ],
         },
       },
