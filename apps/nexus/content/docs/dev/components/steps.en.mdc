@@ -68,7 +68,7 @@ code: |
 | `description` | `string` | - | Supporting text. |
 | `icon` | `string` | - | Icon name or class shown before completion. |
 | `status` | `'wait' \| 'active' \| 'completed' \| 'error'` | `'wait'` | Manual status; the active state and numeric completion take precedence. |
-| `step` | `number \| string` | child order | Step key; defaults to the zero-based child order. |
+| `step` | `number \| string` | child order | Step key; defaults to the zero-based child order. String keys are numbered by order. |
 | `clickable` | `boolean` | `true` | Renders a button head; a click updates the internal active step. |
 | `disabled` | `boolean` | `false` | Disables the step button and blocks activation. |
 | `showLine` | `boolean` | `true` | Renders the connector; the last step never has one. |

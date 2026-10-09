@@ -68,7 +68,7 @@ code: |
 | `description` | `string` | - | 辅助说明。 |
 | `icon` | `string` | - | 未完成时显示的图标名或 class。 |
 | `status` | `'wait' \| 'active' \| 'completed' \| 'error'` | `'wait'` | 手动状态；当前项与数字完成推断优先于它。 |
-| `step` | `number \| string` | 子项顺序 | 步骤键；未提供时用从 0 开始的子项顺序。 |
+| `step` | `number \| string` | 子项顺序 | 步骤键；未提供时用从 0 开始的子项顺序。字符串键按子项顺序编号。 |
 | `clickable` | `boolean` | `true` | 渲染按钮头部，点击更新内部当前步骤。 |
 | `disabled` | `boolean` | `false` | 禁用步骤按钮并阻止激活。 |
 | `showLine` | `boolean` | `true` | 渲染连接线；最后一步始终没有。 |
