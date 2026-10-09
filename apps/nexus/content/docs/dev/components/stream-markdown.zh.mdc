@@ -53,6 +53,12 @@ code: |
 | `sanitize` | `boolean` | `true` | 用 DOMPurify 净化 HTML。 |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 配色主题；`auto` 跟随环境。 |
 | `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | 按围栏语言替换块渲染组件，组件以 props 接收 `StreamMarkdownBlockContext`。 |
+| `blockRemoteImages` | `boolean` | `true` | 远程图片（`http(s)://`、`//`）先显示占位块，读者确认后才加载。 |
+| `blockedImageText` | `string` | `'Remote image blocked'` | 图片占位块的标题。 |
+| `loadImageOnceText` | `string` | `'Load this image'` | 只加载这一张图片的按钮文字。 |
+| `allowSessionImagesText` | `string` | `'Allow for this conversation'` | 放行本次会话全部远程图片的按钮文字。 |
+| `copyTableText` | `string` | `'Copy CSV'` | 表格「复制为 CSV」按钮的文字。 |
+| `copiedTableText` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
 
 ## 概述
 
@@ -61,4 +67,5 @@ code: |
 - 未注册的语言走内置渲染：`mermaid` 用 `TxMermaidBlock`，其余用 `TxCodeBlock`。
 - 光标同 `TxStreamText`：尾部是段落、标题或引用时紧跟末字符，否则单独位于下方一行；减弱动效时不播放进场，光标静止。
 - DOMPurify 动态加载，加载失败时不净化、组件照常工作：净化是尽力而为，不能替代服务端的信任边界。
+- 图片放行记录是模块级的，所有实例共享；切换会话时调用导出的 `resetRemoteImagePolicy()` 清除。
 - 每个实例持有自己的 `Marked`（`gfm`、`breaks`）；GitHub Markdown 样式表限定在 `:where(.tx-md)` 下，不会改写宿主的 `.markdown-body`。

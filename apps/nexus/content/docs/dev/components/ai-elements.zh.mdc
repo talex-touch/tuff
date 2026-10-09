@@ -58,6 +58,7 @@ code: |
 | 插槽名 | Props | 说明 |
 |------|------|------|
 | `empty` | - | 替换内置空状态。 |
+| `default` / `avatar` / `markdown-renderer` / `tool-result` | 同 `TxAiMessage` | 转发给每条 `TxAiMessage`。 |
 
 ### TxAiMessage
 
@@ -69,6 +70,13 @@ code: |
 | `markdown` | `boolean` | `true` | 用 `TxMarkdownView` 渲染正文；`false` 时按纯文本保留换行。 |
 | `compact` | `boolean` | `false` | 紧凑行距与更小的头像。 |
 | `showAvatar` | `boolean` | `false` | 显示头像。 |
+| `typingLabel` | `string` | `'AI is typing'` | 输入中指示器的可访问名称；`TxAiConversation` 不转发。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open-source` | `(source: AiSourceItem)` | 点击 `sources` 片段中的来源时触发，默认跳转已阻止；`TxAiConversation` 不转发。 |
 
 #### 插槽
 
@@ -76,6 +84,8 @@ code: |
 |------|------|------|
 | `default` | `{ message }` | 替换正文区域，用于工具卡片、附件或自定义渲染。 |
 | `avatar` | `{ message }` | `showAvatar` 开启时替换头像。 |
+| `markdown-renderer` | `{ part, message, streaming }` | 替换 `text` 片段的渲染；只有流式消息的最后一个文本片段 `streaming` 为真。 |
+| `tool-result` | `{ part }` | 替换 `tool-call` 片段在 `done` 后的结果区。 |
 
 ### 类型
 
@@ -90,11 +100,26 @@ code: |
 | `name` | `string` | - | 显示名称；缺省为 You / AI / Tool / System。 |
 | `avatar` | `string` | - | 头像图片 URL。 |
 | `status` | `'pending' \| 'streaming' \| 'complete' \| 'error'` | - | 消息生命周期状态。 |
+| `parts` | `AiMessagePart[]` | - | 非空时按顺序渲染这些片段，取代 `content`。 |
+
+#### AiMessagePart
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type AiMessagePart =
+    | { type: 'text', text: string } // markdown-renderer 插槽或 TxMarkdownView
+    | { type: 'reasoning', text: string, done?: boolean, durationMs?: number } // TxReasoningDisclosure
+    | AiToolCallPart // type: 'tool-call'，由 TxToolCallCard 渲染
+    | { type: 'attachment', attachments: AiAttachment[] } // 只读的 TxAttachmentTray
+    | { type: 'sources', sources: AiSourceItem[] } // TxSources
+---
+:::
 
 ## 概述
 
-- `content` 为空的消息不渲染，`status` 为 `pending` 或 `streaming` 时除外。
-- 这类空消息显示输入中指示器。
+- `content` 为空的消息不渲染，带 `parts` 或 `status` 为 `pending`、`streaming` 时除外。
+- 这类空消息若没有 `parts`，显示输入中指示器。
 - `TxAiConversation` 是 `aria-live="polite"` 区域：追加的消息会被播报，不抢焦点。
 
 ## 技术实现

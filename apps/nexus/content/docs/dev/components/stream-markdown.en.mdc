@@ -53,6 +53,12 @@ code: |
 | `sanitize` | `boolean` | `true` | Sanitizes HTML through DOMPurify. |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme; `auto` follows the environment. |
 | `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | Block renderers by fence language; each receives `StreamMarkdownBlockContext` as props. |
+| `blockRemoteImages` | `boolean` | `true` | Shows remote images (`http(s)://`, `//`) as a placeholder until the reader loads them. |
+| `blockedImageText` | `string` | `'Remote image blocked'` | Title of the blocked-image placeholder. |
+| `loadImageOnceText` | `string` | `'Load this image'` | Text of the button that loads only this image. |
+| `allowSessionImagesText` | `string` | `'Allow for this conversation'` | Text of the button that allows every remote image for the conversation. |
+| `copyTableText` | `string` | `'Copy CSV'` | Text of a table's copy-as-CSV button. |
+| `copiedTableText` | `string` | `'Copied'` | Button text shown briefly after a successful copy. |
 
 ## Overview
 
@@ -61,4 +67,5 @@ code: |
 - Unregistered languages use the built-ins: `TxMermaidBlock` for `mermaid`, `TxCodeBlock` for the rest.
 - The caret is `TxStreamText`'s: right after the last character of a paragraph, heading, or quote, otherwise on its own line below. Under reduced motion nothing enters and the caret rests.
 - DOMPurify loads dynamically; if it fails, the component keeps working unsanitized, so sanitizing is best-effort and no substitute for a server-side trust boundary.
+- Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.
 - Each instance owns its own `Marked` (`gfm`, `breaks`); the GitHub Markdown sheet is scoped under `:where(.tx-md)`, leaving the host's `.markdown-body` alone.

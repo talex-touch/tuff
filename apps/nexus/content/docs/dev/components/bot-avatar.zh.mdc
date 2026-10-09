@@ -112,14 +112,16 @@ code: |
 | `jumpHeight` | `number` | `26` | 跳跃高度，以身体高 100 为单位。 |
 | `jumpTime` | `number` | `0.68` | 一次跳跃的滞空秒数。 |
 | `jumpStretch` / `jumpSquash` | `number` | `1` / `1.15` | 空中拉伸与落地压扁。 |
-| `jumpSquashTime` / `jumpSquashEase` / `jumpGroundTime` / `jumpGroundEase` / `jumpRiseTime` / `jumpRiseEase` | — | 已调校 | 落地压扁的形状、停顿与回弹。 |
+| `jumpSquashTime` / `jumpSquashEase` | `number` / `BotAvatarSquashEase` | `0.37` / `'pulse'` | 落地压扁从触地到复原的秒数与缓动。 |
+| `jumpGroundTime` / `jumpGroundEase` | `number` / `BotAvatarSquashEase` | `0.11` / `'pulse'` | 停在最深压扁处的秒数与缓动。 |
+| `jumpRiseTime` / `jumpRiseEase` | `number` / `BotAvatarSquashEase` | `0.33` / `'pulse'` | 从最深压扁回到原形的秒数与缓动。 |
 | `jumpClickSquashTime` | `number` | `0.24` | 点击跳跃的落地压扁时长。 |
 | `jumpSpin` | `number` | `1` | 空中转的整圈数。 |
 | `jumpLean` | `number` | `6` | 跳跃时的倾斜角度。 |
 | `jumpEvery` | `number` | `8` | 空闲跳跃间隔秒数（±40%）；`0` 关闭。 |
 | `jumpLand` | `number` | `0` | 落地压扁相对触地的开始时刻（秒）。 |
 
-`BotAvatarType` 共 18 种：`clover`、`flower`、`triangle`、`square`、`blob`、`ghost`、`circle`、`drop`、`star`、`droid`、`mech`、`alien`、`hexagon`、`cat`、`cloud`、`pill`、`pebble`、`puddle`。`BotAvatarFace` 为 `'eyes' | 'mouth'`。
+`BotAvatarType` 共 18 种：`clover`、`flower`、`triangle`、`square`、`blob`、`ghost`、`circle`、`drop`、`star`、`droid`、`mech`、`alien`、`hexagon`、`cat`、`cloud`、`pill`、`pebble`、`puddle`。`BotAvatarFace` 为 `'eyes' | 'mouth'`。`BotAvatarSquashEase` 为 `'sharp' | 'pulse' | 'soft' | 'bouncy'`。
 
 ### 暴露方法
 

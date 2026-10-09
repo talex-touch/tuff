@@ -58,6 +58,7 @@ code: |
 | Slot | Props | Description |
 |------|------|-------------|
 | `empty` | - | Replaces the built-in empty state. |
+| `default` / `avatar` / `markdown-renderer` / `tool-result` | Same as `TxAiMessage` | Forwarded to every `TxAiMessage`. |
 
 ### TxAiMessage
 
@@ -69,6 +70,13 @@ code: |
 | `markdown` | `boolean` | `true` | Renders the body through `TxMarkdownView`; `false` keeps plain text with its line breaks. |
 | `compact` | `boolean` | `false` | Compact row density and a smaller avatar. |
 | `showAvatar` | `boolean` | `false` | Shows the avatar. |
+| `typingLabel` | `string` | `'AI is typing'` | Accessible name of the typing indicator; `TxAiConversation` doesn't forward it. |
+
+#### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `open-source` | `(source: AiSourceItem)` | Fires when a source in a `sources` part is clicked; navigation is prevented. `TxAiConversation` doesn't forward it. |
 
 #### Slots
 
@@ -76,6 +84,8 @@ code: |
 |------|------|-------------|
 | `default` | `{ message }` | Replaces the content region; for tool cards, attachments, or custom renderers. |
 | `avatar` | `{ message }` | Replaces the avatar when `showAvatar` is on. |
+| `markdown-renderer` | `{ part, message, streaming }` | Replaces a `text` part's rendering; `streaming` is true only for the last text part of a streaming message. |
+| `tool-result` | `{ part }` | Replaces the result area of a `tool-call` part once it is `done`. |
 
 ### Types
 
@@ -90,11 +100,26 @@ code: |
 | `name` | `string` | - | Display name; falls back to You / AI / Tool / System. |
 | `avatar` | `string` | - | Avatar image URL. |
 | `status` | `'pending' \| 'streaming' \| 'complete' \| 'error'` | - | Message lifecycle state. |
+| `parts` | `AiMessagePart[]` | - | When non-empty, these parts render in order instead of `content`. |
+
+#### AiMessagePart
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type AiMessagePart =
+    | { type: 'text', text: string } // markdown-renderer slot or TxMarkdownView
+    | { type: 'reasoning', text: string, done?: boolean, durationMs?: number } // TxReasoningDisclosure
+    | AiToolCallPart // type: 'tool-call', rendered by TxToolCallCard
+    | { type: 'attachment', attachments: AiAttachment[] } // read-only TxAttachmentTray
+    | { type: 'sources', sources: AiSourceItem[] } // TxSources
+---
+:::
 
 ## Overview
 
-- A message with empty `content` is not rendered unless its `status` is `pending` or `streaming`.
-- Such an empty message shows a typing indicator.
+- A message with empty `content` is not rendered unless it has `parts` or its `status` is `pending` or `streaming`.
+- Such an empty message without `parts` shows a typing indicator.
 - `TxAiConversation` is an `aria-live="polite"` region: appended messages are announced without stealing focus.
 
 ## Technologies

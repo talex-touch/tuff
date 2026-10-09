@@ -122,6 +122,20 @@ code: |
 | `actions` | `{ send, disabled }` | 追加到发送按钮之前。 |
 | `footer` | - | 卡片内、操作行下方的内容。 |
 
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ChatComposerAttachment {
+    id: string // chip 的 key
+    label: string // chip 文本，超宽时省略
+    kind?: string // 文本后的类型标记，以大写显示
+    pending?: boolean // 处理中，chip 改为琥珀色
+  }
+---
+:::
+
 ### CSS 变量
 
 | 变量 | 默认值 | 说明 |

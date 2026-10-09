@@ -43,10 +43,11 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `steps` | `AiChainStep[]` | — | 步骤列表，必填。`AiChainStep` 为 `{ id, kind: 'thinking' \| 'tool', title, body?, status: 'active' \| 'done' \| 'error' }`。 |
+| `steps` | `AiChainStep[]` | — | 步骤列表，必填。`AiChainStep` 为 `{ id, kind: 'thinking' \| 'tool', title, body?, status: 'active' \| 'done' \| 'error', durationMs? }`。 |
 | `streaming` | `boolean` | `false` | 仍在输出；有 `active` 步骤时头部显示思考球。 |
 | `defaultOpen` | `boolean` | `true` | 不在流式时的展开状态。 |
 | `label` | `string` | `'Chain of thought'` | 头部文案；非英文界面需覆盖。 |
+| `userOpen` | `boolean` | — | 宿主持有的展开状态，优先级最高；回写 `toggle` 可跨重新挂载保留。 |
 
 ### 事件
 
@@ -56,7 +57,8 @@ code: |
 
 ## 概述
 
-- 展开状态：用户点击过则以点击为准；否则流式时随 `active` 步骤展开、收起，不在流式时取 `defaultOpen`。
+- 展开状态：`userOpen` 优先，其次是用户点击；否则流式时随 `active` 步骤展开、收起，不在流式时取 `defaultOpen`。
 - 任一步骤的 `body` 变长时，活跃步骤的正文滚到底部。
+- `done` 步骤带 `durationMs` 时，标题后显示耗时（`· 3.2s`，10 秒及以上取整秒）。
 - 头部计数为 `steps.length`，只有一步时不显示。
 - 头部是原生 `<button>`，带 `aria-expanded` 与 `aria-controls`；步骤列表是 `<ol>`。

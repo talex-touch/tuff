@@ -112,14 +112,16 @@ Each instance offsets its blink timing by default, so a row never blinks in unis
 | `jumpHeight` | `number` | `26` | Jump height in body units; the body is 100 tall. |
 | `jumpTime` | `number` | `0.68` | Seconds a jump spends in the air. |
 | `jumpStretch` / `jumpSquash` | `number` | `1` / `1.15` | Stretch in the air and squash on the ground. |
-| `jumpSquashTime` / `jumpSquashEase` / `jumpGroundTime` / `jumpGroundEase` / `jumpRiseTime` / `jumpRiseEase` | — | tuned | Landing squash shape, hold, and rise. |
+| `jumpSquashTime` / `jumpSquashEase` | `number` / `BotAvatarSquashEase` | `0.37` / `'pulse'` | Seconds and easing of the landing squash, from contact to recovery. |
+| `jumpGroundTime` / `jumpGroundEase` | `number` / `BotAvatarSquashEase` | `0.11` / `'pulse'` | Seconds and easing of the hold at the deepest squash. |
+| `jumpRiseTime` / `jumpRiseEase` | `number` / `BotAvatarSquashEase` | `0.33` / `'pulse'` | Seconds and easing of the rise from the deepest squash back to shape. |
 | `jumpClickSquashTime` | `number` | `0.24` | Landing squash time for a click's jump. |
 | `jumpSpin` | `number` | `1` | Whole turns made in the air. |
 | `jumpLean` | `number` | `6` | Degrees of lean into a jump. |
 | `jumpEvery` | `number` | `8` | Seconds between idle jumps, ±40%; `0` disables them. |
 | `jumpLand` | `number` | `0` | When the landing squash starts relative to touch-down, in seconds. |
 
-`BotAvatarType` has 18 shapes: `clover`, `flower`, `triangle`, `square`, `blob`, `ghost`, `circle`, `drop`, `star`, `droid`, `mech`, `alien`, `hexagon`, `cat`, `cloud`, `pill`, `pebble`, and `puddle`. `BotAvatarFace` is `'eyes' | 'mouth'`.
+`BotAvatarType` has 18 shapes: `clover`, `flower`, `triangle`, `square`, `blob`, `ghost`, `circle`, `drop`, `star`, `droid`, `mech`, `alien`, `hexagon`, `cat`, `cloud`, `pill`, `pebble`, and `puddle`. `BotAvatarFace` is `'eyes' | 'mouth'`. `BotAvatarSquashEase` is `'sharp' | 'pulse' | 'soft' | 'bouncy'`.
 
 ### Exposed Methods
 
