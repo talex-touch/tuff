@@ -808,21 +808,18 @@ describe('IntelligenceContextExecutionService', () => {
     expect(stream).not.toHaveBeenCalled()
   })
 
-  it('honors trusted entrypoint ownership and rejects plugin owner spoofing', async () => {
+  it('honors the trusted CoreBox entrypoint and rejects the retired Assistant one and owner spoofing', async () => {
     const { IntelligenceContextExecutionService } = await import('./intelligence-context-execution')
     const contextPackage = createPackage()
     const prepared = createPrepared(contextPackage)
-    const prepareTurn = vi.fn(async () => ({
-      ...prepared,
-      session: { ...prepared.session, owner: 'assistant' as const }
-    }))
+    const prepareTurn = vi.fn(async () => prepared)
     const revalidatePackageMemories = vi.fn(async () => contextPackage)
     const appendAssistantTurn = vi.fn(async () => prepared.turn)
     const invoke = vi.fn(async () => ({
-      result: 'Assistant answer',
+      result: 'CoreBox answer',
       provider: 'local-default',
       model: 'qwen2.5:3b',
-      traceId: 'trace-assistant',
+      traceId: 'trace-corebox',
       latency: 2
     }))
     const stream = vi.fn(async function* () {})
@@ -834,23 +831,32 @@ describe('IntelligenceContextExecutionService', () => {
       ...createRequest(),
       options: {
         metadata: {
+          contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'new' }
+        }
+      },
+      context: { mode: 'new', owner: 'corebox', scope: 'light' }
+    }
+    // The floating ball's voice panel submitted through this pair; nothing sends it any more.
+    const retired: IntelligenceContextExecutionRequest = {
+      ...request,
+      options: {
+        metadata: {
           contextEntrypoint: { id: 'assistant.voice', owner: 'assistant', mode: 'new' }
         }
       },
-      context: {
-        mode: 'new',
-        owner: 'assistant',
-        scope: 'light'
-      }
+      context: { mode: 'new', owner: 'assistant', scope: 'light' }
     }
 
     await expect(
       service.invoke(request, { id: 'plugin:touch-intelligence', type: 'plugin' })
-    ).resolves.toMatchObject({ invocation: { result: 'Assistant answer' } })
+    ).resolves.toMatchObject({ invocation: { result: 'CoreBox answer' } })
     expect(prepareTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ owner: 'assistant', explicitScope: 'light' })
+      expect.objectContaining({ owner: 'corebox', explicitScope: 'light' })
     )
 
+    await expect(
+      service.invoke(retired, { id: 'plugin:touch-intelligence', type: 'plugin' })
+    ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
     await expect(
       service.invoke(request, { id: 'plugin:untrusted', type: 'plugin' })
     ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')

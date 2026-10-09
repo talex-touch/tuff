@@ -34,7 +34,7 @@ export interface PluginIntelligenceContextRequest {
   readonly options?: IntelligenceInvokeOptions
   readonly context: {
     readonly mode: 'new' | 'continue' | 'stateless'
-    readonly owner?: 'corebox' | 'assistant'
+    readonly owner?: 'corebox'
     readonly sessionId?: string
     readonly scope?: 'light' | 'session' | 'retrieval'
     readonly objective?: string
@@ -320,14 +320,9 @@ function snapshotEntrypoint(value: unknown): Readonly<Record<string, string>> {
   const id = boundedString(required(record, 'id', code), MAX_IDENTIFIER_BYTES, code)
   const owner = required(record, 'owner', code)
   const mode = required(record, 'mode', code)
-  if (owner !== 'corebox' && owner !== 'assistant') fail(code)
+  if (owner !== 'corebox') fail(code)
   if (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') fail(code)
-  if (
-    (id !== 'corebox.ai-ask' || owner !== 'corebox') &&
-    (id !== 'assistant.voice' || owner !== 'assistant')
-  ) {
-    fail(code)
-  }
+  if (id !== 'corebox.ai-ask') fail(code)
   return Object.freeze({ id, owner, mode })
 }
 
@@ -442,7 +437,7 @@ function snapshotContext(value: unknown): PluginIntelligenceContextRequest['cont
   const mode = required(record, 'mode', code)
   if (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') fail(code)
   const owner = Object.hasOwn(record, 'owner') ? record.owner : undefined
-  if (owner !== undefined && owner !== 'corebox' && owner !== 'assistant') fail(code)
+  if (owner !== undefined && owner !== 'corebox') fail(code)
   const sessionId = optionalString(record, 'sessionId', MAX_IDENTIFIER_BYTES, code)
   if ((mode === 'continue') !== (sessionId !== undefined)) fail(code)
   const scope = Object.hasOwn(record, 'scope') ? record.scope : undefined

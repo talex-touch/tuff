@@ -1951,7 +1951,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
         arrayIsArray(context) ||
         (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
         mode === 'continue' ||
-        (owner !== 'corebox' && owner !== 'assistant') ||
+        owner !== 'corebox' ||
         (mode === 'continue' &&
           (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
         (mode !== 'continue' && sessionId !== undefined) ||
@@ -1967,8 +1967,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
         objectKeys(entrypoint).length !== 3 ||
         entrypointOwner !== owner ||
         entrypointMode !== mode ||
-        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
-          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
+        entrypointId !== 'corebox.ai-ask'
       ) {
         return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
       }
@@ -2093,7 +2092,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
         typeof context !== 'object' ||
         arrayIsArray(context) ||
         (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
-        (owner !== 'corebox' && owner !== 'assistant') ||
+        owner !== 'corebox' ||
         (mode === 'continue' &&
           (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
         (mode !== 'continue' && sessionId !== undefined) ||
@@ -2109,8 +2108,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
         objectKeys(entrypoint).length !== 3 ||
         entrypointOwner !== owner ||
         entrypointMode !== mode ||
-        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
-          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
+        entrypointId !== 'corebox.ai-ask'
       ) {
         return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
       }
