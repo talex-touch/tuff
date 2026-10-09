@@ -189,12 +189,14 @@ code: |
 | `label` | `string` | `''` | Text shown when the default slot is empty. |
 | `disabled` | `boolean` | `false` | Disables this radio; keyboard navigation skips it. |
 | `type` | `'button' \| 'standard' \| 'card'` | `'button'` | Style when used standalone; inside a group, the group's `type` wins. |
+| `modelValue` / `v-model` | `boolean` | - | Checked state when used standalone; uncontrolled when omitted, ignored inside a group. |
 
 #### Events
 
 | Event | Params | Description |
 |------|------|------|
 | `click` | `(value: string \| number)` | Fires when an enabled, unchecked radio selects itself through the group. |
+| `update:modelValue` | `(value: boolean)` | Standalone only: fires with `true` when an unchecked radio is clicked. |
 
 #### Slots
 

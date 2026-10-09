@@ -109,6 +109,7 @@ code: |
 | `--tx-badge-bg` | `variant` / `color` | Background. |
 | `--tx-badge-text` | `variant` / `color` | Text color. |
 | `--tx-badge-border` | `variant` | Border color. |
+| `--tx-badge-dot` | `color` | Fill of the `dot`; falls back to the text color. |
 | `--tx-badge-offset-x` / `--tx-badge-offset-y` | caller | Slide-in start offset; defaults `-8.2px` / `12.4px`. |
 | `--tx-badge-slide-dur` | caller | Slide-in duration; default `260ms`. |
 | `--tx-badge-pop-dur` / `--tx-badge-pop-close-dur` | caller | Pop-in / pop-out duration; defaults `500ms` / `180ms`. |

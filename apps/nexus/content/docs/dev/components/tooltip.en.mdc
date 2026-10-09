@@ -144,6 +144,9 @@ code: |
 | `keepAliveContent` | `boolean` | `false` | Keeps panel content mounted after close. |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Closes on an outside click; takes precedence over the same key in `anchor`. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggles on reference click; takes precedence over the same key in `anchor`. |
+| `layer` | `'hint' \| 'menu' \| 'dialog'` | `'hint'` | Semantic overlay layer; picks the delay preset, exclusion rules, and default animation. |
+| `role` | `string` | `'tooltip'` | Panel ARIA role; any value but `tooltip` also drops the reference's `aria-describedby`. |
+| `unstyled` | `boolean` | `false` | Renders the content bare, without tooltip typography or the height cap. |
 | `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Passed to `TxBaseAnchor`, overriding the tooltip's placement, panel, and animation defaults; excludes `modelValue` and `disabled`. |
 
 ### Events
@@ -160,6 +163,12 @@ code: |
 |------|------|-------------|
 | `default` | - | Reference content, wrapped in the trigger span. |
 | `content` | `{ side: string }` | Custom tooltip body; `side` is the final side. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `updatePosition` | `() => void` | Recomputes the panel position. |
 
 ## Overview
 

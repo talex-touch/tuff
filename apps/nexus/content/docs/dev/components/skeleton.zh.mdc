@@ -107,6 +107,55 @@ rows:
 | `TxSkeleton` / `Skeleton` | 可配置的文本、矩形或圆形占位。 |
 | `TxCardSkeleton` / `CardSkeleton` | 卡片 / feed 占位：图标、标题、徽标与描述。 |
 | `TxListItemSkeleton` / `ListItemSkeleton` | 列表行占位：图标、名称、元信息与尾部徽标。 |
+| `TxRowSkeleton` / `RowSkeleton` | 设置项行占位：可选的图标、描述与尾部控件。 |
+
+### TxRowSkeleton
+
+#### 属性
+::TuffPropsTable
+---
+rows:
+  - name: rows
+    type: 'number'
+    default: '1'
+    description: '行数，至少为 1。'
+  - name: leading
+    type: 'boolean'
+    default: 'false'
+    description: '为行首图标预留位置。'
+  - name: description
+    type: 'boolean'
+    default: 'false'
+    description: '在标题下方加一条较窄的描述条。'
+  - name: trailing
+    type: 'boolean'
+    default: 'false'
+    description: '为尾部控件（开关、按钮、标签）预留位置。'
+  - name: separated
+    type: 'boolean'
+    default: 'false'
+    description: '在行间画分隔线，与真实列表的分隔线占同一像素。'
+  - name: titleWidth
+    type: 'string | number'
+    default: '38%'
+    description: '标题条的基准宽度，逐行略作变化；数字按 px 计。'
+  - name: descWidth
+    type: 'string | number'
+    default: '62%'
+    description: '描述条宽度，数字按 px 计。'
+---
+::
+
+### useDeferredLoading
+
+把原始加载标记转换为不闪烁的骨架显示标记。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `source` | `MaybeRefOrGetter<boolean>` | - | 原始加载标记。 |
+| `options.delay` | `number` | `150` | 推迟显示的毫秒数；此前到达的数据不出现骨架。 |
+| `options.minDuration` | `number` | `400` | 骨架出现后至少保持的毫秒数。 |
+| 返回值 | `Ref<boolean>` | - | 是否显示骨架。 |
 
 ## 概述
 

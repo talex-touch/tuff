@@ -114,6 +114,8 @@ code: |
 | `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay in ms; the shared delay service supplies it when unset. |
 | `closeDelay` | `number` | From the `menu` preset (`100`) | Hover close delay in ms; the shared delay service supplies it when unset. |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | Animation config forwarded to BaseAnchor; each type uses its own default timing. |
+| `virtualReference` | `BaseAnchorVirtualReference` | - | Positions against an arbitrary rect, such as the pointer or a selection, instead of the reference. |
+| `matchReferenceWidth` | `boolean` | `width <= 0` | With `width` at `0`, matches the reference width; `false` sizes the panel to its content. |
 | `keepAliveContent` | `boolean` | `true` | Keeps content and its state after close. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggles on reference click. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
@@ -139,6 +141,12 @@ code: |
 |------|-------|-------------|
 | `reference` | - | Trigger content, rendered inside the reference wrapper. |
 | `default` | `{ side: string }` | Panel content; `side` is the final side. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|------|
+| `updatePosition` | `() => void` | Recomputes the position; call it after the `virtualReference` rect changes. |
 
 ## Overview
 

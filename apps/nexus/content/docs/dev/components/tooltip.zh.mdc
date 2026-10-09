@@ -144,6 +144,9 @@ code: |
 | `keepAliveContent` | `boolean` | `false` | 关闭后保留面板内容挂载。 |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 点击外部时关闭；优先于 `anchor` 中的同名配置。 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 时切换；优先于 `anchor` 中的同名配置。 |
+| `layer` | `'hint' \| 'menu' \| 'dialog'` | `'hint'` | 浮层语义层级，决定延迟预设、互斥规则与默认动画。 |
+| `role` | `string` | `'tooltip'` | 面板的 ARIA 角色；非 `tooltip` 时 reference 不再带 `aria-describedby`。 |
+| `unstyled` | `boolean` | `false` | 去掉提示的文字样式与高度上限，原样渲染内容。 |
 | `anchor` | `Partial<TooltipAnchorProps>` | `{}` | 透传给 `TxBaseAnchor`，覆盖 Tooltip 的定位、面板与动画默认值；不含 `modelValue`、`disabled`。 |
 
 ### 事件
@@ -160,6 +163,12 @@ code: |
 |------|-------|------|
 | `default` | - | reference 内容，包在触发用的 span 内。 |
 | `content` | `{ side: string }` | 自定义提示内容；`side` 为最终落位方向。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `updatePosition` | `() => void` | 重新计算面板定位。 |
 
 ## 概述
 

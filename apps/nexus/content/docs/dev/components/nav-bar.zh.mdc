@@ -71,6 +71,9 @@ code: |
 | `showBack` | `boolean` | `false` | 没有 `left` 插槽时显示内置返回图标。 |
 | `disabled` | `boolean` | `false` | 禁用两侧按钮，不派发事件。 |
 | `zIndex` | `number` | `2000` | 层级，写入 `--tx-nav-bar-z-index`。 |
+| `backLabel` | `string` | `'Back'` | 内置返回按钮的 `aria-label`，本地化时传入。 |
+| `leftLabel` | `string` | `'Navigation left action'` | 无 `left` 插槽且未开 `showBack` 时左侧按钮的 `aria-label`。 |
+| `rightLabel` | `string` | `'Navigation right action'` | 无 `right` 插槽时右侧按钮的 `aria-label`。 |
 
 ### 事件
 

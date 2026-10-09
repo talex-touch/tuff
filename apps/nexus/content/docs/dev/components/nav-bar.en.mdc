@@ -71,6 +71,9 @@ The `left` slot replaces the built-in back icon; clicking it emits only `click-l
 | `showBack` | `boolean` | `false` | Shows the built-in back icon when there is no `left` slot. |
 | `disabled` | `boolean` | `false` | Disables both action buttons and suppresses events. |
 | `zIndex` | `number` | `2000` | Stacking level, written to `--tx-nav-bar-z-index`. |
+| `backLabel` | `string` | `'Back'` | The built-in back button's `aria-label`; pass a localized string. |
+| `leftLabel` | `string` | `'Navigation left action'` | The left button's `aria-label` when there is no `left` slot and `showBack` is off. |
+| `rightLabel` | `string` | `'Navigation right action'` | The right button's `aria-label` when there is no `right` slot. |
 
 ### Events
 

@@ -114,6 +114,8 @@ code: |
 | `openDelay` | `number` | 见 `menu` 预设（`120`） | 悬停打开延迟（ms）；不传时由共享延迟服务提供。 |
 | `closeDelay` | `number` | 见 `menu` 预设（`100`） | 悬停关闭延迟（ms）；不传时由共享延迟服务提供。 |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | 透传给 BaseAnchor 的动画配置；各类型使用自己的默认时序。 |
+| `virtualReference` | `BaseAnchorVirtualReference` | - | 按任意矩形（如指针位置、选区）定位，取代 reference。 |
+| `matchReferenceWidth` | `boolean` | `width <= 0` | `width` 为 `0` 时与 reference 等宽；设为 `false` 则按内容定宽。 |
 | `keepAliveContent` | `boolean` | `true` | 关闭后保留内容及其状态。 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 时切换开合。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态。 |
@@ -139,6 +141,12 @@ code: |
 |------|------|------|
 | `reference` | - | 触发内容，渲染在 reference 包装层内。 |
 | `default` | `{ side: string }` | 面板内容；`side` 为最终落位方向。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `updatePosition` | `() => void` | 重新计算定位；`virtualReference` 的矩形变化后调用。 |
 
 ## 概述
 

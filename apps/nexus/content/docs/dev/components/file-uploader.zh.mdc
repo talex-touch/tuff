@@ -78,7 +78,7 @@ const uploader = ref<{ pick: () => void }>()
 |------|------|---------|------|
 | `modelValue` | `FileUploaderFile[]` | `[]` | 已选文件列表（受控）。 |
 | `multiple` | `boolean` | `true` | 透传给原生 input。 |
-| `accept` | `string` | `'*/*'` | 可接受的文件类型，透传给原生 input。 |
+| `accept` | `string` | `'*/*'` | 可接受的文件类型；透传给原生 input，也按同一规则过滤拖入的文件。 |
 | `disabled` | `boolean` | `false` | 禁止浏览、删除与拖入。 |
 | `max` | `number` | `10` | 已选文件总数上限。 |
 | `showSize` | `boolean` | `true` | 在列表中显示文件大小。 |

@@ -67,6 +67,12 @@ code: |
 | `change` | `string` | Fires together with `update:modelValue`. |
 | `file-error` | `unknown` | Fires when the chooser throws or the fallback input can't read the file. |
 
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `toggle(value?)` | `(value?: boolean) => void` | Opens or closes the panel per `value`, or flips it when omitted; an `inline` panel always shows. |
+
 ## The Identifier
 
 A pick is a `<type>:<value>` string. It splits at the *first* colon, so a value may contain colons (`url:`, a Windows `file:C:/…`).

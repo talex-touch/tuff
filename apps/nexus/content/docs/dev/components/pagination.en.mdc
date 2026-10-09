@@ -126,6 +126,26 @@ rows:
     type: boolean
     default: 'false'
     description: Shows first and last buttons
+  - name: ariaLabel
+    type: string
+    default: "'Pagination'"
+    description: The aria-label of the root nav landmark
+  - name: firstLabel
+    type: string
+    default: "'First page'"
+    description: The first-page button's aria-label
+  - name: prevLabel
+    type: string
+    default: "'Previous page'"
+    description: The previous-page button's aria-label
+  - name: nextLabel
+    type: string
+    default: "'Next page'"
+    description: The next-page button's aria-label
+  - name: lastLabel
+    type: string
+    default: "'Last page'"
+    description: The last-page button's aria-label
 ---
 ::
 

@@ -152,6 +152,7 @@ code: |
 - 远程模式原样显示 `options`，不缓存结果。
 - 清空时以 `''` 派发 `update:modelValue` 与 `change`。
 - 面板关闭后保留输入内容，重新打开不会重置。
+- 键盘：ArrowDown / ArrowUp 打开面板并在启用项间循环高亮；Enter 选中高亮项，无高亮时派发远程 `search`；Escape 关闭面板。
 
 ## 技术实现
 

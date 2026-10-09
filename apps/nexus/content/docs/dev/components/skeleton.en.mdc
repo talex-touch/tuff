@@ -107,6 +107,55 @@ rows:
 | `TxSkeleton` / `Skeleton` | Configurable text, rectangle, or circle placeholder. |
 | `TxCardSkeleton` / `CardSkeleton` | Card or feed placeholder: icon, title, badge, and description. |
 | `TxListItemSkeleton` / `ListItemSkeleton` | List-row placeholder: icon, name, meta, and trailing badge. |
+| `TxRowSkeleton` / `RowSkeleton` | Settings-row placeholder: optional icon, description, and trailing control. |
+
+### TxRowSkeleton
+
+#### Props
+::TuffPropsTable
+---
+rows:
+  - name: rows
+    type: 'number'
+    default: '1'
+    description: 'Number of rows; at least 1.'
+  - name: leading
+    type: 'boolean'
+    default: 'false'
+    description: 'Reserves space for a leading icon.'
+  - name: description
+    type: 'boolean'
+    default: 'false'
+    description: 'Adds a narrower description bar under the title.'
+  - name: trailing
+    type: 'boolean'
+    default: 'false'
+    description: 'Reserves space for a trailing control (switch, button, chip).'
+  - name: separated
+    type: 'boolean'
+    default: 'false'
+    description: 'Draws a hairline between rows on the same pixel as the real list separator.'
+  - name: titleWidth
+    type: 'string | number'
+    default: '38%'
+    description: 'Base width of the title bar, varied slightly per row; numbers are px.'
+  - name: descWidth
+    type: 'string | number'
+    default: '62%'
+    description: 'Width of the description bar; numbers are px.'
+---
+::
+
+### useDeferredLoading
+
+Turns a raw loading flag into a skeleton flag that doesn't flicker.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `MaybeRefOrGetter<boolean>` | - | The raw loading flag. |
+| `options.delay` | `number` | `150` | Milliseconds before the skeleton shows; data that arrives sooner never shows one. |
+| `options.minDuration` | `number` | `400` | Minimum milliseconds the skeleton stays once shown. |
+| Returns | `Ref<boolean>` | - | Whether to show the skeleton. |
 
 ## Overview
 

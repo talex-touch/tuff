@@ -126,6 +126,26 @@ rows:
     type: boolean
     default: 'false'
     description: 显示首末页按钮
+  - name: ariaLabel
+    type: string
+    default: "'Pagination'"
+    description: 根节点 nav 地标的 aria-label
+  - name: firstLabel
+    type: string
+    default: "'First page'"
+    description: 首页按钮的 aria-label
+  - name: prevLabel
+    type: string
+    default: "'Previous page'"
+    description: 上一页按钮的 aria-label
+  - name: nextLabel
+    type: string
+    default: "'Next page'"
+    description: 下一页按钮的 aria-label
+  - name: lastLabel
+    type: string
+    default: "'Last page'"
+    description: 末页按钮的 aria-label
 ---
 ::
 
