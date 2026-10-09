@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `code-stream`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
+- **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `code-stream`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `switch`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `morph`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -20,6 +20,7 @@
 - 新增 `TxMorph` 一形多态容器：同一块形状承载所有状态。`morph-key` 变化时旧内容以短模糊先离场，新内容晚一拍进入；形状的宽高按弹簧逐帧跟到新内容的尺寸（默认 liquid 的 `snappy`），圆角与填充色走同一弹簧编译出的 `linear()` 曲线。中途再变只改目标，位置与速度都保留，不会跳回原尺寸，也不会从零速度重新起步。`width` 关闭时为块级、只过渡高度；落定后尺寸回到 `auto` 并触发 `settle`；`prefers-reduced-motion` 下直接替换内容、尺寸立即落定。圆角写在注册过的 `--tx-morph-radius` 上，子元素可以用 `calc(var(--tx-morph-radius) - var(--tx-morph-inset))` 得到同心圆角。
 - `TxTransitionSmoothSize` 的容器尺寸改由弹簧逐帧驱动（与 `TxMorph` 同一引擎）：尺寸在途中再变时只改目标，位置与速度保留，不再从停下的位置重新起一段过渡。`duration` 现在是弹簧的时钟（220ms 时即 liquid 的 `snappy`），`easing` 只作用于内容动效；`duration` 为 `0` 时尺寸直接落定。实现不再经由 `TxAutoSizer`，三层 DOM 结构与 attrs、class、style 的落点不变。
 - 新增 `blur` 过渡：内容经 4px 模糊淡入淡出，不位移；`TxTransition` 的 `preset` 与 `TxTransitionSmoothSize` 的 `motion` 都可用，减少动态效果时去掉模糊。
+- `TuffSwitch` 的滑块改走 glide 材质（与 Tabs、FlatRadio 的指示器同一引擎）：两端各乘一个弹簧，途中向前拉长、到位收拢，行进中再次切换会就地转向而不是从头再来；减少动态效果时滑块直接到位（此前 `left` 的 0.25s 过渡不理会该设置）。静止位置仍由样式表决定，组件只在行进时写入 `translate` 与 `width`，`:active` 的按压缩放不受影响。
 
 ### 🎨 外观与主题
 

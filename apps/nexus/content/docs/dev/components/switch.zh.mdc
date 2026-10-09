@@ -181,11 +181,13 @@ code: |
 - 受控组件：切换只派发事件，父级回写 `modelValue` 后外观才更新。
 - `disabled` 与 `loading` 都设置原生 `disabled`；`loading` 不降低透明度，并设置 `aria-busy="true"`。
 - 有可见文案（`label` 或插槽）时不渲染 `aria-label`。
-- 减少动态效果时，加载环停止旋转。
+- 滑块走 glide 材质：两端各乘一个弹簧，途中拉长、到位收拢；行进中再次切换会就地转向，不会从头再来。
+- 减少动态效果时，滑块直接到位，加载环停止旋转。
 
 ## 技术实现
 
 - 状态类 `is-active`、`is-disabled`、`is-loading`、`has-label` 挂在根节点；轨道与滑块是 `.tuff-switch__track`、`.tuff-switch__thumb`。
+- 滑块静止位置由样式表的 `left` 决定；行进时组件逐帧写入 `translate` 与 `width`，到位后清除，`transform` 留给按压反馈。
 - 源码：`packages/tuffex/packages/components/src/switch/`。
 
 <TuffDocSourceLink />
