@@ -20,6 +20,19 @@ const MAX_ROLLUP_DAYS_BACK = 6
 const ROLLUP_CHECK_THROTTLE_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
+/**
+ * Off until every aggregate has been run against D1 itself. The first release passed every local
+ * test and still failed there (D1 caps a compound SELECT at five terms), and each failed attempt
+ * read whole tables first: every isolate retrying every ten minutes spent the free plan's
+ * five-million-row daily read allowance within an hour (2026-10-09). Ingestion keeps writing only
+ * the rows, so the counters can still be derived later from the seven days retention keeps.
+ */
+let dailyRollupEnabled = false
+
+export function setTelemetryDailyRollupEnabledForTest(enabled: boolean): void {
+  dailyRollupEnabled = enabled
+}
+
 const SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS = 300
 const SEARCH_TOTAL_SLOW_THRESHOLD_MS = 800
 
@@ -56,6 +69,11 @@ const PROVIDER_STATUSES = [...PROVIDER_STATUS_VALUES].map(status => `'${status}'
  *
  * One aggregation, two uses: the daily rollup writes a finished day's rows, and the analytics
  * summary reads today's directly, so what the dashboard shows for today is what the rollup stores.
+ *
+ * D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT"), where
+ * SQLite's own default is 500, so a local test does not catch it. Measures taken from one scan are
+ * therefore unpivoted through `json_each(json_object(...))`, not a `UNION ALL` per measure; a NULL
+ * measure becomes a JSON null and is dropped with the other NULLs.
  */
 const DAILY_AGGREGATES: readonly string[] = [
   `
@@ -147,23 +165,26 @@ const DAILY_AGGREGATES: readonly string[] = [
         )) AS slow
       FROM search
     )
-    SELECT 'searches' AS stat_type, '' AS stat_key, NULLIF(searches, 0) AS value FROM totals
-    UNION ALL SELECT 'search_duration_total', '', duration_total FROM totals
-    UNION ALL SELECT 'search_duration_max', '', duration_max FROM totals
-    UNION ALL SELECT 'search_duration_min', '', duration_min FROM totals
-    UNION ALL SELECT 'search_result_total', '', result_total FROM totals
-    UNION ALL SELECT 'search_result_count', '', NULLIF(result_count, 0) FROM totals
-    UNION ALL SELECT 'search_query_length_total', '', query_length_total FROM totals
-    UNION ALL SELECT 'search_query_length_count', '', NULLIF(query_length_count, 0) FROM totals
-    UNION ALL SELECT 'search_sorting_total', '', sorting_total FROM totals
-    UNION ALL SELECT 'search_sorting_count', '', NULLIF(sorting_count, 0) FROM totals
-    UNION ALL SELECT 'search_sorting_max', '', sorting_max FROM totals
-    UNION ALL SELECT 'search_sorting_min', '', sorting_min FROM totals
-    UNION ALL SELECT 'search_first_result_total', '', first_result_total FROM totals
-    UNION ALL SELECT 'search_first_result_count', '', NULLIF(first_result_count, 0) FROM totals
-    UNION ALL SELECT 'search_first_result_max', '', first_result_max FROM totals
-    UNION ALL SELECT 'search_first_result_min', '', first_result_min FROM totals
-    UNION ALL SELECT 'search_slow_count', '', NULLIF(slow, 0) FROM totals
+    SELECT measure.key AS stat_type, '' AS stat_key, measure.value AS value
+    FROM totals, json_each(json_object(
+      'searches', NULLIF(searches, 0),
+      'search_duration_total', duration_total,
+      'search_duration_max', duration_max,
+      'search_duration_min', duration_min,
+      'search_result_total', result_total,
+      'search_result_count', NULLIF(result_count, 0),
+      'search_query_length_total', query_length_total,
+      'search_query_length_count', NULLIF(query_length_count, 0),
+      'search_sorting_total', sorting_total,
+      'search_sorting_count', NULLIF(sorting_count, 0),
+      'search_sorting_max', sorting_max,
+      'search_sorting_min', sorting_min,
+      'search_first_result_total', first_result_total,
+      'search_first_result_count', NULLIF(first_result_count, 0),
+      'search_first_result_max', first_result_max,
+      'search_first_result_min', first_result_min,
+      'search_slow_count', NULLIF(slow, 0)
+    )) AS measure
   `,
   `
     WITH search AS (
@@ -199,20 +220,28 @@ const DAILY_AGGREGATES: readonly string[] = [
       FROM ${TELEMETRY_TABLE} AS event, json_each(event.provider_timings) AS provider
       WHERE event.event_type = 'search' AND ${EVENT_DAY_RANGE}
         AND json_type(event.provider_timings) = 'object'
+    ),
+    per_provider AS (
+      SELECT
+        provider,
+        COUNT(*) AS calls,
+        SUM(CASE WHEN kind IN ('integer', 'real') THEN duration END) AS time_total,
+        COUNT(CASE WHEN kind IN ('integer', 'real') THEN 1 END) AS time_count,
+        MAX(CASE WHEN kind IN ('integer', 'real') THEN duration END) AS time_max,
+        MIN(CASE WHEN kind IN ('integer', 'real') THEN duration END) AS time_min,
+        COUNT(CASE WHEN slow_search AND duration > ${SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS} THEN 1 END) AS slow
+      FROM timing
+      GROUP BY provider
     )
-    SELECT 'search_provider' AS stat_type, provider AS stat_key, COUNT(*) AS value FROM timing GROUP BY provider
-    UNION ALL
-    SELECT 'search_provider_time_total', provider, SUM(duration) FROM timing WHERE kind IN ('integer', 'real') GROUP BY provider
-    UNION ALL
-    SELECT 'search_provider_time_count', provider, COUNT(*) FROM timing WHERE kind IN ('integer', 'real') GROUP BY provider
-    UNION ALL
-    SELECT 'search_provider_time_max', provider, MAX(duration) FROM timing WHERE kind IN ('integer', 'real') GROUP BY provider
-    UNION ALL
-    SELECT 'search_provider_time_min', provider, MIN(duration) FROM timing WHERE kind IN ('integer', 'real') GROUP BY provider
-    UNION ALL
-    SELECT 'search_provider_slow', provider, COUNT(*) FROM timing
-    WHERE slow_search AND duration > ${SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS}
-    GROUP BY provider
+    SELECT measure.key AS stat_type, per_provider.provider AS stat_key, measure.value AS value
+    FROM per_provider, json_each(json_object(
+      'search_provider', calls,
+      'search_provider_time_total', time_total,
+      'search_provider_time_count', NULLIF(time_count, 0),
+      'search_provider_time_max', time_max,
+      'search_provider_time_min', time_min,
+      'search_provider_slow', NULLIF(slow, 0)
+    )) AS measure
   `,
   `
     SELECT 'search_input_type' AS stat_type, input.value AS stat_key, COUNT(*) AS value
@@ -270,18 +299,21 @@ const DAILY_AGGREGATES: readonly string[] = [
       FROM ${TELEMETRY_TABLE}
       WHERE event_type = 'performance' AND ${DAY_RANGE}
     )
-    SELECT 'perf_longtask_total_ms' AS stat_type, '' AS stat_key, longtask_total AS value FROM perf
-    UNION ALL SELECT 'perf_longtask_count', '', longtask_count FROM perf
-    UNION ALL SELECT 'perf_longtask_max_ms', '', longtask_max FROM perf
-    UNION ALL SELECT 'perf_raf_jank_total_ms', '', raf_jank_total FROM perf
-    UNION ALL SELECT 'perf_raf_jank_count', '', raf_jank_count FROM perf
-    UNION ALL SELECT 'perf_raf_jank_max_ms', '', raf_jank_max FROM perf
-    UNION ALL SELECT 'perf_event_loop_delay_p95_total_ms', '', event_loop_p95_total FROM perf
-    UNION ALL SELECT 'perf_event_loop_delay_p95_count', '', NULLIF(event_loop_p95_count, 0) FROM perf
-    UNION ALL SELECT 'perf_event_loop_delay_max_ms', '', event_loop_max FROM perf
-    UNION ALL SELECT 'perf_unresponsive_total_ms', '', unresponsive_total FROM perf
-    UNION ALL SELECT 'perf_unresponsive_count', '', unresponsive_count FROM perf
-    UNION ALL SELECT 'perf_unresponsive_max_ms', '', unresponsive_max FROM perf
+    SELECT measure.key AS stat_type, '' AS stat_key, measure.value AS value
+    FROM perf, json_each(json_object(
+      'perf_longtask_total_ms', longtask_total,
+      'perf_longtask_count', longtask_count,
+      'perf_longtask_max_ms', longtask_max,
+      'perf_raf_jank_total_ms', raf_jank_total,
+      'perf_raf_jank_count', raf_jank_count,
+      'perf_raf_jank_max_ms', raf_jank_max,
+      'perf_event_loop_delay_p95_total_ms', event_loop_p95_total,
+      'perf_event_loop_delay_p95_count', NULLIF(event_loop_p95_count, 0),
+      'perf_event_loop_delay_max_ms', event_loop_max,
+      'perf_unresponsive_total_ms', unresponsive_total,
+      'perf_unresponsive_count', unresponsive_count,
+      'perf_unresponsive_max_ms', unresponsive_max
+    )) AS measure
   `,
 ]
 
@@ -431,6 +463,9 @@ export async function withUnrolledTelemetryDays(
   rows: TelemetryDailyStatRow[],
   options: { from: string, now?: Date },
 ): Promise<TelemetryDailyStatRow[]> {
+  if (!dailyRollupEnabled)
+    return rows
+
   const nowMs = (options.now ?? new Date()).getTime()
   const candidates = [toDate(nowMs - DAY_MS), toDate(nowMs)].filter(date => date >= options.from)
   if (!candidates.length)
@@ -478,7 +513,7 @@ function getWaitUntil(event: H3Event | undefined): ((promise: Promise<unknown>) 
  */
 export function scheduleTelemetryDailyRollup(event: H3Event | undefined, db: D1Database) {
   const nowMs = Date.now()
-  if (rollupInFlight || nowMs < nextRollupCheckAt)
+  if (!dailyRollupEnabled || rollupInFlight || nowMs < nextRollupCheckAt)
     return
 
   rollupInFlight = true
