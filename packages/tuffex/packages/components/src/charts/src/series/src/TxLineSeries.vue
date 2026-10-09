@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<LineSeriesProps<T>>(), {
   strokeWidth: 2,
   showSymbol: false,
   dashed: false,
+  enter: 'clip',
 })
 
 const { ctx, color, points } = useCartesianSeries(props, { component: 'TxLineSeries' })
@@ -40,13 +41,34 @@ const plot = computed(() => ctx.plot.value)
 
 // ECharts' line series reveals on first render by expanding a clip rectangle
 // left→right, and overrides the global easing to `linear` (LineSeries).
+// `draw` traces the stroke itself instead, decelerating as a hand would; a
+// dashed stroke already spends its dash array, so it keeps the clip. The enter
+// runs once, so the choice made at mount is the one that plays.
 const enterClipId = `tx-line-enter-${nextSeriesUid()}`
+const draws = props.enter === 'draw' && !props.dashed
 const enterProgress = useEnterProgress({
   duration: ENTER_DURATION,
-  easing: easings.linear,
+  easing: draws ? easings.cubicOut : easings.linear,
   enabled: () => positioned.value.length <= ANIMATION_THRESHOLD,
 })
-const enterWidth = computed(() => plot.value.width * enterProgress.value)
+const enterWidth = computed(() => (draws ? plot.value.width : plot.value.width * enterProgress.value))
+const drawing = computed(() => draws && enterProgress.value < 1)
+
+// Where along the line each point sits, 0 to 1, so a symbol shows once the
+// stroke has reached it. Measured on the straight segments between points:
+// exact for `linear`, close enough for a curve to land each symbol as the
+// stroke passes it.
+const reach = computed(() => {
+  const list = positioned.value
+  const lengths = [0]
+  for (let index = 1; index < list.length; index++) {
+    const a = list[index - 1]!
+    const b = list[index]!
+    lengths.push(lengths[index - 1]! + Math.hypot(b.px - a.px, b.py - a.py))
+  }
+  const total = lengths[lengths.length - 1] ?? 0
+  return lengths.map(length => (total > 0 ? length / total : 0))
+})
 
 // Data updates morph point positions (ECharts `animationDurationUpdate`). The
 // morph stays off while the enter reveal runs, so the path is already at its
@@ -101,7 +123,9 @@ const path = computed(() => {
         fill="none"
         :stroke="color"
         :stroke-width="props.strokeWidth"
-        :stroke-dasharray="props.dashed ? '5 5' : undefined"
+        :pathLength="drawing ? 1 : undefined"
+        :stroke-dasharray="drawing ? '1 1' : props.dashed ? '5 5' : undefined"
+        :stroke-dashoffset="drawing ? 1 - enterProgress : undefined"
         stroke-linejoin="round"
         stroke-linecap="round"
       />
@@ -110,6 +134,7 @@ const path = computed(() => {
           v-for="(point, index) in animated"
           :key="index"
           class="tx-series__symbol"
+          :class="{ 'is-pending': drawing && enterProgress < (reach[index] ?? 0) }"
           :cx="point.px"
           :cy="point.py"
           :r="props.strokeWidth + 1"
@@ -127,5 +152,14 @@ const path = computed(() => {
   .tx-series--line {
     transition: opacity 300ms cubic-bezier(0.33, 1, 0.68, 1);
   }
+
+  /* `enter: 'draw'`: a symbol the stroke has not reached yet. */
+  .tx-series__symbol {
+    transition: opacity 160ms ease-out;
+  }
+}
+
+.tx-series__symbol.is-pending {
+  opacity: 0;
 }
 </style>
