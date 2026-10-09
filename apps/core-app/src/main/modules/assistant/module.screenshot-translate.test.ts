@@ -1,4 +1,4 @@
-import { StorageList, type AppSetting } from '@talex-touch/utils'
+import type { AppSetting } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   NativeScreenshotCaptureResult,
@@ -15,7 +15,7 @@ type ScreenPoint = { x: number; y: number }
 type ScreenTopologyEvent = 'display-added' | 'display-removed' | 'display-metrics-changed'
 type ScreenTopologyListener = () => void | Promise<void>
 
-type FloatingBallDisplay = {
+type WorkAreaDisplay = {
   workArea: { x: number; y: number; width: number; height: number }
   /** Present only where a test needs the screen behind the work area. */
   bounds?: { x: number; y: number; width: number; height: number }
@@ -128,7 +128,7 @@ const mocks = vi.hoisted(() => ({
   startScreenshotSession: vi.fn(),
   waitForScreenshotResult: vi.fn(),
   getCursorScreenPoint: vi.fn<() => ScreenPoint>(() => ({ x: 0, y: 0 })),
-  getDisplayNearestPoint: vi.fn<(point: ScreenPoint) => FloatingBallDisplay>(() => ({
+  getDisplayNearestPoint: vi.fn<(point: ScreenPoint) => WorkAreaDisplay>(() => ({
     workArea: { x: 0, y: 0, width: 1440, height: 900 }
   })),
   touchWindows: [] as Array<{
@@ -609,6 +609,19 @@ describe('AssistantModule screenshot translation', () => {
     expect(dock.window.showInactive).not.toHaveBeenCalled()
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
+  it('opens no resting window, even for a profile that had the floating ball turned on', async () => {
+    // The fixture still carries `floatingBall.enabled: true`, as a profile from before the ball
+    // was removed does.
+    const setting = mocks.createEnabledSetting()
+    mocks.getMainConfig.mockReturnValue(setting)
+    const { module } = await createInitializedModule()
+    if (!mocks.appSettingListener) throw new Error('App setting observer was not active')
+
+    mocks.appSettingListener(setting)
+
+    expect(mocks.touchWindows).toHaveLength(0)
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
   it('stops an active temporary HUD when voice input is disabled', async () => {
     const setting = mocks.createEnabledSetting({
       assistant: { enabled: false },
@@ -668,7 +681,7 @@ describe('AssistantModule screenshot translation', () => {
       })
     )
     // `vi.resetModules()` gives every Electron fixture a fresh Assistant singleton, so this
-    // intentional dynamic import starts with a hidden resting entry before the delayed HUD load.
+    // intentional dynamic import starts with no dock window before the delayed HUD load.
     const { AssistantModule } = await import('./module')
     const module = new AssistantModule()
     await module.onInit({
@@ -851,33 +864,8 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
 
-  it('opens click-origin voice panels without focusing the active application target', async () => {
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.floatingBall.openVoicePanel.toEventName()
-    )
-    const dock = mocks.touchWindows[0]
-    if (!dock) throw new Error('VoiceDock was not created')
-    const showInactive = vi.mocked(dock.window.showInactive)
-    const focus = vi.mocked(dock.window.focus)
-    showInactive.mockClear()
-    focus.mockClear()
-
-    await handler({ source: 'click' }, {} as HandlerContext)
-
-    expect(showInactive).toHaveBeenCalledTimes(1)
-    expect(focus).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
-  })
-
   it('opens command-origin voice panels without focusing the active application target', async () => {
     const { module } = await createInitializedModule()
-    const dock = mocks.touchWindows[0]
-    if (!dock) throw new Error('VoiceDock was not created')
-    const showInactive = vi.mocked(dock.window.showInactive)
-    const focus = vi.mocked(dock.window.focus)
-    showInactive.mockClear()
-    focus.mockClear()
 
     await module.handleVoiceCommandGesture({
       action: 'start',
@@ -885,135 +873,12 @@ describe('AssistantModule screenshot translation', () => {
       source: 'command'
     })
 
-    expect(showInactive).toHaveBeenCalledTimes(1)
-    expect(focus).not.toHaveBeenCalled()
+    const dock = mocks.touchWindows[0]
+    if (!dock) throw new Error('VoiceDock was not created')
+    expect(dock.window.showInactive).toHaveBeenCalledTimes(1)
+    expect(dock.window.focus).not.toHaveBeenCalled()
 
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
-  })
-
-  it('restores a persisted negative ball position on its saved display', async () => {
-    const savedDisplay: FloatingBallDisplay = {
-      workArea: { x: -1280, y: 0, width: 1280, height: 720 }
-    }
-    const cursorDisplay: FloatingBallDisplay = {
-      workArea: { x: 1440, y: 0, width: 1440, height: 900 }
-    }
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({
-        floatingBall: {
-          enabled: true,
-          size: 56,
-          opacity: 1,
-          edgePadding: 24,
-          position: { x: -1180, y: 620 }
-        }
-      })
-    )
-    mocks.getCursorScreenPoint.mockReturnValue({ x: 1800, y: 300 })
-    mocks.getDisplayNearestPoint.mockImplementation((point) =>
-      point.x < 0 ? savedDisplay : cursorDisplay
-    )
-
-    const { module } = await createInitializedModule()
-    const floatingBall = mocks.touchWindows[0]
-    if (!floatingBall) {
-      throw new Error('Floating ball was not opened')
-    }
-
-    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith({ x: -1180, y: 620 })
-    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
-      x: -1180,
-      y: 620,
-      width: 56,
-      height: 56
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  // One window carries both the ball and the dock, so its limits have to admit the union of
-  // the two. Before the dock shrank, minHeight (56) already excluded the smallest ball and
-  // maxHeight (60) excluded the largest — silently resizing whatever the user had chosen.
-  it('admits every configurable ball size and the full dock in one set of window limits', async () => {
-    await createInitializedModule()
-    const dock = mocks.touchWindows[0]
-    if (!dock) {
-      throw new Error('VoiceDock window was not created')
-    }
-
-    const ballMin = 48
-    const ballMax = 72
-    const { minWidth, minHeight, maxWidth, maxHeight } = dock.options
-
-    expect(minWidth).toBeLessThanOrEqual(ballMin)
-    expect(minHeight).toBeLessThanOrEqual(ballMin)
-    expect(maxWidth).toBeGreaterThanOrEqual(Math.max(ballMax, 360))
-    expect(maxHeight).toBeGreaterThanOrEqual(Math.max(ballMax, 64))
-  })
-
-  it('uses the cursor display and default edge placement for the canonical unset ball position', async () => {
-    const cursor = { x: 1800, y: 300 }
-    const cursorDisplay: FloatingBallDisplay = {
-      workArea: { x: 1440, y: 100, width: 1600, height: 900 }
-    }
-    mocks.getCursorScreenPoint.mockReturnValue(cursor)
-    mocks.getDisplayNearestPoint.mockReturnValue(cursorDisplay)
-
-    const { module } = await createInitializedModule()
-    const floatingBall = mocks.touchWindows[0]
-    if (!floatingBall) {
-      throw new Error('Floating ball was not opened')
-    }
-
-    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith(cursor)
-    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
-      x: 2960,
-      y: 415,
-      width: 56,
-      height: 56
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('clamps an out-of-work-area persisted position wholly inside its selected display', async () => {
-    const savedDisplay: FloatingBallDisplay = {
-      workArea: { x: 1440, y: 100, width: 600, height: 400 }
-    }
-    const cursorDisplay: FloatingBallDisplay = {
-      workArea: { x: -1280, y: 0, width: 1280, height: 720 }
-    }
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({
-        floatingBall: {
-          enabled: true,
-          size: 56,
-          opacity: 1,
-          edgePadding: 24,
-          position: { x: 2500, y: 760 }
-        }
-      })
-    )
-    mocks.getCursorScreenPoint.mockReturnValue({ x: -500, y: 300 })
-    mocks.getDisplayNearestPoint.mockImplementation((point) =>
-      point.x >= 1440 ? savedDisplay : cursorDisplay
-    )
-
-    const { module } = await createInitializedModule()
-    const floatingBall = mocks.touchWindows[0]
-    if (!floatingBall) {
-      throw new Error('Floating ball was not opened')
-    }
-
-    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith({ x: 2500, y: 760 })
-    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
-      x: 1984,
-      y: 444,
-      width: 56,
-      height: 56
-    })
-
-    await module.onDestroy({} as never)
   })
 
   it('registers one topology listener for every display event and removes it on teardown', async () => {
@@ -1043,50 +908,6 @@ describe('AssistantModule screenshot translation', () => {
     expect(mocks.screenListeners.size).toBe(0)
   })
 
-  it('reapplies the saved ball position into the remaining work area without persisting topology recovery', async () => {
-    const savedSetting = mocks.createEnabledSetting({
-      floatingBall: {
-        enabled: true,
-        size: 56,
-        opacity: 1,
-        edgePadding: 24,
-        position: { x: 2500, y: 760 }
-      }
-    })
-    mocks.getMainConfig.mockReturnValue(savedSetting)
-    mocks.getDisplayNearestPoint.mockReturnValue({
-      workArea: { x: 1440, y: 100, width: 600, height: 400 }
-    })
-
-    const { module } = await createInitializedModule()
-    const floatingBall = mocks.touchWindows[0]
-    const listener = mocks.screenListeners.get('display-removed')
-    if (!floatingBall || !listener) {
-      throw new Error('Topology recovery prerequisites were not initialized')
-    }
-
-    vi.mocked(floatingBall.window.setBounds).mockClear()
-    mocks.saveMainConfig.mockClear()
-    mocks.persistMainConfig.mockClear()
-    mocks.getDisplayNearestPoint.mockReturnValue({
-      workArea: { x: 0, y: 0, width: 800, height: 500 }
-    })
-
-    await listener()
-
-    expect(mocks.touchWindows).toHaveLength(1)
-    expect(floatingBall.window.setBounds).toHaveBeenCalledWith({
-      x: 744,
-      y: 444,
-      width: 56,
-      height: 56
-    })
-    expect(mocks.saveMainConfig).not.toHaveBeenCalled()
-    expect(mocks.persistMainConfig).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
   /**
    * The Dock is at kCGDockWindowLevel (20) and `floating` is NSFloatingWindowLevel (3), so the
    * HUD used to be covered by a bar sliding in underneath it. Above the Dock it does not have
@@ -1100,9 +921,7 @@ describe('AssistantModule screenshot translation', () => {
     })
 
     const { module } = await createInitializedModule()
-    const openPanel = mocks.handlers.get(AssistantEvents.floatingBall.openVoicePanel.toEventName())
-    if (!openPanel) throw new Error('openVoicePanel handler was not registered')
-    await openPanel({ source: 'click' }, {} as HandlerContext)
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
 
     const voiceDock = mocks.touchWindows[0]
     if (!voiceDock) throw new Error('VoiceDock window was not created')
@@ -1121,26 +940,12 @@ describe('AssistantModule screenshot translation', () => {
   })
 
   it('reanchors the expanded VoiceDock after topology recovery without reopening it and leaves it hidden otherwise', async () => {
-    const savedSetting = mocks.createEnabledSetting({
-      floatingBall: {
-        enabled: true,
-        size: 56,
-        opacity: 1,
-        edgePadding: 24,
-        position: { x: 2500, y: 760 }
-      }
-    })
-    mocks.getMainConfig.mockReturnValue(savedSetting)
     mocks.getDisplayNearestPoint.mockReturnValue({
       workArea: { x: 1440, y: 100, width: 600, height: 400 }
     })
 
     const { module } = await createInitializedModule()
-    const openPanel = mocks.handlers.get(AssistantEvents.floatingBall.openVoicePanel.toEventName())
-    if (!openPanel) {
-      throw new Error('openVoicePanel handler was not registered')
-    }
-    await openPanel({ source: 'click' }, {} as HandlerContext)
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
 
     const voiceDock = mocks.touchWindows[0]
     const listener = mocks.screenListeners.get('display-metrics-changed')
@@ -1149,10 +954,10 @@ describe('AssistantModule screenshot translation', () => {
     }
 
     vi.mocked(voiceDock.window.getBounds).mockReturnValue({
-      x: 744,
-      y: 444,
-      width: 56,
-      height: 56
+      x: 1560,
+      y: 343,
+      width: 360,
+      height: 148
     })
     vi.mocked(voiceDock.window.isVisible).mockReturnValue(true)
     vi.mocked(voiceDock.window.setBounds).mockClear()
@@ -1250,13 +1055,7 @@ describe('AssistantModule screenshot translation', () => {
       AssistantEvents.voice.openIntelligenceSettings.toEventName(),
       mainWindow
     )
-    const openVoicePanel = mocks.handlers.get(
-      AssistantEvents.floatingBall.openVoicePanel.toEventName()
-    )
-    if (!openVoicePanel) {
-      throw new Error('openVoicePanel handler was not registered')
-    }
-    await openVoicePanel({ source: 'provider-recovery' }, {} as HandlerContext)
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
     const voiceDock = mocks.touchWindows[mocks.touchWindows.length - 1]
     if (!voiceDock) {
       throw new Error('VoiceDock was not opened')
@@ -1274,10 +1073,9 @@ describe('AssistantModule screenshot translation', () => {
     expect(mainWindow.restore).not.toHaveBeenCalled()
     expect(mainWindow.show).not.toHaveBeenCalled()
     expect(mainWindow.focus).not.toHaveBeenCalled()
-    expect(voiceDock.window.hide).not.toHaveBeenCalled()
-    expect(voiceDock.window.setBounds).toHaveBeenCalledWith(
-      expect.objectContaining({ width: 56, height: 56 })
-    )
+    // The settings page takes over, so the HUD goes away rather than waiting on top of it.
+    expect(voiceDock.window.hide).toHaveBeenCalled()
+    expect(voiceDock.window.setBounds).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })
@@ -1299,13 +1097,7 @@ describe('AssistantModule screenshot translation', () => {
       AssistantEvents.voice.openIntelligenceSettings.toEventName(),
       mainWindow
     )
-    const openVoicePanel = mocks.handlers.get(
-      AssistantEvents.floatingBall.openVoicePanel.toEventName()
-    )
-    if (!openVoicePanel) {
-      throw new Error('openVoicePanel handler was not registered')
-    }
-    await openVoicePanel({ source: 'provider-recovery' }, {} as HandlerContext)
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
     const voiceDock = mocks.touchWindows[mocks.touchWindows.length - 1]
     if (!voiceDock) {
       throw new Error('VoiceDock was not opened')
@@ -1961,31 +1753,9 @@ describe('AssistantModule screenshot translation', () => {
         sizeBytes: 1024
       }
     })
-    expect(mocks.touchWindows).toHaveLength(1)
+    // The selection overlay belongs to the screenshot session; the Assistant opens no window.
+    expect(mocks.touchWindows).toHaveLength(0)
 
     await module.onDestroy({} as never)
-  })
-
-  it('persists floating ball drag position immediately after the debounce window', async () => {
-    vi.useFakeTimers()
-    const setting = mocks.createEnabledSetting()
-    mocks.getMainConfig.mockImplementation(() => setting)
-    const { module } = await createInitializedModule()
-    const handler = mocks.handlers.get(AssistantEvents.floatingBall.updatePosition.toEventName())
-    if (!handler) {
-      throw new Error('updatePosition handler was not registered')
-    }
-
-    await handler({ x: 316.2, y: 292.8 }, {} as HandlerContext)
-    await vi.advanceTimersByTimeAsync(220)
-
-    expect(setting.floatingBall.position).toEqual({ x: 316, y: 293 })
-    expect(mocks.saveMainConfig).toHaveBeenLastCalledWith(StorageList.APP_SETTING, setting, {
-      force: true
-    })
-    expect(mocks.persistMainConfig).toHaveBeenCalledWith(StorageList.APP_SETTING)
-
-    await module.onDestroy({} as never)
-    vi.useRealTimers()
   })
 })

@@ -69,7 +69,7 @@ import { translateClipboardImage, translateImageBase64 } from '../box-tool/core-
 import { windowManager } from '../box-tool/core-box/window'
 import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
 import { getScreenshotSessionManager } from '../screenshot-session'
-import { getMainConfig, persistMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
   x: number
@@ -273,29 +273,17 @@ export class AssistantModule extends BaseModule {
   private escapeCancelTimer: NodeJS.Timeout | null = null
   private escapeCancelHolding = false
   private escapeCancelCommitted = false
-  private pendingPosition: FloatingBallPosition | null = null
-  private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
     const dock = this.voiceDockWindow
-    if (!dock || dock.window.isDestroyed()) {
+    // Between sessions the dock is hidden and has nothing on screen to keep in place.
+    if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded) {
       return
     }
 
-    const setting = this.readAppSetting()
-    if (this.voiceDockExpanded) {
-      if (!this.getVoiceInputSetting(setting).enabled || !dock.window.isVisible()) {
-        return
-      }
-      this.applyVoiceDockBounds(dock, dock.window.getBounds())
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled || !dock.window.isVisible()) {
       return
     }
-
-    const floatingSetting = this.getFloatingBallSetting(setting)
-    if (!this.isAssistantEnabled(setting) || !floatingSetting.enabled) {
-      return
-    }
-
-    this.applyFloatingBallBounds(dock, floatingSetting)
+    this.applyVoiceDockBounds(dock, dock.window.getBounds())
   }
 
   constructor() {
@@ -309,7 +297,7 @@ export class AssistantModule extends BaseModule {
     this.setupTransport(ctx)
     this.registerTransportHandlers()
     this.watchAppSetting()
-    await this.applySettingSnapshot(this.readAppSetting())
+    this.applySettingSnapshot(this.readAppSetting())
     screen.on('display-added', this.handleDisplayTopologyChange)
     screen.on('display-removed', this.handleDisplayTopologyChange)
     screen.on('display-metrics-changed', this.handleDisplayTopologyChange)
@@ -320,12 +308,7 @@ export class AssistantModule extends BaseModule {
     screen.off('display-added', this.handleDisplayTopologyChange)
     screen.off('display-removed', this.handleDisplayTopologyChange)
     screen.off('display-metrics-changed', this.handleDisplayTopologyChange)
-    if (this.positionSaveTimer) {
-      clearTimeout(this.positionSaveTimer)
-      this.positionSaveTimer = null
-    }
     this.resetEscapeCancelHold(false, true)
-    this.pendingPosition = null
     this.voiceDockExpanded = false
     this.voiceCommandStartPending = null
     this.voiceCommandStopPending = null
@@ -362,22 +345,6 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.floatingBall.getRuntimeConfig, () => {
         return this.buildRuntimeConfig(this.readAppSetting())
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.openVoicePanel, async (payload) => {
-        const source = typeof payload?.source === 'string' ? payload.source : 'click'
-        await this.showVoicePanel(source)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.updatePosition, (payload) => {
-        if (!payload || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) {
-          return
-        }
-        this.updateFloatingBallPosition(payload.x, payload.y)
       })
     )
 
@@ -465,7 +432,7 @@ export class AssistantModule extends BaseModule {
         saveMainConfig(StorageList.APP_SETTING, nextSetting as AppSetting)
         return
       }
-      void this.applySettingSnapshot(nextSetting as AppSetting)
+      this.applySettingSnapshot(nextSetting as AppSetting)
     })
   }
 
@@ -657,33 +624,18 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private async applySettingSnapshot(setting: AppSetting): Promise<void> {
-    const voiceInput = this.getVoiceInputSetting(setting)
-    const floatingBall = this.getFloatingBallSetting(setting)
-    const showFloatingBall = this.isAssistantEnabled(setting) && floatingBall.enabled
-
-    if (!voiceInput.enabled) {
+  private applySettingSnapshot(setting: AppSetting): void {
+    if (!this.getVoiceInputSetting(setting).enabled) {
       this.stopActiveVoiceInput()
       if (this.voiceDockExpanded) {
         this.collapseVoicePanel()
       }
     }
 
-    if (!showFloatingBall) {
-      // A hidden assistant ball must not tear down an active dictation HUD. It is a separate
-      // temporary surface that can be opened by Fn even when the resting ball is disabled.
-      if (!this.voiceDockExpanded) {
-        this.hideVoicePanel()
-      }
-      return
-    }
-
-    const dock = await this.ensureVoiceDockWindow()
+    // There is no resting surface: the dock only exists for a voice session, so outside one it
+    // stays hidden. A setting never opens it; only a voice command does.
     if (!this.voiceDockExpanded) {
-      this.applyFloatingBallBounds(dock, floatingBall)
-    }
-    if (!dock.window.isVisible()) {
-      dock.window.showInactive()
+      this.hideVoicePanel()
     }
   }
 
@@ -773,16 +725,10 @@ export class AssistantModule extends BaseModule {
   }
 
   private async createVoiceDockWindow(): Promise<TouchWindow> {
-    // One window carries both the ball and the dock, so the bounds limits have to admit
-    // the union of the two: the ball's user-configurable 48..72 and the dock's 360x64.
     const touchWindow = new TouchWindow({
       ...AssistantVoiceDockWindowOption,
       width: VOICE_DOCK_WIDTH,
-      height: VOICE_DOCK_HEIGHT,
-      minWidth: FLOATING_BALL_MIN_SIZE,
-      minHeight: FLOATING_BALL_MIN_SIZE,
-      maxWidth: VOICE_DOCK_WIDTH,
-      maxHeight: Math.max(VOICE_DOCK_HEIGHT, FLOATING_BALL_MAX_SIZE)
+      height: VOICE_DOCK_HEIGHT
     })
 
     /*
@@ -826,29 +772,6 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private applyFloatingBallBounds(window: TouchWindow, setting: FloatingBallSetting): void {
-    const hasPersistedPosition = setting.position.x !== -1 || setting.position.y !== -1
-    const displayAnchor = hasPersistedPosition
-      ? { x: Math.round(setting.position.x), y: Math.round(setting.position.y) }
-      : screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(displayAnchor)
-    const workArea = display.workArea
-    const maxX = workArea.x + workArea.width - setting.size
-    const maxY = workArea.y + workArea.height - setting.size
-    const defaultX = workArea.x + workArea.width - setting.size - setting.edgePadding
-    const defaultY = workArea.y + Math.round(workArea.height * 0.35)
-    const xCandidate = hasPersistedPosition ? setting.position.x : defaultX
-    const yCandidate = hasPersistedPosition ? setting.position.y : defaultY
-
-    window.window.setBounds({
-      x: clamp(Math.round(xCandidate), workArea.x, maxX),
-      y: clamp(Math.round(yCandidate), workArea.y, maxY),
-      width: setting.size,
-      height: setting.size
-    })
-    window.window.setOpacity(setting.opacity)
-  }
-
   private applyVoiceDockBounds(window: TouchWindow, anchorBounds: Rectangle): void {
     const display = screen.getDisplayNearestPoint({
       x: anchorBounds.x + anchorBounds.width / 2,
@@ -866,47 +789,6 @@ export class AssistantModule extends BaseModule {
     })
   }
 
-  private updateFloatingBallPosition(x: number, y: number): void {
-    const dock = this.voiceDockWindow
-    if (!dock || dock.window.isDestroyed() || this.voiceDockExpanded) {
-      return
-    }
-
-    const bounds = dock.window.getBounds()
-    const display = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) })
-    const workArea = display.workArea
-    const maxX = workArea.x + workArea.width - bounds.width
-    const maxY = workArea.y + workArea.height - bounds.height
-    const nextX = clamp(Math.round(x), workArea.x, maxX)
-    const nextY = clamp(Math.round(y), workArea.y, maxY)
-
-    dock.window.setPosition(nextX, nextY)
-    this.pendingPosition = { x: nextX, y: nextY }
-    this.schedulePositionPersist()
-  }
-
-  private schedulePositionPersist(): void {
-    if (this.positionSaveTimer) {
-      clearTimeout(this.positionSaveTimer)
-    }
-    this.positionSaveTimer = setTimeout(() => {
-      this.positionSaveTimer = null
-      if (!this.pendingPosition) {
-        return
-      }
-      const setting = this.readAppSetting()
-      const changed = this.patchAssistantSetting(setting)
-      if (changed) {
-        saveMainConfig(StorageList.APP_SETTING, setting)
-      }
-      setting.floatingBall.position = { ...this.pendingPosition }
-      saveMainConfig(StorageList.APP_SETTING, setting, { force: true })
-      this.pendingPosition = null
-      void persistMainConfig(StorageList.APP_SETTING).catch((error) => {
-        assistantLog.warn('Failed to persist floating ball position immediately', { error })
-      })
-    }, 220)
-  }
   /** True while the VoiceDock is open or its first renderer window is still being created. */
   isVoiceCommandActive(): boolean {
     return (
@@ -961,7 +843,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.resetEscapeCancelHold(false, true)
-    // A compact dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
+    // A hidden dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
     // renderer has mounted; sending a second command here can race that handoff and leave the
     // first session reset by `openPanel()`.
     if (this.voiceCommandStartPending) return
@@ -1082,16 +964,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.voiceDockExpanded = false
-    const setting = this.readAppSetting()
-    const floatingBall = this.getFloatingBallSetting(setting)
-    if (this.isAssistantEnabled(setting) && floatingBall.enabled) {
-      this.applyFloatingBallBounds(dock, floatingBall)
-      if (!dock.window.isVisible()) {
-        dock.window.showInactive()
-      }
-    } else {
-      dock.window.hide()
-    }
+    dock.window.hide()
     this.transport?.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelClosed, undefined)
   }
 
