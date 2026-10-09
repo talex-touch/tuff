@@ -34,6 +34,15 @@ describe('docs install command', () => {
     })
   })
 
+  it('carries a dlx command\'s arguments over exactly as written', () => {
+    expect(all('pnpm dlx tool "hello  world" --flag=\'a b\'')).toEqual({
+      pnpm: 'pnpm dlx tool "hello  world" --flag=\'a b\'',
+      npm: 'npx tool "hello  world" --flag=\'a b\'',
+      yarn: 'yarn dlx tool "hello  world" --flag=\'a b\'',
+      bun: 'bunx tool "hello  world" --flag=\'a b\'',
+    })
+  })
+
   it('leaves anything it cannot translate faithfully as written', () => {
     expect(parseInstallCommand('pnpm add -g @talex-touch/tuffex', 'bash')).toBeNull() // other flags
     expect(parseInstallCommand('pnpm add @a/b --filter docs', 'bash')).toBeNull()
@@ -41,5 +50,6 @@ describe('docs install command', () => {
     expect(parseInstallCommand('pnpm build', 'bash')).toBeNull()
     expect(parseInstallCommand('npm install @talex-touch/tuffex', 'bash')).toBeNull() // only pnpm is the source form
     expect(parseInstallCommand('pnpm add @talex-touch/tuffex', 'typescript')).toBeNull()
+    expect(parseInstallCommand('pnpm add "@scope/pkg@>=1  <2"', 'bash')).toBeNull() // quoting
   })
 })

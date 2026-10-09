@@ -1,8 +1,9 @@
 /**
  * Docs code blocks that are a single `pnpm add` / `pnpm dlx` line render as a
  * package-manager switch. Only commands that translate faithfully qualify:
- * one line, `add` with at most a leading `-D`, or `dlx`; anything else is shown
- * as written.
+ * one line, `add` with at most a leading `-D` and no quoting, or `dlx`, whose
+ * arguments are carried over exactly as written; anything else is shown as
+ * written.
  */
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
@@ -28,9 +29,14 @@ export function parseInstallCommand(code: string | undefined, lang: string | und
   const match = /^pnpm (add|dlx) (.+)$/.exec(lines[0]!.trim())
   if (!match)
     return null
-  const args = match[2]!.trim().split(/\s+/)
+  // The runner is the only part that changes, so a `dlx` command keeps its own
+  // spacing and quoting.
   if (match[1] === 'dlx')
-    return { kind: 'dlx', dev: false, rest: args.join(' ') }
+    return { kind: 'dlx', dev: false, rest: match[2]!.trim() }
+  // Packages are re-joined one space apart, which a quoted argument would not survive.
+  if (/["'`\\]/.test(match[2]!))
+    return null
+  const args = match[2]!.trim().split(/\s+/)
   const dev = args[0] === '-D'
   const packages = dev ? args.slice(1) : args
   if (!packages.length || packages.some(arg => arg.startsWith('-')))
