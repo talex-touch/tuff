@@ -66,6 +66,6 @@ code: |
 - While streaming, the still-growing tail fence defers its final rendering until it closes; renderers get `closed: false` only for that fence.
 - Unregistered languages use the built-ins: `TxMermaidBlock` for `mermaid`, `TxCodeBlock` for the rest.
 - The caret is `TxStreamText`'s: right after the last character of a paragraph, heading, or quote, otherwise on its own line below. Under reduced motion nothing enters and the caret rests.
-- DOMPurify loads dynamically; if it fails, the component keeps working unsanitized, so sanitizing is best-effort and no substitute for a server-side trust boundary.
+- DOMPurify loads dynamically; with `sanitize` on, nothing renders until it loads, or at all if loading fails. Sanitizing is no substitute for a server-side trust boundary.
 - Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.
 - Each instance owns its own `Marked` (`gfm`, `breaks`); the GitHub Markdown sheet is scoped under `:where(.tx-md)`, leaving the host's `.markdown-body` alone.

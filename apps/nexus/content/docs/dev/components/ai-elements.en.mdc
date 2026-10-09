@@ -37,7 +37,7 @@ code: |
 - Keep provider-specific streaming state in the host and map it into `status`.
 - Use stable ids from the conversation store, not array indexes.
 - Keep `markdown` on for assistant output; sanitize untrusted Markdown at the data boundary.
-- Put tool cards and attachments in the `default` slot instead of custom HTML in `content`.
+- Describe reasoning, tool calls, attachments, and sources with `parts` instead of custom HTML in `content`.
 
 ## API Reference
 
@@ -52,6 +52,13 @@ code: |
 | `compact` | `boolean` | `false` | Tightens message spacing. |
 | `emptyText` | `string` | `'No messages yet'` | Empty-state copy when no message is renderable. |
 | `showAvatar` | `boolean` | `false` | Shows an avatar column for every message. |
+| `typingLabel` | `string` | - | Forwarded to each message: accessible name of the typing indicator. |
+
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `open-source` | `(source: AiSourceItem)` | Re-emitted from the message whose source was clicked. |
 
 #### Slots
 
@@ -70,13 +77,13 @@ code: |
 | `markdown` | `boolean` | `true` | Renders the body through `TxMarkdownView`; `false` keeps plain text with its line breaks. |
 | `compact` | `boolean` | `false` | Compact row density and a smaller avatar. |
 | `showAvatar` | `boolean` | `false` | Shows the avatar. |
-| `typingLabel` | `string` | `'AI is typing'` | Accessible name of the typing indicator; `TxAiConversation` doesn't forward it. |
+| `typingLabel` | `string` | `'AI is typing'` | Accessible name of the typing indicator. |
 
 #### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `open-source` | `(source: AiSourceItem)` | Fires when a source in a `sources` part is clicked; navigation is prevented. `TxAiConversation` doesn't forward it. |
+| `open-source` | `(source: AiSourceItem)` | Fires when a source in a `sources` part is clicked; navigation is prevented. |
 
 #### Slots
 

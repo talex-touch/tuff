@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AiElementMessage } from './types'
+import type { AiElementMessage, AiSourceItem } from './types'
 import { computed } from 'vue'
 import TxAiMessage from './TxAiMessage.vue'
 
@@ -10,6 +10,8 @@ const props = withDefaults(
     compact?: boolean
     emptyText?: string
     showAvatar?: boolean
+    /** Forwarded to each TxAiMessage: accessible name of the typing indicator. */
+    typingLabel?: string
   }>(),
   {
     markdown: true,
@@ -22,6 +24,11 @@ const props = withDefaults(
 defineOptions({
   name: 'TxAiConversation',
 })
+
+const emit = defineEmits<{
+  /** Re-emitted from the message whose sources part was clicked. */
+  'open-source': [source: AiSourceItem]
+}>()
 
 const normalizedMessages = computed(() =>
   props.messages.filter(message =>
@@ -50,6 +57,8 @@ const normalizedMessages = computed(() =>
         :markdown="markdown"
         :compact="compact"
         :show-avatar="showAvatar"
+        :typing-label="typingLabel"
+        @open-source="(source) => emit('open-source', source)"
       >
         <template v-if="$slots.default" #default="slotProps">
           <slot v-bind="slotProps" />

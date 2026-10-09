@@ -188,7 +188,7 @@ rows:
 ## 概述
 
 - 星级行渲染为 `role="radiogroup"`，每颗星是一个 `role="radio"` 按钮。
-- 键盘：整行只占一个 Tab 停留点；ArrowRight / ArrowUp 选中后一颗星，ArrowLeft / ArrowDown 选中前一颗，到头不循环；Home / End 选中首尾。
+- 键盘：整行只占一个 Tab 停留点；ArrowRight / ArrowUp 选中后一颗星，ArrowLeft / ArrowDown 选中前一颗，到头不循环；Home / End 选中首尾。按键只选整星，落在当前星上时评分不变。
 - `disabled` 与 `readonly` 都阻止更新，评分照常显示。
 
 ## 技术实现

@@ -1,6 +1,6 @@
 ---
 title: Message Actions
-description: A message toolbar with built-in copy and regenerate actions.
+description: A message toolbar with built-in copy, regenerate, and read-aloud actions.
 category: AiChat
 status: beta
 since: 0.3.9
@@ -32,7 +32,7 @@ code: |
 
 - Use native `<button>`s, or elements with a `tabindex`, for custom actions; non-focusable elements stay out of the arrow-key order.
 - `copy` fires even when the clipboard write fails; handle any fallback there instead of copying a second time.
-- When localizing, override `copyLabel`, `copiedLabel`, `regenerateLabel`, and `label` together.
+- When localizing, override `copyLabel`, `copiedLabel`, `regenerateLabel`, `speakLabel`, `stopSpeakLabel`, and `label` together.
 - Mount the toolbar after the message finishes streaming, so nobody copies a half-written answer.
 
 ## API Reference
