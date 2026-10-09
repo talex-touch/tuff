@@ -9,52 +9,45 @@ import type {
 
 // Pure geometry for TxFusionSurface: a rounded-rectangle body that grows buds
 // from its edges, stretches them into a neck and snaps them off into drops.
-// No Vue and no DOM, so core-app's send split can draw with it directly.
+// No Vue and no DOM, so a host can draw with it directly.
 //
 // The attached bud follows the uiarc.dev Dock (technique observed 2026-09-25,
 // no code taken): one path recomputed from a few spring values, a concave
 // quadratic fillet where the bud meets the body and a convex quadratic corner
-// on its outer end, the bud clamped onto the straight part of the edge. The
-// neck is this repo's own: each side of the bud is a half-width profile
-// sampled over its height (design.md §2.3–2.4, validated against the
-// prototype in the task's research/prototype/), so attached, stretched,
-// pinched and broken are one formula under different parameters.
+// on its outer end, the bud clamped onto the straight part of the edge.
+//
+// The neck is a liquid bridge. Pulled away, the bud is a drop with its own
+// underside, and the bridge joins that underside to the body: each side is a
+// concave flare out of the body, a waist, and a concave flare into the drop,
+// both flares quadratic and tangent to the surface they meet, so a side only
+// ever turns one way. As the neck narrows the waist draws in, the flares
+// spread into a low mound on the body and well inside the drop's corners, and
+// the drop's underside comes free with its corners rounding. Unpinched, the
+// flares are the fillet and nothing, and the bud is the attached one.
 //
 // Every edge has local coordinates: u runs along the edge in the path's
 // clockwise direction, v points out of the body. Outlines are built there
 // once and mapped onto whichever edge they sit on.
 
 type Pt = readonly [number, number]
-type Cmd = readonly ['L', Pt] | readonly ['Q', Pt, Pt] | readonly ['C', Pt, Pt, Pt]
+type Cmd = readonly ['L', Pt] | readonly ['Q', Pt, Pt]
 
-/** A point on a side and its derivative with respect to the sampling
- *  parameter. The sides are drawn as cubic Hermite segments from these. */
-interface Sample {
-  p: Pt
-  t: Pt
-}
-
-/** Samples per bud side. Fixed, so a moving bud keeps one command structure
- *  from frame to frame. */
-const SAMPLES = 22
-/** Where the waist sits, as a share of the detach distance above the fillet:
- *  about where the drop's inner end will be once it separates. */
-const WAIST = 0.62
-/** Length of the dip above the waist (the drop's shoulder): 0.45 of the bud
- *  height, at most 18px. Short, so the drop keeps a convex shoulder. */
-const SHOULDER_SHARE = 0.45
-const SHOULDER_MAX = 18
-/** Shortest either half of the dip may be; it is a divisor. */
-const MIN_SPREAD = 4
-/** Pinch by which a dip has fully taken its neck form (see `neckProfile`):
- *  half closed, the point from which the neck reads as an hourglass. */
-const NECK_FORM = 0.5
+/** How far the bridge's foot spreads along the body as the neck narrows, as
+ *  a share of how far the waist has drawn in: a liquid bridge stands on a
+ *  low mound, not on the bud's full width. */
+const FOOT_SPREAD = 0.3
+/** The same where the bridge meets the drop: well inside its corners, so the
+ *  underside around it comes free and its corners can round. */
+const DROP_SPREAD = 0.3
+/** Where the waist settles, as a share of the gap: the middle, so the stub
+ *  left on the body and the drop's tail are alike when the neck snaps. */
+const WAIST_AT = 0.5
+/** Pinch by which the flares fill the gap: from there on a side is one
+ *  concave curve, with no straight run left at the waist to read as a slot. */
+const FLARE_FILLS = 0.35
 /** Under this height (px) a bud, remnant or drop is not drawn: below a device
  *  pixel it only flickers. uiarc skips the same range. */
 const MIN_VISIBLE = 0.5
-/** Steepest side slope a corner's control point follows. Only extreme leans
- *  reach it, and past it the control point would fly off along the edge. */
-const MAX_SLOPE = 2
 /** Inputs are clamped to ±this many px, which keeps every product finite. */
 const LIMIT = 1e6
 const EPS = 1e-9
@@ -87,35 +80,13 @@ function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
-function smoothstepSlope(e0: number, e1: number, x: number): number {
-  if (e1 - e0 <= EPS || x <= e0 || x >= e1)
-    return 0
-  const t = (x - e0) / (e1 - e0)
-  return (6 * t * (1 - t)) / (e1 - e0)
-}
-
-/** Raised cosine: 1 at t = 0, 0 with zero slope at |t| = 1. The zero slope is
- *  what lets the dip die out into a straight side without a knee. */
-function bump(t: number): number {
-  return Math.abs(t) >= 1 ? 0 : (1 + Math.cos(Math.PI * t)) / 2
-}
-
-function bumpSlope(t: number): number {
-  return Math.abs(t) >= 1 ? 0 : -(Math.PI / 2) * Math.sin(Math.PI * t)
-}
-
 /**
  * The default neck: nothing for the first quarter of `breakAt`, then the
  * square of a smoothstep, fully closed at `breakAt` (it snaps at about 96%).
  *
- * Eased in because a short neck can only carry a shallow dip. With a plain
- * smoothstep from 15%, a 160px bud's side already leaned 45° at detach 7,
- * its dip only 2.9px deep: a notch on each side rather than a waist. Squared,
- * the curve starts with zero slope and zero curvature and stays within a few
- * px until the neck has stretched about half of `breakAt`, then closes
- * quickly into the hourglass, the way a stretched liquid bridge gives way
- * late. Together with the broad early dip in `neckProfile`, that first 45°
- * comes at detach 15 with the dip 8.4px deep.
+ * Squared, the curve starts with zero slope and zero curvature and stays
+ * small until the neck has stretched about half of `breakAt`, then closes
+ * quickly, the way a stretched liquid bridge gives way late.
  */
 export function fusionSurfacePinch(detach: number, breakAt: number): number {
   const at = Math.max(1, finite(breakAt, 28))
@@ -164,162 +135,57 @@ function resolveFrame(
   return { c, l, p, m, e: height }
 }
 
-/**
- * One side profile: the half-width of the bud at height v, and the line it is
- * centred on. With no pinch the half-width is constant and the sides are the
- * straight sides of the attached bud, so nothing switches models when a bud
- * starts to stretch.
- */
-interface Profile {
+/** A bud's bridge at one moment, in its edge's local coordinates. */
+interface Neck {
   c: number
+  /** Half the bud's width. */
   half: number
-  /** Height of the waist. */
-  vw: number
-  /** Length of the dip below and above the waist. */
-  down: number
-  up: number
-  /** Depth of the dip at the waist, 0..half. */
-  delta: number
-  /** Sideways offset reached above the dip. */
+  /** Half-width at the waist: `half` unpinched, 0 closed. */
+  waist: number
+  /** How far the flare out of the body reaches past the waist along the
+   *  edge, and how high it climbs. Unpinched, the fillet. */
+  footReach: number
+  footHeight: number
+  /** The same for the flare into the drop, measured down from its underside. */
+  dropReach: number
+  dropHeight: number
+  /** Height of the drop's underside. */
+  inner: number
+  /** Corner radius where the drop's underside meets its sides. */
+  innerRadius: number
+  /** Height of the outer end. */
+  top: number
+  outerRadius: number
+  /** Sideways offset of the drop; the bridge leans with it. */
   drift: number
 }
 
-function dipAt(pr: Profile, v: number): { t: number, spread: number } {
-  const spread = v < pr.vw ? pr.down : pr.up
-  return { t: (v - pr.vw) / spread, spread }
+function neckOf(frame: Frame, detach: number, pinch: number, drift: number): Neck {
+  const half = frame.l / 2
+  const waist = half * (1 - pinch)
+  const drawn = half - waist
+  const top = frame.e + detach
+  // The underside never sits inside the fillet, nor above the outer corners:
+  // a bud pulled less than its fillet is still one column.
+  const inner = clamp(detach, frame.p, top - frame.m)
+  // Together the two flares fill the gap from FLARE_FILLS on, and leave a
+  // straight waist of (inner - p) * (1 - fill) before that.
+  const fill = smoothstep(0, FLARE_FILLS, pinch)
+  const footHeight = frame.p + (WAIST_AT * inner - frame.p) * fill
+  const dropHeight = (1 - WAIST_AT) * inner * fill
+  const footReach = frame.p + FOOT_SPREAD * drawn
+  const dropReach = DROP_SPREAD * drawn
+  // What the bridge leaves bare of the underside on each side holds the corner.
+  const bare = half - waist - dropReach
+  const innerRadius = Math.max(0, Math.min(frame.m, bare, top - frame.m - inner))
+  return { c: frame.c, half, waist, footReach, footHeight, dropReach, dropHeight, inner, innerRadius, top, outerRadius: frame.m, drift }
 }
 
-function halfWidth(pr: Profile, v: number): number {
-  return pr.half - pr.delta * bump(dipAt(pr, v).t)
-}
-
-function halfWidthSlope(pr: Profile, v: number): number {
-  const { t, spread } = dipAt(pr, v)
-  return (-pr.delta * bumpSlope(t)) / spread
-}
-
-function axis(pr: Profile, v: number): number {
-  return pr.c + pr.drift * smoothstep(pr.vw - pr.down, pr.vw + pr.up, v)
-}
-
-function axisSlope(pr: Profile, v: number): number {
-  return pr.drift * smoothstepSlope(pr.vw - pr.down, pr.vw + pr.up, v)
-}
-
-function shoulder(height: number): number {
-  return Math.max(MIN_SPREAD, Math.min(height * SHOULDER_SHARE, SHOULDER_MAX))
-}
-
-function neckProfile(frame: Frame, detach: number, pinch: number, drift: number): Profile {
-  // The waist never comes closer than MIN_SPREAD to the fillet. The prototype
-  // floored the lower dip's length instead, which on a short neck (detach
-  // under ~6.5px) let the dip reach below the fillet's end: a knee at the base
-  // and a lean that started inside the fillet.
-  let vw = frame.p + Math.max(WAIST * detach, MIN_SPREAD)
-  // The shoulder has to be finished where the outer corners start, or they
-  // begin on a side that is still flaring and overshoot the bud's width.
-  // Only short or barely stretched buds hit this; at the break of a default
-  // 40px bud there is 22px of room for its 18px shoulder.
-  const room = frame.e + detach - frame.m - vw
-  let up = Math.max(MIN_SPREAD, Math.min(shoulder(frame.e), room))
-  // A shallow dip starts as a broad waist centred on the whole side and takes
-  // the neck form above as it deepens, completely by NECK_FORM. The neck
-  // form's lower half is only 0.62 of the stretch long, so any depth bent the
-  // side in hard just above the fillet, a notch rather than a waist; centred,
-  // that half is up to twice as long. From NECK_FORM on (every hourglass and
-  // break frame) the profile is exactly the neck form.
-  const span = frame.e + detach - frame.m - frame.p
-  if (span >= 2 * MIN_SPREAD) {
-    const k = smoothstep(0, NECK_FORM, pinch)
-    vw = frame.p + span / 2 + (vw - frame.p - span / 2) * k
-    up = span / 2 + (up - span / 2) * k
-  }
-  return {
-    c: frame.c,
-    half: frame.l / 2,
-    vw,
-    // Asymmetric on purpose. Below the waist the dip spans the whole run down
-    // to the fillet, so it reaches zero (with zero slope) exactly where the
-    // fillet ends and the fillet flows into the side without a knee. Above it
-    // the dip is short, which is what gives the drop its convex shoulder.
-    down: vw - frame.p,
-    up,
-    delta: pinch * frame.l / 2,
-    drift,
-  }
-}
-
-/**
- * Samples one side between two heights, bottom to top, with the profile's
- * exact slope. `squash` scales the heights after the profile is read, which
- * is how a remnant sinks.
- *
- * Exact slopes rather than Catmull-Rom's chords (the prototype's choice):
- * where the profile bends within a sample or two of an end, the chord is off
- * by up to ~50° at the base of a short neck, and the fillet that has to meet
- * it either kinks or, following the chord, balloons to twice its radius.
- */
-function sampleSide(pr: Profile, from: number, to: number, sign: 1 | -1, squash = 1): Sample[] {
-  const samples: Sample[] = []
-  for (let i = 0; i <= SAMPLES; i++) {
-    const v = from + ((to - from) * i) / SAMPLES
-    samples.push({
-      p: [axis(pr, v) + sign * halfWidth(pr, v), v * squash],
-      t: [axisSlope(pr, v) + sign * halfWidthSlope(pr, v), squash],
-    })
-  }
-  return samples
-}
-
-/** Cubic Hermite through the samples (parameter step `step`), as cubic
- *  segments starting from the current point. */
-function hermite(samples: readonly Sample[], step: number): Cmd[] {
-  const k = step / 3
-  const out: Cmd[] = []
-  for (let i = 0; i < samples.length - 1; i++) {
-    const a = samples[i]!
-    const b = samples[i + 1]!
-    out.push(['C', [a.p[0] + a.t[0] * k, a.p[1] + a.t[1] * k], [b.p[0] - b.t[0] * k, b.p[1] - b.t[1] * k], b.p])
-  }
-  return out
-}
-
-/** The same curve walked the other way. */
-function reversed(samples: readonly Sample[]): Sample[] {
-  return samples.map(s => ({ p: s.p, t: [-s.t[0], -s.t[1]] as Pt })).reverse()
-}
-
-function slopeOf(sample: Sample): number {
-  return Math.abs(sample.t[1]) > EPS ? clamp(sample.t[0] / sample.t[1], -MAX_SLOPE, MAX_SLOPE) : 0
-}
-
-interface Corner {
-  ctrl: Pt
-  /** The corner's end on the straight line. */
-  foot: Pt
-}
-
-/**
- * The quadratic corner joining a side to the straight line v = level.
- *
- * The control point is where the side's tangent at `end` meets that line, so
- * the join has no kink even while the side leans; on an upright side it is
- * the plain square-corner control point uiarc uses. The corner's other end
- * sits `leg` px along the line from the control point.
- */
-function corner(end: Sample, level: number, leg: number): Corner {
-  const ctrl: Pt = [end.p[0] + slopeOf(end) * (level - end.p[1]), level]
-  return { ctrl, foot: [ctrl[0] + leg, level] }
-}
-
-/** Two corners on one straight line whose legs would cross meet at the
- *  midpoint of their control points instead. */
-function meet(left: Corner, right: Corner): void {
-  if (left.foot[0] <= right.foot[0])
-    return
-  const mid: Pt = [(left.ctrl[0] + right.ctrl[0]) / 2, left.foot[1]]
-  left.foot = mid
-  right.foot = mid
+/** The drift as a shear: nothing at the body, the full drift from the
+ *  drop's underside out. Affine, so every curve is mapped exactly and
+ *  tangents that met stay met. */
+function leaner(n: Neck): (p: Pt) => Pt {
+  return ([u, v]) => [u + n.drift * clamp(v / Math.max(n.inner, EPS), 0, 1), v]
 }
 
 interface Outline {
@@ -329,89 +195,75 @@ interface Outline {
   to: number
 }
 
-/** A bud still joined to the body, stretched or not: fillet, left side, outer
- *  corners, right side, fillet. Starts with a line to the left fillet's foot. */
-function budOutline(pr: Profile, fillet: number, cornerRadius: number, top: number): Outline {
-  const sideTop = Math.max(fillet, top - cornerRadius)
-  const step = (sideTop - fillet) / SAMPLES
-  const left = sampleSide(pr, fillet, sideTop, -1)
-  const right = sampleSide(pr, fillet, sideTop, 1)
-  const n = SAMPLES
-  const baseLeft = corner(left[0]!, 0, -fillet)
-  const baseRight = corner(right[0]!, 0, fillet)
-  const topLeft = corner(left[n]!, top, cornerRadius)
-  const topRight = corner(right[n]!, top, -cornerRadius)
-  meet(topLeft, topRight)
+/**
+ * A bud still joined to the body, stretched or not. Left side, bottom up:
+ * flare out of the body, waist, flare into the drop, the drop's underside to
+ * its corner, the corner, the side, the outer corner; then the outer edge and
+ * the right side mirrored, top down. One command structure at every pinch.
+ * Starts with a line to the left foot.
+ */
+function bridgeOutline(n: Neck): Outline {
+  const lean = leaner(n)
+  const at = (sign: 1 | -1, along: number, v: number): Pt => lean([n.c + sign * along, v])
+  const left = (s: 1 | -1) => ({
+    foot: at(s, n.waist + n.footReach, 0),
+    footCtrl: at(s, n.waist, 0),
+    waistLow: at(s, n.waist, n.footHeight),
+    waistHigh: at(s, n.waist, n.inner - n.dropHeight),
+    dropCtrl: at(s, n.waist, n.inner),
+    dropFoot: at(s, n.waist + n.dropReach, n.inner),
+    cornerFrom: at(s, n.half - n.innerRadius, n.inner),
+    cornerCtrl: at(s, n.half, n.inner),
+    cornerTo: at(s, n.half, n.inner + n.innerRadius),
+    sideTop: at(s, n.half, n.top - n.outerRadius),
+    topCtrl: at(s, n.half, n.top),
+    topFoot: at(s, n.half - n.outerRadius, n.top),
+  })
+  const l = left(-1)
+  const r = left(1)
   return {
     cmds: [
-      ['L', baseLeft.foot],
-      ['Q', baseLeft.ctrl, left[0]!.p],
-      ...hermite(left, step),
-      ['Q', topLeft.ctrl, topLeft.foot],
-      ['L', topRight.foot],
-      ['Q', topRight.ctrl, right[n]!.p],
-      ...hermite(reversed(right), step),
-      ['Q', baseRight.ctrl, baseRight.foot],
+      ['L', l.foot],
+      ['Q', l.footCtrl, l.waistLow],
+      ['L', l.waistHigh],
+      ['Q', l.dropCtrl, l.dropFoot],
+      ['L', l.cornerFrom],
+      ['Q', l.cornerCtrl, l.cornerTo],
+      ['L', l.sideTop],
+      ['Q', l.topCtrl, l.topFoot],
+      ['L', r.topFoot],
+      ['Q', r.topCtrl, r.sideTop],
+      ['L', r.cornerTo],
+      ['Q', r.cornerCtrl, r.cornerFrom],
+      ['L', r.dropFoot],
+      ['Q', r.dropCtrl, r.waistHigh],
+      ['L', r.waistLow],
+      ['Q', r.footCtrl, r.foot],
     ],
-    from: baseLeft.foot[0],
-    to: baseRight.foot[0],
+    from: l.foot[0],
+    to: r.foot[0],
   }
 }
 
-/** What a snapped neck leaves on the body: the lower half of the neck with
- *  the waist closed to a point, squashed toward the edge as it retracts. */
-function remnantOutline(pr: Profile, fillet: number, squash: number): Outline {
-  const step = (pr.vw - fillet) / SAMPLES
-  const left = sampleSide(pr, fillet, pr.vw, -1, squash)
-  const right = sampleSide(pr, fillet, pr.vw, 1, squash)
-  const baseLeft = corner(left[0]!, 0, -fillet)
-  const baseRight = corner(right[0]!, 0, fillet)
-  // The half-width is 0 at the apex, so the right side starts where the left
-  // one ends, both upright: the point is a cusp.
+/** What a snapped neck leaves on the body: the flares out of it, open at the
+ *  top by the waist they had (about a pixel), squashed toward the edge as it
+ *  sinks. */
+function remnantOutline(n: Neck, squash: number): Outline {
+  const lean = leaner(n)
+  const height = n.footHeight * squash
+  const at = (sign: 1 | -1, along: number, v: number): Pt => lean([n.c + sign * along, v])
+  const footL = at(-1, n.waist + n.footReach, 0)
+  const footR = at(1, n.waist + n.footReach, 0)
   return {
     cmds: [
-      ['L', baseLeft.foot],
-      ['Q', baseLeft.ctrl, left[0]!.p],
-      ...hermite(left, step),
-      ...hermite(reversed(right), step),
-      ['Q', baseRight.ctrl, baseRight.foot],
+      ['L', footL],
+      ['Q', at(-1, n.waist, 0), at(-1, n.waist, height)],
+      ['L', at(1, n.waist, height)],
+      ['Q', at(1, n.waist, 0), footR],
     ],
-    from: baseLeft.foot[0],
-    to: baseRight.foot[0],
+    from: footL[0],
+    to: footR[0],
   }
-}
-
-/** A drop's final inner end: a straight edge and a round corner of `radius`,
- *  then the upright side to `top`. Sampled evenly by length, from the middle
- *  of the inner edge outward; derivatives are per unit of the 0..1 parameter. */
-function roundedSide(half: number, radius: number, top: number, sign: 1 | -1): Sample[] {
-  const flat = Math.max(0, half - radius)
-  const arc = (Math.PI / 2) * radius
-  const length = flat + arc + Math.max(0, top - radius)
-  const samples: Sample[] = []
-  for (let i = 0; i <= SAMPLES; i++) {
-    const s = (length * i) / SAMPLES
-    if (s <= flat) {
-      samples.push({ p: [sign * s, 0], t: [sign * length, 0] })
-    }
-    else if (s <= flat + arc && radius > EPS) {
-      const angle = (s - flat) / radius
-      samples.push({
-        p: [sign * (flat + radius * Math.sin(angle)), radius * (1 - Math.cos(angle))],
-        t: [sign * length * Math.cos(angle), length * Math.sin(angle)],
-      })
-    }
-    else {
-      samples.push({ p: [sign * half, radius + (s - flat - arc)], t: [0, length] })
-    }
-  }
-  return samples
-}
-
-/** The drop's inner end as the neck left it: the tail of the upper half of
- *  the neck, point at the middle. Sampled evenly by height up to `top`. */
-function tailSide(pr: Profile, top: number, sign: 1 | -1): Sample[] {
-  return sampleSide(pr, 0, top, sign).map(s => ({ p: s.p, t: [s.t[0] * top, s.t[1] * top] as Pt }))
 }
 
 interface Loose {
@@ -421,55 +273,59 @@ interface Loose {
 }
 
 /**
- * A drop, clockwise like the body so the two union under nonzero.
- *
- * Its sides are a blend, by `tail`, of the pointed tail the neck left and the
- * rounded inner end it settles into, taken sample for sample from the middle
- * of the inner end outward. The point therefore stays a point while it draws
- * in, flattening into the straight inner edge as the corners round out; the
- * two halves meet in the middle in a cusp at tail = 1 and in a straight line
- * at 0. Blending the dip's depth instead chamfered the end into a trapezoid
- * the moment the neck broke, while the remnant on the body was still pointed.
+ * A drop, clockwise like the body so the two union under nonzero: a rounded
+ * rectangle of the bud's size, with the flares the neck left on its underside
+ * hanging as a tail. `tail` 1 is the tail as the neck snapped, 0 a flat
+ * underside; its corners go from the radius they had at the break to the
+ * settled one along with it. Starts at the tip of the tail.
  */
 function dropOutline(
   centre: number,
   bottom: number,
-  height: number,
-  settled: { half: number, radius: number, top: number },
-  broken: { profile: Profile, top: number } | null,
+  frame: Frame,
+  broken: Neck | null,
   tail: number,
-  outerRadius: number,
   edge: FusionSurfaceEdge,
 ): Loose {
-  const side = (sign: 1 | -1): Sample[] => {
-    const rounded = roundedSide(settled.half, settled.radius, settled.top, sign)
-    const pointed = broken ? tailSide(broken.profile, broken.top, sign) : rounded
-    return rounded.map((r, i) => {
-      const q = pointed[i]!
-      const mix = (a: number, b: number): number => a + (b - a) * tail
-      return {
-        p: [centre + mix(r.p[0], q.p[0]), bottom + mix(r.p[1], q.p[1])],
-        t: [mix(r.t[0], q.t[0]), mix(r.t[1], q.t[1])],
-      }
-    })
-  }
-  const step = 1 / SAMPLES
-  const left = side(-1)
-  const right = side(1)
-  const n = SAMPLES
-  const top = bottom + height
-  const topLeft = corner(left[n]!, top, outerRadius)
-  const topRight = corner(right[n]!, top, -outerRadius)
-  meet(topLeft, topRight)
+  const half = frame.l / 2
+  const top = bottom + frame.e
+  const outer = Math.min(frame.m, frame.e)
+  const settled = Math.min(outer, Math.max(0, frame.e - outer))
+  const radius = Math.max(0, Math.min(settled + ((broken?.innerRadius ?? settled) - settled) * tail, half, frame.e - outer))
+  const waist = broken ? Math.min(broken.waist, half) : 0
+  const reach = broken ? Math.min(waist + broken.dropReach, half - radius) : 0
+  const depth = broken ? broken.dropHeight * tail : 0
+  // Leaning back toward the body by the drift it had at the break.
+  const lean = broken ? -broken.drift * depth / Math.max(broken.inner, EPS) : 0
+  const at = (sign: 1 | -1, along: number, v: number): Pt => [centre + sign * along, v]
+  const tip = (sign: 1 | -1): Pt => [centre + sign * waist + lean, bottom - depth]
+  const side = (s: 1 | -1) => ({
+    tailCtrl: at(s, waist, bottom),
+    tailFoot: at(s, Math.max(waist, reach), bottom),
+    cornerFrom: at(s, half - radius, bottom),
+    cornerCtrl: at(s, half, bottom),
+    cornerTo: at(s, half, bottom + radius),
+    sideTop: at(s, half, top - outer),
+    topCtrl: at(s, half, top),
+    topFoot: at(s, half - outer, top),
+  })
+  const l = side(-1)
+  const r = side(1)
   return {
     edge,
-    start: left[0]!.p,
+    start: tip(-1),
     cmds: [
-      ...hermite(left, step),
-      ['Q', topLeft.ctrl, topLeft.foot],
-      ['L', topRight.foot],
-      ['Q', topRight.ctrl, right[n]!.p],
-      ...hermite(reversed(right), step),
+      ['Q', l.tailCtrl, l.tailFoot],
+      ['L', l.cornerFrom],
+      ['Q', l.cornerCtrl, l.cornerTo],
+      ['L', l.sideTop],
+      ['Q', l.topCtrl, l.topFoot],
+      ['L', r.topFoot],
+      ['Q', r.topCtrl, r.sideTop],
+      ['L', r.cornerTo],
+      ['Q', r.cornerCtrl, r.cornerFrom],
+      ['L', r.tailFoot],
+      ['Q', r.tailCtrl, tip(1)],
     ],
   }
 }
@@ -481,13 +337,7 @@ function scaleAbout(drop: Loose, origin: Pt, s: number): Loose {
   return {
     edge: drop.edge,
     start: at(drop.start),
-    cmds: drop.cmds.map((cmd): Cmd => {
-      if (cmd[0] === 'L')
-        return ['L', at(cmd[1])]
-      if (cmd[0] === 'Q')
-        return ['Q', at(cmd[1]), at(cmd[2])]
-      return ['C', at(cmd[1]), at(cmd[2]), at(cmd[3])]
-    }),
+    cmds: drop.cmds.map((cmd): Cmd => (cmd[0] === 'L' ? ['L', at(cmd[1])] : ['Q', at(cmd[1]), at(cmd[2])])),
   }
 }
 
@@ -538,10 +388,8 @@ function emit(cmds: readonly Cmd[], map: (p: Pt) => Pt): string {
   for (const cmd of cmds) {
     if (cmd[0] === 'L')
       out += ` L ${pt(cmd[1])}`
-    else if (cmd[0] === 'Q')
-      out += ` Q ${pt(cmd[1])} ${pt(cmd[2])}`
     else
-      out += ` C ${pt(cmd[1])} ${pt(cmd[2])} ${pt(cmd[3])}`
+      out += ` Q ${pt(cmd[1])} ${pt(cmd[2])}`
   }
   return out
 }
@@ -608,11 +456,10 @@ export function fusionSurfacePath(input: FusionSurfaceGeometryInput): FusionSurf
     if (!split) {
       if (!frame)
         return
-      const pr = neckProfile(frame, detach, clamp(finite(bud.pinch, 0), 0, 1), drift)
-      const top = frame.e + detach
-      addAttached(budOutline(pr, frame.p, frame.m, top))
-      const centre = axis(pr, top)
-      rects.push(rectOf(id, edge, width, height, centre - frame.l / 2, centre + frame.l / 2, top - frame.e, top))
+      const neck = neckOf(frame, detach, clamp(finite(bud.pinch, 0), 0, 1), drift)
+      addAttached(bridgeOutline(neck))
+      const centre = frame.c + drift
+      rects.push(rectOf(id, edge, width, height, centre - frame.l / 2, centre + frame.l / 2, neck.top - frame.e, neck.top))
       return
     }
 
@@ -629,48 +476,29 @@ export function fusionSurfacePath(input: FusionSurfaceGeometryInput): FusionSurf
       cornerRadius,
       fillet,
     )
-    const broken = was ? neckProfile(was, splitDetach, 1, splitDrift) : null
+    const broken = was ? neckOf(was, splitDetach, 1, splitDrift) : null
 
     const remnant = clamp(finite(split.remnant, 0), 0, 1)
-    if (was && broken && broken.vw * remnant >= MIN_VISIBLE)
-      addAttached(remnantOutline(broken, was.p, remnant))
+    if (broken && broken.footHeight * remnant >= MIN_VISIBLE)
+      addAttached(remnantOutline(broken, remnant))
 
     if (!frame)
       return
     // With no usable break frame there is no tail to draw in: the drop is
     // already its own rounded rectangle.
-    const tail = was && broken ? clamp(finite(split.tail, 0), 0, 1) : 0
+    const tail = broken ? clamp(finite(split.tail, 0), 0, 1) : 0
     // A drop closes toward, and opens from, its own centre on both axes.
     // Lowering its height the way an attached bud closes kept its width and
     // left a line hanging in mid-air.
     const scale = Math.max(0, finite(split.scale, 1))
-    const top = frame.e + detach
-    // At the break the drop reaches from the waist to the outer end; as the
-    // tail draws in it settles to the bud's own height.
-    const atBreak = was && broken ? was.e + splitDetach - broken.vw : frame.e
-    const dropHeight = frame.e + (atBreak - frame.e) * tail
-    if (!(dropHeight * scale >= MIN_VISIBLE && frame.l * scale >= MIN_VISIBLE))
+    if (!(frame.e * scale >= MIN_VISIBLE && frame.l * scale >= MIN_VISIBLE))
       return
-    const bottom = top - dropHeight
+    const top = frame.e + detach
+    const bottom = top - frame.e
     const centre = frame.c + drift
-    const outerRadius = Math.min(frame.m, dropHeight)
     const half = frame.l / 2
-    // The neck's upper half, re-expressed about the drop: waist at the drop's
-    // inner end, centred on the drop, fully pinched. Leaning back toward the
-    // body by the drift it had at the break.
-    const pointed = was && broken
-      ? {
-          profile: { c: -broken.drift, half, vw: 0, down: broken.down, up: broken.up, delta: half, drift: broken.drift },
-          top: Math.max(0, atBreak - outerRadius),
-        }
-      : null
-    const settled = {
-      half,
-      radius: Math.min(outerRadius, Math.max(0, frame.e - outerRadius)),
-      top: Math.max(0, frame.e - outerRadius),
-    }
-    const middle: Pt = [centre, bottom + dropHeight / 2]
-    const drop = dropOutline(centre, bottom, dropHeight, settled, pointed, tail, outerRadius, edge)
+    const middle: Pt = [centre, bottom + frame.e / 2]
+    const drop = dropOutline(centre, bottom, frame, broken, tail, edge)
     loose.push(scale === 1 ? drop : scaleAbout(drop, middle, scale))
     rects.push(rectOf(
       id,
@@ -679,8 +507,8 @@ export function fusionSurfacePath(input: FusionSurfaceGeometryInput): FusionSurf
       height,
       centre - half * scale,
       centre + half * scale,
-      middle[1] - (dropHeight / 2) * scale,
-      middle[1] + (dropHeight / 2) * scale,
+      middle[1] - (frame.e / 2) * scale,
+      middle[1] + (frame.e / 2) * scale,
     ))
   })
 

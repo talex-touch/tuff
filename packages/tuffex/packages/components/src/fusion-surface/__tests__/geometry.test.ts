@@ -200,9 +200,11 @@ describe('fusionSurfacePath', () => {
   it('narrows the neck monotonically as detach grows', () => {
     const waist = (detach: number): number => {
       const { d } = fusionSurfacePath({ ...BODY, buds: [bud({ detach, pinch: fusionSurfacePinch(detach, 28) })] })
-      // The C endpoints are the side samples; the left side is x < centre.
-      const ends = [...d.matchAll(/C (?:-?[\d.]+ ){4}(-?[\d.]+) -?[\d.]+/g)].map(m => Number(m[1]))
-      return Math.min(...ends.filter(x => x < 150).map(x => 150 - x))
+      // The left side of the bridge, from the body up to the drop's underside
+      // (which sits at the detach, or at the 12px fillet while that is more):
+      // its narrowest half-width is the waist.
+      const inner = Math.max(detach, 12)
+      return Math.min(...points(d).filter(([x, y]) => x <= 150 && y < 0 && -y <= inner + 1e-9).map(([x]) => 150 - x))
     }
     const widths: number[] = []
     for (let detach = 0; detach <= 28; detach += 0.5)
@@ -213,27 +215,44 @@ describe('fusionSurfacePath', () => {
     expect(widths.at(-1)).toBeLessThan(1)
   })
 
-  it('starts a neck as a shallow waist, not a notch above the fillet', () => {
-    // A side leaning past 45° is where a dip stops reading as a waist. The
-    // first frame that happens, the dip is 8.4px deep on the 160px bud and
-    // 8.3px on the split demo's 168px one. With the dip pinned to the neck
-    // from the start and a plain smoothstep from 15% of breakAt, that frame
-    // came at detach 6.9 with the dip 2.9px and 2.8px deep: a notch on each
-    // side rather than a waist.
+  it('pulls a drop with its own underside on a concave bridge, not a wedge under the bud', () => {
+    // The look the raised-cosine neck missed: its drop ended in a V and its
+    // base in a tent, and the waist was two spikes. A pulled bud is a drop
+    // with its own underside and rounded corners, and each side of the bridge
+    // only ever bends inward, without a corner.
     const cases: [typeof BODY, FusionSurfaceBudShape][] = [
       [BODY, bud()],
-      [{ width: 320, height: 48, radius: 16 }, { id: 'a', center: 150, width: 168, height: 36, radius: 12 }],
+      // The split demo's bud, at the stretch the demo holds before the break.
+      [{ width: 320, height: 48, radius: 16 }, { id: 'a', center: 208, width: 168, height: 36, radius: 12 }],
     ]
     for (const [body, shape] of cases) {
-      const straight = shape.center! - shape.width / 2
-      let depthAtLean: number | null = null
-      for (let detach = 0; detach <= 28 && depthAtLean === null; detach += 0.05) {
-        const side = leftSide(fusionSurfacePath({ ...body, buds: [{ ...shape, detach, pinch: fusionSurfacePinch(detach, 28) }] }).d)
-        const lean = Math.max(...side.slice(1).map((p, i) => Math.abs((p[0] - side[i]![0]) / (p[1] - side[i]![1]))))
-        if (lean > 1)
-          depthAtLean = Math.max(...side.map(p => p[0])) - straight
+      const centre = shape.center!
+      for (const detach of [18, 22, 25]) {
+        const label = `${shape.width}px bud at detach ${detach}`
+        const outline = subpaths(fusionSurfacePath({ ...body, buds: [{ ...shape, detach, pinch: fusionSurfacePinch(detach, 28) }] }).d, 32)[0]!
+        const side = outline.filter(([x, y]) => x < centre && y < 0)
+        // The drop is its full width from one corner radius above its
+        // underside up; a V reached it only well above the waist.
+        const fullWidth = side.filter(([x]) => centre - x >= shape.width / 2 - 1e-6).map(([, y]) => -y)
+        expect(Math.min(...fullWidth), label).toBeLessThanOrEqual(detach + shape.radius! + 1e-6)
+        // The bridge's side, body to underside, in outline order: no corner
+        // (consecutive samples turn a few degrees at most) and one way only.
+        // Samples closer than 0.05px apart are the 0.01px rounding of a joint, not a direction.
+        const bridge = side.filter(([, y]) => -y > 0 && -y < detach)
+          .filter((p, i, all) => i === 0 || Math.hypot(p[0] - all[i - 1]![0], p[1] - all[i - 1]![1]) > 0.05)
+        let previousTurn = 0
+        for (let i = 2; i < bridge.length; i++) {
+          const [ax, ay] = bridge[i - 2]!
+          const [bx, by] = bridge[i - 1]!
+          const [cx, cy] = bridge[i]!
+          const turn = Math.atan2((bx - ax) * (cy - by) - (by - ay) * (cx - bx), (bx - ax) * (cx - bx) + (by - ay) * (cy - by))
+          expect(Math.abs(turn), `${label}, sample ${i}`).toBeLessThan(0.35)
+          if (Math.abs(turn) > 1e-3) {
+            expect(Math.sign(turn) === Math.sign(previousTurn) || previousTurn === 0, `${label}, sample ${i} bends back`).toBe(true)
+            previousTurn = turn
+          }
+        }
       }
-      expect(depthAtLean, `${shape.width}px bud`).toBeGreaterThan(6)
     }
   })
 
