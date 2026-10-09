@@ -1,7 +1,7 @@
 import type { Component, PropType } from 'vue'
 import type { TransitionPushDirection } from '../src/types'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import TxTransition from '../src/TxTransition.vue'
 import TxTransitionFade from '../src/TxTransitionFade.vue'
@@ -125,7 +125,7 @@ describe('txTransition', () => {
     expect(transition.attributes('style')).toContain('--tx-transition-duration: 240ms')
   })
 
-  it('forwards smooth-size sizing props through TxAutoSizer', () => {
+  it('puts attrs on the sized box and the class, style and timing on the transition wrapper', () => {
     const wrapper = mountTransition(TxTransitionSmoothSize, {
       props: {
         width: true,
@@ -145,17 +145,10 @@ describe('txTransition', () => {
         default: '<strong>Auto sized</strong>',
       },
     })
-    const autoSizer = wrapper.findComponent({ name: 'TxAutoSizer' })
     const transition = wrapper.find('.tx-transition')
 
-    expect(autoSizer.props()).toMatchObject({
-      width: true,
-      height: false,
-      durationMs: 280,
-      easing: 'ease-in',
-      outerClass: 'overflow-hidden',
-    })
-    expect(autoSizer.attributes('data-size')).toBe('card')
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['tx-transition-smooth-size__outer', 'is-width']))
+    expect(wrapper.attributes('data-size')).toBe('card')
     expect(transition.classes()).toEqual(expect.arrayContaining(['tx-transition', 'tx-transition-smooth-size', 'size-motion']))
     expect(transition.attributes('style')).toContain('--tx-transition-duration: 280ms')
     expect(transition.attributes('style')).toContain('--tx-transition-easing: ease-in')
@@ -165,6 +158,13 @@ describe('txTransition', () => {
       appear: false,
       mode: 'in-out',
     })
+  })
+
+  it('maps the blur motion to its own transition name', () => {
+    const smooth = mountTransition(TxTransitionSmoothSize, { props: { motion: 'blur' }, slots: { default: '<span>a</span>' } })
+    const plain = mountTransition(TxTransition, { props: { preset: 'blur' }, slots: { default: '<span>a</span>' } })
+    expect(smooth.findComponent({ name: 'Transition' }).props('name')).toBe('tx-blur')
+    expect(plain.findComponent({ name: 'Transition' }).props('name')).toBe('tx-blur')
   })
 
   it('degrades smooth-size to tx-fade inside a TransitionGroup instead of a dead name', () => {
@@ -586,5 +586,81 @@ describe('txTransitionPush', () => {
     wrapper.unmount()
 
     expect(inFlight.every(call => call.animation.cancelled)).toBe(true)
+  })
+})
+
+describe('txTransitionSmoothSize sizing', () => {
+  let originalObserver: typeof ResizeObserver | undefined
+  let observe: ResizeObserverCallback | null = null
+
+  class FakeResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      observe = callback
+    }
+
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  }
+
+  beforeEach(() => {
+    originalObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    globalThis.ResizeObserver = originalObserver as typeof ResizeObserver
+    observe = null
+  })
+
+  function mountSized(props: Record<string, unknown> = {}) {
+    const wrapper = mountTransition(TxTransitionSmoothSize, {
+      props,
+      slots: { default: '<div>content</div>' },
+      attachTo: document.body,
+    })
+    const inner = wrapper.find('.tx-transition-smooth-size__inner').element as HTMLElement
+    const callback = observe
+    const resize = (height: number) => {
+      callback?.([{ target: inner, borderBoxSize: [{ inlineSize: 300, blockSize: height }] } as unknown as ResizeObserverEntry], {} as ResizeObserver)
+    }
+    return { wrapper, outer: wrapper.element as HTMLElement, resize }
+  }
+
+  const px = (value: string) => Number.parseFloat(value)
+
+  it('springs the height from the old content to the new one and returns to auto', () => {
+    const { outer, resize } = mountSized()
+    resize(100)
+    resize(180)
+    expect(px(outer.style.height)).toBe(100)
+    expect(outer.style.width).toBe('')
+    vi.advanceTimersByTime(48)
+    expect(px(outer.style.height)).toBeGreaterThan(100)
+    vi.advanceTimersByTime(2000)
+    expect(outer.style.height).toBe('')
+  })
+
+  it('runs the spring on the duration clock: twice the duration, slower travel', () => {
+    const fast = mountSized({ duration: 220 })
+    const slow = mountSized({ duration: 440 })
+    fast.resize(100)
+    fast.resize(200)
+    vi.advanceTimersByTime(48)
+    const fastTravel = px(fast.outer.style.height) - 100
+    slow.resize(100)
+    slow.resize(200)
+    vi.advanceTimersByTime(48)
+    const slowTravel = px(slow.outer.style.height) - 100
+    expect(fastTravel).toBeGreaterThan(slowTravel * 1.5)
+  })
+
+  it('swaps the size at once when the duration is 0', () => {
+    const { outer, resize } = mountSized({ duration: 0 })
+    resize(100)
+    resize(180)
+    expect(outer.style.height).toBe('')
   })
 })

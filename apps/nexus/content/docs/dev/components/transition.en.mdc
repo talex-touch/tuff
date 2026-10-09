@@ -109,7 +109,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Transition preset; `smooth-size` delegates to `TxTransitionSmoothSize` only when `group=false`. |
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'blur' \| 'smooth-size'` | `'fade'` | Transition preset; `blur` fades through a short blur, and `smooth-size` delegates to `TxTransitionSmoothSize` only when `group=false`. |
 | `group` | `boolean` | `false` | Renders keyed lists with `TransitionGroup`. |
 | `tag` | `string` | `'div'` | Root tag when `group=true`. |
 | `appear` | `boolean` | `true` | Runs the enter motion on first render. |
@@ -130,12 +130,12 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `appear` | `boolean` | `true` | Runs the enter motion on first render. |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | `Transition` mode for the keyed child inside `TxAutoSizer`. |
-| `duration` | `number` | `220` | Duration shared by the size transition and the inner motion. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Easing shared by size and content motion. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | `Transition` mode for the keyed child inside the sized box. |
+| `duration` | `number` | `220` | The size spring's clock and the inner motion's duration, in ms; `0` lands at once. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Easing of the inner motion; the size runs on a spring and ignores it. |
 | `width` | `boolean` | `false` | Animates width changes. |
 | `height` | `boolean` | `true` | Animates height changes. |
-| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | Inner content motion while the size animates. |
+| `motion` | `'fade' \| 'slide-fade' \| 'rebound' \| 'blur'` | `'fade'` | Inner content motion while the size animates. |
 
 ### TxTransitionPush
 
@@ -175,16 +175,17 @@ code: |
 
 ## Overview
 
-- `class` and `style` merge onto the outer `.tx-transition`; other attrs, Vue transition listeners included, go to `Transition` / `TransitionGroup`, or to `TxAutoSizer` under `smooth-size`.
-- `smooth-size` is single-child: it wraps the content in `TxAutoSizer`, animates height by default, and hides overflow while measuring; with `group=true` it behaves as `fade`.
+- `class` and `style` merge onto the outer `.tx-transition`; other attrs, Vue transition listeners included, go to `Transition` / `TransitionGroup`, or to the sized box under `smooth-size`.
+- `smooth-size` is single-child: the box animates height by default and hides overflow; the size runs on a spring, so a change mid-flight keeps its position and speed. With `group=true` it behaves as `fade`.
 - `TxTransitionPush` moves both pages at once: the old page is pinned in place as `position: absolute` and made `inert`, while the new page stays in flow and sets the height. Focus inside the old page is lost; the host moves it to the new page.
 - While a push runs, the container is `overflow: clip`, not `hidden`; at rest nothing is clipped, so focus rings inside a page stay whole.
 - An interrupted switch continues from where things are drawn; turning back to the same key mid-push slides that page back from where the old one stopped.
-- Under reduced motion, every preset collapses to a near-instant duration without its offset or scale; `TxTransitionPush` crossfades in place over 120ms and lands the height at once.
+- Under reduced motion, every preset collapses to a near-instant duration without its offset, scale or blur; `smooth-size` lands the size at once; `TxTransitionPush` crossfades in place over 120ms and lands the height at once.
 
 ## Technologies
 
 - `TxTransitionPush` drives Web Animations from the JS hooks of `<Transition :css="false">`: pages animate `translate`, leaving their own `transform` alone, the container animates `height`, and a page cut short resumes from `getComputedTiming().progress`.
+- `TxTransitionSmoothSize` sizes with `useMorphBox`, integrating a spring frame by frame (the engine behind `TxMorph`); `duration` time-scales liquid's `snappy`, which runs unchanged at 220ms.
 - Source: `packages/tuffex/packages/components/src/transition/`.
 
 <TuffDocSourceLink />
