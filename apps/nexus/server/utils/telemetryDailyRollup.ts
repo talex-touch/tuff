@@ -44,9 +44,10 @@ const ROLLUP_FAILURE_HOLD_MS = DAY_MS
  * read allowance within an hour. Now one isolate in the fleet runs it per hour (maintenance lease),
  * a run rolls up one day, and a failure holds the lease for a day. A day's run reads its events about
  * once per statement through `idx_telemetry_event_geo`: 79,836 rows for 2026-10-08's 21,161 events,
- * the heaviest retained day (measured before the shared CTEs were materialized). The 257,000 rows a
- * run D1 Insights showed during the incident were whole-table scans, planned while production still
- * had an `event_type`-only index (since dropped).
+ * the heaviest retained day (measured before the shared CTEs were materialized). During the incident
+ * D1 Insights showed about 257,000 rows a run, roughly the whole table four times over; that was while
+ * production still had an `event_type`-only index (since dropped), and the plan behind it was never
+ * captured, so the cause is unconfirmed.
  */
 let dailyRollupEnabled = true
 /**
