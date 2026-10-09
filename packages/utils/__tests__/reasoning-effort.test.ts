@@ -49,7 +49,7 @@ describe('the setting', () => {
 
 describe('the support table', () => {
   it('knows which OpenAI ids reason, and how far', () => {
-    expect(resolveReasoningEffortSupport(openai('gpt-4o'))).toEqual({ wire: null, levels: [], unsupported: 'model' })
+    expect(resolveReasoningEffortSupport(openai('gpt-4o'))).toEqual({ wire: null, levels: [], unsupported: 'model', source: 'unknown' })
     expect(resolveReasoningEffortSupport(openai('gpt-4.1-mini')).unsupported).toBe('model')
     expect(resolveReasoningEffortSupport(openai('gpt-5-pro')).levels).toEqual(['high'])
     expect(resolveReasoningEffortSupport(openai('gpt-5-mini')).levels).toEqual(['minimal', 'low', 'medium', 'high'])
@@ -59,6 +59,7 @@ describe('the support table', () => {
     expect(resolveReasoningEffortSupport(openai('o3-mini-2025-01-31'))).toEqual({
       wire: 'openai-reasoning-effort',
       levels: ['low', 'medium', 'high'],
+      source: 'catalog',
     })
     // Narrower prefixes are matched first: these would otherwise inherit their line's range.
     expect(resolveReasoningEffortSupport(openai('gpt-5-chat-latest')).unsupported).toBe('model')
@@ -77,14 +78,17 @@ describe('the support table', () => {
     expect(resolveReasoningEffortSupport(anthropic('claude-sonnet-4-5-20250929'))).toEqual({
       wire: 'anthropic-budget',
       levels: ['low', 'medium', 'high'],
+      source: 'catalog',
     })
     expect(resolveReasoningEffortSupport(anthropic('claude-opus-4-6'))).toEqual({
       wire: 'anthropic-adaptive',
       levels: ['low', 'medium', 'high', 'max'],
+      source: 'catalog',
     })
     expect(resolveReasoningEffortSupport(anthropic('claude-opus-5'))).toEqual({
       wire: 'anthropic-adaptive',
       levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      source: 'catalog',
     })
     expect(resolveReasoningEffortSupport(anthropic('claude-fable-5-1')).wire).toBe('anthropic-adaptive')
   })
@@ -93,6 +97,7 @@ describe('the support table', () => {
     expect(resolveReasoningEffortSupport(deepseek('deepseek-v4-pro'))).toEqual({
       wire: 'deepseek-thinking',
       levels: ['high', 'max'],
+      source: 'catalog',
     })
     expect(resolveReasoningEffortSupport(deepseek('deepseek-v4-flash')).levels).toEqual(['low', 'high', 'max'])
     expect(resolveReasoningEffortSupport(deepseek('deepseek-chat')).unsupported).toBe('model')
@@ -112,6 +117,7 @@ describe('the support table', () => {
         wire: null,
         levels: [],
         unsupported: 'provider',
+        source: 'unknown',
       })
     }
   })

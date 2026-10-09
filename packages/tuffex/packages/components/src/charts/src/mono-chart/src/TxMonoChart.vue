@@ -331,7 +331,7 @@ const legend = computed(() => data.value.items?.map((item, index) => ({ key: `it
   &__center-content { display: flex; flex-direction: column; text-align: center; gap: 4px; font-size: 12px; }
   &__center-content strong { font-size: 18px; font-weight: 600; }
   &__center-content span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  &__tooltip { pointer-events: none; position: absolute; z-index: 2; max-width: calc(100% - 20px); padding: 8px 10px; border-radius: 10px; color: var(--tx-text-color-primary, #303133); background: var(--tx-bg-color, #fff); box-shadow: 0 0 0 1px var(--tx-border-color, #dcdfe6), 0 4px 12px var(--tx-chart-grid-line, #dcdfe6); display: flex; flex-direction: column; gap: 5px; }
+  &__tooltip { pointer-events: none; position: absolute; z-index: 2; max-width: calc(100% - 20px); padding: 8px 10px; border-radius: 10px; color: var(--tx-text-color-primary, #303133); background: var(--tx-bg-color, #fff); box-shadow: 0 0 0 1px var(--tx-border-color, #dcdfe6), 2px 4px 12px var(--tx-chart-grid-line, #dcdfe6); display: flex; flex-direction: column; gap: 5px; }
   &__tooltip > span { display: flex; gap: 20px; justify-content: space-between; }
   &__tooltip b, &__tooltip strong { font-weight: 500; }
   &__legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 8px; }

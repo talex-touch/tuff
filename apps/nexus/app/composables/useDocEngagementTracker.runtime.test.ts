@@ -47,9 +47,29 @@ function dispatch(type: string) {
     listener()
 }
 
-/** Lets the flushes the timers started finish: hashing runs off the microtask queue. */
+/** The real digest, captured before any test spies on it. */
+const realDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle)
+/** Digests still running; `drain()` waits for them. They settle between turns, not in its loop. */
+const pending = { digests: 0 }
+
+/** The real digest, counted while it runs. */
+const trackedDigest: SubtleCrypto['digest'] = async (algorithm, data) => {
+  pending.digests += 1
+  try {
+    return await realDigest(algorithm, data)
+  }
+  finally {
+    pending.digests -= 1
+  }
+}
+
+/**
+ * Lets the flushes the timers started finish. Hashing runs off the microtask queue, on the thread
+ * pool, so it does not settle within a fixed number of turns: on a slow runner a fixed drain
+ * returned before the report arrived, and it landed after the test had already cleared `reports`.
+ */
 async function drain() {
-  for (let index = 0; index < 20; index += 1)
+  for (let index = 0; index < 20 || pending.digests > 0; index += 1)
     await new Promise(resolve => setImmediate(resolve))
 }
 
@@ -62,6 +82,8 @@ async function advance(ms: number) {
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+  pending.digests = 0
+  vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation(trackedDigest)
   vi.setSystemTime(new Date('2026-10-08T00:00:00.000Z'))
   reports = []
   listeners = new Map()
@@ -151,11 +173,9 @@ describe('docs engagement reports', () => {
 
   it('does not report the same time twice when the next flush starts while one is still hashing', async () => {
     // Hashing a report is asynchronous; hold every hash until the next interval has fired.
-    const subtle = globalThis.crypto.subtle
-    const digest = subtle.digest.bind(subtle)
     const held: Array<() => void> = []
-    vi.spyOn(subtle, 'digest').mockImplementation((algorithm, data) =>
-      new Promise(resolve => held.push(() => resolve(digest(algorithm, data)))))
+    vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation((algorithm, data) =>
+      new Promise(resolve => held.push(() => resolve(trackedDigest(algorithm, data)))))
 
     await advance(15_000)
     await advance(15_000)
