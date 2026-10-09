@@ -42,7 +42,7 @@ code: |
 :::
 
 ### Loading Flag with a Known Image
-When the card stays mounted after the job ends, pause it while waiting and reveal or hide the image through the ref.
+When the card stays mounted after the job ends, reveal or hide the image through the ref. Trigger the reveal after the new `images` reach the component, and leave `paused` unset.
 
 ```vue
 <script setup lang="ts">
@@ -51,6 +51,7 @@ import { ref, watch } from 'vue'
 const props = defineProps<{ generating: boolean, src: string }>()
 const cell = ref()
 
+// flush: 'post' fires after the component has the new images.
 watch(() => props.generating, (generating) => {
   // Generating: fade any shown image back to the shader.
   // Done: reveal the image and hold it until the next run.
@@ -58,11 +59,11 @@ watch(() => props.generating, (generating) => {
     cell.value?.triggerHide()
   else
     cell.value?.triggerReveal({ hold: 'manual' })
-})
+}, { flush: 'post' })
 </script>
 
 <template>
-  <TxImageGeneration ref="cell" :images="[props.src]" :paused="props.generating" role="img" :aria-label="props.generating ? 'Generating image' : 'Result'" :aria-busy="props.generating">
+  <TxImageGeneration ref="cell" :images="[props.src]" role="img" :aria-label="props.generating ? 'Generating image' : 'Result'" :aria-busy="props.generating">
     <div style="width: 320px; height: 200px; border-radius: 12px" />
   </TxImageGeneration>
 </template>
@@ -92,7 +93,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 - Give the wrapped child an explicit width and height; the wrapper is `inline-block` and sizes itself to the child.
 - Pass `images` before triggering a reveal; with an empty pool every trigger is a silent no-op.
-- Animate only while working (`:paused="!isGenerating"`); never pause for the card's whole lifetime, or the image never appears.
+- As a placeholder that never reveals an image, animate only while working (`:paused="!isGenerating"`). When it does reveal one, leave `paused` unset: a paused card silently ignores reveals.
 - Serve reveal images same-origin or with CORS headers; cross-origin images still reveal, but `triggerRegenerate()` can't sample their colors and falls back to the preset palette.
 - Use `sweep-gradient` with a lower `strength` for quiet grid tiles; keep the pixel mosaics for the main result.
 

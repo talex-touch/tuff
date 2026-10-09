@@ -42,7 +42,7 @@ code: |
 :::
 
 ### 已知图片的加载态
-任务结束后卡片仍保留时，等待期间暂停，并通过 ref 揭示或隐藏图片。
+任务结束后卡片仍保留时，用 ref 揭示或隐藏图片；揭示要在新的 `images` 传入组件之后触发，且不要设置 `paused`。
 
 ```vue
 <script setup lang="ts">
@@ -51,17 +51,18 @@ import { ref, watch } from 'vue'
 const props = defineProps<{ generating: boolean, src: string }>()
 const cell = ref()
 
+// flush: 'post'：等组件拿到新的 images 后再触发。
 watch(() => props.generating, (generating) => {
   // 生成中：把已显示的图片淡回着色器；完成：揭示图片并保持到下一轮。
   if (generating)
     cell.value?.triggerHide()
   else
     cell.value?.triggerReveal({ hold: 'manual' })
-})
+}, { flush: 'post' })
 </script>
 
 <template>
-  <TxImageGeneration ref="cell" :images="[props.src]" :paused="props.generating" role="img" :aria-label="props.generating ? '正在生成图片' : '生成结果'" :aria-busy="props.generating">
+  <TxImageGeneration ref="cell" :images="[props.src]" role="img" :aria-label="props.generating ? '正在生成图片' : '生成结果'" :aria-busy="props.generating">
     <div style="width: 320px; height: 200px; border-radius: 12px" />
   </TxImageGeneration>
 </template>
@@ -91,7 +92,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 - 子元素要有明确的宽高；包裹层是 `inline-block`，尺寸跟随子元素。
 - 触发揭示前先提供 `images`；图片池为空时所有触发都是静默空操作。
-- 只在工作时播放（`:paused="!isGenerating"`）；不要整个生命周期都暂停，否则图片永远不会出现。
+- 只作占位、不揭示图片时，只在工作时播放（`:paused="!isGenerating"`）；要揭示图片时不设 `paused`，暂停会让揭示静默失效。
 - 揭示图片用同源或带 CORS 头的地址；跨域图片仍能揭示，但 `triggerRegenerate()` 无法取色，会退回预设调色板。
 - 网格里的安静占位用 `sweep-gradient` 配较低的 `strength`，像素马赛克留给主位。
 
