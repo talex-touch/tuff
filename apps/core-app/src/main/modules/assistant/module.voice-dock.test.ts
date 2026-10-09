@@ -341,7 +341,7 @@ describe('AssistantModule voice dock', () => {
     })
     mocks.getMainConfig.mockReturnValue(setting)
     const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.floatingBall.getRuntimeConfig.toEventName()
+      AssistantEvents.voice.getRuntimeConfig.toEventName()
     )
 
     expect(await handler(undefined, {} as HandlerContext)).toEqual({
@@ -361,7 +361,7 @@ describe('AssistantModule voice dock', () => {
       providerIds: capabilityId === 'text.chat' ? [] : ['unrelated-provider']
     }))
     const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.floatingBall.getRuntimeConfig.toEventName()
+      AssistantEvents.voice.getRuntimeConfig.toEventName()
     )
 
     expect(handler(undefined, {} as HandlerContext)).toMatchObject({

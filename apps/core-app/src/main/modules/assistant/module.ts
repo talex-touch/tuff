@@ -169,7 +169,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.getRuntimeConfig, () => {
+      this.transport.on(AssistantEvents.voice.getRuntimeConfig, () => {
         return this.buildRuntimeConfig(this.readAppSetting())
       })
     )

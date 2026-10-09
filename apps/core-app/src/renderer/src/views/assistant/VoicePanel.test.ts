@@ -240,7 +240,7 @@ beforeEach(() => {
     }
   )
   transportSendMock.mockImplementation(async (event: unknown) => {
-    if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+    if (eventName(event) === AssistantEvents.voice.getRuntimeConfig.toEventName()) {
       return {
         enabled: true,
         language: 'en-US',
@@ -311,7 +311,7 @@ describe('VoicePanel dock surface', () => {
       resolveConfig = resolve
     })
     transportSendMock.mockImplementation(async (event: unknown) => {
-      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+      if (eventName(event) === AssistantEvents.voice.getRuntimeConfig.toEventName()) {
         return configRequest
       }
       throw new Error(`Unexpected transport event: ${eventName(event)}`)
@@ -349,7 +349,7 @@ describe('VoicePanel dock surface', () => {
   })
   it('does not start recognition when runtime voice input is disabled', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
-      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+      if (eventName(event) === AssistantEvents.voice.getRuntimeConfig.toEventName()) {
         return {
           enabled: false,
           language: 'fr-FR',
@@ -451,7 +451,7 @@ describe('VoicePanel dock surface', () => {
 
   it('uses raw live delivery only when the persisted polish preference is disabled', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
-      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+      if (eventName(event) === AssistantEvents.voice.getRuntimeConfig.toEventName()) {
         return {
           enabled: true,
           language: 'en-US',
@@ -474,7 +474,7 @@ describe('VoicePanel dock surface', () => {
 
   it('uses raw live delivery when enabled polish has no chat runtime', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
-      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+      if (eventName(event) === AssistantEvents.voice.getRuntimeConfig.toEventName()) {
         return {
           enabled: true,
           language: 'en-US',

@@ -41,17 +41,11 @@ export interface AssistantGlobeKeyStatus {
 }
 
 export const AssistantEvents = {
-  floatingBall: {
-    /**
-     * Named for the floating ball that first asked for it. The ball is gone and the voice HUD
-     * reads it now; the wire name stays so both ends keep agreeing on it.
-     */
+  voice: {
     getRuntimeConfig: defineEvent('assistant')
-      .module('floating-ball')
+      .module('voice-panel')
       .event('get-runtime-config')
       .define<void, AssistantRuntimeConfig>(),
-  },
-  voice: {
     panelOpened: defineEvent('assistant').module('voice-panel').event('opened').define<{ source?: string }, void>(),
     panelClosed: defineEvent('assistant').module('voice-panel').event('closed').define<void, void>(),
     command: defineEvent('assistant')

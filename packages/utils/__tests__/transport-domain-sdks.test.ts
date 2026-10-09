@@ -263,12 +263,12 @@ describe('transport domain sdk mappings', () => {
   })
 
   it('assistant events use typed transport metadata without changing event names', () => {
-    expect(AssistantEvents.floatingBall.getRuntimeConfig.toEventName()).toBe(
-      'assistant:floating-ball:get-runtime-config',
+    expect(AssistantEvents.voice.getRuntimeConfig.toEventName()).toBe(
+      'assistant:voice-panel:get-runtime-config',
     )
-    expect(AssistantEvents.floatingBall.getRuntimeConfig).toMatchObject({
+    expect(AssistantEvents.voice.getRuntimeConfig).toMatchObject({
       namespace: 'assistant',
-      module: 'floating-ball',
+      module: 'voice-panel',
       action: 'get-runtime-config',
     })
     expect(AssistantEvents.voice.panelClosed.toEventName()).toBe(
