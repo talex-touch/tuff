@@ -326,7 +326,7 @@ A path from `includeBody: false` closes inside the host. To stroke it, clip away
 ## Technologies
 
 - One `requestAnimationFrame` loop per surface integrates the shared springs (`liquid/src/spring.ts`), recomputes one sharp SVG path, and writes bud layer styles directly; it sleeps at rest.
-- The attached bud follows the Dock on [uiarc.dev](https://uiarc.dev/), whose technique was observed and no code taken; the neck is this library's own profile model.
+- The attached bud follows the Dock on [uiarc.dev](https://uiarc.dev/), whose technique was observed and no code taken. The neck is this library's own liquid-bridge model: pulled away, the bud is a drop with its own underside and rounded corners, joined to the body by one inward-bending flare on each side.
 - Source: `packages/tuffex/packages/components/src/fusion-surface/`.
 
 <TuffDocSourceLink />
