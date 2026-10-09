@@ -70,9 +70,10 @@ const PROVIDER_STATUSES = [...PROVIDER_STATUS_VALUES].map(status => `'${status}'
  * One aggregation, two uses: the daily rollup writes a finished day's rows, and the analytics
  * summary reads today's directly, so what the dashboard shows for today is what the rollup stores.
  *
- * D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT") and a
- * function call of more than 32 arguments, both far under SQLite's defaults; the test database
- * applies D1's limits (`test/helpers/d1-sqlite.ts`). Measures taken from one scan are therefore
+ * D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT"), far
+ * under SQLite's 500, and documents a cap of 32 arguments per function call (a 34-argument
+ * json_object still ran there on 2026-10-09; staying under the documented cap costs nothing). The
+ * test database applies both (`test/helpers/d1-sqlite.ts`). Measures taken from one scan are therefore
  * unpivoted through `json_each(json_object(...))`, not a `UNION ALL` per measure, and a set of more
  * than 16 measures is split into several objects inside one `json_array`. A NULL measure becomes a
  * JSON null and is dropped with the other NULLs.
