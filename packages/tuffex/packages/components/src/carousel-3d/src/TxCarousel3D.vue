@@ -161,11 +161,11 @@ defineExpose({ previous, next, select })
 .tx-carousel-3d { position: relative; width: 100%; overflow: hidden; border-radius: 16px; background: var(--tx-bg-color); color: var(--tx-text-color-primary); font-size: 13px; padding: 12px 0; }
 .tx-carousel-3d__spatial { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .tx-carousel-3d__stage { position: relative; flex: 1; min-width: 0; transform-style: preserve-3d; }
-.tx-carousel-3d__slide { position: absolute; left: 50%; top: 50%; padding: 0; border: 0; border-radius: 12px; color: inherit; font: inherit; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); box-shadow: inset 0 0 0 1px var(--tx-border-color), 0 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); cursor: pointer; overflow: hidden; }
+.tx-carousel-3d__slide { position: absolute; left: 50%; top: 50%; padding: 0; border: 0; border-radius: 12px; color: inherit; font: inherit; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); box-shadow: inset 0 0 0 1px var(--tx-border-color), 3px 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); cursor: pointer; overflow: hidden; }
 .tx-carousel-3d__slide img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tx-carousel-3d__content { display: flex; height: 100%; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
 .tx-carousel-3d__content small { color: var(--tx-text-color-regular); font-size: 12px; }
-.tx-carousel-3d__slide.is-active { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 0 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
+.tx-carousel-3d__slide.is-active { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 3px 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
 .tx-carousel-3d__caption { min-height: 20px; text-align: center; padding: 6px 12px; font-weight: 500; }
 .tx-carousel-3d__controls, .tx-carousel-3d__dots { display: flex; justify-content: center; align-items: center; gap: 4px; }
 .tx-carousel-3d__controls button { padding: 6px 8px; border: 0; border-radius: 8px; color: var(--tx-text-color-regular); background: var(--tx-fill-color-light); font: inherit; cursor: pointer; }
