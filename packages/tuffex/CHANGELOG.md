@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `ai-elements`, `base-anchor`, `charts`, `chat`, `icon-chip`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
+- **更新组件**: `ai-elements`, `base-anchor`, `charts`, `chat`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -34,6 +34,7 @@
 - `TxChatList` 新增 `attachmentLabel` 并透传给每条 `TxChatMessage`，非英文宿主可以本地化无名图片缩略图的读屏名称；导出的 `ChatMessageProps` / `ChatListProps` 类型同步补上该属性。
 - `TxAiConversation` 新增 `typingLabel` 并透传给每条消息，同时转发消息的 `open-source` 事件；此前在对话里点击来源没有任何监听者能收到。导出的 `AiConversationProps` / `AiMessageProps` 类型同步补上 `typingLabel`。
 - `TxRating` 在 `precision=0.5` 时，方向键或 Home / End 落在当前星上不再把整星减成半星；按键只选整星，落在当前星上时评分不变。
+- `TxIconMorph` 实例上的 `seek` 类型改为必选：组件始终提供它，此前沿用引擎接口的可选签名，TS 调用方需要多一层判空。
 
 ### 🧩 组件导出
 
