@@ -1,6 +1,6 @@
 ---
 title: "LoadingOverlay 加载遮罩"
-description: "用于在内容区域或全屏展示加载遮罩。"
+description: "覆盖内容区域或全屏的加载遮罩"
 category: Feedback
 status: beta
 since: 0.3.4
@@ -16,55 +16,22 @@ const loading = ref(false)
 
 ## 用法
 
-### 最佳实践
-
-- 刷新、保存、重算这类已有内容的短等待优先使用局部遮罩，让旧内容保持可见。
-- `fullscreen` 只用于必须阻断全局操作的流程，例如启动、工作区切换或不能并行继续的危险操作。
-- 遮罩文案要指向具体动作：“正在刷新任务队列…” 比通用 “Loading…” 更有用。
-- 首屏内容尚不存在时不要套 `TxLoadingOverlay`；使用 `TxLoadingState` 或骨架屏组件。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `loading` | `boolean` | `false` | 是否显示遮罩。 |
-| `fullscreen` | `boolean` | `false` | 是否 teleport 到 `body` 并覆盖整个视口。 |
-| `text` | `string` | `''` | 显示在 spinner 下方的可选文案。 |
-| `spinnerSize` | `number` | `18` | spinner 尺寸，单位 px。 |
-| `background` | `string` | `'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)'` | 遮罩层使用的 CSS 背景。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| - | - | 没有组件自定义事件，通过 `loading` prop 控制显隐。 |
-
-### Slots
-
-| 插槽名 | Props | 说明 |
-|------|-------|------|
-| `default` | - | `fullscreen=false` 时渲染在局部遮罩下方的内容；全屏分支不会渲染插槽内容。 |
-
-## 容器内遮罩
-
-### LoadingOverlay (container)
+### 容器内
+遮罩盖在默认插槽上，底层内容保持可见。
 :::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayContainerDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton @click="loading = !loading">Toggle</TxButton>
     <TxLoadingOverlay :loading="loading" text="Loading...">
-      <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
+      <div class="content">Content</div>
     </TxLoadingOverlay>
   </template>
 ---
 :::
 
-## 全屏遮罩
-
-### LoadingOverlay (fullscreen)
+### 全屏
+`fullscreen` 把遮罩 teleport 到 `body` 并覆盖视口，不渲染默认插槽。
 :::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayFullscreenDemo" code-lang="vue"}
 ---
 code: |
@@ -75,61 +42,56 @@ code: |
 ---
 :::
 
-## 后台任务遮罩
-
-`TxLoadingOverlay` 适合阻断“某个数据容器正在刷新”的短等待，不应该替代首屏加载态。首屏加载用 `TxLoadingState`；表格局部刷新或任务队列重算时再使用遮罩，并保持底层内容可见，减少布局跳动。
-
-:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="局部 LoadingOverlay 与 Toast / Tooltip / Spinner 的截图验证组合。"}
+### 后台任务
+局部遮罩与 Toast、Tooltip、Spinner 组合；刷新期间任务队列保持可见，布局不跳动。
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { toast } from '@talex-touch/tuffex/utils'
-  import { ref } from 'vue'
-
-  const syncing = ref(true)
-
-  function notify() {
-    toast({ id: 'nexus-task-center', title: '同步任务已排队', variant: 'warning', duration: 0 })
-  }
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxToastHost />
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <TxTooltip content="Tooltip 只解释当前动作。">
-          <TxButton size="sm" icon="i-carbon-information" @click="notify">提示说明</TxButton>
-        </TxTooltip>
-        <span style="display: inline-flex; align-items: center; gap: 6px;">
-          <TxSpinner :size="14" />
-          行内等待
-        </span>
-      </div>
-      <TxLoadingOverlay :loading="syncing" text="正在刷新任务队列…" :spinner-size="22">
-        <section class="grid gap-2">
-          <TxProgressBar :percentage="72" status="warning" />
-          <TxProgressBar :percentage="96" status="success" />
-        </section>
-      </TxLoadingOverlay>
-    </section>
+    <TxLoadingOverlay :loading="syncing" text="正在刷新任务队列…" :spinner-size="22">
+      <TxProgressBar :percentage="72" status="warning" />
+      <TxProgressBar :percentage="96" status="success" />
+    </TxLoadingOverlay>
   </template>
 ---
 :::
 
+### 最佳实践
+
+- 刷新、保存、重算等已有内容的短等待用局部遮罩，让旧内容保持可见。
+- `fullscreen` 只用于必须阻断全局操作的流程，如启动、切换工作区或不能并行的危险操作。
+- 文案写具体动作：「正在刷新任务队列…」比「Loading…」更有用。
+- 首屏内容尚不存在时用 `TxLoadingState` 或骨架屏，不要套遮罩。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `loading` | `boolean` | `false` | 显示遮罩。 |
+| `fullscreen` | `boolean` | `false` | teleport 到 `body` 并覆盖整个视口。 |
+| `text` | `string` | `''` | spinner 下方的文案；省略时只显示 spinner。 |
+| `spinnerSize` | `number` | `18` | spinner 尺寸（px）。 |
+| `background` | `string` | `'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)'` | 遮罩背景，写入 `--tx-loading-overlay-bg`。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 局部模式下被遮罩覆盖的内容；全屏模式不渲染。 |
+
 ## 概述
 
-- 局部模式会把默认插槽包在 `position: relative` 容器里，仅在 `loading=true` 时渲染绝对定位遮罩。
-- 全屏模式会 teleport 到 `body`、覆盖视口，并在每次打开时获取新的共享 z-index。
-- `background` 写入 `--tx-loading-overlay-bg`；遮罩本身还通过 `backdrop-filter` 添加模糊与饱和度。
-- `text` 可省略；省略时，遮罩卡片内只渲染 spinner。
+- 局部模式把默认插槽包在 `position: relative` 容器中，只在 `loading` 时渲染绝对定位的遮罩。
+- 全屏模式每次打开都获取新的共享 z-index。
+- 遮罩带 `role="status"` 与 `aria-live="polite"`，读屏器会播报 `text`，无需另行播报。
+- 全屏模式把焦点停在遮罩上并拦截 Tab，关闭后焦点回到原来的元素。
+- 遮罩没有模态语义（无 `aria-modal`）；需要模态时用 `TxModal` 或 Dialog 组件。
 
 ## 技术实现
 
-- **可访问性说明:** 遮罩自带 `role="status"` 与 `aria-live="polite"`，`text` 会被读屏播报，**不需要你另行补播报**。全屏模式还会把焦点停在遮罩上并拦截 Tab，关闭时还原到原先的焦点元素。唯一没有的是模态语义（无 `aria-modal`），所以它不会被当作对话框；需要真正的模态请改用 `TxModal` 或 `TxDialog`。
-- **实测覆盖:** `loading-overlay.test.ts` 覆盖局部遮罩渲染、自定义背景/spinner 尺寸/文案、关闭状态下保留插槽、全屏 teleport，以及全屏模式不渲染局部容器。
-
-- Component source: `packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`。
-- Types/export: `packages/tuffex/packages/components/src/loading-overlay/index.ts` 导出 `LoadingOverlayProps`、`LoadingOverlay`、`TxLoadingOverlay` 与 `TxLoadingOverlayInstance`。
-- Coverage: `packages/tuffex/packages/components/src/loading-overlay/__tests__/loading-overlay.test.ts` 覆盖局部与全屏分支。
+- 遮罩通过 `backdrop-filter` 叠加模糊与饱和度。
+- 源码：`packages/tuffex/packages/components/src/loading-overlay/`。
 
 <TuffDocSourceLink />

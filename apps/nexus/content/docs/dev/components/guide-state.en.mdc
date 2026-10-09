@@ -1,6 +1,6 @@
 ---
 title: "GuideState"
-description: "Onboarding shortcut around TxEmptyState with the guide variant preselected, forwarding copy, actions, layout, surface, and named slots."
+description: "A state view that guides users through initial setup."
 category: Status
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Use the default guide title and description when the surrounding page already explains the context.
-
+### Basic
+Use the preset title and description when the surrounding page already explains the context.
 ::::TuffDemoWrapper{demo="GuideStateBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -25,8 +25,8 @@ code: |
 ---
 ::::
 
-Override copy and surface when the guide needs to stand alone inside a page or panel.
-
+### Custom Copy
+When the guide stands alone in a page or panel, override the copy and set `surface="card"`.
 ::::TuffDemoWrapper{demo="GuideStateCustomDemo" code-lang="vue"}
 ---
 code: |
@@ -44,65 +44,51 @@ code: |
 
 ### Best Practices
 
-- Use `TxGuideState` for first-use help, setup prompts, or “start here” panels. Use `TxEmptyState variant="no-data"` or dedicated wrappers for data absence.
-- Keep guide copy action-oriented. The title should name the next meaningful step, not just describe an empty screen.
-- Prefer `surface="card"` when the guide sits among other dashboard content; keep `plain` inside already framed panels.
-- Pass slot content only when the preset illustration or generated buttons cannot express the target action.
-- Keep action labels specific, such as “Create workspace” or “Connect account”, rather than generic “Continue”.
+- Use it for first use, setup prompts, or "start here" panels; use `TxNoData` for missing data.
+- Make the title name the next step, not describe an empty screen.
+- Use `surface="card"` among dashboard content; keep `plain` inside an already framed panel.
+- Keep action labels specific, such as "Create workspace" or "Connect account", not "Continue".
+- Pass slots only when the preset illustration or generated buttons cannot express the target action.
 
 ## API Reference
 
-`TxGuideState` accepts `GuideStateProps`, defined as `Omit<EmptyStateProps, 'variant'>`. It forwards those props to `TxEmptyState` and injects `variant="guide"`. For the complete base contract, see [EmptyState](./empty-state.en.mdc).
+Takes every [TxEmptyState](./empty-state.en.mdc) prop, event, and slot except `variant`, which is fixed to `guide`.
 
 ### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `'Start here'` | Overrides the guide preset title inherited from `TxEmptyState`. |
-| `description` | `string` | `'Follow the steps to get started.'` | Overrides the guide preset description. |
-| `icon` | `TxIconSource \| string \| null` | guide illustration | Replaces the preset guide illustration or hides it when set to `null`. |
-| `iconSize` | `number` | size preset | Custom icon/spinner size in pixels. |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout forwarded to `TxEmptyState`. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment forwarded to `TxEmptyState`. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Visual scale. |
-| `surface` | `'plain' \| 'card'` | `'plain'` | Adds the empty-state card surface when set to `card`. |
-| `primaryAction` | `EmptyStateAction` | - | Primary generated action. Emits `primary` from `TxEmptyState`. |
-| `secondaryAction` | `EmptyStateAction` | - | Secondary generated action. Emits `secondary` from `TxEmptyState`. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Default size for generated action buttons. |
-| `loading` | `boolean` | `false` | Shows the spinner when no icon slot or icon prop is supplied. |
+| `title` | `string` | `'Start here'` | Overrides the preset title. |
+| `description` | `string` | `'Follow the steps to get started.'` | Overrides the preset description. |
+| `icon` | `TxIconSource \| string \| null` | guide illustration | Replaces the illustration; `null` hides the icon area. |
+| `iconSize` | `number` | size preset | Icon or spinner size in px. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Visual size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` adds a card surface. |
+| `primaryAction` | `EmptyStateAction` | - | Generated primary action; emits `primary`. |
+| `secondaryAction` | `EmptyStateAction` | - | Generated secondary action; emits `secondary`. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Default size of the generated buttons. |
+| `loading` | `boolean` | `false` | Shows a spinner when there is no `icon` slot or prop. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `primary` | `()` | Forwarded from the generated primary action button. |
-| `secondary` | `()` | Forwarded from the generated secondary action button. |
+| `primary` | `()` | Fires when the generated primary button is clicked. |
+| `secondary` | `()` | Fires when the generated secondary button is clicked. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `icon` | - | Forwarded to `TxEmptyState` and replaces the guide illustration. |
-| `title` | - | Forwarded title content. |
-| `description` | - | Forwarded description content. |
-| `actions` | - | Replaces generated primary/secondary buttons. |
-
-## Overview
-
-- `TxGuideState` always renders `TxEmptyState` with `variant="guide"`; callers cannot change the variant through props.
-- Every other `EmptyStateProps` field is forwarded unchanged.
-- `icon`, `title`, `description`, and `actions` slots are forwarded only when provided.
-- Generated action buttons and emitted `primary`/`secondary` events come from `TxEmptyState`.
-- The component has no wrapper DOM of its own; styling and semantics are those of `TxEmptyState`.
+| `icon` | - | Replaces the guide illustration. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
 
 ## Technologies
 
-- **Accessibility note:** `TxGuideState` adds no wrapper DOM or independent semantics; accessible structure, headings, action labels, and generated button events come directly from `TxEmptyState`.
-- **Verified coverage:** `guide-state.test.ts` verifies fixed `variant="guide"`, prop forwarding to `TxEmptyState`, named slot forwarding, and plugin installation under `TxGuideState`.
-
-- Component source: `packages/tuffex/packages/components/src/guide-state/src/TxGuideState.vue`.
-- Types: `packages/tuffex/packages/components/src/guide-state/src/types.ts` exports `GuideStateProps` as `Omit<EmptyStateProps, 'variant'>`.
-- Export alias: `packages/tuffex/packages/components/src/guide-state/index.ts` exports `TxGuideState`, `GuideStateProps`, and `TxGuideStateInstance`.
-- Coverage: `packages/tuffex/packages/components/src/guide-state/__tests__/guide-state.test.ts` verifies variant locking, prop/slot forwarding, and install registration.
+- Source: `packages/tuffex/packages/components/src/guide-state/`.
 
 <TuffDocSourceLink />

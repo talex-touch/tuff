@@ -1,6 +1,6 @@
 ---
 title: "PermissionState"
-description: "Shortcut empty-state component for missing permissions, unauthorized access, and gated workspaces."
+description: "A state view shown when access is denied."
 category: Status
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### PermissionState
+### Basic
 :::TuffDemoWrapper{demo="PermissionStatePermissionStateDemo" code-lang="vue"}
 ---
 code: |
@@ -28,64 +28,50 @@ code: |
 
 ### Best Practices
 
-- Use it only after the host has already determined access is denied; the component does not perform permission checks.
-- Explain which resource is gated and who can grant access.
-- Prefer a request-access primary action when a workflow exists; otherwise point to workspace switching or documentation.
-- Do not reveal sensitive resource details in the title or description when the user is not authorized.
+- Render it only after the host has decided access is denied; the component performs no permission checks.
+- Say which resource is gated and who can grant access.
+- Make "Request access" the primary action when a request flow exists; otherwise point to switching workspaces or to docs.
+- Don't reveal sensitive resource details in the title or description to an unauthorized user.
 
 ## API Reference
 
-### Props
+Takes every [TxEmptyState](./empty-state.en.mdc) prop, event, and slot except `variant`, which is fixed to `permission`.
 
-`TxPermissionState` accepts every `EmptyStateProps` field except `variant`.
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | preset title | Overrides the permission-state title. |
-| `description` | `string` | preset description | Explains the access requirement and next step. |
-| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
-| `iconSize` | `number` | size preset | Custom icon size in pixels. |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Density and illustration scale. |
-| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `title` | `string` | preset title | Overrides the preset title. |
+| `description` | `string` | preset description | The access requirement and the next step. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Replaces the illustration; `null` hides the icon area. |
+| `iconSize` | `number` | size preset | Icon size in px. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Spacing and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` adds a card border. |
 | `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
 | `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
-| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Default size of the generated buttons. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon is given. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `primary` | - | Forwarded from the generated primary action. |
-| `secondary` | - | Forwarded from the generated secondary action. |
+| `primary` | - | Fires when the generated primary action is clicked. |
+| `secondary` | - | Fires when the generated secondary action is clicked. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `icon` | - | Replaces the preset illustration or custom icon. |
-| `title` | - | Replaces resolved title content. |
-| `description` | - | Replaces resolved description content. |
-| `actions` | - | Replaces generated primary/secondary action buttons. |
-
-## Overview
-
-- Always forwards `variant="permission"` to `TxEmptyState`.
-- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
-- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
-- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+| `icon` | - | Replaces the illustration or icon. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
 
 ## Technologies
 
-- **Wrapper contract:** `TxPermissionState` locks `variant="permission"` and forwards all other empty-state props and slots without performing access checks.
-- **Security note:** The host must decide authorization before rendering this component. Keep copy generic enough to avoid disclosing restricted resource details.
-- **Verified coverage:** `permission-state.test.ts` verifies variant locking, action prop forwarding, slot forwarding, and install registration.
-
-- Component source: `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`.
-- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
-- Types: `packages/tuffex/packages/components/src/permission-state/src/types.ts` exports `PermissionStateProps = Omit<EmptyStateProps, 'variant'>`.
-- Coverage: `packages/tuffex/packages/components/src/permission-state/__tests__/permission-state.test.ts` verifies wrapper forwarding and install behavior.
+- Source: `packages/tuffex/packages/components/src/permission-state/`.
 
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: Skeleton 骨架屏
-description: 加载占位与结构提示
+description: 在内容加载前占位的骨架形状
 category: Status
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## 用法
 
-### Skeleton
-文本与头像混合占位
+### 文本与头像
+`lines` 设定行数；`variant="circle"` 配合相同的 `width` 与 `height` 画出正圆。
 :::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
 ---
 code: |
@@ -22,8 +22,8 @@ code: |
   </template>
 ---
 :::
+
 ### 卡片占位
-骨架屏配合卡片承载列表。
 :::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
 ---
 code: |
@@ -35,103 +35,87 @@ code: |
 ---
 :::
 
+### 后台数据运维面板
+表格旁的侧栏摘要用 `TxSkeleton` 与 `TxLayoutSkeleton` 保留结构。
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" height="10px" />
+    <TxLayoutSkeleton />
+  </template>
+---
+:::
+
 ### 最佳实践
 
-- 骨架的宽度、高度、行数和圆角应贴近最终内容，避免 loading 阶段形成第二套布局。
-- 可配置文本、矩形、头像占位用 `TxSkeleton`；固定结构刚好匹配最终界面时再用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
-- 把 `loading=false` 作为切换到真实内容的交接点，不要在不同分支里分别维护骨架和内容。
-- 不要把骨架当作灰色装饰。如果最终内容结构未知，优先使用有文案的空态或加载态。
-- 表格请用 `TxDataTable` 的 `loadingVariant="skeleton"`：首次加载时它按自己的列画出骨架行，刷新时保留现有行。它默认的 `loading` 遮罩适合本地的短暂等待。
+- 宽度、高度、行数与圆角贴近最终内容，不要在加载期形成第二套布局。
+- 固定结构恰好匹配最终界面时，才用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
+- 用 `loading=false` 交接真实内容，不在两个分支里分别维护骨架与内容。
+- 最终结构未知时，改用带文案的空态或加载态。
+- 表格用 [TxDataTable](./data-table.zh.mdc) 的 `loadingVariant="skeleton"`，不另拼骨架行。
 
 ## API 参考
 
-### Props
+### 属性
 ::TuffPropsTable
 ---
 rows:
   - name: loading
     type: 'boolean'
     default: 'true'
-    description: '是否显示骨架。`false` 时渲染默认插槽。'
+    description: '显示骨架；为 `false` 时渲染默认插槽。'
   - name: lines
     type: 'number'
     default: '1'
-    description: '占位项数量；最小会收敛到 1。'
+    description: '占位项数量，至少为 1。'
   - name: variant
     type: "'text' | 'rect' | 'circle'"
     default: 'text'
-    description: '每个占位项的形态。'
+    description: '每个占位项的形状。'
   - name: width
     type: 'string | number'
     default: '100%'
-    description: '宽度，number 会转换为 px'
+    description: '宽度，数字按 px 计。'
   - name: height
     type: 'string | number'
     default: '12'
-    description: '高度，number 会转换为 px'
+    description: '高度，数字按 px 计。'
   - name: radius
     type: 'string | number'
     default: '8'
-    description: '非 circle 占位项圆角；number 会转换为 px。'
+    description: '非 circle 占位项的圆角，数字按 px 计。'
   - name: gap
     type: 'string | number'
     default: '10'
-    description: '多行间距，number 会转换为 px'
+    description: '行间距，数字按 px 计。'
 ---
 ::
 
-### Events
-
-`TxSkeleton`、`TxCardSkeleton` 和 `TxListItemSkeleton` 不会 emit 自定义事件。
-
-### Slots
+### 插槽
 
 | 组件 | 插槽名 | 参数 | 说明 |
 |------|--------|------|------|
-| `TxSkeleton` | `default` | - | `loading=false` 时渲染的最终内容。 |
-| `TxCardSkeleton` | - | - | 固定卡片占位，无插槽。 |
-| `TxListItemSkeleton` | - | - | 固定列表行占位，无插槽。 |
+| `TxSkeleton` | `default` | - | `loading=false` 时渲染的真实内容。 |
+| `TxCardSkeleton` | - | - | 固定的卡片占位，无插槽。 |
+| `TxListItemSkeleton` | - | - | 固定的列表行占位，无插槽。 |
 
 ### 预设组件
 
 | 导出 | 用途 |
 |------|------|
-| `TxSkeleton` / `Skeleton` | 可配置文本、矩形或圆形占位。 |
-| `TxCardSkeleton` / `CardSkeleton` | 固定卡片 / feed 占位，包含 icon、title、badge 和 description 区块。 |
-| `TxListItemSkeleton` / `ListItemSkeleton` | 固定列表行占位，包含 icon、name、meta 和尾部 badge 区块。 |
-
-## 后台数据运维面板
-
-表格数据加载时，`TxDataTable` 的 `loadingVariant="skeleton"` 会自己画出骨架行，本地的短暂等待可以保留默认遮罩；表格旁的侧栏摘要用 `TxSkeleton` 保留结构节奏。
-
-:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="骨架屏与表格加载态一起覆盖数据区等待状态。"}
----
-code: |
-  <template>
-    <aside class="grid gap-3">
-      <TxSkeleton :loading="true" :lines="3" height="10px" />
-      <TxLayoutSkeleton />
-    </aside>
-  </template>
----
-:::
+| `TxSkeleton` / `Skeleton` | 可配置的文本、矩形或圆形占位。 |
+| `TxCardSkeleton` / `CardSkeleton` | 卡片 / feed 占位：图标、标题、徽标与描述。 |
+| `TxListItemSkeleton` / `ListItemSkeleton` | 列表行占位：图标、名称、元信息与尾部徽标。 |
 
 ## 概述
 
-- `loading=false` 时不渲染骨架，直接渲染默认 slot。
-- `lines` 最小渲染 1 行，避免空骨架。
-- `variant="circle"` 固定使用圆形半径，忽略 `radius`。
-- `TxSkeleton` 根节点是 `aria-hidden="true"`，装饰性 shimmer 不会被播报。加载态的播报应由宿主区域负责（例如容器上的 `aria-busy` 或 polite live region），并在 `loading=false` 时切换到真实内容。
+- `variant="circle"` 的圆角固定为 `999px`，忽略 `radius`。
+- `TxCardSkeleton`、`TxListItemSkeleton` 形状固定，没有属性、事件或插槽。
+- 根节点为 `aria-hidden="true"`；加载状态由宿主区域播报，例如 `aria-busy` 或 polite live region。
 
 ## 技术实现
 
-- 已对照 `packages/tuffex/packages/components/src/skeleton/src/types.ts`、`TxSkeleton.vue`、`TxCardSkeleton.vue`、`TxListItemSkeleton.vue` 与 `skeleton.test.ts` 核对。
-- 现有测试覆盖 CSS 变量输出、number 转 px、行数最小值收敛、circle 半径归一化、装饰性 `aria-hidden` 根节点、`loading=false` slot 交接、固定预设渲染和 install 注册。
-- API 说明：`TxSkeleton` 是可配置基础组件；`TxCardSkeleton` 和 `TxListItemSkeleton` 是固定形状预设，无 props、events 或 slots。
-- 渲染说明：`variant="circle"` 会强制 `--tx-skeleton-radius: 999px`；调用方应同时设置匹配的 `width` 和 `height` 才能得到正圆。
-
-- Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
-- Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts` 验证 CSS 变量输出、number 转 px、行数最小值收敛、circle 半径、装饰性 `aria-hidden` 根节点、`loading=false` slot 交接、固定预设渲染与 install 注册。
+- 源码：`packages/tuffex/packages/components/src/skeleton/`。
 
 <TuffDocSourceLink />
