@@ -115,7 +115,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     GROUP BY substr(created_at, 12, 2)
   `,
   `
-    WITH visit AS (
+    WITH visit AS MATERIALIZED (
       SELECT
         COALESCE(NULLIF(client_id, ''), NULLIF(user_id, ''), NULLIF(device_fingerprint, '')) AS actor,
         platform,
@@ -134,7 +134,7 @@ const DAILY_AGGREGATES: readonly string[] = [
   // Startup visits carry each module's load time; a detail that is not an object counts as an
   // `unknown` module that loaded in 0 ms, as it did when ingestion read it.
   `
-    WITH module AS (
+    WITH module AS MATERIALIZED (
       SELECT
         CASE WHEN detail.type = 'object'
           THEN COALESCE(${jsonText('detail.value', 'name')}, 'unknown')
@@ -219,7 +219,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     )) AS part, json_each(part.value) AS measure
   `,
   `
-    WITH search AS (
+    WITH search AS MATERIALIZED (
       SELECT
         COALESCE(NULLIF(country_code, ''), 'Unknown') AS country,
         COALESCE(NULLIF(region_code, ''), NULLIF(region_name, ''), 'Unknown') AS subdivision,
@@ -299,7 +299,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     GROUP BY CAST(entry.key AS TEXT)
   `,
   `
-    WITH provider_status AS (
+    WITH provider_status AS MATERIALIZED (
       SELECT entry.key AS provider, entry.value AS state
       FROM ${TELEMETRY_TABLE} AS event, json_each(event.metadata, '$.providerStatus') AS entry
       WHERE event.event_type = 'search' AND ${EVENT_DAY_RANGE}
