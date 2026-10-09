@@ -1,6 +1,6 @@
 ---
 title: LayoutSkeleton
-description: Layout-level skeleton placeholder
+description: A skeleton placeholder shaped like a full app layout.
 category: Status
 status: beta
 since: 0.3.4
@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Layout Placeholder
-The wrapper controls the size. The scaffold draws a whole app layout: a header with a hairline under it, a proportional sidebar whose first row is the current item, and a content area that opens with a title.
+The wrapper sets the size.
 :::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
 ---
 code: |
@@ -25,7 +25,6 @@ code: |
 :::
 
 ### Panel Placeholder
-Skeleton paired with card containers.
 :::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
 ---
 code: |
@@ -39,11 +38,10 @@ code: |
 
 ### Best Practices
 
-- Give the wrapper an explicit height; the component fills `width: 100%` and `height: 100%` rather than deciding page dimensions itself.
-- Use it for page, panel, side-summary, and detail-pane loading where the final layout shape is stable.
-- The scaffold draws a header + sidebar + content app layout. When the final UI has no sidebar or no header, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead, so nothing shifts when the data lands.
-- Do not use it as a table row placeholder. For row bodies use `TxDataTable` with `loadingVariant="skeleton"`, or `TxSkeleton` and row-level placeholders outside a table.
-- Keep it deterministic for docs, SSR, hydration, and visual tests; sidebar label and content line widths intentionally use fixed sequences instead of runtime randomness.
+- Give the wrapper an explicit height; the component only fills `width: 100%` and `height: 100%`.
+- Use it for pages, panels, side summaries, and detail panes whose final shape is stable.
+- When the final UI has no header or sidebar, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead.
+- Don't use it for table rows; use `TxDataTable` with `loadingVariant="skeleton"` for table bodies.
 
 ## API Reference
 
@@ -58,33 +56,16 @@ rows:
 ---
 ::
 
-### Events
-
-`TxLayoutSkeleton` does not emit custom events.
-
-### Slots
-
-`TxLayoutSkeleton` does not expose slots. It always renders the fixed layout scaffold documented below.
-
 ## Overview
 
-- `TxLayoutSkeleton` has no props, events, or slots.
-- The component always renders a 36px header (a brand square, a title bar, two small pills, and an avatar, with a hairline under it), 6 sidebar items (the first on a light fill as the current item), and 8 content lines (the first is a title; the fifth opens a second paragraph).
-- The sidebar is `clamp(72px, 30%, 200px)` wide and separated from the content by a hairline: in a narrow container it shrinks in proportion instead of squeezing the content into a strip. The content area is transparent, so in dark mode it is never darker than the frame.
-- Sidebar label and content line widths both come from fixed sequences and do not depend on runtime randomness.
-- The root is `aria-hidden="true"`, so the decorative scaffold stays out of the a11y tree. The host should announce the page/panel loading state (for example `aria-busy` on the region) and swap to real content when ready.
+- Always renders a 36px header, 6 sidebar items (the first is the current item), and 8 content lines (the first is a title).
+- The sidebar is `clamp(72px, 30%, 200px)` wide and shrinks in proportion in narrow containers instead of squeezing the content.
+- Line widths come from fixed sequences, so SSR, hydration, and visual tests stay stable.
+- The root is `aria-hidden="true"`; the host announces loading, for example with `aria-busy` on the region.
+- Under reduced motion only the shimmer stops; the placeholders stay.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` and `layout-skeleton.test.ts`.
-- API note: this component intentionally has no props. Size, aspect ratio, and placement must come from the parent container.
-- Rendering note: sidebar label and content line widths are fixed, not random, so SSR, hydration, docs snapshots, and visual tests stay stable.
-- Layout fix (2026-09-23): the shared `.tx-layout-skeleton__line` rule (`height: 100%`) used to be declared after the sized rules and won on equal specificity, so the header bar filled the whole header and ran into the frame, and the sidebar labels came out as tall as the avatars; the shared shape rules now come first. The sidebar used to be a fixed 200px, which took about two thirds of a narrow frame and squeezed the content into a strip, and the content area used `--tx-bg-color-page`, which in dark mode was darker than the frame and read as a hole.
-- Motion fallback: every placeholder, including the new brand square, pills, and avatar, goes through the shared `skeleton-surface`, so `prefers-reduced-motion: reduce` stops only the shimmer and keeps the placeholders.
-- **Verified coverage:** fixed scaffold shape, the decorative `aria-hidden` root, six sidebar items, eight content rows, deterministic content widths, and install registration; `skeleton/__tests__/skeleton-motion.test.ts` asserts against the compiled styles that every shimmer has a reduced-motion fallback, that the fallback never hides a placeholder, and that the component declares no keyframes of its own.
-
-- Component source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`.
-- Types: `packages/tuffex/packages/components/src/layout-skeleton/index.ts` exports `TxLayoutSkeletonInstance`.
-- Coverage: `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts` verifies fixed scaffold counts, deterministic content widths, and install registration.
+- Source: `packages/tuffex/packages/components/src/layout-skeleton/`.
 
 <TuffDocSourceLink />

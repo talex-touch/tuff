@@ -80,6 +80,12 @@ code: |
 |------|---------|-------------|
 | `click` | `MouseEvent` | Fires on click, or on Enter / Space when the badge acts as a button. |
 
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-status-chip-size` | `18px` (`sm`: `15px`) | Diameter of the status disc, which scales the glyph; set on the root by the `size` class. |
+
 ## Overview
 
 - Without a click listener, the root is `role="status"`; with `@click`, it becomes a focusable `role="button"` that Enter / Space activate.

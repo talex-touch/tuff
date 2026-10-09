@@ -1,6 +1,6 @@
 ---
 title: "LoadingOverlay"
-description: "A loading mask for blocking a container or the full screen while async work is running."
+description: "A loading mask over a container or the whole screen."
 category: Feedback
 status: beta
 since: 0.3.4
@@ -16,55 +16,22 @@ const loading = ref(false)
 
 ## Usage
 
-### Best Practices
-
-- Prefer local overlays for refresh, save, and recalculation flows where the previous content should remain visible.
-- Reserve `fullscreen` for blocking global transitions such as bootstrapping, workspace switching, or destructive flows that cannot continue in parallel.
-- Keep overlay text action-specific: “Refreshing task queue…” is more useful than a generic “Loading…”.
-- Do not place first-load empty screens behind `TxLoadingOverlay`; use `TxLoadingState` or skeleton components before content exists.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `loading` | `boolean` | `false` | Shows or hides the overlay. |
-| `fullscreen` | `boolean` | `false` | Teleports the overlay to `body` and covers the viewport. |
-| `text` | `string` | `''` | Optional message displayed below the spinner. |
-| `spinnerSize` | `number` | `18` | Spinner size in pixels. |
-| `background` | `string` | `'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)'` | CSS background used for the overlay mask. |
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | No component-specific emits. Control visibility with the `loading` prop. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| `default` | - | Content rendered below the local overlay when `fullscreen=false`. The fullscreen branch does not render slot content. |
-
-## In-Container Overlay
-
-### LoadingOverlay (container)
+### In a Container
+The mask covers the default slot, and the content underneath stays visible.
 :::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayContainerDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton @click="loading = !loading">Toggle</TxButton>
     <TxLoadingOverlay :loading="loading" text="Loading...">
-      <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
+      <div class="content">Content</div>
     </TxLoadingOverlay>
   </template>
 ---
 :::
 
-## Fullscreen Overlay
-
-### LoadingOverlay (fullscreen)
+### Fullscreen
+`fullscreen` teleports the mask to `body` to cover the viewport and skips the default slot.
 :::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayFullscreenDemo" code-lang="vue"}
 ---
 code: |
@@ -75,61 +42,56 @@ code: |
 ---
 :::
 
-## Dashboard Task Overlay
-
-Use `TxLoadingOverlay` for short waits that block one data container while it refreshes. Do not use it as a replacement for first-load screens; use `TxLoadingState` for first-load states. For table refreshes or task queue recalculation, keep the underlying content visible so the layout does not jump.
-
-:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified local LoadingOverlay with Toast / Tooltip / Spinner."}
+### Background Task
+A local overlay combined with Toast, Tooltip, and Spinner; the task queue stays visible while it refreshes, so the layout doesn't jump.
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { toast } from '@talex-touch/tuffex/utils'
-  import { ref } from 'vue'
-
-  const syncing = ref(true)
-
-  function notify() {
-    toast({ id: 'nexus-task-center', title: 'Sync task queued', variant: 'warning', duration: 0 })
-  }
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxToastHost />
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <TxTooltip content="Tooltip explains the current action only.">
-          <TxButton size="sm" icon="i-carbon-information" @click="notify">Hint details</TxButton>
-        </TxTooltip>
-        <span style="display: inline-flex; align-items: center; gap: 6px;">
-          <TxSpinner :size="14" />
-          Inline wait
-        </span>
-      </div>
-      <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…" :spinner-size="22">
-        <section class="grid gap-2">
-          <TxProgressBar :percentage="72" status="warning" />
-          <TxProgressBar :percentage="96" status="success" />
-        </section>
-      </TxLoadingOverlay>
-    </section>
+    <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…" :spinner-size="22">
+      <TxProgressBar :percentage="72" status="warning" />
+      <TxProgressBar :percentage="96" status="success" />
+    </TxLoadingOverlay>
   </template>
 ---
 :::
 
+### Best Practices
+
+- Use a local overlay for short waits over existing content — refresh, save, recalculate — so the old content stays visible.
+- Reserve `fullscreen` for flows that must block the whole app, such as startup, workspace switching, or destructive work that can't run in parallel.
+- Name the action in the text: "Refreshing task queue…" beats a generic "Loading…".
+- Before first content exists, use `TxLoadingState` or a skeleton, not an overlay.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `loading` | `boolean` | `false` | Shows the overlay. |
+| `fullscreen` | `boolean` | `false` | Teleports to `body` and covers the viewport. |
+| `text` | `string` | `''` | Text below the spinner; without it, only the spinner shows. |
+| `spinnerSize` | `number` | `18` | Spinner size in px. |
+| `background` | `string` | `'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)'` | Mask background, written to `--tx-loading-overlay-bg`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Content the local overlay covers; not rendered in fullscreen mode. |
+
 ## Overview
 
-- Local mode wraps the default slot in a `position: relative` container and renders an absolute overlay above it only while `loading=true`.
-- Fullscreen mode teleports the overlay to `body`, covers the viewport, and receives a fresh shared z-index every time it opens.
-- `background` is written to `--tx-loading-overlay-bg`; the overlay also applies blur and saturation through `backdrop-filter`.
-- `text` is optional. When omitted, only the spinner is rendered inside the overlay card.
+- Local mode wraps the default slot in a `position: relative` container and renders the absolute mask only while `loading`.
+- Fullscreen mode takes a fresh shared z-index each time it opens.
+- The mask has `role="status"` and `aria-live="polite"`, so screen readers announce `text`; no extra announcement is needed.
+- Fullscreen mode parks focus on the mask and traps Tab, then returns focus to the previous element on close.
+- The mask has no modal semantics (no `aria-modal`); use `TxModal` or a Dialog component when you need a modal.
 
 ## Technologies
 
-- **Accessibility note:** The overlay carries `role="status"` and `aria-live="polite"`, so `text` is announced by screen readers — **you do not need to announce it separately**. Fullscreen mode also parks focus on the overlay, traps Tab, and restores the previously focused element on close. The one thing it lacks is modal semantics (no `aria-modal`), so it is never treated as a dialog; reach for `TxModal` or `TxDialog` when you need a real modal.
-- **Verified coverage:** `loading-overlay.test.ts` checks local overlay rendering, custom background/spinner size/text, closed-state slot preservation, fullscreen teleport, and absence of the local container in fullscreen mode.
-
-- Component source: `packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`.
-- Types/export: `packages/tuffex/packages/components/src/loading-overlay/index.ts` exports `LoadingOverlayProps`, `LoadingOverlay`, `TxLoadingOverlay`, and `TxLoadingOverlayInstance`.
-- Coverage: `packages/tuffex/packages/components/src/loading-overlay/__tests__/loading-overlay.test.ts` verifies local and fullscreen branches.
+- The mask adds blur and saturation through `backdrop-filter`.
+- Source: `packages/tuffex/packages/components/src/loading-overlay/`.
 
 <TuffDocSourceLink />

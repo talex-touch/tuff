@@ -1,6 +1,6 @@
 ---
 title: "StreamText 流式文字"
-description: "逐词匀速流出的文字，每个词从轻微模糊中析出、颜色扫过蓝紫粉后落到正文色，支持行内引用与 Tuff 光标"
+description: "逐词匀速显影的流式文字"
 category: AiReasoning
 status: beta
 since: 0.6.3
@@ -23,20 +23,15 @@ code: |
 code: |
   import { TxStreamText } from '@talex-touch/tuffex/stream-text'
   import '@talex-touch/tuffex/stream-text/style.css'
-  // 引用 chip 是 TxInlineCitation，样式单独引入
-  import '@talex-touch/tuffex/inline-citation/style.css'
-  import '@talex-touch/tuffex/base.css' // token 与重置样式，全局引入一次
+  import '@talex-touch/tuffex/inline-citation/style.css' // 引用 chip
+  import '@talex-touch/tuffex/base.css' // 全局引入一次
 ---
 :::
 
 ## 用法
 
-`TxStreamText` 用来显示流式到达的文字。把目前收到的全部内容传给 `content`，源头还在输出时保持 `streaming` 为真；无论 token 到达得多不均匀，它都匀速放出每个词，每个词从轻微模糊中析出，颜色依次扫过蓝、紫、粉，最后落到正文色。
-
 ### 流式输出
-
-demo 每隔 20–90ms 喂入 1–6 个字符，中途还停顿一次。词依旧每 24ms 放出一个；停顿期间 Tuff 光标继续呼吸，输出结束后收起。
-
+把目前收到的全部文字传给 `content`，源头输出期间保持 `streaming` 为真。
 :::TuffDemoWrapper{demo="StreamTextStreamTextDemo" code-lang="vue"}
 ---
 code: |
@@ -58,9 +53,7 @@ code: |
 :::
 
 ### 显影预设
-
-`reveal` 决定词怎么进场：`aurora`（默认）从 4px 模糊中析出并扫过色带；`hue` 只扫色带；`blur` 去掉颜色；`languid` 从 8px 模糊中缓慢上浮；`none` 放出即显示。内容完整时，用 `replay()` 重播，`reserve` 让版面在播放中保持不动。
-
+`reveal` 决定词的进场方式。内容完整时用 `replay()` 重播，`reserve` 让版面保持不动。
 :::TuffDemoWrapper{demo="StreamTextPresetsDemo" code-lang="vue"}
 ---
 code: |
@@ -78,9 +71,7 @@ code: |
 :::
 
 ### 插槽与状态
-
-`content` 也可以是一组片段：带样式和链接的文字、引用，以及用于其他任何内容的自定义片段。每个内置部件都有对应插槽；插槽、`state-change` 事件和实例上的 `state` 都会告诉你流式进行到了哪一步。
-
+`content` 也接受片段数组：带样式与链接的文字、引用和自定义片段。
 :::TuffDemoWrapper{demo="StreamTextSlotsDemo" code-lang="vue"}
 ---
 code: |
@@ -102,12 +93,11 @@ code: |
 
 ### 最佳实践
 
-- 传目前为止的完整文字，不要只传最新的增量。组件自己判断哪些是新的；前文被改写时，只重新显影改动的部分。
-- 源头真正结束之前一直保持 `streaming` 为真。为真时，可能还没写完的最后一个词会等后文到来（源头静默后最多等 200ms），因为 token 常常断在词中间。
-- 已经完整的回答（历史消息、回放）不要开 `streaming`：挂载时已有的内容会直接显示，想再播一遍就调用 `replay()`。
-- 完整文字在不能挪动的布局里回放时（卡片、聊天气泡、gallery 格子），打开 `reserve`。
-- 复制、分享用你手里的完整文字，不要用屏幕上显示的部分：显示最多会落后源头 `maxLagMs`。
-- 模型很快、显示需要紧跟时调低 `maxLagMs`；想要更从容的节奏就调高 `wordMs`。
+- 传目前为止的完整文字，不要只传增量。
+- 源头真正结束前一直保持 `streaming` 为真；已完整的回答（历史、回放）不开，重播用 `replay()`。
+- 完整文字在不能挪动的布局（卡片、气泡）里回放时，打开 `reserve`。
+- 复制、分享用你持有的完整文字：屏幕显示最多落后源头 `maxLagMs`。
+- 组件不是 live region；需要播报回复时，把对话包在 `role="log"` 里。
 
 ## API 参考
 
@@ -115,17 +105,17 @@ code: |
 
 | 名称 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `content` | `string \| StreamInline[]` | — | 目前收到的全部内容：纯文本，或由文字、引用、自定义片段组成的列表。必填。 |
-| `streaming` | `boolean` | `false` | 源头仍在输出。为真时，可能还没写完的最后一个词会等到后文到来，或源头静默 200ms 后再放出。 |
+| `content` | `string \| StreamInline[]` | — | 目前收到的全部内容，必填。 |
+| `streaming` | `boolean` | `false` | 源头仍在输出；可能未写完的末词等后文或静默 200ms 后放出。 |
 | `wordMs` | `number` | `24` | 每 `wordMs` 放出一个词。 |
-| `maxLagMs` | `number` | `600` | 提速，保证任何词在到达后这段时间内显示出来。 |
+| `maxLagMs` | `number` | `600` | 任何词都在到达后这段时间内显示。 |
 | `drainMs` | `number` | `320` | `streaming` 变为 false 后，在这段时间内放完剩余部分。 |
-| `pauseMs` | `number` | `400` | 输出中超过这段时间没有新词，就报告 `paused`。 |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式。 |
-| `caret` | `boolean` | `true` | 流式进行时显示光标。关闭时光标立即移除；流结束时光标收起。 |
-| `reserve` | `boolean` | `false` | 完整内容回放时，用一份隐形副本占住最终版面。`streaming` 时忽略。 |
-| `paced` | `boolean` | `true` | 为 `false` 时词一到就显示（仍有进场动画）。`TxStreamElement` 自己统一给各片段放词，会传 `false`。 |
-| `appear` | `boolean` | `false` | 挂载时已有的内容也播放进场，而不是直接显示。`TxStreamElement` 给回答中途挂载的片段打开它。只在挂载时读取。 |
+| `pauseMs` | `number` | `400` | 输出中超过这段时间没有新词即报告 `paused`。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式，见 `StreamRevealPreset`。 |
+| `caret` | `boolean` | `true` | 流式进行时显示光标；关闭时立即移除。 |
+| `reserve` | `boolean` | `false` | 完整内容回放时用隐形副本占住最终版面；`streaming` 时忽略。 |
+| `paced` | `boolean` | `true` | 为 `false` 时词一到就显示（仍有进场）；`TxStreamElement` 统一控制节奏时传 `false`。 |
+| `appear` | `boolean` | `false` | 挂载时已有的内容也播放进场；只在挂载时读取。 |
 | `tag` | `string` | `'span'` | 根元素。 |
 | `locale` | `string` | `'zh'` | `Intl.Segmenter` 分词所用的语言。 |
 
@@ -133,16 +123,16 @@ code: |
 
 | 名称 | 参数 | 说明 |
 |------|------|------|
-| `state-change` | `(state: StreamState)` | 流式状态发生变化。 |
-| `done` | — | 每次播放触发一次：最后一个词已显示且源头已结束。 |
-| `cite` | `(source: AiSourceItem)` | 引用 chip 被打开。chip 自身从不跳转。 |
+| `state-change` | `(state: StreamState)` | 流式状态变化时触发。 |
+| `done` | — | 每次播放触发一次：末词已显示且源头已结束。 |
+| `cite` | `(source: AiSourceItem)` | 引用 chip 被打开时触发；chip 自身不跳转。 |
 
 ### 插槽
 
 | 名称 | 作用域 | 说明 |
 |------|--------|------|
-| `caret` | `{ state }` | 替换 Tuff 光标。只在流式进行时渲染。 |
-| `citation` | `{ source, label, index }` | 替换引用 chip。有编号时 `index` 为标记里的数字。 |
+| `caret` | `{ state }` | 替换 Tuff 光标，只在流式进行时渲染。 |
+| `citation` | `{ source, label, index }` | 替换引用 chip；`index` 为标记中的数字。 |
 | `inline` | `{ name, props }` | 渲染 `{ type: 'custom' }` 片段。 |
 
 ### 暴露方法
@@ -150,16 +140,8 @@ code: |
 | 名称 | 类型 | 说明 |
 |------|------|------|
 | `state` | `StreamState` | 当前流式状态。 |
-| `replay` | `() => void` | 从第一个词开始按 `wordMs` 把全部内容再播一遍。 |
-| `skip` | `() => void` | 立即显示全部内容，不再播放进场。 |
-
-### CSS 变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `--tx-stream-reveal-1` / `-2` / `-3` | 蓝 / 紫 / 粉，随主题变化 | 词扫过的三个颜色节点。高对比度主题下三者都等于正文色。 |
-| `--tx-stream-caret-start` / `--tx-stream-caret-end` | `#199ffe` / `#810dc6` | 光标渐变：Tuff logo 核心的两种颜色。 |
-| `--tx-stream-reveal-duration` | 取决于预设 | 组件按 `reveal` 写在根节点上，使用方不需要设置。 |
+| `replay` | `() => void` | 从第一个词起按 `wordMs` 重播全部内容。 |
+| `skip` | `() => void` | 立即显示全部内容，不播放进场。 |
 
 ### 类型
 
@@ -167,7 +149,13 @@ code: |
 ---
 code: |
   type StreamState = 'idle' | 'streaming' | 'paused' | 'draining' | 'done'
-  type StreamRevealPreset = 'aurora' | 'hue' | 'blur' | 'languid' | 'none'
+
+  type StreamRevealPreset =
+    | 'aurora' // 从 4px 模糊析出，同时扫过蓝紫粉色带（默认）
+    | 'hue' // 只扫色带
+    | 'blur' // 只有模糊
+    | 'languid' // 从 8px 模糊缓慢上浮
+    | 'none' // 放出即显示
 
   type StreamInline =
     | { type: 'text', text: string, marks?: ('strong' | 'em' | 'del' | 'code')[], href?: string }
@@ -176,38 +164,41 @@ code: |
 ---
 :::
 
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-stream-reveal-1` / `-2` / `-3` | 蓝 / 紫 / 粉，随主题变化 | 色带的三个颜色节点；高对比度主题下均为正文色。 |
+| `--tx-stream-caret-start` / `--tx-stream-caret-end` | `#199ffe` / `#810dc6` | 光标渐变，取自 Tuff logo。 |
+| `--tx-stream-reveal-duration` | 取决于预设 | 由组件按 `reveal` 写入根节点，无需设置。 |
+
 ## 概述
 
-- **一次一个词，不会落后太多。** 词按 `wordMs` 匀速放出。一阵突发的内容如果按这个节奏会超过 `maxLagMs` 才能放完，就刚好提速到让等得最久的词按时出现，所以突发读起来是一段稍快的流动，而不是一下跳出来。源头结束后，剩下的在 `drainMs` 内放完。
-- **状态。** `idle`（还没有内容）→ `streaming` → `paused`（仍在输出，但 `pauseMs` 内没有新词）→ `draining`（源头已结束，积压还在放出）→ `done`。光标在 `streaming`、`paused`、`draining` 时显示，`done` 时收起。
-- **按词而不是按字。** 文字用 `Intl.Segmenter` 切分，中文按词显影。标点跟随它所属的词，一行不会以孤零零的「，」或「.」开头；空格放在动画元素之外。没有 `Intl.Segmenter` 时，拉丁文字按空格切分，中日韩文字按单字切分。
-- **只有新内容才进场。** 挂载时已有的内容直接显示，之后到达的内容才有进场动画。前文被改写时，从第一个改动的词开始重新放出；只是变长的词保持原位。
-- **落定的词就是纯文本。** 一个词只在进场动画播放期间是独立元素，之后合并进周围的文本节点，所以每放出一个词的开销不会随回答变长而增加。
-- **光标不占位置。** 它悬在最后一个词的后面，所以换行位置和没有光标时一样，也和 `reserve` 副本的换行位置一致。
-- **只链接安全的 URL。** `href` 只在 `http(s)`、`mailto`、`tel`、相对路径、查询串和 hash 链接时生效，其余保持为文字。以 `//` 开头的协议相对地址同样保持为文字：它会沿用页面自身的协议，在桌面端就是 `file:`。链接带 `rel="noopener noreferrer"`，不设 `target`。
-- **减弱动效。** 没有进场动画也不做节奏控制：词一到就显示，光标静止为一段光弧环绕核心。
-- **服务端渲染。** 渲染为纯文本，没有动画元素，也不留下定时器；之后由客户端接管。
-- **无障碍。** 流式进行时根节点带 `aria-busy="true"`；光标和 `reserve` 副本对辅助技术隐藏，副本同时 `inert`。文字本身不是 live region：请把对话包在 `role="log"`（或你自己的 live region）里来播报回复。
+- 词按 `wordMs` 匀速放出；突发时提速，保证每个词在到达后 `maxLagMs` 内显示；源头结束后，剩余部分在 `drainMs` 内放完。
+- 状态依次为 `idle` → `streaming` → `paused`（`pauseMs` 内无新词）→ `draining`（源头已结束，积压仍在放出）→ `done`；光标在 `done` 时收起。
+- 只有新内容进场：挂载时已有的内容直接显示；前文被改写时，从第一个改动的词起重新放出。
+- 用 `Intl.Segmenter` 按词切分，标点随所属的词；不支持时拉丁文按空格、中日韩文字按字切分。
+- `href` 只对 `http(s)`、`mailto`、`tel`、相对路径、查询串与 hash 链接生效，`//` 开头的地址保持为文字；链接带 `rel="noopener noreferrer"`。
+- 减弱动效时不进场、不控节奏，光标静止；服务端渲染为纯文本；流式进行时根节点带 `aria-busy="true"`。
+- 光标与 `reserve` 副本对辅助技术隐藏（副本同时 `inert`）；文字本身不是 live region，需要播报时把对话包在 `role="log"` 里。
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/stream-text/src/TxStreamText.vue` 与 `TxStreamCaret.vue`；时钟在 `use-stream-pacer.ts`，分词在 `segment.ts`，预设时长在 `presets.ts`。
-- 显影 keyframes 与预设规则：`packages/tuffex/packages/components/style/mixins.scss` 中的 `stream-reveal-keyframes` 与 `stream-reveal-presets` mixin，由各流式组件共用；颜色 token 在 `style/variables.scss`。
-- **已测试行为：** `stream-text/__tests__/segment.test.ts`（7 条：中文按词且标点随词、空格、百分号与句号随词、括号与引号、emoji、还原原文、降级切分），`pacer.test.ts`（16 条：挂载时已有的内容、`appear` 时的进场、节奏、突发内容均匀摊开、滞后上限、收尾、停顿、停顿计时从源头开始算起、完整状态流转、落定、重播、跳过、不节流放出、回退、无时钟、销毁），`stream-text.test.ts`（19 条：挂载不进场、进场与落定、扣住尾词、源头静默或以标点收尾时放出尾词、光标、关闭时光标立即移除、状态事件、改写、引用、chip 后的空格、行内代码或链接后的空格留在其外、插槽、`reserve`、安全链接、协议相对地址、减弱动效、SSR、`appear`），`model.test.ts`（7 条：前若干个单位重建后恰好得到这些单位，覆盖样式与链接、引用、自定义片段、中文与 emoji，空白不进入词）与 `stream-text-style.test.ts`（10 条：动画只在未减弱动效时声明、预设 keyframes、TS 与 CSS 的预设表一致、代码变体不扫色带、块变体只有整块淡入、色带扫过、光标只在合成层动画、光标取 logo 配色、光标不占行内宽度、各主题 token 齐全）。
-- 动效参考：kobra.systems 的 streaming text（透明度加三段色相扫，每词 180ms、每 16ms 一词，即现在的 `hue` 预设）与 Beautiful UI 的 streaming text（透明度加 4px 模糊，420ms，即现在的 `blur`）；默认的 `aurora` 把两者合在一起，用时 460ms。
-- 光标取材自 Tuff logo（`apps/nexus/public/logo.svg`）：外环化作一段旋转光弧，核心图形在其中呼吸。
+- 时钟 `use-stream-pacer.ts` 与 `style/mixins.scss` 中的 `stream-reveal-*` mixin 由流式家族共用。
+- 动效参考 kobra.systems（`hue`）与 Beautiful UI（`blur`）的 streaming text，默认的 `aurora` 合并两者；光标取自 Tuff logo。
+- 源码：`packages/tuffex/packages/components/src/stream-text/`。
 
 <TuffDocSourceLink />
 
 ## 使用场景
 
-- AI 回答逐 token 到达：对话、侧边面板、通知里都适用。
-- 以可读的节奏回放存档的回答、更新日志或脚本演示，同时不挪动版面。
-- 带出处的简短生成句子，引用恰好落在对应论断的位置。
+- 逐 token 到达的 AI 回答：对话、侧边面板、通知。
+- 以可读的节奏回放存档的回答或脚本演示，版面不动。
+- 带出处的简短生成句子，引用落在对应论断处。
 
 ## 相关组件
 
-- [StreamMarkdown](./stream-markdown.zh.mdc) 流式渲染完整的 Markdown 文档，使用同一套显影预设与光标。
-- [CodeStream](./code-stream.zh.mdc) 流式输出代码。
-- [InlineCitation](./inline-citation.zh.mdc) 是默认的引用 chip。
-- [Sources](./sources.zh.mdc) 在回答末尾列出来源。
+- [StreamMarkdown](./stream-markdown.zh.mdc)：流式渲染完整的 Markdown 文档，使用同一套显影预设与光标。
+- [CodeStream](./code-stream.zh.mdc)：流式输出代码。
+- [InlineCitation](./inline-citation.zh.mdc)：默认的引用 chip。
+- [Sources](./sources.zh.mdc)：在回答末尾列出来源。

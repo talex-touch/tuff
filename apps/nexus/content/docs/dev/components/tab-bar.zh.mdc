@@ -1,6 +1,6 @@
 ---
 title: "TabBar 底部导航"
-description: "移动端底部 Tab 导航，支持图标、badge、fixed 定位和安全区占位。"
+description: "移动端底部的主导航栏"
 category: Navigation
 status: beta
 since: 0.3.4
@@ -11,8 +11,7 @@ verified: true
 
 ## 用法
 
-当 TabBar 位于预览框、弹层或自定义外壳内部时，关闭 `fixed`，避免定位到真实视口底部。
-
+### 基础
 ::::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
 ---
 code: |
@@ -33,107 +32,71 @@ code: |
 ---
 ::::
 
-### 最佳实践
-
-- 数量保持在适合拇指导航的范围，通常是 3 到 5 个主入口。
-- `value` 使用稳定的 primitive，方便映射到路由或视图 key。
-- 嵌入式预览、抽屉和自定义 App 外壳内设置 `fixed=false`。
-- `badge` 保持短小，优先使用数字或紧凑状态文本，避免挤压图标区。
-- 不要在 label 内再嵌套交互控件；每个 tab 本身已经是按钮。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | `v-model` 使用的当前选中值。 |
-| `items` | `TabBarItem[]` | `[]` | 从左到右渲染的 tab 数据。 |
-| `indicator` | `'none' \| 'pill' \| 'line' \| 'block' \| 'dot'` | `'pill'` | 当前项背后的滑动指示器。`pill` 抬起一块表面，`block` 用色块填充同一方框，`line` 在顶边滑一条细线，`dot` 打一个小圆点，`none` 只用颜色区分。 |
-| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | 尺寸档位。驱动 bar 高度、图标尺寸、文字尺寸与 pill 内缩，以行内 CSS 变量下发。 |
-| `fixed` | `boolean` | `true` | 使用 `position: fixed` 固定到视口底部。 |
-| `safeAreaBottom` | `boolean` | `true` | 在 tab 行下方渲染 `env(safe-area-inset-bottom)` 安全区占位。 |
-| `disabled` | `boolean` | `false` | 禁用所有 tab，并阻止值更新。 |
-| `zIndex` | `number` | `2000` | 写入 `--tx-tab-bar-z-index` 的 CSS z-index。 |
-
-### TabBarItem
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `value` | `string \| number` | 选中该 tab 时派发的值。 |
-| `label` | `string` | 可见 tab 文案。 |
-| `iconClass` | `string` | 可选图标 class，显示在文案上方。 |
-| `badge` | `string \| number` | 图标区 badge。`null`、`undefined` 和空字符串不会显示。 |
-| `disabled` | `boolean` | 仅禁用当前 tab。 |
-
-### Slots
-
-无插槽。请通过 `items` 渲染 tab。
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `TabBarValue` | 选中项的值，用于 `v-model`。 |
-| `change` | `TabBarValue` | 非禁用项被选择后派发同一个值。 |
-
-## 指示器
-
-`indicator` 让一个整体在当前项背后滑动，而不再只靠颜色区分。`pill` 像 `TxFlatRadio` 的滑块那样抬起一块表面；`block` 用同一个方框但改为色块填充，适合放在卡片上、再加一层阴影只会更吵的场合；`line` 在 bar 顶边滑动一条细线；`dot` 在当前项下方居中打一个小圆点；`none` 就是过去那个只有颜色的 bar。命名与 `TxTabs` 的 `indicatorVariant` 保持一致，两者读起来属于同一套。
-
-每种变体都和 Tabs 家族其他成员（`TxTabs`、`TxFlatRadio`、`TxSidebarNav`）一样滑行：两端各走一根弹簧，去往新 tab 的路上略微拉长、到位时收拢，从不挤压或缩放。到了 bar 的两端，要冲出去的那一端会停在边缘上，所以外框带 `overflow: hidden` 时也不会被切掉。
-
-`size` 与 `TxFlatRadio` 是同一条三档阶梯，理由也相同：嵌在紧凑面板里的 bar 和手机屏幕底部的 bar，本来就不该是同一个尺寸。
-
-### TabBar (indicator)
+### 指示器与尺寸
+`indicator` 决定当前项背后滑块的画法，`size` 在 `sm`、`md`、`lg` 三档间切换。
 :::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('home')
-  const items = [
-    { value: 'home', label: '首页', iconClass: 'i-carbon-home' },
-    { value: 'search', label: '搜索', iconClass: 'i-carbon-search', badge: 3 },
-    { value: 'me', label: '我的', iconClass: 'i-carbon-user' },
-  ]
-  </script>
-
   <template>
-    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="pill" />
+    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="line" size="sm" />
   </template>
 ---
 :::
 
+### 最佳实践
+
+- 主入口保持 3–5 个，适合拇指操作。
+- `value` 用稳定的原始值，便于映射到路由或视图 key。
+- 嵌入预览框、弹层或自定义外壳时关闭 `fixed` 与 `safeAreaBottom`，否则会固定到真实视口底部。
+- `badge` 保持简短，用数字或紧凑的状态文本。
+- 不要在文案里嵌套交互控件；每一项本身就是按钮。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| number` | `''` | 当前选中值（`v-model`）。 |
+| `items` | `TabBarItem[]` | `[]` | 从左到右渲染的各项。 |
+| `indicator` | `'none' \| 'pill' \| 'line' \| 'block' \| 'dot'` | `'pill'` | 滑动指示器：仅颜色、凸起面、顶边细线、色块或圆点。 |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | 尺寸档位；高度、图标、文字与内缩以行内 CSS 变量下发。 |
+| `fixed` | `boolean` | `true` | 以 `position: fixed` 固定到视口底部。 |
+| `safeAreaBottom` | `boolean` | `true` | 在各项下方渲染 `env(safe-area-inset-bottom)` 安全区占位。 |
+| `disabled` | `boolean` | `false` | 禁用所有项，不更新值。 |
+| `zIndex` | `number` | `2000` | 层级，写入 `--tx-tab-bar-z-index`。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `TabBarValue` | 选中项的值（`v-model`）。 |
+| `change` | `TabBarValue` | 选中未禁用的项后派发同一个值。 |
+
+### 类型
+
+`TabBarItem`，`items` 中的一项：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string \| number` | 选中时派发的值。 |
+| `label` | `string` | 文案。 |
+| `iconClass` | `string` | 文案上方的图标 class。 |
+| `badge` | `string \| number` | 图标区徽标；`null`、`undefined` 与空字符串不显示。 |
+| `disabled` | `boolean` | 只禁用该项。 |
+
 ## 概述
 
-- 根节点是 `nav` 地标；它是站点导航而非 tab 组件，因此没有 `role="tablist"`。每一项是 `button`，当前项带由 `modelValue` 推导的 `aria-current="page"`。
-- 指示器通过共享的 `useIndicatorBox` 测量，和 `TxSidebarNav` 读的是同一份：用带小数的 rect 而非 `offsetLeft`，减去容器边框（绝对定位的指示器是相对 padding box 定位的），并归一化祖先 transform 的缩放。`ResizeObserver` 会重新测量，因此尺寸变化或字体替换后指示器不会滞留。
-- 指示器由共享的指示器引擎（`useJellyIndicator`）驱动，用的是 `TxTabs`、`TxFlatRadio`、`TxSidebarNav` 同样在用的滑行材质（Radio 按钮组保留果冻）。选中新的一项时它滑过去：朝向新项的一端走 `GLIDE` 弹簧（刚度 420、阻尼 38）领先，另一端走同一根弹簧的慢放版本跟上（lag 0.45），所以 `md` 档 84px 的药丸途中长到约 98px、到位时收拢。首次测量、容器尺寸变化、字体替换以及切换 `size` 或 `indicator` 都直接落位。
-- 不做任何缩放：指示器的盒子只移动、改尺寸，所以 `pill` 与 `block` 行进中一直保持当前尺寸档的内缩，拉长只沿着 bar 的方向，不会横向越出。
-- 到了 bar 的两端，要离开 bar 的那一端停在边缘上：引擎的墙就是 bar 的 padding box 宽度（`clientWidth`）。贴着边缘的目标（第一个或最后一个 tab 上的 `line`）照样精确到位。
-- `prefers-reduced-motion: reduce` 下每次变化都直接落位，淡入保留。
-- `pill` 的内缩是对测量结果做算术，不是 CSS margin：绝对定位且显式指定宽高的盒子在尺寸上会忽略 margin，那会让药丸保持选项整高并挂出 bar 外。`block` 沿用同一个方框，只是画法不同；`dot` 在它中间居中。
-- 所有变体都在同一个 x 上移动，所以切换 `indicator` 不会让指示器挪位，只改变它的样子。
-- `size` 以行内 CSS 变量下发而不是尺寸 class，调用方只想改一个值（比如 `--tx-tab-bar-height`）时覆写那一个变量即可，不必重写整档。bar 高度尤其必须是变量：指示器测量的是选项盒子，用 class 定高会让指示器走上一条从不读取它的路径。无法识别的 `size` 回退到 `md`。
-- 点击禁用项，或在 `disabled=true` 时点击任意项，都不会派发事件。
-- 点击当前已选中项仍会派发 `update:modelValue` 和 `change`；需要忽略重复值时在调用方处理。
-- `safeAreaBottom` 只控制底部占位节点；fixed 与非 fixed 布局都可以使用。
-- `zIndex` 通过 CSS 变量写入，应用外壳可避免深层选择器覆盖。
+- 根节点是 `<nav>` 地标而非 tab 组件，因此没有 `role="tablist"`；每项是 `<button>`，当前项带 `aria-current="page"`。
+- 指示器经 `useIndicatorBox` 测量（与 `TxSidebarNav` 相同），尺寸变化或字体替换后由 `ResizeObserver` 重新测量。
+- 只有新的选中项会滑行；首次测量、尺寸变化、字体替换以及切换 `size` 或 `indicator` 都直接落位，减少动态效果时也直接落位。
+- 指示器从不缩放，途中只沿 bar 方向拉长；到两端时停在边缘，外框带 `overflow: hidden` 也不会被裁切。
+- 点击禁用项、或在 `disabled` 时点击任意项，不派发事件；点击当前项仍会派发 `update:modelValue` 与 `change`。
+- `size` 的每个值都是可单独覆写的 CSS 变量（如 `--tx-tab-bar-height`）；无法识别的值回退到 `md`。
 
 ## 技术实现
 
-- **Model contract:** `TxTabBar` 只在 tab bar 本身启用且被点击 item 也启用时派发 `update:modelValue` 与 `change`。禁用项会渲染原生 disabled button。
-- **布局说明:** `fixed=true` 会把 tab bar 固定到视口，`safeAreaBottom=true` 会追加 `env(safe-area-inset-bottom)` spacer。预览框、弹层和嵌入式 shell 内应同时关闭。
-- **指示器说明:** 这个 bar 刻意与 `TxSidebarNav` 共用 `useIndicatorBox`，而不是自己长一套测量；移动则和 Tabs 家族其他成员共用同一个 `useJellyIndicator` 滑行材质。会移动的 bar 不应该和它旁边会移动的控件产生漂移。
-- **动效说明:** 引擎每帧直接写指示器的 `transform`、`width`、`height` 与 `opacity`，模板不绑定其中任何一项，所以一次移动不会让 bar 重新渲染。滑行由 `springSteps`（`packages/tuffex/packages/components/src/liquid/src/spring.ts`，按 1/240 s 分步积分）作为 `integrate` 传入驱动，写出的缩放恒为 `1.000`。这些属性上不挂 CSS transition：它会把引擎写入的每一帧再缓动一遍，指示器就会拖在自己的弹簧后面。原先驱动 CSS 位移的 `--tx-tab-bar-indicator-duration` 与 `--tx-tab-bar-indicator-ease` 不再参与移动。
-- **props 使用运行时对象声明，而不是 `defineProps<TabBarProps>()`。** SFC 编译器解析导入的 props 接口时会去读同级模块，但之后往 `types.ts` 里新增的字段它拿不到——清空全部缓存冷启动的 dev server 依然输出旧的 prop 列表，于是 `size` 变成透传属性、读出来是 `undefined`。构建产物自始至终是对的，这正是它容易被忽略的原因。`TabBarProps` 仍然导出给调用方使用，只是不再作为运行时列表的来源；`TxTabs` 也是同样的声明方式。
-- **实测覆盖:** `tab-bar.test.ts` 覆盖导航语义（nav 地标、无 `role`）、`aria-current="page"` 选中项、图标、badge、z-index CSS 变量、fixed/safe-area 开关、启用态派发、禁用 bar/item 阻断，以及每个尺寸档位下发的行内 CSS 变量（含未知 size 回退 md）、首次测量渲染出节点后每种指示器变体的 class，和 `none` 时不渲染指示器节点。桩化 rect 并使用假计时器后，还验证：首次测量让药丸直接落位；选中新的一项时滑过去而不是瞬移——途中比药丸更长、从不缩放、高度不变——最终精确停在下一项的内缩方框上；往返两端时 `pill` 与 `line` 每一帧都在 bar 内；切换变体或尺寸直接落位；`prefers-reduced-motion: reduce` 下新的选中项直接落位。对编译后的样式，还验证指示器只过渡 `opacity`，减弱动效下同样如此。
-
-- Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`。
-- Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` 导出 `TabBarItem`、`TabBarProps`、`TabBarEmits`、`TabBarValue`、`TabBarIndicator` 与 `TabBarSize`。
-- Export entry: `packages/tuffex/packages/components/src/tab-bar/index.ts` 导出 `TabBar`、`TxTabBar`、props/emits/item types 与 `TxTabBarInstance`。
-- Coverage: `packages/tuffex/packages/components/src/tab-bar/__tests__/tab-bar.test.ts` 验证渲染语义、badge/icon、布局开关、事件派发、禁用行为，以及指示器的移动、落位与不越界。
+- 指示器由 `useJellyIndicator` 的滑行材质驱动（与 `TxTabs`、`TxFlatRadio`、`TxSidebarNav` 相同），每帧直接写样式，不触发重渲染。
+- 源码：`packages/tuffex/packages/components/src/tab-bar/`。
 
 <TuffDocSourceLink />

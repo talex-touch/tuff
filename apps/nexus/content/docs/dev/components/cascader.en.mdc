@@ -102,6 +102,7 @@ code: |
 | `change` | `(v)` | Fires together with `update:modelValue`. |
 | `open` | - | Fires after the dropdown opens. |
 | `close` | - | Fires after the dropdown closes. |
+| `load-error` | `({ path: CascaderPath, error: unknown })` | Fires when `load` rejects, with the node's path; expanding it again retries. |
 
 ### Exposed Methods
 

@@ -1,6 +1,6 @@
 ---
 title: Terminal
-description: ANSI and Unicode terminal display with interactive input, read-only logs, host themes and automatic sizing
+description: A terminal view that displays ANSI and Unicode output.
 category: Advanced
 status: beta
 since: 0.6.3
@@ -23,12 +23,8 @@ import '@talex-touch/tuffex/terminal/style.css'
 
 ## Usage
 
-`TxTerminal` displays data; the host supplies its source. Mounting it never creates a shell, starts a process or requests Electron privileges.
-
-### Interactive display
-
-The demo renders ANSI and Chinese output, captures keyboard data and changes its container size. It has no connected process and does not emulate a shell or echo input.
-
+### Interactive Display
+`ready` hands over the instance and `data` emits keyboard input; input is never echoed automatically.
 :::TuffDemoWrapper{demo="TerminalTerminalDemo" code-lang="vue"}
 ---
 code: |
@@ -51,10 +47,8 @@ code: |
 ---
 :::
 
-### Read-only logs
-
-Append records, edit the first record in place, switch history or clear the display. Pause belongs to the host: retain incoming records while keeping the displayed `lines` unchanged.
-
+### Read-only Logs
+Pausing belongs to the host: keep collecting records, but stop updating the `lines` passed in.
 :::TuffDemoWrapper{demo="TerminalLogsDemo" code-lang="vue"}
 ---
 code: |
@@ -62,20 +56,13 @@ code: |
   import { ref } from 'vue'
 
   const lines = ref(['\x1B[32m[info]\x1B[0m 中文日志 ✓'])
-  const autoScroll = ref(true)
-  function append() {
-    lines.value.push('[info] next record')
-  }
-  function clear() {
-    lines.value.length = 0
-  }
   </script>
 
   <template>
-    <TxButton @click="append">Append</TxButton>
-    <TxButton @click="clear">Clear</TxButton>
+    <TxButton @click="lines.push('[info] next record')">Append</TxButton>
+    <TxButton @click="lines.length = 0">Clear</TxButton>
     <div style="height: 224px">
-      <TxTerminal read-only :lines="lines" :auto-scroll="autoScroll" />
+      <TxTerminal read-only :lines="lines" />
     </div>
   </template>
 ---
@@ -83,12 +70,11 @@ code: |
 
 ### Best Practices
 
-- Use either `lines` for declarative log records or `write()` / `writeln()` for a streaming terminal. A later `lines` replacement resets the display, including imperative output.
-- Give the host a definite height. Without `cols` / `rows`, the component fits the available content box; explicit dimensions override fitting on their respective axes.
-- Keep `readOnly` enabled for logs. It blocks input events and autofocus but retains selection and copying. Do not create a PTY just to display logs.
-- Handle rejected write promises: disposal or an initialization failure rejects every pending write rather than leaving it waiting.
-- Connect privileged execution only through a trusted host SDK, with an explicit user action, separate `command` and `args`, and cleanup on session switches or unmount.
-- Supply localized `labels.ariaLabel`; override individual `theme` colors only when the host palette needs an intentional exception.
+- Use `lines` for declarative logs and `write()` / `writeln()` for streams; replacing `lines` also wipes imperative output.
+- Give the container a definite height; explicit `cols` / `rows` override fitting on their own axis only.
+- Keep logs `readOnly`, and don't create a PTY just to display them.
+- Handle rejected write promises: unmounting or a failed initialization rejects every pending write.
+- Run privileged commands only through a trusted host SDK: on an explicit user action, with `command` and `args` passed separately, and cleaned up on session switch or unmount.
 
 ## API Reference
 
@@ -96,44 +82,44 @@ code: |
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `readOnly` | `boolean` | `false` | Disables stdin and `data` emission. Suppresses autofocus and `focus()`. |
-| `autoFocus` | `boolean` | `false` | Focuses the interactive terminal after initialization; never focuses read-only logs. |
-| `autoScroll` | `boolean` | `true` | Scrolls after parsed output. When false, restores the previous viewport position and disables scrolling on user input. |
-| `lines` | `readonly (string \| Uint8Array)[]` | `undefined` | Log records; each receives CRLF. An unchanged prefix appends only new records. Edits, shortening or clearing reset and replay the records. |
-| `cols` | `number` | fit / initial `80` | Explicit column count; otherwise derived from the container. |
-| `rows` | `number` | fit / initial `24` | Explicit row count; otherwise derived from the container. |
-| `fontSize` | `number` | `13` | xterm font size in pixels. Changes trigger a fit. |
-| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | Terminal font stack. Changes trigger a fit. |
-| `theme` | `ITheme` | host tokens | Partial xterm theme; supplied keys override the host-derived palette. Imported as a type only. |
-| `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | Accessible label for the region and xterm input textarea. |
+| `readOnly` | `boolean` | `false` | Disables input and `data`, and never autofocuses; selection and copy still work. |
+| `autoFocus` | `boolean` | `false` | Focuses an interactive terminal after initialization; ignored when read-only. |
+| `autoScroll` | `boolean` | `true` | Scrolls to the bottom after output; when off, keeps the viewport, and input doesn't scroll either. |
+| `lines` | `readonly (string \| Uint8Array)[]` | `undefined` | Log records, each followed by CRLF; an unchanged prefix appends, anything else resets and replays. |
+| `cols` | `number` | fit / initial `80` | Fixed column count; otherwise derived from the container. |
+| `rows` | `number` | fit / initial `24` | Fixed row count; otherwise derived from the container. |
+| `fontSize` | `number` | `13` | Font size in px; changes trigger a fit. |
+| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | Font stack; changes trigger a fit. |
+| `theme` | `ITheme` | host tokens | Partial xterm theme; overrides only the colors you set. |
+| `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | Accessible name of the terminal region and its input textarea. |
 
 ### Events
 
 | Event | Payload | Description |
 | --- | --- | --- |
-| `data` | `string` | Interactive keyboard, paste and control-sequence input. Forward unchanged to the owning session. Never emitted in read-only mode. |
-| `resize` | `{ cols: number; rows: number }` | Initial size and subsequent row/column changes. Forward to the owning PTY when one exists. |
-| `ready` | `TerminalInstance` | The client display is initialized. The same instance methods are exposed through the component ref. |
+| `data` | `string` | Keyboard, paste, and control-sequence input to forward unchanged; never emitted when read-only. |
+| `resize` | `{ cols: number; rows: number }` | The initial size and later changes; forward to the PTY if there is one. |
+| `ready` | `TerminalInstance` | The display is initialized; the component ref exposes the same methods. |
 
 ### Exposed Methods
 
 | Method | Signature | Description |
 | --- | --- | --- |
-| `write(data)` | `(string \| Uint8Array) => Promise<void>` | Queues full raw output before or after readiness. Resolves after parsing; does not add a newline. |
-| `writeln(data)` | `(string \| Uint8Array) => Promise<void>` | Same queue, with CRLF appended by xterm. |
-| `clear()` | `() => void` | Queues xterm's clear operation: removes scrollback while retaining the current prompt line. |
-| `reset()` | `() => void` | Queues a full buffer/parser reset; removes prior content and terminal modes. |
-| `focus()` | `() => void` | Focuses only a ready interactive terminal. |
-| `fit()` | `() => TerminalSize \| null` | Fits unpinned axes and returns the current size. Hidden containers retain their last valid size; an unavailable instance returns null. |
-| `getSize()` | `() => TerminalSize \| null` | Returns current columns and rows, or null before initialization/after disposal. |
+| `write(data)` | `(string \| Uint8Array) => Promise<void>` | Queues raw output, even before readiness; resolves once parsed and adds no newline. |
+| `writeln(data)` | `(string \| Uint8Array) => Promise<void>` | Same queue, with CRLF appended. |
+| `clear()` | `() => void` | Queues a scrollback clear; the current prompt line stays. |
+| `reset()` | `() => void` | Queues a buffer and parser reset, dropping content and terminal modes. |
+| `focus()` | `() => void` | Focuses a ready interactive terminal. |
+| `fit()` | `() => TerminalSize \| null` | Fits unpinned axes and returns the size; hidden containers keep their last size; null when unavailable. |
+| `getSize()` | `() => TerminalSize \| null` | Current columns and rows; null before initialization or after disposal. |
 
 ### Types
 
-`TerminalProps`, `TerminalEmits`, `TerminalInstance`, `TerminalSize`, `TerminalData`, `TerminalLabels`, `TxTerminalInstance` and `TERMINAL_DEFAULT_LABELS` are exported from `/terminal`. The component also belongs to `/pro` and the root barrel; `Terminal` is its installable wrapper.
+`/terminal` exports `TerminalProps`, `TerminalEmits`, `TerminalInstance`, `TerminalSize`, `TerminalData`, `TerminalLabels`, `TxTerminalInstance`, and `TERMINAL_DEFAULT_LABELS`. The component is also exported from `/pro` and the root; `Terminal` is the installable wrapper.
 
-## Electron PTY integration
+## Electron PTY Integration
 
-This recipe is for a trusted Electron renderer with TuffTransport, not an ordinary browser. The main process owns PTY creation, `system.shell` authorization and caller/session isolation. `createTerminalSdk` subscribes before creation and delivers complete early output and fast exits.
+For trusted Electron renderers with TuffTransport only. The main process owns the PTY and checks `system.shell`; `createTerminalSdk` subscribes before creating, and an aborted `signal` closes a late session automatically.
 
 ```vue
 <script setup lang="ts">
@@ -153,58 +139,38 @@ function fail(reason: unknown) {
   status.value = reason instanceof Error ? reason.message : String(reason)
 }
 function stop() {
-  const previous = session
-  session = null
   active?.abort()
   active = null
-  void previous?.close().catch(fail)
+  void session?.close().catch(fail)
+  session = null
 }
 async function start() {
   stop()
-  const controller = new AbortController()
-  active = controller
+  const controller = (active = new AbortController())
   display.value?.reset()
-  status.value = ''
+  const size = display.value?.getSize()
   try {
-    const size = display.value?.getSize()
-    const handle = await sdk.create({
-      command: 'node',
-      args: ['-i'],
-      cwd: props.directory,
-      cols: size?.cols,
-      rows: size?.rows,
-    }, {
+    session = await sdk.create({ command: 'node', args: ['-i'], cwd: props.directory, cols: size?.cols, rows: size?.rows }, {
       signal: controller.signal,
       onData(data) {
         if (active === controller)
           void display.value?.write(data).catch(fail)
       },
       onExit(exit) {
-        if (active !== controller) return
+        if (active !== controller)
+          return
         session = null
-        active = null
         status.value = `exit=${exit.exitCode}, signal=${exit.signal ?? 'none'}`
       },
     })
-    if (active !== controller) {
-      await handle.close()
-      return
-    }
-    session = handle
   }
   catch (reason) {
-    if (active === controller) {
-      active = null
+    if (active === controller)
       fail(reason)
-    }
   }
 }
-function input(data: string) {
-  void session?.write(data).catch(fail)
-}
-function resize(size: TerminalSize) {
-  void session?.resize(size.cols, size.rows).catch(fail)
-}
+const input = (data: string) => void session?.write(data).catch(fail)
+const resize = (size: TerminalSize) => void session?.resize(size.cols, size.rows).catch(fail)
 onBeforeUnmount(stop)
 </script>
 
@@ -218,36 +184,30 @@ onBeforeUnmount(stop)
 </template>
 ```
 
-The command runs only when the user presses Start. The example needs an installed Node executable and a valid `directory`; startup errors are displayed. Abort cancels a pending creation and closes a late result. The SDK releases output/exit subscriptions on close or natural exit; the host releases the display independently.
-
 ## Overview
 
-- xterm and the fit addon load dynamically inside `onMounted`; server imports and rendering do not touch browser globals or initialize a terminal.
-- Output and reset/clear operations share a single ordered queue. No component-level chunk truncation occurs. Typed arrays are UTF-8 data.
-- Deep `lines` watching handles reactive-array push, index assignment, replacement and clearing. Binary records are snapshotted when the records change; trigger a reactive records update after changing bytes inside a typed array.
-- Read-only mode suppresses input at both xterm and the event boundary, disables the cursor blink and never requests focus. Switching from interactive to read-only blurs the input.
-- A ResizeObserver coalesces fits into one animation frame. Font loading and font changes refit; hidden containers keep their previous size.
-- Theme colors are resolved from inherited TuffEx tokens. The shared theme observer follows document class/theme/contrast changes and operating-system color/contrast preferences.
-- Unmount disposes xterm and its addon, data/resize subscriptions, ResizeObserver, the shared-theme subscription and pending fit callbacks. Pending writes reject; late imports cannot recreate the terminal.
+- Display only: mounting never creates a shell, starts a process, or requests Electron privileges, and the component imports neither transport nor Electron.
+- xterm and the fit addon load dynamically in `onMounted`; server rendering touches no browser globals.
+- Output, `reset()`, and `clear()` share one ordered queue; binary data is decoded as UTF-8.
+- `lines` is watched deeply, so push, index assignment, replacement, and clearing all work; after mutating bytes inside a `Uint8Array`, trigger one reactive update.
+- Read-only mode blocks input at both xterm and the event boundary and stops the cursor blink; switching from interactive to read-only blurs the input.
+- Unmount disposes xterm, subscriptions, and observers; pending writes reject, and a late dynamic import can't recreate the terminal.
 
 ## Technologies
 
-- Display engine: `@xterm/xterm ^5.5.0`; sizing: `@xterm/addon-fit ^0.10.0` (MIT). The engine stylesheet is included in `terminal/style.css`.
-- Source: `packages/tuffex/packages/components/src/terminal/src/TxTerminal.vue`; public types: `terminal/src/types.ts`; installable entry: `terminal/index.ts`.
-- Host theme observer: `packages/tuffex/packages/components/src/stat-card/src/theme-change.ts`.
-- Component tests: `packages/tuffex/packages/components/src/terminal/__tests__/terminal.test.ts`. Runtime acceptance is recorded separately by the change's verifier; this page does not claim a completed browser or Electron verification.
-- Electron execution is separate: `packages/utils/transport/sdk/domains/terminal.ts` and `apps/core-app/src/main/modules/terminal/` own SDK/session behavior. This component imports neither transport nor Electron.
+- Built on `@xterm/xterm ^5.5.0` and `@xterm/addon-fit ^0.10.0` (both MIT); the engine stylesheet ships in `terminal/style.css`.
+- Colors come from inherited TuffEx tokens and follow theme and contrast changes; a `ResizeObserver` coalesces fits into one frame.
+- Source: `packages/tuffex/packages/components/src/terminal/`; process sessions live in `packages/utils/transport/sdk/domains/terminal.ts`.
 
 <TuffDocSourceLink />
 
 ## Use cases
 
-- Browser or Electron log viewers with host-owned pause/history controls.
-- Interactive Electron PTYs whose trusted host owns command execution and lifecycle.
-- ANSI/Unicode output previews that do not need any process privileges.
+- Browser or Electron log viewers whose host owns pause and history.
+- Interactive Electron PTYs whose trusted host owns command execution.
+- ANSI / Unicode output previews that need no process privileges.
 
 ## Accessibility
 
-- Supply a localized `labels.ariaLabel`; it labels both the terminal region and the input textarea.
-- xterm screen-reader support is enabled. Read-only output still allows text selection and copying.
-- Keep `autoFocus` off unless opening an explicit interactive terminal is the user's action. Log updates must not move focus.
+- xterm screen-reader support is on; read-only output stays selectable and copyable.
+- Leave `autoFocus` off unless the user explicitly opens an interactive terminal; log updates never move focus.

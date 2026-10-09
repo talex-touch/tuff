@@ -1,6 +1,6 @@
 ---
 title: Floating 浮动层
-description: 基于指针位置的视差容器，支持注册绝对定位的深度图层。
+description: 随指针产生视差位移的容器
 category: Primitives
 status: beta
 since: 0.3.4
@@ -11,6 +11,8 @@ verified: true
 
 ## 用法
 
+### 基础
+`depth` 决定图层位移幅度，`sensitivity` 整体放大，`easingFactor` 决定跟随速度。
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
 ---
 code: |
@@ -26,10 +28,11 @@ code: |
 ::::
 
 ### 禁用动效
+`disabled` 停止监听与动画帧，并把图层位移归零。
 
 ```vue
 <template>
-  <TxFloating :disabled="prefersReducedMotion">
+  <TxFloating :disabled="paused">
     <TxFloatingElement class-name="hero-card" :depth="0.08">
       内容
     </TxFloatingElement>
@@ -37,9 +40,8 @@ code: |
 </template>
 ```
 
-当 `disabled` 变为 true 时，事件监听和动画帧会停止，已注册元素的 transform 会重置为零。
-
 ### 反向运动图层
+负数 `depth` 朝正数 `depth` 的反方向移动。
 
 ```vue
 <template>
@@ -50,75 +52,58 @@ code: |
 </template>
 ```
 
-负数 `depth` 会朝正数 `depth` 的反方向移动。
-
 ### 最佳实践
 
-- 用于装饰性视差、引导卡片或背景点缀。不要让关键布局依赖指针移动。
-- 尊重 reduced-motion 设置，并把它绑定到 `disabled`。
-- 图层数量保持少量；每个已注册图层都会在每帧更新。
-- 使用较低 `depth` 保持动效克制。数值过大很快会让界面显得脱节。
-- 通过 CSS 类提供真实静态布局位置；组件只添加 transform 偏移。
-- 避免在快速移动图层中放交互控件，除非动效非常轻微。
+- 只用于装饰性视差、引导卡片或背景点缀，关键布局不要依赖指针移动。
+- 图层保持少量；运动中每个图层每帧都会更新。
+- 用较小的 `depth` 保持克制，数值过大会让界面显得脱节。
+- 静态位置通过 class 提供，组件只叠加 `transform`。
+- 快速移动的图层里不放交互控件。
 
 ## API 参考
 
-### TxFloating Props
+### TxFloating
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `className` | `string` | `''` | 追加到容器上的类名。 |
 | `sensitivity` | `number` | `1` | 整体位移倍率。 |
 | `easingFactor` | `number` | `0.05` | 每帧靠近目标位置的比例。 |
-| `disabled` | `boolean` | `false` | 停止动效并重置已注册元素 transform。 |
+| `disabled` | `boolean` | `false` | 停止动效，并重置已注册图层的 transform。 |
 
-### TxFloatingElement Props
+#### 插槽
+
+| 插槽名 | 说明 |
+|------|------|
+| `default` | 浮动图层与场景内容。 |
+
+### TxFloatingElement
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `className` | `string` | `''` | 追加到绝对定位图层上的类名。 |
-| `depth` | `number` | `1` | 位移深度。负数会朝指针反方向移动。 |
+| `depth` | `number` | `1` | 位移深度；负数朝指针的反方向移动。 |
 
-### Slots
+#### 插槽
 
-| 组件 | 插槽名 | 说明 |
-|------|------|------|
-| `TxFloating` | `default` | 浮动元素和场景内容。 |
-| `TxFloatingElement` | `default` | 图层内容。 |
-
-### Events
-
-不发出公开事件。
-
-### Exposed Methods
-
-不暴露公开实例方法。
+| 插槽名 | 说明 |
+|------|------|
+| `default` | 图层内容。 |
 
 ## 概述
 
-- `TxFloating` 提供注册上下文，供子级 `TxFloatingElement` 消费。
-- 容器渲染相对定位 `div`，类名包含 `tx-floating` 和可选 `className`。
-- `TxFloatingElement` 渲染绝对定位 `div`，类名包含 `tx-floating-element` 和可选 `className`。
-- `TxFloating` 挂载时会启动 passive `mousemove` 与 `touchmove` window 监听，除非已禁用。
-- 指针坐标以 floating 容器中心为原点。
-- 每帧会让已注册元素按 `easingFactor` 靠近 `pointerPosition * (depth * sensitivity / 20)`。
-- `disabled=true` 会停止监听、取消当前 RAF，并把 transform 重置为 `translate3d(0px, 0px, 0)`。
-- `disabled=false` 会重新启动监听与 RAF。
-- `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
-- 元素在 `TxFloating` 外部使用时仍会渲染，但不会动画。
-- 用户开启 `prefers-reduced-motion: reduce` 时组件停止全部视差运动。
-- `IntersectionObserver` 在容器移出视口时暂停 RAF 循环，重新进入时恢复。
-- 容器在 capture 阶段监听 window `scroll` 与 `resize`，以在页面滚动/缩放后重新测量原点。
-- 实现通过 `hasWindow()` 保护浏览器 API，避免 SSR 问题。
+- `TxFloatingElement` 挂载时向 `TxFloating` 注册，`depth` 变化时重新注册，卸载时注销；在 `TxFloating` 外使用时只渲染、不移动。
+- 指针坐标以容器中心为原点；每帧按 `easingFactor` 逼近 `pointerPosition * (depth * sensitivity / 20)`。
+- `disabled` 或减少动态效果时，停止监听与动画帧，并把位移重置为 `translate3d(0px, 0px, 0)`。
+- 容器移出视口时暂停动画；页面滚动或缩放后重新测量原点。
 
 ## 技术实现
 
-- 已人工核对 `packages/tuffex/packages/components/src/floating/src/types.ts`、`context.ts`、`TxFloating.vue`、`TxFloatingElement.vue` 与 `floating.test.ts`。
-- 浏览器监听和动画帧都经过 SSR 防护；位移动效只会在客户端挂载后存在。
-- `disabled` 不只是视觉状态：它会停止监听、取消 RAF，并重置已注册元素 transform。
-
-- Component sources: `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`、`TxFloatingElement.vue` 与 `context.ts`。
-- Types: `packages/tuffex/packages/components/src/floating/src/types.ts`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/floating/__tests__/floating.test.ts` 验证缓动指针位移、disabled 监听重置、初始 disabled、depth 重新注册、卸载清理、类名 / 插槽渲染和插件安装注册。
+- 动画循环只在图层未到位时运行，静止后自动停下；window 监听均为 passive，并经 `hasWindow()` 保护，SSR 安全。
+- 源码：`packages/tuffex/packages/components/src/floating/`。
 
 <TuffDocSourceLink />

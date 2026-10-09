@@ -272,6 +272,8 @@ code: |
 - 表面是 `aria-hidden` 的 `TxBaseSurface`；惯性由 `requestAnimationFrame` 弹簧写入 `--tx-card-dx` / `--tx-card-dy`，静止后停止。
 - 源码：`packages/tuffex/packages/components/src/card/`。
 
+<TuffDocSourceLink />
+
 ## 自定义
 
 :::TuffCodeBlock{lang="css"}
@@ -293,5 +295,3 @@ code: |
 | `--tx-surface-refraction-mask-color` | 根节点内联样式 | 把 `--tx-card-fake-background` 转给 `TxBaseSurface`；改前者即可。 |
 
 跟随应用主题时覆盖全局 token，如 `--tx-bg-color-overlay`、`--tx-border-color-light`、`--tx-color-primary`。
-
-<TuffDocSourceLink />

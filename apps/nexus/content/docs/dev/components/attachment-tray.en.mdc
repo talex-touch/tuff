@@ -45,7 +45,9 @@ code: |
 
 ## API Reference
 
-### Props
+### TxAttachmentTray
+
+#### Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
@@ -60,7 +62,7 @@ code: |
 | `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of cancel-upload buttons. |
 | `sizeFormatter` | `(bytes: number) => string` | — | Formats file sizes; defaults to B/KB/MB with one decimal. |
 
-### Events
+#### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
@@ -68,9 +70,30 @@ code: |
 | `cancel` | `(id: string)` | Fires when cancel-upload is clicked. |
 | `open` | `(attachment: AiAttachmentFile)` | Fires when a file chip is clicked; images open the built-in viewer. |
 
+### TxAttachmentChip
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `attachment` | `AiAttachment & { kind: 'file' }` | — | The file attachment to show. Required. |
+| `removable` | `boolean` | `false` | Shows the remove button; the cancel-upload button doesn't depend on it. |
+| `removeLabel` | `string` | `'Remove attachment'` | Accessible name of the remove button. |
+| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of the cancel-upload button. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Formats the file size; defaults to the same format as `TxAttachmentTray`. |
+
+#### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `remove` | `(id: string)` | Fires when remove is clicked. |
+| `cancel` | `(id: string)` | Fires when cancel-upload is clicked. |
+| `open` | `(attachment: AiAttachment & { kind: 'file' })` | Fires when the chip body is clicked. |
+
 ## Overview
 
 - `kind: 'image'` items go to the image grid and `kind: 'file'` items to file chips; pass both in one `attachments` array.
+- Each file renders as a `TxAttachmentChip`; the tray forwards `removable`, `removeLabel`, `cancelLabel`, and `sizeFormatter` to it.
 - Clicking an image opens the built-in viewer (on `TxModal`), which pages through images only and emits nothing.
 - An `uploading` attachment always shows a cancel button: images draw a progress ring, file chips show a percentage.
 - A thumbnail that fails to load becomes a placeholder and is not retried.

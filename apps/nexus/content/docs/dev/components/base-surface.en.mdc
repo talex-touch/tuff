@@ -1,6 +1,6 @@
 ---
 title: "BaseSurface"
-description: "Unified background rendering component supporting pure/mask/blur/glass/refraction modes with motion-degradation fallback for backdrop-filter + transform issues."
+description: "A background layer with switchable materials and motion fallback."
 category: Primitives
 status: beta
 since: 0.3.4
@@ -11,169 +11,37 @@ verified: true
 
 ## Usage
 
-### Best Practices
-
-- Prefer `TxCard` for normal product containers; reach for `TxBaseSurface` only when a page needs direct material or fallback tuning.
-- Use `moving` when the parent already owns animation state. Use `autoDetect` for legacy transform transitions where explicit state is unavailable.
-- Keep `fallbackMode="mask"` for readable blur/glass content during motion; use `pure` only when a flat color is visually acceptable.
-- Treat `refractionStrength`, `refractionProfile`, and `refractionTone` as the high-level API. Touch raw channel offsets only for visual experiments.
-- Use `refractionRenderer="css"` only when the page can tolerate the CSS renderer's lower optical fidelity; keep `svg` for the default premium material.
-- Use `fake` when matching existing `.fake-background` layering; otherwise keep normal layer rendering for clearer DOM/debugging.
-
-## API Reference
-
-### TxBaseSurface Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'pure'` | Surface mode: pure / mask / filter / glass / refraction. |
-| `radius` | `string \| number` | - | Custom border radius (inherits from parent if unset). |
-| `color` | `string` | - | Base color for pure/mask layers. |
-| `opacity` | `number` | `0.75` | Opacity in `mask` mode (0-1). |
-| `fallbackMaskOpacity` | `number` | - | Overrides opacity when degraded to `mask` (0-1). |
-| `blur` | `number` | `10` | Blur intensity for the filter layer (px). |
-| `filterSaturation` | `number` | `1.5` | Filter-layer saturation (low-level tuning). |
-| `filterContrast` | `number` | `1` | Filter-layer contrast (low-level tuning). |
-| `filterBrightness` | `number` | `1` | Filter-layer brightness (low-level tuning). |
-| `saturation` | `number` | `1.8` | Glass-layer saturation for glass/refraction. |
-| `brightness` | `number` | `70` | Glass-layer brightness for glass/refraction. |
-| `backgroundOpacity` | `number` | `0` | Background opacity of the glass layer. |
-| `borderWidth` | `number` | `0.07` | Edge width factor for the glass layer. |
-| `displace` | `number` | `0.5` | Refraction displacement amount. |
-| `distortionScale` | `number` | `-180` | Refraction distortion scale. |
-| `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB channel offsets for spectral separation. |
-| `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | Sampling channels used by displacement maps. |
-| `mixBlendMode` | `string` | `'difference'` | Blend mode used in refraction rendering. |
-| `refractionStrength` | `number` | `62` | Unified refraction strength 0-100 (effective fallback when the refraction model is active). |
-| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Refraction style preset (computed as `'filmic'` when not set explicitly). |
-| `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | Refraction tone preset (`vivid` is clearer, `mist` is softer). |
-| `refractionAngle` | `number` | `-24` | Main dispersion angle in degrees (computed as `-24` when not set explicitly). |
-| `refractionLightX` / `refractionLightY` | `number` | - | Light anchor coordinates (0-1). |
-| `refractionHaloOpacity` | `number` | - | Halo opacity override (0-1). If unset, uses the internal filmic model. |
-| `overlayOpacity` | `number` | `0` | Optional extra mask opacity for non-mask modes. |
-| `preset` | `'default' \| 'card'` | `'default'` | Visual preset (`card` applies card-focused tuning). |
-| `refractionRenderer` | `'svg' \| 'css'` | `'svg'` | Renderer type for refraction mode. |
-| `moving` | `boolean` | `false` | Manual motion flag for degradation fallback. |
-| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | Target mode while moving. |
-| `settleDelay` | `number` | `150` | Delay before recovery after motion ends (ms). |
-| `autoDetect` | `boolean` | `false` | Auto detect transform motion and fallback. |
-| `transitionDuration` | `number` | `299` | Recovery transition duration (ms). |
-| `fake` | `boolean` | `false` | Enable fake pseudo-element rendering mode. |
-| `fakeIndex` | `number` | `0` | z-index for fake layer. |
-| `tag` | `string` | `'div'` | Root element tag name. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| `default` | - | Surface content. It is rendered in `.tx-base-surface__content` above glass, filter, mask, motion-cover, and refraction-edge layers. |
-
-### Events
-
-None. `TxBaseSurface` is a visual primitive and does not emit interaction or lifecycle events.
-
-### Exposed Methods
-
-None. Drive motion fallback with `moving` or `autoDetect`, and update visual state through props.
-
-### CSS Variables
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `--tx-surface-color` | `color` prop or theme fallback | Solid/mask background color. Falls back to `var(--tx-fill-color-lighter, #fafafa)`. |
-| `--tx-surface-radius` | `radius` prop | Root and layer border radius; numeric values become `px`. |
-| `--tx-surface-transition` | `transitionDuration` prop | Layer fade, background, and backdrop-filter transition duration. |
-| `--tx-surface-filter-blur` | `blur` prop | Backdrop blur radius for filter and refraction filter layers. |
-| `--tx-surface-filter-saturation` | `filterSaturation` prop | Filter-layer saturation multiplier. |
-| `--tx-surface-filter-contrast` | `filterContrast` prop | Filter-layer contrast multiplier. |
-| `--tx-surface-filter-brightness` | `filterBrightness` prop | Filter-layer brightness multiplier. |
-| `--tx-surface-mask-opacity` | `opacity`, `fallbackMaskOpacity`, or `overlayOpacity` | Active mask opacity after clamping to `0..1`. |
-| `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` or angle model | Refraction light anchor in percentages. |
-| `--tx-surface-refraction-strength` | `refractionStrength` model | Blended optical strength during rest, motion, and recovery. |
-| `--tx-surface-fake-index` | `fakeIndex` prop | z-index for fake pseudo-element rendering. |
-| `--tx-surface-fake-bg` | `color` prop or theme fallback | Background color of the fake-mode pseudo element. |
-| `--tx-surface-fake-opacity` | mask opacity model | Opacity of the fake-mode pseudo element. |
-| `--tx-surface-mask-opacity-percent` | mask opacity model | Percentage form of the mask opacity (internal interpolation output, do not override). |
-| `--tx-surface-motion-cover-opacity` | motion state model | Refraction motion-cover layer opacity (internal). |
-| `--tx-surface-refraction-edge-opacity` | optics model | Refraction edge highlight opacity (internal). |
-| `--tx-surface-refraction-streak-angle` | `refractionAngle` model | Refraction streak angle (angle model +92deg, internal). |
-| `--tx-surface-refraction-{filter,mask}-{base,primary,secondary,veil}-weight` / `--tx-surface-refraction-streak-weight` | profile/tone weight model | Blend-weight family for the optical layers (internal). |
-| `--tx-surface-refraction-*-gain` / `-boost` / `-base`, `--tx-surface-refraction-halo-opacity`, `--tx-surface-refraction-mask-effective-opacity` | profile/tone derived values | Derived optical interpolation outputs (internal). |
-| `--tx-surface-refraction-mask-color` | theming hook (consumed) | Base color of the refraction gradient layers; overridable in themes (falls back to `#fff`-family defaults). |
-
-## Relationship with TxCard
-
-- Use `TxCard` for out-of-the-box product usage (header/footer/loading/inertial/interaction states).
-- Use `TxBaseSurface` for low-level material tuning (filter/refraction/glass parameter matrix).
-- Recommended split: `TxCard` handles container semantics + interaction, `TxBaseSurface` handles material rendering.
-
-## Background Modes
-
-Five modes compared: `pure` solid color, `mask` semi-transparent overlay, `blur` backdrop blur, `glass` glass layer, and `refraction` glass+filter refraction.
-
-### Mode Comparison
+### Modes
+`mode` picks the material: `pure` solid, `mask` translucent overlay, `blur` backdrop blur, `glass`, or `refraction`.
 :::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-      <TxBaseSurface mode="pure" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
-        Pure
-      </TxBaseSurface>
-      <TxBaseSurface mode="mask" :opacity="0.6" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
-        Mask
-      </TxBaseSurface>
-      <TxBaseSurface mode="blur" :blur="8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
-        Blur
-      </TxBaseSurface>
-      <TxBaseSurface mode="glass" :blur="12" :saturation="1.8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
-        Glass
-      </TxBaseSurface>
-      <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
-        Refraction
-      </TxBaseSurface>
-    </div>
+    <TxBaseSurface mode="pure">Pure</TxBaseSurface>
+    <TxBaseSurface mode="mask" :opacity="0.6">Mask</TxBaseSurface>
+    <TxBaseSurface mode="blur" :blur="8">Blur</TxBaseSurface>
+    <TxBaseSurface mode="glass" :blur="12" :saturation="1.8">Glass</TxBaseSurface>
+    <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200">Refraction</TxBaseSurface>
   </template>
 ---
 :::
 
-## Advanced Parameter Lab
-
-Use this low-level lab to tune material parameters in `filter` / `refraction` workflows. For product-facing card usage, `TxCard` is still the recommended first choice.
-
 ### Advanced Lab
+`filter*` props tune the filter layer, `refraction*` props the refraction layer, and `preset="card"` applies the card tuning.
 :::TuffDemoWrapper{demo="BaseSurfaceAdvancedDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-  
-  const mode = ref<'blur' | 'glass' | 'refraction'>('refraction')
-  const profile = ref<'soft' | 'filmic' | 'cinematic'>('filmic')
-  const blur = ref(24)
-  const filterSaturation = ref(1.6)
-  const filterContrast = ref(1.05)
-  const filterBrightness = ref(1.02)
-  
-  const refractionStrength = ref(68)
-  const refractionAngle = ref(-24)
-  const refractionHaloOpacity = ref(0.42)
-  </script>
-  
   <template>
     <TxBaseSurface
-      :mode="mode"
+      mode="refraction"
       preset="card"
       :radius="18"
-      :blur="blur"
-      :filter-saturation="filterSaturation"
-      :filter-contrast="filterContrast"
-      :filter-brightness="filterBrightness"
-      :refraction-profile="profile"
-      :refraction-strength="refractionStrength"
-      :refraction-angle="refractionAngle"
-      :refraction-halo-opacity="refractionHaloOpacity"
-      style="min-height: 180px; padding: 16px;"
+      :blur="24"
+      :filter-saturation="1.6"
+      refraction-profile="filmic"
+      :refraction-strength="68"
+      :refraction-angle="-24"
+      :refraction-halo-opacity="0.42"
     >
       BaseSurface Advanced
     </TxBaseSurface>
@@ -181,132 +49,157 @@ code: |
 ---
 :::
 
-## Fake Pseudo-Element Mode
-
-Enable pseudo-element background rendering via the `fake` prop. Slot content naturally sits above the background without extra z-index management. Useful when you need consistency with the existing `.fake-background` pattern.
-
 ### Fake Mode
+`fake` paints the background on a pseudo-element, matching the existing `.fake-background` layering; slot content sits above it naturally.
 :::TuffDemoWrapper{demo="BaseSurfaceFakeDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-      <TxBaseSurface fake mode="mask" :opacity="0.5" :radius="12" style="width: 200px; height: 100px;">
-        <strong>Pseudo-element background</strong>
-        <span style="font-size: 12px; opacity: 0.7;">Slot content naturally above</span>
-      </TxBaseSurface>
-      <TxBaseSurface fake mode="pure" :radius="12" color="var(--tx-color-primary-light-9)" style="width: 200px; height: 100px;">
-        Custom color
-      </TxBaseSurface>
-    </div>
+    <TxBaseSurface fake mode="mask" :opacity="0.5" :radius="12">
+      <strong>Pseudo-element background</strong>
+    </TxBaseSurface>
+    <TxBaseSurface fake mode="pure" :radius="12" color="var(--tx-color-primary-light-9)">
+      Custom color
+    </TxBaseSurface>
   </template>
 ---
 :::
 
-## Motion Fallback
-
-When `blur` or `glass` mode elements are in a CSS `transform` animation, `backdrop-filter` becomes invalidated (known Chromium bug).
-
-Use the `moving` prop for manual control, or `auto-detect` for automatic transform detection. The component degrades to `fallbackMode` (default `mask`) during motion and smoothly recovers afterward. Refraction degrades per layer: the sampling-stale glass / blur layers fade themselves out while a translucent motion cover holds the visual weight, then cross-fade back on settle — nothing near-opaque ever covers the surface.
-
-Click the button to trigger real `transform` movement on both blur and glass cards. The cards contain scrollable content inside.
-
-### Multi-Mode Motion Fallback
+### Motion Fallback
+`transform` motion breaks `backdrop-filter`; with `moving` set, the surface degrades to `fallbackMode` and recovers smoothly when it stops.
 :::TuffDemoWrapper{demo="BaseSurfaceFallbackDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const animating = ref(false)
-  </script>
-
   <template>
     <TxButton @click="animating = !animating">
       {{ animating ? 'Stop Motion' : 'Start Motion' }}
     </TxButton>
 
-    <!-- Both cards transform together; only :moving differs -->
-    <div :style="{ display: 'flex', gap: '12px', transition: 'transform 1.4s cubic-bezier(0.22, 1, 0.36, 1)', transform: animating ? 'translateX(16px) translateY(-10px) scale(0.92) rotate(2.5deg)' : 'none' }">
-      <TxBaseSurface
-        mode="glass"
-        :blur="12"
-        :moving="false"
-        :auto-detect="false"
-        fallback-mode="mask"
-        :radius="14"
-      >
-        No fallback — backdrop-filter breaks while moving
-      </TxBaseSurface>
-      <TxBaseSurface
-        mode="glass"
-        :blur="12"
-        :moving="animating"
-        :auto-detect="false"
-        fallback-mode="mask"
-        :radius="14"
-      >
-        With fallback — degrades to mask
+    <div
+      :style="{ transform: animating ? 'translateX(16px) scale(0.92)' : 'none' }"
+      style="transition: transform 1.4s;"
+    >
+      <TxBaseSurface mode="glass" :blur="12">No fallback</TxBaseSurface>
+      <TxBaseSurface mode="glass" :blur="12" :moving="animating" fallback-mode="mask">
+        With fallback
       </TxBaseSurface>
     </div>
   </template>
 ---
 :::
 
-## Raw vs BaseSurface Comparison
-
-Left side uses raw `backdrop-filter` — blur breaks completely during transform motion. Right side uses `BaseSurface` — gracefully degrades to mask during motion, then smoothly recovers to glass when stopped.
-
-### Motion Comparison
+### Raw vs BaseSurface
+When the motion state isn't available, turn on `autoDetect` and the surface watches transform transitions itself.
 :::TuffDemoWrapper{demo="BaseSurfaceMotionCompareDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const animating = ref(false)
-  </script>
-
   <template>
-    <!-- Left: raw, backdrop-filter breaks on move -->
-    <div :style="{ transform: animating ? 'translateX(20px)' : '' }"
-         style="backdrop-filter: blur(12px); transition: transform 1.2s;">
+    <div
+      :style="{ transform: animating ? 'translateX(20px)' : '' }"
+      style="backdrop-filter: blur(12px); transition: transform 1.2s;"
+    >
       Raw glass (breaks on move)
     </div>
 
-    <!-- Right: BaseSurface auto fallback -->
-    <TxBaseSurface mode="glass" :blur="12" :moving="animating"
-                   fallback-mode="mask" :radius="14">
+    <TxBaseSurface mode="glass" :blur="12" :moving="animating" auto-detect fallback-mode="mask">
       BaseSurface (degrades to mask)
     </TxBaseSurface>
   </template>
 ---
 :::
 
+### Best Practices
+
+- Prefer `TxCard` for product containers, since it owns container semantics and interaction; use `TxBaseSurface` only to tune material, fallback, or refraction directly.
+- Pass `moving` when the parent owns the animation state; use `autoDetect` only for transform transitions whose state you can't reach.
+- Keep `fallbackMode="mask"` so `blur` / `glass` content stays readable in motion; use `pure` only when a flat color is acceptable.
+- Tune refraction through `refractionStrength`, `refractionProfile`, and `refractionTone`; keep RGB channel offsets for visual experiments.
+- Use `refractionRenderer="css"` only where its lower optical fidelity is acceptable.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'pure'` | Surface mode: solid, mask, filter, glass, or refraction. |
+| `radius` | `string \| number` | - | Corner radius; inherits from the parent when unset. |
+| `color` | `string` | - | Base color for the solid or mask layer. |
+| `opacity` | `number` | `0.75` | Opacity in `mask` mode (0–1). |
+| `fallbackMaskOpacity` | `number` | - | Opacity when degraded to `mask` (0–1). |
+| `blur` | `number` | `10` | Filter-layer blur radius in px. |
+| `filterSaturation` | `number` | `1.5` | Filter-layer saturation. |
+| `filterContrast` | `number` | `1` | Filter-layer contrast. |
+| `filterBrightness` | `number` | `1` | Filter-layer brightness. |
+| `saturation` | `number` | `1.8` | Glass-layer saturation for glass and refraction. |
+| `brightness` | `number` | `70` | Glass-layer brightness for glass and refraction; `<= 3` is read as a multiplier. |
+| `backgroundOpacity` | `number` | `0` | Background opacity of the glass layer. |
+| `borderWidth` | `number` | `0.07` | Edge width factor of the glass layer. |
+| `displace` | `number` | `0.5` | Refraction displacement amount. |
+| `distortionScale` | `number` | `-180` | Refraction distortion scale. |
+| `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB channel offsets that control dispersion. |
+| `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | Channels sampled by the displacement map. |
+| `mixBlendMode` | `string` | `'difference'` | Refraction blend mode. |
+| `refractionStrength` | `number` | `62` | Refraction strength, 0–100. |
+| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Refraction style preset. |
+| `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | Refraction tone: `vivid` is clearer, `mist` softer. |
+| `refractionAngle` | `number` | `-24` | Main dispersion angle in degrees. |
+| `refractionLightX` / `refractionLightY` | `number` | - | Light anchor (0–1). |
+| `refractionHaloOpacity` | `number` | - | Halo opacity (0–1); the built-in filmic model applies when unset. |
+| `overlayOpacity` | `number` | `0` | Extra mask opacity for non-mask modes. |
+| `preset` | `'default' \| 'card'` | `'default'` | Visual preset; `card` applies the card tuning. |
+| `refractionRenderer` | `'svg' \| 'css'` | `'svg'` | Refraction renderer. |
+| `moving` | `boolean` | `false` | Marks the surface as moving, which triggers the fallback. |
+| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | Mode used while moving. |
+| `settleDelay` | `number` | `150` | Delay in ms before recovery after motion ends; never shorter than `transitionDuration`. |
+| `autoDetect` | `boolean` | `false` | Detects transform motion and falls back automatically. |
+| `transitionDuration` | `number` | `299` | Recovery transition duration in ms. |
+| `fake` | `boolean` | `false` | Renders the background on a pseudo-element. |
+| `fakeIndex` | `number` | `0` | z-index of the pseudo-element layer. |
+| `tag` | `string` | `'div'` | Root element tag. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Surface content, rendered in `.tx-base-surface__content` above every material layer. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-surface-color` | `color` prop or theme fallback | Solid / mask color; defaults to `var(--tx-fill-color-lighter, #fafafa)`. |
+| `--tx-surface-radius` | `radius` prop | Radius of the root and every layer; numbers become `px`. |
+| `--tx-surface-transition` | `transitionDuration` prop | Duration of layer fades, background, and backdrop-filter transitions. |
+| `--tx-surface-filter-blur` | `blur` prop | Blur radius of the filter and refraction filter layers. |
+| `--tx-surface-filter-saturation` | `filterSaturation` prop | Filter-layer saturation multiplier. |
+| `--tx-surface-filter-contrast` | `filterContrast` prop | Filter-layer contrast multiplier. |
+| `--tx-surface-filter-brightness` | `filterBrightness` prop | Filter-layer brightness multiplier. |
+| `--tx-surface-mask-opacity` | `opacity`, `fallbackMaskOpacity`, or `overlayOpacity` | Current mask opacity, clamped to `0..1`. |
+| `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` or angle model | Refraction light anchor in percent. |
+| `--tx-surface-refraction-strength` | `refractionStrength` model | Optical strength blended across rest, motion, and recovery. |
+| `--tx-surface-fake-index` | `fakeIndex` prop | z-index of the pseudo-element layer. |
+| `--tx-surface-fake-bg` | `color` prop or theme fallback | Background color of the pseudo-element. |
+| `--tx-surface-fake-opacity` | mask opacity model | Opacity of the pseudo-element. |
+| `--tx-surface-mask-opacity-percent` | mask opacity model | Mask opacity as a percentage (internal; do not override). |
+| `--tx-surface-motion-cover-opacity` | motion state model | Opacity of the refraction motion cover (internal). |
+| `--tx-surface-refraction-edge-opacity` | optics model | Opacity of the refraction edge highlight (internal). |
+| `--tx-surface-refraction-streak-angle` | `refractionAngle` model | Refraction streak angle, the angle plus 92deg (internal). |
+| `--tx-surface-refraction-{filter,mask}-{base,primary,secondary,veil}-weight` / `--tx-surface-refraction-streak-weight` | profile/tone weight model | Blend weights of the optical layers (internal). |
+| `--tx-surface-refraction-*-gain` / `-boost` / `-base`, `--tx-surface-refraction-halo-opacity`, `--tx-surface-refraction-mask-effective-opacity` | profile/tone derived values | Derived outputs of the optical interpolation (internal). |
+| `--tx-surface-refraction-mask-color` | theming hook (consumed) | Base color of the refraction gradients; override it in themes (defaults to `#fff` shades). |
+
 ## Overview
 
-- `tag` controls the root element and the default slot is rendered above all material layers.
-- `pure` mode renders only the root background; `mask` renders the mask layer and clamps opacity to `0..1`.
-- `blur` and `glass` degrade while `moving=true` or auto-detected transform motion is active. `fallbackMode='mask'` uses `fallbackMaskOpacity` when provided; `fallbackMode='pure'` renders no mask layer.
-- `glass` and `refraction` forward normalized geometry and optical props to `TxGlassSurface`; `brightness <= 3` is treated as a multiplier and converted to a percentage.
-- `refraction` renders glass, filter, mask, optional motion-cover, and edge layers, plus renderer/profile/tone classes and light/strength CSS variables.
-- Passing any of `refractionStrength` / `refractionAngle` / `refractionProfile` switches to the derived refraction model (`shouldUseRefractionModel`); unset ones fall back to `62` / `-24` / `'filmic'`.
-- `autoDetect` observes the root and ancestor `style` mutations plus `transitionstart`, `transitionend`, and `transitioncancel`; listeners and observers are removed on unmount.
-- `settleDelay` and `transitionDuration` both affect fallback recovery. The actual settle timer is at least the transition duration.
-- `refraction` keeps the refraction renderer active during motion, but blends optical parameters down while moving and back up during recovery.
+- `pure` renders only the root background; `mask` renders a mask layer with opacity clamped to `0..1`.
+- `blur` and `glass` degrade while `moving` is set or transform motion is detected: `fallbackMode="mask"` prefers `fallbackMaskOpacity`, and `pure` renders no mask layer.
+- `refraction` keeps its mode in motion: the glass / blur layers that lose their sampling fade out, a translucent motion cover holds the weight, and both cross-fade back on settle.
+- Passing any of `refractionStrength`, `refractionAngle`, or `refractionProfile` switches to the derived refraction model; unset ones fall back to `62` / `-24` / `'filmic'`.
+- `autoDetect` watches `style` changes on the root and its ancestors plus `transitionstart` / `transitionend` / `transitioncancel`, and removes its listeners on unmount.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`, `types.ts`, `base-surface-motion.ts`, `base-surface-math.ts`, and `style/index.scss`.
-- The CSS-variable table covers every runtime variable the component emits (rows marked internal are interpolation outputs, not override points) plus the consumed theming hook `--tx-surface-refraction-mask-color`.
-- Existing tests cover root tag/radius/color variables, mask opacity clamping, blur fallback, pure fallback, normalized `TxGlassSurface` props, refraction classes/light variables, and auto-detect teardown.
-- No events or exposed methods exist in source; visual state is controlled through props and CSS variables.
-
-- Component source: `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`.
-- Types: `packages/tuffex/packages/components/src/base-surface/src/types.ts`.
-- Motion helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-motion.ts`.
-- Math helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-math.ts`.
-- Styles: `packages/tuffex/packages/components/src/base-surface/src/style/index.scss`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/base-surface/__tests__/base-surface.test.ts` verifies mode rendering, fallback behavior, refraction parameters, and observer cleanup.
+- Glass and refraction render through `TxGlassSurface`; fallback timing lives in `base-surface-motion.ts`.
+- Source: `packages/tuffex/packages/components/src/base-surface/`.
 
 <TuffDocSourceLink />

@@ -100,6 +100,8 @@ code: |
 | `step` | `number` | `1` | 步长。 |
 | `disabled` | `boolean` | `false` | 禁用滑块并隐藏 tooltip。 |
 | `active` | `boolean` | `true` | `false` 时暂停观测、全局追踪与动效，值与 `disabled` 不变。 |
+| `ariaLabel` | `string` | - | 可访问名称，写在原生 range 输入上而非外层包装。 |
+| `ariaLabelledby` | `string` | - | 为 range 输入命名的可见元素 id。 |
 | `showValue` | `boolean` | `false` | 在右侧显示当前值。 |
 | `formatValue` | `(value: number) => string` | - | 格式化右侧读数。 |
 | `thumbSurface` | `boolean` | `true` | 常驻胶囊拖钮，材质与形变同 Radio 指示器；`false` 为扁平圆钮。 |

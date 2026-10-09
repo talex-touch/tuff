@@ -152,6 +152,7 @@ code: |
 - Remote mode shows `options` as given and caches nothing.
 - Clearing emits `update:modelValue` and `change` with `''`.
 - The input text survives closing the panel; reopening does not reset it.
+- Keyboard: ArrowDown/ArrowUp open the panel and move the highlight through enabled options, wrapping; Enter picks the highlighted option, or emits the remote `search` when none is; Escape closes the panel.
 
 ## Technologies
 

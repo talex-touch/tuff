@@ -1,6 +1,6 @@
 ---
 title: Sources
-description: A collapsible citation list whose links never navigate on their own.
+description: A collapsible list of cited sources.
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Sources
+### Basic
 ::::TuffDemoWrapper{demo="SourcesSourcesDemo" code-lang="vue"}
 ---
 code: |
@@ -33,10 +33,8 @@ code: |
 ::::
 
 ### Stacked Sources
-
-`variant="stack"` swaps the header globe for the leading favicons, overlapped. The reader can see which sites back an answer while the list is still collapsed, so opening it becomes optional rather than necessary.
-
-:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="Stacked sources in a streaming answer" description="Once the answer settles, the stacked header appears alongside the vertical follow-up list."}
+`variant="stack"` swaps the header globe for the leading favicons, so the cited sites show while the list is collapsed.
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="Appears once a streaming answer settles"}
 ---
 code: |
   <template>
@@ -52,10 +50,10 @@ code: |
 
 ### Best Practices
 
-- Handle `open` — without a listener, clicking a citation does nothing at all.
-- On desktop, open in the external browser and pass `noopener` rather than navigating the app window away.
-- Use stable ids: the failed-favicon record is keyed by `id`, so a changing id makes broken images retry.
-- Override `labelFormatter` for non-English surfaces; the default carries English pluralization.
+- Handle `open`; without a listener, clicking a citation does nothing.
+- On desktop, open links in the external browser with `noopener` rather than navigating the app window.
+- Use stable ids: failed favicons are recorded by `id`, so a changing id retries broken images.
+- Override `labelFormatter` on non-English surfaces; the default is English and pluralizes in English.
 
 ## API Reference
 
@@ -63,30 +61,22 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `sources` | `AiSourceItem[]` | — | The citations to render, where `AiSourceItem` is `{ id, url, title?, favicon? }`. Required. |
-| `labelFormatter` | `(count: number) => string` | — | Replaces the collapsed header text. Falls back to `Used N source(s)`. |
-| `defaultOpen` | `boolean` | `false` | Initial open state. Read once, on mount. |
+| `sources` | `AiSourceItem[]` | — | The citations, `{ id, url, title?, favicon? }`. Required. |
+| `labelFormatter` | `(count: number) => string` | — | Collapsed header text; defaults to `Used N source(s)`. |
+| `defaultOpen` | `boolean` | `false` | Initial open state, read once on mount. |
 | `variant` | `'default' \| 'stack'` | `'default'` | `stack` replaces the header globe with overlapped favicons. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `open` | `(source: AiSourceItem)` | Emitted when a citation is clicked. The default navigation is already prevented, so the host must perform it. |
-
-## Slots
-
-`TxSources` exposes no slots. Each row is a fixed composition of ordinal, favicon, title and domain.
+| `open` | `(source: AiSourceItem)` | Fires when a citation is clicked; navigation is prevented and left to the host. |
 
 ## Overview
 
-- `variant="stack"` draws at most the first three sources **that can actually render a head**, and falls back to the globe when none can rather than leaving a gap. A favicon that fails to load drops out of the stack and the next source takes its place.
-- The ring around each head comes from `--tx-sources-stack-ring`, defaulting to the page background. Its job is to punch a gap where the discs overlap, so repoint it when the header sits on anything other than the page colour.
-- **Links never navigate on their own.** A click calls `preventDefault()` and emits `open`; whether and where to open it is the host's decision. That is deliberate for sandboxed surfaces such as an Electron renderer.
-- The `href` is still present on the `<a>`, so the browser's own "open in new tab" and "copy link address" affordances keep working.
-- Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled — changing `defaultOpen` later has no effect.
-- The collapsed header defaults to `Used N source(s)` and pluralizes itself. `labelFormatter` replaces it entirely.
-- Titles fall back to the domain: an empty `title` shows the URL's hostname with a leading `www.` stripped, and a URL that `URL` cannot parse is shown verbatim.
-- A favicon that fails to load is recorded permanently for that source, so a broken image is not re-requested.
-- Favicons carry `alt=""` and `aria-hidden`; the accessible name comes from the title and domain text.
-- The list is an `<ol>` and the ordinals come from render order rather than a data field, so reordering `sources` renumbers them.
+- A click calls `preventDefault()` and emits `open`; the `href` stays on the `<a>`, so "open in new tab" and "copy link address" still work.
+- `stack` draws at most the first three sources that have a usable favicon and falls back to the globe when none do; a favicon that fails drops out and the next source takes its place.
+- The ring around stacked favicons is `--tx-sources-stack-ring`, the page background by default; repoint it when the header sits on another surface.
+- An empty `title` shows the hostname without `www.`; an unparseable `url` shows verbatim.
+- A favicon that fails to load is recorded and never re-requested.
+- The list is an `<ol>` numbered by render order; favicons carry `alt=""` and `aria-hidden`, and the title and domain carry the accessible name.

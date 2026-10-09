@@ -1,6 +1,6 @@
 ---
 title: "TextTransformer"
-description: "Short-text transition helper: morphs per character through the text-morph engine by default (numbers roll by place value), and keeps the original whole-string blur crossfade as a mode, with a scoped text slot."
+description: "A short-text transition that morphs per character or crossfades."
 category: Effects
 status: beta
 since: 0.3.4
@@ -9,127 +9,27 @@ syncStatus: reviewed
 verified: true
 ---
 
-> Not recommended for high-frequency real-time updates (e.g., streaming text, per-frame state changes). Better for occasional state/title/chapter/short-text changes.
-
 ## Usage
 
-### TextTransformer
+### Basic
+When the text color changes with the value, set it on the root; under `fade` the outgoing layer fades out in its old color.
 :::TuffDemoWrapper{demo="TextTransformerTextTransformerDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const text = ref('Hello')
-  const duration = ref(320)
-  const blurPx = ref(10)
-  const accent = ref(false)
-  const sizerRef = ref<any>(null)
-
-  function toggle() {
-    void sizerRef.value?.action?.(() => {
-      text.value = text.value === 'Hello'
-        ? 'Goodbye (blur + fade) - a longer title that will be clipped while resizing'
-        : 'Hello'
-      accent.value = !accent.value
-    })
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <TxButton @click="toggle">
-          Toggle
-        </TxButton>
-
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <div style="width: 220px;">
-            <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-              duration (ms)
-            </div>
-            <TxSlider v-model="duration" :min="120" :max="720" :step="10" :show-value="true" />
-          </div>
-
-          <div style="width: 220px;">
-            <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-              blur (px)
-            </div>
-            <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
-          </div>
-        </div>
-      </div>
-
-      <TxAutoSizer
-        ref="sizerRef"
-        :width="true"
-        :height="true"
-        :inline="true"
-        :duration-ms="duration"
-        easing="cubic-bezier(0.2, 0, 0, 1)"
-        outer-class="overflow-hidden"
-      >
-        <TxCard variant="plain" background="mask" :padding="12" :radius="14">
-          <div style="font-size: 14px; font-weight: 600; line-height: 1.4;">
-            <TxTextTransformer
-              mode="fade"
-              :text="text"
-              :duration-ms="duration"
-              :blur-px="blurPx"
-              :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
-            />
-          </div>
-          <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
-            text: {{ text }}
-          </div>
-        </TxCard>
-      </TxAutoSizer>
-    </div>
+    <TxTextTransformer
+      mode="fade"
+      :text="text"
+      :duration-ms="320"
+      :blur-px="10"
+      :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
+    />
   </template>
 ---
 :::
 
-### Best Practices
-
-- Use it for labels, titles, badges, and occasional state changes; avoid streaming tokens or per-frame counters.
-- Reach for `TxTextMorph` directly when you want the morph without the `fade` compatibility layer — it exposes the full surface: springs, the place-value switch, `locale` and `cursorIndex`.
-- Keep `durationMs` aligned with the surrounding `TxAutoSizer` transaction when both are used together; the `morph` engine animates its own width and height, so an outer sizer is usually redundant.
-- Prefer `wrap=false` inside compact buttons/badges to avoid vertical jumps; enable `wrap` only for paragraph or chapter transitions (which fall back to `fade`).
-- Keep slot content inline and lightweight. Heavy components inside the slot are duplicated while the previous layer is visible.
-- If color changes with text, set color on the transformer root; under `fade` the outgoing layer keeps the old computed color for a cleaner crossfade.
-
-## API Reference
-
-### TxTextTransformer
-
-#### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `text` | `string \| number` | - | Value rendered in the current layer and announced through the polite live region. |
-| `mode` | `'morph' \| 'fade'` | `morph` | `morph` hands the value to the text-morph engine (per-character diff, place-value digit rolls); `fade` is the original whole-string blur crossfade. The default slot and `wrap` both force `fade`. |
-| `durationMs` | `number` | `240` | Transition duration in milliseconds; under `fade` it also controls when the previous layer is removed. |
-| `blurPx` | `number` | `8` | Blur distance applied to the outgoing and incoming layers during the transition. **`fade` only** — the morph engine has no blur stage. |
-| `tag` | `string` | `span` | Root HTML tag used for the transformer wrapper. |
-| `wrap` | `boolean` | `false` | Allows multi-line text by switching layer whitespace from ellipsis mode to `pre-line`. **Forces `fade`**. |
-
-#### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `default` | `{ text: string }` | Optional renderer for both current and previous layers. Use it to wrap the text in custom inline markup while keeping the transition logic. |
-
-#### Events
-
-No Vue events are emitted. Drive state from the parent via the `text` prop.
-
-## Morph and Fade
-
-`mode` defaults to `morph`: the value goes to the text-morph engine, shared words hold their position, only the changed characters move, and digits roll by place value. `fade` is the original whole-string blur crossfade, and the only mode `blurPx` applies to.
-
-Two situations override `mode` and force `fade`: the default slot being in play (a slot renders arbitrary nodes, and the engine has no plain-text segments to morph), and `wrap` being on (the engine lays its segments out on one nowrap line and animates the container's width, which a value reflowing inside a constrained box cannot be measured against).
-
-### Morph vs fade
+### Morph and Fade
+The default `morph` animates per character and rolls digits by place value; `fade` is a whole-string blur crossfade, the only mode `blurPx` applies to.
 :::TuffDemoWrapper{demo="TextTransformerMorphVsFadeDemo" code-lang="vue"}
 ---
 code: |
@@ -151,13 +51,8 @@ code: |
 ---
 :::
 
-## Used with AutoSizer
-
-When you want width/height to follow text changes smoothly, wrap `TxTextTransformer` in `TxAutoSizer` and trigger a transaction via `autoSizerRef.action(() => ...)`.
-
-If you do not want text to wrap during size animations (vertical/jumping lines), keep `wrap=false`; overflow will be clipped (`overflow: hidden`).
-
-### AutoSizer + TextTransformer
+### With AutoSizer
+Inside `TxAutoSizer`, wrap the change in `action(() => …)` and the size follows the text; with `wrap=false`, overflow is clipped.
 :::TuffDemoWrapper{demo="TextTransformerAutoSizerTextTransformerDemo" code-lang="vue"}
 ---
 code: |
@@ -166,349 +61,110 @@ code: |
 
   const sizerRef = ref<any>(null)
   const label = ref('Short')
-  const accent = ref(false)
-  const duration = ref(360)
-  const blurPx = ref(10)
 
   function toggle() {
     void sizerRef.value?.action?.(() => {
       label.value = label.value === 'Short'
         ? 'Very very long label (blur + fade) that will be clipped while resizing'
         : 'Short'
-      accent.value = !accent.value
     })
   }
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <TxButton @click="toggle">
-          Toggle
-        </TxButton>
-
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            duration (ms)
-          </div>
-          <TxSlider v-model="duration" :min="160" :max="720" :step="10" :show-value="true" />
-        </div>
-
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            blur (px)
-          </div>
-          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
-        </div>
-      </div>
-
-      <TxAutoSizer
-        ref="sizerRef"
-        :width="true"
-        :height="true"
-        :inline="true"
-        :duration-ms="duration"
-        easing="cubic-bezier(0.2, 0, 0, 1)"
-        outer-class="overflow-hidden"
-      >
-        <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
-          <div style="font-size: 13px; line-height: 1.4;">
-            <TxTextTransformer
-              mode="fade"
-              :text="label"
-              :duration-ms="duration"
-              :blur-px="blurPx"
-              :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
-            />
-          </div>
-        </TxCard>
-      </TxAutoSizer>
-    </div>
+    <TxButton @click="toggle">Toggle</TxButton>
+    <TxAutoSizer
+      ref="sizerRef"
+      :width="true"
+      :height="true"
+      :inline="true"
+      :duration-ms="360"
+      outer-class="overflow-hidden"
+    >
+      <TxTextTransformer mode="fade" :text="label" :duration-ms="360" />
+    </TxAutoSizer>
   </template>
 ---
 :::
 
-## Long Text / Chapter Switch
-
-### Long text chapter
+### Long Text / Chapter Switch
+`wrap` breaks multi-line text with `pre-line` and forces `fade`.
 :::TuffDemoWrapper{demo="TextTransformerLongTextChapterDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const sizerRef = ref<any>(null)
-  const long = ref(false)
-  const duration = ref(380)
-  const blurPx = ref(12)
-
-  const chapterA = `Chapter A\n\nThis is a longer paragraph of text used to simulate chapter content changes.\nIt includes multiple lines so you can observe both width and height transitions.\n\n- Bullet A\n- Bullet B\n- Bullet C\n\nEnd.`
-
-  const chapterB = `Chapter B\n\nA different chapter with different length.\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit.\nSed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n\nUt enim ad minim veniam, quis nostrud exercitation ullamco laboris.\n\nEnd.`
-
-  const text = ref(chapterA)
-
-  function toggle() {
-    void sizerRef.value?.action?.(() => {
-      long.value = !long.value
-      text.value = long.value ? chapterB : chapterA
-    })
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <TxButton @click="toggle">
-          Toggle chapter
-        </TxButton>
-
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            duration (ms)
-          </div>
-          <TxSlider v-model="duration" :min="180" :max="900" :step="10" :show-value="true" />
-        </div>
-
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            blur (px)
-          </div>
-          <TxSlider v-model="blurPx" :min="0" :max="28" :step="1" :show-value="true" />
-        </div>
-      </div>
-
-      <TxAutoSizer
-        ref="sizerRef"
-        :width="true"
-        :height="true"
-        :duration-ms="duration"
-        easing="cubic-bezier(0.2, 0, 0, 1)"
-        outer-class="overflow-hidden"
-        style="max-width: 720px;"
-      >
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-          <div style="font-size: 13px; line-height: 1.6; max-width: 640px;">
-            <TxTextTransformer :text="text" :duration-ms="duration" :blur-px="blurPx" wrap />
-          </div>
-        </TxCard>
-      </TxAutoSizer>
-
-      <div style="font-size: 12px; opacity: 0.65;">
-        Tip: this component is designed for occasional transitions. Avoid using it for high-frequency real-time updates.
-      </div>
-    </div>
+    <TxAutoSizer ref="sizerRef" :width="true" :height="true" :duration-ms="380" outer-class="overflow-hidden">
+      <TxTextTransformer :text="chapter" :duration-ms="380" :blur-px="12" wrap />
+    </TxAutoSizer>
   </template>
 ---
 :::
 
-## Title + Subtitle
-
-### Title + subtitle
+### Title and Subtitle
 :::TuffDemoWrapper{demo="TextTransformerTitleSubtitleDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const sizerRef = ref<any>(null)
-  const duration = ref(320)
-  const blurPx = ref(10)
-  const accent = ref(false)
-
-  const title = ref('Daily Report')
-  const subtitle = ref('Short summary.')
-
-  function toggle() {
-    void sizerRef.value?.action?.(() => {
-      if (title.value === 'Daily Report') {
-        title.value = 'Weekly Report (Longer Title)'
-        subtitle.value = 'A longer subtitle that spans multiple words.'
-      }
-      else {
-        title.value = 'Daily Report'
-        subtitle.value = 'Short summary.'
-      }
-      accent.value = !accent.value
-    })
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <TxButton @click="toggle">
-          Toggle
-        </TxButton>
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            duration (ms)
-          </div>
-          <TxSlider v-model="duration" :min="160" :max="720" :step="10" :show-value="true" />
-        </div>
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            blur (px)
-          </div>
-          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
-        </div>
-      </div>
-
-      <TxAutoSizer
-        ref="sizerRef"
-        :width="true"
-        :height="true"
-        :inline="true"
-        :duration-ms="duration"
-        easing="cubic-bezier(0.2, 0, 0, 1)"
-        outer-class="overflow-hidden"
-      >
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="max-width: 420px;">
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            <div style="font-size: 14px; font-weight: 700; line-height: 1.3;">
-              <TxTextTransformer
-                mode="fade"
-                :text="title"
-                :duration-ms="duration"
-                :blur-px="blurPx"
-                :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
-              />
-            </div>
-            <div style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
-              <TxTextTransformer
-                mode="fade"
-                :text="subtitle"
-                :duration-ms="duration"
-                :blur-px="blurPx"
-                :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-secondary)' }"
-              />
-            </div>
-          </div>
-        </TxCard>
-      </TxAutoSizer>
-    </div>
+    <TxAutoSizer ref="sizerRef" :width="true" :height="true" :inline="true" :duration-ms="320" outer-class="overflow-hidden">
+      <TxTextTransformer mode="fade" :text="title" :duration-ms="320" />
+      <TxTextTransformer mode="fade" :text="subtitle" :duration-ms="320" />
+    </TxAutoSizer>
   </template>
 ---
 :::
 
-## Status/Badge Text
-
-### Status text
+### Status Text
 :::TuffDemoWrapper{demo="TextTransformerStatusTextDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const sizerRef = ref<any>(null)
-  const duration = ref(280)
-  const blurPx = ref(10)
-
-  const mode = ref<'ok' | 'warn' | 'err'>('ok')
-
-  function label() {
-    if (mode.value === 'ok')
-      return 'Synced'
-    if (mode.value === 'warn')
-      return 'Syncing (may take a while)'
-    return 'Failed: Network error'
-  }
-
-  function color() {
-    if (mode.value === 'ok')
-      return 'var(--tx-color-success)'
-    if (mode.value === 'warn')
-      return 'var(--tx-color-warning)'
-    return 'var(--tx-color-danger)'
-  }
-
-  function toggle() {
-    void sizerRef.value?.action?.(() => {
-      mode.value = mode.value === 'ok' ? 'warn' : mode.value === 'warn' ? 'err' : 'ok'
-    })
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <TxButton @click="toggle">
-          Toggle
-        </TxButton>
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            duration (ms)
-          </div>
-          <TxSlider v-model="duration" :min="120" :max="600" :step="10" :show-value="true" />
-        </div>
-        <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
-            blur (px)
-          </div>
-          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
-        </div>
-      </div>
-
-      <TxAutoSizer
-        ref="sizerRef"
-        :width="true"
-        :height="true"
-        :inline="true"
-        :duration-ms="duration"
-        easing="cubic-bezier(0.2, 0, 0, 1)"
-        outer-class="overflow-hidden"
-      >
-        <TxCard variant="plain" background="mask" :padding="12" :radius="14">
-          <div style="display: inline-flex; align-items: center; gap: 10px;">
-            <div
-              style="width: 8px; height: 8px; border-radius: 99px;"
-              :style="{ background: color() }"
-            />
-            <TxTextTransformer
-              mode="fade"
-              :text="label()"
-              :duration-ms="duration"
-              :blur-px="blurPx"
-              :style="{ color: color() }"
-            />
-          </div>
-        </TxCard>
-      </TxAutoSizer>
-    </div>
+    <TxAutoSizer ref="sizerRef" :width="true" :height="true" :inline="true" :duration-ms="280" outer-class="overflow-hidden">
+      <span class="dot" :style="{ background: color }" />
+      <TxTextTransformer mode="fade" :text="label" :duration-ms="280" :style="{ color }" />
+    </TxAutoSizer>
   </template>
 ---
 :::
 
+### Best Practices
+
+- Use it for labels, titles, badges, and occasional state changes, not for streaming tokens or per-frame counters.
+- Use `TxTextMorph` directly when you only need the morph; it adds springs, `numbers`, `locale`, and `cursorIndex`.
+- Keep the durations equal when paired with `TxAutoSizer`; `morph` animates its own size, so an outer sizer is usually redundant.
+- Keep `wrap=false` in compact buttons and badges; turn `wrap` on only for paragraph or chapter changes.
+- Keep slot content light and derived only from the provided `text`: during a `fade`, both layers render it.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string \| number` | - | The current value, normalized with `String(...)`. |
+| `mode` | `'morph' \| 'fade'` | `morph` | `morph` animates per character; `fade` crossfades the whole string with blur. |
+| `durationMs` | `number` | `240` | Transition duration in ms; under `fade`, also when the old layer is removed. |
+| `blurPx` | `number` | `8` | Blur distance of the crossfade; `fade` only. |
+| `tag` | `string` | `span` | Root element tag. |
+| `wrap` | `boolean` | `false` | Breaks multi-line text with `pre-line` and forces `fade`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ text: string }` | Text renderer shared by the current and previous layers; forces `fade`. |
+
 ## Overview
 
-- `text` is normalized with `String(...)`; numbers are displayed as their string form.
-- Under `morph` the value goes to the engine: the whole value sits in a visually-hidden `[tx-morph-sr]` node and every segment is `aria-hidden`. The root's `overflow` opens back up to `visible`, or exiting segments would be cut in half — which is why `morph` does not ellipsise.
-- The root uses `aria-live="polite"`; under `fade` the previous layer is `aria-hidden` so screen readers announce only the current text.
-- Under `fade`, when `text` changes the component snapshots the previous DOM color, then renders both layers:
-  - the new layer first lands in its setup state (transparent and blurred) with no transition;
-  - the component forces one style commit, then starts the animation on the next animation frame;
-  - the previous layer is removed after `durationMs + 34ms`.
-  Without that commit, the setup and animating states would land in the same style recalc and the new text would appear at once instead of fading in.
-- Under `prefers-reduced-motion: reduce`, neither layer transitions; the new text replaces the old at once.
-- A newer text change cancels the previous timer/frame through an internal sequence guard, so stale transitions cannot remove the active layer.
-- `wrap=false` keeps one-line ellipsis behavior; `wrap=true` switches layers to `white-space: pre-line` for multiline or newline-delimited content.
-- The scoped slot is invoked for both current and previous text, so slot output should be deterministic from the provided `text` value.
+- The default slot or `wrap` overrides `mode` and forces `fade`: the engine morphs only plain text and measures on a single line.
+- The root is `aria-live="polite"`. Under `morph` the whole value sits in a visually hidden `[tx-morph-sr]` node; under `fade` the old layer is `aria-hidden`, so only the current text is announced.
+- `fade` with `wrap=false` truncates to one line with an ellipsis; under `morph` the root is `overflow: visible` so exiting segments aren't clipped, and nothing is truncated.
+- Under `fade`, the new layer lands in a transparent, blurred setup state, one style commit is forced, and the transition starts on the next frame; the old layer is removed after `durationMs + 34ms`.
+- A newer change cancels the previous timer and animation frame, so a stale transition never removes the current layer.
+- Under reduced motion, neither layer transitions; the new text replaces the old at once.
 
 ## Technologies
 
-- **Live-region note:** The root always uses `aria-live="polite"`. Avoid placing multiple high-churn instances in the same dense region, or screen readers may announce more changes than users can consume.
-- **Transition note:** The outgoing layer is duplicated until `durationMs + 34ms`; slot content is rendered for both layers during that window. Keep slot renderers pure and cheap.
-- **Fade-in fix (2026-09-24):** Before this fix, the setup and animating states were computed in the same style recalc, so under `fade` the new text never faded in; only the old text blurred out. The setup state now lands without a transition, and a style commit is forced before the animation frame is requested. `TxModeChip`'s label crossfade, which depends on this fade-in, is what surfaced it.
-- **Verified coverage:** `text-transformer.test.ts` checks:
-  - the default morph path, and the slot and `wrap` fallbacks to `fade`;
-  - on the `fade` side: live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, and numeric text normalization;
-  - previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props;
-  - the forced setup-state commit, the setup state landing without a tween, and the reduced-motion escape.
-
-- Component source: `packages/tuffex/packages/components/src/text-transformer/src/TxTextTransformer.vue`.
-- Types: `packages/tuffex/packages/components/src/text-transformer/src/types.ts` exports `TextTransformerProps`.
-- Export alias: `packages/tuffex/packages/components/src/text-transformer/index.ts` exports `TextTransformer`, `TxTextTransformer`, `TextTransformerProps`, and `TxTextTransformerInstance`.
-- Coverage: `packages/tuffex/packages/components/src/text-transformer/__tests__/text-transformer.test.ts` verifies both modes, both forced fallbacks, live-region defaults, transitions, CSS variables, slots, and cleanup.
-- Engine: `morph` renders `TxTextMorph`; see [TextMorph](./text-morph.en.mdc) for the engine itself.
+- `morph` renders `TxTextMorph` (see [TextMorph](./text-morph.en.mdc)); `fade` renders two layers whose CSS transitions read `--tx-tt-duration` and `--tx-tt-blur`.
+- Source: `packages/tuffex/packages/components/src/text-transformer/`.
 
 <TuffDocSourceLink />

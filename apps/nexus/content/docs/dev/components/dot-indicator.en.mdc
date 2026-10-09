@@ -1,6 +1,6 @@
 ---
 title: "DotIndicator"
-description: "A bare coloured dot with text, the status primitive for table cells and footer aggregates."
+description: "A status primitive: a colored dot beside text."
 category: Data
 status: beta
 since: 0.3.9
@@ -11,8 +11,9 @@ verified: true
 
 ## Usage
 
-### DotIndicator
-:::TuffDemoWrapper{demo="DotIndicatorDotIndicatorDemo" code-lang="vue" title="Connection strength" description="The dot carries the colour and the text carries the meaning; neither works alone."}
+### Basic
+`color` tints the dot; `label` or the default slot supplies the text.
+:::TuffDemoWrapper{demo="DotIndicatorDotIndicatorDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -30,10 +31,11 @@ code: |
 
 ### Best Practices
 
-- Prefer a `label`. Colour must never be the only carrier of state — neither a colour-blind reader nor a greyscale screenshot can tell red from green.
-- Use the `ariaLabel` form only when something else in the same row already conveys the meaning.
-- Take colours from `--tx-bui-*` or `--tx-color-*` variables; a hardcoded hex will not follow a theme change.
-- In a footer aggregate, wrap the default slot in `<strong>` to emphasise the figure while keeping the dot aligned.
+- Prefer a `label`: color must never be the only carrier of state.
+- Use `ariaLabel` alone only when other text in the same row already conveys the meaning.
+- Take colors from `--tx-bui-*` or `--tx-color-*` variables; a hardcoded hex won't follow the theme.
+- In a footer aggregate, wrap the slot text in `<strong>` to emphasize the figure; the dot stays aligned.
+- Use the dot in dense contexts such as table cells and footers; use `TxStatusBadge` for a standalone status marker.
 
 ## API Reference
 
@@ -41,49 +43,27 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `color` | `string` | `'currentColor'` | Dot colour; any CSS colour or custom property |
-| `label` | `string` | - | Text beside the dot |
-| `size` | `number` | `8` | Dot diameter in pixels |
-| `ariaLabel` | `string` | - | Accessible name used when there is no visible text |
+| `color` | `string` | `'currentColor'` | Dot color; any CSS color or custom property. |
+| `label` | `string` | - | Text beside the dot. |
+| `size` | `number` | `8` | Dot diameter in px. |
+| `ariaLabel` | `string` | - | Accessible name when there is no visible text. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `default` | Replaces the text beside the dot |
-
-## How It Differs From StatusBadge
-
-These are not interchangeable, and picking the wrong one gives you a control that is wrong in both size and meaning.
-
-| | `TxDotIndicator` | `TxStatusBadge` |
-|------|------|------|
-| Shape | Bare dot plus plain text | Bordered pill with an icon |
-| Palette | Any colour | Five fixed semantic tones |
-| Use | Dense contexts: table cells, footer aggregates | A standalone status marker |
-
-A column of dozens of pills is heavy and pulls the eye away from the data, which is exactly why this primitive exists.
+| `default` | Replaces the text beside the dot. |
 
 ## Overview
 
-The component resolves its own identity in the accessibility tree three ways, so it never announces an empty element:
-
-| Given | Result |
-|------|------|
-| A `label` or default slot | The text speaks for it; no extra role or aria-label is added |
-| Only `ariaLabel` | Becomes `role="img"` carrying that name |
-| Neither | Treated as decoration, `aria-hidden="true"` |
-
-The text uses tabular figures, so percentages and ratios do not shift sideways as the numbers change.
+- With a `label` or the default slot, the text carries the meaning; no role or `aria-label` is added.
+- With only `ariaLabel`, it renders as `role="img"` with that name.
+- With neither, it is decoration and gets `aria-hidden="true"`.
+- The text uses tabular figures, so changing numbers don't shift sideways.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/dot-indicator/src/TxDotIndicator.vue`.
-- Types: `packages/tuffex/packages/components/src/dot-indicator/src/types.ts` exports `DotIndicatorProps`.
-- **Test coverage:** `packages/tuffex/packages/components/src/dot-indicator/__tests__/dot-indicator.test.ts` has 5 cases covering the colour and size variables, all three accessibility identities (decorative / `role="img"` / carried by visible text), and the default slot.
+- Source: `packages/tuffex/packages/components/src/dot-indicator/`.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT); upstream's dot is purely visual, and this port adds the three accessibility identities.
 
 <TuffDocSourceLink />
-
-- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
-- **Why not reuse `TxStatusBadge`:** that component is a bordered pill locked to five tones with an icon; it accepts no arbitrary colour and does not suit dense table contexts.
-- **Accessibility:** Upstream's dot is purely visual with no accessibility handling at all; this port adds the three-way identity resolution.

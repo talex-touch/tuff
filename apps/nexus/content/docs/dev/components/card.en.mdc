@@ -272,6 +272,8 @@ code: |
 - The surface is an `aria-hidden` `TxBaseSurface`; inertia is a `requestAnimationFrame` spring that writes `--tx-card-dx` / `--tx-card-dy` and stops once settled.
 - Source: `packages/tuffex/packages/components/src/card/`.
 
+<TuffDocSourceLink />
+
 ## Customization
 
 :::TuffCodeBlock{lang="css"}
@@ -293,5 +295,3 @@ code: |
 | `--tx-surface-refraction-mask-color` | root inline style | Forwards `--tx-card-fake-background` to `TxBaseSurface`; override that one instead. |
 
 To follow an app theme, override global tokens such as `--tx-bg-color-overlay`, `--tx-border-color-light`, and `--tx-color-primary`.
-
-<TuffDocSourceLink />

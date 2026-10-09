@@ -1,6 +1,6 @@
 ---
 title: "ImageGeneration"
-description: "用于生图或慢加载图片的 WebGL 像素马赛克占位，带溶入揭示与原地重生成翻涌"
+description: "生图或慢加载图片的 WebGL 像素马赛克占位"
 category: Effects
 status: beta
 since: 0.6.2
@@ -11,8 +11,10 @@ verified: true
 
 ## 用法
 
-`TxImageGeneration` 包裹一个元素，在图片生成或加载期间在其内部绘制翻涌的像素马赛克着色器，随后溶入真实图片。它需要 `three` 作为 peer 依赖。
+包裹一个元素并在其中绘制着色器，图片就绪后溶入；需要 peer 依赖 `three`（`>=0.149.0`）。
 
+### 预设
+`preset` 选择效果，`images` 是揭示用的图片池。
 :::TuffDemoWrapper{demo="ImageGenerationShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -39,9 +41,8 @@ code: |
 ---
 :::
 
-### 已知图片地址的加载态
-
-任务结束后卡片仍然挂着时，等待期间暂停，并通过暴露出的 handle 揭示图片。
+### 已知图片的加载态
+任务结束后卡片仍保留时，用 ref 揭示或隐藏图片；揭示要在新的 `images` 传入组件之后触发，且不要设置 `paused`。
 
 ```vue
 <script setup lang="ts">
@@ -50,25 +51,25 @@ import { ref, watch } from 'vue'
 const props = defineProps<{ generating: boolean, src: string }>()
 const cell = ref()
 
+// flush: 'post'：等组件拿到新的 images 后再触发。
 watch(() => props.generating, (generating) => {
   // 生成中：把已显示的图片淡回着色器；完成：揭示图片并保持到下一轮。
   if (generating)
     cell.value?.triggerHide()
   else
     cell.value?.triggerReveal({ hold: 'manual' })
-})
+}, { flush: 'post' })
 </script>
 
 <template>
-  <TxImageGeneration ref="cell" :images="[props.src]" :paused="props.generating" role="img" :aria-label="props.generating ? '正在生成图片' : '生成结果'" :aria-busy="props.generating">
+  <TxImageGeneration ref="cell" :images="[props.src]" role="img" :aria-label="props.generating ? '正在生成图片' : '生成结果'" :aria-busy="props.generating">
     <div style="width: 320px; height: 200px; border-radius: 12px" />
   </TxImageGeneration>
 </template>
 ```
 
-### 重生成与多版本
-
-`triggerRegenerate()` 只在有图片显示时生效：图片会先碎成单元格网格翻涌，再从池中选出下一张溶入。
+### 重新生成
+`triggerRegenerate()` 只在图片显示时生效：图片碎成单元格翻涌，再溶入池中的下一张。
 
 ```vue
 <script setup lang="ts">
@@ -89,12 +90,11 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 ### 最佳实践
 
-- 被包裹的子元素必须有明确的宽高；包裹层是 `inline-block`，尺寸跟随子元素。
-- 触发揭示前先给出 **图片池**（`images`）；池为空时任何触发都是静默空操作。
-- 只在工作时动画：`:paused="!isGenerating"`。不要整段生命周期都暂停，否则图片永远不会出现。
-- 库自身不处理 `prefers-reduced-motion`，需要你自己接线（`:paused="reduced && generating"`），并让暂停只覆盖等待窗口。
-- 揭示图片尽量同源或带 CORS 响应头；跨域图片仍可揭示，但 `triggerRegenerate()` 无法采样其颜色，会退回预设调色板。
-- 网格里的安静占位用 `sweep-gradient` 配较低 `strength`；把像素马赛克留给英雄区或结果主位。
+- 子元素要有明确的宽高；包裹层是 `inline-block`，尺寸跟随子元素。
+- 触发揭示前先提供 `images`；图片池为空时所有触发都是静默空操作。
+- 只作占位、不揭示图片时，只在工作时播放（`:paused="!isGenerating"`）；要揭示图片时不设 `paused`，暂停会让揭示静默失效。
+- 揭示图片用同源或带 CORS 头的地址；跨域图片仍能揭示，但 `triggerRegenerate()` 无法取色，会退回预设调色板。
+- 网格里的安静占位用 `sweep-gradient` 配较低的 `strength`，像素马赛克留给主位。
 
 ## API 参考
 
@@ -103,28 +103,22 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `preset` | `'pixels-organic' \| 'pixels-mechanic' \| 'sweep-gradient'` | `'pixels-organic'` | 内置效果：柔和马赛克、网格马赛克或对角扫掠。 |
-| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 主题解析；`auto` 实时跟随系统。 |
-| `strength` | `number` | `1` | 0-1 缩放画布不透明度；大于 1 时转而增强调色板强度。 |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 主题；`auto` 实时跟随页面或系统主题。 |
+| `strength` | `number` | `1` | 0–1 缩放画布不透明度；大于 1 时改为增强调色板。 |
 | `speed` | `number` | `1` | 缩放整个效果时钟（漂移、翻涌、闪烁）。 |
-| `pixelScale` | `number` | `1` | 屏幕像素单元尺寸倍数；揭示溶解与之同步。 |
-| `cardBg` | `string` | 预设值 | 卡片底色；同时被解析为不透明 RGB 供着色器做对比逻辑。 |
+| `pixelScale` | `number` | `1` | 像素单元的尺寸倍数；揭示溶解与之同步。 |
+| `cardBg` | `string` | 预设值 | 卡片底色，也用于着色器的对比计算。 |
 | `colors` | `(string \| null \| undefined)[]` | 预设调色板 | 调色板覆盖，每个着色器槽位一项。 |
-| `images` | `string \| string[]` | `[]` | 揭示图片池；随机选取且不重复上一张。 |
-| `autoReveal` | `boolean` | `false` | 自动执行 着色器 → 揭示 → 保持 → 隐藏。 |
-| `revealDelayRange` | `[number, number]` | `[2, 4]` | 两次揭示之间的随机纯着色器延迟（秒）。 |
+| `images` | `string \| string[]` | `[]` | 揭示图片池；随机选取，不重复上一张。 |
+| `autoReveal` | `boolean` | `false` | 自动循环：着色器 → 揭示 → 保持 → 隐藏。 |
+| `revealDelayRange` | `[number, number]` | `[2, 4]` | 两次揭示之间的随机延迟（秒）。 |
 | `revealInitialDelay` | `number \| [number, number]` | 抖动 | 首次揭示前的一次性延迟。 |
-| `revealHoldMs` | `number \| [number, number]` | `2000` | 图片完全可见后、淡出前的保持时长。 |
+| `revealHoldMs` | `number \| [number, number]` | `2000` | 图片完全可见后保持的时长。 |
 | `revealFadeOutMs` | `number` | `300` | 淡回着色器的时长。 |
 | `borderRadius` | `number` | 自动探测 | 卡片圆角（CSS px）。 |
-| `paused` | `boolean` | `false` | 冻结着色器与自动揭示调度器。 |
-| `fragmentShader` | `string` | 内置 | 替换用的 GLSL 1.00 片元着色器；设置期间对整页生效。 |
-| `excludeSrcs` | `() => string[] \| Set<string> \| null` | 无 | 本次选取必须避开的图片，用于共享图片池的多实例协调。 |
-
-### 插槽
-
-| 插槽 | 参数 | 说明 |
-|------|------|------|
-| `default` | - | 效果据此确定尺寸的卡片元素。 |
+| `paused` | `boolean` | `false` | 冻结着色器与自动揭示；暂停时揭示、隐藏、重新生成都不生效。 |
+| `fragmentShader` | `string` | 内置 | 替换用的 GLSL 1.00 片元着色器；设置期间整页生效。 |
+| `excludeSrcs` | `() => string[] \| Set<string> \| null` | 无 | 本次选取须避开的图片，用于共享图片池的多个实例。 |
 
 ### 事件
 
@@ -132,37 +126,34 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 |------|------|------|
 | `cycle` | `ImageGenerationCycleEvent` | 自动揭示的阶段切换（`idle` → `reveal` → `visible` → `hide`）。 |
 
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 效果据以确定尺寸的卡片元素。 |
+
 ### 暴露方法
 
 | 方法 | 说明 |
 |------|------|
-| `triggerReveal({ hold?: 'auto' \| 'manual' })` | 执行一次揭示；已有过程在跑或 `images` 为空时不生效。 |
-| `triggerHide()` | 把已揭示的图片淡回着色器；没有显示中的图片时不生效。 |
-| `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | 把当前图片碎成单元格翻涌，再溶入下一张；仅在已显示图片时生效。 |
+| `element` | 根包装 `<div>`（`HTMLDivElement`），未挂载时为 `null`。 |
+| `triggerReveal({ hold?: 'auto' \| 'manual' })` | 执行一次揭示，`manual` 时保持到 `triggerHide()`；进行中或 `images` 为空时不生效。 |
+| `triggerHide()` | 把图片淡回着色器；没有显示中的图片时不生效。 |
+| `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | 把当前图片碎成单元格翻涌，再溶入下一张；仅在图片显示时生效。 |
 | `isImageActive()` | 图片正在揭示、显示或隐藏时返回 `true`。 |
-
-### CSS 变量
-
-无。效果绘制在自有画布上。
 
 ## 概述
 
-- 全页共用一份 `THREE.WebGLRenderer` 与一个 WebGL 上下文；每张卡片把自己的帧复制到各自的 2D 画布。
-- 帧率上限 10 fps，GL 画布设备像素比上限 1.25，可见画布上限 2。
-- 卡片离屏（`IntersectionObserver`，64 px 边距）时暂停，没有活跃卡片时动画循环完全停止；WebGL 上下文丢失也会被处理。
-- 已解码图片按 URL 在卡片间缓存，并以 `object-fit: cover` 居中裁剪绘制。
-- 包裹层从子元素计算后的 `border-top-left-radius` 取圆角，并应用到四个角。
+- 全页共用一个 `THREE.WebGLRenderer` 与一个 WebGL 上下文，每张卡片把帧复制到自己的 2D 画布。
+- 帧率上限 10 fps，GL 画布的设备像素比上限 1.25，可见画布上限 2。
+- 离屏（`IntersectionObserver`，64 px 边距）时暂停，没有活跃卡片时动画循环完全停止；WebGL 上下文丢失会被处理。
+- 已解码图片按 URL 在卡片间缓存，按 `object-fit: cover` 居中裁剪绘制。
+- 圆角取子元素计算后的 `border-top-left-radius`，应用到四个角。
+- 组件不处理 `prefers-reduced-motion`；需要时自行接线，如 `:paused="reduced && generating"`。
 
-## 技术说明
+## 技术实现
 
-- 已对照 `packages/tuffex/packages/components/src/image-generation/` 下的 `index.ts`、`TxImageGeneration.vue`、`types.ts` 与 `image-generation.test.ts` 人工核验。
-- `engine/**` 与 `presets/**` 是上游 `img-fx`（MIT © Jakub Antalik）的逐字移植，仅做严格 TS 索引加固。
-- 依赖 `three`（peer 依赖，`>=0.149.0`），用法与上游一致。
-- Vue 壳镜像了上游包裹层的揭示循环、命令式 handle 语义与尺寸响应。
-
-- 组件源码：`packages/tuffex/packages/components/src/image-generation/src/TxImageGeneration.vue`。
-- 类型定义：`packages/tuffex/packages/components/src/image-generation/src/types.ts`。
-- 上游：[Jakubantalik/Libraries · img-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/img-fx)（MIT）。
-- **覆盖**：`packages/tuffex/packages/components/src/image-generation/__tests__/image-generation.test.ts` 验证预设解析、图片池归一化、`strength` 分支与 handle 的空操作守卫。
+- `engine/**` 与 `presets/**` 移植自 [Jakubantalik/Libraries · img-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/img-fx)（MIT © Jakub Antalik）。
+- 源码：`packages/tuffex/packages/components/src/image-generation/`。
 
 <TuffDocSourceLink />

@@ -43,11 +43,15 @@ code: |
 |------|------|---------|------|
 | `copyText` | `string` | — | 复制按钮写入的文本；未传时不渲染复制按钮。 |
 | `regenerable` | `boolean` | `false` | 显示重新生成按钮。 |
+| `speakable` | `boolean` | `false` | 显示朗读按钮；播放由宿主负责。 |
+| `speakState` | `'idle' \| 'loading' \| 'speaking'` | `'idle'` | 宿主回写的播放状态：`loading` 显示旋转环，`speaking` 显示停止图标。 |
 | `appear` | `boolean` | `true` | 挂载时播放模糊淡入。 |
 | `copyLabel` | `string` | `'Copy'` | 复制按钮的可访问名称与悬停提示。 |
 | `copiedLabel` | `string` | `'Copied'` | 已复制状态的可访问名称与悬停提示。 |
 | `regenerateLabel` | `string` | `'Regenerate'` | 重新生成按钮的可访问名称与悬停提示。 |
 | `label` | `string` | `'Message actions'` | 工具栏的可访问名称。 |
+| `speakLabel` | `string` | `'Read aloud'` | 朗读按钮的可访问名称与悬停提示。 |
+| `stopSpeakLabel` | `string` | `'Stop reading'` | `speaking` 时朗读按钮的可访问名称与悬停提示。 |
 
 ### 事件
 
@@ -55,6 +59,7 @@ code: |
 |------|------|------|
 | `copy` | `(text: string)` | 点击复制后触发，携带 `copyText`；剪贴板写入失败时同样触发。 |
 | `regenerate` | — | 点击重新生成时触发。 |
+| `speak` | — | 点击朗读按钮时触发。 |
 
 ### 插槽
 
@@ -66,5 +71,6 @@ code: |
 
 - `copyText` 为空字符串时仍渲染复制按钮，但点击无效果；要隐藏就不传。
 - 复制写入 `navigator.clipboard`，随后按钮进入「已复制」态 1200ms，期间忽略重复点击。
+- 朗读按钮是开关：任何状态下点击都派发 `speak`（含 `loading`），由宿主开始或停止播放；`speaking` 时 `aria-pressed="true"`。
 - `role="toolbar"`：只占一个 Tab 落点，方向键在控件间循环移动，Home / End 跳到首尾。
 - 方向键顺序实时读取 DOM（`button:not([disabled])`、`[href]`、`tabindex` 非 -1），禁用按钮被排除。

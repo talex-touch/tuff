@@ -1,6 +1,6 @@
 ---
 title: "Spinner"
-description: "A compact loading indicator for inline, overlay, and fallback loading states."
+description: "A rotating indicator for an indeterminate wait."
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Spinner
+### Basic
 :::TuffDemoWrapper{demo="SpinnerSpinnerDemo" code-lang="vue"}
 ---
 code: |
@@ -21,108 +21,35 @@ code: |
 ---
 :::
 
-### Best Practices
-
-- Use spinner for indeterminate waits only. Switch to `TxProgressBar` once progress is numeric or staged.
-- Keep inline spinner copy next to the icon; the spinner itself exposes busy state but no completion message.
-- Use `visible` when you want the built-in enter/leave transition; use `v-if` only when the host owns mount timing.
-- Use `fallback=true` only for constrained surfaces where the CSS ball animation is unsuitable.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `size` | `number` | `16` | Spinner width and height in pixels; written to `--tx-spinner-size`. |
-| `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback; written to `--tx-spinner-stroke`. |
-| `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated ball/ring shape. |
-| `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in `tx-spinner-visibility` transition. |
-| `label` | `string` | `'Loading'` | Accessible name for the status region, announced when the spinner appears; override it to localize. |
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | No component-specific emits. Visibility is controlled by the `visible` prop. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| - | - | `TxSpinner` has no slots. Pair text outside the spinner for accessible status copy. |
-
-## Sizes
-
-### Spinner sizes
+### Sizes
+`size` sets the width and height in px.
 :::TuffDemoWrapper{demo="SpinnerSpinnerSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxSpinner :size="12" />
-      <TxSpinner :size="16" />
-      <TxSpinner :size="24" />
-      <TxSpinner :size="32" />
-    </div>
+    <TxSpinner :size="12" />
+    <TxSpinner :size="16" />
+    <TxSpinner :size="24" />
+    <TxSpinner :size="32" />
   </template>
 ---
 :::
 
-## Visibility Toggle (v-if vs visible)
-
-### Toggle
+### Visibility Toggle
+`visible` has a built-in enter and leave transition; `v-if` mounts and unmounts directly.
 :::TuffDemoWrapper{demo="SpinnerToggleDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const showByIf = ref(true)
-  const visible = ref(true)
-  </script>
-
   <template>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;">
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-weight: 600;">
-            v-if (no built-in transition)
-          </div>
-          <TxButton size="sm" @click="showByIf = !showByIf">
-            Toggle
-          </TxButton>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
-          <TxSpinner v-if="showByIf" />
-          <span style="color: var(--tx-text-color-secondary);">Status: {{ showByIf ? 'mounted' : 'unmounted' }}</span>
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-weight: 600;">
-            :visible (built-in transition)
-          </div>
-          <TxButton size="sm" @click="visible = !visible">
-            Toggle
-          </TxButton>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
-          <TxSpinner :visible="visible" />
-          <span style="color: var(--tx-text-color-secondary);">Status: {{ visible ? 'mounted' : 'unmounted (after leave)' }}</span>
-        </div>
-      </div>
-    </div>
+    <TxSpinner v-if="showByIf" />
+    <TxSpinner :visible="visible" />
   </template>
 ---
 :::
 
-## Dashboard Inline Waiting
-
-Use `TxSpinner` for short waits inside buttons, inline status rows, or overlays. Prefer `TxProgressBar` when progress is known; prefer `TxLoadingState` for full first-load states. Spinner is best when the wait is short and no percentage is available.
-
-:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Spinner with Toast / Tooltip / LoadingOverlay."}
+### Inline Wait
+For short waits inside buttons, inline status rows, or overlays.
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -134,21 +61,35 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Use a spinner only for short indeterminate waits; use `TxProgressBar` once progress is numeric or staged, and `TxLoadingState` for full first-load states.
+- Put status text next to the icon; the spinner shows busy state, not a completion result.
+- Use `visible` for the built-in enter and leave transition; use `v-if` when the host owns mount timing.
+- Set `fallback` only where the CSS animation doesn't suit a constrained surface.
+- Tint it by setting `color` on `TxSpinner` itself; a parent's `color` doesn't reach past the root.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `number` | `16` | Width and height in px; written to `--tx-spinner-size`. |
+| `strokeWidth` | `number` | `2` | Stroke width of the ring and the SVG; written to `--tx-spinner-stroke`. |
+| `fallback` | `boolean` | `false` | Renders a spinning SVG circle instead of the default ball/ring animation. |
+| `visible` | `boolean` | `true` | Shows or hides it with the `tx-spinner-visibility` transition. |
+| `label` | `string` | `'Loading'` | Accessible name of the status region, announced on appear; override it to localize. |
+
 ## Overview
 
-- When `visible=false`, the spinner is not rendered after the leave transition.
-- The visible root is an inline-flex `span` with `aria-busy="true"` and `aria-live="polite"`.
-- Default mode renders the animated ball/ring shape; `fallback=true` renders an SVG circle using the same `size` and `strokeWidth` props.
-- The spinner root defaults to the secondary text color (`--tx-text-color-secondary`); tint it by setting `color` on the `TxSpinner` element itself — a parent's `color` does not override the root's own declaration.
+- The root is an inline-flex `span` with `role="status"`, `aria-busy="true"`, and `aria-live="polite"`, named by `label` through `aria-label`; it announces no completion.
+- With `visible=false`, nothing renders once the leave transition ends.
+- `fallback` renders an SVG circle that reuses `size` and `strokeWidth`.
+- The root takes `--tx-text-color-secondary` as its color by default.
 
 ## Technologies
 
-- **Accessibility note:** The visible root has `aria-busy="true"` and `aria-live="polite"`, but the spinner itself has no readable label or completion announcement. Pair it with adjacent status text for anything longer than a momentary inline wait.
-- **Verified coverage:** `spinner.test.ts` checks default accessibility attributes, default vs SVG fallback branches, CSS variable mapping for `size`/`strokeWidth`, and `visible=false` non-rendering.
-
-- Component source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue`.
-- Types: `packages/tuffex/packages/components/src/spinner/src/types.ts` exports `SpinnerProps`.
-- Export alias: `packages/tuffex/packages/components/src/spinner/index.ts` exports `Spinner`, `TxSpinner`, `SpinnerProps`, and `TxSpinnerInstance`.
-- Coverage: `packages/tuffex/packages/components/src/spinner/__tests__/spinner.test.ts` verifies rendering branches and prop-driven CSS variables.
+- Source: `packages/tuffex/packages/components/src/spinner/`.
 
 <TuffDocSourceLink />

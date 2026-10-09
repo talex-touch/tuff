@@ -1,6 +1,6 @@
 ---
 title: MotionMetric
-description: 完整源码映射、调用方数据驱动的指标、图表及复合仪表
+description: 由调用方数据驱动的指标卡、图表与复合仪表
 category: Advanced
 status: beta
 since: 0.6.3
@@ -8,22 +8,17 @@ tags: [motion, metrics, charts, pro]
 syncStatus: reviewed
 ---
 
-`TxMotionMetric` 保留 15 个目录变体、全部 29 个 Metrics 源码能力，以及 `AnimatedMetricCard` 的全部 29 个真实交互分支。布局根据原始能力分别使用缓存分配、像素矩阵、钢琴键、阶梯柱、双柱、条码、圆弧、面积曲线、睡眠阶段及消息线程；不是换标签的通用统计卡。
-
 ## 用法
 
-### 全量交互演示
-
-选择目录 ID、独立源码能力或原始交互，切换真实样本周期并操作图表滑块、噪声范围、阶段选择、资产筛选及反馈输入。数值与状态可以在演示里直接编辑；详情、分享、继续、开始/暂停和发送只发出事件，样本消息由演示在本地追加。
-
-图表默认提供可用键盘操作的数据点滑块；噪声下界的原生最大值受当前上界约束，上界的原生最小值受当前下界约束，避免读数与原生 thumb 在越界输入后分离。
-
+### 全部变体
+每个周期在 `periods` 中携带自己的 `data`，用 `v-model:period` 切换。
 :::TuffDemoWrapper{demo="MotionMetricDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
   import { TxMotionMetric } from '@talex-touch/tuffex/motion-metric'
+
   const period = ref('weekly')
   const periods = [
     { value: 'weekly', label: 'Weekly', data: {
@@ -33,202 +28,215 @@ code: |
         { id: 'earnings', label: 'Earnings', points: [{ label: 'Sep', value: 90 }, { label: 'Oct', value: 180 }] },
       ],
     } },
-    { value: 'monthly', label: 'Monthly', data: {
-      title: 'Sales analytics', value: 420, target: 500,
-      series: [
-        { id: 'sales', label: 'Sales', points: [{ label: 'Sep', value: 180 }, { label: 'Oct', value: 240 }] },
-        { id: 'earnings', label: 'Earnings', points: [{ label: 'Sep', value: 140 }, { label: 'Oct', value: 210 }] },
-      ],
-    } },
+    { value: 'monthly', label: 'Monthly', data: monthlyData },
   ]
   </script>
+
   <template>
     <TxMotionMetric v-model:period="period" variant="m-sales-dual" :periods="periods" />
   </template>
 ---
 :::
 
-### 数据与生命周期
+### 最佳实践
 
-组件不读取网络、音频、健康、金融或监控服务，不生成股票价格，不启动监控/倒计时模拟器，不承诺发送通知。调用方持续更新 `series`、`metrics`、`status`、`remaining` 和结果模型。缺少业务数据会显示空状态，而不是固定业务读数。原始 SVG/D3 图表、`TxStatCard`、`TxSlider`、`TxInput`、`TxButton` 及 `TxTextMorph` 被复用；共享 activity 在离屏、隐藏文档、KeepAlive 失活及减弱动态时停下数值/圆环动效。
+- 每个周期提供真实的 `data`，受控时响应更新事件；不要只改按钮文案而复用同一序列。
+- 计时器的 `remaining` / `total`、监控状态、噪声读数与消息送达都由调用方负责；`running` 只表示意图。
+- 读数、条码分数、圆环进度与图表使用一致的 `target` / `min` / `max` / `unit`；信用分组合默认范围为 300–850，可覆盖。
+- 为 series、metrics、groups、cells 提供稳定 ID、真实标签与完整单位；缺失的点不会被补造。
+- 用 `labels`、`formatValue` 与已授权的头像插槽本地化；尊重减少动态效果，不添加轮询或常驻动画。
 
 ## API 参考
 
 ### 属性
 
-| Prop | Type | Default | 说明 |
+| 属性名 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `variant` | `MotionMetricVariant` | `m-progress-piano` | 目录、复合能力或原始交互 ID |
-| `interaction` | `MotionMetricInteraction` | `progress-indicator-piano` | 仅用于 animated-metric-card 的分支选择 |
-| `data` | `MotionMetricData` | `—` | 调用方数据集 |
-| `series` | `MotionMetricSeries[]` | `—` | 覆盖选中数据集的序列 |
-| `metrics` | `MotionMetricReadout[]` | `—` | 覆盖选中数据集的读数 |
-| `status` | `string` | `—` | 调用方状态，不推断业务成功 |
-| `period` | `string` | `First period` | 受控周期（v-model:period） |
-| `periods` | `MotionMetricPeriod[]` | `—` | 每个选项拥有独立真实数据对象 |
-| `filterStyle` | `'pills' \| 'select'` | `Source-appropriate` | 原生胶囊按钮或原生下拉 |
-| `activeIndex` | `number` | `0` | 受控图表/矩阵/阶段索引 |
-| `modelValue` | `number` | `data.value / data.threshold` | 数值读数覆盖；警报布局用于阈值 |
-| `range` | `[number, number]` | `[data.min ?? 30, data.max ?? 120]` | 噪声范围边界，仅发出输入、不测量音频 |
-| `running` | `boolean` | `false` | 计时器运行模型，不启动内部时钟 |
-| `message` | `string` | `Empty` | 反馈草稿 |
-| `disabled` | `boolean` | `false` | 禁用原生输入及动作事件 |
-| `animated` | `boolean` | `true` | 数值/仪表动效共享可见性及减弱动态闸门 |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | 令牌驱动间距及数值字号 |
-| `labels` | `Partial<MotionMetricLabels>` | `English defaults` | 覆盖全部控件及空状态文案 |
-| `formatValue` | `(value, unit?) => string` | `Number with up to 2 decimals + unit` | 仅格式化，不更改图表数据 |
-
-### 数据类型
-
-| Type | Fields | 说明 |
-|---|---|---|
-| `MotionMetricData` | `title, description, value, target, min, max, unit, previous, rank, status, remaining, total, threshold, columns, metrics, series, groups, cells, weekdays, steps, profiles, messages` | 无业务默认值。remaining/total 使用秒；仪表几何的 target 默认 100。 |
-| `MotionMetricSeries` | `id, label, points, unit?, tone?` | 独立序列；每点含 label/value，可选 description、语义 tone 及睡眠阶段 level（0–100）。 |
-| `MotionMetricReadout` | `id, label, value, unit?, previous?, target?, description?, status?, tone?, grade?` | 数值或文本读数；grade 用于信用报告。 |
-| `MotionMetricGroup` | `id, label, value?, target?, unit?, columns?, cells?, metrics?, series?, period?, periods?` | 命名子布局。销售/财务/信用仪表组可提供独立周期数据；group.period 为受控值，未提供时选择保持本地。 |
-| `MotionMetricCell` | `id, label, value, description?, selected?` | 活动强度或日历日期；选择发出 id/index。 |
-| `MotionMetricStep` | `id, label, value, status?` | 相对分段宽度及调用方阶段状态。 |
-| `MotionMetricProfile` | `id, name, initials?, status, detail?, value?, segments?, flight?` | flight 含 label/from/to/departure/arrival/progress（0–100）；不内置外部头像 URL。 |
-| `MotionMetricMessage` | `id, author, text, time?` | 调用方消息；send 不自行追加或声称送达。 |
-| `MotionMetricPeriod` | `value, label, data` | 选中数据覆盖基础 data；显式顶层 series/metrics/status 优先。 |
-
-| Variant | Group IDs | 说明 |
-|---|---|---|
-| `cache-stats-card / cacheable-bandwidth-cost` | `bandwidth` | group.value/unit 为可缓存量；group.metrics 为已缓存/不可缓存分配 |
-| `network-telemetry` | `Any ID` | 每组为独立命名活动矩阵 |
-| `sales-dashboard` | `analytics, target` | 双柱图及分段销售目标 |
-| `credit-score-cards` | `report, utilization, history` | 等级条目、余额/限额及历史分数 |
-| `finance-dashboard` | `savings, credit, expenses, assets` | 像素储蓄、条码、堆叠支出及本地筛选资产分配 |
-| `marketing-cards` | `channels, campaign` | 渠道分配及图表/读数分栏 |
-| `health-cards` | `goals, period, hydration, workout, steps, sleep, heart, target` | 每日圆环、周期圆点、图表、睡眠阶段高度及周目标 |
-| `system-metrics-card` | `Any ID` | 每组包含分位读数及独立图表；顶层 metrics 为错误分解 |
-| `course-progress-card` | `Any ID` | 培训图表及参会者读数 |
-
-默认 labels：`period: Period`, `empty: No data for this period`, `details: View details`, `share: Share`, `more: More actions`, `scrubber: Select a data point`, `current: Current`, `target: Target`, `remaining: Remaining`, `low: Low`, `high: High`, `minimum: Minimum`, `maximum: Maximum`, `threshold: Threshold`, `start: Start`, `pause: Pause`, `message: Message`, `send: Send`, `all: See all`, `resume: Resume`, `analysis: Analysis`, `average: Average`.
+| `variant` | `MotionMetricVariant` | `m-progress-piano` | 目录、复合能力或原始交互 ID。 |
+| `interaction` | `MotionMetricInteraction` | `progress-indicator-piano` | 仅 `animated-metric-card` 使用的交互分支。 |
+| `data` | `MotionMetricData` | `—` | 调用方数据集。 |
+| `series` | `MotionMetricSeries[]` | `—` | 覆盖当前数据集的序列。 |
+| `metrics` | `MotionMetricReadout[]` | `—` | 覆盖当前数据集的读数。 |
+| `status` | `string` | `—` | 调用方状态；组件不据此推断业务成功。 |
+| `period` | `string` | `First period` | 当前周期，配合 `v-model:period`。 |
+| `periods` | `MotionMetricPeriod[]` | `—` | 周期选项，每项携带自己的数据。 |
+| `filterStyle` | `'pills' \| 'select'` | `Source-appropriate` | 原生胶囊按钮或原生下拉。 |
+| `activeIndex` | `number` | `0` | 受控的图表、矩阵或阶段索引。 |
+| `modelValue` | `number` | `data.value / data.threshold` | 数值读数；警报布局中为阈值。 |
+| `range` | `[number, number]` | `[data.min ?? 30, data.max ?? 120]` | 噪声范围上下界；只派发输入，不测量音频。 |
+| `running` | `boolean` | `false` | 计时器运行状态；不启动内部时钟。 |
+| `message` | `string` | `Empty` | 反馈草稿。 |
+| `disabled` | `boolean` | `false` | 禁用原生输入与动作事件。 |
+| `animated` | `boolean` | `true` | 启用数值与仪表动效；仍受可见性与减少动态效果限制。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | 间距与数值字号。 |
+| `labels` | `Partial<MotionMetricLabels>` | `English defaults` | 覆盖控件与空状态文案。 |
+| `formatValue` | `(value, unit?) => string` | `Number with up to 2 decimals + unit` | 只格式化显示，不改图表数据。 |
 
 ### 事件
 
-| Event | Payload | 说明 |
+| 事件名 | 参数 | 说明 |
 |---|---|---|
-| `update:period` | `string` | 周期选择 |
-| `update:activeIndex` | `number` | 图表、矩阵或步骤选择 |
-| `update:modelValue` | `number` | 进度/噪声值或警报阈值 |
-| `update:range` | `[number, number]` | 噪声上下界 |
-| `update:running` | `boolean` | 开始/暂停意图，无内部时钟 |
-| `update:message` | `string` | 反馈草稿 |
-| `select` | `{ id: string, index: number }` | 选中数据点；图表 id 为空 |
-| `filter` | `{ groupId: string, period: string }` | 独立仪表组周期选择 |
-| `action` | `string` | details/share/more/add/resume/all |
-| `send` | `string` | 去除首尾空白的非空消息 |
+| `update:period` | `string` | 选择周期时触发。 |
+| `update:activeIndex` | `number` | 选择图表点、矩阵格或步骤时触发。 |
+| `update:modelValue` | `number` | 进度、噪声值或警报阈值变化时触发。 |
+| `update:range` | `[number, number]` | 噪声上下界变化时触发。 |
+| `update:running` | `boolean` | 开始或暂停的意图；没有内部时钟。 |
+| `update:message` | `string` | 反馈草稿变化时触发。 |
+| `select` | `{ id: string, index: number }` | 选中数据点时触发；图表点的 `id` 为空。 |
+| `filter` | `{ groupId: string, period: string }` | 仪表分组切换周期时触发。 |
+| `action` | `string` | `details`、`share`、`more`、`add`、`resume` 或 `all`。 |
+| `send` | `string` | 发送去除首尾空白后的非空消息。 |
 
 ### 插槽
 
-| Slot | Scope | 说明 |
+| 插槽名 | 作用域 | 说明 |
 |---|---|---|
-| `header` | `{ data }` | 自定义标题区域 |
-| `avatar` | — | 调用方拥有许可的头像 |
-| `preview` | `{ data }` | 反馈布局中的实际内容预览 |
-| `footer` | `{ data }` | 来源/单位/更新时间说明 |
+| `header` | `{ data }` | 自定义标题区。 |
+| `avatar` | — | 调用方提供的已授权头像。 |
+| `preview` | `{ data }` | 反馈布局中的内容预览。 |
+| `footer` | `{ data }` | 来源、单位或更新时间。 |
+
+### 类型
+
+| 类型 | 字段 | 说明 |
+|---|---|---|
+| `MotionMetricData` | `title, description, value, target, min, max, unit, previous, rank, status, remaining, total, threshold, columns, metrics, series, groups, cells, weekdays, steps, profiles, messages` | 无业务默认值；`remaining` / `total` 以秒计，仪表的 `target` 默认 100。 |
+| `MotionMetricSeries` | `id, label, points, unit?, tone?` | 独立序列；点含 `label` / `value`，可选 `description`、`tone` 与睡眠阶段 `level`（0–100）。 |
+| `MotionMetricReadout` | `id, label, value, unit?, previous?, target?, description?, status?, tone?, grade?` | 数值或文本读数；`grade` 用于信用报告。 |
+| `MotionMetricGroup` | `id, label, value?, target?, unit?, columns?, cells?, metrics?, series?, period?, periods?` | 命名子布局；销售、财务、信用分组可带独立周期，传入 `period` 时受控。 |
+| `MotionMetricCell` | `id, label, value, description?, selected?` | 活动强度或日历日；选择时派发 id 与 index。 |
+| `MotionMetricStep` | `id, label, value, status?` | 分段相对宽度与调用方阶段状态。 |
+| `MotionMetricProfile` | `id, name, initials?, status, detail?, value?, segments?, flight?` | `flight` 含 label/from/to/departure/arrival/progress（0–100）；不内置头像 URL。 |
+| `MotionMetricMessage` | `id, author, text, time?` | 调用方消息；`send` 不自行追加，也不声称送达。 |
+| `MotionMetricPeriod` | `value, label, data` | 选中数据覆盖基础 `data`；顶层 `series` / `metrics` / `status` 优先。 |
+
+#### 分组 ID
+
+| 变体 | 分组 ID | 说明 |
+|---|---|---|
+| `cache-stats-card / cacheable-bandwidth-cost` | `bandwidth` | `group.value` / `unit` 为可缓存量；`group.metrics` 为已缓存与不可缓存分配。 |
+| `network-telemetry` | `Any ID` | 每组是一个命名活动矩阵。 |
+| `sales-dashboard` | `analytics, target` | 双柱图与分段销售目标。 |
+| `credit-score-cards` | `report, utilization, history` | 等级条目、余额/额度与历史分数。 |
+| `finance-dashboard` | `savings, credit, expenses, assets` | 像素储蓄、条码、堆叠支出与可筛选的资产分配。 |
+| `marketing-cards` | `channels, campaign` | 渠道分配与图表/读数分栏。 |
+| `health-cards` | `goals, period, hydration, workout, steps, sleep, heart, target` | 每日圆环、周期圆点、图表、睡眠阶段与周目标。 |
+| `system-metrics-card` | `Any ID` | 每组含分位读数与独立图表；顶层 `metrics` 为错误分解。 |
+| `course-progress-card` | `Any ID` | 培训图表与参会者读数。 |
+
+#### MotionMetricLabels
+
+`labels` 的键与默认值，导出为 `MOTION_METRIC_DEFAULT_LABELS`：
+
+```ts
+{
+  period: 'Period', empty: 'No data for this period', details: 'View details', share: 'Share', more: 'More actions',
+  scrubber: 'Select a data point', current: 'Current', target: 'Target', remaining: 'Remaining',
+  low: 'Low', high: 'High', minimum: 'Minimum', maximum: 'Maximum', threshold: 'Threshold',
+  start: 'Start', pause: 'Pause', message: 'Message', send: 'Send', all: 'See all', resume: 'Resume',
+  analysis: 'Analysis', average: 'Average',
+}
+```
 
 ### CSS 变量
 
-| Variable | Purpose |
+| 变量 | 用途 |
 |---|---|
-| `--tx-mm-pad` | Root padding / 根内边距 |
-| `--tx-mm-gap` | Section spacing / 区块间距 |
-| `--tx-mm-number` | Numeric display size / 数值字号 |
-| `--tx-chart-categorical-1..6` | Independent series palette / 独立序列颜色 |
-| `--tx-chart-grid-line` | Chart reference grid / 图表参考线 |
-| `--tx-color-*`, `--tx-text-color-*`, `--tx-fill-color-*`, `--tx-bg-color`, `--tx-border-color-*` | Shared semantic theme / 共享语义主题 |
+| `--tx-mm-pad` | 根内边距。 |
+| `--tx-mm-gap` | 区块间距。 |
+| `--tx-mm-number` | 数值字号。 |
+| `--tx-chart-categorical-1..6` | 各序列颜色。 |
+| `--tx-chart-grid-line` | 图表参考线。 |
+| `--tx-color-*`, `--tx-text-color-*`, `--tx-fill-color-*`, `--tx-bg-color`, `--tx-border-color-*` | 共享语义主题。 |
 
-## 全量变体与源码映射
+## 变体与源码映射
 
-### 15 个目录条目
+### 目录条目
 
-| Catalog ID | Interaction | 能力 |
+| 目录 ID | 交互 | 能力 |
 |---|---|---|
-| `m-cache-bandwidth` | `cacheable-bandwidth-cost` | 缓存/不可缓存分配、总量和费用 |
-| `m-net-matrix` | `network-telemetry-matrix` | 最终确认读数及独立网络矩阵 |
-| `m-progress-piano` | `progress-indicator-piano` | 28 个钢琴键及数值目标输入 |
+| `m-cache-bandwidth` | `cacheable-bandwidth-cost` | 缓存/不可缓存分配、总量与费用 |
+| `m-net-matrix` | `network-telemetry-matrix` | 最终确认读数与独立网络矩阵 |
+| `m-progress-piano` | `progress-indicator-piano` | 28 个钢琴键与数值目标输入 |
 | `m-server-step` | `server-performance-step-bars` | 带顶部高亮的阶梯柱 |
-| `m-overview-scrubber` | `overview-bar-scrubber-card` | 条纹柱、活动点及滑动提示 |
-| `m-sales-dual` | `sales-analytics-dual-bars` | 销售/收益双柱及销量目标 |
+| `m-overview-scrubber` | `overview-bar-scrubber-card` | 条纹柱、活动点与滑动提示 |
+| `m-sales-dual` | `sales-analytics-dual-bars` | 销售/收益双柱与销量目标 |
 | `m-sales-arc` | `sales-target-segmented-arc` | 挂牌/交付分段半圆 |
-| `m-sales-radial-dash` | `sales-overview-radial-dashboard` | 排名横幅、径向目标及双读数 |
-| `m-credit-barcode` | `credit-score-barcode-meter` | 42 条信用刻度及周期下拉 |
-| `m-mono-stock` | `mono-stock` | 单色股票曲线、周期数据及悬停值 |
-| `m-users-pill` | `users-growth-pill-progress` | 星标/个人信息及可选择胶囊条 |
-| `m-views-wave` | `views-hourly-wave-chart` | 小时波形、真实平均值及周期筛选 |
+| `m-sales-radial-dash` | `sales-overview-radial-dashboard` | 排名横幅、径向目标与双读数 |
+| `m-credit-barcode` | `credit-score-barcode-meter` | 42 条信用刻度与周期下拉 |
+| `m-mono-stock` | `mono-stock` | 单色股票曲线、周期数据与悬停值 |
+| `m-users-pill` | `users-growth-pill-progress` | 星标/个人信息与可选择胶囊条 |
+| `m-views-wave` | `views-hourly-wave-chart` | 小时波形、真实平均值与周期筛选 |
 | `m-mono-heatmap` | `mono-heatmap` | 调用方提供的 28 天灰度活动矩阵 |
-| `m-timer-prep` | `timer-preparation-segmented` | 调用方剩余时间、选中阶段及分段步骤 |
-| `m-noise-level` | `noise-decibel-level` | 信号条、当前值输入及双范围控件 |
+| `m-timer-prep` | `timer-preparation-segmented` | 剩余时间、选中阶段与分段步骤 |
+| `m-noise-level` | `noise-decibel-level` | 信号条、当前值输入与双范围控件 |
 
-### 全部 29 个源码能力
+### 源码能力
 
-每个来源路径均相对固定上游提交 `43c29ce9cdd16459e3eab4992381b8d35b38776a` 的 `src/components/metrics/`，组件导出 `MOTION_METRIC_SOURCE_MAP` 供程序读取。
+路径相对于上游 `src/components/metrics/`；`MOTION_METRIC_SOURCE_MAP` 导出完整映射。
 
-| Source | Variant | 能力 |
+| 源码 | 变体 | 能力 |
 |---|---|---|
-| `AnimatedMetricCard.tsx` | `animated-metric-card` | 29 个交互分支，不使用通用占位卡 |
-| `Budget.tsx` | `budget` | 三行 64 列预算矩阵及详情事件 |
-| `CacheStatsCard.tsx` | `cache-stats-card` | 查询/缓存读数及带宽分配 |
-| `CourseProgressCard.tsx` | `course-progress-card` | 课程圆环、继续/全部动作、培训柱及参会者 |
-| `CreditScoreCards.tsx` | `credit-score-cards` | 分数半圆、等级报告、使用率及历史曲线 |
-| `FeedbackCard.tsx` | `feedback-card` | 调用方预览、可编辑消息、发送事件及真实消息列表 |
-| `FinanceDashboard.tsx` | `finance-dashboard` | 储蓄像素、信用条码、堆叠支出及资产筛选 |
+| `AnimatedMetricCard.tsx` | `animated-metric-card` | 29 个交互分支，没有通用占位卡 |
+| `Budget.tsx` | `budget` | 三行 64 列预算矩阵与详情事件 |
+| `CacheStatsCard.tsx` | `cache-stats-card` | 查询/缓存读数与带宽分配 |
+| `CourseProgressCard.tsx` | `course-progress-card` | 课程圆环、继续/全部动作、培训柱与参会者 |
+| `CreditScoreCards.tsx` | `credit-score-cards` | 分数半圆、等级报告、使用率与历史曲线 |
+| `FeedbackCard.tsx` | `feedback-card` | 调用方预览、可编辑消息、发送事件与消息列表 |
+| `FinanceDashboard.tsx` | `finance-dashboard` | 储蓄像素、信用条码、堆叠支出与资产筛选 |
 | `Growth.tsx` | `growth` | 三组像素高度增长柱 |
-| `GrowthCalendar.tsx` | `growth-calendar` | 可选择增长胶囊及调用方日历 |
-| `HealthCards.tsx` | `health-cards` | 每日圆环、周期圆点、饮水、锻炼、步数、睡眠阶段、心率及周目标 |
-| `MarketingCards.tsx` | `marketing-cards` | 渠道分配及活动图表/读数分栏 |
-| `NetworkTelemetry.tsx` | `network-telemetry` | 汇总统计及各网络像素矩阵 |
-| `NoiseCards.tsx` | `noise-cards` | 独立噪声读数及双范围控件 |
-| `OverviewChart.tsx` | `overview-chart` | 月度条纹柱及选中读数 |
-| `ProgressIndicator.tsx` | `progress-indicator` | 36 键进度、比较及真实数值输入 |
+| `GrowthCalendar.tsx` | `growth-calendar` | 可选择增长胶囊与调用方日历 |
+| `HealthCards.tsx` | `health-cards` | 每日圆环、周期圆点、饮水、锻炼、步数、睡眠阶段、心率与周目标 |
+| `MarketingCards.tsx` | `marketing-cards` | 渠道分配与活动图表/读数分栏 |
+| `NetworkTelemetry.tsx` | `network-telemetry` | 汇总统计与各网络像素矩阵 |
+| `NoiseCards.tsx` | `noise-cards` | 独立噪声读数与双范围控件 |
+| `OverviewChart.tsx` | `overview-chart` | 月度条纹柱与选中读数 |
+| `ProgressIndicator.tsx` | `progress-indicator` | 36 键进度、比较与数值输入 |
 | `PromptsCard.tsx` | `prompts-card` | 30 段提示词配额表 |
-| `RealTimeAlerts.tsx` | `real-time-alerts` | 预算柱及可编辑阈值线，仅发出输入 |
-| `RunningStatsCard.tsx` | `running-stats-card` | 距离/时长及含零值的每日柱 |
-| `SalesDashboard.tsx` | `sales-dashboard` | 四项汇总、销售双柱及分段目标 |
-| `SalesOverview.tsx` | `sales-overview` | 排名横幅、12 段目标及双统计 |
-| `SavingsCards.tsx` | `savings-cards` | 储蓄进度、添加事件、目标及交易柱 |
+| `RealTimeAlerts.tsx` | `real-time-alerts` | 预算柱与可编辑阈值线，只派发输入 |
+| `RunningStatsCard.tsx` | `running-stats-card` | 距离/时长与含零值的每日柱 |
+| `SalesDashboard.tsx` | `sales-dashboard` | 四项汇总、销售双柱与分段目标 |
+| `SalesOverview.tsx` | `sales-overview` | 排名横幅、12 段目标与双统计 |
+| `SavingsCards.tsx` | `savings-cards` | 储蓄进度、添加事件、目标与交易柱 |
 | `ServerPerformance.tsx` | `server-performance` | 带顶帽的阶梯性能柱 |
-| `StatusCards.tsx` | `status-cards` | 个人状态、活动/睡眠时间线及真实航班进度 |
-| `StockChartCard.tsx` | `stock-chart-card` | 外部股票序列及首末值差量 |
-| `SystemMetricsCard.tsx` | `system-metrics-card` | 延迟/滞后图、分位读数及错误分解 |
-| `TimerCard.tsx` | `timer-card` | 剩余秒数、阶段提示、步骤及运行事件 |
-| `UserMetrics.tsx` | `user-metrics` | 四项受众统计及浏览量/平均波形 |
-| `UsersChartCard.tsx` | `users-chart-card` | 受众面积图、次要读数及详情事件 |
-| `VisitorsChartCard.tsx` | `visitors-chart-card` | 两条独立访客曲线及真实多序列提示 |
+| `StatusCards.tsx` | `status-cards` | 个人状态、活动/睡眠时间线与航班进度 |
+| `StockChartCard.tsx` | `stock-chart-card` | 外部股票序列与首末值差量 |
+| `SystemMetricsCard.tsx` | `system-metrics-card` | 延迟/滞后图、分位读数与错误分解 |
+| `TimerCard.tsx` | `timer-card` | 剩余秒数、阶段提示、步骤与运行事件 |
+| `UserMetrics.tsx` | `user-metrics` | 四项受众统计与浏览量/平均波形 |
+| `UsersChartCard.tsx` | `users-chart-card` | 受众面积图、次要读数与详情事件 |
+| `VisitorsChartCard.tsx` | `visitors-chart-card` | 两条独立访客曲线与多序列提示 |
 
-### AnimatedMetricCard 的额外交互
+### AnimatedMetricCard 交互
 
-上表目录的 15 个 interaction 加上下表 14 个，构成全部 29 个分支。可直接作为 `variant`，或通过 `variant="animated-metric-card"` 与 `interaction` 选择。
+目录条目的 15 个交互加上下表 14 个，构成全部 29 个分支。可直接作为 `variant`，或用 `variant="animated-metric-card"` 加 `interaction` 选择。
 
-| Interaction | 能力 |
+| 交互 | 能力 |
 |---|---|
 | `mono-revenue` | 营收曲线 |
-| `mono-credit` | 信用圆环及等级 |
-| `mono-wallet` | 余额及流入/流出 |
-| `mono-savings` | 储蓄目标及进度 |
+| `mono-credit` | 信用圆环与等级 |
+| `mono-wallet` | 余额与流入/流出 |
+| `mono-savings` | 储蓄目标与进度 |
 | `mono-activity-ring` | 独立活动目标同心环 |
-| `mono-users` | 活跃用户及地区徽标 |
+| `mono-users` | 活跃用户与地区徽标 |
 | `mono-kfactor` | 推荐倍数圆环 |
-| `mono-latency` | 分位值及延迟折线 |
-| `mono-bandwidth` | 速度半圆及延迟/丢包 |
-| `mono-server` | 独立 CPU/RAM 圆环及节点/堆数据 |
-| `mono-progress` | 构建圆环、步骤及调用方状态 |
-| `mono-radar` | 事件半圆及调用方警报数 |
-| `mono-timer-arc` | 剩余时间圆环及开始/暂停事件 |
+| `mono-latency` | 分位值与延迟折线 |
+| `mono-bandwidth` | 速度半圆与延迟/丢包 |
+| `mono-server` | 独立 CPU/RAM 圆环与节点/堆数据 |
+| `mono-progress` | 构建圆环、步骤与调用方状态 |
+| `mono-radar` | 事件半圆与调用方警报数 |
+| `mono-timer-arc` | 剩余时间圆环与开始/暂停事件 |
 | `mono-timer-ring` | 独立专注/休息同心环 |
 
-## 最佳实践
+## 概述
 
-- 每个周期提供真实 `data`，并在受控模式下响应更新事件；不要只改按钮标签而复用未筛选的序列。
-- 计时器的 `remaining/total`、监控状态、噪声读数及反馈送达均由调用方负责。`running` 只表达输入意图，不能当作后台成功。
-- 数值读数、条码分数、圆环进度及不同单位的序列必须使用一致的 `target/min/max/unit`。信用分组合默认几何范围 300–850，可覆盖。
-- 为所有 series/metrics/groups/cells 提供稳定 ID、真实标签及完整单位；缺失点不生成替代业务数据。
-- `health-cards` 用 `sleep` 点的 `level` 区分睡眠阶段高度；个人状态通过 profiles 的 segments 或 flight 展示。
-- 使用 `labels`、`formatValue` 和已授权头像插槽进行本地化；尊重减弱动态，不添加轮询或永久动画。
+- 组件不读取网络、音频、健康、金融或监控服务，不生成数据，也不启动计时器；`series`、`metrics`、`status`、`remaining` 等由调用方更新。
+- 缺少数据时显示空状态，不显示固定读数。
+- 图表默认提供可用键盘操作的数据点滑块；噪声上下界互为原生边界，不会交叉。
+- 离屏、文档隐藏、KeepAlive 失活或减少动态效果时停止数值与圆环动效。
 
-## 来源与许可
+## 技术实现
 
-基于固定上游 Amicro Metrics 真源码逐项移植。MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。样本数值仅存在文档演示；组件内没有默认业务读数。构建、类型检查、全量文档门禁及真实浏览器验收由集成阶段统一执行，本页不声称这些检查已经运行。
+- 复用 SVG/D3 图表、`TxStatCard`、`TxSlider`、`TxInput`、`TxButton` 与 `TxTextMorph`。
+- 上游：[Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a) 的 Metrics 组件，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+- 源码：`packages/tuffex/packages/components/src/motion-metric/`。

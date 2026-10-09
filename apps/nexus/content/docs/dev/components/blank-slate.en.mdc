@@ -1,6 +1,6 @@
 ---
 title: "BlankSlate"
-description: "Large onboarding empty state for first-use screens and empty product areas."
+description: "A large empty state that guides first-time users to a first action."
 category: Status
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### BlankSlate
+### Basic
 :::TuffDemoWrapper{demo="BlankSlateBlankSlateDemo" code-lang="vue"}
 ---
 code: |
@@ -28,63 +28,50 @@ code: |
 
 ### Best Practices
 
-- Use it for first-use or onboarding states; use `TxNoData` for recurring empty query results.
-- Explain the value of the first action, not just the absence of content.
-- Keep the primary action singular and direct. Secondary actions should teach, import, or dismiss.
-- Avoid `surface="card"` on full-page blank slates unless the surrounding layout already uses card containment.
+- Use it for first use and onboarding; use `TxNoData` for recurring empty query results.
+- Explain the value of the first step, not just the absence of content.
+- Offer one direct primary action; secondary actions teach, import, or skip.
+- Keep full-page blank slates on `surface="plain"` unless the layout already uses cards.
 
 ## API Reference
 
-### Props
+Takes every [TxEmptyState](./empty-state.en.mdc) prop, event, and slot except `variant`, which is fixed to `blank-slate`; `size` defaults to `'large'`.
 
-`TxBlankSlate` accepts every `EmptyStateProps` field except `variant`.
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | preset title | Onboarding headline. |
-| `description` | `string` | preset description | Explains why the first action matters. |
-| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
-| `iconSize` | `number` | size preset | Custom icon size in pixels. |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'large'` | Density and illustration scale. |
-| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `description` | `string` | preset description | Why the first step matters. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Replaces the illustration; `null` hides the icon area. |
+| `iconSize` | `number` | size preset | Icon size in px. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'large'` | Spacing and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` adds a card border. |
 | `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
 | `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
-| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Default size of the generated buttons. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon is given. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `primary` | - | Forwarded from the generated primary action. |
-| `secondary` | - | Forwarded from the generated secondary action. |
+| `primary` | - | Fires when the generated primary action is clicked. |
+| `secondary` | - | Fires when the generated secondary action is clicked. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `icon` | - | Replaces the preset illustration or custom icon. |
-| `title` | - | Replaces resolved title content. |
-| `description` | - | Replaces resolved description content. |
-| `actions` | - | Replaces generated primary/secondary action buttons. |
-
-## Overview
-
-- Always forwards `variant="blank-slate"` to `TxEmptyState`.
-- Applies onboarding defaults: `size="large"`, `layout="vertical"`, and `surface="plain"`.
-- Explicit `size`, `layout`, and `surface` props override those defaults.
-- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
-- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+| `icon` | - | Replaces the illustration or icon. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`, `types.ts`, and `blank-slate.test.ts`.
-- **Verified coverage:** `blank-slate.test.ts` covers fixed `variant="blank-slate"`, onboarding defaults, explicit layout overrides, named slot forwarding, and install registration.
-- Accessibility note: `TxBlankSlate` delegates semantics to `TxEmptyState`; keep first-action copy specific and avoid placing multiple competing calls to action in `actions`.
+- Source: `packages/tuffex/packages/components/src/blank-slate/`.
 
-- Component source: `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`.
-- Types: `packages/tuffex/packages/components/src/blank-slate/src/types.ts` exports `BlankSlateProps` as `Omit<EmptyStateProps, 'variant'>`.
-- Coverage: `packages/tuffex/packages/components/src/blank-slate/__tests__/blank-slate.test.ts` verifies wrapper defaults, overrides, slot forwarding, and install registration.
 <TuffDocSourceLink />

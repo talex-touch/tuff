@@ -1,6 +1,6 @@
 ---
 title: "OutlineBorder"
-description: "Border and ring wrapper with optional clipping for avatars, thumbnails, badges, and custom slot content."
+description: "A wrapper that adds an outline with optional clipping."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Use `ring-offset` for avatar-style outlines and `border` when the outline should participate in layout.
-
+### Outline Modes
+Use `ring-offset` for avatar outlines and `border` when the outline should take up layout space.
 ::::TuffDemoWrapper{demo="OutlineBorderBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -28,48 +28,8 @@ code: |
 ---
 ::::
 
-### Best Practices
-
-- Prefer `overflow` for circular or rounded avatars; it is cheaper and easier to debug than `mask`.
-- Use `ring-offset` when the outline must stay visually separated from the content surface.
-- Pass explicit width and height on the slotted content so masks and rings have predictable geometry.
-- Use `as="span"` only for inline contexts; keep block wrappers for cards, thumbnails, and list media.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `as` | `string` | `'div'` | Root element tag rendered by the wrapper. |
-| `variant` | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | Visual outline mode. `border` writes a CSS border; the ring variants write `box-shadow`. |
-| `shape` | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | Shape preset used for default radius and `clipShape="auto"`. |
-| `borderRadius` | `string \| number` | - | Explicit radius. Numeric values are normalized to px. |
-| `borderWidth` | `string \| number` | `'1px'` | Border width and fallback ring width. |
-| `borderColor` | `string` | `'var(--tx-border-color)'` | Border color and fallback ring color. |
-| `borderStyle` | `'solid' \| 'dashed' \| 'dotted'` | `'solid'` | CSS border style used by `variant="border"`. |
-| `ringWidth` | `string \| number` | `borderWidth` | Ring width for ring variants. Numeric values are normalized to px. |
-| `ringColor` | `string` | `borderColor` | Ring color for ring variants. |
-| `offset` | `string \| number` | `'2px'` | Ring-offset gap for `variant="ring-offset"`. |
-| `offsetBg` | `string` | `'var(--tx-bg-color)'` | Color used to paint the offset gap. |
-| `padding` | `string \| number` | `0` | Padding applied to the inner slot wrapper. |
-| `clipMode` | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `'overflow'` | Clipping strategy applied to the content layer. |
-| `clipShape` | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `'auto'` | Clip shape. `auto` maps `shape` to `circle`, `rounded`, or `squircle`. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `default` | - | Content wrapped by the outline and optional clipping layer. |
-
-### Events
-
-No component events.
-
-## Mask Clipping
-
-Use `clip-mode="mask"` for shapes that cannot be expressed with border radius alone, such as hexagons.
-
+### Mask Clipping
+Use `clip-mode="mask"` for shapes that border radius cannot express, such as hexagons.
 ::::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
 ---
 code: |
@@ -87,24 +47,52 @@ code: |
 ---
 ::::
 
+### Best Practices
+
+- Prefer `overflow` for circular or rounded avatars; it is cheaper and easier to debug than `mask`.
+- Use `ring-offset` when the outline needs a visible gap from the content.
+- Give the slotted content an explicit width and height so masks and rings keep a stable geometry.
+- Use `as="span"` only in inline contexts; keep block wrappers for cards, thumbnails, and list media.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `as` | `string` | `'div'` | Root element tag. |
+| `variant` | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | Outline mode. |
+| `shape` | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | Shape; sets the default radius and what `clipShape="auto"` resolves to. |
+| `borderRadius` | `string \| number` | - | Explicit radius. |
+| `borderWidth` | `string \| number` | `'1px'` | Border width; also the fallback ring width. |
+| `borderColor` | `string` | `'var(--tx-border-color)'` | Border color; also the fallback ring color. |
+| `borderStyle` | `'solid' \| 'dashed' \| 'dotted'` | `'solid'` | Border style for `variant="border"`. |
+| `ringWidth` | `string \| number` | `borderWidth` | Ring width. |
+| `ringColor` | `string` | `borderColor` | Ring color. |
+| `offset` | `string \| number` | `'2px'` | Gap width for `variant="ring-offset"`. |
+| `offsetBg` | `string` | `'var(--tx-bg-color)'` | Color of the gap. |
+| `padding` | `string \| number` | `0` | Padding of the inner slot wrapper. |
+| `clipMode` | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `'overflow'` | Clipping strategy for the content layer. |
+| `clipShape` | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `'auto'` | Clip shape; `auto` maps `shape` to `circle`, `rounded`, or `squircle`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Content wrapped by the outline and the clipping layer. |
+
 ## Overview
 
-- Numeric `borderRadius`, `borderWidth`, `ringWidth`, `offset`, and `padding` values are converted to px.
-- `variant="border"` writes a real CSS border; ring variants use `box-shadow` and do not affect layout size.
-- `clipMode="overflow"` clips through `border-radius`; `clipPath` writes a CSS `clip-path`; `mask` writes an inline SVG mask data URI.
-- `clipShape="rounded"`, `"squircle"`, and the default rectangular case resolve to `inset(0 round var(--tx-outline-radius))` under `clipPath`; the true squircle shape only renders with `clipMode="mask"`.
-- `ring`/`border` outlines are drawn with `box-shadow`/CSS border and follow only `border-radius`; `clipShape` affects the content layer only, so the outline does not trace non-rounded shapes like `hexagon`/`squircle` (use a shaped `drop-shadow` filter if the outline must follow such a shape).
-- The component has no intrinsic size. The slotted content determines the final box.
+- The component has no intrinsic size; the slotted content sets the box. Numeric size props are treated as px.
+- `variant="border"` writes a real CSS border; ring variants use `box-shadow` and don't affect layout size.
+- `clipMode`: `overflow` clips through `border-radius`, `clipPath` writes a CSS `clip-path`, and `mask` writes an inline SVG mask (`circle`, `hexagon`, and `squircle` only).
+- Under `clipPath`, `rounded` and `squircle` both resolve to `inset(0 round var(--tx-outline-radius))`; the true squircle renders only with `mask`.
+- The outline follows only `border-radius` and `clipShape` affects only the content layer, so the outline doesn't trace `hexagon` / `squircle`; use a shaped `drop-shadow` filter when it must.
+- It is a visual wrapper only and adds no role, label, or image semantics; keep alt text, focus, and click targets on the slotted content.
 
 ## Technologies
 
-- **Accessibility note:** `TxOutlineBorder` is a visual wrapper only; it does not add roles, labels, or image semantics. Keep alt text, labels, focus behavior, and click targets on the slotted content or the caller-provided root attributes.
-- **Mask note:** `clipMode="mask"` only emits masks for `circle`, `hexagon`, and `squircle`; rectangular/rounded shapes should use `overflow` or `clipPath`.
-- **Verified coverage:** `outline-border.test.ts` checks dynamic root tags, slot rendering, border style mapping, numeric unit conversion, default ring-offset box shadow, ring/inset variants, default overflow clipping, clip-path/mask modes, and disabled clipping.
-
-- Component source: `packages/tuffex/packages/components/src/outline-border/src/TxOutlineBorder.vue`.
-- Types: `packages/tuffex/packages/components/src/outline-border/src/types.ts` exports `OutlineBorderProps`, variant, shape, clip-mode, and clip-shape unions.
-- Export alias: `packages/tuffex/packages/components/src/outline-border/index.ts` exports `OutlineBorder`, `TxOutlineBorder`, type unions, and `TxOutlineBorderInstance`.
-- Coverage: `packages/tuffex/packages/components/src/outline-border/__tests__/outline-border.test.ts` verifies styles, clipping strategies, root tag, and slot behavior.
+- The outline paints on the root and clipping applies to the content layer `.tx-outline-border__content`; both share the radius through `--tx-outline-radius`.
+- Source: `packages/tuffex/packages/components/src/outline-border/`.
 
 <TuffDocSourceLink />

@@ -56,6 +56,7 @@ code: |
 | `messages` | `ChatMessageModel[]` | 必填 | 消息数组，按顺序渲染。 |
 | `markdown` | `boolean` | `true` | 用 `TxMarkdownView` 渲染正文；关闭时渲染纯文本。 |
 | `stagger` | `boolean` | `true` | 用 `TxStagger` 播放消息入场动画。 |
+| `attachmentLabel` | `string` | - | 转发给每条消息：无 `name` 缩略图的可访问名称。 |
 
 #### 事件
 
@@ -118,10 +119,10 @@ code: |
 
 - 源码：`packages/tuffex/packages/components/src/chat/`（`TxChatList.vue`、`TxChatMessage.vue`、`types.ts`）。
 
+<TuffDocSourceLink />
+
 ## 相关组件
 
 - [ChatComposer](./chat-composer.zh.mdc)：文本输入、附件与发送。
 - [TypingIndicator](./typing-indicator.zh.mdc)：助手输入中状态。
 - [AI Elements](./ai-elements.zh.mdc)：需要 `tool` 消息或流式状态时优先使用。
-
-<TuffDocSourceLink />

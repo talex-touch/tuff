@@ -1,6 +1,6 @@
 ---
 title: "WorkingIndicator 工作指示器"
-description: "长任务进行中的行内指示器：像素格 + 微光标签 + 实时计时。"
+description: "长任务进行中的行内状态指示器"
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -11,8 +11,8 @@ verified: true
 
 ## 用法
 
-### WorkingIndicator
-
+### 基础
+`label` 写正在做什么，`startedAt` 设定计时起点。
 :::TuffDemoWrapper{demo="WorkingIndicatorWorkingIndicatorDemo" code-lang="vue"}
 ---
 code: |
@@ -28,11 +28,9 @@ code: |
 ---
 :::
 
-### 三种像素图案
-
-`drive` 与 `dots` 共用同一条人字形波前，周期 650ms；`orbit` 是一颗彗星绕格子外圈跑，中心格永远不亮。
-
-:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue" title="三种像素图案" description="drive / dots / orbit 的波前与造型差异。"}
+### 像素图案
+`variant` 决定像素格图案。
+:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -45,57 +43,42 @@ code: |
 
 ### 最佳实践
 
-- 用它表示「某件事正在跑，已经跑了多久」。对方正在输入用 `TxTypingIndicator`，无语义的等待用 `TxSpinner`。
-- 文案写清楚在做什么（「正在索引仓库」），不要只写「Working」——读数已经回答了「多久」，标签要回答「什么」。
-- 任务超过几秒才值得显示读数；瞬时操作把 `showElapsed` 关掉，省下定时器也省下视觉噪音。
-- 流式场景一律传 `startedAt`，否则组件重建时计时会跳回 0。
-- 组件宽度是 `fit-content`，容器由宿主决定。
+- 用于「某件事正在运行、已运行多久」；输入中用 `TxTypingIndicator`，无语义的等待用 `TxSpinner`，页面级状态用 `TxLoadingState`。
+- `label` 写在做什么（「正在索引仓库」），不要只写「Working」：读数回答多久，标签回答什么。
+- 瞬时操作关闭 `showElapsed`；读数在任务超过几秒后才有意义。
+- 流式场景始终传 `startedAt`，否则组件重建时计时归零。
+- 读屏用户需要耗时信息时，由宿主在任务结束后播报一次总时长。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `label` | `string` | `'Working'` | 微光状态文案。 |
 | `variant` | `'drive' \| 'dots' \| 'orbit'` | `'drive'` | 像素格图案。 |
-| `startedAt` | `number` | — | 计时起点（epoch 毫秒）。省略则从挂载起算。 |
-| `showElapsed` | `boolean` | `true` | 关掉时不渲染读数，同时停掉定时器。 |
+| `startedAt` | `number` | — | 计时起点（epoch 毫秒）；不传则从挂载起算。 |
+| `showElapsed` | `boolean` | `true` | 关闭时不渲染读数，并停止定时器。 |
 | `elapsedFormatter` | `(ms: number) => string` | — | 覆盖默认格式（`12.3s` / `2m 3.0s`）。 |
-| `ariaLabel` | `string` | — | 状态区的可访问名。省略则由可见文案充当播报内容。 |
+| `ariaLabel` | `string` | — | 状态区的可访问名称；不传时以可见文案播报。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
 | `label` | — | 替换微光文案，可放富文本。 |
 
-## 计时与重挂载
-
-不传 `startedAt` 时，计时从挂载那一刻起算。流式宿主每收到一个增量都可能重建这一行，那样计时会被清零——传一个时间戳就能让它跨重挂载继续走。
-
-读数始终是 `Date.now() - startedAt` 而不是自增计数器：标签页切到后台会被节流，自增计数器每次少加，时间越走越慢。
-
 ## 概述
 
-- 组件没有 emits：它只呈现状态，不产生事件。
-- 根节点是 `role="status"`。**读数带 `aria-hidden="true"`**——它每 100ms 变一次，留在实时区域里会把辅助技术淹没；播报内容只有标签。
-- `ariaLabel` 缺省时不写 `aria-label`。把可见文案再抄一遍会被读两次。
-- 9 个格子的动画延迟写在 SCSS 的 `:nth-child()` 里而不是内联样式上。内联样式优先级更高，会盖掉减弱动效的关闭规则。
-- `orbit` 的中心格是 `opacity: .07` 且完全不参与动画，其余格子静止态是 `.15`。
-- 减弱动效下格子停在 `.15` 的暗态（`animation: none`），**计时器照常走**——它报告的是真实进度，不是装饰。
-- 同目录导出 `useElapsed` 与 `formatElapsed`，宿主想自己排版读数时可以直接用。
+- 根节点为 `role="status"`；读数每 100ms 更新并带 `aria-hidden="true"`，只有标签会被播报。
+- 读数始终按 `Date.now() - startedAt` 计算，后台标签页节流定时器时也不会走慢。
+- 减少动态效果时格子停在暗态，计时照常。
+- 同目录还导出 `useElapsed` 与 `formatElapsed`，可自行排版读数。
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/working-indicator/src/TxWorkingIndicator.vue`。
-- Composable: `packages/tuffex/packages/components/src/working-indicator/src/use-elapsed.ts` 导出 `useElapsed` 与 `formatElapsed`。
-- Types: `packages/tuffex/packages/components/src/working-indicator/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/working-indicator/__tests__/working-indicator.test.ts`（17 项）验证格式化边界、`startedAt` 重定基、`showElapsed` 停表、卸载清理定时器、变体类名与 aria 归属。
-- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+- 九个格子的动画延迟写在 SCSS 的 `:nth-child()` 里，减少动态效果时一条 `animation: none` 即可全部关闭。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）。
+- 源码：`packages/tuffex/packages/components/src/working-indicator/`。
 
 <TuffDocSourceLink />
-
-- **与 `TxLoadingState` 无关:** 同一个包里的 `TxLoadingState` 是页面级空态包装器，语义完全不同，不要混用。
-- **可访问性:** 读数对辅助技术隐藏是刻意的取舍——每秒 10 次的播报没有可用性。需要让屏幕阅读器知道耗时的场景，请在任务结束后由宿主播报一次总时长。
-- **减弱动效:** 关掉的是补间，不是状态机。计时继续走是与上游一致的行为。

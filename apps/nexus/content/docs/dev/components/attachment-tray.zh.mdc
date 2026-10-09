@@ -45,7 +45,9 @@ code: |
 
 ## API 参考
 
-### 属性
+### TxAttachmentTray
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
@@ -60,7 +62,7 @@ code: |
 | `cancelLabel` | `string` | `'Cancel upload'` | 取消上传按钮的可访问名称。 |
 | `sizeFormatter` | `(bytes: number) => string` | — | 格式化文件大小；默认按 B/KB/MB 保留一位小数。 |
 
-### 事件
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
@@ -68,9 +70,30 @@ code: |
 | `cancel` | `(id: string)` | 点击取消上传时触发。 |
 | `open` | `(attachment: AiAttachmentFile)` | 点击文件胶囊时触发；图片打开内置预览器。 |
 
+### TxAttachmentChip
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `attachment` | `AiAttachment & { kind: 'file' }` | — | 要显示的文件附件，必填。 |
+| `removable` | `boolean` | `false` | 显示移除按钮；取消上传按钮不受其控制。 |
+| `removeLabel` | `string` | `'Remove attachment'` | 移除按钮的可访问名称。 |
+| `cancelLabel` | `string` | `'Cancel upload'` | 取消上传按钮的可访问名称。 |
+| `sizeFormatter` | `(bytes: number) => string` | — | 格式化文件大小；默认与 `TxAttachmentTray` 相同。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `remove` | `(id: string)` | 点击移除时触发。 |
+| `cancel` | `(id: string)` | 点击取消上传时触发。 |
+| `open` | `(attachment: AiAttachment & { kind: 'file' })` | 点击胶囊主体时触发。 |
+
 ## 概述
 
 - `kind: 'image'` 进入图片网格，`kind: 'file'` 进入文件胶囊；两类放在同一个 `attachments` 中。
+- 每个文件渲染为 `TxAttachmentChip`，Tray 向它透传 `removable`、`removeLabel`、`cancelLabel` 与 `sizeFormatter`。
 - 点击图片打开基于 `TxModal` 的内置预览器，只在图片间翻页，不派发事件。
 - `uploading` 为真的附件始终显示取消按钮：图片绘制环形进度，文件胶囊显示百分比。
 - 缩略图加载失败后换成占位块，不再重试。

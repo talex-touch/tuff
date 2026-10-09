@@ -1,6 +1,6 @@
 ---
 title: Tool Confirmation
-description: An authorization card shown before a tool runs, with a risk level and a session-scoped remember option.
+description: An authorization card shown before a tool call runs.
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### Tool Confirmation
+### Basic
+With `risk` set to `write` or `execute`, the card and the allow button switch to the danger color.
 ::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
 ---
 code: |
@@ -30,11 +31,11 @@ code: |
 
 ### Best Practices
 
-- Unmount the card as soon as a decision arrives rather than reusing it — `remember` does not reset itself.
-- Report `risk` honestly. Labelling a write as `read` removes both the visual emphasis and the user's basis for deciding.
-- Put only the decision-relevant fields in `input`, pre-truncated. It is the one place a user can see what will actually happen, and a full request body makes them skip it.
-- Override `allowLabel`, `denyLabel`, `rememberLabel` and `riskLabels` together for non-English surfaces.
-- When `remember` is true, scope the grant to the current session. Do not quietly promote it to a permanent one — the label promises otherwise.
+- Unmount the card as soon as a decision arrives; never reuse it.
+- Report `risk` honestly; labelling a write as `read` removes both the emphasis and the user's basis for deciding.
+- Put only the decision-relevant fields in `input`, truncated in advance.
+- On non-English surfaces, override `allowLabel`, `denyLabel`, `rememberLabel`, and `riskLabels` together.
+- Scope a `remember` grant to the current session; never quietly make it permanent.
 
 ## API Reference
 
@@ -42,33 +43,29 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `toolName` | `string` | — | The tool being authorized; also used to build the accessible name. Required. |
-| `summary` | `string` | — | One line on what the tool will do. Not rendered when unset. |
-| `input` | `string` | — | Serialized input preview, shown preformatted. |
+| `toolName` | `string` | — | The tool being authorized; also builds the accessible name. Required. |
+| `summary` | `string` | — | One line on what the tool will do; not rendered when unset. |
+| `input` | `string` | — | Serialized input preview, shown verbatim in a `<pre>`; not rendered when unset. |
 | `risk` | `'read' \| 'write' \| 'execute'` | `'read'` | Risk level, mirrored onto `data-risk`. |
-| `allowLabel` | `string` | `'Allow'` | Label for the allow button. |
-| `denyLabel` | `string` | `'Deny'` | Label for the deny button. |
-| `rememberLabel` | `string` | `'Remember for this session'` | Label for the remember checkbox. |
-| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | Overrides the risk text, per level; partial overrides are fine. |
+| `allowLabel` | `string` | `'Allow'` | Label of the allow button. |
+| `denyLabel` | `string` | `'Deny'` | Label of the deny button. |
+| `rememberLabel` | `string` | `'Remember for this session'` | Label of the remember checkbox. |
+| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | Overrides `Read-only`, `Writes data`, and `Executes` per level; partial overrides are fine. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `approve` | `({ remember: boolean })` | Emitted when allow is clicked. |
-| `deny` | `({ remember: boolean })` | Emitted when deny is clicked, carrying `remember` as well. |
-
-## Slots
-
-`TxToolConfirmation` exposes no slots. Serialize richer input yourself and pass it through `input`.
+| `approve` | `({ remember: boolean })` | Fires when allow is clicked. |
+| `deny` | `({ remember: boolean })` | Fires when deny is clicked, also carrying `remember`. |
 
 ## Overview
 
-- The component runs nothing and remembers nothing. It reports a decision; executing and persisting it are the host's job.
-- Both `approve` and `deny` carry `{ remember: boolean }` — **deny included**, so "deny for the rest of this session" is expressible.
-- `remember` is internal state, starts `false`, and is **not reset after a decision**. The card is single-use: unmount it once a decision arrives.
-- `risk` has three levels, mirrored onto `data-risk`: `read` (default), `write` and `execute`. Anything other than `read` is treated as dangerous for emphasis.
-- Risk text defaults to `Read-only` / `Writes data` / `Executes`. `riskLabels` overrides them, and a partial override is allowed.
-- `summary` and `input` are both optional; each region is omitted entirely when unset.
-- `input` renders verbatim in a `<pre>` with **no processing beyond escaping** — truncate long payloads before passing them in.
-- The root is `role="group"` with an accessible name of `${toolName} confirmation`.
+- The component runs nothing and stores nothing; it reports a decision, and the host executes and persists it.
+- Deny carries `remember` too, so "deny for the rest of this session" is expressible.
+- `remember` is internal state that starts `false` and does not reset after a decision: the card is single-use.
+- The root is a `role="group"` named `${toolName} confirmation`.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/tool-confirmation/`.

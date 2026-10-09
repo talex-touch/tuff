@@ -1,6 +1,6 @@
 ---
 title: "GradualBlur"
-description: "Layered backdrop-filter edge fade for parent or page overlays, presets, hover intensity, scroll reveal, responsive sizing, and GPU hints."
+description: "A layered blur that fades in from the edge of a container or page."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,31 +11,16 @@ verified: true
 
 ## Usage
 
-### GradualBlur
+### Basic
+It sits on the parent's bottom edge by default; `strength`, `divCount`, and `curve` set how strong the blur is and how it ramps.
 :::TuffDemoWrapper{demo="GradualBlurGradualBlurDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <section style="position: relative; height: 320px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-      <div style="height: 100%; overflow-y: auto; padding: 2rem 1rem; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0));">
-        <div style="font-weight: 600; margin-bottom: 8px;">
-          Scrollable Content
-        </div>
-        <div style="color: var(--tx-text-color-secondary); line-height: 1.7;">
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-          <div style="height: 16px;" />
-          Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-          <div style="height: 16px;" />
-          Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
-          <div style="height: 16px;" />
-          Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-          <div style="height: 16px;" />
-          More lines. More lines. More lines. More lines. More lines.
-          <div style="height: 120px;" />
-          Bottom.
-        </div>
+    <section style="position: relative; height: 320px; overflow: hidden;">
+      <div style="height: 100%; overflow-y: auto;">
+        <!-- long content -->
       </div>
-
       <TxGradualBlur
         target="parent"
         position="bottom"
@@ -44,282 +29,128 @@ code: |
         :div-count="5"
         curve="bezier"
         :exponential="true"
-        :opacity="1"
       />
     </section>
   </template>
 ---
 :::
 
-### Direction (Top / Bottom / Left / Right)
-
-#### Positions
+### Positions
+`position` picks the edge; on the left and right, `width` sets the thickness.
 :::TuffDemoWrapper{demo="GradualBlurPositionsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 620px;">
-      <section style="position: relative; height: 220px; overflow: hidden; border-radius: 16px; border: 1px solid var(--tx-border-color); background: linear-gradient(180deg, rgba(125,211,252,.24), rgba(255,255,255,0));">
-        <div style="height: 100%; overflow-y: auto; padding: 1.4rem 1.2rem; display: flex; flex-direction: column; gap: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-            <span>Top fade</span>
-            <span style="font-size: 20px;">↑</span>
-          </div>
-          <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            Headline content stays sharp while the top edge fades the scrolled content behind it.
-          </p>
-          <div style="height: 160px;" />
-          <p style="color: var(--tx-text-color-secondary); margin: 0;">
-            End.
-          </p>
-        </div>
-        <TxGradualBlur position="top" height="4.5rem" :strength="2.2" :div-count="6" curve="ease-out" />
-      </section>
-
-      <section style="position: relative; height: 220px; overflow: hidden; border-radius: 16px; border: 1px solid var(--tx-border-color); background: linear-gradient(180deg, rgba(168,85,247,.08), rgba(255,255,255,0));">
-        <div style="height: 100%; overflow-y: auto; padding: 1.4rem 1.2rem; display: flex; flex-direction: column; gap: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-            <span>Bottom fade</span>
-            <span style="font-size: 20px;">↓</span>
-          </div>
-          <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            A bottom fade keeps footer actions readable over long card content.
-          </p>
-          <div style="height: 200px;" />
-          <p style="color: var(--tx-text-color-secondary); margin: 0;">
-            End.
-          </p>
-        </div>
-        <TxGradualBlur position="bottom" height="5rem" :strength="2.2" :div-count="6" curve="ease-out" />
-      </section>
-
-      <section style="position: relative; height: 200px; overflow: hidden; border-radius: 16px; border: 1px solid var(--tx-border-color); background: linear-gradient(90deg, rgba(14,165,233,.06), rgba(255,255,255,0));">
-        <div style="height: 100%; overflow-y: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-            <span>Left pane</span>
-            <span style="font-size: 20px;">←</span>
-          </div>
-          <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            Sidebar text and icon grids stay readable while the outside edge is softened.
-          </p>
-          <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-            <div style="height: 48px; border-radius: 8px; background: rgba(125,211,252,.35);" />
-            <div style="height: 48px; border-radius: 8px; background: rgba(59,130,246,.25);" />
-            <div style="height: 48px; border-radius: 8px; background: rgba(37,99,235,.25);" />
-          </div>
-        </div>
-        <TxGradualBlur position="left" width="5rem" :strength="2.5" :div-count="7" curve="bezier" />
-      </section>
-
-      <section style="position: relative; height: 200px; overflow: hidden; border-radius: 16px; border: 1px solid var(--tx-border-color); background: linear-gradient(90deg, rgba(236,72,153,.08), rgba(255,255,255,0));">
-        <div style="height: 100%; overflow-y: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-            <span>Right pane</span>
-            <span style="font-size: 20px;">→</span>
-          </div>
-          <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            Useful for media rails or chat panes where the right edge should not steal focus.
-          </p>
-          <div style="flex: 1; display: flex; gap: 6px;">
-            <div style="flex: 1; border-radius: 10px; background: rgba(248,113,113,.15);" />
-            <div style="flex: 1; border-radius: 10px; background: rgba(251,146,60,.15);" />
-          </div>
-        </div>
-        <TxGradualBlur position="right" width="5rem" :strength="2.5" :div-count="7" curve="bezier" />
-      </section>
-    </div>
+    <section class="pane">
+      <!-- scrollable content -->
+      <TxGradualBlur position="top" height="4.5rem" :strength="2.2" :div-count="6" curve="ease-out" />
+    </section>
+    <section class="pane">
+      <TxGradualBlur position="bottom" height="5rem" :strength="2.2" :div-count="6" curve="ease-out" />
+    </section>
+    <section class="pane">
+      <TxGradualBlur position="left" width="5rem" :strength="2.5" :div-count="7" curve="bezier" />
+    </section>
+    <section class="pane">
+      <TxGradualBlur position="right" width="5rem" :strength="2.5" :div-count="7" curve="bezier" />
+    </section>
   </template>
 ---
 :::
 
-### Preset
-
-#### Presets
+### Presets
 :::TuffDemoWrapper{demo="GradualBlurPresetsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 640px;">
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            subtle
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="subtle" />
-      </section>
-
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            intense
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="intense" />
-      </section>
-
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            smooth
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="smooth" />
-      </section>
-
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            sharp
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="sharp" />
-      </section>
-
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            header
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="header" />
-      </section>
-
-      <section style="position: relative; height: 140px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-        <div style="height: 100%; overflow-y: auto; padding: 1rem;">
-          <div style="font-weight: 600;">
-            footer
-          </div>
-          <div style="height: 120px;" />
-        </div>
-        <TxGradualBlur preset="footer" />
-      </section>
-    </div>
+    <section class="pane"><TxGradualBlur preset="subtle" /></section>
+    <section class="pane"><TxGradualBlur preset="intense" /></section>
+    <section class="pane"><TxGradualBlur preset="smooth" /></section>
+    <section class="pane"><TxGradualBlur preset="sharp" /></section>
+    <section class="pane"><TxGradualBlur preset="header" /></section>
+    <section class="pane"><TxGradualBlur preset="footer" /></section>
   </template>
 ---
 :::
 
-### Hover Intensity Boost (hoverIntensity)
-
-#### HoverIntensity
+### Hover Intensity
 :::TuffDemoWrapper{demo="GradualBlurHoverIntensityDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <section style="position: relative; height: 220px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-      <div style="height: 100%; overflow-y: auto; padding: 1.25rem 1rem;">
-        <div style="font-weight: 600; margin-bottom: 8px;">
-          Hover the blurred area
-        </div>
-        <div style="color: var(--tx-text-color-secondary); line-height: 1.7;">
-          When hoverIntensity is provided, the blur overlay will accept pointer events.
-          <div style="height: 220px;" />
-          End.
-        </div>
-      </div>
-
-      <TxGradualBlur
-        position="bottom"
-        height="6rem"
-        :strength="2"
-        :div-count="6"
-        curve="bezier"
-        :hover-intensity="1.8"
-        :exponential="true"
-      />
-    </section>
+    <TxGradualBlur
+      position="bottom"
+      height="6rem"
+      :strength="2"
+      :div-count="6"
+      curve="bezier"
+      :hover-intensity="1.8"
+      :exponential="true"
+    />
   </template>
 ---
 :::
 
-### Trigger on Viewport (animated="scroll")
-
-#### Animated scroll
+### Reveal on Scroll
 :::TuffDemoWrapper{demo="GradualBlurAnimatedScrollDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import GradualBlurAnimatedDemo from './GradualBlurAnimatedDemo.vue'
-  </script>
-
   <template>
-    <GradualBlurAnimatedDemo />
+    <TxGradualBlur
+      position="bottom"
+      height="6.5rem"
+      :strength="2.4"
+      animated="scroll"
+      duration="0.35s"
+      :on-animation-complete="onRevealed"
+    />
   </template>
 ---
 :::
 
-### Page Target (target="page")
-
-#### Target page
+### Page Target
 :::TuffDemoWrapper{demo="GradualBlurTargetPageDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="position: relative; height: 220px; border-radius: 12px; border: 1px solid var(--tx-border-color); overflow: hidden;">
-      <div style="padding: 1rem; color: var(--tx-text-color-secondary);">
-        This box only exists to show a fixed blur overlay.
-      </div>
-
-      <TxGradualBlur
-        target="page"
-        preset="page-footer"
-        :div-count="8"
-        :exponential="true"
-        :opacity="1"
-        :strength="2.5"
-        :z-index="9999"
-        :style="{ left: 0, right: 0 }"
-      />
-    </div>
+    <TxGradualBlur
+      target="page"
+      preset="page-footer"
+      :div-count="8"
+      :exponential="true"
+      :strength="2.5"
+      :z-index="9999"
+      :style="{ left: 0, right: 0 }"
+    />
   </template>
 ---
 :::
 
-### Responsive Sizes (responsive)
-
-#### Responsive sizes
+### Responsive Sizes
 :::TuffDemoWrapper{demo="GradualBlurResponsiveSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <section style="position: relative; height: 220px; overflow: hidden; border-radius: 12px; border: 1px solid var(--tx-border-color);">
-      <div style="height: 100%; overflow-y: auto; padding: 1.25rem 1rem;">
-        <div style="font-weight: 600; margin-bottom: 8px;">
-          Resize window to see height changes
-        </div>
-        <div style="color: var(--tx-text-color-secondary); line-height: 1.7;">
-          desktop/tablet/mobile heights can be configured.
-          <div style="height: 220px;" />
-          End.
-        </div>
-      </div>
-
-      <TxGradualBlur
-        position="bottom"
-        :strength="2"
-        responsive
-        height="6rem"
-        mobile-height="4rem"
-        tablet-height="5rem"
-        desktop-height="7rem"
-      />
-    </section>
+    <TxGradualBlur
+      position="bottom"
+      :strength="2"
+      responsive
+      height="6rem"
+      mobile-height="4rem"
+      tablet-height="5rem"
+      desktop-height="7rem"
+    />
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Keep the parent `position: relative` and `overflow: hidden` for card-local fades; use `target="page"` only for fixed viewport chrome.
-- Increase `divCount` for smoother fades, then tune `strength`; very high layer counts multiply backdrop-filter work.
-- Prefer presets for common headers/footers and override one or two props instead of repeating the whole parameter matrix.
-- Do not put interactive controls under the overlay unless `hoverIntensity` is required; by default the overlay is pointer-transparent.
-- Check contrast in both themes because `backdrop-filter` output depends on the content behind the overlay.
+- For card-local fades, keep the parent `position: relative` and `overflow: hidden`; use `target="page"` only for fixed page chrome.
+- Raise `divCount` for a smoother ramp before tuning `strength`; every layer adds backdrop-filter work.
+- Start common headers and footers from a `preset` and override one or two props.
+- Don't set `hoverIntensity` when interactive controls sit under the overlay.
+- Check contrast in both themes; the blur depends on the content behind it.
 
 ## API Reference
 
@@ -327,62 +158,48 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | Edge where the blur overlay is anchored and the mask gradient direction is derived. |
-| `strength` | `number` | `2` | Multiplier used to calculate each layer's blur radius. |
-| `height` | `string` | `'6rem'` | Overlay thickness for top/bottom positions; also used as fallback width for left/right positions. |
-| `width` | `string` | - | Overlay width. Top/bottom default to `100%`; left/right fall back to `height` when omitted. |
-| `divCount` | `number` | `5` | Number of masked blur layers; values below `1` are clamped to one layer. |
-| `exponential` | `boolean` | `false` | Uses exponential blur scaling instead of linear per-layer blur scaling. |
-| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | Curve used to distribute blur progression across layers. |
-| `opacity` | `number` | `1` | Opacity applied to every blur layer. |
-| `animated` | `boolean \| 'scroll'` | `false` | Enables opacity/filter transitions; `'scroll'` waits for intersection visibility before fading in. |
-| `duration` | `string` | `'0.3s'` | CSS duration used by opacity and blur transitions. |
-| `easing` | `string` | `'ease-out'` | CSS easing used by opacity and blur transitions. |
-| `zIndex` | `number` | `1000` | Base z-index. Page-target overlays add `100` to this value. |
-| `target` | `'parent' \| 'page'` | `'parent'` | `parent` renders absolute positioning; `page` renders fixed positioning. |
-| `hoverIntensity` | `number` | - | Multiplies blur strength while hovered and enables pointer events on the overlay. |
-| `responsive` | `boolean` | `false` | Enables viewport-width based height/width overrides and installs a debounced resize listener. |
-| `mobileHeight` | `string` | - | Height used at viewport widths `<= 480px` when `responsive` is enabled. |
-| `tabletHeight` | `string` | - | Height used at viewport widths `<= 768px` when `responsive` is enabled. |
-| `desktopHeight` | `string` | - | Height used at viewport widths `<= 1024px` when `responsive` is enabled. |
-| `mobileWidth` | `string` | - | Width used at viewport widths `<= 480px` when `responsive` is enabled. |
-| `tabletWidth` | `string` | - | Width used at viewport widths `<= 768px` when `responsive` is enabled. |
-| `desktopWidth` | `string` | - | Width used at viewport widths `<= 1024px` when `responsive` is enabled. |
-| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | Applies a preset config first; explicitly provided props still override preset values. |
-| `gpuOptimized` | `boolean` | `false` | Adds `will-change: backdrop-filter, opacity` and `translateZ(0)` to the overlay. |
-| `onAnimationComplete` | `() => void` | - | Called after a scroll-triggered overlay becomes visible and the configured duration elapses. |
-| `className` | `string` | `''` | Extra class appended to the root element. |
-| `style` | `CSSProperties` | `{}` | Extra inline style merged into the root style after generated positioning styles. |
+| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | Edge to attach to; also sets the mask gradient's direction. |
+| `strength` | `number` | `2` | Multiplier for each layer's blur radius. |
+| `height` | `string` | `'6rem'` | Thickness on top and bottom; left and right use it when `width` is unset. |
+| `width` | `string` | - | Overlay width; `100%` on top and bottom, `height` on left and right. |
+| `divCount` | `number` | `5` | Number of layers; floored, minimum 1. |
+| `exponential` | `boolean` | `false` | Grows the blur exponentially instead of linearly. |
+| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | How blur progress is spread across layers. |
+| `opacity` | `number` | `1` | Opacity of every layer. |
+| `animated` | `boolean \| 'scroll'` | `false` | Enables opacity and blur transitions; `'scroll'` fades in only once in view. |
+| `duration` | `string` | `'0.3s'` | Transition duration. |
+| `easing` | `string` | `'ease-out'` | Transition easing. |
+| `zIndex` | `number` | `1000` | Base z-index; `target="page"` adds `100`. |
+| `target` | `'parent' \| 'page'` | `'parent'` | `parent` is absolute inside the parent; `page` is fixed to the viewport. |
+| `hoverIntensity` | `number` | - | Multiplies `strength` while hovered and makes the overlay take pointer events. |
+| `responsive` | `boolean` | `false` | Switches sizes by viewport width, with a debounced resize listener. |
+| `mobileHeight` | `string` | - | Height at viewports `<= 480px` when `responsive`. |
+| `tabletHeight` | `string` | - | Height at viewports `<= 768px` when `responsive`. |
+| `desktopHeight` | `string` | - | Height at viewports `<= 1024px` when `responsive`. |
+| `mobileWidth` | `string` | - | Width at viewports `<= 480px` when `responsive`. |
+| `tabletWidth` | `string` | - | Width at viewports `<= 768px` when `responsive`. |
+| `desktopWidth` | `string` | - | Width at viewports `<= 1024px` when `responsive`. |
+| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | Applies a preset first; props you pass still override it. |
+| `gpuOptimized` | `boolean` | `false` | Adds `will-change: backdrop-filter, opacity` and `translateZ(0)`. |
+| `onAnimationComplete` | `() => void` | - | Called once an `animated="scroll"` overlay shows and `duration` elapses. |
+| `className` | `string` | `''` | Extra class on the root. |
+| `style` | `CSSProperties` | `{}` | Root inline style, merged after the generated positioning. |
 
 ### Slots
 
 | Slot | Description |
 |------|-------------|
-| `default` | Optional content rendered above the blur layers inside the overlay root. |
-
-### Events
-
-No Vue events are emitted. Use `onAnimationComplete` when `animated="scroll"` needs a completion hook.
+| `default` | Optional content rendered above the blur layers. |
 
 ## Overview
 
-- Presets are merged first; props explicitly present on the component override preset values.
-- `position` controls both edge anchoring and mask-gradient direction. Vertical edges use `height`; horizontal edges use `width` or fall back to `height`.
-- `target="parent"` renders `position: absolute`; `target="page"` renders `position: fixed`, uses full viewport width for vertical edges, and adds `100` to `zIndex`.
-- `divCount` is floored and clamped to at least one layer. Each layer receives its own mask band and `backdrop-filter` blur value.
-- `hoverIntensity` enables pointer events and multiplies `strength` only while the overlay is hovered.
-- `animated="scroll"` starts hidden, observes the root with `IntersectionObserver`, and calls `onAnimationComplete` after the configured `duration` once visible.
-- `responsive` installs a debounced resize listener and applies mobile/tablet/desktop dimensions by viewport width (`<=480`, `<=768`, `<=1024`).
-- `style` is merged after generated positioning styles, so parent pages can deliberately override coordinates.
+- The overlay is decorative and `pointer-events: none` by default; it takes pointer events only with `hoverIntensity`.
+- With `target="page"`, top and bottom overlays span the full viewport width by default.
+- `animated="scroll"` starts hidden, watches the root with `IntersectionObserver`, and fades in once visible.
 
 ## Technologies
 
-- **Accessibility note:** The blur root is decorative and pointer-transparent by default. Enabling `hoverIntensity` turns on pointer events, so keep it away from focusable controls unless the hover boost is essential.
-- **Verified coverage:** `gradual-blur.test.ts` verifies configured layer rendering, slot content, page-target positioning and z-index offset, GPU styles, preset merging with `divCount` clamping, hover-strength changes, and responsive dimensions.
-
-- Component source: `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`.
-- Types: `packages/tuffex/packages/components/src/gradual-blur/src/types.ts` exports `GradualBlurProps` and the position, curve, animated, and target unions.
-- Export alias: `packages/tuffex/packages/components/src/gradual-blur/index.ts` exports `GradualBlur`, `TxGradualBlur`, `GradualBlurProps`, and `TxGradualBlurInstance`.
-- Coverage: `packages/tuffex/packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts` covers layer generation, presets, page targeting, GPU optimization, hover intensity, and responsive sizing.
+- Each layer is a `backdrop-filter` blur limited by its own `mask-image` band; blur values rise along `curve` and stack into one continuous fade.
+- Source: `packages/tuffex/packages/components/src/gradual-blur/`.
 
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "VoiceBeam"
-description: "Audio-reactive glow along the bottom edge of the element it wraps, for voice input, dictation and post-speech processing"
+description: "An audio-reactive glow along the bottom edge of the element it wraps."
 category: Effects
 status: beta
 since: 0.6.2
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-`TxVoiceBeam` wraps exactly one element that carries its own corner radius, clips it, and paints a sound-reactive beam along its bottom edge. Feed it a `MediaStream` from the microphone, or drive it manually with `level`.
-
+### Basic
+Wrap exactly one element that carries its own radius; feed it a microphone `stream`, or drive it with `level`.
 :::TuffDemoWrapper{demo="VoiceBeamShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -48,8 +48,7 @@ code: |
 :::
 
 ### Microphone Input
-
-`useMicrophone()` produces the stream. It requests `getUserMedia` with echo cancellation, noise suppression and auto gain turned off, so the glow sees the real dynamics of the voice. Call `start()` from a click; browsers only grant the mic inside a user gesture.
+`useMicrophone()` requests `getUserMedia` with echo cancellation, noise suppression, and auto gain off; call `start()` from a click.
 
 ```vue
 <script setup lang="ts">
@@ -69,9 +68,8 @@ const live = computed(() => mic.state.value === 'live')
 </template>
 ```
 
-### Types and Palettes
-
-`type` picks the host preset (`default` for a ~350 px chat input, `pill` for a recording pill, `mobile` for the bottom of a phone screen); every geometry prop still wins over it. `colorVariant` selects the palette and `colors` overrides individual lobes.
+### Host Presets and Palettes
+`type` picks the host preset, and any geometry prop you pass wins over it; `colorVariant` picks the palette.
 
 ```vue
 <template>
@@ -87,12 +85,11 @@ const live = computed(() => mic.state.value === 'live')
 
 ### Best Practices
 
-- Never rely on the glow as the only sign that the mic is live: keep a text status and a visible mic button state (`aria-pressed`), and announce changes with `role="status"`.
-- Pass a **getter** (`:level="() => meter.value"`), not a reactive number read 60 times a second — the getter is sampled once per frame with no re-render.
-- `stream` wins over `level`: a stream with an audio track always drives the beam.
-- Wrap exactly one element that carries the radius, and put content that must stay crisp at `position: relative; z-index: 5`. Anything with its own overlay (popovers, menus) inside the wrapped element gets clipped — portal it out.
-- Call `mic.stop()` when the voice UI closes; the composable only stops tracks on unmount.
-- Keep instances few. Each one runs blurred layers and a canvas; the component is not for dense lists.
+- Never let the glow be the only sign the mic is live: keep a text status and the button's `aria-pressed`, and announce changes with `role="status"`.
+- Pass `level` a getter (`:level="() => meter.value"`), not a reactive number; the getter is sampled once per frame with no re-render.
+- Put content that must stay crisp at `position: relative; z-index: 5`; overlays inside the wrapped element get clipped, so portal them out.
+- Call `mic.stop()` when the voice UI closes; the composable stops tracks only on unmount.
+- Keep instances few: each runs blurred layers and a canvas, so it doesn't suit dense lists.
 
 ## API Reference
 
@@ -100,45 +97,45 @@ const live = computed(() => mic.state.value === 'live')
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'default' \| 'pill' \| 'mobile'` | `'default'` | Host preset that seeds the geometry props. |
+| `type` | `'default' \| 'pill' \| 'mobile'` | `'default'` | Host preset (chat input, recording pill, phone bottom) that seeds the geometry props. |
 | `stream` | `MediaStream \| null` | `null` | Live audio to react to; wins over `level`. |
-| `level` | `number \| () => number` | `0` | Manual drive (0-1) used when there is no stream. |
+| `level` | `number \| () => number` | `0` | Manual level (0-1) used when there is no stream. |
 | `sensitivity` | `number` | `3.1` | Input gain on the analysed audio. |
 | `threshold` | `number` | `0.015` | Noise gate (0-1); levels below it read as silence. |
 | `attack` | `number` | `0.325` | Seconds the glow takes to rise. |
 | `release` | `number` | `0.86` | Seconds the glow takes to settle. |
-| `idle` | `number` | `0.23` | Resting presence (0-1) so the beam never looks dead. |
-| `breatheDuration` | `number` | `5.2` | Period of the idle breathing in seconds. |
+| `idle` | `number` | `0.23` | Resting presence (0-1), so the beam never looks dead. |
+| `breatheDuration` | `number` | `5.2` | Idle breathing period in seconds. |
 | `reach` | `number` | `1.2` | How tall the glow grows at full level. |
 | `spread` | `number` | `1.05` | How far the glow widens at full level. |
-| `bands` | `boolean` | `true` | Let low / mid / high bands move the lobes independently. |
+| `bands` | `boolean` | `true` | Lets low, mid, and high bands move the lobes independently. |
 | `flow` | `number` | `48` | Sideways travel of the spectrum in px/s at full level. |
 | `processing` | `boolean` | `false` | Gathers the glow into a travelling beam and holds it lit. |
 | `processingDuration` | `number` | `1.1` | Seconds for one pass of the processing beam. |
-| `processingLevel` | `number` | `0.55` | How lit the glow is held while processing. |
+| `processingLevel` | `number` | `0.55` | How lit the glow stays while processing. |
 | `processingEase` | `number` | `0.6` | Seconds of the morph in either direction. |
 | `processingTravel` | `number` | `1.55` | How far the processing beam travels to each side. |
 | `processingCurve` | `number` | `2.1` | How the sweep eases into each turn. |
 | `cornerFollow` | `number` | `0.45` | How much the glow rides the corner arcs while processing. |
 | `colorVariant` | `'colorful' \| 'mono' \| 'ocean' \| 'sunset' \| …` | `'colorful'` | Palette for the lobes. |
 | `colors` | `string[]` | none | Up to seven lobe colours, centre first. |
-| `bandColors` | `{ core?, above?, mid?, below? }` | theme defaults | Colours of the band's ridge and chromatic fringes. |
-| `theme` | `'dark' \| 'light' \| 'auto'` | `'dark'` | Background adaptation; `auto` follows the system preference. |
-| `staticColors` | `boolean` | `false` | Disables the slow hue drift. |
-| `hueRange` | `number` | `24` / `40` | Hue drift range in degrees. |
-| `hueDuration` | `number` | `12` / `8.5` | Period of the hue drift in seconds. |
+| `bandColors` | `{ core?, above?, mid?, below? }` | theme defaults | Colours of the band's ridge and fringes. |
+| `theme` | `'dark' \| 'light' \| 'auto'` | `'dark'` | Background adaptation; `auto` follows the system. |
+| `staticColors` | `boolean` | `false` | Turns off the slow hue drift. |
+| `hueRange` | `number` | `24` / `40` | Hue drift range in degrees (dark / light default). |
+| `hueDuration` | `number` | `12` / `8.5` | Hue drift period in seconds (dark / light default). |
 | `active` | `boolean` | `true` | Off fades the beam out and stops the audio analysis. |
-| `paused` | `boolean` | `false` | Freezes glow, band and analysis on their last frame. |
+| `paused` | `boolean` | `false` | Freezes glow, band, and analysis on their last frame. |
 | `borderRadius` | `number` | auto-detected | Corner radius in px. |
 | `brightness` / `saturation` | `number` | theme defaults | Glow multipliers. |
 | `glowSize` | `number` | `1` | Bloom blur radius multiplier. |
-| `strokeOpacity` / `innerOpacity` / `bloomOpacity` | `number` | `1` | Per-layer opacity multipliers. |
+| `strokeOpacity` / `innerOpacity` / `bloomOpacity` | `number` | `1` | Opacity multipliers of the stroke, inner light, and bloom layers. |
 | `scale` | `number` | `1` | Multiplies every pixel dimension at once. |
 | `bend`, `bandStrength`, `bandWidth`, `bandPosition`, `bandCurve`, `bandSpread`, `bandSkew`, `bandOffset`, `bandTail`, `bandTailPosition`, `bandTailCurve`, `bandTailOverflow`, `bandAberration` | `number` | tuned | Shape of the glow's contour and the band along it. |
-| `distortion`, `distortionDetail` | `number` | `0.62`, `2.3` | Horizontal warp of the light under the band line. |
-| `glowWidth`, `glowHeight`, `lobeSpacing`, `rangeWidth`, `rangeHeight`, `softness`, `coreSize`, `coreLight`, `coreLightWidth`, `coreLightHeight`, `strokeScale`, `innerScale`, `innerHeight`, `bloomScale`, `bloomHeight` | `number` | tuned | Lobes, visible range, core and halo geometry. |
+| `distortion`, `distortionDetail` | `number` | `0.62`, `2.3` | Strength and noise grain of the warp under the band line. |
+| `glowWidth`, `glowHeight`, `lobeSpacing`, `rangeWidth`, `rangeHeight`, `softness`, `coreSize`, `coreLight`, `coreLightWidth`, `coreLightHeight`, `strokeScale`, `innerScale`, `innerHeight`, `bloomScale`, `bloomHeight` | `number` | tuned | Lobe, visible-range, core, and halo geometry. |
 | `strength` | `number` | `1` | Overall effect opacity (0-1); the children are untouched. |
-| `css` | `string` | none | Extra CSS appended after the generated stylesheet; `{id}` is substituted per instance. |
+| `css` | `string` | none | CSS appended after the generated stylesheet; `{id}` is replaced per instance. |
 
 ### Slots
 
@@ -150,38 +147,28 @@ const live = computed(() => mic.state.value === 'live')
 
 | Event | Payload | Description |
 |------|------|-------------|
-| `level` | `(level: number)` | Fired every frame with the smoothed level the beam is showing. |
-| `activate` | - | Fired when the fade-in completes. |
-| `deactivate` | - | Fired when the fade-out completes. |
-
-### Exposed Methods
-
-No public instance methods.
+| `level` | `(level: number)` | Fires every frame with the smoothed level the beam shows. |
+| `activate` | - | Fires when the fade-in completes. |
+| `deactivate` | - | Fires when the fade-out completes. |
 
 ### CSS Variables
 
 | Variable | Source | Description |
 |------|------|-------------|
 | `--voice-strength` | `strength` | Beam-layer opacity (0-1). |
-| `--voice-stroke-opacity` / `--voice-inner-opacity` / `--voice-bloom-opacity` | `strokeOpacity` / `innerOpacity` / `bloomOpacity` | Per-layer opacity multipliers. |
+| `--voice-stroke-opacity` / `--voice-inner-opacity` / `--voice-bloom-opacity` | host CSS | Per-layer opacity multipliers, multiplied with `strokeOpacity` / `innerOpacity` / `bloomOpacity`; the component never sets them. |
 
 ## Overview
 
-- The component wraps its slot content and clips it to the child's `border-top-left-radius` (16 px when none is found), so the beam hugs the element edge.
-- One shared `requestAnimationFrame` loop drives every instance, capped at about 60 fps; an instance scrolled offscreen (256 px margin) unregisters and releases its analyser.
-- One `AudioContext` is shared per page, one source node per stream (reference-counted) and one analyser per instance. Audio is analysed, never played.
-- `prefers-reduced-motion: reduce` stops the idle breathing, the colour flow, the hue drift, the distortion warp and the processing sweep; the reaction to sound stays, since it is a meter.
-- Under `stream`, the analyser reads the RMS level plus three voice bands (80-300, 300-2000, 2000-6000 Hz).
+- It clips to the child's `border-top-left-radius` (16 px when none is found), so the beam hugs the element edge.
+- One shared `requestAnimationFrame` loop, capped at about 60 fps, drives every instance; an instance scrolled offscreen (256 px margin) unregisters and releases its analyser.
+- One `AudioContext` is shared per page, with one source node per stream (reference-counted) and one analyser per instance. Audio is analysed, never played.
+- With a `stream`, the analyser reads the RMS level plus three voice bands (80-300, 300-2000, 2000-6000 Hz).
+- Under reduced motion, the idle breathing, colour flow, hue drift, distortion, and processing sweep stop; the reaction to sound stays, since it is a meter.
 
 ## Technologies
 
-- Manually verified against `index.ts`, `TxVoiceBeam.vue`, `types.ts` and `voice-beam.test.ts` under `packages/tuffex/packages/components/src/voice-beam/`.
-- `styles.ts`, `presets.ts`, `voice-driver.ts`, `audio.ts` and `color.ts` are verbatim ports of upstream `voice-glow` (MIT © Jakub Antalik) with strict-TS index hardening only; the Vue shell mirrors the upstream wrapper's fade lifecycle, offscreen pause and radius detection.
-- `useMicrophone` is the Vue port of the upstream React hook, with the same constraints and track lifecycle.
-
-- Component source: `packages/tuffex/packages/components/src/voice-beam/src/TxVoiceBeam.vue`.
-- Types: `packages/tuffex/packages/components/src/voice-beam/src/types.ts`.
-- Upstream: [Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow) (MIT).
-- **Coverage:** `packages/tuffex/packages/components/src/voice-beam/__tests__/voice-beam.test.ts` verifies preset resolution, unknown-type fallback, the microphone state machine and the manual-level path.
+- `styles.ts`, `presets.ts`, `voice-driver.ts`, `audio.ts`, and `color.ts` are verbatim ports of [Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow) (MIT © Jakub Antalik); `useMicrophone` is the Vue port of its React hook.
+- Source: `packages/tuffex/packages/components/src/voice-beam/`.
 
 <TuffDocSourceLink />

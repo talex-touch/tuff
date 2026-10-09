@@ -1,6 +1,6 @@
 ---
 title: "SidebarNav"
-description: "Vertical workspace navigation: org switcher, quick search, primary action, and grouped destinations."
+description: "A vertical workspace navigation with search and grouped destinations."
 category: Navigation
 status: beta
 since: 0.3.9
@@ -11,8 +11,9 @@ verified: true
 
 ## Usage
 
-### SidebarNav
-:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="Workspace navigation" description="The quick search works and `/` focuses it; the highlight glides after the pointer."}
+### Workspace Navigation
+`search-hint="/"` makes `/` focus the search field; the tinted highlight follows the pointer.
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -27,18 +28,22 @@ code: |
       action-label="New task"
       @select="onSelect"
       @action="onNewTask"
-    />
+    >
+      <template #item-icon="{ item }">
+        <svg viewBox="0 0 24 24"><path :d="icons[item.value]" /></svg>
+      </template>
+    </TxSidebarNav>
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Pass icons as inline SVG through the `item-icon` slot; the component owns their size and stroke width.
-- Past a dozen items, reach for the search field rather than adding more groups.
-- With remote search, always pass `filter="items => items"` as well, or server results get filtered a second time by the built-in match.
-- Make the shortcut glyph either a single typeable character (which really binds) or a complete symbol such as `⌘K` handled via `focusSearch()`. A half-hint like `Ctrl` is neither.
-- Reserve badges for counts that need follow-up; decorative numbers cost the real ones their weight.
+- Pass icons as inline SVG through the `item-icon` slot; the component sets their size and stroke.
+- Past a dozen items, turn on search rather than adding more groups.
+- For remote search, pass `filter="items => items"` and swap `items` on `update:query`; otherwise the built-in match filters the results again.
+- Make `searchHint` either a single typeable character, which really binds, or a complete glyph such as `⌘K` that you wire to `focusSearch()`. A half-hint like `Ctrl` is neither.
+- Reserve badges for counts that need follow-up; decorative numbers dilute the real ones.
 
 ## API Reference
 
@@ -47,101 +52,66 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `items` | `SidebarNavItem[]` | - | Navigation items. |
-| `groups` | `SidebarNavGroup[]` | - | Group definitions. Items matching no group lead the list under no header. |
+| `groups` | `SidebarNavGroup[]` | - | Group definitions; items matching no group lead the list without a header. |
 | `modelValue` | `string \| number` | - | Active item (`v-model`). |
-| `query` | `string` | - | Quick-search text (`v-model:query`). |
+| `query` | `string` | - | Search text (`v-model:query`). |
 | `workspace` | `SidebarNavWorkspace` | - | Workspace details; omit to drop the switcher row. |
-| `workspaceLabel` | `string` | `'Switch workspace'` | Accessible name for the switcher button. |
-| `searchPlaceholder` | `string` | - | Omit to drop the search row. |
-| `searchLabel` | `string` | - | Accessible name for the field; falls back to the placeholder. |
-| `searchHint` | `string` | - | Shortcut glyph at the end of the row, e.g. `/`. A single character also binds that key. |
+| `workspaceLabel` | `string` | `'Switch workspace'` | Accessible name of the switcher button. |
+| `searchPlaceholder` | `string` | - | Search placeholder; omit to drop the search row. |
+| `searchLabel` | `string` | - | Accessible name of the field; falls back to the placeholder. |
+| `searchHint` | `string` | - | Shortcut glyph at the end of the search row, such as `/`; a single character also binds that key. |
 | `actionLabel` | `string` | - | Primary action label; omit to drop the button. |
-| `filter` | `(items, query) => items` | - | Replaces the built-in match. Pass `items => items` for remote results. |
-| `ariaLabel` | `string` | `'Workspace'` | Accessible name for the `<nav>` landmark. |
-| `indicatorDuration` | `number` | `220` | Speed of the highlight, in ms: the glide's springs played faster or slower as a whole (220, the default, is `GLIDE` as written). Values under 100 play as 100. |
+| `filter` | `(items, query) => items` | - | Replaces the built-in match; pass `items => items` for remote results. |
+| `ariaLabel` | `string` | `'Workspace'` | Accessible name of the `<nav>` landmark. |
+| `indicatorDuration` | `number` | `220` | Highlight speed in ms, time-scaling the glide springs; values under 100 play as 100. |
 
-### Types
+### Events
 
-| Name | Description |
-|------|------|
-| `SidebarNavItem` | `{ value, label, group?, icon?, badge?, action?, disabled? }`. `icon` is an icon class; the `item-icon` slot wins over it. |
-| `SidebarNavGroup` | `{ key, label }`. Pass `label` in normal case — CSS uppercases it. |
-| `SidebarNavWorkspace` | `{ name, description?, initials? }`. `initials` defaults to the first character of `name`. |
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `SidebarNavValue` | Fires when the active item changes. |
+| `update:query` | `string` | Fires when the search text changes. |
+| `select` | `SidebarNavItem` | Fires when an item is activated; disabled items don't emit. |
+| `action` | - | Fires when the primary action button is pressed. |
+| `itemAction` | `SidebarNavItem` | Fires when a row's trailing quick action is pressed. |
+| `workspaceClick` | - | Fires when the workspace switcher is pressed. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
 | `workspace` | Replaces the whole workspace switcher row. |
-| `item-icon` | Replaces an item's leading glyph; scope is `{ item, active }`. |
-| `footer` | Appended below the item groups. |
+| `item-icon` | Replaces an item's leading icon; scope is `{ item, active }`. |
+| `footer` | Appended below the groups. |
 
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:modelValue` | `SidebarNavValue` | The active item changed. |
-| `update:query` | `string` | The search text changed. |
-| `select` | `SidebarNavItem` | An item was activated (disabled items do not emit). |
-| `action` | - | The primary action button was pressed. |
-| `itemAction` | `SidebarNavItem` | A row's trailing quick action was pressed. |
-| `workspaceClick` | - | The workspace switcher was pressed. |
-
-### Exposed
+### Exposed Methods
 
 | Name | Description |
 |------|------|
 | `focusSearch()` | Focuses the search field, for hosts wiring their own shortcut. |
-| `refreshIndicator()` | Re-measures the highlight after a layout change the observers cannot see. It lands in place rather than travelling. |
+| `refreshIndicator()` | Re-measures the highlight after a layout change the observers miss; it lands in place. |
 
-## How the Highlight Travels
+### Types
 
-Selection is carried by the label's weight and its badge; the tinted plate is a **pointer**. Hovering any row pulls it off the selected item immediately, and leaving the list hands it back. Keyboard focus moves it too, because focus is pointer intent.
-
-It is one absolutely positioned element that moves by measuring the target row against its container, rather than each row painting its own background — that is what makes it read as a single object travelling. The measurement is factored into `useIndicatorBox`, exported alongside the component:
-
-```ts
-import { useIndicatorBox } from '@talex-touch/tuffex'
-```
-
-It reports all four edges (`top / left / width / height`), so a horizontal segmented control can reuse the same reading. Two things it adds over upstream: a `ResizeObserver` on both the container and the target (upstream measures only when hover/active changes, so the highlight is stranded after a container resize or a font swap), and a `revealed` flag, which the nav uses to fade the plate in once it has a row to sit on.
-
-The plate moves on the shared indicator engine, `useJellyIndicator`, on the glide material that `TxTabs`, `TxTabBar` and `TxFlatRadio` also ride (Radio's button group keeps the jelly):
-
-- The edge facing the new row leads on the `GLIDE` spring (stiffness 420, damping 38) and the far edge follows the same spring played slower, with a lighter lag than the tabs (0.3), so the plate keeps up with a pointer sweeping across rows: a 28px plate runs to about 33px on the way and gathers on the row. It never scales. `indicatorDuration` plays both springs faster or slower as a whole — 220ms, the default, is `GLIDE` as written — and a new target mid-trip retargets the springs instead of waiting for the old trip to end.
-- Its width is the CSS one and never changes, so the full-width plate cannot spill sideways out of the list.
-- At the first and last row an edge that would leave the list stops at its end instead of carrying the plate out of the card. The engine's walls are the list's full height (`scrollHeight`), so rows past a height-capped list are still reached.
-- A new target travels: the pointer or keyboard focus reaching another row, or the plate going home when it leaves the list. The first measurement and any re-measure of the same row (a resize, a font swap, `refreshIndicator()`) land in place.
-- Under `prefers-reduced-motion: reduce` the plate jumps to its row and appears without the fade.
-
-## Quick Search and the `/` Shortcut
-
-**Both are additions — upstream ships them inert.** It renders the field but never uses the query, and binds no listener to `/` at all.
-
-- Typing filters live (case-insensitive `includes` on `label`), and a group that empties out drops its header with it. For remote search, pass `filter="items => items"` to disable the built-in match and swap `items` yourself in response to `update:query`.
-- One prop (`searchHint`) drives both the badge and the key, so you cannot end up with a `/` painted on screen that does nothing — which is exactly the upstream shape of the defect. The single-character binding, the multi-character glyph, and the stand-down rules are spelled out in Interaction Contract below.
+| Name | Description |
+|------|------|
+| `SidebarNavItem` | `{ value, label, group?, icon?, badge?, action?, disabled? }`; `icon` is an icon class that the `item-icon` slot overrides, and a changed `badge` replays its pop-in. |
+| `SidebarNavGroup` | `{ key, label }`; pass `label` in normal case, CSS uppercases it. |
+| `SidebarNavWorkspace` | `{ name, description?, initials? }`; `initials` defaults to the first character of `name`. |
 
 ## Overview
 
-- The active row carries `aria-current="page"`. Disabled items render as genuinely `disabled` buttons and emit no `select`.
-- **The length of `searchHint` decides whether it is a key or a glyph.** A single character (`/`, `k`) is really bound to a `document` keydown: pressing it focuses the field and calls `preventDefault`, so the character is not also typed somewhere else. A multi-character hint (`⌘K`, `Ctrl K`) renders as a badge and **binds nothing** — those are symbols, not `KeyboardEvent.key` values, and guessing would bind the wrong key. Those hosts listen for the chord themselves and call `focusSearch()`. Either way one prop drives both the badge and the behaviour, so a hint can never be shown without working.
-- When the binding is live it still stands down: focus already in an input, textarea, select or contenteditable region; Meta, Ctrl or Alt held; the event already `preventDefault`ed by another handler; or no search row rendered. The listener is removed on unmount.
-- **The trailing quick action is its own `<button>`, a sibling of the row button rather than a child** — a button inside a button is invalid interactive nesting. Upstream uses a non-activatable `<span>`. On touch (`hover: none`) it stays visible, since hover is otherwise its only affordance.
-- Changing a badge value rebuilds the element so the pop-in replays; an unchanged value does not replay.
-- Group headers are tied to their list via `aria-labelledby`, with ids prefixed per component instance so two sidebars on one page cannot collide.
+- The active row has `aria-current="page"`; disabled items are real `disabled` buttons and emit no `select`.
+- The highlight is a pointer, not the selection: it follows hover and keyboard focus and returns to the active row when the pointer leaves the list. Label weight and badges carry the selection.
+- The highlight travels only when its target changes; the first measurement and re-measures of the same row land in place, and under reduced motion it jumps without the fade.
+- Typing filters live (case-insensitive `includes` on `label`), and a group left empty collapses with its header.
+- A single-character `searchHint` binds a `document` keydown that focuses the search field; a multi-character one such as `⌘K` renders only as a badge. The binding stands down when focus is in a text field, Meta / Ctrl / Alt is held, the event was already handled, or there is no search row.
+- The trailing quick action is a sibling `<button>` of the row button and stays visible on touch (`hover: none`); group headers label their lists through `aria-labelledby`.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`.
-- Composables: `packages/tuffex/packages/utils/use-indicator-box.ts` measures the plate and is re-exported from `sidebar-nav/index.ts`; `packages/tuffex/packages/utils/use-jelly-indicator.ts` moves it on the glide material, integrated with `springSteps` (`packages/tuffex/packages/components/src/liquid/src/spring.ts`, 1/240 s substeps).
-- Types: `packages/tuffex/packages/components/src/sidebar-nav/src/types.ts`.
-- **Motion note:** the engine writes the plate's `transform`, `height` and `opacity` every frame and the template binds none of them, so a trip does not re-render the nav; `top` stays 0 and the width stays with the CSS. No CSS transition sits on the transform or the height, because it would re-ease every written frame. The plate still carries `--tx-bui-sidebar-nav-indicator-duration` inline, but no rule reads it any more.
-- **Verified coverage:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` verifies grouped rendering and `aria-current`, disabled items emitting nothing, query filtering with empty groups collapsing, the `filter` override, workspace and primary-action events, the trailing action being a named button that does not also navigate, badge rebuilding, ungrouped items leading, the highlight staying transparent and without its fade until measured, and — with stubbed rects and fake timers — the first measurement landing on the active row in place, then the highlight gliding, not jumping, to the hovered row and back — taller than a row on the way, never scaling — landing exactly on each without an inline `top`; a round trip to the first and last row keeping the plate inside the list at every frame; and `prefers-reduced-motion: reduce` jumping it straight to the hovered row. Against the compiled styles it checks that the plate transitions only its fade, which reduced motion switches off. The shortcut tests cover focusing, standing down for typing targets / chords / already-consumed events, multi-character hints not claiming a key, and unbinding on unmount.
-- Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- `useIndicatorBox` measures the highlight and the glide material of `useJellyIndicator` moves it. `useIndicatorBox` is exported with the component (`import { useIndicatorBox } from '@talex-touch/tuffex'`) and returns `top / left / width / height` for reuse in horizontal segmented controls.
+- The shortcut listener lives on `document`; enable `enableAutoUnmount(afterEach)` in tests, or a wrapper left mounted keeps consuming keys.
+- Source: `packages/tuffex/packages/components/src/sidebar-nav/`. Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-- **Naming:** Selection uses `modelValue` rather than `active`, matching every other component's primary binding in this library.
-- **Divergences from upstream:** search really filters, `/` is really bound, and the trailing action is a real button that survives on touch — three decorations turned into behaviour.
-- **Relationship to TxNavBar:** Similar name, unrelated semantics — that one is a mobile top app bar. tuffex had no vertical navigation component before this.
-- **Testing note:** The component binds a `document`-level shortcut listener, so enable `enableAutoUnmount(afterEach)` in tests. A wrapper left mounted keeps consuming keys and makes the next case look broken.

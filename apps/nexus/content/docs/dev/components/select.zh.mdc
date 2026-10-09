@@ -325,6 +325,12 @@ code: |
 | `icon` | `string` | - | 行首图标的 class，由宿主样式解析。 |
 | `description` | `string` | - | label 下方的说明文字。 |
 
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | 选项行的标题内容；为空时依次回退到 `label`、值。 |
+
 ### 类型
 
 :::TuffCodeBlock{lang="ts"}

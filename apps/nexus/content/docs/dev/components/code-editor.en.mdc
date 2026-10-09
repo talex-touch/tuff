@@ -1,6 +1,6 @@
 ---
 title: "CodeEditor"
-description: "CodeMirror-based editor for JSON/YAML plus lightweight TOML, INI, and JavaScript editing, with formatting, linting, search, folding, and a toolbar slot."
+description: "A CodeMirror-based editor for configuration files and code."
 category: Advanced
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Use `language` to select the CodeMirror language package. JSON and YAML receive formatter and linter support; the other languages provide highlighting and editor behavior.
-
+### Languages
+`language` selects the language. JSON and YAML get formatting and linting; the others get highlighting and basic editing only.
 ::::TuffDemoWrapper{demo="CodeEditorCodeEditorDemo" code-lang="vue"}
 ---
 code: |
@@ -30,158 +30,148 @@ code: |
 ---
 ::::
 
-### Best Practices
-
-- Use JSON or YAML for editable config surfaces that need validation and formatting. Use TOML/INI/JavaScript modes only when highlighting and basic editing are enough.
-- Keep `formatOnBlur` off for documents where users may intentionally keep partial or invalid syntax while editing.
-- Use `readOnly` for generated output and examples; do not hide the editor behind disabled form fields.
-- Prefer toolbar actions for discoverability, but keep keyboard shortcuts enabled for power users.
-- Keep custom `extensions` narrow and local to the feature. They are appended after built-ins and can change editing behavior globally inside the editor.
-
-## API Reference
-
-### Props
-
-#### TxCodeEditor
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `modelValue` | `string` | `''` | Editor document string used by `v-model`. |
-| `language` | `'json' \| 'yaml' \| 'toml' \| 'ini' \| 'javascript' \| 'js'` | `'json'` | Language mode. `js` normalizes to `javascript`. |
-| `theme` | `'auto' \| 'light' \| 'dark' \| 'github' \| 'dracula' \| 'monokai'` | `'auto'` | Editor palette. `auto` follows document theme markers. |
-| `readOnly` | `boolean` | `false` | Makes the CodeMirror document non-editable and disables formatting. |
-| `lineNumbers` | `boolean` | `true` | Shows line numbers and active-line gutter highlighting. |
-| `lineWrapping` | `boolean` | `false` | Enables CodeMirror line wrapping. |
-| `placeholder` | `string` | `''` | Placeholder extension text. |
-| `tabSize` | `number` | `2` | Indentation width. Invalid values normalize to `2`; valid values are rounded. |
-| `formatOnBlur` | `boolean` | `false` | Runs `format()` after blur. |
-| `formatOnInit` | `boolean` | `false` | Runs `format()` once after the runtime editor mounts. |
-| `lint` | `boolean` | `true` | Enables lint gutter and diagnostics when the selected language has a linter. |
-| `search` | `boolean` | `true` | Enables search extension and search keymap. |
-| `completion` | `boolean` | `true` | Enables autocompletion, close brackets, and related keymaps. |
-| `extensions` | `Extension[]` | `[]` | Additional CodeMirror extensions appended after built-ins. |
-
-#### TxCodeEditorToolbar
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `actions` | `CodeEditorToolbarAction[]` | built-in actions | Toolbar actions. When empty, the built-in `format`, `search`, `foldAll`, `unfoldAll`, and `copy` actions are used. |
-| `compact` | `boolean` | `false` | Reduces action button padding. |
-
-### Data Models
-
-#### CodeEditorToolbarAction
-
-| Field | Type | Description |
-|------|------|-------------|
-| `key` | `'format' \| 'search' \| 'foldAll' \| 'unfoldAll' \| 'copy'` | Action id emitted by the toolbar. |
-| `label` | `string` | Optional visible label. Falls back to a built-in English label. |
-| `icon` | `TxIconSource \| string` | Optional `TxIcon` source or icon name. |
-| `active` | `boolean` | Applies active styling. |
-| `disabled` | `boolean` | Disables the button and suppresses `action`. |
-| `shortcut` | `string` | Optional shortcut text rendered after the label. |
-
-### Events
-
-#### TxCodeEditor
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| `update:modelValue` | `string` | Emitted when the document changes through user editing or formatter changes. |
-| `change` | `string` | Mirrors document changes for change listeners. |
-| `focus` | `()` | Emitted when the CodeMirror view receives focus. |
-| `blur` | `()` | Emitted when the CodeMirror view loses focus. |
-| `format` | `{ value: string; language: CodeEditorLanguage }` | Emitted after a successful formatter change. |
-
-#### TxCodeEditorToolbar
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| `action` | `CodeEditorToolbarActionKey` | Emitted when an enabled toolbar action is clicked. |
-
-### Slots
-
-#### TxCodeEditor
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `toolbar` | `{ format, openSearch, foldAll, unfoldAll, copy, getValue }` | Optional toolbar area rendered above the editor view after the runtime component mounts. |
-
-#### TxCodeEditorToolbar
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `leading` | - | Content before the action group. |
-| `trailing` | - | Content after the action group. |
-
-### Exposed Methods
-
-| Method | Type | Description |
-|------|------|-------------|
-| `focus()` | `() => void` | Focuses the CodeMirror view when mounted. |
-| `blur()` | `() => void` | Blurs the editor content DOM when mounted. |
-| `format()` | `() => boolean` | Formats JSON/YAML. Returns `false` for read-only, unsupported languages, invalid input, unchanged output, or unmounted runtime. |
-| `openSearch()` | `() => boolean` | Opens the search panel when search is enabled. |
-| `foldAll()` | `() => boolean` | Runs CodeMirror fold-all command. |
-| `unfoldAll()` | `() => boolean` | Runs CodeMirror unfold-all command. |
-| `copy()` | `() => Promise<boolean>` | Copies current content through `navigator.clipboard` when available. |
-| `getValue()` | `() => string` | Returns the current editor document, or the prop value before runtime mount. |
-| `getView()` | `() => EditorView \| null` | Returns the CodeMirror `EditorView` after runtime mount. |
-
-## Toolbar Slot
-
-Use the `toolbar` slot to connect editor methods to custom controls. `TxCodeEditorToolbar` provides the standard action button layout.
-
+### Toolbar
+The `toolbar` slot exposes the editor methods; `TxCodeEditorToolbar` provides the standard button layout.
 ::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const actions = [
+    { key: 'format', label: 'Format', icon: 'i-carbon-code' },
+    { key: 'search', label: 'Search', icon: 'i-carbon-search', shortcut: '⌘F' },
+    { key: 'copy', label: 'Copy', icon: 'i-carbon-copy' },
+  ]
+  </script>
+
   <template>
     <TxCodeEditor v-model="value" language="json">
-      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
-        <TxCodeEditorToolbar
-          :actions="toolbarActions"
-          @action="(key) => runEditorAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
-        />
+      <template #toolbar="editor">
+        <TxCodeEditorToolbar :actions="actions" compact @action="(key) => runAction(key, editor)" />
       </template>
     </TxCodeEditor>
   </template>
 ---
 ::::
 
+### Best Practices
+
+- Use JSON or YAML for configuration that needs validation and formatting; TOML, INI, and JavaScript suit highlighting and basic editing only.
+- Leave `formatOnBlur` off when users may keep invalid syntax mid-edit.
+- Show generated output and examples with `readOnly`, not inside disabled form fields.
+- Use the toolbar for discoverability, and keep the keyboard shortcuts.
+- Keep custom `extensions` narrow: they are appended after the built-ins and affect the whole editor.
+
+## API Reference
+
+### TxCodeEditor
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | The document, bound with `v-model`. |
+| `language` | `'json' \| 'yaml' \| 'toml' \| 'ini' \| 'javascript' \| 'js'` | `'json'` | Language; `js` is an alias of `javascript`. |
+| `theme` | `'auto' \| 'light' \| 'dark' \| 'github' \| 'dracula' \| 'monokai'` | `'auto'` | Palette; `auto` follows the page theme. |
+| `readOnly` | `boolean` | `false` | Blocks editing and disables formatting. |
+| `lineNumbers` | `boolean` | `true` | Shows line numbers and highlights the active line's number. |
+| `lineWrapping` | `boolean` | `false` | Wraps long lines. |
+| `placeholder` | `string` | `''` | Text shown while the document is empty. |
+| `tabSize` | `number` | `2` | Indent width; invalid values fall back to `2`, others are rounded. |
+| `formatOnBlur` | `boolean` | `false` | Runs `format()` on blur. |
+| `formatOnInit` | `boolean` | `false` | Runs `format()` once after the editor mounts. |
+| `lint` | `boolean` | `true` | Shows diagnostics when the language has a linter. |
+| `search` | `boolean` | `true` | Enables the search panel and its shortcuts. |
+| `completion` | `boolean` | `true` | Enables autocompletion, bracket closing, and their shortcuts. |
+| `extensions` | `Extension[]` | `[]` | CodeMirror extensions appended after the built-ins. |
+
+#### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `string` | Fires when editing or formatting changes the document. |
+| `change` | `string` | Fires together with `update:modelValue`. |
+| `focus` | `()` | Fires when the editor gains focus. |
+| `blur` | `()` | Fires when the editor loses focus. |
+| `format` | `{ value: string; language: CodeEditorLanguage }` | Fires when formatting changes the document. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `toolbar` | `{ format, openSearch, foldAll, unfoldAll, copy, getValue }` | Toolbar above the editor, rendered once the runtime mounts. |
+
+#### Exposed Methods
+
+| Method | Type | Description |
+|------|------|-------------|
+| `focus()` | `() => void` | Focuses the editor. |
+| `blur()` | `() => void` | Blurs the editor. |
+| `format()` | `() => boolean` | Formats JSON/YAML; returns `false` when it can't or nothing changes. |
+| `openSearch()` | `() => boolean` | Opens the search panel when `search` is on. |
+| `foldAll()` | `() => boolean` | Folds every block. |
+| `unfoldAll()` | `() => boolean` | Unfolds every block. |
+| `copy()` | `() => Promise<boolean>` | Copies the document through `navigator.clipboard`. |
+| `getValue()` | `() => string` | The current document; `modelValue` before the runtime mounts. |
+| `getView()` | `() => EditorView \| null` | The CodeMirror `EditorView`; `null` before mount. |
+
+### TxCodeEditorToolbar
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `actions` | `CodeEditorToolbarAction[]` | built-in actions | Buttons; when empty, `format`, `search`, `foldAll`, `unfoldAll`, and `copy`. |
+| `compact` | `boolean` | `false` | Tightens button padding. |
+
+#### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `action` | `CodeEditorToolbarActionKey` | Fires when an enabled button is clicked. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `leading` | - | Content before the buttons. |
+| `trailing` | - | Content after the buttons. |
+
+### Types
+
+#### CodeEditorToolbarAction
+
+| Field | Type | Description |
+|------|------|-------------|
+| `key` | `'format' \| 'search' \| 'foldAll' \| 'unfoldAll' \| 'copy'` | Id emitted with `action` on click. |
+| `label` | `string` | Button text; falls back to a built-in English label. |
+| `icon` | `TxIconSource \| string` | A `TxIcon` source or icon name. |
+| `active` | `boolean` | Applies the active style. |
+| `disabled` | `boolean` | Disables the button and suppresses `action`. |
+| `shortcut` | `string` | Shortcut text shown after the label. |
+
 ## Overview
 
-- `TxCodeEditor` dynamically imports the runtime editor on mount; before that, exposed methods return safe fallbacks.
-- `theme="auto"` reads `html` / `body` `data-theme` and `light` / `dark` classes, then observes `html` class and `data-theme` changes.
-- JSON formatting uses `JSON.parse` / `JSON.stringify` with normalized `tabSize`; YAML formatting uses the `yaml` package parser/stringifier.
-- JSON and YAML linting are enabled only when `lint=true`; TOML, INI, and JavaScript do not currently add custom lint diagnostics.
-- External `modelValue` changes replace the full editor document without re-emitting update/change events.
-- Toolbar slot props are functions from the runtime editor. They are unavailable until the runtime component has mounted.
-- `Cmd/Ctrl+Shift+F` inside the editor runs `format()`; the shortcut is always intercepted (the keymap handler always returns `true`), so it is swallowed even when the current language has no formatter.
+- The runtime editor loads dynamically after mount. Until then, exposed methods return safe fallbacks and the `toolbar` slot does not render.
+- `theme="auto"` reads `data-theme` and the `dark` / `light` classes on `html` / `body`, and follows changes on `html`.
+- Only JSON and YAML format and lint; indentation follows `tabSize`.
+- Writing `modelValue` from outside replaces the whole document without emitting `update:modelValue` or `change`.
+- `Cmd/Ctrl+Shift+F` runs `format()`. The shortcut is always intercepted, so it is swallowed even for languages without a formatter.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/code-editor/src/types.ts`, `TxCodeEditor.vue`, `TxCodeEditorRuntime.vue`, `TxCodeEditorToolbar.vue`, `code-editor.test.ts`, and `code-editor-toolbar.test.ts`.
-- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, so coverage checks and readers find both editor and toolbar contracts.
-- Verified source behavior: client-only runtime import, safe pre-mount exposed-method fallbacks, JSON/YAML formatting, TOML/INI local stream parsers, toolbar default actions, and disabled toolbar action guard.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts` covers update emission, JSON/YAML formatting, and TOML/INI language modes; `code-editor-toolbar.test.ts` covers toolbar action emission.
-- `format()` intentionally returns `false` instead of throwing for read-only, unsupported, invalid, unchanged, or unmounted states.
-
-- Component source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
-- Runtime source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
-- Toolbar source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue`
-- Types: `packages/tuffex/packages/components/src/code-editor/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`, `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts`
+- JSON formats through `JSON.stringify` and YAML through the `yaml` package; TOML and INI highlight with local stream parsers.
+- Source: `packages/tuffex/packages/components/src/code-editor/`.
 
 <TuffDocSourceLink />
 
 ## Customization
 
-| Variable | Written by | Purpose |
-|----------|------------|---------|
-| `--tx-code-editor-bg` | resolved theme | Editor shell and CodeMirror background. |
-| `--tx-code-editor-border` | resolved theme | Shell border and toolbar divider color. |
-| `--tx-code-editor-toolbar-bg` | resolved theme | Toolbar background. |
-| `--tx-code-editor-text` | resolved theme | Toolbar text color. |
-| `--tx-code-editor-focus` | resolved theme | Focus border and ring color. |
+| CSS variable | Used for |
+|------|------|
+| `--tx-code-editor-bg` | Shell and editor background. |
+| `--tx-code-editor-border` | Shell border and toolbar divider. |
+| `--tx-code-editor-toolbar-bg` | Toolbar background. |
+| `--tx-code-editor-text` | Toolbar text. |
+| `--tx-code-editor-focus` | Focus border and ring. |
 
-Use the `theme` prop for supported palettes. Override these variables only when a host theme must tune the shell around CodeMirror.
+The resolved `theme` writes these variables on the root. Prefer `theme` for palettes; override only when a host theme must tune the shell.

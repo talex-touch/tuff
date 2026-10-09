@@ -1,6 +1,6 @@
 ---
 title: Drawer
-description: Side panels and form surfaces
+description: A modal panel that slides in from an edge of the screen.
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,214 +11,56 @@ verified: true
 
 ## Usage
 
-### Basic Drawer
-The common drawer pattern, with a confirmation dialog above it. Tab stays in the confirmation and Escape closes only the confirmation.
+### Basic
+With a confirmation dialog open on top, Tab stays inside it and Escape closes only the dialog.
 :::TuffDemoWrapper{demo="DrawerBasicDrawerDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-  const visible1 = ref(false)
-  const confirmVisible = ref(false)
-  </script>
   <template>
-    <TxButton @click="visible1 = true">Open Drawer</TxButton>
-    <TxDrawer v-model:visible="visible1" title="Settings">
+    <TxButton @click="visible = true">Open drawer</TxButton>
+    <TxDrawer v-model:visible="visible" title="Settings">
       <p>This is the drawer content area.</p>
-      <p>Supports custom size, direction, Header/Footer, mask, and close behavior.</p>
       <TxButton @click="confirmVisible = true">Open confirmation</TxButton>
     </TxDrawer>
     <TxModal v-model="confirmVisible" title="Confirm action">
-      <TxButton @click="confirmVisible = false">Cancel</TxButton>
+      <template #footer>
+        <TxButton @click="confirmVisible = false">Cancel</TxButton>
+      </template>
     </TxModal>
   </template>
 ---
 :::
 
-### Best Practices
-
-- Use Drawer for long forms, audit details, permission matrices, and flows that need footer actions.
-- Keep `title` meaningful even when `showHeader=false`; it becomes the dialog's accessible fallback label.
-- Prefer `size` and `full`; keep `width` only for old call sites that have not migrated yet.
-- Use `mobileAdapt=false` only when preserving side direction is more important than bottom-sheet ergonomics on small screens.
-
-## API Reference
-
-### Props
-
-::TuffPropsTable
----
-rows:
-  - name: visible
-    description: 'Controls drawer visibility'
-    type: 'boolean'
-    default: '*required*'
-  - name: title
-    description: 'Title text'
-    type: 'string'
-    default: "'Drawer'"
-  - name: size
-    description: 'Active-axis size; width for left/right and height for top/bottom; numbers are px and full maps to 100%'
-    type: "number | string | 'full'"
-    default: "'60%'"
-  - name: full
-    description: 'Open at 100% on the active axis, equivalent to size="full"'
-    type: 'boolean'
-    default: 'false'
-  - name: width
-    description: 'Deprecated compatibility alias; use size instead'
-    type: "number | string | 'full'"
-    default: '-'
-  - name: direction
-    description: 'Slide-in direction'
-    type: "'left' | 'right' | 'top' | 'bottom'"
-    default: "'right'"
-  - name: showHeader
-    description: 'Render the header area'
-    type: 'boolean'
-    default: 'true'
-  - name: showFooter
-    description: 'Render the footer slot area'
-    type: 'boolean'
-    default: 'true'
-  - name: showClose
-    description: 'Show close button'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnClickMask
-    description: 'Close on mask click'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnPressEscape
-    description: 'Close on Escape key'
-    type: 'boolean'
-    default: 'true'
-  - name: maskEffect
-    description: 'Mask visual effect'
-    type: "'blur' | 'opacity' | 'transparent'"
-    default: "'blur'"
-  - name: panelTransparent
-    description: 'Make the panel translucent so the back layer shows through'
-    type: 'boolean'
-    default: 'false'
-  - name: mobileAdapt
-    description: 'Force bottom direction on mobile viewport'
-    type: 'boolean'
-    default: 'true'
-  - name: zIndex
-    description: 'Custom z-index. When unset the runtime z-index manager assigns one (seeded at `10000`, incremented per drawer); set it manually only to coexist with externally fixed layers.'
-    type: 'number'
-    default: '-'
-  - name: lazy
-    description: 'Defer rendering slot content until the drawer first opens. The panel itself stays mounted, so the slide-out animation is unaffected; content is kept alive after the first open, so reopening never re-runs child setup. Set `false` when a child must mount eagerly.'
-    type: 'boolean'
-    default: 'true'
----
-::
-
-### Events
-
-::TuffPropsTable
----
-rows:
-  - name: update:visible
-    description: 'Emitted on visibility change'
-    type: '(visible: boolean) => void'
-    default: '-'
-  - name: open
-    description: 'Emitted when opened'
-    type: '() => void'
-    default: '-'
-  - name: close
-    description: 'Emitted when closed'
-    type: '() => void'
-    default: '-'
----
-::
-
-### Slots
-
-::TuffPropsTable
----
-rows:
-  - name: default
-    description: 'Main content'
-    type: '-'
-    default: '-'
-  - name: header
-    description: 'Custom header; slot props: { close, title, titleId }'
-    type: '-'
-    default: '-'
-  - name: footer
-    description: 'Footer area; slot props: { close }'
-    type: '-'
-    default: '-'
----
-::
-
-## Direction
-
-Drawers support `left`, `right`, `top`, and `bottom`. Mobile viewports adapt to `bottom` by default unless `mobile-adapt="false"` is set.
-
 ### Direction
-Four-direction drawers. The size prop maps to width for left/right and height for top/bottom.
+`direction` takes four edges; `size` is the width for left and right, and the height for top and bottom.
 :::TuffDemoWrapper{demo="DrawerDirectionDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton @click="visibleLeft = true">Left</TxButton>
-    <TxButton @click="visibleRight = true">Right</TxButton>
-    <TxButton @click="visibleTop = true">Top</TxButton>
-    <TxButton @click="visibleBottom = true">Bottom</TxButton>
-    <TxDrawer v-model:visible="visibleLeft" title="Left Drawer" direction="left" size="360px" :mobile-adapt="false">
-      <p>Slides in from the left. The size prop becomes width.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visibleRight" title="Right Drawer" direction="right" size="360px" :mobile-adapt="false">
-      <p>Slides in from the right. The size prop becomes width.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visibleTop" title="Top Drawer" direction="top" size="18rem" :mobile-adapt="false">
-      <p>Slides down from the top. The size prop becomes height.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visibleBottom" title="Bottom Drawer" direction="bottom" size="45%">
-      <p>Slides up from the bottom, ideal for mobile bottom sheets.</p>
-    </TxDrawer>
+    <TxDrawer v-model:visible="left" title="Left Drawer" direction="left" size="360px" :mobile-adapt="false" />
+    <TxDrawer v-model:visible="right" title="Right Drawer" direction="right" size="360px" :mobile-adapt="false" />
+    <TxDrawer v-model:visible="top" title="Top Drawer" direction="top" size="18rem" :mobile-adapt="false" />
+    <TxDrawer v-model:visible="bottom" title="Bottom Drawer" direction="bottom" size="45%" />
   </template>
 ---
 :::
 
-## Size and Fullscreen
-
 ### Size and Fullscreen
-Use the unified `size` prop for the active axis: width for `left/right`, height for `top/bottom`. It supports `px`, `rem`, percentages, any CSS length, and `full`. You can also use the more discoverable boolean `full` prop, equivalent to `size="full"`. `width` remains as a compatibility alias for old code.
+`size` takes a number (px), a CSS length, a percentage, or `'full'`; `full` equals `size="full"`.
 :::TuffDemoWrapper{demo="DrawerCustomWidthDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton @click="visiblePx = true">size px</TxButton>
-    <TxButton @click="visibleRem = true">size rem</TxButton>
-    <TxButton @click="visiblePercent = true">size %</TxButton>
-    <TxButton @click="visibleFull = true">full screen</TxButton>
-    <TxDrawer v-model:visible="visiblePx" title="size = 400px" size="400px" :mobile-adapt="false">
-      <p>For left/right directions, size="400px" becomes width.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visibleRem" title="size = 24rem" size="24rem" :mobile-adapt="false">
-      <p>CSS lengths such as rem are supported.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visiblePercent" title="bottom + size = 55%" direction="bottom" size="55%">
-      <p>For top/bottom directions, percentage size becomes height.</p>
-    </TxDrawer>
-    <TxDrawer v-model:visible="visibleFull" title="full drawer" full>
-      <p>The full prop opens the drawer at 100% on the active axis; size="full" is equivalent.</p>
-    </TxDrawer>
+    <TxDrawer v-model:visible="px" title="size = 400px" size="400px" :mobile-adapt="false" />
+    <TxDrawer v-model:visible="rem" title="size = 24rem" size="24rem" :mobile-adapt="false" />
+    <TxDrawer v-model:visible="percent" title="bottom + size = 55%" direction="bottom" size="55%" />
+    <TxDrawer v-model:visible="fullscreen" title="Fullscreen drawer" full />
   </template>
 ---
 :::
 
-## Header / Footer Slots and Mask
-
-Use the `header` / `footer` slots to customize the chrome, or disable them with `show-header` / `show-footer`. Built-in header/footer separators reuse `TxDivider`. `mask-effect` supports `blur`, `opacity`, and `transparent`; `panel-transparent` lets the panel surface show content behind it.
-
-### Custom header / footer slots + mask effect
+### Header, Footer, and Mask
+The `header` and `footer` slots receive `close`; `maskEffect` sets the mask look, and `panelTransparent` lets the page show through the panel.
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |
@@ -231,13 +73,11 @@ code: |
       panel-transparent
     >
       <template #header="{ close }">
-        <div class="drawer-custom-header">
-          <strong>Release policy</strong>
-          <TxButton variant="ghost" @click="close">Close</TxButton>
-        </div>
+        <strong>Release policy</strong>
+        <TxButton variant="ghost" @click="close">Close</TxButton>
       </template>
 
-      <p>Main drawer content</p>
+      <p>Drawer content</p>
 
       <template #footer="{ close }">
         <TxButton @click="close">Cancel</TxButton>
@@ -248,7 +88,8 @@ code: |
 ---
 :::
 
-Compatibility example: use the `footer` slot to add action buttons.
+### Form
+When `close` isn't needed, the `footer` slot can update outside state directly.
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -268,110 +109,201 @@ code: |
 ---
 :::
 
-## Close Behavior
+### Close Behavior
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <!-- Disable mask click -->
-    <TxDrawer
-      v-model:visible="visible"
-      title="Persistent"
-      :close-on-click-mask="false"
-    >
-      <p>Close via the button only.</p>
+    <!-- Clicking the mask doesn't close it -->
+    <TxDrawer v-model:visible="visible" title="Persistent" :close-on-click-mask="false">
+      <p>Only the close button closes this drawer</p>
     </TxDrawer>
 
-    <!-- Disable Escape close -->
-    <TxDrawer
-      v-model:visible="visible2"
-      title="Disable Escape"
-      :close-on-press-escape="false"
-    >
-      <p>Escape key won't close this drawer.</p>
+    <!-- Escape doesn't close it -->
+    <TxDrawer v-model:visible="visible2" title="No Escape" :close-on-press-escape="false">
+      <p>Escape does not close this drawer</p>
     </TxDrawer>
   </template>
 ---
 :::
 
-## Events
+### Open and Close Events
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxDrawer
-      v-model:visible="visible"
-      title="Event Demo"
-      @open="handleOpen"
-      @close="handleClose"
-    >
+    <TxDrawer v-model:visible="visible" title="Events" @open="handleOpen" @close="handleClose">
       <p>Content</p>
     </TxDrawer>
   </template>
 ---
 :::
 
-## Dashboard Navigation Composition
-
-Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
-
-:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
+### Dashboard Navigation
+Tabs hold the top-level sections, DropdownMenu the light actions, Popover the short notes, and Drawer the dense settings.
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Overview')
-  const drawerVisible = ref(false)
-  </script>
-
   <template>
-    <section class="grid gap-3">
-      <TxDropdownMenu>
-        <template #trigger>
-          <TxButton>Release actions</TxButton>
-        </template>
-        <TxDropdownItem>Quick release</TxDropdownItem>
-      </TxDropdownMenu>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Release actions</TxButton>
+      </template>
+      <TxDropdownItem>Quick release</TxDropdownItem>
+    </TxDropdownMenu>
 
-      <TxPopover>
-        <template #reference>
-          <TxButton variant="secondary">Policy notes</TxButton>
-        </template>
-        Keep popovers short and action-light.
-      </TxPopover>
+    <TxPopover>
+      <template #reference>
+        <TxButton variant="secondary">Policy notes</TxButton>
+      </template>
+      Keep popovers to short notes and light actions.
+    </TxPopover>
 
-      <TxTabs v-model="active" placement="left" indicator-variant="pill">
-        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
-        <TxTabItem name="Releases">Release settings</TxTabItem>
-      </TxTabs>
+    <TxTabs v-model="active" placement="left" indicator-variant="pill">
+      <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      <TxTabItem name="Release">Release settings</TxTabItem>
+    </TxTabs>
 
-      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
-    </section>
+    <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
   </template>
 ---
 :::
 
+### Best Practices
+
+- Put long forms, audit details, permission matrices, and flows that need a footer action bar in a drawer, not a popover.
+- Give a meaningful `title` even with `showHeader=false`; it is the dialog's accessible name.
+- Size the drawer with `size` or `full`; `width` exists only for older call sites.
+- Set `mobileAdapt=false` only when a side entrance matters more on small screens than a bottom sheet.
+- Let the drawer manage focus instead of moving it from outside; form fields in the body still need explicit labels.
+
+## API Reference
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: visible
+    description: 'Whether the drawer is shown; bind with `v-model:visible`.'
+    type: 'boolean'
+    default: '*required*'
+  - name: title
+    description: 'Title; becomes the `aria-label` when no header renders.'
+    type: 'string'
+    default: "'Drawer'"
+  - name: size
+    description: 'Size on the active axis: width for left/right, height for top/bottom; numbers are px, `full` is 100%.'
+    type: "number | string | 'full'"
+    default: "'60%'"
+  - name: full
+    description: 'Opens at 100% on the active axis; same as `size="full"`.'
+    type: 'boolean'
+    default: 'false'
+  - name: width
+    description: 'Legacy alias; use `size`.'
+    type: "number | string | 'full'"
+    default: '-'
+  - name: direction
+    description: 'Edge the drawer slides in from.'
+    type: "'left' | 'right' | 'top' | 'bottom'"
+    default: "'right'"
+  - name: showHeader
+    description: 'Renders the header area.'
+    type: 'boolean'
+    default: 'true'
+  - name: showFooter
+    description: 'Renders the footer slot area.'
+    type: 'boolean'
+    default: 'true'
+  - name: showClose
+    description: 'Shows the close button in the default header.'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnClickMask
+    description: 'Closes when the mask is clicked.'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnPressEscape
+    description: 'Closes when Escape is pressed.'
+    type: 'boolean'
+    default: 'true'
+  - name: maskEffect
+    description: 'Mask look: blurred, dimmed only, or transparent.'
+    type: "'blur' | 'opacity' | 'transparent'"
+    default: "'blur'"
+  - name: panelTransparent
+    description: 'Makes the panel translucent so the page shows through.'
+    type: 'boolean'
+    default: 'false'
+  - name: mobileAdapt
+    description: 'Forces a bottom entrance when the viewport is 768px wide or less.'
+    type: 'boolean'
+    default: 'true'
+  - name: zIndex
+    description: 'Fixed layer; without it the z-index manager allocates from `10000`.'
+    type: 'number'
+    default: '-'
+  - name: lazy
+    description: 'Skips slot content until the first open, then keeps it; set `false` to mount eagerly.'
+    type: 'boolean'
+    default: 'true'
+---
+::
+
+### Events
+
+::TuffPropsTable
+---
+rows:
+  - name: update:visible
+    description: 'Fires when visibility changes.'
+    type: '(visible: boolean) => void'
+    default: '-'
+  - name: open
+    description: 'Fires when `visible` turns `true`.'
+    type: '() => void'
+    default: '-'
+  - name: close
+    description: 'Fires when the user closes the drawer; not when the parent sets `visible`.'
+    type: '() => void'
+    default: '-'
+---
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Main content.'
+    type: '-'
+    default: '-'
+  - name: header
+    description: 'Replaces the default title and close button; slot props: `{ close, title, titleId }`.'
+    type: '-'
+    default: '-'
+  - name: footer
+    description: 'Footer action area; slot props: `{ close }`.'
+    type: '-'
+    default: '-'
+---
+::
+
 ## Overview
 
-- The drawer root exposes `role="dialog"` and `aria-modal="true"`; with a header it links the title through instance-scoped `aria-labelledby`, and without a header it falls back to `title` as `aria-label`.
-- Opening the drawer focuses the drawer root; hiding or unmounting restores focus to the element that was active before opening.
-- The close button, mask click, and Escape close paths emit `update:visible(false)` and `close` by default; `closeOnClickMask=false` and `closeOnPressEscape=false` block their respective paths.
-- Keys already handled by another control, or originating in another modal dialog, are not handled again by the drawer. A confirmation above the drawer owns Tab, Shift+Tab and Escape without a page-level CSS-class or body-event guard.
-- `showClose=false` removes the default close button without changing mask or Escape behavior.
-- `mobileAdapt=true` forces bottom direction on mobile; set `:mobile-adapt="false"` to preserve the requested direction.
+- The root is `role="dialog"` with `aria-modal="true"`; with a header it uses `aria-labelledby`, otherwise `title` becomes the `aria-label`.
+- Opening focuses the drawer and Tab cycles inside it; closing or unmounting returns focus to the previously focused element.
+- The close button, the mask, and Escape all emit `update:visible(false)` and `close`; `closeOnClickMask` and `closeOnPressEscape` turn off the last two.
+- Only the topmost modal dialog handles Tab and Escape, and keys another control already handled are ignored, so a confirmation on top owns them.
+- When closed, the root stays in the DOM with `inert` and `aria-hidden`.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`.
-- Types: `packages/tuffex/packages/components/src/drawer/src/types.ts`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts` verifies visibility emits, focus restoration, ARIA labeling, close controls, size resolution, mobile adaptation, and separator rendering.
+- The header and footer dividers are `TxDivider`; don't hard-code borders for them.
+- Source: `packages/tuffex/packages/components/src/drawer/`.
 
 <TuffDocSourceLink />
-
-- The drawer root already exposes `role="dialog"` / `aria-modal="true"` and title linkage; form fields inside still need explicit labels.
-- Opening stores the previously focused element and restores it on hide/unmount; avoid manually stealing focus from outside.
-- Dashboard settings pages should place long forms, permission matrices, and audit detail in Drawer rather than Popover.
-- Built-in header/footer separators come from `TxDivider`, avoiding duplicated border styling.

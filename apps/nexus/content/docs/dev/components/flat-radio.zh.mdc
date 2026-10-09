@@ -213,6 +213,8 @@ code: |
 - 滑块由共享的 `useJellyIndicator` 滑行材质驱动（与 `TxTabs`、`TxTabBar`、`TxSidebarNav` 相同），每帧直接写 `transform`、`width`、`opacity`，不触发重渲染。
 - 源码：`packages/tuffex/packages/components/src/flat-radio/`。
 
+<TuffDocSourceLink />
+
 ## 自定义
 
 | CSS 变量 | 用途 |
@@ -220,5 +222,3 @@ code: |
 | `--tx-flat-radio-track-bg` | 轨道底色，默认 `--tx-fill-color`。 |
 | `--tx-flat-radio-indicator-bg` | 滑块与多选项底色，默认 `--tx-surface-raised`。 |
 | `--tx-flat-radio-indicator-shadow` | 滑块投影。 |
-
-<TuffDocSourceLink />

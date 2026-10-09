@@ -70,6 +70,26 @@ describe('txSteps', () => {
     expect(wrapper.findAll('.tx-step')[1].classes()).toContain('tx-step--active')
   })
 
+  it('numbers string-keyed steps by their order', () => {
+    const wrapper = mount(TxSteps, {
+      props: {
+        active: 'start',
+      },
+      slots: {
+        default: `
+          <TxStep title="Start" step="start" />
+          <TxStep title="Details" step="details" />
+          <TxStep title="Publish" step="publish" />
+        `,
+      },
+      global: {
+        components: { TxStep },
+      },
+    })
+
+    expect(wrapper.findAll('.tx-step__number').map(number => number.text())).toEqual(['1', '2', '3'])
+  })
+
   it('updates internal active step through clickable step buttons', async () => {
     const wrapper = mountSteps({ active: 0 })
     const heads = wrapper.findAll('.tx-step__head')

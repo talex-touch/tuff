@@ -1,6 +1,6 @@
 ---
 title: Release
-description: A console that takes one desktop release from CI build, signing and notarization to a staged rollout, with an artifact matrix, a build log, guardrails and human approval, all on sample data
+description: A release console from CI build to a staged rollout a person approves.
 category: TemplateData
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Staged rollout
-
-:::TuffDemoWrapper{demo="TemplateReleaseDemo" code-lang="vue" title="Staged rollout" description="Once it scrolls into view the pipeline runs through, then stops at the approval gate for the first rollout until you click Start rollout or Not yet. Every version, checksum and signature is sample data."}
+:::TuffDemoWrapper{demo="TemplateReleaseDemo" code-lang="vue" description="The pipeline runs through, then waits at the approval gate for your click. Versions, checksums, and signatures are sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -96,35 +95,34 @@ code: |
 
 ## Overview
 
-One release of the Tuff desktop app. CI builds, signs, notarizes and stages it, then stops and waits for a person before rolling it out to a small share of beta users. The console puts the pipeline, the artifacts for five platforms, the build log, the release notes, the rollout share, the guardrails and this release's history on one screen. The pipeline runs by itself; anything that ships to users (the first rollout, a promotion, a halt, a resume) waits for your click.
+One release of the Tuff desktop app; the pipeline runs itself, and anything that ships to users waits for your click.
 
-It fits any screen where the machine prepares and a person lets it through: staged mobile or desktop releases, gradual feature-flag rollouts, database migrations, config pushes. The version, checksums, signatures and notarization results on the page are sample data; the version carries a `-demo` tag and there is no download link anywhere.
-
-- Once the template scrolls into view, the pipeline runs through signing, notarization and staging in about four seconds: the log fills in line by line, and the two macOS rows show Notarizing before they turn notarized. It then stops at the approval gate for the first rollout with no timer running, next to a note that nothing ships on its own. With reduced motion the template renders everything up to the gate at once.
-- Start rollout rolls the share from 0 to 5% and fills in the three guardrails one by one; only then can you promote. Not yet stages the release without shipping it to anyone, and you can ask again at any time. The gate's checkbox reads "Pause automatically if a guardrail fails": the one automatic action on the page, and it only ever moves in the safe direction.
-- Pick a target on the segmented slider, then Promote to 25%: the confirmation lists the guardrail checks. While guardrail data is still coming in, while one fails, or while the target is not above the current share, the button is disabled and says why.
-- Halt rollout in the header and Resume rollout in the rollout card both ask for a second click in a dialog. Turn on "Simulate a crash-rate dip" and crash-free sessions fall below 99.50%: with automatic pausing checked, the rollout halts at once and the history records it; without it, promotion is blocked.
-- Any build in the version capsule's download panel only says it is a sample with no download; pick an older version in the history panel and Notes switches to its release notes. Escape inside an open panel closes the panel, not the full-screen view. Copying a sha256 yields text with a `SAMPLE-` prefix.
-- Wide (≥ 960px) puts the pipeline in a left column, the artifact table above the log and notes side by side in the middle, and rollout, guardrail trend and history on the right; once the table has the room, signing and notarization get columns of their own and the file name sits under the platform. The docs column (640–959px) switches between Log, Artifacts and Notes; narrow (< 640px) makes Rollout the first tab and trims the table to platform and status, with the sha256 inside the platform cell.
+- Once in view the pipeline runs through signing, notarization, and staging in about four seconds, then stops at the approval gate with no timer; reduced motion renders everything up to the gate at once.
+- Start rollout rolls the share to 5%, and promotion unlocks once the guardrails fill in; Not yet only stages the release, and you can ask again at any time.
+- The gate's checkbox reads "Pause automatically if a guardrail fails": the one automatic action on the page, and it only moves the safe way.
+- Promote, halt, and resume each ask for a second click; while a guardrail fails or the target isn't above the current share, Promote is disabled and says why.
+- "Simulate a crash-rate dip" drops crash-free sessions below 99.50%: with automatic pausing checked the rollout halts at once; otherwise promotion is blocked.
+- Builds in the version capsule's download panel are samples with no download, and Esc in an open panel closes only the panel; a copied sha256 carries a `SAMPLE-` prefix.
+- Wide (≥ 960px) is three columns; the docs column (640–959px) switches between Log, Artifacts, and Notes; narrow (< 640px) makes Rollout the first tab.
 
 ## Customization
 
-- Wire real CI by replacing the timed steps in `pipelinePlan()` with events from your build system; each event updates one step's state and appends a log line, and everything else on screen follows from that state.
-- Keep approvals with a person: use TxToolConfirmation for actions like the first rollout and let it wait indefinitely. Its "remember" checkbox cannot be hidden, so give it a meaning that points the safe way, such as pausing on a failed guardrail, never "promote automatically from now on".
-- TxSteps lets its `active` index override a step's own `status`. To show an error state such as a halt, pass `:active="-1"` and control every step's status yourself.
-- Make sample data obvious at a glance: a pre-release tag that never ships, checksums and signatures labelled as samples, and no `href` on TxVersionDownloadPanel builds (with one, a build renders as a download link).
+- To wire real CI, replace the timed steps in `pipelinePlan()` with events from your build system; each event updates one step and appends a log line.
+- Use TxToolConfirmation for actions like the first rollout and let it wait indefinitely; its "remember" checkbox can't be hidden, so give it a meaning that points the safe way.
+- TxSteps' `active` index overrides each step's `status`: to show an error state such as a halt, pass `:active="-1"` and control every step yourself.
+- Make sample data obvious: a pre-release tag that never ships, checksums and signatures labeled as samples, and no `href` on TxVersionDownloadPanel builds.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Header | [TxVersionCapsule](/docs/dev/components/version-capsule), [TxTag](/docs/dev/components/tag), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxButton](/docs/dev/components/button) | The sample version; its download panel lists sample builds with no download links, and its history panel switches the release notes; a permanent "Sample data" tag; the pipeline timer or the release state; Halt rollout |
-| Pipeline | [TxSteps](/docs/dev/components/steps) | Build → Sign → Notarize → Stage → Rollout, each step's state controlled and its duration as the description; vertical in the left column when wide |
-| Artifacts | [TxDataTable](/docs/dev/components/data-table), [TxCopyButton](/docs/dev/components/button), [TxStatusBadge](/docs/dev/components/status-badge) | Size, sample sha256, signing and notarization for five artifacts across macOS, Windows and Linux; file names follow electron-builder's real naming |
-| Log | [TxCodeStream](/docs/dev/components/code-stream) | The build log, revealed line by line inside a scroller that follows the end; its first line says it is a sample |
-| Release notes | [TxMarkdownView](/docs/dev/components/markdown-view) | Notes for the current version; picking another version in the history switches them |
-| Rollout | [TxTextMorph](/docs/dev/components/text-morph), [TxProgressBar](/docs/dev/components/progress-bar), [TxSegmentedSlider](/docs/dev/components/segmented-slider), [TxAlert](/docs/dev/components/alert) | Current share and target stage (1 / 5 / 25 / 50 / 100%), the promote button with the reason it is unavailable; a notice while halted |
-| Approval gate | [TxToolConfirmation](/docs/dev/components/tool-confirmation) | Waits before the first rollout until you click Start rollout or Not yet |
-| Guardrails | [TxSignalMeter](/docs/dev/components/signal-meter), [TxSwitch](/docs/dev/components/switch), [TxSparkChart](/docs/dev/components/spark-chart) | Crash-free sessions, update failures and rollback requests, each marked pass or fail in words too; a "Simulate a crash-rate dip" switch; a trend line when wide |
-| This release | [TxTimeline](/docs/dev/components/timeline) | What has happened to this release, newest first |
-| Confirmation and feedback | [TxModal](/docs/dev/components/modal), [TxToastPanel](/docs/dev/components/toast-panel) | A second click before promoting, halting or resuming; the outcome, shown inside the stage |
+| Header | [TxVersionCapsule](/docs/dev/components/version-capsule), [TxTag](/docs/dev/components/tag), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxButton](/docs/dev/components/button) | Sample version, state, and Halt |
+| Pipeline | [TxSteps](/docs/dev/components/steps) | Five controlled pipeline steps |
+| Artifacts | [TxDataTable](/docs/dev/components/data-table), [TxCopyButton](/docs/dev/components/button), [TxStatusBadge](/docs/dev/components/status-badge) | Five artifacts with sample checksums |
+| Log | [TxCodeStream](/docs/dev/components/code-stream) | Build log, line by line |
+| Release notes | [TxMarkdownView](/docs/dev/components/markdown-view) | Notes for the selected version |
+| Rollout | [TxTextMorph](/docs/dev/components/text-morph), [TxProgressBar](/docs/dev/components/progress-bar), [TxSegmentedSlider](/docs/dev/components/segmented-slider), [TxAlert](/docs/dev/components/alert) | Share, target stage, and Promote |
+| Approval gate | [TxToolConfirmation](/docs/dev/components/tool-confirmation) | Waits for you before rollout |
+| Guardrails | [TxSignalMeter](/docs/dev/components/signal-meter), [TxSwitch](/docs/dev/components/switch), [TxSparkChart](/docs/dev/components/spark-chart) | Three guardrails and a simulator |
+| This release | [TxTimeline](/docs/dev/components/timeline) | Release history, newest first |
+| Confirmation and feedback | [TxModal](/docs/dev/components/modal), [TxToastPanel](/docs/dev/components/toast-panel) | Second click and outcome notices |

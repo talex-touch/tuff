@@ -1,6 +1,6 @@
 ---
 title: Grid 栅格
-description: 结构化布局与对齐
+description: 按行与列排布内容的网格容器
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,37 +11,97 @@ verified: true
 
 ## 用法
 
-### Grid
+### 基础
 :::TuffDemoWrapper{demo="GridGridDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="width: 520px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxGrid :cols="3" :gap="12">
-        <TxGridItem v-for="i in 6" :key="i">
-          <div style="height: 54px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa); display: flex; align-items: center; justify-content: center; color: var(--tx-text-color-secondary);">
-            {{ i }}
-          </div>
-        </TxGridItem>
-      </TxGrid>
-    </div>
+    <TxGrid :cols="3" :gap="12">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
+    </TxGrid>
   </template>
 ---
 :::
 
-最简单的网格布局：
-
+### 响应式列数
+`cols` 可按断点设置。
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="3" gap="16">
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" :gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>项目 {{ i }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 自适应列数
+`minItemWidth` 按可用宽度自动排布列，优先于 `cols`。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" :gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>{{ item.title }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 间距
+`gap` 接受数字（px）、`{ row, col }` 或按断点的对象。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="32">…</TxGrid>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">…</TxGrid>
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">…</TxGrid>
+  </template>
+---
+:::
+
+### 跨列与跨行
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" :gap="16">
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="2">跨 2 列</TxGridItem>
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="3">跨 3 列</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
       <TxGridItem>项目 1</TxGridItem>
-      <TxGridItem>项目 2</TxGridItem>
+      <TxGridItem :row-span="2">跨 2 行</TxGridItem>
       <TxGridItem>项目 3</TxGridItem>
       <TxGridItem>项目 4</TxGridItem>
-      <TxGridItem>项目 5</TxGridItem>
-      <TxGridItem>项目 6</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 对齐
+`justify` / `align` 对齐全部项目，`justifySelf` / `alignSelf` 对齐单个项目。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="16" justify="center" align="center" style="height: 400px;">
+      <TxGridItem v-for="i in 3" :key="i">项目 {{ i }}</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem justify-self="start">左对齐</TxGridItem>
+      <TxGridItem justify-self="center">居中对齐</TxGridItem>
+      <TxGridItem justify-self="end">右对齐</TxGridItem>
     </TxGrid>
   </template>
 ---
@@ -49,34 +109,50 @@ code: |
 
 ### 最佳实践
 
-- 已知列数的后台网格优先使用显式 `cols`；需要随容器自动排布的卡片集合优先使用 `minItemWidth`。
-- `TxGridItem` 的跨列 / 跨行应保持可预测；大跨度项目要确认每个响应式断点都有足够列数。
-- token 化间距优先使用数字；只有需要 `rem`、`clamp()` 等 CSS 单位时才传字符串。
-- 不要把 Grid 当语义表格或有序列表使用；数据表继续使用表格组件，导航继续使用列表语义。
+- 已知列数的后台网格用 `cols`，随容器排布的卡片集合用 `minItemWidth`；同一网格只选一种。
+- 使用大跨度项目时，确认每个断点都有足够的列数。
+- 间距优先用数字；需要 `rem`、`clamp()` 等单位时才传字符串。
+- 不要用 Grid 代替语义表格或列表。
 
 ## API 参考
 
-### Grid Props
+### TxGrid
+
+#### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| cols | `number \| Responsive<number>` | `0` | 列数；为 0 时不输出固定列模板 |
-| rows | `number` | `0` | 行数；为 0 时不输出固定行模板 |
-| gap | `GridGap` | `16` | 网格间距（数字转 px、`{ row, col }` 或按断点响应式对象） |
-| minItemWidth | `string` | - | 项目最小宽度（自适应模式） |
-| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 水平对齐 |
-| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 垂直对齐 |
+| cols | `number \| Responsive<number>` | `0` | 列数，可按断点设置；为 `0` 时不输出列模板。 |
+| rows | `number` | `0` | 行数；为 `0` 时不输出行模板。 |
+| gap | `GridGap` | `16` | 间距：数字（px）、`{ row, col }` 或按断点的对象。 |
+| minItemWidth | `string` | - | 项目最小宽度，启用 `auto-fit` 自适应列。 |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 项目的水平对齐。 |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 项目的垂直对齐。 |
 
-### GridItem Props
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|--------|-------|------|
+| `default` | - | `TxGridItem` 子项。 |
+
+### TxGridItem
+
+#### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| colSpan | `number` | `1` | 跨列数，最小按 1 处理 |
-| rowSpan | `number` | `1` | 跨行数，最小按 1 处理 |
-| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身水平对齐 |
-| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身垂直对齐 |
+| colSpan | `number` | `1` | 跨列数，最小为 1。 |
+| rowSpan | `number` | `1` | 跨行数，最小为 1。 |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身的水平对齐。 |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身的垂直对齐。 |
 
-### 类型定义
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|--------|-------|------|
+| `default` | - | 单元格内容。 |
+
+### 类型
 
 :::TuffCodeBlock{lang="ts"}
 ---
@@ -95,169 +171,15 @@ code: |
 ---
 :::
 
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| - | - | `TxGrid` 与 `TxGridItem` 没有组件自定义事件。 |
-
-### Slots
-
-| 组件 | 插槽名 | Props | 说明 |
-|------|--------|-------|------|
-| `TxGrid` | `default` | - | 网格内容，通常放置 `TxGridItem` 子项。 |
-| `TxGridItem` | `default` | - | 渲染在 grid item 包装层内部的单元格内容。 |
-
-## 响应式网格
-
-### 响应式列数
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" gap="20">
-      <TxGridItem v-for="i in 10" :key="i">
-        <TxCard>项目 {{ i }}</TxCard>
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### 自适应网格
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid min-item-width="250px" gap="24">
-      <TxGridItem v-for="item in items" :key="item.id">
-        <TxCard>
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.description }}</p>
-        </TxCard>
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## 网格间距
-
-`gap` 支持三种写法：数字（转 px 的统一间距）、`{ row, col }`（行列分向）、以及按断点响应式对象。
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <!-- 统一间距：数字转 px -->
-    <TxGrid :cols="3" gap="32">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-
-    <!-- 行列分向 -->
-    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-
-    <!-- 按断点响应式 -->
-    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## 网格项配置
-
-### 跨列布局
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="4" gap="16">
-      <TxGridItem>普通项目</TxGridItem>
-      <TxGridItem :col-span="2">跨 2 列项目</TxGridItem>
-      <TxGridItem>普通项目</TxGridItem>
-      <TxGridItem :col-span="3">跨 3 列项目</TxGridItem>
-      <TxGridItem>普通项目</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### 跨行布局
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="3" gap="16">
-      <TxGridItem>项目 1</TxGridItem>
-      <TxGridItem :row-span="2">跨 2 行项目</TxGridItem>
-      <TxGridItem>项目 3</TxGridItem>
-      <TxGridItem>项目 4</TxGridItem>
-      <TxGridItem>项目 5</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## 对齐方式
-
-### 网格对齐
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid
-      :cols="3"
-      gap="16"
-      justify="center"
-      align="center"
-      style="height: 400px;"
-    >
-      <TxGridItem v-for="i in 3" :key="i">
-        项目 {{ i }}
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### 项目对齐
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="3" gap="16">
-      <TxGridItem justify-self="start">左对齐</TxGridItem>
-      <TxGridItem justify-self="center">居中对齐</TxGridItem>
-      <TxGridItem justify-self="end">右对齐</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
 ## 概述
 
-- `minItemWidth` 优先于 `cols`，会输出 `repeat(auto-fit, minmax(..., 1fr))`。
-- 响应式值按当前窗口宽度解析，断点为 `xs < 640`、`sm < 768`、`md < 1024`、`lg < 1280`、其余为 `xl`。
-- `gap` 数字会转为 px；`{ row, col }` 可分别控制行列间距。
-- `TxGridItem` 的 `colSpan` / `rowSpan` 最小按 1 处理。
+- `minItemWidth` 优先于 `cols`，输出 `repeat(auto-fit, minmax(<minItemWidth>, 1fr))`。
+- 响应式值按窗口宽度解析：`xs < 640 ≤ sm < 768 ≤ md < 1024 ≤ lg < 1280 ≤ xl`。当前断点未设置时先取更小断点，再取更大断点。
+- 服务端渲染时按 1024px 解析，即 `lg`。
 
 ## 技术实现
 
-- **响应式契约:** `TxGrid` 按 `window.innerWidth` 解析响应式 `cols` 与 `gap`；SSR/default width 从 1024 开始，因此首屏关键布局也要能接受 `md` fallback。
-- **尺寸说明:** `minItemWidth` 优先于显式 `cols`，并输出 `repeat(auto-fit, minmax(..., 1fr))`。同一个 grid 中只选一种策略，避免 review 时难以判断最终列数。
-- **实测覆盖:** `grid.test.ts` 覆盖固定列/行/gap、`minItemWidth` 优先级、响应式 resize 更新、resize listener 清理、`TxGridItem` span 最小值、自身对齐与 install 注册。
-
-- Component source: `packages/tuffex/packages/components/src/grid/src/TxGrid.vue`。
-- Grid item source: `packages/tuffex/packages/components/src/grid/src/TxGridItem.vue`。
-- Coverage: `packages/tuffex/packages/components/src/grid/__tests__/grid.test.ts` 校验固定模板、响应式解析、监听清理与 span 最小值处理。
+- 网格样式由 props 计算后内联到根节点，断点随 `window` 的 `resize` 更新。
+- 源码：`packages/tuffex/packages/components/src/grid/`。
 
 <TuffDocSourceLink />

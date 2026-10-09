@@ -56,6 +56,7 @@ code: |
 | `messages` | `ChatMessageModel[]` | required | Messages, rendered in array order. |
 | `markdown` | `boolean` | `true` | Renders bodies with `TxMarkdownView`; off renders plain text. |
 | `stagger` | `boolean` | `true` | Animates rows in with `TxStagger`. |
+| `attachmentLabel` | `string` | - | Forwarded to each message: names image thumbnails that lack `name`. |
 
 #### Events
 
@@ -118,10 +119,10 @@ code: |
 
 - Source: `packages/tuffex/packages/components/src/chat/` (`TxChatList.vue`, `TxChatMessage.vue`, `types.ts`).
 
+<TuffDocSourceLink />
+
 ## Related components
 
 - [ChatComposer](./chat-composer.en.mdc): text entry, attachments, and sending.
 - [TypingIndicator](./typing-indicator.en.mdc): the assistant's pending state.
 - [AI Elements](./ai-elements.en.mdc): prefer it when you need `tool` messages or streaming states.
-
-<TuffDocSourceLink />

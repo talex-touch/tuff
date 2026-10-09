@@ -1,6 +1,6 @@
 ---
 title: "Spinner 加载"
-description: "用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。"
+description: "表示不确定等待的旋转指示器"
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### Spinner
+### 基础
 :::TuffDemoWrapper{demo="SpinnerSpinnerDemo" code-lang="vue"}
 ---
 code: |
@@ -21,108 +21,35 @@ code: |
 ---
 :::
 
-### 最佳实践
-
-- Spinner 只表达不确定等待；一旦有数值或阶段进度，切换为 `TxProgressBar`。
-- 行内 spinner 要把文案放在图标旁边；spinner 自身只表达 busy，不表达完成结果。
-- 需要内置进出场过渡时使用 `visible`；挂载时机由宿主管理时再使用 `v-if`。
-- 只有在 CSS ball 动效不适合受限表面时才使用 `fallback=true`。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `size` | `number` | `16` | spinner 的宽高，单位 px；写入 `--tx-spinner-size`。 |
-| `strokeWidth` | `number` | `2` | 环形线宽与 SVG fallback 线宽；写入 `--tx-spinner-stroke`。 |
-| `fallback` | `boolean` | `false` | 使用 SVG fallback 旋转图形，而不是默认的 ball/ring 动效。 |
-| `visible` | `boolean` | `true` | 通过内置 `tx-spinner-visibility` 过渡控制显示或隐藏。 |
-| `label` | `string` | `'Loading'` | 状态区域的可访问名称，读屏在 spinner 出现时播报；本地化时覆盖此值。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| - | - | 没有组件自定义事件，通过 `visible` prop 控制显隐。 |
-
-### Slots
-
-| 插槽名 | Props | 说明 |
-|------|-------|------|
-| - | - | `TxSpinner` 没有插槽；需要状态文案时在 spinner 外部组合文本。 |
-
-## 尺寸
-
-### Spinner sizes
+### 尺寸
+`size` 设置宽高（px）。
 :::TuffDemoWrapper{demo="SpinnerSpinnerSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxSpinner :size="12" />
-      <TxSpinner :size="16" />
-      <TxSpinner :size="24" />
-      <TxSpinner :size="32" />
-    </div>
+    <TxSpinner :size="12" />
+    <TxSpinner :size="16" />
+    <TxSpinner :size="24" />
+    <TxSpinner :size="32" />
   </template>
 ---
 :::
 
-## 显隐切换（v-if vs visible）
-
-### Toggle
+### 显隐切换
+`visible` 带内置的进出场过渡；`v-if` 直接挂载或卸载。
 :::TuffDemoWrapper{demo="SpinnerToggleDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const showByIf = ref(true)
-  const visible = ref(true)
-  </script>
-
   <template>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;">
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-weight: 600;">
-            v-if (no built-in transition)
-          </div>
-          <TxButton size="sm" @click="showByIf = !showByIf">
-            Toggle
-          </TxButton>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
-          <TxSpinner v-if="showByIf" />
-          <span style="color: var(--tx-text-color-secondary);">Status: {{ showByIf ? 'mounted' : 'unmounted' }}</span>
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-weight: 600;">
-            :visible (built-in transition)
-          </div>
-          <TxButton size="sm" @click="visible = !visible">
-            Toggle
-          </TxButton>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
-          <TxSpinner :visible="visible" />
-          <span style="color: var(--tx-text-color-secondary);">Status: {{ visible ? 'mounted' : 'unmounted (after leave)' }}</span>
-        </div>
-      </div>
-    </div>
+    <TxSpinner v-if="showByIf" />
+    <TxSpinner :visible="visible" />
   </template>
 ---
 :::
 
-## 后台行内等待
-
-`TxSpinner` 用于按钮、行内状态或遮罩内部的短等待。已知进度请优先使用 `TxProgressBar`；整块首屏加载请使用 `TxLoadingState`；只有在等待时间短且不需要百分比时使用 Spinner。
-
-:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="Spinner 与 Toast / Tooltip / LoadingOverlay 的截图验证组合。"}
+### 行内等待
+用于按钮、行内状态或遮罩内部的短等待。
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -134,21 +61,35 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 只用于不确定的短等待；有数值或阶段进度时用 `TxProgressBar`，整块首屏加载用 `TxLoadingState`。
+- 文案放在图标旁边；Spinner 只表达忙碌，不表达完成结果。
+- 需要内置进出场过渡时用 `visible`；挂载时机由宿主管理时用 `v-if`。
+- 只有 CSS 动效不适合受限表面时才设置 `fallback`。
+- 着色时直接在 `TxSpinner` 上设置 `color`；父级的 `color` 不会穿透根节点。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `size` | `number` | `16` | 宽高（px），写入 `--tx-spinner-size`。 |
+| `strokeWidth` | `number` | `2` | 环形与 SVG 的线宽，写入 `--tx-spinner-stroke`。 |
+| `fallback` | `boolean` | `false` | 渲染 SVG 旋转圆环，替代默认的 ball/ring 动效。 |
+| `visible` | `boolean` | `true` | 显示或隐藏，带 `tx-spinner-visibility` 过渡。 |
+| `label` | `string` | `'Loading'` | 状态区域的可访问名，出现时被播报；本地化时覆盖。 |
+
 ## 概述
 
-- `visible=false` 时，离场过渡结束后不渲染 spinner。
-- 可见根节点是 inline-flex `span`，带 `aria-busy="true"` 与 `aria-live="polite"`。
-- 默认模式渲染 ball/ring 动效；`fallback=true` 渲染 SVG circle，并复用 `size` 与 `strokeWidth`。
-- 组件根节点默认使用次要文本色（`--tx-text-color-secondary`）；如需着色，请直接在 `TxSpinner` 元素上设置 `color`（父级的 `color` 不会穿透根节点自身的声明）。
+- 根节点是 inline-flex 的 `span`，带 `role="status"`、`aria-busy="true"`、`aria-live="polite"`，以 `label` 作为 `aria-label`；不播报完成。
+- `visible=false` 时，离场过渡结束后不再渲染。
+- `fallback` 渲染 SVG circle，沿用 `size` 与 `strokeWidth`。
+- 根节点默认取 `--tx-text-color-secondary` 作为颜色。
 
 ## 技术实现
 
-- **可访问性说明:** 可见根节点带 `aria-busy="true"` 与 `aria-live="polite"`，但 spinner 本身没有可读标签或完成播报。超过瞬时行内等待时，需要在旁边组合状态文案。
-- **实测覆盖:** `spinner.test.ts` 覆盖默认可访问性属性、默认与 SVG fallback 分支、`size`/`strokeWidth` 的 CSS 变量映射，以及 `visible=false` 时不渲染。
-
-- Component source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue`。
-- Types: `packages/tuffex/packages/components/src/spinner/src/types.ts` 导出 `SpinnerProps`。
-- Export alias: `packages/tuffex/packages/components/src/spinner/index.ts` 导出 `Spinner`、`TxSpinner`、`SpinnerProps` 与 `TxSpinnerInstance`。
-- Coverage: `packages/tuffex/packages/components/src/spinner/__tests__/spinner.test.ts` 覆盖渲染分支与 prop 驱动的 CSS 变量。
+- 源码：`packages/tuffex/packages/components/src/spinner/`。
 
 <TuffDocSourceLink />

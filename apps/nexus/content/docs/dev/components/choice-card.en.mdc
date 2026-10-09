@@ -249,6 +249,8 @@ Set them on the card or any ancestor; the component only writes `--tx-choice-car
 - Skeleton rows reuse the loaded row's own containers, with `TxSkeleton` bars inside.
 - Source: `packages/tuffex/packages/components/src/choice-card/`.
 
+<TuffDocSourceLink />
+
 ## Use cases
 
 - An assistant's opening guide: "Where should we start?", one question per step.
@@ -262,5 +264,3 @@ Set them on the card or any ancestor; the component only writes `--tx-choice-car
 | [SuggestionChips](/docs/dev/components/suggestion-chips) | One-line follow-up prompts |
 | [RecommendationCard](/docs/dev/components/recommendation-card) | One recommendation with alternatives |
 | [ApprovalCard](/docs/dev/components/approval-card) | Multi-question answers, sent together |
-
-<TuffDocSourceLink />

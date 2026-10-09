@@ -67,6 +67,12 @@ code: |
 | `change` | `string` | 与 `update:modelValue` 同时触发。 |
 | `file-error` | `unknown` | 文件选择器抛错或回退 input 读取失败时触发。 |
 
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `toggle(value?)` | `(value?: boolean) => void` | 按 `value` 打开或关闭面板，省略时切换；`inline` 面板始终显示。 |
+
 ## 标识符
 
 选中结果是 `<type>:<value>` 字符串。以**第一个**冒号分隔，value 中可再含冒号（`url:`、Windows 的 `file:C:/…`）。

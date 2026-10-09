@@ -1,6 +1,6 @@
 ---
 title: Modal
-description: Lightweight Teleport-backed dialog for short blocking tasks, with focus restore, Escape/backdrop dismissal, and header/footer slots.
+description: A lightweight dialog for short blocking tasks.
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,25 +11,14 @@ verified: true
 
 ## Usage
 
-Open the dialog from a button, keep the body concise, and close it by updating the bound model.
-
+### Basic
+`v-model` controls visibility, and the `footer` slot holds the actions.
 ::::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  const fullscreen = ref(false)
-  </script>
-
   <template>
-    <TxButton variant="primary" @click="open = true">
-      Open Modal
-    </TxButton>
-    <TxButton variant="ghost" @click="fullscreen = true">
-      Open fullscreen preview
-    </TxButton>
+    <TxButton variant="primary" @click="open = true">Open Modal</TxButton>
+    <TxButton variant="ghost" @click="fullscreen = true">Open fullscreen preview</TxButton>
 
     <TxModal v-model="open" title="Confirm sync settings" width="min(92vw, 520px)">
       <p>Use a modal for short confirmations or compact forms.</p>
@@ -49,16 +38,8 @@ code: |
 ---
 ::::
 
-### Best Practices
-
-- Keep modal work narrow: confirmation, one-step input, or a short decision. Use a drawer/page when content needs navigation, filtering, or long forms.
-- Prefer the default `title` header for accessible labeling. If you replace `header`, keep the title visible and avoid passing a stale `title` that no longer matches the custom header markup.
-- Put destructive or final actions in the `footer`; keep secondary actions visually quieter than the primary action.
-- Use responsive `width` values for docs and app surfaces because the content panel also has internal padding.
-- Reach for `fullscreen` only when the content itself owns the screen (image or diagram preview). It ignores `width`, drops the panel radius and shadow, and the body becomes the scrolling region — a short confirmation does not belong there.
-- Do not store long-running async state only inside modal content. If closing cancels work, model that cancellation in the parent.
-
 ### Fullscreen Panel
+`fullscreen` fills the visible viewport: the body scrolls, the header and footer stay fixed, and the footer clears the bottom safe area.
 
 ```vue
 <TxModal v-model="previewOpen" fullscreen :title="current?.name">
@@ -69,7 +50,13 @@ code: |
 </TxModal>
 ```
 
-`fullscreen` stretches the panel to the visible viewport (a `dvh` height where supported, so mobile browser chrome does not cover the footer). The panel becomes a header/body/footer column: the body takes the remaining space and scrolls, the bars stay put, and the footer's bottom padding carries `safe-area-inset-bottom`.
+### Best Practices
+
+- Limit a modal to a confirmation, one-step input, or short decision; use a drawer or page for navigation, filtering, or long forms.
+- With a custom `header`, keep a visible title and leave `title` empty, or `aria-labelledby` points at a missing element.
+- Put destructive or final actions in the `footer`, and keep secondary actions visually quieter than the primary one.
+- Use `fullscreen` only when the content owns the screen (image or diagram previews), never for a short confirmation.
+- Don't keep long-running async state only inside the modal content; if closing cancels work, model the cancellation in the parent.
 
 ## API Reference
 
@@ -77,45 +64,38 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `boolean` | required | Controls whether the dialog is visible. Used by `v-model`. |
-| `title` | `string` | `''` | Default header title. When present, the generated heading is linked with `aria-labelledby`. |
-| `width` | `string` | `'480px'` | Inline width applied to the content panel. Prefer responsive values such as `min(92vw, 520px)`. Ignored when `fullscreen` is set. |
-| `fullscreen` | `boolean` | `false` | Stretch the panel to the full visible viewport instead of centring a sized panel. |
+| `modelValue` | `boolean` | required | Whether the dialog is shown; used by `v-model`. |
+| `title` | `string` | `''` | Default header title; when set, it is linked through `aria-labelledby`. |
+| `width` | `string` | `'480px'` | Panel width; prefer responsive values such as `min(92vw, 520px)`. Ignored with `fullscreen`. |
+| `fullscreen` | `boolean` | `false` | Fills the visible viewport and drops the panel radius and shadow. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `(value: boolean)` | Emitted when the component requests visibility changes. |
-| `close` | `()` | Emitted after backdrop click, Escape, or close-button dismissal. |
+| `update:modelValue` | `(value: boolean)` | Fires when the component requests a visibility change. |
+| `close` | `()` | Fires after a backdrop click, Escape, or the close button. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `default` | - | Main dialog body. |
-| `header` | - | Replaces the generated title area while keeping the built-in close button. |
-| `footer` | - | Footer action row. Hidden when omitted. |
+| `default` | - | Dialog body. |
+| `header` | - | Replaces the title area; the built-in close button stays. |
+| `footer` | - | Footer actions; not rendered when omitted. |
 
 ## Overview
 
-- The overlay is mounted under `body`, receives a fresh z-index from the shared z-index manager on open, and is removed with `v-if` when closed.
-- The overlay exposes `role="dialog"`, `aria-modal="true"`, and `tabindex="-1"`.
-- With the default header and non-empty `title`, the dialog links `aria-labelledby` to the generated heading.
-- Opening focuses the overlay root. Closing or unmounting restores the element focused before opening.
-- Tab and Shift+Tab cycle inside the topmost visible modal. Keyboard ownership follows live dialog semantics and z-index, so disabling the focused submit button does not let the drawer underneath consume Escape; the next Tab returns focus to the modal even if the browser moved it to `body`.
-- Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
-- With `fullscreen`, the overlay keeps its dialog semantics, focus trap, Escape handling and focus restore; only the layout changes — the panel stretches to the visible viewport and its header/body/footer become a fixed-bar column with the body scrolling.
-- The fullscreen panel covers the whole overlay, so there is no backdrop region left to click: Escape and the close button are the dismissals. Keep a visible close affordance in the header or footer.
-- `TModal` forwards props, attrs, `update:modelValue`, `close`, and `default/header/footer` slots to `TxModal`.
+- The overlay teleports to `body`, takes a fresh layer from the shared z-index manager on open, and is removed with `v-if` on close.
+- The overlay is `role="dialog"` with `aria-modal="true"`; it takes focus on open and returns it to the previous element on close or unmount.
+- Tab and Shift+Tab cycle inside the topmost modal; even with focus on `body`, a drawer underneath doesn't react to Escape.
+- A backdrop click, Escape, and the close button emit `update:modelValue(false)`, then `close`.
+- `fullscreen` changes only the layout, not the dialog semantics or focus handling; it leaves no backdrop to click, so keep a visible close control in the header or footer.
+- `TModal` forwards props, attrs, events, and the `default` / `header` / `footer` slots to `TxModal`.
 
 ## Technologies
 
-- **Accessibility note:** `aria-labelledby` is generated only from the default `title` heading. If you provide a custom `header`, keep `title` empty unless that slot also renders an element with the generated id; otherwise the dialog can point at a missing label.
-- **Verified coverage:** `modal.test.ts` checks dialog semantics, title linkage, inline width, body/footer slots, focus restore on close/unmount, backdrop/Escape/close-button dismissal, custom header without title linkage, and `TModal` title forwarding.
-
-- Component sources: `packages/tuffex/packages/components/src/modal/src/TxModal.vue` and `TModal.vue`.
-- Export alias: `packages/tuffex/packages/components/src/modal/index.ts` exports installable `TxModal` and `TModal`; default export is `TxModal`.
-- Coverage: `packages/tuffex/packages/components/src/modal/__tests__/modal.test.ts` verifies dialog semantics, focus behavior, dismissal events, slots, and wrapper forwarding.
+- The fullscreen panel uses a `100dvh` height where supported, and its footer padding includes `safe-area-inset-bottom`.
+- Source: `packages/tuffex/packages/components/src/modal/` (`TxModal.vue` and the `TModal.vue` wrapper).
 
 <TuffDocSourceLink />

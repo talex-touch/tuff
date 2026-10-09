@@ -325,6 +325,12 @@ code: |
 | `icon` | `string` | - | Class of the leading icon, resolved by the host app's styles. |
 | `description` | `string` | - | Secondary text under the label. |
 
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Title content of the option row; falls back to `label`, then the value. |
+
 ### Types
 
 :::TuffCodeBlock{lang="ts"}

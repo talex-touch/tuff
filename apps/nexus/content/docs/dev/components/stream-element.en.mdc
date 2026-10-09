@@ -1,6 +1,6 @@
 ---
 title: "StreamElement"
-description: "A whole AI answer, streamed: Markdown or structured parts revealed word by word on one clock, citation chips, code and delegated tables, math and diagrams, with the stream state for the host's own UI"
+description: "An element that streams a whole AI answer."
 category: AiReasoning
 status: beta
 since: 0.6.3
@@ -23,18 +23,14 @@ code: |
 code: |
   import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
   import '@talex-touch/tuffex/stream-element/style.css'
-  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+  import '@talex-touch/tuffex/base.css' // once per app
 ---
 :::
 
 ## Usage
 
-`TxStreamElement` streams a whole answer. Pass everything received so far as `content` (Markdown) and keep `streaming` on while the source is live: headings, paragraphs, lists, quotes and code come in word by word, strictly in order, on one steady clock; `[n]` markers turn into citation chips resolved against `sources`; tables, math, diagrams, raw HTML and images are handed to `TxStreamMarkdown` and come in line by line.
-
-### An AI answer
-
-The answer streams in uneven bursts with one pause. The action row (thumbs through `TxMessageActions`' slot), the source stack and the follow-ups appear only once it is done, through the `footer` slot. Opening a chip names its source. Once it is done, Replay plays it back at the chosen pace, which is where `wordMs` sets the cadence; Regenerate or a follow-up streams a new one.
-
+### AI Answer
+`[n]` markers resolve against `sources` into citation chips; actions, sources, and follow-ups go in the `footer` slot and appear on `done`.
 :::TuffDemoWrapper{demo="StreamElementAnswerDemo" code-lang="vue"}
 ---
 code: |
@@ -54,10 +50,8 @@ code: |
 ---
 :::
 
-### Markdown it hands on
-
-A table, inline math and a task list around a code block: the native parts reveal word by word, the delegated ones line by line, all on the same clock. With complete content, `replay()` plays it back and `reserve` keeps everything below from moving.
-
+### Delegated Markdown
+Delegated parts such as tables and math reveal line by line on the same clock as native parts; `reserve` keeps content below still during playback.
 :::TuffDemoWrapper{demo="StreamElementMarkdownDemo" code-lang="vue"}
 ---
 code: |
@@ -68,10 +62,8 @@ code: |
 ---
 :::
 
-### Slots and state
-
-`parts` takes structure directly, including custom parts. Every built-in piece has a slot, and the slots, the `state-change` event, the instance's `state` and the `footer` slot all say where the stream is.
-
+### Slots and State
+`parts` takes structure directly; a `part-<name>` slot renders the custom part of that name.
 :::TuffDemoWrapper{demo="StreamElementSlotsDemo" code-lang="vue"}
 ---
 code: |
@@ -96,12 +88,11 @@ code: |
 
 ### Best Practices
 
-- Pass the whole answer so far, not the latest delta; the element works out what is new, and a rewrite of earlier text re-reveals only what changed.
-- Keep `streaming` true until the source has really finished: while it is true a half-written construct at the end (`**bold`, `` `code ``) is closed for the parser, so its markers never flash.
-- Put everything that belongs to a finished answer (actions, sources, follow-ups) in the `footer` slot behind `done`, so it arrives once, after the last word. The answer's box ends at its last part, with no margin after it, so give the footer its own top spacing.
-- Copy and share the full answer you hold, never what is on screen: the display trails the source by up to `maxLagMs`.
-- Give `sources` in the order the model cites them: `[n]` resolves to `sources[n - 1]`, and a marker without a source stays text.
-- Use `TxStreamText` for a single run of text and `TxStreamMarkdown` when you do not need the word-by-word reveal; this element is for whole answers.
+- Pass the whole answer so far, not the latest delta.
+- Keep `streaming` true until the source has really finished, so a half-written `**bold` or `` `code `` at the end is closed and its markers never flash.
+- Put what belongs to a finished answer (actions, sources, follow-ups) in the `footer` slot behind `done`; the answer has no bottom margin, so space the footer yourself.
+- Copy and share the full answer you hold, never what is on screen.
+- Use `TxStreamText` for a single run of text and `TxStreamMarkdown` when you don't need the word-by-word reveal.
 
 ## API Reference
 
@@ -109,54 +100,47 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `content` | `string` | `''` | Markdown: everything received so far. |
-| `parts` | `StreamPart[]` | — | Structured alternative to `content`; wins over it. |
+| `content` | `string` | `''` | All the Markdown received so far. |
+| `parts` | `StreamPart[]` | — | Structured alternative to `content`; wins when both are set. |
 | `streaming` | `boolean` | `false` | The source is still producing. |
-| `sources` | `AiSourceItem[]` | — | Resolves `[n]` markers in text into citation chips (`sources[n - 1]`). |
-| `wordMs` | `number` | `24` | Release one word every `wordMs`. |
-| `maxLagMs` | `number` | `600` | Speed up so no word shows later than this after it arrived. |
-| `drainMs` | `number` | `320` | Once `streaming` turns false, release the rest within this. |
-| `pauseMs` | `number` | `400` | Report `paused` after this long without a new word. |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How a word enters; code keeps its syntax colour. |
-| `caret` | `boolean` | `true` | Show the stream caret at the write head while live. |
-| `reserve` | `boolean` | `false` | Hold the final layout while complete content plays back: an invisible copy, and from `replay()` the height the answer already has, since delegated parts render a frame late. Ignored while `streaming`. |
-| `renderers` | `Record<string, Component>` | — | Components for custom parts, by name; the `part-<name>` slot wins over them. |
-| `markdownProps` | `Partial<StreamMarkdownProps>` | — | Forwarded to the `TxStreamMarkdown` blocks that render delegated parts. |
-| `locale` | `string` | `'zh'` | Word segmentation locale for `Intl.Segmenter`. |
+| `sources` | `AiSourceItem[]` | — | In the order the model cites them; `[n]` resolves to a chip for `sources[n - 1]`. |
+| `wordMs` | `number` | `24` | Releases one word every `wordMs`. |
+| `maxLagMs` | `number` | `600` | No word shows later than this after it arrives. |
+| `drainMs` | `number` | `320` | Once `streaming` turns false, releases the rest within this. |
+| `pauseMs` | `number` | `400` | Reports `paused` after this long without a new word. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How a word enters, with `TxStreamText`'s presets; code keeps its syntax color. |
+| `caret` | `boolean` | `true` | Shows the caret at the write head while live. |
+| `reserve` | `boolean` | `false` | Holds the final layout during playback, plus the answer's current height from `replay()`; ignored while `streaming`. |
+| `renderers` | `Record<string, Component>` | — | Components for custom parts, by name; a `part-<name>` slot wins. |
+| `markdownProps` | `Partial<StreamMarkdownProps>` | — | Forwarded to the `TxStreamMarkdown` that renders delegated parts. |
+| `locale` | `string` | `'zh'` | Locale for `Intl.Segmenter` word segmentation. |
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `state-change` | `(state: StreamState)` | The stream moved to another state. |
-| `done` | — | Once per play-through, when the last word is shown and the source has finished. |
-| `cite` | `(source: AiSourceItem)` | A citation chip was opened. The chip never navigates by itself. |
+| `state-change` | `(state: StreamState)` | Fires when the stream changes state. |
+| `done` | — | Fires once per play-through, when the last word shows and the source has finished. |
+| `cite` | `(source: AiSourceItem)` | Fires when a citation chip opens; the chip never navigates. |
 
 ### Slots
 
 | Name | Scope | Description |
 |------|-------|-------------|
-| `caret` | `{ state }` | Replaces the stream caret, at the write head of text and code. |
+| `caret` | `{ state }` | Replaces the caret at the write head of text and code. |
 | `citation` | `{ source, label, index }` | Replaces a citation chip. |
 | `inline` | `{ name, props }` | Renders a custom inline inside text. |
-| `code` | `{ part, code, streaming }` | Replaces a code block; `code` is what has been revealed so far. |
+| `code` | `{ part, code, streaming }` | Replaces a code block; `code` is what has been revealed. |
 | `part-<name>` | `{ part, state }` | Renders `{ type: 'custom', name }` parts. |
-| `footer` | `{ state, done }` | Below the answer; `done` once the last word is shown and the source has finished. |
+| `footer` | `{ state, done }` | Below the answer; `done` once the last word shows and the source has finished. |
 
 ### Exposed Methods
 
 | Name | Type | Description |
 |------|------|-------------|
-| `state` | `StreamState` | Where the stream is. |
+| `state` | `StreamState` | The current stream state. |
 | `replay` | `() => void` | Plays the whole answer again from the first word. |
 | `skip` | `() => void` | Shows everything now, without entrances. |
-
-### CSS Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `--tx-stream-reveal-1` / `-2` / `-3` | blue / violet / pink, per theme | The colour stops a word sweeps through (shared with `TxStreamText`). |
-| `--tx-stream-reveal-duration` | the preset's | Written by the element onto its root from `reveal`; hosts do not set it. |
 
 ### Types
 
@@ -175,36 +159,37 @@ code: |
 ---
 :::
 
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-stream-reveal-1` / `-2` / `-3` | blue / violet / pink, per theme | The sweep's color stops, shared with `TxStreamText`. |
+| `--tx-stream-reveal-duration` | the preset's | Written onto the root from `reveal`; hosts do not set it. |
+
 ## Overview
 
-- **One clock.** The element owns the only pacer. Every part is laid out on it in document order — text by words (the units `TxStreamText` releases), code by words (`TxCodeStream`'s), delegated Markdown by lines, a rule or a custom part as one unit — and each part receives the prefix of itself the clock has reached. So parts reveal strictly in order at one steady cadence, bursts come out as a quicker flow, and the whole answer never trails the source by more than `maxLagMs`.
-- **The write head.** Only the part holding the last revealed word streams and shows the caret. The caret moves on to the next part with its first word, and the part it leaves has its caret switched off, which removes it at once, so the answer never shows two; the last caret retracts as the answer ends.
-- **Rendered natively:** headings, paragraphs, strong, emphasis, strikethrough, inline code, links (safe URLs only), lists (nested, task), quotes, rules and fenced code (through `TxCodeStream`). **Delegated whole** to `TxStreamMarkdown`, with its sanitising and remote-image policy: tables, math, mermaid, raw HTML and images; neighbouring delegated blocks form one part.
-- **Citations.** `[n]` becomes a chip only in plain text, never inside code or link text, and only when `sources[n - 1]` exists.
-- **A new part enters too.** A part mounts with the words already due and plays their entrance, so a burst that crosses into a new paragraph never pops its first words in. Content present when the element mounts shows at once.
-- **Stable parts.** Parts are keyed by position and type: an unchanged part keeps its element and its content's identity across new tokens, so a token re-renders only the part it lands in; a part that changes type (a paragraph becoming a setext heading) remounts once, settled.
-- **States.** `idle` → `streaming` → `paused` → `draining` → `done`, emitted, exposed and passed to the `footer` slot.
-- **Reduced motion.** No entrances and no pacing: everything shows as it arrives, and the caret rests.
-- **Server rendering.** Rendered as plain text with no animated elements and no timers.
-- **Accessibility.** The root carries `aria-busy="true"` while the stream is live; the caret and the `reserve` copy are hidden from assistive technology, the copy also `inert`; citation chips are links with their source's name.
+- Pacing, states, incremental reveal, and degradation match [StreamText](./stream-text.en.mdc); all parts sit on one clock in document order.
+- Rendered natively, word by word: headings, paragraphs, emphasis, strikethrough, inline code, safe links, lists (nested, task), quotes, rules, and fenced code (`TxCodeStream`).
+- Tables, math, mermaid, raw HTML, and images are delegated whole to `TxStreamMarkdown`, with its sanitizing and remote-image policy, and reveal line by line; neighboring delegated blocks form one part.
+- The caret sits only at the write head: one per answer at any time, retracting when the answer ends.
+- `[n]` becomes a citation chip (a link named after its source) only in plain text, never in code or link text; without a matching source it stays text.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/stream-element/src/TxStreamElement.vue`; Markdown to parts in `parse.ts`, the clock layout in `plan.ts`, types in `types.ts`.
-- Built on the family: `TxStreamText` (with its shared unit model `stream-text/src/model.ts`), `TxCodeStream` (streaming mode, code units in `code-stream/src/units.ts`), `TxStreamMarkdown` for delegated parts, and the pacer `use-stream-pacer.ts`.
-- **Tested behaviour:** `stream-element/__tests__/parse.test.ts` (6 cases: the native subset, nested and task lists, delegation with neighbours grouped, citations only in text, closing a half-written construct while streaming, an open fence), `plan.test.ts` (4: one clock in document order, keys by position and type, model reuse across parses, line ends), `stream-element.test.ts` (14: content at mount, in-order reveal with one write head, a new part's first word, entrances in a catch-up, only the write head re-rendering as the clock ticks, a caret dropped at once as the write head moves on and the last one retracting, code and delegated Markdown, citation chips and `cite`, state events, `replay` with `reserve` and `skip`, the answer's height held through a `reserve` replay, custom parts through `renderers`, reduced motion, SSR) and `stream-element-slots.test.ts` (6: the caret slot at the write head, citation and inline slots, the code slot, custom parts and the footer, following the host when a slot comes or goes, `caret: false`).
+- Built on `TxStreamText`, `TxCodeStream`, and `TxStreamMarkdown`: `parse.ts` turns Markdown into parts and `plan.ts` lays them on the clock.
+- Source: `packages/tuffex/packages/components/src/stream-element/`.
 
 <TuffDocSourceLink />
 
 ## Use cases
 
-- A chat reply or an assistant panel answer, with sources, code and follow-ups.
-- A generated report or summary that mixes prose, lists, tables and formulas.
-- Replaying a stored answer at a readable pace in a card or a demo, with `reserve`.
+- A chat reply or assistant panel answer, with sources, code, and follow-ups.
+- A generated report that mixes prose, lists, tables, and formulas.
+- Replaying a stored answer in a card or demo, with `reserve`.
 
 ## Related components
 
 - [StreamText](./stream-text.en.mdc) streams one run of text; the element is built on it.
-- [CodeStream](./code-stream.en.mdc) renders the element's code parts.
+- [CodeStream](./code-stream.en.mdc) renders its code parts.
 - [StreamMarkdown](./stream-markdown.en.mdc) renders its delegated parts.
-- [Sources](./sources.en.mdc), [MessageActions](./message-actions.en.mdc) and [SuggestionChips](./suggestion-chips.en.mdc) finish an answer in the `footer` slot.
+- [Sources](./sources.en.mdc), [MessageActions](./message-actions.en.mdc), and [SuggestionChips](./suggestion-chips.en.mdc) finish an answer in the `footer` slot.

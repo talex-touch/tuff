@@ -1,6 +1,6 @@
 ---
 title: "ImageGeneration"
-description: "WebGL pixel-mosaic placeholder for generated or slow-loading images, with a dissolve reveal and an in-place regenerate churn"
+description: "A WebGL pixel-mosaic placeholder for generated or slow-loading images."
 category: Effects
 status: beta
 since: 0.6.2
@@ -11,8 +11,10 @@ verified: true
 
 ## Usage
 
-`TxImageGeneration` wraps one element and paints a churning pixel-mosaic shader inside it while an image is being made or loaded, then dissolves into the real image. It requires `three` as a peer dependency.
+Wraps one element, paints a shader inside it, and dissolves into the image once it is ready. Requires the `three` peer dependency (`>=0.149.0`).
 
+### Presets
+`preset` picks the effect; `images` is the pool to reveal from.
 :::TuffDemoWrapper{demo="ImageGenerationShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -39,9 +41,8 @@ code: |
 ---
 :::
 
-### Loading flag with a known image
-
-When the card stays mounted after the job ends, pause it while waiting and reveal through the exposed handle.
+### Loading Flag with a Known Image
+When the card stays mounted after the job ends, reveal or hide the image through the ref. Trigger the reveal after the new `images` reach the component, and leave `paused` unset.
 
 ```vue
 <script setup lang="ts">
@@ -50,6 +51,7 @@ import { ref, watch } from 'vue'
 const props = defineProps<{ generating: boolean, src: string }>()
 const cell = ref()
 
+// flush: 'post' fires after the component has the new images.
 watch(() => props.generating, (generating) => {
   // Generating: fade any shown image back to the shader.
   // Done: reveal the image and hold it until the next run.
@@ -57,19 +59,18 @@ watch(() => props.generating, (generating) => {
     cell.value?.triggerHide()
   else
     cell.value?.triggerReveal({ hold: 'manual' })
-})
+}, { flush: 'post' })
 </script>
 
 <template>
-  <TxImageGeneration ref="cell" :images="[props.src]" :paused="props.generating" role="img" :aria-label="props.generating ? 'Generating image' : 'Result'" :aria-busy="props.generating">
+  <TxImageGeneration ref="cell" :images="[props.src]" role="img" :aria-label="props.generating ? 'Generating image' : 'Result'" :aria-busy="props.generating">
     <div style="width: 320px; height: 200px; border-radius: 12px" />
   </TxImageGeneration>
 </template>
 ```
 
-### Regenerate and variants
-
-`triggerRegenerate()` only runs while an image is showing: the image breaks into the cell grid, churns, and the next image from the pool dissolves in.
+### Regenerate
+`triggerRegenerate()` works only while an image is showing: the image breaks into cells, churns, and the next image from the pool dissolves in.
 
 ```vue
 <script setup lang="ts">
@@ -91,11 +92,10 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 ### Best Practices
 
 - Give the wrapped child an explicit width and height; the wrapper is `inline-block` and sizes itself to the child.
-- Pass a **pool** (`images`) before triggering a reveal — with an empty pool every trigger is a silent no-op.
-- Only animate while working: `:paused="!isGenerating"`. Never pause for the card's whole lifetime, or the image never appears.
-- `prefers-reduced-motion` is not handled by the library: gate it yourself (`:paused="reduced && generating"`) and keep the paused state scoped to the waiting window.
-- Serve reveal images same-origin or with CORS headers; cross-origin images still reveal, but `triggerRegenerate()` cannot sample their colours and falls back to the preset palette.
-- Use `sweep-gradient` with a lower `strength` for quiet grid tiles; keep the pixel mosaics for the hero or result surface.
+- Pass `images` before triggering a reveal; with an empty pool every trigger is a silent no-op.
+- As a placeholder that never reveals an image, animate only while working (`:paused="!isGenerating"`). When it does reveal one, leave `paused` unset: a paused card silently ignores reveals.
+- Serve reveal images same-origin or with CORS headers; cross-origin images still reveal, but `triggerRegenerate()` can't sample their colors and falls back to the preset palette.
+- Use `sweep-gradient` with a lower `strength` for quiet grid tiles; keep the pixel mosaics for the main result.
 
 ## API Reference
 
@@ -103,23 +103,29 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `preset` | `'pixels-organic' \| 'pixels-mechanic' \| 'sweep-gradient'` | `'pixels-organic'` | The bundled effect: soft mosaic, grid-locked mosaic, or a diagonal sweep. |
-| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Theme resolution; `auto` follows the OS live. |
-| `strength` | `number` | `1` | 0-1 scales the canvas opacity; above 1 the palette intensity is boosted instead. |
-| `speed` | `number` | `1` | Scales the effect's whole clock (drift, churn, flicker). |
-| `pixelScale` | `number` | `1` | On-screen pixel-cell size multiplier; the reveal dissolve stays in lockstep. |
-| `cardBg` | `string` | preset default | Card background; also parsed to an opaque RGB for the shader's contrast logic. |
+| `preset` | `'pixels-organic' \| 'pixels-mechanic' \| 'sweep-gradient'` | `'pixels-organic'` | Bundled effect: soft mosaic, grid-locked mosaic, or diagonal sweep. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Theme; `auto` follows the page or OS theme live. |
+| `strength` | `number` | `1` | 0–1 scales canvas opacity; above 1 it boosts the palette instead. |
+| `speed` | `number` | `1` | Scales the whole effect clock (drift, churn, flicker). |
+| `pixelScale` | `number` | `1` | Pixel-cell size multiplier; the reveal dissolve stays in step. |
+| `cardBg` | `string` | preset default | Card background, also used for the shader's contrast logic. |
 | `colors` | `(string \| null \| undefined)[]` | preset palette | Palette override, one entry per shader slot. |
-| `images` | `string \| string[]` | `[]` | Reveal pool; a random pick that never repeats the previous one. |
-| `autoReveal` | `boolean` | `false` | Runs shader → reveal → hold → hide on its own. |
-| `revealDelayRange` | `[number, number]` | `[2, 4]` | Random shader-only delay in seconds between reveals. |
-| `revealInitialDelay` | `number \| [number, number]` | jitter | One-time delay before the very first reveal. |
-| `revealHoldMs` | `number \| [number, number]` | `2000` | Time the image stays visible before the hide fade. |
-| `revealFadeOutMs` | `number` | `300` | Cross-fade back to the shader. |
+| `images` | `string \| string[]` | `[]` | Reveal pool; picks at random, never repeating the previous image. |
+| `autoReveal` | `boolean` | `false` | Loops shader → reveal → hold → hide on its own. |
+| `revealDelayRange` | `[number, number]` | `[2, 4]` | Random delay between reveals, in seconds. |
+| `revealInitialDelay` | `number \| [number, number]` | jitter | One-time delay before the first reveal. |
+| `revealHoldMs` | `number \| [number, number]` | `2000` | How long the image stays fully visible. |
+| `revealFadeOutMs` | `number` | `300` | Fade back to the shader. |
 | `borderRadius` | `number` | auto-detected | Card corner radius in CSS px. |
-| `paused` | `boolean` | `false` | Freezes the shader and the reveal scheduler. |
-| `fragmentShader` | `string` | bundled | Replacement GLSL 1.00 fragment shader; shared page-wide while set. |
-| `excludeSrcs` | `() => string[] \| Set<string> \| null` | none | Sources this pick must avoid, for coordinating instances that share a pool. |
+| `paused` | `boolean` | `false` | Freezes the shader and auto-reveal; reveal, hide, and regenerate do nothing while paused. |
+| `fragmentShader` | `string` | bundled | Replacement GLSL 1.00 fragment shader; applies page-wide while set. |
+| `excludeSrcs` | `() => string[] \| Set<string> \| null` | none | Sources this pick must avoid, for instances sharing a pool. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `cycle` | `ImageGenerationCycleEvent` | Auto-reveal phase changes (`idle` → `reveal` → `visible` → `hide`). |
 
 ### Slots
 
@@ -127,43 +133,28 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 |------|------|-------------|
 | `default` | - | The card element the effect sizes itself to. |
 
-### Events
-
-| Event | Payload | Description |
-|------|------|-------------|
-| `cycle` | `ImageGenerationCycleEvent` | Auto-reveal phase transitions (`idle` → `reveal` → `visible` → `hide`). |
-
 ### Exposed Methods
 
 | Method | Description |
 |------|-------------|
-| `triggerReveal({ hold?: 'auto' \| 'manual' })` | One reveal pass; no-op while a pass is running or `images` is empty. |
-| `triggerHide()` | Fades a revealed image back to the shader; no-op when nothing is showing. |
-| `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | Breaks the shown image into cells and churns before the next one dissolves in; no-op unless an image is showing. |
-| `isImageActive()` | `true` while an image is revealing, visible or hiding. |
-
-### CSS Variables
-
-None. The effect paints on its own canvases.
+| `element` | The root wrapper `<div>` (`HTMLDivElement`); `null` while unmounted. |
+| `triggerReveal({ hold?: 'auto' \| 'manual' })` | Runs one reveal, held until `triggerHide()` with `manual`; no-op mid-pass or with empty `images`. |
+| `triggerHide()` | Fades the image back to the shader; no-op when nothing is showing. |
+| `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | Breaks the shown image into churning cells, then dissolves in the next; no-op unless an image is showing. |
+| `isImageActive()` | `true` while an image is revealing, visible, or hiding. |
 
 ## Overview
 
-- One shared `THREE.WebGLRenderer` and one WebGL context serve the whole page; each card copies its frame into its own 2D canvas.
-- Frame rate is capped at 10 fps, the GL canvas at a device-pixel-ratio cap of 1.25, the visible canvas at 2.
-- Cards pause offscreen (`IntersectionObserver`, 64 px margin) and the animation loop stops when no card is active; WebGL context loss is handled.
-- Decoded images are cached by URL across cards and drawn like `object-fit: cover`, centre-cropped.
-- The wrapper takes its corner radius from the child's computed `border-top-left-radius` and applies it to all four corners.
+- One shared `THREE.WebGLRenderer` and WebGL context serve the whole page; each card copies its frame into its own 2D canvas.
+- Frame rate is capped at 10 fps, the GL canvas at a device pixel ratio of 1.25, and the visible canvas at 2.
+- Cards pause offscreen (`IntersectionObserver`, 64 px margin), the loop stops when no card is active, and WebGL context loss is handled.
+- Decoded images are cached by URL across cards and drawn like `object-fit: cover`, center-cropped.
+- The corner radius comes from the child's computed `border-top-left-radius` and applies to all four corners.
+- `prefers-reduced-motion` is not handled; wire it yourself when needed, such as `:paused="reduced && generating"`.
 
 ## Technologies
 
-- Manually verified against `index.ts`, `TxImageGeneration.vue`, `types.ts` and `image-generation.test.ts` under `packages/tuffex/packages/components/src/image-generation/`.
-- The `engine/**` and `presets/**` trees are verbatim ports of upstream `img-fx` (MIT © Jakub Antalik) with strict-TS index hardening only.
-- Requires `three` (peer dependency, `>=0.149.0`), used exactly as upstream does.
-- The Vue shell mirrors the upstream wrapper's reveal cycle, imperative handle semantics and resize behaviour.
-
-- Component source: `packages/tuffex/packages/components/src/image-generation/src/TxImageGeneration.vue`.
-- Types: `packages/tuffex/packages/components/src/image-generation/src/types.ts`.
-- Upstream: [Jakubantalik/Libraries · img-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/img-fx) (MIT).
-- **Coverage:** `packages/tuffex/packages/components/src/image-generation/__tests__/image-generation.test.ts` verifies preset resolution, image-pool normalisation, the strength branches and the handle's no-op guards.
+- `engine/**` and `presets/**` are ported from [Jakubantalik/Libraries · img-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/img-fx) (MIT © Jakub Antalik).
+- Source: `packages/tuffex/packages/components/src/image-generation/`.
 
 <TuffDocSourceLink />

@@ -122,6 +122,20 @@ code: |
 | `actions` | `{ send, disabled }` | Adds content before the send button. |
 | `footer` | - | Content inside the card, below the action row. |
 
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ChatComposerAttachment {
+    id: string // chip key
+    label: string // chip text; truncated with an ellipsis
+    kind?: string // type tag after the text, shown in uppercase
+    pending?: boolean // still processing; tints the chip amber
+  }
+---
+:::
+
 ### CSS Variables
 
 | Variable | Default | Description |

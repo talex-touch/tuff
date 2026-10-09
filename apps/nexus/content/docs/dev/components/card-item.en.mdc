@@ -1,6 +1,6 @@
 ---
 title: "CardItem"
-description: "Compact list row with optional avatar media, text, right-side actions, active state, and explicit click handling."
+description: "A compact list row with avatar, text, and trailing actions."
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Use the `right` slot for switches, chevrons, metadata, or secondary status. The row itself does not emit clicks unless `clickable` is enabled.
-
+### Basic
+Put switches, chevrons, or metadata in the `right` slot; the row emits no clicks unless `clickable` is set.
 ::::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
 ---
 code: |
@@ -35,12 +35,11 @@ code: |
 
 ### Best Practices
 
-- Set `clickable=true` only when the row itself performs an action. If only the `right` slot is interactive, keep the row non-clickable.
-- Override `--tx-card-item-hover-bg` when the rows sit on a dark, translucent surface. The default washes `--tx-bg-color-overlay` at 18%, and under the dark theme that token is `#1d1e1f` itself — a dark wash on a dark panel, which reads as no hover at all. Point it at a semantic surface colour of the host rather than fighting the component's rule with `:deep`.
-- Pass an explicit `role` when a clickable row is not already inside a semantic list or menu.
-- Use `avatar` slot for complex media. Use `avatarUrl`, `iconClass`, or `avatarText` for simple, generated media.
-- Keep the `right` slot compact; long controls can collapse the title area.
-- Avoid duplicating row navigation and switch toggles on the same click target. Separate row click behavior from right-slot controls.
+- Set `clickable` only when the row itself performs an action; if only the `right` slot is interactive, keep the row non-clickable.
+- Pass a `role` (`button`, `menuitem`, or `option`) when a clickable row isn't inside a semantic list or menu.
+- Use `avatarUrl`, `iconClass`, or `avatarText` for simple media and the `avatar` slot for complex media.
+- Keep the `right` slot compact; long controls squeeze the title.
+- On a dark, translucent panel, point `--tx-card-item-hover-bg` at the host's surface color instead of overriding the rule with `:deep`.
 
 ## API Reference
 
@@ -48,55 +47,47 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `role` | `string` | `undefined` | ARIA role applied only when `clickable=true`. Pass `button`, `menuitem`, or `option` when the row needs explicit semantics. |
-| `title` | `string` | `''` | Primary single-line label when the `title` slot is not used. |
-| `subtitle` | `string` | `''` | Secondary single-line label below the title. |
-| `description` | `string` | `''` | Supporting copy rendered below the top row. |
-| `iconClass` | `string` | `''` | Icon class rendered in the avatar area when no avatar URL is provided. |
-| `avatarText` | `string` | `''` | Text fallback rendered in the avatar area when no image or icon is provided. |
-| `avatarUrl` | `string` | `''` | Image URL rendered before icon or text avatar fallbacks. |
-| `avatarSize` | `number` | `36` | Avatar box size in pixels. |
-| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Avatar corner style. `rounded` uses a 12px radius. |
-| `clickable` | `boolean` | `false` | Enables pointer cursor, focusability, and mouse / Enter activation. |
-| `active` | `boolean` | `false` | Applies the selected visual state. |
-| `disabled` | `boolean` | `false` | Disables focus and click / keyboard activation. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `avatar` | - | Replaces the generated image / icon / text avatar area. |
-| `title` | - | Replaces the primary title content. |
-| `subtitle` | - | Replaces the subtitle content. |
-| `description` | - | Replaces the supporting description content. |
-| `right` | - | Renders actions or trailing metadata on the right side of the top row. |
+| `role` | `string` | `undefined` | ARIA role on the root; there is no default. |
+| `title` | `string` | `''` | Primary label, truncated to one line. |
+| `subtitle` | `string` | `''` | Secondary label below the title, truncated to one line. |
+| `description` | `string` | `''` | Supporting text below the top row; wraps. |
+| `iconClass` | `string` | `''` | Icon class for the avatar area. |
+| `avatarText` | `string` | `''` | Text for the avatar area. |
+| `avatarUrl` | `string` | `''` | Avatar image; takes priority over icon and text. |
+| `avatarSize` | `number` | `36` | Avatar size in px. |
+| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Avatar shape; `rounded` uses a 12px radius. |
+| `clickable` | `boolean` | `false` | Enables the pointer cursor, focus, and click / Enter / Space activation. |
+| `active` | `boolean` | `false` | Selected state. |
+| `disabled` | `boolean` | `false` | Blocks focus and activation, and sets `aria-disabled`. |
+| `tabindex` | `number` | `undefined` | Overrides the automatic tab stop (`0` when clickable); listbox hosts pass `-1`. |
+| `align` | `'start' \| 'center'` | `'start'` | Cross-axis alignment of the columns; use `center` for single-line rows. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `click` | `MouseEvent` | Emitted on mouse click when `clickable=true` and not disabled. Enter activation uses the same event channel at runtime. |
+| `click` | `MouseEvent` | Fires on click, Enter, or Space when the row is clickable and not disabled. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `avatar` | - | Replaces the generated avatar. |
+| `title` | - | Replaces the title. |
+| `subtitle` | - | Replaces the subtitle. |
+| `description` | - | Replaces the description. |
+| `right` | - | Actions or metadata at the right of the top row. |
 
 ## Overview
 
-- `align="center"` puts the row's columns on one centre line, which is what a single-line list row wants: a taller leading column — a caret, a checkbox, an avatar — otherwise pins the label to the top of the row. The default stays `start`, because a card whose text wraps to several lines should align with the top of its media column.
-
-- The left media column is omitted when there is no `avatar` slot, `avatarUrl`, `iconClass`, or `avatarText`.
-- Generated avatar priority is `avatarUrl` first, then `iconClass`, then `avatarText`.
-- `tabindex="0"` is applied only when `clickable=true` and `disabled=false`.
-- `role` is also applied only when `clickable=true`; there is no implicit default role.
-- `disabled=true` adds the disabled class, removes focusability, and suppresses mouse and Enter activation.
-- The hover fill reads `--tx-card-item-hover-bg` and the active fill reads `--tx-card-item-active-bg`. Their defaults are 18% of `--tx-bg-color-overlay` and 8% of `--tx-color-primary`, so an unset row renders pixel for pixel what it did before. Border colours are not overridable and still come from `--tx-border-color-light` / `--tx-color-primary`.
-- Text areas use single-line ellipsis for `title` and `subtitle`; `description` can wrap.
-- Hovering an `active` row deepens its accent rather than replacing it with the neutral hover fill: the hover rule outranks the active rule on its own, so a selected row used to lose its highlight under the pointer.
+- Without an `avatar` slot, `avatarUrl`, `iconClass`, or `avatarText`, the left media column is omitted.
+- A clickable, enabled row gets `tabindex="0"`; there is no implicit `role`.
+- Only Enter / Space on the row itself activate it; key presses in `right`-slot controls pass through.
+- Hovering an active row deepens its accent instead of swapping in the neutral hover fill.
+- Hover and active fills read `--tx-card-item-hover-bg` / `--tx-card-item-active-bg`, defaulting to 18% of `--tx-bg-color-overlay` and 8% of `--tx-color-primary`; border colors aren't overridable.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`, `types.ts`, and `card-item.test.ts`.
-- **Verified coverage:** `card-item.test.ts` covers text and icon rendering, avatar CSS variables, image-over-icon/text priority, named slots, clickable mouse/Enter emits, disabled blocking, the no-left layout, and that the two overridable surface variables still fall back to their original formulas.
-- Accessibility note: a clickable row gets focusability but no implicit role. Supply the semantic role that matches the surrounding interaction pattern, and keep interactive controls in `right` outside the row click target.
+- Source: `packages/tuffex/packages/components/src/card-item/`.
 
-- Component source: `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`.
-- Types: `packages/tuffex/packages/components/src/card-item/src/types.ts` exports `CardItemProps` and `CardItemAvatarShape`.
-- Coverage: `packages/tuffex/packages/components/src/card-item/__tests__/card-item.test.ts` verifies generated media, slots, keyboard activation, disabled state, and layout fallbacks.
 <TuffDocSourceLink />
