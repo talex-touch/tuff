@@ -1,6 +1,6 @@
 ---
 title: Dashboard
-description: A product analytics board of KPI cards, a per-platform trend, platform share, service health and a top-plugins table
+description: A product analytics board with KPI cards, a trend chart, and a plugin table.
 category: TemplateData
 status: beta
 since: 0.6.0
@@ -12,8 +12,7 @@ verified: false
 ## Usage
 
 ### Tuff Pulse board
-
-:::TuffDemoWrapper{demo="TemplateDashboardDemo" code-lang="vue" title="Tuff Pulse board" description="The range switch, the date picker, brushing the chart and the legend all recompute the KPI cards, share bar and plugin table. All figures are sample data."}
+:::TuffDemoWrapper{demo="TemplateDashboardDemo" code-lang="vue" description="Range, dates, brushing, and the legend recompute the whole board. Sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -101,10 +100,8 @@ code: |
 :::
 
 ### Ops wall
-
-For screens that are watched rather than worked: launch duty, a live event, an ops or support centre. Unlike the analytics board above, it has no time range, date picker or table, only the present: who is online, where searches go, service health and what just happened. It does not follow the site theme either; the template root sets `data-theme="dark"`, so it stays a dark screen on the light docs page. Every figure is sample data.
-
-:::TuffDemoWrapper{demo="TemplateDashboardOpsDemo" code-lang="vue" title="Ops wall" description="Goes live once it scrolls into view: figures roll, events stream in, the focus card rotates, cloud sync in Tokyo degrades at 18 seconds and recovers at 30. Pause it at any time. All figures are sample data."}
+A dark, real-time screen for watching rather than working: no filters or table, only the present, and no site theme.
+:::TuffDemoWrapper{demo="TemplateDashboardOpsDemo" code-lang="vue" description="Goes live in view, and cloud sync in Tokyo degrades and recovers; pause it at any time. Sample data."}
 ---
 code: |
   <script setup lang="ts">
@@ -167,43 +164,37 @@ code: |
 
 ## Overview
 
-The analytics board a launcher team keeps open. The top shows how daily actives, CoreBox searches, AI requests and plugin installs are moving; below that sit search share by platform, backend service health, this month's AI usage and the most-installed plugins. Every figure follows one time range, so changing the range, picking dates or brushing the chart recomputes the whole page.
+The analytics board a launcher team keeps open; every figure follows one time range, and changing the range, the dates, or the brushed span recomputes the page.
 
-It fits any operations back office that shows the big picture first and then lets people dig in: a SaaS console, a plugin-market admin, an internal metrics page.
-
-The second style, Ops wall, is the screen left on the wall on launch day: nothing to filter, figures rolling in real time, dark all the time.
-
-- Switch between 7, 30 and 90 days, or pick a span in the date picker: the KPI figures roll to their new values, and each change is measured against the period of the same length just before. Up to seven days is drawn by the hour, anything longer by the day.
-- Drag across the trend chart to zoom into that span. The KPI cards, legend, share bar and plugin table then count only those days; the "Zoomed" pill beside the title restores the full range.
-- Click a legend item to hide or show a platform, and hover one to fade the other two lines. With the pointer inside Platform share, the chart singles out the selected platform; clicking another segment switches it.
-- Sort the plugin table by installs or crash-free rate from the header. The trend column always holds 24 samples, so a range change morphs the lines instead of redrawing them.
-- The charts start drawing once the template scrolls into view, so the entrance animation is actually seen. This is an interactive template; nothing plays by itself.
-- Wide (≥ 960px) adds the crash-rate card, a large legend with values and the insight cards. Narrow (< 640px) puts the KPI cards in two columns, drops the side rail under the chart and trims the table to plugin, installs and trend.
-- Ops wall: it goes live once it scrolls into view. KPIs roll every 2 seconds, an event streams in every 3, cities update every 4, the focus card turns every 8 and the sankey moves to a new window every 12. At 18 seconds cloud sync in Tokyo degrades (the map bubble and the health light turn orange and the top bar reads 6/7) and at 30 it recovers. Scroll the template away or switch tabs and it stops updating.
-- Ops wall: click Live to pause every update and again to resume; resting the pointer on the focus card, the sankey or the event list holds that part. Page the focus card with ‹ › and the rotation leaves it to you; click Shanghai or Hangzhou on the map to jump to East China. With reduced motion the wall shows one still snapshot and starts no timer.
-- Ops wall: the whole screen is dark whether the site is light or dark. In the docs column it fills the stage exactly with no scrolling; wide (≥ 960px) shows six KPIs and taller map and sankey, with values on the nodes; narrow (< 640px) is one scrolling column with the KPIs in two.
+- Switch 7, 30, or 90 days or pick dates: KPI figures roll to new values, compared with the same-length period just before; up to seven days draws by the hour.
+- Drag across the trend chart to zoom, and the whole page counts only that span; the Zoomed pill restores the full range.
+- Click a legend item to hide or show a platform; sort the plugin table by installs or crash-free rate, and its trend column morphs when the range changes.
+- Charts start drawing once in view, and nothing plays by itself; wide (≥ 960px) adds the crash-rate and insight cards, and narrow (< 640px) puts KPIs in two columns and trims the table to three.
+- Ops wall: it goes live once in view, and cloud sync in Tokyo degrades at 18 seconds and recovers at 30; it stops updating when scrolled away or in a background tab.
+- Ops wall: Live pauses every update, and the pointer on the focus card, sankey, or event list holds that part; reduced motion shows one still snapshot.
+- Ops wall: always dark; in the docs column it fills the stage exactly, and narrow (< 640px) is one scrolling column.
 
 ## Customization
 
-- Swap the data source: replace `daily()`, which generates the sample history, with the per-day series from your API. `total()`, `average()` and `previousWindow()` already handle a day still in progress and the same-length comparison, so the roll-ups stay as they are.
-- Keep rates such as crash rate or success rate out of TxTimeseriesChart: its y axis always includes 0, so a line near 100% sits flat along the top. Chart the counts instead, or use TxSparkChart with a `domain`.
-- Pixel props such as a chart height or a table `maxHeight` are out of reach of container queries; compute them from the stage size as the template does, or from a ResizeObserver of your own.
-- To drill into a row, add `@row-click` to TxDataTable, swap the trend chart's data for that plugin's installs and add a pill that returns to all platforms.
-- Ops wall: a local dark scope takes only `data-theme="dark"` and `color-scheme: dark` on the root, plus redeclaring the few tokens `:root` derives with `var()` that the dark blocks never rewrite (the three disabled colours, the chart grid line, the skeleton base). Overlays that teleport (tooltips, popovers, dialogs) leave that scope and render in the page theme, so keep them off the wall.
+- To swap the data source, replace `daily()` with your API's per-day series; `total()`, `average()`, and `previousWindow()` already handle an unfinished today and the same-length comparison.
+- Keep rates out of TxTimeseriesChart, whose y axis always includes 0; chart the counts, or use TxSparkChart with a `domain`.
+- Pixel props such as chart heights or a table's `maxHeight` are out of reach of container queries; compute them from the stage size or your own ResizeObserver.
+- To drill into a row, add `@row-click` to TxDataTable and swap the trend data for that plugin's installs.
+- Ops wall: a local dark scope needs `data-theme="dark"` and `color-scheme: dark` on the root plus the few tokens `:root` derives; keep teleported overlays off the wall.
 
 ## Related components
 
 | Region | Components | Role |
 |---|---|---|
-| Top bar | [TxFlatRadio](/docs/dev/components/flat-radio), [TxDatePicker](/docs/dev/components/date-picker), [TxStatusBadge](/docs/dev/components/status-badge) | 7 / 30 / 90-day switch and a custom date range; the degraded-service notice. It stays pinned while the board scrolls |
-| KPI cards | [TxStatCard](/docs/dev/components/stat-card), [TxTextMorph](/docs/dev/components/text-morph) | Daily actives, searches per day, AI requests and plugin installs, plus crash rate when wide; each compared with the period of the same length just before |
-| Trend | [TxTimeseriesChart](/docs/dev/components/timeseries-chart), [TxChartLegendItem](/docs/dev/components/charts) | Searches on three platforms; release markers, today's unfinished stretch dashed, brush to zoom |
-| Side rail | [TxAllocationBar](/docs/dev/components/allocation-bar), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxProgressBar](/docs/dev/components/progress-bar) | Platform share, service health, and this month's AI usage split by route |
-| Insights (wide) | [TxInsightCards](/docs/dev/components/insight-cards), [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart), [TxToastPanel](/docs/dev/components/toast-panel) | Three pageable insights whose charts can be scrubbed day by day; a follow-up gets an acknowledgement |
-| Top plugins | [TxDataTable](/docs/dev/components/data-table), [TxSparkChart](/docs/dev/components/spark-chart), [TxSignalMeter](/docs/dev/components/signal-meter), [TxStatusBadge](/docs/dev/components/status-badge) | Plugin ids and versions come from the repo's `plugins/`; sortable by installs and crash-free rate, with a trend line and a stability meter in the cells |
-| Top bar (Ops wall) | [TxModeChip](/docs/dev/components/mode-chip) | The LIVE mark, the clock and the service summary; a "Live ↔ Paused" switch that stops every figure, event and rotation |
-| Big KPIs (Ops wall) | [TxTextMorph](/docs/dev/components/text-morph), [TxSparkChart](/docs/dev/components/spark-chart) | Users online, searches per minute, AI requests and plugin installs, plus sync latency and crash rate when wide; rolling figures beside a strip of the last 30 refreshes |
-| City map (Ops wall) | [TxBubbleMap](/docs/dev/components/maps), [TxSkeleton](/docs/dev/components/skeleton) | Online users as bubbles in 14 cities, a ring on the focus cities and orange for a degraded one; geography from the same-origin `/geo/world-countries.geo.json`, cities only, no country fills |
-| Focus rotation (Ops wall) | [TxInsightCards](/docs/dev/components/insight-cards), [TxAllocationBar](/docs/dev/components/allocation-bar) | East China at peak, on-device AI share and plugin momentum, one page every 8 seconds |
-| Search flow (Ops wall) | [TxSankeyChart](/docs/dev/components/sankey-chart) | Input → plugin → action, every middle node passing on exactly what it receives; the tooltip is localized through its slot |
-| Health and events (Ops wall) | [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxTransition](/docs/dev/components/transition) | A dot, latency and signal bars for seven services; new events slide in at the top while the oldest makes way |
+| Top bar | [TxFlatRadio](/docs/dev/components/flat-radio), [TxDatePicker](/docs/dev/components/date-picker), [TxStatusBadge](/docs/dev/components/status-badge) | Time range and degraded notice |
+| KPI cards | [TxStatCard](/docs/dev/components/stat-card), [TxTextMorph](/docs/dev/components/text-morph) | KPIs against the previous period |
+| Trend | [TxTimeseriesChart](/docs/dev/components/timeseries-chart), [TxChartLegendItem](/docs/dev/components/charts) | Per-platform trend with brush zoom |
+| Side rail | [TxAllocationBar](/docs/dev/components/allocation-bar), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxProgressBar](/docs/dev/components/progress-bar) | Share, health, and AI usage |
+| Insights (wide) | [TxInsightCards](/docs/dev/components/insight-cards), [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart), [TxToastPanel](/docs/dev/components/toast-panel) | Pageable, scrubbable insights |
+| Top plugins | [TxDataTable](/docs/dev/components/data-table), [TxSparkChart](/docs/dev/components/spark-chart), [TxSignalMeter](/docs/dev/components/signal-meter), [TxStatusBadge](/docs/dev/components/status-badge) | Sortable plugin table |
+| Top bar (Ops wall) | [TxModeChip](/docs/dev/components/mode-chip) | Live mark and pause switch |
+| Big KPIs (Ops wall) | [TxTextMorph](/docs/dev/components/text-morph), [TxSparkChart](/docs/dev/components/spark-chart) | Rolling figures and trend strips |
+| City map (Ops wall) | [TxBubbleMap](/docs/dev/components/maps), [TxSkeleton](/docs/dev/components/skeleton) | Online bubbles in 14 cities |
+| Focus rotation (Ops wall) | [TxInsightCards](/docs/dev/components/insight-cards), [TxAllocationBar](/docs/dev/components/allocation-bar) | Focus cards turning every 8 seconds |
+| Search flow (Ops wall) | [TxSankeyChart](/docs/dev/components/sankey-chart) | Input → plugin → action |
+| Health and events (Ops wall) | [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxTransition](/docs/dev/components/transition) | Service health and event stream |

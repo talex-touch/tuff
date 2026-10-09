@@ -1,6 +1,6 @@
 ---
 title: Shell
-description: An app shell of sidebar navigation, a ⌘K command palette, a notification tray and an overview dashboard
+description: An app shell with a sidebar, command palette, notifications, and a dashboard.
 category: TemplateApp
 status: beta
 since: 0.6.0
