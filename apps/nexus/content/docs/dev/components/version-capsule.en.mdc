@@ -1,6 +1,6 @@
 ---
 title: "VersionCapsule"
-description: "Split release pill: download the build on the left, open history on the right"
+description: "A split release pill: download on the left, history on the right."
 category: Advanced
 status: beta
 since: 0.3.9
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### VersionCapsule
+### Download and History
+The `download` and `history` slots hold the two panels; their `close` slot prop closes the panel and returns focus.
 :::TuffDemoWrapper{demo="VersionCapsuleVersionCapsuleDemo" code-lang="vue"}
 ---
 code: |
@@ -19,21 +20,13 @@ code: |
   import { ref } from 'vue'
 
   const panel = ref<'download' | 'history' | null>('download')
-
-  const notice = {
-    tone: 'warning',
-    title: 'Preview channel build',
-    description: 'Heads up: this build is not fully signed or regression-tested yet.',
-    points: ['Features may change without notice', 'Recommended for early adopters only'],
-  }
+  const notice = { tone: 'warning', title: 'Preview channel build', points: ['Features may change without notice'] }
   const builds = [
     { id: 'mac-arm', name: 'macOS · Apple silicon', meta: '.dmg · 126 MB', href: '#mac-arm', recommended: true },
     { id: 'win', name: 'Windows · x64', meta: '.exe · 118 MB', href: '#win' },
   ]
   const latest = { id: '1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: 'Jul 21', note: 'Icon self-healing' }
-  const entries = [
-    { id: '2', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jul 12', href: '#v2412' },
-  ]
+  const entries = [{ id: '2', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jul 12', href: '#v2412' }]
   </script>
 
   <template>
@@ -49,68 +42,150 @@ code: |
 ---
 :::
 
+### Channel Tones
+`tone` sets the status dot and channel color.
+:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const capsules = [
+    { tone: 'stable', version: 'v2.4.12', channel: 'STABLE' },
+    { tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA' },
+    { tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY' },
+    { tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED' },
+  ]
+  </script>
+
+  <template>
+    <TxVersionCapsule
+      v-for="item in capsules"
+      :key="item.tone"
+      :version="item.version"
+      :channel="item.channel"
+      :tone="item.tone"
+      history-label="History"
+    >
+      <template #history="{ close }">
+        <TxVersionHistoryPanel :latest="{ id: item.tone, tag: item.version, channel: item.channel, tone: item.tone }" @select="close" />
+      </template>
+    </TxVersionCapsule>
+  </template>
+---
+:::
+
 ### Best Practices
 
-- Always name the channel (`BETA` / `STABLE` / `NIGHTLY`) instead of "LATEST" so the capsule never competes with a page's primary stable-download CTA.
-- Pair the capsule *with*, not in place of, a primary certified-release button: the button ships the stable build, the capsule owns the preview channel (download + history).
-- Put pre-release caveats in the download panel's `notice` with tone `warning` so users read them on the way to the file; use tone `success` for certified builds.
-- Provide `href` on builds so rows download directly as `<a download>`; reserve the `<button>` fallback for flows that resolve the URL on `select`.
-- Mark exactly one build `recommended` (the visitor's platform) — additional recommended builds are ignored for highlighting.
-- Use the history panel's `latest` for the featured card and `entries` for older rows; set `note` only where a one-line changelog helps, since it renders on the featured card only.
-- Match each entry's `tone` to its channel so stable and preview releases stay distinguishable in the same list.
+- Always name the channel (`BETA`, `STABLE`, `NIGHTLY`), never "LATEST"; pair the capsule with the page's stable download button instead of replacing it.
+- Put pre-release caveats in the download panel's `notice` (`warning`); use `success` for certified builds.
+- Give builds an `href` so they download directly as `<a download>`; omit it only when the URL is resolved on `select`.
+- Mark only the visitor's platform build `recommended`.
+- Match each history entry's `tone` to its channel, and use `note` only on `latest`.
 
 ## API Reference
 
-### TxVersionCapsule Props
+### TxVersionCapsule
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `version` | `string` | — (required) | Version tag rendered as the headline, e.g. `v2.4.13-beta.19`. |
-| `channel` | `string` | - | Channel label rendered next to the status dot, e.g. `BETA`. Only shown when set. |
-| `tone` | `TxVersionChannelTone` | `'preview'` | Semantic tone driving the dot and channel colour. |
-| `historyLabel` | `string` | `'History'` | Label for the right (history) segment. |
-| `downloadLabel` | `string` | `'Download this build'` | Accessible name for the left (download) segment. |
-| `panel` | `TxVersionCapsulePanel` | - | Controlled open panel (`'download' \| 'history' \| null`). Omit for uncontrolled; supports `v-model:panel`. |
+| `version` | `string` | — (required) | Version tag shown as the headline, e.g. `v2.4.13-beta.19`. |
+| `channel` | `string` | - | Channel label beside the status dot, e.g. `BETA`; hidden when unset. |
+| `tone` | `TxVersionChannelTone` | `'preview'` | Color of the dot and channel label. |
+| `historyLabel` | `string` | `'History'` | Text of the right segment. |
+| `downloadLabel` | `string` | `'Download this build'` | Accessible name of the left segment. |
+| `panel` | `TxVersionCapsulePanel` | - | Controlled open panel, for `v-model:panel`; omit for uncontrolled. |
 | `disabled` | `boolean` | `false` | Disables both segments and closes any open panel. |
-| `closeOnClickOutside` | `boolean` | `true` | Closes the open panel on an outside `pointerdown`. |
-| `closeOnEsc` | `boolean` | `true` | Closes the open panel on `Escape`. |
+| `closeOnClickOutside` | `boolean` | `true` | Closes the panel on an outside `pointerdown`. |
+| `closeOnEsc` | `boolean` | `true` | Closes the panel on Escape. |
 
-### TxVersionDownloadPanel Props
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:panel` | `(value: TxVersionCapsulePanel)` | Fires when the open panel changes. |
+| `download` | - | Fires when the left segment is activated. |
+| `history` | - | Fires when the right segment is activated. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `download` | `{ close: () => void }` | Download panel content, anchored under the left segment. |
+| `history` | `{ close: () => void }` | History panel content, anchored under the right segment. |
+
+#### Exposed Methods
+
+| Member | Type | Description |
+|------|------|------|
+| `close` | `() => void` | Closes the panel and returns focus to its segment; also passed to both slots. |
+| `downloadRef` | `Ref<HTMLButtonElement \| null>` | The left segment's button element. |
+| `historyRef` | `Ref<HTMLButtonElement \| null>` | The right segment's button element. |
+
+### TxVersionDownloadPanel
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `notice` | `TxVersionNotice` | - | Trust block rendered above the builds. Omit to show builds only. |
-| `builds` | `TxVersionBuild[]` | `[]` | Platform build list. |
+| `notice` | `TxVersionNotice` | - | Trust block above the builds; omit to show builds only. |
+| `builds` | `TxVersionBuild[]` | `[]` | Builds per platform. |
 | `buildsLabel` | `string` | `'Choose a build'` | Overline above the build list. |
-| `downloadLabel` | `string` | `'Download'` | Label on the recommended build's button. |
+| `downloadLabel` | `string` | `'Download'` | Text on the recommended build's button. |
 | `emptyText` | `string` | `'No builds published yet.'` | Shown when `builds` is empty. |
 
-### TxVersionHistoryPanel Props
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `select` | `(id: string)` | Fires with the build's `id` when a build is chosen. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `footer` | - | Footer below the build list. |
+
+### TxVersionHistoryPanel
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `title` | `string` | `'Version history'` | Panel heading. |
-| `latest` | `TxVersionHistoryEntry` | - | Featured entry rendered as a card above the list. |
+| `latest` | `TxVersionHistoryEntry` | - | Featured card above the list. |
 | `entries` | `TxVersionHistoryEntry[]` | `[]` | Release rows below the featured card. |
 | `latestLabel` | `string` | `'LATEST'` | Badge on the featured card. |
-| `countLabel` | `string` | - | Right-hand side of the header, e.g. `6 releases`. |
-| `notesLabel` | `string` | `"What's new"` | Call-to-action on the featured card. |
-| `emptyText` | `string` | `'No releases published yet.'` | Shown when there is neither a `latest` nor any `entries`. |
+| `countLabel` | `string` | - | Right side of the header, e.g. `6 releases`. |
+| `notesLabel` | `string` | `"What's new"` | Call to action on the featured card. |
+| `emptyText` | `string` | `'No releases published yet.'` | Shown when there is neither `latest` nor any `entries`. |
+
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `select` | `(entry: TxVersionHistoryEntry)` | Fires when a release row or the featured card is chosen. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `footer` | - | Footer below the release list. |
 
 ### Types
 
-`TxVersionChannelTone` is `'stable' \| 'preview' \| 'nightly' \| 'neutral'`, mapped to `success` / `primary` (default) / `warning` / `secondary` colours.
+`TxVersionChannelTone` is `'stable' \| 'preview' \| 'nightly' \| 'neutral'`, mapped to `success` / `primary` (default) / `warning` / `secondary` colors.
 
 #### TxVersionBuild
 
 | Field | Type | Description |
 |------|------|------|
-| `id` | `string` | Stable identity used as the list key. |
+| `id` | `string` | List key. |
 | `name` | `string` | Headline, e.g. `macOS · Apple silicon`. |
 | `meta` | `string?` | Secondary line, e.g. `.dmg · 126 MB`. |
-| `href` | `string?` | Direct download URL. When present the row renders as `<a download>`, otherwise a `<button>`. |
-| `recommended` | `boolean?` | Marks the visitor's platform build. Only the **first** recommended build is highlighted and gets the labelled download button; the rest fall back to a bare glyph. |
-| `icon` | `string?` | Icon class rendered before the name — the consumer supplies the icon set. |
+| `href` | `string?` | Direct URL; renders the row as `<a download>`, otherwise a `<button>`. |
+| `recommended` | `boolean?` | The visitor's platform build; only the first gets the highlight and labelled button. |
+| `icon` | `string?` | Icon class before the name; the consumer supplies the icon set. |
 
 #### TxVersionNotice
 
@@ -125,123 +200,24 @@ code: |
 
 | Field | Type | Description |
 |------|------|------|
-| `id` | `string` | Stable identity used as the list key. |
+| `id` | `string` | List key. |
 | `tag` | `string` | Version tag. |
 | `channel` | `string?` | Channel label, e.g. `BETA`. |
-| `tone` | `TxVersionChannelTone?` | Tone resolved per row (default `preview`). |
+| `tone` | `TxVersionChannelTone?` | Tone of this row; defaults to `preview`. |
 | `date` | `string?` | Release date text. |
-| `note` | `string?` | One-line changelog; only rendered for the featured `latest` entry. |
-| `href` | `string?` | When present, the row/card renders as a link. |
-
-### TxVersionCapsule Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:panel` | `(value: TxVersionCapsulePanel)` | Emitted when the open panel changes; enables `v-model:panel`. |
-| `download` | - | Emitted when the left (download) segment is activated. |
-| `history` | - | Emitted when the right (history) segment is activated. |
-
-### TxVersionDownloadPanel Events
-
-| Event | Params | Description |
-|------|------|------|
-| `select` | `(id: string)` | Emitted with the build `id` when a build row is chosen. |
-
-### TxVersionHistoryPanel Events
-
-| Event | Params | Description |
-|------|------|------|
-| `select` | `(entry: TxVersionHistoryEntry)` | Emitted with the entry when a release row or the featured card is chosen. |
-
-## Channel Tones
-
-The capsule always names its channel and colours it by `tone`, so it never competes with a page's primary stable-download CTA. History rows resolve tone per entry, keeping a stable release distinct inside a list of previews.
-
-:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="Channel tones" description="stable / preview / nightly / neutral, each with a matching status dot and channel colour."}
----
-code: |
-  <script setup lang="ts">
-  const capsules = [
-    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: 'STABLE', historyTitle: 'Version history', latest: { id: 's1', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jun 23', note: 'Certified build with signing and regression complete.' } },
-    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA', historyTitle: 'Version history', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: 'Jul 21', note: 'Preview channel for early adopters.' } },
-    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY', historyTitle: 'Version history', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: 'NIGHTLY', tone: 'nightly', date: 'Today', note: 'Automated build, may be unstable.' } },
-    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED', historyTitle: 'Version history', latest: { id: 'a1', tag: 'v1.9.8', channel: 'LEGACY', tone: 'neutral', date: '2024', note: 'Legacy build, no longer maintained.' } },
-  ]
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
-      <TxVersionCapsule
-        v-for="item in capsules"
-        :key="item.key"
-        :version="item.version"
-        :channel="item.channel"
-        :tone="item.tone"
-        history-label="History"
-      >
-        <template #history="{ close }">
-          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
-        </template>
-      </TxVersionCapsule>
-    </div>
-  </template>
----
-:::
-
-## Slots
-
-### TxVersionCapsule
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `download` | `{ close: () => void }` | Download panel content, anchored under the left segment. |
-| `history` | `{ close: () => void }` | History panel content, anchored under the right segment. |
-
-Leaving a slot empty turns that segment into a **plain trigger**: it still emits
-its event, but opens no popover. Use this when the host already has its own
-dialog for that job — the Tuff landing hero omits `history` so the right half
-opens a full-screen release-history overlay instead.
-
-### TxVersionDownloadPanel
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `footer` | - | Optional footer rendered below the build list. |
-
-### TxVersionHistoryPanel
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `footer` | - | Optional footer rendered below the release list. |
-
-## Exposed
-
-`TxVersionCapsule` exposes:
-
-| Member | Type | Description |
-|------|------|------|
-| `close` | `() => void` | Closes the open panel and returns focus to the segment that opened it. Also passed into both panel slots. |
-| `downloadRef` | `Ref<HTMLButtonElement \| null>` | The left (download) segment button element. |
-| `historyRef` | `Ref<HTMLButtonElement \| null>` | The right (history) segment button element. |
+| `note` | `string?` | One-line changelog, rendered only on `latest`. |
+| `href` | `string?` | Renders the row or card as a link. |
 
 ## Overview
 
-- The two segments are **separate affordances for separate jobs**: the left downloads the build, the right opens history. They are independent click targets — do not wrap the whole capsule in one action.
-- Only one panel is open at a time. Clicking the other segment swaps panels; clicking the active segment again closes it.
-- Panels are anchored below their own segment (download → left-aligned, history → right-aligned). They are deliberately **not** modal.
-- `panel` is optional. Omit it for uncontrolled behaviour, or drive it with `v-model:panel` (or `:panel` + `@update:panel`). `undefined` means "not controlled"; `null` is a valid controlled value meaning "everything closed."
-- `closeOnClickOutside` and `closeOnEsc` govern dismissal; `close()` — also handed to both slots — closes and restores focus to the originating segment.
-- Setting `disabled` closes any open panel and blocks both segments.
-- The `notice` lives in the download panel, above the builds: the pre-release warning is **consent on the path to the download**, not a passive hover tooltip.
-- The download panel highlights only the first `recommended` build with the labelled button, so the platform-detected choice reads as the default rather than one of several equal actions.
-- History tone is resolved per row, so a stable release stays visually distinct inside a list of previews.
+- The two segments are independent click targets: the left downloads the build, the right opens history. Don't wrap the whole capsule in one action.
+- One panel is open at a time; clicking the other segment swaps panels, and clicking the active one closes it.
+- Panels anchor under their own segment (download left-aligned, history right-aligned) and are not modal.
+- `panel` left `undefined` means uncontrolled; `null` is the controlled "all closed" value.
+- Without a slot, its segment only emits its event and opens nothing — useful when the host has its own dialog.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/version-capsule/src/TxVersionCapsule.vue` confirms the split segments, controlled/uncontrolled `panel`, outside-click / Escape dismissal, `close()` focus return, and the `download` / `history` slots.
-- Source: `packages/tuffex/packages/components/src/version-capsule/src/TxVersionDownloadPanel.vue` confirms notice tones, first-`recommended` highlighting, and link-vs-button build rows.
-- Source: `packages/tuffex/packages/components/src/version-capsule/src/TxVersionHistoryPanel.vue` confirms the featured latest card, per-row tone resolution, and link rows.
-- Type contracts: `packages/tuffex/packages/components/src/version-capsule/src/types.ts` exports `TxVersionCapsuleProps`, `TxVersionDownloadPanelProps`, `TxVersionHistoryPanelProps`, `TxVersionBuild`, `TxVersionNotice`, `TxVersionHistoryEntry`, and `TxVersionChannelTone`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/version-capsule/__tests__/version-capsule.test.ts` covers panel open/swap/toggle, Escape and outside-pointer dismissal, controlled `panel`, disabled behaviour, first-`recommended`-only button, link-vs-button rows, `select` payloads, and per-row tone classes.
+- Source: `packages/tuffex/packages/components/src/version-capsule/`.
 
 <TuffDocSourceLink />

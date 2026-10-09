@@ -1,6 +1,6 @@
 ---
 title: Stream Markdown
-description: A Markdown renderer built for streaming output — new text enters with the StreamElement family's reveal and the Tuff caret rides the write head — with per-language fenced-block renderers.
+description: A Markdown renderer built for streaming output.
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -11,12 +11,13 @@ verified: true
 
 ## Usage
 
-### Stream Markdown
+### Basic
+While streaming, an unclosed tail fence defers rendering instead of flashing in half-written.
 ::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import TxMermaidBlock from '@talex-touch/tuffex/stream-markdown'
+  import ChartBlock from './ChartBlock.vue'
 
   const content = ref('# Heading\n\nGenerating…')
   </script>
@@ -25,7 +26,7 @@ code: |
     <TxStreamMarkdown
       :content="content"
       streaming
-      :renderers="{ mermaid: TxMermaidBlock }"
+      :renderers="{ chart: ChartBlock }"
     />
   </template>
 ---
@@ -33,11 +34,11 @@ code: |
 
 ### Best Practices
 
-- Do not turn `sanitize` off. Model output is untrusted content and this is where it becomes DOM.
-- Keep `streaming` true for the duration and set it false when generation ends, or the caret stays at the tail forever.
-- Handle `fenceClosed === false` in custom renderers with a loading state rather than parsing a partial block.
-- Key `renderers` by the lowercase language that opens the fence (` ```mermaid ` → `mermaid`).
-- Use `TxMarkdownView` for static Markdown; it does not need the block-splitting and cursor machinery.
+- Keep `sanitize` on: model output is untrusted, and this is where it becomes DOM.
+- Set `streaming` to false when generation ends, or the caret stays at the tail.
+- In custom renderers, show a loading state while `closed` is false instead of parsing a partial block.
+- Key `renderers` by the lowercase first word of the fence (` ```chart ` → `chart`).
+- Use `TxMarkdownView` for static Markdown; it needs none of the block and caret machinery.
 
 ## API Reference
 
@@ -46,33 +47,25 @@ code: |
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `content` | `string` | — | The Markdown source. Required. |
-| `streaming` | `boolean` | `false` | Whether output is still arriving; drives the caret, the reveal and deferred tail-fence rendering. |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How newly streamed text enters, with `TxStreamText`'s presets. A streamed chunk runs across words and stays inline, so `languid` keeps its slow blur but not its rise. |
-| `caret` | `boolean` | `true` | Shows the Tuff caret at the write head while `streaming`. Switched off, the caret goes at once; a stream that ends retracts it. |
-| `sanitize` | `boolean` | `true` | Whether to sanitize rendered HTML through dompurify. |
-| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Colour theme. |
-| `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | Per-language fenced-block renderers, e.g. `{ mermaid: TxMermaidBlock }`. |
-
-### Events
-
-`TxStreamMarkdown` emits no component events.
-
-## Slots
-
-`TxStreamMarkdown` exposes no slots. Register a component through `renderers` to take over a particular kind of block.
+| `streaming` | `boolean` | `false` | Output is still arriving; drives the caret, the reveal, and deferred tail-fence rendering. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How new text enters, with `TxStreamText`'s presets; `languid` keeps its slow blur but not its rise. |
+| `caret` | `boolean` | `true` | Shows the Tuff caret at the write head while `streaming`; switched off, it goes at once. |
+| `sanitize` | `boolean` | `true` | Sanitizes HTML through DOMPurify. |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme; `auto` follows the environment. |
+| `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | Block renderers by fence language; each receives `StreamMarkdownBlockContext` as props. |
+| `blockRemoteImages` | `boolean` | `true` | Shows remote images (`http(s)://`, `//`) as a placeholder until the reader loads them. |
+| `blockedImageText` | `string` | `'Remote image blocked'` | Title of the blocked-image placeholder. |
+| `loadImageOnceText` | `string` | `'Load this image'` | Text of the button that loads only this image. |
+| `allowSessionImagesText` | `string` | `'Allow for this conversation'` | Text of the button that allows every remote image for the conversation. |
+| `copyTableText` | `string` | `'Copy CSV'` | Text of a table's copy-as-CSV button. |
+| `copiedTableText` | `string` | `'Copied'` | Button text shown briefly after a successful copy. |
 
 ## Overview
 
-- The document is split into blocks and rendered per block, so appending text does not reflow the whole page — the property that makes this usable while streaming.
-- While `streaming` is true **an unclosed tail fence has its rendering deferred**: a half-written code block does not flash in a wrong form first, it waits for the closing fence.
-- **The caret is the Tuff caret**, the same as `TxStreamText`'s. It sits after the last character of a paragraph, heading or quote, and on its own line below a list, table or fence. It is one element placed with the `translate` property: it takes no room, so nothing reflows around it, and it never remounts as the write head moves between elements. It is re-placed once per frame, and on resize, while the stream is live, and it retracts when `streaming` turns false. (`translate`, not `transform`: the enter and leave `scale` then grows it in place instead of flying it in from the corner.)
-- **New text enters with the family's reveal.** Newly streamed characters take the `reveal` preset — by default `aurora`, a fade out of a light blur through the blue → violet → pink sweep onto the ink — and each new block fades in once. A block is re-rendered wholesale on every delta, so the entering characters are re-wrapped after each patch with a negative delay and resume where the patch cut them.
-- Under reduced motion nothing enters or eases: text shows as it arrives, and the caret rests as a still arc. Every animation and transition is declared only under `prefers-reduced-motion: no-preference`.
-- `fenceClosed` is `false` only for the still-growing tail fence of a streaming document. Indented code has no fence and also reports `false`; any non-tail block is treated as complete.
-- `sanitize` is on by default and loads dompurify through a dynamic `import()`. **Keep it on** — the content is model output.
-- If dompurify fails to load, the sanitizer is left null and the component keeps working. Sanitization is therefore best-effort and is not a substitute for a server-side trust boundary.
-- Each instance owns its own `Marked` (with `gfm` and `breaks`) rather than mutating the global singleton, which would reconfigure every other consumer in the app.
-- `renderers` are matched by fence language — the first word, lowercased. Unregistered languages fall back to the default code block.
-- A registered renderer receives `StreamMarkdownBlockContext` as props, including `fenceClosed`, so it can show a placeholder until the block completes.
-- `theme` accepts `light`, `dark` or `auto`, with `auto` following the environment.
-- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.
+- The document renders block by block, so appended text never reflows the whole page.
+- While streaming, the still-growing tail fence defers its final rendering until it closes; renderers get `closed: false` only for that fence.
+- Unregistered languages use the built-ins: `TxMermaidBlock` for `mermaid`, `TxCodeBlock` for the rest.
+- The caret is `TxStreamText`'s: right after the last character of a paragraph, heading, or quote, otherwise on its own line below. Under reduced motion nothing enters and the caret rests.
+- DOMPurify loads dynamically; if it fails, the component keeps working unsanitized, so sanitizing is best-effort and no substitute for a server-side trust boundary.
+- Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.
+- Each instance owns its own `Marked` (`gfm`, `breaks`); the GitHub Markdown sheet is scoped under `:where(.tx-md)`, leaving the host's `.markdown-body` alone.

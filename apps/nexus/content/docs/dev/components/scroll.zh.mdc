@@ -1,6 +1,6 @@
 ---
 title: "Scroll 滚动"
-description: "基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。"
+description: 基于 BetterScroll 或原生滚动的滚动容器
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,245 +11,75 @@ verified: true
 
 ## 用法
 
-### Scroll
+### 基础
 :::TuffDemoWrapper{demo="ScrollScrollDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="demo-container" style="height: 220px;">
-      <div style="height: 100%;">
-        <TxScroll style="height: 100%;">
-          <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
-            <div v-for="i in 60" :key="i" class="demo-scroll-item">
-              Row {{ i }}
-            </div>
-          </div>
-        </TxScroll>
-      </div>
-    </div>
+    <TxScroll style="height: 220px;">
+      <div v-for="i in 60" :key="i">Row {{ i }}</div>
+    </TxScroll>
   </template>
 ---
 :::
 
-### 最佳实践
-
-- 普通文章或文档滚动优先使用 Native 模式；只有需要一致滚动条、滚轮桥接、bounce 或 pull 插件时再使用 BetterScroll。
-- 嵌套面板默认保持 `scrollChaining=false`。只有明确需要父子滚动交接且已验证体验时才开启。
-- 子组件自带间距时使用 `noPadding`，尤其是虚拟列表、表格和全出血媒体内容。
-- 横向或双轴内容要提供稳定内容宽度，或让组件设置 `width: max-content`；否则 BetterScroll 无法可靠判断横向溢出。
-- 使用 `pullDownRefresh` / `pullUpLoad` 时，异步成功和失败路径都必须调用对应 finish 方法。
-- 避免把大型可变对象塞进 `options`；已文档化行为优先使用一等 props，方便 watcher 和文档保持准确。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `native` | `boolean` | `false` | 强制使用浏览器原生滚动，跳过 BetterScroll 初始化 |
-| `unified` | `boolean` | `false` | 强制由 BetterScroll 接管滚动（跨环境统一行为，会覆盖 Safari/Chromium 自动原生；`native=true` 仍优先生效） |
-| `nativeAutoFallback` | `boolean` | `true` | 控制 macOS + Chromium `145+` 自动回退原生滚动；不影响 macOS Safari 的原生优先策略 |
-| `noPadding` | `boolean` | `false` | 移除默认内容内边距；horizontal 与 both 轴模式还会把内容宽度设为 `max-content` |
-| `scrollChaining` | `boolean` | `false` | 是否允许滚动链（到边界后继续带动父级滚动）；不建议默认开启，仅在明确需要父子联动时启用 |
-| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 选择滚动轴向；native 模式映射为 `overflow-x/y`，BetterScroll 映射为 `scrollX`、`scrollY` 与 `freeScroll` |
-| `scrollbar` | `boolean` | `true` | 启用 BetterScroll 滚动条插件；native 模式使用浏览器滚动条 |
-| `scrollbarFade` | `boolean` | `true` | 启用 `scrollbar` 时，透传 BetterScroll 滚动条的淡出行为 |
-| `scrollbarInteractive` | `boolean` | `true` | 启用 `scrollbar` 时，允许拖拽 BetterScroll 滚动条 |
-| `scrollbarAlwaysVisible` | `boolean` | `false` | 让 BetterScroll 保持滚动条常显状态（用于 bounce/无边界场景） |
-| `scrollbarMinSize` | `number` | `18` | 通过 `--tx-scrollbar-min-size` 设置 BetterScroll 滚动条滑块的最小尺寸 |
-| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
-| `bounce` | `boolean` | `true` | 启用 BetterScroll 边界回弹与本地滚轮 overshoot 行为 |
-| `click` | `boolean` | `true` | 透传 BetterScroll 的 click 处理 |
-| `wheel` | `boolean` | `true` | 为 BetterScroll 模式启用本地滚轮桥接；忽略 `ctrl` 滚轮手势 |
-| `refreshOnContentChange` | `boolean` | `true` | 监听内容变更，并在变更后调用 BetterScroll 的 `refresh()` |
-| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 启用下拉刷新；BetterScroll 模式接收插件选项，native 模式发出基于阈值的触发 |
-| `pullDownThreshold` | `number` | `70` | `pulling-down` 的最小原生触摸位移与 BetterScroll 插件阈值 |
-| `pullDownStop` | `number` | `56` | BetterScroll 下拉停留位置；native 模式不使用该值 |
-| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 启用上拉加载；BetterScroll 模式接收插件选项，native 模式在到达底部阈值时发出 |
-| `pullUpThreshold` | `number` | `0` | `pulling-up` 的原生距底阈值与 BetterScroll 插件阈值 |
-| `options` | `Record<string, unknown>` | `{}` | 额外的 BetterScroll 选项；`wheelOvershoot` 会在透传前被本地消费；macOS 上当 `wheel` 与 `bounce` 同时开启时，会默认注入 `useTransition: false`，在 `options` 里显式传 `useTransition` 可覆盖 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动事件 |
-| `pulling-down` | - | 触发下拉刷新 |
-| `pulling-up` | - | 触发上拉加载更多 |
-
-### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | 主滚动内容，渲染在 `.tx-scroll__content` 内。 |
-| `header` | 默认内容之前的可选内容。Native 模式渲染在 `.tx-scroll__content` 之前；BetterScroll 模式渲染在滚动内容内部。 |
-| `footer` | 默认内容之后的可选内容，常用于加载更多状态。 |
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `nativeScrollRef` | `Ref<HTMLElement \| null>` | Native 模式下的原生滚动元素引用。 |
-| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | 滚动到绝对偏移。BetterScroll 模式内部会取负偏移并使用 `time`；Native 模式调用 `scrollTo(x, y)`。 |
-| `getScrollInfo()` | `() => TxScrollInfo` | 返回当前偏移、滚动尺寸和可视尺寸。 |
-| `refresh()` | `() => void` | 调用 BetterScroll `refresh()` 并更新可滚动状态；Native 模式无操作。 |
-| `finishPullDown()` | `() => void` | 重置 Native 下拉锁，或转发到 BetterScroll `finishPullDown()` 后调度刷新。 |
-| `finishPullUp()` | `() => void` | 重置 Native 上拉锁，或转发到 BetterScroll `finishPullUp()` 后调度刷新。 |
-
-## 行为说明
-
-- **BetterScroll 模式**
-  - 支持 `bounce`、更一致的滚动条外观
-  - 内容/容器变化会自动 `refresh()`（可通过 `refreshOnContentChange` 控制）
-- **Native 模式**
-  - 使用浏览器原生滚动
-  - `direction` 会映射为 `overflow-x/y` 以保持结构一致
-  - macOS Safari 直接启用原生滚动
-  - 默认在 macOS + Chromium `145+` 自动回退到原生滚动（Chromium 原生已支持）
-  - 如需跨环境统一由 BetterScroll 接管，可设置 `unified=true`
-
-## 运行时策略（优先级）
-
-1. `native=true`：始终使用原生滚动（最高优先级）。
-2. `unified=true`：始终由 BetterScroll 接管（跨环境统一行为）。
-3. 运行在 macOS Safari：直接使用原生滚动。
-4. `nativeAutoFallback=true` 且满足 `macOS + Chromium >= 145`：自动使用原生滚动。
-5. 其他情况：使用 BetterScroll。
-
-## 方向与滚动条
-
-### Scroll (horizontal)
+### 横向滚动
+`direction` 选择滚动轴：`vertical`、`horizontal` 或 `both`。
 :::TuffDemoWrapper{demo="ScrollScrollHorizontalDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="demo-container" style="height: 140px;">
-      <div style="height: 100%;">
-        <TxScroll direction="horizontal" style="height: 100%;">
-          <div style="width: 920px; height: 100%; display: flex; align-items: center; gap: 12px;">
-            <div v-for="i in 24" :key="i" class="demo-scroll-item" style="min-width: 120px;">
-              Col {{ i }}
-            </div>
-          </div>
-        </TxScroll>
+    <TxScroll direction="horizontal" style="height: 140px;">
+      <div style="display: flex; gap: 12px; width: 920px;">
+        <div v-for="i in 24" :key="i" style="min-width: 120px;">Col {{ i }}</div>
       </div>
-    </div>
+    </TxScroll>
   </template>
 ---
 :::
 
-### Scroll (bounce + always show scrollbar)
+### 回弹与常显滚动条
+内容不足一屏时，`scrollbarAlwaysVisible` 仍显示滚动条。
 :::TuffDemoWrapper{demo="ScrollScrollBounceAlwaysShowScrollbarDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="demo-container" style="height: 220px;">
-      <div style="height: 100%;">
-        <TxScroll :bounce="true" :scrollbar-always-visible="true" style="height: 100%;">
-          <div style="height: 160px; display: flex; flex-direction: column; gap: 8px;">
-            <div class="demo-scroll-item">
-              Short content
-            </div>
-            <div class="demo-scroll-item">
-              No boundary but scrollbar should be visible
-            </div>
-          </div>
-        </TxScroll>
-      </div>
-    </div>
+    <TxScroll :bounce="true" :scrollbar-always-visible="true" style="height: 220px;">
+      <div>Short content</div>
+    </TxScroll>
   </template>
 ---
 :::
 
-## 滚动链（高级 / Scroll Chaining）
-
-默认会阻止内层滚动把外层一起带着滚动（到边界时也不会继续传递）。如果你希望滚到顶/底后继续滚动外层，需要显式开启 `scrollChaining`。
-
-> ⚠️ 不建议默认开启 `scrollChaining`。在复杂嵌套滚动场景中，它容易让用户误判“当前正在滚动哪一层”，仅建议在明确需要父子联动滚动时按需启用。
-
-### Scroll (scroll chaining, advanced)
+### 滚动链
+默认不把滚动传给外层；`scrollChaining` 让内层到达边界后继续滚动外层。
 :::TuffDemoWrapper{demo="ScrollScrollScrollChainingDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="demo-container" style="height: 320px;">
-      <div style="height: 100%; overflow: auto; padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12);">
-        <div style="height: 720px; display: flex; flex-direction: column; gap: 12px;">
-          <div class="demo-scroll-item">
-            Outer scroll area (top)
-          </div>
-
-          <div style="height: 160px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;">
-            <TxScroll style="height: 100%;" :bounce="true">
-              <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-                <div class="demo-scroll-item">
-                  Inner (default): scrollChaining = false
-                </div>
-                <div v-for="i in 18" :key="i" class="demo-scroll-item">
-                  Item {{ i }}
-                </div>
-              </div>
-            </TxScroll>
-          </div>
-
-          <div class="demo-scroll-item">
-            Outer content (middle)
-          </div>
-
-          <div style="height: 160px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;">
-            <TxScroll style="height: 100%;" :bounce="true" :scroll-chaining="true">
-              <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-                <div class="demo-scroll-item">
-                  Inner (opt-in): scrollChaining = true
-                </div>
-                <div v-for="i in 18" :key="i" class="demo-scroll-item">
-                  Item {{ i }}
-                </div>
-              </div>
-            </TxScroll>
-          </div>
-
-          <div class="demo-scroll-item">
-            Outer scroll area (bottom)
-          </div>
-        </div>
-      </div>
+    <div style="height: 320px; overflow: auto;">
+      <TxScroll style="height: 160px;">…</TxScroll>
+      <TxScroll style="height: 160px;" :scroll-chaining="true">…</TxScroll>
     </div>
   </template>
 ---
 :::
 
-## 使用原生滚动
-
-当你不需要 BetterScroll 行为时，可以切换为原生滚动（仍保持统一容器结构）。
-
-### Scroll (native)
+### 原生滚动
+`native` 跳过 BetterScroll，容器结构不变。
 :::TuffDemoWrapper{demo="ScrollScrollNativeDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div class="demo-container" style="height: 220px;">
-      <div style="height: 100%;">
-        <TxScroll native style="height: 100%;">
-          <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
-            <div v-for="i in 60" :key="i" class="demo-scroll-item">
-              Native Row {{ i }}
-            </div>
-          </div>
-        </TxScroll>
-      </div>
-    </div>
+    <TxScroll native style="height: 220px;">
+      <div v-for="i in 60" :key="i">Native Row {{ i }}</div>
+    </TxScroll>
   </template>
 ---
 :::
 
-## 下拉刷新与上拉加载
-
-- 下拉刷新：设置 `pullDownRefresh`，监听 `@pulling-down`，完成后调用 `finishPullDown()`。
-- 上拉加载：设置 `pullUpLoad`，监听 `@pulling-up`，完成后调用 `finishPullUp()`。
-- 在 `native=true` 或自动原生回退时，事件为降级触发；`pullDownStop` 仅 BetterScroll 模式生效。
-
-### Scroll (pull down + pull up)
+### 下拉刷新与上拉加载
+监听 `pulling-down` / `pulling-up`；异步任务无论成败，都调用 `finishPullDown()` / `finishPullUp()`。
 :::TuffDemoWrapper{demo="ScrollScrollPullDownPullUpDemo" code-lang="vue"}
 ---
 code: |
@@ -257,79 +87,118 @@ code: |
   import { ref } from 'vue'
 
   const items = ref(Array.from({ length: 30 }, (_, i) => i + 1))
-  const scrollRef = ref<any>(null)
-  const loading = ref(false)
-
-  function sleep(ms: number) {
-    return new Promise<void>(resolve => setTimeout(resolve, ms))
-  }
+  const scrollRef = ref()
 
   async function onPullingDown() {
-    loading.value = true
-    await sleep(600)
-    items.value = Array.from({ length: 30 }, (_, i) => i + 1)
-    loading.value = false
-    scrollRef.value?.finishPullDown?.()
+    try {
+      await reload()
+    }
+    finally {
+      scrollRef.value?.finishPullDown()
+    }
   }
 
   async function onPullingUp() {
-    if (loading.value)
-      return
-    loading.value = true
-    await sleep(600)
-    const last = items.value[items.value.length - 1] ?? 0
-    items.value.push(...Array.from({ length: 20 }, (_, i) => last + i + 1))
-    loading.value = false
-    scrollRef.value?.finishPullUp?.()
+    try {
+      await loadMore()
+    }
+    finally {
+      scrollRef.value?.finishPullUp()
+    }
   }
   </script>
 
   <template>
-    <div class="demo-container" style="height: 260px;">
-      <TxScroll
-        ref="scrollRef"
-        style="height: 100%;"
-        :pull-down-refresh="true"
-        :pull-up-load="true"
-        @pulling-down="onPullingDown"
-        @pulling-up="onPullingUp"
-      >
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <div v-for="i in items" :key="i" class="demo-scroll-item">
-            Item {{ i }}
-          </div>
-        </div>
-
-        <template #footer>
-          <div style="padding: 10px 0; color: var(--tx-text-color-secondary); text-align: center;">
-            {{ loading ? 'Loading...' : 'Pull up to load more' }}
-          </div>
-        </template>
-      </TxScroll>
-    </div>
+    <TxScroll
+      ref="scrollRef"
+      style="height: 260px;"
+      :pull-down-refresh="true"
+      :pull-up-load="true"
+      @pulling-down="onPullingDown"
+      @pulling-up="onPullingUp"
+    >
+      <div v-for="i in items" :key="i">Item {{ i }}</div>
+      <template #footer>上拉加载更多</template>
+    </TxScroll>
   </template>
 ---
 :::
 
+### 最佳实践
+
+- 普通文章或文档滚动用原生模式；需要一致的滚动条、滚轮桥接、回弹或下拉插件时才用 BetterScroll。
+- 嵌套面板保持 `scrollChaining=false`，只在父子交接是刻意设计且已验证时开启。
+- 子组件自带间距时（虚拟列表、表格、全出血媒体）设 `noPadding`。
+- 横向或双轴内容给出确定的内容宽度，否则 BetterScroll 无法可靠判断横向溢出。
+- 不要把大型可变对象塞进 `options`；已有 props 的行为用 props 配置。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `native` | `boolean` | `false` | 强制原生滚动，跳过 BetterScroll 初始化。 |
+| `unified` | `boolean` | `false` | 强制 BetterScroll，覆盖 Safari / Chromium 的自动原生；`native` 仍优先。 |
+| `nativeAutoFallback` | `boolean` | `true` | 在 macOS + Chromium `145+` 上自动改用原生滚动；不影响 Safari。 |
+| `noPadding` | `boolean` | `false` | 去掉内容内边距；横向与双轴时内容宽度为 `max-content`。 |
+| `scrollChaining` | `boolean` | `false` | 到达边界后把滚动交给外层。 |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 滚动轴向。 |
+| `scrollbar` | `boolean` | `true` | 启用 BetterScroll 滚动条插件；原生模式用浏览器滚动条。 |
+| `scrollbarFade` | `boolean` | `true` | 滚动条闲置时淡出。 |
+| `scrollbarInteractive` | `boolean` | `true` | 允许拖拽滚动条。 |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | 滚动条常显，适合回弹或内容不足一屏的场景。 |
+| `scrollbarMinSize` | `number` | `18` | 滑块最小尺寸，写入 `--tx-scrollbar-min-size`。 |
+| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType`，决定 `scroll` 事件频率。 |
+| `bounce` | `boolean` | `true` | 边界回弹与滚轮 overshoot。 |
+| `click` | `boolean` | `true` | 透传 BetterScroll 的 `click` 选项。 |
+| `wheel` | `boolean` | `true` | BetterScroll 模式的滚轮桥接；忽略 `ctrl` 滚轮。 |
+| `refreshOnContentChange` | `boolean` | `true` | 内容变更后自动 `refresh()`。 |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 启用下拉刷新；对象作为 BetterScroll 插件选项。 |
+| `pullDownThreshold` | `number` | `70` | 触发 `pulling-down` 的下拉距离。 |
+| `pullDownStop` | `number` | `56` | 刷新时的停留位置，仅 BetterScroll 模式生效。 |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 启用上拉加载；对象作为 BetterScroll 插件选项。 |
+| `pullUpThreshold` | `number` | `0` | 触发 `pulling-up` 的距底阈值。 |
+| `options` | `Record<string, unknown>` | `{}` | 额外的 BetterScroll 选项；`wheelOvershoot` 由组件自行消费。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动时触发，参数为绝对偏移。 |
+| `pulling-down` | - | 下拉刷新时触发；`finishPullDown()` 之前不再触发。 |
+| `pulling-up` | - | 上拉加载时触发；`finishPullUp()` 之前不再触发。 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 主内容，渲染在 `.tx-scroll__content` 内。 |
+| `header` | 主内容之前；原生模式在 `.tx-scroll__content` 之前，BetterScroll 模式在其内。 |
+| `footer` | 主内容之后，常放加载状态。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `nativeScrollRef` | `Ref<HTMLElement \| null>` | 原生模式下的滚动元素。 |
+| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | 滚动到绝对偏移；`time` 仅 BetterScroll 模式生效。 |
+| `getScrollInfo()` | `() => TxScrollInfo` | 当前偏移、滚动尺寸与可视尺寸。 |
+| `refresh()` | `() => void` | 重新计算 BetterScroll 的可滚动范围；原生模式无操作。 |
+| `finishPullDown()` | `() => void` | 结束本轮下拉，允许再次触发。 |
+| `finishPullUp()` | `() => void` | 结束本轮上拉，允许再次触发。 |
+
 ## 概述
 
-- `native=true` 始终优先。否则 `unified=true` 强制 BetterScroll；macOS Safari 以及支持原生非根 overscroll 的 macOS Chromium 默认走 Native，除非设置 unified。
-- Native 模式下，`direction` 映射为 CSS overflow；启用轴上 `scrollChaining=false` 会映射为 `overscroll-behavior: contain`。
-- BetterScroll 模式下，`direction` 映射为 `scrollX`、`scrollY` 和 `freeScroll`；`probeType` 控制 scroll 事件频率。
-- 容器和内容尺寸变化会先合并到同一个 animation frame，再执行 `refresh()`；`refreshOnContentChange=false` 只关闭 MutationObserver 刷新，ResizeObserver 刷新仍保留。
-- 下拉 / 上拉事件触发后会加锁。异步任务完成后必须调用 `finishPullDown()` / `finishPullUp()`，下一轮才会再次触发。
-- Native 下拉是在 `scrollTop=0` 时基于 touch 阈值的降级实现；`pullDownStop` 仅 BetterScroll 模式生效。
+- 模式按优先级决定：`native` → `unified`（BetterScroll）→ macOS Safari 用原生 → `nativeAutoFallback` 且 macOS + Chromium ≥ 145 用原生 → 其余用 BetterScroll。
+- 原生模式把 `direction` 映射为 `overflow-x/y`，`scrollChaining=false` 映射为 `overscroll-behavior: contain`；BetterScroll 模式映射为 `scrollX`、`scrollY` 与 `freeScroll`。
+- 尺寸与内容变化合并到同一帧再 `refresh()`；`refreshOnContentChange=false` 只关闭内容变更刷新，尺寸刷新保留。
+- 原生模式的下拉刷新是 `scrollTop=0` 时基于触摸阈值的降级实现。
+- macOS 上同时开启 `wheel` 与 `bounce` 时默认注入 `useTransition: false`，可在 `options` 中覆盖。
 
 ## 技术实现
 
-- **运行时契约：** `native=true` 始终优先；否则 `unified=true` 强制 BetterScroll，macOS Safari 和支持原生非根 overscroll 的 macOS Chromium 默认走原生降级。
-- **轴向契约：** Native 模式把 `direction` 映射为 CSS overflow 与 `overscroll-behavior`；BetterScroll 模式映射为 `scrollX`、`scrollY` 和 `freeScroll`。
-- **刷新契约：** 尺寸变化和内容变更会先合并再 `refresh()`。下拉/上拉事件带锁，异步结束后必须调用 `finishPullDown()` / `finishPullUp()`。
-- **实测覆盖:** `scroll.test.ts` 覆盖原生 overflow、插槽、滚动事件、`getScrollInfo()`、`scrollTo()`、原生 pull 锁和合并刷新；`scroll-export.test.ts` 保护公开导出边界。
-
-- Component source: `packages/tuffex/packages/components/src/scroll/src/TxScroll.vue`.
-- Runtime helpers: `packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts`, `better-scroll-pull-plugins.ts`, and `runtime-capabilities.ts`.
-- Types: `packages/tuffex/packages/components/src/scroll/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/scroll/__tests__/scroll.test.ts` verifies native direction overflow, slots, scroll events, `getScrollInfo()`, `scrollTo()`, native pull locks, and coalesced BetterScroll refreshes. `scroll-export.test.ts` verifies the public export boundary.
+- BetterScroll 模式按需加载 `@better-scroll/core` 与 `@better-scroll/scroll-bar`，滚轮由组件自己的桥接处理。
+- 源码：`packages/tuffex/packages/components/src/scroll/`。
 
 <TuffDocSourceLink />

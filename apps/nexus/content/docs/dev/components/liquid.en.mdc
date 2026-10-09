@@ -1,6 +1,6 @@
 ---
 title: "Liquid"
-description: "Two-layer liquid effect group: an SVG silhouette carries the goo merge and real shadows while the content layer stays crisp and interactive."
+description: "A two-layer group whose touching pieces merge like liquid."
 category: Effects
 status: beta
 since: 0.3.9
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Morph (default): give items `x` / `y` and the library animates the element and its liquid on one JS clock — touching pieces bridge and merge like droplets.
-
+### Morph
+With the default `effect="morph"`, give items `x` / `y`: element and liquid animate together, and touching pieces merge like droplets.
 :::TuffDemoWrapper{demo="LiquidMorphMenuDemo" code-lang="vue"}
 ---
 code: |
@@ -42,8 +42,7 @@ code: |
 :::
 
 ### Shape Physics
-
-`morph.shape` enables liquid shape-change physics: the mass flows toward the new centre first, then size and corner radius adapt — content cross-blurs while moving and sharpens as it settles.
+`morph.shape` turns on shape change: the mass flows to the new centre first, size and radius follow, and content blurs in motion and sharpens as it settles.
 
 ```vue
 <template>
@@ -56,8 +55,7 @@ code: |
 ```
 
 ### Dissolve
-
-`dissolve` is a modifier orthogonal to `effect`: the item's imagery melts into a touching neighbour at the contact point through a turbulence displacement field — two liquids mixing, not a blur. Text is never melted.
+`dissolve` is orthogonal to `effect`: at the contact point, the item's imagery melts into its neighbour through a turbulence warp, not a blur. Text never melts.
 
 ```vue
 <template>
@@ -72,63 +70,8 @@ code: |
 </template>
 ```
 
-### Best Practices
-
-- Keep item backgrounds transparent — the blob is the surface; opaque content (a round photo) covers its own blob, which is exactly right for image chips.
-- Pass a CSS variable as `fill` (e.g. `var(--tx-bg-color)`) so the liquid follows the theme.
-- Put shadows on `shadow` rather than on children, so one consistent shadow hugs the merged liquid through every merge and split.
-- When pieces that should merge look separate, tune the `blur`-to-gap ratio before touching anything else.
-- Prefer the default `effect="move"` feel for high-frequency dragging; reach for `advanced` only after the defaults prove insufficient.
-
-## API Reference
-
-### TxLiquid Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `blur` | `number` | `6` | Goo blur sigma (px) — how far apart pieces start bridging. |
-| `contrast` | `number` | `18` | Alpha-contrast slope; larger = sharper liquid edge. |
-| `fill` | `string` | `'#fff'` | Liquid surface color; `var()` welcome for theming. |
-| `shadow` | `string` | - | `box-shadow` syntax rendered on the MERGED silhouette; `inset` layers paint inside the liquid edge. |
-| `filterPadding` | `number` | `24` | Extra filter-region slack (px) for blobs travelling outside the group box. |
-
-### TxLiquidItem Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `effect` | `'morph' \| 'move'` | `'morph'` | Liquid behavior. |
-| `morph` | `MorphTuning` | - | `shape` / `speed` / `bounce` / `contentBlur` plus the `advanced` escape hatch. |
-| `move` | `MoveTuning` | - | `springiness` / `wobble` / `stretch` / `trail` plus `advanced`. |
-| `dissolve` | `boolean \| number \| DissolveOptions` | - | Contact-melt modifier; `0..1` scales intensity. |
-| `x` / `y` / `scale` | `number` | `0` / `0` / `1` | Component-driven position, pixel-synced with the liquid. |
-| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig \| { duration, ease }` | `'smooth'` | Spring or duration transition for x/y. |
-| `delay` | `number` | `0` | Transition delay in ms (stagger). |
-| `observe` | `boolean` | `false` | Liquid follows the rendered rect of content you animate yourself; implied by `morph.shape`, `dissolve` and `move`. |
-| `radius` | `number \| [tl, tr, br, bl]` | measured | Overrides the liquid corner radius. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|------|
-| `default` (TxLiquid) | - | Group content, typically several `TxLiquidItem`s. |
-| `default` (TxLiquidItem) | - | The real interactive content; keep its background transparent — the liquid is the surface. |
-
-### Events
-
-No public events.
-
-### Exposed Methods
-
-No public instance methods.
-
-### CSS Variables
-
-No public CSS variables are consumed; pass `fill="var(--surface)"` for light/dark theming.
-
-## Move Trail
-
-Move: you move the element however you like (CSS, pointer events) — the liquid chases it on a spring and drags a droplet tail.
-
+### Move Trail
+With `effect="move"`, you move the element yourself (CSS or pointer events); the liquid chases it on a spring and drags a droplet tail.
 :::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
 ---
 code: |
@@ -149,26 +92,69 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Keep item backgrounds transparent: the liquid is the surface. Opaque content, such as a round photo, covers its own blob.
+- Pass a CSS variable as `fill` (e.g. `var(--tx-bg-color)`) so the liquid follows the theme.
+- Put shadows on `shadow`, not on children, so one shadow hugs the merged liquid.
+- When pieces that should merge look separate, raise `blur` before tuning anything else.
+- For high-frequency dragging, start from the `effect="move"` defaults; reach for `advanced` only if they fall short.
+
+## API Reference
+
+### TxLiquid
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `blur` | `number` | `6` | Goo blur sigma (px); sets how far apart pieces start bridging. |
+| `contrast` | `number` | `18` | Alpha-contrast slope; larger values give a sharper liquid edge. |
+| `fill` | `string` | `'#fff'` | Liquid surface color; accepts `var()`. |
+| `shadow` | `string` | - | `box-shadow` syntax drawn on the merged silhouette; `inset` layers paint inside. |
+| `filterPadding` | `number` | `24` | Extra filter-region slack (px) for blobs that leave the group box. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Several `TxLiquidItem` nodes. |
+
+### TxLiquidItem
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `effect` | `'morph' \| 'move'` | `'morph'` | Liquid behavior: `morph` merges, `move` chases with a tail. |
+| `morph` | `MorphTuning` | - | `shape` / `speed` / `bounce` / `contentBlur`, plus the `advanced` escape hatch. |
+| `move` | `MoveTuning` | - | `springiness` / `wobble` / `stretch` / `trail`, plus `advanced`. |
+| `dissolve` | `boolean \| number \| DissolveOptions` | - | Contact-melt modifier; `0..1` scales its intensity. |
+| `x` / `y` / `scale` | `number` | `0` / `0` / `1` | Component-driven position and scale, pixel-synced with the liquid. |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig \| { duration, ease }` | `'smooth'` | Spring or duration transition for `x` / `y`. |
+| `delay` | `number` | `0` | Transition delay in ms, for staggering. |
+| `observe` | `boolean` | `false` | Makes the liquid follow content you animate yourself; implied by `morph.shape`, `dissolve`, and `move`. |
+| `radius` | `number \| [tl, tr, br, bl]` | measured | Overrides the radius measured from computed style. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | The real interactive content; keep its background transparent. |
+
 ## Overview
 
-- `TxLiquid` renders a `position: relative; isolation: isolate` container; the silhouette SVG sits at `z-index: -1` below every child, the melt overlay above the content layer, both `pointer-events: none`.
-- `TxLiquidItem` must live inside a `TxLiquid` group, otherwise it throws.
-- Size the group to contain the items' full travel (like a menu reserving its open footprint); bridging happens roughly once `blur ≳ gap` — raise `blur` before suspecting anything else.
-- Corner radius is measured from computed style (percentages, pills and circles just work); `radius` overrides it.
-- For `x/y/scale`-driven items the component owns the wrapper `transform`; do not write your own transform or filter onto the wrapper.
-- `morph.shape` writes `filter: blur()` onto the content mid-morph; `dissolve` writes `mask-image` onto `<img>` elements — don't combine either with your own.
-- `dissolve` combined with `effect="move"` is ignored with a warning; component-driven transitions collapse to instant snaps under `prefers-reduced-motion: reduce`.
-- `resolveTransition(transition, reducedMotion?)` is exported alongside `liquidTransitionPresets`: it compiles a preset or a `SpringConfig` into `{ duration, easing }`, where `easing` is a CSS `linear()` curve (a cubic-bezier where `linear()` is unsupported), so WAAPI or CSS motion outside the component can ride the same springs.
+- `TxLiquid` is a relatively positioned `isolation: isolate` container: the silhouette SVG sits below every child, the melt overlay above the content, and neither takes pointer events.
+- `TxLiquidItem` must render inside a `TxLiquid`, or it throws.
+- Size the group to contain the items' full travel; bridging starts roughly once `blur ≳ gap`.
+- The component owns the wrapper's `transform` (`x/y/scale`), the content `filter` during `morph.shape`, and `mask-image` on `<img>` (`dissolve`); don't set your own.
+- `dissolve` with `effect="move"` is ignored with a warning; under reduced motion, component-driven transitions become instant.
+- The entry also exports `resolveTransition(transition, reducedMotion?)` and `liquidTransitionPresets`, which compile a preset or `SpringConfig` into `{ duration, easing }` (CSS `linear()`, or cubic-bezier where unsupported) for WAAPI or CSS motion outside the component.
 
 ## Technologies
 
-- Manually verified against `index.ts`, `TxLiquid.vue`, `TxLiquidItem.vue`, `types.ts` and `liquid.test.ts` under `packages/tuffex/packages/components/src/liquid/`.
-- The physics engine (`observer.ts`, `spring.ts`, `geometry.ts`, `shadow.ts`) is a verbatim port of upstream `liquid-gooey` (MIT © Jakub Antalik) with strict-TS index hardening only; the filter chain is rebuilt imperatively in `filter-primitives.ts` to avoid SVG namespace ambiguity.
-- Upstream React's `Liquid` / `Liquid.Item` map to `TxLiquid` / `TxLiquidItem`; `className` / `style` are covered by Vue attribute fallthrough.
-
-- Component source: `packages/tuffex/packages/components/src/liquid/src/TxLiquid.vue`, `TxLiquidItem.vue`.
-- Types: `packages/tuffex/packages/components/src/liquid/src/types.ts`.
-- Upstream: [Jakubantalik/Libraries · liquid-gooey](https://github.com/Jakubantalik/Libraries/tree/main/packages/liquid-gooey) (MIT).
-- **Coverage:** `packages/tuffex/packages/components/src/liquid/__tests__/liquid.test.ts` verifies the silhouette/melt double layer, the goo filter chain, shadow splitting (drop-shadow vs SVG passes), morph blob mirroring, observed registration, and the outside-group throw.
+- The silhouette layer merges each item's blob through an SVG goo filter (Gaussian blur plus alpha contrast); the content layer skips the filter and stays crisp and interactive.
+- Ported from [Jakubantalik/Libraries · liquid-gooey](https://github.com/Jakubantalik/Libraries/tree/main/packages/liquid-gooey) (MIT © Jakub Antalik); React's `Liquid` / `Liquid.Item` map to `TxLiquid` / `TxLiquidItem`.
+- Source: `packages/tuffex/packages/components/src/liquid/`.
 
 <TuffDocSourceLink />

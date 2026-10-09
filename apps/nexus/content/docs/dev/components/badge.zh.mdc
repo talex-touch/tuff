@@ -109,6 +109,7 @@ code: |
 | `--tx-badge-bg` | `variant` / `color` | 背景色。 |
 | `--tx-badge-text` | `variant` / `color` | 文字色。 |
 | `--tx-badge-border` | `variant` | 边框色。 |
+| `--tx-badge-dot` | `color` | `dot` 圆点的填充色，未设置时用文字色。 |
 | `--tx-badge-offset-x` / `--tx-badge-offset-y` | 调用方 | 滑入起点偏移，默认 `-8.2px` / `12.4px`。 |
 | `--tx-badge-slide-dur` | 调用方 | 滑入时长，默认 `260ms`。 |
 | `--tx-badge-pop-dur` / `--tx-badge-pop-close-dur` | 调用方 | 弹出 / 收起时长，默认 `500ms` / `180ms`。 |

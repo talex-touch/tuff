@@ -286,6 +286,8 @@ code: |
 - `TxTabItemGroup` renders no DOM; TxTabs reads its children and builds the group.
 - Source: `packages/tuffex/packages/components/src/tabs/`.
 
+<TuffDocSourceLink />
+
 ## Customization
 
 | CSS variable | Used for |
@@ -300,5 +302,3 @@ code: |
 | `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Generated from the indicator props, for hosts to read. |
 | `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Generated from the content animation props. |
 | `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Generated from the nav animation props. |
-
-<TuffDocSourceLink />

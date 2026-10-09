@@ -1,6 +1,6 @@
 ---
 title: "DropdownMenu"
-description: "Compact Popover-based menu with pre-close activation confirmation."
+description: "A menu of short commands that opens from a trigger."
 category: Navigation
 status: beta
 since: 0.3.4
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### DropdownMenu
+### Basic
+A selection blinks to confirm, then closes the menu; an item with `activation-feedback="false"` runs at once.
 :::TuffDemoWrapper{demo="DropdownMenuDropdownMenuDemo" code-lang="vue"}
 ---
 code: |
@@ -29,9 +30,8 @@ code: |
 ---
 :::
 
-`TxDropdownSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, nor does a diagonal path across sibling rows expand them, and selecting a `TxDropdownItem` inside the child closes the whole chain following the root menu's `closeOnSelect`.
-
-### DropdownSubmenu
+### Submenus
+`TxDropdownSubmenu` nests child panels to any depth; hovering the trigger row expands one.
 :::TuffDemoWrapper{demo="DropdownMenuDropdownSubmenuDemo" code-lang="vue"}
 ---
 code: |
@@ -61,224 +61,183 @@ code: |
 ---
 :::
 
+### Navigation Style
+The `trigger` slot takes any element; the `right` slot replaces an item's trailing arrow.
+:::TuffDemoWrapper{demo="DropdownMenuDropdownMenuNavDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu v-model="open" :min-width="240">
+      <template #trigger>
+        <div class="nav-trigger">
+          Design <span>Ecosystem</span>
+          <TxIcon name="chevron-down" />
+        </div>
+      </template>
+
+      <TxDropdownItem>
+        GitHub
+        <template #right>
+          <i class="i-carbon-launch" />
+        </template>
+      </TxDropdownItem>
+      <TxDropdownItem>
+        NPM
+        <template #right>
+          <i class="i-carbon-launch" />
+        </template>
+      </TxDropdownItem>
+    </TxDropdownMenu>
+  </template>
+---
+:::
+
+### Dashboard Navigation
+`TxTabs` hold the top-level sections; light actions go in `TxDropdownMenu`, short notes in `TxPopover`, and dense settings in `TxDrawer`.
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Release actions</TxButton>
+      </template>
+      <TxDropdownItem>Quick release</TxDropdownItem>
+    </TxDropdownMenu>
+
+    <TxPopover>
+      <template #reference>
+        <TxButton variant="secondary">Policy notes</TxButton>
+      </template>
+      Keep popovers short and action-light.
+    </TxPopover>
+
+    <TxTabs v-model="active" placement="left" indicator-variant="pill">
+      <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      <TxTabItem name="Releases">Release settings</TxTabItem>
+    </TxTabs>
+
+    <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+  </template>
+---
+:::
+
 ### Best Practices
 
-- Keep dropdowns to a short command list. If the panel needs paragraphs, forms, or multiple interaction steps, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel` composition instead.
-- Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
-- Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
-- Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
-- The default `activationFeedback=true` clears the highlight for 90 ms, confirms with the existing active state for 90 ms, then emits `select` and closes. Disable it only when the host already supplies stronger immediate feedback or requires synchronous callbacks; reduced motion automatically uses the immediate path.
-- Set `initialFocus="none"` only when the host places focus itself after opening (focusing a search field inside the panel, for example). Otherwise keyboard users open the menu with focus still on the trigger and need an extra arrow press to reach the list.
-- Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
+- Keep it to short commands. For paragraphs, forms, or multi-step interaction, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel`.
+- Use `danger` only for destructive commands, and group them apart from neutral ones as the list grows.
+- Use `arrow` only on navigation or submenu rows; put external-link icons, shortcuts, and status badges in the `right` slot.
+- Set `closeOnSelect=false` only on rows that open another surface or start a multi-step flow. Turn off `activationFeedback` only when the host gives stronger feedback or needs a synchronous callback.
+- Set `initialFocus="none"` only when the host places focus itself after opening, such as on a search field in the panel; otherwise keyboard users need an extra arrow press to reach the list.
 
 ## API Reference
 
-### TxDropdownMenu Props
+### TxDropdownMenu
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `undefined` | Controls whether the dropdown is open (v-model). Omit it for uncontrolled open state, kept internally. |
-| `trigger` | `'click' \| 'hover'` | `'click'` | How the trigger opens the menu, forwarded to `TxPopover`. It owns hover handling for both the reference and the panel, so timing and mutual exclusion come from the shared delay service rather than a close timer in the host. |
-| `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
-| `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
+| `modelValue` | `boolean` | `undefined` | Open state (`v-model`); omit it to leave the menu uncontrolled. |
+| `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode; `TxPopover` handles hover timing and mutual exclusion. |
+| `placement` | `DropdownPlacement` | `'bottom-start'` | Panel position relative to the trigger. |
+| `offset` | `number` | `6` | Distance between the trigger and the panel, in px. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
-| `activationFeedback` | `boolean` | `true` | Runs a 90 ms clear + 90 ms confirmation before `select` and close for closing commands; reduced motion skips it. |
-| `initialFocus` | `'first-item' \| 'none'` | `'first-item'` | Where focus lands when the menu opens. `'first-item'` focuses the first enabled item; `'none'` leaves focus alone so the host can place it itself (a search field at the top of the panel, for example). Arrow keys still hand focus from there to the list. |
-| `animation` | `BaseAnchorAnimationOptions` | `{}` | Popover animation config forwarded to BaseAnchor; an empty object uses BaseAnchor's default animation. |
-| `minWidth` | `number` | `220` | Minimum panel width in pixels. The maximum panel width is fixed at 360px, with no prop to change it. |
-| `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
-| `unlimitedHeight` | `boolean` | `false` | Disables the panel max-height constraint. |
-| `referenceClass` | `BaseAnchorClassValue` | - | Extra class value forwarded to the trigger anchor. |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Low-level card props forwarded to the popover panel. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Visual border variant forwarded to the popover panel. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Background treatment forwarded to the popover panel. |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Shadow strength forwarded to the popover panel. |
-| `panelRadius` | `number` | `18` | Panel corner radius in pixels. |
-| `panelPadding` | `number` | `8` | Panel padding in pixels. |
+| `activationFeedback` | `boolean` | `true` | Clears, then confirms the highlight for 90 ms each before closing; skipped under reduced motion. |
+| `initialFocus` | `'first-item' \| 'none'` | `'first-item'` | Where focus lands on open; `'none'` leaves it for the host to place. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Panel animation; an empty object uses BaseAnchor's default. |
+| `minWidth` | `number` | `220` | Minimum panel width in px; the maximum is fixed at 360px. |
+| `maxHeight` | `number` | `420` | Maximum panel height in px; taller content scrolls. |
+| `unlimitedHeight` | `boolean` | `false` | Removes the panel's height limit. |
+| `referenceClass` | `BaseAnchorClassValue` | - | Extra class on the trigger anchor. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the panel. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
+| `panelRadius` | `number` | `18` | Panel corner radius in px. |
+| `panelPadding` | `number` | `8` | Panel padding in px. |
 
-### TxDropdownItem Props
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: boolean)` | Fires when the menu requests an open-state change. |
+| `open` | - | Fires when the menu requests opening. |
+| `close` | - | Fires when the menu requests closing. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `trigger` | - | Trigger content, used as the Popover reference. |
+| `default` | - | Menu rows, usually `TxDropdownItem`. |
+
+### TxDropdownItem
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `disabled` | `boolean` | `false` | Prevents selection and renders the item as disabled. |
-| `danger` | `boolean` | `false` | Applies danger text styling for destructive actions. |
-| `arrow` | `boolean` | `false` | Shows a trailing chevron when no `right` slot is provided. |
-| `closeOnSelect` | `boolean` | `undefined` | Per-item override of the menu-level `closeOnSelect`; unset follows the menu-level value. |
-| `activationFeedback` | `boolean` | `undefined` | Per-item override of the menu-level confirmation feedback; unset follows the menu-level value. |
+| `disabled` | `boolean` | `false` | Prevents selection; the menu stays open. |
+| `danger` | `boolean` | `false` | Danger text styling. |
+| `arrow` | `boolean` | `false` | Shows a trailing arrow when there is no `right` slot. |
+| `closeOnSelect` | `boolean` | `undefined` | Per-item override of the menu's `closeOnSelect`. |
+| `activationFeedback` | `boolean` | `undefined` | Per-item override of the menu's confirmation feedback. |
 
-### TxDropdownSubmenu Props
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `select` | - | Fires on selection, without a payload; a closing item with feedback fires after the 180 ms confirmation. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main label. |
+| `right` | - | Replaces the trailing arrow drawn by `arrow`. |
+
+### TxDropdownSubmenu
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `disabled` | `boolean` | `false` | Disables the trigger row; the child panel no longer opens. |
-| `placement` | `DropdownPlacement` | `'right-start'` | Positions the child panel relative to the trigger row. |
-| `offset` | `number` | `4` | Distance in pixels between the trigger row and the child panel. |
-| `width` | `number` | `0` | Fixed child panel width; `0` sizes to content bounded by `minWidth`. |
-| `minWidth` | `number` | `160` | Minimum child panel width in pixels. |
-| `maxHeight` | `number` | `420` | Maximum scrollable child panel height in pixels. |
-| `unlimitedHeight` | `boolean` | `false` | Disables the child panel max-height constraint. |
-| `animation` | `BaseAnchorAnimationOptions` | `{}` | Anchor animation config for the child panel. |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Low-level card props forwarded to the child panel. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Visual border variant of the child panel. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Background treatment of the child panel. |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Shadow strength of the child panel. |
-| `panelRadius` | `number` | `14` | Child panel corner radius in pixels. |
-| `panelPadding` | `number` | `6` | Child panel padding in pixels. |
+| `placement` | `DropdownPlacement` | `'right-start'` | Child panel position relative to the trigger row. |
+| `offset` | `number` | `4` | Distance between the trigger row and the child panel, in px. |
+| `width` | `number` | `0` | Fixed child panel width; `0` sizes to content, bounded by `minWidth`. |
+| `minWidth` | `number` | `160` | Minimum child panel width in px. |
+| `maxHeight` | `number` | `420` | Maximum child panel height in px; taller content scrolls. |
+| `unlimitedHeight` | `boolean` | `false` | Removes the child panel's height limit. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Child panel animation. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the child panel. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Child panel border style. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Child panel background effect. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Child panel shadow. |
+| `panelRadius` | `number` | `14` | Child panel corner radius in px. |
+| `panelPadding` | `number` | `6` | Child panel padding in px. |
 
-### TxDropdownMenu Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: boolean)` | Emitted when the menu requests an open-state change. |
-| `open` | - | Emitted when the menu requests opening. |
-| `close` | - | Emitted when the menu requests closing. |
-
-### TxDropdownItem Events
-
-| Event | Params | Description |
-|------|------|------|
-| `select` | - | Emitted when an enabled item activates. Closing items with feedback enabled emit after the 180 ms confirmation; bypass paths emit immediately. |
-
-## Navigation Styles
-
-### DropdownMenu (nav)
-:::TuffDemoWrapper{demo="DropdownMenuDropdownMenuNavDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  </script>
-
-  <template>
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <TxDropdownMenu v-model="open" :min-width="240" placement="bottom-start" :panel-padding="8">
-        <template #trigger>
-          <div
-            style="display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--tx-border-color); border-radius: 12px; user-select: none; cursor: pointer;"
-          >
-            <div style="font-weight: 600;">
-              Repository
-            </div>
-            <div style="color: var(--tx-text-color-secondary); font-weight: 600;">
-              main
-            </div>
-            <TxIcon name="chevron-down" style="opacity: 0.65;" />
-          </div>
-        </template>
-
-        <TxDropdownItem arrow>
-          GitHub
-          <template #right>
-            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-              <i class="i-ri-external-link-line" style="font-size: 16px;" />
-            </span>
-          </template>
-        </TxDropdownItem>
-        <TxDropdownItem arrow>
-          NPM
-          <template #right>
-            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-              <i class="i-ri-external-link-line" style="font-size: 16px;" />
-            </span>
-          </template>
-        </TxDropdownItem>
-      </TxDropdownMenu>
-    </div>
-  </template>
----
-:::
-
-## Dashboard Navigation Composition
-
-Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
-
-:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Overview')
-  const drawerVisible = ref(false)
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxDropdownMenu>
-        <template #trigger>
-          <TxButton>Release actions</TxButton>
-        </template>
-        <TxDropdownItem>Quick release</TxDropdownItem>
-      </TxDropdownMenu>
-
-      <TxPopover>
-        <template #reference>
-          <TxButton variant="secondary">Policy notes</TxButton>
-        </template>
-        Keep popovers short and action-light.
-      </TxPopover>
-
-      <TxTabs v-model="active" placement="left" indicator-variant="pill">
-        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
-        <TxTabItem name="Releases">Release settings</TxTabItem>
-      </TxTabs>
-
-      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
-    </section>
-  </template>
----
-:::
-
-## Slots
-
-### TxDropdownMenu
+#### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `trigger` | - | Trigger content forwarded to the Popover reference slot. |
-| `default` | - | Menu rows, usually `TxDropdownItem` children, rendered inside the menu panel. |
-
-### TxDropdownItem
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `default` | - | Main menu item label. |
-| `right` | - | Replaces the generated trailing chevron used by `arrow`. |
-
-### TxDropdownSubmenu
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `default` | - | Main trigger row label. |
-| `right` | - | Trailing metadata on the trigger row, rendered before the submenu chevron. |
-| `menu` | - | Child panel content, usually `TxDropdownItem` rows or nested `TxDropdownSubmenu`. |
+| `default` | - | Trigger row label. |
+| `right` | - | Trailing info on the trigger row, before the arrow. |
+| `menu` | - | Child panel content; may nest another `TxDropdownSubmenu`. |
 
 ## Overview
 
-- Menu rows use the same outlined hover and active states as every other list row in the library. They previously opted out for a translucent veil; a menu highlighting differently from a select, a tree or a cascader was the more confusing of the two.
-
-- `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
-- `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
-- `closeOnSelect` closes the parent after an enabled item completes confirmation and emits `select`; disabled items do not select or close, while `closeOnSelect=false` submenu/multi-step rows select immediately without blinking.
-- `activationFeedback` is enabled by default: the row clears its current hover/focus highlight, reuses `TxCardItem`'s active style to confirm, then runs the business action and closes. `prefers-reduced-motion: reduce`, menu/item opt-out, or a missing parent menu context adds no delay.
-- The menu panel uses `role="menu"`, and each item uses `role="menuitem"` through `TxDropdownItem`.
-- The first enabled item receives focus when the menu opens; `initialFocus="none"` skips that step so the host can place focus itself (a search field at the top of the panel, for example).
-- Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound and enter the list from a non-item such as a search field; `Home` / `End` jump to the first / last item, skipping `aria-disabled` items, except when focus is inside an `input`, `textarea`, or `contenteditable` element, where they pass through and move the caret.
-- `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
-- The `TxDropdownSubmenu` trigger row is a `role="menuitem"`: `ArrowRight` / `Enter` expand the child panel and focus its first item, and `ArrowLeft` inside the child panel collapses it and returns focus to the trigger row.
-- Pointer travel from parent panel into the child panel never closes the parent; clicks inside the child panel don't count as outside-clicks for the parent, and closing the parent (including preemption by another menu) cascades to its children.
-- A diagonal path from the trigger row to the child panel rides the safe triangle: sibling submenu rows it crosses do not expand and the open child panel stays; resting on a sibling row for about 100ms switches to it. The 4px gap between the panels is covered by the hover bridge.
+- It wraps `TxPopover`, so placement, height limits, panel card props, and animation follow the same anchor behavior.
+- A closing selection first clears the highlight, confirms with the `TxCardItem` active state, then emits `select` and closes; other selections emit at once. Disabled items neither select nor close.
+- The panel is `role="menu"` and items are `role="menuitem"`. Opening focuses the first enabled item unless `initialFocus="none"`.
+- Keyboard: `ArrowDown` / `ArrowUp` move with wraparound and enter the list from a search field; `Home` / `End` jump to the ends, except inside an `input`, `textarea`, or `contenteditable`, where they move the caret.
+- Submenus: `ArrowRight` / `Enter` on the trigger row expand and focus the first item, `ArrowLeft` in the child collapses it. Child items close the whole chain per the root's `closeOnSelect`; clicks inside a child aren't outside clicks, and closing a parent closes its children.
+- A hover bridge covers the 4px gap between parent and child panels. Sibling submenu rows crossed on a diagonal don't expand; resting on one for about 100 ms switches to it.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, and panel visual props, then injects `closeOnSelect` and `activationFeedback` into items.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect/activationFeedback props, `right` slot behavior, `role="menuitem"`, and the pre-close confirmation.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` confirms hover expansion, keyboard traversal, and root-context passthrough (selecting a nested item closes the whole chain); its `closeOnSelect=false` trigger never runs pre-close feedback.
-- Shared behavior: `packages/tuffex/packages/utils/menu-activation-feedback.ts` owns the 90 ms clear / 90 ms confirm state machine, reduced-motion bypass, duplicate suppression, and unmount cleanup.
-- Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, the injected menu context, and the supported placement union.
-- Keyboard contract: `Home` / `End` pass through `input`, `textarea`, and `contenteditable` targets because a search field inside the panel needs them to move the caret; a menu that takes them leaves the field uneditable. Arrow keys are still claimed on editable targets on purpose, since that is the only way the field hands focus to the list. Asking hosts to `stopPropagation` on the field was rejected: it would copy the exception into every host.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, pointer and keyboard confirmation timing, duplicate suppression, menu/item opt-out, reduced motion, unmount cleanup, disabled items, `closeOnSelect=false`, `initialFocus="none"`, and the input/contenteditable navigation exceptions.
+- Activation feedback runs on `packages/tuffex/packages/utils/menu-activation-feedback.ts`, shared with ContextMenu.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/`.
 
 <TuffDocSourceLink />

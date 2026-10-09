@@ -249,6 +249,8 @@ code: |
 - 骨架行沿用选项行自己的容器，内放 `TxSkeleton` 骨架条。
 - 源码：`packages/tuffex/packages/components/src/choice-card/`。
 
+<TuffDocSourceLink />
+
 ## 使用场景
 
 - 助手的开场引导：「我们先从哪件事开始？」，每步一个问题。
@@ -262,5 +264,3 @@ code: |
 | [SuggestionChips](/docs/dev/components/suggestion-chips) | 单行追问建议 |
 | [RecommendationCard](/docs/dev/components/recommendation-card) | 单个推荐答案与备选 |
 | [ApprovalCard](/docs/dev/components/approval-card) | 多问题作答后统一发送 |
-
-<TuffDocSourceLink />

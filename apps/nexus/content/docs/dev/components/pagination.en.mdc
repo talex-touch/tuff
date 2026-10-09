@@ -1,6 +1,6 @@
 ---
 title: Pagination
-description: Page navigation for long lists
+description: A control for moving between pages of data.
 category: Navigation
 status: beta
 since: 0.3.4
@@ -16,47 +16,27 @@ const page = ref(1)
 
 ## Usage
 
-### Pagination
-Navigate through pages of data. `page-sizes` puts the items-per-page selector inside the pagination, and `TxPagination` recalculates the page count for the new size; this demo returns to page 1 when the size changes, as the next section explains.
+### Basic
+`total` and `pageSize` set the page count; `show-info` adds page info and `show-first-last` adds first and last buttons.
 :::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const page = ref(1)
-  const pageSize = ref(10)
-  </script>
-
   <template>
     <TxPagination
       v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50]"
-      page-size-label="Items per page"
       :total="120"
       show-info
       show-first-last
-      @page-size-change="page = 1"
     />
   </template>
 ---
 :::
 
-### Page size
-
-`page-sizes` adds a size selector after the page buttons, named by its visible `page-size-label`, and lays the controls out in one wrapping row. Picking a size emits `update:pageSize` and `pageSizeChange` and leaves the page alone, so the host decides where the reader lands; this demo goes back to page 1.
-
+### Page Size
+`page-sizes` adds a size selector after the page buttons. Changing the size leaves the page alone; the host decides whether to return to page 1.
 :::TuffDemoWrapper{demo="PaginationPageSizeDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const page = ref(1)
-  const pageSize = ref(20)
-  </script>
-
   <template>
     <TxPagination
       v-model:current-page="page"
@@ -66,111 +46,18 @@ code: |
       :total="230"
       show-info
       @page-size-change="page = 1"
-    />
+    >
+      <template #info="{ currentPage, totalPages }">
+        230 items · page {{ currentPage }} of {{ totalPages }}
+      </template>
+    </TxPagination>
   </template>
 ---
 :::
 
-### Best Practices
-
-- Prefer `total + pageSize` so the UI can reflect item counts; use `totalPages` only when the backend cannot return totals.
-- Keep `currentPage` one-based. Initialize the model to `1`, not `0`.
-- Reset `currentPage` to `1` when filters or search terms change and the old page may be out of range.
-- Reset it on `pageSizeChange` too: the component only reports the new size, and the rows the reader was looking at have moved. A page past the new count is clamped either way.
-- Prefer `pageSizes` over a size select of your own beside the pagination: it is named by its visible label and sits in the pagination's own row.
-- Keep pagination adjacent to the list or table it controls.
-- Use the `info` slot for localized range copy such as “Viewing 21–40 of 120 items”.
-
-## API Reference
-
-### Props
-::TuffPropsTable
----
-rows:
-  - name: currentPage
-    type: number
-    default: '1'
-    description: Current page
-  - name: pageSize
-    type: number
-    default: '10'
-    description: Items per page; pair with v-model:page-size when the reader can change it
-  - name: pageSizes
-    type: 'number[]'
-    default: '[]'
-    description: 'Page-size choices. Supplying them renders a size selector after the page buttons and lays the controls out in one wrapping row; without them the DOM is unchanged. Invalid sizes are dropped, and a pageSize missing from the list joins it'
-  - name: pageSizeLabel
-    type: string
-    default: "'Items per page'"
-    description: Visible label in front of the size selector; it also names the selector for assistive technology
-  - name: total
-    type: number
-    default: '-'
-    description: Total item count; when omitted or 0, page count falls back to totalPages
-  - name: totalPages
-    type: number
-    default: '-'
-    description: Explicit total page count; used when total is not provided
-  - name: prevIcon
-    type: string
-    default: "''"
-    description: Custom previous icon class consumed by TxIcon; empty uses the bundled SVG chevron
-  - name: nextIcon
-    type: string
-    default: "''"
-    description: Custom next icon class consumed by TxIcon; empty uses the bundled SVG chevron
-  - name: showInfo
-    type: boolean
-    default: 'false'
-    description: Show total info
-  - name: showFirstLast
-    type: boolean
-    default: 'false'
-    description: Show first/last buttons
----
-::
-
-## Events
-
-::TuffPropsTable
----
-rows:
-  - name: update:currentPage
-    type: '(page: number) => void'
-    default: '-'
-    description: v-model current page update
-  - name: pageChange
-    type: '(page: number) => void'
-    default: '-'
-    description: Triggered when users navigate to another page
-  - name: update:pageSize
-    type: '(size: number) => void'
-    default: '-'
-    description: v-model page size update when the reader picks another size; the current page is left as it is
-  - name: pageSizeChange
-    type: '(size: number) => void'
-    default: '-'
-    description: Triggered when the reader picks another page size
----
-::
-
-## Slots
-
-::TuffPropsTable
----
-rows:
-  - name: info
-    type: '{ currentPage: number, totalPages: number, total?: number }'
-    default: '-'
-    description: Custom page info area
----
-::
-
-## Dashboard Data Operations
-
-Place pagination directly below the table and bind it to the same reactive model as filtering and selection; avoid floating pagination away from the list container.
-
-::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Pagination shares the data-region state with DataTable and Skeleton."}
+### Data Operations
+Place pagination right below the table, bound to the same reactive state as filtering and selection.
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" description="With DataTable and Skeleton"}
 ---
 code: |
   <template>
@@ -185,21 +72,130 @@ code: |
 ---
 ::
 
+### Best Practices
+
+- Prefer `total` with `pageSize`; use `totalPages` only when the backend returns a page count alone.
+- Keep `currentPage` one-based and initialize it to `1`.
+- Reset `currentPage` to `1` when filters, search terms, or the page size change.
+- Use `pageSizes` instead of your own size select: it is named by a visible label and shares the pagination's row.
+- Use the `info` slot for localized range copy, such as "Viewing 21–40 of 120 items".
+
+## API Reference
+
+### Props
+::TuffPropsTable
+---
+rows:
+  - name: currentPage
+    type: number
+    default: '1'
+    description: Current page, counted from 1
+  - name: pageSize
+    type: number
+    default: '10'
+    description: Items per page; pair with v-model:page-size when the reader can change it
+  - name: pageSizes
+    type: 'number[]'
+    default: '[]'
+    description: 'Size choices that render a size selector; invalid sizes are dropped, and a missing pageSize joins them'
+  - name: pageSizeLabel
+    type: string
+    default: "'Items per page'"
+    description: Visible label before the size selector; also names the selector
+  - name: total
+    type: number
+    default: '-'
+    description: Total item count; when omitted or 0, totalPages is used instead
+  - name: totalPages
+    type: number
+    default: '-'
+    description: Explicit page count, used when total is not provided
+  - name: prevIcon
+    type: string
+    default: "''"
+    description: Previous-page icon class rendered by TxIcon; empty uses the built-in chevron
+  - name: nextIcon
+    type: string
+    default: "''"
+    description: Next-page icon class rendered by TxIcon; empty uses the built-in chevron
+  - name: showInfo
+    type: boolean
+    default: 'false'
+    description: Shows page and total info
+  - name: showFirstLast
+    type: boolean
+    default: 'false'
+    description: Shows first and last buttons
+  - name: ariaLabel
+    type: string
+    default: "'Pagination'"
+    description: The aria-label of the root nav landmark
+  - name: firstLabel
+    type: string
+    default: "'First page'"
+    description: The first-page button's aria-label
+  - name: prevLabel
+    type: string
+    default: "'Previous page'"
+    description: The previous-page button's aria-label
+  - name: nextLabel
+    type: string
+    default: "'Next page'"
+    description: The next-page button's aria-label
+  - name: lastLabel
+    type: string
+    default: "'Last page'"
+    description: The last-page button's aria-label
+---
+::
+
+### Events
+
+::TuffPropsTable
+---
+rows:
+  - name: update:currentPage
+    type: '(page: number) => void'
+    default: '-'
+    description: Current-page update (v-model)
+  - name: pageChange
+    type: '(page: number) => void'
+    default: '-'
+    description: Fires when the user moves to another page
+  - name: update:pageSize
+    type: '(size: number) => void'
+    default: '-'
+    description: Page-size update (v-model) when the reader picks another size; the page is unchanged
+  - name: pageSizeChange
+    type: '(size: number) => void'
+    default: '-'
+    description: Fires when the reader picks another page size
+---
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: info
+    type: '{ currentPage: number, totalPages: number, total?: number }'
+    default: '-'
+    description: Custom page info area
+---
+::
+
 ## Overview
 
-- `total` takes precedence for page-count calculation with `pageSize`; `totalPages` is used when `total` is not provided.
-- `showFirstLast` renders first/last page jump buttons, and boundary pages disable first/previous or next/last controls.
-- The active page button exposes `aria-current="page"`; previous/next/first/last controls expose readable `aria-label` values.
-- Default navigation chevrons are bundled SVGs and do not require host icon generation; custom icon classes still use `TxIcon`.
-- With `pageSizes`, a `div.tx-pagination__size` sits between the page list and the info: a visible `span.tx-pagination__size-label` and an 88px `TxSelect` whose combobox carries `aria-labelledby` pointing at that label. The nav gains `has-page-size` and lays the list, the selector and the info out in one centred row that wraps when narrow. Without `pageSizes` (or with only invalid sizes) none of this renders.
-- Picking a size emits `update:pageSize` and then `pageSizeChange`, and only when the size differs from `pageSize`. `currentPage` is left to the host; if the larger size leaves fewer pages than the current one, the existing clamp emits `update:currentPage` with the last page.
-- The page-size selector passes `aria-labelledby` directly to `TxSelect`, which forwards it to the combobox from the first render; no DOM-writing ref callback is needed. The on-demand style plugin loads the select's sheets with pagination; manual style imports still need `select/style.css` and its dependencies.
+- The page count comes from `total` and `pageSize`; when `total` is omitted or 0, `totalPages` is used.
+- When `currentPage` falls out of range, the component emits `update:currentPage` with the nearest valid page.
+- The active page button has `aria-current="page"`; previous, next, first, and last buttons have readable `aria-label`s and disable at the boundaries.
+- The size selector renders only with valid `pageSizes`, and its combobox is named by the visible label through `aria-labelledby`; otherwise the DOM is unchanged.
+- Picking a different size emits `update:pageSize`, then `pageSizeChange`, and leaves the page alone.
+- The on-demand style plugin loads the selector's styles too; manual style imports also need `select/style.css` and its dependencies.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` confirms total/page-size page calculation, ellipsis window generation, boundary guards, first/last controls, info slot props, `aria-current`, and readable pagination button labels.
-- Type contracts: `packages/tuffex/packages/components/src/pagination/src/types.ts` defines `PaginationProps` and `PaginationEmits`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` covers total-derived pages, ellipsis rendering, active page semantics, blocked out-of-range navigation, first/last controls, boundary disabled states, localized control labels, and custom info slot props. `pagination-page-size.test.ts` (6 cases) covers the unchanged DOM without valid `pageSizes`, the selector's order and its `aria-labelledby` name, the size events without a page change, no event for the current size, a missing `pageSize` joining the options, and a `v-model:page-size` round trip where the clamp pulls the page back.
-- Recommendation: prefer `total + pageSize`; use `totalPages` only when the backend returns a page count without total items.
+- Source: `packages/tuffex/packages/components/src/pagination/`.
 
 <TuffDocSourceLink />

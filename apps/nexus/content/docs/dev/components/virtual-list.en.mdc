@@ -1,6 +1,6 @@
 ---
 title: "VirtualList"
-description: "Fixed-row virtualized list for long data sets with lower DOM cost and imperative scroll helpers."
+description: "A fixed-row-height list that renders only the visible rows."
 category: Advanced
 status: beta
 since: 0.3.4
@@ -11,6 +11,8 @@ verified: true
 
 ## Usage
 
+### Basic
+`itemHeight` fixes the row height and `height` sets the viewport.
 :::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
 ---
 code: |
@@ -21,9 +23,7 @@ code: |
   <template>
     <TxVirtualList :items="items" :item-height="36" height="240px">
       <template #item="{ item, index }">
-        <div style="padding: 6px 12px; width: 100%;">
-          {{ index + 1 }}. {{ item }}
-        </div>
+        {{ index + 1 }}. {{ item }}
       </template>
     </TxVirtualList>
   </template>
@@ -61,11 +61,11 @@ function jumpToLatest() {
 
 ### Best Practices
 
-- Use only for fixed-height rows. Variable-height content will desynchronize scroll math.
-- Provide `itemKey` for objects with stable ids; index keys are acceptable only for immutable arrays.
-- Keep `overscan` modest. Higher overscan smooths fast scrolling but increases DOM work.
-- Avoid wrapping rows with vertical margins; put padding inside the fixed-height row instead.
-- Use `scroll` for analytics or lazy data triggers, not for per-frame heavy work.
+- Use it only for fixed-height rows; variable heights throw off the scroll math.
+- Point `itemKey` at a stable id for object lists; index keys suit immutable arrays only.
+- Keep `overscan` modest: more rows scroll smoother but cost more DOM work.
+- Put spacing inside the fixed-height row, not as vertical margins around it.
+- Use `scroll` for analytics or lazy-load triggers, not per-frame heavy work.
 
 ## API Reference
 
@@ -73,55 +73,43 @@ function jumpToLatest() {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `items` | `T[]` | `[]` | Full data set. |
-| `itemHeight` | `number` | required | Fixed row height in pixels. All rows must match this value. |
-| `height` | `number \| string` | `320` | Scroll container height. Numbers become px. |
+| `items` | `T[]` | `[]` | The full data set. |
+| `itemHeight` | `number` | required | Fixed row height in px; every row must match it. |
+| `height` | `number \| string` | `320` | Scroll container height; numbers become px. |
 | `overscan` | `number` | `4` | Extra rows rendered before and after the viewport. |
-| `itemKey` | `keyof T \| (item: T, index: number) => string \| number` | `index` | Key resolver for rendered rows. |
+| `itemKey` | `keyof T \| (item: T, index: number) => string \| number` | `index` | Row key: a field name or function; a missing field falls back to its index in `items`. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `scroll` | `{ scrollTop: number, startIndex: number, endIndex: number }` | Emitted after the list scrolls. |
+| `scroll` | `{ scrollTop: number, startIndex: number, endIndex: number }` | Fires after a scroll updates the visible range. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `item` | `{ item: T, index: number }` | Custom renderer for each visible item. Defaults to rendering `item` as text. |
+| `item` | `{ item: T, index: number }` | Renders each visible item; defaults to `item` as text. |
 
-### Expose
+### Exposed Methods
 
 | Method | Signature | Description |
 |------|-----------|-------------|
-| `scrollToIndex` | `(index: number) => void` | Sets scrollTop to `Math.max(0, index) * itemHeight`. |
-| `scrollToTop` | `() => void` | Sets scrollTop to `0`. |
-| `scrollToBottom` | `() => void` | Sets scrollTop to `max(0, totalHeight - viewHeight)`. |
+| `scrollToIndex` | `(index: number) => void` | Scrolls to `Math.max(0, index) * itemHeight`; indexes past the last item aren't clamped. |
+| `scrollToTop` | `() => void` | Scrolls to the top. |
+| `scrollToBottom` | `() => void` | Scrolls to `max(0, totalHeight - viewHeight)`. |
 
 ## Overview
 
-- `itemHeight` is required and every rendered row is styled with that exact pixel height.
-- Numeric `height` becomes px; string `height` is applied as-is.
-- Numeric, px, and bare numeric string heights are parsed immediately to compute the viewport. `%`, `vh`, `vw`, `rem`, and `em` heights wait for the real container height.
-- On mount, the component reads `clientHeight`; when `ResizeObserver` is available, it updates viewport height after resize.
-- `startIndex` is `floor(scrollTop / itemHeight) - overscan`, clamped to `0`.
-- `endIndex` is based on visible viewport plus `overscan`, clamped to `items.length`.
-- The spacer height is `items.length * itemHeight`; visible items are translated by `startIndex * itemHeight`.
-- `itemKey` may be a field name or function. Missing field values fall back to the visible item index.
-- `scroll` emits `{ scrollTop, startIndex, endIndex }` after internal scroll state updates.
-- `scrollToIndex(index)` clamps negative indexes to zero but does not clamp indexes above the last item; callers should pass valid indexes.
-- The container and rows stay semantically neutral (no `role`/`aria-*`). Because only the visible slice is in the DOM, consumers who need accessible list semantics should supply `role="list"`/`role="listitem"` plus `aria-setsize`/`aria-posinset` themselves, using the real `items.length` and absolute indices rather than the visible-slice offsets.
+- Every row is exactly `itemHeight` px tall; a numeric `height` becomes px, and a string is applied as-is.
+- Numeric, px, and bare numeric string heights count immediately; `%`, `vh`, `vw`, `rem`, and `em` wait for the mounted `clientHeight`, so give SSR or hidden containers a concrete height.
+- With `ResizeObserver` available, container resizes update the viewport height.
+- The visible range runs from `floor(scrollTop / itemHeight) - overscan` to the viewport's end plus `overscan`, clamped between `0` and `items.length`.
+- The spacer is `items.length * itemHeight` tall, and visible items shift by `startIndex * itemHeight`.
+- The container and rows carry no `role` or `aria-*`. For list semantics, wrap them with `role="list"` / `role="listitem"` and set `aria-setsize` / `aria-posinset` from the real total and absolute indexes.
 
 ## Technologies
 
-- **Viewport note:** `height` values that cannot be parsed synchronously (`%`, viewport units, `rem`, `em`) depend on the mounted element's `clientHeight`; server-side or hidden containers should provide a concrete height before relying on visible range math.
-- **Scroll note:** `scrollToIndex()` clamps negative indexes but not indexes above `items.length - 1`. Validate caller indexes for user-provided jump targets.
-- **Verified coverage:** `virtual-list.test.ts` currently checks visible item count from fixed height and the `scrollToIndex` exposed method. The docs therefore call out untested contracts—ResizeObserver, custom `itemKey`, overscan, and `scroll` payloads—explicitly for manual review.
-
-- Component source: `packages/tuffex/packages/components/src/virtual-list/src/TxVirtualList.vue`.
-- Types: `packages/tuffex/packages/components/src/virtual-list/src/types.ts` exports `VirtualListProps`, `VirtualListEmits`, `VirtualListItemKey`, and `VirtualListKey`.
-- Export alias: `packages/tuffex/packages/components/src/virtual-list/index.ts` exports `VirtualList`, `TxVirtualList`, virtual-list types, and `TxVirtualListInstance`.
-- Coverage: `packages/tuffex/packages/components/src/virtual-list/__tests__/virtual-list.test.ts` verifies visible range rendering and imperative scrolling.
+- Source: `packages/tuffex/packages/components/src/virtual-list/`.
 
 <TuffDocSourceLink />

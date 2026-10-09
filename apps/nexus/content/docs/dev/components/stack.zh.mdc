@@ -1,6 +1,6 @@
 ---
 title: "Stack 堆叠"
-description: "以方向为核心的一维 Flexbox 包装器，用于纵向或横向间距布局。"
+description: "沿单一方向排列子元素并统一间距的容器"
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,22 +11,22 @@ verified: true
 
 ## 用法
 
+### 基础
 :::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxStack :gap="10">
-        <TxButton>One</TxButton>
-        <TxButton variant="secondary">Two</TxButton>
-        <TxButton variant="ghost">Three</TxButton>
-      </TxStack>
-    </div>
+    <TxStack :gap="10">
+      <TxButton>One</TxButton>
+      <TxButton variant="secondary">Two</TxButton>
+      <TxButton variant="ghost">Three</TxButton>
+    </TxStack>
   </template>
 ---
 :::
 
 ### 横向操作区
+`direction="horizontal"` 横向排列，`wrap` 允许在窄容器中换行。
 
 ```vue
 <template>
@@ -38,6 +38,7 @@ code: |
 ```
 
 ### 行内堆叠
+`inline` 使用 `inline-flex`，可嵌入文本行。
 
 ```vue
 <template>
@@ -53,65 +54,50 @@ code: |
 
 ### 最佳实践
 
-- 当设计需要控制同级元素节奏时使用 `TxStack`，不要把它当成任意页面布局容器。
-- 表单与设置面板优先使用 `vertical`；操作行和紧凑元信息优先使用 `horizontal`。
-- 需要适配窄容器的按钮组应开启 `wrap`。
-- `gap` 使用 token 或数字值；不要用空子元素充当间隔。
-- 需要 `row-reverse` 或 `column-reverse` 等原生 flex 方向时使用 `TxFlex`。
+- 控制同级元素的节奏时用 `TxStack`，不要拿它做任意页面布局。
+- 表单与设置面板用 `vertical`，操作行与紧凑元信息用 `horizontal`。
+- 间距交给 `gap`，不要用空元素充当间隔。
+- 需要 `row-reverse`、`column-reverse` 等原生方向时改用 `TxFlex`。
+- 组件不添加语义 role；列表、表单、导航语义放在子元素或外层容器上。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | 主轴方向。 |
-| `gap` | `number \| string` | `12` | 子元素间距，数字会转为 px。 |
-| `align` | `string` | `'stretch'` | 交叉轴对齐，取任意合法 `align-items` 值（`stretch` / `center` / `flex-start` / `flex-end` / `baseline`）。类型未收窄为联合，便于传 `safe center` 等新值。 |
-| `justify` | `string` | `'flex-start'` | 主轴分布，取任意合法 `justify-content` 值（`flex-start` / `center` / `space-between` / `space-around` / `space-evenly`）。等分布局用 `space-between`，居中成组用 `center`。 |
-| `wrap` | `boolean` | `false` | 允许子元素换行。 |
-| `inline` | `boolean` | `false` | 使用 `inline-flex` 而不是块级 `flex`。 |
+| `gap` | `number \| string` | `12` | 子元素间距；数字按 px，字符串原样使用。 |
+| `align` | `string` | `'stretch'` | `align-items`，接受任意合法值，如 `safe center`。 |
+| `justify` | `string` | `'flex-start'` | `justify-content`，接受任意合法值。 |
+| `wrap` | `boolean` | `false` | 允许换行。 |
+| `inline` | `boolean` | `false` | 使用 `inline-flex`。 |
 
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| - | - | `TxStack` 不触发自定义事件。子组件保留自己的事件行为。 |
-
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | - | 堆叠子元素。 |
+| `default` | - | 堆叠的子元素。 |
 
-### CSS Variables
+### CSS 变量
 
 | 变量 | 来源 | 说明 |
 |------|------|------|
 | `--tx-stack-gap` | `gap` | CSS gap。 |
 | `--tx-stack-align` | `align` | `align-items`。 |
 | `--tx-stack-justify` | `justify` | `justify-content`。 |
-| `--tx-stack-direction` | `direction` | 解析后的 flex direction。 |
-| `--tx-stack-wrap` | `wrap` | 解析后的换行模式。 |
+| `--tx-stack-direction` | `direction` | 解析后的 `flex-direction`。 |
+| `--tx-stack-wrap` | `wrap` | 解析后的 `flex-wrap`。 |
 | `--tx-stack-display` | `inline` | `flex` 或 `inline-flex`。 |
 
 ## 概述
 
-- 根节点是 `div`，默认 `display: flex`。
-- `direction="vertical"` 映射为 `flex-direction: column`；`direction="horizontal"` 映射为 `row`。
-- 数字 `gap` 会转成 px；字符串会原样保留。
-- `align` 与 `justify` 会写入 CSS 变量，并分别作为 `align-items` 与 `justify-content` 使用。
-- `wrap=true` 映射为 `flex-wrap: wrap`；否则使用 `nowrap`。
-- `inline=true` 会把 display 从 `flex` 切换为 `inline-flex`。
-- 根节点设置 `min-width: 0`，确保子元素可以在受限卡片内收缩。
+- 根节点是 `div`，设置 `min-width: 0`，子元素可在受限容器内收缩。
+- props 写入根节点的 `--tx-stack-*` 变量，样式表读取这些变量。
+- `vertical` 映射为 `column`，`horizontal` 映射为 `row`；`align`、`justify` 传空值时回退到默认值。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/stack/src/TxStack.vue`、`types.ts` 与 `stack.test.ts`。
-- 现有测试覆盖默认纵向变量、插槽内容渲染、横向 prop 映射、换行、行内 display 与数字 gap 归一化。
-- 可访问性说明：`TxStack` 不添加语义 role。列表、表单、导航语义应保留在子元素或外层容器上。
+- 源码：`packages/tuffex/packages/components/src/stack/`。
 
-- Component source: `packages/tuffex/packages/components/src/stack/src/TxStack.vue`.
-- Types: `packages/tuffex/packages/components/src/stack/src/types.ts` exports `StackProps` and `StackDirection`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/stack/__tests__/stack.test.ts` 覆盖默认纵向 CSS 变量与插槽渲染、横向 prop 映射、换行、行内 display，以及数字 gap 归一化。
 <TuffDocSourceLink />

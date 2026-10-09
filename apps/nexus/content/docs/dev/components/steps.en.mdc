@@ -1,6 +1,6 @@
 ---
 title: Steps
-description: Step-by-step progress indicator with horizontal/vertical layouts, numeric or string step keys, clickable heads, and explicit disabled states.
+description: A sequence of steps that shows progress through a flow.
 category: Navigation
 status: beta
 since: 0.3.4
@@ -11,92 +11,81 @@ verified: true
 
 ## Usage
 
-The common case uses numeric steps. Completed states are inferred when both `active` and step keys are numbers.
-
+### Numeric and String Keys
+Numeric keys infer completed steps from `active`; string keys need an explicit `status`.
 ::::TuffDemoWrapper{demo="StepsStepsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: grid; gap: 24px;">
-      <TxSteps :active="1">
-        <TxStep title="Start" description="Collect basics" :step="0" />
-        <TxStep title="Details" description="Fill in details" :step="1" />
-        <TxStep title="Finish" description="Review and submit" :step="2" />
-      </TxSteps>
+    <TxSteps :active="1">
+      <TxStep title="Start" description="Collect basics" :step="0" />
+      <TxStep title="Details" description="Fill in details" :step="1" />
+      <TxStep title="Finish" description="Review and submit" :step="2" />
+    </TxSteps>
 
-      <TxSteps direction="vertical" size="small" active="review">
-        <TxStep title="Draft" description="Content saved" step="draft" status="completed" />
-        <TxStep title="Review" description="Waiting for approval" step="review" icon="i-carbon-in-progress" />
-        <TxStep title="Publish" description="Unlocked after review" step="publish" disabled />
-      </TxSteps>
-    </div>
+    <TxSteps direction="vertical" size="small" active="review">
+      <TxStep title="Draft" description="Content saved" step="draft" status="completed" />
+      <TxStep title="Review" description="Waiting for approval" step="review" icon="i-carbon-in-progress" />
+      <TxStep title="Publish" description="Unlocked after review" step="publish" disabled />
+    </TxSteps>
   </template>
 ---
 ::::
 
 ### Best Practices
 
-- Use numeric keys for linear forms and onboarding flows where completion can be inferred.
-- Use string keys for named workflows, but set `status` explicitly for completed or error states.
-- Disable future steps when users must complete prerequisites before jumping ahead.
-- Treat `TxSteps` as progress/navigation affordance, not as the source of truth for a router or form state. Keep the authoritative workflow state in the parent.
-- Avoid putting long descriptions into every step; use step details below the component when content needs paragraphs or controls.
+- Use numeric keys for linear forms and onboarding so completion is inferred.
+- Use string keys for named workflows, and set `completed` or `error` status explicitly.
+- Disable steps that depend on unfinished prerequisites.
+- Keep the authoritative flow state in the parent; `TxSteps` is a progress cue, not the source of truth for a router or form.
+- Keep step descriptions short; put paragraphs or controls below the steps.
 
 ## API Reference
 
-### TxSteps Props
+### TxSteps
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `active` | `number \| string` | `0` | Active step key. Prop changes update the internal active step. |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction for the root and child steps. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Visual scale forwarded to child steps. |
+| `active` | `number \| string` | `0` | Active step key; changes sync to the internal state. |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size, passed down to child steps. |
 
-### TxStep Props
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | `TxStep` children. |
+
+### TxStep
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | - | Step title. |
-| `description` | `string` | - | Optional supporting copy. |
-| `icon` | `string` | - | Icon name/class used for non-completed custom icons. |
-| `status` | `'wait' \| 'active' \| 'completed' \| 'error'` | `'wait'` | Manual status. The active state and numeric completion inference can override it. |
-| `step` | `number \| string` | child order | Step key. When omitted, the zero-based child order is used. |
-| `clickable` | `boolean` | `true` | Renders a button head and lets clicks update the internal active step. |
+| `description` | `string` | - | Supporting text. |
+| `icon` | `string` | - | Icon name or class shown before completion. |
+| `status` | `'wait' \| 'active' \| 'completed' \| 'error'` | `'wait'` | Manual status; the active state and numeric completion take precedence. |
+| `step` | `number \| string` | child order | Step key; defaults to the zero-based child order. String keys are numbered by order. |
+| `clickable` | `boolean` | `true` | Renders a button head; a click updates the internal active step. |
 | `disabled` | `boolean` | `false` | Disables the step button and blocks activation. |
-| `showLine` | `boolean` | `true` | Controls connector rendering. The last step never renders a line. |
-| `completedIcon` | `string` | `'check'` | Icon rendered when the resolved status is completed. |
-
-### Slots
-
-| Component | Slot | Description |
-|-----------|------|-------------|
-| `TxSteps` | `default` | `TxStep` children. |
-
-### Events
-
-No events are emitted. Clickable steps update only the internal active step stored by `TxSteps`.
+| `showLine` | `boolean` | `true` | Renders the connector; the last step never has one. |
+| `completedIcon` | `string` | `'check'` | Icon shown in the completed state. |
 
 ## Overview
 
-- `TxSteps` renders `role="list"`; each `TxStep` renders `role="listitem"`.
-- Clickable step heads are native `button type="button"` elements. Non-clickable heads render as `div`.
-- Disabled clickable steps render disabled buttons and ignore activation.
-- Active steps expose `aria-current="step"` on the head.
-- If `step` is omitted, `TxStep` registers itself in child order and uses that zero-based index as its key.
-- Numeric steps before a numeric active step are treated as completed. String-keyed flows need explicit `status="completed"` when you want completion styling.
-- Clicks update the internal active step but do not emit a change event or update the parent automatically.
+- `TxSteps` is `role="list"` and each `TxStep` is `role="listitem"`; the active step's head has `aria-current="step"`.
+- A clickable head is a native `<button type="button">`, otherwise a `<div>`; a disabled step disables the button and ignores activation.
+- A click only updates the active step inside `TxSteps`; nothing is emitted and the parent isn't updated.
+- Numeric keys before a numeric `active` count as completed; string keys need `status="completed"`.
+- Without `step`, a step registers in child order and uses its zero-based index as the key.
+- Under reduced motion, all motion stops and the state colors remain.
 
 ## Technologies
 
-- **State contract:** `TxSteps` owns an internal `activeStep` and watches the `active` prop. Clicking a step changes only that internal value; no `update:active` or `change` event is emitted.
-- **Ordering note:** Steps register by component uid and child order. Numeric steps infer completed state from `effectiveStep < activeStep`; string-valued flows need explicit `status="completed"` when completion should be shown.
-- **Verified coverage:** `steps.test.ts` covers list/listitem semantics, automatic numeric completion, connector omission on the last item, explicit string steps, click-driven internal active state, and disabled/non-clickable blocking.
-
-- Component sources: `packages/tuffex/packages/components/src/steps/src/TxSteps.vue` and `TxStep.vue`.
-- Types: `packages/tuffex/packages/components/src/steps/src/types.ts` exports `StepsProps`, `StepProps`, `StepsDirection`, `StepsSize`, and `StepStatus`.
-- Export entry: `packages/tuffex/packages/components/src/steps/index.ts` re-exports from `src`.
-- Coverage: `packages/tuffex/packages/components/src/steps/__tests__/steps.test.ts` verifies ordering, active state, string steps, connector lines, click behavior, blocking states, and the connector geometry (each size sets only `--tx-step-icon-size` and the line reads it; the line is a sibling of the marker button and carries `tx-step__line--completed` after a completed step).
-- Visual (2026-09-06): markers sit centred over their own titles and the connector runs from this marker's edge to the next one's (it used to be a flex sibling inside the button, which pushed every marker left of its title); steps ahead are a hollow ring with secondary text, completed and current steps share the primary hue (completed is no longer green) with a 4px halo on the current one, the connector after a completed step takes the same colour, and `error` has a style of its own.
-- Motion (2026-09-06): all CSS, sequenced in reading order — the marker just completed swaps its number for the check (with a small overshoot), the connector after it sweeps towards the next marker (staggered 140ms per step on mount, so a fresh row draws its progress left to right), and the new current marker pops in behind the sweep and then keeps a slow breathing halo; stepping back eases the connector out through a transition rather than snapping. `prefers-reduced-motion` turns all of it off and keeps the state colours.
+- All motion is CSS: a completed marker swaps to a check, the connector sweeps to the next marker, and the new active marker pops in after it.
+- Source: `packages/tuffex/packages/components/src/steps/`.
 
 <TuffDocSourceLink />

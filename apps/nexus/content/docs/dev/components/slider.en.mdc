@@ -100,6 +100,8 @@ code: |
 | `step` | `number` | `1` | Step size. |
 | `disabled` | `boolean` | `false` | Disables the slider and hides the tooltip. |
 | `active` | `boolean` | `true` | When `false`, suspends observers, global tracking, and motion; the value and `disabled` are untouched. |
+| `ariaLabel` | `string` | - | Accessible name, applied to the native range input rather than the wrapper. |
+| `ariaLabelledby` | `string` | - | ID(s) of visible elements that name the range input. |
 | `showValue` | `boolean` | `false` | Shows the current value beside the slider. |
 | `formatValue` | `(value: number) => string` | - | Formats the side readout. |
 | `thumbSurface` | `boolean` | `true` | Always-visible capsule thumb with the Radio indicator's material and jelly; `false` gives a flat disc. |

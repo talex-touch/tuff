@@ -1,6 +1,6 @@
 ---
 title: Shell 应用外壳
-description: 侧栏导航、⌘K 命令面板、通知托盘与总览看板组成的应用外壳
+description: 侧栏、命令面板、通知与看板组成的应用外壳
 category: TemplateApp
 status: beta
 since: 0.6.0

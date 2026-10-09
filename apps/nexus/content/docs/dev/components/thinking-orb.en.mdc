@@ -1,6 +1,6 @@
 ---
 title: Thinking Orb
-description: A canvas thinking indicator that shares one clock and stops when offscreen.
+description: A canvas-drawn indicator that a model is thinking.
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Thinking Orb
+### Basic
 ::::TuffDemoWrapper{demo="ThinkingOrbThinkingOrbDemo" code-lang="vue"}
 ---
 code: |
@@ -25,11 +25,10 @@ code: |
 
 ### Best Practices
 
-- To get a new orb per thought, key the component by that thought. Changing `state` will not reroll it.
-- Pass an explicit `state` where you need determinism; a random form makes screenshot tests and screen recordings differ every run.
-- Keep `size` at `20` or `64` and adjust the visual size with `displaySize`; other values distort the tuned presets.
-- Supply `label` on non-English surfaces — the defaults are English.
-- Show one orb per thought. Several stay in phase, but they blur what exactly is in progress.
+- For a new orb per thought, key the component by that thought; changing `state` won't reroll it.
+- Pass an explicit `state` where you need determinism, such as screenshot tests and recordings.
+- Keep `size` at `20` or `64`; use `displaySize` for any other rendered size.
+- Show one orb per thought.
 
 ## API Reference
 
@@ -37,30 +36,34 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `state` | `OrbState \| 'random'` | `'random'` | Which orb to draw. `'random'` rolls once, on mount. |
-| `size` | `20 \| 64` | `20` | Preset geometry size. Only these two are tuned. |
-| `displaySize` | `number` | same as `size` | Rendered CSS size in px; does not affect the drawing parameters. |
+| `state` | `OrbState \| 'random'` | `'random'` | Which orb to draw; `'random'` rolls once on mount and keeps it. |
+| `size` | `20 \| 64` | `20` | Preset geometry size; only these two are tuned. |
+| `displaySize` | `number` | same as `size` | Rendered CSS size in px; leaves the drawing parameters alone. |
 | `speed` | `number` | `1` | Animation speed multiplier. |
-| `paused` | `boolean` | `false` | Whether to pause the animation. |
-| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Colour theme; `auto` follows the environment. |
-| `label` | `string` | an English label per form | Accessible name. |
+| `paused` | `boolean` | `false` | Pauses the animation. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Color theme; `auto` follows the environment. |
+| `label` | `string` | an English label per form | Accessible name; supply it on non-English surfaces. |
 
-### Events
+### Types
 
-`TxThinkingOrb` emits no component events.
-
-## Slots
-
-`TxThinkingOrb` exposes no slots. It is a pure drawing surface — put any text in a sibling node.
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type OrbState =
+    | 'working' | 'searching' | 'solving' | 'listening' | 'connecting'
+    | 'weaving' | 'composing' | 'breathing' | 'shaping'
+---
+:::
 
 ## Overview
 
-- `state` defaults to `'random'`, and the form is rolled **once on mount** and kept for the component's lifetime. To get a different orb, remount it with a new `key` — changing the prop will not do it.
-- The nine forms are `working`, `searching`, `solving`, `listening`, `connecting`, `weaving`, `composing`, `breathing` and `shaping`.
-- Every mounted orb shares one clock (`performance.now`), so several on screen stay **in phase** rather than drifting apart.
-- The loop stops when the orb scrolls offscreen (`IntersectionObserver`) and when the tab is hidden, so a long list of orbs does not keep burning CPU.
-- Under `prefers-reduced-motion: reduce` the animation does not run; a single representative frame is drawn instead, and it still follows theme changes.
-- `size` accepts only `20` and `64` — the preset geometry is hand-tuned for those two. Use `displaySize` for any other rendered size; it changes the CSS box only, not the drawing parameters.
-- The canvas is scaled by `devicePixelRatio`, capped at 2.
-- Where there is no canvas (jsdom, for instance) `getContext('2d')` returns null, and the component keeps the element but skips painting rather than throwing.
-- The accessible name defaults to an English label for the form (`Searching…` and so on); `label` overrides it.
+- Every mounted orb shares one clock (`performance.now`), so orbs on screen stay in phase.
+- Drawing stops offscreen (`IntersectionObserver`) and while the tab is hidden.
+- Under reduced motion, a single representative frame is drawn; it still follows theme changes.
+- The canvas scales by `devicePixelRatio`, capped at 2.
+- Without a canvas (jsdom, for instance), the element stays and painting is skipped without throwing.
+
+## Technologies
+
+- Vendored from [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) v0.2.0 (MIT © Jakub Antalik); the source headers keep the attribution.
+- Source: `packages/tuffex/packages/components/src/thinking-orb/`.

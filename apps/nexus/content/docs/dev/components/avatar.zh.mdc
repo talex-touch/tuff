@@ -204,6 +204,8 @@ code: |
 - 组内的负 margin 与 `z-index` 来自样式表（`--tx-avatar-group-overlap`、`--tx-avatar-group-index`），子头像只内联描边。
 - 源码：`packages/tuffex/packages/components/src/avatar/`。
 
+<TuffDocSourceLink />
+
 ## 自定义
 
 | 变量 | 写入方 | 用途 |
@@ -222,5 +224,3 @@ code: |
 | `--tx-avatar-group-border` | 调用方 / 主题 | 组内头像的描边色。 |
 
 `--tx-avatar-*-preset`、`--tx-avatar-status-diameter`、`--tx-avatar-status-ring`、`--tx-avatar-status-inset`、`--tx-avatar-group-gap`、`--tx-avatar-group-index`、`--tx-avatar-group-more-z` 是内部变量，不要直接设置。
-
-<TuffDocSourceLink />

@@ -204,6 +204,8 @@ code: |
 - Group negative margins and `z-index` come from the stylesheet (`--tx-avatar-group-overlap`, `--tx-avatar-group-index`); children only get their ring inline.
 - Source: `packages/tuffex/packages/components/src/avatar/`.
 
+<TuffDocSourceLink />
+
 ## Customization
 
 | Variable | Written by | Purpose |
@@ -222,5 +224,3 @@ code: |
 | `--tx-avatar-group-border` | caller / theme | Ring color of grouped avatars. |
 
 `--tx-avatar-*-preset`, `--tx-avatar-status-diameter`, `--tx-avatar-status-ring`, `--tx-avatar-status-inset`, `--tx-avatar-group-gap`, `--tx-avatar-group-index`, and `--tx-avatar-group-more-z` are internal; don't set them directly.
-
-<TuffDocSourceLink />

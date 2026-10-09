@@ -1,6 +1,6 @@
 ---
 title: "NoSelection"
-description: "Shortcut empty-state component for unselected detail panels, based on TxEmptyState with variant no-selection."
+description: "An empty state for a detail pane awaiting a selection."
 category: Status
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### NoSelection
+### Basic
 :::TuffDemoWrapper{demo="NoSelectionNoSelectionDemo" code-lang="vue"}
 ---
 code: |
@@ -28,64 +28,50 @@ code: |
 
 ### Best Practices
 
-- Use it when the current pane is valid but depends on a user selection; use `TxNoData` when the dataset itself is empty.
-- Pair it with visible list/table selection affordances so the next step is discoverable.
-- Use `surface="card"` inside split panes where the empty region needs boundaries.
-- Keep action labels specific, such as “Create item” or “Open list”, not “OK”.
+- Use it when the pane is valid but waits on a selection; use `TxNoData` for an empty dataset and `TxSearchEmpty` for a filter with no matches.
+- Pair it with visible selection affordances in the list or table so users know where to pick.
+- Use `surface="card"` in split panes so the empty region has clear bounds.
+- Keep action labels specific, such as "Create item" or "Open list", not "OK".
 
 ## API Reference
 
-### Props
+Takes every [TxEmptyState](./empty-state.en.mdc) prop, event, and slot except `variant`, which is fixed to `no-selection`.
 
-`TxNoSelection` accepts every `EmptyStateProps` field except `variant`.
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | preset title | Overrides the no-selection title. |
-| `description` | `string` | preset description | Supporting text for what to select next. |
-| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
-| `iconSize` | `number` | size preset | Custom icon size in pixels. |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Density and illustration scale. |
-| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `title` | `string` | preset title | Overrides the preset title. |
+| `description` | `string` | preset description | What to select next. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Replaces the illustration; `null` hides the icon area. |
+| `iconSize` | `number` | size preset | Icon size in px. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Spacing and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` adds a card border. |
 | `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
 | `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
-| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Default size of the generated buttons. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon is given. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `primary` | - | Forwarded from the generated primary action. |
-| `secondary` | - | Forwarded from the generated secondary action. |
+| `primary` | - | Fires when the generated primary action is clicked. |
+| `secondary` | - | Fires when the generated secondary action is clicked. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `icon` | - | Replaces the preset illustration or custom icon. |
-| `title` | - | Replaces resolved title content. |
-| `description` | - | Replaces resolved description content. |
-| `actions` | - | Replaces generated primary/secondary action buttons. |
-
-## Overview
-
-- Always forwards `variant="no-selection"` to `TxEmptyState`.
-- Does not override explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
-- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
-- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+| `icon` | - | Replaces the illustration or icon. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
 
 ## Technologies
 
-- **Wrapper contract:** `TxNoSelection` always supplies `variant="no-selection"` to `TxEmptyState` and forwards all non-variant props and named slots.
-- **State choice:** Use it for empty detail panes or inspectors waiting on a user selection; do not use it for empty datasets or filtered searches.
-- **Verified coverage:** `no-selection.test.ts` covers variant locking, action prop forwarding, named slot forwarding, and install registration.
-
-- Component source: `packages/tuffex/packages/components/src/no-selection/src/TxNoSelection.vue`.
-- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
-- Types: `packages/tuffex/packages/components/src/no-selection/src/types.ts` exports `NoSelectionProps = Omit<EmptyStateProps, 'variant'>`.
-- Coverage: `packages/tuffex/packages/components/src/no-selection/__tests__/no-selection.test.ts` verifies wrapper forwarding and install behavior.
+- Source: `packages/tuffex/packages/components/src/no-selection/`.
 
 <TuffDocSourceLink />

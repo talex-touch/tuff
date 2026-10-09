@@ -1,6 +1,6 @@
 ---
 title: "BlankSlate 空白页"
-description: "用于首次进入、引导用户开始操作的较大空状态。"
+description: "引导首次使用者开始操作的大号空状态"
 category: Status
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### BlankSlate
+### 基础
 :::TuffDemoWrapper{demo="BlankSlateBlankSlateDemo" code-lang="vue"}
 ---
 code: |
@@ -28,63 +28,50 @@ code: |
 
 ### 最佳实践
 
-- 首次使用或 onboarding 空态使用它；重复出现的空查询结果用 `TxNoData`。
-- 文案要解释第一步的价值，不只是说明“这里没有内容”。
-- 主操作保持单一且直接；次操作可用于查看指南、导入或跳过。
-- 全页面空白页一般保持 `surface="plain"`，除非外层布局已经统一使用卡片容器。
+- 用于首次使用与 onboarding；反复出现的空查询结果用 `TxNoData`。
+- 文案说明第一步的价值，而不只是「这里没有内容」。
+- 只放一个直接的主操作；次操作用于查看指南、导入或跳过。
+- 全页空白页保持 `surface="plain"`，除非外层布局统一使用卡片。
 
 ## API 参考
 
-### Props
+继承 [TxEmptyState](./empty-state.zh.mdc) 除 `variant` 外的全部属性、事件与插槽；`variant` 固定为 `blank-slate`，`size` 默认为 `'large'`。
 
-`TxBlankSlate` 接收除 `variant` 以外的所有 `EmptyStateProps` 字段。
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `title` | `string` | 预设标题 | 首次引导标题。 |
-| `description` | `string` | 预设描述 | 说明第一步操作的价值。 |
-| `icon` | `TxIconSource \| string \| null` | 预设插画 | 自定义图标源/class，或传 `null` 隐藏图标区域。 |
-| `iconSize` | `number` | 尺寸预设 | 自定义图标像素尺寸。 |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 空状态布局。 |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 内容对齐方式。 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'large'` | 密度和插画尺寸。 |
-| `surface` | `'plain' \| 'card'` | `'plain'` | 是否添加卡片边界。 |
-| `primaryAction` | `EmptyStateAction` | - | 生成的主操作。 |
-| `secondaryAction` | `EmptyStateAction` | - | 生成的次操作。 |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | 生成按钮默认尺寸。 |
-| `loading` | `boolean` | `false` | 未传自定义图标时显示 spinner。 |
+| `title` | `string` | 预设标题 | 引导标题。 |
+| `description` | `string` | 预设描述 | 说明第一步的价值。 |
+| `icon` | `TxIconSource \| string \| null` | 预设插画 | 替换插画；`null` 隐藏图标区。 |
+| `iconSize` | `number` | 尺寸预设 | 图标尺寸（px）。 |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向。 |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 内容对齐。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'large'` | 间距与插画尺寸。 |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` 添加卡片边框。 |
+| `primaryAction` | `EmptyStateAction` | - | 生成主操作。 |
+| `secondaryAction` | `EmptyStateAction` | - | 生成次操作。 |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | 生成按钮的默认尺寸。 |
+| `loading` | `boolean` | `false` | 无自定义图标时显示 spinner。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `primary` | - | 从生成的主操作转发。 |
-| `secondary` | - | 从生成的次操作转发。 |
+| `primary` | - | 点击生成的主操作时触发。 |
+| `secondary` | - | 点击生成的次操作时触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `icon` | - | 替换预设插画或自定义图标。 |
-| `title` | - | 替换解析后的标题。 |
-| `description` | - | 替换解析后的描述。 |
+| `icon` | - | 替换插画或图标。 |
+| `title` | - | 替换标题。 |
+| `description` | - | 替换描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
-
-## 概述
-
-- 始终向 `TxEmptyState` 透传 `variant="blank-slate"`。
-- 默认值面向首次引导场景：`size="large"`、`layout="vertical"`、`surface="plain"`。
-- 显式传入 `size`、`layout`、`surface` 时会覆盖这些默认值。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`、`types.ts` 与 `blank-slate.test.ts`。
-- **实测覆盖:** `blank-slate.test.ts` 覆盖固定 `variant="blank-slate"`、首次引导默认值、显式布局覆盖、命名插槽转发与 install 注册。
-- 可访问性说明：`TxBlankSlate` 将语义交给 `TxEmptyState`；第一步文案应具体，`actions` 中不要放入多个互相竞争的主操作。
+- 源码：`packages/tuffex/packages/components/src/blank-slate/`。
 
-- Component source: `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`.
-- Types: `packages/tuffex/packages/components/src/blank-slate/src/types.ts` exports `BlankSlateProps` as `Omit<EmptyStateProps, 'variant'>`.
-- Coverage: `packages/tuffex/packages/components/src/blank-slate/__tests__/blank-slate.test.ts` verifies wrapper defaults, overrides, slot forwarding, and install registration.
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "Descriptions"
-description: "A read-only list of label and value pairs, laid out in columns, for the fields of one record"
+description: "A read-only list of label–value pairs laid out in columns."
 category: Data
 status: beta
 since: 0.6.3
@@ -30,12 +30,8 @@ code: |
 
 ## Usage
 
-`TxDescriptions` shows the fields of one record as label and value pairs: a member in an admin drawer, a run's details, a plugin's metadata. Each `TxDescriptionsItem` is one field, and the value goes in its default slot.
-
-### Descriptions
-
-Two columns by default. `phone` is empty, so its value shows the `—` placeholder; `credits` is `0`, which is a value and shows as one.
-
+### Basic
+Two columns by default; an empty value shows `emptyText`, while `0` shows as a value.
 :::TuffDemoWrapper{demo="DescriptionsBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -58,10 +54,8 @@ code: |
 ---
 :::
 
-### Layout and size
-
-`horizontal` puts each label in a track beside its value, and the labels of one column share that track, so the values line up. `vertical` puts the label above its value, which suits narrow columns and long values. `sm` is for drawers and side panels, where the surrounding text is 13px.
-
+### Layout and Size
+`layout` puts each label beside or above its value; `size="sm"` suits drawers and side panels.
 :::TuffDemoWrapper{demo="DescriptionsLayoutDemo" code-lang="vue"}
 ---
 code: |
@@ -82,10 +76,8 @@ code: |
 ---
 :::
 
-### Columns and span
-
-`span` gives a long field more than one column and is clamped to `columns`. Below 480px of container the list falls back to one column whatever `columns` says; switch the frame to 360px to see it.
-
+### Columns and Span
+`span` widens a long field up to `columns`; below 480px of container the list falls back to one column.
 :::TuffDemoWrapper{demo="DescriptionsColumnsDemo" code-lang="vue"}
 ---
 code: |
@@ -110,51 +102,58 @@ code: |
 
 ### Best Practices
 
-- One item per field, in reading order: the list fills each row left to right.
-- Leave a missing value empty instead of writing `—` yourself, so every list shows missing data the same way. Pass `emptyText` once for a different placeholder, such as a localized "Not set".
+- Leave a missing value empty instead of writing `—`; pass `emptyText` once for a different placeholder.
 - Give a long field (an ID, an address, a note) a `span` rather than lowering `columns` for the whole list.
-- Keep labels short. A label wider than 40% of its column wraps; set `labelWidth` when several lists stacked on one page must line up with one another.
-- Use `size="sm"` inside drawers and side panels, and `md` on a page.
-- Let the parent give the list its width. In a flex row, give it `flex: 1`; in a shrink-to-fit parent the container has no width of its own and collapses.
-- Put the items directly in the slot. `v-for` and `v-if` are fine, but a wrapping element breaks both the `<dl>` and the grid.
+- Keep labels short; set `labelWidth` when stacked lists on one page must line up.
+- Put items directly in the default slot (`v-for` and `v-if` are fine); don't wrap them.
+- Let the parent give the list its width: `flex: 1` in a flex row. A shrink-to-fit parent collapses it.
 
 ## API Reference
 
-### TxDescriptions Props
+### TxDescriptions
+
+#### Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `columns` | `number` | `2` | Items per row, floored; anything below 1 is 1. Below 480px of container the list falls back to one column whatever this says |
-| `layout` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal`: the label in its own track beside the value, the labels of a column sharing one track. `vertical`: the label above its value. Any other value is `horizontal` |
-| `size` | `'sm' \| 'md'` | `'md'` | `md`: 14px values and 13px labels, 12px between rows, 24px between pairs. `sm`: 13px values and labels, 8px / 16px |
-| `emptyText` | `string` | `'—'` | Shown in place of a value that renders nothing: no default slot, only whitespace, an empty interpolation or a false `v-if`. `0` is a value |
-| `labelWidth` | `string \| number` | - | Width of the label track in the horizontal layout; a number is px. Left unset, each column's labels share the width of the longest one, up to 40% of the column. The vertical layout ignores it |
+| `columns` | `number` | `2` | Items per row, floored, at least 1. |
+| `layout` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal`: labels beside values, sharing a track per column. `vertical`: labels above values. |
+| `size` | `'sm' \| 'md'` | `'md'` | `md`: 14px values, 13px labels. `sm`: 13px for both, with tighter gaps. |
+| `emptyText` | `string` | `'—'` | Placeholder for a value that renders nothing; `0` is a value. |
+| `labelWidth` | `string \| number` | - | Label-track width in the horizontal layout, px for numbers; defaults to the longest label, up to 40%. |
 
-### TxDescriptionsItem Props
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | The `TxDescriptionsItem`s, directly; a wrapping element breaks the `<dl>` and the grid. |
+
+### TxDescriptionsItem
+
+#### Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `label` | `string` | `''` | Label text. The `label` slot replaces it |
-| `span` | `number` | `1` | Columns to span, floored and clamped between 1 and the list's `columns`. Below 480px of container every item takes the whole row |
+| `label` | `string` | `''` | Label text; the `label` slot replaces it. |
+| `span` | `number` | `1` | Columns to span, clamped between 1 and `columns`. |
 
-### Slots
+#### Slots
 
-| Component | Slot | Description |
-|-----------|------|-------------|
-| `TxDescriptions` | `default` | The `TxDescriptionsItem`s, directly: a wrapping element breaks the `<dl>` and the grid |
-| `TxDescriptionsItem` | `default` | The value. When it renders nothing, `emptyText` shows instead |
-| `TxDescriptionsItem` | `label` | Replaces the label text, inside the same `<dt>` |
+| Slot | Description |
+|------|-------------|
+| `default` | The value; `emptyText` shows when it renders nothing. |
+| `label` | Replaces the label text, inside the same `<dt>`. |
 
 ### CSS Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `--tx-descriptions-gap` | `12px`; `sm` `8px` | Between rows, and between a label and its value in the horizontal layout. Pairs sit twice this apart; in the vertical layout the label sits a quarter of it above its value |
-| `--tx-descriptions-font-size` | `14px`; `sm` `13px` | Value size; labels are 1px smaller, but never under 13px |
-| `--tx-descriptions-label-width` | unset | Width of the label track. `labelWidth` writes it on the root; a host rule on the root or an ancestor works too |
+| `--tx-descriptions-gap` | `12px`; `sm` `8px` | Row gap, and the label-to-value gap in the horizontal layout; pairs sit twice this apart. |
+| `--tx-descriptions-font-size` | `14px`; `sm` `13px` | Value size; labels are 1px smaller, never under 13px. |
+| `--tx-descriptions-label-width` | unset | Label-track width; `labelWidth` writes it on the root, and hosts may set it on an ancestor. |
 
-- `sm` sets the first two on the root at one class's weight, so a host rule with more weight than one class (a scoped class counts) overrides them in any load order.
-- The component writes `--tx-descriptions-columns` on the root and `--tx-descriptions-span` on each item; they are not meant for hosts.
+- `sm` sets the first two at one class's weight, so any heavier host rule (a scoped class counts) overrides them.
+- The component writes `--tx-descriptions-columns` and `--tx-descriptions-span` itself; hosts don't set them.
 
 ### Types
 
@@ -168,31 +167,24 @@ code: |
 
 ## Overview
 
-- The root, `div.tx-descriptions` with `tx-descriptions--{layout}` and `tx-descriptions--{size}`, is a query container around `dl.tx-descriptions__list`. Each item is a `div.tx-descriptions__item` holding one `dt.tx-descriptions__label` and one `dd.tx-descriptions__value`, the grouping HTML allows inside a `<dl>`, so assistive technology reads each pair as a term and its description.
-- Horizontal layout: the list is a grid of `columns` pairs, each a label track and a value track. Every item is a subgrid over its own pair, so all the labels of a column share one track. The track is as wide as the longest label, up to 40% of the column, after which labels wrap; every value of that column starts at the same place, on the first baseline of its label.
-- A label sits `--tx-descriptions-gap` from its value and pairs sit twice that apart, so the pairs read as groups.
-- `span` covers whole pairs. Items fill the rows in source order, and an item that does not fit what is left of a row starts the next one, leaving the gap empty.
-- Below 480px of its own width (a container query, not the viewport) the list is one column and every item takes the whole row. The width has to come from the parent: a shrink-to-fit parent (an inline-block, a flex item that does not stretch, an `auto` grid track) gives an inline-size container no width of its own.
-- A value counts as empty when its slot renders nothing but comments and whitespace: no slot, `{{ '' }}`, `{{ null }}`, a false `v-if`, an empty `v-for`. Then `emptyText` renders in `dd.is-empty`. `0` and any element, even an empty `<span>`, count as content. The check runs on every render, so a value that arrives later replaces the placeholder.
-- Values wrap anywhere (`overflow-wrap: anywhere`): a long ID, email or URL wraps inside its column instead of widening it.
-- Values use `--tx-text-color-primary`. Labels and the empty placeholder use `--tx-text-color-regular`, because 13px text has to clear 4.5:1 and `--tx-text-color-secondary` does not.
-- There is no motion and nothing to operate. Server rendering emits the same markup and inline custom properties; nothing reads the DOM.
+- Each item is a `div` group inside a `<dl>` holding one `dt` and one `dd`, read as a term and its description.
+- In the horizontal layout, a column's labels share one track, as wide as the longest label up to 40%, then wrap; values align with the label's first baseline.
+- Items fill rows in source order; an item that doesn't fit the rest of a row starts the next, leaving a gap.
+- Below 480px of its own width (a container query, not the viewport) the list is one column and every item spans the row.
+- A slot that renders only comments or whitespace (`{{ null }}`, a false `v-if`, an empty `v-for`) is empty and shows `emptyText`; `0` and any element are content.
+- Values wrap anywhere, so a long ID, email, or URL never widens its column.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/descriptions/src/TxDescriptions.vue` (the list, the layout and every rule, items included) and `TxDescriptionsItem.vue` (the pair, its span and the empty check); types in `types.ts`. The list hands its items `layout`, `columns` and `emptyText` through `provide` / `inject`.
-- CSS grid `subgrid` lines the labels up; `@container (width < 480px)` on the root drives the one-column fallback. The list is a separate element inside the root because a container query cannot restyle the container itself.
-- The stylesheet is not scoped: every selector carries the `tx-descriptions` prefix, and both size tiers come from two custom properties. That keeps the sheet small against the CSS size gate.
-- The empty check walks the slot's vnodes: comments, whitespace-only text and fragments of those are empty. Vue's own slot fallback skips comments only, so `{{ user.phone }}` without a phone would otherwise render a blank value.
-- Rejected: a two-column grid inside each item with a fixed default label width. Values line up only while every label fits that width, and a spanning item's value starts somewhere else. A `<table>` was rejected too: it claims row and column relations the content does not have.
-- **Verified coverage:** `descriptions/__tests__/descriptions.test.ts` (10 cases) covers the `<dl>` / `dt` / `dd` structure and the `label` slot; the column count and its fallback for 0, negative, `NaN` and fractional input; spans doubled into label and value tracks, clamped, and kept as columns in the vertical layout; the empty check for no slot, whitespace, an empty interpolation, a false `v-if` and an empty `v-for`, with `0` and elements kept; a custom and an updated `emptyText`; a value switching between empty and filled; layout and size classes with unknown values falling back; `labelWidth` in px, as a string, and dropped in the vertical layout; an item outside a list; and, against the stylesheet, the narrow-container rule, the subgrid and the prefix on every unscoped selector.
+- CSS `subgrid` aligns the labels; `@container (width < 480px)` on the root drives the one-column fallback, so the list is a separate element inside the root.
+- Source: `packages/tuffex/packages/components/src/descriptions/`.
 
 <TuffDocSourceLink />
 
 ## Use cases
 
-- The fields of one record in a drawer or a detail panel: a member, a subscription, a run, a plugin.
-- A summary above a form or a table, naming what the next screen acts on.
+- The fields of one record in a drawer or detail panel: a member, a subscription, a run, a plugin.
+- A summary above a form or table, naming what the next step acts on.
 - Read-only settings and metadata inside a card.
 
 ## Related components

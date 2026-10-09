@@ -78,7 +78,7 @@ const uploader = ref<{ pick: () => void }>()
 |------|------|---------|-------------|
 | `modelValue` | `FileUploaderFile[]` | `[]` | The selected files (controlled). |
 | `multiple` | `boolean` | `true` | Passed to the native input. |
-| `accept` | `string` | `'*/*'` | Accepted file types, passed to the native input. |
+| `accept` | `string` | `'*/*'` | Accepted file types; passed to the native input and applied the same way to dropped files. |
 | `disabled` | `boolean` | `false` | Blocks browsing, removing, and dropping. |
 | `max` | `number` | `10` | Maximum total number of selected files. |
 | `showSize` | `boolean` | `true` | Shows file sizes in the list. |

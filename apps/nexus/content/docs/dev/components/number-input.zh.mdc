@@ -50,6 +50,8 @@ code: |
 | `disabled` | `boolean` | `false` | 禁用输入与按钮。 |
 | `readonly` | `boolean` | `false` | 只读，并阻止步进。 |
 | `controls` | `boolean` | `true` | 显示减少与增加按钮。 |
+| `decreaseLabel` | `string` | `'Decrease value'` | 减少按钮的 `aria-label`，本地化时传入。 |
+| `increaseLabel` | `string` | `'Increase value'` | 增加按钮的 `aria-label`，本地化时传入。 |
 
 ### 事件
 

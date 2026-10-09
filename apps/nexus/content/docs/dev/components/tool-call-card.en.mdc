@@ -1,6 +1,6 @@
 ---
 title: Tool Call Card
-description: A tool call's status card, with logs that follow their tail and a result surface the host can own.
+description: A status card for a single tool call.
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### Tool Call Card
+### Basic
+The host advances `toolCall.status`; the expanded body switches content with it.
 ::::TuffDemoWrapper{demo="ToolCallCardToolCallCardDemo" code-lang="vue"}
 ---
 code: |
@@ -35,11 +36,11 @@ code: |
 
 ### Best Practices
 
-- Use the `result` slot for structured output — a table, a chart, a widget — and leave `output` as the plain-text fallback for when no widget is mounted.
-- Only offer retry while `status` is `error`, and move the status back to `running` once `retry` arrives, or users will click it repeatedly.
-- Append to logs line by line rather than replacing the whole block, so the tail-following stays smooth.
-- Override all six label props together on non-English surfaces; a partial override produces a mixed-language card.
-- Write `summary` as what the call *did* rather than repeating the tool name — the collapsed row is the only thing users scan.
+- Put structured results (a table, a chart, a widget) in the `result` slot and keep `output` as the plain-text fallback.
+- On `retry`, set `status` back to `running` right away so users don't click repeatedly.
+- Append logs line by line instead of replacing the block, so tail-following stays smooth.
+- On non-English surfaces, override all six label props together to avoid a mixed-language card.
+- Write `summary` as what the call did, not the tool name again; the collapsed row is all users scan.
 
 ## API Reference
 
@@ -47,36 +48,39 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `toolCall` | `AiToolCallPart` | — | The call to render: `{ type, id, name, status, summary?, input?, output?, error?, logs? }`. Required. |
-| `defaultExpanded` | `boolean` | `false` | Initial expanded state. Read once, on mount. |
-| `retryLabel` | `string` | `'Retry'` | Label for the retry button. |
-| `pendingLabel` | `string` | `'Queued'` | Label for the `pending` status. |
-| `runningLabel` | `string` | `'Running'` | Label for the `running` status. |
-| `doneLabel` | `string` | `'Done'` | Label for `done`, and for any unmatched status. |
-| `errorLabel` | `string` | `'Failed'` | Label for the `error` status. |
-| `inputLabel` | `string` | `'Input'` | Heading for the input section. |
+| `toolCall` | `AiToolCallPart` | — | The call to render. Required. |
+| `defaultExpanded` | `boolean` | `false` | Initial expanded state; read once, on mount. |
+| `retryLabel` | `string` | `'Retry'` | Label of the retry button. |
+| `pendingLabel` | `string` | `'Queued'` | Label for `pending`. |
+| `runningLabel` | `string` | `'Running'` | Label for `running`. |
+| `doneLabel` | `string` | `'Done'` | Label for `done` and any unmatched status. |
+| `errorLabel` | `string` | `'Failed'` | Label for `error`. |
+| `inputLabel` | `string` | `'Input'` | Heading of the input section. |
+
+`AiToolCallPart` is `{ type, id, name, status, summary?, input?, output?, error?, logs? }`, where `status` is `'pending' | 'running' | 'done' | 'error'`.
 
 ### Events
 
 | Name | Payload | Description |
 |------|---------|-------------|
-| `retry` | `(id: string)` | Emitted when retry is clicked, carrying `toolCall.id`. |
-| `toggle` | `(expanded: boolean)` | Emitted when the header is clicked, carrying the resulting state. |
+| `retry` | `(id: string)` | Fires when retry is clicked, with `toolCall.id`. |
+| `toggle` | `(expanded: boolean)` | Fires when the header is clicked, with the new expanded state. |
 
-## Slots
+### Slots
 
 | Name | Scope | Description |
 |------|-------|-------------|
-| `summary` | `{ toolCall }` | Replaces the summary text in the collapsed header. |
-| `result` | `{ toolCall }` | The result surface, for a host to mount its own rendering (a widget, for instance). `output` is not rendered directly once this is provided. |
+| `summary` | `{ toolCall }` | Replaces the summary in the collapsed header. |
+| `result` | `{ toolCall }` | Result surface for the host's own rendering; replaces `output` when provided. |
 | `icon` | `{ status }` | Replaces the status icon. |
 
 ## Overview
 
-- Expanded state is owned by the component and seeded from `defaultExpanded`. It is uncontrolled — changing the prop later has no effect.
-- Clicking the header toggles it and emits `toggle` with the state **after** the change.
-- `status` has four values — `pending`, `running`, `done`, `error` — mirrored onto `data-status` for styling. Their labels come from `pendingLabel` / `runningLabel` / `doneLabel` / `errorLabel`, all English by default.
-- The status label resolves through a `default` branch: `pending`, `running` and `error` match explicitly, and **anything else falls through to `doneLabel`**.
-- Every change to `toolCall.logs` scrolls the log region to the bottom, so a running call follows its own tail like a terminal.
-- `retry` carries `toolCall.id` rather than the whole object — a retry usually needs only the identifier.
-- The result area falls back in three stages: the `result` slot when a host mounts one, otherwise `output`, and `error` when `status` is `error`.
+- The body follows `status`: `running` shows `logs`, `done` shows the `result` slot (falling back to `output`), and `error` shows `error` with a retry button; `input` shows whenever it is set.
+- Every change to `logs` scrolls the log region to the bottom.
+- `status` is mirrored onto the root's `data-status` for styling.
+
+## Technologies
+
+- `AiToolCallPart` is defined and exported by `ai-elements`.
+- Source: `packages/tuffex/packages/components/src/tool-call-card/`.

@@ -1,6 +1,6 @@
 ---
 title: "CommandPalette"
-description: "Command palette for global shortcuts, plugin entries, and search actions."
+description: "An overlay for searching and running commands."
 category: Advanced
 status: beta
 since: 0.3.4
@@ -11,81 +11,15 @@ verified: true
 
 ## Usage
 
-### Best Practices
-
-- Keep `id` stable across releases; use it for analytics, persistence, and permission checks instead of localized titles.
-- Put synonyms, aliases, plugin names, and localized search terms in `keywords`; do not duplicate commands just to cover search variants.
-- Register global shortcuts in the app shell, then drive `v-model`; `shortcut` is only a visible keyboard hint.
-- Use `footer` for source labels, result counts, or keyboard help. Use `empty` to show the current query and suggest recovery actions.
-- Cap `maxHeight` for dense command sets so the overlay stays keyboard-scannable and does not push below the viewport.
-
-## API Reference
-
-### Props
-
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `modelValue` | `boolean` | - | Visibility state |
-| `commands` | `CommandPaletteItem[]` | `[]` | Command list |
-| `placeholder` | `string` | `'Search commands'` | Search placeholder |
-| `emptyText` | `string` | `'No commands found'` | Empty text |
-| `maxHeight` | `number` | `320` | Max list height |
-| `autoFocus` | `boolean` | `true` | Auto focus input |
-| `closeOnSelect` | `boolean` | `true` | Close after select |
-| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | Custom overlay class |
-| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | Custom panel class |
-
-### CommandPaletteItem
-
-| Field | Type | Description |
-|------|------|------|
-| `id` | `string` | Unique id |
-| `title` | `string` | Title |
-| `description` | `string` | Description |
-| `keywords` | `string[]` | Keywords |
-| `icon` | `TxIconSource \| string` | Icon |
-| `shortcut` | `string` | Shortcut |
-| `disabled` | `boolean` | Disabled state |
-
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:modelValue` | `(value)` | Visibility state |
-| `select` | `(item)` | Select command |
-| `open` | - | Opened |
-| `close` | - | Closed |
-| `update:query` | `(value)` | Search input update |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|------|
-| `empty` | `{ query, emptyText }` | Custom empty state |
-| `footer` | `{ query, visibleCount }` | Custom footer area |
-
-## Launcher Scenario
-
+### Launcher
 ::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  interface CommandItem {
-    id: string
-    title: string
-    description: string
-    keywords: string[]
-    icon: string
-    shortcut: string
-    disabled?: boolean
-  }
+  import { ref } from 'vue'
 
   const open = ref(false)
-  const selectedId = ref('search-files')
-
-  const commands: CommandItem[] = [
+  const commands = [
     {
       id: 'search-files',
       title: 'Search Files',
@@ -94,94 +28,91 @@ code: |
       icon: 'i-carbon-search',
       shortcut: '⌘ K',
     },
-    {
-      id: 'quick-note',
-      title: 'Save Quick Note',
-      description: 'Save clipboard text into the snippets library',
-      keywords: ['snippet', 'note', 'clipboard'],
-      icon: 'i-carbon-notebook',
-      shortcut: '⌘ ⇧ N',
-    },
-    {
-      id: 'browser-open',
-      title: 'Open In Browser',
-      description: 'Open the typed URL in the default browser',
-      keywords: ['url', 'link', 'browser'],
-      icon: 'i-carbon-launch',
-      shortcut: '⌘ ↵',
-    },
-    {
-      id: 'sync-settings',
-      title: 'Sync Settings',
-      description: 'Open account sync and device management',
-      keywords: ['sync', 'account', 'device'],
-      icon: 'i-carbon-cloud',
-      shortcut: '⌘ ,',
-    },
-    {
-      id: 'locked-admin',
-      title: 'Admin Script',
-      description: 'Requires administrator permission before running',
-      keywords: ['admin', 'shell', 'script'],
-      icon: 'i-carbon-locked',
-      shortcut: '⌘ ⇧ S',
-      disabled: true,
-    },
+    { id: 'locked-admin', title: 'Admin Script', icon: 'i-carbon-locked', disabled: true },
   ]
-
-  const selected = computed(() => commands.find(command => command.id === selectedId.value))
-
-  function onSelect(command: CommandItem) {
-    selectedId.value = command.id
-  }
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-520">
-      <TxButton variant="primary" @click="open = true">
-        Open command palette
-      </TxButton>
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          Last action: {{ selected?.title }}
-        </div>
-      </TxCard>
-    </div>
-
+    <TxButton variant="primary" @click="open = true">Open command palette</TxButton>
     <TxCommandPalette
       v-model="open"
       :commands="commands"
       placeholder="Search commands, plugins, or settings..."
       empty-text="No matching commands"
       :max-height="280"
-      @select="onSelect"
+      @select="(item) => run(item.id)"
     />
   </template>
 ---
 ::
 
-## UX Notes
+### Best Practices
 
-- Title, description, and `keywords` all participate in filtering. Put aliases, localized terms, and plugin keywords on the same command.
-- `icon` accepts an icon class or `TxIconSource`; `shortcut` only renders the keyboard hint and does not register a global shortcut.
-- `disabled` commands remain visible but cannot be selected, which is useful for missing permissions, unsupported platforms, or disabled features.
-- Use `closeOnSelect=false` for batch workflows or settings panels. The default closes the palette after selection.
+- Keep `id` stable across releases, and use it — not the localized title — for analytics, persistence, and permission checks.
+- Put synonyms, aliases, and plugin names in `keywords` instead of duplicating commands for search variants.
+- Register global shortcuts in the app shell, then open the palette through `v-model`.
+- Use `footer` for sources, result counts, or keyboard help; use `empty` to show the query and a recovery action.
+- Cap `maxHeight` for long command sets so the palette stays inside the viewport.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|------|------|
+| `modelValue` | `boolean` | - | Whether the palette is shown, bound with `v-model`. |
+| `commands` | `CommandPaletteItem[]` | `[]` | The commands. |
+| `placeholder` | `string` | `'Search commands'` | Search placeholder; also the input's `aria-label`. |
+| `emptyText` | `string` | `'No commands found'` | Text shown when nothing matches. |
+| `maxHeight` | `number` | `320` | Maximum list height in px. |
+| `autoFocus` | `boolean` | `true` | Focuses the search input on open. |
+| `closeOnSelect` | `boolean` | `true` | Closes after a selection; set `false` for batch actions. |
+| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | Class for the overlay. |
+| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | Class for the panel. |
+| `query` | `string` | - | Search text for `v-model:query`; omit to let the palette manage it. |
+| `ariaLabel` | `string` | `'Command palette'` | Accessible name of the dialog and command list. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `(value)` | Fires when the palette asks to open or close. |
+| `select` | `(item)` | Fires with the original item when an enabled command is chosen. |
+| `open` | - | Fires when the palette opens. |
+| `close` | - | Fires when an open palette closes. |
+| `update:query` | `(value)` | Fires on input; resets to an empty string on close. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `empty` | `{ query, emptyText }` | Content shown when nothing matches. |
+| `footer` | `{ query, visibleCount }` | Area below the list. |
+
+### Types
+
+#### CommandPaletteItem
+
+| Field | Type | Description |
+|------|------|------|
+| `id` | `string` | Unique id. |
+| `title` | `string` | Title; searched. |
+| `description` | `string` | Line under the title; searched. |
+| `keywords` | `string[]` | Extra search terms; not displayed. |
+| `icon` | `TxIconSource \| string` | Icon source or icon class. |
+| `shortcut` | `string` | Shortcut hint on the right; registers nothing. |
+| `disabled` | `boolean` | Stays visible but can't be selected. |
 
 ## Overview
 
-- `modelValue` is the single source of truth for visibility. The palette emits `open` when it becomes visible and `close` when an existing open state is dismissed.
-- Search is local substring matching across `title`, `description`, and every `keywords` entry. The component does not rank, debounce, or fetch remote results.
-- `ArrowDown` / `ArrowUp` cycle through the visible commands and skip disabled ones, so the highlight never parks on an unusable command; `Enter` selects the active command; `Escape` closes the overlay. The initial highlight lands on the first enabled command, and arrow navigation is a no-op when every command is disabled.
-- IME composition (`isComposing`, keyCode `229`, or an active composition session) suppresses keyboard selection so Chinese/Japanese/Korean input is not submitted early.
-- `select` emits the original `CommandPaletteItem`. Disabled commands stay visible as `role="option"` with `aria-disabled="true"` and are removed from the tab order (`tabindex="-1"`); they never emit `select`. `closeOnSelect=false` keeps the palette open after selection.
+- Visibility comes only from `modelValue`. The palette emits `open` when shown and `close` when an open palette is dismissed.
+- Filtering is a local, case-insensitive substring match over `title`, `description`, and `keywords`; there is no ranking, debouncing, or remote fetch.
+- `ArrowDown` / `ArrowUp` cycle and skip disabled commands, `Enter` selects, `Escape` closes. The highlight starts on the first enabled command.
+- Keyboard selection is ignored during IME composition, so Chinese, Japanese, and Korean input is not submitted early.
+- The overlay is `role="dialog"` with `aria-modal="true"`; disabled commands carry `aria-disabled="true"` and never emit `select`.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/command-palette/src/types.ts`, `TxCommandPalette.vue`, and `command-palette.test.ts`.
-- Existing tests cover local filtering and selection, disabled-command skipping with `aria-disabled` / `tabindex` marking, IME composition guarding, matched text highlighting, and custom `empty` / `footer` slots.
-- Accessibility note: the overlay renders `role="dialog"` with `aria-modal="true"`; keep the trigger label and placeholder specific enough for the current command domain, and do not treat the displayed `shortcut` as actual shortcut registration.
+- Source: `packages/tuffex/packages/components/src/command-palette/`.
 
-- Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`.
-- Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` exports `CommandPaletteProps`, `CommandPaletteEmits`, `CommandPaletteItem`, and `CommandPaletteClassValue`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` verifies filtering, select emits, disabled-command skipping and `aria-disabled` / `tabindex` marking, IME guarding, match highlighting, and slots.
 <TuffDocSourceLink />

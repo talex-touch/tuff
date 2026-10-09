@@ -1,6 +1,6 @@
 ---
 title: "Empty"
-description: "Compact empty-state wrapper for panels, filtered results, and first-run placeholders."
+description: "A compact empty-state card for panels and filtered results."
 category: Status
 status: beta
 since: 0.3.4
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### Empty
+### Basic
+`compact` switches to the small size; `iconClass` replaces the icon.
 :::TuffDemoWrapper{demo="EmptyEmptyDemo" code-lang="vue"}
 ---
 code: |
@@ -21,7 +22,7 @@ code: |
 ---
 :::
 
-### Empty (action)
+### Action
 :::TuffDemoWrapper{demo="EmptyEmptyActionDemo" code-lang="vue"}
 ---
 code: |
@@ -37,48 +38,35 @@ code: |
 
 ### Best Practices
 
-- Use `TxEmpty` for compact list, search, or panel placeholders where the card surface is desirable.
-- Use the more explicit `TxNoData`, `TxNoSelection`, `TxOfflineState`, or `TxPermissionState` when the empty cause has product meaning.
-- Keep `compact` for dense regions such as sidebars and table interiors.
-- Put clickable behavior inside the `action` slot; `TxEmpty` does not proxy action events.
+- Use `TxEmpty` for list, search, or panel placeholders that want a card surface.
+- When the empty cause has product meaning, use `TxNoData`, `TxNoSelection`, `TxOfflineState`, or `TxPermissionState`.
+- Set `compact` in dense regions such as sidebars and table interiors.
+- Put click handling on the control in the `action` slot; `TxEmpty` emits no events.
 
 ## API Reference
+
+Renders [TxEmptyState](./empty-state.en.mdc) with `variant="empty"`, `surface="card"`, and `layout="vertical"` fixed.
 
 ### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `'Nothing here'` | Primary empty-state message. |
-| `description` | `string` | `''` | Supporting text shown below the title. |
-| `iconClass` | `string` | `'i-carbon-incomplete'` | Icon class forwarded to the wrapped `TxEmptyState`. |
-| `compact` | `boolean` | `false` | Uses the small empty-state size for dense panels. |
+| `title` | `string` | `'Nothing here'` | Main message. |
+| `description` | `string` | `''` | Supporting text below the title. |
+| `iconClass` | `string` | `'i-carbon-incomplete'` | Icon class, passed to `TxEmptyState` as `icon`. |
+| `compact` | `boolean` | `false` | `true` sets `size="small"`; otherwise `medium`. |
 
-### Events
-
-`TxEmpty` does not emit component events. Place click handlers on controls rendered inside the `action` slot.
-
-## Slots
+### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `icon` | - | Replaces the icon rendered by `iconClass`. |
-| `title` | - | Replaces the title prop content. |
-| `description` | - | Replaces the description prop content. |
-| `action` | - | Replaces the wrapped `TxEmptyState` actions area. |
-
-## Overview
-
-- Always renders the wrapped `TxEmptyState` with `variant="empty"`, `surface="card"`, and `layout="vertical"`.
-- `compact=false` maps to `size="medium"`; `compact=true` maps to `size="small"`.
-- `iconClass` is forwarded as the wrapped empty-state `icon` prop.
-- Slots are intentionally simpler than `TxEmptyState`: `action` is singular and replaces the wrapped `actions` slot.
-- No events are emitted by `TxEmpty`; action behavior belongs to the slotted control.
+| `icon` | - | Replaces the `iconClass` icon. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `action` | - | Action area; replaces the `actions` slot of `TxEmptyState`. |
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/empty/src/TxEmpty.vue` confirms `TxEmptyState` wrapping, forced `variant="empty"`, `surface="card"`, `layout="vertical"`, compact size mapping, and slot remapping.
-- Type contract: `packages/tuffex/packages/components/src/empty/src/types.ts` defines the compact `EmptyProps` surface.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/empty/__tests__/empty.test.ts` covers default prop forwarding, compact sizing, and wrapper-to-empty-state slot mapping.
-- Export: `packages/tuffex/packages/components/src/empty/index.ts` exports `Empty`, `TxEmpty`, `EmptyProps`, and `TxEmptyInstance`.
+- Source: `packages/tuffex/packages/components/src/empty/`.
 
 <TuffDocSourceLink />

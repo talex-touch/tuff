@@ -60,11 +60,13 @@ const status = computed(() => {
   return props.status
 })
 
+// A string key names the step but carries no position, so the visible number
+// falls back to the step's order among its siblings.
 const stepNumber = computed(() => {
   if (typeof effectiveStep.value === 'number') {
     return effectiveStep.value + 1
   }
-  return 1
+  return orderIndex.value + 1
 })
 
 const isLast = computed(() => {

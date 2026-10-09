@@ -1,6 +1,6 @@
 ---
 title: Floating
-description: Pointer-aware parallax container with registered absolute-positioned depth layers.
+description: A container that shifts its layers in parallax with the pointer.
 category: Primitives
 status: beta
 since: 0.3.4
@@ -11,6 +11,8 @@ verified: true
 
 ## Usage
 
+### Basic
+`depth` sets how far a layer moves, `sensitivity` scales all of them, and `easingFactor` sets how quickly they follow.
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
 ---
 code: |
@@ -26,10 +28,11 @@ code: |
 ::::
 
 ### Disable Motion
+`disabled` stops the listeners and the animation frame and resets every layer's offset to zero.
 
 ```vue
 <template>
-  <TxFloating :disabled="prefersReducedMotion">
+  <TxFloating :disabled="paused">
     <TxFloatingElement class-name="hero-card" :depth="0.08">
       Content
     </TxFloatingElement>
@@ -37,9 +40,8 @@ code: |
 </template>
 ```
 
-When `disabled` becomes true, event listeners and the animation frame stop and registered element transforms reset to zero.
-
 ### Opposite Direction Layers
+A negative `depth` moves opposite to a positive one.
 
 ```vue
 <template>
@@ -50,75 +52,58 @@ When `disabled` becomes true, event listeners and the animation frame stop and r
 </template>
 ```
 
-Negative `depth` moves in the opposite direction from positive `depth`.
-
 ### Best Practices
 
-- Use it for decorative parallax, guide cards, or background accents. Do not make critical layout depend on pointer movement.
-- Respect reduced-motion settings by binding them to `disabled`.
-- Keep layer counts small; every registered layer updates on every animation frame.
-- Use low `depth` values for subtle motion. Large values quickly feel detached from the interface.
-- Provide real static layout positions through CSS classes; the component only adds transform offsets.
-- Avoid interactive controls inside fast-moving layers unless the movement is very subtle.
+- Use it only for decorative parallax, guide cards, or background accents; never make critical layout depend on pointer movement.
+- Keep layers few; each one updates on every frame while moving.
+- Keep `depth` low for restrained motion; large values make the interface feel detached.
+- Give layers their static position with classes; the component only adds a `transform`.
+- Keep interactive controls out of fast-moving layers.
 
 ## API Reference
 
-### TxFloating Props
+### TxFloating
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `className` | `string` | `''` | Extra class applied to the container. |
+| `className` | `string` | `''` | Extra class for the container. |
 | `sensitivity` | `number` | `1` | Overall movement multiplier. |
-| `easingFactor` | `number` | `0.05` | Per-frame ratio used to approach the target position. |
-| `disabled` | `boolean` | `false` | Stops motion and resets registered element transforms. |
+| `easingFactor` | `number` | `0.05` | Share of the remaining distance covered each frame. |
+| `disabled` | `boolean` | `false` | Stops motion and resets registered layers' transforms. |
 
-### TxFloatingElement Props
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Floating layers and scene content. |
+
+### TxFloatingElement
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `className` | `string` | `''` | Extra class applied to the absolute layer. |
-| `depth` | `number` | `1` | Movement depth. Negative values move opposite to pointer direction. |
+| `className` | `string` | `''` | Extra class for the absolutely positioned layer. |
+| `depth` | `number` | `1` | Movement depth; negative values move against the pointer. |
 
-### Slots
+#### Slots
 
-| Component | Slot | Description |
-|-----------|------|-------------|
-| `TxFloating` | `default` | Floating elements and any scene content. |
-| `TxFloatingElement` | `default` | Layer content. |
-
-### Events
-
-No public events are emitted.
-
-### Exposed Methods
-
-No public instance methods are exposed.
+| Slot | Description |
+|------|-------------|
+| `default` | Layer content. |
 
 ## Overview
 
-- `TxFloating` provides a registration context consumed by child `TxFloatingElement` components.
-- The container renders a relative `div` with classes `tx-floating` and optional `className`.
-- `TxFloatingElement` renders an absolute `div` with classes `tx-floating-element` and optional `className`.
-- On mount, `TxFloating` starts passive `mousemove` and `touchmove` window listeners unless disabled.
-- Pointer coordinates are measured relative to the floating container's center.
-- Each animation frame moves registered elements toward `pointerPosition * (depth * sensitivity / 20)` using `easingFactor`.
-- `disabled=true` stops listeners, cancels the current RAF, and resets transforms to `translate3d(0px, 0px, 0)`.
-- `disabled=false` restarts listeners and RAF.
-- `TxFloatingElement` registers on mount, re-registers when `depth` changes, and unregisters on unmount.
-- If an element is used outside `TxFloating`, it renders but does not animate.
-- All parallax motion stops when the user requests `prefers-reduced-motion: reduce`.
-- An `IntersectionObserver` parks the RAF loop while the container is off-screen and resumes it on re-entry.
-- The container listens for window `scroll` and `resize` in the capture phase so the origin is re-measured after page scroll or viewport changes.
-- The implementation guards browser APIs with `hasWindow()` for SSR safety.
+- `TxFloatingElement` registers with `TxFloating` on mount, re-registers when `depth` changes, and unregisters on unmount; outside a `TxFloating` it renders but never moves.
+- Pointer coordinates are measured from the container's center; each frame eases layers toward `pointerPosition * (depth * sensitivity / 20)` by `easingFactor`.
+- With `disabled` or reduced motion, listeners and the animation frame stop and offsets reset to `translate3d(0px, 0px, 0)`.
+- Animation pauses while the container is off-screen; the origin is re-measured after page scroll or resize.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/floating/src/types.ts`, `context.ts`, `TxFloating.vue`, `TxFloatingElement.vue`, and `floating.test.ts`.
-- Browser listeners and animation frames are guarded for SSR; movement only exists after client mount.
-- `disabled` is not just a visual flag: it stops listeners, cancels RAF work, and resets registered transforms.
-
-- Component sources: `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`, `TxFloatingElement.vue`, and `context.ts`.
-- Types: `packages/tuffex/packages/components/src/floating/src/types.ts`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/floating/__tests__/floating.test.ts` verifies eased pointer transforms, disabled listener reset, initially disabled setup, depth re-registration, unmount cleanup, class / slot rendering, and plugin install registration.
+- The animation loop runs only while a layer is still travelling and parks once all settle; window listeners are passive and guarded by `hasWindow()` for SSR.
+- Source: `packages/tuffex/packages/components/src/floating/`.
 
 <TuffDocSourceLink />

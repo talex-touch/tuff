@@ -102,6 +102,7 @@ code: |
 | `change` | `(v)` | 与 `update:modelValue` 同时触发。 |
 | `open` | - | 浮层打开后触发。 |
 | `close` | - | 浮层关闭后触发。 |
+| `load-error` | `({ path: CascaderPath, error: unknown })` | `load` 拒绝时触发，`path` 为该节点路径；再次展开会重试。 |
 
 ### 暴露方法
 

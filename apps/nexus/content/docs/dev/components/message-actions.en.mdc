@@ -43,11 +43,15 @@ code: |
 |------|------|---------|-------------|
 | `copyText` | `string` | — | Text the copy button writes; without it, no copy button renders. |
 | `regenerable` | `boolean` | `false` | Shows the regenerate button. |
+| `speakable` | `boolean` | `false` | Shows the read-aloud button; the host owns playback. |
+| `speakState` | `'idle' \| 'loading' \| 'speaking'` | `'idle'` | Playback state set by the host: `loading` shows a spinner, `speaking` a stop icon. |
 | `appear` | `boolean` | `true` | Plays a blur-fade entrance on mount. |
 | `copyLabel` | `string` | `'Copy'` | Accessible name and hover tooltip of the copy button. |
 | `copiedLabel` | `string` | `'Copied'` | Accessible name and hover tooltip in the copied state. |
 | `regenerateLabel` | `string` | `'Regenerate'` | Accessible name and hover tooltip of the regenerate button. |
 | `label` | `string` | `'Message actions'` | Accessible name of the toolbar. |
+| `speakLabel` | `string` | `'Read aloud'` | Accessible name and hover tooltip of the read-aloud button. |
+| `stopSpeakLabel` | `string` | `'Stop reading'` | Accessible name and hover tooltip of the read-aloud button while `speaking`. |
 
 ### Events
 
@@ -55,6 +59,7 @@ code: |
 |------|---------|-------------|
 | `copy` | `(text: string)` | Fires after a copy click with `copyText`, even if the clipboard write failed. |
 | `regenerate` | — | Fires when regenerate is clicked. |
+| `speak` | — | Fires when the read-aloud button is clicked. |
 
 ### Slots
 
@@ -66,5 +71,6 @@ code: |
 
 - An empty-string `copyText` still renders the copy button, but clicking does nothing; omit the prop to hide it.
 - Copying writes through `navigator.clipboard`; the button then shows its copied state for 1200ms and ignores repeat clicks.
+- The read-aloud button is a toggle: every click emits `speak`, even while `loading`, and the host starts or stops playback; `aria-pressed` is true while `speaking`.
 - The bar is a `role="toolbar"`: one Tab stop, arrow keys cycle through the controls, and Home / End jump to the ends.
 - The arrow-key order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so disabled buttons are excluded.

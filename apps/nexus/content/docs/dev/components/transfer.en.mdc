@@ -1,6 +1,6 @@
 ---
 title: Transfer
-description: Move and filter items between two lists
+description: A control that moves items between two lists.
 category: Data
 status: beta
 since: 0.3.4
@@ -11,9 +11,8 @@ verified: true
 
 ## Usage
 
-### Filterable transfer
-When `filterable` is enabled, both panels show a filter input. Use `emptyText` to localize the empty state.
-
+### Filterable Transfer
+`filterable` shows a filter input on both sides; `emptyText` localizes the empty state.
 :::TuffDemoWrapper{demo="TransferTransferDemo" code-lang="vue"}
 ---
 code: |
@@ -44,9 +43,8 @@ code: |
 ---
 :::
 
-### Ranked target list
-`orderable` turns the target panel into an ordered list: every row shows its rank and carries move up / move down. The rank is read from `modelValue`, so filtering never shifts it, and the target order *is* the `modelValue` order — `targetOrder` no longer applies. `maxHeight` caps each panel so a long list scrolls inside the list instead of stretching the surrounding dialog; `minHeight` is the matching floor, which a compact host needs to lower.
-
+### Ranked Target List
+`orderable` shows ranks and move up / move down in the target panel, in `modelValue` order; `maxHeight` keeps long lists scrolling inside the panel.
 :::TuffDemoWrapper{demo="TransferOrderableDemo" code-lang="vue"}
 ---
 code: |
@@ -79,95 +77,9 @@ code: |
 ---
 :::
 
-### Best Practices
-
-- Keep `modelValue` controlled by the host and store only item keys, not full item objects.
-- Keep every `data[].key` unique and stable across filtering; duplicate keys make source/target membership ambiguous.
-- Use `targetOrder="original"` when the target list should mirror source data order, and `targetOrder="push"` when selection order is part of the workflow.
-- Turn on `orderable` when the user has to rank the target list by hand (priority, fallback chains), and set `targetOrder="push"` to state the intent; the component then honours `modelValue` order only.
-- Keep disabled rows in `data` instead of filtering them out, so users can distinguish unavailable resources from missing resources.
-- Provide explicit `addAriaLabel` and `removeAriaLabel` whenever the action buttons are icon-only, plus `moveUpAriaLabel` and `moveDownAriaLabel` once `orderable` is on, and `selectAllAriaLabel` in a localized UI.
-- Use `filterable` only for medium or large lists; short permission lists are faster to scan without two filter inputs.
-- Do not add your own "select all" control outside the component: each panel header already has one, and it is correctly scoped to the filtered rows.
-- Panels cap at 320px by default. Inside a dialog or drawer, set `maxHeight` to match the container (e.g. `min(56dvh, 520px)`) so scrolling always happens inside the list rather than growing the dialog.
-- Panels also have a 240px floor, which is a hard one: in a box shorter than that the panel keeps its own height and spills past the container. Lower `minHeight` whenever the transfer sits somewhere compact.
-- Pass a tuple to `emptyText` when the two sides mean different things ("nothing left to assign" vs "pick at least one to enable this"), instead of reusing one sentence.
-
-## API Reference
-
-### Props
-
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: "Array<string | number>"
-    default: "[]"
-    description: Keys shown in the target list
-  - name: data
-    type: TransferItem[]
-    default: "[]"
-    description: Complete item list with key, label, and optional disabled
-  - name: titles
-    type: "[string, string]"
-    default: "['Source', 'Target']"
-    description: Source and target panel titles
-  - name: filterable
-    type: boolean
-    default: false
-    description: Whether to show filter inputs
-  - name: filterPlaceholder
-    type: string
-    default: "''"
-    description: Placeholder for the filter input
-  - name: emptyText
-    type: "string | [string, string]"
-    default: "'No data'"
-    description: Text shown when a panel is empty; pass a tuple for per-panel copy
-  - name: maxHeight
-    type: "string | number"
-    default: "'320px'"
-    description: Panel height cap; numbers are treated as px, or set --tx-transfer-max-height directly
-  - name: minHeight
-    type: "string | number"
-    default: "'240px'"
-    description: Panel height floor; numbers are treated as px, or set --tx-transfer-min-height directly
-  - name: addAriaLabel
-    type: string
-    default: "'Move selected items to target'"
-    description: Accessible label for the add action button
-  - name: removeAriaLabel
-    type: string
-    default: "'Move selected items to source'"
-    description: Accessible label for the remove action button
-  - name: selectAllAriaLabel
-    type: string
-    default: "'Select all'"
-    description: Accessible label for each panel's select-all box; the panel title is appended
-  - name: moveUpAriaLabel
-    type: string
-    default: "'Move item up'"
-    description: Accessible label for the move-up button; the row label is appended
-  - name: moveDownAriaLabel
-    type: string
-    default: "'Move item down'"
-    description: Accessible label for the move-down button; the row label is appended
-  - name: targetOrder
-    type: "'original' | 'push'"
-    default: "'original'"
-    description: Sort target items by original data order or append order; ignored once `orderable` is on
-  - name: orderable
-    type: boolean
-    default: false
-    description: Target panel shows ranks and move up/down; order follows modelValue
----
-::
-
-## Permission Resource Grants
-
-In admin authorization flows, `TxTransfer` should only own controlled movement between assignable and granted resources. Let `TxTree` select the permission scope, `TxTreeSelect` select the owner team, and `TxTimeline` show audit progress so every component keeps one clear responsibility.
-
-:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified resource grant transfer."}
+### Permission Resource Grants
+`TxTransfer` only moves resources under host control; `TxTree`, `TxTreeSelect`, and `TxTimeline` handle the scope, owner team, and audit trail.
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -198,33 +110,101 @@ code: |
 ---
 :::
 
-## Events
+### Best Practices
+
+- Keep `modelValue` controlled by the host and store only item keys; keep every `data[].key` unique and stable.
+- Keep disabled rows in `data` rather than filtering them out, so unavailable resources don't look missing.
+- Use `targetOrder="push"` when selection order matters; turn on `orderable` when users rank the target by hand (priorities, fallback chains).
+- Inside a dialog or drawer, set `maxHeight` to fit the container (e.g. `min(56dvh, 520px)`); lower `minHeight` in compact spots.
+- In a localized UI, override `titles`, `emptyText`, and every `*AriaLabel` prop.
+
+## API Reference
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: "Array<string | number>"
+    default: "[]"
+    description: Keys shown in the target list.
+  - name: data
+    type: TransferItem[]
+    default: "[]"
+    description: All items, each with key, label, and optional disabled.
+  - name: titles
+    type: "[string, string]"
+    default: "['Source', 'Target']"
+    description: Source and target panel titles.
+  - name: filterable
+    type: boolean
+    default: false
+    description: Shows a filter input on both sides.
+  - name: filterPlaceholder
+    type: string
+    default: "''"
+    description: Placeholder of the filter input.
+  - name: emptyText
+    type: "string | [string, string]"
+    default: "'No data'"
+    description: Text for an empty panel; a tuple gives each side its own.
+  - name: maxHeight
+    type: "string | number"
+    default: "'320px'"
+    description: Panel height cap, px for numbers; writes --tx-transfer-max-height.
+  - name: minHeight
+    type: "string | number"
+    default: "'240px'"
+    description: Panel height floor, px for numbers; writes --tx-transfer-min-height.
+  - name: addAriaLabel
+    type: string
+    default: "'Move selected items to target'"
+    description: Accessible name of the add button.
+  - name: removeAriaLabel
+    type: string
+    default: "'Move selected items to source'"
+    description: Accessible name of the remove button.
+  - name: selectAllAriaLabel
+    type: string
+    default: "'Select all'"
+    description: Accessible name of each select-all box, followed by the panel title.
+  - name: moveUpAriaLabel
+    type: string
+    default: "'Move item up'"
+    description: Accessible name of the move-up button, followed by the row label.
+  - name: moveDownAriaLabel
+    type: string
+    default: "'Move item down'"
+    description: Accessible name of the move-down button, followed by the row label.
+  - name: targetOrder
+    type: "'original' | 'push'"
+    default: "'original'"
+    description: Orders the target by original data order or append order; ignored with `orderable`.
+  - name: orderable
+    type: boolean
+    default: false
+    description: Shows ranks and move up/down in the target panel; order follows modelValue.
+---
+::
+
+### Events
 
 | Event | Payload | Description |
 |------|------|------|
-| `update:modelValue` | `Array<string \| number>` | Selected keys update |
-| `change` | `Array<string \| number>` | Selected keys changed |
-
-## Slots
-
-`TxTransfer` does not expose custom slots. Render labels through `data[].label`, localize panel headings through `titles`, and localize empty/filter/action copy through props.
+| `update:modelValue` | `Array<string \| number>` | Selected keys updated. |
+| `change` | `Array<string \| number>` | Fires together with `update:modelValue`. |
 
 ## Overview
 
-- Each panel header carries a select-all box scoped to the rows that are **currently visible and enabled**: with a filter applied it only touches the filtered rows rather than checking items the user cannot see. A partial selection reports `aria-checked="mixed"`.
-- There are two ways to move a row: check it and press the middle button, or double-click the row. Double-clicking a disabled row does nothing.
-- The middle buttons carry a border and fill, turn primary once something is checked, and show how many rows are pending. Icon-only borderless buttons between two bordered panels read as decoration, so pressing them looks like nothing happened.
-- With `orderable`, target rows show a rank plus move up / move down. The rank comes from `modelValue` and is independent of the filter.
+- Each panel's select-all box covers only visible, enabled rows; a partial selection reports `aria-checked="mixed"`.
+- Rows move by checking them and pressing a middle button, or by double-clicking; double-clicking a disabled row does nothing.
+- A middle button turns primary and shows the pending count once rows are checked; with none checked it is disabled.
+- With `orderable`, ranks and first/last checks come from the unfiltered `modelValue`, so filtering never shifts them.
 
 ## Technologies
 
-<TuffDocSourceLink label="View source" />
+- Panels read `--tx-transfer-max-height` (default `320px`) and `--tx-transfer-min-height` (default `240px`); the props only write those variables, and the cap keeps scrolling inside the list.
+- Source: `packages/tuffex/packages/components/src/transfer/`.
 
-- Source: `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` confirms source/target derivation, filter matching, disabled item checks, `targetOrder`, and icon-only action labels.
-- Type contracts: `packages/tuffex/packages/components/src/transfer/src/types.ts` exports `TransferItem`, `TransferProps`, and `TransferEmits`.
-- Height contract: panels read `--tx-transfer-max-height` (default `320px`) and `--tx-transfer-min-height` (default `240px`); the props only write those variables. The cap has to exist — with no cap the panel grows with its content, `.tx-transfer__list`'s `overflow: auto` never triggers, and the surrounding page or dialog becomes the scroll container. The floor used to be hardcoded, which made it unbeatable: a transfer inside a 190px box still laid out at 240px and overflowed it.
-- Row labels wrap with `overflow-wrap: anywhere`, not `word-break: break-all`. `break-all` broke at whatever character ran out of room, so "Quick actions" wrapped as "Quick actio / ns"; `anywhere` takes the space first and only splits a word that genuinely cannot fit.
-- Props are declared as a runtime object, not `defineProps<TransferProps>()`. The SFC compiler resolves the sibling `types.ts` once and does not redo it when that file changes, so a prop added to the interface ships as an unknown attribute while both vitest and the built `dist` stay correct.
-- Ordering contract: with `orderable`, both `targetItems` and `resolveOrder` short-circuit `targetOrder='original'`. Changing only the render order and leaving `resolveOrder` re-deriving from `data` was tried first: every move was re-sorted away on the next emit, which reads as "the button does nothing". Rank and first/last checks come from the unfiltered `modelValue`; using the filtered index gets both the rank and the disabled state wrong while a filter is applied.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` covers checked item movement, double-click single-row movement and the disabled-row refusal, select-all (skipping disabled rows, filter scoping, mixed reporting, and clearing on a second press), custom empty text (including per-panel copy), accessible action labels, `maxHeight` and `minHeight` variable injection (separately and together), and `orderable` rank rendering, move up/down, boundary disabling, and rank/bounds under an active filter.
-- Screenshot: `.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`.
+<TuffDocSourceLink label="View source" />

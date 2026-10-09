@@ -189,12 +189,14 @@ code: |
 | `label` | `string` | `''` | 无默认插槽时显示的文本。 |
 | `disabled` | `boolean` | `false` | 禁用该项，键盘导航跳过它。 |
 | `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 独立使用时的样式；group 内以 group 的 `type` 为准。 |
+| `modelValue` / `v-model` | `boolean` | - | 独立使用时的选中状态；未传则自行记录，group 内忽略。 |
 
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
 | `click` | `(value: string \| number)` | 启用且未选中的项经 group 选中自身后触发。 |
+| `update:modelValue` | `(value: boolean)` | 独立使用时，点击未选中的项后以 `true` 触发。 |
 
 #### 插槽
 

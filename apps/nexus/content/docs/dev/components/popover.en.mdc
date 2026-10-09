@@ -1,6 +1,6 @@
 ---
 title: "Popover"
-description: "Semantic popover built directly on BaseAnchor."
+description: "A lightweight panel anchored to its trigger."
 category: Feedback
 status: beta
 since: 0.3.4
@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-### Popover
+### Basic
 :::TuffDemoWrapper{demo="PopoverPopoverDemo" code-lang="vue"}
 ---
 code: |
@@ -27,216 +27,136 @@ code: |
 ---
 :::
 
+### Trigger and Panel
+`trigger` picks click or hover; `panelBackground` and the other `panel*` props style the panel.
+:::TuffDemoWrapper{demo="PopoverPopoverVisualEffectsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxPopover
+      v-model="open"
+      :trigger="trigger"
+      :placement="placement"
+      :panel-background="background"
+      :keep-alive-content="keepAliveContent"
+      :width="284"
+    >
+      <template #reference>
+        <TxButton>Click me</TxButton>
+      </template>
+
+      <strong>Popover panel</strong>
+      <TxButton size="sm">Action</TxButton>
+    </TxPopover>
+  </template>
+---
+:::
+
+### Dashboard Navigation
+Tabs hold the top-level sections; light actions go in `TxDropdownMenu`, short notes in `TxPopover`, and dense settings in `TxDrawer`.
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Release actions</TxButton>
+      </template>
+      <TxDropdownItem>Quick release</TxDropdownItem>
+    </TxDropdownMenu>
+
+    <TxPopover>
+      <template #reference>
+        <TxButton variant="secondary">Policy notes</TxButton>
+      </template>
+      Keep popovers short and action-light.
+    </TxPopover>
+
+    <TxTabs v-model="active" placement="left" indicator-variant="pill">
+      <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      <TxTabItem name="Releases">Release settings</TxTabItem>
+    </TxTabs>
+
+    <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+  </template>
+---
+:::
+
 ### Best Practices
 
-- Keep popover content short: explanations, compact filters, and one or two lightweight actions.
-- Use `toggleOnReferenceClick=false` when the reference contains an input or custom focus behavior, as `TxSearchSelect` does.
-- Leave `keepAliveContent=true` for small forms or stateful filters; set it to `false` only for static copy.
-- Use `maxHeight` or internal scrolling for option panels instead of allowing a popover to cover the viewport.
-- There is no arrow by default. Turn on `showArrow` only when several triggers sit close together and the panel has to show which one it belongs to; with `offset` unset, the gap grows to fit the arrow.
+- Hold short notes, compact filters, and one or two light actions; move anything past one screen or with many fields to a Drawer.
+- Set `toggleOnReferenceClick=false` when the reference contains an input or manages its own focus, as `TxSearchSelect` does.
+- Keep `keepAliveContent` on for stateful filters and small forms; static copy can turn it off.
+- Bound option panels with `maxHeight` or inner scrolling rather than letting a popover cover the viewport.
+- Turn on `showArrow` only when triggers sit close together and the panel must show which one it belongs to.
 
 ## API Reference
 
-### TxPopover Props
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean` | - | Open state (`v-model`) |
-| `disabled` | `boolean` | `false` | Disable interaction |
-| `eager` | `boolean` | `false` | Mounts anchor content eagerly through `TxBaseAnchor`. |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | Floating placement |
-| `offset` | `number` | auto | Gap: `6` without an arrow (matching DropdownMenu and Select), `max(8, arrowSize / 2 + 2)` with one |
-| `width` | `number` | `0` | Panel width (`0` follows reference width) |
-| `minWidth` | `number` | `0` | Minimum panel width |
-| `maxWidth` | `number` | `360` | Maximum panel width |
-| `maxHeight` | `number` | `420` | Maximum panel height before internal overflow handling. |
-| `unlimitedHeight` | `boolean` | `false` | Disables the max-height cap for panels that manage their own scrolling. |
-| `referenceFullWidth` | `boolean` | `false` | Stretch reference container to full width |
-| `referenceClass` | `BaseAnchorClassValue` | - | Additional class value forwarded to the BaseAnchor reference wrapper. |
-| `showArrow` | `boolean` | `false` | Show arrow. The anchor family draws no arrow by default; opt in per instance |
-| `arrowSize` | `number` | `12` | Arrow size |
-| `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
-| `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay (ms). Left unset, the shared delay service supplies it. |
-| `closeDelay` | `number` | From the `menu` preset (`100`) | Hover close delay (ms). Left unset, the shared delay service supplies it. |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | Anchor animation config forwarded to BaseAnchor; spring expand by default — classic types (`transfer` etc.) get `duration: 180` / `ease: 'power2.out'` injected. |
-| `keepAliveContent` | `boolean` | `true` | Keep floating content mounted between open/close |
-| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggle by clicking reference |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Card border variant |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Card background style |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Card shadow style |
-| `panelRadius` | `number` | `18` | Card radius |
-| `panelPadding` | `number` | `10` | Card padding |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Advanced override object forwarded to the BaseAnchor panel card. |
-| `closeOnClickOutside` | `boolean` | `true` | Close on outside click (click trigger only) |
-| `closeOnEsc` | `boolean` | `true` | Close on ESC |
+| `modelValue` | `boolean` | - | Whether the panel is open (`v-model`); omit it for uncontrolled use. |
+| `disabled` | `boolean` | `false` | Blocks opening and closes an open panel. |
+| `eager` | `boolean` | `false` | Mounts the content before the first open. |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | Preferred side. |
+| `offset` | `number` | auto | Gap to the reference: `6` without an arrow, `max(8, arrowSize / 2 + 2)` with one. |
+| `width` | `number` | `0` | Panel width; `0` matches the reference width. |
+| `minWidth` | `number` | `0` | Minimum width. |
+| `maxWidth` | `number` | `360` | Maximum width. |
+| `maxHeight` | `number` | `420` | Maximum height; content beyond it scrolls inside the panel. |
+| `unlimitedHeight` | `boolean` | `false` | Removes the height cap, for panels that scroll themselves. |
+| `referenceFullWidth` | `boolean` | `false` | Stretches the reference container to full width. |
+| `referenceClass` | `BaseAnchorClassValue` | - | Extra class for the reference wrapper. |
+| `showArrow` | `boolean` | `false` | Shows an arrow. |
+| `arrowSize` | `number` | `12` | Arrow size in px. |
+| `trigger` | `'click' \| 'hover' \| 'manual'` | `'click'` | How it opens; `manual` binds no reference interaction, so `modelValue` alone decides. |
+| `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay in ms; the shared delay service supplies it when unset. |
+| `closeDelay` | `number` | From the `menu` preset (`100`) | Hover close delay in ms; the shared delay service supplies it when unset. |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | Animation config forwarded to BaseAnchor; each type uses its own default timing. |
+| `virtualReference` | `BaseAnchorVirtualReference` | - | Positions against an arbitrary rect, such as the pointer or a selection, instead of the reference. |
+| `matchReferenceWidth` | `boolean` | `width <= 0` | With `width` at `0`, matches the reference width; `false` sizes the panel to its content. |
+| `keepAliveContent` | `boolean` | `true` | Keeps content and its state after close. |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggles on reference click. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
+| `panelRadius` | `number` | `18` | Panel corner radius in px. |
+| `panelPadding` | `number` | `10` | Panel padding in px. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Advanced overrides forwarded to the panel card. |
+| `closeOnClickOutside` | `boolean` | `true` | Closes on an outside click; ignored with `hover`. |
+| `closeOnEsc` | `boolean` | `true` | Closes on Escape. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `open` | - | Emitted when uncontrolled or internal state opens. |
-| `close` | - | Emitted when uncontrolled or internal state closes. |
-| `update:modelValue` | `boolean` | Emitted whenever Popover requests a controlled or uncontrolled open state change. |
+| `open` | - | Fires when the popover opens itself. |
+| `close` | - | Fires when the popover closes itself. |
+| `update:modelValue` | `boolean` | Fires when the popover requests an open-state change, controlled or not. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `reference` | - | Trigger/reference content rendered inside the anchor reference wrapper. |
-| `default` | `{ side: string }` | Popover panel content. `side` is the resolved floating side from `TxBaseAnchor`. |
+| `reference` | - | Trigger content, rendered inside the reference wrapper. |
+| `default` | `{ side: string }` | Panel content; `side` is the final side. |
 
-## Trigger And Panel Behavior
+### Exposed Methods
 
-### Popover (trigger and panel)
-:::TuffDemoWrapper{demo="PopoverPopoverVisualEffectsDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  const background = ref<'refraction' | 'pure' | 'mask' | 'blur' | 'glass'>('refraction')
-  const placement = ref<'bottom-start' | 'bottom' | 'top' | 'right'>('bottom-start')
-  const trigger = ref<'click' | 'hover'>('click')
-  const showArrow = ref(false)
-  const keepAliveContent = ref(true)
-  </script>
-
-  <template>
-    <div class="tx-demo tx-demo__col" style="gap: 12px; max-width: 860px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">background</span>
-            <TuffSelect v-model="background" style="min-width: 160px;">
-              <TuffSelectItem value="refraction" label="refraction" />
-              <TuffSelectItem value="pure" label="pure" />
-              <TuffSelectItem value="mask" label="mask" />
-              <TuffSelectItem value="blur" label="blur" />
-              <TuffSelectItem value="glass" label="glass" />
-            </TuffSelect>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">placement</span>
-            <TuffSelect v-model="placement" style="min-width: 200px;">
-              <TuffSelectItem value="bottom-start" label="bottom-start" />
-              <TuffSelectItem value="bottom" label="bottom" />
-              <TuffSelectItem value="top" label="top" />
-              <TuffSelectItem value="right" label="right" />
-            </TuffSelect>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">arrow</span>
-            <TxSwitch v-model="showArrow" />
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">trigger</span>
-            <TuffSelect v-model="trigger" style="min-width: 140px;">
-              <TuffSelectItem value="click" label="click" />
-              <TuffSelectItem value="hover" label="hover" />
-            </TuffSelect>
-          </label>
-
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">keepAlive</span>
-            <TxSwitch v-model="keepAliveContent" />
-          </label>
-        </div>
-      </TxCard>
-
-      <div style="display: flex; justify-content: center; padding: 48px 0;">
-        <TxPopover
-          v-model="open"
-          :placement="placement"
-          :trigger="trigger"
-          :show-arrow="showArrow"
-          :keep-alive-content="keepAliveContent"
-          :panel-background="background"
-          panel-shadow="soft"
-          :panel-padding="12"
-          :width="284"
-        >
-          <template #reference>
-            <TxButton>Click me</TxButton>
-          </template>
-
-          <div style="width: 260px; display: grid; gap: 8px;">
-            <div style="font-weight: 600;">
-              Popover panel
-            </div>
-            <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
-              Trigger + Surface + Arrow + KeepAlive
-            </div>
-            <TxButton size="sm">
-              Action
-            </TxButton>
-          </div>
-        </TxPopover>
-      </div>
-    </div>
-  </template>
----
-:::
-
-## Dashboard Navigation Composition
-
-Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
-
-:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Overview')
-  const drawerVisible = ref(false)
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxDropdownMenu>
-        <template #trigger>
-          <TxButton>Release actions</TxButton>
-        </template>
-        <TxDropdownItem>Quick release</TxDropdownItem>
-      </TxDropdownMenu>
-
-      <TxPopover>
-        <template #reference>
-          <TxButton variant="secondary">Policy notes</TxButton>
-        </template>
-        Keep popovers short and action-light.
-      </TxPopover>
-
-      <TxTabs v-model="active" placement="left" indicator-variant="pill">
-        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
-        <TxTabItem name="Releases">Release settings</TxTabItem>
-      </TxTabs>
-
-      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
-    </section>
-  </template>
----
-:::
+| Name | Type | Description |
+|------|------|------|
+| `updatePosition` | `() => void` | Recomputes the position; call it after the `virtualReference` rect changes. |
 
 ## Overview
 
-- With `trigger="click"`, outside-click and Escape closing are available; with `trigger="hover"`, open/close delays apply, and the trip to the panel is covered by the hover bridge and the safe triangle (rules in Tooltip's Overview): crossing the `offset` gap, resting on the panel's padding, or passing another hover trigger diagonally neither closes the panel nor hands it away.
-- Use `keepAliveContent` for filters, short forms, and stateful explanation panels; disable it for pure display copy when state does not matter.
-- Popover should stay lightweight; upgrade to Drawer for one-screen-plus content, footer actions, or multi-field configuration.
+- With `modelValue` it is controlled; otherwise it keeps its own open state.
+- With `trigger="click"`, a reference click toggles it and an outside click or Escape closes it; with `hover`, delays drive it and outside clicks are ignored.
+- On the way to the panel, the hover bridge and safe triangle hold it open: crossing the `offset` gap, resting on the panel padding, or passing another hover trigger diagonally neither closes it nor hands it away.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/popover/src/types.ts`, `TxPopover.vue`, and `popover.test.ts`.
-- With `offset` unset, the gap is 6px without an arrow and derived from `arrowSize` with one; examples should not imply a fixed default gap.
-- Rejected design: keeping the old 2px no-arrow gap once the arrow went off by default. Measured, the panel's top edge sat 1.8px from the trigger, over the trigger's 3px focus outline, so it uses the menu family's 6px instead.
-- `closeOnClickOutside` is click-trigger only because hover mode owns close timing through pointer/focus leave delays.
-
-- Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
-- Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding (no arrow by default), offset derivation (6 without an arrow, 8 with the default arrow, a custom arrow size, an explicit value), hover trigger timing, the hover zone spanning the whole floating layer (leaving the content for the card padding does not close), disabled-close behavior, full-width reference classes, and content side slot props.
+- Built on `TxTooltip` (`layer="menu"`); the shared anchor-delay service schedules its delays and closes other panels on the same layer.
+- Source: `packages/tuffex/packages/components/src/popover/`.
 
 <TuffDocSourceLink />

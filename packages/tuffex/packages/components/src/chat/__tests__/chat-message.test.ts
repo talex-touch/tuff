@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import TxChatList from '../src/TxChatList.vue'
 import TxChatMessage from '../src/TxChatMessage.vue'
 
 function messageWith(attachments: Array<{ type: 'image', url: string, name?: string }>) {
@@ -42,5 +43,32 @@ describe('txChatMessage attachment names', () => {
     })
 
     expect(wrapper.find('.tx-chat-message__thumb').attributes('aria-label')).toBe('打开图片附件')
+  })
+})
+
+describe('txChatList attachment names', () => {
+  it.each([true, false])('forwards attachmentLabel to every message (stagger: %s)', (stagger) => {
+    const wrapper = mount(TxChatList, {
+      props: {
+        markdown: false,
+        stagger,
+        attachmentLabel: '打开图片附件',
+        messages: [messageWith([{ type: 'image', url: '/anon.png' }])],
+      },
+    })
+
+    expect(wrapper.find('.tx-chat-message__thumb').attributes('aria-label')).toBe('打开图片附件')
+  })
+
+  it('keeps the message default when no label is passed', () => {
+    const wrapper = mount(TxChatList, {
+      props: {
+        markdown: false,
+        stagger: false,
+        messages: [messageWith([{ type: 'image', url: '/anon.png' }])],
+      },
+    })
+
+    expect(wrapper.find('.tx-chat-message__thumb').attributes('aria-label')).toBe('Open image attachment')
   })
 })

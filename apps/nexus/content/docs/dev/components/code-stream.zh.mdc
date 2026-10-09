@@ -1,6 +1,6 @@
 ---
 title: "CodeStream 流式代码块"
-description: "带文件名头部的代码块，可随到达逐词流式输出，也可按行显现，复制与语法高亮开箱可用。"
+description: "带文件名头部、可流式输出的代码块"
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -12,9 +12,7 @@ verified: true
 ## 用法
 
 ### 流式输出
-
-把目前收到的代码传给 `code` 并设置 `streaming`：无论 token 到达得多不均匀，组件都按匀速逐词放出。每个词在自己的语法颜色里从轻微模糊中析出，Tuff 光标跟在正在书写的那一行末尾。只要设置了 `streaming`（`true` 或 `false` 都算）就进入这个模式；同时传了 `revealedLines` 或 `diff` 时以它们为准。`TxStreamCode` 是同一个组件在流式家族里的名字。
-
+把目前收到的代码传给 `code` 并设置 `streaming`，组件逐词匀速放出。
 :::TuffDemoWrapper{demo="CodeStreamLiveDemo" code-lang="vue"}
 ---
 code: |
@@ -34,9 +32,7 @@ code: |
 :::
 
 ### 逐行显现
-
-`revealedLines` 由宿主推进，组件负责过渡与光标。节奏（起播 400ms、每行 240ms、结尾停 3200ms）留在 demo 层。
-
+宿主推进 `revealedLines`，组件负责过渡与光标。
 :::TuffDemoWrapper{demo="CodeStreamStreamingDemo" code-lang="vue"}
 ---
 code: |
@@ -54,10 +50,8 @@ code: |
 :::
 
 ### 完整清单
-
-不传 `revealedLines` 就是全量展示，此时不画光标。
-
-:::TuffDemoWrapper{demo="CodeStreamStaticDemo" code-lang="vue" title="完整清单" description="settled 态：文件名、语言标签、复制与高亮。"}
+不传 `revealedLines` 与 `streaming` 时显示完整清单。
+:::TuffDemoWrapper{demo="CodeStreamStaticDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -72,16 +66,8 @@ code: |
 :::
 
 ### 统一 Diff
-
-传 `diff` 就从清单切到 diff：删除行淡红底配斜纹槽标，新增行淡绿底配实心槽标，头部右侧出现 `+N −N`。**斜纹不是装饰**——两种色调正是红绿色盲最难分辨的一对，所以槽标的形状也要能单独区分。
-
-被删行与替换它的新增行**共享同一个行号**（各自是自己那版的第 4 行），所以行号按行给，不由组件计数。
-
-高亮时所有行（含删除行）一起送进 Shiki：中间那段文本短暂地不是合法源码——同一条语句连着出现两个版本——但高亮器逐行会自己恢复，而逐行单独高亮会丢掉全部上下文、把跨行结构染错。
-
-复制按钮给出的始终是 `code`，不是 diff：把标记剥掉的 diff 既不是旧版也不是新版，所以由宿主明确指定哪一份是可复制的文本。
-
-:::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue" title="统一 Diff" description="一行被替换 + 一行新增；行号在替换处重复。"}
+传 `diff` 渲染统一 diff。被删行与替换它的新增行共用行号，所以行号逐行给出。
+:::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -103,109 +89,88 @@ code: |
 
 ### 最佳实践
 
-- 代码来自模型时，把完整的已收内容传给 `code` 并开启 `streaming`，交给组件控制节奏。宿主自己掌握节奏时（脚本回放、逐行推进的日志）才用 `revealedLines`。
-- 流式模式下代码框随行数长高；下方页面不能挪动时，把 `minHeight` 设为最终高度，完整代码回放时用 `reserve`。
-- 语言不确定时宁可不传 `lang`：纯文本渲染永远正确，错误的语言 id 只会白跑一次高亮。
-- 长代码建议配合外层滚动容器；代码区自身横向可滚，但纵向由内容决定。
+- 代码来自模型时用 `streaming`，交给组件控制节奏；宿主掌握节奏（脚本回放、逐行日志）时才用 `revealedLines`。
+- 流式模式下代码框随行数长高；下方不能挪动时，把 `minHeight` 设为最终高度，完整代码回放时用 `reserve`。
+- 语言不确定时不传 `lang`：纯文本总是正确的。
+- 长代码配合外层滚动容器：代码区只横向滚动，高度随内容。
 - 需要与 `TxStreamMarkdown` 的围栏统一观感时用 `TxCodeBlock`；需要文件名头部、行号与逐行显现时用本组件。
-- 非英文界面记得一起覆盖 `copyLabel` 与 `copiedLabel`，只改一个会中英混排。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `code` | `string` | — | 源码。必填。 |
-| `lang` | `string` | `''` | shiki 语言 id。留空则不高亮。 |
+| `code` | `string` | — | 源码，必填。 |
+| `lang` | `string` | `''` | Shiki 语言 id；留空不高亮，也不加载 Shiki。 |
 | `filename` | `string` | — | 头部文件名，等宽。 |
-| `langLabel` | `string` | — | 文件名旁的语言标签，例如 `TypeScript`。 |
-| `revealedLines` | `number` | — | 显现到第几行。省略或传 `-1` 表示全部。 |
-| `streaming` | `boolean` | — | 为真时逐词流式输出 `code`。只要设置了它就进入流式模式（传了 `revealedLines` 或 `diff` 时除外）；为 `false` 时代码直接显示，可用 `replay()` 回放。 |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 流式模式：词的进场方式。代码始终保持语法颜色，所以这里 `aurora` 与 `blur` 效果相同，`hue` 只是淡入。 |
+| `langLabel` | `string` | — | 文件名旁的语言标签，如 `TypeScript`。 |
+| `revealedLines` | `number` | — | 显现到第几行，越界时夹取；省略或传 `-1` 表示全部。 |
+| `streaming` | `boolean` | — | 流式模式：源头仍在输出；`false` 时直接显示，可用 `replay()` 回放。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 流式模式：词的进场方式；代码保持语法颜色，`aurora` 等同 `blur`，`hue` 只是淡入。 |
 | `wordMs` | `number` | `24` | 流式模式：每 `wordMs` 放出一个词。 |
-| `maxLagMs` | `number` | `600` | 流式模式：任何词都在到达后这段时间内显示出来。 |
+| `maxLagMs` | `number` | `600` | 流式模式：任何词都在到达后这段时间内显示。 |
 | `drainMs` | `number` | `320` | 流式模式：`streaming` 变为 false 后，在这段时间内放完剩余部分。 |
-| `pauseMs` | `number` | `400` | 流式模式：超过这段时间没有新词，就报告 `paused`。 |
-| `reserve` | `boolean` | `false` | 流式模式：完整代码回放时占住最终高度。`streaming` 时忽略。 |
-| `paced` | `boolean` | `true` | 流式模式：为 `false` 时词一到就显示（仍有进场）。`TxStreamElement` 自己统一放词，会传 `false`。 |
-| `appear` | `boolean` | `false` | 流式模式：挂载时已有的代码也播放进场，而不是直接显示。只在挂载时读取。 |
-| `caret` | `boolean` | `true` | 光标：`revealedLines` 模式下是最后一行末尾的静止标记，流式模式进行中是 Tuff 光标。关闭时流式光标立即移除；流结束时光标收起。 |
-| `lineNumbers` | `boolean` | `true` | 是否显示行号。 |
-| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 高亮主题，`'auto'` 跟随文档根。 |
-| `copyable` | `boolean` | `true` | 是否渲染复制按钮。 |
-| `copyLabel` | `string` | `'Copy'` | 复制按钮文案。 |
+| `pauseMs` | `number` | `400` | 流式模式：超过这段时间没有新词即报告 `paused`。 |
+| `reserve` | `boolean` | `false` | 流式模式：完整代码回放时占住最终高度；`streaming` 时忽略。 |
+| `paced` | `boolean` | `true` | 流式模式：为 `false` 时词一到就显示（仍有进场）；`TxStreamElement` 统一控制节奏时传 `false`。 |
+| `appear` | `boolean` | `false` | 流式模式：挂载时已有的代码也播放进场；只在挂载时读取。 |
+| `caret` | `boolean` | `true` | 逐行模式为末行静止标记，流式模式为 Tuff 光标；关闭即移除。 |
+| `lineNumbers` | `boolean` | `true` | 显示行号。 |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 高亮主题；`'auto'` 跟随文档根的 `data-theme` 或 `.dark`。 |
+| `copyable` | `boolean` | `true` | 渲染复制按钮。 |
+| `copyLabel` | `string` | `'Copy'` | 复制按钮文案；与 `copiedLabel` 一起本地化。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案。 |
-| `minHeight` | `number \| string` | — | 代码区高度下限。缺省时按完整清单的高度预留。 |
-| `diff` | `CodeDiffRow[]` | — | 统一 diff 行。传了就渲染 diff 而不是 `code`，头部同时出现增删计数。 |
+| `minHeight` | `number \| string` | — | 代码区高度下限；缺省时按完整清单的高度预留。 |
+| `diff` | `CodeDiffRow[]` | — | 统一 diff 行，渲染时附增删计数；复制按钮仍复制 `code`。 |
 
-### CodeDiffRow
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `content` | `string` | 该行文本，**不带** `+` / `-` 标记——标记由行槽承载 |
-| `kind` | `'context' \| 'added' \| 'removed'` | 默认 `'context'` |
-| `number` | `number` | 行号。被删行与替换它的新增行通常共享同一个，所以按行给而不是自动计数；不传则该行行槽留空 |
-
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `copy` | `(code: string)` | 复制成功时透传自 `TxCopyButton`。 |
-| `complete` | — | `revealedLines` 抵达最后一行时派发一次。挂载即完整不派发，流式模式也不派发（改用 `done`）。 |
-| `state-change` | `(state: StreamState)` | 流式模式：流式状态发生变化。 |
-| `done` | — | 流式模式：每次播放触发一次，最后一个词已显示且源头已结束。 |
+| `copy` | `(code: string)` | 复制成功时触发。 |
+| `complete` | — | `revealedLines` 抵达最后一行时触发一次；挂载即完整或流式模式下不触发。 |
+| `state-change` | `(state: StreamState)` | 流式模式：状态变化时触发。 |
+| `done` | — | 流式模式：每次播放结束时触发一次。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
-| `header` | — | 替换文件名与语言标签这一对。 |
-| `actions` | — | 在复制按钮之前插入自定义控件。 |
-| `caret` | `{ state }` | 流式模式：替换 Tuff 光标。只在流式进行时渲染。 |
+| `header` | — | 替换文件名与语言标签。 |
+| `actions` | — | 复制按钮之前的自定义控件。 |
+| `caret` | `{ state }` | 流式模式：替换 Tuff 光标，只在流式进行时渲染。 |
 
 ### 暴露方法
 
 | 名称 | 类型 | 说明 |
 |------|------|------|
-| `state` | `StreamState` | 流式模式：当前流式状态；其他模式下为 `idle`。 |
-| `replay` | `() => void` | 流式模式：从第一个词开始把代码再播一遍。 |
-| `skip` | `() => void` | 流式模式：立即显示全部，不再播放进场。 |
+| `state` | `StreamState` | 流式模式的状态；其他模式下为 `idle`。 |
+| `replay` | `() => void` | 流式模式：从第一个词起重播代码。 |
+| `skip` | `() => void` | 流式模式：立即显示全部，不播放进场。 |
 
-## 高亮与主题
+### 类型
 
-高亮走仓库已有的 shiki 运行时（与 `TxCodeBlock` 同一个懒加载单例），是纯异步增强：纯文本渲染永远是对的，颜色到了再叠上去。不传 `lang` 就不高亮，也不会去加载 shiki。
+#### CodeDiffRow
 
-`theme` 默认 `'auto'`，跟着文档根的 `data-theme` 或 `.dark` 走。上游是单主题 demo，把默认写死成 light 会让暗色宿主里出现浅底深字。
-
-组件把 shiki 的输出按行拆开，再逐行配上行号与显现动画。**拆分前会核对行数**：如果高亮结果的行数与源码不一致，整体回退到纯文本，而不是让行号整体错位一行。
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `content` | `string` | 该行文本，不带 `+` / `-` 标记。 |
+| `kind` | `'context' \| 'added' \| 'removed'` | 默认 `'context'`。 |
+| `number` | `number` | 行号；被删行与替换它的新增行通常共用一个。不传则留空。 |
 
 ## 概述
 
-- `revealedLines` 会被夹到 `[0, 总行数]`，越界不会报错。
-- **流式模式与 `TxStreamText` 用同一套节奏。** 词按 `wordMs` 匀速放出；一阵突发如果会让显示落后源头超过 `maxLagMs`，就提速追上；源头结束后剩下的在 `drainMs` 内放完。每个词带着它前面的空白，所以换行与缩进随下一行的第一个词一起到达，光标不会独自停在空行上。状态依次为 `idle` → `streaming` → `paused` → `draining` → `done`；前文被改写时从第一个改动的词重新放出。
-- **流式时的颜色。** 增长中的代码按 120ms 的尾随定时器重新高亮（与 `TxCodeBlock` 处理未闭合围栏的方式一致）。每一行都取最近一次高亮的结果：截到已显示的长度，或者最新的字符先以纯文本显示，等下一次高亮再上色——这时它们还在进场，颜色变化看不出来。
-- **进场不怕重新高亮。** 每行的标记在文字或颜色变化时整体替换；每次替换后，正在进场的字符会以负延迟重新包裹，进场从被打断处继续。输出完成后，包裹会合并回普通标记。
-- **正在书写的那一行始终是同一个元素。** 换行时是把写完的那一行移到新的一行里，所以其中的光标不会重新挂载，轨道也不会跳回起点。
-- `revealedLines` 模式下，光标只在**正在显现**时出现（`0 < revealedLines < 总行数`），画在最后一行末尾。它是**静止**的：上游把闪烁光标留给流式散文，代码光标只是位置标记。
-- `complete` 只在跨越终点时派发一次。挂载时就是完整清单不算跨越，不会派发。
-- 复制按钮复用 `TxCopyButton`，因此带上了 `document.execCommand` 降级与礼貌实时区域；外观由本组件覆写成 BUI 的样子。
-- 行号 `line-height: 1.86` 与代码 `1.7` 的搭配是刻意的：10.5px×1.86 与 11.5px×1.7 都落在约 19.5px，行号才与代码同基线。改任何一边都会错位。
-- 高度下限按 `行数 × 1.7em + 20px` 预留，所以显现过程是长进已留好的空间里，而不是把页面往下推。上游写死的 137px 恰好是它那段样例六行的高度。流式模式下高度下限跟随已显示的行数，除非 `reserve` 在完整代码回放时占住最终高度。
-- 代码区是 `<div>` 而不是 `<pre>`：Vue 编译器会保留 `<pre>` 内的模板缩进，标记自身的缩进会被当成代码渲染出来。逐行的 `white-space: pre` 表达同一件事。
-- 减弱动效下不播放任何行或词的进场：`revealedLines` 照常显现，流式模式在代码到达时直接显示，光标静止为一段光弧。所有动效都只在 `prefers-reduced-motion: no-preference` 下声明。
+- 设置了 `streaming`（`true` 或 `false`），且没有 `revealedLines` 和非空的 `diff` 时进入流式模式；节奏、状态与增量显影同 [StreamText](./stream-text.zh.mdc)。
+- `revealedLines` 模式下，光标只在显现过程中（`0 < revealedLines < 总行数`）出现在最后一行末尾，且保持静止。
+- 删除行用斜纹槽标、新增行用实心槽标，不只靠红绿两种色调区分。
+- 只有 Shiki 生成的标记进入 `v-html`，其中代码文本已转义；未高亮时走普通插值。
+- 减弱动效时不播放行或词的进场：`revealedLines` 照常显现，流式模式直接显示，光标静止。
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`。
-- Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`。
-- Reused: `packages/tuffex/packages/components/src/button/src/copy-button.vue`、`packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`、`.../use-auto-theme.ts`。
-- 流式模式复用家族的公共部件：时钟 `stream-text/src/use-stream-pacer.ts`、光标 `stream-text/src/TxStreamCaret.vue`、`style/mixins.scss` 中的显影 mixin（代码变体，不扫色带），以及负责进场的 `stream-markdown/src/use-fresh-chunks.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts`（22 项）验证显现夹取与已显现行不重播、光标出现条件、`complete` 只派发一次、头部去留、shiki 输出按行拆分、行数不符时回退纯文本、主题透传与复制事件转发。`code-stream-live.test.ts`（17 项）覆盖流式模式：模式选择、挂载时已有的代码、`appear` 时代码进场、按词流式与缩进、突发内容均匀摊开、高亮标记内的进场及其合并、高亮节奏、持久的书写行与光标、光标收起、关闭时光标立即移除、光标插槽与状态事件、重播与跳过、改写、`reserve`、减弱动效、SSR 与别名。`code-stream-style.test.ts`（4 项）锁定动效只在未减弱时声明、行进场只在非流式模式、代码变体的显影与零宽光标。
-- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+- 高亮复用 `TxCodeBlock` 的 Shiki 懒加载单例：先渲染纯文本，颜色异步叠加。`TxStreamCode` 是同一组件的别名。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）。
+- 源码：`packages/tuffex/packages/components/src/code-stream/`。
 
 <TuffDocSourceLink />
-
-- **与 `TxCodeBlock` 的分工:** `TxCodeBlock` 是 `TxStreamMarkdown` 渲染每个围栏的内部件，负责 markdown 场景；本组件是独立的「智能体在写代码」展示，多出文件名头部、行号、逐行显现与光标。
-- **已知偏差（视觉）:** 上游手写了一套五色 token 映射（`kw → --accent-ink`、`str → --green`、`dim → --ink-3`），这里换成 shiki，因此配色与截图基准不逐像素一致。这是 design.md §8.2 预先接受的取舍——手写模型要求每个宿主自己分词，不能作为公共 API。需要贴近时，可给 shiki 配自定义主题把那五个 scope 映到 `--tx-bui-*`。
-- **安全:** 只有 shiki 生成的标记会进 `v-html`，其中代码文本已被转义；未高亮分支走普通插值。

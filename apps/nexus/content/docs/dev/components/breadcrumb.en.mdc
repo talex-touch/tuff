@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Links and Manual Items
-Items with `href` render as native links; items without one render as buttons and emit `click`.
+Items with `href` render as native links; other interactive items render as buttons and emit `click`.
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
 code: |
@@ -80,7 +80,7 @@ code: |
 
 - The root is `<nav aria-label="Breadcrumb">` around an ordered list.
 - The last item renders as `<span aria-current="page">` and stays inert even with `href`.
-- Other items render as `<a>` with `href`, using native navigation, or as `<button>` without it.
+- Other enabled items render as `<a>` with `href`, using native navigation, or as `<button>` without it.
 - Disabled items render as `<span aria-disabled="true">` and emit nothing.
 - Separators appear only between items and are `aria-hidden`.
 - Icon names are `i-`-prefixed icon classes, such as `i-carbon-home`.

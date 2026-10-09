@@ -1,6 +1,6 @@
 ---
 title: "GlowText"
-description: "Animated shine overlay for text and compact UI surfaces."
+description: "An animated highlight band that sweeps across text or content."
 category: Effects
 status: beta
 since: 0.3.4
@@ -9,62 +9,66 @@ syncStatus: reviewed
 verified: true
 ---
 
-> `adaptive` is enabled by default (container-level shimmer, good for images/cards); for text use `mode="text-clip"` so shimmer clips to glyphs.
->
-> `text-clip` currently sweeps right → left (aligned with the ShinyText reference).
-
 ## Usage
 
-### GlowText
+### Text
+`mode="text-clip"` clips the highlight to the glyphs, gradient text included.
 :::TuffDemoWrapper{demo="GlowTextGlowTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <TxGlowText
-        mode="text-clip"
-        :band-size="24"
-        :duration-ms="1300"
-        :opacity="0.95"
-        color="rgba(255, 255, 255, 0.98)"
-        style="font-size: 20px; font-weight: 700; color: var(--tx-text-color-secondary, #a9b1bd);"
-      >
-        GlowText
-      </TxGlowText>
+    <TxGlowText mode="text-clip" :band-size="24" :duration-ms="1300" color="rgba(255, 255, 255, 0.98)">
+      GlowText
+    </TxGlowText>
+    <TxGlowText mode="text-clip" :angle="18" :band-size="30" color="rgba(99, 102, 241, 0.9)">
+      Sweep highlight over text
+    </TxGlowText>
+    <TxGlowText mode="text-clip" :band-size="34">
+      <span class="gradient-text">Colorful text still shines</span>
+    </TxGlowText>
+  </template>
+---
+:::
 
-      <TxGlowText
-        mode="text-clip"
-        :angle="18"
-        :band-size="26"
-        :duration-ms="1700"
-        :opacity="0.92"
-        color="rgba(125, 211, 252, 0.95)"
-        style="font-size: 14px; font-weight: 500; color: var(--tx-text-color-secondary, #9ea8b7);"
-      >
-        Subtle sweep for captions
-      </TxGlowText>
+### Images and Cards
+The default `adaptive` mode sweeps the whole container; set `tag="div"` around block content.
+:::TuffDemoWrapper{demo="GlowTextGlowTextOnImageDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlowText tag="div" :radius="14" :band-size="34" color="rgba(255, 255, 255, 0.95)">
+      <div class="card card--dark" />
+    </TxGlowText>
+    <TxGlowText tag="div" :radius="12" :angle="-12" :band-size="40" :opacity="0.55" blend-mode="soft-light">
+      <div class="card card--light" />
+    </TxGlowText>
+  </template>
+---
+:::
 
-      <TxGlowText mode="text-clip" :angle="18" :band-size="30" :duration-ms="1400" color="rgba(99, 102, 241, 0.9)" style="font-size: 15px; font-weight: 600;">
-        Sweep highlight over text
-      </TxGlowText>
-
-      <TxGlowText mode="text-clip" :angle="20" :band-size="34" :duration-ms="1600" style="font-size: 16px; font-weight: 700;">
-        <span style="background: linear-gradient(90deg, #f59e0b, #ef4444, #8b5cf6); -webkit-background-clip: text; color: transparent;">
-          Colorful text still shines
-        </span>
-      </TxGlowText>
-    </div>
+### UI Elements
+`:repeat="false"` sweeps once; pair it with `delayMs` for a one-shot feature badge.
+:::TuffDemoWrapper{demo="GlowTextGlowTextCasesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlowText tag="div" :radius="999" :angle="-20" :band-size="28" :duration-ms="1200" :repeat="false">
+      <div class="badge">New Feature</div>
+    </TxGlowText>
+    <TxGlowText tag="div" :radius="12" :angle="16" :band-size="36" :opacity="0.6">
+      <div class="status-card">Realtime Sync</div>
+    </TxGlowText>
   </template>
 ---
 :::
 
 ### Best Practices
 
-- Use `text-clip` for labels, headings, and gradient text; use `adaptive` for image thumbnails, cards, and status chips.
-- Keep `bandSize` between `24` and `40` for readable text. Larger bands work better on image/card surfaces.
-- Prefer a light `color` with moderate `opacity` on dark surfaces; on light cards, lower `opacity` or use `blendMode="soft-light"`.
-- Avoid wrapping focusable controls unless the glow is purely decorative and does not obscure focus rings.
-- Do not use `GlowText` as a loading skeleton. Use `TxSkeleton`, `TxProgressBar`, or `TxLoadingState` for loading feedback.
+- Use `text-clip` for labels, headings, and gradient text; use `adaptive` for images, cards, and status chips.
+- Keep `bandSize` between `24` and `40` on text; wider bands suit images and cards.
+- On light cards, lower `opacity` or use `blendMode="soft-light"` with a darker `color`.
+- Don't wrap focusable controls, so the highlight never hides a focus ring.
+- Don't use it as a loading skeleton; use `TxSkeleton`, `TxProgressBar`, or `TxLoadingState`.
 
 ## API Reference
 
@@ -72,107 +76,38 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `tag` | `string` | `span` | Root element used to wrap the default slot. |
-| `active` | `boolean` | `true` | Disables the shine overlay when set to `false`. |
-| `repeat` | `boolean` | `true` | Runs the sweep once when set to `false`. |
-| `durationMs` | `number` | `2000` | Sweep animation duration in milliseconds. |
-| `delayMs` | `number` | `0` | Delay before the sweep animation starts. |
-| `angle` | `number` | `20` | Band tilt from vertical, in degrees; `0` is an upright band, positive values lean it like `/`. |
-| `bandSize` | `number` | `38` | Highlight band width as a percentage of the element's width. |
-| `color` | `string` | `rgba(255, 255, 255, 0.9)` | Highlight color used in the sweep gradient. |
-| `opacity` | `number` | `0.75` | Overlay opacity during the visible part of the sweep. |
-| `blendMode` | `string` | - | Optional CSS `mix-blend-mode` override for the shine overlay. |
-| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `classic` uses a plain overlay, `adaptive` adds blend/backdrop defaults for surfaces, and `text-clip` mirrors slot text so the shine is clipped to glyphs. |
-| `backdrop` | `string` | - | Optional CSS backdrop filter override for the shine overlay. |
-| `radius` | `number` | `10` | Root border radius in pixels. |
+| `tag` | `string` | `span` | Root element; `span` for text, `div` for cards or images. |
+| `active` | `boolean` | `true` | Shows the sweep; when `false`, the slot still renders. |
+| `repeat` | `boolean` | `true` | Loops the sweep; `false` runs it once. |
+| `durationMs` | `number` | `2000` | Length of one cycle in ms. |
+| `delayMs` | `number` | `0` | Delay before the sweep starts, in ms. |
+| `angle` | `number` | `20` | Band tilt from vertical in degrees; `0` is upright, positive leans like `/`. |
+| `bandSize` | `number` | `38` | Band width as a percentage of the element's width. |
+| `color` | `string` | `rgba(255, 255, 255, 0.9)` | Highlight color. |
+| `opacity` | `number` | `0.75` | Highlight opacity. |
+| `blendMode` | `string` | - | Custom `mix-blend-mode`; `adaptive` defaults to `plus-lighter`, else `screen`. |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `classic` is a plain overlay, `adaptive` adds blend and backdrop defaults, `text-clip` clips to glyphs. |
+| `backdrop` | `string` | - | Custom `backdrop-filter`, such as `brightness(1.2) saturate(1.1)`. |
+| `radius` | `number` | `10` | Root corner radius in px. |
 
 ### Slots
 
 | Name | Props | Description |
 |------|------|------|
-| `default` | - | Text or compact content that receives the shine overlay. In `text-clip` mode, plain text is mirrored into an aria-hidden shine layer. |
-
-### Events
-
-`TxGlowText` does not emit events.
-
-## Applied to Images/Cards
-
-### GlowText on image
-:::TuffDemoWrapper{demo="GlowTextGlowTextOnImageDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <TxGlowText tag="div" :radius="14" :angle="20" :band-size="34" :duration-ms="1600" color="rgba(255, 255, 255, 0.95)">
-        <div
-          style="width: 240px; height: 120px; border-radius: 14px; background: linear-gradient(135deg, #111827, #0f766e); border: 1px solid var(--tx-border-color-light);"
-        />
-      </TxGlowText>
-
-      <TxGlowText tag="div" :radius="12" :angle="-12" :band-size="40" :duration-ms="2000" :opacity="0.55" color="rgba(255, 255, 255, 0.85)" blend-mode="soft-light">
-        <div
-          style="width: 240px; height: 120px; border-radius: 12px; background: linear-gradient(135deg, #f8fafc, #e2e8f0); border: 1px solid rgba(148, 163, 184, 0.25);"
-        />
-      </TxGlowText>
-    </div>
-  </template>
----
-:::
-
-## More Examples
-
-### GlowText in UI
-:::TuffDemoWrapper{demo="GlowTextGlowTextCasesDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <TxGlowText tag="div" :radius="999" :angle="-20" :band-size="28" :duration-ms="1200" :repeat="false">
-        <div
-          style="padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; font-weight: 600; font-size: 13px; letter-spacing: 0.02em;"
-        >
-          New Feature
-        </div>
-      </TxGlowText>
-
-      <TxGlowText tag="div" :radius="12" :angle="16" :band-size="36" :duration-ms="1800" :opacity="0.6" color="rgba(255, 255, 255, 0.85)">
-        <div
-          style="padding: 12px 14px; border-radius: 12px; background: #0b1220; color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.2); display: flex; align-items: center; gap: 10px;"
-        >
-          <div style="width: 8px; height: 8px; border-radius: 999px; background: #22c55e;"></div>
-          <div>
-            <div style="font-size: 12px; opacity: 0.8;">Connected</div>
-            <div style="font-size: 14px; font-weight: 600;">Realtime Sync</div>
-          </div>
-        </div>
-      </TxGlowText>
-    </div>
-  </template>
----
-:::
+| `default` | - | Content that receives the sweep; in `text-clip`, plain text is mirrored into an `aria-hidden` layer. |
 
 ## Overview
 
-- The root element is controlled by `tag`; keep it inline (`span`) for text and block (`div`) for cards, images, or badges.
-- `active=false` removes the shine layer visually but keeps slot content rendered.
-- `repeat=false` runs the animation once and keeps the final frame; combine it with `delayMs` for one-shot announcement badges.
-- `mode="adaptive"` blends with `screen` (`plus-lighter` where supported), which is lighten-only. On a light surface a light `color` therefore changes nothing at all — the component renders, animates, and stays invisible, with no error to go on. Adaptive is for dark cards, images and thumbnails; text on a light page wants `text-clip`, and a light card wants `blendMode="soft-light"` with a darker `color`.
-- `mode="text-clip"` reads the rendered slot text after mount and on text mutations; it is best for simple text nodes, not large nested interactive content.
-- Both sweeps draw the same band. `angle` tilts it away from vertical and `bandSize` is a share of the element's width; the band enters centred half an element before the left edge and leaves half an element past the right. In `adaptive` mode the backdrop filter is masked to the band, so only what the band crosses is lifted.
-- The band travels at a constant speed and then waits off-stage: both sweeps are `linear` and finish their travel at 65% of the cycle, holding still for the rest. Easing the travel instead made the band decelerate just before it left and then restart instantly, which reads as a hesitation rather than a pass. `--tx-glow-ease` still overrides it.
-- `opacity` holds for the whole travel rather than fading in and out along it. Both endpoints already sit outside the root, which is `overflow: hidden`, so there is nothing to fade — the old mid-travel fade dissolved the band while it was still over the element and it never appeared to leave. Opacity only hides the layer during the off-stage hold.
-- Reduced-motion users get a static highlight because the component disables sweep animation under `prefers-reduced-motion: reduce`.
+- `adaptive` only lightens, so a light `color` on a light surface stays invisible, with no error.
+- `text-clip` reads the slot text on mount and on text changes; it suits simple text only.
+- The band travels at a constant speed from half a width before the left edge to half a width past the right, over 65% of the cycle, then waits off-stage; `--tx-glow-ease` overrides the easing.
+- In `adaptive`, the backdrop filter affects only what the band crosses.
+- Both shine layers are `aria-hidden`; keep the readable text in the default slot.
+- Under reduced motion the sweep stops and a static, centered highlight remains.
 
 ## Technologies
 
-- **Accessibility note:** Both shine layers are `aria-hidden`; in `text-clip` mode the mirrored text is decorative, so keep the real readable text in the default slot.
-- **Band geometry:** `angle` used to be the gradient's own direction, so the default 20° laid the band nearly flat — thicker than a short card is tall — and a pass washed the whole card light grey instead of crossing it. The adaptive layer was also unmasked: its backdrop filter brightened a strip three element-widths wide, whose edge crossed the element as a hard vertical seam.
-- **Verified coverage:** `glow-text.test.ts` verifies default adaptive rendering, `aria-hidden` shine layers, custom root tags and CSS variables, inactive/one-shot classes, text-clip mirror text, and cleanup when switching back to adaptive mode.
-
-- Component source: `packages/tuffex/packages/components/src/glow-text/src/TxGlowText.vue`.
-- Types: `packages/tuffex/packages/components/src/glow-text/src/types.ts` exports `GlowTextProps`.
-- Export alias: `packages/tuffex/packages/components/src/glow-text/index.ts` exports `GlowText`, `TxGlowText`, `GlowTextProps`, and `TxGlowTextInstance`.
-- Coverage: `packages/tuffex/packages/components/src/glow-text/__tests__/glow-text.test.ts` verifies adaptive defaults, CSS variable mapping, state classes, `aria-hidden` shine layers, and text-clip mode transitions.
+- The band is one `linear-gradient` at `90deg + angle` on a layer three element-widths wide, moved by `transform` (`background-position` in `text-clip`).
+- Source: `packages/tuffex/packages/components/src/glow-text/`.
 
 <TuffDocSourceLink />

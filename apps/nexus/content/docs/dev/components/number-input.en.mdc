@@ -50,6 +50,8 @@ code: |
 | `disabled` | `boolean` | `false` | Disables the field and the buttons. |
 | `readonly` | `boolean` | `false` | Makes the field read-only and blocks stepping. |
 | `controls` | `boolean` | `true` | Shows the decrease and increase buttons. |
+| `decreaseLabel` | `string` | `'Decrease value'` | The decrease button's `aria-label`; pass a localized string. |
+| `increaseLabel` | `string` | `'Increase value'` | The increase button's `aria-label`; pass a localized string. |
 
 ### Events
 

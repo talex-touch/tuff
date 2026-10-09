@@ -1,6 +1,6 @@
 ---
 title: Skeleton
-description: Loading placeholders and structure hints
+description: Placeholder shapes that hold the layout until content loads.
 category: Status
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-### Skeleton
-Text and avatar placeholders
+### Text and Avatar
+`lines` sets the line count; `variant="circle"` with equal `width` and `height` draws a true circle.
 :::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
 ---
 code: |
@@ -22,8 +22,8 @@ code: |
   </template>
 ---
 :::
+
 ### Card Placeholder
-Skeletons inside cards for feeds.
 :::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
 ---
 code: |
@@ -35,13 +35,25 @@ code: |
 ---
 :::
 
+### Dashboard Data Operations
+Side summaries beside the table keep their structure with `TxSkeleton` and `TxLayoutSkeleton`.
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" height="10px" />
+    <TxLayoutSkeleton />
+  </template>
+---
+:::
+
 ### Best Practices
 
-- Match skeleton width, height, line count, and radius to the final content so loading does not create a second layout.
-- Use `TxSkeleton` for configurable text, rectangle, and avatar placeholders; use `TxCardSkeleton` or `TxListItemSkeleton` when their fixed structure matches the final surface.
-- Keep `loading=false` as the handoff point to real content instead of rendering skeleton and content in separate branches.
-- Do not use skeletons as decorative gray chrome. If the final content is unknown, prefer a neutral empty or loading state with copy.
-- For a table, use `TxDataTable` with `loadingVariant="skeleton"`: it draws placeholder rows shaped like its columns on the first load and keeps the rows during a refresh. Its default `loading` overlay suits a short local wait.
+- Match width, height, line count, and radius to the final content so loading doesn't create a second layout.
+- Use `TxCardSkeleton` or `TxListItemSkeleton` only when their fixed structure matches the final UI.
+- Hand off to real content with `loading=false` rather than keeping skeleton and content in separate branches.
+- If the final structure is unknown, use an empty or loading state with copy instead.
+- For tables, use [TxDataTable](./data-table.en.mdc) with `loadingVariant="skeleton"` instead of composing skeleton rows.
 
 ## API Reference
 
@@ -52,43 +64,39 @@ rows:
   - name: loading
     type: 'boolean'
     default: 'true'
-    description: 'Whether to show the skeleton. `false` renders the default slot instead.'
+    description: 'Shows the skeleton; `false` renders the default slot.'
   - name: lines
     type: 'number'
     default: '1'
-    description: 'Number of placeholder items; clamped to at least 1.'
+    description: 'Number of placeholder items; at least 1.'
   - name: variant
     type: "'text' | 'rect' | 'circle'"
     default: 'text'
-    description: 'Shape variant for each generated placeholder item.'
+    description: 'Shape of each placeholder item.'
   - name: width
     type: 'string | number'
     default: '100%'
-    description: 'Width; numbers are converted to px'
+    description: 'Width; numbers are px.'
   - name: height
     type: 'string | number'
     default: '12'
-    description: 'Height; numbers are converted to px'
+    description: 'Height; numbers are px.'
   - name: radius
     type: 'string | number'
     default: '8'
-    description: 'Corner radius for non-circle items; numbers are converted to px.'
+    description: 'Corner radius of non-circle items; numbers are px.'
   - name: gap
     type: 'string | number'
     default: '10'
-    description: 'Gap between multiple lines; numbers are converted to px'
+    description: 'Gap between lines; numbers are px.'
 ---
 ::
-
-### Events
-
-`TxSkeleton`, `TxCardSkeleton`, and `TxListItemSkeleton` do not emit custom events.
 
 ### Slots
 
 | Component | Slot | Props | Description |
 |-----------|------|-------|-------------|
-| `TxSkeleton` | `default` | - | Final content rendered only when `loading=false`. |
+| `TxSkeleton` | `default` | - | Real content, rendered when `loading=false`. |
 | `TxCardSkeleton` | - | - | Fixed card placeholder; no slots. |
 | `TxListItemSkeleton` | - | - | Fixed list-row placeholder; no slots. |
 
@@ -96,42 +104,67 @@ rows:
 
 | Export | Purpose |
 |--------|---------|
-| `TxSkeleton` / `Skeleton` | Configurable line, rectangle, or circle placeholder. |
-| `TxCardSkeleton` / `CardSkeleton` | Fixed card/feed placeholder with icon, title, badge, and description blocks. |
-| `TxListItemSkeleton` / `ListItemSkeleton` | Fixed list-row placeholder with icon, name, meta, and trailing badge blocks. |
+| `TxSkeleton` / `Skeleton` | Configurable text, rectangle, or circle placeholder. |
+| `TxCardSkeleton` / `CardSkeleton` | Card or feed placeholder: icon, title, badge, and description. |
+| `TxListItemSkeleton` / `ListItemSkeleton` | List-row placeholder: icon, name, meta, and trailing badge. |
+| `TxRowSkeleton` / `RowSkeleton` | Settings-row placeholder: optional icon, description, and trailing control. |
 
-## Dashboard Data Operations
+### TxRowSkeleton
 
-For table loading, `TxDataTable`'s `loadingVariant="skeleton"` draws the placeholder rows itself, and a short local wait can keep its default overlay; side summaries beside the table use `TxSkeleton` to preserve layout rhythm.
-
-:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Skeleton placeholders and table loading cover the data-region wait state together."}
+#### Props
+::TuffPropsTable
 ---
-code: |
-  <template>
-    <aside class="grid gap-3">
-      <TxSkeleton :loading="true" :lines="3" height="10px" />
-      <TxLayoutSkeleton />
-    </aside>
-  </template>
+rows:
+  - name: rows
+    type: 'number'
+    default: '1'
+    description: 'Number of rows; at least 1.'
+  - name: leading
+    type: 'boolean'
+    default: 'false'
+    description: 'Reserves space for a leading icon.'
+  - name: description
+    type: 'boolean'
+    default: 'false'
+    description: 'Adds a narrower description bar under the title.'
+  - name: trailing
+    type: 'boolean'
+    default: 'false'
+    description: 'Reserves space for a trailing control (switch, button, chip).'
+  - name: separated
+    type: 'boolean'
+    default: 'false'
+    description: 'Draws a hairline between rows on the same pixel as the real list separator.'
+  - name: titleWidth
+    type: 'string | number'
+    default: '38%'
+    description: 'Base width of the title bar, varied slightly per row; numbers are px.'
+  - name: descWidth
+    type: 'string | number'
+    default: '62%'
+    description: 'Width of the description bar; numbers are px.'
 ---
-:::
+::
+
+### useDeferredLoading
+
+Turns a raw loading flag into a skeleton flag that doesn't flicker.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `MaybeRefOrGetter<boolean>` | - | The raw loading flag. |
+| `options.delay` | `number` | `150` | Milliseconds before the skeleton shows; data that arrives sooner never shows one. |
+| `options.minDuration` | `number` | `400` | Minimum milliseconds the skeleton stays once shown. |
+| Returns | `Ref<boolean>` | - | Whether to show the skeleton. |
 
 ## Overview
 
-- `loading=false` renders the default slot instead of the skeleton.
-- `lines` always renders at least one item, preventing empty skeleton output.
-- `variant="circle"` always uses a circular radius and ignores `radius`.
-- The `TxSkeleton` root is `aria-hidden="true"`, so the decorative shimmer is not announced. Let the host region own the loading announcement (for example `aria-busy` or a polite live region), then hand off to real content at `loading=false`.
+- `variant="circle"` fixes the radius at `999px` and ignores `radius`.
+- `TxCardSkeleton` and `TxListItemSkeleton` have fixed shapes and no props, events, or slots.
+- The root is `aria-hidden="true"`; the host region announces loading, for example with `aria-busy` or a polite live region.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/skeleton/src/types.ts`, `TxSkeleton.vue`, `TxCardSkeleton.vue`, `TxListItemSkeleton.vue`, and `skeleton.test.ts`.
-- Existing tests cover CSS-variable emission, numeric-to-px conversion, line count clamping, circle radius normalization, the decorative `aria-hidden` root, `loading=false` slot handoff, fixed preset rendering, and install registration.
-- API note: `TxSkeleton` is the configurable primitive; `TxCardSkeleton` and `TxListItemSkeleton` are fixed-shape presets with no props, events, or slots.
-- Rendering note: `variant="circle"` forces `--tx-skeleton-radius: 999px`; callers should set matching `width` and `height` for a true circle.
-
-- Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
-- Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts` verifies CSS variable output, numeric-to-px conversion, line clamping, circle radius, the decorative `aria-hidden` root, `loading=false` slot handoff, preset rendering, and install registration.
+- Source: `packages/tuffex/packages/components/src/skeleton/`.
 
 <TuffDocSourceLink />

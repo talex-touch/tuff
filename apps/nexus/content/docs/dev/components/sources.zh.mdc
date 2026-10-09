@@ -1,6 +1,6 @@
 ---
 title: Sources
-description: 可折叠的引用来源列表，链接是否跳转完全由宿主决定。
+description: 可折叠的引用来源列表
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-### Sources
+### 基础
 ::::TuffDemoWrapper{demo="SourcesSourcesDemo" code-lang="vue"}
 ---
 code: |
@@ -33,10 +33,8 @@ code: |
 ::::
 
 ### 来源堆叠
-
-`variant="stack"` 把头部的地球图标换成前几条来源的站点图标，重叠排列。折叠状态下读者就能看出引用了哪些站点，展不展开都成立。
-
-:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="流式回答里的来源堆叠" description="答案定稿后，堆叠头部与纵向追问列表一起出现。"}
+`variant="stack"` 用前几条来源的站点图标替换头部的地球图标，折叠时也能看出引用了哪些站点。
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="流式回答定稿后出现"}
 ---
 code: |
   <template>
@@ -52,41 +50,33 @@ code: |
 
 ### 最佳实践
 
-- 必须监听 `open`，否则点击引用不会有任何反应。
-- 桌面端在外部浏览器打开，并带上 `noopener`；不要在应用窗口里直接导航走。
-- `id` 用稳定标识：图标失败记录是按 `id` 存的，`id` 变化会让坏图重新尝试加载。
-- 中文界面记得覆盖 `labelFormatter`，默认文案是英文且带英文复数规则。
+- 监听 `open`，否则点击引用没有任何反应。
+- 桌面端在外部浏览器打开并带上 `noopener`，不要把应用窗口导航走。
+- `id` 用稳定标识：图标失败记录按 `id` 保存，`id` 变化会让坏图重新加载。
+- 中文界面覆盖 `labelFormatter`：默认文案是英文，并按英文单复数变形。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `sources` | `AiSourceItem[]` | — | 引用列表；`AiSourceItem` 为 `{ id, url, title?, favicon? }`。必填。 |
-| `labelFormatter` | `(count: number) => string` | — | 自定义折叠标题；未设时回退到 `Used N source(s)`。 |
-| `defaultOpen` | `boolean` | `false` | 初始是否展开。仅在挂载时读取一次。 |
-| `variant` | `'default' \| 'stack'` | `'default'` | `stack` 用重叠的站点图标替代头部的地球图标。 |
+| `sources` | `AiSourceItem[]` | — | 引用列表 `{ id, url, title?, favicon? }`，必填。 |
+| `labelFormatter` | `(count: number) => string` | — | 折叠标题；缺省为 `Used N source(s)`。 |
+| `defaultOpen` | `boolean` | `false` | 初始是否展开，只在挂载时读取。 |
+| `variant` | `'default' \| 'stack'` | `'default'` | `stack` 用重叠的站点图标替换头部的地球图标。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `open` | `(source: AiSourceItem)` | 点击某条引用时派发。默认跳转已被阻止，导航需宿主自行完成。 |
-
-## Slots
-
-`TxSources` 不暴露插槽。条目结构固定为序号 + 图标 + 标题 + 域名。
+| `open` | `(source: AiSourceItem)` | 点击某条引用时触发；默认跳转已阻止，导航由宿主完成。 |
 
 ## 概述
 
-- `variant="stack"` 最多取前 3 条**能画出图标**的来源；一条都画不出时回落到地球图标，而不是留一片空白。图标加载失败后该条退出堆叠，后面的来源顶上来。
-- 堆叠图标的描边色走 `--tx-sources-stack-ring`（默认取页面底色）：它的作用是在重叠处挖出缝隙，头部放在非页面底色的容器上时需要改指向。
-- **链接不会自己跳转。** 点击时组件调用 `preventDefault()` 并派发 `open`，是否打开、在哪打开由宿主决定——这对沙箱环境（如 Electron 渲染进程）是刻意设计。
-- `href` 仍然写在 `<a>` 上，所以「在新标签页打开」「复制链接地址」等浏览器原生右键菜单依旧可用。
-- 展开态由组件自己持有，初值取 `defaultOpen`；这是非受控组件，后续改 `defaultOpen` 不生效。
-- 折叠标题默认是 `Used N source(s)`，会按单复数变形；`labelFormatter` 可整体接管。
-- 标题回退到域名：`title` 为空时显示 `url` 的 hostname（去掉 `www.`）；`url` 无法被 `URL` 解析时，原样显示 `url` 本身。
-- 站点图标加载失败会被永久记下并停止重试该条，不会反复请求坏图。
-- 图标标了 `alt=""` 与 `aria-hidden`，可访问名称由标题与域名文本承载。
-- 列表是 `<ol>`，序号来自渲染顺序而非数据字段——重排 `sources` 就会重排编号。
+- 点击时 `preventDefault()` 再派发 `open`；`href` 仍在 `<a>` 上，浏览器的「在新标签页打开」「复制链接地址」照常可用。
+- `stack` 最多取前 3 条能显示图标的来源，一条都没有时回落到地球图标；图标加载失败的来源退出堆叠，由后面的补上。
+- 堆叠图标的描边取 `--tx-sources-stack-ring`（默认为页面底色）；头部不在页面底色上时，改指向所在容器的底色。
+- `title` 为空时显示去掉 `www.` 的域名；`url` 无法解析时显示原文。
+- 图标加载失败会被记下，不再重复请求。
+- 列表是 `<ol>`，序号来自渲染顺序；图标带 `alt=""` 与 `aria-hidden`，可访问名称由标题与域名承载。

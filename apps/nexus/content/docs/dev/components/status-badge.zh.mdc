@@ -80,6 +80,12 @@ code: |
 |------|------|------|
 | `click` | `MouseEvent` | 点击或在按钮态下按 Enter / Space 时触发。 |
 
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-status-chip-size` | `18px`（`sm`：`15px`） | 状态圆盘直径，字形随之缩放；由 `size` 类设在根节点上。 |
+
 ## 概述
 
 - 没有点击监听时根节点为 `role="status"`；绑定 `@click` 后变为可聚焦的 `role="button"`，Enter / Space 可触发。

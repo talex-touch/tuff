@@ -1,6 +1,6 @@
 ---
 title: "BotAvatar"
-description: "面向智能体与助手的 canvas 动画机器人头像，含空闲与工作状态、指针互动与多种体型"
+description: "用 canvas 绘制的动画机器人头像"
 category: AiAgent
 status: beta
 since: 0.6.2
@@ -11,8 +11,8 @@ verified: true
 
 ## 用法
 
-`TxBotAvatar` 在 2D 画布上绘制一个带光泽的机器人。用智能体的真实状态驱动 `state`：流式输出或执行中为 `working`，空闲为 `default`。
-
+### 基础
+`state` 跟随智能体的真实状态：流式输出或执行中为 `working`，空闲为 `default`。
 :::TuffDemoWrapper{demo="BotAvatarShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -34,13 +34,11 @@ code: |
 
     <TxBotAvatar type="clover" :size="96" />
     <TxBotAvatar type="clover" :size="32" />
-
-    <TxSwitch v-model="working" />
   </template>
 ---
 :::
 
-### 对话回复旁
+### 对话回复
 
 ```vue
 <template>
@@ -54,8 +52,7 @@ code: |
 ```
 
 ### 智能体名册
-
-每个智能体一种体型，各自显示忙闲。实例会错开眨眼时机，整行不会同时眨眼。
+每个实例默认错开眨眼时机，同一行不会同时眨眼。
 
 ```vue
 <template>
@@ -69,7 +66,7 @@ code: |
 </template>
 ```
 
-### 设置卡片里的静态头像
+### 静态头像
 
 ```vue
 <template>
@@ -79,12 +76,11 @@ code: |
 
 ### 最佳实践
 
-- 用 `size` 控制大小，不要在 `style` 或类里写 `width` / `height` / `margin`——那会覆盖超采样盒与负外边距，导致头像位移或被裁。
-- 画布按 `size` 的 1.5 倍绘制再回拉，所以跳跃或翻身会超出布局盒。头像上方要留空间；父级若 `overflow: hidden` 会裁掉跳跃。
-- 映射你自己的状态：`running` / `streaming` / `pending` / `busy` → `working`；`idle` / `ready` / `online` → `default`；`offline` / `away` / `disabled` → `default` 加 `paused`。
-- 当智能体名称与状态已在旁边以文字呈现时，把它标记为装饰性：`aria-hidden`。
-- 未知 `state` 会静默回退到 `default`；未知 `type` 回退到调色板默认值。
-- 这是机器人头像，不用于真人：真人头像请用照片或首字母。
+- 用 `size` 控制尺寸，不要在 `style` 或类里写 `width`、`height`、`margin`，否则头像会位移或被裁。
+- 头像上方留出空间：画布按 `size` 的 1.5 倍绘制，跳跃会超出布局盒，`overflow: hidden` 的父级会把它裁掉。
+- 映射自有状态：`running` / `streaming` / `pending` / `busy` → `working`；`idle` / `ready` / `online` → `default`；`offline` / `away` / `disabled` → `default` 加 `paused`。
+- 名称与状态已在旁边以文字呈现时，加 `aria-hidden` 作为装饰。
+- 只用于机器人；真人头像用照片或首字母。
 
 ## API 参考
 
@@ -92,71 +88,60 @@ code: |
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `type` | `'clover' \| 'flower' \| 'star' \| 'ghost' \| 'mech' \| 'circle' \| 'hexagon' \| 'square'` | `'clover'` | 体型，每种自带调色板颜色。 |
+| `type` | `BotAvatarType` | `'clover'` | 体型，各带调色板颜色。 |
 | `face` | `BotAvatarFace` | 该体型默认 | 面部类型。 |
-| `state` | `'default' \| 'working' \| 'sleeping'` | `'default'` | 空闲（四处看、眨眼、偶尔跳跃）或工作（跳跃、旋转、微笑）。 |
-| `size` | `number \| string` | `64` | 头像盒子的布局尺寸，也接受任意 CSS 长度。 |
+| `state` | `'default' \| 'working' \| 'sleeping'` | `'default'` | 空闲（张望、眨眼、偶尔跳跃）、工作（跳跃旋转并微笑）或睡眠。 |
+| `size` | `number \| string` | `64` | 布局尺寸，也接受任意 CSS 长度。 |
 | `color` | `string` | 体型调色板 | 身体颜色。 |
-| `ink` | `string` | 自动 | 面部墨色；默认深色，深色身体上用浅色。 |
+| `ink` | `string` | 自动 | 面部墨色；默认深色，深色身体上为浅色。 |
 | `brightness` / `saturation` | `number` | `1` / `1.5` | 身体颜色的明度与饱和度。 |
 | `speed` | `number` | `1` | 所有动画的速度倍数。 |
 | `paused` | `boolean` | `false` | 把动画冻结在当前帧。 |
-| `seed` | `number` | 由实例派生 | 错开眨眼与瞥视时机，避免整行同步。 |
-| `shading` | `'plastic' \| 'crisp' \| 'smooth' \| 'flat' \| boolean` | `'plastic'` | 打光方式；`true` 等价 `crisp`，`false` 等价 `flat`。 |
+| `seed` | `number` | 由实例派生 | 错开眨眼与张望时机，避免整行同步。 |
+| `shading` | `'plastic' \| 'crisp' \| 'smooth' \| 'flat' \| boolean` | `'plastic'` | 打光方式；`true` 即 `crisp`，`false` 即 `flat`。 |
 | `shadow` / `highlight` | `number` | `0.35` / `1.3` | 暗面与亮面的强度。 |
-| `depth` | `number` | `0.65` | 身体厚度，0.2-2。 |
-| `light` | `number` | `265` | 光源方向（自顶部顺时针角度）。 |
-| `rim` | `number` | `0.5` | `crisp` 下的亮边宽度，`plastic` 下的菲涅尔强度。 |
+| `depth` | `number` | `0.65` | 身体厚度，0.2–2。 |
+| `light` | `number` | `265` | 光源方向，自顶部顺时针的角度。 |
+| `rim` | `number` | `0.5` | `crisp` 下为亮边宽度，`plastic` 下为菲涅尔强度。 |
 | `spread` | `number` | `1.55` | 柔光覆盖范围或高光宽度。 |
-| `interactive` | `boolean` | `true` | 眼睛与头部跟随靠近的指针；点击会跳一下并转身。 |
-| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 头像所处的表面；`auto` 读取祖先 `data-theme` 属性或类，再回退到系统。 |
-| `turn` | `number` | `1` | 空闲时头部左右转动的幅度。 |
+| `interactive` | `boolean` | `true` | 眼睛与头部跟随靠近的指针；点击会跳起转身。 |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 所在表面；`auto` 先读祖先的 `data-theme` 属性或类，再读系统。 |
+| `turn` | `number` | `1` | 空闲时左右转头的幅度。 |
 | `whirl` | `number` | `0` | 旋转时旋风环的强度。 |
-| `whirlSize` / `whirlWidth` / `whirlLength` / `whirlTilt` | `number` | `1` | 旋风环几何。 |
-| `jumpHeight` | `number` | `26` | 跳跃高度（身体单位，身体高 100）。 |
-| `jumpTime` | `number` | `0.68` | 一次跳跃在空中的秒数。 |
+| `whirlSize` / `whirlWidth` / `whirlLength` / `whirlTilt` | `number` | `1` | 旋风环的几何。 |
+| `jumpHeight` | `number` | `26` | 跳跃高度，以身体高 100 为单位。 |
+| `jumpTime` | `number` | `0.68` | 一次跳跃的滞空秒数。 |
 | `jumpStretch` / `jumpSquash` | `number` | `1` / `1.15` | 空中拉伸与落地压扁。 |
-| `jumpSquashTime` / `jumpSquashEase` / `jumpGroundTime` / `jumpGroundEase` / `jumpRiseTime` / `jumpRiseEase` | — | 已调校 | 落地压扁的形状、保持与回弹。 |
+| `jumpSquashTime` / `jumpSquashEase` | `number` / `BotAvatarSquashEase` | `0.37` / `'pulse'` | 落地压扁从触地到复原的秒数与缓动。 |
+| `jumpGroundTime` / `jumpGroundEase` | `number` / `BotAvatarSquashEase` | `0.11` / `'pulse'` | 停在最深压扁处的秒数与缓动。 |
+| `jumpRiseTime` / `jumpRiseEase` | `number` / `BotAvatarSquashEase` | `0.33` / `'pulse'` | 从最深压扁回到原形的秒数与缓动。 |
 | `jumpClickSquashTime` | `number` | `0.24` | 点击跳跃的落地压扁时长。 |
-| `jumpSpin` | `number` | `1` | 空中整圈数。 |
+| `jumpSpin` | `number` | `1` | 空中转的整圈数。 |
 | `jumpLean` | `number` | `6` | 跳跃时的倾斜角度。 |
 | `jumpEvery` | `number` | `8` | 空闲跳跃间隔秒数（±40%）；`0` 关闭。 |
 | `jumpLand` | `number` | `0` | 落地压扁相对触地的开始时刻（秒）。 |
 
-### 插槽
-
-无。头像就是一块画布。
-
-### 事件
-
-无组件事件。`click`、`pointerenter` 等所有 DOM 处理器直接透传到画布。
+`BotAvatarType` 共 18 种：`clover`、`flower`、`triangle`、`square`、`blob`、`ghost`、`circle`、`drop`、`star`、`droid`、`mech`、`alien`、`hexagon`、`cat`、`cloud`、`pill`、`pebble`、`puddle`。`BotAvatarFace` 为 `'eyes' | 'mouth'`。`BotAvatarSquashEase` 为 `'sharp' | 'pulse' | 'soft' | 'bouncy'`。
 
 ### 暴露方法
 
-无公开实例方法。
-
-### CSS 变量
-
-无。颜色来自属性。
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `canvas` | `HTMLCanvasElement \| null` | 根 `<canvas>` 元素。 |
 
 ## 概述
 
-- 画布带 `role="img"` 与随状态变化的 `aria-label`（"Clover bot, idle" / "Clover bot, working"）；传入自己的 `aria-label` 可覆盖。
-- 其余属性直接透传到 `<canvas>`，因此 `class`、`style`、`data-*` 与事件处理器照常可用。
-- 全页共用一个 `requestAnimationFrame` 循环；实例滚出视口（`IntersectionObserver`）后退出，标签页隐藏时循环停止。
-- 设备像素比上限为 2。默认外观是逐像素材质，某体型首次出现时在空闲时间烘焙形体，那几帧用更柔和的外观顶替。
-- `prefers-reduced-motion: reduce` 下不启动循环，只绘制当前状态的静止姿势。媒体查询在渲染时读取，不实时监听。
-- 状态切换带交叉动画，因此在每个 token 或工具调用时切换 `state` 是安全的。
+- 画布为 `role="img"`，`aria-label` 随状态变化（如 "Clover bot, idle"）；传入 `aria-label` 可覆盖。
+- 其余属性与 DOM 事件直接透传到 `<canvas>`，`class`、`style`、`data-*` 照常可用。
+- 未知 `state` 回退到 `default`，未知 `type` 回退到 `clover`。
+- 全页共用一个 `requestAnimationFrame` 循环；实例离开视口或标签页隐藏时停止绘制。
+- 减少动态效果时不启动循环，只画当前状态的静止姿势；该偏好在渲染时读取，不实时监听。
+- 状态切换带过渡，每个 token 或工具调用都切换 `state` 也安全。
 
-## 技术说明
+## 技术实现
 
-- 已对照 `packages/tuffex/packages/components/src/bot-avatar/` 下的 `index.ts`、`TxBotAvatar.vue`、`types.ts` 与 `bot-avatar.test.ts` 人工核验。
-- `engine.ts`、`draw.ts`、`plastic.ts`、`color.ts`、`ticker.ts`、`presets.ts`、`shapes.ts` 是上游 `bot-avatars`（MIT © Jakub Antalik）的逐字移植，仅做严格 TS 索引加固。
-- Vue 壳镜像了上游 React 组件的画布生命周期、超采样盒、共享 ticker 与指针交互。上游另有 React Native 与 SwiftUI 版本，不在本次范围内。
-
-- 组件源码：`packages/tuffex/packages/components/src/bot-avatar/src/TxBotAvatar.vue`。
-- 类型定义：`packages/tuffex/packages/components/src/bot-avatar/src/types.ts`。
-- 上游：[Jakubantalik/Libraries · bot-avatars](https://github.com/Jakubantalik/Libraries/tree/main/packages/bot-avatars)（MIT）。
-- **覆盖**：`packages/tuffex/packages/components/src/bot-avatar/__tests__/bot-avatar.test.ts` 验证体型与形体预设、状态回退、尺寸解析、颜色辅助函数、按状态生成的标签与暂停通路。
+- 设备像素比上限为 2；`plastic` 打光在某体型首次出现时于空闲时间烘焙，完成前以柔和外观顶替。
+- 绘制引擎逐字移植自上游 [Jakubantalik/Libraries · bot-avatars](https://github.com/Jakubantalik/Libraries/tree/main/packages/bot-avatars)（MIT © Jakub Antalik），Vue 壳对应上游 React 组件。
+- 源码：`packages/tuffex/packages/components/src/bot-avatar/`。
 
 <TuffDocSourceLink />

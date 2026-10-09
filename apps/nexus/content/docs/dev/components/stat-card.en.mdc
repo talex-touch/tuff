@@ -1,6 +1,6 @@
 ---
 title: "StatCard"
-description: "Metric card for values, insights, and progress summaries."
+description: "A card that shows a metric with its trend or progress."
 category: Data
 status: beta
 since: 0.3.4
@@ -12,47 +12,39 @@ verified: true
 ## Usage
 
 ### Default Variant
-
-Base card layout without trend/progress enhancement. `iconClass` renders the whole icon, bare, on the right, vertically centered in the same slot as the progress variant's ring, and its color is drawn out into an aura across the right of the card: three soft blobs in the icon's hue, a neighboring hue and a lighter tint drift slowly and fade out toward the text. A color class in `iconClass` sets that color; without one the icon and its aura are primary, and an explicit grey such as `--tx-color-info` keeps a grey icon with no aura. The example shows four tones in turn: primary (`clickable`), success, warning and neutral.
-
-`meta` and the `meta` slot work in both variants, including cards with an insight. The default layout places the line below the label; omit both to keep the original compact layout. The first card below demonstrates a default meta line.
-
+A color class in `iconClass` sets the tone (primary by default; grey draws no aura); `meta` adds a line under the label.
 ::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
-      <TxStatCard
-        :value="2847"
-        label="Total plugins"
-        meta="Includes enabled and disabled plugins"
-        icon-class="i-carbon-download text-[var(--tx-color-primary)]"
-        clickable
-      />
-      <TxStatCard
-        :value="2516"
-        label="Enabled"
-        icon-class="i-carbon-checkmark-outline text-[var(--tx-color-success)]"
-      />
-      <TxStatCard
-        :value="18"
-        label="Pending updates"
-        icon-class="i-carbon-renew text-[var(--tx-color-warning)]"
-      />
-      <TxStatCard
-        :value="331"
-        label="Disabled"
-        icon-class="i-carbon-power text-[var(--tx-color-info)]"
-      />
-    </div>
+    <TxStatCard
+      :value="2847"
+      label="Total plugins"
+      meta="Includes enabled and disabled plugins"
+      icon-class="i-carbon-download text-[var(--tx-color-primary)]"
+      clickable
+    />
+    <TxStatCard
+      :value="2516"
+      label="Enabled"
+      icon-class="i-carbon-checkmark-outline text-[var(--tx-color-success)]"
+    />
+    <TxStatCard
+      :value="18"
+      label="Pending updates"
+      icon-class="i-carbon-renew text-[var(--tx-color-warning)]"
+    />
+    <TxStatCard
+      :value="331"
+      label="Disabled"
+      icon-class="i-carbon-power text-[var(--tx-color-info)]"
+    />
   </template>
 ---
 ::
 
 ### Insight Variant
-
-Shows trend/compare information by passing the `insight` object. Sign, number, and unit render as one figure in a tinted pill (for example `+16.7%`). The first card uses the built-in SVG trend arrow; the second passes `insight.iconClass` to swap in its own icon.
-
+`insight` computes the change from `from` and `to` and renders it as a tinted pill; `insight.iconClass` replaces the built-in arrow.
 ::TuffDemoWrapper{demo="StatCardInsightVariantDemo" code-lang="vue"}
 ---
 code: |
@@ -60,180 +52,104 @@ code: |
   import { ref } from 'vue'
 
   const activeUsers = ref(18200)
-  const activeInsight = ref({
-    from: 16800,
-    to: activeUsers.value,
-    type: 'delta',
-    color: 'success',
-  })
-
   const resourceLoad = ref(42)
-  const resourceInsight = ref({
+
+  const activeInsight = { from: 16800, to: 18200, type: 'delta', color: 'success' }
+
+  const resourceInsight = {
     from: 35,
-    to: resourceLoad.value,
+    to: 42,
     type: 'percent',
     color: 'danger',
     iconClass: 'i-carbon-arrow-up-right',
     precision: 1,
-  })
-
-  function bump() {
-    const nextUsers = Math.floor(Math.random() * 8000) + 14000
-    const nextLoad = Math.floor(Math.random() * 50) + 30
-
-    activeInsight.value = {
-      ...activeInsight.value,
-      from: activeUsers.value,
-      to: nextUsers,
-    }
-    activeUsers.value = nextUsers
-
-    resourceInsight.value = {
-      ...resourceInsight.value,
-      from: resourceLoad.value,
-      to: nextLoad,
-    }
-    resourceLoad.value = nextLoad
   }
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; gap: 8px;">
-        <TxButton @click="bump">
-          Shuffle
-        </TxButton>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-        <TxStatCard
-          :value="activeUsers"
-          label="Active Users"
-          icon-class="i-carbon-task text-[var(--tx-color-success)]"
-          :insight="activeInsight"
-        />
-        <TxStatCard
-          :value="resourceLoad"
-          label="Resource Load"
-          icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
-          :insight="resourceInsight"
-        >
-          <template #value>
-            <div style="display: flex; align-items: baseline; gap: 6px;">
-              <TxTextMorph :text="resourceLoad" />
-              <span style="font-size: 16px;">%</span>
-            </div>
-          </template>
-        </TxStatCard>
-      </div>
-    </div>
+    <TxStatCard
+      :value="activeUsers"
+      label="Active Users"
+      icon-class="i-carbon-task text-[var(--tx-color-success)]"
+      :insight="activeInsight"
+    />
+    <TxStatCard
+      :value="resourceLoad"
+      label="Resource Load"
+      icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
+      :insight="resourceInsight"
+    >
+      <template #value>
+        <TxTextMorph :text="resourceLoad" /><span>%</span>
+      </template>
+    </TxStatCard>
   </template>
 ---
 ::
 
 ### Progress Variant
-
-Switches to progress layout and supports shuffle updates. The ring, its center disc and the icon follow the color class in `iconClass`, and the same aura as the default layout's lies behind the ring.
-
+`progress` switches to the progress layout; the ring follows the color in `iconClass`.
 ::TuffDemoWrapper{demo="StatCardProgressVariantDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const healthProgress = ref(78)
-  const healthDelay = ref(2)
-
-  const healthStatus = computed(() => {
-    if (healthProgress.value > 85) {
-      return 'Synced'
-    }
-    return 'Syncing'
-  })
-
-  const healthMeta = computed(() => `${healthStatus.value} · Last sync: ${healthDelay.value}s ago (v2.4.0)`)
-
-  function bump() {
-    healthProgress.value = Math.floor(Math.random() * 50) + 40
-    healthDelay.value = Math.floor(Math.random() * 16) + 2
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; gap: 8px;">
-        <TxButton @click="bump">
-          Shuffle
-        </TxButton>
-      </div>
-
-      <TxStatCard
-        variant="progress"
-        :value="healthProgress"
-        label="Cloud Sync"
-        :meta="healthMeta"
-        :progress="healthProgress"
-        icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
-      >
-        <template #value>
-          <div style="display: flex; align-items: baseline; gap: 6px;">
-            <TxTextMorph :text="healthProgress" />
-            <span style="font-size: 16px;">%</span>
-          </div>
-        </template>
-      </TxStatCard>
-    </div>
+    <TxStatCard
+      variant="progress"
+      :value="healthProgress"
+      label="Cloud Sync"
+      :meta="healthMeta"
+      :progress="healthProgress"
+      icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
+    >
+      <template #value>
+        <TxTextMorph :text="healthProgress" /><span>%</span>
+      </template>
+    </TxStatCard>
   </template>
 ---
 ::
 
 ### Dashboard Operations Panel
-
-`TxStatCard` can compose with `TxStatusBadge` and `TxProgressBar` to form a dashboard status header for API availability, pending queues, and alerts.
-
-::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="A dashboard composition with metric cards, status badges, and progress bars."}
+Combines with `TxStatusBadge` and `TxProgressBar` into a dashboard status header.
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <section class="grid gap-3" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
-      <TxStatCard
-        variant="progress"
-        value="99.9%"
-        label="API availability"
-        meta="Normal"
-        :progress="99"
-        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
-      />
-      <TxStatCard
-        variant="progress"
-        :value="18"
-        label="Pending queue"
-        meta="Watch"
-        :progress="64"
-        icon-class="i-carbon-queued text-[var(--tx-color-warning)]"
-      />
-      <TxStatCard
-        variant="progress"
-        :value="2"
-        label="Alerts"
-        meta="Blocked"
-        :progress="22"
-        icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]"
-      />
-    </section>
+    <TxStatCard
+      variant="progress"
+      value="99.9%"
+      label="API availability"
+      meta="Normal"
+      :progress="99"
+      icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+    />
+    <TxStatCard
+      variant="progress"
+      :value="18"
+      label="Pending queue"
+      meta="Watch"
+      :progress="64"
+      icon-class="i-carbon-queued text-[var(--tx-color-warning)]"
+    />
+    <TxStatCard
+      variant="progress"
+      :value="2"
+      label="Alerts"
+      meta="Blocked"
+      :progress="22"
+      icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]"
+    />
   </template>
 ---
 ::
 
 ### Best Practices
 
-- Use numeric `value` for count metrics so the default formatter can insert separators. Use the `value` slot when the unit or animated number needs custom layout.
-- Use `insight.type="delta"` for absolute changes and `insight.type="percent"` for relative changes; the default precision is `0` for deltas and `1` for percentages.
-- Sign, number, and unit sit flush as one figure. When the unit needs a space, put it in `suffix` (for example `' pts'`) instead of spacing it with outside styles.
-- Reserve `variant="progress"` for bounded health, capacity, quota, or completion values. Do not use it for unbounded totals.
-- `clickable` only changes visual affordance. Wrap the card in an interactive parent or add a surrounding button/link when it must navigate.
-- Use a color class in `iconClass` to mark a metric's category (for example `i-carbon-task text-[var(--tx-color-success)]`); it tints the icon, the aura and, in the progress layout, the ring. Give the card in a row that should stay quiet a grey (for example `text-[var(--tx-color-info)]`): it keeps a grey icon and draws no aura. Size classes such as `text-6xl` are no longer needed.
-- Let the parent decide the card's width — a grid cell, a stretched flex item or a fixed-width box. The root is an inline-size container (when its content box is under 240px the icon and the ring shrink into the top-right corner), so a shrink-to-fit parent such as `inline-block` or `width: fit-content` collapses it.
+- Pass count metrics as numbers so the default formatter adds separators; use the `value` slot for complex units or animated numbers.
+- Use `insight.type="delta"` for absolute changes and `insight.type="percent"` for relative ones.
+- Reserve `variant="progress"` for bounded values such as health, capacity, quota, or completion, never unbounded totals.
+- `clickable` changes only the look; let a surrounding button or link carry navigation and actions.
+- Let the parent set the width (a grid cell, a stretched flex item); a shrink-to-fit parent such as `inline-block` collapses the card.
 
 ## API Reference
 
@@ -241,14 +157,23 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `value` | `number \| string` | - | Primary value; numbers are formatted with the built-in number formatter. Use the `value` slot to render `TxTextMorph` or custom units yourself. |
-| `label` | `string` | - | Metric label shown below the value or at the top for insight/progress layouts. |
-| `iconClass` | `string` | `''` | Decorative icon class (UnoCSS Icones). In the default and insight layouts the icon sits bare on the right, vertically centered (in the top-right corner when the card's content box is under 240px), and the component owns its size; a color class in it tints the icon and the aura drawn out behind it, with primary as the default. In the progress layout it sits at the center of the ring, which follows the same color, over the same aura. |
-| `clickable` | `boolean` | `false` | Adds only the pointer cursor. The hover feedback applies to every card, and the component attaches no click behavior. |
-| `insight` | `StatCardInsight` | - | Change indicator object (moves label to top). |
+| `value` | `number \| string` | - | Primary value; numbers get the default formatter's separators. |
+| `label` | `string` | - | Metric label; shown at the top in the insight and progress layouts. |
+| `iconClass` | `string` | `''` | Decorative icon class, sized by the component; its color class tints the icon, aura, and ring. |
+| `clickable` | `boolean` | `false` | Adds only the pointer cursor; no click behavior is attached. |
+| `insight` | `StatCardInsight` | - | Change indicator; moves the label to the top and renders the trend pill. |
 | `variant` | `StatCardVariant` | `'default'` | Layout variant (`default` \| `progress`). |
-| `progress` | `number` | - | Progress percent. Passing this enables the progress variant and clamps the ring to 0-100. |
-| `meta` | `string` | - | Supporting line in default and progress layouts, including insight cards; the `meta` slot takes precedence. |
+| `progress` | `number` | - | Progress percent; passing it enables the progress layout, clamped to 0–100. |
+| `meta` | `string` | - | Supporting line; the `meta` slot takes precedence. |
+| `ariaLabel` | `string` | - | Accessible name of the `role="group"`; defaults to the visible label. |
+
+### Slots
+
+| Slot | Description |
+|------|------|
+| `value` | Custom value area. |
+| `label` | Custom label area. |
+| `meta` | Supporting line; with both it and `meta` omitted, no line is reserved. |
 
 ### StatCardInsight
 
@@ -257,52 +182,31 @@ code: |
 | `from` | `number` | - | Baseline value. |
 | `to` | `number` | - | Current value. |
 | `type` | `'percent' \| 'delta'` | `'percent'` | Percent change or absolute delta. |
-| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | Overrides the indicator color, which also tints the pill (a 12% mix). Defaults to success for values ≥ 0 and danger below 0. |
-| `iconClass` | `string` | - | Custom trend icon class, rendered as an `<i>`. Without it the pill uses a built-in SVG arrow (up for ≥ 0, down below 0). |
-| `suffix` | `string` | - | Overrides the suffix (default `%` for percent). It sits flush against the number; put a leading space in it when you want one, for example `' pts'`. |
-| `precision` | `number` | - | Decimal precision. |
-
-### Slots
-
-| Slot | Description |
-|------|------|
-| `value` | Custom value area. |
-| `label` | Custom label area. |
-| `meta` | Supporting line in every layout. Omitted together with `meta`, it reserves no extra line. |
+| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | Indicator color, which also tints the pill; defaults to success for ≥ 0 and danger below. |
+| `iconClass` | `string` | - | Custom trend icon class; defaults to a built-in SVG arrow. |
+| `suffix` | `string` | - | Suffix, `%` by default for percent; it sits flush, so include any space, as in `' pts'`. |
+| `precision` | `number` | - | Decimal places; defaults to 0 for `delta` and 1 for `percent`. |
 
 ### CSS Variables
 
 | Variable | Source | Description |
 |------|------|------|
-| `--tx-stat-card-slot` | Component default `72px`; override through the component's `style` | Side of the square slot on the right: the icon is centered in it, the progress ring is drawn at its size, and on a wide card the content column keeps the slot plus 8px clear. When the card's content box is under 240px the component sets it to `36px` on the icon and the ring. |
-| `--tx-stat-card-slot-inset` | Component default `18px`; override through the component's `style` | Distance from the slot to the card's right edge. Not read in that narrow layout, where the slot sits in the corner `12px` from the top and right edges. |
-| `--tx-stat-card-icon-color` | Written by the component (the icon's computed color) | Written to the root for a tinted icon. A grey icon removes it, except in the progress layout, where the ring takes the grey too. The aura's three blobs (the color mixed towards the page color `--tx-bg-color`, that mix with its hue turned 42° in OKLCH, and the color itself), the glyph's ink on a tinted card, and the progress arc, track and disc are all drawn from it. Read again on mount, when `iconClass` or `variant` changes, and after the page theme switches. The component owns it; do not bind it through `:style`. |
+| `--tx-stat-card-slot` | Component default `72px`; override through the component's `style` | Side of the square right-hand slot that sizes the icon and ring; `36px` on a narrow card. |
+| `--tx-stat-card-slot-inset` | Component default `18px`; override through the component's `style` | Distance from the slot to the card's right edge; unused in the narrow layout. |
+| `--tx-stat-card-icon-color` | Written by the component (the icon's computed color) | Source color of the aura, glyph ink, and ring; component-owned, so never bind it via `:style`. |
 
 ## Overview
 
-- Metadata renders once after the label or insight content in the default layout and at the bottom of the progress layout. A host aligning a row of cards can reserve the same line on empty cards with an `aria-hidden` spacer in the `meta` slot.
-- Glyph: the default and insight layouts draw `iconClass` bare — no tile, ring, shadow or glow — on the right, vertically centered in the same 72px slot as the progress ring, so the icon shows whole instead of being cropped by the card's edge; the content column keeps the slot plus 8px clear. The component owns the glyph size (30px) — its selector outranks host utilities such as `text-6xl`, so size classes have no effect — while a color class in `iconClass` still tints the icon, and an icon without one inherits primary. The progress layout draws the icon at 22px in the center of the ring and renders no separate glyph.
-- Aura: behind the glyph (or the ring) the icon's color is drawn out across the right of the card. Three blurred (34px) blobs — the color mixed 55:45 with the page color (`--tx-bg-color`) at 24%, the same mix with its hue turned 42° in OKLCH at 20%, and the color itself at 12% (small, the field's core, in the top-right corner rather than behind the glyph) — drift, turn and stretch on 17s, 21s and 13s cycles, so together they read as one field slowly changing shape. A mask keeps it on the right: fully shown over the right-most 10% of the card and gone 62% of the way across, so the figures sit on the plain card. It fades in over 0.8s once the color has been read. The two large blobs are mixed towards the page color, so the aura is deep on the dark theme and pale on the light one rather than a glare that swallows the icon (2026-09-26 review of the dark theme: 'too bright, the icon does not stand out'); a second review the same day found it 'still quite conspicuous', so all three were roughly halved and the mask narrowed — the aura is a wash behind the figure, not a second subject beside it; a third review asked for 'fainter, blurrier, with a little grain', so the blobs lost another third of their strength, the blur went from 22px to 34px, and the layer carries SVG fractal noise (`feTurbulence`, tiled at 140px, overlaid at 14%). The grain lives inside the aura, so it appears with the aura's mask and fade, and it never moves. Where relative color (`oklch(from …)`) is unsupported, the neighbor falls back to a 17% pool of the same mix.
-- Glyph ink: on a tinted card the icon's color is pulled 45% towards the text color (`--tx-text-color-primary`), the opposite way from the aura — deeper than a pale light-theme aura, lighter than a deep dark-theme one — or it would all but vanish over an aura of its own hue. A color class in `iconClass` still picks the hue: the component lifts this ink before it reads the icon's color, so the re-read after a theme switch never mixes an already mixed color.
-- Narrow cards: when the card's content box is under 240px (a container query on the card itself, not the viewport; about a 274px card at the default 16px padding) the slot shrinks to 36px and moves into the empty corner 12px from the top and right edges; the glyph drops to 18px and the ring shrinks with it, while the aura, laid out in percentages of the card, stays as it is. The content column stops making room: only a top-aligned label (insight, progress) keeps 44px clear on its right, while the default layout keeps its figures at the bottom, where a one-line label leaves them below the corner.
-- The color follows the icon: on mount, whenever `iconClass` or `variant` changes, and after the page theme switches (a `class`, `data-theme` or `data-tx-contrast` change on `<html>`, or the OS color scheme or contrast preference flipping; one observer shared by every card, read on the next frame, and read again when a card cached by `<KeepAlive>` comes back), the component reads the icon's computed color. When it has a hue, the color is written to the root as `--tx-stat-card-icon-color` and `tx-stat-card--tinted` is added, which turns the aura on; the progress ring, track and disc are mixed from it too. A grey icon (RGB channel spread < 24, `--tx-color-info` in the standard light and dark themes included) leaves the card untinted: the icon stays grey and no aura is drawn — the blobs are not rendered at all — because grey has no hue to draw out, and mixing it in only leaves a smudge of fog next to the number. In the progress layout the ring still takes a grey icon's color rather than falling back to primary.
-- Hover applies to every card and moves nothing: the border switches to `--tx-border-color` at once (color never transitions), and nothing on the card lifts, sweeps or glows. `clickable` only adds the pointer cursor.
-- Insight pill: sign, number, and unit render flush as one figure (`+16.7%`) on a 12% mix of the insight color. The default trend glyph is inline SVG, so it does not depend on the host scanning an icon class; an explicit `insight.iconClass` still renders as an `<i>` icon. The value and the insight both use tabular numerals, so they hold still while updating.
+- The root is a `role="group"` named by its visible label through `aria-labelledby`; give dashboards a nearby heading so numbers never stand bare.
+- On mount, on `iconClass` / `variant` changes, and after a theme switch, the card reads the icon's computed color. A hue adds `tx-stat-card--tinted` and the aura; a grey icon (including `--tx-color-info`) draws none.
+- When the card's content box is under 240px (a container query, not the viewport), the slot shrinks to 36px and moves to the top-right corner.
+- The insight pill renders sign, number, and unit as one figure (`+16.7%`); numbers use tabular figures and hold still while updating.
+- Hover only switches the border to `--tx-border-color`, with no motion.
+- Under reduced motion the blobs stop drifting, the aura appears at once, and the progress arc jumps to its value.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
-- Recommendation: use the default variant for plain metrics, `insight` for deltas, and `variant="progress"` for bounded health or capacity values.
-- Visual contract change (2026-09-23): the decoration no longer renders a second, blurred and enlarged copy of the icon (`.tx-stat-card__decoration-icon`); `.tx-stat-card__decoration` holds only `.tx-stat-card__glow`. The default trend glyph moved from the `i-carbon-growth` / `i-carbon-arrow-down` icon classes to inline SVG (`.tx-stat-card__insight-icon--trend`), the insight text is wrapped in `.tx-stat-card__insight-text`, and the root gains `tx-stat-card--tinted`. Overrides written against the old class or icon classes need migrating. Props, slots, events, and the `progress` variant are unchanged.
-- Progress ring fix (2026-09-24): `--tx-stat-card-progress` is registered with `@property` and bound on `.tx-stat-card__progress`, but the ring that draws the arc is its child. It was registered with `inherits: false`, so the ring only ever read the 0% initial value and the arc was never drawn — in these docs and in CoreApp's storage usage card alike. It now inherits. The disc inside the ring is now always a 16% tint of the ring color; an `@supports (color: color-mix(…))` override used to mix it into `rgba(0, 0, 0, 0.45)` instead, which read as a dark lens on the dark theme and a grey blot on the light one.
-- Visual contract change (2026-09-26): `iconClass` moved from the bottom-right watermark to a glowing badge on the right. `.tx-stat-card__icon-layer`, `.tx-stat-card__decoration` and `.tx-stat-card__glow` are gone; the new structure is `.tx-stat-card__badge` > `.tx-stat-card__halo` + `.tx-stat-card__badge-body` > `i.tx-stat-card__icon` (the `<i>` keeps its class). `--tx-stat-card-icon-opacity` / `--tx-stat-card-icon-opacity-hover` are no longer read, the glow's `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` are removed, and `--tx-stat-card-slot` / `--tx-stat-card-slot-inset` are new. The progress ring, track, disc and center icon now follow the icon's color: the ring used to draw primary whatever the icon said, and the component's own rule overrode a color class on the center icon, so the operations panel's success / warning / danger cards all drew primary. The content column now keeps the slot clear, and the root is an inline-size container (`container-type: inline-size`). Overrides written against the old classes or variables need migrating; props, slots and events are unchanged.
-- Visual contract change (2026-09-26, later the same day): the badge became an aura. `.tx-stat-card__badge`, `.tx-stat-card__halo` and `.tx-stat-card__badge-body` are gone, and with them the badge's gradient tile, 1px ring, top highlight, 1:2 shadow, halo, and the hover lift and sweep. The icon now sits bare in `.tx-stat-card__glyph` > `i.tx-stat-card__icon` (the `<i>` keeps its class; 30px, 18px on a narrow card), and the new `.tx-stat-card__aura` > three `.tx-stat-card__aura-blob` (`.is-a` / `.is-b` / `.is-c`) draws the icon's color across the right of the card — in the progress layout too, behind the ring. `--tx-stat-card-slot`, `--tx-stat-card-slot-inset` and `--tx-stat-card-icon-color` are unchanged. Overrides written against the badge classes need migrating; props, slots and events are unchanged.
-- Rejected alternatives: on 2026-09-23 a small tinted badge at the top right was turned down. CoreApp's plugin pages (`PluginFeatures` / `PluginStorage`) pass `icon-class="i-ri-… text-6xl text-<color>"` and rely on the character of a large colored icon, so the icon stayed large and became a faint watermark cropped by the bottom-right corner; the old hover, which scaled the decoration to 2.05× with a blur and rotated the icon layer 10°, went with it. On 2026-09-26 the watermark itself was replaced: the card's edge cut the icon off, and at 0.16 opacity it was too faint to carry the card — it read as clipped rather than bold. Its first replacement, a glowing badge, was not that small corner badge either — it sat vertically centered on the right in the 72px slot, 56px across, with a same-hue gradient, ring, halo and shadow — but it was rejected in review the same day: the shadow, the ring and the hover motion (a 2px lift and a sweeping highlight) were the wrong kind of emphasis. The brief was the icon's color drawn out into a gradient on the right that keeps changing shape, with no hover motion. The aura does that, and the bare glyph keeps the badge's slot, whole and large. The smaller top-right form is only the fallback for cards whose content box is under 240px, where there is no room beside the figures.
-- Accessibility: the root renders `role="group"`; provide nearby heading/context in dashboards so users are not left with bare numbers.
-- Motion fallback: the aura fades in over 0.8s on mount (`opacity`, driven by the `--tinted` + `--glow-in` state, never by hover). Its blobs drift on 17s, 21s and 13s `ease-in-out` cycles that alternate and start out of phase, animating `transform` alone (rotate, translate, uneven scale), so the blurred layers move on the compositor instead of being re-blurred every frame. The progress arc eases to a new value over 0.6s. There is no hover motion, and no transition touches color. Under `prefers-reduced-motion: reduce` all of it stops: the blobs hold their resting composition (the first frame of each drift, fully drawn), the aura appears at once, and the arc jumps to its value.
-
-- Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`.
-- Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` exports `StatCardProps`, `StatCardInsight`, and variant types.
-- **Verified coverage:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` covers default rendering with `aria-labelledby` naming, the aura and glyph structure (`.tx-stat-card__aura` holding three `.tx-stat-card__aura-blob`, `.tx-stat-card__glyph` > `.tx-stat-card__icon` carrying the icon class, both `aria-hidden`, and no badge), the `ariaLabel` override, the pointer cursor living only on `--clickable` (a source assertion), custom value and label slots, percent and delta insights (the default inline SVG trend glyph, an explicit `iconClass`, `+20%` rendered as one figure, no `+` on negative values), the color following tinted icons only (`rgb()` and `color(srgb …)` count as tinted; a grey icon writes no `--tx-stat-card-icon-color`, except in the progress layout, where it still colors the ring; grey cards render the aura layer but never get `--tinted`, the class it shows on), the icon color being read again on the frame after the `<html>` class or `data-tx-contrast` attribute changes, progress activation and ring clamping with no separate glyph and the aura ahead of the ring in the DOM, the ring reading the percentage bound on its parent (`@property … inherits: true`, a source assertion) with its transition stopped under reduced motion, progress inferred from a numeric value ≤ 100 when `progress` is omitted, and custom progress meta slots. A style contract compiles the stylesheet with Sass and checks that the aura shows only on `--tinted` + `--glow-in` and that an untinted card drops the blobs rather than the layer; that the three blobs are the only animated elements, each on keyframes of its own that animate `transform` alone; that neither the glyph nor the aura casts a shadow or sits on a tile; that no hover rule moves anything and no transition eases a color; and that reduced motion stops every animation and transition without hiding anything. The narrow-card container query and how the aura actually looks are not asserted: jsdom has no layout or paint.
+- The aura is three blurred blobs that animate `transform` alone, so the compositor moves them without re-blurring each frame.
+- Source: `packages/tuffex/packages/components/src/stat-card/`.
 
 <TuffDocSourceLink />
