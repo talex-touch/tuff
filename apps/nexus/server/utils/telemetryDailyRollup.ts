@@ -5,6 +5,8 @@ import {
   MAX_SEARCH_RESULT_COUNT,
   PROVIDER_STATUS_VALUES,
 } from './telemetrySanitizer'
+import { runAfterResponse } from './afterResponse'
+import { claimMaintenanceRun, holdMaintenanceRun } from './maintenanceLease'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
@@ -17,20 +19,47 @@ const ROLLUP_MARKER_KEY = 'v1'
  * events while it is read; the oldest day rolled up is the one after it.
  */
 const MAX_ROLLUP_DAYS_BACK = 6
+/**
+ * The first day whose counters only the rollup writes: from 2026-10-09 ingestion keeps the rows and
+ * no longer upserts the counters. Earlier days keep what ingestion wrote; deriving them again would
+ * read all their events for numbers already stored.
+ */
+const ROLLUP_FIRST_DAY = '2026-10-09'
 const ROLLUP_CHECK_THROTTLE_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
+/** One isolate in the fleet rolls up, at most one day per interval. */
+const ROLLUP_LEASE_KEY = 'telemetry-daily-rollup'
+const ROLLUP_INTERVAL_MS = 60 * 60 * 1000
+/**
+ * How long a failed run holds the lease. A statement D1 refuses fails the day's whole batch, its
+ * marker included, and every attempt reads the day's events again first: once an hour, that spends
+ * the free plan's daily read allowance again.
+ */
+const ROLLUP_FAILURE_HOLD_MS = DAY_MS
 
 /**
- * Off until every aggregate has been run against D1 itself. The first release passed every local
- * test and still failed there (D1 caps a compound SELECT at five terms), and each failed attempt
- * read whole tables first: every isolate retrying every ten minutes spent the free plan's
- * five-million-row daily read allowance within an hour (2026-10-09). Ingestion keeps writing only
- * the rows, so the counters can still be derived later from the seven days retention keeps.
+ * On again, bounded (2026-10-09). The first release ran on every isolate every ten minutes, rolled
+ * up every pending day in one go and retried a failing day each time; with D1 refusing one of its
+ * statements (a compound SELECT over five terms) that spent the free plan's five-million-row daily
+ * read allowance within an hour. Now one isolate in the fleet runs it per hour (maintenance lease),
+ * a run rolls up one day, and a failure holds the lease for a day. A day's run reads its events about
+ * once per statement through `idx_telemetry_event_geo`: 79,836 rows for 2026-10-08's 21,161 events,
+ * the heaviest retained day (measured before the shared CTEs were materialized). During the incident
+ * D1 Insights showed about 257,000 rows a run, roughly the whole table four times over; that was while
+ * production still had an `event_type`-only index (since dropped), and the plan behind it was never
+ * captured, so the cause is unconfirmed.
  */
-let dailyRollupEnabled = false
+let dailyRollupEnabled = true
+/**
+ * Today and yesterday derived from their events for the analytics summary, on every view: the same
+ * statements over two days, up to about 160,000 rows a view at the 2026-10-08 volume, where the free
+ * plan allows five million a day for everything. Off; the summary shows the days the rollup stored.
+ */
+let liveDaysEnabled = false
 
 export function setTelemetryDailyRollupEnabledForTest(enabled: boolean): void {
   dailyRollupEnabled = enabled
+  liveDaysEnabled = enabled
 }
 
 const SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS = 300
@@ -90,7 +119,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     GROUP BY substr(created_at, 12, 2)
   `,
   `
-    WITH visit AS (
+    WITH visit AS MATERIALIZED (
       SELECT
         COALESCE(NULLIF(client_id, ''), NULLIF(user_id, ''), NULLIF(device_fingerprint, '')) AS actor,
         platform,
@@ -109,7 +138,7 @@ const DAILY_AGGREGATES: readonly string[] = [
   // Startup visits carry each module's load time; a detail that is not an object counts as an
   // `unknown` module that loaded in 0 ms, as it did when ingestion read it.
   `
-    WITH module AS (
+    WITH module AS MATERIALIZED (
       SELECT
         CASE WHEN detail.type = 'object'
           THEN COALESCE(${jsonText('detail.value', 'name')}, 'unknown')
@@ -194,7 +223,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     )) AS part, json_each(part.value) AS measure
   `,
   `
-    WITH search AS (
+    WITH search AS MATERIALIZED (
       SELECT
         COALESCE(NULLIF(country_code, ''), 'Unknown') AS country,
         COALESCE(NULLIF(region_code, ''), NULLIF(region_name, ''), 'Unknown') AS subdivision,
@@ -274,7 +303,7 @@ const DAILY_AGGREGATES: readonly string[] = [
     GROUP BY CAST(entry.key AS TEXT)
   `,
   `
-    WITH provider_status AS (
+    WITH provider_status AS MATERIALIZED (
       SELECT entry.key AS provider, entry.value AS state
       FROM ${TELEMETRY_TABLE} AS event, json_each(event.metadata, '$.providerStatus') AS entry
       WHERE event.event_type = 'search' AND ${EVENT_DAY_RANGE}
@@ -422,7 +451,8 @@ export async function rollupTelemetryDay(db: D1Database, date: string): Promise<
  */
 export async function listTelemetryDaysToRollUp(db: D1Database, now = new Date()): Promise<string[]> {
   const today = toDate(now.getTime())
-  const earliestCandidate = toDate(now.getTime() - MAX_ROLLUP_DAYS_BACK * DAY_MS)
+  const daysBack = toDate(now.getTime() - MAX_ROLLUP_DAYS_BACK * DAY_MS)
+  const earliestCandidate = daysBack > ROLLUP_FIRST_DAY ? daysBack : ROLLUP_FIRST_DAY
   const row = await db.prepare(`
     SELECT
       (SELECT MIN(created_at) FROM ${TELEMETRY_TABLE}) AS earliest_event,
@@ -453,11 +483,26 @@ export async function listTelemetryDaysToRollUp(db: D1Database, now = new Date()
   return days
 }
 
-export async function rollupTelemetryDailyStats(db: D1Database, now = new Date()): Promise<string[]> {
-  const days = await listTelemetryDaysToRollUp(db, now)
-  for (const date of days)
+/**
+ * Rolls up the oldest finished day still to do, when this isolate wins the hour's lease. Resolves to
+ * that day, or null when another isolate holds the lease or no day is waiting.
+ */
+export async function runTelemetryDailyRollupIfDue(db: D1Database, now = new Date()): Promise<string | null> {
+  const claim = await claimMaintenanceRun(db, ROLLUP_LEASE_KEY, now, ROLLUP_INTERVAL_MS)
+  if (!claim.claimed)
+    return null
+
+  try {
+    const [date] = await listTelemetryDaysToRollUp(db, now)
+    if (!date)
+      return null
     await rollupTelemetryDay(db, date)
-  return days
+    return date
+  }
+  catch (error) {
+    await holdMaintenanceRun(db, ROLLUP_LEASE_KEY, now, ROLLUP_FAILURE_HOLD_MS).catch(() => {})
+    throw error
+  }
 }
 
 /**
@@ -470,7 +515,7 @@ export async function withUnrolledTelemetryDays(
   rows: TelemetryDailyStatRow[],
   options: { from: string, now?: Date },
 ): Promise<TelemetryDailyStatRow[]> {
-  if (!dailyRollupEnabled)
+  if (!liveDaysEnabled)
     return rows
 
   const nowMs = (options.now ?? new Date()).getTime()
@@ -504,41 +549,16 @@ export async function withUnrolledTelemetryDays(
 }
 
 let nextRollupCheckAt = 0
-let rollupInFlight = false
-
-function getWaitUntil(event: H3Event | undefined): ((promise: Promise<unknown>) => void) | null {
-  const context = event?.context as any
-  const waitUntil = context?.waitUntil
-    ?? context?.cloudflare?.context?.waitUntil
-    ?? context?._platform?.cloudflare?.context?.waitUntil
-  return typeof waitUntil === 'function' ? waitUntil.bind(context) : null
-}
 
 /**
- * Called after each telemetry commit; at most one check per isolate every ten minutes, a single
- * read when there is nothing to do. Two isolates rolling up the same day write the same values.
+ * Called after each telemetry commit. An isolate checks at most every ten minutes, and a check is one
+ * lease claim unless the hour's run falls to it (`runTelemetryDailyRollupIfDue`).
  */
 export function scheduleTelemetryDailyRollup(event: H3Event | undefined, db: D1Database) {
   const nowMs = Date.now()
-  if (!dailyRollupEnabled || rollupInFlight || nowMs < nextRollupCheckAt)
+  if (!dailyRollupEnabled || nowMs < nextRollupCheckAt)
     return
 
-  rollupInFlight = true
   nextRollupCheckAt = nowMs + ROLLUP_CHECK_THROTTLE_MS
-
-  const promise = rollupTelemetryDailyStats(db)
-    .catch((error) => {
-      console.error('[telemetry-rollup] daily rollup failed', error)
-    })
-    .finally(() => {
-      rollupInFlight = false
-    })
-
-  const waitUntil = getWaitUntil(event)
-  if (waitUntil) {
-    waitUntil(promise)
-    return
-  }
-
-  void promise
+  runAfterResponse(event, 'telemetry daily rollup', () => runTelemetryDailyRollupIfDue(db, new Date(nowMs)))
 }
