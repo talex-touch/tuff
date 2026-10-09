@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxSwitch from '../src/TxSwitch.vue'
 
@@ -203,5 +203,93 @@ describe('txSwitch', () => {
     expect(wrapper.attributes('aria-busy')).toBeUndefined()
     expect(wrapper.attributes('disabled')).toBeUndefined()
     expect(wrapper.emitted('change')?.[0]).toEqual([true])
+  })
+})
+
+describe('txSwitch thumb travel', () => {
+  // jsdom lays nothing out; these rules hand the component the resting places
+  // the real stylesheet gives it (10% and 50% of a 44px track).
+  let sheet: HTMLStyleElement
+  let originalMatchMedia: typeof window.matchMedia
+
+  beforeEach(() => {
+    sheet = document.createElement('style')
+    sheet.textContent = '.tuff-switch__thumb { position: absolute; left: 4px; height: 16px; } .tuff-switch.is-active .tuff-switch__thumb { left: 22px; }'
+    document.head.appendChild(sheet)
+    originalMatchMedia = window.matchMedia
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    sheet.remove()
+    window.matchMedia = originalMatchMedia
+  })
+
+  function thumbOf(wrapper: ReturnType<typeof mount>) {
+    return wrapper.find('.tuff-switch__thumb').element as HTMLElement
+  }
+
+  it('holds the thumb where it was in the frame the state flips, then springs it home and lets go', async () => {
+    const wrapper = mount(TxSwitch, { props: { modelValue: false }, attachTo: document.body })
+    await nextTick()
+    const thumb = thumbOf(wrapper)
+    expect(thumb.style.translate).toBe('')
+
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    // The CSS has moved it to 22px; the engine draws it back at 4px until it travels.
+    expect(thumb.style.translate).toBe('-18px 0')
+    expect(thumb.style.width).toBe('16px')
+
+    vi.advanceTimersByTime(32)
+    const midway = Number.parseFloat(thumb.style.translate)
+    expect(midway).toBeGreaterThan(-18)
+    expect(midway).toBeLessThan(0)
+    // The leading end runs ahead: the thumb is longer than at rest on the way.
+    expect(Number.parseFloat(thumb.style.width)).toBeGreaterThan(16)
+
+    vi.advanceTimersByTime(2000)
+    expect(thumb.style.translate).toBe('')
+    expect(thumb.style.width).toBe('')
+    wrapper.unmount()
+  })
+
+  it('leaves an unrendered thumb to the stylesheet and lands the first move once it shows', async () => {
+    // Unrendered, `left` and `height` resolve to the authored percentages, not lengths.
+    sheet.textContent = '.tuff-switch__thumb { position: absolute; left: 10%; height: 70%; } .tuff-switch.is-active .tuff-switch__thumb { left: 50%; }'
+    const wrapper = mount(TxSwitch, { props: { modelValue: false }, attachTo: document.body })
+    await nextTick()
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    expect(thumbOf(wrapper).style.translate).toBe('')
+    expect(thumbOf(wrapper).style.width).toBe('')
+
+    // Shown again: nothing to travel from, so the next move lands where the CSS puts it.
+    sheet.textContent = '.tuff-switch__thumb { position: absolute; left: 4px; height: 16px; } .tuff-switch.is-active .tuff-switch__thumb { left: 22px; }'
+    await wrapper.setProps({ modelValue: false })
+    await nextTick()
+    expect(thumbOf(wrapper).style.translate).toBe('')
+    // And the move after that travels again.
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    expect(thumbOf(wrapper).style.translate).toBe('-18px 0')
+    wrapper.unmount()
+  })
+
+  it('lands at once under reduced motion', async () => {
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    })) as unknown as typeof window.matchMedia
+    const wrapper = mount(TxSwitch, { props: { modelValue: false }, attachTo: document.body })
+    await nextTick()
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    expect(thumbOf(wrapper).style.translate).toBe('')
+    expect(thumbOf(wrapper).style.width).toBe('')
+    wrapper.unmount()
   })
 })

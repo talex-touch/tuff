@@ -26,6 +26,8 @@ const name = computed(() => {
     return 'tx-slide-fade'
   if (props.preset === 'rebound')
     return 'tx-rebound'
+  if (props.preset === 'blur')
+    return 'tx-blur'
   // `smooth-size` has no TransitionGroup CSS — its animation lives in the dedicated
   // non-group TxTransitionSmoothSize path, which handles the `!group` case above. Only a
   // grouped smooth-size reaches this `name`, where `tx-smooth-size-*` classes don't exist
@@ -139,9 +141,23 @@ const wrapperStyle = computed<StyleValue>(() => {
   transform: translateY(10px) scale(0.985);
 }
 
+.tx-blur-enter-active,
+.tx-blur-leave-active {
+  transition:
+    opacity var(--tx-transition-duration) var(--tx-transition-easing),
+    filter var(--tx-transition-duration) var(--tx-transition-easing);
+}
+
+.tx-blur-enter-from,
+.tx-blur-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+}
+
 .tx-fade-move,
 .tx-slide-fade-move,
-.tx-rebound-move {
+.tx-rebound-move,
+.tx-blur-move {
   transition: transform var(--tx-transition-duration) var(--tx-transition-easing);
 }
 
@@ -152,9 +168,12 @@ const wrapperStyle = computed<StyleValue>(() => {
   .tx-slide-fade-leave-active,
   .tx-rebound-enter-active,
   .tx-rebound-leave-active,
+  .tx-blur-enter-active,
+  .tx-blur-leave-active,
   .tx-fade-move,
   .tx-slide-fade-move,
-  .tx-rebound-move {
+  .tx-rebound-move,
+  .tx-blur-move {
     transition-duration: 0.01ms;
   }
 
@@ -163,6 +182,11 @@ const wrapperStyle = computed<StyleValue>(() => {
   .tx-rebound-enter-from,
   .tx-rebound-leave-to {
     transform: none;
+  }
+
+  .tx-blur-enter-from,
+  .tx-blur-leave-to {
+    filter: none;
   }
 }
 </style>

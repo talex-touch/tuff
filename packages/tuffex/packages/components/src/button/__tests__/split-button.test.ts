@@ -109,3 +109,89 @@ describe('txSplitButton', () => {
     expect(spy).toHaveBeenLastCalledWith(false)
   })
 })
+
+// The real TxPopover is mounted with `toggle-on-reference-click=false`: it never
+// toggles on its own, so whatever state these tests see is the trigger's doing.
+const PassivePopoverStub = defineComponent({
+  name: 'TxPopover',
+  props: {
+    modelValue: { type: Boolean, default: false },
+  },
+  template: `
+    <div>
+      <slot name="reference" />
+      <div v-if="modelValue" class="passive-popover__panel"><slot /></div>
+    </div>
+  `,
+})
+
+describe('txSplitButton menu press', () => {
+  function mountWithMenu() {
+    const spy = vi.fn()
+    const wrapper = mount(SplitButton, {
+      attrs: { onMenuOpenChange: spy },
+      slots: { default: 'Run', menu: () => 'Menu' },
+      global: { stubs: { TxPopover: PassivePopoverStub } },
+    })
+    return { wrapper, spy, menuBtn: wrapper.find('button.tx-split-button__menu') }
+  }
+
+  it('stays open after an ordinary click, whose click event arrives on release', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper, spy, menuBtn } = mountWithMenu()
+      await menuBtn.trigger('pointerdown')
+      // a real press: the button is held ~100ms before the release and its click
+      vi.advanceTimersByTime(120)
+      window.dispatchEvent(new Event('pointerup'))
+      await menuBtn.trigger('click')
+      vi.advanceTimersByTime(600)
+      await wrapper.vm.$nextTick()
+
+      expect(spy).toHaveBeenLastCalledWith(true)
+      expect(wrapper.find('.passive-popover__panel').exists()).toBe(true)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops swallowing clicks once a press is released off the trigger', async () => {
+    vi.useFakeTimers()
+    try {
+      const { spy, menuBtn } = mountWithMenu()
+      await menuBtn.trigger('pointerdown')
+      expect(spy).toHaveBeenLastCalledWith(true)
+      // released elsewhere: no click follows on the trigger
+      window.dispatchEvent(new Event('pointerup'))
+      vi.advanceTimersByTime(600)
+      // a later click with no press of its own (assistive tech) still toggles
+      await menuBtn.trigger('click')
+      expect(spy).toHaveBeenLastCalledWith(false)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('txSplitButton menu icon', () => {
+  it('draws its own glyph when no icon class is given', () => {
+    const wrapper = mount(SplitButton, {
+      slots: { default: 'Run', menu: () => 'Menu' },
+      global: { stubs: { TxPopover: PassivePopoverStub } },
+    })
+    expect(wrapper.find('svg.tx-split-button__menu-glyph').exists()).toBe(true)
+    expect(wrapper.find('i.tx-split-button__menu-icon').exists()).toBe(false)
+  })
+
+  it('uses the icon class when one is given', () => {
+    const wrapper = mount(SplitButton, {
+      props: { menuIcon: 'i-carbon-chevron-down' },
+      slots: { default: 'Run', menu: () => 'Menu' },
+      global: { stubs: { TxPopover: PassivePopoverStub } },
+    })
+    expect(wrapper.find('i.tx-split-button__menu-icon.i-carbon-chevron-down').exists()).toBe(true)
+    expect(wrapper.find('svg.tx-split-button__menu-glyph').exists()).toBe(false)
+  })
+})

@@ -7,6 +7,14 @@ export interface SliderProps {
   /** Suspend observers, global tracking and motion without changing the value or disabled state. */
   active?: boolean
   /**
+   * Let the thumb be pulled past either end with growing resistance (a rubber
+   * band) and spring back on release. The value stays clamped; only the
+   * drawing moves. Off under reduced motion.
+   *
+   * @default false
+   */
+  overdrag?: boolean
+  /**
    * Accessible label for the range input. The visual root is a wrapper `<div>`,
    * so a fallthrough `aria-label` lands on the wrapper instead of the control —
    * pass it here (or use `ariaLabelledby`) to name the slider itself.

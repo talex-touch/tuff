@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { PackageManager } from '~/utils/docs-install-command'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { formatInstallCommand, PACKAGE_MANAGERS, parseInstallCommand } from '~/utils/docs-install-command'
 
 const props = withDefaults(defineProps<{
   code: string
@@ -34,6 +36,23 @@ const copyLabel = computed(() => {
 
 const showHeader = computed(() => !props.embedded)
 const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
+
+/*
+ * A one-line `pnpm add` / `pnpm dlx` block is an install command: it renders as
+ * a package-manager switch over the command, so readers copy the one they use.
+ * The rules for what qualifies live in utils/docs-install-command.
+ */
+const MANAGERS = PACKAGE_MANAGERS
+// A block with a title of its own keeps the ordinary renderer, which shows it.
+const install = computed(() => (props.embedded || props.title ? null : parseInstallCommand(props.code, props.lang)))
+
+// One choice for every install block on the page, kept across client navigation.
+const manager = useState<PackageManager>('docs-install-manager', () => 'pnpm')
+const installCommand = computed(() => (install.value ? formatInstallCommand(install.value, manager.value) : ''))
+
+const installLabels = computed(() => (locale.value === 'zh'
+  ? { copy: '复制命令', copied: '已复制', failed: '复制失败', manager: '包管理器' }
+  : { copy: 'Copy command', copied: 'Copied', failed: 'Copy failed', manager: 'Package manager' }))
 
 async function highlightCode() {
   if (!import.meta.client || isMermaid.value)
@@ -115,7 +134,27 @@ async function handleCopy() {
 </script>
 
 <template>
-  <div class="tuff-code-block" :class="{ 'tuff-code-block--embedded': props.embedded }">
+  <!-- data-theme scopes TuffEx's dark tokens to the panel: code blocks are dark
+       in both page themes, and the switch and copy button sit on that surface. -->
+  <div v-if="install" class="tuff-code-block tuff-code-block--install" data-theme="dark">
+    <div class="tuff-install__head">
+      <TxFlatRadio v-model="manager" size="sm" :aria-label="installLabels.manager">
+        <TxFlatRadioItem v-for="name in MANAGERS" :key="name" :value="name" :label="name" />
+      </TxFlatRadio>
+      <TxCopyButton
+        icon-only
+        :text="installCommand"
+        :copy-label="installLabels.copy"
+        :copied-label="installLabels.copied"
+        :failed-label="installLabels.failed"
+      />
+    </div>
+    <div class="tuff-install__command">
+      <span class="tuff-install__prompt" aria-hidden="true">$</span>
+      <TxTextTransformer :text="installCommand" />
+    </div>
+  </div>
+  <div v-else class="tuff-code-block" :class="{ 'tuff-code-block--embedded': props.embedded }">
     <div v-if="showHeader" class="tuff-code-block__header">
       <div class="tuff-code-block__meta">
         <div class="tuff-code-block__dots" aria-hidden="true">
@@ -159,7 +198,12 @@ async function handleCopy() {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--docs-border) 70%, transparent);
   background: linear-gradient(180deg, rgba(16, 14, 12, 0.98), rgba(10, 8, 6, 0.98));
-  box-shadow: 0 22px 60px rgba(8, 6, 4, 0.35);
+  /*
+   * Close and mostly downward. The old 0 22px 60px shadow was invisible on the
+   * dark page but a heavy grey slab on the light one, and a full-width block's
+   * sideways blur got cut by the column into a box with hard edges.
+   */
+  box-shadow: 0 1px 2px rgba(16, 14, 12, 0.1), 0 4px 10px -4px rgba(16, 14, 12, 0.3);
 }
 
 .tuff-code-block--embedded {
@@ -284,6 +328,34 @@ async function handleCopy() {
   height: auto;
 }
 
+.tuff-install__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tuff-install__command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px 18px;
+  overflow-x: auto;
+  color: rgba(255, 255, 255, 0.96);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tuff-install__prompt {
+  color: rgba(255, 255, 255, 0.32);
+  user-select: none;
+}
+
 :global(.dark .tuff-code-block),
 :global([data-theme='dark'] .tuff-code-block) {
   border-color: rgba(255, 255, 255, 0.08);
@@ -296,5 +368,88 @@ async function handleCopy() {
   background: transparent;
   border: none;
   box-shadow: none;
+}
+</style>
+
+<style>
+/*
+ * An install command and the import snippet written right after it are one
+ * card. Sibling selectors decide it at first paint, so nothing shifts when the
+ * page hydrates; every other pair of code blocks keeps its own card.
+ */
+.tuff-code-block--install:has(+ .tuff-code-block) {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+}
+
+.tuff-code-block--install + .tuff-code-block {
+  position: relative;
+  margin-top: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/*
+ * The joined snippet drops its window chrome. Its copy control floats beside
+ * the first line, shaped like the install row's icon-only TxCopyButton, on an
+ * opaque face so a long line under it never shows through; it appears with the
+ * pointer or focus, and stays on devices that cannot hover.
+ */
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__header {
+  position: absolute;
+  top: 14px;
+  right: 0;
+  z-index: 1;
+  padding: 0 14px 0 0;
+  border: 0;
+  /* opaque to the card's edge, feathered on the left, so no code shows beside it */
+  background: rgb(16, 14, 12);
+  box-shadow: -14px 0 12px rgb(16, 14, 12);
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__meta {
+  display: none;
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy {
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  gap: 0;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 0;
+  background: rgb(16, 14, 12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy:hover {
+  background: rgb(36, 33, 30);
+}
+
+.tuff-code-block--install + .tuff-code-block:hover .tuff-code-block__header,
+.tuff-code-block--install + .tuff-code-block:focus-within .tuff-code-block__header {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tuff-code-block--install + .tuff-code-block .tuff-code-block__header {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tuff-code-block--install + .tuff-code-block .tuff-code-block__header {
+    transition: none;
+  }
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy > span {
+  font-size: 14px;
 }
 </style>

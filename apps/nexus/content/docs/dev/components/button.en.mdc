@@ -194,15 +194,17 @@ code: |
 ::::
 
 ### Copy Button
-Shows `copiedLabel` after a successful copy and emits `error` on failure.
+A copy draws a check and morphs the label into `copiedLabel`; a failure draws a cross and emits `error`. `iconOnly` shows the label only while reporting.
 ::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxCopyButton
-      text="pnpm add @talex-touch/tuffex"
+      icon-only
+      :text="commands[manager]"
       copy-label="Copy install command"
       copied-label="Copied"
+      failed-label="Copy failed"
       @error="notifyCopyFailed"
     />
   </template>
@@ -215,7 +217,7 @@ code: |
 - Set `loading` for async actions and clear it on both success and failure, so the button never sticks disabled.
 - Use `nativeType="submit"` only inside forms; the default `button` never submits by accident.
 - Use `TxIconButton` with a `label` for icon-only actions; reserve `pressed` for persistent toggles.
-- Name the copied target in `TxCopyButton`'s `copyLabel`; handle `error` for critical values, since browsers can reject writes outside a user gesture.
+- Name the copied target in `TxCopyButton`'s `copyLabel`; handle `error` for critical values, and set `failedLabel` outside English.
 
 ## API Reference
 
@@ -342,7 +344,7 @@ rows:
 | `disabled` | `boolean` | `false` | Disables both the primary action and the menu trigger. |
 | `loading` | `boolean` | `false` | Shows the primary spinner and disables both sides. |
 | `icon` | `string` | - | Icon class shown before the label while not loading. |
-| `menuIcon` | `string` | `i-ri-more-2-line` | Default icon class of the menu trigger. |
+| `menuIcon` | `string` | - | Icon class for the menu trigger; without it, a built-in vertical ellipsis is drawn. |
 | `menuDisabled` | `boolean` | `false` | Disables only the menu trigger. |
 | `menuWidth` | `number` | `200` | Popover width, passed to `TxPopover`. |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | Popover placement. |
@@ -399,9 +401,11 @@ rows:
 | `text` | `string` | `''` | Text written to the clipboard. |
 | `copyLabel` | `string` | `'Copy'` | Idle label and `aria-label`. |
 | `copiedLabel` | `string` | `'Copied'` | Label and `aria-label` after a successful copy. |
+| `failedLabel` | `string` | - | Label and `aria-label` after a failure. Without it, `copyLabel` stays (`iconOnly` grows no label) and the live region announces "Copy failed". |
 | `disabled` | `boolean` | `false` | Disables the button and prevents copying. |
-| `timeout` | `number` | `1400` | Milliseconds before the copied state resets. |
+| `timeout` | `number` | `1400` | Milliseconds before the copied or failed state resets. |
 | `size` | `'sm' \| 'md'` | `'sm'` | Button size. |
+| `iconOnly` | `boolean` | `false` | Shows only the icon at rest; the label grows out while reporting. |
 
 #### Events
 
@@ -414,7 +418,7 @@ rows:
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `default` | `{ copied, copying }` | Custom button content. |
+| `default` | `{ copied, copying, failed }` | Custom button content; replaces the label morph. |
 
 ### Types
 :::TuffCodeBlock{lang="ts"}
@@ -436,18 +440,18 @@ code: |
 - `disabled` and `loading` both disable the native `<button>` and suppress `click`; a loading `TxSplitButton` disables both sides.
 - Non-block, non-circle buttons animate width with a FLIP transition when `loading` toggles; `block` with `circle` keeps the regular label layout.
 - An icon-only `TxButton` takes its name from attrs such as `aria-label`; `TxIconButton` maps `label` to `aria-label` and a boolean `pressed` to `aria-pressed`.
-- `TxCopyButton` uses the Clipboard API and falls back to `execCommand` when it is unavailable; it ignores clicks while disabled or copying.
-- Under reduced motion, the `vibrate` shake is skipped.
+- `TxCopyButton` uses the Clipboard API and falls back to `execCommand`; it ignores clicks while copying and eases colour only on a state change.
+- Under reduced motion, the `vibrate` shake is skipped and `TxCopyButton` lands each state as its final frame.
 
 ## Technologies
 
 - `--tx-button-height` sets both the button height and the width of a non-block circle.
 - Source: `packages/tuffex/packages/components/src/button/`.
 
+<TuffDocSourceLink label="View source" />
+
 ## Use cases
 
 - Page and card actions, form submits (`nativeType="submit"`), and drawer footers (`block`).
 - Table rows and toolbars (`size="sm"`), and icon-only actions (`circle` or `TxIconButton`).
 - A primary action with a menu of variants (`TxSplitButton`), and copy-to-clipboard (`TxCopyButton`).
-
-<TuffDocSourceLink label="View source" />

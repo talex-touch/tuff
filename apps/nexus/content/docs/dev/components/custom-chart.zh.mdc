@@ -118,7 +118,7 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 | `x` / `y` | `keyof T \| (d, i) => v` | accessor。 |
 | `color` | `string` | 缺省按挂载顺序取分类色。 |
 
-`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`，悬停发 `slice-hover`（带 `{ datum, index, name, value }`，指针移出弧形时为 `null`）——无轴弧形没有坐标系可读，`#overlay` 里的 `<TxChartTooltip>` 就靠它取数。
+`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`，以及 `enter`（默认 `clip` 从左向右擦开；`draw` 沿线描出、描到哪个点才显示该点的标记，虚线仍用 `clip`）；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`，悬停发 `slice-hover`（带 `{ datum, index, name, value }`，指针移出弧形时为 `null`）——无轴弧形没有坐标系可读，`#overlay` 里的 `<TxChartTooltip>` 就靠它取数。
 
 ### ChartTooltip Props
 
