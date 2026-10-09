@@ -3,7 +3,7 @@ title: "MotionForm"
 description: "基于 TuffEx 表单控件的十五种动效交互"
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [form, motion, validation, otp, files]
 syncStatus: documented
 verified: false

@@ -3,7 +3,7 @@ title: MotionText
 description: "45 个可追溯文字效果、4 个 registry 揭示，以及乱序揭示、调用方行内媒体和真实焦点模糊交互。"
 category: MotionText
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, text, grapheme, hover, media, accessibility]
 syncStatus: reviewed
 verified: false

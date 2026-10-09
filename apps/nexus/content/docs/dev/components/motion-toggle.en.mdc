@@ -3,7 +3,7 @@ title: "MotionToggle"
 description: "Twelve controlled switch/action styles with real models, icon feedback and caller-owned counters."
 category: MotionToggles
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, toggle, action, accessibility]
 verified: false
 ---

@@ -3,7 +3,7 @@ title: "Motion 通用交互"
 description: "由调用方内容、指针和滚动位置驱动的入场、悬停与可见性效果。"
 category: MotionInteraction
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, pointer, scroll, accessibility]
 verified: false
 ---

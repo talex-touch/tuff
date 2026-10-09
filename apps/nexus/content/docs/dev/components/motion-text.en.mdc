@@ -3,7 +3,7 @@ title: MotionText
 description: "45 source-mapped text effects, four registry reveals, scramble, inline caller media and interactive focus blur."
 category: MotionText
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, text, grapheme, hover, media, accessibility]
 syncStatus: reviewed
 verified: false

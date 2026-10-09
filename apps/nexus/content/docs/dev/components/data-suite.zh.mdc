@@ -28,4 +28,4 @@ verified: false
 
 [DitherChart 抖动图表](./dither-chart.zh.mdc) 将图表结构与动态抖动展示结合，因此放在[动效套件](./motion-suite.zh.mdc)。它使用相同的现有 charts 边界和 `--tx-chart-*` 主题变量，不新增独立图表包。
 
-这些新增能力在当前源码中标记 `since: 0.6.3`，随 Tuff beta 测试，尚未独立发布 npm。
+这些新增能力标记 `since: 0.7.0`，随 npm 0.7.0 发布。

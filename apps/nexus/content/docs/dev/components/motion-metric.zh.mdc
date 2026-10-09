@@ -3,7 +3,7 @@ title: MotionMetric
 description: 由调用方数据驱动的指标卡、图表与复合仪表
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, metrics, charts, pro]
 syncStatus: reviewed
 ---

@@ -13,21 +13,27 @@ verified: false
 
 | 项目 | 值 |
 |------|----|
-| 源码版本 | **0.6.3**，随 Tuff beta 测试，未独立发布 npm |
-| npm 最新版本 | **0.6.2** |
-| 组件模块 | **182**：基础 94 · 进阶 54 · AI 34 |
+| 源码版本 | **0.7.0**，与 npm 发布一致 |
+| npm 最新版本 | **0.7.0** |
+| 组件模块 | **183**：基础 94 · 进阶 55 · AI 34 |
 
 ## 版本更新历程
 
-### Unreleased 未发布
+### 0.7.0 版本（2026-10-09）
 
-源码版本保持 0.6.3，以下内容不是独立 npm 发版。
+动效原语与 Motion 套件、悬停弹层的悬停桥，以及终端显示组件。
 
+- **新增组件（16 个）**：[card-spread](./card-spread.zh.mdc)、[carousel-3d](./carousel-3d.zh.mdc)、[flip-book](./flip-book.zh.mdc)、[morph](./morph.zh.mdc)、[motion](./motion.zh.mdc)、[motion-button](./motion-button.zh.mdc)、[motion-control](./motion-control.zh.mdc)、[motion-dock](./motion-dock.zh.mdc)、[motion-form](./motion-form.zh.mdc)、[motion-loader](./motion-loader.zh.mdc)、[motion-metric](./motion-metric.zh.mdc)、[motion-text](./motion-text.zh.mdc)、[motion-toggle](./motion-toggle.zh.mdc)、[motion-transition](./motion-transition.zh.mdc)、[physics-motion](./physics-motion.zh.mdc)、[terminal](./terminal.zh.mdc)
+- **更新组件（18 个）**：[ai-elements](./ai-elements.zh.mdc)、[base-anchor](./base-anchor.zh.mdc)、[button](./button.zh.mdc)、[charts](./charts.zh.mdc)、[chat](./chat.zh.mdc)、[code-stream](./code-stream.zh.mdc)、[flat-dropdown](./flat-dropdown.zh.mdc)、[fusion-surface](./fusion-surface.zh.mdc)、[icon-chip](./icon-chip.zh.mdc)、[icon-morph](./icon-morph.zh.mdc)、[liquid](./liquid.zh.mdc)、[popover](./popover.zh.mdc)、[rating](./rating.zh.mdc)、[slider](./slider.zh.mdc)、[steps](./steps.zh.mdc)、[switch](./switch.zh.mdc)、[tooltip](./tooltip.zh.mdc)、[transition](./transition.zh.mdc)
 - **Motion 文档套件**：导航新增[动效套件](./motion-suite.zh.mdc)，含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册
-- **新增组件模块（14 个）**：[motion-button](./motion-button.zh.mdc)、[card-spread](./card-spread.zh.mdc)、[carousel-3d](./carousel-3d.zh.mdc)、[flip-book](./flip-book.zh.mdc)、[motion-loader](./motion-loader.zh.mdc)、[motion-text](./motion-text.zh.mdc)、[physics-motion](./physics-motion.zh.mdc)、[motion-dock](./motion-dock.zh.mdc)、[motion](./motion.zh.mdc)、[motion-toggle](./motion-toggle.zh.mdc)、[motion-transition](./motion-transition.zh.mdc)、[motion-form](./motion-form.zh.mdc)、[motion-control](./motion-control.zh.mdc)、[motion-metric](./motion-metric.zh.mdc)
 - **现有 charts 模块新增**：Motion 中的 [dither-chart](./dither-chart.zh.mdc) 与 Data 中的 [mono-chart](./mono-chart.zh.mdc)，均从 `@talex-touch/tuffex/charts` 导出
 - **安装边界**：仍为 Base、Pro、AI 三套 barrel；Motion 只是文档套件，`/motion` 单组件子路径引入 `TxMotion`，不是第四套 barrel；复合表单、控件和指标归 Pro
 - **来源与授权**：标签、内容、条目、模型和数据由调用方驱动；持续动效共享可见性、减少动态效果与清理处理，spring 与文字变化复用现有引擎。保留 Amicro 的 MIT 署名与源文件级 Apache-2.0 声明；保留的 46 个 Lucide 图标附 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖
+- **关键特性**：
+  - 闭式弹簧（`solveSpring`、`createSpringTrack`）与 `useMorphBox`；TxMorph 一形多态容器；TxTransitionSmoothSize 改由弹簧驱动，并新增 blur 过渡
+  - 悬停弹层与触发器之间渲染悬停桥，斜向移动由安全三角保护；锚点家族默认不画箭头，expand 回弹按面板高度封顶
+  - TuffSwitch 滑块走 glide 材质，TxSlider 可越界回弹，TxLineSeries 沿线描出，TxIconMorph 新增播放与暂停，TxCopyButton 在复制、成功、失败之间形变
+  - TxTerminal 在网页与 Electron 中共用 ANSI / Unicode 终端显示
 
 ### 0.6.3 源码版本（2026-10-01）
 
@@ -127,7 +133,7 @@ TuffEx 独立包初始基线。
 
 ## 全组件引入版本索引
 
-全部 182 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](./index.zh.mdc)。
+全部 183 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](./index.zh.mdc)。
 
 | 组件 | 安装 barrel | 引入版本 |
 |---|---|---|
@@ -151,8 +157,8 @@ TuffEx 独立包初始基线。
 | [`button`](./button.zh.mdc) | base | 0.3.4 |
 | [`card`](./card.zh.mdc) | base | 0.3.4 |
 | [`card-item`](./card-item.zh.mdc) | base | 0.3.4 |
-| [`card-spread`](./card-spread.zh.mdc) | pro | 0.6.3 |
-| [`carousel-3d`](./carousel-3d.zh.mdc) | pro | 0.6.3 |
+| [`card-spread`](./card-spread.zh.mdc) | pro | 0.7.0 |
+| [`carousel-3d`](./carousel-3d.zh.mdc) | pro | 0.7.0 |
 | [`cascader`](./cascader.zh.mdc) | base | 0.3.4 |
 | [`cell-link`](./cell-link.zh.mdc) | base | 0.3.9 |
 | [`chain-of-thought`](./chain-of-thought.zh.mdc) | ai | 0.3.9 |
@@ -190,7 +196,7 @@ TuffEx 独立包初始基线。
 | [`flat-radio`](./flat-radio.zh.mdc) | base | 0.3.4 |
 | [`flat-select`](./flat-select.zh.mdc) | base | 0.3.4 |
 | [`flex`](./flex.zh.mdc) | base | 0.3.4 |
-| [`flip-book`](./flip-book.zh.mdc) | pro | 0.6.3 |
+| [`flip-book`](./flip-book.zh.mdc) | pro | 0.7.0 |
 | [`flip-overlay`](./flip-overlay.zh.mdc) | pro | 0.3.4 |
 | [`floating`](./floating.zh.mdc) | pro | 0.3.4 |
 | [`flowchart`](./flowchart.zh.mdc) | ai | 0.6.0 |
@@ -227,16 +233,17 @@ TuffEx 独立包初始基线。
 | [`metal-fx`](./metal-fx.zh.mdc) | pro | 0.6.2 |
 | [`modal`](./modal.zh.mdc) | base | 0.3.4 |
 | [`mode-chip`](./mode-chip.zh.mdc) | ai | 0.6.0 |
-| [`motion`](./motion.zh.mdc) | pro | 0.6.3 |
-| [`motion-button`](./motion-button.zh.mdc) | pro | 0.6.3 |
-| [`motion-control`](./motion-control.zh.mdc) | pro | 0.6.3 |
-| [`motion-dock`](./motion-dock.zh.mdc) | pro | 0.6.3 |
-| [`motion-form`](./motion-form.zh.mdc) | pro | 0.6.3 |
-| [`motion-loader`](./motion-loader.zh.mdc) | pro | 0.6.3 |
-| [`motion-metric`](./motion-metric.zh.mdc) | pro | 0.6.3 |
-| [`motion-text`](./motion-text.zh.mdc) | pro | 0.6.3 |
-| [`motion-toggle`](./motion-toggle.zh.mdc) | pro | 0.6.3 |
-| [`motion-transition`](./motion-transition.zh.mdc) | pro | 0.6.3 |
+| [`morph`](./morph.zh.mdc) | pro | 0.7.0 |
+| [`motion`](./motion.zh.mdc) | pro | 0.7.0 |
+| [`motion-button`](./motion-button.zh.mdc) | pro | 0.7.0 |
+| [`motion-control`](./motion-control.zh.mdc) | pro | 0.7.0 |
+| [`motion-dock`](./motion-dock.zh.mdc) | pro | 0.7.0 |
+| [`motion-form`](./motion-form.zh.mdc) | pro | 0.7.0 |
+| [`motion-loader`](./motion-loader.zh.mdc) | pro | 0.7.0 |
+| [`motion-metric`](./motion-metric.zh.mdc) | pro | 0.7.0 |
+| [`motion-text`](./motion-text.zh.mdc) | pro | 0.7.0 |
+| [`motion-toggle`](./motion-toggle.zh.mdc) | pro | 0.7.0 |
+| [`motion-transition`](./motion-transition.zh.mdc) | pro | 0.7.0 |
 | [`nav-bar`](./nav-bar.zh.mdc) | base | 0.3.4 |
 | [`no-data`](./no-data.zh.mdc) | base | 0.3.4 |
 | [`no-selection`](./no-selection.zh.mdc) | base | 0.3.4 |
@@ -245,7 +252,7 @@ TuffEx 独立包初始基线。
 | [`outline-border`](./outline-border.zh.mdc) | pro | 0.3.4 |
 | [`pagination`](./pagination.zh.mdc) | base | 0.3.4 |
 | [`permission-state`](./permission-state.zh.mdc) | base | 0.3.4 |
-| [`physics-motion`](./physics-motion.zh.mdc) | pro | 0.6.3 |
+| [`physics-motion`](./physics-motion.zh.mdc) | pro | 0.7.0 |
 | [`picker`](./picker.zh.mdc) | base | 0.3.4 |
 | [`popover`](./popover.zh.mdc) | base | 0.3.4 |
 | [`prism-glow`](./prism-glow.zh.mdc) | pro | 0.6.0 |
@@ -292,7 +299,7 @@ TuffEx 独立包初始基线。
 | [`tag`](./tag.zh.mdc) | base | 0.3.4 |
 | [`tag-input`](./tag-input.zh.mdc) | base | 0.3.4 |
 | [`task-rows`](./task-rows.zh.mdc) | ai | 0.3.9 |
-| [`terminal`](./terminal.zh.mdc) | pro | 0.6.3 |
+| [`terminal`](./terminal.zh.mdc) | pro | 0.7.0 |
 | [`text-morph`](./text-morph.zh.mdc) | pro | 0.6.0 |
 | [`text-transformer`](./text-transformer.zh.mdc) | pro | 0.3.4 |
 | [`textarea`](./textarea.zh.mdc) | base | 0.3.7 |
@@ -320,8 +327,8 @@ TuffEx 独立包初始基线。
 
 | 图表组件 | 文档套件 | 引入版本 |
 | --- | --- | --- |
-| [`dither-chart`](./dither-chart.zh.mdc) | Motion | 0.6.3 |
-| [`mono-chart`](./mono-chart.zh.mdc) | Data | 0.6.3 |
+| [`dither-chart`](./dither-chart.zh.mdc) | Motion | 0.7.0 |
+| [`mono-chart`](./mono-chart.zh.mdc) | Data | 0.7.0 |
 
 ## 版本门禁与规范
 

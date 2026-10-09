@@ -25,7 +25,7 @@ verified: false
 
 ## 概述
 
-Motion 是八个文档套件之一，包含十二个组件家族。安装仍使用现有 Base、Pro 和 AI 三套 barrel。这里的组件从 `@talex-touch/tuffex/pro` 引入；DitherChart 还提供现有 `@talex-touch/tuffex/charts` 图表入口。0.6.3 源码随 Tuff beta 测试，尚未独立发布 npm。
+Motion 是八个文档套件之一，包含十二个组件家族。安装仍使用现有 Base、Pro 和 AI 三套 barrel。这里的组件从 `@talex-touch/tuffex/pro` 引入；DitherChart 还提供现有 `@talex-touch/tuffex/charts` 图表入口。这些组件随 npm 0.7.0 发布。
 
 ### 按钮
 

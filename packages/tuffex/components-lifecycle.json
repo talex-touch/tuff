@@ -1,8 +1,52 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.6.3",
+  "currentVersion": "0.7.0",
   "totalComponents": 183,
   "versions": [
+    {
+      "version": "0.7.0",
+      "date": "2026-10-09",
+      "title": "动效原语、Motion 套件、悬停桥与终端 (Motion Primitives, Hover Bridge and Terminal)",
+      "newComponents": [
+        "card-spread",
+        "carousel-3d",
+        "flip-book",
+        "morph",
+        "motion",
+        "motion-button",
+        "motion-control",
+        "motion-dock",
+        "motion-form",
+        "motion-loader",
+        "motion-metric",
+        "motion-text",
+        "motion-toggle",
+        "motion-transition",
+        "physics-motion",
+        "terminal"
+      ],
+      "updatedComponents": [
+        "ai-elements",
+        "base-anchor",
+        "button",
+        "charts",
+        "chat",
+        "code-stream",
+        "flat-dropdown",
+        "fusion-surface",
+        "icon-chip",
+        "icon-morph",
+        "liquid",
+        "popover",
+        "rating",
+        "slider",
+        "steps",
+        "switch",
+        "tooltip",
+        "transition"
+      ],
+      "summary": "新增 Motion 套件的 14 个动效组件、一形多态的 TxMorph 与终端显示 TxTerminal；闭式弹簧与 useMorphBox 驱动尺寸与形状过渡，悬停弹层获得悬停桥与安全三角，锚点家族默认不画箭头。"
+    },
     {
       "version": "0.6.3",
       "date": "2026-10-01",
@@ -435,12 +479,12 @@
     },
     "card-spread": {
       "slug": "card-spread",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "carousel-3d": {
       "slug": "carousel-3d",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "cascader": {
@@ -625,7 +669,7 @@
     },
     "flip-book": {
       "slug": "flip-book",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "flip-overlay": {
@@ -810,57 +854,57 @@
     },
     "morph": {
       "slug": "morph",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion": {
       "slug": "motion",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-button": {
       "slug": "motion-button",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-control": {
       "slug": "motion-control",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-dock": {
       "slug": "motion-dock",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-form": {
       "slug": "motion-form",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-loader": {
       "slug": "motion-loader",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-metric": {
       "slug": "motion-metric",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-text": {
       "slug": "motion-text",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-toggle": {
       "slug": "motion-toggle",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "motion-transition": {
       "slug": "motion-transition",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "nav-bar": {
@@ -905,7 +949,7 @@
     },
     "physics-motion": {
       "slug": "physics-motion",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "picker": {
@@ -1140,7 +1184,7 @@
     },
     "terminal": {
       "slug": "terminal",
-      "since": "0.6.3",
+      "since": "0.7.0",
       "suite": "pro"
     },
     "text-morph": {

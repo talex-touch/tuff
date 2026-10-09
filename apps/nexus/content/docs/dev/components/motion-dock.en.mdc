@@ -3,7 +3,7 @@ title: "Motion dock"
 description: "Caller-owned items with adjacent spring magnification, pointer dragging and keyboard reorder."
 category: MotionInteraction
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, dock, reorder]
 syncStatus: reviewed
 verified: false
