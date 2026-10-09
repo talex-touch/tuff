@@ -603,3 +603,68 @@ describe('txSlider thumb jelly', () => {
     expect(wrapper.find('.tx-slider__glass').exists()).toBe(false)
   })
 })
+
+describe('txSlider overdrag', () => {
+  const leftOf = (wrapper: ReturnType<typeof mount>) => {
+    const match = (wrapper.find('.tx-slider__surface').attributes('style') ?? '').match(/left:\s*(-?[\d.]+)px/)
+    return match ? Number(match[1]) : Number.NaN
+  }
+  const pointerMove = (clientX: number) => window.dispatchEvent(new MouseEvent('pointermove', { clientX }))
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function pullPastTheEnd(overdrag: boolean) {
+    const wrapper = mount(TxSlider, { props: { modelValue: 100, overdrag, showTooltip: false }, attachTo: document.body })
+    setMainMetrics(wrapper)
+    await wrapper.find('input').trigger('pointerdown')
+    await nextTick()
+    const rest = leftOf(wrapper)
+    vi.advanceTimersByTime(16)
+    pointerMove(260)
+    await nextTick()
+    const near = leftOf(wrapper) - rest
+    vi.advanceTimersByTime(16)
+    pointerMove(400)
+    await nextTick()
+    const far = leftOf(wrapper) - rest
+    return { wrapper, rest, near, far }
+  }
+
+  it('gives past the end with growing resistance, keeps the value clamped, and springs home on release', async () => {
+    const { wrapper, rest, near, far } = await pullPastTheEnd(true)
+    // 69px past the end shows as about 12px, 209px as under 16px: it gives less the further it goes,
+    // and never as much as one thumb (18px in jsdom).
+    expect(near).toBeGreaterThan(8)
+    expect(far).toBeGreaterThan(near)
+    expect(far - near).toBeLessThan(near)
+    expect(far).toBeLessThan(18)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    window.dispatchEvent(new Event('pointerup'))
+    await nextTick()
+    vi.advanceTimersByTime(16)
+    await nextTick()
+    // Not snapped: released while still pulling outward, it carries on a moment before it turns.
+    expect(leftOf(wrapper) - rest).toBeGreaterThan(0)
+    vi.advanceTimersByTime(1000)
+    await nextTick()
+    expect(leftOf(wrapper)).toBe(rest)
+    wrapper.unmount()
+  })
+
+  it('stops dead at the end when overdrag is off', async () => {
+    const { wrapper, near, far } = await pullPastTheEnd(false)
+    expect(near).toBe(0)
+    expect(far).toBe(0)
+    window.dispatchEvent(new Event('pointerup'))
+    wrapper.unmount()
+  })
+})

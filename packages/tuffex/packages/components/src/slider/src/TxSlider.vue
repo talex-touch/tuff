@@ -2,6 +2,7 @@
 import type { SliderEmits, SliderProps } from './types'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
+import { stepSpring } from '../../../../utils/animation/spring'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { useThumbJelly } from './use-thumb-jelly'
 import { clamp01, useTooltipMotion } from './use-tooltip-motion'
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<SliderProps>(), {
   step: 1,
   disabled: false,
   active: true,
+  overdrag: false,
   showValue: false,
   thumbSurface: true,
   thumbVariant: 'blur',
@@ -106,12 +108,81 @@ const percent = computed(() => {
   return ((liveValue.value - props.min) / range) * 100
 })
 
+// --- Overdrag ---
+// Pulled past an end, the thumb follows with growing resistance instead of
+// stopping dead; the value stays clamped, only the drawing gives. Let go, it
+// springs home on the spring every shape in the library uses, carrying the
+// speed it was released with, and a new grab picks it up wherever it is.
+const OVERDRAG_SPRING = { stiffness: 480, damping: 34 }
+/** The share of the pull that shows at first; it gives less the further it goes. */
+const OVERDRAG_GIVE = 0.55
+
+const overdragEnabled = computed(() => props.overdrag && trackingActive.value && !props.disabled && !reducedMotion.value)
+const overshootPx = ref(0)
+let overshootVelocity = 0
+let overshootTs = 0
+let returnFrame = 0
+
+/** Past an end by `distance` px, drawn at most `limit` px past it, and never quite there. */
+function rubberBand(distance: number, limit: number): number {
+  if (!(limit > 0) || distance === 0)
+    return 0
+  return Math.sign(distance) * limit * (1 - 1 / ((Math.abs(distance) * OVERDRAG_GIVE) / limit + 1))
+}
+
+function trackOverdrag(clientX: number, now: number): void {
+  const edge = thumbSizePx.value / 2
+  const local = clientX - mainLeftPx.value
+  const end = mainWidth.value - edge
+  const beyond = local < edge ? local - edge : local > end ? local - end : 0
+  const next = rubberBand(beyond, thumbSizePx.value)
+  const dt = (now - overshootTs) / 1000
+  overshootVelocity = overshootTs && dt > 0 && dt < 0.1 ? (next - overshootPx.value) / dt : 0
+  overshootTs = now
+  overshootPx.value = next
+}
+
+function cancelReturn(): void {
+  if (returnFrame)
+    cancelAnimationFrame(returnFrame)
+  returnFrame = 0
+}
+
+function springHome(): void {
+  cancelReturn()
+  if (overshootPx.value === 0)
+    return
+  let last = 0
+  const step = (ts: number) => {
+    const dt = last ? Math.min((ts - last) / 1000, 0.064) : 1 / 60
+    last = ts
+    const [position, velocity] = stepSpring(overshootPx.value, overshootVelocity, 0, OVERDRAG_SPRING, dt)
+    if (Math.abs(position) < 0.1 && Math.abs(velocity) < 5) {
+      overshootPx.value = 0
+      overshootVelocity = 0
+      returnFrame = 0
+      return
+    }
+    overshootPx.value = position
+    overshootVelocity = velocity
+    returnFrame = requestAnimationFrame(step)
+  }
+  returnFrame = requestAnimationFrame(step)
+}
+
+function dropOverdrag(): void {
+  cancelReturn()
+  overshootPx.value = 0
+  overshootVelocity = 0
+  overshootTs = 0
+}
+
 const thumbCenterPx = computed(() => {
   if (mainWidth.value <= 0)
     return 0
   const edge = thumbSizePx.value / 2
   const inner = Math.max(0, mainWidth.value - thumbSizePx.value)
-  return edge + inner * (percent.value / 100)
+  return edge + inner * (percent.value / 100) + overshootPx.value
 })
 
 const fillWidthStyle = computed(() => {
@@ -345,6 +416,9 @@ function onGlobalPointerMove(e: PointerEvent): void {
   const now = performance.now()
   const x = e.clientX
 
+  if (overdragEnabled.value)
+    trackOverdrag(x, now)
+
   if (lastPointerTs.value != null && lastPointerX.value != null) {
     const dtMs = now - lastPointerTs.value
     const dx = x - lastPointerX.value
@@ -410,6 +484,9 @@ function startDragging(e: PointerEvent): void {
   refreshMetrics()
   darkTheme.value = readDarkTheme()
   jelly.press()
+  // A grab mid-return holds the thumb where it is; the next move takes over.
+  cancelReturn()
+  overshootTs = 0
 
   if (tooltipMotionEnabled.value) {
     motion.reset()
@@ -428,6 +505,10 @@ function stopDragging(): void {
     return
   dragging.value = false
   jelly.release()
+  if (overdragEnabled.value)
+    springHome()
+  else
+    dropOverdrag()
 
   window.removeEventListener('pointermove', onGlobalPointerMove)
   lastPointerTs.value = null
@@ -549,6 +630,7 @@ function stopResources(): void {
   motion.stop()
   motion.reset()
   jelly.stop()
+  dropOverdrag()
   if (typeof window !== 'undefined') {
     window.removeEventListener('pointerup', onGlobalPointerUp)
     window.removeEventListener('pointermove', onGlobalPointerMove)

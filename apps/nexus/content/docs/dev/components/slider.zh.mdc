@@ -100,6 +100,7 @@ code: |
 | `step` | `number` | `1` | 步长。 |
 | `disabled` | `boolean` | `false` | 禁用滑块并隐藏 tooltip。 |
 | `active` | `boolean` | `true` | `false` 时暂停观测、全局追踪与动效，值与 `disabled` 不变。 |
+| `overdrag` | `boolean` | `false` | 拖过两端时滑块带阻尼越界，松手弹回；值仍夹在范围内。 |
 | `ariaLabel` | `string` | - | 可访问名称，写在原生 range 输入上而非外层包装。 |
 | `ariaLabelledby` | `string` | - | 为 range 输入命名的可见元素 id。 |
 | `showValue` | `boolean` | `false` | 在右侧显示当前值。 |
@@ -140,6 +141,7 @@ code: |
 - 默认的 `thumbSurface` 下，原生 thumb 退化为与胶囊等宽的命中区；键盘焦点环画在胶囊上，拖拽引起的聚焦除外。
 - `active=false`、KeepAlive 失活与卸载都会停止帧任务、移除全局 pointer 监听并断开尺寸观察；恢复后按当前布局重新观测。
 - 减弱动效偏好即时生效：按住期间切换也会停止形变，原生输入与静态读数保留。
+- `overdrag` 越界越远阻力越大，最多露出一个滑块宽度；松手后带着松手时的速度弹回，再次按住会从当前位置接手。减弱动效时不越界。
 
 ## 技术实现
 
