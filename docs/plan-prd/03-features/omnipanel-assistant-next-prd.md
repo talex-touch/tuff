@@ -1,7 +1,8 @@
 # PRD: OmniPanel 与悬浮助手下一版本
 
-> 更新时间：2026-07-13
+> 更新时间：2026-10-08
 > 状态：MVP implementation slice landed / packaged evidence pending
+> 2026-10-08：悬浮助手已收缩为 Fn/Ctrl 唤起的听写胶囊。浮球、Voice Panel 的文本提交与截图/翻译入口及其主进程处理函数均已移除，下文「悬浮助手」与 FR-2 为历史记录。
 > 目标窗口：2.5.x Beta 后续，不能抢 2.5.0 Stable 的 CoreBox 文本 + OCR 收口
 > 关联 Roadmap：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 > 关联 AI PRD：`./ai-2.5.0-plan-prd.md`
@@ -57,6 +58,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - packaged visible evidence 仍在 R2 队列中，不能把 MVP 说成 Stable。
 
 ### 悬浮助手
+
+> 2026-10-08：本节描述的浮球、文本提交和截图/翻译入口已全部移除，`FloatingBall.vue` 已删除；语音输入只保留 Fn/Ctrl 唤起的听写胶囊（`VoiceDock` + `VoicePanel`）。以下为历史记录。
 
 当前实现位于：
 
@@ -164,6 +167,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 5. IF provider unavailable、quota exhausted、permission denied 或 model unsupported THEN 系统 SHALL fail-closed 并展示可理解原因。
 
 ### FR-2：悬浮助手轻量入口
+
+> 2026-10-08：已撤销。浮球及其点击、拖动与文本面板入口已移除，本条不再验收；听写胶囊的契约见 `docs/engineering/specs/main-process/voice-session-contracts.md`。
 
 用户故事：作为经常跨窗口工作的用户，我希望有一个低打扰的悬浮入口，可以在需要时呼出语音/文本面板或截图翻译，而不是常驻占屏。
 
