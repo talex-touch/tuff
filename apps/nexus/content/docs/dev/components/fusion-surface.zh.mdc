@@ -326,7 +326,7 @@ code: |
 ## 技术实现
 
 - 每个表面一个 `requestAnimationFrame` 循环：逐帧积分共享弹簧（`liquid/src/spring.ts`），重算一条锐利的 SVG 路径，并直接写入凸起内容层的样式；静止后休眠。
-- 相连凸起参照 [uiarc.dev](https://uiarc.dev/) 的 Dock，只借鉴观察到的手法，未使用其代码；颈部是本库自己的轮廓模型。
+- 相连凸起参照 [uiarc.dev](https://uiarc.dev/) 的 Dock，只借鉴观察到的手法，未使用其代码。颈部是本库自己的液桥模型：拉开后的凸起是一个带底边和圆角的水滴，两侧各用一段只向内弯的凹弧连到主体上。
 - 源码：`packages/tuffex/packages/components/src/fusion-surface/`。
 
 <TuffDocSourceLink />
