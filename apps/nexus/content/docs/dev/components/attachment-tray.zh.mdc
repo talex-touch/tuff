@@ -60,7 +60,7 @@ code: |
 | `nextText` | `string` | `'Next'` | 下一张按钮的可见文字。 |
 | `removeLabel` | `string` | `'Remove attachment'` | 移除按钮的可访问名称。 |
 | `cancelLabel` | `string` | `'Cancel upload'` | 取消上传按钮的可访问名称。 |
-| `sizeFormatter` | `(bytes: number) => string` | — | 格式化文件大小；默认按 B/KB/MB 保留一位小数。 |
+| `sizeFormatter` | `(bytes: number) => string` | — | 格式化文件大小；默认不足 1 KB 取整显示 B，其余 KB/MB/GB 保留一位小数。 |
 
 #### 事件
 

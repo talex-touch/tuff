@@ -66,6 +66,6 @@ code: |
 - 流式中仍在增长的尾部围栏推迟到闭合后再渲染最终形态；渲染器收到的 `closed` 只对它为 `false`。
 - 未注册的语言走内置渲染：`mermaid` 用 `TxMermaidBlock`，其余用 `TxCodeBlock`。
 - 光标同 `TxStreamText`：尾部是段落、标题或引用时紧跟末字符，否则单独位于下方一行；减弱动效时不播放进场，光标静止。
-- DOMPurify 动态加载，加载失败时不净化、组件照常工作：净化是尽力而为，不能替代服务端的信任边界。
+- DOMPurify 动态加载；`sanitize` 开启时，加载完成前或加载失败时不渲染任何内容。净化不能替代服务端的信任边界。
 - 图片放行记录是模块级的，所有实例共享；切换会话时调用导出的 `resetRemoteImagePolicy()` 清除。
 - 每个实例持有自己的 `Marked`（`gfm`、`breaks`）；GitHub Markdown 样式表限定在 `:where(.tx-md)` 下，不会改写宿主的 `.markdown-body`。

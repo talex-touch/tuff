@@ -126,6 +126,36 @@ describe('txAiMessage parts rendering', () => {
 })
 
 describe('txAiConversation parts compatibility', () => {
+  it('re-emits open-source from a message in the list', async () => {
+    const source = { id: 'src1', url: 'https://example.com', title: 'Ref' }
+    const wrapper = mount(TxAiConversation, {
+      props: {
+        markdown: false,
+        messages: [partsMessage([
+          { type: 'text', text: 'answer' },
+          { type: 'sources', sources: [source] },
+        ], 'complete')],
+      },
+    })
+
+    const sourcesPart = wrapper.find('.tx-ai-message__part--sources')
+    await sourcesPart.find('.tx-sources__header').trigger('click')
+    await sourcesPart.find('.tx-sources__link').trigger('click')
+    expect(wrapper.emitted('open-source')).toEqual([[expect.objectContaining({ id: 'src1' })]])
+  })
+
+  it('forwards typingLabel to the typing indicator', () => {
+    const wrapper = mount(TxAiConversation, {
+      props: {
+        markdown: false,
+        typingLabel: '正在输入',
+        messages: [{ id: 'm1', role: 'assistant', content: '', status: 'pending' }],
+      },
+    })
+
+    expect(wrapper.find('.tx-ai-message__typing').attributes('aria-label')).toBe('正在输入')
+  })
+
   it('keeps parts-only messages with an empty content summary', () => {
     const wrapper = mount(TxAiConversation, {
       props: {

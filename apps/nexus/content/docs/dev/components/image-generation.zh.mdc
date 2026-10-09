@@ -134,7 +134,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 ### 暴露方法
 
-| 方法 | 说明 |
+| 成员 | 说明 |
 |------|------|
 | `element` | 根包装 `<div>`（`HTMLDivElement`），未挂载时为 `null`。 |
 | `triggerReveal({ hold?: 'auto' \| 'manual' })` | 执行一次揭示，`manual` 时保持到 `triggerHide()`；进行中或 `images` 为空时不生效。 |

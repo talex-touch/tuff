@@ -60,7 +60,7 @@ code: |
 | `nextText` | `string` | `'Next'` | Visible text of the next button. |
 | `removeLabel` | `string` | `'Remove attachment'` | Accessible name of remove buttons. |
 | `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of cancel-upload buttons. |
-| `sizeFormatter` | `(bytes: number) => string` | — | Formats file sizes; defaults to B/KB/MB with one decimal. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Formats file sizes; defaults to whole bytes under 1 KB, then KB/MB/GB with one decimal. |
 
 #### Events
 

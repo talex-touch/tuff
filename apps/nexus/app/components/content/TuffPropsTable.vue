@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
-import { computed, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 
 interface PropRow {
   name: string
@@ -57,6 +57,41 @@ function extractValues(type?: unknown) {
   return doubleMatches
 }
 
+interface DescriptionSegment {
+  code: boolean
+  text: string
+}
+
+/**
+ * Splits a description on `inline code` spans so they render as <code>, the way a
+ * markdown table cell would; everything stays text (no v-html).
+ */
+function toDescriptionSegments(description?: string): DescriptionSegment[] {
+  if (!description)
+    return []
+  const segments: DescriptionSegment[] = []
+  let last = 0
+  for (const match of description.matchAll(/`([^`]+)`/g)) {
+    const start = match.index ?? 0
+    if (start > last)
+      segments.push({ code: false, text: description.slice(last, start) })
+    segments.push({ code: true, text: match[1] ?? '' })
+    last = start + match[0].length
+  }
+  if (last < description.length)
+    segments.push({ code: false, text: description.slice(last) })
+  return segments
+}
+
+/**
+ * Rendered by a function rather than template markup: the template compiler would
+ * turn the line breaks around each segment into spaces, which show up between
+ * Chinese text and the code spans.
+ */
+function DescriptionText(cell: { segments: DescriptionSegment[] }) {
+  return cell.segments.map(segment => (segment.code ? h('code', segment.text) : segment.text))
+}
+
 const normalizedRows = computed(() => {
   return props.rows.map((row) => {
     const values = row.values?.length ? row.values.map(value => toCopyText(value)) : extractValues(row.type)
@@ -65,6 +100,7 @@ const normalizedRows = computed(() => {
       displayName: toCopyText(row.name),
       displayType: toCopyText(row.type),
       displayDefault: toCopyText(row.default),
+      descriptionSegments: toDescriptionSegments(row.description),
       values,
     }
   })
@@ -186,7 +222,10 @@ async function copyText(text?: unknown, key?: string) {
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
           <td class="tuff-props-table__desc">
-            {{ row.description || '-' }}
+            <DescriptionText v-if="row.descriptionSegments.length" :segments="row.descriptionSegments" />
+            <template v-else>
+              -
+            </template>
           </td>
         </tr>
       </tbody>

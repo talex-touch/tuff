@@ -195,7 +195,7 @@ code: |
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `click` | `(value: string \| number)` | 启用且未选中的项经 group 选中自身后触发。 |
+| `click` | `(value: string \| number)` | 在 group 内选中未选中项时触发；独立使用时每次点击启用项都触发。 |
 | `update:modelValue` | `(value: boolean)` | 独立使用时，点击未选中的项后以 `true` 触发。 |
 
 #### 插槽

@@ -37,7 +37,7 @@ code: |
 - 在宿主维护 provider 的流式状态，再映射到 `status`。
 - `id` 用对话存储中的稳定 id，不用数组下标。
 - 助手输出保持 `markdown` 开启；不可信的 Markdown 在数据边界清洗。
-- 工具卡片、附件放进 `default` 插槽，不要往 `content` 里塞 HTML。
+- 推理、工具调用、附件与来源用 `parts` 描述，不要往 `content` 里塞 HTML。
 
 ## API 参考
 
@@ -52,6 +52,13 @@ code: |
 | `compact` | `boolean` | `false` | 收紧消息间距。 |
 | `emptyText` | `string` | `'No messages yet'` | 没有可渲染消息时的空状态文案。 |
 | `showAvatar` | `boolean` | `false` | 为每条消息显示头像列。 |
+| `typingLabel` | `string` | - | 转发给每条消息：输入中指示器的可访问名称。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open-source` | `(source: AiSourceItem)` | 转发自被点击来源所在的消息。 |
 
 #### 插槽
 
@@ -70,13 +77,13 @@ code: |
 | `markdown` | `boolean` | `true` | 用 `TxMarkdownView` 渲染正文；`false` 时按纯文本保留换行。 |
 | `compact` | `boolean` | `false` | 紧凑行距与更小的头像。 |
 | `showAvatar` | `boolean` | `false` | 显示头像。 |
-| `typingLabel` | `string` | `'AI is typing'` | 输入中指示器的可访问名称；`TxAiConversation` 不转发。 |
+| `typingLabel` | `string` | `'AI is typing'` | 输入中指示器的可访问名称。 |
 
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `open-source` | `(source: AiSourceItem)` | 点击 `sources` 片段中的来源时触发，默认跳转已阻止；`TxAiConversation` 不转发。 |
+| `open-source` | `(source: AiSourceItem)` | 点击 `sources` 片段中的来源时触发，默认跳转已阻止。 |
 
 #### 插槽
 
