@@ -1,6 +1,6 @@
 # Core App Startup and Runtime Env Reference
 
-> Updated: 2026-10-07
+> Updated: 2026-10-08
 > Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
 
 ## Startup and fallback status
@@ -8,8 +8,8 @@
 ### 1) Assistant startup state (current)
 
 - `assistantModule` is always registered in the Core App startup module list; there is no environment-variable gate or Assistant-specific `shouldSkip` branch.
-- Product availability is controlled by persisted App Settings. The host repairs missing `assistant.enabled` to `false`, so the Assistant remains opt-in without changing module startup semantics.
-- Result: operators must use Settings rather than the removed `TUFF_ENABLE_ASSISTANT_EXPERIMENT` flag; startup no longer reports the old optional-module or environment-gate messages.
+- The module creates no window at startup: the voice HUD is created by the first Fn/Ctrl voice command and hidden when each session ends. Since 2026-10-08 the floating ball and its `assistant.enabled` switch are gone, and loading the settings drops any leftover `assistant` and `floatingBall` fields.
+- The Assistant has no separate switch any more; voice input is gated by `voiceInput.enabled` alone. The removed `TUFF_ENABLE_ASSISTANT_EXPERIMENT` flag is not a supported runtime variable, and startup no longer reports the old optional-module or environment-gate messages.
 
 ### 2) dev.source probe + local fallback (fixed)
 

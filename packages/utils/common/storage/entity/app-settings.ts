@@ -233,9 +233,6 @@ const _appSettingOriginData = {
     plugins: 0,
     settings: 0,
   },
-  assistant: {
-    enabled: false,
-  },
   betaFeatures: {
     screenshot: false,
     voiceDictation: false,

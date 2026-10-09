@@ -77,8 +77,8 @@ identity, and plugin permissions remain in main.
 ## Voice input enablement
 
 - `AppSetting.voiceInput.enabled` alone gates platform dictation gestures, HUD entry, and the
-  Assistant voice runtime projection. Assistant enablement and legacy wake-word preferences must
-  not authorize or disable shortcut dictation.
+  Assistant voice runtime projection. Legacy wake-word preferences must not authorize or disable
+  shortcut dictation.
 - The Home composer's microphone (`views/base/home/composer/useComposerDictation.ts`) is outside
   that gate (D10-a): pressing the in-composer button is itself the consent, it requests
   `delivery: 'none'` so nothing is typed into another application, and its words land only in the
@@ -101,10 +101,12 @@ identity, and plugin permissions remain in main.
 - Missing `voiceInput` is migrated during raw main-storage normalization, before caching/defaults
   can hide absence: preserve legacy `assistant.enabled && voiceWake.enabled` and language once.
   Any explicit new value wins; malformed new values fail closed rather than restoring legacy enablement.
+  The same pass then drops the legacy `assistant` and `floatingBall` keys: the migration was the last
+  reader of `assistant`, and nothing reads `floatingBall` since the ball was removed.
 - There is no resting entry (the floating ball was removed on 2026-10-08): the dock window is
-  created by the first voice command, hidden between sessions, and never shown by a setting; a
-  persisted `floatingBall` setting is ignored. Between sessions VoiceDock renders only an empty
-  idle child, so `out-in` still holds a pill reopened mid-leave behind the one leaving.
+  created by the first voice command, hidden between sessions, and never shown by a setting.
+  Between sessions VoiceDock renders only an empty idle child, so `out-in` still holds a pill
+  reopened mid-leave behind the one leaving.
   Turning voice input off stops the active HUD; renderer starts must wait for enabled runtime config.
 - Wake-word controls are unavailable until their actual runtime is implemented and verified.
 

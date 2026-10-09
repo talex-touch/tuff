@@ -27,12 +27,8 @@ type VoiceSessionActiveReader = NonNullable<
   ConstructorParameters<typeof CommandVoiceGestureController>[1]
 >
 
-function setting(
-  voiceInputEnabled: boolean,
-  legacy: { assistant?: boolean; voiceWake?: boolean } = {}
-): AppSetting {
+function setting(voiceInputEnabled: boolean, legacy: { voiceWake?: boolean } = {}): AppSetting {
   return {
-    assistant: { enabled: legacy.assistant ?? false },
     voiceWake: { enabled: legacy.voiceWake ?? false },
     voiceInput: { enabled: voiceInputEnabled, language: 'zh-CN' }
   } as AppSetting
@@ -85,7 +81,7 @@ describe('command voice gesture', () => {
     controller.unregister()
   })
   it('does not register a gesture when voice input is explicitly off despite enabled legacy controls', () => {
-    mocks.getMainConfig.mockReturnValue(setting(false, { assistant: true, voiceWake: true }))
+    mocks.getMainConfig.mockReturnValue(setting(false, { voiceWake: true }))
     const controller = createController(vi.fn())
 
     controller.register()
@@ -169,7 +165,7 @@ describe('command voice gesture', () => {
 
     globalKeyListener?.onKeyDown?.({})
     vi.advanceTimersByTime(320)
-    settingsListener?.(setting(false, { assistant: true, voiceWake: true }))
+    settingsListener?.(setting(false, { voiceWake: true }))
 
     expect(sink.mock.calls).toEqual([
       [{ action: 'start', mode: 'hold', source: 'command' }],

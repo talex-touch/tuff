@@ -67,7 +67,6 @@ const VOICE_DOCK_HEIGHT = 148
  * ever going to appear.
  */
 const VOICE_DOCK_EDGE_GAP = 9
-const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
@@ -230,25 +229,6 @@ export class AssistantModule extends BaseModule {
 
   private patchAssistantSetting(setting: AppSetting): boolean {
     let changed = false
-
-    if (!isRecord(setting.assistant)) {
-      setting.assistant = {
-        enabled: ASSISTANT_DEFAULT_ENABLED
-      }
-      changed = true
-    } else {
-      if (typeof setting.assistant.enabled !== 'boolean') {
-        setting.assistant.enabled = ASSISTANT_DEFAULT_ENABLED
-        changed = true
-      }
-      const assistantSettings = setting.assistant as Record<string, unknown>
-      for (const key of ['name', 'identifier']) {
-        if (Object.prototype.hasOwnProperty.call(assistantSettings, key)) {
-          delete assistantSettings[key]
-          changed = true
-        }
-      }
-    }
 
     if (!isRecord(setting.voiceWake)) {
       setting.voiceWake = {

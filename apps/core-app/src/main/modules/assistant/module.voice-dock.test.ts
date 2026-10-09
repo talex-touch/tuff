@@ -40,11 +40,6 @@ const mocks = vi.hoisted(() => ({
   loadDockRenderer: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   createEnabledSetting: (overrides: Partial<AppSetting> = {}): AppSetting =>
     ({
-      assistant: {
-        enabled: true,
-        name: '阿洛 aler',
-        identifier: 'aler'
-      },
       voiceWake: {
         enabled: false,
         wakeWords: ['阿洛', 'aler'],
@@ -373,10 +368,9 @@ describe('AssistantModule voice dock', () => {
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
 
-  it('opens a command HUD without a floating entry and hides it when the session closes', async () => {
+  it('opens a command HUD and hides it when the session closes', async () => {
     mocks.getMainConfig.mockReturnValue(
       mocks.createEnabledSetting({
-        assistant: { enabled: false },
         voiceWake: {
           enabled: false,
           wakeWords: ['Alo'],
@@ -418,7 +412,7 @@ describe('AssistantModule voice dock', () => {
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
   it('opens no resting window, even for a profile saved with the floating ball turned on', async () => {
-    // A profile written before the ball was removed still carries its setting; nothing reads it.
+    // Storage drops this key when it loads a profile; one that reaches the module is still unread.
     const setting = {
       ...mocks.createEnabledSetting(),
       floatingBall: {
@@ -440,7 +434,6 @@ describe('AssistantModule voice dock', () => {
   })
   it('stops an active temporary HUD when voice input is disabled', async () => {
     const setting = mocks.createEnabledSetting({
-      assistant: { enabled: false },
       voiceInput: {
         enabled: true,
         language: 'fr-FR',
@@ -484,11 +477,7 @@ describe('AssistantModule voice dock', () => {
   })
 
   it('forwards only a pending STOP after the first VoiceDock window has loaded', async () => {
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({
-        assistant: { enabled: false }
-      })
-    )
+    mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
     // `vi.resetModules()` gives every Electron fixture a fresh Assistant singleton, so this
     // intentional dynamic import starts with no dock window before the delayed HUD load.
     const { AssistantModule } = await import('./module')
@@ -524,9 +513,7 @@ describe('AssistantModule voice dock', () => {
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
   it('does not carry a released Escape hold into a VoiceDock still being created', async () => {
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({ assistant: { enabled: false } })
-    )
+    mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
     const { AssistantModule } = await import('./module')
     const module = new AssistantModule()
     await module.onInit({
