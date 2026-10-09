@@ -195,7 +195,7 @@ code: |
 
 | Event | Params | Description |
 |------|------|------|
-| `click` | `(value: string \| number)` | Fires when an enabled, unchecked radio selects itself through the group. |
+| `click` | `(value: string \| number)` | In a group, fires when an unchecked radio selects itself; standalone, fires on every enabled click. |
 | `update:modelValue` | `(value: boolean)` | Standalone only: fires with `true` when an unchecked radio is clicked. |
 
 #### Slots

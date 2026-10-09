@@ -100,6 +100,7 @@ code: |
 | `step` | `number` | `1` | Step size. |
 | `disabled` | `boolean` | `false` | Disables the slider and hides the tooltip. |
 | `active` | `boolean` | `true` | When `false`, suspends observers, global tracking, and motion; the value and `disabled` are untouched. |
+| `overdrag` | `boolean` | `false` | Lets the thumb be pulled past either end with resistance and spring back on release; the value stays clamped. |
 | `ariaLabel` | `string` | - | Accessible name, applied to the native range input rather than the wrapper. |
 | `ariaLabelledby` | `string` | - | ID(s) of visible elements that name the range input. |
 | `showValue` | `boolean` | `false` | Shows the current value beside the slider. |
@@ -140,6 +141,7 @@ code: |
 - With the default `thumbSurface`, the native thumb becomes a hit area as wide as the capsule; the keyboard focus ring is drawn on the capsule, except after a drag-initiated focus.
 - `active=false`, KeepAlive deactivation, and unmount all stop frame work, detach global pointer listeners, and disconnect size observers; resuming re-observes the current layout.
 - Reduced-motion changes apply immediately, even mid-drag: deformation stops while the native input and static readouts remain.
+- `overdrag` resists harder the further the pull, showing at most one thumb's width; on release it springs back with the speed it was let go at, and a new grab takes over where it is. Off under reduced motion.
 
 ## Technologies
 

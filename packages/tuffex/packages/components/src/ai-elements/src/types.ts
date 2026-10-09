@@ -121,6 +121,8 @@ export interface AiMessageProps {
   markdown?: boolean
   compact?: boolean
   showAvatar?: boolean
+  /** Accessible name of the typing indicator. */
+  typingLabel?: string
 }
 
 export interface AiConversationProps {
@@ -129,4 +131,6 @@ export interface AiConversationProps {
   compact?: boolean
   emptyText?: string
   showAvatar?: boolean
+  /** Forwarded to each TxAiMessage: accessible name of the typing indicator. */
+  typingLabel?: string
 }

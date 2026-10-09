@@ -1,4 +1,5 @@
-export type TransitionPreset = 'fade' | 'slide-fade' | 'rebound' | 'smooth-size'
+/** `blur` fades the content through a short blur instead of moving it. */
+export type TransitionPreset = 'fade' | 'slide-fade' | 'rebound' | 'blur' | 'smooth-size'
 
 export interface TxTransitionProps {
   preset?: TransitionPreset

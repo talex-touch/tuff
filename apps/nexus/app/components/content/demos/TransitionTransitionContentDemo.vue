@@ -22,6 +22,7 @@ const toggle = () => {
                 <TuffSelectItem value="fade" label="fade" />
                 <TuffSelectItem value="slide-fade" label="slide-fade" />
                 <TuffSelectItem value="rebound" label="rebound" />
+                <TuffSelectItem value="blur" label="blur" />
                 <TuffSelectItem value="smooth-size" label="smooth-size" />
               </TuffSelect>
             </label>
@@ -92,6 +93,7 @@ const toggle = () => {
                 <TuffSelectItem value="fade" label="fade" />
                 <TuffSelectItem value="slide-fade" label="slide-fade" />
                 <TuffSelectItem value="rebound" label="rebound" />
+                <TuffSelectItem value="blur" label="blur" />
                 <TuffSelectItem value="smooth-size" label="smooth-size" />
               </TuffSelect>
             </label>

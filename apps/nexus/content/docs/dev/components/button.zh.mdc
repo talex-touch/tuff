@@ -194,15 +194,17 @@ code: |
 ::::
 
 ### 复制按钮
-成功后显示 `copiedLabel`，失败时派发 `error`。
+成功时画出对勾并形变为 `copiedLabel`，失败时画出叉并派发 `error`；`iconOnly` 只在反馈时展开文案。
 ::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxCopyButton
-      text="pnpm add @talex-touch/tuffex"
+      icon-only
+      :text="commands[manager]"
       copy-label="复制安装命令"
       copied-label="已复制"
+      failed-label="复制失败"
       @error="notifyCopyFailed"
     />
   </template>
@@ -215,7 +217,7 @@ code: |
 - 异步动作设置 `loading`，成功与失败路径都要撤下，避免按钮卡在禁用态。
 - 只在表单内使用 `nativeType="submit"`；默认的 `button` 不会意外提交表单。
 - 纯图标动作用 `TxIconButton` 并设置 `label`；`pressed` 只用于持久开关。
-- `TxCopyButton` 的 `copyLabel` 写明复制对象；复制值关键时处理 `error`，浏览器可能拒绝非用户手势的写入。
+- `TxCopyButton` 的 `copyLabel` 写明复制对象；复制值关键时处理 `error`，非英文界面同时设置 `failedLabel`。
 
 ## API 参考
 
@@ -342,7 +344,7 @@ rows:
 | `disabled` | `boolean` | `false` | 同时禁用主操作与菜单触发器。 |
 | `loading` | `boolean` | `false` | 主按钮显示加载指示，两侧均禁用。 |
 | `icon` | `string` | - | 非加载时显示在文案前的图标类名。 |
-| `menuIcon` | `string` | `i-ri-more-2-line` | 菜单触发器的默认图标类名。 |
+| `menuIcon` | `string` | - | 菜单触发器的图标类名；不传时绘制内置的竖向三点图标。 |
 | `menuDisabled` | `boolean` | `false` | 仅禁用菜单触发器。 |
 | `menuWidth` | `number` | `200` | 弹层宽度，透传给 `TxPopover`。 |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | 弹层位置。 |
@@ -399,9 +401,11 @@ rows:
 | `text` | `string` | `''` | 写入剪贴板的文本。 |
 | `copyLabel` | `string` | `'Copy'` | 空闲时的文案与 `aria-label`。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案与 `aria-label`。 |
+| `failedLabel` | `string` | - | 失败时的文案与 `aria-label`；不传时保持 `copyLabel`（`iconOnly` 不展开文案），读屏播报英文「Copy failed」。 |
 | `disabled` | `boolean` | `false` | 禁用并阻止复制。 |
-| `timeout` | `number` | `1400` | 成功状态恢复前的毫秒数。 |
+| `timeout` | `number` | `1400` | 成功或失败状态恢复前的毫秒数。 |
 | `size` | `'sm' \| 'md'` | `'sm'` | 按钮尺寸。 |
+| `iconOnly` | `boolean` | `false` | 平时只显示图标，反馈时展开文案。 |
 
 #### 事件
 
@@ -414,7 +418,7 @@ rows:
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `default` | `{ copied, copying }` | 自定义按钮内容。 |
+| `default` | `{ copied, copying, failed }` | 自定义按钮内容，替代文案形变。 |
 
 ### 类型
 :::TuffCodeBlock{lang="ts"}
@@ -436,18 +440,18 @@ code: |
 - `disabled` 与 `loading` 都禁用原生 `<button>` 并阻止 `click`；`TxSplitButton` 加载时两侧都禁用。
 - 非块级、非圆形按钮在 `loading` 切换时以 FLIP 过渡宽度；`block` 与 `circle` 并用时保持常规文案布局。
 - 纯图标的 `TxButton` 用 `aria-label` 等 attrs 命名；`TxIconButton` 把 `label` 写入 `aria-label`，布尔 `pressed` 写入 `aria-pressed`。
-- `TxCopyButton` 优先用 Clipboard API，不可用时回退到 `execCommand`；禁用或写入中忽略点击。
-- 减少动态效果时跳过 `vibrate` 的晃动。
+- `TxCopyButton` 优先用 Clipboard API，不可用时回退到 `execCommand`；写入中忽略点击，颜色只在状态切换时过渡。
+- 减少动态效果时跳过 `vibrate` 的晃动，`TxCopyButton` 各状态直接落到终态。
 
 ## 技术实现
 
 - `--tx-button-height` 同时决定按钮高度与非块级圆形按钮的宽度。
 - 源码：`packages/tuffex/packages/components/src/button/`。
 
+<TuffDocSourceLink label="View source" />
+
 ## 使用场景
 
 - 页面与卡片动作、表单提交（`nativeType="submit"`）、抽屉底部操作（`block`）。
 - 表格行与工具栏（`size="sm"`）、纯图标操作（`circle` 或 `TxIconButton`）。
 - 带一组变体的主操作（`TxSplitButton`）、复制到剪贴板（`TxCopyButton`）。
-
-<TuffDocSourceLink label="View source" />

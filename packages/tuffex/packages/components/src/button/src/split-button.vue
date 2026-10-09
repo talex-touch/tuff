@@ -13,7 +13,10 @@ const props = withDefaults(defineProps<SplitButtonProps>(), {
   disabled: false,
   loading: false,
   icon: undefined,
-  menuIcon: 'i-ri-more-2-line',
+  // No class by default: the trigger draws its own glyph, because an icon
+  // class only renders if the host's UnoCSS has that collection (Nexus has no
+  // `ri`, so `i-ri-more-2-line` was a blank trigger there).
+  menuIcon: undefined,
   menuDisabled: false,
   menuWidth: 200,
   menuPlacement: 'bottom-end',
@@ -47,13 +50,38 @@ const interactiveDisabled = computed(() => props.disabled || props.loading)
 const menuDisabled = computed(() => interactiveDisabled.value || props.menuDisabled)
 const ignoreNextMenuClick = ref(false)
 let menuClickGuardTimer: ReturnType<typeof setTimeout> | null = null
+let watchingRelease = false
+
+/**
+ * How long after the release a press may still be waiting for its click. A
+ * click that arrives consumes the guard at once; this only expires a press
+ * that never produces one (released off the trigger). It has to outlast the
+ * gap between pointerup and click, which on touch can be a separate task.
+ */
+const ABANDONED_PRESS_MS = 400
+
+function stopWatchingRelease() {
+  if (!watchingRelease)
+    return
+  watchingRelease = false
+  window.removeEventListener('pointerup', handlePressEnd, true)
+  window.removeEventListener('pointercancel', handlePressEnd, true)
+}
 
 function clearMenuClickGuard() {
   ignoreNextMenuClick.value = false
+  stopWatchingRelease()
   if (menuClickGuardTimer != null) {
     clearTimeout(menuClickGuardTimer)
     menuClickGuardTimer = null
   }
+}
+
+function handlePressEnd() {
+  stopWatchingRelease()
+  if (menuClickGuardTimer != null)
+    clearTimeout(menuClickGuardTimer)
+  menuClickGuardTimer = setTimeout(clearMenuClickGuard, ABANDONED_PRESS_MS)
 }
 
 function handlePrimaryClick(event: MouseEvent) {
@@ -74,12 +102,18 @@ function handleMenuPointerDown() {
   // Toggle on pointerdown for snappy feedback, then swallow the click the
   // browser fires from this same press.
   ignoreNextMenuClick.value = true
-  if (menuClickGuardTimer != null)
+  if (menuClickGuardTimer != null) {
     clearTimeout(menuClickGuardTimer)
-  // Defensive reset: if the press is aborted (released off-target) no paired
-  // click arrives to clear the guard, so drop it on the next tick instead of
-  // letting it wedge and swallow a later activation.
-  menuClickGuardTimer = setTimeout(clearMenuClickGuard, 0)
+    menuClickGuardTimer = null
+  }
+  // The guard lives until the press ends, not until the next tick: that click
+  // only comes after pointerup, so a 0ms reset let it toggle the menu shut
+  // again and a plain click never opened it — only a long press showed it.
+  if (!watchingRelease) {
+    watchingRelease = true
+    window.addEventListener('pointerup', handlePressEnd, true)
+    window.addEventListener('pointercancel', handlePressEnd, true)
+  }
   toggleMenu()
 }
 
@@ -144,7 +178,18 @@ onBeforeUnmount(clearMenuClickGuard)
             @keydown.space.prevent="toggleMenu"
           >
             <slot name="menu-icon">
-              <i class="tx-split-button__menu-icon" :class="menuIcon" />
+              <i v-if="menuIcon" class="tx-split-button__menu-icon" :class="menuIcon" />
+              <!-- Remix `more-2-line`'s glyph, drawn here so it needs no icon collection -->
+              <svg
+                v-else
+                class="tx-split-button__menu-icon tx-split-button__menu-glyph"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
             </slot>
           </button>
         </template>

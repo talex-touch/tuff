@@ -266,6 +266,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   ModeChipModeChipDemo: () => import('./demos/ModeChipModeChipDemo.vue'),
   ModeChipTonesDemo: () => import('./demos/ModeChipTonesDemo.vue'),
   MonoChartDemo: () => import('./demos/MonoChartDemo.vue'),
+  MorphStatesDemo: () => import('./demos/MorphStatesDemo.vue'),
   MotionButtonDemo: () => import('./demos/MotionButtonDemo.vue'),
   MotionControlDemo: () => import('./demos/MotionControlDemo.vue'),
   MotionDemo: () => import('./demos/MotionDemo.vue'),

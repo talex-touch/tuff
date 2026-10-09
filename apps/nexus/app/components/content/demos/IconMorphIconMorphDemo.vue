@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
 
-const icons = ['menu', 'close', 'check', 'plus', 'arrow-down', 'chevron-up', 'search']
+const icons = ['menu', 'close', 'play', 'pause', 'check', 'plus', 'arrow-down', 'chevron-up', 'search']
 const index = ref(0)
 const controlled = ref(false)
 const progress = ref(0)

@@ -1,0 +1,117 @@
+---
+title: Morph
+description: A shape container that morphs continuously between states.
+category: Effects
+status: beta
+since: 0.6.3
+tags: [morph, shape, spring, state]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### State Changes
+Give each state a `morph-key`; the size, radius and fill follow it, and a change mid-flight continues from the current size and speed.
+:::TuffDemoWrapper{demo="MorphStatesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const state = ref<'idle' | 'loading' | 'done'>('idle')
+  const fill = computed(() => ({
+    idle: 'var(--tx-color-primary)',
+    loading: 'var(--tx-fill-color)',
+    done: 'var(--tx-color-success)',
+  })[state.value])
+  </script>
+
+  <template>
+    <TxMorph :morph-key="state" :radius="state === 'idle' ? 12 : 19" :fill="fill">
+      <button v-if="state === 'idle'" @click="state = 'loading'">
+        Connect earbuds
+      </button>
+      <TxSpinner v-else-if="state === 'loading'" :size="18" />
+      <CheckIcon v-else />
+    </TxMorph>
+  </template>
+---
+:::
+
+### Concentric Corners
+Subtract `inset` from the radius inside the content to stay concentric with the shape, following the animated value.
+
+```vue
+<template>
+  <TxMorph :radius="20" :inset="12" fill="var(--tx-fill-color-light)">
+    <div class="cover" />
+  </TxMorph>
+</template>
+
+<style scoped>
+.cover {
+  border-radius: calc(var(--tx-morph-radius) - var(--tx-morph-inset));
+}
+</style>
+```
+
+### Height Only
+With `:width="false"` the shape is block-level and its width is left to layout.
+
+```vue
+<template>
+  <TxMorph :morph-key="tab" :width="false" :radius="16" fill="var(--tx-fill-color-light)">
+    <TabPanel :tab="tab" />
+  </TxMorph>
+</template>
+```
+
+### Best Practices
+
+- Use it for one element's chain of states (button → loading → result → card); use `TxTransition` for unrelated content.
+- Keep the `morph-key` when only the text grows; the shape still follows the new size.
+- Let `fill` express state only; put hover and press feedback on the content's own styles.
+- Use `TxTextMorph` for counters and live text instead of changing `morph-key` on every update.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `morphKey` | `string \| number` | - | Swaps the content on change: the old one blurs out, the new one enters a beat later. |
+| `radius` | `number \| string` | - | Corner radius, px for numbers; runs on the size's spring. |
+| `fill` | `string` | - | Fill color; eases only across a change of state. |
+| `inset` | `number \| string` | - | Space between the shape's edge and its content, px for numbers. |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig` | `'snappy'` | The spring shared by size and radius. |
+| `width` | `boolean` | `true` | Springs the width; off, the shape is block-level and layout sets the width. |
+| `height` | `boolean` | `true` | Springs the height. |
+| `tag` | `string` | `'div'` | Root element tag. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `settle` | `() => void` | Fires when the size lands and the shape is `auto` again. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | The current state's content, laid out at its own size. |
+
+## Overview
+
+- The size is measured after layout and before paint: the shape holds its old size, springs to the new one frame by frame, then clears the inline size.
+- A change mid-flight only moves the target; position and velocity carry over, so the shape neither jumps back nor restarts from rest.
+- Radius and fill ease only within a change of state, so a host's hover styles stay immediate.
+- The leaving content steps out of flow, keeps its size and turns `inert`; the entering content is measured at once.
+- On first sight, from a zero size, or under reduced motion, the shape lands at once without animating.
+
+## Technologies
+
+- `useMorphBox` from `@talex-touch/tuffex/utils` drives the size; the radius runs the same spring compiled to a `linear()` curve and is registered as `@property --tx-morph-radius`, so children read the animated value.
+- Source: `packages/tuffex/packages/components/src/morph/`.
+
+<TuffDocSourceLink />

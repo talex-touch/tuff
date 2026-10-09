@@ -119,7 +119,9 @@ const computedStrokeWidth = computed(() => {
   return props.strokeWidth
 })
 
-const handle: MorphHandle = {
+// `seek` is optional on the shared engine interface (not every binding has a
+// controlled mode); this component always provides it, so expose it as required.
+const handle: Required<MorphHandle> = {
   morphTo(target: unknown, springPreset?: SpringPreset | MorphOptions) {
     const resolved = resolveIconInput(target)
     if (resolved !== undefined)

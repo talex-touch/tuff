@@ -188,7 +188,7 @@ rows:
 ## Overview
 
 - The star row renders as `role="radiogroup"`, and each star is a `role="radio"` button.
-- Keyboard: the row is a single tab stop; ArrowRight/ArrowUp select the next star and ArrowLeft/ArrowDown the previous, without wrapping; Home/End select the first and last.
+- Keyboard: the row is a single tab stop; ArrowRight/ArrowUp select the next star and ArrowLeft/ArrowDown the previous, without wrapping; Home/End select the first and last. Keys select whole stars, and a key that lands on the current star leaves the rating unchanged.
 - `disabled` and `readonly` both block updates; the score still shows.
 
 ## Technologies

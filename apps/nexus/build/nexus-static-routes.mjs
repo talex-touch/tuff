@@ -60,8 +60,18 @@ export const PAGES_CATCH_ALL_SOURCE = '/*'
  * navigation to those pages. Prerendered so that read is a static file, not the runtime content
  * database. Listed with the docs API routes: they share the Worker exclusion and JSON headers.
  */
-export const contentApiPrerenderRoutes = ['license', 'privacy', 'protocol']
+export const POLICY_DOCUMENT_NAMES = ['license', 'privacy', 'protocol']
+
+export const contentApiPrerenderRoutes = POLICY_DOCUMENT_NAMES
   .flatMap(name => ['en', 'zh'].map(locale => `/api/content/policy/${name}/${locale}`))
+
+/**
+ * Their `_routes.json` exclusions, one per document. A `_routes.json` pattern `/x/*` also matches `/x`
+ * itself: a single `/api/content/policy/*` kept the query form older clients still send
+ * (`/api/content/policy?name=…`) away from the Worker that redirects it, and Pages answered it with
+ * its static 404 page.
+ */
+export const contentApiRouteExcludes = POLICY_DOCUMENT_NAMES.map(name => `/api/content/policy/${name}/*`)
 
 export const docsApiPrerenderRoutes = [
   ...contentApiPrerenderRoutes,
