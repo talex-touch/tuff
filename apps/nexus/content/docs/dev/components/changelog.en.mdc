@@ -13,25 +13,31 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.6.3**, tested with the Tuff beta; not published to npm on its own |
-| Latest npm release | **0.6.2** |
-| Component modules | **182**: Base 94 · Pro 54 · AI 34 |
+| Source version | **0.7.0**, the same as the npm release |
+| Latest npm release | **0.7.0** |
+| Component modules | **183**: Base 94 · Pro 55 · AI 34 |
 
 ## Release History
 
-### Unreleased
+### Version 0.7.0 (2026-10-09)
 
-The source version stays 0.6.3; nothing below is an independent npm release.
+Motion primitives and the Motion suite, a hover bridge for hover panels, and a terminal display component.
 
+- **New components (16)**: [card-spread](./card-spread.en.mdc), [carousel-3d](./carousel-3d.en.mdc), [flip-book](./flip-book.en.mdc), [morph](./morph.en.mdc), [motion](./motion.en.mdc), [motion-button](./motion-button.en.mdc), [motion-control](./motion-control.en.mdc), [motion-dock](./motion-dock.en.mdc), [motion-form](./motion-form.en.mdc), [motion-loader](./motion-loader.en.mdc), [motion-metric](./motion-metric.en.mdc), [motion-text](./motion-text.en.mdc), [motion-toggle](./motion-toggle.en.mdc), [motion-transition](./motion-transition.en.mdc), [physics-motion](./physics-motion.en.mdc), [terminal](./terminal.en.mdc)
+- **Updated components (18)**: [ai-elements](./ai-elements.en.mdc), [base-anchor](./base-anchor.en.mdc), [button](./button.en.mdc), [charts](./charts.en.mdc), [chat](./chat.en.mdc), [code-stream](./code-stream.en.mdc), [flat-dropdown](./flat-dropdown.en.mdc), [fusion-surface](./fusion-surface.en.mdc), [icon-chip](./icon-chip.en.mdc), [icon-morph](./icon-morph.en.mdc), [liquid](./liquid.en.mdc), [popover](./popover.en.mdc), [rating](./rating.en.mdc), [slider](./slider.en.mdc), [steps](./steps.en.mdc), [switch](./switch.en.mdc), [tooltip](./tooltip.en.mdc), [transition](./transition.en.mdc)
 - **Motion documentation suite**: navigation adds [Motion](./motion-suite.en.mdc), with individually resettable live specimens and bilingual category, sidebar, overview and demo registration
-- **New component modules (14)**: [motion-button](./motion-button.en.mdc), [card-spread](./card-spread.en.mdc), [carousel-3d](./carousel-3d.en.mdc), [flip-book](./flip-book.en.mdc), [motion-loader](./motion-loader.en.mdc), [motion-text](./motion-text.en.mdc), [physics-motion](./physics-motion.en.mdc), [motion-dock](./motion-dock.en.mdc), [motion](./motion.en.mdc), [motion-toggle](./motion-toggle.en.mdc), [motion-transition](./motion-transition.en.mdc), [motion-form](./motion-form.en.mdc), [motion-control](./motion-control.en.mdc), [motion-metric](./motion-metric.en.mdc)
 - **Existing charts module additions**: [dither-chart](./dither-chart.en.mdc) in Motion and [mono-chart](./mono-chart.en.mdc) in Data, both exported through `@talex-touch/tuffex/charts`
 - **Installation boundaries**: still the three Base, Pro and AI barrels. Motion is a documentation suite; the `/motion` component subpath imports `TxMotion` and is not a fourth barrel. Composite forms, controls and metrics belong to Pro
 - **Sources and licensing**: callers own labels, content, items, models and data. Continuous effects share visibility, reduced-motion and cleanup handling; springs and changing text reuse the existing engines. Adaptations keep Amicro's MIT attribution and source-file Apache-2.0 notices; the 46 preserved Lucide glyphs keep ISC and applicable Feather-MIT notices, with no React or Lucide runtime dependency
+- **Key features**:
+  - Closed-form springs (`solveSpring`, `createSpringTrack`) and `useMorphBox`; TxMorph keeps one shape across states; TxTransitionSmoothSize runs on springs and gains a blur transition
+  - Hover panels render a bridge to their trigger and guard diagonal travel with a safe triangle; the anchor family draws no arrow by default, and the expand bounce is capped by panel height
+  - TuffSwitch's thumb rides the glide material, TxSlider overdrags on a rubber band, TxLineSeries draws its stroke in, TxIconMorph adds play and pause, and TxCopyButton morphs between copy, copied and failed
+  - TxTerminal shares ANSI / Unicode terminal display between the web and Electron
 
-### Source version 0.6.3 (2026-10-01)
+### Version 0.6.3 (2026-10-01)
 
-Streaming content and menu confirmation feedback; tested with the client beta, not published to npm on its own.
+Streaming content and menu confirmation feedback; first tested with the client beta, then published to npm on 2026-10-03.
 
 - **New components (3)**: [descriptions](./descriptions.en.mdc), [stream-element](./stream-element.en.mdc), [stream-text](./stream-text.en.mdc)
 - **Updated components (6)**: [code-stream](./code-stream.en.mdc), [context-menu](./context-menu.en.mdc), [data-table](./data-table.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [pagination](./pagination.en.mdc), [stream-markdown](./stream-markdown.en.mdc)
@@ -127,7 +133,7 @@ Initial standalone package baseline.
 
 ## Component Since Index
 
-Introduction versions and installation barrels for all 182 component modules. Documentation suites are listed in the [component hub](./index.en.mdc).
+Introduction versions and installation barrels for all 183 component modules. Documentation suites are listed in the [component hub](./index.en.mdc).
 
 | Component | Installation barrel | Since |
 |---|---|---|
@@ -151,8 +157,8 @@ Introduction versions and installation barrels for all 182 component modules. Do
 | [`button`](./button.en.mdc) | base | 0.3.4 |
 | [`card`](./card.en.mdc) | base | 0.3.4 |
 | [`card-item`](./card-item.en.mdc) | base | 0.3.4 |
-| [`card-spread`](./card-spread.en.mdc) | pro | 0.6.3 |
-| [`carousel-3d`](./carousel-3d.en.mdc) | pro | 0.6.3 |
+| [`card-spread`](./card-spread.en.mdc) | pro | 0.7.0 |
+| [`carousel-3d`](./carousel-3d.en.mdc) | pro | 0.7.0 |
 | [`cascader`](./cascader.en.mdc) | base | 0.3.4 |
 | [`cell-link`](./cell-link.en.mdc) | base | 0.3.9 |
 | [`chain-of-thought`](./chain-of-thought.en.mdc) | ai | 0.3.9 |
@@ -190,7 +196,7 @@ Introduction versions and installation barrels for all 182 component modules. Do
 | [`flat-radio`](./flat-radio.en.mdc) | base | 0.3.4 |
 | [`flat-select`](./flat-select.en.mdc) | base | 0.3.4 |
 | [`flex`](./flex.en.mdc) | base | 0.3.4 |
-| [`flip-book`](./flip-book.en.mdc) | pro | 0.6.3 |
+| [`flip-book`](./flip-book.en.mdc) | pro | 0.7.0 |
 | [`flip-overlay`](./flip-overlay.en.mdc) | pro | 0.3.4 |
 | [`floating`](./floating.en.mdc) | pro | 0.3.4 |
 | [`flowchart`](./flowchart.en.mdc) | ai | 0.6.0 |
@@ -227,16 +233,17 @@ Introduction versions and installation barrels for all 182 component modules. Do
 | [`metal-fx`](./metal-fx.en.mdc) | pro | 0.6.2 |
 | [`modal`](./modal.en.mdc) | base | 0.3.4 |
 | [`mode-chip`](./mode-chip.en.mdc) | ai | 0.6.0 |
-| [`motion`](./motion.en.mdc) | pro | 0.6.3 |
-| [`motion-button`](./motion-button.en.mdc) | pro | 0.6.3 |
-| [`motion-control`](./motion-control.en.mdc) | pro | 0.6.3 |
-| [`motion-dock`](./motion-dock.en.mdc) | pro | 0.6.3 |
-| [`motion-form`](./motion-form.en.mdc) | pro | 0.6.3 |
-| [`motion-loader`](./motion-loader.en.mdc) | pro | 0.6.3 |
-| [`motion-metric`](./motion-metric.en.mdc) | pro | 0.6.3 |
-| [`motion-text`](./motion-text.en.mdc) | pro | 0.6.3 |
-| [`motion-toggle`](./motion-toggle.en.mdc) | pro | 0.6.3 |
-| [`motion-transition`](./motion-transition.en.mdc) | pro | 0.6.3 |
+| [`morph`](./morph.en.mdc) | pro | 0.7.0 |
+| [`motion`](./motion.en.mdc) | pro | 0.7.0 |
+| [`motion-button`](./motion-button.en.mdc) | pro | 0.7.0 |
+| [`motion-control`](./motion-control.en.mdc) | pro | 0.7.0 |
+| [`motion-dock`](./motion-dock.en.mdc) | pro | 0.7.0 |
+| [`motion-form`](./motion-form.en.mdc) | pro | 0.7.0 |
+| [`motion-loader`](./motion-loader.en.mdc) | pro | 0.7.0 |
+| [`motion-metric`](./motion-metric.en.mdc) | pro | 0.7.0 |
+| [`motion-text`](./motion-text.en.mdc) | pro | 0.7.0 |
+| [`motion-toggle`](./motion-toggle.en.mdc) | pro | 0.7.0 |
+| [`motion-transition`](./motion-transition.en.mdc) | pro | 0.7.0 |
 | [`nav-bar`](./nav-bar.en.mdc) | base | 0.3.4 |
 | [`no-data`](./no-data.en.mdc) | base | 0.3.4 |
 | [`no-selection`](./no-selection.en.mdc) | base | 0.3.4 |
@@ -245,7 +252,7 @@ Introduction versions and installation barrels for all 182 component modules. Do
 | [`outline-border`](./outline-border.en.mdc) | pro | 0.3.4 |
 | [`pagination`](./pagination.en.mdc) | base | 0.3.4 |
 | [`permission-state`](./permission-state.en.mdc) | base | 0.3.4 |
-| [`physics-motion`](./physics-motion.en.mdc) | pro | 0.6.3 |
+| [`physics-motion`](./physics-motion.en.mdc) | pro | 0.7.0 |
 | [`picker`](./picker.en.mdc) | base | 0.3.4 |
 | [`popover`](./popover.en.mdc) | base | 0.3.4 |
 | [`prism-glow`](./prism-glow.en.mdc) | pro | 0.6.0 |
@@ -292,7 +299,7 @@ Introduction versions and installation barrels for all 182 component modules. Do
 | [`tag`](./tag.en.mdc) | base | 0.3.4 |
 | [`tag-input`](./tag-input.en.mdc) | base | 0.3.4 |
 | [`task-rows`](./task-rows.en.mdc) | ai | 0.3.9 |
-| [`terminal`](./terminal.en.mdc) | pro | 0.6.3 |
+| [`terminal`](./terminal.en.mdc) | pro | 0.7.0 |
 | [`text-morph`](./text-morph.en.mdc) | pro | 0.6.0 |
 | [`text-transformer`](./text-transformer.en.mdc) | pro | 0.3.4 |
 | [`textarea`](./textarea.en.mdc) | base | 0.3.7 |
@@ -320,8 +327,8 @@ These chart components belong to the existing `charts` aggregate, import through
 
 | Chart component | Documentation suite | Since |
 | --- | --- | --- |
-| [`dither-chart`](./dither-chart.en.mdc) | Motion | 0.6.3 |
-| [`mono-chart`](./mono-chart.en.mdc) | Data | 0.6.3 |
+| [`dither-chart`](./dither-chart.en.mdc) | Motion | 0.7.0 |
+| [`mono-chart`](./mono-chart.en.mdc) | Data | 0.7.0 |
 
 ## Version Gate and Standards
 

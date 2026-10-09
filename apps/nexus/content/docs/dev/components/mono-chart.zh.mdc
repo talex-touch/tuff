@@ -3,7 +3,7 @@ title: MonoChart
 description: "30 种圆角单色图表与真实数据驱动的 GitHub 活动日历。"
 category: Charts
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [chart, mono, svg, activity]
 syncStatus: reviewed
 verified: false

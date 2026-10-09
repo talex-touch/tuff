@@ -3,7 +3,7 @@ title: "动态加载器"
 description: "137 个源定义加载场景，支持独立播放、本地化和可见性控制。"
 category: MotionLoaders
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, loading, animation]
 syncStatus: reviewed
 verified: false

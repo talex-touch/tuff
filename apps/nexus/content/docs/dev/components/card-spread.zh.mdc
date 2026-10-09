@@ -3,7 +3,7 @@ title: "卡片展开"
 description: "内容驱动的九种展开几何与聚焦模糊链接，支持选择、邮票参数和键盘操作。"
 category: MotionCards
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, cards, spread]
 ---
 

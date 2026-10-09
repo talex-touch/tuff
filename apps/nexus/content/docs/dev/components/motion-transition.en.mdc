@@ -3,7 +3,7 @@ title: MotionTransition
 description: Controlled content transitions with doors, waves, iris, flip and curtains
 category: MotionTransitions
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, transition, overlay]
 syncStatus: reviewed
 verified: false

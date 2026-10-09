@@ -3,7 +3,7 @@ title: MonoChart
 description: "Thirty rounded monochrome chart variants plus a data-driven GitHub activity calendar."
 category: Charts
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [chart, mono, svg, activity]
 syncStatus: reviewed
 verified: false

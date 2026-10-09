@@ -3,7 +3,7 @@ title: "物理动效"
 description: "保留 61 种独立的折叠、笔画、堆叠和机械运动结构。"
 category: MotionPhysics
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, physics, geometry]
 syncStatus: reviewed
 verified: false

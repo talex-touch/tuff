@@ -3,7 +3,7 @@ title: "三维轮播"
 description: "弧线、CoverFlow 和 Time Machine 独立轨迹，支持彩色、单色内容、受控当前项和时间轴。"
 category: MotionCarousels
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, carousel, perspective]
 ---
 

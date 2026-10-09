@@ -3,7 +3,7 @@ title: "MotionToggle 动态开关"
 description: "12 种受控开关与操作样式，保留真实模型、图标反馈和调用方计数。"
 category: MotionToggles
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, toggle, action, accessibility]
 verified: false
 ---

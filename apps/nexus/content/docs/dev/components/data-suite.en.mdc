@@ -28,4 +28,4 @@ The Data suite is where numbers become a picture, and it gathers everything Tuff
 
 [DitherChart](./dither-chart.en.mdc) belongs to [Motion](./motion-suite.en.mdc) because its catalog combines chart structure with animated dither presentation. It uses the same existing charts package boundary and `--tx-chart-*` tokens. No standalone chart package is added.
 
-These additions have `since: 0.6.3` in the current source, included in Tuff beta testing and not yet independently published to npm.
+These additions have `since: 0.7.0` and ship in npm 0.7.0.

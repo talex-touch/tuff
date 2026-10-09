@@ -3,7 +3,7 @@ title: MotionTransition
 description: 受控内容转场，支持门、液体波、光圈、翻转和分层帘
 category: MotionTransitions
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, transition, overlay]
 syncStatus: reviewed
 verified: false

@@ -3,7 +3,7 @@ title: "翻页书"
 description: "真实双面书页、DitherBook 控件和宽屏书页预设，支持调用方内容与纸张参数。"
 category: MotionCarousels
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, book, perspective]
 ---
 

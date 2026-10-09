@@ -3,7 +3,7 @@ title: "Motion loader"
 description: "137 source-defined loading scenes with independent playback, localization and visibility-aware motion."
 category: MotionLoaders
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, loading, animation]
 syncStatus: reviewed
 verified: false

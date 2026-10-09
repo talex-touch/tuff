@@ -3,7 +3,7 @@ title: Morph 形变容器
 description: 在多个状态间连续形变的形状容器
 category: Effects
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [morph, shape, spring, state]
 syncStatus: reviewed
 verified: true
