@@ -20,13 +20,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { randomUUID } from 'node:crypto'
 
-export type ScreenshotSessionEntrypoint =
-  | 'shortcut'
-  | 'tray'
-  | 'assistant'
-  | 'system-action'
-  | 'plugin'
-  | 'demo'
+export type ScreenshotSessionEntrypoint = 'shortcut' | 'tray' | 'system-action' | 'plugin' | 'demo'
 
 export interface ScreenshotSessionStartOptions {
   entrypoint: ScreenshotSessionEntrypoint
