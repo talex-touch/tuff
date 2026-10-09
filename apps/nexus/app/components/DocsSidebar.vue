@@ -380,6 +380,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/tuff-logo-stroke',
     '/docs/dev/components/text-morph',
     '/docs/dev/components/icon-morph',
+    '/docs/dev/components/morph',
     '/docs/dev/components/text-transformer',
     '/docs/dev/components/transition',
     '/docs/dev/components/stagger',

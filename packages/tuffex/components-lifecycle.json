@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.6.3",
-  "totalComponents": 182,
+  "totalComponents": 183,
   "versions": [
     {
       "version": "0.6.3",
@@ -807,6 +807,11 @@
       "slug": "mode-chip",
       "since": "0.6.0",
       "suite": "ai"
+    },
+    "morph": {
+      "slug": "morph",
+      "since": "0.6.3",
+      "suite": "pro"
     },
     "motion": {
       "slug": "motion",

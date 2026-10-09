@@ -52,7 +52,7 @@ Pass `from`, `to`, and `progress` to drive the morph from a gesture, scroll posi
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `icon` | `IconInput` | - | Current icon when uncontrolled: a preset name (`'menu'`, `'close'`, `'check'`, …), a path `d`, an `IconNode`, or `<svg>` markup. |
+| `icon` | `IconInput` | - | Current icon when uncontrolled: a preset name (`'menu'`, `'close'`, `'check'`, `'play'`, `'pause'`, …), a path `d`, an `IconNode`, or `<svg>` markup. |
 | `from` | `IconInput` | - | Start icon in controlled mode. |
 | `to` | `IconInput` | - | Target icon in controlled mode. |
 | `progress` | `number` | - | Controlled progress (0–1); setting it enters controlled mode and stops the spring. |

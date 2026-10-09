@@ -77,6 +77,17 @@ describe('txIconMorph (Vue component)', () => {
     expect(svg.attributes('stroke-width')).toBe('1')
   })
 
+  it('ships play and pause, and morphs one into the other through a split', () => {
+    const at = (progress: number) => mount(TxIconMorph, { props: { from: 'play', to: 'pause', progress } }).find('path').attributes('d')
+    expect(at(0)).toBe(BUILTIN_MORPH_ICONS.play)
+    expect(at(1)).toBe(BUILTIN_MORPH_ICONS.pause)
+    // Midway the one triangle has divided into the two bars' outlines.
+    const mid = at(0.5) ?? ''
+    expect(mid).not.toBe(BUILTIN_MORPH_ICONS.play)
+    expect(mid).not.toBe(BUILTIN_MORPH_ICONS.pause)
+    expect(mid.match(/M/gi)).toHaveLength(2)
+  })
+
   it('renders controlled mode endpoints (from, to, progress)', () => {
     const wrapperAt0 = mount(TxIconMorph, {
       props: {

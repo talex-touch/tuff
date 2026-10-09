@@ -118,7 +118,7 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 | `x` / `y` | `keyof T \| (d, i) => v` | Accessors. |
 | `color` | `string` | Defaults to categorical slots in mount order. |
 
-`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`; `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius`, and emits `slice-click` plus `slice-hover` with the hovered slice (`{ datum, index, name, value }`, and `null` once the pointer leaves the arc) — the axis-free arc has no chart context to read, so this is how an `#overlay` `<TxChartTooltip>` gets its values.
+`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`, and `enter` (`clip` by default wipes the plot open left to right; `draw` traces the stroke along its length and shows each symbol once the line reaches it; a dashed stroke still clips); `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius`, and emits `slice-click` plus `slice-hover` with the hovered slice (`{ datum, index, name, value }`, and `null` once the pointer leaves the arc) — the axis-free arc has no chart context to read, so this is how an `#overlay` `<TxChartTooltip>` gets its values.
 
 ### ChartTooltip Props
 

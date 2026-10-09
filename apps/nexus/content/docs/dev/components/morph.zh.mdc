@@ -1,0 +1,117 @@
+---
+title: Morph 形变容器
+description: 在多个状态间连续形变的形状容器
+category: Effects
+status: beta
+since: 0.6.3
+tags: [morph, shape, spring, state]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 状态切换
+每个状态给一个 `morph-key`，形状的尺寸、圆角与填充色随之过渡；连续切换时从当前尺寸与速度继续。
+:::TuffDemoWrapper{demo="MorphStatesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const state = ref<'idle' | 'loading' | 'done'>('idle')
+  const fill = computed(() => ({
+    idle: 'var(--tx-color-primary)',
+    loading: 'var(--tx-fill-color)',
+    done: 'var(--tx-color-success)',
+  })[state.value])
+  </script>
+
+  <template>
+    <TxMorph :morph-key="state" :radius="state === 'idle' ? 12 : 19" :fill="fill">
+      <button v-if="state === 'idle'" @click="state = 'loading'">
+        连接耳机
+      </button>
+      <TxSpinner v-else-if="state === 'loading'" :size="18" />
+      <CheckIcon v-else />
+    </TxMorph>
+  </template>
+---
+:::
+
+### 同心圆角
+内容里的圆角减去 `inset`，与外形保持同心，并跟随动画中的半径。
+
+```vue
+<template>
+  <TxMorph :radius="20" :inset="12" fill="var(--tx-fill-color-light)">
+    <div class="cover" />
+  </TxMorph>
+</template>
+
+<style scoped>
+.cover {
+  border-radius: calc(var(--tx-morph-radius) - var(--tx-morph-inset));
+}
+</style>
+```
+
+### 只过渡高度
+`:width="false"` 时形状为块级，宽度交给布局。
+
+```vue
+<template>
+  <TxMorph :morph-key="tab" :width="false" :radius="16" fill="var(--tx-fill-color-light)">
+    <TabPanel :tab="tab" />
+  </TxMorph>
+</template>
+```
+
+### 最佳实践
+
+- 用于同一元素的状态链（按钮 → 加载 → 结果 → 卡片）；互不相关的内容切换用 `TxTransition`。
+- 只是文字变长时不必换 `morph-key`，形状照样跟随新尺寸。
+- `fill` 只表达状态；悬停、按下等即时反馈写在内容的样式上。
+- 计数、实时文本等高频变化用 `TxTextMorph`，不要每次换 `morph-key`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `morphKey` | `string \| number` | - | 变化时交换内容：旧内容模糊淡出，新内容晚一拍进入。 |
+| `radius` | `number \| string` | - | 圆角，数字按 px；与尺寸同一弹簧。 |
+| `fill` | `string` | - | 填充色，只在状态变化时过渡。 |
+| `inset` | `number \| string` | - | 内容与边缘的距离，数字按 px。 |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig` | `'snappy'` | 尺寸与圆角共用的弹簧。 |
+| `width` | `boolean` | `true` | 过渡宽度；关闭后为块级，宽度由布局决定。 |
+| `height` | `boolean` | `true` | 过渡高度。 |
+| `tag` | `string` | `'div'` | 根元素标签。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `settle` | `() => void` | 尺寸落定、回到 `auto` 时触发。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 当前状态的内容，按自身尺寸排版。 |
+
+## 概述
+
+- 尺寸在布局之后、绘制之前测得：先固定在旧尺寸，再用弹簧逐帧过渡到新尺寸，落定后清除内联尺寸。
+- 途中再次变化只改目标，保留当前位置与速度，不会跳回，也不会从静止重新起步。
+- 圆角与填充色只在状态变化的窗口内过渡，宿主的悬停样式保持即时。
+- 离场内容移出文档流、固定在原尺寸并设为 `inert`，新内容立即参与测量。
+- 首次出现、此前尺寸为 0，或系统开启「减少动态效果」时直接落定，不播放动画。
+
+## 技术实现
+
+- 尺寸由 `@talex-touch/tuffex/utils` 的 `useMorphBox` 驱动；圆角走同一弹簧编译出的 `linear()` 曲线，并注册为 `@property --tx-morph-radius`，子元素读到的是动画中的值。
+- 源码：`packages/tuffex/packages/components/src/morph/`。
+
+<TuffDocSourceLink />

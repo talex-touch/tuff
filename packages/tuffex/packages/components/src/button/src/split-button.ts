@@ -8,6 +8,7 @@ export interface SplitButtonProps {
   loading?: boolean
 
   icon?: string
+  /** 菜单触发器的图标类名；不传时用内置的竖向三点图标，不依赖宿主的图标集 */
   menuIcon?: string
 
   menuDisabled?: boolean

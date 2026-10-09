@@ -25,6 +25,13 @@ export interface LineSeriesProps<T> extends CartesianSeriesProps<T> {
   showSymbol?: boolean
   /** Dash the stroke (e.g. incomplete data). @default false */
   dashed?: boolean
+  /**
+   * First-render reveal. `clip` (ECharts' line enter) wipes the plot open left
+   * to right; `draw` traces the stroke along its own length and brings each
+   * symbol in as the line reaches it. A dashed stroke always reveals as `clip`.
+   * @default 'clip'
+   */
+  enter?: 'clip' | 'draw'
 }
 
 export interface AreaSeriesProps<T> extends CartesianSeriesProps<T> {

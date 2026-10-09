@@ -118,7 +118,12 @@
     left: 10%;
     border-radius: var(--tuff-switch-thumb-radius);
     background-color: var(--tuff-switch-thumb-color);
-    transition: all 0.25s ease-in-out;
+    // Not `left`, `width` or `translate`: the thumb's travel is a spring the
+    // component draws itself (see TxSwitch.vue), and a CSS transition on those
+    // would smear every frame it writes.
+    transition-property: background-color, border-radius, filter, transform;
+    transition-duration: 0.25s;
+    transition-timing-function: ease-in-out;
 
     // The loading ring lives on a pseudo-element so the thumb -> ring morph is
     // one coordinated transition on a single box, with no node swap to flash.

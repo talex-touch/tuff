@@ -230,6 +230,7 @@ TAXONOMY: dict[str, list[str]] = {
         "tuff-logo-stroke",
         "text-morph",
         "icon-morph",
+        "morph",
         "text-transformer",
         "transition",
         "stagger",

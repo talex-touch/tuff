@@ -7,6 +7,8 @@ export const BUILTIN_MORPH_ICONS: Record<string, string> = {
   'plus': 'M5 12h14M12 5v14',
   'minus': 'M5 12h14',
   'check': 'M20 6 9 17l-5-5',
+  'play': 'M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z',
+  'pause': 'M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z',
   'arrow-right': 'M5 12h14M12 5l7 7-7 7',
   'arrow-down': 'M12 5v14M19 12l-7 7-7-7',
   'arrow-left': 'M19 12H5M12 19l-7-7 7-7',

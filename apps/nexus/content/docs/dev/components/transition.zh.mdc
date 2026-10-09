@@ -109,7 +109,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | 过渡预设；`smooth-size` 仅在 `group=false` 时委托 `TxTransitionSmoothSize`。 |
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'blur' \| 'smooth-size'` | `'fade'` | 过渡预设；`blur` 经短暂模糊淡入淡出，`smooth-size` 仅在 `group=false` 时委托 `TxTransitionSmoothSize`。 |
 | `group` | `boolean` | `false` | 用 `TransitionGroup` 渲染带 key 的列表。 |
 | `tag` | `string` | `'div'` | `group=true` 时的根标签。 |
 | `appear` | `boolean` | `true` | 首次渲染时执行进入动效。 |
@@ -131,11 +131,11 @@ code: |
 |------|------|--------|------|
 | `appear` | `boolean` | `true` | 首次渲染时执行进入动效。 |
 | `mode` | `'in-out' \| 'out-in'` | `'out-in'` | 内部带 key 子节点的 `Transition` 模式。 |
-| `duration` | `number` | `220` | 尺寸过渡与内容动效共用的时长。 |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 尺寸与内容动效共用的缓动函数。 |
+| `duration` | `number` | `220` | 尺寸弹簧的时钟与内容动效的时长（ms）；`0` 直接落定。 |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 内容动效的缓动；尺寸走弹簧，不读它。 |
 | `width` | `boolean` | `false` | 动画宽度变化。 |
 | `height` | `boolean` | `true` | 动画高度变化。 |
-| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | 尺寸变化期间内部内容的动效。 |
+| `motion` | `'fade' \| 'slide-fade' \| 'rebound' \| 'blur'` | `'fade'` | 尺寸变化期间内部内容的动效。 |
 
 ### TxTransitionPush
 
@@ -175,16 +175,17 @@ code: |
 
 ## 概述
 
-- `class` 与 `style` 合并到外层 `.tx-transition`；其余 attrs（含 Vue 过渡监听器）转发给 `Transition` / `TransitionGroup`，`smooth-size` 下转发给 `TxAutoSizer`。
-- `smooth-size` 是单子节点模式：用 `TxAutoSizer` 包住内容，默认只动画高度，测量期间隐藏溢出；`group=true` 时按 `fade` 处理。
+- `class` 与 `style` 合并到外层 `.tx-transition`；其余 attrs（含 Vue 过渡监听器）转发给 `Transition` / `TransitionGroup`，`smooth-size` 下落在尺寸容器上。
+- `smooth-size` 是单子节点模式：容器默认只过渡高度、隐藏溢出，尺寸走弹簧，途中再变保留当前位置与速度；`group=true` 时按 `fade` 处理。
 - `TxTransitionPush` 的新旧两页同时运动：旧页原位固定为 `position: absolute` 并加上 `inert`，新页留在文档流里决定高度；旧页里的焦点随之丢失，换页时由使用方交给新页。
 - 推入期间容器是 `overflow: clip`（不是 `hidden`），静止时不裁剪，页内焦点环不会被切掉。
 - 切换被打断时从当前绘制的位置继续；推入中途回到同一个 key 时，回来的页从旧页停下的位置滑回。
-- 减少动态效果时各预设收敛到近乎瞬时，并去掉位移与缩放；`TxTransitionPush` 改为 120ms 的原位淡入淡出，高度直接落定。
+- 减少动态效果时各预设收敛到近乎瞬时，并去掉位移、缩放与模糊；`smooth-size` 的尺寸直接落定；`TxTransitionPush` 改为 120ms 的原位淡入淡出，高度直接落定。
 
 ## 技术实现
 
 - `TxTransitionPush` 用 `<Transition :css="false">` 的 JS 钩子驱动 Web Animations：页面动 `translate`，不占用自身的 `transform`；容器动 `height`；被打断的页按 `getComputedTiming().progress` 续跑。
+- `TxTransitionSmoothSize` 的尺寸由 `useMorphBox` 逐帧积分弹簧（与 `TxMorph` 同一引擎），`duration` 按比例缩放 liquid 的 `snappy`，220ms 时原样。
 - 源码：`packages/tuffex/packages/components/src/transition/`。
 
 <TuffDocSourceLink />
