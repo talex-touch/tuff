@@ -137,6 +137,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 | Method | Description |
 |------|-------------|
+| `element` | The root wrapper `<div>` (`HTMLDivElement`); `null` while unmounted. |
 | `triggerReveal({ hold?: 'auto' \| 'manual' })` | Runs one reveal, held until `triggerHide()` with `manual`; no-op mid-pass or with empty `images`. |
 | `triggerHide()` | Fades the image back to the shader; no-op when nothing is showing. |
 | `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | Breaks the shown image into churning cells, then dissolves in the next; no-op unless an image is showing. |

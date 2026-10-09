@@ -59,8 +59,21 @@ Pass `from`, `to`, and `progress` to drive the morph from a gesture, scroll posi
 | `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?: number, damping?: number }` | `'snappy'` | Spring for uncontrolled transitions. |
 | `size` | `number \| string` | `24` | Icon width and height in px. |
 | `strokeWidth` | `number \| string` | `2` | Stroke width. |
+| `absoluteStrokeWidth` | `boolean` | `false` | Keeps the stroke width constant as `size` changes, per the Lucide convention. |
+| `viewBox` | `string` | `'0 0 24 24'` | The root `<svg>` viewBox; the default matches the engine's 24-unit grid. |
+| `label` | `string` | - | Accessible name: renders `role="img"` and a `<title>`; without it the icon is `aria-hidden="true"`. |
 | `color` | `string` | `'currentColor'` | Stroke color. |
 | `reducedMotion` | `'never' \| 'user' \| 'always'` | `'never'` | Reduced-motion policy: `user` follows the OS setting, `always` jumps straight to the end. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `morphTo` | `(icon: IconInput, spring?: SpringPreset \| MorphOptions) => void` | Springs to the icon; without `spring`, uses the `spring` prop. |
+| `set` | `(icon: IconInput) => void` | Jumps to the icon without animating. |
+| `seek` | `(icon: IconInput, t: number) => void` | Freezes the morph toward the icon at progress `t` (0–1), without the spring. |
+| `progress` | `number` | Read-only current morph progress; `1` at rest. |
+| `getMorph` | `() => Morph \| null` | Returns the underlying `Morph` driver, or `null` before any icon shows up. |
 
 ## Technologies
 

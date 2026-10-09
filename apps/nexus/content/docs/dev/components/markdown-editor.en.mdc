@@ -101,6 +101,7 @@ code: |
 - Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds an internal mode.
 - Source mode edits Markdown directly; WYSIWYG mode serializes the DOM back to Markdown on input.
 - The toolbar is shared across modes and disabled in preview.
+- In WYSIWYG and Source modes, `Cmd/Ctrl+B` and `Cmd/Ctrl+I` apply bold and italic, even when `toolbarActions` omits them.
 - The mode switcher is a `role="group"` of toggle buttons; `aria-pressed` marks the active mode.
 - `theme="auto"` follows the class and `data-theme` on `html` and `body`, falling back to light.
 

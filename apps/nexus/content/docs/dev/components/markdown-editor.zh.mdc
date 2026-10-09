@@ -101,6 +101,7 @@ code: |
 - 传入 `mode` 时为受控模式；否则由 `defaultMode` 初始化内部模式。
 - Source 模式直接编辑 Markdown；WYSIWYG 模式在输入时把 DOM 序列化回 Markdown。
 - 工具栏在各模式间共用，preview 模式下禁用。
+- WYSIWYG 与 Source 模式下，`Cmd/Ctrl+B`、`Cmd/Ctrl+I` 执行加粗与斜体；`toolbarActions` 未列出时同样生效。
 - 模式切换器是 `role="group"` 的切换按钮组，按钮用 `aria-pressed` 标出当前模式。
 - `theme="auto"` 跟随 `html` 与 `body` 的 class、`data-theme`，无法判断时为 light。
 

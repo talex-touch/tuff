@@ -136,6 +136,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 | 方法 | 说明 |
 |------|------|
+| `element` | 根包装 `<div>`（`HTMLDivElement`），未挂载时为 `null`。 |
 | `triggerReveal({ hold?: 'auto' \| 'manual' })` | 执行一次揭示，`manual` 时保持到 `triggerHide()`；进行中或 `images` 为空时不生效。 |
 | `triggerHide()` | 把图片淡回着色器；没有显示中的图片时不生效。 |
 | `triggerRegenerate({ durationMs?, tintFromImage?, autoReveal? })` | 把当前图片碎成单元格翻涌，再溶入下一张；仅在图片显示时生效。 |

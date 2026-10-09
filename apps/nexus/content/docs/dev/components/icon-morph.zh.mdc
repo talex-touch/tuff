@@ -59,8 +59,21 @@ code: |
 | `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?: number, damping?: number }` | `'snappy'` | 非受控过渡的弹簧参数。 |
 | `size` | `number \| string` | `24` | 图标宽高（px）。 |
 | `strokeWidth` | `number \| string` | `2` | 描边宽度。 |
+| `absoluteStrokeWidth` | `boolean` | `false` | 描边宽度不随 `size` 缩放（Lucide 约定）。 |
+| `viewBox` | `string` | `'0 0 24 24'` | 根 `<svg>` 的 viewBox，默认对应引擎的 24 网格。 |
+| `label` | `string` | - | 无障碍名称：设置后渲染 `role="img"` 与 `<title>`，否则为 `aria-hidden="true"`。 |
 | `color` | `string` | `'currentColor'` | 描边颜色。 |
 | `reducedMotion` | `'never' \| 'user' \| 'always'` | `'never'` | 减少动态效果策略：`user` 跟随系统设置，`always` 每次都直接跳到终点。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `morphTo` | `(icon: IconInput, spring?: SpringPreset \| MorphOptions) => void` | 以弹簧形变到目标图标；省略 `spring` 时沿用同名属性。 |
+| `set` | `(icon: IconInput) => void` | 直接切到目标图标，不播放动画。 |
+| `seek` | `(icon: IconInput, t: number) => void` | 把朝目标图标的形变定格在进度 `t`（0–1），不经弹簧。 |
+| `progress` | `number` | 只读，当前形变进度；静止时为 `1`。 |
+| `getMorph` | `() => Morph \| null` | 返回底层 `Morph` 驱动；尚未出现图标时为 `null`。 |
 
 ## 技术实现
 
