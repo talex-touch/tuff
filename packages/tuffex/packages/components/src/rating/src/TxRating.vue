@@ -177,10 +177,11 @@ function handleClick(star: number) {
 /**
  * Arrow keys and Home / End pick a whole star. The half-star toggle belongs to a
  * repeated click only: a key that lands on the current star (pressing past either
- * end) leaves the rating alone instead of halving it.
+ * end) leaves the rating alone instead of halving it. The current star is the
+ * checked one, `ceil(rating)`, so 4.5 stays 4.5 when End lands on star 5.
  */
 function selectWithKey(star: number) {
-  if (star === rating.value)
+  if (star === Math.ceil(rating.value))
     return
   commit(star, star)
 }

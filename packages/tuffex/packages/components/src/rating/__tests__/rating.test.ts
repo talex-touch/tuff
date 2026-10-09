@@ -273,6 +273,24 @@ describe('txRating', () => {
     wrapper.unmount()
   })
 
+  it('keeps a half rating when a key stays on its checked star', async () => {
+    const wrapper = mount(TxRating, {
+      attachTo: document.body,
+      props: { modelValue: 4.5, precision: 0.5 },
+    })
+
+    const stars = wrapper.findAll<HTMLButtonElement>('.tx-rating__star')
+    // 4.5 checks the fifth star; pressing past it changes nothing.
+    await stars[4]!.trigger('keydown', { key: 'ArrowRight' })
+    await stars[4]!.trigger('keydown', { key: 'End' })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await stars[4]!.trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([4])
+
+    wrapper.unmount()
+  })
+
   it('ignores arrow keys when readonly or disabled', async () => {
     const wrapper = mount(TxRating, {
       props: { modelValue: 3, readonly: true },
