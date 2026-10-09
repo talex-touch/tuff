@@ -92,7 +92,7 @@ describe('search-index split flag', () => {
       'utf8',
     )
 
-    expect(flags).toContain(`parseEnvBoolean('${FLAG}', true)`)
+    expect(flags).toContain(`getBooleanEnv('${FLAG}', true)`)
   })
 
   it('scans a plausible set of documents', () => {
