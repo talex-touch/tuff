@@ -3,7 +3,7 @@ title: "Physics motion"
 description: "61 independently retained folding, stroke, stacking and mechanical motion scenes."
 category: MotionPhysics
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, physics, geometry]
 syncStatus: reviewed
 verified: false

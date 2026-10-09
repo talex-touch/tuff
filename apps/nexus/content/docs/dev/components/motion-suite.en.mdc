@@ -25,7 +25,7 @@ Each cell below renders its real component with caller-provided content or data.
 
 ## Overview
 
-Motion is one of the eight documentation suites. It groups twelve component families while installation remains split into the existing Base, Pro and AI barrels. These Motion components import from `@talex-touch/tuffex/pro`, except DitherChart, which also has the existing `@talex-touch/tuffex/charts` entry. Source version 0.6.3 is included in Tuff beta testing and has not been independently published to npm.
+Motion is one of the eight documentation suites. It groups twelve component families while installation remains split into the existing Base, Pro and AI barrels. These Motion components import from `@talex-touch/tuffex/pro`, except DitherChart, which also has the existing `@talex-touch/tuffex/charts` entry. These components ship in npm 0.7.0.
 
 ### Buttons
 

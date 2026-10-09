@@ -3,7 +3,7 @@ title: "MotionButton 动效按钮"
 description: "保留原生按钮和链接语义的 13 类交互与 35 个来源图标组合"
 category: MotionButtons
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, button, icon, spring, interaction]
 syncStatus: reviewed
 verified: false

@@ -3,7 +3,7 @@ title: DitherChart
 description: "由真实数据驱动的像素图表、有序抖动和SVG纹理，支持周期、图例和日期游标。"
 category: MotionCharts
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, chart, dither, canvas, svg]
 syncStatus: reviewed
 ---

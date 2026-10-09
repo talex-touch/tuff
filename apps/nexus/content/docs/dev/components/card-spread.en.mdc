@@ -3,7 +3,7 @@ title: "Card spread"
 description: "Nine content-driven card layouts and focus-blur links with selection, adjustable stamp geometry and keyboard operation."
 category: MotionCards
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, cards, spread]
 ---
 

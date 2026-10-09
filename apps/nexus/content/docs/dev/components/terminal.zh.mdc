@@ -3,7 +3,7 @@ title: Terminal 终端显示
 description: 显示 ANSI 与 Unicode 输出的终端组件
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [terminal, logs, xterm, ansi]
 syncStatus: reviewed
 verified: false

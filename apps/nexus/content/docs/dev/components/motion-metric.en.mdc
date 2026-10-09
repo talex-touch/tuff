@@ -3,7 +3,7 @@ title: MotionMetric
 description: Caller-driven metric cards, charts, and composite dashboards.
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, metrics, charts, pro]
 syncStatus: reviewed
 ---

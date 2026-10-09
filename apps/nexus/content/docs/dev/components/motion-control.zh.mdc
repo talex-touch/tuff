@@ -3,7 +3,7 @@ title: MotionControl
 description: 移植自 Amicro UIkit 的动效控件集
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, controls, uikit, pro]
 syncStatus: reviewed
 ---

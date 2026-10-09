@@ -3,7 +3,7 @@ title: Morph
 description: A shape container that morphs continuously between states.
 category: Effects
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [morph, shape, spring, state]
 syncStatus: reviewed
 verified: true

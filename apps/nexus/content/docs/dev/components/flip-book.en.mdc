@@ -3,7 +3,7 @@ title: "Flip book"
 description: "Caller-owned two-sided book pages, DitherBook controls and the wider extracted-book preset with real paper settings."
 category: MotionCarousels
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, book, perspective]
 ---
 

@@ -3,7 +3,7 @@ title: MotionControl
 description: A set of animated controls ported from the Amicro UIkit.
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, controls, uikit, pro]
 syncStatus: reviewed
 ---

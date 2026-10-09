@@ -3,7 +3,7 @@ title: "3D carousel"
 description: "Arc, CoverFlow and Time Machine paths with color/mono content, controlled current items and timeline scrubbing."
 category: MotionCarousels
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, carousel, perspective]
 ---
 

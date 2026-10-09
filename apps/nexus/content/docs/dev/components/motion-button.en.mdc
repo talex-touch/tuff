@@ -3,7 +3,7 @@ title: "MotionButton"
 description: "Native buttons and links with 13 independent interactions and 35 source icon combinations"
 category: MotionButtons
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, button, icon, spring, interaction]
 syncStatus: reviewed
 verified: false

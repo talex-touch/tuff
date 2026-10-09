@@ -3,7 +3,7 @@ title: Terminal
 description: A terminal view that displays ANSI and Unicode output.
 category: Advanced
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [terminal, logs, xterm, ansi]
 syncStatus: reviewed
 verified: false

@@ -1,14 +1,16 @@
 # TouchX UI 更新日志
 
-## [Unreleased]
+## [0.7.0] - 2026-10-09
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `code-stream`, `fusion-surface`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `slider`, `steps`, `switch`, `tooltip`, `transition`
-- **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `morph`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
+- **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `code-stream`, `flat-dropdown`, `fusion-surface`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `slider`, `steps`, `switch`, `tooltip`, `transition`
+- **新增组件 (Since 0.7.0)**: `card-spread`, `carousel-3d`, `flip-book`, `morph`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`, `terminal`
 
 ### ✨ 组件增强
 
+- 新增 `TxTerminal` 终端显示组件：网页与 Electron 共用的 ANSI / Unicode 输出显示，支持只读日志（`readOnly`、`lines`）、按容器适配尺寸（`fit()` / `getSize()`）与主题；xterm.js 只在客户端加载，组件本身不执行进程。
+- 悬停弹层有了悬停桥与安全三角：`TxTooltip` 的交互式悬停面板（Popover、DropdownMenu、两种子菜单、Cascader 各级与 AvatarGroup 的溢出面板都基于它）打开期间在触发器与面板之间渲染一座桥，面板的内边距算作面板本身；指针离开触发器朝面板移动时，只要留在离开点与面板对边构成的三角内、且停顿不超过 100ms，面板不会关闭，途经的其他触发器也不会抢先打开。`TxFlatDropdown` 使用同一套判定，不再靠拉长 `closeDelay` 掩盖斜向移动。纯提示与点击打开的面板不变。
 - 新增 `TxTransitionPush` 推入翻页过渡，用于层级导航（进入子页、返回上一页）：key 变化时新旧两页同时横向推入推出，`direction` 为 `forward` 时新页从行内结束方向进入、`back` 时反向，RTL 容器自动镜像；容器高度只在切换那一刻从旧页过渡到新页，结束后回到 `auto`；离场页固定在原位并设为 `inert`；中途打断从当前绘制的位置继续；`duration` 为 `0` 时直接替换，`prefers-reduced-motion: reduce` 时改为 120ms 原位淡入淡出、高度直接落定。新增 `before-enter`/`after-enter`/`after-leave` 事件与 `TransitionPushDirection`、`TxTransitionPushProps` 类型。
 - `TxBaseAnchor` 的箭头有了自己的动画：箭头挂到面板内容层上，跟着面板的位移、缩放、模糊和透明度一起动，面板开始运动之前、收起之后都随面板隐藏（此前会在面板动起来前先完整闪出两三帧，关闭的第一帧就消失）；`expand` 下箭头等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回再折叠面板；`opacity` 的箭头只随面板淡入淡出。
 - `TxBaseAnchor` 的 `transfer` / `boom` / `opacity` 现在和 `expand` 一样解析 `animation.ease` / `closeEase` 里的 `spring(omega, zeta)` 与 `cubic-bezier(...)`；此前原样交给 GSAP，被静默换成 GSAP 的默认缓动。GSAP 自己的缓动名照旧透传。
@@ -27,6 +29,7 @@
 
 ### 🎨 外观与主题
 
+- `TxBaseAnchor` 的 `expand` 回弹按面板高度封顶：130px 以内最多过冲 6px，更高的面板按高度平方根略微放大（五行约 7.6px、十行约 10.4px，此前为 19.9–38px）；首次到达满高仍在 112ms，宿主显式指定的缓动照原样执行。
 - 锚点家族默认不再画箭头：`TxTooltip`（`anchor.showArrow`）与 `TxPopover` 的 `showArrow` 默认值由 `true` 改为 `false`，与 `TxBaseAnchor`、`TxContextMenu` 一致；基于 Popover 的 `TxDropdownMenu`、`TxSplitButton`、`TxCascader`、`TxTreeSelect`、头像组溢出面板，以及基于 Tooltip 的 `TxMotionControl` 提示和 `TxProgressBar` 提示随之不带箭头。需要箭头时逐个实例传 `showArrow`。
 - `TxPopover` 未传 `offset` 且无箭头时的间距由 2px 改为 6px，与 DropdownMenu、Select 系列一致：2px 时面板上沿压住触发器 3px 的焦点描边。默认 Popover 的面板因此从离触发器 8px 变为 6px；显式关箭头且不传 `offset` 的 `TxDatePicker`（字段形态）与 `TxIconPicker` 从 2px 变为 6px。开启箭头时的间距不变。
 
@@ -54,6 +57,7 @@
 
 ### 🧪 内部
 
+- 悬停意图的几何（桥、安全三角与过渡判定）收拢到 `utils/hover-intent.ts`；anchor 延迟模块新增 `holdChain` / `releaseChain`，过渡期间到期的父级关闭会暂缓，指针放弃时重放、到达时丢弃。
 - 缓动实现收拢到 `utils/animation/easing.ts`，各处副本删除：`TxBaseAnchor` 的弹簧与贝塞尔构件、`TxLiquid` 的两份 CSS 缓动求值（`spring.ts` 的 `easingFunction` 与 observer 的圆角时间线）、`TxTextMorph` 借用的那份，以及图表入口的 `cubicBezier`（名字保留，改用共享求解器）。
 - 共享工具的发布模块输出到稳定的 `utils/internal` 路径，不再把构建机的绝对工作区目录带进按需入口；公开组件与工具子路径保持不变。
 
@@ -67,7 +71,7 @@
 
 ## [0.6.3] - 2026-10-01
 
-本版本为当前源码及客户端 beta 内的组件版本，尚未独立发布 npm；已发布的 0.6.2 历史记录保持不变。
+本版本最初随源码与客户端 beta 测试，2026-10-03 发布到 npm；已发布的 0.6.2 历史记录保持不变。
 
 ### 📦 组件变动 (Components)
 
@@ -460,8 +464,8 @@ const handleClick = () => {
 | `button` | base | **0.3.4** |
 | `card` | base | **0.3.4** |
 | `card-item` | base | **0.3.4** |
-| `card-spread` | pro | **0.6.3（未独立发布）** |
-| `carousel-3d` | pro | **0.6.3（未独立发布）** |
+| `card-spread` | pro | **0.7.0** |
+| `carousel-3d` | pro | **0.7.0** |
 | `cascader` | base | **0.3.4** |
 | `cell-link` | base | **0.3.9** |
 | `chain-of-thought` | ai | **0.3.9** |
@@ -499,7 +503,7 @@ const handleClick = () => {
 | `flat-radio` | base | **0.3.4** |
 | `flat-select` | base | **0.3.4** |
 | `flex` | base | **0.3.4** |
-| `flip-book` | pro | **0.6.3（未独立发布）** |
+| `flip-book` | pro | **0.7.0** |
 | `flip-overlay` | pro | **0.3.4** |
 | `floating` | pro | **0.3.4** |
 | `flowchart` | ai | **0.6.0** |
@@ -536,16 +540,17 @@ const handleClick = () => {
 | `metal-fx` | pro | **0.6.2** |
 | `modal` | base | **0.3.4** |
 | `mode-chip` | ai | **0.6.0** |
-| `motion` | pro | **0.6.3（未独立发布）** |
-| `motion-button` | pro | **0.6.3（未独立发布）** |
-| `motion-control` | pro | **0.6.3（未独立发布）** |
-| `motion-dock` | pro | **0.6.3（未独立发布）** |
-| `motion-form` | pro | **0.6.3（未独立发布）** |
-| `motion-loader` | pro | **0.6.3（未独立发布）** |
-| `motion-metric` | pro | **0.6.3（未独立发布）** |
-| `motion-text` | pro | **0.6.3（未独立发布）** |
-| `motion-toggle` | pro | **0.6.3（未独立发布）** |
-| `motion-transition` | pro | **0.6.3（未独立发布）** |
+| `morph` | pro | **0.7.0** |
+| `motion` | pro | **0.7.0** |
+| `motion-button` | pro | **0.7.0** |
+| `motion-control` | pro | **0.7.0** |
+| `motion-dock` | pro | **0.7.0** |
+| `motion-form` | pro | **0.7.0** |
+| `motion-loader` | pro | **0.7.0** |
+| `motion-metric` | pro | **0.7.0** |
+| `motion-text` | pro | **0.7.0** |
+| `motion-toggle` | pro | **0.7.0** |
+| `motion-transition` | pro | **0.7.0** |
 | `nav-bar` | base | **0.3.4** |
 | `no-data` | base | **0.3.4** |
 | `no-selection` | base | **0.3.4** |
@@ -554,7 +559,7 @@ const handleClick = () => {
 | `outline-border` | pro | **0.3.4** |
 | `pagination` | base | **0.3.4** |
 | `permission-state` | base | **0.3.4** |
-| `physics-motion` | pro | **0.6.3（未独立发布）** |
+| `physics-motion` | pro | **0.7.0** |
 | `picker` | base | **0.3.4** |
 | `popover` | base | **0.3.4** |
 | `prism-glow` | pro | **0.6.0** |
@@ -601,7 +606,7 @@ const handleClick = () => {
 | `tag` | base | **0.3.4** |
 | `tag-input` | base | **0.3.4** |
 | `task-rows` | ai | **0.3.9** |
-| `terminal` | pro | **0.6.3** |
+| `terminal` | pro | **0.7.0** |
 | `text-morph` | pro | **0.6.0** |
 | `text-transformer` | pro | **0.3.4** |
 | `textarea` | base | **0.3.7** |

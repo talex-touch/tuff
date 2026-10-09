@@ -3,7 +3,7 @@ title: DitherChart
 description: "Data-driven pixel charts, ordered dithering and SVG patterns with periods, legends and date cursors."
 category: MotionCharts
 status: beta
-since: 0.6.3
+since: 0.7.0
 tags: [motion, chart, dither, canvas, svg]
 syncStatus: reviewed
 ---
