@@ -1146,10 +1146,16 @@ interface AuditCountCheck {
   params: Array<string | number | null>
 }
 
+/** D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT"). */
+const D1_MAX_COMPOUND_SELECT_TERMS = 5
+
 /**
  * Counts device-auth audits for several limit scopes at once — each check's count and newest
- * timestamp — in one query. The limiters used to count scope after scope, and look the newest row
- * up again when one tripped: up to seven round trips before a device code was issued or approved.
+ * timestamp — in one round trip. The limiters used to count scope after scope, and look the newest
+ * row up again when one tripped: up to seven round trips before a device code was issued or approved.
+ *
+ * Each check is one term of a compound SELECT, so it keeps its own index; the terms go five to a
+ * statement and the statements into one batch, because D1 refuses a sixth term.
  */
 async function countDeviceAuthAuditsBatch(
   db: D1Database,
@@ -1157,15 +1163,18 @@ async function countDeviceAuthAuditsBatch(
 ): Promise<Array<{ total: number, newestMs: number | null }>> {
   if (checks.length === 0)
     return []
-  const sql = checks.map((check, index) => `
-    SELECT ${index} AS idx, COUNT(*) AS total, MAX(created_at) AS created_at
-    FROM ${DEVICE_AUTH_AUDIT_TABLE}
-    WHERE ${check.whereSql}
-  `).join(' UNION ALL ')
-  const { results } = await db.prepare(sql)
-    .bind(...checks.flatMap(check => check.params))
-    .all<{ idx: number, total?: number | string, created_at?: string | null }>()
-  const byIndex = new Map((results ?? []).map(row => [Number(row.idx), row]))
+  const statements: D1PreparedStatement[] = []
+  for (let start = 0; start < checks.length; start += D1_MAX_COMPOUND_SELECT_TERMS) {
+    const chunk = checks.slice(start, start + D1_MAX_COMPOUND_SELECT_TERMS)
+    const sql = chunk.map((check, offset) => `
+      SELECT ${start + offset} AS idx, COUNT(*) AS total, MAX(created_at) AS created_at
+      FROM ${DEVICE_AUTH_AUDIT_TABLE}
+      WHERE ${check.whereSql}
+    `).join(' UNION ALL ')
+    statements.push(db.prepare(sql).bind(...chunk.flatMap(check => check.params)))
+  }
+  const batches = await db.batch<{ idx: number, total?: number | string, created_at?: string | null }>(statements)
+  const byIndex = new Map(batches.flatMap(batch => batch.results ?? []).map(row => [Number(row.idx), row]))
   return checks.map((_, index) => {
     const row = byIndex.get(index)
     return { total: toSafeInteger(row?.total), newestMs: newestAuditMs(row) }

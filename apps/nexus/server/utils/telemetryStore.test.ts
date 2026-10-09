@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSqliteD1, type SqliteD1Database } from '../../test/helpers/d1-sqlite'
 import { getPlatformGovernanceAnalytics, listPlatformGovernanceEvents } from './platformGovernanceStore'
+import { setTelemetryDailyRollupEnabledForTest } from './telemetryDailyRollup'
 import {
   buildTelemetryBatchReceiptStatement,
   commitTelemetryWrite,
@@ -390,11 +391,16 @@ describe('telemetryStore search provider metrics', () => {
     state.rollupSchedules = []
   })
 
+  afterEach(() => {
+    setTelemetryDailyRollupEnabledForTest(false)
+  })
+
   it('records anonymous provider metrics without search query text', async () => {
     // The summary derives today's search counters from the stored rows with SQL (JSON functions
     // included), so this one runs against real SQLite rather than the text-matching mock.
     const db = createSqliteD1()
     state.db = db
+    setTelemetryDailyRollupEnabledForTest(true)
     await recordTelemetryEvent(makeEvent(), {
       eventType: 'search',
       clientId: 'client-a',
