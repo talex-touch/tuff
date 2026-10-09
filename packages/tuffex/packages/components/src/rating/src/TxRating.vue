@@ -171,6 +171,21 @@ function handleClick(star: number) {
     newValue = star - 0.5
   }
 
+  commit(star, newValue)
+}
+
+/**
+ * Arrow keys and Home / End pick a whole star. The half-star toggle belongs to a
+ * repeated click only: a key that lands on the current star (pressing past either
+ * end) leaves the rating alone instead of halving it.
+ */
+function selectWithKey(star: number) {
+  if (star === rating.value)
+    return
+  commit(star, star)
+}
+
+function commit(star: number, newValue: number) {
   if (props.animated) {
     animatedStar.value = null
     requestAnimationFrame(() => {
@@ -213,20 +228,20 @@ function handleKeydown(event: KeyboardEvent, star: number) {
     case 'ArrowRight':
     case 'ArrowUp':
       event.preventDefault()
-      handleClick(focusStar(star + 1))
+      selectWithKey(focusStar(star + 1))
       break
     case 'ArrowLeft':
     case 'ArrowDown':
       event.preventDefault()
-      handleClick(focusStar(star - 1))
+      selectWithKey(focusStar(star - 1))
       break
     case 'Home':
       event.preventDefault()
-      handleClick(focusStar(1))
+      selectWithKey(focusStar(1))
       break
     case 'End':
       event.preventDefault()
-      handleClick(focusStar(props.maxStars))
+      selectWithKey(focusStar(props.maxStars))
       break
   }
 }
