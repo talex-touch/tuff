@@ -1,6 +1,6 @@
 ---
 title: "StatCard 指标卡片"
-description: "用于展示核心数字、趋势洞察与进度摘要的指标卡片。"
+description: "展示核心数字、趋势与进度的指标卡片"
 category: Data
 status: beta
 since: 0.3.4
@@ -12,47 +12,39 @@ verified: true
 ## 用法
 
 ### 默认样式
-
-基础卡片布局，不包含趋势和进度增强。`iconClass` 以完整、无底板的图标画在卡片右侧、垂直居中，与进度样式的进度环占同一个槽位；图标的颜色被抽离成卡片右侧的一片色光：图标色、相邻色相与提亮浅色三团柔和色斑缓慢漂移，向文字方向渐隐。颜色由 `iconClass` 里的颜色类决定；不带颜色类时图标与色光都是主色，显式的灰色（如 `--tx-color-info`）只留灰色图标、没有色光。本例依次是主色（`clickable`）、success、warning 与中性四种色调。
-
-两种变体都支持 `meta` 和 `meta` 插槽，带趋势的卡片也支持。默认布局把说明放在标签下方；两者都不传时，保留原有紧凑布局。下面第一张卡展示默认样式的说明行。
-
+`iconClass` 的颜色类决定色调，缺省为主色，灰色不画色光；`meta` 在标签下方加一行说明。
 ::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
-      <TxStatCard
-        :value="2847"
-        label="插件总数"
-        meta="包含已启用与已停用插件"
-        icon-class="i-carbon-download text-[var(--tx-color-primary)]"
-        clickable
-      />
-      <TxStatCard
-        :value="2516"
-        label="已启用"
-        icon-class="i-carbon-checkmark-outline text-[var(--tx-color-success)]"
-      />
-      <TxStatCard
-        :value="18"
-        label="待更新"
-        icon-class="i-carbon-renew text-[var(--tx-color-warning)]"
-      />
-      <TxStatCard
-        :value="331"
-        label="已停用"
-        icon-class="i-carbon-power text-[var(--tx-color-info)]"
-      />
-    </div>
+    <TxStatCard
+      :value="2847"
+      label="插件总数"
+      meta="包含已启用与已停用插件"
+      icon-class="i-carbon-download text-[var(--tx-color-primary)]"
+      clickable
+    />
+    <TxStatCard
+      :value="2516"
+      label="已启用"
+      icon-class="i-carbon-checkmark-outline text-[var(--tx-color-success)]"
+    />
+    <TxStatCard
+      :value="18"
+      label="待更新"
+      icon-class="i-carbon-renew text-[var(--tx-color-warning)]"
+    />
+    <TxStatCard
+      :value="331"
+      label="已停用"
+      icon-class="i-carbon-power text-[var(--tx-color-info)]"
+    />
   </template>
 ---
 ::
 
 ### 趋势样式
-
-通过 `insight` 展示变化趋势和对比信息。符号、数值与单位合成一枚带色胶囊（如 `+16.7%`）。本例第一张卡片使用内置的 SVG 趋势箭头，第二张通过 `insight.iconClass` 换成自定义图标。
-
+`insight` 由 `from` 与 `to` 算出变化，渲染为带色胶囊；`insight.iconClass` 替换内置箭头。
 ::TuffDemoWrapper{demo="StatCardInsightVariantDemo" code-lang="vue"}
 ---
 code: |
@@ -60,249 +52,161 @@ code: |
   import { ref } from 'vue'
 
   const activeUsers = ref(18200)
-  const activeInsight = ref({
-    from: 16800,
-    to: activeUsers.value,
-    type: 'delta',
-    color: 'success',
-  })
-
   const resourceLoad = ref(42)
-  const resourceInsight = ref({
+
+  const activeInsight = { from: 16800, to: 18200, type: 'delta', color: 'success' }
+
+  const resourceInsight = {
     from: 35,
-    to: resourceLoad.value,
+    to: 42,
     type: 'percent',
     color: 'danger',
     iconClass: 'i-carbon-arrow-up-right',
     precision: 1,
-  })
-
-  function bump() {
-    const nextUsers = Math.floor(Math.random() * 8000) + 14000
-    const nextLoad = Math.floor(Math.random() * 50) + 30
-
-    activeInsight.value = {
-      ...activeInsight.value,
-      from: activeUsers.value,
-      to: nextUsers,
-    }
-    activeUsers.value = nextUsers
-
-    resourceInsight.value = {
-      ...resourceInsight.value,
-      from: resourceLoad.value,
-      to: nextLoad,
-    }
-    resourceLoad.value = nextLoad
   }
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; gap: 8px;">
-        <TxButton @click="bump">
-          随机刷新
-        </TxButton>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-        <TxStatCard
-          :value="activeUsers"
-          label="活跃用户"
-          icon-class="i-carbon-task text-[var(--tx-color-success)]"
-          :insight="activeInsight"
-        />
-        <TxStatCard
-          :value="resourceLoad"
-          label="资源负载"
-          icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
-          :insight="resourceInsight"
-        >
-          <template #value>
-            <div style="display: flex; align-items: baseline; gap: 6px;">
-              <TxTextMorph :text="resourceLoad" />
-              <span style="font-size: 16px;">%</span>
-            </div>
-          </template>
-        </TxStatCard>
-      </div>
-    </div>
+    <TxStatCard
+      :value="activeUsers"
+      label="活跃用户"
+      icon-class="i-carbon-task text-[var(--tx-color-success)]"
+      :insight="activeInsight"
+    />
+    <TxStatCard
+      :value="resourceLoad"
+      label="资源负载"
+      icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
+      :insight="resourceInsight"
+    >
+      <template #value>
+        <TxTextMorph :text="resourceLoad" /><span>%</span>
+      </template>
+    </TxStatCard>
   </template>
 ---
 ::
 
 ### 进度样式
-
-使用 `progress` 切换为进度卡片，并支持 `Shuffle` 动态刷新。进度环、环心圆盘与图标跟随 `iconClass` 里的颜色类，进度环背后也铺着与默认样式相同的色光。
-
+`progress` 启用进度布局；进度环跟随 `iconClass` 的颜色。
 ::TuffDemoWrapper{demo="StatCardProgressVariantDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const healthProgress = ref(78)
-  const healthDelay = ref(2)
-
-  const healthStatus = computed(() => {
-    if (healthProgress.value > 85) {
-      return '已同步'
-    }
-    return '同步中'
-  })
-
-  const healthMeta = computed(() => `${healthStatus.value} · 上次同步：${healthDelay.value}s 前 (v2.4.0)`)
-
-  function bump() {
-    healthProgress.value = Math.floor(Math.random() * 50) + 40
-    healthDelay.value = Math.floor(Math.random() * 16) + 2
-  }
-  </script>
-
   <template>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; gap: 8px;">
-        <TxButton @click="bump">
-          随机刷新
-        </TxButton>
-      </div>
-
-      <TxStatCard
-        variant="progress"
-        :value="healthProgress"
-        label="云同步"
-        :meta="healthMeta"
-        :progress="healthProgress"
-        icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
-      >
-        <template #value>
-          <div style="display: flex; align-items: baseline; gap: 6px;">
-            <TxTextMorph :text="healthProgress" />
-            <span style="font-size: 16px;">%</span>
-          </div>
-        </template>
-      </TxStatCard>
-    </div>
+    <TxStatCard
+      variant="progress"
+      :value="healthProgress"
+      label="云同步"
+      :meta="healthMeta"
+      :progress="healthProgress"
+      icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
+    >
+      <template #value>
+        <TxTextMorph :text="healthProgress" /><span>%</span>
+      </template>
+    </TxStatCard>
   </template>
 ---
 ::
 
 ### 后台运营面板
-
-`TxStatCard` 可与 `TxStatusBadge`、`TxProgressBar` 组合成后台首屏状态区，适合展示 API 可用率、待处理队列和告警数量。
-
-::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="指标卡、状态徽标与进度条的后台组合示例。"}
+与 `TxStatusBadge`、`TxProgressBar` 组合成后台首屏状态区。
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <section class="grid gap-3" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
-      <TxStatCard
-        variant="progress"
-        value="99.9%"
-        label="API 可用率"
-        meta="正常"
-        :progress="99"
-        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
-      />
-      <TxStatCard
-        variant="progress"
-        :value="18"
-        label="待处理队列"
-        meta="关注"
-        :progress="64"
-        icon-class="i-carbon-queued text-[var(--tx-color-warning)]"
-      />
-      <TxStatCard
-        variant="progress"
-        :value="2"
-        label="告警"
-        meta="阻塞"
-        :progress="22"
-        icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]"
-      />
-    </section>
+    <TxStatCard
+      variant="progress"
+      value="99.9%"
+      label="API 可用率"
+      meta="正常"
+      :progress="99"
+      icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+    />
+    <TxStatCard
+      variant="progress"
+      :value="18"
+      label="待处理队列"
+      meta="关注"
+      :progress="64"
+      icon-class="i-carbon-queued text-[var(--tx-color-warning)]"
+    />
+    <TxStatCard
+      variant="progress"
+      :value="2"
+      label="告警"
+      meta="阻塞"
+      :progress="22"
+      icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]"
+    />
   </template>
 ---
 ::
 
 ### 最佳实践
 
-- 计数类指标优先传 number，让默认格式化补充分隔符；单位或动效布局复杂时再使用 `value` 插槽。
-- 绝对变化用 `insight.type="delta"`，相对变化用 `insight.type="percent"`；默认精度分别是 `0` 与 `1`。
-- 涨幅的符号、数值与单位紧贴成一个整体；单位前需要空格时把空格写进 `suffix`（如 `' pts'`），不要靠外部样式拉开。
-- `variant="progress"` 只用于健康度、容量、配额、完成率等有边界的指标，不用于无限增长的总量。
-- `clickable` 只提供视觉反馈。需要跳转或操作时，应由外层按钮/链接或相邻操作控件承载真实交互。
-- 用 `iconClass` 里的颜色类区分指标类别（如 `i-carbon-task text-[var(--tx-color-success)]`），它同时给图标、色光以及 progress 布局的进度环着色；一排卡片里需要安静的那张给灰色（如 `text-[var(--tx-color-info)]`），只留灰色图标、不画色光。不必再传 `text-6xl` 这类尺寸类。
-- 卡片宽度要来自父级（grid 单元格、被拉伸的 flex 项或定宽容器）：根节点是 inline-size 容器，内容区窄于 240px 时图标与进度环缩小并移到右上角；放进 `inline-block`、`width: fit-content` 这类按内容收缩的父级会让卡片塌陷。
+- 计数类指标传 number，由默认格式化补分隔符；单位或动效布局复杂时用 `value` 插槽。
+- 绝对变化用 `insight.type="delta"`，相对变化用 `insight.type="percent"`。
+- `variant="progress"` 只用于有边界的指标（健康度、容量、配额、完成率），不用于无限增长的总量。
+- `clickable` 只改变外观；跳转或操作由外层按钮、链接承载。
+- 由父级给卡片宽度（grid 单元格、被拉伸的 flex 项）；`inline-block` 等按内容收缩的父级会让它塌陷。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `value` | `number \| string` | - | 主数值；传入 number 时会使用默认数字格式化 |
-| `label` | `string` | - | 指标标签；在 insight/progress 布局中显示在顶部 |
-| `iconClass` | `string` | `''` | 装饰图标 class（UnoCSS Icones）。默认与 insight 布局中以无底板的图标画在右侧、垂直居中（卡片内容区窄于 240px 时移到右上角），尺寸由组件决定；类里的颜色类给图标和它身后抽出的色光着色，不带颜色类时为主色。progress 布局中画在进度环中心，进度环跟随同一颜色，背后铺着同一片色光 |
-| `clickable` | `boolean` | `false` | 只加指针光标；hover 反馈对所有卡片生效，组件不绑定点击行为 |
-| `insight` | `StatCardInsight` | - | 指标变化对象；启用后 label 上移并渲染趋势信息 |
-| `variant` | `StatCardVariant` | `'default'` | 布局变体（`default` \| `progress`） |
-| `progress` | `number` | - | 进度百分比；传入即启用进度变体，进度环会裁剪到 0-100 |
-| `meta` | `string` | - | 默认、进度与趋势布局的说明行；存在 `meta` 插槽时由插槽覆盖 |
+| `value` | `number \| string` | - | 主数值；number 按默认格式化补分隔符。 |
+| `label` | `string` | - | 指标标签；趋势与进度布局中显示在顶部。 |
+| `iconClass` | `string` | `''` | 装饰图标 class，尺寸由组件决定；颜色类为图标、色光与进度环着色。 |
+| `clickable` | `boolean` | `false` | 只加指针光标，不绑定点击行为。 |
+| `insight` | `StatCardInsight` | - | 变化指标；启用后标签上移并渲染趋势胶囊。 |
+| `variant` | `StatCardVariant` | `'default'` | 布局变体（`default` \| `progress`）。 |
+| `progress` | `number` | - | 进度百分比；传入即启用进度布局，裁剪到 0–100。 |
+| `meta` | `string` | - | 说明行；`meta` 插槽优先。 |
+| `ariaLabel` | `string` | - | `role="group"` 的可访问名称；缺省时由可见标签命名。 |
+
+### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `value` | 自定义数值区域。 |
+| `label` | 自定义标签区域。 |
+| `meta` | 说明行；与 `meta` 都省略时不占行。 |
 
 ### StatCardInsight
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `from` | `number` | - | 基准值 |
-| `to` | `number` | - | 当前值 |
-| `type` | `'percent' \| 'delta'` | `'percent'` | 百分比变化或绝对增量 |
-| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | 自定义颜色，同时决定胶囊底色（该色的 12% 混色）；缺省时 ≥0 为 success、<0 为 danger |
-| `iconClass` | `string` | - | 自定义趋势图标 class，渲染为 `<i>`；缺省时使用内置 SVG 箭头（≥0 上升、<0 下降） |
-| `suffix` | `string` | - | 自定义后缀（默认 percent 为 `%`）；与数值紧贴，需要空格时写进后缀，如 `' pts'` |
-| `precision` | `number` | - | 小数精度 |
-
-### Slots
-
-| 插槽 | 说明 |
-|------|------|
-| `value` | 自定义数值区域 |
-| `label` | 自定义标题区域 |
-| `meta` | 所有布局的说明行；插槽与 `meta` 都省略时不额外占行 |
+| `from` | `number` | - | 基准值。 |
+| `to` | `number` | - | 当前值。 |
+| `type` | `'percent' \| 'delta'` | `'percent'` | 百分比变化或绝对增量。 |
+| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | 涨幅色，也决定胶囊底色；缺省时 ≥0 为 success、<0 为 danger。 |
+| `iconClass` | `string` | - | 自定义趋势图标 class；缺省为内置 SVG 箭头。 |
+| `suffix` | `string` | - | 后缀，`percent` 默认为 `%`；与数值紧贴，需要空格时写进后缀，如 `' pts'`。 |
+| `precision` | `number` | - | 小数位数；缺省时 `delta` 为 0、`percent` 为 1。 |
 
 ### CSS 变量
 
 | 变量 | 来源 | 说明 |
 |------|------|------|
-| `--tx-stat-card-slot` | 组件默认 `72px`，可在组件的 `style` 上覆写 | 右侧方形槽位的边长：图标居中其中，progress 的进度环按它的尺寸绘制，宽卡的内容列在右侧让出槽位加 8px。卡片内容区窄于 240px 时组件在图标与进度环上把它改为 `36px`。 |
-| `--tx-stat-card-slot-inset` | 组件默认 `18px`，可在组件的 `style` 上覆写 | 槽位到卡片右边缘的距离。上述窄卡布局中不读取：槽位固定在距上、右各 `12px` 的角落。 |
-| `--tx-stat-card-icon-color` | 组件写入（图标计算色） | 图标着色时写到根节点；灰色图标会移除它，只有 progress 布局保留，让进度环也取这层灰色。色光的三团色斑（该色向页面底色 `--tx-bg-color` 混合后的颜色、它在 OKLCH 中色相转 42° 的邻近色、该色本身）、着色时图标的墨色，以及 progress 的进度弧、轨道与环心圆盘都由它绘制。挂载时、`iconClass` / `variant` 变化时和页面主题切换后重新读取。由组件独占，不要用 `:style` 绑定。 |
+| `--tx-stat-card-slot` | 组件默认 `72px`，可在组件的 `style` 上覆写 | 右侧方形槽位的边长，图标与进度环按它绘制；窄卡时为 `36px`。 |
+| `--tx-stat-card-slot-inset` | 组件默认 `18px`，可在组件的 `style` 上覆写 | 槽位到卡片右边缘的距离；窄卡布局不读取。 |
+| `--tx-stat-card-icon-color` | 组件写入（图标计算色） | 色光、图标墨色与进度环的来源色；由组件独占，不要用 `:style` 绑定。 |
 
 ## 概述
 
-- 默认布局在标签或趋势内容后显示一次说明，进度布局仍放在底部。宿主需要整排对齐时，可在没有说明的卡片上用 `meta` 插槽放置 `aria-hidden` 占位。
-- 图标：默认与 insight 布局把 `iconClass` 直接画在右侧——没有底板、描边、投影或光晕——垂直居中于与 progress 进度环相同的 72px 槽位，图标完整显示，不再被卡片边缘裁切；内容列在右侧让出槽位加 8px 的空间。图标尺寸由组件决定（30px）——选择器优先级高于 `text-6xl` 这类宿主工具类，尺寸类不生效；`iconClass` 里的颜色类照常给图标着色，不带颜色类时继承主色。progress 布局把图标以 22px 画在进度环中心，不再单独渲染图标槽。
-- 色光：图标（或进度环）身后，图标的颜色被抽离铺在卡片右侧。三团模糊（34px）色斑——该色与页面底色（`--tx-bg-color`）55:45 混合后取 24%、同一混合色在 OKLCH 中色相转 42° 取 20%、该色本身 12%（细小，作为色场的核心，落在右上角而不是图标身后）——分别以 17s、21s、13s 的周期漂移、旋转、拉伸，叠在一起像一片缓慢形变的色场。遮罩把它限定在右侧：卡片最右 10% 完全可见，到从右往左 62% 处淡尽，数字仍落在素净的卡面上。读到颜色后 0.8s 淡入。两团大色斑向页面底色混合，所以色光在暗色主题下是深色、在亮色主题下是浅色，不会亮成一片把图标吞掉（2026-09-26 评审：暗色下「太亮，图标不显眼」）；同日再次评审「还是比较明显」，三团透明度约减半、遮罩收窄，色光只是数字旁的一层底色，不是和数字抢眼的第二主体；第三次评审要求「继续淡、更模糊、带些许颗粒感」，透明度再降三成、模糊从 22px 加到 34px，并在色光层上叠一层 SVG 分形噪声（`feTurbulence`，140px 平铺，`overlay` 混合 14%）。颗粒在色光层内部，随它的遮罩与淡入一起出现，本身静止。浏览器不支持相对颜色（`oklch(from …)`）时，邻近色回落为同一混合色 17% 的一团。
-- 图标墨色：着色的卡片里，图标颜色向正文色（`--tx-text-color-primary`）偏 45%，与色光往相反方向走——亮色主题下比浅色光更深、暗色主题下比深色光更浅——否则它落在同色相的色光上几乎看不见。`iconClass` 的颜色类仍决定色相：组件读取图标颜色时会先撤掉这层墨色，主题切换后的重读不会在已混过的颜色上再混一次。
-- 窄卡：卡片内容区窄于 240px 时（按卡片自身的容器查询，与视口无关；默认 16px 内边距下约为 274px 宽的卡片），槽位缩成 36px、移到距上、右各 12px 的空白角落，图标缩为 18px，进度环同步缩小；色光按卡片的百分比布局，保持不变。内容列不再让位，只有顶部对齐的标签（insight / progress）右侧留出 44px，默认布局的数字贴底，标签只有一行时位于角落下方。
-- 取色跟随图标：挂载时、`iconClass` / `variant` 变化时以及页面主题切换后（`<html>` 的 `class` / `data-theme` / `data-tx-contrast` 变化，或系统配色、对比度偏好变化；所有卡片共用一个观察器，在下一帧读取，被 `<KeepAlive>` 缓存的卡片重新激活时再读一次），组件读取图标的计算色。有色相时写入根节点的 `--tx-stat-card-icon-color` 并加上 `tx-stat-card--tinted`，色光随之出现；progress 的进度环、轨道与环心圆盘也由它混出。灰色图标（RGB 通道极差 < 24，包括标准亮 / 暗主题下的 `--tx-color-info`）不给卡片着色：图标保持灰色，不画色光（色斑根本不渲染）——灰色没有色相可抽离，混进去只会在数字旁留下一团灰雾。progress 布局里的进度环仍取灰色图标的颜色，不会退回主色。
-- hover 对所有卡片生效，但不带任何动效：描边立即变为 `--tx-border-color`（颜色不做过渡），卡片上没有东西上浮、扫光或发光。`clickable` 只额外加上指针光标。
-- 涨幅胶囊：符号、数值、单位紧贴渲染为一个整体（`+16.7%`），底色是涨幅色的 12% 混色。默认趋势图标是内联 SVG，不依赖宿主扫描图标类；显式 `insight.iconClass` 仍渲染为 `<i>` 图标。数值与涨幅都使用等宽数字，刷新时不抖动。
+- 根节点为 `role="group"`，由可见标签经 `aria-labelledby` 命名；Dashboard 中给出相邻标题，避免只显示裸数字。
+- 挂载、`iconClass` / `variant` 变化及页面主题切换后读取图标计算色：有色相时加 `tx-stat-card--tinted` 并画色光；灰色图标（含 `--tx-color-info`）不画色光。
+- 卡片内容区窄于 240px 时（容器查询，非视口），槽位缩成 36px 并移到右上角。
+- 涨幅胶囊把符号、数值与单位渲染为一体（`+16.7%`）；数值使用等宽数字，刷新时不抖动。
+- hover 只把描边换成 `--tx-border-color`，没有动效。
+- 减少动态效果时色斑停止漂移、色光直接出现，进度弧直接跳到新值。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
-- 建议：普通指标使用默认变体，增减趋势使用 `insight`，0-100 边界明确的健康度/容量使用 `variant="progress"`。
-- 视觉契约变更（2026-09-23）：装饰层不再渲染模糊放大的第二个图标 `.tx-stat-card__decoration-icon`，`.tx-stat-card__decoration` 里只剩 `.tx-stat-card__glow`；默认趋势图标从 `i-carbon-growth` / `i-carbon-arrow-down` 图标类改为内联 SVG `.tx-stat-card__insight-icon--trend`；涨幅文本包进 `.tx-stat-card__insight-text`；根节点新增 `tx-stat-card--tinted`。针对旧 class 或旧图标类写的覆盖样式需要迁移。props、slots、events 与 `progress` 变体不变。
-- 进度环修复（2026-09-24）：`--tx-stat-card-progress` 用 `@property` 注册、绑定在 `.tx-stat-card__progress` 上，而真正画弧的进度环是它的子元素。它原先注册为 `inherits: false`，进度环永远只读到初始值 0%，弧从未画出——本文档与 CoreApp 存储页的使用率卡片都是如此。现在改为可继承。环内圆盘也统一为进度色的 16% 混色；此前一条 `@supports (color: color-mix(…))` 覆盖把它改混进 `rgba(0, 0, 0, 0.45)`，暗色下像一块深色镜片，亮色下是环心一团灰斑。
-- 视觉契约变更（2026-09-26）：`iconClass` 从右下角水印改为右侧的发光徽章。删除 `.tx-stat-card__icon-layer`、`.tx-stat-card__decoration` 与 `.tx-stat-card__glow`，新结构是 `.tx-stat-card__badge` > `.tx-stat-card__halo` + `.tx-stat-card__badge-body` > `i.tx-stat-card__icon`（`<i>` 的类名不变）；不再读取 `--tx-stat-card-icon-opacity` / `--tx-stat-card-icon-opacity-hover`，柔光用的 `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` 一并删除，新增 `--tx-stat-card-slot` / `--tx-stat-card-slot-inset`。进度环、轨道、环心圆盘与环心图标改为跟随图标颜色：此前环固定为主色，环心图标上的颜色类也被组件样式压掉，运营面板里 success / warning / danger 三张卡都画成了主色。内容列在右侧为槽位留出空间；根节点成为 inline-size 容器（`container-type: inline-size`）。针对旧 class 或变量写的覆盖样式需要迁移；props、slots、events 不变。
-- 视觉契约变更（2026-09-26，同日稍后）：徽章改为色光。删除 `.tx-stat-card__badge`、`.tx-stat-card__halo` 与 `.tx-stat-card__badge-body`，连同徽章的渐变底板、1px 描边、顶边内高光、1:2 投影、光晕以及 hover 上浮与扫光。图标改为直接放在 `.tx-stat-card__glyph` > `i.tx-stat-card__icon` 里（`<i>` 的类名不变；30px，窄卡 18px）；新增 `.tx-stat-card__aura` > 三个 `.tx-stat-card__aura-blob`（`.is-a` / `.is-b` / `.is-c`），把图标颜色铺在卡片右侧——progress 布局里也有，位于进度环之下。`--tx-stat-card-slot`、`--tx-stat-card-slot-inset` 与 `--tx-stat-card-icon-color` 不变。针对徽章类名写的覆盖样式需要迁移；props、slots、events 不变。
-- 被否决的方案：2026-09-23 先否决了把图标收进右上角小号着色徽章的做法——CoreApp 插件页（`PluginFeatures` / `PluginStorage`）传入 `icon-class="i-ri-… text-6xl text-<颜色>"`，依赖的是大号彩色图标的气质，于是改成裁在右下角的大号淡色水印，旧 hover（装饰层放大到 2.05 倍并模糊、图标层旋转 10°）一并移除。2026-09-26 水印本身也被替换：图标被卡片边缘裁掉一截，0.16 的透明度又撑不起卡片，看起来既残缺又不够醒目。第一个替代方案是发光徽章——它也不是当年那枚右上角小徽章：在右侧垂直居中、占 72px 槽位、本体 56px，带同色渐变、描边、光晕与投影——但同日在评审中被否决：投影、描边和 hover 动效（上浮 2px 加一道扫光）用错了强调方式。要的是从图标颜色抽出、在右侧持续形变的渐变，而且没有 hover 动效。色光就是这个方案，无框的图标保留徽章的槽位，完整而醒目。缩小后放在右上角的形态只是卡片内容区窄于 240px、数字旁放不下槽位时的退路。
-- 可访问性：组件根节点使用 `role="group"`；在 Dashboard 中应给相邻标题或上下文，避免只显示裸数字。
-- 动效降级：色光挂载时 0.8s 淡入（`opacity`，由 `--tinted` + `--glow-in` 状态驱动，与 hover 无关）。三团色斑以 17s、21s、13s 的 `ease-in-out` 往返循环漂移，起始相位错开，只动 `transform`（旋转、位移、不等比缩放），模糊后的图层交给合成器移动，不会每帧重新模糊。进度弧变化是 0.6s 过渡。没有任何 hover 动效，也没有过渡涉及颜色。`prefers-reduced-motion: reduce` 下全部停止：色斑停在静止构图（每段漂移的第一帧，完整可见），色光直接出现，进度弧直接跳到新值。
-
-- Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`。
-- Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` 导出 `StatCardProps`、`StatCardInsight` 与变体类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染与 `aria-labelledby` 命名、色光与图标结构（`.tx-stat-card__aura` 内三个 `.tx-stat-card__aura-blob`，`.tx-stat-card__glyph` > 带图标类的 `.tx-stat-card__icon`，两者都 `aria-hidden`，不再有徽章）、`ariaLabel` 覆盖、指针光标只挂在 `--clickable` 上（源码断言）、自定义 value 与 label 插槽、百分比与增量 insight（默认内联 SVG 趋势图标、显式 `iconClass`、`+20%` 整体渲染、负值不加 `+`）、取色只跟随着色图标（`rgb()` 与 `color(srgb …)` 判为着色，灰色不写 `--tx-stat-card-icon-color`，progress 布局除外、仍由它给进度环着色；灰色卡片渲染色光层，但永远拿不到让它显示的 `--tinted`）、`<html>` 的 `class` 或 `data-tx-contrast` 属性切换后在下一帧重读图标颜色、进度激活与进度环裁剪（progress 布局不渲染 `.tx-stat-card__glyph`，色光在 DOM 中位于进度环之前）、进度环读取父元素上绑定的百分比（`@property … inherits: true`，源码断言）且其过渡在 reduced-motion 下关闭、省略 `progress` 时用 ≤100 的数值推断进度，以及自定义 progress meta 插槽。样式契约用 Sass 编译样式表后断言：色光只在 `--tinted` + `--glow-in` 时显示，未着色的卡片去掉色斑而不是整层；三团色斑是唯一的动画元素，各用一组只动 `transform` 的关键帧；图标与色光都没有投影或底板；hover 规则不移动任何东西，也没有过渡作用于颜色；reduced-motion 下停止所有动画与过渡，且不隐藏任何内容。窄卡容器查询与色光的实际观感没有断言：jsdom 没有布局与绘制。
+- 色光是三团模糊色斑，只动画 `transform`，由合成器移动，不逐帧重新模糊。
+- 源码：`packages/tuffex/packages/components/src/stat-card/`。
 
 <TuffDocSourceLink />

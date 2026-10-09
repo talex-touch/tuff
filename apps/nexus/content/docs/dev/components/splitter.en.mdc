@@ -1,6 +1,6 @@
 ---
 title: "Splitter"
-description: "Resizable two-pane layout with pointer and keyboard controls, clamped ratios, snapping, and horizontal or vertical direction."
+description: "A two-pane layout with a draggable divider."
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Give the splitter a real width and height through its parent. Its compact 6px separator has a slim grip; the two panes share the remaining space, so their ratio never adds separator-width overflow.
-
+### Basic
+The panes split the space left after the separator track by the `v-model` ratio; `direction="vertical"` stacks them.
 ::::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
 ---
 code: |
@@ -20,17 +20,20 @@ code: |
   import { ref } from 'vue'
 
   const ratio = ref(0.42)
+  const verticalRatio = ref(0.58)
   </script>
 
   <template>
-    <div style="width: 520px; height: 220px;">
+    <div style="height: 220px;">
       <TxSplitter v-model="ratio" :min="0.25" :max="0.75" :snap="0.05">
-        <template #a>
-          <div>Navigation ({{ ratio.toFixed(2) }})</div>
-        </template>
-        <template #b>
-          <div>Content</div>
-        </template>
+        <template #a>Navigation ({{ ratio.toFixed(2) }})</template>
+        <template #b>Content</template>
+      </TxSplitter>
+    </div>
+    <div style="height: 220px;">
+      <TxSplitter v-model="verticalRatio" direction="vertical" :bar-size="12">
+        <template #a>Preview</template>
+        <template #b>Logs</template>
       </TxSplitter>
     </div>
   </template>
@@ -39,11 +42,11 @@ code: |
 
 ### Best Practices
 
-- Always wrap `TxSplitter` in a container with explicit height. Without a bounded box the panes cannot resize predictably.
-- Keep `min` and `max` far enough apart for both panes to remain usable; avoid letting one pane collapse to unreadable content.
-- Use `snap` for inspector/sidebar layouts where stable ratios matter; leave it `0` for free-form editing canvases.
-- Put scroll containers inside pane slots, not around the splitter root, so resizing does not fight page scroll.
-- Disable the splitter while modal interactions or drag-and-drop flows are active to avoid competing pointer capture.
+- Put the splitter in a container with explicit width and height; without a bounded box the panes can't resize predictably.
+- Keep `min` and `max` far enough apart that neither pane shrinks to unreadable content.
+- Use `snap` for inspector and sidebar layouts that need stable ratios; leave it `0` for free-form canvases.
+- Put scroll containers inside the pane slots, not around the root, so resizing doesn't fight page scroll.
+- Disable the splitter during modal interactions or drag-and-drop to avoid competing pointer capture.
 
 ## API Reference
 
@@ -51,47 +54,41 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `number` | `0.5` | Ratio for pane A. Non-finite values fall back to `0.5`; rendered values are clamped between `0` and `1`. |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal` splits left/right; `vertical` splits top/bottom. Invalid values fall back to horizontal. |
-| `min` | `number` | `0.1` | Minimum emitted ratio during pointer or keyboard resizing. |
-| `max` | `number` | `0.9` | Maximum emitted ratio during pointer or keyboard resizing. |
-| `disabled` | `boolean` | `false` | Disables pointer and keyboard resizing. If enabled while dragging, it ends the active drag. |
-| `barSize` | `number` | `6` | Separator track size in pixels. Runtime floor is `6px`; the visible grip is 2px thick. |
-| `snap` | `number` | `0` | Optional ratio step. `0` disables snapping; positive values snap emitted ratios to the nearest step. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `a` | - | First pane: left in horizontal mode, top in vertical mode. |
-| `b` | - | Second pane: right in horizontal mode, bottom in vertical mode. |
+| `modelValue` | `number` | `0.5` | Ratio of pane A; non-finite values become `0.5`, and rendering clamps to `0..1`. |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal` splits left/right, `vertical` top/bottom; invalid values become `horizontal`. |
+| `min` | `number` | `0.1` | Smallest ratio emitted by pointer or keyboard resizing. |
+| `max` | `number` | `0.9` | Largest ratio emitted by pointer or keyboard resizing. |
+| `disabled` | `boolean` | `false` | Blocks resizing; disabling mid-drag ends the drag. |
+| `barSize` | `number` | `6` | Separator track size in px, at least 6; the visible grip is 2px thick. |
+| `snap` | `number` | `0` | Ratio step; `0` turns snapping off. |
 
 ### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `number` | Emitted with the next clamped and snapped ratio. |
-| `change` | `number` | Emitted with the same ratio for change listeners. |
-| `drag-start` | `()` | Emitted when pointer resizing starts. |
-| `drag-end` | `()` | Emitted when pointer resizing ends or is cancelled by disabling/unmounting. |
+| `update:modelValue` | `number` | Emits the next clamped and snapped ratio. |
+| `change` | `number` | Fires together with `update:modelValue`. |
+| `drag-start` | `()` | Fires when a pointer drag starts. |
+| `drag-end` | `()` | Fires when a drag ends, or is cancelled by disabling or unmounting. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `a` | - | First pane: left when horizontal, top when vertical. |
+| `b` | - | Second pane: right when horizontal, bottom when vertical. |
 
 ## Overview
 
-- Pointer drag reads the splitter root bounding box: horizontal uses `clientX / width`, vertical uses `clientY / height`.
-- Keyboard resizing uses ArrowLeft / ArrowRight in horizontal mode and ArrowUp / ArrowDown in vertical mode, stepping by `0.02` before clamp / snap.
-- The separator renders `role="separator"` with `aria-label="Resize"`; `aria-orientation` is `vertical` for horizontal panes and `horizontal` for vertical panes. It reports the current split through `aria-valuenow` and the `min`/`max` bounds through `aria-valuemin`/`aria-valuemax`, all as integer percentages (`0..100`).
-- When disabled, the separator uses `tabindex="-1"`, pointer/keyboard changes are ignored, and active dragging is ended.
-- The component does not persist layout. Store the `v-model` ratio in the caller if users should keep their pane size.
+- Pointer drags map through the root's bounding box: `clientX / width` horizontally, `clientY / height` vertically.
+- Arrow keys (← / → horizontally, ↑ / ↓ vertically) step by `0.02`, then clamp and snap.
+- The separator is a `role="separator"` with `aria-label="Resize"` and an `aria-orientation` perpendicular to the split; `aria-valuenow` / `aria-valuemin` / `aria-valuemax` are integer percentages (`0..100`).
+- When disabled, the separator gets `tabindex="-1"` and ignores pointer and keyboard input.
+- Callers must keep `min <= max`. The ratio isn't persisted; store the `v-model` value to remember it.
 
 ## Technologies
 
-- **Accessibility note:** The separator is keyboard-focusable with `role="separator"`, `aria-label="Resize"`, and arrow-key resizing, and it exposes `aria-valuenow` / `aria-valuemin` / `aria-valuemax` as integer percentages (the current ratio and the `min`/`max` bounds scaled to `0..100`) so assistive tech can announce the split position. Visible ratio/size feedback is still helpful when precision matters.
-- **Layout note:** Rendered ratios are clamped to `0..1`, while emitted pointer/keyboard changes are clamped by `min`/`max` and then snapped. Keep `min <= max` in caller code; the component does not normalize inverted bounds.
-- **Verified coverage:** `splitter.test.ts` checks horizontal and vertical rendering, separator orientation, `aria-valuenow`/`aria-valuemin`/`aria-valuemax`, slot content, ratio/bar CSS variables, pointer drag with clamp/snap, vertical pointer math, keyboard resizing, disabled blocking, and drag-end emission when disabled mid-drag.
-
-- Component source: `packages/tuffex/packages/components/src/splitter/src/TxSplitter.vue`.
-- Types: `packages/tuffex/packages/components/src/splitter/src/types.ts` exports `SplitterProps`, `SplitterEmits`, and `SplitterDirection`.
-- Export alias: `packages/tuffex/packages/components/src/splitter/index.ts` exports `Splitter`, `TxSplitter`, splitter types, and `TxSplitterInstance`.
-- Coverage: `packages/tuffex/packages/components/src/splitter/__tests__/splitter.test.ts` verifies rendering, pointer/keyboard resizing, snapping, disabled behavior, and drag lifecycle.
+- The root writes `--tx-splitter-ratio` and `--tx-splitter-bar-size`, and the grid columns are computed from them.
+- Source: `packages/tuffex/packages/components/src/splitter/`.
 
 <TuffDocSourceLink />

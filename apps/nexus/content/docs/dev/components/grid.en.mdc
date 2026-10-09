@@ -1,6 +1,6 @@
 ---
 title: Grid
-description: Structured layout and alignment
+description: A container that arranges content in rows and columns.
 category: Layout
 status: beta
 since: 0.3.4
@@ -11,37 +11,97 @@ verified: true
 
 ## Usage
 
-### Grid
+### Basic
 :::TuffDemoWrapper{demo="GridGridDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="width: 520px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <TxGrid :cols="3" :gap="12">
-        <TxGridItem v-for="i in 6" :key="i">
-          <div style="height: 54px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa); display: flex; align-items: center; justify-content: center; color: var(--tx-text-color-secondary);">
-            {{ i }}
-          </div>
-        </TxGridItem>
-      </TxGrid>
-    </div>
+    <TxGrid :cols="3" :gap="12">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
+    </TxGrid>
   </template>
 ---
 :::
 
-Simple grid layout:
-
+### Responsive Columns
+`cols` can be set per breakpoint.
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="3" gap="16">
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" :gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>Item {{ i }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Auto-Fit Columns
+`minItemWidth` fits as many columns as the width allows and takes precedence over `cols`.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" :gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>{{ item.title }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Gaps
+`gap` takes a number (px), `{ row, col }`, or a per-breakpoint object.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="32">…</TxGrid>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">…</TxGrid>
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">…</TxGrid>
+  </template>
+---
+:::
+
+### Column and Row Spans
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" :gap="16">
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="2">Span 2</TxGridItem>
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="3">Span 3</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
       <TxGridItem>Item 1</TxGridItem>
-      <TxGridItem>Item 2</TxGridItem>
+      <TxGridItem :row-span="2">Span 2 rows</TxGridItem>
       <TxGridItem>Item 3</TxGridItem>
       <TxGridItem>Item 4</TxGridItem>
-      <TxGridItem>Item 5</TxGridItem>
-      <TxGridItem>Item 6</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Alignment
+`justify` / `align` align every item; `justifySelf` / `alignSelf` align one.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="16" justify="center" align="center" style="height: 400px;">
+      <TxGridItem v-for="i in 3" :key="i">Item {{ i }}</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem justify-self="start">Start</TxGridItem>
+      <TxGridItem justify-self="center">Center</TxGridItem>
+      <TxGridItem justify-self="end">End</TxGridItem>
     </TxGrid>
   </template>
 ---
@@ -49,32 +109,48 @@ code: |
 
 ### Best Practices
 
-- Prefer explicit `cols` for known dashboard grids and `minItemWidth` for card collections that should auto-fit available space.
-- Keep `TxGridItem` spans predictable; oversized spans should be paired with enough columns at every responsive breakpoint.
-- Use numeric gaps for token-like spacing and string gaps only when the layout needs CSS units such as `rem` or `clamp()`.
-- Do not use Grid for semantic tables or ordered lists; keep data tables in table components and navigation in list markup.
+- Use `cols` for dashboard grids with a known column count and `minItemWidth` for card collections that fill the container; pick one per grid.
+- With large spans, make sure every breakpoint has enough columns.
+- Prefer numeric gaps; pass strings only for units such as `rem` or `clamp()`.
+- Don't use Grid in place of a semantic table or list.
 
 ## API Reference
 
-### Grid Props
+### TxGrid
+
+#### Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| cols | `number \| Responsive<number>` | `0` | Columns; 0 leaves the column template unset |
-| rows | `number` | `0` | Rows; 0 leaves the row template unset |
-| gap | `GridGap` | `16` | Grid gap (number → px, `{ row, col }`, or responsive object) |
-| minItemWidth | `string` | - | Min item width (auto-fit) |
-| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
-| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
+| cols | `number \| Responsive<number>` | `0` | Column count, optionally per breakpoint; `0` sets no column template. |
+| rows | `number` | `0` | Row count; `0` sets no row template. |
+| gap | `GridGap` | `16` | Gap: a number (px), `{ row, col }`, or a per-breakpoint object. |
+| minItemWidth | `string` | - | Minimum item width; switches to `auto-fit` columns. |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment of items. |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment of items. |
 
-### GridItem Props
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | `TxGridItem` children. |
+
+### TxGridItem
+
+#### Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| colSpan | `number` | `1` | Column span, clamped to at least 1 |
-| rowSpan | `number` | `1` | Row span, clamped to at least 1 |
-| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item horizontal alignment |
-| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item vertical alignment |
+| colSpan | `number` | `1` | Columns spanned, at least 1. |
+| rowSpan | `number` | `1` | Rows spanned, at least 1. |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | The item's own horizontal alignment. |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | The item's own vertical alignment. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Cell content. |
 
 ### Types
 
@@ -95,169 +171,15 @@ code: |
 ---
 :::
 
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | `TxGrid` and `TxGridItem` do not emit component-specific events. |
-
-### Slots
-
-| Component | Slot | Props | Description |
-|-----------|------|------|-------------|
-| `TxGrid` | `default` | - | Grid item content, normally `TxGridItem` children. |
-| `TxGridItem` | `default` | - | Cell content rendered inside the grid item wrapper. |
-
-## Responsive Grid
-
-### Responsive columns
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" gap="20">
-      <TxGridItem v-for="i in 10" :key="i">
-        <TxCard>Item {{ i }}</TxCard>
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### Auto-fit grid
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid min-item-width="250px" gap="24">
-      <TxGridItem v-for="item in items" :key="item.id">
-        <TxCard>
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.description }}</p>
-        </TxCard>
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## Grid Gaps
-
-`gap` accepts three forms: a number (uniform gap converted to px), `{ row, col }` for separate row/column gaps, and a responsive object keyed by breakpoint.
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <!-- Uniform gap: number converted to px -->
-    <TxGrid :cols="3" gap="32">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-
-    <!-- Separate row / column gaps -->
-    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-
-    <!-- Responsive by breakpoint -->
-    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">
-      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## Grid Items
-
-### Column span
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="4" gap="16">
-      <TxGridItem>Item</TxGridItem>
-      <TxGridItem :col-span="2">Span 2</TxGridItem>
-      <TxGridItem>Item</TxGridItem>
-      <TxGridItem :col-span="3">Span 3</TxGridItem>
-      <TxGridItem>Item</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### Row span
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="3" gap="16">
-      <TxGridItem>Item 1</TxGridItem>
-      <TxGridItem :row-span="2">Span 2 rows</TxGridItem>
-      <TxGridItem>Item 3</TxGridItem>
-      <TxGridItem>Item 4</TxGridItem>
-      <TxGridItem>Item 5</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-## Alignment
-
-### Grid alignment
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid
-      :cols="3"
-      gap="16"
-      justify="center"
-      align="center"
-      style="height: 400px;"
-    >
-      <TxGridItem v-for="i in 3" :key="i">
-        Item {{ i }}
-      </TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
-### Item alignment
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="3" gap="16">
-      <TxGridItem justify-self="start">Start</TxGridItem>
-      <TxGridItem justify-self="center">Center</TxGridItem>
-      <TxGridItem justify-self="end">End</TxGridItem>
-    </TxGrid>
-  </template>
----
-:::
-
 ## Overview
 
-- `minItemWidth` takes precedence over `cols` and outputs `repeat(auto-fit, minmax(..., 1fr))`.
-- Responsive values are resolved from the current window width with breakpoints `xs < 640`, `sm < 768`, `md < 1024`, `lg < 1280`, and `xl` otherwise.
-- Numeric `gap` values are converted to px; `{ row, col }` controls row and column gaps separately.
-- `TxGridItem` clamps `colSpan` and `rowSpan` to at least 1.
+- `minItemWidth` takes precedence over `cols` and emits `repeat(auto-fit, minmax(<minItemWidth>, 1fr))`.
+- Responsive values follow the window width: `xs < 640 ≤ sm < 768 ≤ md < 1024 ≤ lg < 1280 ≤ xl`. An unset breakpoint takes the nearest smaller value, then the nearest larger one.
+- During server rendering the width is taken as 1024px, which is `lg`.
 
 ## Technologies
 
-- **Responsive contract:** `TxGrid` resolves responsive `cols` and `gap` against `window.innerWidth`; SSR/default width starts at 1024, so critical first paint layouts should also work at the `md` fallback.
-- **Sizing note:** `minItemWidth` wins over explicit `cols` and emits `repeat(auto-fit, minmax(..., 1fr))`. Use one strategy per grid to avoid surprising reviewers.
-- **Verified coverage:** `grid.test.ts` covers fixed columns/rows/gaps, `minItemWidth` precedence, responsive resize updates, resize listener cleanup, `TxGridItem` span clamping, self alignment, and install registration.
-
-- Grid source: `packages/tuffex/packages/components/src/grid/src/TxGrid.vue`.
-- Grid item source: `packages/tuffex/packages/components/src/grid/src/TxGridItem.vue`.
-- Coverage: `packages/tuffex/packages/components/src/grid/__tests__/grid.test.ts` verifies fixed templates, responsive resolution, listener cleanup, and span clamping.
+- Props compute the grid styles and inline them on the root; the breakpoint updates on `window` `resize`.
+- Source: `packages/tuffex/packages/components/src/grid/`.
 
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "FilterChips 筛选胶囊"
-description: "带圆点与计数的单选筛选条，可作为工具栏或标签页语义使用。"
+description: "带圆点与计数的单选筛选条"
 category: Data
 status: beta
 since: 0.3.9
@@ -11,8 +11,9 @@ verified: true
 
 ## 用法
 
-### FilterChips
-:::TuffDemoWrapper{demo="FilterChipsFilterChipsDemo" code-lang="vue" title="状态筛选" description="计数由真实数据推导，不是写死的字面量。"}
+### 基础
+`items` 为每个 chip 提供 `label`、`dot` 与 `count`。
+:::TuffDemoWrapper{demo="FilterChipsFilterChipsDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -40,59 +41,9 @@ code: |
 ---
 :::
 
-### 最佳实践
-
-- 计数一律用 `computed` 从行数据算出来。写死字面量的那一刻它就开始说谎——新增一行就对不上了。
-- 筛选逻辑放宿主：chip 只表达「选了哪一项」，被过滤掉的行应当真正从数据里移除，而不是靠 CSS 藏起来（藏起来的行仍在无障碍树和 Tab 序列里）。
-- 单纯的列表筛选保持默认 `role="toolbar"`；只有确实存在成组的互斥面板时才用 `tablist`。
-- 圆点是辅助信息，不要让颜色成为状态的唯一载体——`label` 必须自己说清楚。
-- chip 多于两三个时给每个都配 `iconClass`：只有文字的一排 chip 会连成一句话，图标是每个 chip 的起始边界。图标是装饰性的（`aria-hidden`），命名仍然由 `label` 承担。
-- 图标本身就能认出来时（星标、品牌标）再开 `iconOnly`；图标只是抽象的类别符号时留着文字，hover 才看到名字的 chip 不算能认。
-- 只有当 chip 会在宿主自己的动效期间被整体重排时才关 `indicator`：两套位移叠在一起会互相打架。单纯不想要动效不必关它——系统的「减弱动态效果」已经会把补间切掉。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `string \| number` | - | 当前选中的 chip |
-| `items` | `FilterChipItem[]` | `[]` | chip 列表 |
-| `disabled` | `boolean` | `false` | 禁用整条筛选条 |
-| `role` | `'toolbar' \| 'tablist'` | `'toolbar'` | ARIA 语义，见「交互契约」 |
-| `indicator` | `boolean` | `true` | 选中底色作为一个滑块在 chip 之间平移；关掉则退回逐 chip 上色 |
-| `iconOnly` | `boolean` | `false` | 只画 `iconClass`，`label` 转到 `aria-label` 与 `title`；没有图标的 chip 仍显示文字 |
-| `ariaLabel` | `string` | `'Filters'` | 筛选条的可访问名 |
-
-### FilterChipItem
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `value` | `string \| number` | chip 唯一标识 |
-| `label` | `string` | chip 文案 |
-| `iconClass` | `string` | 前置图标 class，画在圆点与文案之前；不传则不渲染 |
-| `dot` | `string` | 前置圆点颜色；不传则不渲染圆点 |
-| `count` | `number` | 尾部计数徽标；不传则不渲染。**应当从数据推导** |
-| `disabled` | `boolean` | 单独禁用该 chip |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value)` | 选中变化 |
-| `change` | `(value)` | 选中变化（与上一条同时触发） |
-
-### Slots
-
-| 名称 | 说明 |
-|------|------|
-| `chip` | 替换 chip 内部内容；接收 `{ item, active }`。按钮外壳与键盘行为仍由组件保留 |
-
-## 与表格组合
-
-筛选条只负责「选了哪一项」，过滤本身由宿主完成——这样计数、行数据与表格永远是同一份真相。
-
-:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue" title="筛选 + 数据表格" description="计数从行数据推导；日期列按时间戳排序，而不是按渲染出来的月份文本。"}
+### 与表格组合
+筛选条只表达选中项；宿主过滤行数据，计数与表格共用同一份数据。
+:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -119,34 +70,64 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 计数用 `computed` 从行数据推导，不写死字面量。
+- 过滤放在宿主：被筛掉的行从数据中移除，不要用 CSS 隐藏——隐藏的行仍在无障碍树与 Tab 序列里。
+- 列表筛选保持默认的 `role="toolbar"`；只有存在成组的互斥面板时才用 `tablist`。
+- chip 多于两三个时给每个配 `iconClass`；只有图标本身可辨认时才开 `iconOnly`。
+- 只有宿主动效会整体重排 chip 时才关 `indicator`；减少动态效果由系统设置处理。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| number` | - | 当前选中的 chip。 |
+| `items` | `FilterChipItem[]` | `[]` | chip 列表。 |
+| `disabled` | `boolean` | `false` | 禁用整条筛选条。 |
+| `role` | `'toolbar' \| 'tablist'` | `'toolbar'` | 决定 chip 按开关还是标签页呈现。 |
+| `indicator` | `boolean` | `true` | 选中底色作为一个滑块在 chip 间平移；关闭后逐 chip 上色。 |
+| `iconOnly` | `boolean` | `false` | 只画 `iconClass`，`label` 转为 `aria-label` 与 `title`；无图标的 chip 仍显示文字。 |
+| `ariaLabel` | `string` | `'Filters'` | 筛选条的可访问名称。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value)` | 选中变化。 |
+| `change` | `(value)` | 与 `update:modelValue` 同时触发。 |
+
+### 插槽
+
+| 名称 | 说明 |
+|------|------|
+| `chip` | 替换 chip 内部内容；接收 `{ item, active }`，按钮外壳与键盘行为保留。 |
+
+### FilterChipItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string \| number` | chip 唯一标识。 |
+| `label` | `string` | chip 文案。 |
+| `iconClass` | `string` | 前置图标 class，画在圆点与文案之前。 |
+| `dot` | `string` | 前置圆点颜色。 |
+| `count` | `number` | 尾部计数徽标，应从数据推导。 |
+| `disabled` | `boolean` | 单独禁用该 chip。 |
+
 ## 概述
 
-- 整条筛选条只有一个 Tab 停靠点：焦点落在选中的 chip 上（没有选中项时落在第一个可用 chip），方向键在 chip 之间移动。
-- 方向键会绕回，并跳过禁用的 chip；`Home` / `End` 直达首尾。
-- `role="toolbar"`（默认）时 chip 是 `aria-pressed` 开关，**移动焦点不会改变筛选**，需要显式激活。
-- `role="tablist"` 时 chip 变成 `role="tab"` + `aria-selected`，**选中跟随焦点**；此时宿主应当同时渲染对应的 `role="tabpanel"` 区域。
-- 点击已选中的 chip 不会重复触发事件。
-- `indicator`（默认开）把选中底色画成**一个**元素并让它平移到新 chip；静止观感与关掉时逐像素一致，区别只在两态之间。关掉后底色回到每个 chip 自己身上。
-- 该滑块是滚动行的绝对定位子元素，因此**随 chip 一起横向滚动**——它测的是 chip 的 `offsetLeft` / `offsetTop`，不是视口坐标。
-- 不该被「看见移动」的位置不会做补间：首帧、chip 列表被重建（宿主重新拉取选项）、以及尺寸变化（含 webfont 落地后 chip 变宽）都是直接落位。
-- 没有任何选中项时不画滑块，而不是让它停在第 0 个 chip 上。
-- `iconOnly` 下每个 chip 收成 30px 方块（pill 的内边距是为文字留的，单个图标放进去会漂在椭圆里），`label` 转到 `aria-label` 与 `title`，辅助技术与 hover 仍能读到名字。**没有 `iconClass` 的 chip 不受影响**，照常显示文字——空 chip 比啰嗦的 chip 更糟。
-- `prefers-reduced-motion: reduce` 下滑块不做补间，直接落位。
-- 「不补间」的守卫要等新盒子**写入 DOM 之后**的下一帧才解除。在同一帧解除会让 `width` 从 0 补间上来，首帧画出 0 宽——这个顺序错误发布过一次，现由 `filter-chips.test.ts` 钉住。
-- 计数由宿主传入，组件看不到数据，也不会自行推导。
+- 整条只占一个 Tab 停靠点：焦点落在选中的 chip（无选中时为第一个可用 chip）；方向键绕回并跳过禁用项，`Home` / `End` 直达首尾。
+- `toolbar` 下 chip 是 `aria-pressed` 开关，移动焦点不改变筛选。
+- `tablist` 下 chip 为 `role="tab"` 加 `aria-selected`，选中跟随焦点；宿主需渲染对应的 `role="tabpanel"`。
+- 点击已选中的 chip 不触发事件。
+- 首帧、chip 列表重建、尺寸变化及减少动态效果时，滑块直接落位；无选中项时不绘制。
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/filter-chips/src/TxFilterChips.vue`。
-- Types: `packages/tuffex/packages/components/src/filter-chips/src/types.ts` 导出 `FilterChipsProps`、`FilterChipItem`、`FilterChipsRole`、`FilterChipValue`、`FilterChipsEmits`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/filter-chips/__tests__/filter-chips.test.ts` 共 15 例，覆盖 chip / 圆点 / 计数渲染、toolbar 与 tablist 两套 ARIA、v-model 与 change 发射、重复点击不发事件、roving tabindex 与无选中时的回退、方向键绕回与跳过禁用项、tablist 下选中跟随焦点、禁用态、chip 插槽与选中滑块；`filter-chips-motion.test.ts` 另有 3 例编译样式契约。
+- 滑块是滚动行的绝对定位子元素，按 chip 的 `offsetLeft` / `offsetTop` 定位，因此随 chip 一起滚动。
+- 源码：`packages/tuffex/packages/components/src/filter-chips/`。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）；上游只有 `aria-pressed`，此处补上键盘导航与 `tablist` 语义。
 
 <TuffDocSourceLink />
-
-- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
-- **补齐的无障碍能力：** 上游只有 `aria-pressed`，没有任何键盘导航；本移植按仓库标准补上了 roving tabindex、方向键、`Home` / `End` 与 `tablist` 语义。
-- **修正的上游缺陷：** 上游把计数写成字面量常量，只是恰好与当时的行数对得上；本组件把 `count` 定义为宿主推导的值，并在文档与 demo 中一致地这么做。
-- **配色：** 悬停用中性的 `--tx-bui-hover`，不是主色调 tint——筛选条是纸面控件，不是强调元素。
-- **被否掉的做法：** 直接搬 `TxTabs` 的 pointer。写这个移植时，它是 900 行组件里的内联实现，支持 line/pill/block/dot/outline × stretch/warp/glide/snap/spring 与纵向布局；一条筛选条要的只是「底色挪过去」，一种观感一种运动。2026-09-26 起那个 pointer 改由共享的 `useJellyIndicator` 引擎以滑行材质驱动，「体量太大」这条理由已不成立；FilterChips 仍保留自己的 0.24s 补间，不引入滑行的两根弹簧。
-- **props 声明方式：** 用运行时对象而不是 `defineProps<FilterChipsProps>()`。类型式声明在编译时从 `types.ts` 解析，而 dev server 的 Vue 插件在 *那个文件* 变化时不会重新编译本 SFC——`iconOnly` 加进接口后，vitest（冷编译）全绿，运行中的应用却一直把它当未知属性丢掉。运行时对象把声明留在编译器会监听的文件里，`satisfies` 钉住它与接口一致。
-- **实测覆盖：** `filter-chips.test.ts` 断言运行时 props 与 `FilterChipsProps` 的键逐一对应；覆盖滑块取自活动 chip 的盒子并跟随选中变化、无选中项时不绘制、`indicator: false` 时底色留在 chip 上、chip 列表重建走不补间路径；`filter-chips-motion.test.ts` 按 BUI 规则 2 编译样式块，正反两向断言 reduce 下补间被切掉、默认下确实存在补间，且静止态不依赖动画才可见。

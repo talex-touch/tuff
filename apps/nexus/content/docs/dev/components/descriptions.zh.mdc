@@ -1,6 +1,6 @@
 ---
 title: "Descriptions 描述列表"
-description: "按列排布的只读标签/值列表，用来展示一条记录的各个字段"
+description: "按列排布的只读标签与值列表"
 category: Data
 status: beta
 since: 0.6.3
@@ -30,12 +30,8 @@ code: |
 
 ## 用法
 
-`TxDescriptions` 用标签/值对展示一条记录的字段：后台抽屉里的成员、一次运行的详情、一个插件的元数据。每个 `TxDescriptionsItem` 是一个字段，值放在它的默认插槽里。
-
-### Descriptions
-
-默认两列。`手机` 为空，值显示占位符 `—`；`剩余积分` 是 `0`，它是一个值，照常显示。
-
+### 基础
+默认两列；空值显示 `emptyText`，`0` 照常显示。
 :::TuffDemoWrapper{demo="DescriptionsBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -59,9 +55,7 @@ code: |
 :::
 
 ### 布局与尺寸
-
-`horizontal` 把标签放在值旁边的一条轨道里，同一列的标签共用这条轨道，所以值自动对齐。`vertical` 把标签放在值上方，适合窄列和长值。`sm` 用在抽屉和侧边面板里，那里周围的文字是 13px。
-
+`layout` 决定标签在值旁边还是上方；`size="sm"` 用于抽屉和侧边面板。
 :::TuffDemoWrapper{demo="DescriptionsLayoutDemo" code-lang="vue"}
 ---
 code: |
@@ -83,9 +77,7 @@ code: |
 :::
 
 ### 列数与跨列
-
-`span` 让长字段占多列，最多不超过 `columns`。容器窄于 480px 时，无论 `columns` 是多少都退为单列；把框切到 360px 就能看到。
-
+`span` 让长字段跨列，最多到 `columns`；容器窄于 480px 时退为单列。
 :::TuffDemoWrapper{demo="DescriptionsColumnsDemo" code-lang="vue"}
 ---
 code: |
@@ -110,51 +102,58 @@ code: |
 
 ### 最佳实践
 
-- 一个字段一项，按阅读顺序排列：列表按行从左到右填充。
-- 缺失的值留空，不要自己写 `—`，这样所有列表对缺失数据的显示方式一致。需要别的占位符时传一次 `emptyText`，例如「未填写」。
-- 长字段（ID、地址、备注）用 `span` 加宽，不要为它把整张列表的 `columns` 调小。
-- 标签保持简短。宽于所在列 40% 的标签会换行；同一页面上下堆叠的几张列表需要彼此对齐时，设置 `labelWidth`。
-- 抽屉和侧边面板里用 `size="sm"`，页面里用 `md`。
-- 让父元素给列表宽度。放在 flex 行里时给它 `flex: 1`；在按内容收缩的父元素里，容器没有自己的宽度，会塌成零宽。
-- 条目直接放进插槽。`v-for` 和 `v-if` 都可以，但外面再包一层元素会同时破坏 `<dl>` 和网格。
+- 缺失的值留空，不手写 `—`；需要别的占位时传一次 `emptyText`。
+- 长字段（ID、地址、备注）用 `span` 加宽，不为它调小整张列表的 `columns`。
+- 标签保持简短；上下堆叠的几张列表需要对齐时设置 `labelWidth`。
+- 条目直接放进默认插槽（`v-for`、`v-if` 均可），不要外包元素。
+- 由父元素给列表宽度：flex 行中给 `flex: 1`；按内容收缩的父元素会让它塌成零宽。
 
 ## API 参考
 
-### TxDescriptions 属性
+### TxDescriptions
+
+#### 属性
 
 | 名称 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `columns` | `number` | `2` | 每行的项数，向下取整，小于 1 时按 1 处理。容器窄于 480px 时无论此值多少都退为单列 |
-| `layout` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal`：标签在值旁边自成一条轨道，同一列的标签共用这条轨道。`vertical`：标签在值上方。其他取值按 `horizontal` 处理 |
-| `size` | `'sm' \| 'md'` | `'md'` | `md`：值 14px、标签 13px，行间距 12px，项间距 24px。`sm`：值与标签都是 13px，8px / 16px |
-| `emptyText` | `string` | `'—'` | 值什么都不渲染时显示的占位：没有默认插槽、只有空白、空插值，或 `v-if` 为假。`0` 算作值 |
-| `labelWidth` | `string \| number` | - | 水平布局下标签轨道的宽度，数字按 px 计。不设置时，每列标签共用其中最长一个的宽度，最多占该列的 40%。垂直布局忽略此值 |
+| `columns` | `number` | `2` | 每行项数，向下取整，最小为 1。 |
+| `layout` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal` 标签在值旁、同列共用标签轨道；`vertical` 标签在值上方。 |
+| `size` | `'sm' \| 'md'` | `'md'` | `md` 值 14px、标签 13px；`sm` 均为 13px，间距更紧。 |
+| `emptyText` | `string` | `'—'` | 值不渲染任何内容时的占位；`0` 算作值。 |
+| `labelWidth` | `string \| number` | - | 水平布局的标签宽度，数字按 px；缺省取最长标签，至多 40%。 |
 
-### TxDescriptionsItem 属性
+#### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `default` | 直接放 `TxDescriptionsItem`；外包元素会破坏 `<dl>` 与网格。 |
+
+### TxDescriptionsItem
+
+#### 属性
 
 | 名称 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `label` | `string` | `''` | 标签文字，`label` 插槽可替换它 |
-| `span` | `number` | `1` | 跨越的列数，向下取整，并限制在 1 到列表的 `columns` 之间。容器窄于 480px 时每一项都占满整行 |
+| `label` | `string` | `''` | 标签文字；`label` 插槽可替换。 |
+| `span` | `number` | `1` | 跨越的列数，限制在 1 到 `columns` 之间。 |
 
-### 插槽
+#### 插槽
 
-| 组件 | 插槽 | 说明 |
-|------|------|------|
-| `TxDescriptions` | `default` | 直接放 `TxDescriptionsItem`：外面包一层元素会破坏 `<dl>` 和网格 |
-| `TxDescriptionsItem` | `default` | 值。它什么都不渲染时改为显示 `emptyText` |
-| `TxDescriptionsItem` | `label` | 替换标签文字，仍在同一个 `<dt>` 里 |
+| 插槽 | 说明 |
+|------|------|
+| `default` | 值；不渲染内容时显示 `emptyText`。 |
+| `label` | 替换标签文字，仍在同一个 `<dt>` 里。 |
 
 ### CSS 变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `--tx-descriptions-gap` | `12px`；`sm` 为 `8px` | 行间距，以及水平布局中标签与值之间的距离。两项之间是它的两倍；垂直布局中标签在值上方，相距它的四分之一 |
-| `--tx-descriptions-font-size` | `14px`；`sm` 为 `13px` | 值的字号；标签比它小 1px，但不小于 13px |
-| `--tx-descriptions-label-width` | 未设置 | 标签轨道宽度。`labelWidth` 会把它写在根节点上；宿主在根节点或祖先上设置同样生效 |
+| `--tx-descriptions-gap` | `12px`；`sm` 为 `8px` | 行间距及水平布局中标签与值的间距；两项之间为其两倍。 |
+| `--tx-descriptions-font-size` | `14px`；`sm` 为 `13px` | 值的字号；标签小 1px，但不小于 13px。 |
+| `--tx-descriptions-label-width` | 未设置 | 标签轨道宽度；`labelWidth` 写在根节点上，宿主也可在祖先上设置。 |
 
-- `sm` 以一个类的权重在根节点上设置前两个变量，所以权重高于一个类的宿主规则（scoped 类即可）无论加载顺序如何都能覆盖它们。
-- 组件在根节点上写 `--tx-descriptions-columns`、在每一项上写 `--tx-descriptions-span`；宿主不需要设置。
+- `sm` 以单个类的权重设置前两个变量，权重更高的宿主规则（如 scoped 类）可覆盖。
+- `--tx-descriptions-columns` 与 `--tx-descriptions-span` 由组件写入，宿主无需设置。
 
 ### 类型
 
@@ -168,31 +167,24 @@ code: |
 
 ## 概述
 
-- 根节点 `div.tx-descriptions` 带 `tx-descriptions--{layout}` 与 `tx-descriptions--{size}`，是包着 `dl.tx-descriptions__list` 的查询容器。每一项是 `div.tx-descriptions__item`，内含一个 `dt.tx-descriptions__label` 和一个 `dd.tx-descriptions__value`，这是 HTML 允许放在 `<dl>` 里的分组方式，辅助技术会把每一对读作术语与它的描述。
-- 水平布局：列表是 `columns` 组「标签轨道 + 值轨道」组成的网格。每一项都是覆盖自己那一组的 subgrid，所以同一列的所有标签共用一条轨道。轨道宽度等于最长的标签，最多占该列的 40%，超出后标签换行；这一列的每个值都从同一位置开始，并与标签的第一条基线对齐。
-- 标签与值相距 `--tx-descriptions-gap`，两项之间相距它的两倍，所以每一对读起来是一组。
-- `span` 按整组跨越。各项按源码顺序填充每一行，放不进当前行剩余空间的项会从下一行开始，留下的空位保持空白。
-- 自身宽度小于 480px 时（容器查询，不是视口宽度）列表为单列，每一项都占满整行。宽度必须来自父元素：按内容收缩的父元素（inline-block、不拉伸的 flex 项、`auto` 网格轨道）不会给 inline-size 容器任何宽度。
-- 插槽只渲染出注释和空白时，值算作空：没有插槽、`{{ '' }}`、`{{ null }}`、`v-if` 为假、空的 `v-for`。此时在 `dd.is-empty` 里显示 `emptyText`。`0` 以及任何元素（哪怕是空的 `<span>`）都算内容。每次渲染都会重新判断，所以之后才到的值会替换占位符。
-- 值可在任意位置换行（`overflow-wrap: anywhere`）：过长的 ID、邮箱或 URL 在所在列内换行，不会把列撑宽。
-- 值使用 `--tx-text-color-primary`。标签和空占位使用 `--tx-text-color-regular`，因为 13px 文字需要达到 4.5:1，而 `--tx-text-color-secondary` 达不到。
-- 没有动效，也没有可操作的元素。服务端渲染输出同样的结构和行内自定义属性；不读取 DOM。
+- 每一项是 `<dl>` 中的 `div` 分组，含一个 `dt` 和一个 `dd`，辅助技术读作术语与描述。
+- 水平布局中，同列标签共用一条轨道，宽度取最长标签、至多 40%，超出时换行；值与标签首行基线对齐。
+- 各项按源码顺序填充；放不进当前行剩余空间的项另起一行，空位留白。
+- 自身宽度（容器查询，非视口）小于 480px 时为单列，每项占满整行。
+- 插槽只渲染注释或空白时算空（含 `{{ null }}`、`v-if` 为假、空 `v-for`），显示 `emptyText`；`0` 与任何元素都算内容。
+- 值可在任意位置换行，过长的 ID、邮箱、URL 不会撑宽列。
 
 ## 技术实现
 
-- 源码：`packages/tuffex/packages/components/src/descriptions/src/TxDescriptions.vue`（列表、布局与全部样式规则，包括条目的）和 `TxDescriptionsItem.vue`（标签/值对、跨列与空值判断）；类型在 `types.ts`。列表通过 `provide` / `inject` 把 `layout`、`columns` 与 `emptyText` 交给条目。
-- 标签对齐靠 CSS 网格的 `subgrid`；单列回退由根节点上的 `@container (width < 480px)` 驱动。列表是根节点里的独立元素，因为容器查询无法改写容器自身的样式。
-- 样式不加 scoped：每个选择器都带 `tx-descriptions` 前缀，两档尺寸只由两个自定义属性驱动，以此控制 CSS 体积门禁。
-- 空值判断会遍历插槽的 vnode：注释、只有空白的文本以及由它们组成的 fragment 都算空。Vue 自带的插槽回退只跳过注释，否则没有手机号时 `{{ user.phone }}` 会渲染成一片空白。
-- 放弃的方案：每一项内部各自一个两列网格并给标签一个固定默认宽度。只有所有标签都放得进这个宽度时值才对齐，跨列项的值也会从别处开始。同样放弃了 `<table>`：它声明的行列关系内容里并不存在。
-- **已验证覆盖：** `descriptions/__tests__/descriptions.test.ts`（10 条）覆盖 `<dl>` / `dt` / `dd` 结构与 `label` 插槽；列数及其对 0、负数、`NaN` 和小数的回退；跨列换算为标签加值两条轨道、限幅，以及垂直布局下按列计数；空值判断对无插槽、空白、空插值、`v-if` 为假、空 `v-for` 的处理，以及保留 `0` 和元素；自定义与更新后的 `emptyText`；值在空与非空之间切换；布局与尺寸类名及未知取值的回退；`labelWidth` 按 px、按字符串及在垂直布局中不写入；列表之外单独使用的条目；并对照样式表检查窄容器规则、subgrid 以及每个非 scoped 选择器的前缀。
+- 标签对齐靠 CSS `subgrid`；单列回退靠根节点上的 `@container (width < 480px)`，所以列表是根节点内的独立元素。
+- 源码：`packages/tuffex/packages/components/src/descriptions/`。
 
 <TuffDocSourceLink />
 
 ## 使用场景
 
-- 在抽屉或详情面板里展示一条记录的字段：成员、订阅、一次运行、一个插件。
-- 放在表单或表格上方的摘要，说明接下来操作的对象。
+- 抽屉或详情面板里展示一条记录：成员、订阅、一次运行、一个插件。
+- 表单或表格上方的摘要，说明接下来操作的对象。
 - 卡片里的只读设置与元数据。
 
 ## 相关组件

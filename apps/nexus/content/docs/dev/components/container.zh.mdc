@@ -1,6 +1,6 @@
 ---
 title: Container 容器
-description: 容器组件是页面布局的基础，提供灵活的布局选项与响应式支持
+description: 限定宽度与留白的容器及 24 列栅格
 category: Layout
 status: beta
 since: 0.3.4
@@ -10,43 +10,6 @@ verified: true
 ---
 
 ## 用法
-
-### Container
-:::TuffDemoWrapper{demo="ContainerContainerDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxContainer max-width="680px" :padding="18">
-      <div style="display: grid; gap: 4px; margin-bottom: 14px;">
-        <strong>响应式容器</strong>
-        <span style="color: var(--tx-text-color-secondary); font-size: 12px;">同一组 Row / Col 会随断点切换列宽，Container 负责最大宽度和左右留白。</span>
-      </div>
-      <TxRow :gutter="{ xs: 10, sm: 14, md: 18 }" align="stretch">
-        <TxCol :xs="24" :sm="12" :md="8">
-          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-            <strong>概览</strong>
-            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
-          </div>
-        </TxCol>
-        <TxCol :xs="24" :sm="12" :md="8">
-          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-            <strong>指标</strong>
-            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
-          </div>
-        </TxCol>
-        <TxCol :xs="24" :sm="24" :md="8">
-          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-            <strong>操作</strong>
-            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 24 / md 8</span>
-          </div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-最简单的容器用法：
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -59,241 +22,153 @@ code: |
 ---
 :::
 
+### 基础
+`TxContainer` 负责最大宽度与左右留白，`TxRow` / `TxCol` 按断点切换列宽。
+:::TuffDemoWrapper{demo="ContainerContainerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer max-width="680px" :padding="18">
+      <TxRow :gutter="{ xs: 10, sm: 14, md: 18 }" align="stretch">
+        <TxCol :xs="24" :sm="12" :md="8">概览</TxCol>
+        <TxCol :xs="24" :sm="12" :md="8">指标</TxCol>
+        <TxCol :xs="24" :sm="24" :md="8">操作</TxCol>
+      </TxRow>
+    </TxContainer>
+  </template>
+---
+:::
+
+### 宽度
+`fluid` 填满父容器，`maxWidth` 限定最大宽度，`responsive` 按断点切换最大宽度。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer fluid>流体容器，宽度 100%</TxContainer>
+    <TxContainer max-width="1200px">最大宽度 1200px</TxContainer>
+    <TxContainer responsive>响应式容器</TxContainer>
+  </template>
+---
+:::
+
+### 间距
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer padding="small">小间距</TxContainer>
+    <TxContainer padding="large">大间距</TxContainer>
+    <TxContainer :padding="32">自定义间距</TxContainer>
+    <TxContainer margin="auto">水平居中</TxContainer>
+  </template>
+---
+:::
+
+### 栅格
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxRow>
+      <TxCol :span="12">左侧内容</TxCol>
+      <TxCol :span="12">右侧内容</TxCol>
+    </TxRow>
+
+    <TxRow :gutter="{ xs: 8, sm: 16, md: 24, lg: 32 }">
+      <TxCol v-for="n in 4" :key="n" :xs="24" :sm="12" :md="8" :lg="6">
+        响应式列 {{ n }}
+      </TxCol>
+    </TxRow>
+  </template>
+---
+:::
+
 ### 最佳实践
 
-- 每个页面区块优先只使用一个 `TxContainer`；多层嵌套会让宽度和留白难以判断。
-- 使用响应式 `xs` / `sm` / `md` / `lg` / `xl` span 切换布局，不要为不同断点复制多份 DOM。
-- `gutter` 应和页面间距尺度保持一致；避免同一行里混用过大的 gutter 和过小的列内边距。
-- 在布局原语内部放置语义元素（`main`、`aside`、`nav`、`section`），因为这些原语自身只渲染中性 `div`。
-- 只有横向滚动或固定宽度工具栏才设置 `wrap=false`；普通内容栅格应允许换行。
+- 每个页面区块只用一个 `TxContainer`；多层嵌套会让宽度与留白难以判断。
+- 用 `xs`–`xl` 切换布局，不要为不同断点复制多份 DOM。
+- `gutter` 与页面间距尺度保持一致，不要在同一行混用过大的 gutter 与过小的列内边距。
+- 三个组件都渲染中性 `div`，语义元素（`main`、`aside`、`nav`、`section`）放在其内部。
+- 只有横向滚动或固定宽度的工具栏才设 `wrap=false`。
 
 ## API 参考
 
-### Props
+### TxContainer
+
+#### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| fluid | `boolean` | `false` | 移除最大宽度限制，填满父容器 |
-| maxWidth | `string` | `'1200px'` | 非流体模式下的最大宽度 |
-| responsive | `boolean` | `false` | 是否启用内置响应式容器宽度 |
-| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 水平内边距预设或像素值 |
-| margin | `'auto' \| string \| number` | `'auto'` | 水平外边距；`auto` 表示居中 |
+| fluid | `boolean` | `false` | 取消最大宽度，填满父容器。 |
+| maxWidth | `string` | `'1200px'` | 最大宽度。 |
+| responsive | `boolean` | `false` | 按断点切换最大宽度：640 / 768 / 1024 / 1280px。 |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 左右内边距：预设 12 / 16 / 24px，或不小于 0 的像素值。 |
+| margin | `'auto' \| string \| number` | `'auto'` | 左右外边距；`auto` 居中，其他值按 `0 <value>` 应用。 |
 
-### Row Props
+#### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 受最大宽度与留白约束的内容。 |
+
+### TxRow
+
+#### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | 栅格间距，可按断点设置 |
-| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | 垂直对齐方式 |
-| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | 水平分布方式 |
-| wrap | `boolean` | `true` | 是否换行 |
+| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | 列间距（px），可按断点设置。 |
+| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | 列的垂直对齐。 |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | 列的水平分布。 |
+| wrap | `boolean` | `true` | 允许换行。 |
 
-### Col Props
+#### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | `TxCol` 或其他 flex 子项。 |
+
+### TxCol
+
+#### 属性
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| span | `number` | `24` | 栅格占据的列数 |
-| offset | `number` | `0` | 栅格左侧的间隔格数 |
-| xs | `number` | - | 640px 以下使用的列数 |
-| sm | `number` | - | 640px 到 767px 使用的列数 |
-| md | `number` | - | 768px 到 1023px 使用的列数 |
-| lg | `number` | - | 1024px 到 1279px 使用的列数 |
-| xl | `number` | - | 1280px 及以上使用的列数 |
+| span | `number` | `24` | 占据的列数（共 24 列）。 |
+| offset | `number` | `0` | 左侧偏移的列数。 |
+| xs | `number` | - | xs 断点（< 640px）的列数。 |
+| sm | `number` | - | sm 断点（≥ 640px）的列数。 |
+| md | `number` | - | md 断点（≥ 768px）的列数。 |
+| lg | `number` | - | lg 断点（≥ 1024px）的列数。 |
+| xl | `number` | - | xl 断点（≥ 1280px）的列数。 |
 
-### Slots
+#### 插槽
 
-| 组件 | 插槽 | 参数 | 说明 |
-|------|------|------|------|
-| `TxContainer` | `default` | - | 受容器宽度和左右留白约束的页面或面板内容。 |
-| `TxRow` | `default` | - | `TxCol` 子项或其他 flex 子项。 |
-| `TxCol` | `default` | - | 列内容。 |
-
-### Events
-
-`TxContainer`、`TxRow` 和 `TxCol` 不触发事件。
-
-## 容器类型
-
-### 流体容器
-占满整个父容器的宽度：
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer fluid>
-      <p>流体容器，宽度100%</p>
-    </TxContainer>
-  </template>
----
-:::
-
-### 固定宽度容器
-根据断点设置最大宽度：
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer max-width="1200px">
-      <p>最大宽度1200px的容器</p>
-    </TxContainer>
-  </template>
----
-:::
-
-### 响应式容器
-在不同断点下有不同的最大宽度：
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer responsive>
-      <p>响应式容器</p>
-    </TxContainer>
-  </template>
----
-:::
-
-## 容器间距
-
-### 内边距
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="padding-demo">
-      <TxContainer padding="small">小间距容器</TxContainer>
-      <TxContainer padding="medium">中等间距容器</TxContainer>
-      <TxContainer padding="large">大间距容器</TxContainer>
-      <TxContainer :padding="32">自定义间距容器</TxContainer>
-    </div>
-  </template>
----
-:::
-
-### 外边距
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer margin="auto">
-      <p>水平居中的容器</p>
-    </TxContainer>
-  </template>
----
-:::
-
-## 栅格系统
-
-### 基础栅格
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow>
-        <TxCol :span="12">
-          <div class="col-content">左侧内容</div>
-        </TxCol>
-        <TxCol :span="12">
-          <div class="col-content">右侧内容</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
-
-  <style scoped>
-  .col-content {
-    background: var(--tx-bg-color-overlay, #fff);
-    padding: 16px;
-    text-align: center;
-    border-radius: 8px;
-  }
-  </style>
----
-:::
-
-### 响应式栅格
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow :gutter="{ xs: 8, sm: 16, md: 24, lg: 32 }">
-        <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列1</div>
-        </TxCol>
-        <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列2</div>
-        </TxCol>
-        <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列3</div>
-        </TxCol>
-        <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列4</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-## 响应式断点
-
-TouchX UI 使用以下断点：
-
-:::TuffCodeBlock{lang="css"}
----
-code: |
-  /* 超小屏幕 */
-  @media (max-width: 639px) { /* xs */ }
-
-  /* 小屏幕 */
-  @media (min-width: 640px) { /* sm */ }
-
-  /* 中等屏幕 */
-  @media (min-width: 768px) { /* md */ }
-
-  /* 大屏幕 */
-  @media (min-width: 1024px) { /* lg */ }
-
-  /* 超大屏幕 */
-  @media (min-width: 1280px) { /* xl */ }
----
-:::
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 列内容。 |
 
 ## 概述
 
-- `TxContainer` 始终渲染 `width: 100%` 的块级包裹；`fluid` 会移除最大宽度限制。
-- `padding` 预设分别映射为 12 / 16 / 24 px，数字 padding 会被限制为不小于 0。
-- `margin="auto"` 会水平居中；字符串或数字 margin 会按 `0 <value>` 应用到左右两侧。
-- `TxRow` 会按当前断点计算单一 gutter，并通过 `--tx-row-gutter` 暴露；列组件会把 gutter 均分到左右 padding。
-- 行通过负外边距抵消两侧最外缘的这份 padding，并用 `calc(100% + var(--tx-row-gutter))` 为其买单。单纯写 `100%` 是相对包含块的**内容**宽度解析的，负外边距只会把行整体左移而不加宽，导致右侧正好少一个 gutter——在有 padding 的 `TxContainer` 里，8px gutter 下就表现为左侧内缩 16px、右侧 24px。
-- `TxCol` 会把 `span` 和 `offset` 限制在 0–24 栅格内，断点 prop 未提供时回退到 `span`。
+- 断点值向上沿用：当前断点未设置时取更小断点的值；都未设置时，`TxCol` 用 `span`，`TxRow` 用 `0`。
+- `TxRow` 把当前 gutter 写入 `--tx-row-gutter`，每列取一半作为左右内边距，行用负外边距抵消首尾两侧。
+- `span` 与 `offset` 收敛到 0–24。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue`、`TxCol.vue` 与 `container.test.ts`。
-- 现有测试覆盖容器 CSS 变量、padding 限制、fluid/responsive 类、自定义 margin、行 gutter/对齐/分布/换行样式、响应式 gutter 选择，以及列 span/offset/响应式样式。
-- 可访问性说明:三个原语都渲染中性 `div`;请在插槽内容里补充语义地标和标题,不要期待布局原语提供文档结构。
+- 断点按 `window.innerWidth` 计算并随 `resize` 更新，与容器自身宽度无关。
+- 行宽为 `calc(100% + var(--tx-row-gutter))`，配合负外边距让首尾列与容器内边距对齐。
+- 源码：`packages/tuffex/packages/components/src/container/`。
 
-- Component source: `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue` 与 `TxCol.vue`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/container/__tests__/container.test.ts` 覆盖间距变量、数值限制、响应式类、行 flex 样式、响应式 gutter 与列尺寸。
 <TuffDocSourceLink />
 
 ## 自定义
 
-### CSS 变量
+| 变量 | 写入方 | 用途 |
+|------|--------|------|
+| `--tx-container-max-width` | `maxWidth` / `fluid` | 最大宽度。 |
+| `--tx-container-padding` | `padding` | 左右内边距。 |
+| `--tx-row-gutter` | `gutter` | 列间距。 |
 
-:::TuffCodeBlock{lang="css"}
----
-code: |
-  .custom-container {
-    --tx-container-max-width: 1200px;
-    --tx-container-padding: 16px;
-    --tx-row-gutter: 16px;
-  }
----
-:::
+三个变量由 props 写入根节点内联样式，请通过 props 调整。

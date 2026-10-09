@@ -1,6 +1,6 @@
 ---
 title: DataTable
-description: Lightweight data table with sorting and selection
+description: A data table with sorting, selection, and expandable rows.
 category: Data
 status: beta
 since: 0.3.4
@@ -11,6 +11,7 @@ verified: true
 
 ## Usage
 
+### Basic
 ::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
 ---
 code: |
@@ -34,20 +35,28 @@ code: |
 ---
 ::
 
-### Skeleton loading
+### Row Selection
+`selectable` adds a selection column; `v-model:selected-keys` syncs the selected rows.
+::TuffDemoWrapper{demo="DataTableDataTableSelectableDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="data"
+      row-key="id"
+      selectable
+    />
+  </template>
+---
+::
 
-`loading-variant="skeleton"` swaps the spinner veil for placeholder rows while there are no rows yet, shaped like the columns and as tall as a loaded row. Once rows exist, a refresh keeps them on screen and only a thin bar under the header moves. Pick a state to compare the two.
-
+### Skeleton Loading
+`loadingVariant="skeleton"` draws placeholder rows while there are none; a refresh of existing rows shows only a bar under the header.
 ::TuffDemoWrapper{demo="DataTableSkeletonLoadingDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const rows = ref([])
-  const loading = ref(true)
-  </script>
-
   <template>
     <TxDataTable
       :columns="columns"
@@ -61,19 +70,11 @@ code: |
 ---
 ::
 
-### Expandable rows
-
-`expandable` adds a leading toggle column; each row can open a `#expanded` detail row beneath it.
-
+### Expandable Rows
+`expandable` adds a leading toggle column; the `#expanded` slot renders the detail under a row.
 ::TuffDemoWrapper{demo="DataTableExpandableRowsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const expandedKeys = ref([1])
-  </script>
-
   <template>
     <TxDataTable
       v-model:expanded-keys="expandedKeys"
@@ -91,168 +92,9 @@ code: |
 ---
 ::
 
-### Best Practices
-
-- Pass a stable `rowKey` for business lists; when selection persists across pages, drive `selectedKeys` with business ids instead of default indexes.
-- Sortable columns support click, Enter, and Space. Use `sortOnClient=false` with `sortChange` for remote sorting.
-- `tableLayout="fixed"` plus explicit `width` / `minWidth` keeps dense operations tables from shifting during loading or sorting.
-- For a list that loads from a server, use `loadingVariant="skeleton"` with `skeletonRows` set to the page size: the first load draws rows of the right shape and height, and a refresh keeps the rows instead of veiling them. The default `overlay` suits a short local wait.
-- Fixed columns should use numeric px `width` or `minWidth`; sticky offsets are calculated from those values.
-- Pick one horizontal scroller: either turn on `scrollX` and let the component be its own, or leave the default and wrap the table in an outer `overflow-x: auto` container. Both give sticky columns something to stick against — just do not nest two scrollers.
-- A pinned header or footer needs `maxHeight` (or an ancestor that already scrolls), otherwise there is nothing to stick to; and that scroll container must not scroll by transform, as `TxScroll` does in its default mode, which disables sticky entirely.
-- Sort on comparable fields such as timestamps or ranks, never on formatted relative-time text.
-- Custom cells should preserve readable text or status-badge labels because sortable headers expose state through `aria-sort`.
-- The shell clips to a rounded corner, so the component drops the bottom separator on the last row of whichever section ends the table; a summary `tfoot` keeps the rule that divides it from the body. Reproduce that if you restyle cell borders, otherwise a stray line sits under the table.
-- `expandedKeys` is business state in the same way `selectedKeys` is: drive it with `v-model:expanded-keys` when it has to survive a reload, or use `defaultExpandedKeys` for a row that merely starts open.
-- `rowExpandable` hides the toggle on rows with no detail to show; the leading cell stays, so the columns keep their alignment. The toggle also stops its own click, so expanding a row never fires `rowClick`.
-- A fixed-left column sticks after the leading utility columns, so its offset already accounts for the toggle and the selection column.
-
-## API Reference
-
-### TxDataTable Props
-
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `columns` | `DataTableColumn[]` | `[]` | Column config |
-| `data` | `any[]` | `[]` | Data source |
-| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | Unique row key |
-| `loading` | `boolean` | `false` | Loading state |
-| `loadingVariant` | `'overlay' \| 'skeleton'` | `'overlay'` | How `loading` is drawn. `overlay`: a blurred veil and a spinner over the table. `skeleton`: placeholder rows while there are no rows, and a bar under the header while existing rows refresh. Any other value is `overlay` |
-| `skeletonRows` | `number` | `5` | Placeholder rows the `skeleton` variant draws before the first rows land; floored, at least 1. Match the page size so nothing moves when the data arrives |
-| `emptyText` | `string` | `'No data'` | Empty text |
-| `striped` | `boolean` | `false` | Zebra rows |
-| `bordered` | `boolean` | `false` | Show borders |
-| `hover` | `boolean` | `true` | Hover highlight |
-| `interactiveRows` | `boolean` | `false` | Makes rows focusable (`tabindex="0"`) so Enter/Space can trigger `rowClick`; automatically enabled when a `rowClick` listener is attached |
-| `selectable` | `boolean` | `false` | Selectable rows |
-| `selectedKeys` | `Array<string \| number>` | `[]` | Selected keys |
-| `expandable` | `boolean` | `false` | Renders a leading toggle column and one detail row per expanded row. Off by default, so existing tables render exactly as before |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Initial expanded rows for the uncontrolled mode, after which the component owns the state. Mutually exclusive with `expandedKeys`, which wins when both are passed |
-| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded rows. Supply it (including as `[]`) and the component stops holding its own state: it reports toggles through `update:expandedKeys` / `expand` and renders whatever comes back |
-| `rowExpandable` | `(row, index) => boolean` | - | Per-row gate for the toggle. A rejected row keeps an empty leading cell so the columns stay aligned, and cannot be opened |
-| `expandLabel` | `string` | `'Expand row'` | Accessible name of a closed toggle |
-| `collapseLabel` | `string` | `'Collapse row'` | Accessible name of an open toggle |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Initial sort for the uncontrolled mode, after which the component owns it. Mutually exclusive with `sort` — pass one or the other |
-| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | Controlled sort. Supply it (including as `null` for "unsorted") and the component stops holding its own state: it reports the user's intent through `update:sort` and renders whatever the parent sends back. Leave it out entirely for the uncontrolled mode driven by `defaultSort` |
-| `sortOnClient` | `boolean` | `true` | Client-side sort |
-| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | Header click cycle: `tri` is ascending → descending → unsorted, `bi` is ascending → descending → ascending and never unsorts |
-| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | Native table layout mode. Use `fixed` when column widths must stay stable. |
-| `nowrap` | `boolean` | `false` | Prevent wrapping for all header and cell content. |
-| `maxHeight` | `string \| number` | - | Caps the height and makes the component its own vertical scroll container. `stickyHeader` / `stickyFooter` need this to have anything to stick to, unless an ancestor already scrolls |
-| `scrollX` | `boolean` | `false` | Lets the table scroll horizontally inside the component; needed by wide tables with fixed columns |
-| `stickyHeader` | `boolean` | `false` | Pins the header row while the body scrolls |
-| `stickyFooter` | `boolean` | `false` | Pins the footer row while the body scrolls |
-| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | Extra classes per row, e.g. to tint a row by its state |
-| `highlightSelected` | `boolean` | `false` | Tints selected rows. Off by default, so existing tables keep expressing selection through the checkbox alone |
-
-### DataTableColumn
-
-| Field | Type | Description |
-|------|------|------|
-| `key` | `string` | Column key |
-| `title` | `string` | Header title |
-| `dataIndex` | `string` | Data field |
-| `width` | `string \| number` | Column width |
-| `minWidth` | `string \| number` | Minimum column width. |
-| `maxWidth` | `string \| number` | Maximum column width. |
-| `auto` | `boolean` | Force column width to `auto`. |
-| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. Without `scrollX` / `maxHeight`, a fixed column switches the root from `overflow: hidden` to `overflow: visible`, so horizontal scrolling must come from an outer container or the sticky offsets have nothing to stick against; with `scrollX` the component becomes that scroll container itself. |
-| `nowrap` | `boolean` | Prevent wrapping for this column. |
-| `align` | `'left' \| 'center' \| 'right'` | Alignment |
-| `sortable` | `boolean` | Sortable |
-| `sorter` | `(a, b) => number` | Custom sorter |
-| `format` | `(value, row, index) => string` | Cell formatter |
-| `headerClass` | `string` | Header class |
-| `cellClass` | `string` | Cell class |
-
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:selectedKeys` | `(keys)` | Selection update |
-| `selectionChange` | `(keys)` | Selection change |
-| `update:expandedKeys` | `(keys)` | Expansion update; emitted in both controlled and uncontrolled modes, and paired with the `expandedKeys` prop |
-| `expand` | `({ row, index, expanded })` | A row was expanded or collapsed |
-| `sortChange` | `(sort)` | Sort change |
-| `update:sort` | `(sort)` | Sort change; emitted in both controlled and uncontrolled modes, and paired with the `sort` prop |
-| `rowClick` | `({ row, index })` | Row click |
-
-### Slots
-
-| Name | Description |
-|------|------|
-| `header-<columnKey>` | Custom header; receives `{ column, sorted, order, toggle }`. `sorted` says whether this column is the active sort, `order` is the direction (`null` when it is not), and `toggle` advances the column through the configured cycle. |
-| `cell-<columnKey>` | Custom cell; receives `{ row, column, value, index }`. |
-| `expanded` | Detail row of an expanded row; receives `{ row, index }`. Rendered in one cell spanning every column, directly under the row it belongs to. |
-| `footer` | The whole summary row: you supply the `<td>`s yourself, so cells can span columns. A `<tfoot>` is rendered only when some footer slot is present. |
-| `footer-<columnKey>` | Fills one summary cell per column; receives `{ column, data }`. When `footer` is also present, `footer` wins. |
-| `empty` | Empty slot rendered when there are no display rows and `loading=false`. |
-
-## Row Selection
-
-::TuffDemoWrapper{demo="DataTableDataTableSelectableDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const selectedKeys = ref([])
-  </script>
-
-  <template>
-    <TxDataTable
-      v-model:selected-keys="selectedKeys"
-      :columns="columns"
-      :data="data"
-      row-key="id"
-      selectable
-    />
-  </template>
----
-::
-
-## Sorting Interaction
-
-Sortable headers expose `aria-sort` and support pointer click, Enter, and Space to cycle through ascending, descending, and unsorted states. When `sortOnClient=false`, the table still emits `sortChange` without reordering local rows.
-
-## Dashboard Data Operations
-
-In dashboard data regions, `TxDataTable` owns the primary list, `TxPagination` owns page navigation, and `TxSkeleton` / `TxLayoutSkeleton` keep loading previews from collapsing into blank space.
-
-::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="A screenshot-verified table, pagination, and skeleton-loading composition on the local Tuff page."}
----
-code: |
-  <template>
-    <section class="grid gap-3">
-      <TxDataTable
-        v-model:selected-keys="selectedKeys"
-        :columns="columns"
-        :data="pagedRows"
-        row-key="id"
-        selectable
-        striped
-        bordered
-      />
-      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
-    </section>
-  </template>
----
-::
-
-## Records Composition
-
-The wide CRM layout: a pinned header, a pinned footer, a frozen first column, a three-state select-all, and composed cell primitives. Every one of these is off by default and changes nothing until it is switched on.
-
-What makes the layout work:
-
-- `maxHeight` turns the table into its own scroll container, which is what the header and footer stick against; `scrollX` handles the horizontal axis. **Do not put it inside `TxScroll` in its default mode** — that scrolls by transform, and a transformed ancestor kills every `position: sticky` inside it.
-- With `stickyHeader` / `stickyFooter` on, the table switches to `border-collapse: separate` inside `.is-sticky-shell`. This is not a style preference: collapsed borders are painted by the table rather than the cell, so a pinned `<th>` loses its rules the moment it detaches. The switch is scoped to that class, so `bordered` and `striped` look unchanged everywhere else.
-- The summary row comes from the `footer` or `footer-<key>` slots; with no footer slot, no `<tfoot>` is rendered at all.
-- The select-all box goes `indeterminate` on a partial selection and reports `aria-checked="mixed"`.
-- Sort on timestamp fields, never with `localeCompare` over readable text like "9 days ago" — that places "over 1 year ago" between "3 weeks ago" and "9 days ago" and calls it a chronology.
-- `sortCycle="bi"` keeps the table from ever returning to unsorted, which suits record lists that always need a definite order.
-
-::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue" title="Records table" description="Pinned header and footer, a frozen first column, selection highlighting, a three-state select-all, and the tag / dot / link cell primitives."}
+### Records Table
+A wide layout with a pinned header and footer, a frozen first column, and selection highlighting; cells compose `TxTag`, `TxDotIndicator`, and `TxCellLink`.
+::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -294,7 +136,137 @@ code: |
 ---
 ::
 
-The row hover and selection fills are exposed as CSS variables, so a paper-like table can go neutral grey without a prop or an `!important`:
+### Data Operations Panel
+`TxPagination` pages the list, and `TxSkeleton` / `TxLayoutSkeleton` preview the loading state.
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="pagedRows"
+      row-key="id"
+      selectable
+      striped
+      bordered
+    />
+    <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+  </template>
+---
+::
+
+### Best Practices
+
+- Pass a stable `rowKey` for business lists; to keep selection across pages, drive `selectedKeys` with business ids, not default indexes.
+- For server-loaded lists, use `loadingVariant="skeleton"` with `skeletonRows` set to the page size; keep the default `overlay` for short local waits.
+- Give fixed columns numeric px `width` / `minWidth`, and keep one horizontal scroller: `scrollX`, or an outer `overflow-x: auto`.
+- A pinned header or footer needs `maxHeight` or a scrolling ancestor; don't nest the table in `TxScroll`'s default mode, whose transform scrolling disables sticky.
+- Sort on comparable fields such as timestamps or ranks, never on formatted relative-time text.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|------|------|
+| `columns` | `DataTableColumn[]` | `[]` | Column config. |
+| `data` | `any[]` | `[]` | Data source. |
+| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | Unique row key. |
+| `loading` | `boolean` | `false` | Loading state. |
+| `loadingVariant` | `'overlay' \| 'skeleton'` | `'overlay'` | `overlay` veils the table with a spinner; `skeleton` draws placeholder rows, or only a bar when rows exist. |
+| `skeletonRows` | `number` | `5` | Placeholder rows before the first data lands; match the page size so nothing moves. |
+| `emptyText` | `string` | `'No data'` | Empty text. |
+| `striped` | `boolean` | `false` | Zebra rows. |
+| `bordered` | `boolean` | `false` | Show borders. |
+| `hover` | `boolean` | `true` | Hover highlight. |
+| `interactiveRows` | `boolean` | `false` | Makes rows focusable so Enter / Space fire `rowClick`; on automatically with a `rowClick` listener. |
+| `selectable` | `boolean` | `false` | Adds a selection column. |
+| `selectedKeys` | `Array<string \| number>` | `[]` | Keys of the selected rows. |
+| `expandable` | `boolean` | `false` | Adds a leading toggle column; an expanded row renders a detail row beneath it. |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Initial expanded rows when uncontrolled; `expandedKeys` wins if both are passed. |
+| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded rows, bound with `v-model:expanded-keys`. |
+| `rowExpandable` | `(row, index) => boolean` | - | Per-row gate for expanding; a rejected row keeps an empty leading cell. |
+| `expandLabel` | `string` | `'Expand row'` | Accessible name of a closed toggle. |
+| `collapseLabel` | `string` | `'Collapse row'` | Accessible name of an open toggle. |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Initial sort when uncontrolled; pass either this or `sort`. |
+| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | Controlled sort; `null` means unsorted. |
+| `sortOnClient` | `boolean` | `true` | Sorts locally; set `false` for remote sorting, which only emits. |
+| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | `tri`: ascending → descending → unsorted; `bi` alternates and never unsorts. |
+| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | Native `table-layout`; use `fixed` when column widths must stay stable. |
+| `nowrap` | `boolean` | `false` | Prevents wrapping in every header and cell. |
+| `maxHeight` | `string \| number` | - | Caps the height and scrolls the table vertically; what sticky rows stick to. |
+| `scrollX` | `boolean` | `false` | Scrolls horizontally inside the component; for wide tables with fixed columns. |
+| `stickyHeader` | `boolean` | `false` | Pins the header row. |
+| `stickyFooter` | `boolean` | `false` | Pins the summary row. |
+| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | Extra classes per row, such as a tint by state. |
+| `highlightSelected` | `boolean` | `false` | Tints selected rows. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:selectedKeys` | `(keys)` | Selection update. |
+| `selectionChange` | `(keys)` | Selection change. |
+| `update:expandedKeys` | `(keys)` | Expansion update; fires in controlled and uncontrolled modes. |
+| `expand` | `({ row, index, expanded })` | A row was expanded or collapsed. |
+| `sortChange` | `(sort)` | Sort change. |
+| `update:sort` | `(sort)` | Sort change; fires in controlled and uncontrolled modes. |
+| `rowClick` | `({ row, index })` | Row click. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `header-<columnKey>` | Custom header; receives `{ column, sorted, order, toggle }`, where `toggle` advances the sort cycle. |
+| `cell-<columnKey>` | Custom cell; receives `{ row, column, value, index }`. |
+| `expanded` | Detail of an expanded row, spanning every column; receives `{ row, index }`. |
+| `footer` | The whole summary row of your own `<td>`s, which can span columns. Any footer slot renders a `<tfoot>`. |
+| `footer-<columnKey>` | One summary cell per column; receives `{ column, data }`. `footer` wins when both exist. |
+| `empty` | Empty state when there are no rows and `loading=false`. |
+
+### DataTableColumn
+
+| Field | Type | Description |
+|------|------|------|
+| `key` | `string` | Column key. |
+| `title` | `string` | Header title. |
+| `dataIndex` | `string` | Data field. |
+| `width` | `string \| number` | Column width. |
+| `minWidth` | `string \| number` | Minimum column width. |
+| `maxWidth` | `string \| number` | Maximum column width. |
+| `auto` | `boolean` | Forces the column width to `auto`. |
+| `fixed` | `boolean \| 'left' \| 'right'` | Sticky side; `true` means `'left'`. Left offsets already include the toggle and selection columns. |
+| `nowrap` | `boolean` | Prevents wrapping in this column. |
+| `align` | `'left' \| 'center' \| 'right'` | Alignment. |
+| `sortable` | `boolean` | Sortable. |
+| `sorter` | `(a, b) => number` | Custom sorter. |
+| `format` | `(value, row, index) => string` | Cell formatter. |
+| `headerClass` | `string` | Header class. |
+| `cellClass` | `string` | Cell class. |
+
+## Overview
+
+- Passing `sort` or `expandedKeys` (even `null` or `[]`) makes it controlled: the table only emits updates and renders what the parent sends back.
+- Sortable headers carry `scope="col"` and `aria-sort`; click, Enter, and Space step through `sortCycle`.
+- On a partial selection the select-all box is `indeterminate` (`aria-checked="mixed"`); clicks in the selection and toggle cells never fire `rowClick`.
+- `loading` sets `aria-busy` on the `<table>`, and the empty state stays hidden while loading.
+- Placeholder rows are `aria-hidden` and as tall as a one-line row; the refresh bar holds still under reduced motion.
+- `stickyHeader`, `stickyFooter`, or `maxHeight` switches to `border-collapse: separate`. The last row has no bottom rule; the rule above a `tfoot` stays.
+
+## Technologies
+
+- The skeleton variant renders `TxSkeleton`. The on-demand style plugin loads its sheet; when importing styles by hand, add `@talex-touch/tuffex/skeleton/style.css`.
+- Source: `packages/tuffex/packages/components/src/data-table/`.
+
+<TuffDocSourceLink />
+
+## Customization
+
+| CSS variable | Used for |
+|------|------|
+| `--tx-data-table-row-hover-bg` | Row hover fill. |
+| `--tx-data-table-row-selected-bg` | Selected-row fill under `highlightSelected`. |
 
 ```css
 .records-shell {
@@ -302,24 +274,3 @@ The row hover and selection fills are exposed as CSS variables, so a paper-like 
   --tx-data-table-row-selected-bg: color-mix(in srgb, var(--tx-bui-accent) 7%, var(--tx-bui-surface));
 }
 ```
-
-## Overview
-
-- `loading` always sets `aria-busy` on the `<table>`. With the default `overlay`, `div.tx-data-table__loading` veils the whole table, rows or not, and the empty state stays hidden.
-- `skeleton` with no rows: the body holds `skeletonRows` rows of class `tx-data-table__row--skeleton`, each `aria-hidden="true"`, with no tab stop and no pointer events. Every cell keeps the column's cell class, width and fixed side. Its bar is a `TxSkeleton` held to one line box (`height: 1lh`) and aligned like the column, so a placeholder row is exactly as tall as a one-line row and nothing moves when the rows land. The selection column holds a checkbox-sized box on the text baseline; the expand column stays empty. Bar widths step through a fixed sequence between 60% and 90%, so the server render and hydration agree.
-- `skeleton` with rows: the rows stay, with no veil, no fade and no placeholder. A 2px bar in `--tx-color-primary` lies over the header's bottom rule, from a zero-height row group of its own (`tbody.tx-data-table__refresh`, `aria-hidden`), so the body's stripes keep their parity. It slides back and forth on `translate` only while `prefers-reduced-motion` is `no-preference`, and never leaves the table; under reduced motion it is a still, full line.
-- The empty state never shows while loading. Once `loading` turns false with no rows, the placeholders give way to it.
-- The skeleton variant renders `TxSkeleton`. The on-demand style plugin loads that sheet with the table's; when importing styles by hand, add `@talex-touch/tuffex/skeleton/style.css`.
-- Without `loadingVariant`, the table renders exactly as before the variant existed.
-
-## Technologies
-
-- **Accessibility note:** `TxDataTable` renders a native table and gives sortable header cells `scope="col"`, `aria-sort`, keyboard focus, and Enter/Space handlers.
-- **Types:** `rowKey` is declared as `keyof T` or a callback that returns a string or number; `sortChange` may emit a `DataTableSortState` or `null`.
-- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles. The last-row separator reset is asserted against the SFC source, because vitest never evaluates a `<style>` block. The loading test (8 cases) covers the overlay default, placeholder rows (count, cells, widths, alignment, the utility columns, deterministic bar widths), a refresh that keeps the very same row elements with the bar in its own row group, the swap to rows or to the empty state, an unknown variant falling back to the overlay, and, against the stylesheet, the one-line box and the motion-gated bar.
-
-- Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`.
-- Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` exports `DataTableProps`, `DataTableColumn`, sort state, row-key, and emit types.
-- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, layout/nowrap/auto/fixed-column styles, and the last-row separator reset; `data-table-loading.test.ts` verifies both loading variants.
-
-<TuffDocSourceLink />

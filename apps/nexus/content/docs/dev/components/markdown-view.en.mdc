@@ -1,6 +1,6 @@
 ---
 title: "MarkdownView Markdown"
-description: "GitHub-flavored Markdown renderer with explicit sanitization and light/dark theme modes."
+description: "A read-only view that renders GitHub-flavored Markdown."
 category: Data
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Use `content` as the single source string. `marked` is configured with GFM and soft line breaks enabled.
-
+### Basic
+`content` is the only input, parsed as GFM.
 ::::TuffDemoWrapper{demo="MarkdownViewMarkdownViewDemo" code-lang="vue"}
 ---
 code: |
@@ -26,35 +26,7 @@ code: |
 ---
 ::::
 
-### Best Practices
-
-- Keep `sanitize` enabled for user-generated, remote, or plugin-provided content.
-- Prefer short, already-normalized Markdown strings; do not pass partially escaped HTML unless you intentionally rely on Markdown HTML support.
-- Set `theme` explicitly inside previews, cards, or split light/dark comparisons where the surrounding page theme is not representative.
-- Use `TxMarkdownView` for display-only content. Pair it with an editor or textarea outside the component when users need to edit Markdown.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `content` | `string` | required | Markdown source rendered into the `.markdown-body` container. |
-| `sanitize` | `boolean` | `true` | Sanitizes generated HTML with DOMPurify. While DOMPurify is loading, sanitized output is withheld. |
-| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` resolves from document `data-theme` / theme classes and falls back to `light`. |
-
-### Slots
-
-No slots. The rendered HTML is fully derived from `content`.
-
-### Events
-
-No component events.
-
-## Rich Markdown
-
-Tables, task lists, blockquotes, inline code, and fenced code blocks are rendered into the internal `.markdown-body` container.
-
+### Rich Markdown
 ::::TuffDemoWrapper{demo="MarkdownViewMarkdownDemo" code-lang="vue"}
 ---
 code: |
@@ -81,56 +53,46 @@ code: |
 ---
 ::::
 
-## Theme Preview
-
-Set `theme` explicitly when the surrounding surface is known. Leave it as `auto` when the page owns the theme state.
-
+### Themes
+`theme` pins light or dark; `auto` follows the document theme.
 ::::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  const richContent = [
-    '## Theme preview',
-    '',
-    'The same Markdown keeps its structure in light and dark themes.',
-    '',
-    '- sanitize stays enabled by default',
-    '- `theme` can be set explicitly',
-  ].join('\n')
-  </script>
-
   <template>
-    <div class="grid gap-4 md:grid-cols-2">
-      <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #fff;">
-        <TxMarkdownView :content="richContent" theme="light" />
-      </div>
-      <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
-        <TxMarkdownView :content="richContent" theme="dark" />
-      </div>
-    </div>
+    <TxMarkdownView :content="richContent" theme="light" />
+    <TxMarkdownView :content="richContent" theme="dark" />
   </template>
 ---
 ::::
 
+### Best Practices
+
+- Keep `sanitize` on for user-generated, remote, or plugin-provided content.
+- Pass normalized Markdown; don't mix in partially escaped HTML unless you rely on Markdown HTML on purpose.
+- Set `theme` explicitly on previews and cards that don't follow the document theme.
+- Use it for display only; pair it with an editor or textarea outside when users edit.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `content` | `string` | required | Markdown source string. |
+| `sanitize` | `boolean` | `true` | Cleans the output with DOMPurify; nothing renders until it loads. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` resolves from the document's `data-theme` or theme classes, falling back to `light`. |
+
 ## Overview
 
-- Markdown is parsed with `marked` using `gfm: true` and `breaks: true`.
-- With `sanitize=true`, raw generated HTML is never rendered before DOMPurify resolves.
-- With `sanitize=false`, `marked` output is written directly with `v-html`; only use this for trusted Markdown.
-- `theme="auto"` checks `html` / `body` `data-theme` and `light` / `dark` classes, then observes `html` class and `data-theme` changes.
-- The public wrapper receives `class="light"` or `class="dark"` and a matching `data-theme` attribute.
-- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.
+- Parses with `marked` using `gfm` and `breaks` (a single newline breaks the line).
+- With `sanitize=true`, nothing renders before DOMPurify is ready; if its import fails, the body stays empty.
+- With `sanitize=false`, the output goes straight into `v-html`; use it only for trusted content.
+- `theme="auto"` reads and observes `data-theme` and the `light` / `dark` classes on both `html` and `body`.
+- The wrapper carries the resolved `light` / `dark` class and a matching `data-theme`.
 
 ## Technologies
 
-- **Security note:** `sanitize=true` waits for DOMPurify and renders an empty body if the sanitizer import fails. Do not disable sanitization for plugin, remote, or user-authored Markdown unless it has already been trusted and normalized upstream.
-- **Theme note:** `theme="auto"` reads both `html` and `body` theme markers initially, but the mutation observer watches only `html` class and `data-theme` changes. Prefer explicit `theme` for embedded previews that do not follow the document root.
-- **Verified coverage:** `markdown-view.test.ts` checks sanitizer withholding, sanitized rendering, raw rendering when `sanitize=false`, explicit light/dark themes, auto-theme resolution from document markers, observer updates, and light fallback.
-
-- Component source: `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`.
-- Types: `packages/tuffex/packages/components/src/markdown-view/src/types.ts` exports `MarkdownViewProps`.
-- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` is imported by the component stylesheet, and `TxStreamMarkdown` imports the same file. Every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)` — keep the scope if you re-vendor it.
-- Export alias: `packages/tuffex/packages/components/src/markdown-view/index.ts` exports `MarkdownView`, `TxMarkdownView`, `MarkdownViewProps`, and `TxMarkdownViewInstance`.
-- Coverage: `packages/tuffex/packages/components/src/markdown-view/__tests__/markdown-view.test.ts` verifies sanitization and theme behavior.
+- The bundled `github-markdown.css` is a global import shared with `TxStreamMarkdown`; every rule is scoped to `:where(.tx-markdown-view, .tx-stream-md)`, so a host's own `.markdown-body` is untouched. Keep the scope when re-vendoring it.
+- Source: `packages/tuffex/packages/components/src/markdown-view/`.
 
 <TuffDocSourceLink />

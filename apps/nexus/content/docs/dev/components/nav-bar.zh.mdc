@@ -1,6 +1,6 @@
 ---
 title: "NavBar 导航栏"
-description: "紧凑顶部导航栏，支持标题、左右操作区、安全区占位与返回事件。"
+description: "页面顶部的标题与操作栏"
 category: Navigation
 status: beta
 since: 0.3.4
@@ -14,12 +14,8 @@ verified: true
 ::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  function noop() {}
-  </script>
-
   <template>
-    <TxNavBar title="设置" show-back @back="noop" @click-right="noop">
+    <TxNavBar title="设置" show-back @back="goBack" @click-right="save">
       <template #right>
         <span>保存</span>
       </template>
@@ -29,8 +25,7 @@ code: |
 ::::
 
 ### 自定义左侧与标题
-
-提供 `left` 插槽会替换内置返回图标。此时点击左侧只会发出 `click-left`，不会发出 `back`。
+`left` 插槽替换内置返回图标；点击它只派发 `click-left`，不派发 `back`。
 
 ```vue
 <template>
@@ -48,7 +43,7 @@ code: |
 </template>
 ```
 
-### 吸顶顶部栏
+### 吸顶
 
 ```vue
 <template>
@@ -56,65 +51,52 @@ code: |
 </template>
 ```
 
-只有在父级布局已经处理设备安全区时，才把 `safeAreaTop` 设为 `false`。
-
 ### 最佳实践
 
-- 导航返回优先监听 `@back`；`@click-left` 更适合自定义左侧插槽。
-- 右侧插槽内容应保持简短；标题会省略，但两侧列仍需要留出空间。
-- 不要在 `left` 或 `right` 内再嵌套交互按钮；这两个操作区本身已经是按钮。
-- 移动端壳层默认保留 `safeAreaTop=true`，除非外层布局已经处理安全区。
-- 路由跳转或保存过程中使用 `disabled`，避免重复触发导航事件。
+- 返回导航监听 `@back`，`@click-left` 留给自定义左侧插槽；内置返回按钮两者都派发，不要同时监听。
+- 右侧内容保持简短；标题会省略，但两侧列仍需留出空间。
+- 不要在 `left` 或 `right` 内嵌套按钮；两个操作区本身就是按钮。
+- 移动端壳层保留 `safeAreaTop=true`，除非外层布局已处理安全区。
+- 路由跳转或保存期间设 `disabled`，避免重复触发。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `title` | `string` | `''` | 未提供 `title` 插槽时居中显示的文本。 |
-| `fixed` | `boolean` | `false` | 使用顶部 sticky 定位。 |
-| `safeAreaTop` | `boolean` | `true` | 通过 `env(safe-area-inset-top)` 渲染安全区占位。 |
-| `showBack` | `boolean` | `false` | 未提供 `left` 插槽时显示内置返回图标。 |
-| `disabled` | `boolean` | `false` | 禁用左右按钮并阻止事件发出。 |
-| `zIndex` | `number` | `2000` | 写入 `--tx-nav-bar-z-index` 的层级值。 |
+| `title` | `string` | `''` | 没有 `title` 插槽时居中显示的文本。 |
+| `fixed` | `boolean` | `false` | 以 sticky 定位吸附在顶部。 |
+| `safeAreaTop` | `boolean` | `true` | 用 `env(safe-area-inset-top)` 渲染顶部安全区占位。 |
+| `showBack` | `boolean` | `false` | 没有 `left` 插槽时显示内置返回图标。 |
+| `disabled` | `boolean` | `false` | 禁用两侧按钮，不派发事件。 |
+| `zIndex` | `number` | `2000` | 层级，写入 `--tx-nav-bar-z-index`。 |
 
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `back` | `void` | 仅由内置返回按钮发出。 |
-| `click-left` | `void` | 由内置返回按钮或自定义左侧操作发出。 |
-| `click-right` | `void` | 存在 `right` 插槽时由右侧操作发出。 |
+| `back` | `void` | 仅由内置返回按钮派发。 |
+| `click-left` | `void` | 点击内置返回按钮或自定义左侧内容时派发。 |
+| `click-right` | `void` | 存在 `right` 插槽时，点击右侧派发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|-------|------|
-| `left` | 无 | 替换内置返回图标并控制左侧操作内容。 |
-| `title` | 无 | 替换居中标题文本。 |
-| `right` | 无 | 提供右侧操作内容。 |
+| `left` | 无 | 替换内置返回图标。 |
+| `title` | 无 | 替换居中标题。 |
+| `right` | 无 | 右侧操作内容。 |
 
 ## 概述
 
-- 根节点是 `header`；左右操作区都是原生 `button type="button"`。
-- `showBack=true` 且未提供 `left` 插槽时，左侧按钮渲染内置返回图标。
-- 点击内置返回按钮会同时发出 `back` 和 `click-left`。
-- 点击自定义 `left` 插槽只会发出 `click-left`。
-- 点击 `right` 插槽会发出 `click-right`；未提供 `right` 插槽时右侧按钮禁用且不发事件。
-- `disabled=true` 会添加 `is-disabled`，禁用左右按钮，并阻断所有事件。
-- `fixed=true` 使用 sticky 吸顶定位。
-- `zIndex` 通过 `--tx-nav-bar-z-index` 暴露给样式。
+- 根节点是 `<header>`；左右操作区都是原生 `<button type="button">`。
+- 内置返回按钮（`showBack` 且没有 `left` 插槽）同时派发 `back` 与 `click-left`；自定义 `left` 只派发 `click-left`。
+- 没有内容的操作区处于禁用状态，不派发事件。
+- `disabled` 添加 `is-disabled`，禁用两侧按钮并阻断所有事件。
 
 ## 技术实现
 
-- **可访问性说明:** 左右操作区本身就是原生按钮。不要在 `left` 或 `right` 内传入嵌套按钮；slot 内应放文本、图标或 span，保持按钮语义有效。
-- **事件说明:** 默认返回按钮会同时发出 `back` 与 `click-left`；自定义 `left` 内容只发出 `click-left`。同一个交互应只选择一条监听路径，避免重复导航。
-- **实测覆盖:** `nav-bar.test.ts` 覆盖标题/安全区/z-index 渲染、fixed 与 disabled class、默认返回事件、自定义 slot 事件、空操作区禁用，以及禁用状态不发事件。
-
-- Component source: `packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue`。
-- Types: `packages/tuffex/packages/components/src/nav-bar/src/types.ts` 导出 `NavBarProps` 与 `NavBarEmits`。
-- Export alias: `packages/tuffex/packages/components/src/nav-bar/index.ts` 导出 `NavBar`、`TxNavBar`、`NavBarProps`、`NavBarEmits` 与 `TxNavBarInstance`。
-- Coverage: `packages/tuffex/packages/components/src/nav-bar/__tests__/nav-bar.test.ts` 覆盖结构、插槽、安全区行为与操作事件。
+- 源码：`packages/tuffex/packages/components/src/nav-bar/`。
 
 <TuffDocSourceLink />
