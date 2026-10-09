@@ -70,10 +70,12 @@ const PROVIDER_STATUSES = [...PROVIDER_STATUS_VALUES].map(status => `'${status}'
  * One aggregation, two uses: the daily rollup writes a finished day's rows, and the analytics
  * summary reads today's directly, so what the dashboard shows for today is what the rollup stores.
  *
- * D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT"), where
- * SQLite's own default is 500, so a local test does not catch it. Measures taken from one scan are
- * therefore unpivoted through `json_each(json_object(...))`, not a `UNION ALL` per measure; a NULL
- * measure becomes a JSON null and is dropped with the other NULLs.
+ * D1 refuses a compound SELECT of more than five terms ("too many terms in compound SELECT") and a
+ * function call of more than 32 arguments, both far under SQLite's defaults; the test database
+ * applies D1's limits (`test/helpers/d1-sqlite.ts`). Measures taken from one scan are therefore
+ * unpivoted through `json_each(json_object(...))`, not a `UNION ALL` per measure, and a set of more
+ * than 16 measures is split into several objects inside one `json_array`. A NULL measure becomes a
+ * JSON null and is dropped with the other NULLs.
  */
 const DAILY_AGGREGATES: readonly string[] = [
   `
@@ -166,25 +168,29 @@ const DAILY_AGGREGATES: readonly string[] = [
       FROM search
     )
     SELECT measure.key AS stat_type, '' AS stat_key, measure.value AS value
-    FROM totals, json_each(json_object(
-      'searches', NULLIF(searches, 0),
-      'search_duration_total', duration_total,
-      'search_duration_max', duration_max,
-      'search_duration_min', duration_min,
-      'search_result_total', result_total,
-      'search_result_count', NULLIF(result_count, 0),
-      'search_query_length_total', query_length_total,
-      'search_query_length_count', NULLIF(query_length_count, 0),
-      'search_sorting_total', sorting_total,
-      'search_sorting_count', NULLIF(sorting_count, 0),
-      'search_sorting_max', sorting_max,
-      'search_sorting_min', sorting_min,
-      'search_first_result_total', first_result_total,
-      'search_first_result_count', NULLIF(first_result_count, 0),
-      'search_first_result_max', first_result_max,
-      'search_first_result_min', first_result_min,
-      'search_slow_count', NULLIF(slow, 0)
-    )) AS measure
+    FROM totals, json_each(json_array(
+      json_object(
+        'searches', NULLIF(searches, 0),
+        'search_duration_total', duration_total,
+        'search_duration_max', duration_max,
+        'search_duration_min', duration_min,
+        'search_result_total', result_total,
+        'search_result_count', NULLIF(result_count, 0),
+        'search_query_length_total', query_length_total,
+        'search_query_length_count', NULLIF(query_length_count, 0),
+        'search_slow_count', NULLIF(slow, 0)
+      ),
+      json_object(
+        'search_sorting_total', sorting_total,
+        'search_sorting_count', NULLIF(sorting_count, 0),
+        'search_sorting_max', sorting_max,
+        'search_sorting_min', sorting_min,
+        'search_first_result_total', first_result_total,
+        'search_first_result_count', NULLIF(first_result_count, 0),
+        'search_first_result_max', first_result_max,
+        'search_first_result_min', first_result_min
+      )
+    )) AS part, json_each(part.value) AS measure
   `,
   `
     WITH search AS (
