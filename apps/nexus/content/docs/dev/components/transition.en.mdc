@@ -1,6 +1,6 @@
 ---
 title: "Transition"
-description: "Preset transition wrapper for keyed content switches, drill-in page pushes, list motion, and smooth size changes."
+description: "Transition wrappers for keyed content, lists, and drill-in pages."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,242 +11,48 @@ verified: true
 
 ## Usage
 
-### Best Practices
-
-- Use `mode="out-in"` for keyed panel switches so leaving content finishes before the new panel enters.
-- Use `TxTransitionPush` for hierarchical navigation (drilling into a sub-page and back): pass `direction="forward"` going in and `"back"` coming out. Sibling tab switches are not a push; keep them on a fade.
-- Use `smooth-size` when content height changes; use normal `fade` / `slide-fade` / `rebound` for lists and repeated rows.
-- Keep list keys stable business ids. `Date.now()` is fine for docs demos, but production reorderable lists should use persisted ids.
-- Keep durations short for repeated UI motion; reserve rebound for small affordances where overshoot is intentional.
-
-## API Reference
-
-### TxTransition Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Selects the transition class name. `smooth-size` delegates to `TxTransitionSmoothSize` only when `group=false`. |
-| `group` | `boolean` | `false` | Uses Vue `TransitionGroup` for keyed lists. Prefer `fade`, `slide-fade`, or `rebound` in list mode. |
-| `tag` | `string` | `'div'` | Root tag forwarded to `TransitionGroup` when `group=true`. |
-| `appear` | `boolean` | `true` | Enables enter motion on initial render. |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | Vue `Transition` mode for single-child transitions; ignored by `TransitionGroup`. |
-| `duration` | `number` | `180` | Motion duration in milliseconds, written to `--tx-transition-duration`. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | CSS timing function written to `--tx-transition-easing`. |
-
-### TxTransitionSmoothSize Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `appear` | `boolean` | `true` | Enables enter motion on initial render. |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | Vue `Transition` mode for the keyed child inside `TxAutoSizer`. |
-| `duration` | `number` | `220` | Shared duration for the size measurement transition and inner motion. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Shared easing for size and content motion. |
-| `width` | `boolean` | `false` | Animates width changes through `TxAutoSizer`. |
-| `height` | `boolean` | `true` | Animates height changes through `TxAutoSizer`. |
-| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | Inner content motion while the wrapper animates size. |
-
-### TxTransitionPush Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `direction` | `'forward' \| 'back'` | `'forward'` | `forward` pushes the new page in from the inline end and the old one out towards the start; `back` reverses both. Mirrored automatically in a right-to-left container. |
-| `duration` | `number` | `220` | Duration of the push and the height tween, in milliseconds. `0` swaps the page at once with no animation. |
-| `easing` | `string` | `'cubic-bezier(0.23, 1, 0.32, 1)'` | Easing shared by the push, the crossfade and the height tween. Web Animations reads it, so it cannot be a CSS variable. |
-| `height` | `boolean` | `true` | Tweens the container from the old page's height to the new one's, then returns it to `auto`. |
-| `appear` | `boolean` | `false` | Pushes the first page in on mount as well, along `direction`; with no old page there is no height tween. |
-
-### Semantic Components
-
-| Component | Preset |
-|-----------|--------|
-| `TxTransitionFade` | `fade` |
-| `TxTransitionSlideFade` | `slide-fade` |
-| `TxTransitionRebound` | `rebound` |
-| `TxTransitionSmoothSize` | size-aware wrapper with configurable inner `motion` |
-| `TxTransitionPush` | drill-in paging: a horizontal push with a height tween; its own implementation, not a `preset` |
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | `TxTransition` and the preset components above have no component-specific emits. Non-smooth `TxTransition` forwards Vue transition listener attributes to the underlying `Transition` / `TransitionGroup`; smooth-size mode forwards attrs to `TxAutoSizer`. |
-| `before-enter` | `(el: Element)` | `TxTransitionPush`: fires before the new page is inserted. |
-| `after-enter` | `(el: Element)` | `TxTransitionPush`: fires once the new page has pushed in; an enter cut short by the next switch does not fire. |
-| `after-leave` | `(el: Element)` | `TxTransitionPush`: fires once the old page has left the DOM, including when a same-key page replaces it mid-push. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| `default` | - | Single keyed child for `Transition`, or keyed children when `group=true`. `TxTransitionPush` takes exactly one keyed element; changing its key turns the page. |
-
-## Content Switch (X)
-
-### Transition Content
+### Content Switch
+One keyed child switches when its key changes; `preset` picks the motion, and `smooth-size` also eases the container's size.
 :::TuffDemoWrapper{demo="TransitionTransitionContentDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  type Preset = 'fade' | 'slide-fade' | 'rebound' | 'smooth-size'
-
-  const preset = ref<Preset>('fade')
-  const value = ref<'A' | 'B'>('A')
-
-  const contentKey = computed(() => value.value)
-
-  function toggle() {
-    value.value = value.value === 'A' ? 'B' : 'A'
-  }
-  </script>
-
   <template>
-    <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">preset</span>
-            <TuffSelect v-model="preset" style="min-width: 180px;">
-              <TuffSelectItem value="fade" label="fade" />
-              <TuffSelectItem value="slide-fade" label="slide-fade" />
-              <TuffSelectItem value="rebound" label="rebound" />
-              <TuffSelectItem value="smooth-size" label="smooth-size" />
-            </TuffSelect>
-          </label>
+    <TxTransition :preset="preset" :duration="220" mode="out-in">
+      <div :key="value">Panel {{ value }}</div>
+    </TxTransition>
 
-          <TxButton size="sm" type="primary" @click="toggle">
-            Toggle
-          </TxButton>
+    <TxTransitionFade :duration="180" mode="out-in">
+      <div :key="`fade-${value}`">Fade {{ value }}</div>
+    </TxTransitionFade>
 
-          <div style="opacity: 0.75; font-size: 12px;">
-            key: <b>{{ contentKey }}</b>
-          </div>
-        </div>
-      </TxCard>
+    <TxTransitionSlideFade :duration="180" mode="out-in">
+      <div :key="`slide-${value}`">SlideFade {{ value }}</div>
+    </TxTransitionSlideFade>
 
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
-        <TxTransition :preset="preset" :duration="220" mode="out-in">
-          <div :key="contentKey" style="padding: 10px 12px;">
-            <div style="font-weight: 600; margin-bottom: 8px;">
-              Panel {{ value }}
-            </div>
-            <div
-              :style="{
-                height: value === 'A' ? '90px' : '180px',
-                borderRadius: '12px',
-                background: value === 'A'
-                  ? 'color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent)'
-                  : 'color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent)',
-              }"
-            />
-          </div>
-        </TxTransition>
-      </TxCard>
-
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
-        <div class="tx-demo__label" style="margin-bottom: 8px;">
-          Semantic Components
-        </div>
-
-        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
-          <TxTransitionFade :duration="180" mode="out-in">
-            <div :key="`fade-${contentKey}`" style="padding: 8px 10px; border-radius: 12px; border: 1px solid var(--tx-border-color-lighter);">
-              Fade {{ value }}
-            </div>
-          </TxTransitionFade>
-
-          <TxTransitionSlideFade :duration="180" mode="out-in">
-            <div :key="`slide-${contentKey}`" style="padding: 8px 10px; border-radius: 12px; border: 1px solid var(--tx-border-color-lighter);">
-              SlideFade {{ value }}
-            </div>
-          </TxTransitionSlideFade>
-
-          <TxTransitionRebound :duration="200" mode="out-in">
-            <div :key="`rebound-${contentKey}`" style="padding: 8px 10px; border-radius: 12px; border: 1px solid var(--tx-border-color-lighter);">
-              Rebound {{ value }}
-            </div>
-          </TxTransitionRebound>
-        </div>
-      </TxCard>
-    </div>
+    <TxTransitionRebound :duration="200" mode="out-in">
+      <div :key="`rebound-${value}`">Rebound {{ value }}</div>
+    </TxTransitionRebound>
   </template>
 ---
 :::
 
-## List Add/Remove (Y)
-
-### Transition List
+### List Add and Remove
+`group` switches to `TransitionGroup`; every item needs a stable key.
 :::TuffDemoWrapper{demo="TransitionTransitionListDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  type Preset = 'fade' | 'slide-fade' | 'rebound'
-
-  const preset = ref<Preset>('slide-fade')
-
-  const seq = ref(3)
-  const items = ref([
-    { id: 'a', text: 'Alpha' },
-    { id: 'b', text: 'Beta' },
-    { id: 'c', text: 'Gamma' },
-  ])
-
-  const list = computed(() => items.value)
-
-  function add() {
-    seq.value += 1
-    items.value.unshift({ id: `${Date.now()}`, text: `New ${seq.value}` })
-  }
-
-  function remove() {
-    items.value.shift()
-  }
-  </script>
-
   <template>
-    <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
-          <label class="tx-demo__row" style="gap: 8px;">
-            <span class="tx-demo__label">preset</span>
-            <TuffSelect v-model="preset" style="min-width: 180px;">
-              <TuffSelectItem value="fade" label="fade" />
-              <TuffSelectItem value="slide-fade" label="slide-fade" />
-              <TuffSelectItem value="rebound" label="rebound" />
-            </TuffSelect>
-          </label>
-
-          <TxButton size="sm" @click="add">
-            Add
-          </TxButton>
-          <TxButton size="sm" @click="remove">
-            Remove
-          </TxButton>
-        </div>
-      </TxCard>
-
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
-        <TxTransition :preset="preset" group tag="div" :duration="180" style="display: grid; gap: 10px;">
-          <div
-            v-for="item in list"
-            :key="item.id"
-            style="padding: 10px 12px; border-radius: 12px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);"
-          >
-            {{ item.text }}
-          </div>
-        </TxTransition>
-      </TxCard>
-    </div>
+    <TxTransition preset="slide-fade" group tag="div" :duration="180">
+      <div v-for="item in items" :key="item.id">
+        {{ item.text }}
+      </div>
+    </TxTransition>
   </template>
 ---
 :::
 
-## Page Push (Z)
-
-### Transition Push
+### Page Push
+Use `TxTransitionPush` for hierarchical navigation: pass `direction="forward"` going in and `"back"` coming out; changing the child's key turns the page.
 :::TuffDemoWrapper{demo="TransitionTransitionPushDemo" code-lang="vue"}
 ---
 code: |
@@ -275,52 +81,110 @@ code: |
   </script>
 
   <template>
-    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-      <TxButton size="sm" :disabled="depth === 0" @click="back">
-        Back
-      </TxButton>
-      <TxButton size="sm" type="primary" :disabled="depth === pages.length - 1" @click="next">
-        Next
-      </TxButton>
-    </div>
+    <TxButton :disabled="depth === 0" @click="back">Back</TxButton>
+    <TxButton :disabled="depth === pages.length - 1" @click="next">Next</TxButton>
 
-    <div style="width: 320px; border: 1px solid var(--tx-border-color-lighter); border-radius: 12px;">
-      <div style="padding: 10px 12px 4px; font-weight: 600;">
-        {{ page.title }}
-      </div>
-      <TxTransitionPush :direction="direction">
-        <ul :key="page.id" style="margin: 0; padding: 4px 6px 6px; list-style: none;">
-          <li v-for="row in page.rows" :key="row" style="padding: 7px 8px;">
-            {{ row }}
-          </li>
-        </ul>
-      </TxTransitionPush>
-    </div>
+    <TxTransitionPush :direction="direction">
+      <ul :key="page.id">
+        <li v-for="row in page.rows" :key="row">{{ row }}</li>
+      </ul>
+    </TxTransitionPush>
   </template>
 ---
 :::
 
+### Best Practices
+
+- Use `mode="out-in"` for keyed panel switches, so the old content leaves before the new one enters.
+- Sibling tab switches are not a push; keep them on a fade and reserve `TxTransitionPush` for hierarchy.
+- Use `smooth-size` when content height changes; use `fade`, `slide-fade`, or `rebound` for lists and repeated rows.
+- Key list items by stable business ids; never by temporary indexes in reorderable lists.
+- Keep repeated motion short, and reserve `rebound` for small affordances where overshoot is intended.
+
+## API Reference
+
+### TxTransition
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Transition preset; `smooth-size` delegates to `TxTransitionSmoothSize` only when `group=false`. |
+| `group` | `boolean` | `false` | Renders keyed lists with `TransitionGroup`. |
+| `tag` | `string` | `'div'` | Root tag when `group=true`. |
+| `appear` | `boolean` | `true` | Runs the enter motion on first render. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | `Transition` mode for a single child; ignored with `group`. |
+| `duration` | `number` | `180` | Duration in ms, written to `--tx-transition-duration`. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Timing function, written to `--tx-transition-easing`; `rebound` enters on its own spring curve. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | One keyed child, or several stably keyed children when `group=true`. |
+
+### TxTransitionSmoothSize
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `appear` | `boolean` | `true` | Runs the enter motion on first render. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | `Transition` mode for the keyed child inside `TxAutoSizer`. |
+| `duration` | `number` | `220` | Duration shared by the size transition and the inner motion. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Easing shared by size and content motion. |
+| `width` | `boolean` | `false` | Animates width changes. |
+| `height` | `boolean` | `true` | Animates height changes. |
+| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | Inner content motion while the size animates. |
+
+### TxTransitionPush
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `direction` | `'forward' \| 'back'` | `'forward'` | `forward` pushes the new page in from the inline end; `back` reverses it. Mirrored in RTL. |
+| `duration` | `number` | `220` | Duration of the push and the height tween, in ms; `0` swaps at once. |
+| `easing` | `string` | `'cubic-bezier(0.23, 1, 0.32, 1)'` | Shared by push, fade, and height; Web Animations reads it, so no CSS variables. |
+| `height` | `boolean` | `true` | Tweens the container from the old page's height to the new one's, then returns to `auto`. |
+| `appear` | `boolean` | `false` | Pushes the first page in on mount too, along `direction`. |
+
+#### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `before-enter` | `(el: Element)` | Fires before the new page is inserted. |
+| `after-enter` | `(el: Element)` | Fires once the new page has pushed in; not for an enter cut short by the next switch. |
+| `after-leave` | `(el: Element)` | Fires once the old page leaves the DOM, including when a same-key page replaces it mid-push. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Exactly one keyed element; changing its key turns the page. |
+
+### Semantic Components
+
+| Component | Preset |
+|-----------|--------|
+| `TxTransitionFade` | `fade` |
+| `TxTransitionSlideFade` | `slide-fade` |
+| `TxTransitionRebound` | `rebound` |
+| `TxTransitionSmoothSize` | size-aware wrapper with a configurable inner `motion` |
+| `TxTransitionPush` | its own drill-in implementation, not a `preset` |
+
 ## Overview
 
-- `class` and `style` are merged onto the outer `.tx-transition` wrapper; other attrs are forwarded to `Transition` / `TransitionGroup` in non-smooth mode.
-- `smooth-size` is a single-child mode. It wraps the child with `TxAutoSizer`, defaults to height animation, and keeps overflow hidden during measurement.
-- `group=true` switches to `TransitionGroup`; `mode` no longer applies and each rendered item must have a stable key.
-- `TxTransitionPush` is single-child too, and moves both pages at once with no `mode`: the old page is pinned where it stands, at its own size, as `position: absolute` and made `inert` (no pointer, Tab stop or assistive-technology access), while the new page stays in flow and sets the container's height. Focus inside the old page is lost with it; the host moves focus to the new page when it switches.
-- The container's height tweens from the old page to the new one only during the switch, then returns to `auto`. While anything moves the container is `overflow: clip`, not `hidden`, so focusing the new page right away never scrolls the container; at rest nothing is clipped, so a focus ring inside a page is never cut off.
-- An interrupted switch continues from where things are drawn: the container starts from its mid-tween height, and a page still entering leaves from where it is. Turning back to the same key mid-push brings that page back from where the old one stopped.
-- Presets share the `--tx-transition-duration` and `--tx-transition-easing` CSS variables, except rebound enter easing uses its spring curve intentionally.
-- Under `prefers-reduced-motion: reduce`, every preset collapses to a near-instant duration and drops its `translateY`/`scale` offsets, so switches and list motion still complete without animation. `TxTransitionPush` crossfades in place over 120ms instead and lands the height at once; `duration` of `0` swaps the page with no animation at all.
+- `class` and `style` merge onto the outer `.tx-transition`; other attrs, Vue transition listeners included, go to `Transition` / `TransitionGroup`, or to `TxAutoSizer` under `smooth-size`.
+- `smooth-size` is single-child: it wraps the content in `TxAutoSizer`, animates height by default, and hides overflow while measuring; with `group=true` it behaves as `fade`.
+- `TxTransitionPush` moves both pages at once: the old page is pinned in place as `position: absolute` and made `inert`, while the new page stays in flow and sets the height. Focus inside the old page is lost; the host moves it to the new page.
+- While a push runs, the container is `overflow: clip`, not `hidden`; at rest nothing is clipped, so focus rings inside a page stay whole.
+- An interrupted switch continues from where things are drawn; turning back to the same key mid-push slides that page back from where the old one stopped.
+- Under reduced motion, every preset collapses to a near-instant duration without its offset or scale; `TxTransitionPush` crossfades in place over 120ms and lands the height at once.
 
 ## Technologies
 
-- **Attribute note:** `class` and `style` land on the `.tx-transition` wrapper; non-style attrs are forwarded to Vue `Transition` / `TransitionGroup`, so they are not visible on the wrapper in tests.
-- **Smooth-size note:** `preset="smooth-size"` delegates to `TxTransitionSmoothSize` only when `group=false`. In grouped lists, it still renders a transition name and should be avoided because the size-aware wrapper is single-child oriented.
-- **Push note:** `TxTransitionPush` drives the Web Animations API from the JS hooks of `<Transition :css="false">`: pages animate `translate`, leaving their own `transform` alone, and the container animates `height`. A leave keeps its last frame with `fill: 'forwards'` until Vue removes the node. A page cut short is resumed from `getComputedTiming().progress`. `class`, `style` and other attrs land on the `.tx-transition-push` root.
-- **Verified coverage:** `transition.test.ts` checks preset-to-name mapping, timing CSS variables, group tags, smooth-size delegation, `TxAutoSizer` sizing prop forwarding, semantic wrapper presets, forwarded attrs, and slot rendering. For `TxTransitionPush` it checks the push keyframes in both directions and mirrored for right-to-left, pinning and `inert` on the leaving page, the `[old, new]` height keyframes (also when nothing enters), `height=false`, `duration=0`, the reduced-motion crossfade, interrupted and same-key turnaround switches, `appear`, and cancelling motion on unmount.
-
-- Component sources: `packages/tuffex/packages/components/src/transition/src/TxTransition.vue`, `TxTransitionSmoothSize.vue`, `TxTransitionFade.vue`, `TxTransitionSlideFade.vue`, `TxTransitionRebound.vue`, and `TxTransitionPush.vue`.
-- Types: `packages/tuffex/packages/components/src/transition/src/types.ts` exports `TransitionPreset`, `TxTransitionProps`, `TxTransitionSmoothSizeProps`, `TransitionPushDirection`, and `TxTransitionPushProps`.
-- Export alias: `packages/tuffex/packages/components/src/transition/index.ts` exports installable transition aliases, raw `Tx*` components, prop types, and instance types.
-- Coverage: `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts` verifies preset mapping, smooth-size behavior, semantic components, attrs, styles, slots, and the push, height, interrupt and fallback paths of `TxTransitionPush`.
+- `TxTransitionPush` drives Web Animations from the JS hooks of `<Transition :css="false">`: pages animate `translate`, leaving their own `transform` alone, the container animates `height`, and a page cut short resumes from `getComputedTiming().progress`.
+- Source: `packages/tuffex/packages/components/src/transition/`.
 
 <TuffDocSourceLink />

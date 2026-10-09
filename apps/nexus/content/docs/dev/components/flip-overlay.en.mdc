@@ -1,6 +1,6 @@
 ---
 title: FlipOverlay
-description: 3D flip overlay that expands from a trigger
+description: A 3D overlay that flips open from its trigger.
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,6 +11,8 @@ verified: true
 
 ## Usage
 
+### Basic
+`source` sets where the flip starts; `headerTitle` and `headerDesc` fill the built-in header.
 :::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}
 ---
 code: |
@@ -27,13 +29,11 @@ code: |
       v-model="open"
       :source="triggerRef?.$el"
       header-title="Detail View"
-      header-desc="Built-in header supports title, description, and default round close button"
+      header-desc="Title, description, and a round close button"
     >
       <template #default="{ close }">
-        <div style="padding: 32px;">
-          <p style="margin: 0 0 16px;">Content flips in from the trigger.</p>
-          <TxButton size="sm" @click="close">Close</TxButton>
-        </div>
+        <p>Content flips in from the trigger.</p>
+        <TxButton size="sm" @click="close">Close</TxButton>
       </template>
     </TxFlipOverlay>
   </template>
@@ -42,11 +42,11 @@ code: |
 
 ### Best Practices
 
-- Pass the real trigger element or its `DOMRect` as `source`; `null` falls back to the centered card without origin continuity.
-- Keep `duration` near the default for stacked overlays so shared mask and card motion stay synchronized.
-- Use `cardStyle` for size constraints such as `width` and `maxHeight`; use `cardClass` for reusable visual variants.
-- Prefer `surface="mask"` for normal cards, `glass` / `refraction` only when the backdrop remains readable, and `pure` for fully custom card styling.
-- Use `#header-display`, `#header-actions`, or `#header-close` before replacing the whole header; full `#header` opts out of built-in close layout.
+- Pass the real trigger element or its `DOMRect` as `source`; `null` falls back to a centered card with no origin.
+- Keep `duration` near the default for stacked overlays so the shared mask and card motion stay in sync.
+- Put size constraints (`width`, `maxHeight`) in `cardStyle` and reusable visual variants in `cardClass`.
+- Use `surface="mask"` for normal cards, `glass` / `refraction` only when the backdrop stays readable, and `pure` for fully custom cards.
+- Prefer `#header-display`, `#header-actions`, or `#header-close`; `#header` replaces the close layout too.
 
 ## API Reference
 
@@ -54,90 +54,79 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `boolean` | `false` | Visible state (v-model) |
-| `source` | `HTMLElement \| DOMRect \| null` | `null` | Animation origin |
-| `sourceRadius` | `string \| null` | `null` | Origin border radius |
-| `duration` | `number` | `480` | Animation duration (ms) |
-| `perspective` | `number` | `1200` | 3D perspective |
-| `rotateX` | `number` | `6` | X-axis rotation |
-| `rotateY` | `number` | `8` | Y-axis rotation |
-| `randomTilt` | `boolean` | `true` | Random tilt per open |
-| `tiltRange` | `number` | `2` | Random tilt range |
-| `easeOut` | `string` | `'back.out(1.25)'` | Open easing |
-| `easeIn` | `string` | `'back.in(1)'` | Close easing |
-| `maskClosable` | `boolean` | `true` | Click mask to close |
-| `preventAccidentalClose` | `boolean` | `false` | Accidental-close protection (block mask close + intercept page exit + red warning glow) |
-| `globalMask` | `boolean` | `true` | Whether to render the global visual mask layer |
-| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'mask'` | Built-in card surface mode |
-| `surfaceColor` | `string` | `''` | Surface base color (theme overlay color by default) |
-| `surfaceOpacity` | `number` | `0.96` | Surface opacity (mask mode) |
-| `speedBoost` | `number` | `1.12` | Time-scale boost applied after `speedBoostAt` progress. |
-| `speedBoostAt` | `number` | `0.7` | Open/close animation progress threshold that enables `speedBoost`. |
-| `transitionName` | `string` | `'TxFlipOverlay-Mask'` | Vue transition name used for the mask layer. |
-| `header` | `boolean` | `true` | Enable built-in header when no `#header` slot is provided |
-| `headerTitle` | `string` | `''` | Built-in header title |
-| `headerDesc` | `string` | `''` | Built-in header description |
-| `closable` | `boolean` | `true` | Show built-in round close button |
-| `closeAriaLabel` | `string` | `'Close'` | Built-in close button aria-label |
-| `maskClass` | `string` | `''` | Mask class |
-| `cardClass` | `string` | `''` | Card class |
-| `cardStyle` | `CSSProperties` | - | Inline style object forwarded to the overlay card. |
-| `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | Card border style (`dash` aliases `dashed`) |
-| `scrollable` | `boolean` | `true` | Whether body area scrolls internally |
-| `expanded` | `boolean` | - | Optional controlled expanded animation state for consumers that need sync telemetry. |
-| `animating` | `boolean` | - | Optional controlled animation state for consumers that need sync telemetry. |
+| `modelValue` | `boolean` | `false` | Whether the overlay is shown; bind with `v-model`. |
+| `source` | `HTMLElement \| DOMRect \| null` | `null` | Animation origin. |
+| `sourceRadius` | `string \| null` | `null` | Corner radius of the origin. |
+| `duration` | `number` | `480` | Animation duration in ms. |
+| `perspective` | `number` | `1200` | 3D perspective distance. |
+| `rotateX` | `number` | `6` | X-axis rotation. |
+| `rotateY` | `number` | `8` | Y-axis rotation. |
+| `randomTilt` | `boolean` | `true` | Adds a slight random tilt on each open. |
+| `tiltRange` | `number` | `2` | Range of the random tilt. |
+| `easeOut` | `string` | `'back.out(1.25)'` | Open easing. |
+| `easeIn` | `string` | `'back.in(1)'` | Close easing. |
+| `maskClosable` | `boolean` | `true` | Closes on a mask click or Escape. |
+| `preventAccidentalClose` | `boolean` | `false` | Blocks mask close and page exit, flashing a red warning glow. |
+| `globalMask` | `boolean` | `true` | Renders the shared body-level mask. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'mask'` | Built-in card surface. |
+| `surfaceColor` | `string` | `''` | Surface base color; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` | Surface opacity in `mask` mode. |
+| `speedBoost` | `number` | `1.12` | Time-scale boost after `speedBoostAt` progress. |
+| `speedBoostAt` | `number` | `0.7` | Animation progress at which `speedBoost` starts. |
+| `transitionName` | `string` | `'TxFlipOverlay-Mask'` | Vue transition name for the mask. |
+| `header` | `boolean` | `true` | Renders the built-in header; ignored when `#header` is provided. |
+| `headerTitle` | `string` | `''` | Built-in header title, wired to `aria-labelledby`. |
+| `headerDesc` | `string` | `''` | Built-in header description, wired to `aria-describedby`. |
+| `closable` | `boolean` | `true` | Shows the close area, including `#header-close`. |
+| `closeAriaLabel` | `string` | `'Close'` | `aria-label` of the close button. |
+| `maskClass` | `string` | `''` | Mask class. |
+| `cardClass` | `string` | `''` | Card class. |
+| `cardStyle` | `CSSProperties` | - | Inline style for the card. |
+| `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | Card border; `dash` aliases `dashed`. |
+| `scrollable` | `boolean` | `true` | Scrolls the body area internally. |
+| `expanded` | `boolean` | - | Controlled expanded-motion state for UI that must stay in sync. |
+| `animating` | `boolean` | - | Controlled animation state for UI that must stay in sync. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `update:modelValue` | `(value: boolean)` | Emitted with `false` when the overlay closes itself. |
-| `open` | - | Open animation starts |
-| `opened` | - | Open animation ends |
-| `close` | - | Close animation starts |
-| `closed` | - | Close animation ends |
-| `update:expanded` | `(value: boolean)` | Sync expanded |
-| `update:animating` | `(value: boolean)` | Sync animating |
+| `update:modelValue` | `(value: boolean)` | Emits `false` when the overlay closes itself. |
+| `open` | - | The open animation starts. |
+| `opened` | - | The open animation ends. |
+| `close` | - | The close animation starts. |
+| `closed` | - | The close animation ends. |
+| `update:expanded` | `(value: boolean)` | Syncs `expanded`. |
+| `update:animating` | `(value: boolean)` | Syncs `animating`. |
 
 ### Slots
 
 | Slot | Params | Description |
 |------|--------|-------------|
-| `default` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Overlay body content |
-| `header` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Full custom header (overrides built-in header system) |
-| `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom built-in title/description area |
-| `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom area left of close button |
-| `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom close area (hidden when `closable=false`) |
+| `default` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Body content. |
+| `header` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Replaces the whole built-in header. |
+| `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Title and description area. |
+| `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Actions left of the close button. |
+| `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Close area; not rendered when `closable=false`. |
 
-### Expose
+### Exposed Methods
 
 | Method | Type | Description |
 |--------|------|-------------|
-| `close()` | `() => void` | Runs the full close animation and emits `update:modelValue(false)`; the parent must own open state via `v-model`. |
+| `close()` | `() => void` | Runs the full close animation and emits `update:modelValue(false)`. |
 
 ## Overview
 
-- `modelValue=true` mounts the overlay, resolves the `source` rectangle, emits `open`, then emits `opened` after the card animation completes.
-- The overlay teleports to `<body>`. Its mask and card are `position: fixed`, and rendered in place they would be laid out against the nearest ancestor with a `transform`, `filter`, `contain` or `content-visibility` instead of the viewport. Non-prop attributes still land on the mask.
-- Built-in close button, slot `close()`, mask click, and Escape all start the close path. Mask click and Escape share `handleMaskClick`, so `maskClosable=false` blocks both and `preventAccidentalClose` flashes the warning instead; the close button and `close()` bypass those gates.
-- Internal close emits `close`, then `update:modelValue(false)`, then `closed`. Parent code must update `v-model` to fully close controlled overlays.
-- Header render priority: `#header` fully overrides the built-in header; otherwise `header=false` hides it and `header=true` renders the built-in header (customizable via `#header-display` / `#header-actions` / `#header-close`). `closable=false` hides the entire close area, including `#header-close`.
-- `expanded` and `animating` are sync telemetry values; bind them only when the surrounding UI needs to observe overlay motion state.
-- `globalMask=true` uses a shared body-level mask for stacked overlays; underlay masks are non-interactive and only the top overlay receives mask clicks. Stack displacement is enabled only when adjacent overlays have similar width/height (`|delta| <= max(8px, previousSize * 5%)`), is capped at depth 3 (`-18/-36/-54px` with `0.95/0.90/0.85` scale), and deeper layers fade `1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`.
-- `preventAccidentalClose=true` blocks mask close and page exit attempts, then flashes the warning state instead of silently closing.
-- Accessibility: the card is `role="dialog"` with `aria-modal="true"` and `tabindex="-1"`. When the built-in header renders, `headerTitle` wires `aria-labelledby` and `headerDesc` wires `aria-describedby`. Focus moves into the card on open and is restored to the previously focused element on close.
+- The overlay teleports to `<body>`; non-prop attributes land on the mask.
+- Closing emits `close`, `update:modelValue(false)`, then `closed`; it fully closes once the parent writes `v-model` back.
+- Mask clicks and Escape obey `maskClosable` and flash the warning under `preventAccidentalClose`; the close button and `close()` bypass both.
+- Header priority: `#header` overrides the built-in header; otherwise `header` decides whether it renders.
+- With `globalMask`, stacked overlays share one mask and only the top one takes clicks; similar-sized neighbors offset (up to 3 layers) and deeper layers fade out.
+- The card is `role="dialog"` with `aria-modal="true"`; focus moves into it on open and returns to the previously focused element on close.
 
 ## Technologies
 
-- **State contract:** `TxFlipOverlay` owns the mount/animation lifecycle but only emits `update:modelValue(false)` when it closes itself; consumers must still sync `v-model` after built-in close, slot `close()`, or mask close.
-- **Mount contract:** the overlay used to render in place. A docs page's article body is `content-visibility: auto`, so the "fixed" card centred itself on the whole article, focusing it scrolled the page about 870px, and the trigger it flips from left the screen. It now teleports the way `TxModal` and `TxCommandPalette` do; the `FlipDialog` wrappers that already put it inside `<Teleport to="body">` are unaffected.
-- **Stacking contract:** `globalMask=true` shares the visual backdrop across open overlays while only the top overlay keeps an interactive mask; size-similar overlays receive capped displacement and deeper overlays fade out.
-- **Safety contract:** `preventAccidentalClose` blocks mask close and page-exit attempts, then flashes the warning state; it is a guardrail, not a persistence or autosave feature.
-- **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, dialog semantics (`role`/`aria-modal`/`aria-labelledby`) with Escape close, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.
-
-- Component source: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`.
-- Motion implementation: `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`.
-- Types: `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts` verifies surface defaults, header slot priority, close event order, card style forwarding, stacked masks, layered displacement, and safety-close guards.
+- The flip runs on lazily loaded GSAP tweens in `flip-overlay-motion.ts`.
+- Source: `packages/tuffex/packages/components/src/flip-overlay/`.
 
 <TuffDocSourceLink />

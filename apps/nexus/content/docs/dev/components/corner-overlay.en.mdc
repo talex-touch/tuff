@@ -1,6 +1,6 @@
 ---
 title: "CornerOverlay"
-description: "Absolute-positioned corner badge layer for avatars, thumbnails, and small status marks."
+description: "An absolutely positioned layer pinned to a corner of its content."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,6 +11,8 @@ verified: true
 
 ## Usage
 
+### Basic
+`placement` picks the corner; `offsetX` / `offsetY` set the distance from its edges.
 ::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -21,13 +23,18 @@ code: |
         <span class="status-dot" />
       </template>
     </TxCornerOverlay>
+    <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
+      <span class="avatar">NX</span>
+      <template #overlay>
+        <TxIcon name="i-carbon-checkmark-filled" />
+      </template>
+    </TxCornerOverlay>
   </template>
 ---
 ::::
 
-### Clickable Overlay Content
-
-The overlay is `pointer-events: none` by default. Set `overlayPointerEvents="auto"` only when the overlay itself must receive pointer input.
+### Clickable Overlay
+`overlayPointerEvents="auto"` lets the overlay receive pointer input and drops its `aria-hidden`.
 
 ```vue
 <template>
@@ -41,6 +48,7 @@ The overlay is `pointer-events: none` by default. Set `overlayPointerEvents="aut
 ```
 
 ### CSS Offset Values
+String offsets are written to the style as-is.
 
 ```vue
 <template>
@@ -53,15 +61,13 @@ The overlay is `pointer-events: none` by default. Set `overlayPointerEvents="aut
 </template>
 ```
 
-String offsets are preserved. Numeric offsets are converted to pixels.
-
 ### Best Practices
 
-- Keep overlays decorative by default; `aria-hidden` means important status should also be represented in nearby text or labels.
-- Use negative offsets for badges that sit partly outside avatars or thumbnails.
-- Set `overlayPointerEvents="auto"` only for intentional interactive overlays, and provide a semantic control inside the slot.
-- Avoid large overlay content. This component is designed for small marks, not popovers or menus.
-- Keep the base content's size stable; the overlay is positioned absolutely and does not reserve layout space.
+- The overlay is hidden from screen readers by default, so state important status in nearby text or a label too.
+- Use negative offsets for badges that extend past an avatar or thumbnail.
+- For an interactive overlay, put a semantic control in the slot; the component adds no click, focus, or keyboard behavior.
+- Keep overlays to small marks, not popovers or menus.
+- Keep the base content's size stable; the overlay reserves no layout space.
 
 ## API Reference
 
@@ -69,45 +75,26 @@ String offsets are preserved. Numeric offsets are converted to pixels.
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | Corner used for the overlay. |
-| `offsetX` | `string \| number` | `0` | Horizontal inset. Numbers become px. |
-| `offsetY` | `string \| number` | `0` | Vertical inset. Numbers become px. |
-| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | CSS `pointer-events` value for the overlay layer. |
+| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | Corner the overlay sits in. |
+| `offsetX` | `string \| number` | `0` | Horizontal inset; numbers are px. |
+| `offsetY` | `string \| number` | `0` | Vertical inset; numbers are px. |
+| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | CSS `pointer-events` of the overlay. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `default` | none | Base inline content. |
-| `overlay` | none | Corner layer content. Omitted slot means no overlay node is rendered. |
-
-### Events
-
-No public events are emitted.
-
-### Exposed Methods
-
-No public instance methods are exposed.
+| `default` | none | Base content. |
+| `overlay` | none | Corner content; without it, no overlay node renders. |
 
 ## Overview
 
-- The root renders an inline-block `span` with `position: relative`.
-- The overlay is rendered only when the `overlay` slot exists.
-- The overlay layer is absolutely positioned; while decorative (`overlayPointerEvents="none"`, the default) it is marked `aria-hidden="true"`, and with `overlayPointerEvents="auto"` it is exposed so a focusable control inside stays reachable.
-- `placement` selects which x/y inset pair is written: top/left, top/right, bottom/left, or bottom/right.
-- `offsetX` controls `left` or `right`; `offsetY` controls `top` or `bottom`.
-- Number offsets become pixel values, while string offsets are passed through as-is.
-- `overlayPointerEvents` maps directly to the overlay style.
-- No click, focus, or keyboard behavior is added by the component.
+- The root is an inline-block `span` with `position: relative`; the overlay is absolutely positioned.
+- `placement` selects the inset pair: `offsetX` sets `left` or `right`, and `offsetY` sets `top` or `bottom`.
+- With `overlayPointerEvents` at `none` (the default), the overlay has `aria-hidden="true"`; at `auto` it does not, so controls inside can take focus.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`, `TxCornerOverlay.vue`, and `corner-overlay.test.ts`.
-- The overlay slot is conditional and `aria-hidden` only while decorative (`overlayPointerEvents="none"`); `overlayPointerEvents="auto"` exposes it so an interactive control is reachable. Product-critical status still needs text or a labeled control outside a decorative layer.
-- `overlayPointerEvents="auto"` only forwards CSS pointer behavior. The slotted control owns all keyboard, focus, and label semantics.
-
-- Component source: `packages/tuffex/packages/components/src/corner-overlay/src/TxCornerOverlay.vue`.
-- Types: `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts` verifies absent overlay rendering, `aria-hidden` overlay output, default placement, placement-to-inset styles, string offsets, and pointer-event forwarding.
+- Source: `packages/tuffex/packages/components/src/corner-overlay/`.
 
 <TuffDocSourceLink />

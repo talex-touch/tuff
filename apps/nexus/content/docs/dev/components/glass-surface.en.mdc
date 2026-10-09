@@ -1,6 +1,6 @@
 ---
 title: "GlassSurface"
-description: "Refractive glass container with SVG displacement, backdrop-filter, and solid fallback rendering paths."
+description: "A glass container that refracts the content behind it."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,49 +11,48 @@ verified: true
 
 ## Usage
 
-### GlassSurface
+### Basic
 :::TuffDemoWrapper{demo="GlassSurfaceGlassSurfaceDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div
-      style="
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 280px;
-        overflow: hidden;
-        border-radius: 18px;
-        background:
-          radial-gradient(circle at 16% 18%, rgba(255, 122, 122, 0.72), transparent 25%),
-          radial-gradient(circle at 78% 24%, rgba(89, 203, 255, 0.7), transparent 28%),
-          linear-gradient(135deg, #f8e3c5 0%, #d7ebff 48%, #d6f5df 100%);
-      "
-    >
-      <div style="position: absolute; top: 32px; left: 36px; max-width: 390px; color: rgba(28, 29, 34, 0.82);">
-        <strong style="display: block; margin-bottom: 8px; font-size: 24px;">Layered clarity with visible depth</strong>
-        <span style="font-size: 14px;">Background bands and text make blur, refraction, and edge highlights visible.</span>
-      </div>
-
+    <div class="backdrop">
       <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0.08">
-        <div style="display: grid; width: 100%; height: 100%; place-items: center; padding: 16px; color: rgba(20, 22, 28, 0.78); font-weight: 700;">
-          GlassSurface
-        </div>
+        GlassSurface
       </TxGlassSurface>
     </div>
   </template>
 ---
 :::
 
+### Parameter Tuning
+:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlassSurface
+      :width="360"
+      :height="160"
+      :blur="blur"
+      :displace="displace"
+      :distortion-scale="distortionScale"
+    >
+      GlassSurface
+    </TxGlassSurface>
+    <TxSlider v-model="blur" :min="0" :max="24" />
+    <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" />
+    <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" />
+  </template>
+---
+:::
+
 ### Best Practices
 
-- Use this component only when the surrounding artwork benefits from visible refraction. For regular cards, prefer `TxBaseSurface` or `TxCard` so the UI keeps predictable contrast.
-- Keep `width`, `height`, and `borderRadius` explicit when the glass layer sits above scrollable or image-heavy content; the displacement map is regenerated from the measured container bounds.
-- Tune `blur`, `backgroundOpacity`, and `saturation` against the actual background. Heavy blur on low-contrast content can make text behind the panel unreadable.
-- Treat `distortionScale` and RGB offsets as art-direction controls. Large negative values or wide channel offsets should be reserved for hero / preview surfaces, not dense forms.
-- Account for the fallback paths in Safari, Firefox, SSR, tests, and other environments without `CSS.supports`; those paths preserve layout and readability but remove RGB refraction.
-- Keep important controls inside the default slot; the generated SVG is decorative, non-interactive, and sits behind `.tx-glass-surface__content`.
+- Use it only where artwork, images, or gradients benefit from refraction; use `TxBaseSurface` or `TxCard` for regular cards.
+- Set `width`, `height`, and `borderRadius` explicitly when the glass sits over scrolling content or images.
+- Tune `blur`, `backgroundOpacity`, and `saturation` against the real background so text behind stays readable.
+- Reserve large `distortionScale` values and wide channel offsets for hero or preview surfaces, not dense forms.
+- Put important controls in the default slot.
 
 ## API Reference
 
@@ -65,141 +64,90 @@ rows:
   - name: width
     type: "string | number"
     default: "'200px'"
-    description: Surface width. Numeric values are normalized to px; strings are passed through.
+    description: Surface width; numbers are px, strings are used as-is.
   - name: height
     type: "string | number"
     default: "'200px'"
-    description: Surface height. Numeric values are normalized to px; strings are passed through.
+    description: Surface height; numbers are px, strings are used as-is.
   - name: borderRadius
     type: number
     default: 20
-    description: Outer radius in px, also applied to the generated displacement map rectangles.
+    description: Outer radius in px, also used by the displacement map.
   - name: borderWidth
     type: number
     default: 0.07
-    description: Edge-size multiplier used when generating the displacement map mask.
+    description: Edge-size multiplier of the displacement map mask.
   - name: brightness
     type: number
     default: 70
-    description: Lightness percentage for the generated inner displacement mask.
+    description: Lightness percentage of the map's inner mask.
   - name: opacity
     type: number
     default: 0.93
-    description: Alpha value for the generated inner displacement mask.
+    description: Alpha of the map's inner mask.
   - name: blur
     type: number
     default: 11
-    description: Blur radius for the generated displacement mask; also drives the backdrop-filter fallback blur.
+    description: Blur radius of the map mask; also the blur of the backdrop-filter fallback.
   - name: displace
     type: number
     default: 0.5
-    description: Final SVG feGaussianBlur.stdDeviation applied after the RGB displacement maps are blended.
+    description: Final blur (feGaussianBlur.stdDeviation) after the RGB maps are blended.
   - name: backgroundOpacity
     type: number
     default: 0
-    description: Background alpha used on the SVG-filter rendering path.
+    description: Background alpha on the SVG-filter path.
   - name: saturation
     type: number
     default: 1
-    description: Saturation value appended to the SVG-filter backdrop-filter chain.
+    description: Saturation on the SVG-filter path.
   - name: distortionScale
     type: number
     default: -180
-    description: Base SVG displacement scale applied to the red, green, and blue maps.
+    description: Base displacement scale of the red, green, and blue maps.
   - name: redOffset
     type: number
     default: 0
-    description: Offset added to distortionScale for the red displacement map.
+    description: Red offset added to distortionScale.
   - name: greenOffset
     type: number
     default: 10
-    description: Offset added to distortionScale for the green displacement map.
+    description: Green offset added to distortionScale.
   - name: blueOffset
     type: number
     default: 20
-    description: Offset added to distortionScale for the blue displacement map.
+    description: Blue offset added to distortionScale.
   - name: xChannel
     type: "'R' | 'G' | 'B'"
     default: "'R'"
-    description: SVG displacement X channel selector forwarded to all RGB maps.
+    description: X-axis channel read by all three maps.
   - name: yChannel
     type: "'R' | 'G' | 'B'"
     default: "'G'"
-    description: SVG displacement Y channel selector forwarded to all RGB maps.
+    description: Y-axis channel read by all three maps.
   - name: mixBlendMode
     type: "'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity' | 'plus-darker' | 'plus-lighter'"
     default: "'difference'"
-    description: CSS mix-blend-mode used by the generated blue gradient rectangle in the displacement map.
+    description: Blend mode of the blue gradient when the map is generated.
 ---
 ::
-
-### Events
-
-`TxGlassSurface` does not emit custom events. Put interactive controls inside the default slot and handle their native events there.
 
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `default` | - | Panel content rendered above the generated SVG filter layer and centered by `.tx-glass-surface__content`. |
+| `default` | - | Panel content, centered in `.tx-glass-surface__content` above the filter layer. |
 
-## Parameter Tuning (Slider)
+## Overview
 
-### GlassSurface Parameter Tuning
-:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  // Bind each optical prop to a TxSlider; only a few are shown here.
-  // The full control panel (14 sliders + xChannel / yChannel / mixBlendMode selects) lives in the demo source.
-  const blur = ref(10)
-  const displace = ref(0.6)
-  const distortionScale = ref(-180)
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <TxGlassSurface
-        :width="360"
-        :height="160"
-        :blur="blur"
-        :displace="displace"
-        :distortion-scale="distortionScale"
-      >
-        <div style="padding: 18px 20px; font-weight: 600; color: rgba(0, 0, 0, 0.68);">
-          GlassSurface
-        </div>
-      </TxGlassSurface>
-
-      <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
-      <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
-      <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
-    </div>
-  </template>
----
-:::
-
-## Fallback degradation
-
-`TxGlassSurface` selects the rendering path in this order:
-
-1. **SVG filter refraction path**: when the browser supports `backdrop-filter: url(#filter)`, the component uses the generated SVG displacement map and keeps RGB channel displacement, `distortionScale`, `redOffset` / `greenOffset` / `blueOffset`, `xChannel` / `yChannel`, `displace`, and `saturation`.
-2. **backdrop-filter blur path**: when SVG filters are unavailable but native `backdrop-filter` is supported, it falls back to `blur(${blur}px) saturate(1.8) brightness(1.06)` with a translucent background and border. RGB displacement and chromatic refraction are no longer rendered.
-3. **solid translucent path**: when `backdrop-filter` is also unavailable, it falls back to a translucent background plus border. Real blur and refraction are disabled, but width, height, radius, and baseline readability are preserved.
-
-Safari and Firefox currently skip the SVG filter refraction path and enter the latter fallback paths first.
+- The rendering path follows support: SVG displacement refraction with `backdrop-filter: url()`, else a `blur()` frosted backdrop, else a translucent background with a border.
+- Safari, Firefox, SSR, and environments without `CSS.supports` skip refraction; the fallbacks keep size, radius, and readability but drop RGB refraction.
+- The displacement map is built from the measured size and regenerated when the size or an optical prop changes.
+- The generated SVG is decorative, non-interactive, and sits below the content layer.
 
 ## Technologies
 
-- **Rendering contract:** numeric `width` / `height` become px strings, string dimensions pass through, and measured bounds feed the generated displacement map.
-- **Fallback contract:** SVG displacement is the high-fidelity path; unsupported browsers fall back to native `backdrop-filter`, then to a solid translucent surface that preserves layout and readability but drops RGB refraction.
-- **Interaction contract:** the generated SVG/filter layers are decorative. Interactive controls belong in the default slot above `.tx-glass-surface__content`.
-- **Verified coverage:** `glass-surface.test.ts` covers dimension normalization, slot rendering, solid fallback styling, and RGB displacement channel forwarding.
-
-- Component source: `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`.
-- Types: `packages/tuffex/packages/components/src/glass-surface/index.ts` exports `GlassSurfaceProps` and `TxGlassSurfaceInstance`.
-- Coverage: `packages/tuffex/packages/components/src/glass-surface/__tests__/glass-surface.test.ts` verifies numeric dimension normalization, slot rendering, solid fallback styling, and SVG displacement channel forwarding.
+- Three `feDisplacementMap` passes shift the red, green, and blue channels separately and recombine them into a chromatic refraction.
+- Source: `packages/tuffex/packages/components/src/glass-surface/`.
 
 <TuffDocSourceLink />

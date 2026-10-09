@@ -1,6 +1,6 @@
 ---
 title: "Fusion 交融"
-description: "两个插槽的 gooey 交融动效，支持 hover、click 或手动受控状态。"
+description: "激活时让两个插槽交融的 gooey 效果"
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,7 +11,8 @@ verified: true
 
 ## 用法
 
-### Fusion
+### 基础
+插槽 `a`、`b` 在激活时靠拢交融；`gap` 是分开时的距离，`trigger` 决定激活方式。
 :::TuffDemoWrapper{demo="FusionFusionDemo" code-lang="vue"}
 ---
 code: |
@@ -22,80 +23,26 @@ code: |
   </script>
 
   <template>
-    <!-- 两个 blob 在 hover / 受控激活时通过 gooey filter 交融；完整 demo 见源码。 -->
-    <TxFusion v-model="active" trigger="hover" :gap="240" :blur="19" :alpha="29" :alpha-offset="-10">
-      <template #a>
-        <div style="width: 260px; height: 260px; border-radius: 999px; background: hsla(256, 65%, 60%, 0.76);" />
-      </template>
-      <template #b>
-        <div style="width: 110px; height: 110px; border-radius: 999px; background: hsla(77, 100%, 55%, 0.78);" />
-      </template>
+    <TxButton @click="active = !active">Toggle</TxButton>
+    <TxFusion v-model="active" trigger="hover" :gap="240">
+      <template #a><div class="blob blob--large" /></template>
+      <template #b><div class="blob blob--small" /></template>
+    </TxFusion>
+    <TxFusion trigger="click" direction="y" :gap="46">
+      <template #a><div class="pill" /></template>
+      <template #b><div class="pill" /></template>
     </TxFusion>
   </template>
 ---
 :::
 
-### 最佳实践
-
-- `TxFusion` 适合装饰性动效、成对 chip、紧凑动作入口和状态点缀；不要把它作为表达关键状态的唯一方式。
-- 当父级状态机、表单、路由状态或埋点流需要确定性控制时，优先使用 `trigger="manual"`。
-- 两个插槽形状的尺寸应相对接近，这样 SVG filter 看起来像交融，而不是碰撞。
-- `gap`、`blur`、`alpha` 和 `alphaOffset` 需要一起调；大间距通常需要更高 blur / alpha 和更克制的时长。
-- 避免在密集文本或表单控件周围使用快速动效。通过宿主的 reduced-motion 偏好驱动 `disabled` 或手动 inactive 状态。
-- 如果插槽内容可交互，确保根节点 trigger 模式不会和子按钮或链接行为冲突。
-
-## API 参考
-
-### TxFusion Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `boolean \| undefined` | `undefined` | 受控 active 状态；省略时组件使用内部 active 状态。 |
-| `disabled` | `boolean` | `false` | 禁用指针触发的状态变更，并应用禁用视觉状态。 |
-| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | 交互模式；`manual` 会忽略指针事件，只接受外部 `v-model` 控制。 |
-| `direction` | `'x' \| 'y'` | `'x'` | 未交融时两个 blob 分离的轴向。 |
-| `gap` | `number` | `40` | 未激活时两个 blob 的距离，单位 px。 |
-| `duration` | `number` | `260` | 过渡时长，单位 ms；负数会收敛为 `0ms`。 |
-| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | blob transform 过渡使用的 CSS easing。 |
-| `blur` | `number` | `19` | SVG `feGaussianBlur.stdDeviation`，控制 gooey filter 模糊强度。 |
-| `alpha` | `number` | `29` | SVG color matrix 的 alpha 倍率；数值越大越“粘”。 |
-| `alphaOffset` | `number` | `-10` | SVG color matrix 的 alpha 偏移。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `change` | `(v: boolean)` | 非禁用触发器请求新 active 状态时发出。 |
-| `update:modelValue` | `(v: boolean)` | `v-model` 更新事件；受控调用方必须把值写回组件。 |
-
-### Slots
-
-| 插槽名 | Props | 说明 |
-|------|-------|------|
-| `a` | - | 第一个 blob 图层；未激活时位于 `direction` 的负方向。 |
-| `b` | - | 第二个 blob 图层；未激活时位于 `direction` 的正方向。 |
-
-### Exposed Methods
-
-不暴露公开实例方法。
-
-## 实际场景
-
-以下配方都共用同一套交融参数，只是插槽内容不同；`gap` / `direction` 需按内容尺寸微调，完整样式见各 demo 源码。
-
-### Button + Tooltip Bubble
+### 按钮与提示气泡
+`direction="y"` 让两团上下交融。
 :::TuffDemoWrapper{demo="FusionFusionButtonTooltipDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref(false)
-  </script>
-
   <template>
-    <!-- direction="y" 让按钮与提示气泡上下交融。 -->
-    <TxFusion v-model="active" trigger="hover" :gap="44" direction="y" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+    <TxFusion v-model="active" trigger="hover" direction="y" :gap="44">
       <template #a><!-- 主按钮：Save ⌘S --></template>
       <template #b><!-- 提示气泡：Saved to drafts --></template>
     </TxFusion>
@@ -103,13 +50,12 @@ code: |
 ---
 :::
 
-### Avatar + Badge
+### 头像与角标
 :::TuffDemoWrapper{demo="FusionFusionAvatarBadgeDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 头像与通知角标交融（hover 触发，无需 v-model）。 -->
-    <TxFusion trigger="hover" :gap="64" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+    <TxFusion trigger="hover" :gap="64">
       <template #a><!-- 头像 TA --></template>
       <template #b><!-- 角标 8 --></template>
     </TxFusion>
@@ -117,33 +63,25 @@ code: |
 ---
 :::
 
-### Chip + Icon
+### 状态胶囊与图标
 :::TuffDemoWrapper{demo="FusionFusionChipIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <!-- 玻璃态状态 chip 与圆形图标徽标交融（hover 触发，无需 v-model）。 -->
-    <TxFusion trigger="hover" :gap="54" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
-      <template #a><!-- 状态 chip：Synced --></template>
+    <TxFusion trigger="hover" :gap="54">
+      <template #a><!-- 状态胶囊：Synced --></template>
       <template #b><!-- 圆形徽标：✓ --></template>
     </TxFusion>
   </template>
 ---
 :::
 
-### Mini Card + FAB
+### 迷你卡片与浮动按钮
 :::TuffDemoWrapper{demo="FusionFusionMiniCardFabDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref(false)
-  </script>
-
   <template>
-    <!-- 卡片与浮动操作按钮交融；较大 gap（92）需要更高的 blur / alpha 才自然。 -->
-    <TxFusion v-model="active" trigger="hover" :gap="92" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+    <TxFusion v-model="active" trigger="hover" :gap="92">
       <template #a><!-- Quick Note 卡片 --></template>
       <template #b><!-- 浮动 + 按钮 --></template>
     </TxFusion>
@@ -151,26 +89,57 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 只做装饰性点缀，不要让它成为表达关键状态的唯一方式。
+- 父级状态机、表单或路由需要确定性控制时，用 `trigger="manual"`。
+- 两个形状的尺寸保持相近，并把 `gap`、`blur`、`alpha`、`alphaOffset` 一起调。
+- 用户偏好减少动态效果时，由宿主设置 `disabled` 或保持未激活。
+- 插槽里有按钮或链接时不要用 `trigger="click"`，避免交互冲突。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean \| undefined` | `undefined` | 受控激活状态；省略时使用内部状态。 |
+| `disabled` | `boolean` | `false` | 禁止触发状态变化，并显示禁用态。 |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | 激活方式；`manual` 不响应指针，只认 `v-model`。 |
+| `direction` | `'x' \| 'y'` | `'x'` | 分开时两团的排列轴。 |
+| `gap` | `number` | `40` | 未激活时两团的距离（px）。 |
+| `duration` | `number` | `260` | 过渡时长（ms）；负值按 `0`。 |
+| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | 位移过渡的 CSS 缓动。 |
+| `blur` | `number` | `19` | gooey 滤镜的 `feGaussianBlur.stdDeviation`。 |
+| `alpha` | `number` | `29` | color matrix 的 alpha 倍率；越大越「粘」。 |
+| `alphaOffset` | `number` | `-10` | color matrix 的 alpha 偏移。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `change` | `(v: boolean)` | 触发器请求新的激活状态时派发；禁用时不派发。 |
+| `update:modelValue` | `(v: boolean)` | 与 `change` 同时派发；受控时须写回。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `a` | - | 第一团；未激活时位于 `direction` 的负方向。 |
+| `b` | - | 第二团；未激活时位于 `direction` 的正方向。 |
+
 ## 概述
 
-- `modelValue` 为 boolean 时组件进入受控模式；省略时 `TxFusion` 保存内部 active 状态。
-- `trigger="hover"` 在 mouse enter 时激活，在 mouse leave 时取消激活。
-- `trigger="click"` 点击根节点时切换 active；受控调用方必须写回发出的值，视觉状态才会变化。
-- `trigger="manual"` 会忽略 hover、leave 和 click。外部控件完全拥有状态机时使用它。
-- `disabled=true` 会阻止指针触发的状态写入，不从这些交互发出更新，添加 `is-disabled`，并设置根节点 `pointer-events: none`。
-- `duration` 为负数时收敛到 `0ms`；`gap` 和 `blur` 会写入像素单位 CSS 变量。
-- 非有限的 `alpha` 与 `alphaOffset` 会先回退到安全 color-matrix 值，再渲染 SVG filter。
-- 插槽内容处于经过 filter 的 SVG gooey 图层内；插槽控件仍需自行负责 label、焦点状态和键盘语义。
+- `modelValue` 为布尔值时受控，否则使用内部状态；两种模式都派发事件。
+- `hover` 在指针进入时激活、离开时取消；`click` 点击根节点切换；`manual` 不响应指针。
+- `trigger="click"` 时根节点带 `role="button"`：可 Tab 聚焦，Enter / Space 切换，`aria-pressed` 反映状态。
+- `disabled` 时根节点 `pointer-events: none`，交互不产生更新。
+- 非有限的 `alpha` / `alphaOffset` 回退到安全的 color matrix 值。
+- 插槽内容渲染在滤镜图层中；插槽内的控件自行负责标签、焦点与键盘语义。
 
 ## 技术实现
 
-- 已人工核对 `packages/tuffex/packages/components/src/fusion/src/types.ts`、`TxFusion.vue` 与 `fusion.test.ts`。
-- 组件在非受控模式下也会通过 computed setter 发出事件，因此文档需要把 `change` 和 `update:modelValue` 都描述为状态请求。
-- `manual` 设计上不响应指针事件；使用外部 Toggle 的示例若不希望 hover / click 同时改状态，应优先使用它。
-- 根节点是带 click / hover 监听的 `div`，语义化交互应放在插槽控件或外层 UI 上，而不是 Fusion 根节点本身。
-
-- Component source: `packages/tuffex/packages/components/src/fusion/src/TxFusion.vue`。
-- Types: `packages/tuffex/packages/components/src/fusion/src/types.ts`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/fusion/__tests__/fusion.test.ts` 验证插槽渲染、视觉 props CSS 变量、SVG filter 接线、duration 收敛、hover 状态事件、受控 click 请求、manual trigger no-op 和 disabled 交互保护。
+- 两团各自做 `transform` 位移，外层 SVG 滤镜（`feGaussianBlur` + `feColorMatrix`）把重叠处融成一体。
+- 源码：`packages/tuffex/packages/components/src/fusion/`。
 
 <TuffDocSourceLink />

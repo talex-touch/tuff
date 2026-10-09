@@ -1,6 +1,6 @@
 ---
 title: "KeyframeStrokeText"
-description: "SVG text effect that draws the stroke first, reveals the fill later, and recalculates text metrics when typography inputs change."
+description: "SVG text that draws its stroke, then fades in its fill."
 category: Effects
 status: beta
 since: 0.3.4
@@ -11,64 +11,27 @@ verified: true
 
 ## Usage
 
-Use short text and tune stroke/fill colors through props. Numeric `fontSize` values become pixels.
-
+### Basic
 ::::TuffDemoWrapper{demo="KeyframeStrokeTextKeyframeStrokeTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-direction: column; gap: 18px;">
-      <TxKeyframeStrokeText text="TuffEx" :font-size="56" />
-
-      <TxKeyframeStrokeText
-        text="Stroke + Fill"
-        stroke-color="#0ea5e9"
-        fill-color="#0f172a"
-        :duration-ms="2400"
-        :stroke-width="1.8"
-        :font-size="42"
-        :font-weight="600"
-      />
-    </div>
+    <TxKeyframeStrokeText text="TuffEx" :font-size="56" />
+    <TxKeyframeStrokeText
+      text="Stroke + Fill"
+      stroke-color="#0ea5e9"
+      fill-color="#0f172a"
+      :duration-ms="2400"
+      :stroke-width="1.8"
+      :font-size="42"
+      :font-weight="600"
+    />
   </template>
 ---
 ::::
 
-### Best Practices
-
-- Use it for short phrases. Long sentences become hard to read and make SVG measurement/animation visually heavy.
-- Keep the surrounding layout width predictable. The SVG height follows `fontSize`, while the viewBox width follows measured text length.
-- Prefer semantic page headings outside the component when the animated text is decorative; use `text` for the visual label itself.
-- Avoid re-rendering the component on every keystroke in large lists. Each typography/text change schedules a measurement pass.
-- Test custom web fonts in the target surface; font loading can change measured width after the first paint.
-
-## API Reference
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `text` | `string` | `''` | Text content rendered into all SVG text layers. |
-| `strokeColor` | `string` | `'#4C4CFF'` | Color of the stroke phase (the outline that animates in first); pick a high-contrast value on dark backgrounds or the first stroke pass is nearly invisible. |
-| `fillColor` | `string` | `'#111827'` | Final text color revealed after the stroke animation completes. |
-| `durationMs` | `number` | `1800` | Animation duration in milliseconds. Used by both stroke and fill animations. |
-| `strokeWidth` | `number` | `2` | SVG stroke width; also drives viewBox padding, so large values (e.g. above 3) visibly change the laid-out size. |
-| `fontSize` | `string \| number` | `64` | Font size. Numbers are converted to px; strings are passed through. |
-| `fontWeight` | `string \| number` | `700` | SVG font weight; heavier weights thicken the glyph outline and make the stroke animation feel bolder. |
-| `fontFamily` | `string` | `'inherit'` | SVG font family. |
-
-### Events
-
-No events are emitted.
-
-### Slots
-
-No slots are exposed. Text must come from the `text` prop so measurement and accessibility stay deterministic.
-
-## Multilingual Text
-
-The component measures the rendered SVG text, so CJK copy and mixed-language labels can use the same API.
-
+### Multilingual Text
+Width comes from the rendered text, so CJK and mixed-language labels need no extra setup.
 ::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
 ---
 code: |
@@ -80,31 +43,44 @@ code: |
       :duration-ms="2600"
       :stroke-width="1.6"
       :font-size="40"
-      :font-weight="700"
     />
   </template>
 ---
 ::::
 
+### Best Practices
+
+- Use it for short phrases; long sentences read poorly and cost more to measure and animate.
+- When the text is decorative, put the semantic heading outside the component.
+- Don't update `text` on every keystroke in large lists; each change triggers a measurement.
+- Test custom web fonts on the target surface; the width changes again once fonts load.
+- On dark backgrounds, give `strokeColor` a high-contrast value, or the stroke phase is nearly invisible.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | `''` | The text to render. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Color of the outline that draws in first. |
+| `fillColor` | `string` | `'#111827'` | Final text color, revealed after the stroke. |
+| `durationMs` | `number` | `1800` | Animation duration in ms, shared by stroke and fill. |
+| `strokeWidth` | `number` | `2` | Stroke width; also sets the viewBox padding. |
+| `fontSize` | `string \| number` | `64` | Font size; numbers become px, strings pass through. |
+| `fontWeight` | `string \| number` | `700` | Font weight; heavier weights thicken the stroke outline. |
+| `fontFamily` | `string` | `'inherit'` | Font family. |
+
 ## Overview
 
-- The root is an SVG with `role="img"`.
-- Non-empty `text` is mirrored to `aria-label`; empty `text` omits `aria-label` and renders a non-breaking-space fallback to keep measurement stable.
-- The component measures `getBBox()` and `getComputedTextLength()` after mount and after text, font, or stroke-width inputs change.
-- `document.fonts.ready` triggers an additional measurement pass when the browser exposes the Font Loading API.
-- The measuring `<text>` stays at the origin while the two painted layers take the computed offset, so every pass reads the same box and repeated measurements agree.
-- `strokeColor`, `fillColor`, `durationMs`, `strokeWidth`, measured stroke length, font size, font weight, and font family are applied through CSS variables.
-- The component respects `prefers-reduced-motion: reduce` by disabling the animations and showing the final state.
+- The root is an SVG with `role="img"`. Non-empty `text` becomes its `aria-label`; empty text omits it and renders a non-breaking space.
+- It re-measures with `getBBox()` and `getComputedTextLength()` after mount and whenever `text`, the font props, or `strokeWidth` change, and once more after `document.fonts.ready`.
+- The SVG is sized from the measured text box plus the stroke padding.
+- Under reduced motion, nothing animates and the final state shows.
 
 ## Technologies
 
-- **Accessibility note:** The source always renders an SVG with `role="img"`; non-empty `text` becomes the accessible name, but there is no prop for `aria-hidden`. Keep semantic headings or labels outside the component when the animation is decorative.
-- **Measurement:** the measuring layer used to take the same offset as the painted layers, so each pass after the first read back its own offset and cancelled it. Once `document.fonts.ready` re-measured, the glyphs sat at x=0, y≈0 — above the viewBox and against its left edge — on every docs demo as well as the gallery. The unit test mocks `getBBox()` with a constant, which is why it never showed.
-- **Verified coverage:** `keyframe-stroke-text.test.ts` checks the accessible SVG/text layers, CSS variable mapping, empty-text fallback, metric updates after prop changes, and install registration.
-
-- Component source: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue`.
-- Types: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/types.ts` exports `KeyframeStrokeTextProps`.
-- Export alias: `packages/tuffex/packages/components/src/keyframe-stroke-text/index.ts` exports `KeyframeStrokeText`, `TxKeyframeStrokeText`, `KeyframeStrokeTextProps`, and `TxKeyframeStrokeTextInstance`.
-- Coverage: `packages/tuffex/packages/components/src/keyframe-stroke-text/__tests__/keyframe-stroke-text.test.ts` verifies measurement-driven rendering and installation.
+- A hidden measuring layer stays at the origin while the two painted layers take the computed offset; the stroke animates its dash over the measured length, with parameters passed as `--tx-kf-*` CSS variables.
+- Source: `packages/tuffex/packages/components/src/keyframe-stroke-text/`.
 
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "IconMorph"
-description: "Universal vector morphing for stroke-based icons with 2D Procrustes alignment and spring physics. Any icon morphs into any other smoothly."
+description: "A stroke icon that morphs into another icon with spring physics."
 category: Effects
 status: beta
 since: 0.6.0
@@ -9,11 +9,10 @@ syncStatus: reviewed
 verified: true
 ---
 
-> Universal stroke-based vector icon morphing. Uses 2D Procrustes rotation detection, polar coordinate interpolation, and spring physics so rotations and path transitions emerge naturally from the geometry without declaring keyframes.
-
 ## Usage
 
-### IconMorph
+### Basic
+Changing `icon` springs the shape into the new icon.
 :::TuffDemoWrapper{demo="IconMorphIconMorphDemo" code-lang="vue"}
 ---
 code: |
@@ -32,42 +31,8 @@ code: |
 ---
 :::
 
-### Best Practices
-
-- Use `TxIconMorph` for stateful action buttons (play/pause, menu/close, search/clear, check/plus).
-- Pair with `spring="snappy"` for tactile click responses, or `spring="smooth"` for relaxed UI transitions.
-- When binding to gesture drag or swipe progress, use the controlled `from`/`to`/`:progress` mode for linear scrubbing.
-- Stroke-based icons (such as Lucide, Tabler, Feather, Heroicons outline) work best. Filled glyphs should use standard icon crossfading.
-
-## API Reference
-
-### TxIconMorph Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `icon` | `IconInput` | - | Current icon in uncontrolled mode. Accepts preset names (`'menu'`, `'close'`, `'check'`, etc.), raw SVG path `d` strings, `IconNode` tuples, or full `<svg>` markup. |
-| `from` | `IconInput` | - | Starting icon in controlled mode. |
-| `to` | `IconInput` | - | Target icon in controlled mode. |
-| `progress` | `number` | - | Progress from 0 to 1 in controlled mode. Freezes spring animation. |
-| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?: number, damping?: number, mass?: number }` | `'snappy'` | Spring physics parameters for uncontrolled transitions. |
-| `size` | `number` | `24` | Icon width and height in px. |
-| `strokeWidth` | `number` | `2` | Stroke width in px. |
-| `color` | `string` | `'currentColor'` | Icon stroke color. |
-| `strokeLinecap` | `'round' \| 'butt' \| 'square'` | `'round'` | SVG stroke-linecap attribute. |
-| `strokeLinejoin` | `'round' \| 'miter' \| 'bevel'` | `'round'` | SVG stroke-linejoin attribute. |
-| `disabled` | `boolean` | `false` | Disable morph animations and snap to target instantly. |
-| `respectReducedMotion` | `boolean` | `true` | Snaps immediately when `prefers-reduced-motion` is active. |
-
-### TxIconMorph Events
-
-| Event | Payload | Description |
-|------|------|-------------|
-| `animation-start` | - | A morph transition began. |
-| `animation-complete` | - | The morph transition completed and settled. |
-
-## Controlled Progress
-
-Pass `from`, `to`, and `progress` to scrub or bind the morph directly to user gestures, scroll positions, or custom transitions without spring animation.
+### Controlled Progress
+Pass `from`, `to`, and `progress` to drive the morph from a gesture, scroll position, or custom transition, without the spring.
 
 ```vue
 <template>
@@ -75,10 +40,32 @@ Pass `from`, `to`, and `progress` to scrub or bind the morph directly to user ge
 </template>
 ```
 
+### Best Practices
+
+- Use it for stateful buttons: play / pause, menu / close, search / clear, plus / check.
+- Use `spring="snappy"` for click feedback and `spring="smooth"` for larger UI transitions.
+- Stroke icons (Lucide, Tabler, Feather) morph best; crossfade filled glyphs instead.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `icon` | `IconInput` | - | Current icon when uncontrolled: a preset name (`'menu'`, `'close'`, `'check'`, …), a path `d`, an `IconNode`, or `<svg>` markup. |
+| `from` | `IconInput` | - | Start icon in controlled mode. |
+| `to` | `IconInput` | - | Target icon in controlled mode. |
+| `progress` | `number` | - | Controlled progress (0–1); setting it enters controlled mode and stops the spring. |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?: number, damping?: number }` | `'snappy'` | Spring for uncontrolled transitions. |
+| `size` | `number \| string` | `24` | Icon width and height in px. |
+| `strokeWidth` | `number \| string` | `2` | Stroke width. |
+| `color` | `string` | `'currentColor'` | Stroke color. |
+| `reducedMotion` | `'never' \| 'user' \| 'always'` | `'never'` | Reduced-motion policy: `user` follows the OS setting, `always` jumps straight to the end. |
+
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/icon-morph/src/TxIconMorph.vue`.
-- Core engine: `packages/tuffex/packages/components/src/icon-morph/src/engine/`.
-- Export aliases: `TxIconMorph`, `IconMorph`, `TxMorphIcon`, `MorphIcon` from `@talex-touch/tuffex/icon-morph` or `@talex-touch/tuffex`.
+- The engine aligns both paths with 2D Procrustes to detect rotation, interpolates in polar space, and drives it with a damped spring.
+- Exports `TxIconMorph`, `IconMorph`, `TxMorphIcon`, and `MorphIcon` from `@talex-touch/tuffex/icon-morph` or `@talex-touch/tuffex`.
+- Source: `packages/tuffex/packages/components/src/icon-morph/`.
 
 <TuffDocSourceLink />
