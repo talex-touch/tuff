@@ -899,6 +899,19 @@ describe('plugin Prelude Intelligence facade', () => {
                       }
                     }
                   }
+                },
+                {
+                  ...base,
+                  context: { mode: 'new', owner: 'assistant', scope: 'retrieval' },
+                  options: {
+                    metadata: {
+                      contextEntrypoint: {
+                        id: 'assistant.voice',
+                        owner: 'assistant',
+                        mode: 'new'
+                      }
+                    }
+                  }
                 }
               ]
               const codes = []
@@ -918,7 +931,7 @@ describe('plugin Prelude Intelligence facade', () => {
     )
 
     await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual(
-      new Array(3).fill('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+      new Array(4).fill('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
     )
     expect(invokeCapability).not.toHaveBeenCalled()
     runtime.shutdown()

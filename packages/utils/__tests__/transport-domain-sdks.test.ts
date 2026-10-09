@@ -263,21 +263,13 @@ describe('transport domain sdk mappings', () => {
   })
 
   it('assistant events use typed transport metadata without changing event names', () => {
-    expect(AssistantEvents.floatingBall.getRuntimeConfig.toEventName()).toBe(
-      'assistant:floating-ball:get-runtime-config',
+    expect(AssistantEvents.voice.getRuntimeConfig.toEventName()).toBe(
+      'assistant:voice-panel:get-runtime-config',
     )
-    expect(AssistantEvents.floatingBall.getRuntimeConfig).toMatchObject({
-      namespace: 'assistant',
-      module: 'floating-ball',
-      action: 'get-runtime-config',
-    })
-    expect(AssistantEvents.voice.submitText.toEventName()).toBe(
-      'assistant:voice-panel:submit',
-    )
-    expect(AssistantEvents.voice.submitText).toMatchObject({
+    expect(AssistantEvents.voice.getRuntimeConfig).toMatchObject({
       namespace: 'assistant',
       module: 'voice-panel',
-      action: 'submit',
+      action: 'get-runtime-config',
     })
     expect(AssistantEvents.voice.panelClosed.toEventName()).toBe(
       'assistant:voice-panel:closed',
@@ -286,30 +278,6 @@ describe('transport domain sdk mappings', () => {
       namespace: 'assistant',
       module: 'voice-panel',
       action: 'closed',
-    })
-    expect(AssistantEvents.voice.captureScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:capture-screenshot',
-    )
-    expect(AssistantEvents.voice.captureScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'capture-screenshot',
-    })
-    expect(AssistantEvents.voice.saveScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:save-screenshot',
-    )
-    expect(AssistantEvents.voice.saveScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'save-screenshot',
-    })
-    expect(AssistantEvents.voice.translateScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:translate-screenshot',
-    )
-    expect(AssistantEvents.voice.translateScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'translate-screenshot',
     })
   })
 

@@ -2454,7 +2454,7 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('keeps Assistant entrypoint context isolated from CoreBox conversation history', async () => {
+  it('keeps an isolated one-shot entrypoint out of CoreBox history and ignores the retired Assistant one', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
     const setFile = vi.fn()
@@ -2462,16 +2462,16 @@ describe('intelligence plugin', () => {
       .fn()
       .mockResolvedValueOnce({
         invocation: {
-          result: 'assistant answer',
+          result: 'isolated answer',
           provider: 'local-default',
           model: 'qwen2.5:3b',
-          traceId: 'trace-assistant',
+          traceId: 'trace-isolated',
           latency: 5,
         },
         context: {
           mode: 'new',
           scope: 'light',
-          sessionId: 'ctxs_assistant',
+          sessionId: 'ctxs_isolated',
           itemCount: 1,
           tokenBudget: 1200,
           tokenEstimate: 8,
@@ -2498,6 +2498,25 @@ describe('intelligence plugin', () => {
           citationCount: 0,
         },
       })
+      .mockResolvedValueOnce({
+        invocation: {
+          result: 'corebox answer again',
+          provider: 'local-default',
+          model: 'qwen2.5:3b',
+          traceId: 'trace-corebox-again',
+          latency: 5,
+        },
+        context: {
+          mode: 'new',
+          scope: 'retrieval',
+          sessionId: 'ctxs_corebox_again',
+          itemCount: 1,
+          tokenBudget: 1200,
+          tokenEstimate: 8,
+          sourceTypes: ['current_input'],
+          citationCount: 0,
+        },
+      })
     const contextStream = vi.fn(async () => {
       throw new Error('transport.stream unavailable')
     })
@@ -2505,7 +2524,7 @@ describe('intelligence plugin', () => {
       check: vi.fn(async () => true),
       request: vi.fn(async () => true),
     }
-    const pluginWithAssistantEntrypoint = loadPluginModule(
+    const plugin = loadPluginModule(
       intelligencePluginUrl,
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
@@ -2531,16 +2550,16 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithAssistantEntrypoint.onFeatureTriggered('intelligence-ask', {
-      text: 'Assistant question',
+    await plugin.onFeatureTriggered('intelligence-ask', {
+      text: 'One-shot question',
       inputs: [],
       context: {
         entrypoint: {
-          id: 'assistant.voice',
-          source: 'voice',
+          id: 'corebox.ai-ask',
+          source: 'host',
           execution: {
             mode: 'new',
-            owner: 'assistant',
+            owner: 'corebox',
             scope: 'light',
             isolated: true,
           },
@@ -2549,27 +2568,27 @@ describe('intelligence plugin', () => {
     })
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledTimes(1))
 
-    const assistantRequest = contextInvoke.mock.calls[0]?.[0]
-    expect(assistantRequest).toMatchObject({
+    const isolatedRequest = contextInvoke.mock.calls[0]?.[0]
+    expect(isolatedRequest).toMatchObject({
       context: {
         mode: 'new',
-        owner: 'assistant',
+        owner: 'corebox',
         scope: 'light',
       },
       options: {
         metadata: expect.objectContaining({
           contextEntrypoint: {
-            id: 'assistant.voice',
-            owner: 'assistant',
+            id: 'corebox.ai-ask',
+            owner: 'corebox',
             mode: 'new',
           },
         }),
       },
     })
-    expect(JSON.stringify(assistantRequest.payload.messages)).not.toContain('private CoreBox')
+    expect(JSON.stringify(isolatedRequest.payload.messages)).not.toContain('private CoreBox')
     expect(setFile).not.toHaveBeenCalled()
 
-    await pluginWithAssistantEntrypoint.onFeatureTriggered('intelligence-ask', 'ordinary CoreBox question')
+    await plugin.onFeatureTriggered('intelligence-ask', 'ordinary CoreBox question')
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledTimes(2))
     expect(contextInvoke.mock.calls[1]?.[0]).toMatchObject({
       context: {
@@ -2577,6 +2596,26 @@ describe('intelligence plugin', () => {
         owner: 'corebox',
         scope: 'retrieval',
       },
+    })
+
+    // The floating ball's voice panel sent this one; its owner is no longer honoured.
+    await plugin.onFeatureTriggered('intelligence-ask', {
+      text: 'Retired voice question',
+      inputs: [],
+      context: {
+        entrypoint: {
+          id: 'assistant.voice',
+          source: 'voice',
+          execution: { mode: 'new', owner: 'assistant', scope: 'light', isolated: true },
+        },
+      },
+    })
+    await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledTimes(3))
+    const retiredRequest = contextInvoke.mock.calls[2]?.[0]
+    expect(retiredRequest.context.owner).toBe('corebox')
+    expect(retiredRequest.options.metadata.contextEntrypoint).toMatchObject({
+      id: 'corebox.ai-ask',
+      owner: 'corebox',
     })
   })
 

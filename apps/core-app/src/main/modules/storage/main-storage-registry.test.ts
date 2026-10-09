@@ -131,6 +131,26 @@ describe('main storage app settings normalization', () => {
     expect(legacyHalfOn.voiceInput.enabled).toBe(false)
   })
 
+  it('drops the floating ball and its Assistant switch once the voice input migration has read them', () => {
+    const migrated = resolveMainStorageValue(StorageList.APP_SETTING, {
+      assistant: { enabled: true },
+      voiceWake: { enabled: true, language: 'fr-FR' },
+      floatingBall: {
+        enabled: true,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: { x: 316, y: 293 }
+      }
+    }) as unknown as Record<string, unknown>
+
+    // The legacy gate still decides the migrated switch before the keys go.
+    expect(migrated.voiceInput).toMatchObject({ enabled: true, language: 'fr-FR' })
+    expect(migrated).not.toHaveProperty('assistant')
+    expect(migrated).not.toHaveProperty('floatingBall')
+    expect(migrated.voiceWake).toMatchObject({ enabled: true, language: 'fr-FR' })
+  })
+
   it('removes legacy auth preference overrides while retaining the main-owned marker', () => {
     const normalized = resolveMainStorageValue(StorageList.APP_SETTING, {
       auth: {

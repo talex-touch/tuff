@@ -422,7 +422,7 @@ score = relevance * 0.45
 | CoreBox AI Ask | 官方 `touch-intelligence` 通过 host-owned `contextInvoke/contextStream` 执行受治理 ContextPackage；支持 new/continue/stateless，展示 metadata-only package/session/citation 摘要；active widget set-query 单次派发并在 item execute 前消费 one-shot entrypoint context。 |
 | OmniPanel Writing Tools | AI action 使用 `owner=omni-panel`、`mode=new`、`scope=light`，优先消费当前选区/剪贴板/OCR capsule，不继承完整聊天历史。 |
 | Workflow `Use Model` | 每个 run 使用 `owner=workflow` 与独立 `scope=session`；首个 `text.chat` model step 以 `mode=new` 建立 session，后续 model step 以 `mode=continue` 复用同一 session。不同 run 不共享 history，Review Queue 状态不自动升级为长期记忆。 |
-| Assistant | VoicePanel/悬浮球通过 trusted one-shot CoreBox query 使用 `owner=assistant`、`new + light`；用户后续输入会清空旧入口 context。 |
+| Assistant | 2026-10-08 已移除：VoicePanel/悬浮球的 trusted one-shot CoreBox query（`assistant.voice`，`owner=assistant`、`new + light`）随浮球删除，插件侧受信入口只剩 `corebox.ai-ask/corebox`。宿主侧的 Home 对话仍以 `owner=assistant` 运行，不受影响。 |
 | `touch-intelligence` 插件 | 只调用 host-owned Intelligence context facade，受 `intelligence.basic` 控制；不得读取或管理 host MemoryItem，也不得自行拼接跨 scope prompt。 |
 | 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext；service foundation 已保留 citation / document source / retrieval status / degraded reason 到 ContextPackage metadata，并可通过 `contextListPackageLogs` 读取 metadata-only explain log；Intelligence Audit 已能展示 trace package 摘要、metadata-only explain drawer、included/excluded source detail 与 citation metadata，后续继续补 permission metadata 与完整 explain drawer 产品化 |
 | Provider Runtime | 接收 ContextPackage 后调用模型；不得反向修改 MemoryStore |

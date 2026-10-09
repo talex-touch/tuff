@@ -1118,10 +1118,7 @@ async function loadRuntimeConfig(
   taskGeneration = panelTaskGeneration
 ): Promise<void> {
   try {
-    const nextConfig = await transport.send(
-      AssistantEvents.floatingBall.getRuntimeConfig,
-      undefined
-    )
+    const nextConfig = await transport.send(AssistantEvents.voice.getRuntimeConfig, undefined)
     if (isCurrentPanel(generation, taskGeneration)) runtimeConfig.value = nextConfig
   } catch (error) {
     // A late settings failure must not turn an already-running microphone session into a

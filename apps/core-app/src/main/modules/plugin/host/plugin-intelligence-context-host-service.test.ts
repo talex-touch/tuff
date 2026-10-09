@@ -197,6 +197,16 @@ describe('plugin Intelligence context host service', () => {
         },
         context: { mode: 'new', owner: 'assistant' }
       },
+      // Accepted until the floating ball's voice panel, its only sender, was removed.
+      {
+        ...base,
+        options: {
+          metadata: {
+            contextEntrypoint: { id: 'assistant.voice', owner: 'assistant', mode: 'new' }
+          }
+        },
+        context: { mode: 'new', owner: 'assistant' }
+      },
       { ...base, signal: new AbortController().signal }
     ]
 

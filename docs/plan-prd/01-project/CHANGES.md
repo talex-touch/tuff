@@ -1,7 +1,27 @@
 # 变更日志
 
-> 更新时间：2026-10-05
+> 更新时间：2026-10-08
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-10-08
+
+### voice: remove the floating ball and the Assistant handlers nothing called
+
+- 删除语音输入浮球：语音输入只剩 Fn/Ctrl 唤起的底部居中听写胶囊，位置、按钮与动效不变。主进程不再在启动时创建 dock 窗口、不再由设置显示它，会话结束一律隐藏；浮球的定位、拖动、位置持久化与 `openVoicePanel` / `updatePosition` 处理一并删除。此前 VoiceDock 收起时总渲染浮球，而主进程先显示窗口再通知打开，所以即使关着浮球，按 Fn 也会先淡出一颗球；这条路径随之消失。
+- VoiceDock 收起时只保留一个不做动画的空占位：`out-in` 只在两个带 key 的子元素同一次渲染互换时排队，没有它，退场中再按 Fn 的新胶囊会挂在旧胶囊下方、落到窗口外。对应测试在去掉占位时失败。
+- 智能设置页移除「Assistant 悬浮入口」整组（启用开关、浮球开关、唤醒词占位）；`assistant`、`voiceWake` 设置保留，供语音输入旧配置迁移读取。
+- 删除 7 个无发送方的 Assistant 事件与处理函数（`submitText`、剪贴板图片翻译、截图显示器列表/区域选择/复制/保存/翻译），连同 `@talex-touch/utils` 中的事件、payload 类型与 `floatingBall` 设置默认值和主进程规范化（`getRuntimeConfig` 随后迁入 `voice` 命名空间，见下一节）。Assistant 主进程模块 1578 → 652 行，测试改名为 `module.voice-dock.test.ts`。
+- 可见证据登记表退役 `assistant-floating-ball-entry` 与 `assistant-screenshot-translate`，删除依赖浮球的三个采证脚本及其 package scripts；2026-06-24 的历史报告保留。中英文各删除 111 个无读取方的 Assistant 文案。TODO-AI、Evidence Matrix、悬浮助手 PRD 与两份工程规范已同步。
+- 验证：CoreApp node / web typecheck 均 0 错误；改动文件包内 ESLint（core-app、utils）通过；core-app 相关测试 **19 files / 225 tests** 与 utils `transport-domain-sdks` **51 tests** 通过（verifier CLI 测试依赖 `corepack pnpm`，本机 PATH 缺 corepack，经转发到已装 pnpm 的 shim 运行）。用户 dev 实例的 VoiceDock 渲染层已热更新为无球版本；主进程改动需重启 dev 后生效，真机 Fn 复核尚未进行。
+
+### voice: migrate what the floating ball left behind
+
+- dock 自身的接线：运行配置事件从 `AssistantEvents.floatingBall.getRuntimeConfig`（`assistant:floating-ball:get-runtime-config`）迁到 `AssistantEvents.voice.getRuntimeConfig`（`assistant:voice-panel:get-runtime-config`），主进程与渲染端同仓发版。窗口选项去掉球的 56 最小尺寸和旧文字面板的 520×300，尺寸只由 Assistant 模块的 360×148 画布决定。dev 实例渲染层已热更新而主进程未重启时会把语音输入报为关闭，重启即恢复。
+- 存储迁移：app-setting 规范化在语音输入迁移之后删除 `floatingBall` 和 `assistant`（浮球总开关），与既有的 `voiceRecognition` 清理同处；`assistant` 退出默认值，Assistant 模块不再补建它。`voiceWake` 属于唤醒词功能，保留。
+- 截图会话入口去掉 `assistant`（只有已删的区域选择使用）；`return-resource` 完成模式仍由插件 ScreenshotSDK 使用，保留。
+- 退役 `assistant.voice` 受信入口：主进程上下文执行与插件宿主（子进程请求校验、宿主服务）只接受 `corebox.ai-ask/corebox`，插件侧上下文 owner 只认 `corebox`；touch-intelligence 不再采用 `assistant` owner，旧式一次性上下文按普通 CoreBox 提问执行。宿主侧 Home 对话的 `owner=assistant` 与已存会话不受影响；上下文入口证据校验去掉 `assistant`。
+- 文档：voice-session 契约、插件运行时安全、quality-guidelines（浮球显示器恢复改写为 Voice Dock Display Recovery）、ContextHygiene 集成表与 Nexus 启动链路参考（中英）同步。
+- 验证：CoreApp node / web typecheck 均 0 错误；改动文件包内 ESLint（core-app、utils、packages/test）通过，touch-intelligence 在根配置下 0 问题；core-app 相关测试 **27 files / 351 tests**、utils `transport-domain-sdks` **51 tests**、`packages/test` 插件套件 **78 tests** 通过。插件新断言对旧插件做过阴性对照（失败），Nexus MDC 围栏与中英一致性检查通过。
 
 ## 2026-10-05
 

@@ -1318,11 +1318,11 @@ describe('useSearch CoreBox reopen behavior', () => {
       value: 'screenshot',
       context: {
         entrypoint: {
-          id: 'assistant.voice',
-          source: 'voice',
+          id: 'corebox.ai-ask',
+          source: 'host',
           execution: {
             mode: 'new',
-            owner: 'assistant',
+            owner: 'corebox',
             scope: 'light',
             isolated: true
           }
@@ -1338,9 +1338,9 @@ describe('useSearch CoreBox reopen behavior', () => {
         inputs: [],
         context: {
           entrypoint: {
-            id: 'assistant.voice',
-            source: 'voice',
-            execution: { mode: 'new', owner: 'assistant', scope: 'light', isolated: true }
+            id: 'corebox.ai-ask',
+            source: 'host',
+            execution: { mode: 'new', owner: 'corebox', scope: 'light', isolated: true }
           }
         }
       }
@@ -1366,11 +1366,11 @@ describe('useSearch CoreBox reopen behavior', () => {
       value: 'ai isolated request',
       context: {
         entrypoint: {
-          id: 'assistant.voice',
-          source: 'voice',
+          id: 'corebox.ai-ask',
+          source: 'host',
           execution: {
             mode: 'new',
-            owner: 'assistant',
+            owner: 'corebox',
             scope: 'light',
             isolated: true
           }
@@ -1398,8 +1398,8 @@ describe('useSearch CoreBox reopen behavior', () => {
     const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
     expect(executePayload?.searchResult?.query.context).toMatchObject({
       entrypoint: {
-        id: 'assistant.voice',
-        execution: { mode: 'new', owner: 'assistant', scope: 'light', isolated: true }
+        id: 'corebox.ai-ask',
+        execution: { mode: 'new', owner: 'corebox', scope: 'light', isolated: true }
       }
     })
   })

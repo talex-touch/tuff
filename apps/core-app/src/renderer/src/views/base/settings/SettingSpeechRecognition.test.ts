@@ -6,7 +6,9 @@ import type * as VueModule from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingSpeechRecognition from './SettingSpeechRecognition.vue'
 
-type SpeechSettingsFixture = Pick<AppSetting, 'assistant' | 'floatingBall' | 'voiceWake'> & {
+type SpeechSettingsFixture = Pick<AppSetting, 'voiceWake'> & {
+  /** The floating entry's old master switch: gone from AppSetting, still read by the migration. */
+  assistant?: { enabled: boolean }
   voiceInput?: VoiceInputSetting
 }
 
@@ -92,14 +94,6 @@ function controlByTitle(wrapper: VueWrapper, title: string) {
 }
 
 function resetSettings(): void {
-  settings.assistant = { enabled: false }
-  settings.floatingBall = {
-    enabled: false,
-    size: 56,
-    opacity: 1,
-    edgePadding: 24,
-    position: { x: -1, y: -1 }
-  }
   settings.voiceWake = {
     enabled: false,
     wakeWords: ['Alo'],
@@ -132,7 +126,7 @@ describe('SettingSpeechRecognition', () => {
   })
 
   it('normalizes a legacy enabled voice setting into the independent Voice Input control', async () => {
-    settings.assistant.enabled = true
+    settings.assistant = { enabled: true }
     settings.voiceWake.enabled = true
     settings.voiceWake.language = 'fr-FR'
     delete settings.voiceInput
@@ -148,7 +142,7 @@ describe('SettingSpeechRecognition', () => {
     wrapper.unmount()
   })
 
-  it('toggles Voice Input without changing assistant, floating-ball, strength, or history settings', async () => {
+  it('toggles Voice Input without changing strength or history settings', async () => {
     const wrapper = mountSettings()
     await flushPromises()
 
@@ -164,8 +158,6 @@ describe('SettingSpeechRecognition', () => {
       polishEnabled: true,
       polishStrength: 'structured'
     })
-    expect(settings.assistant.enabled).toBe(false)
-    expect(settings.floatingBall.enabled).toBe(false)
 
     wrapper.unmount()
   })

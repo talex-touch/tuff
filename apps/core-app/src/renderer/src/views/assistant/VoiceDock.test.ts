@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { defineComponent, h, nextTick } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 
@@ -65,6 +65,32 @@ async function openPanel(source = 'click') {
   await nextTick()
 }
 
+/**
+ * Opens a session while the previous pill is still leaving — Fn pressed again inside the last
+ * pill's leave. Only the real `<Transition>` shows what happens next.
+ */
+async function reopenWhileLastPillLeaves(wrapper: VueWrapper, source: string): Promise<void> {
+  await openPanel()
+  vi.advanceTimersByTime(400)
+  await flushPromises()
+  await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
+  await nextTick()
+  panelOpenMock.mockClear()
+  panelStartMock.mockClear()
+  panelCancelHoldMock.mockClear()
+
+  emit(AssistantEvents.voice.panelOpened, { source })
+  await nextTick()
+}
+
+/** Between sessions the dock holds only its empty placeholder: nothing to see, nothing to click. */
+function expectIdle(wrapper: VueWrapper): void {
+  expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
+  expect(wrapper.find('.voice-dock-idle').exists()).toBe(true)
+  expect(wrapper.find('button').exists()).toBe(false)
+  expect(wrapper.find('.voice-dock-root').text()).toBe('')
+}
+
 describe('VoiceDock renderer contract', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -92,15 +118,13 @@ describe('VoiceDock renderer contract', () => {
     vi.useRealTimers()
   })
 
-  it('shows the floating ball initially and auto-starts after a wake-word panel opens', async () => {
+  it('shows nothing while collapsed and auto-starts once a wake-word panel opens', async () => {
     const wrapper = mount(VoiceDock)
 
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
-    expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
+    expectIdle(wrapper)
 
     await openPanel('wake-word')
 
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(false)
     const panel = wrapper.findComponent({ name: 'VoicePanel' })
     expect(panel.exists()).toBe(true)
     expect(panel.props('managedByDock')).toBe(true)
@@ -117,41 +141,6 @@ describe('VoiceDock renderer contract', () => {
 
     expect(panelStartMock).toHaveBeenCalledTimes(1)
     expect(panelToggleMock).not.toHaveBeenCalled()
-
-    wrapper.unmount()
-  })
-  it('opens the voice panel from native button activation with a click source', async () => {
-    const wrapper = mount(VoiceDock)
-    const ball = wrapper.find('.floating-ball-root')
-    expect(ball.attributes('type')).toBe('button')
-
-    await ball.trigger('click')
-
-    const openPanelCalls = transportSendMock.mock.calls.filter(
-      ([event]) => event === AssistantEvents.floatingBall.openVoicePanel
-    )
-    expect(openPanelCalls).toHaveLength(1)
-    expect(openPanelCalls[0]?.[1]).toEqual({ source: 'click' })
-
-    wrapper.unmount()
-  })
-
-  it('does not open the voice panel when a ball release completes a drag', async () => {
-    const wrapper = mount(VoiceDock)
-    const ball = wrapper.find('.floating-ball-root')
-    expect(ball.element.tagName).toBe('BUTTON')
-
-    await ball.trigger('mousedown', { screenX: 0, screenY: 0, clientX: 10, clientY: 10 })
-    window.dispatchEvent(
-      new MouseEvent('mousemove', { screenX: 20, screenY: 20, clientX: 20, clientY: 20 })
-    )
-    window.dispatchEvent(new MouseEvent('mouseup'))
-    await ball.trigger('click')
-
-    expect(transportSendMock).not.toHaveBeenCalledWith(
-      AssistantEvents.floatingBall.openVoicePanel,
-      { source: 'click' }
-    )
 
     wrapper.unmount()
   })
@@ -202,8 +191,7 @@ describe('VoiceDock renderer contract', () => {
 
     expect(panelStartMock).not.toHaveBeenCalled()
     expect(panelStopMock).not.toHaveBeenCalled()
-    expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+    expectIdle(wrapper)
 
     wrapper.unmount()
   })
@@ -297,7 +285,7 @@ describe('VoiceDock renderer contract', () => {
     wrapper.unmount()
   })
 
-  it('returns straight to the floating ball once the VoicePanel finishes', async () => {
+  it('shows nothing once the VoicePanel finishes, and closes only after it has left', async () => {
     const wrapper = mount(VoiceDock)
     await openPanel()
 
@@ -305,13 +293,12 @@ describe('VoiceDock renderer contract', () => {
     await nextTick()
 
     // The wait for the transcript is expressed inside the pill now, so there is no
-    // separate spinner phase left between the panel and the ball.
-    expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
+    // separate spinner phase left after the panel, and no resting surface to return to.
     expect(wrapper.find('.voice-dock-processing').exists()).toBe(false)
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+    expectIdle(wrapper)
 
-    // Not yet: `closePanel` shrinks the window to the ball, which would clip the pill's own
-    // leave animation out of existence on its first frame. It waits for the surface to go.
+    // Not yet: `closePanel` hides the window, which would cut the pill's own leave animation
+    // off on its first frame. It waits for the surface to go.
     expect(transportSendMock).not.toHaveBeenCalledWith(AssistantEvents.voice.closePanel, undefined)
 
     // Test Utils stubs the transition, so `@after-leave` never arrives and the fallback is what
@@ -322,7 +309,7 @@ describe('VoiceDock renderer contract', () => {
 
     vi.advanceTimersByTime(1000)
     await nextTick()
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+    expectIdle(wrapper)
 
     wrapper.unmount()
   })
@@ -333,7 +320,7 @@ describe('VoiceDock renderer contract', () => {
 
     await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
     await nextTick()
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+    expectIdle(wrapper)
 
     transportSendMock.mockClear()
     await openPanel()
@@ -374,7 +361,7 @@ describe('VoiceDock renderer contract', () => {
   /**
    * Every other test here mounts with Test Utils' default `<Transition>` stub, which renders
    * the incoming branch immediately. The real one does not: `mode="out-in"` keeps VoicePanel
-   * unmounted until the ball's leave transition has finished, so the template ref is still
+   * unmounted until the idle placeholder has finished leaving, so the template ref is still
    * null a tick after `expanded` flips — and every `panel.value?.…` in that window silently
    * does nothing. That is a dock that opens, shows an empty pill, and never records.
    */
@@ -394,6 +381,25 @@ describe('VoiceDock renderer contract', () => {
 
     expect(wrapper.find('.voice-panel-root').exists()).toBe(true)
     expect(panelOpenMock).toHaveBeenCalledWith('click')
+    expect(panelStartMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('holds a pill reopened mid-leave back until the last one has gone', async () => {
+    const wrapper = mount(VoiceDock, { global: { stubs: { transition: false } } })
+
+    await reopenWhileLastPillLeaves(wrapper, 'command')
+    await nextTick()
+    // Mounted now, it would sit beside the leaving pill — stacked below it, outside the window.
+    expect(wrapper.findAll('.voice-panel-root')).toHaveLength(1)
+    expect(panelOpenMock).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(400)
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.findAll('.voice-panel-root')).toHaveLength(1)
+    expect(panelOpenMock).toHaveBeenCalledWith('command')
     expect(panelStartMock).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })

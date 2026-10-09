@@ -1035,8 +1035,9 @@ It contains no session, turn, package, checkpoint or continuation identity.
 - Accept `new` and `stateless` only. Reject `continue` locally and again in main with
   `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED` before provider work. Do not imply that a
   child session id was consumed.
-- Validate the actor and fixed entrypoint pair before execution:
-  `corebox.ai-ask/corebox` or `assistant.voice/assistant`, with matching mode.
+- Validate the actor and fixed entrypoint pair before execution: `corebox.ai-ask/corebox`,
+  with matching mode, is the only pair. `assistant.voice/assistant` was retired on 2026-10-08
+  with the floating ball's voice panel, its only sender, and is rejected like any other pair.
 - Build provider input from bounded system messages plus the trimmed current input only.
   Child user/assistant history is not trusted Context state. Apply the shared host secret
   classifier to current input, every provider-bound system message, every prompt variable,

@@ -248,8 +248,8 @@ describe('ScreenshotSessionManager', () => {
   it('binds overlay state and commands to the exact session-created sender', async () => {
     const harness = createHarness()
     const started = await harness.manager.start({
-      entrypoint: 'assistant',
-      ownerKey: 'internal:assistant',
+      entrypoint: 'plugin',
+      ownerKey: 'plugin:touch-test:sender:1',
       completionMode: 'return-resource',
       delayMs: 0,
       initialTarget: 'free-region'
@@ -282,14 +282,14 @@ describe('ScreenshotSessionManager', () => {
   it('settles cancellation once and tears down all windows and bindings', async () => {
     const harness = createHarness()
     const started = await harness.manager.start({
-      entrypoint: 'assistant',
-      ownerKey: 'internal:assistant',
+      entrypoint: 'plugin',
+      ownerKey: 'plugin:touch-test:sender:1',
       completionMode: 'return-resource',
       delayMs: 0,
       initialTarget: 'free-region'
     })
     const sessionId = started.sessionId!
-    const result = harness.manager.waitForResult(sessionId, 'internal:assistant')
+    const result = harness.manager.waitForResult(sessionId, 'plugin:touch-test:sender:1')
 
     expect(
       await harness.manager.command(sessionId, harness.windows[0].webContentsId, {
@@ -415,15 +415,15 @@ describe('ScreenshotSessionManager', () => {
   it('captures a live region and resolves return-resource without creating an editor', async () => {
     const harness = createHarness()
     const started = await harness.manager.start({
-      entrypoint: 'assistant',
-      ownerKey: 'internal:assistant',
+      entrypoint: 'plugin',
+      ownerKey: 'plugin:touch-test:sender:1',
       completionMode: 'return-resource',
       delayMs: 0,
       initialTarget: 'free-region'
     })
     const sessionId = started.sessionId!
     const senderId = harness.windows[0].webContentsId
-    const result = harness.manager.waitForResult(sessionId, 'internal:assistant')
+    const result = harness.manager.waitForResult(sessionId, 'plugin:touch-test:sender:1')
 
     await harness.manager.command(sessionId, senderId, { type: 'set-mode', mode: 'live' })
     await harness.manager.command(sessionId, senderId, {
