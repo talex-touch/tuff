@@ -35,9 +35,9 @@ Motion primitives and the Motion suite, a hover bridge for hover panels, and a t
   - TuffSwitch's thumb rides the glide material, TxSlider overdrags on a rubber band, TxLineSeries draws its stroke in, TxIconMorph adds play and pause, and TxCopyButton morphs between copy, copied and failed
   - TxTerminal shares ANSI / Unicode terminal display between the web and Electron
 
-### Source version 0.6.3 (2026-10-01)
+### Version 0.6.3 (2026-10-01)
 
-Streaming content and menu confirmation feedback; tested with the client beta, not published to npm on its own.
+Streaming content and menu confirmation feedback; first tested with the client beta, then published to npm on 2026-10-03.
 
 - **New components (3)**: [descriptions](./descriptions.en.mdc), [stream-element](./stream-element.en.mdc), [stream-text](./stream-text.en.mdc)
 - **Updated components (6)**: [code-stream](./code-stream.en.mdc), [context-menu](./context-menu.en.mdc), [data-table](./data-table.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [pagination](./pagination.en.mdc), [stream-markdown](./stream-markdown.en.mdc)

@@ -35,9 +35,9 @@ verified: false
   - TuffSwitch 滑块走 glide 材质，TxSlider 可越界回弹，TxLineSeries 沿线描出，TxIconMorph 新增播放与暂停，TxCopyButton 在复制、成功、失败之间形变
   - TxTerminal 在网页与 Electron 中共用 ANSI / Unicode 终端显示
 
-### 0.6.3 源码版本（2026-10-01）
+### 0.6.3 版本（2026-10-01）
 
-流式内容组件与菜单确认反馈；随客户端 beta 测试，未独立发布 npm。
+流式内容组件与菜单确认反馈；最初随客户端 beta 测试，2026-10-03 发布到 npm。
 
 - **新增组件（3 个）**：[descriptions](./descriptions.zh.mdc)、[stream-element](./stream-element.zh.mdc)、[stream-text](./stream-text.zh.mdc)
 - **更新组件（6 个）**：[code-stream](./code-stream.zh.mdc)、[context-menu](./context-menu.zh.mdc)、[data-table](./data-table.zh.mdc)、[dropdown-menu](./dropdown-menu.zh.mdc)、[pagination](./pagination.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)

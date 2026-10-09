@@ -64,7 +64,7 @@
         "pagination",
         "stream-markdown"
       ],
-      "summary": "新增共享节奏的流式文字与回答组件，补齐代码和 Markdown 流式展示及菜单确认反馈；新增 TxDescriptions 描述列表，TxDataTable 支持骨架加载态，TxPagination 支持每页条数选择；当前随客户端 beta 测试，尚未独立发布 npm。"
+      "summary": "新增共享节奏的流式文字与回答组件，补齐代码和 Markdown 流式展示及菜单确认反馈；新增 TxDescriptions 描述列表，TxDataTable 支持骨架加载态，TxPagination 支持每页条数选择；最初随客户端 beta 测试，2026-10-03 发布到 npm。"
     },
     {
       "version": "0.6.2",
