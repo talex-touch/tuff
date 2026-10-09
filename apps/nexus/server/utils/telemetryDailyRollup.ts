@@ -42,14 +42,17 @@ const ROLLUP_FAILURE_HOLD_MS = DAY_MS
  * up every pending day in one go and retried a failing day each time; with D1 refusing one of its
  * statements (a compound SELECT over five terms) that spent the free plan's five-million-row daily
  * read allowance within an hour. Now one isolate in the fleet runs it per hour (maintenance lease),
- * a run rolls up one day, and a failure holds the lease for a day. A day's run reads its events once
- * per statement; on 2026-10-09 the heaviest statement read about 257,000 rows a run (D1 Insights).
+ * a run rolls up one day, and a failure holds the lease for a day. A day's run reads its events about
+ * once per statement through `idx_telemetry_event_geo`: 79,836 rows for 2026-10-08's 21,161 events,
+ * the heaviest retained day (measured before the shared CTEs were materialized). The 257,000 rows a
+ * run D1 Insights showed during the incident were whole-table scans, planned while production still
+ * had an `event_type`-only index (since dropped).
  */
 let dailyRollupEnabled = true
 /**
  * Today and yesterday derived from their events for the analytics summary, on every view: the same
- * statements over two days, so more than half a million rows a view at the 2026-10-09 figures, a
- * tenth of the free plan's daily allowance. Off; the summary shows the days the rollup has stored.
+ * statements over two days, up to about 160,000 rows a view at the 2026-10-08 volume, where the free
+ * plan allows five million a day for everything. Off; the summary shows the days the rollup stored.
  */
 let liveDaysEnabled = false
 
