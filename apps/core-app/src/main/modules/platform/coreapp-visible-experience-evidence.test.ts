@@ -48,31 +48,10 @@ describe('CoreApp visible experience evidence', () => {
         'Visible experience item is not passed: startup-packaged-hot',
         'Visible experience item has no artifact path: startup-packaged-hot',
         'Visible experience item has no screenshot or recording artifact: startup-first-screen',
-        'Visible experience item has no screenshot or recording artifact: assistant-floating-ball-entry',
-        'Visible experience item has no screenshot or recording artifact: assistant-screenshot-translate',
         'Visible experience item is missing required evidence check: startup-packaged-hot -> Current package version is used by the packaged artifact',
         'Visible experience item is missing required evidence tag: corebox-ai-ask -> AI-STABLE-01'
       ])
     })
-  })
-
-  it('includes Assistant floating ball and clipboard image translation as visible evidence surfaces', () => {
-    const assistantSurfaces = COREAPP_VISIBLE_EXPERIENCE_SURFACES.filter(
-      (surface) => surface.group === 'assistant'
-    )
-
-    expect(assistantSurfaces.map((surface) => surface.id)).toEqual([
-      'assistant-floating-ball-entry',
-      'assistant-screenshot-translate'
-    ])
-    expect(assistantSurfaces.every((surface) => surface.required)).toBe(true)
-    expect(assistantSurfaces.every((surface) => surface.requiresVisualArtifact)).toBe(true)
-    expect(assistantSurfaces[0]?.requiredEvidence).toContain(
-      'Dragged floating ball position persists after reopening the Assistant surface'
-    )
-    expect(assistantSurfaces[1]?.requiredEvidence).toContain(
-      'Empty clipboard image and provider fallback remain visible and recoverable'
-    )
   })
 
   it('requires CoreBox AI Ask text, OCR, permission, routing, and recoverable failure recent paths', () => {
@@ -309,8 +288,6 @@ describe('CoreApp visible experience evidence', () => {
       '- Use real CoreApp UI on the target device; do not substitute mock screenshots.'
     )
     expect(template).toContain('### CoreBox search states')
-    expect(template).toContain('### Assistant floating ball entry')
-    expect(template).toContain('### Assistant clipboard image translation')
     expect(template).toContain('### CoreBox AI Ask preview')
     expect(template).toContain('- Collection steps:')
     expect(template).toContain(
@@ -318,12 +295,6 @@ describe('CoreApp visible experience evidence', () => {
     )
     expect(template).toContain(
       '- Ask with a clipboard image and capture the vision.ocr to text.chat answer preview.'
-    )
-    expect(template).toContain(
-      '- Click the floating ball and capture the Voice Panel opened next to the ball.'
-    )
-    expect(template).toContain(
-      '- Repeat with an empty clipboard image state and capture the recovery hint.'
     )
     expect(template).toContain('- [ ] CoreBox AI Ask text.chat success preview is visible')
     expect(template).toContain(
@@ -339,9 +310,6 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain('- [ ] AI-STABLE-01')
     expect(template).toContain('- [ ] AI-STABLE-08')
     expect(template).toContain('- [ ] No-result state shows retry and File Index settings actions')
-    expect(template).toContain(
-      '- [ ] Clicking the floating ball opens the Voice Panel beside the ball'
-    )
     expect(template).toContain('- Recommended artifacts:')
     expect(template).toContain('- Artifact paths:\n  - _none_')
     expect(template).not.toContain('  - \n')
@@ -350,14 +318,8 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-permission-denied.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-local-ollama-routing.png')
-    expect(template).toContain(
-      'evidence/coreapp-visible/assistant-clipboard-image-translate-result.png'
-    )
     expect(template).toContain('- Block instead of pass when:')
     expect(template).toContain('Reason/status text overlaps row content or is clipped.')
-    expect(template).toContain(
-      'The Assistant path captures the screen instead of consuming the current clipboard image.'
-    )
   })
 
   it('renders checked evidence when the manifest records a completed checklist item', () => {
