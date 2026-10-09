@@ -1,6 +1,6 @@
 ---
 title: Message Actions
-description: 消息下方的操作条，内置复制与重新生成
+description: 消息下方的操作条，内置复制、重新生成与朗读
 category: AiChat
 status: beta
 since: 0.3.9
@@ -32,7 +32,7 @@ code: |
 
 - 自定义操作用原生 `<button>` 或带 `tabindex` 的元素；不可聚焦的元素不会进入方向键顺序。
 - 剪贴板写入失败时 `copy` 照常触发；需要兜底就在 `copy` 中处理，不要另写一份复制。
-- 本地化时一并覆盖 `copyLabel`、`copiedLabel`、`regenerateLabel` 与 `label`。
+- 本地化时一并覆盖 `copyLabel`、`copiedLabel`、`regenerateLabel`、`speakLabel`、`stopSpeakLabel` 与 `label`。
 - 消息流式输出结束后再挂载操作条，避免复制到半截内容。
 
 ## API 参考

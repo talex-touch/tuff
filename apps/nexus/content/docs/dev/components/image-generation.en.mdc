@@ -135,7 +135,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 
 ### Exposed Methods
 
-| Method | Description |
+| Member | Description |
 |------|-------------|
 | `element` | The root wrapper `<div>` (`HTMLDivElement`); `null` while unmounted. |
 | `triggerReveal({ hold?: 'auto' \| 'manual' })` | Runs one reveal, held until `triggerHide()` with `manual`; no-op mid-pass or with empty `images`. |
