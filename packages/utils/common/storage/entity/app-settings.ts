@@ -261,16 +261,6 @@ const _appSettingOriginData = {
       'oh-my-pi': { enabled: false, executableOverride: '' },
     },
   },
-  floatingBall: {
-    enabled: false,
-    size: 56,
-    opacity: 1,
-    edgePadding: 24,
-    position: {
-      x: -1,
-      y: -1,
-    },
-  },
   voiceWake: {
     enabled: false,
     wakeWords: ['阿洛', 'aler'],

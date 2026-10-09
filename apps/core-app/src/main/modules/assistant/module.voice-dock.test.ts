@@ -1,14 +1,8 @@
 import type { AppSetting } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
-import type {
-  NativeScreenshotCaptureResult,
-  NativeScreenshotDisplay
-} from '@talex-touch/utils/transport/events/types'
-import type { CoreBoxImageTranslateResponse } from '../../../shared/events/corebox-scenes'
 import type { AssistantModule } from './module'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
 type AssistantHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 type ScreenPoint = { x: number; y: number }
@@ -43,15 +37,6 @@ const mocks = vi.hoisted(() => ({
       mocks.screenListeners.delete(event)
     }
   }),
-  copyCaptureResource: vi.fn(() => Promise.resolve()),
-  writeCaptureResourceToClipboard: vi.fn(() => Promise.resolve(true)),
-  readCaptureResource: vi.fn(() => Promise.resolve(Buffer.from('screenshot-image'))),
-  showSaveDialog: vi.fn<() => Promise<{ canceled: boolean; filePath?: string }>>(() =>
-    Promise.resolve({
-      canceled: false,
-      filePath: '/tmp/tuff-screenshot.png'
-    })
-  ),
   loadDockRenderer: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   createEnabledSetting: (overrides: Partial<AppSetting> = {}): AppSetting =>
     ({
@@ -59,16 +44,6 @@ const mocks = vi.hoisted(() => ({
         enabled: true,
         name: '阿洛 aler',
         identifier: 'aler'
-      },
-      floatingBall: {
-        enabled: true,
-        size: 56,
-        opacity: 1,
-        edgePadding: 24,
-        position: {
-          x: -1,
-          y: -1
-        }
       },
       voiceWake: {
         enabled: false,
@@ -89,45 +64,13 @@ const mocks = vi.hoisted(() => ({
       },
       ...overrides
     }) as AppSetting,
-  createCaptureResult: (
-    overrides: Partial<NativeScreenshotCaptureResult> = {}
-  ): NativeScreenshotCaptureResult => ({
-    tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
-    mimeType: 'image/png',
-    width: 12,
-    height: 8,
-    displayId: 'display-1',
-    displayName: 'Display',
-    x: 0,
-    y: 0,
-    scaleFactor: 2,
-    durationMs: 7,
-    sizeBytes: 16,
-    wroteClipboard: false,
-    ...overrides
-  }),
-  createTranslateSuccess: (): CoreBoxImageTranslateResponse => ({
-    success: true,
-    translatedImageBase64: 'dHJhbnNsYXRlZA==',
-    sourceText: 'hello',
-    targetText: '你好'
-  }),
   getMainConfig: vi.fn<() => AppSetting>(),
   saveMainConfig: vi.fn(),
-  persistMainConfig: vi.fn(() => Promise.resolve()),
   appSettingListener: undefined as ((setting: AppSetting) => void) | undefined,
   subscribeMainConfig: vi.fn((_key: unknown, listener: (setting: AppSetting) => void) => {
     mocks.appSettingListener = listener
     return vi.fn()
   }),
-  capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
-  releaseTempArtifact: vi.fn(() => Promise.resolve(true)),
-  listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
-  getSupport: vi.fn(),
-  getActiveScreenshotSessionId: vi.fn<() => string | null>(),
-  startScreenshotSession: vi.fn(),
-  waitForScreenshotResult: vi.fn(),
-  getCursorScreenPoint: vi.fn<() => ScreenPoint>(() => ({ x: 0, y: 0 })),
   getDisplayNearestPoint: vi.fn<(point: ScreenPoint) => WorkAreaDisplay>(() => ({
     workArea: { x: 0, y: 0, width: 1440, height: 900 }
   })),
@@ -149,18 +92,9 @@ const mocks = vi.hoisted(() => ({
       on: (event: string, listener: () => void) => void
     }
   }>,
-  translateImageBase64: vi.fn<() => Promise<CoreBoxImageTranslateResponse>>(),
-  translateClipboardImage: vi.fn(),
-  ocr: vi.fn(),
-  textTranslate: vi.fn(),
   resolveCapabilityStatus: vi.fn(),
-  sendTo: vi.fn<
-    (target: unknown, event: { toEventName: () => string }, payload: unknown) => Promise<void>
-  >(() => Promise.resolve()),
   navigateOpen: vi.fn(),
   broadcastToWindow: vi.fn(),
-  coreBoxTrigger: vi.fn(),
-  updateCoreBoxPosition: vi.fn(),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -178,8 +112,7 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
       mocks.handlers.set(event.toEventName(), handler)
       return vi.fn()
     }),
-    broadcastToWindow: mocks.broadcastToWindow,
-    sendTo: mocks.sendTo
+    broadcastToWindow: mocks.broadcastToWindow
   }))
 }))
 vi.mock('../voice/command-gesture', () => ({
@@ -206,11 +139,7 @@ vi.mock('electron', () => ({
       return resolved
     })
   },
-  dialog: {
-    showSaveDialog: mocks.showSaveDialog
-  },
   screen: {
-    getCursorScreenPoint: mocks.getCursorScreenPoint,
     getDisplayNearestPoint: mocks.getDisplayNearestPoint,
     on: mocks.screenOn,
     off: mocks.screenOff,
@@ -244,9 +173,7 @@ vi.mock('../../core/touch-window', () => ({
         setFullScreenable: vi.fn(),
         setSkipTaskbar: vi.fn(),
         setBounds: vi.fn(),
-        setOpacity: vi.fn(),
-        setPosition: vi.fn(),
-        getBounds: vi.fn(() => ({ x: 0, y: 0, width: 56, height: 56 })),
+        getBounds: vi.fn(() => ({ x: 0, y: 0, width: 360, height: 148 })),
         isVisible: vi.fn(() => false),
         isDestroyed: vi.fn(() => false),
         showInactive: vi.fn(),
@@ -275,89 +202,18 @@ vi.mock('../../utils/renderer-url', () => ({
   isDevMode: vi.fn(() => true)
 }))
 
-vi.mock('../screenshot-session', () => ({
-  getScreenshotSessionManager: vi.fn(() => ({
-    getActiveSessionId: mocks.getActiveScreenshotSessionId,
-    start: mocks.startScreenshotSession,
-    waitForResult: mocks.waitForScreenshotResult
-  }))
-}))
-
 vi.mock('../storage', () => ({
   getMainConfig: mocks.getMainConfig,
   isMainStorageReady: vi.fn(() => true),
-  persistMainConfig: mocks.persistMainConfig,
   saveMainConfig: mocks.saveMainConfig,
   subscribeMainConfig: mocks.subscribeMainConfig
 }))
-
-vi.mock('../box-tool/core-box/manager', () => ({
-  coreBoxManager: {
-    trigger: mocks.coreBoxTrigger
-  }
-}))
-
-vi.mock('../box-tool/core-box/window', () => ({
-  windowManager: {
-    getCurScreen: vi.fn(() => ({ id: 'display-1' })),
-    current: {
-      window: {
-        isDestroyed: vi.fn(() => false),
-        webContents: { id: 1 }
-      }
-    },
-    updatePosition: mocks.updateCoreBoxPosition
-  }
-}))
-
-vi.mock('../box-tool/core-box/image-translate', () => {
-  const normalizeImageBase64Payload = (value: string): string | null => {
-    const trimmed = value.trim()
-    if (!trimmed) return null
-    const commaIndex = trimmed.indexOf(',')
-    const payload =
-      trimmed.startsWith('data:image/') && commaIndex >= 0 ? trimmed.slice(commaIndex + 1) : trimmed
-    return payload.trim() || null
-  }
-
-  return {
-    normalizeImageBase64Payload,
-    translateClipboardImage: mocks.translateClipboardImage,
-    translateImageBase64: mocks.translateImageBase64
-  }
-})
 
 vi.mock('../ai/intelligence-capability-status', () => ({
   resolveCapabilityStatus: mocks.resolveCapabilityStatus
 }))
 
-vi.mock('../ai/intelligence-sdk', () => ({
-  tuffIntelligence: {
-    vision: {
-      ocr: mocks.ocr
-    },
-    text: {
-      translate: mocks.textTranslate
-    }
-  }
-}))
-
-vi.mock('../native-capabilities/screenshot-service', () => ({
-  getNativeScreenshotService: vi.fn(() => ({
-    capture: mocks.capture,
-    copyCaptureResource: mocks.copyCaptureResource,
-    writeCaptureResourceToClipboard: mocks.writeCaptureResourceToClipboard,
-    readCaptureResource: mocks.readCaptureResource,
-    releaseTempArtifact: mocks.releaseTempArtifact,
-    getSupport: mocks.getSupport,
-    listDisplays: mocks.listDisplays
-  }))
-}))
-
-async function createInitializedModule(): Promise<{
-  handler: AssistantHandler
-  module: AssistantModule
-}> {
+async function createInitializedModule(): Promise<{ module: AssistantModule }> {
   const { AssistantModule } = await import('./module')
   const module = new AssistantModule()
   await module.onInit({
@@ -365,12 +221,7 @@ async function createInitializedModule(): Promise<{
     runtime: { channel: {} },
     file: { dirPath: '/tmp/assistant' }
   } as unknown as Parameters<typeof module.onInit>[0])
-
-  const handler = mocks.handlers.get(AssistantEvents.voice.translateScreenshot.toEventName())
-  if (!handler) {
-    throw new Error('translateScreenshot handler was not registered')
-  }
-  return { handler, module }
+  return { module }
 }
 
 async function createInitializedModuleWithHandler(
@@ -398,62 +249,26 @@ async function createInitializedModuleWithHandler(
   return { handler, module }
 }
 
-describe('AssistantModule screenshot translation', () => {
+describe('AssistantModule voice dock', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
     mocks.handlers.clear()
     mocks.appSettingListener = undefined
     mocks.screenListeners.clear()
-    mocks.copyCaptureResource.mockClear()
-    mocks.copyCaptureResource.mockResolvedValue(undefined)
-    mocks.readCaptureResource.mockClear()
-    mocks.readCaptureResource.mockResolvedValue(Buffer.from('screenshot-image'))
-    mocks.showSaveDialog.mockClear()
-    mocks.showSaveDialog.mockResolvedValue({
-      canceled: false,
-      filePath: '/tmp/tuff-screenshot.png'
-    })
     mocks.getMainConfig.mockImplementation(() => mocks.createEnabledSetting())
-    mocks.persistMainConfig.mockResolvedValue(undefined)
     mocks.loadDockRenderer.mockReset()
     mocks.loadDockRenderer.mockResolvedValue(undefined)
-    mocks.capture.mockResolvedValue(mocks.createCaptureResult())
-    mocks.listDisplays.mockReturnValue([])
-    mocks.getSupport.mockReturnValue({ supported: true, platform: 'darwin' })
-    mocks.getActiveScreenshotSessionId.mockReturnValue(null)
-    mocks.startScreenshotSession.mockResolvedValue({
-      accepted: true,
-      sessionId: 'screenshot-session:assistant',
-      state: 'started'
-    })
-    mocks.waitForScreenshotResult.mockResolvedValue({
-      status: 'completed',
-      sessionId: 'screenshot-session:assistant',
-      resource: {
-        tfileUrl: 'tfile:///tmp/native/screenshots/interactive.png',
-        mimeType: 'image/png',
-        width: 320,
-        height: 180,
-        sizeBytes: 1024
-      }
-    })
     mocks.touchWindows.length = 0
-    mocks.getCursorScreenPoint.mockReset()
-    mocks.getCursorScreenPoint.mockReturnValue({ x: 0, y: 0 })
     mocks.getDisplayNearestPoint.mockReset()
     mocks.getDisplayNearestPoint.mockReturnValue({
       workArea: { x: 0, y: 0, width: 1440, height: 900 }
     })
-    mocks.ocr.mockReset()
-    mocks.textTranslate.mockReset()
     mocks.resolveCapabilityStatus.mockReturnValue({
-      capabilityId: 'text.translate',
+      capabilityId: 'text.chat',
       available: true,
-      providerIds: ['translation-provider']
+      providerIds: ['chat-provider']
     })
-    mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
-    mocks.sendTo.mockResolvedValue(undefined)
     mocks.navigateOpen.mockReset()
     mocks.navigateOpen.mockReturnValue({ status: 'opened', destinationId: 'settings-channels' })
   })
@@ -562,13 +377,6 @@ describe('AssistantModule screenshot translation', () => {
     mocks.getMainConfig.mockReturnValue(
       mocks.createEnabledSetting({
         assistant: { enabled: false },
-        floatingBall: {
-          enabled: false,
-          size: 56,
-          opacity: 1,
-          edgePadding: 24,
-          position: { x: -1, y: -1 }
-        },
         voiceWake: {
           enabled: false,
           wakeWords: ['Alo'],
@@ -609,10 +417,18 @@ describe('AssistantModule screenshot translation', () => {
     expect(dock.window.showInactive).not.toHaveBeenCalled()
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
-  it('opens no resting window, even for a profile that had the floating ball turned on', async () => {
-    // The fixture still carries `floatingBall.enabled: true`, as a profile from before the ball
-    // was removed does.
-    const setting = mocks.createEnabledSetting()
+  it('opens no resting window, even for a profile saved with the floating ball turned on', async () => {
+    // A profile written before the ball was removed still carries its setting; nothing reads it.
+    const setting = {
+      ...mocks.createEnabledSetting(),
+      floatingBall: {
+        enabled: true,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: { x: -1, y: -1 }
+      }
+    } as unknown as AppSetting
     mocks.getMainConfig.mockReturnValue(setting)
     const { module } = await createInitializedModule()
     if (!mocks.appSettingListener) throw new Error('App setting observer was not active')
@@ -625,13 +441,6 @@ describe('AssistantModule screenshot translation', () => {
   it('stops an active temporary HUD when voice input is disabled', async () => {
     const setting = mocks.createEnabledSetting({
       assistant: { enabled: false },
-      floatingBall: {
-        enabled: false,
-        size: 56,
-        opacity: 1,
-        edgePadding: 24,
-        position: { x: -1, y: -1 }
-      },
       voiceInput: {
         enabled: true,
         language: 'fr-FR',
@@ -1000,48 +809,6 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('dispatches voice text with an isolated Assistant light-context policy', async () => {
-    vi.useFakeTimers()
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.submitText.toEventName()
-    )
-
-    const result = await handler(
-      { text: 'Explain the current task', source: 'voice' },
-      {} as HandlerContext
-    )
-    await vi.advanceTimersByTimeAsync(120)
-
-    expect(result).toEqual({ accepted: true })
-    expect(mocks.coreBoxTrigger).toHaveBeenCalledWith(true)
-    expect(mocks.sendTo).toHaveBeenCalledWith(
-      { id: 1 },
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      {
-        value: 'ai Explain the current task',
-        context: {
-          entrypoint: {
-            id: 'assistant.voice',
-            source: 'voice',
-            execution: {
-              mode: 'new',
-              owner: 'assistant',
-              scope: 'light',
-              objective: 'Assistant voice request',
-              isolated: true
-            }
-          }
-        }
-      }
-    )
-    expect(mocks.sendTo.mock.calls[0]?.[1]?.toEventName()).toBe(
-      CoreBoxEvents.input.setQuery.toEventName()
-    )
-
-    await module.onDestroy({} as never)
-    vi.useRealTimers()
-  })
-
   it('opens provider channels from the registered VoiceDock recovery event', async () => {
     const mainWindow = {
       isDestroyed: vi.fn(() => false),
@@ -1109,652 +876,6 @@ describe('AssistantModule screenshot translation', () => {
     expect(result).toBe(false)
     expect(mocks.navigateOpen).toHaveBeenCalledExactlyOnceWith('settings-channels')
     expect(voiceDock.window.hide).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns native screenshot display metadata through the Assistant transport handler', async () => {
-    const nativeDisplays: NativeScreenshotDisplay[] = [
-      {
-        id: 'display-external',
-        name: 'External Display',
-        friendlyName: 'Studio Display',
-        x: 1440,
-        y: 0,
-        width: 2560,
-        height: 1440,
-        scaleFactor: 2,
-        rotation: 0,
-        isPrimary: false
-      }
-    ]
-    mocks.listDisplays.mockReturnValue(nativeDisplays)
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.listScreenshotDisplays.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toEqual(nativeDisplays)
-    expect(mocks.listDisplays).toHaveBeenCalledTimes(1)
-
-    await module.onDestroy({} as never)
-  })
-
-  it('forwards scene route metadata with a successful translated screenshot response', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      ...mocks.createTranslateSuccess(),
-      metadata: {
-        runId: 'run-image-translation',
-        sceneId: 'corebox.screenshot.translate',
-        durationMs: 147,
-        stages: [
-          {
-            capability: 'vision.ocr',
-            providerId: 'provider-1',
-            providerName: 'Nexus Vision',
-            model: 'vision-ocr-v2',
-            latencyMs: 17
-          }
-        ]
-      }
-    })
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'ja' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: true,
-      mode: 'translated-image',
-      translatedImageBase64: 'dHJhbnNsYXRlZA==',
-      sourceText: 'hello',
-      targetText: '你好',
-      metadata: {
-        runId: 'run-image-translation',
-        sceneId: 'corebox.screenshot.translate',
-        durationMs: 147,
-        stages: [
-          {
-            capability: 'vision.ocr',
-            providerId: 'provider-1',
-            providerName: 'Nexus Vision',
-            model: 'vision-ocr-v2',
-            latencyMs: 17
-          }
-        ]
-      }
-    })
-    expect(mocks.capture).toHaveBeenCalledWith({
-      target: 'cursor-display',
-      writeClipboard: false
-    })
-    expect(mocks.translateImageBase64).toHaveBeenCalledWith('c2NyZWVuc2hvdC1pbWFnZQ==', 'ja', {
-      openPinWindow: true
-    })
-    expect(mocks.ocr).not.toHaveBeenCalled()
-    expect(mocks.textTranslate).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('fails closed when the assistant floating ball is disabled', async () => {
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({
-        floatingBall: {
-          enabled: false,
-          size: 56,
-          opacity: 1,
-          edgePadding: 24,
-          position: {
-            x: -1,
-            y: -1
-          }
-        }
-      })
-    )
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'ASSISTANT_DISABLED'
-    })
-    expect(mocks.capture).not.toHaveBeenCalled()
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('maps native screenshot permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
-    mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'SCREENSHOT_PERMISSION_DENIED',
-      error: 'Screen recording permission denied'
-    })
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('maps unreadable screenshot resources to SCREENSHOT_UNAVAILABLE', async () => {
-    mocks.readCaptureResource.mockRejectedValue(new Error('Screenshot resource is invalid'))
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'SCREENSHOT_UNAVAILABLE'
-    })
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('preserves semantic scene failures through the Assistant clipboard translation handler', async () => {
-    mocks.translateClipboardImage.mockResolvedValue({
-      success: false,
-      code: 'NEXUS_AUTH_REQUIRED',
-      error: 'Nexus provider requires a signed-in account.',
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.'
-    })
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.translateClipboardImage.toEventName()
-    )
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'NEXUS_AUTH_REQUIRED',
-      error: 'Nexus provider requires a signed-in account.',
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.'
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('falls back from an unavailable image scene to OCR and text translation with trace metadata', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockResolvedValue({
-      result: {
-        text: 'Invoice total',
-        language: 'en',
-        engine: 'cloud'
-      },
-      provider: 'ocr-provider',
-      model: 'ocr-model',
-      traceId: 'ocr-trace',
-      latency: 17
-    })
-    mocks.textTranslate.mockResolvedValue({
-      result: '合计金额',
-      provider: 'translation-provider',
-      model: 'translation-model',
-      traceId: 'translation-trace',
-      latency: 23
-    })
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'ja' }, {} as HandlerContext)
-
-    expect(mocks.ocr).toHaveBeenCalledWith(
-      {
-        source: {
-          type: 'data-url',
-          dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ=='
-        },
-        includeLayout: false,
-        includeKeywords: false
-      },
-      {
-        metadata: {
-          caller: 'core.assistant.screenshot-translate',
-          source: 'assistant-screenshot-ocr-fallback'
-        }
-      }
-    )
-    expect(mocks.textTranslate).toHaveBeenCalledWith(
-      {
-        text: 'Invoice total',
-        sourceLang: 'en',
-        targetLang: 'ja'
-      },
-      {
-        metadata: {
-          caller: 'core.assistant.screenshot-translate',
-          source: 'assistant-screenshot-ocr-fallback'
-        }
-      }
-    )
-    expect(result).toEqual({
-      success: true,
-      mode: 'ocr-text',
-      sourceText: 'Invoice total',
-      targetText: '合计金额',
-      fallback: {
-        degradedReason: 'IMAGE_TRANSLATE_SCENE_UNAVAILABLE',
-        ocr: {
-          provider: 'ocr-provider',
-          model: 'ocr-model',
-          traceId: 'ocr-trace',
-          latencyMs: 17,
-          engine: 'cloud'
-        },
-        translation: {
-          provider: 'translation-provider',
-          model: 'translation-model',
-          traceId: 'translation-trace',
-          latencyMs: 23
-        }
-      }
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('falls back through OCR and text translation after a semantic image scene failure', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'NEXUS_AUTH_REQUIRED',
-      error: 'Nexus provider requires a signed-in account.',
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.'
-    })
-    mocks.ocr.mockResolvedValue({ result: { text: 'Invoice total', language: 'en' } })
-    mocks.textTranslate.mockResolvedValue({ result: '合計金額' })
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'ja' }, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: true,
-      mode: 'ocr-text',
-      sourceText: 'Invoice total',
-      targetText: '合計金額',
-      fallback: {
-        degradedReason: 'IMAGE_TRANSLATE_NEXUS_AUTH_REQUIRED'
-      }
-    })
-    expect(mocks.ocr).toHaveBeenCalledTimes(1)
-    expect(mocks.textTranslate).toHaveBeenCalledTimes(1)
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns OCR_UNAVAILABLE without text translation when OCR throws', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockRejectedValue(new Error('OCR provider offline'))
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'OCR_UNAVAILABLE',
-      error: 'Screenshot OCR fallback is unavailable.'
-    })
-    expect(mocks.textTranslate).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns semantic Nexus authentication recovery without text translation when OCR fails', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockRejectedValue(new Error('NEXUS_AUTH_REQUIRED'))
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'NEXUS_AUTH_REQUIRED',
-      error: 'Nexus provider requires a signed-in account.',
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.'
-    })
-    expect(mocks.textTranslate).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns OCR_UNAVAILABLE without text translation when OCR detects no text', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockResolvedValue({ result: { text: '   ' } })
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'OCR_UNAVAILABLE',
-      error: 'Screenshot OCR did not detect translatable text.'
-    })
-    expect(mocks.textTranslate).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns TEXT_TRANSLATE_UNAVAILABLE when text translation throws', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockResolvedValue({ result: { text: 'Detected text' } })
-    mocks.textTranslate.mockRejectedValue(new Error('Text provider offline'))
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'TEXT_TRANSLATE_UNAVAILABLE',
-      error: 'Screenshot text translation fallback is unavailable.'
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns semantic quota recovery when fallback text translation fails', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockResolvedValue({ result: { text: 'Detected text' } })
-    mocks.textTranslate.mockRejectedValue(
-      Object.assign(new Error('quota cache read failed'), { code: 'QUOTA_CHECK_UNAVAILABLE' })
-    )
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'QUOTA_CHECK_UNAVAILABLE',
-      error: 'Quota verification is unavailable, so the request was blocked.',
-      reason: 'Quota verification is unavailable, so the request was blocked.',
-      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.'
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns TEXT_TRANSLATE_UNAVAILABLE when text translation is empty', async () => {
-    mocks.translateImageBase64.mockResolvedValue({
-      success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: 'Scene unavailable'
-    })
-    mocks.ocr.mockResolvedValue({ result: { text: 'Detected text' } })
-    mocks.textTranslate.mockResolvedValue({ result: '   ' })
-    const { handler, module } = await createInitializedModule()
-
-    const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      code: 'TEXT_TRANSLATE_UNAVAILABLE',
-      error: 'Screenshot text translation returned an empty result.'
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('captures the cursor display when screenshot selection is omitted', async () => {
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.captureScreenshot.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: true,
-      tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
-      mimeType: 'image/png',
-      width: 12,
-      height: 8,
-      displayName: 'Display',
-      wroteClipboard: false
-    })
-    expect(mocks.capture).toHaveBeenCalledWith({
-      target: 'cursor-display',
-      writeClipboard: true
-    })
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-  it('forwards a selected display to native screenshot capture', async () => {
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.captureScreenshot.toEventName()
-    )
-
-    await handler({ target: 'display', displayId: 'display-external' }, {} as HandlerContext)
-
-    expect(mocks.capture).toHaveBeenCalledWith({
-      target: 'display',
-      displayId: 'display-external',
-      writeClipboard: true
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('maps screenshot capture permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
-    mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.captureScreenshot.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'SCREENSHOT_PERMISSION_DENIED',
-      error: 'Screen recording permission denied'
-    })
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('saves a screenshot through the system save dialog without invoking image translate', async () => {
-    mocks.capture.mockResolvedValue(
-      mocks.createCaptureResult({
-        tfileUrl: 'tfile:///tmp/native/screenshots/source-screenshot.png',
-        sizeBytes: 128
-      })
-    )
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.saveScreenshot.toEventName()
-    )
-
-    const result = await handler({ target: 'cursor-display' }, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: true,
-      mimeType: 'image/png',
-      width: 12,
-      height: 8,
-      displayName: 'Display',
-      sizeBytes: 128
-    })
-    expect(result).not.toHaveProperty('path')
-    expect(mocks.capture).toHaveBeenCalledWith({
-      target: 'cursor-display',
-      writeClipboard: false
-    })
-    expect(mocks.showSaveDialog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Save Screenshot',
-        filters: [{ name: 'PNG Image', extensions: ['png'] }]
-      })
-    )
-    expect(mocks.copyCaptureResource).toHaveBeenCalledWith(
-      'tfile:///tmp/native/screenshots/source-screenshot.png',
-      '/tmp/tuff-screenshot.png'
-    )
-    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith(
-      'tfile:///tmp/native/screenshots/source-screenshot.png'
-    )
-    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('does not release a borrowed screenshot resource after saving it', async () => {
-    const resource = {
-      tfileUrl: 'tfile:///tmp/native/screenshots/borrowed-screenshot.png',
-      mimeType: 'image/png' as const,
-      width: 12,
-      height: 8,
-      sizeBytes: 128
-    }
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.saveScreenshot.toEventName()
-    )
-
-    const result = await handler(
-      { target: 'resource', tfileUrl: resource.tfileUrl, resource },
-      {} as HandlerContext
-    )
-
-    expect(result).toMatchObject({ success: true, sizeBytes: 128 })
-    expect(mocks.capture).not.toHaveBeenCalled()
-    expect(mocks.copyCaptureResource).toHaveBeenCalledWith(
-      resource.tfileUrl,
-      '/tmp/tuff-screenshot.png'
-    )
-    expect(mocks.releaseTempArtifact).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('returns a canceled screenshot save without copying the temporary file', async () => {
-    mocks.capture.mockResolvedValue(
-      mocks.createCaptureResult({
-        tfileUrl: 'tfile:///tmp/native/screenshots/source-screenshot.png'
-      })
-    )
-    mocks.showSaveDialog.mockResolvedValue({
-      canceled: true
-    })
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.saveScreenshot.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toEqual({
-      success: false,
-      canceled: true
-    })
-    expect(mocks.copyCaptureResource).not.toHaveBeenCalled()
-    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith(
-      'tfile:///tmp/native/screenshots/source-screenshot.png'
-    )
-
-    await module.onDestroy({} as never)
-  })
-
-  it('maps screenshot save capture permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
-    mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.saveScreenshot.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'SCREENSHOT_PERMISSION_DENIED',
-      error: 'Screen recording permission denied'
-    })
-    expect(mocks.showSaveDialog).not.toHaveBeenCalled()
-    expect(mocks.copyCaptureResource).not.toHaveBeenCalled()
-
-    await module.onDestroy({} as never)
-  })
-
-  it('maps native screenshot unsupported failures to SCREENSHOT_UNSUPPORTED', async () => {
-    const error = new Error('disabled-by-env') as Error & { code?: string }
-    error.code = 'ERR_NATIVE_SCREENSHOT_UNSUPPORTED'
-    mocks.capture.mockRejectedValue(error)
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.captureScreenshot.toEventName()
-    )
-
-    const result = await handler(undefined, {} as HandlerContext)
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'SCREENSHOT_UNSUPPORTED',
-      error: 'disabled-by-env'
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it('routes Assistant region selection through the canonical screenshot session manager', async () => {
-    const { module } = await createInitializedModule()
-    const selectHandler = mocks.handlers.get(
-      AssistantEvents.voice.selectScreenshotRegion.toEventName()
-    )
-    if (!selectHandler) {
-      throw new Error('Screenshot session handler was not registered')
-    }
-
-    const selection = await selectHandler(undefined, {} as HandlerContext)
-
-    expect(mocks.startScreenshotSession).toHaveBeenCalledWith({
-      entrypoint: 'assistant',
-      ownerKey: 'internal:assistant-region',
-      completionMode: 'return-resource',
-      delayMs: 0,
-      initialTarget: 'free-region'
-    })
-    expect(mocks.waitForScreenshotResult).toHaveBeenCalledWith(
-      'screenshot-session:assistant',
-      'internal:assistant-region'
-    )
-    expect(selection).toEqual({
-      success: true,
-      resource: {
-        tfileUrl: 'tfile:///tmp/native/screenshots/interactive.png',
-        mimeType: 'image/png',
-        width: 320,
-        height: 180,
-        sizeBytes: 1024
-      }
-    })
-    // The selection overlay belongs to the screenshot session; the Assistant opens no window.
-    expect(mocks.touchWindows).toHaveLength(0)
 
     await module.onDestroy({} as never)
   })

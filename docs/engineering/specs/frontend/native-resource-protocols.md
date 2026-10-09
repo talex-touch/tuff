@@ -250,7 +250,7 @@ const touchApp = genTouchApp(settings)
 
 ### 1. Scope / Trigger
 
-Apply this subsection to `NativeScreenshotService`, `NativeEvents.screenshot.*`, Assistant screenshot events, plugin `ScreenshotSDK`, and Windows/Linux/macOS screenshot backends.
+Apply this subsection to `NativeScreenshotService`, `NativeEvents.screenshot.*`, the screenshot session, plugin `ScreenshotSDK`, and Windows/Linux/macOS screenshot backends.
 
 ### 2. Signatures
 
@@ -298,7 +298,7 @@ There is no public output selector and no public `path`, `dataUrl`, base64, Buff
 
 ### 5. Good / Base / Bad Cases
 
-- Good: renderer assigns `capture.tfileUrl` directly to `<img src>`; Assistant save asks main to copy the same managed resource.
+- Good: renderer assigns `capture.tfileUrl` directly to `<img src>`; a screenshot-session save asks main to copy the same managed resource.
 - Base: AX fails for one target; hit-test keeps its window candidate and an allowlisted fallback reason.
 - Bad: plugin asks for `output: "data-url"`, main returns a raw temp path, or a handler checks only `window.capture` before writing the clipboard.
 

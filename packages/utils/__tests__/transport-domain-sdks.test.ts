@@ -271,14 +271,6 @@ describe('transport domain sdk mappings', () => {
       module: 'floating-ball',
       action: 'get-runtime-config',
     })
-    expect(AssistantEvents.voice.submitText.toEventName()).toBe(
-      'assistant:voice-panel:submit',
-    )
-    expect(AssistantEvents.voice.submitText).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'submit',
-    })
     expect(AssistantEvents.voice.panelClosed.toEventName()).toBe(
       'assistant:voice-panel:closed',
     )
@@ -286,30 +278,6 @@ describe('transport domain sdk mappings', () => {
       namespace: 'assistant',
       module: 'voice-panel',
       action: 'closed',
-    })
-    expect(AssistantEvents.voice.captureScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:capture-screenshot',
-    )
-    expect(AssistantEvents.voice.captureScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'capture-screenshot',
-    })
-    expect(AssistantEvents.voice.saveScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:save-screenshot',
-    )
-    expect(AssistantEvents.voice.saveScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'save-screenshot',
-    })
-    expect(AssistantEvents.voice.translateScreenshot.toEventName()).toBe(
-      'assistant:voice-panel:translate-screenshot',
-    )
-    expect(AssistantEvents.voice.translateScreenshot).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'translate-screenshot',
     })
   })
 

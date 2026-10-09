@@ -1,11 +1,4 @@
 import type { VoicePolishStrength } from '../../common/storage/entity/app-settings'
-import type { ScreenshotManagedResource } from './screenshot-session'
-import type {
-  CoreBoxImageTranslateRouteMetadata,
-  IntelligenceErrorCode,
-  NativeScreenshotDisplay,
-  NativeScreenshotRegion,
-} from './types'
 import { defineEvent } from '../event/builder'
 
 export interface AssistantRuntimeConfig {
@@ -15,10 +8,6 @@ export interface AssistantRuntimeConfig {
   /** Whether an enabled Intelligence `text.chat` runtime can perform optional cleanup. */
   polishAvailable: boolean
   polishStrength: VoicePolishStrength
-}
-
-export interface AssistantOpenVoicePanelPayload {
-  source?: 'click' | 'wake-word'
 }
 
 export type AssistantVoiceCommandPayload
@@ -51,167 +40,16 @@ export interface AssistantGlobeKeyStatus {
   systemActionActive: boolean
 }
 
-export interface AssistantFloatingBallPositionPayload {
-  x: number
-  y: number
-}
-
-export interface AssistantVoiceSubmitPayload {
-  text: string
-  source?: 'voice' | 'manual'
-}
-
-export type AssistantClipboardImageTranslateErrorCode
-  = | 'ASSISTANT_DISABLED'
-    | 'IMAGE_UNAVAILABLE'
-    | 'SCENE_UNAVAILABLE'
-    | IntelligenceErrorCode
-
-export type AssistantScreenshotTranslateErrorCode
-  = | AssistantClipboardImageTranslateErrorCode
-    | 'SCREENSHOT_PERMISSION_DENIED'
-    | 'SCREENSHOT_UNSUPPORTED'
-    | 'SCREENSHOT_UNAVAILABLE'
-    | 'OCR_UNAVAILABLE'
-    | 'TEXT_TRANSLATE_UNAVAILABLE'
-
-export type AssistantScreenshotCaptureErrorCode
-  = | 'ASSISTANT_DISABLED'
-    | 'SCREENSHOT_PERMISSION_DENIED'
-    | 'SCREENSHOT_UNSUPPORTED'
-    | 'SCREENSHOT_UNAVAILABLE'
-
-export type AssistantScreenshotSaveErrorCode = AssistantScreenshotCaptureErrorCode | 'SAVE_FAILED'
-
-export interface AssistantClipboardImageTranslatePayload {
-  targetLang?: string
-}
-
-export interface AssistantClipboardImageTranslateResponse {
-  success: boolean
-  translatedImageBase64?: string
-  sourceText?: string
-  targetText?: string
-  metadata?: CoreBoxImageTranslateRouteMetadata
-  error?: string
-  reason?: string
-  recovery?: string
-  code?: AssistantClipboardImageTranslateErrorCode
-}
-
-export type AssistantScreenshotCaptureTarget = 'cursor-display' | 'display' | 'region' | 'resource'
-export type AssistantScreenshotDisplay = NativeScreenshotDisplay
-
-export interface AssistantScreenshotTargetPayload {
-  target?: AssistantScreenshotCaptureTarget
-  displayId?: string
-  region?: NativeScreenshotRegion
-  tfileUrl?: string
-  resource?: ScreenshotManagedResource
-}
-
-export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload
-  & AssistantScreenshotTargetPayload
-
-export type AssistantScreenshotCapturePayload = AssistantScreenshotTargetPayload
-export type AssistantScreenshotSavePayload = AssistantScreenshotTargetPayload
-
-export type AssistantScreenshotRegionSelectionErrorCode
-  = | 'ASSISTANT_DISABLED'
-    | 'SCREENSHOT_UNSUPPORTED'
-    | 'REGION_SELECTION_UNAVAILABLE'
-
-export interface AssistantScreenshotRegionSelectionPayload {
-  target?: 'cursor-display' | 'display'
-  displayId?: string
-}
-
-export interface AssistantScreenshotRegionSelectionResponse {
-  success: boolean
-  canceled?: boolean
-  region?: NativeScreenshotRegion
-  displayId?: string
-  displayName?: string
-  resource?: ScreenshotManagedResource
-  error?: string
-  code?: AssistantScreenshotRegionSelectionErrorCode
-}
-
-export type AssistantScreenshotTranslateMode = 'translated-image' | 'ocr-text'
-
-export interface AssistantScreenshotFallbackStageMetadata {
-  provider: string
-  model: string
-  traceId: string
-  latencyMs: number
-}
-
-export type AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${'SCENE_UNAVAILABLE' | IntelligenceErrorCode}`
-
-export interface AssistantScreenshotTextFallbackMetadata {
-  degradedReason: AssistantScreenshotFallbackReason
-  ocr: AssistantScreenshotFallbackStageMetadata & { engine?: string }
-  translation: AssistantScreenshotFallbackStageMetadata
-}
-
-export interface AssistantScreenshotTranslateResponse {
-  success: boolean
-  translatedImageBase64?: string
-  sourceText?: string
-  targetText?: string
-  mode?: AssistantScreenshotTranslateMode
-  fallback?: AssistantScreenshotTextFallbackMetadata
-  metadata?: CoreBoxImageTranslateRouteMetadata
-
-  error?: string
-  reason?: string
-  recovery?: string
-  code?: AssistantScreenshotTranslateErrorCode
-}
-
-export interface AssistantScreenshotCaptureResponse {
-  success: boolean
-  tfileUrl?: string
-  mimeType?: string
-  width?: number
-  height?: number
-  displayName?: string
-  wroteClipboard?: boolean
-  error?: string
-  code?: AssistantScreenshotCaptureErrorCode
-}
-
-export interface AssistantScreenshotSaveResponse {
-  success: boolean
-  canceled?: boolean
-  mimeType?: string
-  width?: number
-  height?: number
-  displayName?: string
-  sizeBytes?: number
-  error?: string
-  code?: AssistantScreenshotSaveErrorCode
-}
-
-const translateClipboardImageEvent = defineEvent('assistant')
-  .module('voice-panel')
-  .event('translate-clipboard-image')
-  .define<AssistantClipboardImageTranslatePayload | void, AssistantClipboardImageTranslateResponse>()
-
 export const AssistantEvents = {
   floatingBall: {
+    /**
+     * Named for the floating ball that first asked for it. The ball is gone and the voice HUD
+     * reads it now; the wire name stays so both ends keep agreeing on it.
+     */
     getRuntimeConfig: defineEvent('assistant')
       .module('floating-ball')
       .event('get-runtime-config')
       .define<void, AssistantRuntimeConfig>(),
-    openVoicePanel: defineEvent('assistant')
-      .module('floating-ball')
-      .event('open-voice-panel')
-      .define<AssistantOpenVoicePanelPayload, void>(),
-    updatePosition: defineEvent('assistant')
-      .module('floating-ball')
-      .event('update-position')
-      .define<AssistantFloatingBallPositionPayload, void>(),
   },
   voice: {
     panelOpened: defineEvent('assistant').module('voice-panel').event('opened').define<{ source?: string }, void>(),
@@ -241,30 +79,5 @@ export const AssistantEvents = {
       .module('voice-panel')
       .event('open-keyboard-settings')
       .define<void, boolean>(),
-    submitText: defineEvent('assistant')
-      .module('voice-panel')
-      .event('submit')
-      .define<AssistantVoiceSubmitPayload, { accepted: boolean }>(),
-    translateClipboardImage: translateClipboardImageEvent,
-    listScreenshotDisplays: defineEvent('assistant')
-      .module('voice-panel')
-      .event('list-screenshot-displays')
-      .define<void, AssistantScreenshotDisplay[]>(),
-    selectScreenshotRegion: defineEvent('assistant')
-      .module('voice-panel')
-      .event('select-screenshot-region')
-      .define<AssistantScreenshotRegionSelectionPayload | void, AssistantScreenshotRegionSelectionResponse>(),
-    captureScreenshot: defineEvent('assistant')
-      .module('voice-panel')
-      .event('capture-screenshot')
-      .define<AssistantScreenshotCapturePayload | void, AssistantScreenshotCaptureResponse>(),
-    saveScreenshot: defineEvent('assistant')
-      .module('voice-panel')
-      .event('save-screenshot')
-      .define<AssistantScreenshotSavePayload | void, AssistantScreenshotSaveResponse>(),
-    translateScreenshot: defineEvent('assistant')
-      .module('voice-panel')
-      .event('translate-screenshot')
-      .define<AssistantScreenshotTranslatePayload | void, AssistantScreenshotTranslateResponse>(),
   },
 } as const
