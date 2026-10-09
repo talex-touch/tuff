@@ -74,6 +74,8 @@ SSR 安全：访问 `window` / `document` / `navigator` 前先判断。
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | 对元素做 FLIP 过渡（`TxFlipOverlay` 底层） |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | 测量尺寸变化并过渡（`TxAutoSizer` 底层） |
 | `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | 在自有帧循环中沿弹簧推进数值（`spring` 为 `{ stiffness, damping, mass? }`，`dt` 以秒计），换目标时保留速度；可作 `useJellyIndicator` glide 的 `integrate` |
+| `solveSpring(position, velocity, target, spring, t)` | `(position, velocity, target, spring, t) => [number, number]` | 同一弹簧的闭式解：任意时刻 `t`（秒）的精确位置与速度；用于可拖动时间线、逐帧渲染和断言某一时刻的位置 |
+| `createSpringTrack(spring, initial)` | `(spring, initial) => { retarget(t, target), sample(t) }` | 可中途换目标的弹簧轨道：换目标时保留当时的位置与速度，`sample(t)` 可按任意顺序精确读取 |
 | `useMorphBox(box, content, opts?)` | `(box, content, opts?) => { morphing, settle }` | 容器跟随内容自然尺寸做弹簧过渡，途中再变保留速度；`TxMorph` 与 `TxTransitionSmoothSize` 的尺寸引擎 |
 | `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | 交给 GSAP 前转换缓动：`spring(...)`、`cubic-bezier(...)` 转为进度函数（GSAP 不认识，会静默换成默认缓动），GSAP 缓动名原样返回 |
 | `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | 在 JS 中按 CSS 缓动求值：`cubic-bezier(...)`、等距 `linear(...)` 与 `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`；其他写法退化为钳制线性，从不返回 `null`；按写法缓存，可逐帧调用 |

@@ -43,6 +43,7 @@
 
 ### 🧩 组件导出
 
+- `@talex-touch/tuffex/utils`（根入口同步）新增闭式弹簧：`solveSpring` 给出任意时刻的精确位置与速度，`createSpringTrack` 是可中途换目标、可按任意顺序读取的弹簧轨道，用于可拖动的时间线与逐帧渲染。帧循环仍用 `stepSpring`（它与 liquid 编译 CSS 曲线的步长一致），两者在 liquid 预设上最多相差行程的 3.2%。
 - `@talex-touch/tuffex/utils`（根入口同步）新增 `useMorphBox`：容器跟随内容的自然尺寸做弹簧过渡，尺寸在途中再变时保留位置与速度；`TxMorph` 的尺寸部分即由它实现。
 - `@talex-touch/tuffex/utils`（根入口同步）新增缓动工具：`resolveGsapEase`、`resolveCssEase`、`createSpringEase`、`parseSpringEase`、`createCubicBezier`、`parseCubicBezier`。
 
