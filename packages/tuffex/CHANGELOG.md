@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `base-anchor`, `charts`, `icon-chip`, `liquid`, `popover`, `steps`, `tooltip`, `transition`
+- **更新组件**: `base-anchor`, `charts`, `chat`, `icon-chip`, `liquid`, `popover`, `steps`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -30,6 +30,7 @@
 - `TxDitherChart` 默认 tooltip 不再把数据点标签打两遍：标题写悬停的数据点（日期或类目），数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）只保留数据行。tooltip 落到图表下半部时也不再被坐标轴文字盖住。
 - `TxIconChip` 的 `label` 超过三个字符（如 `JSON`）时角标横向变宽，不再溢出 14px 方块；三个字符以内仍是原来的正方形，高度、圆角与字号不变。
 - `TxStep` 使用字符串 `step` 键时按子项顺序显示编号；此前没有图标的字符串键步骤一律显示 1。
+- `TxChatList` 新增 `attachmentLabel` 并透传给每条 `TxChatMessage`，非英文宿主可以本地化无名图片缩略图的读屏名称；导出的 `ChatMessageProps` / `ChatListProps` 类型同步补上该属性。
 
 ### 🧩 组件导出
 

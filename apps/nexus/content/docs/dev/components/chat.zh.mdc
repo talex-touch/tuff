@@ -56,6 +56,7 @@ code: |
 | `messages` | `ChatMessageModel[]` | 必填 | 消息数组，按顺序渲染。 |
 | `markdown` | `boolean` | `true` | 用 `TxMarkdownView` 渲染正文；关闭时渲染纯文本。 |
 | `stagger` | `boolean` | `true` | 用 `TxStagger` 播放消息入场动画。 |
+| `attachmentLabel` | `string` | - | 转发给每条消息：无 `name` 缩略图的可访问名称。 |
 
 #### 事件
 

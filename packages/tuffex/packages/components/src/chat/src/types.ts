@@ -20,6 +20,8 @@ export interface ChatMessageModel {
 export interface ChatMessageProps {
   message: ChatMessageModel
   markdown?: boolean
+  /** Accessible label for an image attachment thumbnail whose `name` is absent. */
+  attachmentLabel?: string
 }
 
 export interface ChatMessageEmits {
@@ -30,6 +32,8 @@ export interface ChatListProps {
   messages: ChatMessageModel[]
   markdown?: boolean
   stagger?: boolean
+  /** Forwarded to each TxChatMessage: names an image thumbnail that has no `name`. */
+  attachmentLabel?: string
 }
 
 export type ChatComposerTrayPlacement = 'top' | 'bottom'

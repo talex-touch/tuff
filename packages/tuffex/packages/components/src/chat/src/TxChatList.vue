@@ -19,6 +19,8 @@ const props = withDefaults(
     }>
     markdown?: boolean
     stagger?: boolean
+    /** Forwarded to each TxChatMessage: names an image thumbnail that has no `name`. */
+    attachmentLabel?: string
   }>(),
   {
     markdown: true,
@@ -41,6 +43,7 @@ const list = computed(() => props.messages ?? [])
         :key="m.id"
         :message="m"
         :markdown="markdown"
+        :attachment-label="attachmentLabel"
         @image-click="emit('imageClick', $event)"
       />
     </TxStagger>
@@ -51,6 +54,7 @@ const list = computed(() => props.messages ?? [])
         :key="m.id"
         :message="m"
         :markdown="markdown"
+        :attachment-label="attachmentLabel"
         @image-click="emit('imageClick', $event)"
       />
     </div>
