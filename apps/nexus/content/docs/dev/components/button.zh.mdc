@@ -401,7 +401,7 @@ rows:
 | `text` | `string` | `''` | 写入剪贴板的文本。 |
 | `copyLabel` | `string` | `'Copy'` | 空闲时的文案与 `aria-label`。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案与 `aria-label`。 |
-| `failedLabel` | `string` | - | 失败时的文案与 `aria-label`；不传时保持 `copyLabel`。 |
+| `failedLabel` | `string` | - | 失败时的文案与 `aria-label`；不传时保持 `copyLabel`（`iconOnly` 不展开文案），读屏播报英文「Copy failed」。 |
 | `disabled` | `boolean` | `false` | 禁用并阻止复制。 |
 | `timeout` | `number` | `1400` | 成功或失败状态恢复前的毫秒数。 |
 | `size` | `'sm' \| 'md'` | `'sm'` | 按钮尺寸。 |

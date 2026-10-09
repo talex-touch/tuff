@@ -660,6 +660,21 @@ describe('txSlider overdrag', () => {
     wrapper.unmount()
   })
 
+  it('lands at once when overdrag is turned off on the way back', async () => {
+    const { wrapper, rest } = await pullPastTheEnd(true)
+    window.dispatchEvent(new Event('pointerup'))
+    await nextTick()
+    vi.advanceTimersByTime(16)
+    await nextTick()
+    expect(leftOf(wrapper) - rest).toBeGreaterThan(0)
+    await wrapper.setProps({ overdrag: false })
+    expect(leftOf(wrapper)).toBe(rest)
+    vi.advanceTimersByTime(100)
+    await nextTick()
+    expect(leftOf(wrapper)).toBe(rest)
+    wrapper.unmount()
+  })
+
   it('stops dead at the end when overdrag is off', async () => {
     const { wrapper, near, far } = await pullPastTheEnd(false)
     expect(near).toBe(0)
