@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `base-anchor`, `charts`, `chat`, `icon-chip`, `liquid`, `popover`, `steps`, `tooltip`, `transition`
+- **更新组件**: `ai-elements`, `base-anchor`, `charts`, `chat`, `icon-chip`, `liquid`, `popover`, `steps`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -32,6 +32,7 @@
 - `TxIconChip` 的 `label` 超过三个字符（如 `JSON`）时角标横向变宽，不再溢出 14px 方块；三个字符以内仍是原来的正方形，高度、圆角与字号不变。
 - `TxStep` 使用字符串 `step` 键时按子项顺序显示编号；此前没有图标的字符串键步骤一律显示 1。
 - `TxChatList` 新增 `attachmentLabel` 并透传给每条 `TxChatMessage`，非英文宿主可以本地化无名图片缩略图的读屏名称；导出的 `ChatMessageProps` / `ChatListProps` 类型同步补上该属性。
+- `TxAiConversation` 新增 `typingLabel` 并透传给每条消息，同时转发消息的 `open-source` 事件；此前在对话里点击来源没有任何监听者能收到。导出的 `AiConversationProps` / `AiMessageProps` 类型同步补上 `typingLabel`。
 
 ### 🧩 组件导出
 
