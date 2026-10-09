@@ -209,7 +209,14 @@ const LIMITS = {
   // accounting for the rest. Primitive overrides remain beneath their owning Motion
   // roots; they do not inline the input/tabs/select/Skeleton sheets. Measured actuals
   // plus minimal headroom; root/full-style import bans and per-file ceilings stay fixed.
-  fullCssBytes: 736 * 1024,
+  // 736 -> 738 on 2026-10-08: the TxCopyButton redesign (failure state, `iconOnly` with a
+  // width FLIP, drawn check/cross glyphs, colour eased only across a state change) grows
+  // `button/style.css` 14,708 -> 16,774 B, and TxCodeStream's copy override gains its ring
+  // and failure rules, `code-stream/style.css` 6,383 -> 6,588 B. Those two sheets are the
+  // only ones that moved; the full entry went 735.0 -> 737.3 KiB. It slimmed before asking:
+  // the copy button is unscoped (-0.6 KiB of data-v attributes) and its two tones share one
+  // rule through custom properties. Actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 738 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -263,7 +270,12 @@ const LIMITS = {
   // merged artifact measures 705.3 KiB across 185 sheets; Terminal owns this new
   // sheet and the dependency closure still imports primitive sheets once.
   // Keep the 48 KiB JS, 56 KiB per-sheet and root/full-style import gates fixed.
-  onDemandCssBytes: 707 * 1024,
+  // 707 -> 708.5 on 2026-10-08: the same TxCopyButton redesign as the `fullCssBytes` note
+  // above, measured with it at 707.8 KiB across the same 185 sheets. The button and
+  // code-stream sheets carry only their own `.tx-copy-button*` / `.tx-bui-code-stream__copy`
+  // rules; the text-transformer and text-morph sheets the button now reaches stay in their
+  // own files through style-deps. Actuals plus minimal headroom, growth from here fails.
+  onDemandCssBytes: 708.5 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -339,7 +351,10 @@ const onDemandImportBudgets = [
     // `tooltip` rides in behind `popover`: TxPopover is now a TxTooltip
     // specialisation, so anything reaching the popover reaches the tooltip too.
     // `icon` rides in behind TxIconButton, which renders its glyph via TxIcon.
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    // `text-transformer`, `text-morph` and `liquid` ride in behind TxCopyButton, whose
+    // label morphs through TxTextTransformer (the text-morph engine, sprung by liquid's
+    // compiler) — the one text engine the library allows, as TxSwitch and TxModeChip use it.
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'icon', 'liquid', 'popover', 'spinner', 'text-morph', 'text-transformer', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap', 'v-wave'],
   },
   {

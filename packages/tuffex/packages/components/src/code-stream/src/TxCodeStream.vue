@@ -754,6 +754,8 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     border: 0;
     border-radius: var(--tx-bui-radius-chip, 6px);
     background: transparent;
+    // TxCopyButton draws its edge as an inset ring; BUI's chip has none.
+    box-shadow: none;
     color: var(--tx-bui-ink-3, #9a9da3);
     font-size: 11.5px;
     font-weight: 500;
@@ -767,10 +769,17 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
       color: var(--tx-bui-ink, #1f2124);
     }
 
-    &.is-copied {
+    &.is-copied:not(:disabled) {
       border: 0;
       background: transparent;
+      box-shadow: none;
       color: var(--tx-bui-green, #189a4d);
+    }
+
+    &.is-failed:not(:disabled) {
+      background: transparent;
+      box-shadow: none;
+      color: var(--tx-bui-red, #e3474c);
     }
 
     .tx-copy-button__icon svg {
