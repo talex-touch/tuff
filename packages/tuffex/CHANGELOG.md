@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `ai-elements`, `base-anchor`, `charts`, `chat`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
+- **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
 - **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
@@ -24,6 +24,7 @@
 
 ### 🐛 组件修复
 
+- `TxSplitButton` 普通点击即可打开菜单：此前 pointerdown 打开菜单后，用来吞掉配对 click 的标记被 `setTimeout(0)` 提前清掉，松手时的 click 又把菜单关上，只有长按才看得到。未传 `menuIcon` 时改为绘制内置的竖向三点 SVG，不再依赖宿主装有 `ri` 图标集（Nexus 中此前显示为空白）。
 - `TxCardSpread` 的卡片、`TxCarousel3D` 的轮播页、`TxFlipBook` 的书本外框与页面内容，以及 `TxMonoChart` 的提示框，投影都补上横向偏移（约为纵向的一半，如 `0 4px 12px` → `2px 4px 12px`），与组件库统一的左上方光源一致；此前随 Amicro 恢复带回了正下方的阴影，`shadow-light-source` 测试因此失败。
 - `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
 - `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。

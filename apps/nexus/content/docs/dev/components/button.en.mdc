@@ -342,7 +342,7 @@ rows:
 | `disabled` | `boolean` | `false` | Disables both the primary action and the menu trigger. |
 | `loading` | `boolean` | `false` | Shows the primary spinner and disables both sides. |
 | `icon` | `string` | - | Icon class shown before the label while not loading. |
-| `menuIcon` | `string` | `i-ri-more-2-line` | Default icon class of the menu trigger. |
+| `menuIcon` | `string` | - | Icon class for the menu trigger; without it, a built-in vertical ellipsis is drawn. |
 | `menuDisabled` | `boolean` | `false` | Disables only the menu trigger. |
 | `menuWidth` | `number` | `200` | Popover width, passed to `TxPopover`. |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | Popover placement. |

@@ -342,7 +342,7 @@ rows:
 | `disabled` | `boolean` | `false` | 同时禁用主操作与菜单触发器。 |
 | `loading` | `boolean` | `false` | 主按钮显示加载指示，两侧均禁用。 |
 | `icon` | `string` | - | 非加载时显示在文案前的图标类名。 |
-| `menuIcon` | `string` | `i-ri-more-2-line` | 菜单触发器的默认图标类名。 |
+| `menuIcon` | `string` | - | 菜单触发器的图标类名；不传时绘制内置的竖向三点图标。 |
 | `menuDisabled` | `boolean` | `false` | 仅禁用菜单触发器。 |
 | `menuWidth` | `number` | `200` | 弹层宽度，透传给 `TxPopover`。 |
 | `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | 弹层位置。 |
