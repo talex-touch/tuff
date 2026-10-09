@@ -1,6 +1,6 @@
 ---
 title: "CommandPalette 命令面板"
-description: "用于全局快捷指令、插件入口和搜索动作的命令面板。"
+description: "搜索并执行命令的浮层面板"
 category: Advanced
 status: beta
 since: 0.3.4
@@ -11,177 +11,108 @@ verified: true
 
 ## 用法
 
-### 最佳实践
-
-- `id` 需要跨版本稳定；埋点、持久化和权限判断都应使用 `id`，不要依赖本地化后的标题。
-- 将同义词、英文别名、插件名和本地化搜索词放进 `keywords`，不要为了搜索变体复制多条命令。
-- 全局快捷键应在应用外壳注册，再驱动 `v-model` 打开面板；`shortcut` 只负责展示键盘提示。
-- `footer` 适合放数据来源、结果数量或键盘帮助；`empty` 适合展示当前 query 和恢复动作。
-- 命令较多时限制 `maxHeight`，保持面板可键盘浏览，并避免超出视口。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `modelValue` | `boolean` | - | 显示状态 |
-| `commands` | `CommandPaletteItem[]` | `[]` | 命令列表 |
-| `placeholder` | `string` | `'Search commands'` | 搜索占位 |
-| `emptyText` | `string` | `'No commands found'` | 空提示 |
-| `maxHeight` | `number` | `320` | 列表最大高度 |
-| `autoFocus` | `boolean` | `true` | 自动聚焦 |
-| `closeOnSelect` | `boolean` | `true` | 选中后关闭 |
-| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | 叠层自定义类名 |
-| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板自定义类名 |
-
-### CommandPaletteItem
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | `string` | 唯一标识 |
-| `title` | `string` | 标题 |
-| `description` | `string` | 描述 |
-| `keywords` | `string[]` | 关键词 |
-| `icon` | `TxIconSource \| string` | 图标 |
-| `shortcut` | `string` | 快捷键 |
-| `disabled` | `boolean` | 禁用 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value)` | 显示状态 |
-| `select` | `(item)` | 选中命令 |
-| `open` | - | 打开 |
-| `close` | - | 关闭 |
-| `update:query` | `(value)` | 搜索输入 |
-
-### Slots
-
-| 插槽名 | 参数 | 说明 |
-|------|------|------|
-| `empty` | `{ query, emptyText }` | 自定义空状态 |
-| `footer` | `{ query, visibleCount }` | 自定义底部区域 |
-
-## 启动器场景
-
+### 启动器
 ::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  interface CommandItem {
-    id: string
-    title: string
-    description: string
-    keywords: string[]
-    icon: string
-    shortcut: string
-    disabled?: boolean
-  }
+  import { ref } from 'vue'
 
   const open = ref(false)
-  const selectedId = ref('search-files')
-
-  const commands: CommandItem[] = [
+  const commands = [
     {
       id: 'search-files',
       title: '搜索文件',
       description: '在文档、下载和桌面中查找本地文件',
-      keywords: ['file', 'finder', 'everything', '文件'],
+      keywords: ['file', 'finder', '文件'],
       icon: 'i-carbon-search',
       shortcut: '⌘ K',
     },
-    {
-      id: 'quick-note',
-      title: '保存快速笔记',
-      description: '把当前剪贴板文本保存到片段库',
-      keywords: ['snippet', 'note', 'clipboard', '片段'],
-      icon: 'i-carbon-notebook',
-      shortcut: '⌘ ⇧ N',
-    },
-    {
-      id: 'browser-open',
-      title: '用浏览器打开',
-      description: '使用默认浏览器打开输入的 URL',
-      keywords: ['url', 'link', 'browser', '网页'],
-      icon: 'i-carbon-launch',
-      shortcut: '⌘ ↵',
-    },
-    {
-      id: 'sync-settings',
-      title: '同步设置',
-      description: '打开账户同步与设备管理',
-      keywords: ['sync', 'account', 'device', '同步'],
-      icon: 'i-carbon-cloud',
-      shortcut: '⌘ ,',
-    },
-    {
-      id: 'locked-admin',
-      title: '管理员脚本',
-      description: '需要管理员权限后才能运行',
-      keywords: ['admin', 'shell', 'script', '权限'],
-      icon: 'i-carbon-locked',
-      shortcut: '⌘ ⇧ S',
-      disabled: true,
-    },
+    { id: 'locked-admin', title: '管理员脚本', icon: 'i-carbon-locked', disabled: true },
   ]
-
-  const selected = computed(() => commands.find(command => command.id === selectedId.value))
-
-  function onSelect(command: CommandItem) {
-    selectedId.value = command.id
-  }
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-520">
-      <TxButton variant="primary" @click="open = true">
-        打开命令面板
-      </TxButton>
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          最近动作：{{ selected?.title }}
-        </div>
-      </TxCard>
-    </div>
-
+    <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
     <TxCommandPalette
       v-model="open"
       :commands="commands"
       placeholder="搜索命令、插件或设置..."
       empty-text="没有匹配的命令"
       :max-height="280"
-      @select="onSelect"
+      @select="(item) => run(item.id)"
     />
   </template>
 ---
 ::
 
-## 体验要点
+### 最佳实践
 
-- 标题、描述和 `keywords` 都会参与过滤，适合把英文别名、中文别名和插件关键词放在同一条命令上。
-- `icon` 可传图标类名或 `TxIconSource`；`shortcut` 用于展示键盘提示，不负责注册全局快捷键。
-- `disabled` 命令会显示但无法选中，适合表达缺权限、平台不支持或功能未启用的状态。
-- `closeOnSelect=false` 可用于批量动作或设置面板，默认选中后关闭。
+- `id` 跨版本保持稳定；埋点、持久化与权限判断都用 `id`，不用本地化标题。
+- 同义词、别名、插件名放进 `keywords`，不要为搜索变体复制命令。
+- 全局快捷键在应用外壳注册，再通过 `v-model` 打开面板。
+- `footer` 放数据来源、结果数或键盘帮助；`empty` 展示当前 query 与恢复动作。
+- 命令较多时限制 `maxHeight`，让面板留在视口内。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|------|------|
+| `modelValue` | `boolean` | - | 是否显示，配合 `v-model` 使用。 |
+| `commands` | `CommandPaletteItem[]` | `[]` | 命令列表。 |
+| `placeholder` | `string` | `'Search commands'` | 搜索框占位文本，也是搜索框的 `aria-label`。 |
+| `emptyText` | `string` | `'No commands found'` | 无匹配时的提示。 |
+| `maxHeight` | `number` | `320` | 列表最大高度（px）。 |
+| `autoFocus` | `boolean` | `true` | 打开时聚焦搜索框。 |
+| `closeOnSelect` | `boolean` | `true` | 选中后关闭；批量操作时设为 `false`。 |
+| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | 遮罩层的 class。 |
+| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板的 class。 |
+| `query` | `string` | - | 搜索文本，配合 `v-model:query`；不传时由组件自行管理。 |
+| `ariaLabel` | `string` | `'Command palette'` | 对话框与命令列表的无障碍名称。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value)` | 请求打开或关闭时触发。 |
+| `select` | `(item)` | 选中可用命令时触发，参数为原始条目。 |
+| `open` | - | 面板打开时触发。 |
+| `close` | - | 已打开的面板关闭时触发。 |
+| `update:query` | `(value)` | 输入变化时触发；关闭时重置为空串。 |
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `empty` | `{ query, emptyText }` | 无匹配时的内容。 |
+| `footer` | `{ query, visibleCount }` | 列表下方的区域。 |
+
+### 类型
+
+#### CommandPaletteItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 唯一标识。 |
+| `title` | `string` | 标题，参与过滤。 |
+| `description` | `string` | 标题下的说明，参与过滤。 |
+| `keywords` | `string[]` | 参与过滤的额外搜索词，不显示。 |
+| `icon` | `TxIconSource \| string` | 图标源或图标 class。 |
+| `shortcut` | `string` | 右侧的快捷键提示；不注册快捷键。 |
+| `disabled` | `boolean` | 保持可见，但不可选中。 |
 
 ## 概述
 
-- `modelValue` 是显示状态的唯一来源；面板显示时触发 `open`，从已打开状态关闭时触发 `close`。
-- 搜索只在本地对 `title`、`description` 和每个 `keywords` 做包含匹配；组件不负责排序、节流或远程请求。
-- `ArrowDown` / `ArrowUp` 在可见命令间循环并跳过禁用项，高亮不会停留在不可用命令上；`Enter` 选择当前命令；`Escape` 关闭面板。初始高亮落在第一个可用命令上；所有命令都禁用时方向键不做任何操作。
-- 输入法组合态（`isComposing`、keyCode `229` 或正在 composition）会阻止键盘选择，避免中文/日文/韩文输入被提前提交。
-- `select` 会返回原始 `CommandPaletteItem`；禁用命令以 `role="option"` 保持可见，带 `aria-disabled="true"` 并移出 tab 顺序（`tabindex="-1"`），不会触发 `select`；`closeOnSelect=false` 会在选择后保持面板打开。
+- 显示状态只由 `modelValue` 决定。打开时触发 `open`，从打开变为关闭时触发 `close`。
+- 过滤是对 `title`、`description`、`keywords` 的本地子串匹配，不区分大小写；组件不排序、不节流、不请求远端。
+- `↑` / `↓` 循环移动并跳过禁用项，`Enter` 选中，`Esc` 关闭。高亮初始落在第一个可用命令上。
+- 输入法组合期间不响应键盘选择，避免提前提交中日韩输入。
+- 遮罩层是 `role="dialog"` 与 `aria-modal="true"`；禁用项带 `aria-disabled="true"`，不触发 `select`。
 
 ## 技术实现
 
-- 已核对 `packages/tuffex/packages/components/src/command-palette/src/types.ts`、`TxCommandPalette.vue` 与 `command-palette.test.ts`。
-- 现有测试覆盖本地过滤与选择、禁用命令跳过及 `aria-disabled` / `tabindex` 标记、输入法组合态保护、命中文本高亮，以及自定义 `empty` / `footer` 插槽。
-- 可访问性说明:叠层渲染 `role="dialog"` 与 `aria-modal="true"`;触发按钮文案和 placeholder 应说明当前命令域,不要把展示用 `shortcut` 当作实际快捷键注册。
+- 源码：`packages/tuffex/packages/components/src/command-palette/`。
 
-- Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`。
-- Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` 导出 `CommandPaletteProps`、`CommandPaletteEmits`、`CommandPaletteItem` 与 `CommandPaletteClassValue`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` 覆盖过滤、选择事件、禁用命令跳过及 `aria-disabled` / `tabindex` 标记、输入法保护、命中高亮与插槽。
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "MotionForm"
-description: "基于 TuffEx 既有输入、选择、文件与滑块控件组合的十五种受控表单交互。"
+description: "基于 TuffEx 表单控件的十五种动效交互"
 category: Advanced
 status: beta
 since: 0.6.3
@@ -11,11 +11,9 @@ verified: false
 
 ## 用法
 
-### 全部十五种效果
-
-演示展示全部原始表单变体，并提供筛选器。所有值都可编辑，文件来自设备上的真实选择，验证基于实际输入。提交示例通过 Web Crypto 计算真实的本地 SHA-256 摘要：既不会上传，也不宣称服务端提交成功。
-
-:::TuffDemoWrapper{demo="MotionFormDemo" code-lang="vue" title="十五种真实交互" description="输入、选择、粘贴、拖放、校验与计算；可禁用控件或动效，查看静态终态。"}
+### 全部变体
+`validate` 只发起请求；调用方写回 `status` 与 `error`，改变 `validationKey` 重播震动。
+:::TuffDemoWrapper{demo="MotionFormDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -52,13 +50,11 @@ code: |
 
 ### 最佳实践
 
-- 模型、校验消息与业务状态由调用方维护。`validate` 与 `submit` 只是发起请求；组件不会自行产生成功结果，也不会延时清除错误。
-- 同一错误、同一状态再次失败时，改变 `validationKey` 即可重播震动，无需重挂载输入框或丢失焦点。
-- 单选、下拉与标签使用调用方 `options`。标签由已选列表与既有键盘可操作的单选 Select 组合，每次添加一个选项；已选项不能重复添加。
-- `filesSelected` 表示选择文件，不表示上传完成。每项保留真实 `File`；使用应用自己的服务上传，并根据结果驱动 `status`。
-- 传入有意义的 `label` 与本地化 `labels`。`label` 插槽可以自定义可见标签，仍由 `aria-labelledby` 连接控件；OTP 每个数字框的名称还会使用 `label` 属性。
-- `readonly` 只用于文本类字段与 OTP。选择、文件、范围、动作或整体表单不可操作时使用 `disabled`。
-- 默认动作使用 `nativeType="button"` 并发出 `submit`。只有外层原生表单负责提交时才使用 `nativeType="submit"`；不要同时在点击请求与表单 submit 事件执行同一操作。
+- 模型、校验消息与业务状态由调用方维护；组件不自行判定成功，也不定时清除错误。
+- `filesSelected` 只表示选中文件：用应用自己的服务上传每个 `File`，再用结果驱动 `status`。
+- 始终提供 `label` 与本地化的 `labels`；OTP 每格的名称也由 `label` 生成。
+- `readonly` 只用于文本类字段与 OTP；选择、文件、滑块与动作用 `disabled`。
+- 只有外层原生表单负责提交时才设 `nativeType="submit"`，不要在点击与表单 submit 中重复执行同一操作。
 
 ## API 参考
 
@@ -66,72 +62,105 @@ code: |
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `variant` | `MotionFormVariant` | `'floating-label-input'` | 下表十五个原始 ID 之一。 |
+| `variant` | `MotionFormVariant` | `'floating-label-input'` | 十五个效果之一，见下方变体表。 |
 | `modelValue` | `MotionFormValue` | 未设置 | 受控值，形状由变体决定。 |
-| `label` | `string` | `''` | 可见与无障碍标签；空值回退到 `labels.field`。 |
-| `placeholder` | `string` | `''` | 文本/选择占位文案；空且未聚焦的浮动标签会遮蔽占位。 |
-| `description` | `string` | `''` | 实时消息区域的辅助文案，错误/状态优先。 |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 控件高度、选择标记尺寸与圆角；动作的 `xs` 映射到既有 Button 的 `sm`。 |
-| `disabled` | `boolean` | `false` | 禁止编辑、选择、移除、密码显示与动作请求。 |
-| `readonly` | `boolean` | `false` | 文本、文本域与 OTP 只读；密码显示切换仍可用。 |
-| `required` | `boolean` | `false` | 必填标记与无障碍状态；原生文本字段也接收 `required`。 |
-| `status` | `'default' \| 'loading' \| 'success' \| 'error'` | `'default'` | 调用方驱动的操作/校验状态，loading 阻止动作请求。 |
-| `error` | `string` | `''` | 非空时派生错误状态并显示校验消息。 |
-| `validationKey` | `string \| number` | 未设置 | 改变此值可重播同一错误。 |
+| `label` | `string` | `''` | 可见标签与无障碍名称；为空时用 `labels.field`。 |
+| `placeholder` | `string` | `''` | 文本与选择的占位；浮动标签静止时会遮住它。 |
+| `description` | `string` | `''` | 消息区的辅助文案；错误与状态优先。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 高度、选择标记与圆角；动作按钮的 `xs` 对应 Button 的 `sm`。 |
+| `disabled` | `boolean` | `false` | 禁止编辑、选择、移除、显示密码与动作请求。 |
+| `readonly` | `boolean` | `false` | 文本、文本域与 OTP 只读；仍可显示密码。 |
+| `required` | `boolean` | `false` | 必填标记与无障碍状态；原生文本字段同时设置 `required`。 |
+| `status` | `'default' \| 'loading' \| 'success' \| 'error'` | `'default'` | 调用方驱动的状态；`loading` 时阻止动作请求。 |
+| `error` | `string` | `''` | 非空时进入错误状态并显示该消息。 |
+| `validationKey` | `string \| number` | 未设置 | 变化时重播当前错误。 |
 | `labels` | `Partial<MotionFormLabels>` | 未设置 | 本地化静态文案、数字框名称与移除标签。 |
-| `options` | `MotionFormOption[]` | `[]` | 既有 `TxSelectOption` 结构：`{ value: string \| number, label: string, disabled?: boolean, icon?: string, description?: string }`。 |
-| `inputType` | `'text' \| 'email' \| 'number' \| 'date'` | `'text'` | 文本控件类型；密码变体自行管理 text/password。 |
-| `autocomplete` | `string` | 未设置 | 原生文本自动完成；OTP 首框固定使用 `one-time-code`。 |
-| `passwordVisible` | `boolean` | 未设置 | 可选受控显示状态，配合 `update:passwordVisible`；否则显示状态在组件内维护。 |
+| `options` | `MotionFormOption[]` | `[]` | 单选、下拉与标签的选项。 |
+| `inputType` | `'text' \| 'email' \| 'number' \| 'date'` | `'text'` | 文本控件类型；密码变体自行切换 text/password。 |
+| `autocomplete` | `string` | 未设置 | 原生自动完成；OTP 首格固定为 `one-time-code`。 |
+| `passwordVisible` | `boolean` | 未设置 | 受控的密码显示状态，配合 `update:passwordVisible`。 |
 | `rows` | `number` | `2` | 文本域最小行数。 |
-| `maxRows` | `number` | `8` | 自动增长最大行数，超过后滚动；不会小于 `rows`。 |
-| `maxLength` | `number` | 未设置 | 原生文本/文本域长度限制；OTP 固定四位数字。 |
-| `accept` | `string` | `'*/*'` | 选择与拖放类型过滤，复用 FileUploader。 |
-| `multiple` | `boolean` | `true` | 多文件选择；false 时新文件替换旧文件。 |
-| `maxFiles` | `number` | `10` | 最多选择的文件数，复用 FileUploader。 |
+| `maxRows` | `number` | `8` | 自动增高的最大行数，超出后滚动；不小于 `rows`。 |
+| `maxLength` | `number` | 未设置 | 文本与文本域的长度上限；OTP 固定 4 位。 |
+| `accept` | `string` | `'*/*'` | 文件选择与拖放的类型过滤。 |
+| `multiple` | `boolean` | `true` | 多选文件；为 `false` 时新文件替换旧文件。 |
+| `maxFiles` | `number` | `10` | 文件数量上限。 |
 | `min` | `number` | `0` | 滑块最小值。 |
 | `max` | `number` | `100` | 滑块最大值。 |
-| `step` | `number` | `1` | 滑块步进。 |
-| `formatValue` | `(value: number) => string` | 未设置 | 滑块值/提示的格式化函数。 |
-| `nativeType` | `'button' \| 'submit'` | `'button'` | 提交变体的原生 Button 类型。 |
-| `motion` | `boolean` | `true` | 请求启用动效，同时遵守共享的可见性、KeepAlive 与减少动态效果边界。 |
+| `step` | `number` | `1` | 滑块步长。 |
+| `formatValue` | `(value: number) => string` | 未设置 | 滑块数值与提示的格式化函数。 |
+| `nativeType` | `'button' \| 'submit'` | `'button'` | 提交按钮的原生类型。 |
+| `motion` | `boolean` | `true` | 启用动效；仍受可见性、KeepAlive 与减少动态效果限制。 |
 
-### 模型与变体
+### 事件
+
+| 事件 | 参数 | 含义 |
+| --- | --- | --- |
+| `update:modelValue` | `MotionFormValue` | 用户编辑或选择时触发。 |
+| `change` | `MotionFormValue` | 与 `update:modelValue` 同时触发。 |
+| `update:passwordVisible` | `boolean` | 切换密码显示时触发。 |
+| `focus`, `blur` | `FocusEvent` | 焦点进入或离开组件时触发；内部移动不触发。 |
+| `search` | `string` | search-expand 的文本变化时触发；不发请求。 |
+| `validate` | `MotionFormValue` | 请求调用方校验当前值。 |
+| `submit` | `[value: MotionFormValue \| undefined, event: MouseEvent]` | 请求调用方执行操作；不修改 `status`。 |
+| `otpComplete` | `string` | 四格都填入数字时触发；改写后可再次触发。 |
+| `filesSelected` | `FileUploaderFile[]` | 本次新增并被接受的文件；不是累计列表，也不是上传完成。 |
+| `fileRemove` | `{ id: string, value: FileUploaderFile[] }` | 移除文件时触发，携带 ID 与新列表。 |
+
+### 插槽
+
+| 插槽 | 作用域 | 用途 |
+| --- | --- | --- |
+| `label` | 无 | 可见标签，通过稳定 ID 关联控件。 |
+| `prefix`, `suffix` | 无 | 输入前后缀；`suffix` 会替换密码显示按钮。 |
+| `option` | `{ option, selected }` | 单选与下拉的选项内容。 |
+| `chip` | `{ option }` | 标签文案；移除按钮保留。 |
+| `file` | `{ file, remove: () => void }` | 文件行内容；移除按钮保留。 |
+| `submit` | `{ status: MotionFormStatus, label: string }` | 提交按钮文案，与状态图标并排。 |
+| `status` | `{ status, error, value }` | 实时消息区的内容。 |
+
+### 暴露方法
+
+| 方法 | 行为 |
+| --- | --- |
+| `focus()` | 聚焦第一个可用的输入、文本域或动作按钮。 |
+| `blur()` | 让当前聚焦的子控件失焦。 |
+
+### 类型
 
 ```ts
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import type { MotionFormProps, MotionFormVariant } from '@talex-touch/tuffex/motion-form'
 
 type MotionFormValue = string | number | boolean | (string | number)[] | FileUploaderFile[]
+type MotionFormOption = TxSelectOption // { value, label, disabled?, icon?, description? }
 // FileUploaderFile: { id, name, size, type, file: File }
 // MOTION_FORM_VARIANTS 导出完整只读变体元组。
 ```
 
-模块导出 `MotionFormProps`、`MotionFormEmits`、`MotionFormSlots`、`MotionFormLabels`、`MotionFormStatus`、`MotionFormVariant`、`MotionFormOption`、`MotionFormValue` 与 `TxMotionFormInstance`。下文插槽作用域也通过 Vue `defineSlots` 声明类型。
+#### MotionFormVariant
 
-| 原始 ID | `variant` | 模型 | 触发与独立效果 |
+| 原始 ID | `variant` | 模型 | 效果 |
 | --- | --- | --- | --- |
-| `frm1` | `floating-label-input` | `string` 或 `number` | 聚焦/非空时标签上移 24px 并缩放到 0.85。 |
-| `frm2` | `input-focus-glow` | `string` 或 `number` | 聚焦扩大光环与光晕，失焦收回。 |
-| `frm3` | `password-toggle` | `string` | 显示按钮切换输入类型，眼睛旋转/缩放使用弹簧，不修改模型。 |
-| `frm4` | `search-expand` | `string` | 聚焦时在可用宽度内从 160px 扩展到 240px，搜索图标位移。 |
-| `frm5` | `checkbox-draw` | `boolean` | 选择复选框后 SVG 勾选路径在 200ms 内绘制，标记缩放到 1.15。 |
-| `frm6` | `radio-scale` | `string` 或 `number` | 从选项中选择一个值，中心圆点复用源实现 500/25 弹簧。 |
-| `frm7` | `error-shake` | `string` 或 `number` | 错误/状态/key 触发 500ms 的 −10、10、−8、8、−4、4、0px 轨迹。 |
-| `frm8` | `success-check` | `string` 或 `number` | 请求调用方校验，成功状态弹簧显示并在 300ms 内绘出勾选。 |
-| `frm9` | `select-dropdown` | `string` 或 `number` | 既有 Select 根据锚点方向以 0.95 缩放、位移与模糊/淡入展开。 |
-| `frm10` | `multi-select-chips` | `(string \| number)[]` | 已选标签从 scale 0 弹簧进入/退出，原生移除按钮更新数组。 |
-| `frm11` | `textarea-auto-grow` | `string` | 实际滚动高度决定有上限的弹簧高度动画。 |
-| `frm12` | `otp-input` | `string` | 四个数字框自动前进、分发粘贴内容，并以弹簧突出聚焦。 |
-| `frm13` | `file-upload-dropzone` | `FileUploaderFile[]` | 真实选择/拖放；拖入时边框脉冲，上传箭头抬升。 |
-| `frm14` | `range-slider` | `number` | 既有 Slider 处理指针/键盘、拇指弹簧与浮动实际值提示。 |
-| `frm15` | `form-submit-button` | 可选 `MotionFormValue` | 调用方驱动 default/loading/success/error，变换文字、转圈与绘制勾选。 |
+| `frm1` | `floating-label-input` | `string` 或 `number` | 聚焦或有值时标签上浮缩小。 |
+| `frm2` | `input-focus-glow` | `string` 或 `number` | 聚焦时扩散光环，失焦收回。 |
+| `frm3` | `password-toggle` | `string` | 显示按钮切换明文，眼睛图标旋转；不改值。 |
+| `frm4` | `search-expand` | `string` | 聚焦时在可用宽度内展开，图标位移。 |
+| `frm5` | `checkbox-draw` | `boolean` | 勾选时绘出勾并轻微放大。 |
+| `frm6` | `radio-scale` | `string` 或 `number` | 单选，中心圆点弹性缩放。 |
+| `frm7` | `error-shake` | `string` 或 `number` | `error`、错误状态或 `validationKey` 变化时震动。 |
+| `frm8` | `success-check` | `string` 或 `number` | 请求校验；成功状态弹出并绘出勾。 |
+| `frm9` | `select-dropdown` | `string` 或 `number` | Select 按锚点方向缩放、位移并淡入。 |
+| `frm10` | `multi-select-chips` | `(string \| number)[]` | 已选标签弹性进出，移除按钮更新数组。 |
+| `frm11` | `textarea-auto-grow` | `string` | 按实际滚动高度弹性增高，有上限。 |
+| `frm12` | `otp-input` | `string` | 四格数字自动前进，粘贴内容自动分发。 |
+| `frm13` | `file-upload-dropzone` | `FileUploaderFile[]` | 选择或拖放文件；拖入时边框脉动、箭头上抬。 |
+| `frm14` | `range-slider` | `number` | Slider 处理指针与键盘，拇指弹性并浮动显示数值。 |
+| `frm15` | `form-submit-button` | 可选 `MotionFormValue` | 按调用方状态切换文字、转圈与勾。 |
 
-OTP 字符串最多四位数字。本地编辑时可以保留中间空框；真正从外部传入的新字符串会替换全部四框。支持粘贴/自动填充、左右方向键、Home/End、Backspace 与 Delete。只有四个框都包含数字时才触发 `otpComplete`；编辑完整验证码后可再次触发。
+#### MotionFormLabels
 
-### 文案
-
-默认值导出为 `MOTION_FORM_DEFAULT_LABELS`，`labels` 支持局部覆盖。
+默认值导出为 `MOTION_FORM_DEFAULT_LABELS`，`labels` 可局部覆盖。
 
 | 键 | 默认值/类型 |
 | --- | --- |
@@ -145,83 +174,29 @@ OTP 字符串最多四位数字。本地编辑时可以保留中间空框；真�
 | `removeOption` | `(label: string) => string`；默认 `Remove <label>` |
 | `removeFile` | `(name: string) => string`；默认 `Remove <name>` |
 
-### 事件
-
-| 事件 | 参数 | 含义 |
-| --- | --- | --- |
-| `update:modelValue` | `MotionFormValue` | 用户请求新的受控值。 |
-| `change` | `MotionFormValue` | 同一次有效编辑/选择。 |
-| `update:passwordVisible` | `boolean` | 用户改变密码显示状态。 |
-| `focus`, `blur` | `FocusEvent` | 进入/离开组件焦点边界，不是每次内部焦点移动。 |
-| `search` | `string` | search-expand 当前文本变化，不发起网络请求。 |
-| `validate` | `MotionFormValue` | 请求调用方校验当前值。 |
-| `submit` | `[value: MotionFormValue \| undefined, event: MouseEvent]` | 请求调用方执行操作，不自行修改状态。 |
-| `otpComplete` | `string` | 四个 OTP 框都已包含数字。 |
-| `filesSelected` | `FileUploaderFile[]` | 本次新增且已被接受的文件，不是完整累计模型，更不是上传完成。 |
-| `fileRemove` | `{ id: string, value: FileUploaderFile[] }` | 移除的文件 ID 与新的受控列表。 |
-
-### 插槽
-
-| 插槽 | 作用域 | 用途 |
-| --- | --- | --- |
-| `label` | 无 | 可见字段标签，以稳定 ID 关联控件。 |
-| `prefix`, `suffix` | 无 | 输入前后缀；覆盖 suffix 会替换默认密码显示按钮。 |
-| `option` | `{ option, selected }` | 单选/下拉选项内容。 |
-| `chip` | `{ option }` | 标签文案，内建移除按钮仍然可用。 |
-| `file` | `{ file, remove: () => void }` | 文件行内容，内建移除按钮仍然可用。 |
-| `submit` | `{ status: MotionFormStatus, label: string }` | 与状态图标并排的提交标签/内容。 |
-| `status` | `{ status, error, value }` | polite、atomic 的实时消息区域内容。 |
-
-### 暴露方法
-
-| 方法 | 行为 |
-| --- | --- |
-| `focus()` | 聚焦第一个可用输入、文本域或动作控件。 |
-| `blur()` | 让当前聚焦的子控件失焦。 |
-
 ### CSS 变量
 
 | 变量 | `md` 默认值 | 用途 |
 | --- | --- | --- |
-| `--tx-mf-height` | `36px` | 输入/动作基础高度，尺寸类设置为 26/30/36/42px。 |
-| `--tx-mf-choice` | `22px` | 复选/单选标记尺寸，尺寸类设置为 16/18/22/24px。 |
-| `--tx-mf-radius` | `12px` | 字段圆角，尺寸类设置为 8/10/12/12px。 |
+| `--tx-mf-height` | `36px` | 输入与动作高度；各尺寸为 26/30/36/42px。 |
+| `--tx-mf-choice` | `22px` | 复选与单选标记尺寸；各尺寸为 16/18/22/24px。 |
+| `--tx-mf-radius` | `12px` | 字段圆角；各尺寸为 8/10/12/12px。 |
 
-主题颜色使用既有 `--tx-color-*`、`--tx-text-color-*`、`--tx-bg-color` 与 `--tx-border-color-*` token。动效时长/曲线变量由共享弹簧 resolver 内部生成，不是第二套公开动画 API。
+颜色来自 `--tx-color-*`、`--tx-text-color-*`、`--tx-bg-color` 与 `--tx-border-color-*`；动效变量由内部生成，不是公开 API。
 
 ## 概述
 
-- Input、Select、Checkbox、Radio/RadioGroup、Textarea、FileUploader 与 Slider 继续负责各自编辑、选项、拖放与键盘语义。此组件添加独立动效与受控类型事件，不引入第二套基础控件。
-- 标签与控件相邻，不用 label 包裹 Select。Vue `useId` 的稳定标识连接标签、辅助文案与 OTP。密码按钮是具有名称与按下状态的原生按钮；标签/文件移除可通过键盘操作。
-- 状态与错误保持在 `role="status" aria-live="polite"` 区域。错误不是定时闪烁，重播动效不会重置输入焦点。
-- 共享 `useMotionActivity` 区分 `present`（已挂载、与视口相交且文档可见）与动效 `active`；后者额外遵守 `motion` 开关与减少动态效果偏好。向 Slider 传入 `active=present`，在不可见/KeepAlive 失活时暂停其 observer、全局监听与持续动效，不禁用控件、不改变业务值；装饰动效仍按共享动效 `active` 控制。因此减少动态效果不会关闭原生控件的布局测量或输入处理。文字使用 TxTextMorph，曲线来自既有 liquid spring resolver，文本域 WAAPI 在失活/卸载时取消。不使用业务定时器。
+- 编辑、选项、拖放与键盘语义由 Input、Select、Checkbox、Radio、Textarea、FileUploader 与 Slider 负责；本组件只添加动效与受控事件。
+- 标签与控件相邻，`useId` 关联标签、辅助文案与 OTP；密码按钮是带 `aria-pressed` 的原生按钮。
+- 状态与错误显示在 `role="status" aria-live="polite"` 区域；重播动效不重置焦点。
+- OTP 支持粘贴、自动填充、←/→、Home/End、Backspace 与 Delete；外部传入的新值替换全部四格。
+- 标签变体每次添加一个选项，已选项不能重复添加。
+- 不可见或 KeepAlive 失活时暂停动效与监听；减少动态效果只关闭装饰动效，不影响输入与测量。
 
 ## 技术实现
 
-### 来源映射
-
-固定上游：[Amicro 提交 43c29ce9cdd16459e3eab4992381b8d35b38776a](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。Vue 移植替换框架/运行时，组合真实既有控件，增加受控结果、本地化文案与生命周期/无障碍处理。
-
-| 目录条目 | `src/components/forms/AnimatedFormElement.tsx` 实现 |
-| --- | --- |
-| `src/data/formElements.ts:29-35` / `frm1` | `52-79` 浮动标签，400/25 弹簧 |
-| `36-42` / `frm2` | `81-96` 聚焦光晕 |
-| `43-49` / `frm3` | `98-121` 密码显示/眼睛变换 |
-| `50-56` / `frm4` | `123-141` 搜索宽度，400/28 弹簧 |
-| `57-63` / `frm5` | `143-182` 复选路径与缩放 |
-| `64-70` / `frm6` | `184-210` 单选中心圆点，500/25 弹簧 |
-| `71-77` / `frm7` | `212-235` 错误震动轨迹 |
-| `78-84` / `frm8` | `237-275` 成功勾选缩放/路径 |
-| `85-91` / `frm9` | `277-324` 下拉缩放/位移/淡入 |
-| `92-98` / `frm10` | `326-355` 可移除标签缩放/淡入 |
-| `99-105` / `frm11` | `357-374` 实际滚动高度驱动文本域 |
-| `106-112` / `frm12` | `375-401` 四框 OTP 与焦点前进 |
-| `113-119` / `frm13` | `403-415` 拖放区域/上传箭头视觉 |
-| `120-126` / `frm14` | `417-432` 真实范围值/提示 |
-| `127-133` / `frm15` | `434-461` 提交/加载/成功视觉 |
-
-已检查固定快照中的 `src/App.tsx`：不存在表单分支或表单 import。表单行为来自上述实现，不猜测 App 中不存在的 inline 变体。上游定时清除错误与假提交成功（`31-46`）已明确替换为调用方维护的 `error` 与 `status`；原来的视觉拖放区连接到真实 FileUploader 选择。
-
-本地源码：`packages/tuffex/packages/components/src/motion-form/src/TxMotionForm.vue` 与 `src/types.ts`；演示：`apps/nexus/app/components/content/demos/MotionFormDemo.vue`。构建/类型检查、真实浏览器遍历与生命周期验收由集成负责人执行；本页不宣称尚未执行的验证。
+- 文字过渡用 `TxTextMorph`，曲线来自共享的 liquid spring resolver；上游的定时清除错误与模拟提交成功改为调用方维护的 `error` 与 `status`。
+- 上游：[Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a) 的 `src/components/forms/AnimatedFormElement.tsx`，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+- 源码：`packages/tuffex/packages/components/src/motion-form/`。
 
 <TuffDocSourceLink />

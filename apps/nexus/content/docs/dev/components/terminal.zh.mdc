@@ -1,6 +1,6 @@
 ---
 title: Terminal 终端显示
-description: 支持 ANSI 和 Unicode、交互输入、只读日志、宿主主题和自动尺寸适配的终端显示组件
+description: 显示 ANSI 与 Unicode 输出的终端组件
 category: Advanced
 status: beta
 since: 0.6.3
@@ -23,12 +23,8 @@ import '@talex-touch/tuffex/terminal/style.css'
 
 ## 用法
 
-`TxTerminal` 负责显示，数据来源由宿主提供。挂载组件不会创建 shell、启动进程或申请 Electron 权限。
-
 ### 交互显示
-
-演示显示 ANSI 颜色和中文，捕获键盘数据，并改变容器尺寸。网页没有连接进程，也没有模拟 shell 或自动回显输入。
-
+`ready` 返回实例，`data` 派发键盘输入；输入不会自动回显。
 :::TuffDemoWrapper{demo="TerminalTerminalDemo" code-lang="vue"}
 ---
 code: |
@@ -52,9 +48,7 @@ code: |
 :::
 
 ### 只读日志
-
-可以追加记录、原地修改首行、切换历史或清空显示。暂停由宿主控制：继续保留收到的记录，但不更新传入组件的 `lines`。
-
+暂停由宿主实现：继续收集记录，但不更新传给组件的 `lines`。
 :::TuffDemoWrapper{demo="TerminalLogsDemo" code-lang="vue"}
 ---
 code: |
@@ -62,20 +56,13 @@ code: |
   import { ref } from 'vue'
 
   const lines = ref(['\x1B[32m[info]\x1B[0m 中文日志 ✓'])
-  const autoScroll = ref(true)
-  function append() {
-    lines.value.push('[info] 下一条记录')
-  }
-  function clear() {
-    lines.value.length = 0
-  }
   </script>
 
   <template>
-    <TxButton @click="append">追加</TxButton>
-    <TxButton @click="clear">清空</TxButton>
+    <TxButton @click="lines.push('[info] 下一条记录')">追加</TxButton>
+    <TxButton @click="lines.length = 0">清空</TxButton>
     <div style="height: 224px">
-      <TxTerminal read-only :lines="lines" :auto-scroll="autoScroll" />
+      <TxTerminal read-only :lines="lines" />
     </div>
   </template>
 ---
@@ -83,12 +70,11 @@ code: |
 
 ### 最佳实践
 
-- 声明式日志使用 `lines`，终端流使用 `write()` / `writeln()`。替换 `lines` 会重置显示，也会移除此前通过方法写入的内容。
-- 为容器设置明确高度。未指定 `cols` / `rows` 时，组件按内容区尺寸适配；显式行列分别覆盖对应轴的自动适配。
-- 日志保持 `readOnly`。只读模式阻止输入事件和自动聚焦，保留选择与复制。仅显示日志时不要创建 PTY（伪终端）。
-- 处理写入 Promise 的拒绝。卸载或初始化失败会拒绝全部待处理写入，不会让调用方一直等待。
-- 特权执行只通过可信宿主 SDK 发起。由用户明确操作，分开传入 `command` 和 `args`，切换会话或卸载时清理。
-- 通过 `labels.ariaLabel` 提供本地化名称。需要调整宿主配色时，只覆盖对应的 `theme` 颜色。
+- 声明式日志用 `lines`，流式输出用 `write()` / `writeln()`；替换 `lines` 会清掉方法写入的内容。
+- 为容器设置明确高度；显式的 `cols` / `rows` 只覆盖对应轴的自动适配。
+- 日志保持 `readOnly`，不要为只显示日志而创建 PTY（伪终端）。
+- 处理写入 Promise 的 reject：卸载或初始化失败会拒绝全部待处理写入。
+- 特权执行只经可信宿主 SDK：由用户明确触发，`command` 与 `args` 分开传，切换会话或卸载时清理。
 
 ## API 参考
 
@@ -96,44 +82,44 @@ code: |
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `readOnly` | `boolean` | `false` | 禁用 stdin 和 `data` 事件；不执行自动聚焦或 `focus()`。 |
-| `autoFocus` | `boolean` | `false` | 初始化后聚焦交互终端；不会聚焦只读日志。 |
-| `autoScroll` | `boolean` | `true` | 解析输出后滚到底部。关闭时恢复此前的视口位置，也关闭输入触发的滚动。 |
-| `lines` | `readonly (string \| Uint8Array)[]` | `undefined` | 日志记录，每条追加 CRLF。已有前缀不变时只追加新记录；修改、缩短或清空时重置并重放。 |
-| `cols` | `number` | 自动适配；初始 `80` | 显式列数；未指定时由容器计算。 |
-| `rows` | `number` | 自动适配；初始 `24` | 显式行数；未指定时由容器计算。 |
-| `fontSize` | `number` | `13` | xterm 字号，单位为像素。变化后重新适配。 |
-| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | 终端字体栈。变化后重新适配。 |
-| `theme` | `ITheme` | 宿主令牌 | 部分 xterm 主题，指定字段覆盖宿主配色。仅导入类型。 |
-| `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | 终端区域和 xterm 输入 textarea 的无障碍名称。 |
+| `readOnly` | `boolean` | `false` | 禁用输入与 `data` 事件，不自动聚焦；仍可选择与复制。 |
+| `autoFocus` | `boolean` | `false` | 初始化后聚焦交互终端；只读时无效。 |
+| `autoScroll` | `boolean` | `true` | 输出后滚到底部；关闭时保持视口位置，输入也不触发滚动。 |
+| `lines` | `readonly (string \| Uint8Array)[]` | `undefined` | 日志记录，每条追加 CRLF；前缀不变时只追加，否则重置后重放。 |
+| `cols` | `number` | 自动适配；初始 `80` | 固定列数；缺省时按容器计算。 |
+| `rows` | `number` | 自动适配；初始 `24` | 固定行数；缺省时按容器计算。 |
+| `fontSize` | `number` | `13` | 字号（px），变化后重新适配。 |
+| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | 字体栈，变化后重新适配。 |
+| `theme` | `ITheme` | 宿主令牌 | 部分 xterm 主题，只覆盖指定的颜色。 |
+| `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | 终端区域与输入 textarea 的无障碍名称。 |
 
 ### 事件
 
 | 事件 | 参数 | 说明 |
 | --- | --- | --- |
-| `data` | `string` | 交互键盘、粘贴和控制序列输入。原样转交所属会话；只读模式不发送。 |
-| `resize` | `{ cols: number; rows: number }` | 初始尺寸和后续行列变化。存在 PTY 时转交所属会话。 |
-| `ready` | `TerminalInstance` | 客户端显示已初始化。组件 ref 也暴露同一组方法。 |
+| `data` | `string` | 键盘、粘贴与控制序列输入，原样转交会话；只读时不派发。 |
+| `resize` | `{ cols: number; rows: number }` | 初始尺寸与之后的行列变化；有 PTY 时转交会话。 |
+| `ready` | `TerminalInstance` | 显示初始化完成；组件 ref 暴露同一组方法。 |
 
 ### 暴露方法
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
-| `write(data)` | `(string \| Uint8Array) => Promise<void>` | 初始化前后均可排队写入完整数据，解析完成后 resolve，不追加换行。 |
-| `writeln(data)` | `(string \| Uint8Array) => Promise<void>` | 使用同一队列，由 xterm 追加 CRLF。 |
-| `clear()` | `() => void` | 排队执行 xterm clear：移除滚动历史，保留当前提示行。 |
-| `reset()` | `() => void` | 排队重置缓冲区和解析器，移除之前的内容与终端模式。 |
-| `focus()` | `() => void` | 仅聚焦已初始化的交互终端。 |
-| `fit()` | `() => TerminalSize \| null` | 适配未固定的轴并返回尺寸。隐藏容器保留最近有效尺寸；实例不可用时返回 null。 |
-| `getSize()` | `() => TerminalSize \| null` | 返回当前行列；初始化前或释放后返回 null。 |
+| `write(data)` | `(string \| Uint8Array) => Promise<void>` | 排队写入原始数据，解析后 resolve；可在初始化前调用，不加换行。 |
+| `writeln(data)` | `(string \| Uint8Array) => Promise<void>` | 同一队列，追加 CRLF。 |
+| `clear()` | `() => void` | 排队清除滚动历史，保留当前提示行。 |
+| `reset()` | `() => void` | 排队重置缓冲区与解析器，清除内容与终端模式。 |
+| `focus()` | `() => void` | 聚焦已初始化的交互终端。 |
+| `fit()` | `() => TerminalSize \| null` | 适配未固定的轴并返回尺寸；隐藏时保留上次尺寸，不可用时为 null。 |
+| `getSize()` | `() => TerminalSize \| null` | 当前行列；初始化前或释放后返回 null。 |
 
 ### 类型
 
-`/terminal` 导出 `TerminalProps`、`TerminalEmits`、`TerminalInstance`、`TerminalSize`、`TerminalData`、`TerminalLabels`、`TxTerminalInstance` 和 `TERMINAL_DEFAULT_LABELS`。组件也从 `/pro` 和根入口导出，`Terminal` 为可安装包装。
+`/terminal` 导出 `TerminalProps`、`TerminalEmits`、`TerminalInstance`、`TerminalSize`、`TerminalData`、`TerminalLabels`、`TxTerminalInstance` 与 `TERMINAL_DEFAULT_LABELS`。组件也从 `/pro` 与根入口导出，`Terminal` 是可安装包装。
 
 ## Electron PTY 接入
 
-此示例面向具备 TuffTransport 的可信 Electron 渲染器，不能直接放进普通网页执行。主进程持有 PTY，检查 `system.shell` 权限并隔离调用方与会话。`createTerminalSdk` 先订阅再创建，覆盖立即输出和快速退出。
+仅适用于具备 TuffTransport 的可信 Electron 渲染器。主进程持有 PTY 并检查 `system.shell` 权限；`createTerminalSdk` 先订阅再创建，`signal` 中止时自动关闭迟到的会话。
 
 ```vue
 <script setup lang="ts">
@@ -153,58 +139,38 @@ function fail(reason: unknown) {
   status.value = reason instanceof Error ? reason.message : String(reason)
 }
 function stop() {
-  const previous = session
-  session = null
   active?.abort()
   active = null
-  void previous?.close().catch(fail)
+  void session?.close().catch(fail)
+  session = null
 }
 async function start() {
   stop()
-  const controller = new AbortController()
-  active = controller
+  const controller = (active = new AbortController())
   display.value?.reset()
-  status.value = ''
+  const size = display.value?.getSize()
   try {
-    const size = display.value?.getSize()
-    const handle = await sdk.create({
-      command: 'node',
-      args: ['-i'],
-      cwd: props.directory,
-      cols: size?.cols,
-      rows: size?.rows,
-    }, {
+    session = await sdk.create({ command: 'node', args: ['-i'], cwd: props.directory, cols: size?.cols, rows: size?.rows }, {
       signal: controller.signal,
       onData(data) {
         if (active === controller)
           void display.value?.write(data).catch(fail)
       },
       onExit(exit) {
-        if (active !== controller) return
+        if (active !== controller)
+          return
         session = null
-        active = null
         status.value = `exit=${exit.exitCode}, signal=${exit.signal ?? 'none'}`
       },
     })
-    if (active !== controller) {
-      await handle.close()
-      return
-    }
-    session = handle
   }
   catch (reason) {
-    if (active === controller) {
-      active = null
+    if (active === controller)
       fail(reason)
-    }
   }
 }
-function input(data: string) {
-  void session?.write(data).catch(fail)
-}
-function resize(size: TerminalSize) {
-  void session?.resize(size.cols, size.rows).catch(fail)
-}
+const input = (data: string) => void session?.write(data).catch(fail)
+const resize = (size: TerminalSize) => void session?.resize(size.cols, size.rows).catch(fail)
 onBeforeUnmount(stop)
 </script>
 
@@ -218,36 +184,30 @@ onBeforeUnmount(stop)
 </template>
 ```
 
-仅点击启动按钮后执行命令。示例需要已安装的 Node 可执行文件和有效的 `directory`，启动失败会显示错误。Abort 取消待创建会话并关闭迟到结果。关闭或自然退出时，SDK 释放输出和退出订阅；显示组件由宿主单独释放。
-
 ## 概述
 
-- xterm 与 fit addon 仅在 `onMounted` 中动态加载。服务端导入和渲染不访问浏览器全局对象，也不初始化终端。
-- 输出、reset 和 clear 共用有序队列，组件不按块截断正文。二进制数据按 UTF-8 解码。
-- 深度监听 `lines`，支持响应式数组 push、下标修改、替换和清空。记录变化时复制二进制记录；原地修改 Uint8Array 字节后，需要触发一次响应式记录更新。
-- 只读模式同时在 xterm 和事件出口阻止输入，关闭光标闪烁，不主动聚焦。从交互模式切换为只读时，输入区失焦。
-- ResizeObserver 将适配合并到一个动画帧。字体加载和字体设置变化后重新适配，隐藏容器保留此前尺寸。
-- 主题颜色读取继承的 TuffEx 令牌。共用主题观察器跟随文档 class、theme、contrast 变化，以及系统颜色和对比度偏好。
-- 卸载时释放 xterm、addon、data/resize 订阅、ResizeObserver、共用主题订阅和待执行的适配回调。待处理写入 reject，迟到的动态导入不能重建终端。
+- 只负责显示：挂载不会创建 shell、启动进程或申请 Electron 权限，组件也不导入 transport 或 Electron。
+- xterm 与 fit addon 只在 `onMounted` 中动态加载；服务端渲染不访问浏览器全局对象。
+- 输出、`reset()` 与 `clear()` 共用一个有序队列；二进制数据按 UTF-8 解码。
+- 深度监听 `lines`，支持 push、下标修改、替换与清空；原地改写 `Uint8Array` 字节后需触发一次响应式更新。
+- 只读模式在 xterm 与事件出口双重阻止输入并关闭光标闪烁；从交互切到只读时输入区失焦。
+- 卸载时释放 xterm、订阅与观察器；待处理写入被 reject，迟到的动态导入不会重建终端。
 
 ## 技术实现
 
-- 显示引擎：`@xterm/xterm ^5.5.0`；尺寸适配：`@xterm/addon-fit ^0.10.0`，许可证均为 MIT。引擎样式已包含在 `terminal/style.css` 中。
-- 源码：`packages/tuffex/packages/components/src/terminal/src/TxTerminal.vue`；公共类型：`terminal/src/types.ts`；安装入口：`terminal/index.ts`。
-- 宿主主题观察器：`packages/tuffex/packages/components/src/stat-card/src/theme-change.ts`。
-- 组件测试：`packages/tuffex/packages/components/src/terminal/__tests__/terminal.test.ts`。真实运行验收由本需求的 Verifier 单独记录，本页不声称已经完成浏览器或 Electron 验证。
-- Electron 执行独立于显示：`packages/utils/transport/sdk/domains/terminal.ts` 和 `apps/core-app/src/main/modules/terminal/` 持有 SDK 与会话行为，组件不导入 transport 或 Electron。
+- 基于 `@xterm/xterm ^5.5.0` 与 `@xterm/addon-fit ^0.10.0`（均为 MIT），样式已含在 `terminal/style.css`。
+- 颜色取自继承的 TuffEx 令牌并跟随主题与对比度变化；`ResizeObserver` 把适配合并到一帧。
+- 源码：`packages/tuffex/packages/components/src/terminal/`；进程会话见 `packages/utils/transport/sdk/domains/terminal.ts`。
 
 <TuffDocSourceLink />
 
 ## 使用场景
 
-- 普通网页和 Electron 日志查看器，由宿主控制暂停和历史记录。
-- 交互式 Electron PTY，由可信宿主持有命令执行和生命周期。
-- 无须进程权限的 ANSI / Unicode 输出预览。
+- 网页或 Electron 日志查看器，暂停与历史由宿主控制。
+- 由可信宿主持有命令执行的交互式 Electron PTY。
+- 无需进程权限的 ANSI / Unicode 输出预览。
 
 ## 无障碍
 
-- 通过 `labels.ariaLabel` 提供本地化名称，同时命名终端区域和输入 textarea。
-- 已启用 xterm 屏幕阅读器支持。只读输出仍可选择和复制。
-- 除非用户明确打开交互终端，否则保持 `autoFocus` 关闭。日志更新不能改变焦点。
+- 已启用 xterm 屏幕阅读器支持；只读输出仍可选择与复制。
+- 除非用户明确打开交互终端，否则不开启 `autoFocus`；日志更新不移动焦点。

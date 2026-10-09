@@ -1,6 +1,6 @@
 ---
 title: MarkdownEditor
-description: WYSIWYG/source/preview Markdown editor with sanitization and toolbar actions.
+description: A Markdown editor with WYSIWYG, source, and preview modes.
 category: Advanced
 status: beta
 since: 0.3.9
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### MarkdownEditor
+### Basic
+`defaultMode` sets the starting mode; `toolbarActions` picks the toolbar buttons and their order.
 ::::TuffDemoWrapper{demo="MarkdownEditorMarkdownEditorDemo" code-lang="vue"}
 ---
 code: |
@@ -33,10 +34,11 @@ code: |
 
 ### Best Practices
 
-- Keep `sanitize=true` for user-authored or provider-authored content.
-- Use controlled `mode` when the host stores the current editor tab in route/query state.
-- Restrict `toolbarActions` for narrow editors such as release notes or comments.
-- Provide `linkPrompt` instead of letting the component own product-specific URL dialogs.
+- Keep `sanitize=true` for content written by users or providers.
+- Use a controlled `mode` when the route or query stores it.
+- Restrict `toolbarActions` in narrow editors such as release notes or comments.
+- Collect URLs with your own dialog through `linkPrompt`; don't make the component own product dialogs.
+- If the host doesn't scan tuffex sources, add `MARKDOWN_EDITOR_ICON_CLASSES` from `src/toolbar-icons.ts` to the UnoCSS safelist.
 
 ## API Reference
 
@@ -44,71 +46,67 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `string` | `''` | Markdown source. |
-| `placeholder` | `string` | `''` | Placeholder shown in editable modes. |
-| `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | Controlled editor mode. |
-| `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | Initial internal mode. |
-| `disabled` | `boolean` | `false` | Disable toolbar and fields. |
-| `readonly` | `boolean` | `false` | Prevent edits while allowing reading. |
-| `sanitize` | `boolean` | `true` | Sanitize rendered HTML with DOMPurify. |
-| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | Editor theme. |
-| `toolbar` | `boolean` | `true` | Show toolbar and mode switcher. |
-| `toolbarActions` | `MarkdownEditorToolbarActionKey[]` | built-in set | Ordered toolbar actions. |
-| `minHeight` | `string \| number` | `220` | Editor body minimum height. |
-| `maxHeight` | `string \| number` | - | Editor body maximum height. |
-| `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | Async URL provider for link action. |
-
-### Toolbar Actions
-
-`heading`, `bold`, `italic`, `strike`, `quote`, `code`, `bulletList`, `orderedList`, `link`, `undo`, `redo`.
-
-### Slots
-
-No public slots are exposed; toolbar buttons, editing surfaces, and preview output are internal.
+| `modelValue` / `v-model` | `string` | `''` | The Markdown source. |
+| `placeholder` | `string` | `''` | Placeholder in the editable modes. |
+| `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | Controlled mode. |
+| `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | Starting mode when uncontrolled. |
+| `disabled` | `boolean` | `false` | Disables the toolbar, mode switcher, and editing surface. |
+| `readonly` | `boolean` | `false` | Blocks editing; reading and mode switching still work. |
+| `sanitize` | `boolean` | `true` | Sanitizes rendered HTML with DOMPurify; turn off only for trusted content. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | Theme; `auto` follows the page. |
+| `toolbar` | `boolean` | `true` | Shows the toolbar and mode switcher. |
+| `toolbarActions` | `MarkdownEditorToolbarActionKey[]` | built-in set | Toolbar buttons, in order. |
+| `minHeight` | `string \| number` | `220` | Minimum height of the editing area. |
+| `maxHeight` | `string \| number` | - | Maximum height of the editing area. |
+| `ariaLabel` | `string` | `'Markdown editor'` | Accessible name shared by both editing surfaces. |
+| `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | Supplies the URL for the link action; without it, link does nothing. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
-| `update:modelValue` | `(value: string)` | v-model update. |
-| `change` | `(value: string)` | Markdown value changed. |
-| `update:mode` | `(mode: MarkdownEditorMode)` | Mode update for controlled use. |
-| `mode-change` | `(mode: MarkdownEditorMode)` | Mode changed. |
-| `focus` | `()` | Editable surface or source field focused. |
-| `blur` | `()` | Editable surface or source field blurred. |
+| `update:modelValue` | `(value: string)` | Fires when the content changes. |
+| `change` | `(value: string)` | Fires together with `update:modelValue`. |
+| `update:mode` | `(mode: MarkdownEditorMode)` | Fires on a mode switch, for `v-model:mode`. |
+| `mode-change` | `(mode: MarkdownEditorMode)` | Fires together with `update:mode`. |
+| `focus` | `()` | Fires when the editing surface gains focus. |
+| `blur` | `()` | Fires when the editing surface loses focus. |
 
 ### Exposed Methods
 
 | Method | Description |
 |------|-------------|
-| `focus()` | Focus the active editable surface. |
-| `blur()` | Blur the active editable surface. |
-| `setMode(mode)` | Change editor mode. |
-| `getMode()` | Return current mode. |
-| `getValue()` | Return current Markdown source. |
-| `setValue(value)` | Set Markdown, emit updates, and refresh rendered HTML. |
+| `focus()` | Focuses the current mode's editing surface. |
+| `blur()` | Blurs the current editing surface. |
+| `setMode(mode)` | Switches the mode. |
+| `getMode()` | Returns the current mode. |
+| `getValue()` | Returns the current Markdown. |
+| `setValue(value)` | Writes Markdown, emits updates, and re-renders. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type MarkdownEditorMode = 'wysiwyg' | 'source' | 'preview'
+
+  type MarkdownEditorToolbarActionKey =
+    | 'heading' | 'bold' | 'italic' | 'strike' | 'quote' | 'code'
+    | 'bulletList' | 'orderedList' | 'link' | 'undo' | 'redo'
+---
+:::
 
 ## Overview
 
-- `mode` is controlled when provided; otherwise `defaultMode` initializes internal mode.
-- `update:mode` and `mode-change` emit whenever the user changes modes.
-- `sanitize` defaults to `true`; disable it only for already trusted content.
-- Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
-- Toolbar actions are shared across modes, but preview mode disables editing actions.
-- Toolbar and mode buttons draw Carbon icons (`i-carbon-*`) by class name, so the host's UnoCSS has to generate them. `src/toolbar-icons.ts` lists them as `MARKDOWN_EDITOR_ICON_CLASSES` for a host that does not scan tuffex sources to safelist, the way Tuff does.
-- The mode switcher is a toggle-button group: the container is `role="group"` labeled "Markdown editor mode", and each mode button reflects the active mode through `aria-pressed` (not `role="tab"`, since there are no associated tabpanels).
-- `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
+- Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds an internal mode.
+- Source mode edits Markdown directly; WYSIWYG mode serializes the DOM back to Markdown on input.
+- The toolbar is shared across modes and disabled in preview.
+- The mode switcher is a `role="group"` of toggle buttons; `aria-pressed` marks the active mode.
+- `theme="auto"` follows the class and `data-theme` on `html` and `body`, falling back to light.
 
 ## Technologies
 
-- Reviewed against `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`, `TxMarkdownEditor.vue`, `toolbar-icons.ts`, `markdown-serializer.ts`, and `markdown-editor.test.ts`.
-- Sanitization is enabled by default through DOMPurify; `sanitize=false` should remain a trusted-content escape hatch only.
-- `linkPrompt` is the extension point for product-specific URL collection, keeping dialogs outside the component contract.
-- The toolbar icons used to be Remix (`i-ri-*`). Tuff keeps `ri` out of its dependencies on purpose, so every docs demo drew fourteen grey squares; Carbon is installed by both hosts.
-
-- Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`.
-- Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`.
-- Serializer: `packages/tuffex/packages/components/src/markdown-editor/src/markdown-serializer.ts`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` verifies exports, sanitized WYSIWYG rendering, source-mode input updates, uncontrolled mode emits, the `role="group"` / `aria-pressed` mode switcher, and rich-content serialization back to Markdown.
+- Toolbar and mode buttons draw Carbon icons (`i-carbon-*`) by class name, generated by the host's UnoCSS.
+- Source: `packages/tuffex/packages/components/src/markdown-editor/`.
 
 <TuffDocSourceLink />

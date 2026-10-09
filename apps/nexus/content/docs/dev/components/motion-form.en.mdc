@@ -1,6 +1,6 @@
 ---
 title: "MotionForm"
-description: "Fifteen controlled form interactions composed from existing TuffEx inputs, selection, file and range controls."
+description: "Fifteen animated form interactions built on TuffEx form controls."
 category: Advanced
 status: beta
 since: 0.6.3
@@ -11,11 +11,9 @@ verified: false
 
 ## Usage
 
-### All fifteen effects
-
-The demo renders every original form variant, with a filter for focused exploration. All values are editable, file selection uses files from your device, and validation uses the entered value. The submit example calculates a real local SHA-256 digest through Web Crypto: it neither uploads nor claims a server submission.
-
-:::TuffDemoWrapper{demo="MotionFormDemo" code-lang="vue" title="Fifteen real interactions" description="Input, choose, paste, drop, validate and calculate. Disable controls or motion to inspect the settled states."}
+### All Variants
+`validate` only requests work: the caller writes back `status` and `error`, and changing `validationKey` replays the shake.
+:::TuffDemoWrapper{demo="MotionFormDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -51,13 +49,11 @@ code: |
 
 ### Best Practices
 
-- Keep values, validation messages and business status in the caller. `validate` and `submit` request work; the component never creates a successful result or clears an error after a delay.
-- For another rejection with the same error and status, change `validationKey` to replay the shake without remounting the input or losing its focus.
-- Supply `options` for radio, dropdown and chips. Chips are a selected list plus the existing keyboard-operated single Select for adding a choice; already selected options cannot be added twice.
-- Treat `filesSelected` as a selection event, not an upload-complete event. Each item retains its real `File`; upload it through your own application service and drive `status` from that result.
-- Pass a meaningful `label` and localized `labels`. The `label` slot customizes the visible label and remains connected through `aria-labelledby`; OTP inputs additionally use the `label` prop in their individual digit names.
-- `readonly` applies to textual fields and OTP. Use `disabled` for selection, files, range, actions, or a wholly blocked form.
-- The default action uses `nativeType="button"` and emits `submit`. Choose `nativeType="submit"` only when the containing native form owns submission; do not perform the same operation from both the click request and the form's submit event.
+- Keep values, validation messages, and business status in the caller; the component never decides success or clears an error on a timer.
+- Treat `filesSelected` as a selection only: upload each `File` through your own service and drive `status` from the result.
+- Always pass a `label` and localized `labels`; OTP digit names are built from `label` too.
+- Use `readonly` only for text fields and OTP; use `disabled` for choices, files, the slider, and actions.
+- Set `nativeType="submit"` only when an enclosing native form owns submission, and don't run the same work from both the click and the form's submit.
 
 ## API Reference
 
@@ -65,72 +61,105 @@ code: |
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `variant` | `MotionFormVariant` | `'floating-label-input'` | One of the fifteen original IDs below. |
-| `modelValue` | `MotionFormValue` | unset | Controlled value; the expected shape depends on the variant. |
-| `label` | `string` | `''` | Visible/accessibility label; falls back to `labels.field`. |
-| `placeholder` | `string` | `''` | Placeholder for text/select controls. Hidden behind an empty, resting floating label. |
-| `description` | `string` | `''` | Helper text in the live message region; error/status takes precedence. |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Control height, choice size and radius. Actions map `xs` to the existing Button's `sm`. |
-| `disabled` | `boolean` | `false` | Blocks edits, selections, removal, reveal and action requests. |
-| `readonly` | `boolean` | `false` | Makes text, textarea and OTP read-only; password reveal remains available. |
-| `required` | `boolean` | `false` | Required marker and accessibility state; native text fields also receive `required`. |
-| `status` | `'default' \| 'loading' \| 'success' \| 'error'` | `'default'` | Caller-controlled operation/validation status. Loading blocks action requests. |
-| `error` | `string` | `''` | Truthy values derive error state and provide the displayed validation message. |
-| `validationKey` | `string \| number` | unset | Replays an unchanged error when the key changes. |
-| `labels` | `Partial<MotionFormLabels>` | unset | Localizes static text, digit names and removal labels. |
-| `options` | `MotionFormOption[]` | `[]` | Existing `TxSelectOption` shape: `{ value: string \| number, label: string, disabled?: boolean, icon?: string, description?: string }`. |
-| `inputType` | `'text' \| 'email' \| 'number' \| 'date'` | `'text'` | Textual control type. Password variant manages its own text/password type. |
-| `autocomplete` | `string` | unset | Native textual autocomplete. OTP instead uses `one-time-code` on the first box. |
-| `passwordVisible` | `boolean` | unset | Optional controlled reveal state, paired with `update:passwordVisible`; otherwise reveal is local. |
+| `variant` | `MotionFormVariant` | `'floating-label-input'` | One of the fifteen effects in the variant table. |
+| `modelValue` | `MotionFormValue` | unset | Controlled value; its shape depends on the variant. |
+| `label` | `string` | `''` | Visible label and accessible name; falls back to `labels.field`. |
+| `placeholder` | `string` | `''` | Text and select placeholder; a resting floating label covers it. |
+| `description` | `string` | `''` | Helper text in the message region; error and status take precedence. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, choice mark, and radius; action `xs` maps to Button `sm`. |
+| `disabled` | `boolean` | `false` | Blocks edits, selection, removal, password reveal, and action requests. |
+| `readonly` | `boolean` | `false` | Makes text, textarea, and OTP read-only; password reveal still works. |
+| `required` | `boolean` | `false` | Required marker and accessible state; native text fields also get `required`. |
+| `status` | `'default' \| 'loading' \| 'success' \| 'error'` | `'default'` | Caller-driven status; `loading` blocks action requests. |
+| `error` | `string` | `''` | When non-empty, sets the error state and shows this message. |
+| `validationKey` | `string \| number` | unset | Replays the current error when it changes. |
+| `labels` | `Partial<MotionFormLabels>` | unset | Localizes static text, digit names, and removal labels. |
+| `options` | `MotionFormOption[]` | `[]` | Choices for radio, dropdown, and chips. |
+| `inputType` | `'text' \| 'email' \| 'number' \| 'date'` | `'text'` | Text control type; the password variant switches text/password itself. |
+| `autocomplete` | `string` | unset | Native autocomplete; the first OTP box always uses `one-time-code`. |
+| `passwordVisible` | `boolean` | unset | Controlled reveal state, paired with `update:passwordVisible`. |
 | `rows` | `number` | `2` | Minimum textarea rows. |
-| `maxRows` | `number` | `8` | Maximum auto-grow rows, after which the field scrolls. Never below `rows`. |
-| `maxLength` | `number` | unset | Native text/textarea length limit. OTP has a fixed four-digit contract. |
-| `accept` | `string` | `'*/*'` | Picker/drop type filtering, delegated to FileUploader. |
-| `multiple` | `boolean` | `true` | Multiple-file selection; false replaces the previous selected file. |
-| `maxFiles` | `number` | `10` | Maximum selected files, delegated to FileUploader. |
+| `maxRows` | `number` | `8` | Maximum auto-grow rows before scrolling; never below `rows`. |
+| `maxLength` | `number` | unset | Length limit for text and textarea; OTP is fixed at 4 digits. |
+| `accept` | `string` | `'*/*'` | File type filter for picking and dropping. |
+| `multiple` | `boolean` | `true` | Multiple files; when `false`, a new file replaces the old one. |
+| `maxFiles` | `number` | `10` | Maximum number of files. |
 | `min` | `number` | `0` | Slider minimum. |
 | `max` | `number` | `100` | Slider maximum. |
 | `step` | `number` | `1` | Slider step. |
-| `formatValue` | `(value: number) => string` | unset | Slider value/tooltip formatter. |
-| `nativeType` | `'button' \| 'submit'` | `'button'` | Submit variant's native Button type. |
-| `motion` | `boolean` | `true` | Enables motion subject to shared visibility, KeepAlive and reduced-motion gating. |
+| `formatValue` | `(value: number) => string` | unset | Formats the slider value and tooltip. |
+| `nativeType` | `'button' \| 'submit'` | `'button'` | Native type of the submit button. |
+| `motion` | `boolean` | `true` | Enables motion, still gated by visibility, KeepAlive, and reduced motion. |
 
-### Model and variants
+### Events
+
+| Event | Payload | Meaning |
+| --- | --- | --- |
+| `update:modelValue` | `MotionFormValue` | Fires on a user edit or selection. |
+| `change` | `MotionFormValue` | Fires together with `update:modelValue`. |
+| `update:passwordVisible` | `boolean` | Fires when password reveal toggles. |
+| `focus`, `blur` | `FocusEvent` | Fire when focus enters or leaves the component, not on internal moves. |
+| `search` | `string` | Fires when the search-expand text changes; sends no request. |
+| `validate` | `MotionFormValue` | Asks the caller to validate the current value. |
+| `submit` | `[value: MotionFormValue \| undefined, event: MouseEvent]` | Asks the caller to do the work; doesn't change `status`. |
+| `otpComplete` | `string` | Fires when all four boxes hold digits; can fire again after an edit. |
+| `filesSelected` | `FileUploaderFile[]` | Newly accepted files only; neither the full list nor an upload completion. |
+| `fileRemove` | `{ id: string, value: FileUploaderFile[] }` | Fires on removal with the file ID and the new list. |
+
+### Slots
+
+| Slot | Scope | Use |
+| --- | --- | --- |
+| `label` | none | Visible label, linked to the control through a stable ID. |
+| `prefix`, `suffix` | none | Input affixes; `suffix` replaces the password reveal button. |
+| `option` | `{ option, selected }` | Radio and dropdown option content. |
+| `chip` | `{ option }` | Chip label; the remove button stays. |
+| `file` | `{ file, remove: () => void }` | File row content; the remove button stays. |
+| `submit` | `{ status: MotionFormStatus, label: string }` | Submit button content, beside the state glyph. |
+| `status` | `{ status, error, value }` | Content of the live message region. |
+
+### Exposed Methods
+
+| Method | Behavior |
+| --- | --- |
+| `focus()` | Focuses the first available input, textarea, or action button. |
+| `blur()` | Blurs the focused descendant. |
+
+### Types
 
 ```ts
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import type { MotionFormProps, MotionFormVariant } from '@talex-touch/tuffex/motion-form'
 
 type MotionFormValue = string | number | boolean | (string | number)[] | FileUploaderFile[]
+type MotionFormOption = TxSelectOption // { value, label, disabled?, icon?, description? }
 // FileUploaderFile: { id, name, size, type, file: File }
 // MOTION_FORM_VARIANTS exports the full readonly variant tuple.
 ```
 
-The module exports `MotionFormProps`, `MotionFormEmits`, `MotionFormSlots`, `MotionFormLabels`, `MotionFormStatus`, `MotionFormVariant`, `MotionFormOption`, `MotionFormValue` and `TxMotionFormInstance`. Slot scopes are declared through Vue `defineSlots` as well as documented below.
+#### MotionFormVariant
 
-| Original ID | `variant` | Model | Trigger and distinct effect |
+| Original ID | `variant` | Model | Effect |
 | --- | --- | --- | --- |
-| `frm1` | `floating-label-input` | `string` or `number` | Focus/nonempty value lifts the label by 24px and scales it to 0.85. |
-| `frm2` | `input-focus-glow` | `string` or `number` | Focus expands the halo and glow; blur retracts it. |
-| `frm3` | `password-toggle` | `string` | Reveal button switches type and springs its eye rotation/scale without changing the value. |
-| `frm4` | `search-expand` | `string` | Focus expands 160px → 240px within available width; the search icon shifts. |
-| `frm5` | `checkbox-draw` | `boolean` | Checkbox selection draws its SVG path in 200ms and pops the box to 1.15. |
-| `frm6` | `radio-scale` | `string` or `number` | Options select one value; inner dot uses the source's 500/25 spring. |
-| `frm7` | `error-shake` | `string` or `number` | `error`/error status/key runs −10, 10, −8, 8, −4, 4, 0px over 500ms. |
-| `frm8` | `success-check` | `string` or `number` | Validate requests caller validation; successful status springs in a 300ms drawn check. |
-| `frm9` | `select-dropdown` | `string` or `number` | Existing Select opens with origin-aware 0.95 scale, offset and blur/fade. |
-| `frm10` | `multi-select-chips` | `(string \| number)[]` | Selected chips spring in/out at scale 0; native remove buttons update the array. |
-| `frm11` | `textarea-auto-grow` | `string` | Actual scroll height drives bounded, spring-animated field height. |
-| `frm12` | `otp-input` | `string` | Four numeric boxes auto-advance, distribute paste and spring-highlight focus. |
-| `frm13` | `file-upload-dropzone` | `FileUploaderFile[]` | Real picker/drop selection; dragging pulses the ring and lifts the upload arrow. |
-| `frm14` | `range-slider` | `number` | Existing Slider handles pointer/keyboard, thumb spring and floating value tooltip. |
-| `frm15` | `form-submit-button` | optional `MotionFormValue` | Caller-controlled default/loading/success/error morphs text, spinner and drawn check. |
+| `frm1` | `floating-label-input` | `string` or `number` | The label floats up and shrinks on focus or with a value. |
+| `frm2` | `input-focus-glow` | `string` or `number` | A halo spreads on focus and retracts on blur. |
+| `frm3` | `password-toggle` | `string` | The reveal button toggles plain text and spins the eye; the value is untouched. |
+| `frm4` | `search-expand` | `string` | Widens within the available space on focus; the icon shifts. |
+| `frm5` | `checkbox-draw` | `boolean` | Checking draws the tick and pops the box. |
+| `frm6` | `radio-scale` | `string` or `number` | Single choice; the inner dot springs in. |
+| `frm7` | `error-shake` | `string` or `number` | Shakes when `error`, the error status, or `validationKey` changes. |
+| `frm8` | `success-check` | `string` or `number` | Requests validation; success springs in a drawn check. |
+| `frm9` | `select-dropdown` | `string` or `number` | Select opens with origin-aware scale, offset, and fade. |
+| `frm10` | `multi-select-chips` | `(string \| number)[]` | Chips spring in and out; remove buttons update the array. |
+| `frm11` | `textarea-auto-grow` | `string` | Grows with its scroll height, springy and capped. |
+| `frm12` | `otp-input` | `string` | Four digit boxes auto-advance and distribute pasted text. |
+| `frm13` | `file-upload-dropzone` | `FileUploaderFile[]` | Pick or drop files; dragging pulses the ring and lifts the arrow. |
+| `frm14` | `range-slider` | `number` | Slider handles pointer and keyboard, with a springy thumb and value tooltip. |
+| `frm15` | `form-submit-button` | optional `MotionFormValue` | Morphs text, spinner, and check from the caller's status. |
 
-An OTP string contains at most four digits. Empty middle boxes can remain while editing locally; a genuinely external string replaces all four boxes. OTP accepts paste/autofill, Left/Right, Home/End, Backspace and Delete. `otpComplete` fires only when all four boxes contain digits, and may fire again for an edited complete code.
+#### MotionFormLabels
 
-### Labels
-
-All defaults are exported as `MOTION_FORM_DEFAULT_LABELS`. `labels` accepts partial overrides.
+Defaults are exported as `MOTION_FORM_DEFAULT_LABELS`; `labels` overrides any subset.
 
 | Key | Default/type |
 | --- | --- |
@@ -144,83 +173,29 @@ All defaults are exported as `MOTION_FORM_DEFAULT_LABELS`. `labels` accepts part
 | `removeOption` | `(label: string) => string`; default `Remove <label>` |
 | `removeFile` | `(name: string) => string`; default `Remove <name>` |
 
-### Events
-
-| Event | Payload | Meaning |
-| --- | --- | --- |
-| `update:modelValue` | `MotionFormValue` | User requests a new controlled value. |
-| `change` | `MotionFormValue` | Same accepted user edit/selection. |
-| `update:passwordVisible` | `boolean` | User changed the password reveal state. |
-| `focus`, `blur` | `FocusEvent` | Enter/leave the component's focus boundary, not each internal focus movement. |
-| `search` | `string` | Current search-expand text changed; does not issue a network request. |
-| `validate` | `MotionFormValue` | Requests caller validation of the current value. |
-| `submit` | `[value: MotionFormValue \| undefined, event: MouseEvent]` | Requests caller work; does not modify status. |
-| `otpComplete` | `string` | All four OTP boxes now contain digits. |
-| `filesSelected` | `FileUploaderFile[]` | Newly selected accepted files, not the entire accumulated model and not upload completion. |
-| `fileRemove` | `{ id: string, value: FileUploaderFile[] }` | Removed file ID and resulting controlled list. |
-
-### Slots
-
-| Slot | Scope | Use |
-| --- | --- | --- |
-| `label` | none | Visible field label; connected to controls through its stable ID. |
-| `prefix`, `suffix` | none | Input affixes. Replacing suffix replaces the default password reveal button. |
-| `option` | `{ option, selected }` | Radio/select option content. |
-| `chip` | `{ option }` | Chip label content; built-in removal remains available. |
-| `file` | `{ file, remove: () => void }` | File row content; built-in removal remains available. |
-| `submit` | `{ status: MotionFormStatus, label: string }` | Submit label/content, alongside the state glyph. |
-| `status` | `{ status, error, value }` | Content of the polite, atomic live message region. |
-
-### Exposed
-
-| Method | Behavior |
-| --- | --- |
-| `focus()` | Focuses the first available input, textarea or action control. |
-| `blur()` | Blurs the currently focused descendant. |
-
-### CSS variables
+### CSS Variables
 
 | Variable | `md` default | Role |
 | --- | --- | --- |
-| `--tx-mf-height` | `36px` | Base input/action height; size classes set 26/30/36/42px. |
-| `--tx-mf-choice` | `22px` | Checkbox/radio mark size; size classes set 16/18/22/24px. |
-| `--tx-mf-radius` | `12px` | Field radius; size classes set 8/10/12/12px. |
+| `--tx-mf-height` | `36px` | Input and action height; sizes set 26/30/36/42px. |
+| `--tx-mf-choice` | `22px` | Checkbox and radio mark size; sizes set 16/18/22/24px. |
+| `--tx-mf-radius` | `12px` | Field radius; sizes set 8/10/12/12px. |
 
-Theme color comes from existing `--tx-color-*`, `--tx-text-color-*`, `--tx-bg-color` and `--tx-border-color-*` tokens. Motion duration/easing variables are generated internally by the shared spring resolver, not a second public animation API.
+Colors come from `--tx-color-*`, `--tx-text-color-*`, `--tx-bg-color`, and `--tx-border-color-*`; motion variables are generated internally and aren't public API.
 
 ## Overview
 
-- Existing Input, Select, Checkbox, Radio/RadioGroup, Textarea, FileUploader and Slider own their original editing, option, drag/drop and keyboard semantics. This component adds the effect choreography and typed controlled events rather than introducing another control stack.
-- Labels are adjacent to controls, never wrapping Select. Stable Vue `useId` values connect labels, helpers and OTP boxes. The password button is a named, pressed-state native button; chip/file removal is keyboard-operable.
-- Status/error content remains in a `role="status" aria-live="polite"` region. Error state is not a timed flash and focus is not reset to replay motion.
-- The shared `useMotionActivity` separates `present` (mounted, intersecting and document-visible) from motion `active`. Motion additionally respects the `motion` switch and reduced-motion preference. Slider receives `active=present` to suspend its observers, global listeners and ongoing motion when absent/KeepAlive-deactivated without disabling the control or changing its value; its decorative motion remains gated by the shared motion `active`. Reduced motion therefore does not shut down the native control's layout measurements or input handling. Text uses TxTextMorph, curves come from the existing liquid spring resolver, and textarea WAAPI is cancelled at suspension/unmount. No business timers are used.
+- Input, Select, Checkbox, Radio, Textarea, FileUploader, and Slider own editing, options, drag and drop, and keyboard semantics; this component adds motion and controlled events.
+- Labels sit beside their controls, and `useId` links labels, helper text, and OTP boxes. The password button is a native button with `aria-pressed`.
+- Status and errors live in a `role="status" aria-live="polite"` region; replaying motion never resets focus.
+- OTP accepts paste, autofill, Left/Right, Home/End, Backspace, and Delete; a new external value replaces all four boxes.
+- The chips variant adds one option at a time and never adds a selected option twice.
+- Motion and listeners pause when hidden or KeepAlive-inactive; reduced motion turns off decorative motion only, never input handling or measurement.
 
 ## Technologies
 
-### Source mapping
-
-Fixed upstream: [Amicro commit 43c29ce9cdd16459e3eab4992381b8d35b38776a](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. The Vue port changes framework/runtime, composes real existing controls, adds controlled outcomes, localized labels and lifecycle/accessibility handling.
-
-| Catalog | Implementation in `src/components/forms/AnimatedFormElement.tsx` |
-| --- | --- |
-| `src/data/formElements.ts:29-35` / `frm1` | `52-79` floating label, 400/25 spring |
-| `36-42` / `frm2` | `81-96` focus halo |
-| `43-49` / `frm3` | `98-121` password reveal/eye transform |
-| `50-56` / `frm4` | `123-141` search width, 400/28 spring |
-| `57-63` / `frm5` | `143-182` checkbox path and pop |
-| `64-70` / `frm6` | `184-210` radio inner core, 500/25 spring |
-| `71-77` / `frm7` | `212-235` error shake trajectory |
-| `78-84` / `frm8` | `237-275` success check scale/path |
-| `85-91` / `frm9` | `277-324` dropdown scale/offset/fade |
-| `92-98` / `frm10` | `326-355` dismissible chip scale/fade |
-| `99-105` / `frm11` | `357-374` scroll-height textarea growth |
-| `106-112` / `frm12` | `375-401` four-box OTP and focus advance |
-| `113-119` / `frm13` | `403-415` dropzone/upload-arrow visual |
-| `120-126` / `frm14` | `417-432` real range value/tooltip |
-| `127-133` / `frm15` | `434-461` submit/loading/success visual |
-
-`src/App.tsx` was inspected in the fixed snapshot: it has no form branch or form import. Forms behavior comes from the implementation above, not a guessed inline App variant. Upstream's timed error clearing and fake submit success (`31-46`) are deliberately replaced by caller-owned `error` and `status`; the visual dropzone is connected to real FileUploader selection.
-
-Local source: `packages/tuffex/packages/components/src/motion-form/src/TxMotionForm.vue` and `src/types.ts`; demo: `apps/nexus/app/components/content/demos/MotionFormDemo.vue`. Build/typecheck, real-browser traversal and lifecycle acceptance are run by the integration owner; this page does not claim unexecuted verification.
+- Text transitions use `TxTextMorph` and curves come from the shared liquid spring resolver; upstream's timed error clearing and fake submit success became caller-owned `error` and `status`.
+- Upstream: `src/components/forms/AnimatedFormElement.tsx` at [Amicro commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+- Source: `packages/tuffex/packages/components/src/motion-form/`.
 
 <TuffDocSourceLink />
