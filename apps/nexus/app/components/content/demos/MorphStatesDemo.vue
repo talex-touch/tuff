@@ -51,8 +51,14 @@ function connect() {
   timers.push(setTimeout(() => (state.value = 'card'), 1900))
 }
 
+function isState(value: unknown): value is State {
+  return STATES.includes(value as State)
+}
+
 // Picking a state by hand, even mid-flight, only moves the target.
-function pick(next: State) {
+function pick(next: unknown) {
+  if (!isState(next))
+    return
   clearFlow()
   state.value = next
 }
