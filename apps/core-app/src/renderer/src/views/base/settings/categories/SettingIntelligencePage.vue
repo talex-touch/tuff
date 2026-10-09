@@ -8,7 +8,6 @@ import SettingsPage from '~/components/settings/SettingsPage.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
-import SettingAssistant from '../SettingAssistant.vue'
 import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 
 const { t } = useI18n()
@@ -24,9 +23,6 @@ const subPages = computed(() =>
 
 <template>
   <SettingsPage :title="t('settingsNav.category.intelligence')">
-    <!-- One shared group: the master switch, its floating entry, and the wake-word placeholder. -->
-    <SettingAssistant mode="all" />
-
     <!--
       Skills and the skill directories moved to the skills page, MCP to its own page; both are
       reached from the nav.
