@@ -93,6 +93,11 @@ const disableSentry = !enableSentry || process.env.NUXT_DISABLE_SENTRY === 'true
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
   && !disableSentry
   && isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY_SOURCEMAPS)
+if (process.env.CF_PAGES === '1') {
+  // A Pages build log lists its plain variables but never its secrets, so this line is the only
+  // record of whether the source maps were uploaded and, if not, which half was missing.
+  console.info(`[sentry] source map upload ${enableSentrySourceMaps ? 'on' : 'off'} (auth token ${sentryAuthToken ? 'set' : 'unset'}, NUXT_ENABLE_SENTRY_SOURCEMAPS ${isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY_SOURCEMAPS) ? 'on' : 'off'})`)
+}
 /**
  * Which deployment Sentry events come from, and the commit they were built from, for client and
  * server alike. Without them, Preview and production errors were indistinguishable and no release
@@ -744,10 +749,16 @@ export default defineNuxtConfig({
   sentry: {
     sourcemaps: {
       disable: !enableSentrySourceMaps,
+      // The module's own cleanup globs expect `.output/public` and `.output/server`. This preset
+      // builds into `dist` — client chunks are copied into `dist/_nuxt`, the Worker goes to
+      // `dist/_worker.js` — so without this the uploaded maps would ship with the deployment. The
+      // Nitro upload runs last, after the client chunks are copied, so one glob covers both.
+      filesToDeleteAfterUpload: ['./dist/**/*.map'],
     },
     sourceMapsUploadOptions: enableSentrySourceMaps
       ? {
-          org: 'QuotaWish',
+          // Sentry slugs are lowercase: `QuotaWish` is how the name is written, not the slug.
+          org: 'quotawish',
           project: 'tuff-nexus',
           authToken: sentryAuthToken,
           telemetry: false,
