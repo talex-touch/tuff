@@ -401,7 +401,7 @@ rows:
 | `text` | `string` | `''` | Text written to the clipboard. |
 | `copyLabel` | `string` | `'Copy'` | Idle label and `aria-label`. |
 | `copiedLabel` | `string` | `'Copied'` | Label and `aria-label` after a successful copy. |
-| `failedLabel` | `string` | - | Label and `aria-label` after a failure; without it, `copyLabel` stays. |
+| `failedLabel` | `string` | - | Label and `aria-label` after a failure. Without it, `copyLabel` stays (`iconOnly` grows no label) and the live region announces "Copy failed". |
 | `disabled` | `boolean` | `false` | Disables the button and prevents copying. |
 | `timeout` | `number` | `1400` | Milliseconds before the copied or failed state resets. |
 | `size` | `'sm' \| 'md'` | `'sm'` | Button size. |
