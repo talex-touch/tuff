@@ -1,5 +1,6 @@
 import { sentryCloudflareNitroPlugin } from '@sentry/nuxt/module/plugins'
 import { sentryClientOptions } from '../../sentry.client.config'
+import { withDetachedErrorHooks } from '../utils/detachedErrorHooks'
 
 /**
  * Server-side Sentry for the Pages Worker.
@@ -18,10 +19,11 @@ export default defineNitroPlugin((nitroApp) => {
   if (!config.public.sentryClientEnabled)
     return
 
-  sentryCloudflareNitroPlugin({
+  // Its error hook awaits a flush that waits for that hook too; see `withDetachedErrorHooks`.
+  withDetachedErrorHooks(nitroApp, sentryCloudflareNitroPlugin({
     dsn: sentryClientOptions.dsn,
     environment: config.public.sentryEnvironment || undefined,
     release: config.public.sentryRelease || undefined,
     sendDefaultPii: false,
-  })(nitroApp)
+  }))
 })

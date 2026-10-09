@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { createDocsMarkdownPrerenderRoutes, createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
 import { createNexusPrerenderEvidence, createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes, staticFallbackPrerenderRoutes } from './nexus-prerender-routes'
-import { NOT_FOUND_PRERENDER_ROUTE } from './nexus-static-routes.mjs'
+import { NOT_FOUND_PRERENDER_ROUTE, contentApiPrerenderRoutes, contentApiRouteExcludes } from './nexus-static-routes.mjs'
 
 const nexusRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -22,6 +22,25 @@ describe('static 404 fallback prerender', () => {
     const catchAll = readFileSync(join(nexusRoot, 'app/pages/[...all].vue'), 'utf8')
     expect(catchAll).toContain(`import.meta.prerender && event?.path === '${NOT_FOUND_PRERENDER_ROUTE}'`)
     expect(catchAll).toMatch(/if \(event && !isStaticFallbackArtifact\)\s+setResponseStatus\(event, 404\)/)
+  })
+})
+
+/** How a `_routes.json` exclude pattern matches: `/x/*` takes `/x` itself as well as everything below. */
+function routesPatternMatches(pattern: string, path: string): boolean {
+  if (!pattern.endsWith('/*'))
+    return pattern === path
+  const base = pattern.slice(0, -2)
+  return path === base || path.startsWith(`${base}/`)
+}
+
+describe('policy document Worker exclusions', () => {
+  it('keeps every prerendered policy document off the Worker, but not the query form it redirects', () => {
+    for (const route of contentApiPrerenderRoutes)
+      expect(contentApiRouteExcludes.some(pattern => routesPatternMatches(pattern, route)), route).toBe(true)
+
+    // Clients built before the documents were prerendered ask `/api/content/policy?name=…`; only the
+    // Worker can send them on, so no exclusion may take that path.
+    expect(contentApiRouteExcludes.filter(pattern => routesPatternMatches(pattern, '/api/content/policy'))).toEqual([])
   })
 })
 
