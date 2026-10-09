@@ -88,15 +88,12 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
   })
 }
+/** Sized by the assistant module, which owns the dock's one transparent canvas. */
 export const AssistantVoiceDockWindowOption: TalexTouch.TouchWindowConstructorOptions = {
   title: `${AppName} Assistant VoiceDock`,
   type: 'panel',
   acceptFirstMouse: true,
   frame: false,
-  width: 520,
-  height: 300,
-  minWidth: 56,
-  minHeight: 56,
   resizable: false,
   movable: false,
   skipTaskbar: true,

@@ -6,7 +6,6 @@ export type CoreAppVisibleExperienceGroup =
   | 'search'
   | 'auth'
   | 'ai'
-  | 'assistant'
   | 'workflow'
   | 'provider'
 
@@ -333,66 +332,6 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
     blockedWhen: [
       'No selected-text context or recovery hint is visible.',
       'Clipboard replace can happen without confirmation evidence.'
-    ]
-  },
-  {
-    id: 'assistant-floating-ball-entry',
-    group: 'assistant',
-    title: 'Assistant floating ball entry',
-    required: true,
-    requiresVisualArtifact: true,
-    collectionSteps: [
-      'Enable Assistant and the floating ball from Settings while keeping voice wake disabled.',
-      'Capture the floating ball visible above the current desktop or CoreApp surface.',
-      'Drag the floating ball, reopen the app or settings surface, and capture the persisted position.',
-      'Click the floating ball and capture the Voice Panel opened next to the ball.'
-    ],
-    requiredEvidence: [
-      'Settings show Assistant enabled and voice wake disabled',
-      'Floating ball is visible and does not steal focus from the active app',
-      'Dragged floating ball position persists after reopening the Assistant surface',
-      'Clicking the floating ball opens the Voice Panel beside the ball'
-    ],
-    recommendedArtifacts: [
-      'evidence/coreapp-visible/assistant-floating-ball-settings.png',
-      'evidence/coreapp-visible/assistant-floating-ball-visible.png',
-      'evidence/coreapp-visible/assistant-floating-ball-drag-persist.png',
-      'evidence/coreapp-visible/assistant-voice-panel-open.png'
-    ],
-    blockedWhen: [
-      'The floating ball only appears after enabling voice wake.',
-      'The dragged position is lost after reopening or monitor bounds are not respected.',
-      'Clicking the floating ball does not open a usable text panel.'
-    ]
-  },
-  {
-    id: 'assistant-screenshot-translate',
-    group: 'assistant',
-    title: 'Assistant clipboard image translation',
-    required: true,
-    requiresVisualArtifact: true,
-    collectionSteps: [
-      'Open the Assistant Voice Panel from the floating ball and trigger clipboard image translation.',
-      'Capture the translated image pin window or detached DivisionBox result for a copied image.',
-      'Repeat with an empty clipboard image state and capture the recovery hint.',
-      'Repeat with Nexus/provider unavailable or logged out and capture the fallback or recovery hint.'
-    ],
-    requiredEvidence: [
-      'Clipboard image translation starts from the Assistant Voice Panel',
-      'The Assistant action reads the current clipboard image instead of initiating screen capture',
-      'Translated clipboard image result appears in the image translation pin window or detached widget',
-      'Empty clipboard image and provider fallback remain visible and recoverable'
-    ],
-    recommendedArtifacts: [
-      'evidence/coreapp-visible/assistant-clipboard-image-translate-start.png',
-      'evidence/coreapp-visible/assistant-clipboard-image-translate-result.png',
-      'evidence/coreapp-visible/assistant-clipboard-image-empty.png',
-      'evidence/coreapp-visible/assistant-clipboard-image-provider-fallback.png'
-    ],
-    blockedWhen: [
-      'The Assistant path captures the screen instead of consuming the current clipboard image.',
-      'The action writes only to clipboard and does not show a visible translation result.',
-      'Permission/provider failures collapse into a generic error without a recovery hint.'
     ]
   },
   {

@@ -45,15 +45,6 @@ vi.mock('~/components/tuff/TuffGroupBlock.vue', () => ({
   })
 }))
 
-vi.mock('../SettingAssistant.vue', () => ({
-  default: defineComponent({
-    name: 'SettingAssistant',
-    setup() {
-      return () => h('div', { class: 'setting-assistant-mounted' })
-    }
-  })
-}))
-
 vi.mock('../SettingLocalAiCli.vue', () => ({
   default: defineComponent({
     name: 'SettingLocalAiCli',
@@ -78,8 +69,10 @@ describe('SettingIntelligencePage', () => {
   it('no longer carries the skills and skill-directory groups, which live on the skills page', () => {
     const wrapper = mount(SettingIntelligencePage)
 
-    // Only the sections the page composes remain: the assistant, Local AI CLI, and the hub list.
-    expect(wrapper.find('.setting-assistant-mounted').exists()).toBe(true)
+    // Only the sections the page composes remain: Local AI CLI and the hub list. The Assistant
+    // floating-entry group went with the floating ball it configured.
+    expect(wrapper.text()).not.toContain('settingAssistant')
+    expect(wrapper.find('settingassistant').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('settings.skillsMcp')
     expect(wrapper.find('settingskillsmcp').exists()).toBe(false)
   })

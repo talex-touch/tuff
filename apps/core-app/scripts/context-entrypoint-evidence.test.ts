@@ -56,12 +56,12 @@ function createManifest(): ContextEntrypointEvidenceManifest {
         artifactPaths: ['artifacts/packaged-corebox.json']
       }),
       createCase({
-        id: 'packaged-assistant',
-        entrypoint: 'assistant',
+        id: 'packaged-omni-panel',
+        entrypoint: 'omni-panel',
         level: 'packaged',
         source: 'packaged-electron',
         runtimeVersion: 'electron-40',
-        artifactPaths: ['artifacts/packaged-assistant.json']
+        artifactPaths: ['artifacts/packaged-omni-panel.json']
       }),
       createCase({
         id: 'real-profile-open',
@@ -86,7 +86,7 @@ async function createEvidenceRoot(): Promise<string> {
   const artifactDir = path.join(root, 'artifacts')
   await mkdir(artifactDir, { recursive: true })
   await Promise.all(
-    ['unit.json', 'controlled.json', 'packaged-corebox.json', 'packaged-assistant.json'].map(
+    ['unit.json', 'controlled.json', 'packaged-corebox.json', 'packaged-omni-panel.json'].map(
       (name) => writeFile(path.join(artifactDir, name), '{}')
     )
   )
@@ -106,7 +106,7 @@ describe('context entrypoint evidence verifier', () => {
     await expect(verifyContextEntrypointEvidence(createManifest(), root)).resolves.toMatchObject({
       caseCount: 5,
       passedCount: 4,
-      packagedEntrypoints: ['corebox', 'assistant'],
+      packagedEntrypoints: ['corebox', 'omni-panel'],
       privacyScan: 'passed'
     })
   })
@@ -124,7 +124,7 @@ describe('context entrypoint evidence verifier', () => {
   it('rejects packaged evidence without a non-CoreBox entrypoint', async () => {
     const root = await createEvidenceRoot()
     const manifest = createManifest()
-    manifest.cases = manifest.cases.filter((item) => item.id !== 'packaged-assistant')
+    manifest.cases = manifest.cases.filter((item) => item.id !== 'packaged-omni-panel')
 
     await expect(verifyContextEntrypointEvidence(manifest, root)).rejects.toThrow(
       'at least one non-CoreBox entrypoint'

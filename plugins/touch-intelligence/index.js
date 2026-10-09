@@ -1092,7 +1092,7 @@ function normalizeContextMode(value, fallback = 'new') {
 
 function normalizeContextOwner(value, fallback = 'corebox') {
   const owner = normalizeText(value)
-  return owner === 'corebox' || owner === 'assistant' ? owner : fallback
+  return owner === 'corebox' ? owner : fallback
 }
 
 function normalizeContextScope(value, fallback = 'retrieval') {

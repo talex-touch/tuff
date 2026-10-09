@@ -6,7 +6,6 @@ import type {
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import FloatingBall from './FloatingBall.vue'
 import VoicePanel from './VoicePanel.vue'
 
 type VoicePanelHandle = {
@@ -34,10 +33,11 @@ let pendingCancelHold: AssistantVoiceCancelHoldPayload['state'] | null = null
 /**
  * Resolve once VoicePanel actually exists.
  *
- * `<Transition mode="out-in">` keeps the panel unmounted until the ball's leave transition has
- * finished, so the template ref is still null a tick after `expanded` flips. Reading it there
- * and calling through `?.` is how the dock ends up on screen with an empty pill and no session:
- * the open and the start were both issued to nobody, silently. Resolves null if the dock
+ * `<Transition mode="out-in">` keeps the panel unmounted until the outgoing child has finished
+ * leaving — the idle placeholder on a first open, the last pill when a session reopens while it is
+ * still shrinking — so the template ref is still null a tick after `expanded` flips. Reading it
+ * there and calling through `?.` is how the dock ends up on screen with an empty pill and no
+ * session: the open and the start were both issued to nobody, silently. Resolves null if the dock
  * collapses while we are still waiting — there is nothing left to start by then.
  */
 function whenPanelReady(): Promise<VoicePanelHandle | null> {
@@ -116,10 +116,10 @@ let closeFallbackTimer: ReturnType<typeof setTimeout> | null = null
 /**
  * Telling main to collapse is what ends the pill's animation, so it has to wait for it.
  *
- * `closePanel` shrinks the window from 360x148 to the ball's 56x56 immediately. Sent in the
- * same tick as `expanded = false`, that clipped the leaving pill out of existence on the first
- * frame — the shrink was running, inside a window that had already stopped being there to show
- * it. Now the window keeps its size until the surface has finished leaving.
+ * `closePanel` hides the window immediately. Sent in the same tick as `expanded = false`, that cut
+ * the leaving pill out of existence on the first frame — the shrink was running, inside a window
+ * that had already stopped being there to show it. Now the window stays up until the surface has
+ * finished leaving.
  */
 function sendClose(): void {
   if (closeFallbackTimer) {
@@ -155,8 +155,8 @@ function handlePanelFinished(generation?: number): void {
 }
 
 function handlePanelClosed(): void {
-  // Main collapsed on its own; the window is already the ball's size, so there is nothing left
-  // to wait for and nothing left to ask for.
+  // Main collapsed on its own; the window is already hidden, so there is nothing left to wait for
+  // and nothing left to ask for.
   cancelPendingClose()
   dockGeneration += 1
   expanded.value = false
@@ -252,7 +252,13 @@ onBeforeUnmount(() => {
         :generation="dockGeneration"
         @finished="handlePanelFinished"
       />
-      <FloatingBall v-else key="floating-ball" />
+      <!--
+        Between sessions the dock shows nothing, but it still needs a child to swap with: `out-in`
+        only holds a pill back while the outgoing child leaves when the two are exchanged in one
+        render. Without one, a session reopened while the last pill is still shrinking mounts
+        beside it — stacked below it, outside the window — instead of after it.
+      -->
+      <span v-else key="idle" class="voice-dock-idle" aria-hidden="true" />
     </Transition>
   </div>
 </template>
@@ -279,7 +285,6 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
-.voice-dock-root :deep(.floating-ball-root),
 .voice-dock-root :deep(.voice-dock) {
   pointer-events: auto;
 }
@@ -289,8 +294,8 @@ onBeforeUnmount(() => {
  *
  * It used to drift up on the way out at `scale(0.98)`, which is small enough to be invisible:
  * the pill looked like it was fading at full size rather than closing. Both ends now scale from
- * the bottom edge — where the ball sits and where the surface is anchored — so the box reads as
- * shrinking to nothing instead of sliding somewhere.
+ * the bottom edge, where the surface is anchored, so the box reads as shrinking to nothing
+ * instead of sliding somewhere.
  */
 .voice-dock-surface-enter-active,
 .voice-dock-surface-leave-active {
@@ -316,5 +321,14 @@ onBeforeUnmount(() => {
   .voice-dock-surface-leave-to {
     transform: none;
   }
+}
+
+/*
+ * The idle placeholder has nothing to show, so it swaps out within a frame or two rather than
+ * holding the pill back for the surface's own 220ms.
+ */
+.voice-dock-idle.voice-dock-surface-enter-active,
+.voice-dock-idle.voice-dock-surface-leave-active {
+  transition: none;
 }
 </style>

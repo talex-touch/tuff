@@ -402,48 +402,28 @@ if (nextEstimate > budget && selected.length > 0) continue
 if (nextEstimate > budget) continue
 ```
 
-## Scenario: Assistant Floating-Ball Display Restore
+## Scenario: Voice Dock Display Recovery
+
+The Assistant floating ball this scenario used to cover was removed on 2026-10-08; its saved
+position, default placement and bounds clamping went with it. What remains is how the dictation
+HUD (the voice dock) follows display changes.
 
 ### Scope
 
-- Trigger: changing Assistant floating-ball position persistence, initial bounds, display selection, or desktop work-area handling.
-- Electron desktop coordinates may be negative when a display sits left of or above the primary display.
+- Trigger: changing how the voice dock window follows display topology or picks its display.
 
 ### Contract
 
-- Only the canonical `{ x: -1, y: -1 }` pair means no saved position; every other finite pair is a persisted desktop coordinate.
-- Resolve a persisted position with `screen.getDisplayNearestPoint(savedPoint)`, not the current cursor display.
-- Resolve the unset/default position from `screen.getCursorScreenPoint()` and retain existing edge-padding/default-height placement.
-- Clamp the complete floating-ball bounds into the resolved display work area so removed displays and layout changes recover visibly.
-- Preserve size, opacity, debounced persistence, click behavior, and the existing settings schema.
 - After successful module initialization, register one shared handler for `display-added`, `display-removed`, and `display-metrics-changed`; remove that exact handler during teardown.
-- Display events must not create Assistant windows or overwrite the persisted position used to recover a temporarily disconnected display.
-- Reapply bounds to a live floating ball. Reanchor only a visible Voice Panel, without show, focus, or `panelOpened` broadcast side effects.
+- Display events must not create Assistant windows.
+- Reanchor only a visible, expanded dock to the bottom centre of the recovered work area, without show, focus, or `panelOpened` broadcast side effects. A hidden dock is left alone.
 
 ### Validation
 
-- Focused tests cover a negative saved coordinate while the cursor is on another display, canonical unset placement, and off-work-area clamping.
-- Focused lifecycle tests assert all three listeners share handler identity, teardown removes them, and no live ball means no window creation.
-- Focused recovery tests assert removed-display clamping without config persistence and visible/hidden Voice Panel behavior without focus/show/broadcast side effects.
+- Focused lifecycle tests assert all three listeners share handler identity and teardown removes them.
+- Focused recovery tests assert visible and hidden dock behavior without focus, show or broadcast side effects.
 - Main-process lint and node type-check must pass.
 - Code/focused tests do not replace real multi-display/HiDPI or current-version packaged evidence.
-
-### Wrong vs Correct
-
-#### Wrong
-
-```ts
-const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-const x = saved.x >= 0 ? saved.x : defaultX
-```
-
-#### Correct
-
-```ts
-const hasSavedPosition = saved.x !== -1 || saved.y !== -1
-const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint()
-const display = screen.getDisplayNearestPoint(anchor)
-```
 
 ## Scenario: Mode-Isolated Renderer Surface Loading
 

@@ -233,9 +233,6 @@ const _appSettingOriginData = {
     plugins: 0,
     settings: 0,
   },
-  assistant: {
-    enabled: false,
-  },
   betaFeatures: {
     screenshot: false,
     voiceDictation: false,
@@ -259,16 +256,6 @@ const _appSettingOriginData = {
       'codex': { enabled: false, executableOverride: '' },
       'claude': { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
-    },
-  },
-  floatingBall: {
-    enabled: false,
-    size: 56,
-    opacity: 1,
-    edgePadding: 24,
-    position: {
-      x: -1,
-      y: -1,
     },
   },
   voiceWake: {

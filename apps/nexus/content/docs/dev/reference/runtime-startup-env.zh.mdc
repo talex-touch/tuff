@@ -1,6 +1,6 @@
 # Core App 启动链路与运行时变量参考
 
-> 更新时间：2026-10-07
+> 更新时间：2026-10-08
 > 范围：`apps/core-app/src` 中 `process.env` / `import.meta.env` 的实际引用
 
 ## 启动与回退现状
@@ -8,8 +8,8 @@
 ### 1) Assistant 模块启动现状
 
 - `assistantModule` 始终进入 Core App 启动模块列表，不再存在环境变量 gate 或 Assistant 专用 `shouldSkip` 分支。
-- 产品可用性由持久化 App Settings 控制；宿主会把缺失的 `assistant.enabled` 修复为 `false`，因此 Assistant 仍默认关闭，但不再改变模块启动语义。
-- 运维和用户应通过设置页启用 Assistant；已移除的 `TUFF_ENABLE_ASSISTANT_EXPERIMENT` 不再是受支持的运行时变量，也不会再出现旧 optional-module / env-gate 日志。
+- 模块启动时不创建任何窗口：语音 HUD 在第一次 Fn/Ctrl 语音命令时才创建，会话结束即隐藏。2026-10-08 起浮球和 `assistant.enabled` 开关已移除，存储加载配置时会删掉残留的 `assistant` 与 `floatingBall` 字段。
+- Assistant 不再有单独的启用开关，语音输入只受 `voiceInput.enabled` 控制；已移除的 `TUFF_ENABLE_ASSISTANT_EXPERIMENT` 不再是受支持的运行时变量，也不会再出现旧 optional-module / env-gate 日志。
 
 ### 2) dev.source 探活 + 本地降级（已改）
 

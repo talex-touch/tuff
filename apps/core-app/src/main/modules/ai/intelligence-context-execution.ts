@@ -121,10 +121,7 @@ function canUseRequestedOwner(
   ) {
     return false
   }
-  return (
-    (owner === 'corebox' && entrypoint.id === 'corebox.ai-ask') ||
-    (owner === 'assistant' && entrypoint.id === 'assistant.voice')
-  )
+  return owner === 'corebox' && entrypoint.id === 'corebox.ai-ask'
 }
 
 function normalizeRole(value: unknown): IntelligenceMessage['role'] {

@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-10-03
+> 更新时间：2026-10-08
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -36,8 +36,8 @@
 - `browser-login-recovery` packaged surface 已标记 `passed`：覆盖 browser-open failure waiting session、manual login URL copy、short code copy、timeout retry 文案与 network failure copy JSON。
 - `omnipanel-writing-tools` packaged surface 已标记 `passed`：覆盖 selected-text context / recovery hint、writing actions、AI result preview、Retry / Copy / Replace Clipboard 与 replace confirmation。
 - `provider-migration-evidence` surface 已标记 `passed`：覆盖 Nexus local-only dry-run migration summary、readiness/blockers/counts、secret redaction 与 dry-run 不声明 registry-primary readiness 边界。
-- `assistant-floating-ball-entry` surface 已标记 `passed`：packaged evidence 覆盖 Settings 中 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。
-- `assistant-screenshot-translate` surface 已标记 `passed`：packaged evidence 覆盖 Settings 开关、剪贴板图片翻译入口、翻译结果窗口、空剪贴板与 provider fallback。
+- `assistant-floating-ball-entry` surface 已标记 `passed`：packaged evidence 覆盖 Settings 中 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。2026-10-08 浮球已移除，该 surface 随之退役。
+- `assistant-screenshot-translate` surface 已标记 `passed`：packaged evidence 覆盖 Settings 开关、剪贴板图片翻译入口、翻译结果窗口、空剪贴板与 provider fallback。2026-10-08 Assistant 截图/翻译入口与处理函数已移除，该 surface 随之退役。
 - `workflow-use-model-review-queue` surface 已标记 `passed`：packaged evidence 覆盖 Review Queue pending/failed 队列态、Use Model 输出、成本/trace 信号与失败恢复。
 - `provider-registry-observability` surface 已标记 `passed`：packaged evidence 覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。
 - 2026-07-13 默认 Nexus provider 的 CoreBox stream 已从 buffered compatibility 升级为已认证 `/api/v1/intelligence/stream` token SSE：CoreApp 解析 split UTF-8 SSE，逐 delta 保留实际 `traceId/provider/model/latency`，terminal usage 只发一次；Nexus 继续执行 provider quota/request audit、credits billing 与 usage ledger。provider retry/fallback 只允许发生在首个可见 delta 前，输出后失败直接 fail-closed，避免重复回放；guest 仍在网络前返回 `NEXUS_AUTH_REQUIRED`。当前只有 focused contract，不替代登录态 packaged success recapture。
@@ -84,8 +84,8 @@
 | `browser-login-recovery`          | closed                 | 2026-06-24 packaged evidence 已覆盖 browser-open failure waiting session、manual login URL copy、short code copy、timeout retry 文案与 network failure copy JSON。                                                                 |
 | `omnipanel-writing-tools`         | closed                 | 2026-06-24 packaged evidence 已覆盖 selected-text context / recovery hint、5 个 writing actions、AI result preview metadata、Retry / Copy / Replace Clipboard 与 replace confirmation。                                            |
 | `provider-migration-evidence`     | closed                 | 2026-06-24 Nexus local-only dry-run evidence 已覆盖 migration summary、planning readiness、blocker/counts、secret redaction 与 dry-run 不声明 registry-primary readiness；不代表生产 registry-primary ready。                      |
-| `assistant-floating-ball-entry`   | closed                 | 2026-06-24 packaged probe 已覆盖 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。                                                                                       |
-| `assistant-screenshot-translate`  | closed                 | 2026-06-24 packaged evidence 已覆盖 Settings、clipboard image translate start/result、empty clipboard 与 provider fallback；截图翻译后续进入产品化 polish。                                                                        |
+| `assistant-floating-ball-entry`   | retired                | 2026-10-08 浮球移除后退役。2026-06-24 packaged probe 已覆盖 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。                                                                                       |
+| `assistant-screenshot-translate`  | retired                | 2026-10-08 截图/翻译入口与处理函数移除后退役。2026-06-24 packaged evidence 已覆盖 Settings、clipboard image translate start/result、empty clipboard 与 provider fallback。                                                                        |
 | `workflow-use-model-review-queue` | closed                 | 2026-06-24 packaged evidence 已覆盖 pending / failed queue、Use Model output、runtime cost/trace 与恢复文案。                                                                                                                      |
 | `provider-registry-observability` | closed                 | 2026-06-24 packaged evidence 已覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。                                                                                                            |
 | Broader visible surfaces          | historical closed      | 2026-06-24 manifest 的 13/13 surfaces passed；不代表 `apps/core-app/package.json` 版本已复采。 |
@@ -96,7 +96,7 @@
 
 | Surface                           | Artifact count | 摘要                                                                                         |
 | --------------------------------- | -------------: | -------------------------------------------------------------------------------------------- |
-| `assistant-screenshot-translate`  |              6 | packaged Assistant image translate probe + Settings/start/result/empty/fallback PNG 已绑定。 |
+| `assistant-screenshot-translate`  |              6 | packaged Assistant image translate probe + Settings/start/result/empty/fallback PNG 已绑定；2026-10-08 退役。 |
 | `workflow-use-model-review-queue` |              3 | Review Queue probe + pending/failed PNG 已绑定。                                             |
 | `provider-registry-observability` |              3 | Provider registry probe + health/scene run PNG 已绑定。                                      |
 
@@ -109,11 +109,11 @@
 
 ## 下一步
 
-1. Assistant screenshot translate 进入灰度产品化：保留 Voice Panel 双入口；面板打开自动聚焦、Enter 发送、Shift+Enter/IME 保持编辑、in-flight 去重与 Escape 关闭，麦克风拒绝后的系统设置深链 + 显式语音重试、录屏 permission recovery、cursor/display/region 模式、image route metadata、OCR 文本降级、pin window host copy/close/work-area/zoom/opacity，以及 provider/login/quota/OCR/文本翻译失败后直达 Intelligence Channels 的一键恢复均已落 code path，后续补 current-version recapture 和多显示器/HiDPI 采证。
+1. （2026-10-08 取消，以下为历史记录：Voice Panel 已没有截图/翻译入口，Assistant 截图/翻译处理函数与事件已删除）Assistant screenshot translate 进入灰度产品化：保留 Voice Panel 双入口；面板打开自动聚焦、Enter 发送、Shift+Enter/IME 保持编辑、in-flight 去重与 Escape 关闭，麦克风拒绝后的系统设置深链 + 显式语音重试、录屏 permission recovery、cursor/display/region 模式、image route metadata、OCR 文本降级、pin window host copy/close/work-area/zoom/opacity，以及 provider/login/quota/OCR/文本翻译失败后直达 Intelligence Channels 的一键恢复均已落 code path，后续补 current-version recapture 和多显示器/HiDPI 采证。
    - Assistant screenshot OCR/text fallback 已补统一 caller `core.assistant.screenshot-translate`，两阶段调用均进入 Intelligence quota governance；focused contract 保留 degraded result metadata，并验证 OCR 与 text.translate 不再遗漏 caller。
-2. OmniPanel / Assistant 性能优化：VoicePanel 首开竞态、悬浮球位置/显示器生命周期已闭合 focused contract；共享 `AppEntrance` 已将 FloatingBall、VoicePanel、ScreenshotRegionSelector 改为按 window mode 动态加载，production renderer build 分别生成约 8.36 / 44.16 / 6.03 kB 的独立 JS chunks。下一步继续聚焦其余窗口生命周期、非 Assistant packaged asset 排除、首屏不阻塞与 current-version 启动/多显示器/HiDPI/hot-plug 真实采证；本轮不声明已测得启动耗时改善。
+2. OmniPanel / Assistant 性能优化：VoicePanel 首开竞态、悬浮球位置/显示器生命周期已闭合 focused contract；共享 `AppEntrance` 已将 FloatingBall、VoicePanel、ScreenshotRegionSelector 改为按 window mode 动态加载，production renderer build 分别生成约 8.36 / 44.16 / 6.03 kB 的独立 JS chunks。下一步继续聚焦其余窗口生命周期、非 Assistant packaged asset 排除、首屏不阻塞与 current-version 启动/多显示器/HiDPI/hot-plug 真实采证；本轮不声明已测得启动耗时改善。2026-10-08 浮球已移除，FloatingBall 分块随之消失。
 3. 桌面烟花 MVP：feature flag 默认关闭，轻量 overlay/canvas，限制粒子数、帧率、自动退出与无障碍降级。
-4. 截图功能逐步引入：已落地 Voice Panel `capture + preview + copy/save/translate`、cursor/display/region 来源、无副作用区域取消、permission denied / unsupported / unavailable 区分，以及翻译 provider 失败后前往 AI 渠道设置的 typed 恢复动作；下一步补多显示器/HiDPI 与 current-version packaged 采证。
+4. （2026-10-08 取消，以下为历史记录：Voice Panel 截图入口已撤下，Assistant 截图事件与处理函数已删除，截图能力以截图会话为准）截图功能逐步引入：已落地 Voice Panel `capture + preview + copy/save/translate`、cursor/display/region 来源、无副作用区域取消、permission denied / unsupported / unavailable 区分，以及翻译 provider 失败后前往 AI 渠道设置的 typed 恢复动作；下一步补多显示器/HiDPI 与 current-version packaged 采证。
 5. AI Command 产品化：`promptTemplate` / `promptVariables` typed options、legacy metadata 兼容、provider fallback 保真、中英文 Plugin Workflow，以及 CoreBox `rewrite/改写`、`summarize/summary/总结/摘要`、`explain/解释` 三组 text-only stateless 内置命令已落。`touch-intelligence@1.2.0` 进一步新增 bounded `ai-commands.json` registry、动态 text/html command feature、按 id 原子 reload/reconcile，以及可视化 create/update/delete/import/export/open/reload editor；editor 已新增与 host simple Mustache 语义一致的 live System Prompt 预览，明确 nested key、缺失变量空文本与 invalid JSON 状态，并提供语法修正、专业语气、友好语气、代码审查四个 host-owned starter preset；命令输入按“显式后缀 > CoreBox 附带 text/html 剪贴板文本”解析，默认 AI Ask 不会隐式替换输入。2026-07-13 `2.4.13-beta.4` partial packaged capture 已覆盖 editor ready/save、missing registry 初始化、VM-safe 变量校验与 dynamic exact/suffix CoreBox result。下一步是 provider-backed current-version command invocation 与 share-link / one-click install preset 分发；全局 13-surface current-version gate 仍开放，不重复扩散 raw prompt IPC。
 6. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
 7. 后续每次产品化变更仍同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、TODO 与 CHANGES；不使用旧 raw blocker artifact 冒充最终 evidence。
@@ -126,8 +126,8 @@
 | done | `app-index-workbench`             |   closed | Summary counts、UWP/Store/Steam/shortcut/protocol/AppRef/path source filters、attention/found/unchecked/disabled filters、no entries vs filtered-out empty states | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。           |
 | done | `omnipanel-writing-tools`         |   closed | Selected-text context / recovery hint、writing actions、AI result preview、copy / replace / retry / confirmation states                                           | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。           |
 | done | `provider-migration-evidence`     |   closed | Dry-run migration summary、readiness/blockers/migrated/skipped/failed counts、secret redaction、dry-run 不声明 registry-primary readiness                         | 2026-06-24 local-only dry-run evidence 已绑定；strict verifier 不再列该 surface。 |
-| done | `assistant-floating-ball-entry`   |   closed | Settings enabled + voice wake disabled、浮窗不抢焦点、拖动位置持久化、点击打开 Voice Panel                                                                        | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。           |
-| done | `assistant-screenshot-translate`  |   closed | Clipboard image translate、result window、empty clipboard 与 provider fallback                                                                                    | 2026-06-24 packaged evidence 已绑定；后续做产品化 polish。                        |
+| done | `assistant-floating-ball-entry`   |  retired | Settings enabled + voice wake disabled、浮窗不抢焦点、拖动位置持久化、点击打开 Voice Panel                                                                        | 2026-06-24 packaged evidence 已绑定；2026-10-08 浮球移除，surface 退出登记表。           |
+| done | `assistant-screenshot-translate`  |  retired | Clipboard image translate、result window、empty clipboard 与 provider fallback                                                                                    | 2026-06-24 packaged evidence 已绑定；2026-10-08 功能移除，surface 退出登记表。                        |
 | done | `workflow-use-model-review-queue` |   closed | Use Model output 入 Review Queue、pending/failed queue、cost/trace signals、failed recovery                                                                       | 2026-06-24 packaged evidence 已绑定。                                             |
 | done | `provider-registry-observability` |   closed | Provider health、latest usage、scene latest run、recent failure、filters、next-action hints                                                                       | 2026-06-24 packaged evidence 已绑定；不暴露 provider secret。                     |
 

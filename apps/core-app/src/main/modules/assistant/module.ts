@@ -4,10 +4,6 @@ import type {
   ModuleInitContext,
   ModuleKey
 } from '@talex-touch/utils'
-import type {
-  IntelligenceInvokeResult,
-  IntelligenceVisionOcrResult
-} from '@talex-touch/tuff-intelligence'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
@@ -16,33 +12,12 @@ import {
   normalizeVoicePolishStrength,
   type VoiceInputSetting
 } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type {
-  AssistantClipboardImageTranslateResponse,
-  AssistantRuntimeConfig,
-  AssistantScreenshotFallbackReason,
-  AssistantScreenshotCapturePayload,
-  AssistantScreenshotCaptureResponse,
-  AssistantScreenshotSavePayload,
-  AssistantScreenshotRegionSelectionPayload,
-  AssistantScreenshotRegionSelectionResponse,
-  AssistantScreenshotSaveResponse,
-  AssistantScreenshotTargetPayload,
-  AssistantScreenshotTranslatePayload,
-  AssistantScreenshotTranslateResponse
-} from '@talex-touch/utils/transport/events/assistant'
+import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
 import type {
   AssistantVoiceCancelHoldPayload,
   AssistantVoiceCommandPayload
 } from '@talex-touch/utils/transport/events/assistant'
-import type {
-  IntelligenceErrorCode,
-  NativeScreenshotCaptureRequest,
-  NativeScreenshotRegion,
-  NativeScreenshotCaptureResult
-} from '@talex-touch/utils/transport/events/types'
-import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import {
   getAppDestinationNavigationService,
@@ -54,46 +29,17 @@ import {
   openKeyboardSettings,
   readGlobeKeyStatus
 } from '../voice/globe-key-preference'
-import { dialog, screen, type Rectangle, type SaveDialogOptions } from 'electron'
+import { screen, type Rectangle } from 'electron'
 import { AssistantVoiceDockWindowOption } from '../../config/default'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 import { resolveCapabilityStatus } from '../ai/intelligence-capability-status'
-import { tuffIntelligence } from '../ai/intelligence-sdk'
-import { normalizeIntelligenceError } from '../ai/intelligence-error-normalizer'
 import { BaseModule } from '../abstract-base-module'
-import { coreBoxManager } from '../box-tool/core-box/manager'
-import { translateClipboardImage, translateImageBase64 } from '../box-tool/core-box/image-translate'
-import { windowManager } from '../box-tool/core-box/window'
-import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
-import { getScreenshotSessionManager } from '../screenshot-session'
-import { getMainConfig, persistMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
-
-interface FloatingBallPosition {
-  x: number
-  y: number
-}
-
-interface FloatingBallSetting {
-  enabled: boolean
-  size: number
-  opacity: number
-  edgePadding: number
-  position: FloatingBallPosition
-}
-
-type ScreenshotUnavailableCode =
-  | 'SCREENSHOT_PERMISSION_DENIED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'SCREENSHOT_UNAVAILABLE'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 const assistantLog = createLogger('Assistant')
-const FLOATING_BALL_DEFAULT_SIZE = 56
-const FLOATING_BALL_MIN_SIZE = 48
-const FLOATING_BALL_MAX_SIZE = 72
-const FLOATING_BALL_DEFAULT_PADDING = 24
 /**
  * The dock window is a transparent canvas, not the visible pill.
  *
@@ -121,12 +67,9 @@ const VOICE_DOCK_HEIGHT = 148
  * ever going to appear.
  */
 const VOICE_DOCK_EDGE_GAP = 9
-const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
-const ASSISTANT_SCREENSHOT_TRANSLATE_CALLER = 'core.assistant.screenshot-translate'
-const ASSISTANT_SCREENSHOT_FALLBACK_SOURCE = 'assistant-screenshot-ocr-fallback'
 
 const ESCAPE_CANCEL_HOLD_MS = 600
 function clamp(value: number, min: number, max: number): number {
@@ -137,124 +80,6 @@ function clamp(value: number, min: number, max: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function getErrorCode(error: unknown): string | undefined {
-  return isRecord(error) && typeof error.code === 'string' ? error.code : undefined
-}
-
-function mapScreenshotUnavailableCode(error: unknown): ScreenshotUnavailableCode {
-  const code = getErrorCode(error)
-  if (code === 'ERR_NATIVE_SCREENSHOT_UNSUPPORTED') {
-    return 'SCREENSHOT_UNSUPPORTED'
-  }
-
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
-  if (
-    message.includes('permission') ||
-    message.includes('denied') ||
-    message.includes('not authorized')
-  ) {
-    return 'SCREENSHOT_PERMISSION_DENIED'
-  }
-
-  return 'SCREENSHOT_UNAVAILABLE'
-}
-
-function toAssistantIntelligenceFailure<const TFallbackCode extends string>(
-  error: unknown,
-  capabilityId: string,
-  fallback: {
-    code: TFallbackCode
-    error: string
-  }
-): {
-  code: IntelligenceErrorCode | TFallbackCode
-  error: string
-  reason?: string
-  recovery?: string
-} {
-  const normalized = normalizeIntelligenceError(error, { capabilityId })
-  if (normalized.code === 'UNKNOWN') return fallback
-
-  return {
-    code: normalized.code,
-    error: normalized.reason,
-    reason: normalized.reason,
-    recovery: normalized.recovery
-  }
-}
-
-function normalizeScreenshotRegion(value: unknown): NativeScreenshotRegion | null {
-  if (!isRecord(value)) return null
-  const x = value.x
-  const y = value.y
-  const width = value.width
-  const height = value.height
-  if (
-    typeof x !== 'number' ||
-    !Number.isFinite(x) ||
-    typeof y !== 'number' ||
-    !Number.isFinite(y) ||
-    typeof width !== 'number' ||
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    typeof height !== 'number' ||
-    !Number.isFinite(height) ||
-    height <= 0
-  ) {
-    return null
-  }
-  return { x, y, width, height }
-}
-
-function managedCaptureResult(
-  payload?: AssistantScreenshotTargetPayload
-): NativeScreenshotCaptureResult | null {
-  const resource = payload?.target === 'resource' ? payload.resource : undefined
-  if (
-    !resource ||
-    resource.mimeType !== 'image/png' ||
-    typeof resource.tfileUrl !== 'string' ||
-    !resource.tfileUrl.startsWith('tfile://') ||
-    (payload?.tfileUrl !== undefined && payload.tfileUrl !== resource.tfileUrl) ||
-    !Number.isFinite(resource.width) ||
-    resource.width <= 0 ||
-    !Number.isFinite(resource.height) ||
-    resource.height <= 0 ||
-    !Number.isSafeInteger(resource.sizeBytes) ||
-    resource.sizeBytes < 0
-  ) {
-    return null
-  }
-  return {
-    ...resource,
-    displayId: '',
-    displayName: '',
-    x: 0,
-    y: 0,
-    scaleFactor: 1,
-    durationMs: 0,
-    wroteClipboard: false
-  }
-}
-
-function normalizeScreenshotTarget(
-  payload?: AssistantScreenshotTargetPayload
-): Pick<NativeScreenshotCaptureRequest, 'target' | 'displayId' | 'region'> {
-  const displayId = typeof payload?.displayId === 'string' ? payload.displayId.trim() : ''
-  if (payload?.target === 'region') {
-    const region = normalizeScreenshotRegion(payload.region)
-    return {
-      target: 'region',
-      ...(displayId ? { displayId } : {}),
-      ...(region ? { region } : {})
-    }
-  }
-  if (payload?.target === 'display') {
-    return displayId ? { target: 'display', displayId } : { target: 'display' }
-  }
-  return { target: 'cursor-display' }
 }
 
 export class AssistantModule extends BaseModule {
@@ -273,29 +98,17 @@ export class AssistantModule extends BaseModule {
   private escapeCancelTimer: NodeJS.Timeout | null = null
   private escapeCancelHolding = false
   private escapeCancelCommitted = false
-  private pendingPosition: FloatingBallPosition | null = null
-  private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
     const dock = this.voiceDockWindow
-    if (!dock || dock.window.isDestroyed()) {
+    // Between sessions the dock is hidden and has nothing on screen to keep in place.
+    if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded) {
       return
     }
 
-    const setting = this.readAppSetting()
-    if (this.voiceDockExpanded) {
-      if (!this.getVoiceInputSetting(setting).enabled || !dock.window.isVisible()) {
-        return
-      }
-      this.applyVoiceDockBounds(dock, dock.window.getBounds())
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled || !dock.window.isVisible()) {
       return
     }
-
-    const floatingSetting = this.getFloatingBallSetting(setting)
-    if (!this.isAssistantEnabled(setting) || !floatingSetting.enabled) {
-      return
-    }
-
-    this.applyFloatingBallBounds(dock, floatingSetting)
+    this.applyVoiceDockBounds(dock, dock.window.getBounds())
   }
 
   constructor() {
@@ -309,7 +122,7 @@ export class AssistantModule extends BaseModule {
     this.setupTransport(ctx)
     this.registerTransportHandlers()
     this.watchAppSetting()
-    await this.applySettingSnapshot(this.readAppSetting())
+    this.applySettingSnapshot(this.readAppSetting())
     screen.on('display-added', this.handleDisplayTopologyChange)
     screen.on('display-removed', this.handleDisplayTopologyChange)
     screen.on('display-metrics-changed', this.handleDisplayTopologyChange)
@@ -320,12 +133,7 @@ export class AssistantModule extends BaseModule {
     screen.off('display-added', this.handleDisplayTopologyChange)
     screen.off('display-removed', this.handleDisplayTopologyChange)
     screen.off('display-metrics-changed', this.handleDisplayTopologyChange)
-    if (this.positionSaveTimer) {
-      clearTimeout(this.positionSaveTimer)
-      this.positionSaveTimer = null
-    }
     this.resetEscapeCancelHold(false, true)
-    this.pendingPosition = null
     this.voiceDockExpanded = false
     this.voiceCommandStartPending = null
     this.voiceCommandStopPending = null
@@ -360,24 +168,8 @@ export class AssistantModule extends BaseModule {
     }
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.getRuntimeConfig, () => {
+      this.transport.on(AssistantEvents.voice.getRuntimeConfig, () => {
         return this.buildRuntimeConfig(this.readAppSetting())
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.openVoicePanel, async (payload) => {
-        const source = typeof payload?.source === 'string' ? payload.source : 'click'
-        await this.showVoicePanel(source)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.floatingBall.updatePosition, (payload) => {
-        if (!payload || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) {
-          return
-        }
-        this.updateFloatingBallPosition(payload.x, payload.y)
       })
     )
 
@@ -410,52 +202,6 @@ export class AssistantModule extends BaseModule {
         return await openKeyboardSettings()
       })
     )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.submitText, async (payload) => {
-        return await this.handleVoiceSubmit(payload?.text, payload?.source)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.translateClipboardImage, async (payload) => {
-        return await this.handleClipboardImageTranslate(payload?.targetLang)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.listScreenshotDisplays, () => {
-        const setting = this.readAppSetting()
-        if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-          return []
-        }
-        return getNativeScreenshotService().listDisplays()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.selectScreenshotRegion, async (payload) => {
-        return await this.handleScreenshotRegionSelection(payload || undefined)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.captureScreenshot, async (payload) => {
-        return await this.handleScreenshotCapture(payload || undefined)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.saveScreenshot, async (payload) => {
-        return await this.handleScreenshotSave(payload || undefined)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.translateScreenshot, async (payload) => {
-        return await this.handleScreenshotTranslate(payload || undefined)
-      })
-    )
   }
 
   private watchAppSetting(): void {
@@ -465,7 +211,7 @@ export class AssistantModule extends BaseModule {
         saveMainConfig(StorageList.APP_SETTING, nextSetting as AppSetting)
         return
       }
-      void this.applySettingSnapshot(nextSetting as AppSetting)
+      this.applySettingSnapshot(nextSetting as AppSetting)
     })
   }
 
@@ -483,69 +229,6 @@ export class AssistantModule extends BaseModule {
 
   private patchAssistantSetting(setting: AppSetting): boolean {
     let changed = false
-
-    if (!isRecord(setting.assistant)) {
-      setting.assistant = {
-        enabled: ASSISTANT_DEFAULT_ENABLED
-      }
-      changed = true
-    } else {
-      if (typeof setting.assistant.enabled !== 'boolean') {
-        setting.assistant.enabled = ASSISTANT_DEFAULT_ENABLED
-        changed = true
-      }
-      const assistantSettings = setting.assistant as Record<string, unknown>
-      for (const key of ['name', 'identifier']) {
-        if (Object.prototype.hasOwnProperty.call(assistantSettings, key)) {
-          delete assistantSettings[key]
-          changed = true
-        }
-      }
-    }
-
-    if (!isRecord(setting.floatingBall)) {
-      setting.floatingBall = {
-        enabled: false,
-        size: FLOATING_BALL_DEFAULT_SIZE,
-        opacity: 1,
-        edgePadding: FLOATING_BALL_DEFAULT_PADDING,
-        position: {
-          x: -1,
-          y: -1
-        }
-      }
-      changed = true
-    } else {
-      if (typeof setting.floatingBall.enabled !== 'boolean') {
-        setting.floatingBall.enabled = false
-        changed = true
-      }
-      if (!Number.isFinite(setting.floatingBall.size)) {
-        setting.floatingBall.size = FLOATING_BALL_DEFAULT_SIZE
-        changed = true
-      }
-      if (!Number.isFinite(setting.floatingBall.opacity)) {
-        setting.floatingBall.opacity = 1
-        changed = true
-      }
-      if (!Number.isFinite(setting.floatingBall.edgePadding)) {
-        setting.floatingBall.edgePadding = FLOATING_BALL_DEFAULT_PADDING
-        changed = true
-      }
-      if (!isRecord(setting.floatingBall.position)) {
-        setting.floatingBall.position = { x: -1, y: -1 }
-        changed = true
-      } else {
-        if (!Number.isFinite(setting.floatingBall.position.x)) {
-          setting.floatingBall.position.x = -1
-          changed = true
-        }
-        if (!Number.isFinite(setting.floatingBall.position.y)) {
-          setting.floatingBall.position.y = -1
-          changed = true
-        }
-      }
-    }
 
     if (!isRecord(setting.voiceWake)) {
       setting.voiceWake = {
@@ -595,30 +278,6 @@ export class AssistantModule extends BaseModule {
     return changed
   }
 
-  private isAssistantEnabled(setting: AppSetting): boolean {
-    return setting.assistant?.enabled === true
-  }
-
-  private getFloatingBallSetting(setting: AppSetting): FloatingBallSetting {
-    const source = setting.floatingBall as Partial<FloatingBallSetting> | undefined
-    const size = Number.isFinite(source?.size) ? Number(source?.size) : FLOATING_BALL_DEFAULT_SIZE
-    const opacity = Number.isFinite(source?.opacity) ? Number(source?.opacity) : 1
-    const edgePadding = Number.isFinite(source?.edgePadding)
-      ? Number(source?.edgePadding)
-      : FLOATING_BALL_DEFAULT_PADDING
-    const position = source?.position
-    return {
-      enabled: source?.enabled === true,
-      size: Math.round(clamp(size, FLOATING_BALL_MIN_SIZE, FLOATING_BALL_MAX_SIZE)),
-      opacity: clamp(opacity, 0.5, 1),
-      edgePadding: Math.round(clamp(edgePadding, 8, 64)),
-      position: {
-        x: Number.isFinite(position?.x) ? Number(position?.x) : -1,
-        y: Number.isFinite(position?.y) ? Number(position?.y) : -1
-      }
-    }
-  }
-
   private getVoiceInputSetting(setting: AppSetting): VoiceInputSetting {
     const source = setting.voiceInput as Partial<VoiceInputSetting> | undefined
     return {
@@ -657,100 +316,19 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private async applySettingSnapshot(setting: AppSetting): Promise<void> {
-    const voiceInput = this.getVoiceInputSetting(setting)
-    const floatingBall = this.getFloatingBallSetting(setting)
-    const showFloatingBall = this.isAssistantEnabled(setting) && floatingBall.enabled
-
-    if (!voiceInput.enabled) {
+  private applySettingSnapshot(setting: AppSetting): void {
+    if (!this.getVoiceInputSetting(setting).enabled) {
       this.stopActiveVoiceInput()
       if (this.voiceDockExpanded) {
         this.collapseVoicePanel()
       }
     }
 
-    if (!showFloatingBall) {
-      // A hidden assistant ball must not tear down an active dictation HUD. It is a separate
-      // temporary surface that can be opened by Fn even when the resting ball is disabled.
-      if (!this.voiceDockExpanded) {
-        this.hideVoicePanel()
-      }
-      return
-    }
-
-    const dock = await this.ensureVoiceDockWindow()
+    // There is no resting surface: the dock only exists for a voice session, so outside one it
+    // stays hidden. A setting never opens it; only a voice command does.
     if (!this.voiceDockExpanded) {
-      this.applyFloatingBallBounds(dock, floatingBall)
+      this.hideVoicePanel()
     }
-    if (!dock.window.isVisible()) {
-      dock.window.showInactive()
-    }
-  }
-
-  private async handleScreenshotRegionSelection(
-    _payload?: AssistantScreenshotRegionSelectionPayload
-  ): Promise<AssistantScreenshotRegionSelectionResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant floating ball is disabled.'
-      }
-    }
-
-    const manager = getScreenshotSessionManager()
-    if (manager.getActiveSessionId()) {
-      return {
-        success: false,
-        code: 'REGION_SELECTION_UNAVAILABLE',
-        error: 'A screenshot session is already active.'
-      }
-    }
-
-    this.hideVoicePanel()
-    try {
-      const ownerKey = 'internal:assistant-region'
-      const started = await manager.start({
-        entrypoint: 'assistant',
-        ownerKey,
-        completionMode: 'return-resource',
-        delayMs: 0,
-        initialTarget: 'free-region'
-      })
-      if (!started.accepted || !started.sessionId) {
-        return {
-          success: false,
-          code: 'REGION_SELECTION_UNAVAILABLE',
-          error: started.reason || 'Screenshot session is unavailable.'
-        }
-      }
-      const result = await manager.waitForResult(started.sessionId, ownerKey)
-      if (result.status === 'canceled') return { success: false, canceled: true }
-      if (result.status === 'failed') {
-        return {
-          success: false,
-          code: 'REGION_SELECTION_UNAVAILABLE',
-          error: result.code
-        }
-      }
-      return { success: true, resource: result.resource }
-    } catch (error) {
-      return {
-        success: false,
-        code: 'REGION_SELECTION_UNAVAILABLE',
-        error: error instanceof Error ? error.message : 'Screenshot session is unavailable.'
-      }
-    } finally {
-      this.restoreVoiceDockWindow()
-    }
-  }
-
-  private restoreVoiceDockWindow(): void {
-    const dockWindow = this.voiceDockWindow?.window
-    if (!dockWindow || dockWindow.isDestroyed()) return
-    if (!dockWindow.isVisible()) dockWindow.show()
-    dockWindow.focus()
   }
 
   private async ensureVoiceDockWindow(): Promise<TouchWindow> {
@@ -773,16 +351,10 @@ export class AssistantModule extends BaseModule {
   }
 
   private async createVoiceDockWindow(): Promise<TouchWindow> {
-    // One window carries both the ball and the dock, so the bounds limits have to admit
-    // the union of the two: the ball's user-configurable 48..72 and the dock's 360x64.
     const touchWindow = new TouchWindow({
       ...AssistantVoiceDockWindowOption,
       width: VOICE_DOCK_WIDTH,
-      height: VOICE_DOCK_HEIGHT,
-      minWidth: FLOATING_BALL_MIN_SIZE,
-      minHeight: FLOATING_BALL_MIN_SIZE,
-      maxWidth: VOICE_DOCK_WIDTH,
-      maxHeight: Math.max(VOICE_DOCK_HEIGHT, FLOATING_BALL_MAX_SIZE)
+      height: VOICE_DOCK_HEIGHT
     })
 
     /*
@@ -826,29 +398,6 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private applyFloatingBallBounds(window: TouchWindow, setting: FloatingBallSetting): void {
-    const hasPersistedPosition = setting.position.x !== -1 || setting.position.y !== -1
-    const displayAnchor = hasPersistedPosition
-      ? { x: Math.round(setting.position.x), y: Math.round(setting.position.y) }
-      : screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(displayAnchor)
-    const workArea = display.workArea
-    const maxX = workArea.x + workArea.width - setting.size
-    const maxY = workArea.y + workArea.height - setting.size
-    const defaultX = workArea.x + workArea.width - setting.size - setting.edgePadding
-    const defaultY = workArea.y + Math.round(workArea.height * 0.35)
-    const xCandidate = hasPersistedPosition ? setting.position.x : defaultX
-    const yCandidate = hasPersistedPosition ? setting.position.y : defaultY
-
-    window.window.setBounds({
-      x: clamp(Math.round(xCandidate), workArea.x, maxX),
-      y: clamp(Math.round(yCandidate), workArea.y, maxY),
-      width: setting.size,
-      height: setting.size
-    })
-    window.window.setOpacity(setting.opacity)
-  }
-
   private applyVoiceDockBounds(window: TouchWindow, anchorBounds: Rectangle): void {
     const display = screen.getDisplayNearestPoint({
       x: anchorBounds.x + anchorBounds.width / 2,
@@ -866,47 +415,6 @@ export class AssistantModule extends BaseModule {
     })
   }
 
-  private updateFloatingBallPosition(x: number, y: number): void {
-    const dock = this.voiceDockWindow
-    if (!dock || dock.window.isDestroyed() || this.voiceDockExpanded) {
-      return
-    }
-
-    const bounds = dock.window.getBounds()
-    const display = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) })
-    const workArea = display.workArea
-    const maxX = workArea.x + workArea.width - bounds.width
-    const maxY = workArea.y + workArea.height - bounds.height
-    const nextX = clamp(Math.round(x), workArea.x, maxX)
-    const nextY = clamp(Math.round(y), workArea.y, maxY)
-
-    dock.window.setPosition(nextX, nextY)
-    this.pendingPosition = { x: nextX, y: nextY }
-    this.schedulePositionPersist()
-  }
-
-  private schedulePositionPersist(): void {
-    if (this.positionSaveTimer) {
-      clearTimeout(this.positionSaveTimer)
-    }
-    this.positionSaveTimer = setTimeout(() => {
-      this.positionSaveTimer = null
-      if (!this.pendingPosition) {
-        return
-      }
-      const setting = this.readAppSetting()
-      const changed = this.patchAssistantSetting(setting)
-      if (changed) {
-        saveMainConfig(StorageList.APP_SETTING, setting)
-      }
-      setting.floatingBall.position = { ...this.pendingPosition }
-      saveMainConfig(StorageList.APP_SETTING, setting, { force: true })
-      this.pendingPosition = null
-      void persistMainConfig(StorageList.APP_SETTING).catch((error) => {
-        assistantLog.warn('Failed to persist floating ball position immediately', { error })
-      })
-    }, 220)
-  }
   /** True while the VoiceDock is open or its first renderer window is still being created. */
   isVoiceCommandActive(): boolean {
     return (
@@ -961,7 +469,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.resetEscapeCancelHold(false, true)
-    // A compact dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
+    // A hidden dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
     // renderer has mounted; sending a second command here can race that handoff and leave the
     // first session reset by `openPanel()`.
     if (this.voiceCommandStartPending) return
@@ -1082,16 +590,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.voiceDockExpanded = false
-    const setting = this.readAppSetting()
-    const floatingBall = this.getFloatingBallSetting(setting)
-    if (this.isAssistantEnabled(setting) && floatingBall.enabled) {
-      this.applyFloatingBallBounds(dock, floatingBall)
-      if (!dock.window.isVisible()) {
-        dock.window.showInactive()
-      }
-    } else {
-      dock.window.hide()
-    }
+    dock.window.hide()
     this.transport?.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelClosed, undefined)
   }
 
@@ -1115,451 +614,6 @@ export class AssistantModule extends BaseModule {
 
     this.collapseVoicePanel()
     return true
-  }
-
-  private async handleVoiceSubmit(
-    rawText?: string,
-    rawSource?: string
-  ): Promise<{ accepted: boolean }> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting)) {
-      return { accepted: false }
-    }
-
-    const text = typeof rawText === 'string' ? rawText.trim() : ''
-    if (!text) {
-      return { accepted: false }
-    }
-
-    const source = typeof rawSource === 'string' && rawSource.trim() ? rawSource.trim() : 'voice'
-
-    this.collapseVoicePanel()
-    const curScreen = windowManager.getCurScreen()
-    const currentWindow = windowManager.current
-    if (currentWindow) {
-      windowManager.updatePosition(currentWindow, curScreen)
-    }
-
-    coreBoxManager.trigger(true)
-
-    const targetWindow = windowManager.current?.window
-    if (!targetWindow || targetWindow.isDestroyed() || !this.transport) {
-      return { accepted: false }
-    }
-
-    setTimeout(() => {
-      this.transport
-        ?.sendTo(targetWindow.webContents, CoreBoxEvents.input.setQuery, {
-          value: `ai ${text}`,
-          context: {
-            entrypoint: {
-              id: 'assistant.voice',
-              source,
-              execution: {
-                mode: 'new',
-                owner: 'assistant',
-                scope: 'light',
-                objective: 'Assistant voice request',
-                isolated: true
-              }
-            }
-          }
-        })
-        .catch((error) => {
-          assistantLog.error('Failed to dispatch voice text to CoreBox', { error })
-        })
-    }, 120)
-
-    return { accepted: true }
-  }
-
-  private async handleClipboardImageTranslate(
-    targetLang?: string
-  ): Promise<AssistantClipboardImageTranslateResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant floating ball is disabled.'
-      }
-    }
-
-    const result = await translateClipboardImage(targetLang || 'zh', {
-      openPinWindow: true
-    })
-    if (!result.success) {
-      const code = isIntelligenceErrorCode(result.code)
-        ? result.code
-        : result.code === 'SCENE_UNAVAILABLE'
-          ? 'SCENE_UNAVAILABLE'
-          : 'IMAGE_UNAVAILABLE'
-      return {
-        success: false,
-        code,
-        error: result.error,
-        reason: result.reason,
-        recovery: result.recovery
-      }
-    }
-
-    return {
-      success: true,
-      translatedImageBase64: result.translatedImageBase64,
-      sourceText: result.sourceText,
-      targetText: result.targetText,
-      metadata: result.metadata
-    }
-  }
-
-  private async handleScreenshotCapture(
-    payload?: AssistantScreenshotCapturePayload
-  ): Promise<AssistantScreenshotCaptureResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant floating ball is disabled.'
-      }
-    }
-
-    try {
-      const screenshotService = getNativeScreenshotService()
-      let captureResult = managedCaptureResult(payload)
-      if (payload?.target === 'resource' && !captureResult) {
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot resource is invalid.'
-        }
-      }
-      if (captureResult) {
-        captureResult = {
-          ...captureResult,
-          wroteClipboard: await screenshotService.writeCaptureResourceToClipboard(
-            captureResult.tfileUrl
-          )
-        }
-      } else {
-        captureResult = await screenshotService.capture({
-          ...normalizeScreenshotTarget(payload),
-          writeClipboard: true
-        })
-      }
-      if (typeof captureResult.tfileUrl !== 'string' || !captureResult.tfileUrl.trim()) {
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot image is unavailable.'
-        }
-      }
-
-      return {
-        success: true,
-        tfileUrl: captureResult.tfileUrl,
-        mimeType: captureResult.mimeType,
-        width: captureResult.width,
-        height: captureResult.height,
-        displayName: captureResult.displayName,
-        wroteClipboard: captureResult.wroteClipboard
-      }
-    } catch (error) {
-      return {
-        success: false,
-        code: mapScreenshotUnavailableCode(error),
-        error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
-      }
-    }
-  }
-
-  private async handleScreenshotSave(
-    payload?: AssistantScreenshotSavePayload
-  ): Promise<AssistantScreenshotSaveResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant floating ball is disabled.'
-      }
-    }
-
-    let ownedTempArtifactUrl: string | undefined
-    let ownsCaptureArtifact = false
-    try {
-      const screenshotService = getNativeScreenshotService()
-      let captureResult = managedCaptureResult(payload)
-      if (payload?.target === 'resource' && !captureResult) {
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot resource is invalid.'
-        }
-      }
-      if (!captureResult) {
-        try {
-          captureResult = await screenshotService.capture({
-            ...normalizeScreenshotTarget(payload),
-            writeClipboard: false
-          })
-          ownsCaptureArtifact = true
-        } catch (error) {
-          return {
-            success: false,
-            code: mapScreenshotUnavailableCode(error),
-            error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
-          }
-        }
-      }
-
-      if (typeof captureResult.tfileUrl !== 'string' || !captureResult.tfileUrl.trim()) {
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot image is unavailable.'
-        }
-      }
-
-      if (ownsCaptureArtifact) {
-        ownedTempArtifactUrl = captureResult.tfileUrl
-      }
-
-      const ownerWindow =
-        this.voiceDockExpanded && this.voiceDockWindow && !this.voiceDockWindow.window.isDestroyed()
-          ? this.voiceDockWindow.window
-          : undefined
-      const saveOptions: SaveDialogOptions = {
-        title: 'Save Screenshot',
-        defaultPath: `tuff-screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
-        filters: [{ name: 'PNG Image', extensions: ['png'] }]
-      }
-      const saveResult = ownerWindow
-        ? await dialog.showSaveDialog(ownerWindow, saveOptions)
-        : await dialog.showSaveDialog(saveOptions)
-      if (saveResult.canceled || !saveResult.filePath) {
-        return {
-          success: false,
-          canceled: true
-        }
-      }
-
-      await screenshotService.copyCaptureResource(captureResult.tfileUrl, saveResult.filePath)
-
-      return {
-        success: true,
-        mimeType: captureResult.mimeType,
-        width: captureResult.width,
-        height: captureResult.height,
-        displayName: captureResult.displayName,
-        sizeBytes: captureResult.sizeBytes
-      }
-    } catch (error) {
-      return {
-        success: false,
-        code: 'SAVE_FAILED',
-        error: error instanceof Error ? error.message : 'Screenshot save failed.'
-      }
-    } finally {
-      if (ownedTempArtifactUrl) {
-        try {
-          await getNativeScreenshotService().releaseTempArtifact(ownedTempArtifactUrl)
-        } catch {
-          // Scheduled retention remains the fallback if eager release fails.
-        }
-      }
-    }
-  }
-
-  private async translateScreenshotWithOcrFallback(
-    dataUrl: string,
-    targetLang: string,
-    degradedReason: AssistantScreenshotFallbackReason
-  ): Promise<AssistantScreenshotTranslateResponse> {
-    let ocrResult: IntelligenceInvokeResult<IntelligenceVisionOcrResult>
-    try {
-      ocrResult = await tuffIntelligence.vision.ocr(
-        {
-          source: { type: 'data-url', dataUrl },
-          includeLayout: false,
-          includeKeywords: false
-        },
-        {
-          metadata: {
-            caller: ASSISTANT_SCREENSHOT_TRANSLATE_CALLER,
-            source: ASSISTANT_SCREENSHOT_FALLBACK_SOURCE
-          }
-        }
-      )
-    } catch (error) {
-      return {
-        success: false,
-        ...toAssistantIntelligenceFailure(error, 'vision.ocr', {
-          code: 'OCR_UNAVAILABLE',
-          error: 'Screenshot OCR fallback is unavailable.'
-        })
-      }
-    }
-
-    const sourceText =
-      typeof ocrResult.result?.text === 'string' ? ocrResult.result.text.trim() : ''
-    if (!sourceText) {
-      return {
-        success: false,
-        code: 'OCR_UNAVAILABLE',
-        error: 'Screenshot OCR did not detect translatable text.'
-      }
-    }
-
-    const translationCapability = resolveCapabilityStatus('text.translate')
-    if (!translationCapability.available) {
-      return {
-        success: false,
-        code: 'TEXT_TRANSLATE_UNAVAILABLE',
-        error: 'Screenshot text translation fallback is unavailable.'
-      }
-    }
-
-    let translationResult: IntelligenceInvokeResult<string>
-    try {
-      const sourceLang =
-        typeof ocrResult.result?.language === 'string' ? ocrResult.result.language.trim() : ''
-      translationResult = await tuffIntelligence.text.translate(
-        {
-          text: sourceText,
-          ...(sourceLang ? { sourceLang } : {}),
-          targetLang
-        },
-        {
-          metadata: {
-            caller: ASSISTANT_SCREENSHOT_TRANSLATE_CALLER,
-            source: ASSISTANT_SCREENSHOT_FALLBACK_SOURCE
-          }
-        }
-      )
-    } catch (error) {
-      return {
-        success: false,
-        ...toAssistantIntelligenceFailure(error, 'text.translate', {
-          code: 'TEXT_TRANSLATE_UNAVAILABLE',
-          error: 'Screenshot text translation fallback is unavailable.'
-        })
-      }
-    }
-
-    const targetText =
-      typeof translationResult.result === 'string' ? translationResult.result.trim() : ''
-    if (!targetText) {
-      return {
-        success: false,
-        code: 'TEXT_TRANSLATE_UNAVAILABLE',
-        error: 'Screenshot text translation returned an empty result.'
-      }
-    }
-
-    return {
-      success: true,
-      mode: 'ocr-text',
-      sourceText,
-      targetText,
-      fallback: {
-        degradedReason,
-        ocr: {
-          provider: ocrResult.provider,
-          model: ocrResult.model,
-          traceId: ocrResult.traceId,
-          latencyMs: ocrResult.latency,
-          engine: ocrResult.result.engine
-        },
-        translation: {
-          provider: translationResult.provider,
-          model: translationResult.model,
-          traceId: translationResult.traceId,
-          latencyMs: translationResult.latency
-        }
-      }
-    }
-  }
-
-  private async handleScreenshotTranslate(
-    payload?: AssistantScreenshotTranslatePayload
-  ): Promise<AssistantScreenshotTranslateResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant floating ball is disabled.'
-      }
-    }
-
-    let screenshotDataUrl = ''
-    let imageBase64 = ''
-    try {
-      const screenshotService = getNativeScreenshotService()
-      const managed = managedCaptureResult(payload)
-      if (payload?.target === 'resource' && !managed) {
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot resource is invalid.'
-        }
-      }
-      const captureResult =
-        managed ??
-        (await screenshotService.capture({
-          ...normalizeScreenshotTarget(payload),
-          writeClipboard: false
-        }))
-      const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
-      imageBase64 = imageBuffer.toString('base64')
-      screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
-    } catch (error) {
-      return {
-        success: false,
-        code: mapScreenshotUnavailableCode(error),
-        error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
-      }
-    }
-
-    if (!imageBase64) {
-      return {
-        success: false,
-        code: 'SCREENSHOT_UNAVAILABLE',
-        error: 'Screenshot image is unavailable.'
-      }
-    }
-
-    const targetLang = payload?.targetLang?.trim() || 'zh'
-    const result = await translateImageBase64(imageBase64, targetLang, {
-      openPinWindow: true
-    })
-    if (!result.success) {
-      if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
-        const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
-        return await this.translateScreenshotWithOcrFallback(
-          screenshotDataUrl,
-          targetLang,
-          degradedReason
-        )
-      }
-      return {
-        success: false,
-        code: 'IMAGE_UNAVAILABLE',
-        error: result.error,
-        reason: result.reason,
-        recovery: result.recovery
-      }
-    }
-
-    return {
-      success: true,
-      mode: 'translated-image',
-      translatedImageBase64: result.translatedImageBase64,
-      sourceText: result.sourceText,
-      targetText: result.targetText,
-      metadata: result.metadata
-    }
   }
 
   private destroyVoiceDockWindow(): void {

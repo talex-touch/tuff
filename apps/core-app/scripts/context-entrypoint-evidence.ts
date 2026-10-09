@@ -8,12 +8,7 @@ export const CONTEXT_ENTRYPOINT_EVIDENCE_SCHEMA = 'tuff.context-entrypoint-evide
 
 export type ContextEvidenceLevel = 'unit' | 'controlled' | 'packaged' | 'real-profile'
 export type ContextEvidenceStatus = 'passed' | 'failed' | 'blocked' | 'open'
-export type ContextEvidenceEntrypoint =
-  | 'corebox'
-  | 'workflow'
-  | 'omni-panel'
-  | 'assistant'
-  | 'cross-entrypoint'
+export type ContextEvidenceEntrypoint = 'corebox' | 'workflow' | 'omni-panel' | 'cross-entrypoint'
 
 export interface ContextEntrypointEvidenceCase {
   id: string
@@ -97,7 +92,6 @@ function isEvidenceEntrypoint(value: unknown): value is ContextEvidenceEntrypoin
     value === 'corebox' ||
     value === 'workflow' ||
     value === 'omni-panel' ||
-    value === 'assistant' ||
     value === 'cross-entrypoint'
   )
 }

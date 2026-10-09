@@ -1,7 +1,8 @@
 # PRD: OmniPanel 与悬浮助手下一版本
 
-> 更新时间：2026-07-13
+> 更新时间：2026-10-09
 > 状态：MVP implementation slice landed / packaged evidence pending
+> 2026-10-08：悬浮助手已收缩为 Fn/Ctrl 唤起的听写胶囊。浮球、Voice Panel 的文本提交与截图/翻译入口及其主进程处理函数均已移除，下文「悬浮助手」、「截图与图片翻译」的主要缺口与 FR-2 为历史记录。
 > 目标窗口：2.5.x Beta 后续，不能抢 2.5.0 Stable 的 CoreBox 文本 + OCR 收口
 > 关联 Roadmap：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 > 关联 AI PRD：`./ai-2.5.0-plan-prd.md`
@@ -58,6 +59,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 
 ### 悬浮助手
 
+> 2026-10-08：本节描述的浮球、文本提交和截图/翻译入口已全部移除，`FloatingBall.vue` 已删除；语音输入只保留 Fn/Ctrl 唤起的听写胶囊（`VoiceDock` + `VoicePanel`）。以下为历史记录。
+
 当前实现位于：
 
 - `apps/core-app/src/main/modules/assistant/module.ts`
@@ -83,6 +86,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - 常驻浮窗有打扰与性能风险，必须继续默认关闭、可解释、可快速退出。
 
 ### 截图与图片翻译
+
+> 2026-10-08：Assistant 的截图与图片翻译事件（显示器列表、区域选择、截图、保存、截图翻译、剪贴板图片翻译）已随浮球移除，连同它们的 OCR 降级、区域选择 overlay 与保存对话框；下文「主要缺口」三条描述的都是这些已删除的路径，为历史记录。原生截图服务、CoreBox 图片翻译与贴图窗口不受影响。
 
 当前实现位于：
 
@@ -164,6 +169,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 5. IF provider unavailable、quota exhausted、permission denied 或 model unsupported THEN 系统 SHALL fail-closed 并展示可理解原因。
 
 ### FR-2：悬浮助手轻量入口
+
+> 2026-10-08：已撤销。浮球及其点击、拖动与文本面板入口已移除，本条不再验收；听写胶囊的契约见 `docs/engineering/specs/main-process/voice-session-contracts.md`。
 
 用户故事：作为经常跨窗口工作的用户，我希望有一个低打扰的悬浮入口，可以在需要时呼出语音/文本面板或截图翻译，而不是常驻占屏。
 

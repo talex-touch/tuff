@@ -161,6 +161,10 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   // The unpublished voiceRecognition routes duplicated Intelligence capability bindings.
   delete nextValue.voiceRecognition
   ensureVoiceInputSetting(nextValue)
+  // The floating ball and its Assistant master switch are gone. The voice input migration just
+  // above is the last reader of `assistant`, so both leave the stored profile once it has run.
+  delete nextValue.floatingBall
+  delete nextValue.assistant
   const setup = isPlainObject(nextValue.setup) ? nextValue.setup : {}
   const window = isPlainObject(nextValue.window) ? nextValue.window : {}
   const omniPanel = isPlainObject(nextValue.omniPanel) ? nextValue.omniPanel : {}
