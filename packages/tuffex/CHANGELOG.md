@@ -24,7 +24,7 @@
 
 ### 🐛 组件修复
 
-- `TxCardSpread`、`TxCarousel3D`、`TxFlipBook` 与 `TxMonoChart` 提示框的投影补上横向偏移（约为纵向的一半，如 `0 4px 12px` → `2px 4px 12px`），与组件库统一的左上方光源一致；此前随 Amicro 恢复带回了正下方的阴影，`shadow-light-source` 测试因此失败。
+- `TxCardSpread` 的卡片、`TxCarousel3D` 的轮播页、`TxFlipBook` 的书本外框与页面内容，以及 `TxMonoChart` 的提示框，投影都补上横向偏移（约为纵向的一半，如 `0 4px 12px` → `2px 4px 12px`），与组件库统一的左上方光源一致；此前随 Amicro 恢复带回了正下方的阴影，`shadow-light-source` 测试因此失败。
 - `TxBaseAnchor` 的 `transfer` 关闭改为落在 `exit.scale`：此前它忽略 `exit.scale`，`closeType: 'transfer'` 的混搭关闭也不回落到 transfer 自己的默认缩放（0.92），而是沿用打开类型的值。
 - `TxBaseAnchor` 的保留面板在关闭动画结束后停放到视口外，裁剪根节点自身的溢出。`eager` 与 `keepAliveContent` 仍保留可测量内容；视口缩小时，关闭的面板不再撑宽文档。重新打开会先恢复文档定位，并取消旧关闭回调。
 - `TxMotionLoader` 将保留的 React SVG 描边属性转换为标准 SVG 属性，恢复来源中的线宽、端帽、连接和虚线参数；`viewBox` 与滤镜大小写保持不变，SSR 与客户端遵循相同几何。
