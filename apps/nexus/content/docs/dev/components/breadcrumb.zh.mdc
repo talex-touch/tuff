@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 链接与手动条目
-带 `href` 的条目渲染为原生链接；无 `href` 的条目渲染为按钮并派发 `click`。
+带 `href` 的条目渲染为原生链接；其余可交互条目渲染为按钮并派发 `click`。
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
 code: |
@@ -80,7 +80,7 @@ code: |
 
 - 根节点是 `<nav aria-label="Breadcrumb">`，内含有序列表。
 - 最后一项渲染为 `<span aria-current="page">`，即使带 `href` 也不可交互。
-- 其余条目：带 `href` 渲染为 `<a>`，走原生导航；无 `href` 渲染为 `<button>`。
+- 其余未禁用的条目：带 `href` 渲染为 `<a>`，走原生导航；无 `href` 渲染为 `<button>`。
 - 禁用项渲染为 `<span aria-disabled="true">`，不派发事件。
 - 分隔符只出现在条目之间，带 `aria-hidden`。
 - 图标名使用 `i-` 前缀的图标类，如 `i-carbon-home`。

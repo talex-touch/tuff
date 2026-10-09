@@ -213,6 +213,8 @@ code: |
 - The thumb runs on the glide material of the shared `useJellyIndicator` (as in `TxTabs`, `TxTabBar`, and `TxSidebarNav`), writing `transform`, `width`, and `opacity` each frame without re-rendering.
 - Source: `packages/tuffex/packages/components/src/flat-radio/`.
 
+<TuffDocSourceLink />
+
 ## Customization
 
 | CSS variable | Used for |
@@ -220,5 +222,3 @@ code: |
 | `--tx-flat-radio-track-bg` | Track fill; defaults to `--tx-fill-color`. |
 | `--tx-flat-radio-indicator-bg` | Thumb and multi-select item fill; defaults to `--tx-surface-raised`. |
 | `--tx-flat-radio-indicator-shadow` | Thumb shadow. |
-
-<TuffDocSourceLink />

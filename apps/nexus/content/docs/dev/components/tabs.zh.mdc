@@ -286,6 +286,8 @@ code: |
 - `TxTabItemGroup` 不渲染 DOM，分组由 TxTabs 读取其子级后生成。
 - 源码：`packages/tuffex/packages/components/src/tabs/`。
 
+<TuffDocSourceLink />
+
 ## 自定义
 
 | CSS 变量 | 用途 |
@@ -300,5 +302,3 @@ code: |
 | `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器 props 生成，仅供宿主读取。 |
 | `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成。 |
 | `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成。 |
-
-<TuffDocSourceLink />
