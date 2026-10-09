@@ -281,12 +281,12 @@ defineExpose({ previous, next, goTo, replayIntro })
 <style scoped>
 .tx-flip-book { position: relative; width: 100%; font-size: 13px; color: var(--tx-text-color-primary); }
 .tx-flip-book__perspective { position: relative; width: calc(100% - 24px); margin: 12px auto; aspect-ratio: 16 / 10; perspective: 2400px; }
-.tx-flip-book__binding { position: absolute; inset: 0; transform: var(--tx-book-pose); transform-style: preserve-3d; border-radius: 6px; box-shadow: 0 12px 24px color-mix(in srgb, var(--tx-text-color-primary) 18%, transparent); }
+.tx-flip-book__binding { position: absolute; inset: 0; transform: var(--tx-book-pose); transform-style: preserve-3d; border-radius: 6px; box-shadow: 6px 12px 24px color-mix(in srgb, var(--tx-text-color-primary) 18%, transparent); }
 .tx-flip-book__page { position: absolute; inset-block: 0; width: 50%; overflow: hidden; background: var(--tx-book-paper); box-shadow: inset 0 0 0 1px var(--tx-border-color); }
 .tx-flip-book__page.is-left { left: 0; border-radius: 6px 0 0 6px; }
 .tx-flip-book__page.is-right { right: 0; border-radius: 0 6px 6px 0; }
 .tx-flip-book__paper { position: absolute; inset: 0; background-color: var(--tx-book-paper); background-image: repeating-radial-gradient(circle at 17% 31%, color-mix(in srgb, var(--tx-text-color-primary) 3%, transparent) 0 0.5px, transparent 0.5px 3px); padding: var(--tx-book-padding); box-sizing: border-box; }
-.tx-flip-book__content { width: 100%; height: 100%; border-radius: var(--tx-book-radius); box-shadow: 0 4px var(--tx-book-shadow) color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); overflow: hidden; }
+.tx-flip-book__content { width: 100%; height: 100%; border-radius: var(--tx-book-radius); box-shadow: 2px 4px var(--tx-book-shadow) color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); overflow: hidden; }
 .tx-flip-book__content img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .tx-flip-book__text { display: flex; height: 100%; box-sizing: border-box; flex-direction: column; justify-content: center; gap: 8px; padding: 12px; overflow: auto; }
 .tx-flip-book__text strong { font-size: 14px; font-weight: 600; }

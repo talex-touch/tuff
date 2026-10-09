@@ -119,8 +119,8 @@ defineExpose({ select, toggle })
 .tx-card-spread { width: 100%; color: var(--tx-text-color-primary); font-size: 13px; }
 .tx-card-spread__viewport { overflow: auto; }
 .tx-card-spread__stage { position: relative; width: 100%; }
-.tx-card-spread__card { position: absolute; top: 50%; left: 50%; padding: 0; border: 0; border-radius: 16px; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); color: inherit; box-shadow: inset 0 0 0 1px var(--tx-border-color), 0 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); overflow: hidden; cursor: pointer; text-align: left; font: inherit; }
-.tx-card-spread__card.is-selected { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 0 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
+.tx-card-spread__card { position: absolute; top: 50%; left: 50%; padding: 0; border: 0; border-radius: 16px; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); color: inherit; box-shadow: inset 0 0 0 1px var(--tx-border-color), 2px 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); overflow: hidden; cursor: pointer; text-align: left; font: inherit; }
+.tx-card-spread__card.is-selected { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 2px 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
 .tx-card-spread__card.is-stamp { outline: 2px dashed var(--tx-border-color-darker); outline-offset: -7px; }
 .tx-card-spread__card:focus-visible, .tx-card-spread__toggle:focus-visible, .tx-card-spread__focus-item:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
 .tx-card-spread__image { display: block; width: 100%; height: 68%; object-fit: cover; }
