@@ -216,7 +216,17 @@ const LIMITS = {
   // only ones that moved; the full entry went 735.0 -> 737.3 KiB. It slimmed before asking:
   // the copy button is unscoped (-0.6 KiB of data-v attributes) and its two tones share one
   // rule through custom properties. Actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 738 * 1024,
+  // 738 -> 740 on 2026-10-08, the motion primitives round: `morph` (TxMorph) ships its own
+  // stylesheet, 1,318 B, and three existing sheets grow by 826 B together. `transition`
+  // 1,638 -> 2,272 B: the `blur` preset's rules, and TxTransitionSmoothSize's own box/measure
+  // layer now that it no longer renders TxAutoSizer. `switch` 4,763 -> 4,863 B: the thumb's
+  // `transition: all` became the explicit property list its spring-drawn travel needs. `charts`
+  // 26,884 -> 26,976 B: TxLineSeries' draw-enter symbol fade. The full bundle went 737.3 ->
+  // 739.4 KiB, exactly that growth. Checked for the inlining this limit exists to catch: the
+  // morph sheet carries only the `--tx-morph-radius` registration and `.tx-morph*` rules, and
+  // each grown sheet only its own component's rules. Actuals plus minimal headroom, growth
+  // from here fails.
+  fullCssBytes: 740 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -275,7 +285,11 @@ const LIMITS = {
   // code-stream sheets carry only their own `.tx-copy-button*` / `.tx-bui-code-stream__copy`
   // rules; the text-transformer and text-morph sheets the button now reaches stay in their
   // own files through style-deps. Actuals plus minimal headroom, growth from here fails.
-  onDemandCssBytes: 708.5 * 1024,
+  // 708.5 -> 710 on 2026-10-08: the motion primitives round of the `fullCssBytes` note, measured
+  // with it at 709.9 KiB across 186 sheets: TxMorph's new 1,318 B sheet, and the transition,
+  // switch and charts sheets' 826 B. The dependency closure still imports every primitive
+  // sheet once.
+  onDemandCssBytes: 710 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
