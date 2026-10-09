@@ -1,6 +1,6 @@
 ---
 title: "AgentTrace"
-description: "An expandable agent trace covering step, reasoning, search, and tool forms."
+description: "An expandable trace of an agent's steps."
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -12,9 +12,7 @@ verified: true
 ## Usage
 
 ### Step Trace
-
-The trace opens as it starts and folds once it settles; rows arrive in two batches. The timeline belongs to the demo — the component itself only consumes `rows` and `working`.
-
+The host drives the timeline: append `rows`, then set `working` to `false` when the run ends.
 :::TuffDemoWrapper{demo="AgentTraceStepsDemo" code-lang="vue"}
 ---
 code: |
@@ -29,30 +27,16 @@ code: |
 ---
 :::
 
-### All Four Forms Side by Side
-
-`steps` is a step row with a status glyph, `reasoning` is wrapping prose, `search` adds a query line and coloured source dots, and `coding` adds mono filenames with diff counters. The switch is a demo affordance — the component takes one `variant` and does not know it was switched.
-
-:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue" title="All four variants" description="All four share one header and disclosure grammar; only the row form changes. Switch to compare."}
+### Four Forms
+`variant` changes only the row form; the header and the disclosure stay the same.
+:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  const variant = ref<'steps' | 'reasoning' | 'search' | 'coding'>('steps')
-  const rows = computed(() => datasets[variant.value])
-  </script>
-
   <template>
-    <TxFlatRadio v-model="variant" size="sm">
-      <TxFlatRadioItem value="steps" label="Steps" />
-      <TxFlatRadioItem value="reasoning" label="Reasoning" />
-      <TxFlatRadioItem value="search" label="Search" />
-      <TxFlatRadioItem value="coding" label="Coding" />
-    </TxFlatRadio>
-
     <TxAgentTrace
       :key="variant"
       :variant="variant"
-      :rows="rows"
+      :rows="datasets[variant]"
       :query="variant === 'search' ? 'best waffle cone supplier' : undefined"
       :more-label="variant === 'search' ? '+7 more' : undefined"
       default-open
@@ -64,12 +48,11 @@ code: |
 
 ### Best Practices
 
-- Treat it as a controlled primitive: keep the timeline in the host, grow `rows` and flip `working`, and leave playback scripts out of the component.
-- Always handle `@open` in search surfaces, or clicking a source does nothing at all.
+- Keep the timeline in the host: append `rows` and flip `working`; don't put playback scripts in the component.
+- Always handle `open` in the `search` form, or clicking a source does nothing.
 - Cap long traces with `moreLabel` instead of laying out dozens of rows.
-- Use `reasoning` for paragraph prose — it wraps and never truncates. Use `steps` for single-line labels.
-- In streaming UIs, store `toggle` in the host and feed it back through `userOpen` so a rebuild does not discard the reader's choice.
-- The component sizes to its container; upstream's 380px frame is the host's decision.
+- Use `reasoning` for paragraph prose (it wraps, never truncates) and `steps` for single-line labels.
+- In streaming UIs, store `toggle` in the host and pass it back through `userOpen` so the reader's choice survives a rebuild.
 
 ## API Reference
 
@@ -84,21 +67,25 @@ code: |
 | `activeLabel` | `string` | per variant | Header text while working. |
 | `doneLabel` | `string` | per variant | Header text once settled. |
 | `moreLabel` | `string` | — | Trailing overflow note, e.g. `+7 more`. |
-| `defaultOpen` | `boolean` | — | Open state before any interaction. Falls back to `working`. |
-| `userOpen` | `boolean` | — | Host-held override that survives a rebuild. |
-| `selectedId` | `string` | — | `coding`: the selected row id. Binding it hands ownership to the host. |
+| `defaultOpen` | `boolean` | — | Open state before any interaction; falls back to `working`. |
+| `userOpen` | `boolean` | — | Host-held open state; wins over everything and survives a rebuild. |
+| `selectedId` | `string` | — | `coding`: the selected row id. Binding it hands selection to the host. |
 
-`AgentTraceRow` is `{ id, primary, secondary?, mono?, added?, removed?, href?, status? }`, where `status` is `'pending' | 'active' | 'done' | 'error'`.
+Default header text per variant is below. Counted text such as "Thought for 4 seconds" depends on a measurement only the host has, so pass `doneLabel` for it.
 
-Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `search` uses `Searching the web` / `Searched the web`, and `coding` uses `Running tools` / `Ran tools`. Counted copy (upstream's "Thought for 4 seconds", "Ran 3 tools") folds in a measurement only the host has — pass `doneLabel` for those.
+| Variant | `activeLabel` | `doneLabel` |
+|------|------|------|
+| `steps` / `reasoning` | `Thinking` | `Thought` |
+| `search` | `Searching the web` | `Searched the web` |
+| `coding` | `Running tools` | `Ran tools` |
 
 ### Events
 
 | Event | Payload | Description |
 |------|------|------|
-| `toggle` | `(open: boolean)` | Emitted on header click, carrying the state after the toggle. |
-| `open` | `(row: AgentTraceRow)` | `search`: emitted when a linked row is clicked. The component never navigates. |
-| `select` | `(id: string \| null)` | `coding`: emitted on select or deselect; `null` when cleared. |
+| `toggle` | `(open: boolean)` | Fires on a header click with the new state. |
+| `open` | `(row: AgentTraceRow)` | `search`: fires when a linked row is clicked; the component never navigates. |
+| `select` | `(id: string \| null)` | `coding`: fires on select or deselect; `null` when cleared. |
 
 ### Slots
 
@@ -108,32 +95,38 @@ Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `s
 | `label` | `{ working }` | Replaces the header text. |
 | `row` | `{ row, index }` | Replaces the row content, keeping the row container and entrance. |
 
-## Ownership of the Open State
+### Types
 
-Open resolves through three layers, highest first: `userOpen` (host-held) → the component's own click override → `defaultOpen` → `working`.
+#### AgentTraceRow
 
-Used standalone, the trace opens and folds with `working`, and the reader's first click takes over from then on. But a streaming host re-renders on every delta, and a branch realignment can recreate the instance — an override kept only in instance state dies with it, which reads as "clicking does nothing". Lift `toggle` into the host and feed it back through `userOpen` to make the reader's choice survive any rebuild.
+| Field | Type | Description |
+|------|------|------|
+| `id` | `string` | Stable row key. |
+| `primary` | `string` | Step name, prose sentence, site title, or tool name. |
+| `secondary` | `string` | Right-hand detail: a count, domain, file path, or command. |
+| `mono` | `boolean` | Sets `secondary` in the monospace face. |
+| `added` / `removed` | `number` | Diff counters, shown as `+N −M` with a true minus sign (U+2212). |
+| `href` | `string` | In the `search` form, renders the row as a link whose click emits `open`. |
+| `status` | `'pending' \| 'active' \| 'done' \| 'error'` | `steps` glyph: `active` spins, `error` marks, anything else checks. |
 
 ## Overview
 
-- **Links never navigate on their own.** A `search` row still renders a real `href` (copyable, middle-clickable), but a click calls `preventDefault` and emits `open` so the host decides how to open it. This is required inside an Electron renderer.
-- The collapse carries `inert` while closed: a `0fr` grid still leaves its rows in the tab order, so they have to be taken out of it too.
-- The header is a `button` with `aria-expanded` and an `aria-controls` pointing at the collapse.
-- The `steps` glyph reads `row.status` first: `active` spins, `error` marks, anything else checks. **With no `status`** it falls back to upstream behaviour — only the last row spins while `working`.
-- `coding` rows are `button` elements with `aria-pressed`. Leave `selectedId` unbound and the component keeps the selection; bind it and the host owns it outright.
-- Diff counters use U+2212 MINUS SIGN (`−`), not a hyphen, so the pair matches the plus in width and weight.
-- Per-row entrance delay runs through the `--tx-bui-agent-trace-index` CSS variable rather than inline styles, so one rule turns it all off under reduced motion.
-- The rail is a pure CSS `::before`. Upstream measures the row stack in a layout effect and tweens its height over 500ms; dropping the measurement is safe because the collapse is already clipping it.
+- Open resolves from `userOpen`, then the reader's click, then `defaultOpen`, then `working`; the click lives only in the instance.
+- The header is a `button` with `aria-expanded` and `aria-controls`; while collapsed the body is `inert`, so its rows leave the tab order.
+- A `search` row keeps a real `href` (copyable, middle-clickable); a click calls `preventDefault` and emits `open`, and the host decides how to open it.
+- Without `status`, only the last row spins while `working`.
+- `coding` rows are `button` elements with `aria-pressed`.
+- Under reduced motion only the animation stops; opening, closing, and state work as usual.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/agent-trace/src/TxAgentTrace.vue`.
-- Types: `packages/tuffex/packages/components/src/agent-trace/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/agent-trace/__tests__/agent-trace.test.ts` (23 cases) covers the three-layer open precedence, `inert` while collapsed, non-navigating links, controlled and uncontrolled `coding` selection, the `steps` glyph fallback, U+2212, and the per-row stagger variable.
-- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/agent-trace/`.
 
 <TuffDocSourceLink />
 
-- **How it divides from the existing disclosures:** `TxChainOfThought` is a thinking chain with markdown bodies, `TxReasoningDisclosure` is a single reasoning passage, and `TxSources` is a source list. This component is a compact single-line trace carrying links, diffs, and tool selection — different data shapes, not interchangeable.
-- **Accessibility:** the `inert` collapse is a deliberate improvement over upstream, whose collapsed region leaves links in the tab order.
-- **Known deviation:** the rail's 500ms height tween was not ported (see the interaction contract); the static settled state matches the reference screenshots.
+## Related components
+
+- [Chain of Thought](./chain-of-thought.en.mdc): a thinking chain with Markdown bodies.
+- [Reasoning Disclosure](./reasoning-disclosure.en.mdc): a single reasoning passage.
+- [Sources](./sources.en.mdc): a source list.

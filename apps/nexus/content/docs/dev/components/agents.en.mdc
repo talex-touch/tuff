@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "Selectable agent list with enabled/disabled grouping, loading skeletons, empty state, selection, and badges."
+description: "A selectable list of agents, grouped by availability."
 category: AiAgent
 status: beta
 since: 0.3.4
@@ -11,8 +11,8 @@ verified: true
 
 ## Usage
 
-Bind `selectedId` in the caller and update it from `select`. Use custom group titles when the list is shown outside an English-only surface.
-
+### Basic
+The caller owns `selectedId` and writes it back from `select`.
 ::::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
 ---
 code: |
@@ -35,74 +35,69 @@ code: |
 
 ### Best Practices
 
-- Keep this component at the picker layer. Start conversations, fetch capabilities, and run agents in the surrounding feature module.
-- Provide localized `enabledTitle`, `disabledTitle`, and `emptyText` when the surrounding page is localized.
-- Use stable ids from backend or registry data; avoid display names as ids because names may be localized or renamed.
-- Keep `badgeText` short: counts, status initials, or compact labels. Use the `badge` slot only when the badge needs custom visuals.
-- Use `loading` for initial data fetches. For per-agent execution status, add status text or badges to each agent record instead of blocking the whole list.
+- Keep the component at the picker layer; start conversations, fetch capabilities, and run agents in the surrounding module.
+- On a localized page, pass `enabledTitle`, `disabledTitle`, and `emptyText` together.
+- Use stable ids from the backend or registry, never display names that may be localized or renamed.
+- Keep `badgeText` to a count, a status initial, or a short label.
+- Use `loading` only for the initial fetch; put per-agent run status in that item's description or badge instead of blocking the list.
 
 ## API Reference
 
-### TxAgentsList Props
+### TxAgentsList
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `agents` | `AgentItemProps[]` | required | Agent records. Enabled items render before disabled items. |
-| `selectedId` | `string \| null` | `null` | Marks the matching agent item as selected. |
-| `loading` | `boolean` | `false` | Shows four list-item skeleton rows instead of agent groups. |
-| `enabledTitle` | `string` | `'Enabled'` | Section title for agents where `disabled` is not set. |
-| `disabledTitle` | `string` | `'Disabled'` | Section title for agents where `disabled=true`. |
-| `emptyText` | `string` | `'No agents'` | Empty-state text when `agents` is empty and the list is not loading. |
+| `agents` | `AgentItemProps[]` | required | Agent records; enabled items render before disabled ones. |
+| `selectedId` | `string \| null` | `null` | Marks the item with this id as selected. |
+| `loading` | `boolean` | `false` | Shows four skeleton rows instead of the groups. |
+| `enabledTitle` | `string` | `'Enabled'` | Title of the enabled group. |
+| `disabledTitle` | `string` | `'Disabled'` | Title of the `disabled=true` group. |
+| `emptyText` | `string` | `'No agents'` | Shown when `agents` is empty and the list is not loading. |
 
-### TxAgentsList Events
+#### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `select` | `string` | Re-emitted from enabled `TxAgentItem` rows with the selected id. |
+| `select` | `string` | Re-emits the id selected in an enabled `TxAgentItem`. |
 
-### TxAgentItem Props
+### TxAgentItem
+
+#### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `id` | `string` | required | Stable id emitted through `select`. |
 | `name` | `string` | required | Primary label. |
-| `description` | `string` | `''` | Optional secondary text. |
-| `iconClass` | `string` | `'i-carbon-bot'` | Icon class rendered in the generated avatar area. |
+| `description` | `string` | `''` | Secondary text. |
+| `iconClass` | `string` | `'i-carbon-bot'` | Icon class shown in the avatar area. |
 | `selected` | `boolean` | `false` | Applies active styling and `aria-selected=true`. |
-| `disabled` | `boolean` | `false` | Prevents click / Enter / Space selection and applies `aria-disabled=true`. |
-| `badgeText` | `string \| number` | `''` | Optional right-side badge. Empty string, `null`, and `undefined` hide the badge slot. |
+| `disabled` | `boolean` | `false` | Blocks click, Enter, and Space selection and applies `aria-disabled=true`. |
+| `badgeText` | `string \| number` | `''` | Right-side badge; an empty string, `null`, or `undefined` renders none. |
 
-## Slots
-
-### TxAgentsList
-
-`TxAgentsList` does not expose custom slots. Customize row-level badge visuals through `TxAgentItem` data/slot usage when composing items directly.
-
-### TxAgentItem
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `badge` | - | Replaces the default right-side badge content when `badgeText` is present. |
-
-### TxAgentItem Events
+#### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `select` | `string` | Emitted only when an enabled item is activated by click, Enter, or Space. |
+| `select` | `string` | Fires when an enabled item is activated by click, Enter, or Space. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `badge` | - | Replaces the badge content when `badgeText` is set. |
 
 ## Overview
 
-- `TxAgentsList` computes enabled and disabled groups from the same `agents` array; it does not mutate or sort inside each group.
-- Loading state wins over list and empty rendering; `agents` content is ignored while `loading=true`.
-- Each group body has `role="listbox"` and an `aria-label` equal to the group title.
-- `TxAgentItem` is built on `TxCardItem` with `role="option"`, `avatarShape="rounded"`, and `clickable` always on so disabled rows keep their `option` role in the listbox; selection on disabled rows is blocked by `aria-disabled` and the click guard, not by dropping the role.
-- Disabled items suppress click, Enter, and Space selection; enabled items emit the item `id` for all three activation paths.
+- `TxAgentsList` splits `agents` into enabled and disabled groups by `disabled`, keeps the original order within each, and shows each group's count in its header.
+- `loading` wins over both the groups and the empty state.
+- Each group body is a `role="listbox"` labelled by its title; each item is a `role="option"`.
+- Disabled items keep the `option` role; `aria-disabled` and a click guard block their selection.
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/agents/src/TxAgentsList.vue` confirms loading skeletons, enabled/disabled grouping, group badges, empty state, and `select` re-emit behavior.
-- Source: `packages/tuffex/packages/components/src/agents/src/TxAgentItem.vue` confirms `TxCardItem` composition, `role="option"`, disabled guards, `aria-selected`, `aria-disabled`, and `badge` slot rendering.
-- Type contracts: `packages/tuffex/packages/components/src/agents/src/types.ts` defines `AgentItemProps`, `AgentsListGroup`, and `AgentsListProps`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/agents/__tests__/agents.test.ts` covers group titles, empty text, enabled-only selection, keyboard activation, and disabled suppression.
+- `TxAgentItem` is built on `TxCardItem` with a fixed `rounded` avatar shape.
+- Source: `packages/tuffex/packages/components/src/agents/`.
 
 <TuffDocSourceLink />

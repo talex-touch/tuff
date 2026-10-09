@@ -1,6 +1,6 @@
 ---
 title: "ApprovalCard"
-description: "The clarifying questions an agent asks before it acts: single choice, multiple choice, and free text, with paging and a submitted state."
+description: "A questionnaire an agent walks through before it acts."
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -11,10 +11,8 @@ verified: true
 
 ## Usage
 
-### A Multi-Question Walkthrough
-
-One question at a time. A single choice auto-advances after 480ms; a multiple choice does not, because it has to wait for the reader to finish picking.
-
+### Multi-Question Walkthrough
+One question at a time. A single choice advances after `autoAdvanceDelay`; a multiple choice waits for the send control.
 :::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue"}
 ---
 code: |
@@ -56,11 +54,11 @@ code: |
 
 ### Best Practices
 
-- Persist on `answer` rather than waiting for `submit` — answers to earlier questions should survive a reader dismissing the card halfway.
-- Keep it to three to five questions; beyond that use a form page, since the pager dots stop being scannable around seven or eight.
-- Set `allowCustom: false` on questions that do not need free text — one fewer empty field is one fewer mis-tap.
-- Override the label props together for a non-English UI; changing only some of them produces mixed-language chrome.
-- Lift `sent` into the host after `submit`, or remounting the card drops it back to the unsubmitted state.
+- This is a questionnaire, not an authorization gate; for allowing or denying one tool call, use [ToolConfirmation](./tool-confirmation.en.mdc).
+- Persist on `answer`, not only on `submit`, so earlier answers survive a reader dismissing the card halfway.
+- Keep it to three to five questions; beyond that, use a form page.
+- For a non-English UI, override every label prop together to avoid mixed-language chrome.
+- When the card can be remounted (as in a streaming transcript), hold the answers, `index`, and `sent` in the host.
 
 ## API Reference
 
@@ -68,41 +66,41 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `questions` | `ApprovalQuestion[]` | — | The questions: `{ id, question, type?, options, allowCustom?, customPlaceholder? }`. Required. |
-| `modelValue` | `Record<string, ApprovalAnswer>` | — | `v-model`, the answer map keyed by `question.id`. Omit to let the card own it. |
-| `index` | `number` | — | `v-model:index`, the visible question. Omit to let the card own it. |
-| `sent` | `boolean` | — | `v-model:sent`, whether the answers were submitted. |
-| `open` | `boolean` | — | `v-model:open`; `false` collapses the card to a single reopen button. |
-| `autoAdvance` | `boolean` | `true` | Advance after a single-choice pick. |
-| `autoAdvanceDelay` | `number` | `480` | Delay before that advance, in ms. |
-| `dismissible` | `boolean` | `true` | Render the dismiss control. |
+| `questions` | `ApprovalQuestion[]` | — | The questions. Required. |
+| `modelValue` | `Record<string, ApprovalAnswer>` | — | Answer map keyed by `question.id`; omit to let the card own it. |
+| `index` | `number` | — | The visible question, for `v-model:index`; omit to let the card own it. |
+| `sent` | `boolean` | — | Whether the answers were submitted, for `v-model:sent`. |
+| `open` | `boolean` | — | For `v-model:open`; `false` collapses the card to a reopen button. |
+| `autoAdvance` | `boolean` | `true` | Advances after a single-choice pick; off under reduced motion. |
+| `autoAdvanceDelay` | `number` | `480` | Delay before the advance, in ms. |
+| `dismissible` | `boolean` | `true` | Renders the dismiss control. |
 | `ariaLabel` | `string` | `'Approval questions'` | Accessible name of the whole card. |
 | `sendLabel` | `string` | `'Send answers'` | Accessible name of the send control on the last question. |
-| `nextQuestionLabel` | `string` | `'Next question'` | Accessible name of the send control elsewhere. |
+| `nextQuestionLabel` | `string` | `'Next question'` | Accessible name of the send control on other questions. |
 | `prevLabel` / `nextLabel` | `string` | `'Previous'` / `'Next'` | Accessible names of the pager arrows. |
 | `dismissLabel` | `string` | `'Dismiss'` | Accessible name of the dismiss control. |
 | `reopenLabel` | `string` | `'Open approval'` | Text of the collapsed button. |
 | `sentLabel` | `string` | `'Answers sent'` | Confirmation text. |
 | `startOverLabel` | `string` | `'Start over'` | Text of the restart control. |
-| `customPlaceholder` | `string` | `'Type something…'` | Placeholder of the free-text row. A question may override it. |
+| `customPlaceholder` | `string` | `'Type something…'` | Placeholder of the free-text field; a question may override it. |
 | `customLabel` | `string` | `'Custom answer'` | Accessible name of the free-text field. |
 | `pagerLabelFormatter` | `(position: number) => string` | `` n => `Go to question ${n}` `` | Accessible name of each pager dot. |
-| `skippable` | `boolean` | `false` | Render a control that moves past the current question without answering. **Off by default**: on a form where every question is required, offering a way out is worse than not having one. |
-| `skipLabel` | `string` | `'Skip'` | Wording for the skip control. |
+| `skippable` | `boolean` | `false` | Renders a skip control; off by default, since a required questionnaire shouldn't offer a way out. |
+| `skipLabel` | `string` | `'Skip'` | Text of the skip control. |
 
 ### Events
 
 | Event | Arguments | Description |
 |------|------|-------------|
-| `update:modelValue` | `(answers: Record<string, ApprovalAnswer>)` | The answer map changed. |
-| `update:index` | `(index: number)` | The page changed. |
-| `update:sent` | `(sent: boolean)` | The submitted state changed. |
-| `update:open` | `(open: boolean)` | Collapsed or reopened. |
-| `answer` | `(answer: ApprovalAnswer)` | Fires as each question is answered, so a host can persist incrementally. |
-| `submit` | `(answers: ApprovalAnswer[])` | Submitted on the last question, answered items in `questions` order. |
-| `skip` | `({ questionId, index })` | The current question was skipped. **Nothing is recorded**, so the answer map lets a host tell "declined to answer" from "answered and moved on". |
-| `dismiss` | `()` | The card was dismissed. |
-| `reopen` | `()` | The card was reopened. |
+| `update:modelValue` | `(answers: Record<string, ApprovalAnswer>)` | Fires when the answer map changes. |
+| `update:index` | `(index: number)` | Fires when the page changes. |
+| `update:sent` | `(sent: boolean)` | Fires when the submitted state changes. |
+| `update:open` | `(open: boolean)` | Fires on collapse or reopen. |
+| `answer` | `(answer: ApprovalAnswer)` | Fires as each question is answered, for incremental saving. |
+| `submit` | `(answers: ApprovalAnswer[])` | Fires on submit with the answered items in `questions` order. |
+| `skip` | `({ questionId, index })` | Fires on a skip; nothing is recorded, so the host can tell declined from answered. |
+| `dismiss` | `()` | Fires when the card is dismissed. |
+| `reopen` | `()` | Fires when the card is reopened. |
 
 ### Slots
 
@@ -112,39 +110,47 @@ code: |
 | `sent` | `{ answers }` | Replaces the confirmation panel. |
 | `footer-extra` | — | Inserted in the footer, before the send control. |
 
-### Exposed
+### Exposed Methods
 
 | Method | Description |
 |------|-------------|
 | `next()` / `prev()` / `goTo(index)` | Paging. |
-| `submit()` | Equivalent to pressing send; a no-op without an answer. |
+| `submit()` | Same as pressing send; does nothing without an answer. |
 | `reset()` | Clears answers, returns to the first question, leaves the submitted state, and reopens. |
 
-## It Is Not an Authorisation Gate
+### Types
 
-`TxToolConfirmation` is a binary authorisation: may this tool call proceed, answered with approve / deny and a risk tier. This component is a **questionnaire**: the agent asks a few things before it acts and gets back a set of answers. The two share neither a data model nor an output contract — do not substitute one for the other, and do not fold a questionnaire into the confirmation card.
+#### ApprovalQuestion
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Question id, also the key in the answer map. |
+| `question` | `string` | The prompt. |
+| `type` | `'radio' \| 'check'` | Single or multiple choice; defaults to `'radio'`. |
+| `options` | `ApprovalOption[]` | `{ value, label }` choices; answers key on `value`, so reordering is safe. |
+| `allowCustom` | `boolean` | `false` drops the free-text row; defaults to `true`. |
+| `customPlaceholder` | `string` | Overrides `customPlaceholder` for this question. |
+
+#### ApprovalAnswer
+
+| Field | Type | Description |
+|------|------|-------------|
+| `questionId` | `string` | The `id` of the answered question. |
+| `values` | `string[]` | Selected `option.value`s; at most one on a single-choice question. |
+| `custom` | `string` | Free-text answer. |
 
 ## Overview
 
-- **All four states are dual-mode.** Supply `modelValue` / `index` / `sent` / `open` and the prop wins; omit it and the card owns it. A streaming host that remounts the card keeps its page and answers only if it controls them.
-- **Answers are keyed by `option.value`, never by index.** Reordering the options cannot corrupt them.
-- **Single choice and free text are alternatives.** Picking an option clears that question's free text, and typing into the free-text field clears the single choice. Multiple choice is unaffected — both can coexist.
-- The send control is enabled when there is a selected option **or** non-empty free text. It submits on the last question and advances everywhere else.
-- A filled pager dot means **that question is answered**, not that it was passed. Upstream tests `i < currentIndex`, which shows answered questions as unanswered after navigating back; that is corrected here.
-- **The auto-advance is suppressed under `prefers-reduced-motion: reduce` — a deliberate divergence from upstream.** Upstream keeps advancing, since it only has one global `*` rule compressing durations. Here the preference is read as "no unrequested change of context", and a page moving out from under a screen reader mid-sentence is exactly that. Advancing is a change of context rather than progress machinery, so it belongs to what the preference suppresses, not to the state machines that "cut tweens, not state machines" protects. Every question stays reachable through the pager dots and the send control, so nothing is lost.
-- Dismissing swaps the card for a single button without clearing state; only `reset()` or the restart control clears it.
-- Option buttons are `button` + `aria-pressed`, wrapped in a `role="group"` whose `aria-labelledby` points at the prompt, so a screen reader gets the question as context.
+- `modelValue`, `index`, `sent`, and `open` follow the prop when one is passed; otherwise the card owns them.
+- On a single-choice question, an option and free text exclude each other, and the later one clears the earlier; on multiple choice they coexist.
+- Send is enabled once there is a selection or non-empty free text: it submits on the last question and advances elsewhere. On the last question, auto-advance and skip also submit.
+- A filled dot means the question is answered, not that it was passed.
+- Dismissing swaps the card for a reopen button and keeps its state; only `reset()` or the restart control clears it.
+- Options are `button` elements with `aria-pressed`, grouped in a `role="group"` whose `aria-labelledby` points at the prompt.
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/approval-card/src/TxApprovalCard.vue`.
-- Types: `packages/tuffex/packages/components/src/approval-card/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/approval-card/__tests__/approval-card.test.ts` (15 cases) covers single-choice replacement and multi-choice accumulation, the free-text exclusion, the send gate, pager disabling and dot states, controlled `index` / `modelValue` precedence, dismiss and reopen, the auto-advance not firing on multiple choice, its suppression under reduced motion, and `reset()` clearing every piece of state.
-- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/approval-card/`.
 
 <TuffDocSourceLink />
-
-- **How it divides from `TxToolConfirmation`:** see "It Is Not an Authorisation Gate" above. The names are close and the semantics are orthogonal, so the two docs should be read together.
-- **Accessibility:** the `role="group"` with `aria-labelledby` pointing at the prompt is a deliberate improvement over upstream, which ships bare `aria-pressed` and leaves a screen reader without the question as context.
-- **Known deviation:** upstream still auto-advances under reduced motion, since it only has one global `*` rule compressing durations. That is suppressed here for the reason given in the interaction contract; a host that wants upstream behaviour can drive `autoAdvance` and check the preference itself.
-- **Known deviation:** upstream stores answers by array index; this component uses `option.value`.

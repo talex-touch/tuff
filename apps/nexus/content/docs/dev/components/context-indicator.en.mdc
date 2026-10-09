@@ -1,6 +1,6 @@
 ---
 title: Context Indicator
-description: A compact ring that shows how much of the conversation context is used.
+description: A compact ring showing how much context a conversation uses.
 category: AiContext
 status: beta
 since: 0.3.9
@@ -11,7 +11,8 @@ verified: true
 
 ## Usage
 
-### Context Indicator
+### Basic
+Above 80% the level becomes `warning`, above 95% `danger`; `data-level` exposes it for style overrides.
 ::::TuffDemoWrapper{demo="ContextIndicatorContextIndicatorDemo" code-lang="vue"}
 ---
 code: |
@@ -25,10 +26,10 @@ code: |
 
 ### Best Practices
 
-- Pass the model's real window size rather than a hardcoded constant, so the indicator does not lie after a model switch.
-- Use `formatter` for localized number formatting instead of wrapping the component in your own text, or the percentage in `title` will disagree with what is displayed.
-- Only prompt the user near the limit — from `warning` upward. Below that this is background information and should not compete for attention.
-- If you place it inside a clickable region, give that region its own accessible name: `role="meter"` conveys nothing about being actionable.
+- Pass the model's real window size as `maxTokens`, not a hardcoded constant.
+- Localize numbers with `formatter` rather than wrapping the component in your own text, or the `title` disagrees.
+- Prompt the user only from `warning` upward; below that it is background information.
+- Inside a clickable region, give the region its own accessible name: `role="meter"` conveys nothing actionable.
 
 ## API Reference
 
@@ -36,26 +37,19 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `usedTokens` | `number` | — | Tokens consumed so far. Required. |
-| `maxTokens` | `number` | — | Size of the context window. Required; a value of 0 or less is treated as a ratio of 0. |
+| `usedTokens` | `number` | — | Tokens used so far. Required. |
+| `maxTokens` | `number` | — | Context window size. Required; 0 or less yields a ratio of 0. |
 | `label` | `string` | `'Context usage'` | Accessible name, written to `aria-label`. |
-| `formatter` | `(used: number, max: number) => string` | — | Replaces the text beside the ring. Falls back to the built-in compact count when unset. |
+| `formatter` | `(used: number, max: number) => string` | — | Text beside the ring; defaults to compact counts (`12.3K`, `1.2M`). |
 
-### Events
-
-`TxContextIndicator` emits no component events.
-
-## Slots
+### Slots
 
 | Name | Scope | Description |
 |------|-------|-------------|
-| `detail` | `{ ratio: number, used: number, max: number }` | Appended after the text — a place for a percentage, a remaining count, or a "clear context" affordance. |
+| `detail` | `{ ratio: number, used: number, max: number }` | Appended after the text, for a percentage, a remaining count, or a "clear context" action. |
 
 ## Overview
 
-- The ratio is `usedTokens / maxTokens`, clamped to `0`–`1`, so an over-count never draws past a full ring.
-- A `maxTokens` of `0` or less is treated as a ratio of `0` — no divide-by-zero and no thrown error.
-- Three colour levels are derived from the ratio and exposed on `data-level`: `ok` (≤ 80%), `warning` (> 80%) and `danger` (> 95%). Style overrides can key off that attribute.
-- The default label uses compact counts: `1.2M` at a million or more, `12.3K` at a thousand or more, otherwise a rounded integer. A `formatter` replaces that text entirely.
-- `title` is always "text (percentage)", so the percentage stays visible on hover even with a custom `formatter`.
-- The root is `role="meter"` with `aria-valuemin` / `aria-valuemax` / `aria-valuenow` kept in sync. The SVG is `aria-hidden`, and the accessible name comes from `label`.
+- The ratio is `usedTokens / maxTokens`, clamped to 0–1, so an over-count never draws past a full ring.
+- `title` is always "text (percentage)", so the percentage shows on hover even with a custom `formatter`.
+- The root is `role="meter"` with `aria-valuemin` / `aria-valuemax` / `aria-valuenow` kept in sync; the SVG is `aria-hidden`.

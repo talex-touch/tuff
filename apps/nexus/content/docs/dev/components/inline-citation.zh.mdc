@@ -1,6 +1,6 @@
 ---
 title: "InlineCitation 行内引用"
-description: "嵌在正文里的来源引用胶囊，点击只派发事件，不自行跳转。"
+description: "嵌在正文中的来源引用胶囊"
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -11,10 +11,7 @@ verified: true
 
 ## 用法
 
-### 行内引用
-
-胶囊跟着文字排版走：18px 高、等宽字体、上移 1px 让字高与正文对齐，而不是压在基线上。
-
+### 基础
 :::TuffDemoWrapper{demo="InlineCitationInlineCitationDemo" code-lang="vue"}
 ---
 code: |
@@ -36,11 +33,9 @@ code: |
 ---
 :::
 
-### 流式回答里的引用
-
-引用在正文流到那个位置时才落下，`pop-in` 的弹入正是为这一刻准备的。整段观感由 demo 编排，组件本身只负责渲染一枚胶囊。
-
-:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="流式回答" description="逐词显影 + 行内引用 + 来源堆叠 + 追问列表的组合。"}
+### 流式回答
+引用随正文流入时播放弹入；整段编排由宿主完成，组件只渲染一枚胶囊。
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="逐词显影 + 行内引用 + 来源 + 追问"}
 ---
 code: |
   <template>
@@ -59,55 +54,46 @@ code: |
 
 ### 最佳实践
 
-- 必须监听 `open`，否则点击引用不会有任何反应。
-- 一段正文里的引用控制在 2~3 枚：胶囊比文字重，密集出现会把段落读成列表。
-- `label` 留空更好——默认的域名回落让读者一眼看出来源出处，自定义文案反而容易掩盖它。
-- 流式场景里给 `source.id` 用稳定标识：图标失败记录按实例持有，节点复用时靠稳定数据避免反复重试坏图。
-- 需要「答案末尾的来源清单」而不是行内引用时，用 `TxSources`；两者是互补关系，常常同时出现。
+- 监听 `open`，否则点击引用没有任何反应。
+- 每段正文的引用控制在 2~3 枚；密集出现会把段落读成列表。
+- `label` 通常留空：域名回落让读者一眼看出出处。
+- 流式场景里 `source.id` 保持稳定，坏图标不会随节点复用反复重试。
+- 答案末尾的来源清单用 `TxSources`；二者共用 `AiSourceItem`，常一起出现。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `source` | `AiSourceItem` | — | 引用目标，`{ id, url, title?, favicon? }`。必填。 |
-| `label` | `string` | — | 胶囊文案。缺省时依次回落到 `source.title`、`url` 的 hostname（去掉 `www.`）。 |
-| `appear` | `boolean` | `true` | 是否播放入场弹入。重渲染已定稿的答案时置 `false`，避免整段引用重弹。 |
+| `source` | `AiSourceItem` | — | 引用目标 `{ id, url, title?, favicon? }`，必填。 |
+| `label` | `string` | — | 胶囊文案；缺省时依次取 `source.title`、去掉 `www.` 的域名，`url` 无法解析时用原文。 |
+| `appear` | `boolean` | `true` | 挂载时播放弹入；重渲染已定稿的答案时设为 `false`。 |
 
-`url` 无法被 `URL` 解析时，回落链的末端是 `url` 原文，不会渲染成空胶囊。
-
-### Events
+### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `open` | `(source: AiSourceItem)` | 点击时派发。默认跳转已被阻止，导航由宿主完成。 |
+| `open` | `(source: AiSourceItem)` | 点击时触发；默认跳转已阻止，导航由宿主完成。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
 | `default` | `{ source, label }` | 替换胶囊文案，可放富文本。 |
-| `icon` | `{ source }` | 替换前置站点图标，例如换成自绘的分类角标。 |
+| `icon` | `{ source }` | 替换前置的站点图标。 |
 
 ## 概述
 
-- **链接不自行导航。** 渲染的是真实 `<a href>`，但点击会 `preventDefault` 并派发 `open`。这在 Electron 渲染进程里是必须的——正文里的引用最不该做的事就是把整个应用导航走。
-- `href` 保留在 DOM 上，所以浏览器原生的「在新标签页打开」「复制链接地址」右键菜单依旧可用。
-- 站点图标加载失败会被记下并停止渲染该图标，胶囊退化成纯文案而不是留一个破图占位。
-- 图标标了 `alt=""` 与 `aria-hidden`，可访问名称由胶囊文案承担。
-- 胶囊用 `vertical-align: middle` 加 1px 上移嵌进文字流，行高由所在段落决定，组件自己不设 `line-height`。
-- 入场只在挂载时播放一次；`appear` 是渲染期决策，改它不会追加播放。
+- 渲染真实的 `<a href>`，点击时 `preventDefault()` 再派发 `open`，不会把 Electron 渲染进程导航走；浏览器的「在新标签页打开」「复制链接地址」仍可用。
+- 站点图标加载失败后不再渲染，胶囊退化为纯文案。
+- 图标带 `alt=""` 与 `aria-hidden`，可访问名称来自胶囊文案。
+- 胶囊嵌在文字流中，行高由所在段落决定。
+- 弹入只在挂载时播放一次，之后修改 `appear` 不会重播。
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/inline-citation/src/TxInlineCitation.vue`。
-- Types: `packages/tuffex/packages/components/src/inline-citation/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/inline-citation/__tests__/inline-citation.test.ts`（7 项）验证 hostname 回落与 `www.` 剥离、`label` / `title` 的优先级、URL 解析失败的兜底、点击派发 `open` 而不导航、图标失败后消失、`appear` 对入场类名的开关。
-- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）。
+- 源码：`packages/tuffex/packages/components/src/inline-citation/`。
 
 <TuffDocSourceLink />
-
-- **与 `TxSources` 的分工:** `TxSources` 是答案末尾可折叠的来源清单，本组件是正文流中的单枚引用。数据类型共用 `AiSourceItem`，可以同时使用同一份来源数组。
-- **已知偏差:** 上游的行内引用永远取来源数组的第 0 项，与它所在的位置无关——那是 demo 写法。这里要求显式传 `source`，每枚胶囊指向自己的来源。
-- **可访问性:** 上游用 `target="_blank" rel="noreferrer"` 直接导航；这里改为事件上抛，与 `TxSources` 的既有约定保持一致。

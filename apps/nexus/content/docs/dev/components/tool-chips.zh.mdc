@@ -1,6 +1,6 @@
 ---
 title: "ToolChips 工具调用流"
-description: "一次智能体运行的紧凑行流：逐行可展开的工具调用，末尾是文件差分 chip。"
+description: "一次智能体运行的紧凑工具调用流"
 category: AiAgent
 status: beta
 since: 0.3.9
@@ -12,9 +12,7 @@ verified: true
 ## 用法
 
 ### 运行流
-
-行随数据到达而增长，每行都能单独展开看这次工具到底做了什么。上游的 700ms 逐行揭示是演示脚本，放在 demo 层。
-
+`rows` 随数据到达增长，`diffs` 汇总本次改动的文件。
 :::TuffDemoWrapper{demo="ToolChipsRunFlowDemo" code-lang="vue"}
 ---
 code: |
@@ -50,61 +48,8 @@ code: |
 ---
 :::
 
-### 最佳实践
-
-- `label` 写「做了什么」（`写入 204 行`），`chip` 写「对什么做的」（文件名、命令）——折叠态只有这两段可扫读。
-- 路径与命令开 `mono`，散文别开；混用等宽字体会让行高看起来不齐。
-- 详情控制在两三行，长日志用 `TxToolCallCard` 的日志区，那里会跟随尾部滚动。
-- 差分只列前几项，剩下的交给 `moreCount`，不要把几十个文件全铺开。
-- 流式界面把 `expandedRows` 提到宿主，重建组件时读者的展开选择才不会丢。
-
-## API 参考
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `rows` | `ToolChipRow[]` | — | 行数据：`{ id, label, chip?, icon?, mono?, detailMono?, detail? }`。必填。 |
-| `diffs` | `ToolChipDiff[]` | `[]` | 差分区数据。为空时整个差分区（含分隔线）不渲染。 |
-| `summary` | `string` | — | 折叠头文案。不传则由 `summaryFormatter` 生成。 |
-| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call(s)` `` | 折叠头的默认文案，会按数量处理单复数。 |
-| `open` | `boolean` | — | `v-model:open`，整组折叠。不传则组件自持。 |
-| `defaultOpen` | `boolean` | `true` | 非受控时的初始展开态。 |
-| `expandedRows` | `string[]` | — | `v-model:expandedRows`，已展开行的 id 集合。 |
-| `defaultExpandedRows` | `string[]` | `[]` | 非受控时初始展开的行。 |
-| `moreCount` | `number` | `0` | 差分区未列出的剩余数量。 |
-| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | 溢出控件文案。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:open` | `(open: boolean)` | 整组折叠切换。 |
-| `update:expandedRows` | `(ids: string[])` | 逐行展开集合变化。 |
-| `toggle` | `(id: string, expanded: boolean)` | 某行被切换，携带切换**之后**的状态。 |
-| `rowClick` | `(row: ToolChipRow)` | 行被点击，与 `toggle` 同时派发。 |
-| `diffClick` | `(diff: ToolChipDiff)` | 差分 chip 被点击。 |
-| `more` | `()` | 差分区溢出控件被点击。 |
-
-### Slots
-
-| 插槽名 | 作用域参数 | 说明 |
-|------|------|------|
-| `row-icon` | `{ row }` | 覆盖行图标。`icon` 取内置四个值以外时**必须**用它。 |
-| `chip` | `{ row }` | 覆盖行尾 chip 内容。 |
-| `detail` | `{ row }` | 覆盖展开后的详情区。 |
-| `diffs` | `{ diffs }` | 覆盖整个差分区（分隔线保留）。 |
-
-### Exposed
-
-| 方法 | 说明 |
-|------|------|
-| `expand(id)` / `collapse(id)` | 展开或收起指定行，已是该状态时是空操作。 |
-| `expandAll()` / `collapseAll()` | 批量操作。 |
-
-## TxDiffChips
-
-差分区是可以单独用的：同目录导出 `TxDiffChips`，接一组 `{ file, add, del }` 就能渲染「本次改了哪些文件」，不需要外面那层工具调用流。
+### 单独使用差分区
+`TxDiffChips` 单独导出，不需要外层的工具调用流。
 
 ```vue
 <script setup lang="ts">
@@ -121,46 +66,124 @@ const diffs = [
 </template>
 ```
 
-`TxToolChips` 内部就是渲染的它，`diffs` / `moreCount` / `moreLabelFormatter` 会原样透传，`diffClick` 与 `more` 是它冒泡上来的。
+### 最佳实践
 
-### TxDiffChips Props
+- `label` 写做了什么（「写入 204 行」），`chip` 写对什么做的（文件名、命令）：折叠时只有这两段可扫读。
+- 路径与命令开 `mono`，散文不开。
+- 详情控制在两三行，长日志改用 `TxToolCallCard`。
+- 差分只列前几项，其余交给 `moreCount`。
+- 流式界面由宿主持有 `expandedRows`，组件重建后读者的展开选择不会丢。
+
+## API 参考
+
+### TxToolChips
+
+#### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `diffs` | `ToolChipDiff[]` | — | `{ file, add, del }` 列表。必填。 |
-| `moreCount` | `number` | `0` | 未列出的剩余数量，大于 0 时渲染 `+N more`。 |
-| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | 溢出控件文案。 |
-| `staggerStep` | `number` | `80` | chip 入场错峰（ms）。 |
+| `rows` | `ToolChipRow[]` | — | 行数据，必填。 |
+| `diffs` | `ToolChipDiff[]` | `[]` | 差分数据；为空时差分区连同分隔线不渲染。 |
+| `summary` | `string` | — | 折叠头文案；不传时由 `summaryFormatter` 生成。 |
+| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call(s)` `` | 折叠头的默认文案，按数量处理单复数。 |
+| `open` | `boolean` | — | 整组展开状态，配合 `v-model:open`；不传则组件自持。 |
+| `defaultOpen` | `boolean` | `true` | 非受控时的初始展开状态。 |
+| `expandedRows` | `string[]` | — | 已展开行的 id，配合 `v-model:expandedRows`。 |
+| `defaultExpandedRows` | `string[]` | `[]` | 非受控时初始展开的行。 |
+| `moreCount` | `number` | `0` | 差分区未列出的数量。 |
+| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | 溢出控件的文案。 |
 
-### TxDiffChips Events
+#### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | `(diff: ToolChipDiff)` | 点击某个差分 chip。 |
-| `more` | `()` | 点击溢出控件。 |
+| `update:open` | `(open: boolean)` | 整组展开或收起时触发。 |
+| `update:expandedRows` | `(ids: string[])` | 展开的行变化时触发。 |
+| `toggle` | `(id: string, expanded: boolean)` | 某行切换时触发，参数为切换后的状态。 |
+| `rowClick` | `(row: ToolChipRow)` | 点击行时触发，与 `toggle` 同时派发。 |
+| `diffClick` | `(diff: ToolChipDiff)` | 点击差分 chip 时触发。 |
+| `more` | `()` | 点击差分区的溢出控件时触发。 |
+
+#### 插槽
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `row-icon` | `{ row }` | 替换行图标；`icon` 不是内置值时必须提供。 |
+| `chip` | `{ row }` | 替换行尾 chip 的内容。 |
+| `detail` | `{ row }` | 替换展开后的详情。 |
+| `diffs` | `{ diffs }` | 替换差分区内容，分隔线保留。 |
+
+#### 暴露方法
+
+| 方法 | 说明 |
+|------|------|
+| `expand(id)` / `collapse(id)` | 展开或收起指定行；已是该状态时不执行。 |
+| `expandAll()` / `collapseAll()` | 展开或收起全部行。 |
+
+### TxDiffChips
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `diffs` | `ToolChipDiff[]` | — | 差分列表，必填。 |
+| `moreCount` | `number` | `0` | 未列出的数量；大于 0 时渲染 `+N more`。 |
+| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | 溢出控件的文案。 |
+| `staggerStep` | `number` | `80` | chip 入场的错峰间隔（ms）。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(diff: ToolChipDiff)` | 点击差分 chip 时触发。 |
+| `more` | `()` | 点击溢出控件时触发。 |
+
+#### 插槽
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `chip` | `{ diff }` | 替换单个 chip 的内容。 |
+
+### 类型
+
+#### ToolChipRow
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 行的稳定 key，展开状态按它索引。 |
+| `label` | `string` | 做了什么。 |
+| `chip` | `string` | 行尾 chip：参数、路径或命令；占满剩余宽度，过长截断。 |
+| `icon` | `'think' \| 'write' \| 'run' \| 'read' \| string` | 内置四种图标；其他值需配 `row-icon` 插槽。 |
+| `mono` | `boolean` | chip 使用等宽字体。 |
+| `detailMono` | `boolean` | 详情行使用等宽字体。 |
+| `detail` | `{ text, tone? }[]` | 展开后的详情；`tone` 为 `add`（成功色）或 `del`（危险色）。 |
+
+#### ToolChipDiff
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `file` | `string` | 文件名。 |
+| `add` | `number` | 新增行数，显示为 `+N`。 |
+| `del` | `number` | 删除行数，显示为 `−N`（U+2212 减号）；为 0 时不显示。 |
 
 ## 概述
 
-- **行按 `row.id` 索引，不按 label。** 上游用 label 当 key，两行标签相同就会连动展开。
-- 内置图标只有 `think` / `write` / `run` / `read` 四个；传别的值不会报错，但要配 `row-icon` 插槽，否则图标位是空的。
-- **悬停时工具图标原地淡出、chevron 淡入**，展开后 chevron 常驻。触屏没有 hover，`@media (hover: none)` 下 chevron 直接常显——否则移动端看不出这行能展开。
-- `chip` 是 `flex: 1` 且会截断的：它吃掉行内剩余宽度，长路径以省略号收尾。
-- `detail` 行的 `tone` 只有 `add`（成功色）与 `del`（危险色）两种，其余保持次要色。
-- 差分区的删除数用 **U+2212 减号**（`−`）而不是连字符，与加号等宽对齐；`del` 为 0 时整个删除计数不渲染。
-- 所有数字都是 `tabular-nums`，流式更新时宽度不跳。
-- `open` 与 `expandedRows` 都是双模的：传了以 prop 为准，没传由组件自持，两种模式下都照常派发事件。
-- **组件不自己播放。** 上游每 700ms 揭示一行的定时器是演示脚本，真实宿主按数据到达把行 push 进 `rows` 即可，逐行的 300ms 入场会自然产生同样观感。
+- 展开状态按 `row.id` 索引，标签相同的两行互不影响。
+- `open` 与 `expandedRows` 传入时以 prop 为准，否则由组件自持；两种模式都派发事件。
+- 悬停时工具图标淡出、chevron 淡入；已展开的行与触屏（`hover: none`）下 chevron 常显。
+- 所有数字为 `tabular-nums`，流式更新时宽度不跳。
+- 组件不自行播放：宿主随数据到达向 `rows` 追加行，每行自带入场动画。
+- `TxToolChips` 内部渲染 `TxDiffChips`，透传 `diffs`、`moreCount`、`moreLabelFormatter`，并把 `select`、`more` 转发为 `diffClick`、`more`。
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/tool-chips/src/TxToolChips.vue`、`src/TxDiffChips.vue`。
-- Types: `packages/tuffex/packages/components/src/tool-chips/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/tool-chips/__tests__/tool-chips.test.ts`（17 项）验证折叠头计数派生与单复数、`aria-controls` 一一对应、逐行独立展开与按 id 索引、受控 `expandedRows` 优先、mono 标记、`tone` 染色、差分区按需渲染、事件透传、`expandAll` / `collapseAll`，以及 U+2212 与 stagger 变量。
-- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+- chip 文字色可用 `--tx-bui-tool-chips-chip-color` 覆写。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）。
+- 源码：`packages/tuffex/packages/components/src/tool-chips/`。
 
 <TuffDocSourceLink />
 
-- **与既有工具组件的分工:** `TxToolCallCard` 是**单次**调用的完整卡片，带状态机、日志尾随与重试；`TxChainOfThought` 是带 markdown 正文的思考链。本组件是**一次运行的压缩流水**，无状态语义、无重试，胜在信息密度与差分摘要。三者信息层级不同，不要互相替代。
-- **可访问性:** 触屏常显 chevron 是有意超出上游的修正；上游只靠 hover 暴露可展开性，移动端完全没有线索。
-- **已知偏差:** chip 的浅色文字在上游是硬编码的 `#43464c`，不属于 BUI token。这里原样保留以对齐截图，但暴露成 `--tx-bui-tool-chips-chip-color` 供宿主覆写。
-- **已知偏差:** 上游的 `revealInterval` 式定时揭示没有做进组件（见交互契约末条）。
+## 相关组件
+
+- [ToolCallCard](./tool-call-card.zh.mdc)：单次调用的完整卡片，带状态、日志与重试。
+- [Chain of Thought](./chain-of-thought.zh.mdc)：带 Markdown 正文的思考链。
