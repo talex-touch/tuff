@@ -27,7 +27,10 @@ import { DatabaseSync } from 'node:sqlite'
  *   count and a `RETURNING` statement read row by row never reports;
  * - `batch()` is one transaction: when a statement throws, all of them roll back;
  * - a statement binds at most 100 parameters (D1's limit, far under SQLite's), so
- *   an `IN (?, ?, …)` list built from rows fails here as it fails in production.
+ *   an `IN (?, ?, …)` list built from rows fails here as it fails in production;
+ * - a function call takes at most 32 arguments and a compound SELECT at most five
+ *   terms, D1's caps where SQLite allows 1000 and 500. The telemetry daily rollup
+ *   passed every local test and failed on both in production (2026-10-09).
  *
  * Every call yields a microtask before it touches the database, so two callers
  * running at once interleave between their statements as they do against D1: a
@@ -113,6 +116,13 @@ export class SqliteD1Statement {
 export class SqliteD1Database {
   /** The database underneath, for a test to seed and read rows without going through the store. */
   readonly sqlite = new DatabaseSync(':memory:')
+
+  constructor() {
+    // Node 26's node:sqlite has `limits`; the installed @types/node does not declare it yet.
+    const { limits } = this.sqlite as DatabaseSync & { limits: Record<'functionArg' | 'compoundSelect', number> }
+    limits.functionArg = 32
+    limits.compoundSelect = 5
+  }
 
   prepare(sql: string): SqliteD1Statement {
     return new SqliteD1Statement(this.sqlite, sql)
