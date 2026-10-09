@@ -5,7 +5,7 @@
 ### 📦 组件变动 (Components)
 
 - **更新组件**: `ai-elements`, `base-anchor`, `button`, `charts`, `chat`, `code-stream`, `icon-chip`, `icon-morph`, `liquid`, `popover`, `rating`, `steps`, `tooltip`, `transition`
-- **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
+- **新增组件（未独立发布）**: `card-spread`, `carousel-3d`, `flip-book`, `morph`, `motion`, `motion-button`, `motion-control`, `motion-dock`, `motion-form`, `motion-loader`, `motion-metric`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 
 ### ✨ 组件增强
 
@@ -17,6 +17,7 @@
 - 融合 Amicro 固定来源的按钮、卡片展开、三维轮播与书页、命名加载器、文字、物理、指针与滚动、开关和内容转场；Nexus 新增独立 Motion 文档章节，Mono Charts 位于 Data，复合表单、控件和指标位于 Pro。安装边界仍为 base/pro/ai，图表沿用现有 SVG/d3 入口。
 - 内容、数据、模型、上传选择与业务结果由调用方驱动；动效复用已有 spring 与 TextMorph。新增 `useMotionActivity` 统一视口、页面活动、KeepAlive 与减少动态效果边界，npm 分发清单保留 `AMICRO-LICENSE`、`AMICRO-APACHE-LICENSE` 和 `LUCIDE-LICENSE`。
 - `TxCopyButton` 重做状态反馈：边缘改为内描边，悬停立即变色，颜色只在状态切换后的 420ms 内过渡；复制成功时图标画出对勾、文案经 `TxTextTransformer` 原地形变（共同的字不动），失败时画出叉并转为危险色。新增 `failedLabel`（不传时文案保持 `copyLabel`，失败只靠叉形与色调表达）与 `iconOnly`（平时只显示图标，反馈时按钮宽度以 FLIP 展开文案再收回），默认插槽新增 `failed`；所有动效只在 `prefers-reduced-motion: no-preference` 下声明。`TxCodeStream` 的复制按钮覆盖同步去掉内描边、补上失败色调。
+- 新增 `TxMorph` 一形多态容器：同一块形状承载所有状态。`morph-key` 变化时旧内容以短模糊先离场，新内容晚一拍进入；形状的宽高按弹簧逐帧跟到新内容的尺寸（默认 liquid 的 `snappy`），圆角与填充色走同一弹簧编译出的 `linear()` 曲线。中途再变只改目标，位置与速度都保留，不会跳回原尺寸，也不会从零速度重新起步。`width` 关闭时为块级、只过渡高度；落定后尺寸回到 `auto` 并触发 `settle`；`prefers-reduced-motion` 下直接替换内容、尺寸立即落定。圆角写在注册过的 `--tx-morph-radius` 上，子元素可以用 `calc(var(--tx-morph-radius) - var(--tx-morph-inset))` 得到同心圆角。
 
 ### 🎨 外观与主题
 
@@ -40,6 +41,7 @@
 
 ### 🧩 组件导出
 
+- `@talex-touch/tuffex/utils`（根入口同步）新增 `useMorphBox`：容器跟随内容的自然尺寸做弹簧过渡，尺寸在途中再变时保留位置与速度；`TxMorph` 的尺寸部分即由它实现。
 - `@talex-touch/tuffex/utils`（根入口同步）新增缓动工具：`resolveGsapEase`、`resolveCssEase`、`createSpringEase`、`parseSpringEase`、`createCubicBezier`、`parseCubicBezier`。
 
 ### 🧪 内部
