@@ -43,7 +43,8 @@ const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
  * The rules for what qualifies live in utils/docs-install-command.
  */
 const MANAGERS = PACKAGE_MANAGERS
-const install = computed(() => (props.embedded ? null : parseInstallCommand(props.code, props.lang)))
+// A block with a title of its own keeps the ordinary renderer, which shows it.
+const install = computed(() => (props.embedded || props.title ? null : parseInstallCommand(props.code, props.lang)))
 
 // One choice for every install block on the page, kept across client navigation.
 const manager = useState<PackageManager>('docs-install-manager', () => 'pnpm')
