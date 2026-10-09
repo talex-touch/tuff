@@ -177,6 +177,13 @@ function dropOverdrag(): void {
   overshootTs = 0
 }
 
+// Turned off while pulled or on its way back (`overdrag` off, disabled, reduced
+// motion asked for), the thumb lands at once: the return's frames do not check.
+watch(overdragEnabled, (enabled) => {
+  if (!enabled)
+    dropOverdrag()
+})
+
 const thumbCenterPx = computed(() => {
   if (mainWidth.value <= 0)
     return 0
