@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-10-08
+> 更新时间：2026-10-10
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -8,6 +8,26 @@
 - Stable 只覆盖 CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、provider routing 与固定失败路径。
 - OmniPanel Writing Tools、Workflow、Review Queue、Skills、Automation、Assistant 继续按 Beta / Experimental evidence 追踪。
 - focused tests、schema、mock provider、dry-run、CDP raw 诊断不能替代 packaged Electron 体验证据。
+
+## Nexus 供应商配置简化（P1）
+
+> 2026-10-10 老板定为 P1。现状来自 2026-10-08 的代码梳理和一次生产 D1 只读核对；下面的方向只是初稿，动手前先和老板对细节。
+
+目标：后台配置收敛成三步——先添加供应商；在场景里为每个功能选供应商；供应商有模型时，再从该供应商的模型里选。
+
+现状（Provider Registry 后台与 `apps/nexus/server/utils/providerSceneSeed.ts`）：
+
+- **添加供应商**：调用方式由 `vendor`（6 选 1，没有 Anthropic）、`metadata.adapterKey` 和 metadata 里的 `intelligenceType` 共同决定；能力要逐项手动声明，选到没有适配器支持的能力会被服务端拒绝。API Key 只能在新建时填，编辑页换不了；`authRef` 按名称生成，同名供应商的 Key 会互相覆盖。「拉取模型」会把模型列表整份替换成上游返回的全部模型。
+- **场景**：后台叫「能力路由」，分两种：桌面端写死 ID 的产品场景，和按能力自动生成的 `nexus.intelligence.<能力>`。后者由种子在缺失时创建，只绑定当时已启用的系统供应商，之后新加的供应商不会自动绑进去。能力名要在供应商、场景、绑定三处写得完全一致，运行时叫 `text.chat`，表里却是 `chat.completion`。
+- **选模型**：绑定的模型已经是从该供应商的模型列表里选，接近目标；但种子建场景时把当时的默认模型写死进了绑定，之后改供应商的默认模型，对这些场景不生效。
+- **生产缺口**（2026-10-08 只读核对）：桌面端要用的 `corebox.selection.translate`、`corebox.fx.*` 和 `nexus.intelligence.text.translate` 场景都不存在，截图翻译场景里的翻译环节也没有绑定。
+
+方向（初稿）：
+
+- [ ] 供应商只填名称、协议、地址、Key 和模型；模型拉取后勾选，不整份覆盖；Key 在编辑页可以更换。
+- [ ] 场景改成代码里固定的产品功能清单，后台只为每个场景选供应商和模型。
+- [ ] 能力声明和调用格式都由「协议」推导，不再手填能力名；种子不再把模型写进绑定。
+- [ ] 补上上面列出的生产场景缺口。
 
 ## macOS 原生能力渠道化候选
 
