@@ -226,7 +226,12 @@ const LIMITS = {
   // morph sheet carries only the `--tx-morph-radius` registration and `.tx-morph*` rules, and
   // each grown sheet only its own component's rules. Actuals plus minimal headroom, growth
   // from here fails.
-  fullCssBytes: 740 * 1024,
+  // 740 -> 745 on 2026-10-10: FlowLight and VoiceClip add two independent sheets
+  // (2,118 B and 2,549 B). CI at ff09f8a67 measured 744.0 KiB, versus 739.4 before
+  // these components. Both sheets contain only their own selectors and keyframes;
+  // FlowLight's surface wrappers reach its sheet through style-deps, not inlining.
+  // Actuals plus minimal headroom; per-file and root/full-style import gates stay fixed.
+  fullCssBytes: 745 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -289,7 +294,10 @@ const LIMITS = {
   // with it at 709.9 KiB across 186 sheets: TxMorph's new 1,318 B sheet, and the transition,
   // switch and charts sheets' 826 B. The dependency closure still imports every primitive
   // sheet once.
-  onDemandCssBytes: 710 * 1024,
+  // 710 -> 715.5 on 2026-10-10: the same two sheets as the fullCssBytes note.
+  // CI measured 714.5 KiB across 188 sheets (186 before); their dependency closure
+  // still imports each primitive stylesheet once. Actuals plus minimal headroom.
+  onDemandCssBytes: 715.5 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -342,23 +350,25 @@ const emptyStateStyleAliases = [
   'permission-state',
   'search-empty',
 ]
+// FlowLight is opt-in at runtime but statically imported by BaseSurface and Card.
+// Declare that exact new edge for the existing consumers of the surface stack.
 const onDemandImportBudgets = [
   {
     // TxAvatarGroup's overflow popover is opt-in at runtime but statically imported,
     // so `avatar` now carries the whole anchor stack. Declared rather than left
     // implicit: this is the edge that would otherwise grow unnoticed.
     subpath: 'avatar',
-    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'flow-light', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
     subpath: 'base-anchor',
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'glass-surface', 'spinner'],
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'flow-light', 'glass-surface', 'spinner'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
     subpath: 'base-surface',
-    allowedComponentDirs: ['base-surface', 'glass-surface'],
+    allowedComponentDirs: ['base-surface', 'flow-light', 'glass-surface'],
   },
   {
     subpath: 'button',
@@ -368,7 +378,7 @@ const onDemandImportBudgets = [
     // `text-transformer`, `text-morph` and `liquid` ride in behind TxCopyButton, whose
     // label morphs through TxTextTransformer (the text-morph engine, sprung by liquid's
     // compiler) — the one text engine the library allows, as TxSwitch and TxModeChip use it.
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'icon', 'liquid', 'popover', 'spinner', 'text-morph', 'text-transformer', 'tooltip'],
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'flow-light', 'glass-surface', 'icon', 'liquid', 'popover', 'spinner', 'text-morph', 'text-transformer', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap', 'v-wave'],
   },
   {
@@ -378,7 +388,7 @@ const onDemandImportBudgets = [
   {
     subpath: 'select',
     // `tooltip` rides in behind `popover` — see the button entry above.
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'input', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'flow-light', 'glass-surface', 'input', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
@@ -387,7 +397,7 @@ const onDemandImportBudgets = [
     // stack. Declared for the same reason as the avatar entry: this is the edge
     // that would otherwise grow unnoticed.
     subpath: 'pagination',
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'icon', 'input', 'pagination', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'flow-light', 'glass-surface', 'icon', 'input', 'pagination', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
@@ -397,7 +407,7 @@ const onDemandImportBudgets = [
   },
   {
     subpath: 'flip-overlay',
-    allowedComponentDirs: ['base-surface', 'button', 'flip-overlay', 'glass-surface', 'spinner'],
+    allowedComponentDirs: ['base-surface', 'button', 'flip-overlay', 'flow-light', 'glass-surface', 'spinner'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
