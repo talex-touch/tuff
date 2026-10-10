@@ -386,6 +386,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/stagger',
     '/docs/dev/components/fusion',
     '/docs/dev/components/fusion-surface',
+    '/docs/dev/components/flow-light',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
     '/docs/dev/components/image-generation',
@@ -410,6 +411,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/choice-card',
     '/docs/dev/components/typing-indicator',
     '/docs/dev/components/conversation-stream',
+    '/docs/dev/components/voice-clip',
     // ai — AiAgent
     '/docs/dev/components/agents',
     '/docs/dev/components/agent-trace',

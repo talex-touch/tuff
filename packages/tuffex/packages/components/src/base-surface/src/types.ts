@@ -1,3 +1,4 @@
+import type { FlowLightVariant } from '../../flow-light/src/types'
 import type { GlassSurfaceProps } from '../../glass-surface'
 
 export type BaseSurfaceMode = 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
@@ -83,6 +84,13 @@ export interface BaseSurfaceProps {
   refractionRenderer?: BaseSurfaceRefractionRenderer
   /** 非 mask 模式下的可选 mask 层透明度（用于 1+3、2+3、1+2+3） */
   overlayOpacity?: number
+  /**
+   * 流光层（TxFlowLight）：在遮罩之上、描边之下叠一层固定的品牌色光，任何 mode 都可开；
+   * 不传或 `false` 即关闭
+   */
+  flowLight?: FlowLightVariant | false
+  /** 流光强度，乘到流光的主题透明度上，默认 1 */
+  flowLightIntensity?: number
   /** 标签名，默认 'div' */
   tag?: string
 }

@@ -9,8 +9,9 @@ import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
  * The conversation top bar, from artboards `JVvAr` / `lbZ9a` (untitled) and `LI40e` / `zdhVu`
- * (titled). Present at 52px on every home state — it is also the only drag handle the main area
- * has, since the shell's window chrome lives inside the sidebar.
+ * (titled). Present at 52px on every home state, over the conversation column only — the right
+ * panel runs the full height beside it with a header of the same height. The two are the main
+ * area's only drag handles, since the shell's window chrome lives inside the sidebar.
  */
 const props = defineProps<{
   /** Conversation title. Absent until the conversation has one, which selects the pill form below. */
@@ -96,20 +97,6 @@ const { t } = useI18n()
           :class="props.branching ? 'i-ri-loader-4-line HomeTopBar-Spin' : 'i-ri-git-branch-line'"
         />
       </button>
-      <button
-        class="HomeTopBar-IconBtn"
-        type="button"
-        :aria-pressed="Boolean(props.panelOpen)"
-        :aria-label="props.panelOpen ? t('home.closePanel') : t('home.openPanel')"
-        :title="props.panelOpen ? t('home.closePanel') : t('home.openPanel')"
-        @click="$emit('toggle-panel')"
-      >
-        <!-- Remix has no `panel-right-open`; `layout-right` is its equivalent right-panel glyph. -->
-        <span class="i-ri-layout-right-line" />
-        <!-- Inside the button, not beside it: an absolutely positioned chip anchors to its
-             parent, so a sibling would hang off whatever positioned ancestor is further up. -->
-        <MetaHintBadge command="toggle-panel" placement="below" />
-      </button>
       <!-- The bar is a drag region; the button and the panel it opens must stay clickable. -->
       <div class="HomeTopBar-MenuSlot">
         <HomeTurnInfoMenu :turn="props.turn" :message-count="props.messageCount">
@@ -127,6 +114,22 @@ const { t } = useI18n()
           </template>
         </HomeTurnInfoMenu>
       </div>
+      <!-- Last, so it sits against the panel it opens: the panel runs the full height beside this
+           bar, and its tabs start just past the toggle. -->
+      <button
+        class="HomeTopBar-IconBtn"
+        type="button"
+        :aria-pressed="Boolean(props.panelOpen)"
+        :aria-label="props.panelOpen ? t('home.closePanel') : t('home.openPanel')"
+        :title="props.panelOpen ? t('home.closePanel') : t('home.openPanel')"
+        @click="$emit('toggle-panel')"
+      >
+        <!-- Remix has no `panel-right-open`; `layout-right` is its equivalent right-panel glyph. -->
+        <span class="i-ri-layout-right-line" />
+        <!-- Inside the button, not beside it: an absolutely positioned chip anchors to its
+             parent, so a sibling would hang off whatever positioned ancestor is further up. -->
+        <MetaHintBadge command="toggle-panel" placement="below" />
+      </button>
     </div>
   </div>
 </template>
@@ -141,8 +144,9 @@ const { t } = useI18n()
   padding: 0 20px;
   box-sizing: border-box;
   /**
-   * The main area's only drag handle. `ShellChromeBar` covers the sidebar column, so without this
-   * the whole right side of the window — most of its width — cannot be dragged.
+   * A drag handle, with the right panel's header beside it. `ShellChromeBar` covers the sidebar
+   * column, so without this the whole right side of the window — most of its width — cannot be
+   * dragged.
    */
   -webkit-app-region: drag;
 }

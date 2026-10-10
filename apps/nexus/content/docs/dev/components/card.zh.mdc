@@ -202,6 +202,25 @@ code: |
 ---
 :::
 
+### 流光底
+`flowLight` 透传给卡片的表面，与 `background` 无关；浮层面板通过 `panelCard` 开启。
+:::TuffDemoWrapper{demo="CardFlowLightDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard background="pure" shadow="soft" flow-light="rim">
+      卡片内容
+    </TxCard>
+    <TxPopover :panel-card="{ flowLight: 'corners' }">
+      <template #reference>
+        <TxButton>浮层面板</TxButton>
+      </template>
+      面板内容
+    </TxPopover>
+  </template>
+---
+:::
+
 ### 最佳实践
 
 - 整卡导航或选择时才用 `clickable`；独立动作放进插槽里的真实按钮或链接。
@@ -236,6 +255,8 @@ code: |
 | `refractionLightSpring` | `boolean` | `true` | 光源跟随使用弹簧过渡。 |
 | `refractionLightSpringStiffness` | `number` | `0.18` | 光源弹簧刚度，收敛到 `0.01–0.55`。 |
 | `refractionLightSpringDamping` | `number` | `0.84` | 光源弹簧阻尼，收敛到 `0.55–0.99`。 |
+| `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | 表面上的流光底；不传或 `false` 即关闭。 |
+| `flowLightIntensity` | `number` | `1` | 流光底强度，乘到主题透明度上。 |
 | `clickable` | `boolean` | `false` | 启用悬停与按压反馈（缩至 `0.985`），并派发 `click`。 |
 | `loading` | `boolean` | `false` | 用 `TxSpinner` 遮罩覆盖卡片。 |
 | `loadingSpinnerSize` | `number` | - | Spinner 尺寸（px），省略时为 `12`。 |

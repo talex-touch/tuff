@@ -15,6 +15,35 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif'
 }
+/**
+ * A voice message's recording: the composer's kept clip, a WAV of 16-bit mono PCM capped where
+ * the voice service caps a session's audio (10MB of PCM) plus its 44-byte header.
+ */
+const AUDIO_MIME = 'audio/wav'
+const WAV_HEADER_BYTES = 44
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024 + WAV_HEADER_BYTES
+const ASSET_EXTENSIONS: Record<string, string> = { ...IMAGE_EXTENSIONS, [AUDIO_MIME]: 'wav' }
+const ASSET_FILE = /^[a-f0-9-]{36}\.(?:png|jpg|webp|gif|wav)$/
+
+function maxBytesOf(mimeType: string): number {
+  return mimeType === AUDIO_MIME ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES
+}
+
+/** The only audio this store takes: a canonical PCM WAV header, one channel, 16 bits. */
+function isPcm16MonoWav(bytes: Buffer): boolean {
+  if (bytes.length <= WAV_HEADER_BYTES) return false
+  return (
+    bytes.toString('ascii', 0, 4) === 'RIFF' &&
+    bytes.toString('ascii', 8, 12) === 'WAVE' &&
+    bytes.toString('ascii', 12, 16) === 'fmt ' &&
+    bytes.readUInt16LE(20) === 1 &&
+    bytes.readUInt16LE(22) === 1 &&
+    bytes.readUInt32LE(24) > 0 &&
+    bytes.readUInt16LE(34) === 16 &&
+    bytes.toString('ascii', 36, 40) === 'data' &&
+    WAV_HEADER_BYTES + bytes.readUInt32LE(40) <= bytes.length
+  )
+}
 
 export interface StoredWorkspaceAttachment {
   id: string
@@ -56,7 +85,7 @@ export class WorkspaceAttachmentStore {
   }
 
   private async ownedPath(record: StoredWorkspaceAttachment): Promise<string> {
-    if (!/^[a-f0-9-]{36}\.(?:png|jpg|webp|gif)$/.test(record.relativePath)) {
+    if (!ASSET_FILE.test(record.relativePath)) {
       throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
     }
     return path.join(await this.ownerRoot(record.conversationId), record.relativePath)
@@ -110,7 +139,53 @@ export class WorkspaceAttachmentStore {
     }
   }
 
+  /**
+   * Copies a voice message's recording into this conversation. `sourcePath` is the voice module's
+   * own kept clip, resolved from its id in main and never taken from a caller; it is re-read here
+   * anyway and must be a PCM WAV within the cap.
+   */
+  async persistAudio(
+    conversationId: string,
+    sourcePath: string
+  ): Promise<StoredWorkspaceAttachment> {
+    const source = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW)
+    let bytes: Buffer
+    try {
+      const details = await source.stat()
+      if (!details.isFile() || details.size > MAX_AUDIO_BYTES)
+        throw new Error('WORKSPACE_ATTACHMENT_INVALID')
+      bytes = await source.readFile()
+    } finally {
+      await source.close()
+    }
+    if (bytes.length > MAX_AUDIO_BYTES || !isPcm16MonoWav(bytes))
+      throw new Error('WORKSPACE_ATTACHMENT_INVALID')
+    const id = randomUUID()
+    const record: StoredWorkspaceAttachment = {
+      id,
+      conversationId,
+      relativePath: `${id}.wav`,
+      mimeType: AUDIO_MIME,
+      name: null,
+      size: bytes.length,
+      createdAt: Date.now()
+    }
+    const handle = await open(await this.ownedPath(record), 'wx', 0o600)
+    try {
+      await handle.writeFile(bytes)
+      await handle.sync()
+    } catch (error) {
+      await handle.close()
+      await this.remove([record])
+      throw error
+    }
+    await handle.close()
+    return record
+  }
+
   async toModel(record: StoredWorkspaceAttachment): Promise<IntelligenceMessageAttachment> {
+    // Audio is shown, never sent: its turn carries the transcript as text.
+    if (!IMAGE_EXTENSIONS[record.mimeType]) throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
     const file = await this.ownedPath(record)
     const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
@@ -144,13 +219,16 @@ export class WorkspaceAttachmentStore {
     if (!details.isFile() || details.isSymbolicLink() || details.size !== record.size) {
       throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
     }
+    const audio = record.mimeType === AUDIO_MIME
+    const durationMs = audio ? await wavDurationMs(file, record.size) : undefined
     return {
       id: record.id,
-      kind: 'image',
+      kind: audio ? 'audio' : 'image',
       mimeType: record.mimeType,
       size: record.size,
       ...(record.name ? { name: record.name } : {}),
-      previewUrl: toTfileUrl(file)
+      previewUrl: toTfileUrl(file),
+      ...(durationMs === undefined ? {} : { durationMs })
     }
   }
 
@@ -164,7 +242,7 @@ export class WorkspaceAttachmentStore {
       !details.isFile() ||
       details.isSymbolicLink() ||
       details.size !== record.size ||
-      details.size > MAX_IMAGE_BYTES
+      details.size > maxBytesOf(record.mimeType)
     ) {
       throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
     }
@@ -173,7 +251,7 @@ export class WorkspaceAttachmentStore {
       ...record,
       id,
       conversationId: childConversationId,
-      relativePath: `${id}.${IMAGE_EXTENSIONS[record.mimeType]}`,
+      relativePath: `${id}.${ASSET_EXTENSIONS[record.mimeType]}`,
       createdAt: Date.now()
     }
     const target = await this.ownedPath(copy)
@@ -206,7 +284,7 @@ export class WorkspaceAttachmentStore {
     if (!details.isDirectory() || details.isSymbolicLink() || (await realpath(owner)) !== owner)
       throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
     for (const entry of await readdir(owner, { withFileTypes: true })) {
-      if (!entry.isFile() || !/^[a-f0-9-]{36}\.(?:png|jpg|webp|gif)$/.test(entry.name))
+      if (!entry.isFile() || !ASSET_FILE.test(entry.name))
         throw new Error('WORKSPACE_ATTACHMENT_UNSAFE')
       await unlink(path.join(owner, entry.name))
     }
@@ -225,5 +303,23 @@ export class WorkspaceAttachmentStore {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
       }
     }
+  }
+}
+
+/** A stored WAV's length from its own byte rate; absent when the header cannot be read. */
+async function wavDurationMs(file: string, size: number): Promise<number | undefined> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+    const header = Buffer.alloc(WAV_HEADER_BYTES)
+    const { bytesRead } = await handle.read(header, 0, WAV_HEADER_BYTES, 0)
+    if (bytesRead < WAV_HEADER_BYTES) return undefined
+    const byteRate = header.readUInt32LE(28)
+    if (byteRate <= 0) return undefined
+    return Math.round(((size - WAV_HEADER_BYTES) / byteRate) * 1000)
+  } catch {
+    return undefined
+  } finally {
+    await handle?.close()
   }
 }

@@ -99,11 +99,21 @@ export interface ConversationMessage {
    */
   modelAttachments?: IntelligenceMessageAttachment[]
   /**
+   * A voice message's recording (Main's copy, played from `url`). The message's `content` is its
+   * transcript, which is what the model read.
+   */
+  voice?: ConversationVoice
+  /**
    * Heterogeneous content assembled from stream part events (reasoning spans,
    * tool calls) interleaved with text. `content` stays the plain-text
    * concatenation — the provider context, title source and fallback rendering.
    */
   parts?: AiMessagePart[]
+}
+
+export interface ConversationVoice {
+  url: string
+  durationMs?: number
 }
 
 /** Provider / model the next turn should run on, as chosen in the model pill. */

@@ -54,7 +54,11 @@ function createFakeSdk() {
       if (state.statusFails) throw new Error('status read failed')
       return state.status
     }),
-    openMicrophoneSettings: vi.fn(async () => {})
+    openMicrophoneSettings: vi.fn(async () => {}),
+    transcribeRecording: vi.fn(async (_payload: { recordingId: string; language?: string }) => ({
+      text: ''
+    })),
+    discardRecording: vi.fn(async (_payload: { recordingId: string }) => {})
   }
   return { sdk, streams, state }
 }
@@ -125,6 +129,7 @@ describe('useComposerDictation', () => {
       deliveryTiming: 'live',
       cleanup: true,
       emitLevel: true,
+      keepRecording: true,
       language: 'zh'
     })
   })
@@ -459,5 +464,184 @@ describe('useComposerDictation', () => {
     expect(fake.streams[0]!.controller.cancel).toHaveBeenCalledOnce()
     expect(draft.value).toBe('spoken')
     expect(dictation.state.value).toBe('idle')
+  })
+
+  describe('voice clip', () => {
+    const recording = { id: 'clip-1', url: 'tfile:///clip-1.wav', durationMs: 2_000 }
+
+    /** A session that heard `words` (if any), kept its audio, and ended — or failed with `error`. */
+    async function finishSession(
+      dictation: UseComposerDictationReturn,
+      { words, error }: { words?: string; error?: Error } = {}
+    ): Promise<void> {
+      await dictation.start()
+      const stream = fake.streams.at(-1)
+      emit(stream, { type: 'ready' })
+      emit(stream, { type: 'level', rms: 0.002 })
+      emit(stream, { type: 'level', rms: 0.02 })
+      if (words) emit(stream, { type: 'final', text: words })
+      emit(stream, { type: 'recording', recording })
+      if (error) stream!.options.onError?.(error)
+      else emit(stream, { type: 'end' })
+      await settle()
+    }
+
+    it('offers the kept audio once words have landed, with a waveform of the whole session', async () => {
+      const { draft, dictation } = setup('请')
+      input.setSelectionRange(1, 1)
+
+      await finishSession(dictation, { words: '帮我看看' })
+
+      expect(draft.value).toBe('请帮我看看')
+      expect(dictation.clip.value).toMatchObject({
+        recording,
+        outcome: 'inserted',
+        failure: null,
+        spoken: '帮我看看',
+        draft: '请帮我看看',
+        original: '请',
+        busy: null
+      })
+      expect(dictation.clip.value!.peaks).toHaveLength(2)
+      expect(notices).toEqual([])
+    })
+
+    it('carries a failure on the clip instead of a toast, the draft as it was', async () => {
+      const { draft, dictation } = setup('原稿')
+
+      await finishSession(dictation, {
+        error: Object.assign(new Error('socket closed'), { code: 'NETWORK_FAILURE' })
+      })
+
+      expect(draft.value).toBe('原稿')
+      expect(dictation.clip.value).toMatchObject({ outcome: 'failed', spoken: '' })
+      expect(dictation.clip.value!.failure?.kind).toBe('failed')
+      expect(notices).toEqual([])
+    })
+
+    it('still toasts a failure that left no audio behind', async () => {
+      const { dictation } = setup()
+      await dictation.start()
+      fake.streams[0]!.options.onError?.(
+        Object.assign(new Error('denied'), { code: 'MIC_PERMISSION_DENIED' })
+      )
+
+      expect(dictation.clip.value).toBeNull()
+      expect(notices).toEqual(['microphone-denied'])
+    })
+
+    it('says "nothing heard" on the clip rather than in a toast', async () => {
+      const { dictation } = setup()
+
+      await finishSession(dictation)
+
+      expect(dictation.clip.value).toMatchObject({ outcome: 'empty', spoken: '' })
+      expect(notices).toEqual([])
+    })
+
+    it('recognizes again in place of its own words while the draft is untouched', async () => {
+      const { draft, dictation } = setup('请')
+      input.setSelectionRange(1, 1)
+      await finishSession(dictation, { words: '帮我看' })
+      fake.sdk.transcribeRecording.mockResolvedValueOnce({ text: '帮我看看这个分支' })
+
+      await expect(dictation.recognizeClip()).resolves.toBe('inserted')
+
+      expect(fake.sdk.transcribeRecording).toHaveBeenCalledWith({
+        recordingId: 'clip-1',
+        language: 'zh'
+      })
+      expect(draft.value).toBe('请帮我看看这个分支')
+      expect(dictation.clip.value).toMatchObject({ spoken: '帮我看看这个分支', original: '请' })
+    })
+
+    it('adds the words after an edited draft and leaves the edit alone', async () => {
+      const { draft, dictation } = setup()
+      await finishSession(dictation, {
+        error: Object.assign(new Error('socket closed'), { code: 'NETWORK_FAILURE' })
+      })
+      draft.value = '我自己写的'
+      fake.sdk.transcribeRecording.mockResolvedValueOnce({ text: '补上的话' })
+
+      await dictation.recognizeClip()
+
+      expect(draft.value).toBe('我自己写的补上的话')
+      expect(dictation.clip.value).toMatchObject({ outcome: 'inserted', failure: null })
+      // Taking the words back out returns the draft to the user's own edit.
+      expect(dictation.draftWithoutClip()).toBe('我自己写的')
+    })
+
+    it('keeps a second failure on the clip, and the clip with it', async () => {
+      const { dictation } = setup()
+      await finishSession(dictation, {
+        error: Object.assign(new Error('socket closed'), { code: 'NETWORK_FAILURE' })
+      })
+      fake.sdk.transcribeRecording.mockRejectedValueOnce(
+        Object.assign(new Error('Too many requests'), { code: 'RATE_LIMITED' })
+      )
+
+      await expect(dictation.recognizeClip()).resolves.toBe('failed')
+
+      expect(dictation.clip.value?.failure?.kind).toBe('busy')
+      expect(dictation.clip.value?.busy).toBeNull()
+    })
+
+    it('hands its own words to a send, and recognizes them when it has none', async () => {
+      const { dictation } = setup()
+      await finishSession(dictation, { words: '已经听写好的' })
+      await expect(dictation.clipTranscript()).resolves.toBe('已经听写好的')
+      expect(fake.sdk.transcribeRecording).not.toHaveBeenCalled()
+
+      await finishSession(dictation)
+      fake.sdk.transcribeRecording.mockResolvedValueOnce({ text: '。。。' })
+      // Silence comes back as punctuation: nothing to send.
+      await expect(dictation.clipTranscript()).resolves.toBe('')
+    })
+
+    it('takes its words back out of the draft only while they sit as they landed', async () => {
+      const { draft, dictation } = setup('前文')
+      input.setSelectionRange(2, 2)
+      await finishSession(dictation, { words: '语音' })
+      expect(dictation.draftWithoutClip()).toBe('前文')
+
+      draft.value = '前文语音，改过'
+      expect(dictation.draftWithoutClip()).toBe('前文语音，改过')
+    })
+
+    it('lets the old clip go when a new recording starts, and on dismiss', async () => {
+      const { dictation } = setup()
+      await finishSession(dictation, { words: '第一段' })
+
+      await dictation.start()
+      expect(dictation.clip.value).toBeNull()
+      expect(fake.sdk.discardRecording).toHaveBeenCalledWith({ recordingId: 'clip-1' })
+
+      dictation.cancel()
+      await finishSession(dictation, { words: '第二段' })
+      dictation.dismissClip()
+      expect(fake.sdk.discardRecording).toHaveBeenCalledTimes(2)
+      expect(dictation.clip.value).toBeNull()
+    })
+
+    it('hands a clip to a send without discarding it, and takes it back if the send fails', async () => {
+      const { dictation } = setup()
+      await finishSession(dictation, { words: '要发出去的' })
+
+      const taken = dictation.takeClip()
+      expect(dictation.clip.value).toBeNull()
+      expect(fake.sdk.discardRecording).not.toHaveBeenCalled()
+
+      dictation.restoreClip(taken!)
+      expect(dictation.clip.value).toMatchObject({ spoken: '要发出去的', busy: null })
+    })
+
+    it('lets the clip go when the page unmounts', async () => {
+      const { dictation } = setup()
+      await finishSession(dictation, { words: '离开' })
+
+      scope.stop()
+
+      expect(fake.sdk.discardRecording).toHaveBeenCalledWith({ recordingId: 'clip-1' })
+    })
   })
 })

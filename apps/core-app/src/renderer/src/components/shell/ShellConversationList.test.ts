@@ -634,7 +634,7 @@ describe('shellConversationList project folders', () => {
     expect(pushMock).toHaveBeenCalledWith('/home')
   })
 
-  it('sorts the ⋯ menu into Chats, Local Agents and Project, each under its own heading', async () => {
+  it('sorts the ⋯ menu into Chats, Local Agents and Project, named for screen readers only', async () => {
     listState.projects = [project({ id: 'p1' })]
     const wrapper = await mountList()
     const row = wrapper.find('.ShellProjectFolder-Row')
@@ -660,13 +660,10 @@ describe('shellConversationList project folders', () => {
     ]
     expect(groups.map((group) => group.attributes('role'))).toEqual(['group', 'group', 'group'])
     expect(groups.map((group) => group.attributes('aria-label'))).toEqual(headings)
-    // Visible, but kept out of the accessibility tree: the group's label already announces it.
-    expect(groups.map((group) => group.find('.ShellProjectFolder-MenuLabel').text())).toEqual(
-      headings
-    )
-    expect(
-      groups.map((group) => group.find('.ShellProjectFolder-MenuLabel').attributes('aria-hidden'))
-    ).toEqual(['true', 'true', 'true'])
+    // No visible heading: each row leads with its icon instead, and the group's name is only
+    // announced — a heading repeated what its rows already said.
+    expect(row.find('.ShellProjectFolder-MenuLabel').exists()).toBe(false)
+    for (const heading of headings) expect(row.text()).not.toContain(heading)
 
     const actions = groups.map((group) =>
       group

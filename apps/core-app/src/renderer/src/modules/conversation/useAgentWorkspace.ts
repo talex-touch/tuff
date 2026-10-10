@@ -47,7 +47,8 @@ export const AGENT_WORKSPACE_ERROR_CODES = [
   'WORKSPACE_FORK_ANCHOR_INVALID',
   'WORKSPACE_FORK_NATIVE_UNSAFE',
   'WORKSPACE_RUN_NOT_PENDING',
-  'WORKSPACE_STALE_TURN'
+  'WORKSPACE_STALE_TURN',
+  'WORKSPACE_VOICE_UNAVAILABLE'
 ] as const
 
 export type AgentWorkspaceErrorCode = (typeof AGENT_WORKSPACE_ERROR_CODES)[number] | 'unknown'
@@ -87,6 +88,8 @@ export interface WorkspaceDraftDefaults {
 export interface WorkspaceSendOptions extends ConversationSendOptions {
   /** The form tool call this message answers; Main marks it submitted in the same write. */
   answersToolCallId?: string
+  /** Sends this kept voice clip as the message's voice; the text is its transcript. */
+  voiceRecordingId?: string
 }
 
 export interface UseAgentWorkspaceOptions {
@@ -412,7 +415,8 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
         ...(lead ? { lead: { text: lead, note: options.leadNote(lead) } } : {}),
         ...(sendOptions.answersToolCallId
           ? { answersToolCallId: sendOptions.answersToolCallId }
-          : {})
+          : {}),
+        ...(sendOptions.voiceRecordingId ? { voiceRecordingId: sendOptions.voiceRecordingId } : {})
       }
       const carried = attachments?.length ? await toModelAttachments(attachments) : []
       const result = await sdk.submit({

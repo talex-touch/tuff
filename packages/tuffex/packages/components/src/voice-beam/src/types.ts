@@ -174,6 +174,20 @@ export interface VoiceBeamProps {
   flow?: number;
 
   /**
+   * How much each part of the glow moves on its own while a voice is heard,
+   * 0–1. A manual `level` only says how loud the voice is, so at 0 the arch
+   * keeps one shape and grows and shrinks with it. Raised, every lobe rises,
+   * sinks and drifts on its own, bumps run along the band line, and the arch
+   * sways, leans and changes its crest — on periods that never line up and
+   * noise that moves at about the rhythm of syllables, so no two words look
+   * alike. It scales with the level, so silence is still; it gives way to
+   * `processing`, and reduced motion turns it off. A TuffEx addition to the
+   * upstream port.
+   * @default 0
+   */
+  organic?: number;
+
+  /**
    * Processing state — turn it on once the voice has been captured and
    * something is working on it. The lobes gather into one compact beam
    * that travels the glow's range left to right and back, eased at each

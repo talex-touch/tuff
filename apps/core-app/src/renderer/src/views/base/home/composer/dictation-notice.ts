@@ -12,8 +12,10 @@ import {
 
 /**
  * What the composer's dictation has to tell the user, and how. The session reports a kind; the page
- * turns it into a toast with the one action that fixes it. No retry and no undo: main's recovery
- * slot is global and does not know sessions, so it may hold the Fn HUD's recording instead.
+ * turns it into a toast with the one action that fixes it — unless main kept the session's audio,
+ * in which case the voice clip carries the notice (`describeDictationNotice`) together with its own
+ * way past it: recognize the clip again, or send it. Not main's recovery slot: that one is global
+ * and does not know sessions, so it may hold the Fn HUD's recording instead.
  */
 export type DictationNoticeKind =
   | 'recognition-not-configured'
@@ -245,6 +247,26 @@ const COPY: Record<DictationNoticeKind, NoticeCopy> = {
   busy: { message: 'assistant.voicePanel.serviceBusy', tone: 'warning' },
   failed: { message: 'assistant.voicePanel.voiceTranscribeFailed', tone: 'error' },
   empty: { message: 'assistant.voicePanel.voiceTranscribeEmpty', tone: 'warning' }
+}
+
+/**
+ * A notice as one line of the voice clip's status: the toast's headline, without its action. A
+ * usage limit names its reset time, as the toast does.
+ */
+export function describeDictationNotice(
+  kind: DictationNoticeKind,
+  context: Pick<DictationNoticeContext, 't' | 'locale'>,
+  detail?: string
+): string {
+  if (kind === 'usage-limit') {
+    const resetsAt = detail ? Date.parse(detail) : Number.NaN
+    if (Number.isFinite(resetsAt)) {
+      return context.t('assistant.voicePanel.usageLimitReached', {
+        time: formatUsageLimitResetTime(resetsAt, context.locale)
+      })
+    }
+  }
+  return context.t(COPY[kind].message)
 }
 
 /**

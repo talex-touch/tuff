@@ -9,6 +9,7 @@ import process from 'node:process'
 import { app, BrowserWindow, crashReporter, powerMonitor, session } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import packageJson from '../../../package.json'
 import { resolveRuntimeRootPath } from '../utils/app-root-path'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
@@ -168,6 +169,15 @@ function applyStartupBenchmarkUserDataOverride(): void {
   )
 }
 
+/** Dev builds keep Electron's profile apart from the packaged app's; benchmark runs have their own. */
+function applyDevUserDataPath(): void {
+  if (app.isPackaged || resolveStartupBenchmarkUserDataDir()) return
+  const devUserDataPath = path.join(app.getPath('appData'), `${packageJson.name}-dev`)
+  if (app.getPath('userData') !== devUserDataPath) {
+    app.setPath('userData', devUserDataPath)
+  }
+}
+
 registerEarlyUnhandledRejectionHandler()
 applyDeprecationTraceSwitch()
 applyStartupBenchmarkUserDataOverride()
@@ -265,6 +275,11 @@ if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHard
 
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
+
+// After the data root above, which stays under the packaged userData on purpose (see
+// app-root-path.ts), and before the lock: Electron puts SingletonLock in whatever userData is when
+// the lock is requested, so switching later left dev and packaged builds refusing each other.
+applyDevUserDataPath()
 
 const startupBenchmarkMode = isStartupBenchmarkMode()
 const isolatedAcceptanceMode = isIsolatedAcceptanceMode()

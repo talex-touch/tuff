@@ -2,6 +2,7 @@
 import type { PreviewSource, PreviewSourceKind } from '~/modules/conversation/preview-index'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
 /**
  * What the answers were built on.
@@ -41,9 +42,11 @@ const groups = computed(() =>
 
 <template>
   <div class="HomePreviewSources">
-    <p v-if="!props.items.length" class="HomePreview-Empty">
-      {{ t('home.preview.sourcesEmpty') }}
-    </p>
+    <HomePreviewEmpty
+      v-if="!props.items.length"
+      icon="i-ri-book-open-line"
+      :text="t('home.preview.sourcesEmpty')"
+    />
 
     <section v-for="group in groups" :key="group.kind" class="HomePreviewSources-Group">
       <h3 class="HomePreview-GroupLabel">{{ t(KIND_LABEL[group.kind]) }}</h3>

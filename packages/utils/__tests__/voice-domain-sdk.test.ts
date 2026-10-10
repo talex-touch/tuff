@@ -298,6 +298,42 @@ describe('voice domain sdk', () => {
     expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.listInstalledSpeechModels, undefined)
   })
 
+  it('recognizes a kept clip on the retry deadline and discards it on the default one', async () => {
+    const transport = createTransportMock(async () => ({ ok: true, result: { text: '再说一遍' } }))
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport)
+
+    await expect(sdk.transcribeRecording({ recordingId: 'clip-1' })).resolves.toEqual({
+      text: '再说一遍',
+    })
+    await sdk.discardRecording({ recordingId: 'clip-1' })
+
+    // A clip is replayed whole, like a retry, so it gets the same long deadline.
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.transcribeRecording,
+      { recordingId: 'clip-1' },
+      { timeout: 180_000 },
+    )
+    expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.discardRecording, {
+      recordingId: 'clip-1',
+    })
+    expect(voiceApiEvents.transcribeRecording.toEventName()).toBe('voice:api:transcribe-recording')
+    expect(voiceApiEvents.discardRecording.toEventName()).toBe('voice:api:discard-recording')
+  })
+
+  it('surfaces a gone clip as a coded VoiceApiError', async () => {
+    const transport = createTransportMock(async () => ({
+      ok: false,
+      error: 'VOICE_RECORDING_NOT_FOUND',
+      code: 'VOICE_RECORDING_NOT_FOUND',
+      retryable: false,
+    }))
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport)
+
+    await expect(sdk.transcribeRecording({ recordingId: 'gone' })).rejects.toMatchObject({
+      code: 'VOICE_RECORDING_NOT_FOUND',
+    })
+  })
+
   it('voice event names resolve to voice:api:<action>', () => {
     expect(voiceApiEvents.dictate.toEventName()).toBe('voice:api:dictate')
     expect(voiceApiEvents.speak.toEventName()).toBe('voice:api:speak')

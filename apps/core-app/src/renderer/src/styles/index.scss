@@ -44,6 +44,22 @@ body.core-box #app {
   box-shadow: none !important;
 }
 
+/**
+ * Whatever is teleported out of #app — anchored panels (menus, submenus, popovers, tooltips),
+ * modals, drawers, toasts — floats over window chrome, and the shell sidebar and the title bars
+ * are `-webkit-app-region: drag`. A drag region is composited per window, not per stacking
+ * context, and `none` does not punch through it: a press on a menu row that sits over the
+ * sidebar's drag area (a section heading, the gap between rows) went to the OS as a window drag
+ * and never reached the page, so the row looked clickable and did nothing. Everything outside
+ * #app is interactive content, never chrome, so all of it opts out — every descendant too: the
+ * hole is cut on the element that takes the hit, and a child left at `none` is still swallowed
+ * (the same rule as Beginner.vue's overlay).
+ */
+body > :not(#app),
+body > :not(#app) * {
+  -webkit-app-region: no-drag;
+}
+
 ._disabled {
   opacity: 0.75;
   pointer-events: none;

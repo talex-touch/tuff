@@ -54,6 +54,8 @@ export interface DropdownMenuContext {
   close: () => void
   closeOnSelect: boolean
   activationFeedback: boolean
+  /** The root menu's `panelCard`: submenus take its flow light unless they name their own. */
+  readonly panelCard?: BaseAnchorPanelCardProps
 }
 
 export interface DropdownItemProps {

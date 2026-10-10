@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.7.0",
-  "totalComponents": 183,
+  "totalComponents": 185,
   "versions": [
     {
       "version": "0.7.0",
@@ -682,6 +682,11 @@
       "since": "0.3.4",
       "suite": "pro"
     },
+    "flow-light": {
+      "slug": "flow-light",
+      "since": "0.6.3",
+      "suite": "pro"
+    },
     "flowchart": {
       "slug": "flowchart",
       "since": "0.6.0",
@@ -1281,6 +1286,11 @@
       "slug": "voice-beam",
       "since": "0.6.2",
       "suite": "pro"
+    },
+    "voice-clip": {
+      "slug": "voice-clip",
+      "since": "0.6.3",
+      "suite": "ai"
     },
     "working-indicator": {
       "slug": "working-indicator",

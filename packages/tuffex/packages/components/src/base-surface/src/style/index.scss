@@ -51,6 +51,12 @@
     opacity: var(--tx-surface-mask-opacity, 0.75);
   }
 
+  // Above the veil, under the edge: the light tints the material, and the rim stays crisp over it.
+  // It follows the mask in the DOM, so sharing z-index 3 still paints it on top.
+  .tx-base-surface__layer--flow-light {
+    z-index: 3;
+  }
+
   .tx-base-surface__layer--refraction-edge {
     z-index: 4;
     box-shadow: inset 0 0 0 1px color-mix(

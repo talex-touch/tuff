@@ -499,6 +499,8 @@ function onKeydown(ev: KeyboardEvent) {
       :refraction-angle="surfaceRefractionAngle"
       :refraction-light-x="surfaceRefractionLightX"
       :refraction-light-y="surfaceRefractionLightY"
+      :flow-light="flowLight"
+      :flow-light-intensity="flowLightIntensity"
       aria-hidden="true"
     />
 

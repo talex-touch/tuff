@@ -1,9 +1,11 @@
 <script lang="ts" name="HomeWorkspaceModeMenu" setup>
 import type { ConversationWorkspaceMode } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
+import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { GLIDE, stepSpring, useIndicatorBox, useJellyIndicator } from '@talex-touch/tuffex/utils'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ComposerChip from '../composer/ComposerChip.vue'
@@ -104,9 +106,16 @@ function chooseProfile(profile: AiAgentProfile): void {
 
 function showView(next: 'main' | 'manage'): void {
   view.value = next
-  // The view swaps under the pointer; hand focus to its first control for the keyboard.
+  // The rows under the plate are a different list now: it lands on the new one, not travels there.
+  landPlateNext = true
+  plate.stop()
+  // The view swaps under the pointer; hand focus to it for the keyboard — back on the main list, to
+  // the current choice as on opening, so the plate that lands there is not then pulled to row one.
   void nextTick(() =>
-    panelRef.value?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')?.focus()
+    (next === 'main'
+      ? currentRow()
+      : panelRef.value?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')
+    )?.focus()
   )
 }
 
@@ -125,6 +134,172 @@ function currentRow(): HTMLElement | null | undefined {
     panelRef.value?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
     panelRef.value?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')
   )
+}
+
+/**
+ * One travelling highlight for the rows (2026-10-08: switching back and forth had no motion). It
+ * follows the pointer or keyboard focus, whichever moved last, and otherwise rests on the current
+ * choice — TxSidebarNav's plate, measured by `useIndicatorBox` and moved by the library's indicator
+ * engine on the glide material. Rows keep their ink and their check; the fill is this one plate. A
+ * locked row (`aria-disabled`) never draws it, and under reduced motion it lands without travelling.
+ */
+const PLATE_ROW = '[data-plate-key]'
+
+const plateRef = ref<HTMLElement | null>(null)
+const pointerKey = ref<string | null>(null)
+const focusKey = ref<string | null>(null)
+const lastIntent = ref<'pointer' | 'focus'>('focus')
+/** The plate has painted once: from then on it is the rows' only fill, and it may fade. */
+const plateLive = ref(false)
+const plateFades = ref(false)
+/** The next move lands in place: on opening, and on a view swap, there is nothing to travel from. */
+let landPlateNext = true
+
+/** The current choice's row; the manage view has none. */
+const currentPlateKey = computed(() => {
+  if (view.value !== 'main') return null
+  if (props.mode === 'chat') return 'chat'
+  return props.profileId ? `profile:${props.profileId}` : null
+})
+
+function plateRow(key: string | null): HTMLElement | null {
+  if (!key || !panelRef.value) return null
+  for (const row of panelRef.value.querySelectorAll<HTMLElement>(PLATE_ROW)) {
+    if (row.dataset.plateKey !== key) continue
+    return row.getAttribute('aria-disabled') === 'true' ? null : row
+  }
+  return null
+}
+
+/**
+ * Pointer or focus, whichever moved last, then the other, then the current choice. A function, not
+ * a computed: the rows are queried each time, so a measurement from the ResizeObserver finds rows
+ * that arrived after the last change here. The slot renders under the dropdown's own effect, so the
+ * profiles are read here too, to measure again when the list changes.
+ */
+function plateTarget(): { key: string; row: HTMLElement } | null {
+  const pointer = pointerKey.value
+  const focus = focusKey.value
+  const current = currentPlateKey.value
+  void enabledProfiles.value
+  void showSkeleton.value
+  const order =
+    lastIntent.value === 'pointer' ? [pointer, focus, current] : [focus, pointer, current]
+  for (const key of order) {
+    const row = plateRow(key)
+    if (key && row) return { key, row }
+  }
+  return null
+}
+
+const { box: plateBox } = useIndicatorBox({
+  container: panelRef,
+  target: () => plateTarget()?.row
+})
+
+let lastPlateFrame: JellyIndicatorFrame | null = null
+
+// The engine writes the plate's transform, size and opacity every frame; the template binds none of
+// them (one writer per property), so a trip does not re-render the menu.
+function writePlate(el: HTMLElement, frame: JellyIndicatorFrame): void {
+  el.style.opacity = frame.visible ? '1' : '0'
+  el.style.width = `${frame.rect.width}px`
+  el.style.height = `${frame.rect.height}px`
+  el.style.transform = `translate3d(${frame.rect.x}px, ${frame.rect.y}px, 0)`
+}
+
+function revealPlate(): void {
+  plateLive.value = true
+  // Two frames: the first paints the plate in place with no fade to run.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      plateFades.value = true
+    })
+  )
+}
+
+const plate = useJellyIndicator({
+  axis: 'y',
+  material: 'glide',
+  integrate: stepSpring,
+  // TxSidebarNav's pace: the glide springs at their reference speed, with a lighter lag than the
+  // tabs because hover tracking wants the plate to keep up.
+  glide: { ...GLIDE, lag: 0.3 },
+  bounds: () => {
+    const panel = panelRef.value
+    return panel && panel.scrollHeight > 0 ? { start: 0, end: panel.scrollHeight } : null
+  },
+  onFrame(frame) {
+    lastPlateFrame = frame
+    if (plateRef.value) writePlate(plateRef.value, frame)
+    if (frame.visible && !plateLive.value) revealPlate()
+  }
+})
+
+// The panel's content unmounts after each close; a new plate starts from the last frame, which a
+// close leaves hidden, rather than from its stylesheet's top-left corner.
+watch(
+  plateRef,
+  (el) => {
+    if (!el) return
+    if (lastPlateFrame) writePlate(el, lastPlateFrame)
+    else el.style.opacity = '0'
+  },
+  { flush: 'sync' }
+)
+
+// Only a new row travels: the pointer or focus reaching another one, or the plate going home when
+// they leave. A re-measure of the same row — a resize, a profile list arriving — lands in place.
+let landedPlateKey: string | null | undefined
+
+watch(
+  plateBox,
+  (box) => {
+    const key = plateTarget()?.key ?? null
+    const animate = !landPlateNext && key !== landedPlateKey
+    landedPlateKey = key
+    if (box) landPlateNext = false
+    plate.moveTo(box ? { x: box.left, y: box.top, width: box.width, height: box.height } : null, {
+      animate
+    })
+  },
+  { flush: 'post' }
+)
+
+/**
+ * Delegated: the rows come from three templates. A locked row lets go of the plate, as does a
+ * manage row (its switch is the control, not the row); the gap between rows, the divider and the
+ * notes leave it where it is.
+ */
+function onPlatePointer(event: MouseEvent): void {
+  const target = event.target instanceof Element ? event.target : null
+  const row = target?.closest<HTMLElement>(PLATE_ROW)
+  if (row && panelRef.value?.contains(row)) {
+    pointerKey.value =
+      row.getAttribute('aria-disabled') === 'true' ? null : (row.dataset.plateKey ?? null)
+    lastIntent.value = 'pointer'
+    return
+  }
+  if (target?.closest('.HomeWorkspaceModeMenu-ManageRow')) pointerKey.value = null
+}
+
+function onPlateLeave(): void {
+  pointerKey.value = null
+}
+
+function onPlateFocusIn(event: FocusEvent): void {
+  const target = event.target instanceof Element ? event.target : null
+  const row = target?.closest<HTMLElement>(PLATE_ROW)
+  focusKey.value =
+    row && row.getAttribute('aria-disabled') !== 'true' ? (row.dataset.plateKey ?? null) : null
+  lastIntent.value = 'focus'
+}
+
+function onPlateFocusOut(event: FocusEvent): void {
+  // Focus moving on to another row: its focusin takes over, so there is no retarget home between.
+  const next = event.relatedTarget instanceof Element ? event.relatedTarget : null
+  if (next?.closest(PLATE_ROW) && panelRef.value?.contains(next)) return
+  focusKey.value = null
 }
 
 // A press on a locked row lands on the group behind it (`[aria-disabled]` takes no pointer), which
@@ -153,6 +328,12 @@ watch(open, (isOpen) => {
   if (isOpen) {
     restoreFocusOnClose = false
     view.value = 'main'
+    // A fresh opening: nothing hovered or focused yet, so the plate lands on the current choice.
+    pointerKey.value = null
+    focusKey.value = null
+    lastIntent.value = 'focus'
+    landPlateNext = true
+    plate.stop()
     // Read again on every open: a profile enabled elsewhere must not need a restart to appear.
     emit('load-profiles')
     // On the current choice, so the arrows start from it.
@@ -199,7 +380,21 @@ watch(open, (isOpen) => {
       </span>
     </template>
 
-    <div ref="panelRef" class="HomeWorkspaceModeMenu">
+    <div
+      ref="panelRef"
+      class="HomeWorkspaceModeMenu"
+      :class="{ 'has-plate': plateLive }"
+      @mouseover="onPlatePointer"
+      @mouseleave="onPlateLeave"
+      @focusin="onPlateFocusIn"
+      @focusout="onPlateFocusOut"
+    >
+      <span
+        ref="plateRef"
+        class="HomeWorkspaceModeMenu-Plate"
+        :class="{ 'is-fading': plateFades }"
+        aria-hidden="true"
+      />
       <template v-if="view === 'main'">
         <div
           class="HomeWorkspaceModeMenu-Group"
@@ -211,6 +406,7 @@ watch(open, (isOpen) => {
             class="HomeWorkspaceModeMenu-Row"
             type="button"
             role="menuitemradio"
+            data-plate-key="chat"
             :aria-checked="mode === 'chat'"
             :aria-disabled="isBlocked({ mode: 'chat' }) || undefined"
             @click="chooseChat"
@@ -236,6 +432,7 @@ watch(open, (isOpen) => {
               class="HomeWorkspaceModeMenu-Row"
               type="button"
               role="menuitemradio"
+              :data-plate-key="`profile:${profile.id}`"
               :aria-checked="mode === 'agent' && profile.id === profileId"
               :aria-disabled="isBlocked({ mode: 'agent', profileId: profile.id }) || undefined"
               @click="chooseProfile(profile)"
@@ -285,6 +482,7 @@ watch(open, (isOpen) => {
           type="button"
           role="menuitem"
           aria-haspopup="true"
+          data-plate-key="manage"
           @click="showView('manage')"
         >
           <span class="i-ri-settings-3-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
@@ -305,6 +503,7 @@ watch(open, (isOpen) => {
           class="HomeWorkspaceModeMenu-Back"
           type="button"
           role="menuitem"
+          data-plate-key="back"
           @click="showView('main')"
         >
           <span class="i-ri-arrow-left-s-line" aria-hidden="true" />
@@ -369,9 +568,38 @@ watch(open, (isOpen) => {
 
 /* Panel chrome (surface, border, shadow, placement) belongs to the primitive; this is content. */
 .HomeWorkspaceModeMenu {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
+
+  // Positioned and later in the tree than the plate, so every row, note and divider paints over it
+  // — including whatever it crosses on the way.
+  > :not(.HomeWorkspaceModeMenu-Plate) {
+    position: relative;
+  }
+}
+
+/*
+ * The travelling highlight. The engine writes its transform, size and opacity every frame, so none
+ * of them may carry a transition — CSS would re-ease each written frame and the plate would trail
+ * its own spring. The fade is the one exception, and only once the plate has painted in place.
+ */
+.HomeWorkspaceModeMenu-Plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-surface);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .HomeWorkspaceModeMenu-Plate.is-fading {
+    transition: opacity 150ms ease;
+  }
 }
 
 .HomeWorkspaceModeMenu-Group {
@@ -397,7 +625,9 @@ watch(open, (isOpen) => {
   font-size: var(--shell-fs-body);
   cursor: pointer;
 
-  &:hover:not([aria-disabled='true']) {
+  // Once the plate has painted it is the only fill; until then, and wherever it cannot run, a row
+  // keeps its own — immediate, as every hover here.
+  .HomeWorkspaceModeMenu:not(.has-plate) &:hover:not([aria-disabled='true']) {
     background: var(--shell-surface);
   }
 

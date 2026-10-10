@@ -30,6 +30,8 @@ import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdo
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
+import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
+import { usePreferredReducedMotion } from '@vueuse/core'
 import {
   CHART_RESULT_PREFIX,
   FORM_RESULT_PREFIX,
@@ -108,12 +110,14 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
-import { showDictationNotice } from './composer/dictation-notice'
+import type { DictationFailureNotice } from './composer/dictation-notice'
+import { classifyDictationFailure, showDictationNotice } from './composer/dictation-notice'
 import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
 import { useComposerDictation } from './composer/useComposerDictation'
-import { voiceGlowLobes } from './composer/voice-glow'
+import { voiceGlowDriveLevel, voiceGlowLobes, voiceGlowResponse } from './composer/voice-glow'
 import ComposerControl from './composer/ComposerControl.vue'
+import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
@@ -320,6 +324,80 @@ const sendQueues = computed(
   () => workspace.busy.value || (workspace.state.value?.queue.length ?? 0) > 0
 )
 
+/**
+ * The voice clip (`DictationClip`): the last dictation's audio, recognized or not, waiting to be
+ * recognized again or sent as a voice message. In a thread it is one more row of the stream, so it
+ * sits where the message it may become will land; on an untouched Home it waits above the composer.
+ */
+const VOICE_DRAFT_ID = '__home-voice-draft__'
+/**
+ * The id `submit` minted for a first send, until that send has settled. The conversation watcher
+ * leaves the clip alone for it — minted, or taken back when the send failed — because the thread
+ * on screen has not changed, and a failed voice send has just put its clip back.
+ */
+let ownMintedId: string | null = null
+const VOICE_DRAFT_ROW: ConversationMessage = {
+  id: VOICE_DRAFT_ID,
+  role: 'user',
+  content: '',
+  status: 'complete'
+}
+const streamItems = computed(() =>
+  dictation.clip.value ? [...messages.value, VOICE_DRAFT_ROW] : messages.value
+)
+const voiceSendBlocked = computed(
+  () =>
+    !isHomeRoute.value ||
+    sending.value ||
+    dictation.active.value ||
+    workspace.loading.value ||
+    Boolean(workspace.loadError.value)
+)
+
+/** A send of the clip: its recording's id, and its transcript — what the model reads. */
+interface VoiceSend {
+  recordingId: string
+  text: string
+}
+
+/** What a failed voice send leaves on the clip: Main no longer has the recording, or nothing. */
+function voiceSendFailure(error: unknown): DictationFailureNotice | null {
+  const failure =
+    error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
+  return failure.code === 'WORKSPACE_VOICE_UNAVAILABLE'
+    ? { kind: 'failed', detail: 'VOICE_RECORDING_NOT_FOUND' }
+    : null
+}
+
+/**
+ * 「发送语音」/「直接发送」: the clip goes out as a voice message. A clip with no words of its own
+ * is recognized first — no adapter carries audio, so the transcript is what the model reads — and
+ * one that still has none, or fails again, stays where it is and says why.
+ */
+async function sendVoiceDraft(): Promise<void> {
+  const clip = dictation.clip.value
+  if (!clip || clip.busy || voiceSendBlocked.value) return
+  if (agentProfileMissing()) {
+    toast.error(t('home.workspace.profile.required'))
+    return
+  }
+  dictation.markClipSending(true)
+  let text: string
+  try {
+    text = await dictation.clipTranscript()
+  } catch (error) {
+    dictation.markClipSending(false, classifyDictationFailure(error) ?? { kind: 'failed' })
+    return
+  }
+  // Dismissed, or replaced by a new recording, while it was being recognized.
+  if (dictation.clip.value?.recording.id !== clip.recording.id) return
+  if (!text) {
+    dictation.markClipSending(false, { kind: 'empty', detail: 'VOICE_NOTHING_TO_SEND' })
+    return
+  }
+  await submit({ recordingId: clip.recording.id, text })
+}
+
 /** The send key's face (`composer/send-state.ts`), derived from state this page already owns. */
 const sendState = computed(() =>
   deriveSendState({
@@ -362,12 +440,17 @@ const composerBeamActive = computed(
 /**
  * The dictation glow's level, sampled by TxVoiceBeam once per frame: the newest of the session's
  * ~10 Hz level frames while it listens, silence otherwise. A getter, so the frames never re-render
- * the page; the glow's own attack and release smooth between them.
+ * the page; the glow's own attack and release smooth between them (`voice-glow.ts` sets both, and
+ * maps the level onto the beam's range).
  */
 function dictationLevel(): number {
   if (dictation.state.value !== 'listening') return 0
-  return dictation.levels.value.at(-1) ?? 0
+  return voiceGlowDriveLevel(dictation.levels.value.at(-1) ?? 0)
 }
+
+/** The glow's envelope: quick enough to follow words, the beam's own calmer one under reduced motion. */
+const reducedMotion = usePreferredReducedMotion()
+const voiceGlowMotion = computed(() => voiceGlowResponse(reducedMotion.value === 'reduce'))
 
 /**
  * The glow's lobes, read off the composer's live rim (`--home-live-stops`) once the box is mounted.
@@ -833,9 +916,10 @@ function invalidatePageSubmission(): void {
  * composer until Main has persisted it — a rejected input, the full queue included, is never shown
  * as queued and never lost (A6).
  */
-async function enqueueDraft(): Promise<void> {
+async function enqueueDraft(voice?: VoiceSend): Promise<void> {
   if ((workspace.state.value?.queue.length ?? 0) >= WORKSPACE_QUEUE_LIMIT) {
     toast.error(t('home.workspace.queue.full', { max: WORKSPACE_QUEUE_LIMIT }))
+    if (voice) dictation.markClipSending(false)
     return
   }
   const isCurrentSend = pageSubmissionSequence.claim()
@@ -846,19 +930,40 @@ async function enqueueDraft(): Promise<void> {
     isHomeRoute.value &&
     conversationId.value === idAtSend &&
     route.fullPath === pathAtSend
-  const text = draft.value
+  const text = voice?.text ?? draft.value
   const attachments =
-    pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
+    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
+  // A voice send takes the clip off the stream now and leaves the draft to the reader, minus the
+  // clip's own words once Main has the message.
+  const draftAtSend = draft.value
+  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
+  const clip = voice ? dictation.takeClip() : null
   sending.value = true
   try {
-    await workspace.submit(text, attachments)
+    await workspace.submit(
+      text,
+      attachments,
+      voice ? { voiceRecordingId: voice.recordingId } : undefined
+    )
   } catch (error) {
+    if (clip) {
+      dictation.restoreClip(clip)
+      dictation.markClipSending(false, voiceSendFailure(error))
+    }
     if (ownsPage()) reportSubmitError(error)
     return
   } finally {
     if (isCurrentSend()) sending.value = false
   }
+  // A typed send moves the thread on; the clip it may have come from goes with it.
+  if (!voice) dictation.dismissClip()
   if (!ownsPage()) return
+  if (voice) {
+    if (draft.value === draftAtSend) draft.value = draftAfterVoice
+    await nextTick()
+    if (ownsPage()) autoGrow()
+    return
+  }
   // Typing on while Main answered is the reader's next draft, not this one.
   if (draft.value === text) draft.value = ''
   pendingAttachments.value = pendingAttachments.value.filter(
@@ -870,16 +975,18 @@ async function enqueueDraft(): Promise<void> {
   warnUnsentAttachments(attachments)
 }
 
-async function submit(): Promise<void> {
-  if (!canSend.value) return
+async function submit(voice?: VoiceSend): Promise<void> {
+  if (voice ? voiceSendBlocked.value : !canSend.value) return
   if (agentProfileMissing()) {
     toast.error(t('home.workspace.profile.required'))
     return
   }
   // Images reach a model only when its binding and adapter accept them; Main refuses the same
-  // send, so the draft stays put here instead of being lifted and handed back.
+  // send, so the draft stays put here instead of being lifted and handed back. A voice send
+  // carries no images: the tray stays for the next message.
   const imageGate = modelScope.resolvedChoice.value?.binding.imageInput
   if (
+    !voice &&
     imageGate &&
     !imageGate.accepted &&
     pendingAttachments.value.some((item) => item.kind === 'image')
@@ -888,7 +995,7 @@ async function submit(): Promise<void> {
     return
   }
   if (sendQueues.value) {
-    await enqueueDraft()
+    await enqueueDraft(voice)
     return
   }
   const isCurrentSend = pageSubmissionSequence.claim()
@@ -903,11 +1010,12 @@ async function submit(): Promise<void> {
   // arrow leaves with the lifted message and the stop capsule grows as the reply starts.
   toolbarRef.value?.launch()
 
-  const text = draft.value
+  const text = voice?.text ?? draft.value
   const attachments =
-    pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
+    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
   // The lift carries the typed text off the composer as its own bubble. A send with attachments
   // keeps the clone flight, which carries the whole row — the tray included — not the text alone.
+  // So does a voice send: what leaves is the clip, not the draft.
   const input = inputRef.value
   // The conversation's first message: its lift and the dock take their time (LIFT_SCORE).
   const opening = isEmpty.value
@@ -924,7 +1032,7 @@ async function submit(): Promise<void> {
     }
     lead = push.takeLead() ?? undefined
   }
-  const liftable = !attachments && !!input && !prefersReducedMotion()
+  const liftable = !voice && !attachments && !!input && !prefersReducedMotion()
   let lift: SendLift | null = null
   if (liftable && input) {
     // A lift still in the air lands first — before this one lays its bubble over the draft.
@@ -942,17 +1050,28 @@ async function submit(): Promise<void> {
     })
     lifting.value = lift !== null
   }
-  draft.value = ''
-  // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
-  pendingAttachments.value = []
+  // A voice send leaves the draft to the reader, minus the clip's own words, and takes the clip off
+  // the stream before an id is minted below — the conversation watcher dismisses any clip it sees.
+  const draftAtSend = draft.value
+  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
+  const clip = voice ? dictation.takeClip() : null
+  if (voice) {
+    draft.value = draftAfterVoice
+  } else {
+    draft.value = ''
+    // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
+    pendingAttachments.value = []
+  }
   await nextTick()
   if (!ownsPage()) return
-  collapseDraft(lift !== null)
+  if (voice) autoGrow()
+  else collapseDraft(lift !== null)
 
   // Allocated here rather than at setup so an untouched home screen never claims an id; Main
   // creates the conversation with it in the same call that takes the message.
   const minted = conversationId.value === null
   conversationId.value ??= createConversationId()
+  if (minted) ownMintedId = conversationId.value
   idAtSend = conversationId.value
 
   // Claim the incoming batch before it exists: the length watcher fires
@@ -968,8 +1087,16 @@ async function submit(): Promise<void> {
   sending.value = true
   let disposition: WorkspaceSubmitDisposition
   try {
-    disposition = await workspace.submit(text, attachments, { lead })
+    disposition = await workspace.submit(text, attachments, {
+      lead,
+      ...(voice ? { voiceRecordingId: voice.recordingId } : {})
+    })
   } catch (error) {
+    // The clip comes back whatever the page did meanwhile: its recording is still Main's to keep.
+    if (clip) {
+      dictation.restoreClip(clip)
+      dictation.markClipSending(false, voiceSendFailure(error))
+    }
     if (!ownsPage()) return
     // Rejection belongs to this view only. A stale completion cannot restore its
     // draft or release a minted id after the user chose another conversation.
@@ -977,8 +1104,12 @@ async function submit(): Promise<void> {
     openingHold.value = null
     lift?.cancel()
     lifting.value = false
-    if (!draft.value) draft.value = text
-    pendingAttachments.value = [...(attachments ?? []), ...pendingAttachments.value]
+    if (voice) {
+      if (draft.value === draftAfterVoice) draft.value = draftAtSend
+    } else {
+      if (!draft.value) draft.value = text
+      pendingAttachments.value = [...(attachments ?? []), ...pendingAttachments.value]
+    }
     if (minted) {
       conversationId.value = null
       idAtSend = null
@@ -991,6 +1122,10 @@ async function submit(): Promise<void> {
   } finally {
     if (isCurrentSend()) sending.value = false
   }
+  // The thread is this id's now: from here on a change of id is a change of thread.
+  if (minted) ownMintedId = null
+  // A typed send moves the thread on; the clip it may have come from goes with it.
+  if (!voice) dictation.dismissClip()
   if (minted) void history.refresh()
   if (!ownsPage()) return
   warnUnsentAttachments(attachments)
@@ -1339,7 +1474,16 @@ watch(conversationId, () => resetRemoteImagePolicy())
  * A dictation belongs to the thread it started in: switching threads abandons it where it stands,
  * without writing the draft back. (A first send never trips this — it waits for dictation to end.)
  */
-watch(conversationId, () => dictation.cancel({ restore: false }))
+watch(conversationId, (next, previous) => {
+  dictation.cancel({ restore: false })
+  // So does its clip: it belongs to the draft of the thread it was recorded in — except across
+  // the id a first send mints, and takes back when it fails (`ownMintedId`).
+  if (ownMintedId !== null && (next === ownMintedId || previous === ownMintedId)) {
+    if (next === null) ownMintedId = null
+    return
+  }
+  dictation.dismissClip()
+})
 
 /**
  * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
@@ -1860,12 +2004,26 @@ onBeforeUnmount(disposeCommands)
               :key="conversationId ?? 'draft'"
               class="HomePage-Stream"
               role="log"
-              :items="messages"
+              :items="streamItems"
               item-key="id"
               :streaming="isStreaming"
             >
               <template #item="{ item: message, index }">
-                <div class="HomePage-StreamRow">
+                <!-- The voice clip waits where the message it may become will land. -->
+                <div v-if="message.id === VOICE_DRAFT_ID" class="HomePage-StreamRow">
+                  <div class="HomePage-Message user">
+                    <HomeVoiceDraft
+                      v-if="dictation.clip.value"
+                      :clip="dictation.clip.value"
+                      :dictating="dictation.active.value"
+                      :send-blocked="voiceSendBlocked"
+                      @retry="dictation.recognizeClip()"
+                      @send="sendVoiceDraft()"
+                      @dismiss="dictation.dismissClip()"
+                    />
+                  </div>
+                </div>
+                <div v-else class="HomePage-StreamRow">
                   <div
                     class="HomePage-Message"
                     :class="[
@@ -1876,6 +2034,17 @@ onBeforeUnmount(disposeCommands)
                     :aria-busy="message.status === 'streaming'"
                   >
                     <template v-if="message.role === 'user'">
+                      <!-- A voice message: its recording, then its transcript as the bubble. -->
+                      <TxVoiceClip
+                        v-if="message.voice"
+                        class="HomePage-MsgVoice"
+                        :src="message.voice.url"
+                        :duration-ms="message.voice.durationMs"
+                        :play-label="t('home.voiceClip.play')"
+                        :pause-label="t('home.voiceClip.pause')"
+                        :seek-label="t('home.voiceClip.seek')"
+                        :unavailable-label="t('home.voiceClip.unavailable')"
+                      />
                       <TxAttachmentTray
                         v-if="message.attachments?.length"
                         class="HomePage-MsgAttachments"
@@ -2193,6 +2362,18 @@ onBeforeUnmount(disposeCommands)
               @resume="workspace.resume()"
             />
 
+            <!-- An untouched Home has no stream for the voice clip to end: it waits here instead. -->
+            <HomeVoiceDraft
+              v-if="isEmpty && dictation.clip.value"
+              class="HomePage-VoiceDraftDock"
+              :clip="dictation.clip.value"
+              :dictating="dictation.active.value"
+              :send-blocked="voiceSendBlocked"
+              @retry="dictation.recognizeClip()"
+              @send="sendVoiceDraft()"
+              @dismiss="dictation.dismissClip()"
+            />
+
             <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
                  reads that edge's 24px radius off the element in its slot. -->
             <TxBorderBeam
@@ -2219,6 +2400,7 @@ onBeforeUnmount(disposeCommands)
                      focus ring. 「正在识别」 gathers it into the travelling processing beam. -->
                 <TxVoiceBeam
                   class="HomePage-VoiceGlow"
+                  v-bind="voiceGlowMotion"
                   :active="dictation.active.value"
                   :level="dictationLevel"
                   :processing="dictation.state.value === 'finishing'"
@@ -2378,12 +2560,12 @@ onBeforeUnmount(disposeCommands)
 .HomePage {
   /**
    * Shared by the animating slot and the panel inside it, so the two can never drift apart.
-   * 360 rather than the original 280: the panel now carries four tabs and file paths, and 280
+   * 360 rather than the original 280: the panel now carries five tabs and file paths, and 280
    * truncated both.
    */
   --home-panel-width: 360px;
   // Resolve against each lane's containing block, not the whole viewport: the right panel is a
-  // real flex sibling and must reduce the transcript, confirmation and composer together.
+  // real grid sibling and must reduce the transcript, confirmation and composer together.
   --home-chat-lane-width: min(720px, calc(100% - 64px));
 
   // ---------------------------------------------------------------------------
@@ -2431,8 +2613,14 @@ onBeforeUnmount(disposeCommands)
   --tx-fill-color-blank: var(--shell-bg);
   --tx-bg-color: var(--shell-bg);
 
-  display: flex;
-  flex-direction: column;
+  /**
+   * Two columns: the top bar over the conversation, and the right panel beside both. The panel
+   * spans the two rows, so it runs the full height and its own header sits level with the top
+   * bar. `.HomePage-Split` dissolves into this grid instead of laying out a row of its own.
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   container-type: inline-size;
@@ -2450,16 +2638,18 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
-/** Splits the area under the top bar between the conversation and the optional right panel. */
+/**
+ * A wrapper in the markup only: its children are cells of the page grid. The body takes the
+ * conversation column under the top bar; the panel slot takes the second column across both rows.
+ */
 .HomePage-Split {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
+  display: contents;
 }
 
 .HomePage-PanelSlot {
   display: flex;
-  flex: none;
+  grid-column: 2;
+  grid-row: 1 / -1;
   width: var(--home-panel-width);
   // Clips the fixed-width panel while the slot narrows, which is what keeps the rows from
   // re-wrapping on every frame of the animation.
@@ -2467,12 +2657,12 @@ onBeforeUnmount(disposeCommands)
 }
 
 @container (max-width: 720px) {
-  .HomePage-Split {
-    flex-direction: column;
-  }
-
+  // Under the conversation instead, across the full width: an implicit third row, so the second
+  // column is left empty and collapses to nothing.
   .HomePage-PanelSlot {
     --home-panel-width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 3;
     width: 100%;
     height: min(35vh, 300px);
     min-height: 160px;
@@ -2512,7 +2702,8 @@ onBeforeUnmount(disposeCommands)
 }
 
 .HomePage-Body {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 2;
   // Without this the stream's 720px column would push the panel off-screen instead of narrowing.
   min-width: 0;
   min-height: 0;
@@ -2751,6 +2942,16 @@ onBeforeUnmount(disposeCommands)
 
 .HomePage-MsgAttachments {
   max-width: 78%;
+}
+
+.HomePage-MsgVoice {
+  max-width: 78%;
+}
+
+/* Above the composer on an untouched Home: the lane the messages will use, its right edge. */
+.HomePage-VoiceDraftDock {
+  width: var(--home-chat-lane-width, 100%);
+  max-width: 100%;
 }
 
 /**

@@ -85,6 +85,13 @@ const AGENT_ICONS = {
 /** For a CLI the main process lists before this table learns its mark. */
 const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
 
+/**
+ * The project menu's panel: TuffEx's 流光底 (`TxFlowLight`, `corners`) over the default 琉光 card.
+ * Fixed brand light rather than whatever the glass happened to refract, so the agent submenu —
+ * which inherits it — glows the same as the menu it opens from. One object for every render.
+ */
+const PROJECT_MENU_CARD = { flowLight: 'corners' } as const
+
 const { t } = useI18n()
 const projectStore = useProjectStore()
 const { localAiAgents, localAiAgentsPhase, localAiBetaAvailable, localAiEnabled } =
@@ -261,7 +268,7 @@ function onRenameKeydown(event: KeyboardEvent): void {
         {{ project.name }}
       </button>
 
-      <TxDropdownMenu v-model="menuOpen" placement="bottom-end">
+      <TxDropdownMenu v-model="menuOpen" placement="bottom-end" :panel-card="PROJECT_MENU_CARD">
         <template #trigger>
           <button
             class="ShellProjectFolder-More"
@@ -272,13 +279,20 @@ function onRenameKeydown(event: KeyboardEvent): void {
           </button>
         </template>
         <TxDropdownItem v-if="archived" @select="emit('toggleArchived')">
-          {{ t('shell.projects.unarchive') }}
+          <span class="ShellProjectFolder-MenuRow">
+            <span
+              class="i-ri-inbox-unarchive-line ShellProjectFolder-MenuIcon"
+              aria-hidden="true"
+            />
+            <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.unarchive') }}</span>
+          </span>
         </TxDropdownItem>
         <!--
-          Three groups, each under a small heading: what starts a conversation, what reaches for a
-          local agent CLI, and what changes the project itself. Each is a `group` so its heading is
-          announced; the heading row is `aria-hidden` so the name is not read twice, and it takes no
-          focus, so arrow keys go item to item.
+          Three groups split by hairlines: what starts a conversation, what reaches for a local agent
+          CLI, and what changes the project itself. The groups carry no visible heading — each row
+          leads with its icon, as the composer's menus do, and a heading only repeated what its rows
+          already say. Each is still a `group` with a name, so a screen reader hears where it is; the
+          wrapper takes no focus, so arrow keys go item to item.
         -->
         <template v-else>
           <div
@@ -286,11 +300,11 @@ function onRenameKeydown(event: KeyboardEvent): void {
             role="group"
             :aria-label="t('shell.projects.chats')"
           >
-            <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
-              {{ t('shell.projects.chats') }}
-            </div>
             <TxDropdownItem @select="emit('enter')">
-              {{ t('shell.projects.newChat') }}
+              <span class="ShellProjectFolder-MenuRow">
+                <span class="i-ri-chat-new-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.newChat') }}</span>
+              </span>
             </TxDropdownItem>
           </div>
           <!-- Local agents are a macOS Beta the user turns on in Settings: off macOS, or with the
@@ -304,11 +318,16 @@ function onRenameKeydown(event: KeyboardEvent): void {
               role="group"
               :aria-label="t('shell.projects.groupLocalAgents')"
             >
-              <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
-                {{ t('shell.projects.groupLocalAgents') }}
-              </div>
               <TxDropdownSubmenu :min-width="200">
-                {{ t('shell.projects.openInLocalAgent') }}
+                <span class="ShellProjectFolder-MenuRow">
+                  <span
+                    class="i-ri-terminal-box-line ShellProjectFolder-MenuIcon"
+                    aria-hidden="true"
+                  />
+                  <span class="ShellProjectFolder-MenuText">
+                    {{ t('shell.projects.openInLocalAgent') }}
+                  </span>
+                </span>
                 <template #menu>
                   <template v-if="localAiAgentsPhase === 'ready'">
                     <!-- Every CLI Tuff knows, in the main process's order; a blocked one says why. -->
@@ -341,15 +360,24 @@ function onRenameKeydown(event: KeyboardEvent): void {
                   </div>
                 </template>
               </TxDropdownSubmenu>
-              <!-- The hint sits on the label, not the item: TxDropdownItem's root is TxCardItem,
+              <!-- The hint sits on the row, not the item: TxDropdownItem's root is TxCardItem,
                    which takes `title` as a prop, so on the item it would never reach the DOM. -->
               <TxDropdownItem :disabled="discoveringProjectId !== null" @select="emit('discover')">
-                <span :title="t('shell.projects.adoptSessionsHint')">
-                  {{
-                    discoveringProjectId === project.id
-                      ? t('shell.projects.discoveringSessions')
-                      : t('shell.projects.adoptSessions')
-                  }}
+                <span
+                  class="ShellProjectFolder-MenuRow"
+                  :title="t('shell.projects.adoptSessionsHint')"
+                >
+                  <span
+                    class="i-ri-download-2-line ShellProjectFolder-MenuIcon"
+                    aria-hidden="true"
+                  />
+                  <span class="ShellProjectFolder-MenuText">
+                    {{
+                      discoveringProjectId === project.id
+                        ? t('shell.projects.discoveringSessions')
+                        : t('shell.projects.adoptSessions')
+                    }}
+                  </span>
                 </span>
               </TxDropdownItem>
             </div>
@@ -360,17 +388,29 @@ function onRenameKeydown(event: KeyboardEvent): void {
             role="group"
             :aria-label="t('shell.projects.groupProject')"
           >
-            <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
-              {{ t('shell.projects.groupProject') }}
-            </div>
             <TxDropdownItem @select="emit('beginRename')">
-              {{ t('shell.projects.rename') }}
+              <span class="ShellProjectFolder-MenuRow">
+                <span class="i-ri-edit-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.rename') }}</span>
+              </span>
             </TxDropdownItem>
             <TxDropdownItem @select="emit('togglePinned')">
-              {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
+              <span class="ShellProjectFolder-MenuRow">
+                <span
+                  class="ShellProjectFolder-MenuIcon"
+                  :class="project.pinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line'"
+                  aria-hidden="true"
+                />
+                <span class="ShellProjectFolder-MenuText">
+                  {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
+                </span>
+              </span>
             </TxDropdownItem>
             <TxDropdownItem @select="emit('toggleArchived')">
-              {{ t('shell.projects.archive') }}
+              <span class="ShellProjectFolder-MenuRow">
+                <span class="i-ri-archive-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.archive') }}</span>
+              </span>
             </TxDropdownItem>
           </div>
         </template>
@@ -601,7 +641,7 @@ function onRenameKeydown(event: KeyboardEvent): void {
 /**
  * The menu's own furniture. Its panels are teleported out of this row, so these are standalone
  * selectors; they still carry this component's scope id because this template renders them. The
- * group keeps the panel's own 4px rhythm, and headings and notes start where an item's text does.
+ * group keeps the panel's own 4px rhythm, and notes start where an item's text does.
  */
 .ShellProjectFolder-MenuGroup {
   display: flex;
@@ -609,15 +649,49 @@ function onRenameKeydown(event: KeyboardEvent): void {
   gap: 4px;
 }
 
-.ShellProjectFolder-MenuLabel {
-  padding: 4px 10px 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
+/**
+ * A row's icon and label, laid out as the composer's menus lay theirs: a 16px glyph in the
+ * secondary ink, 10px before the label. Inline-flex so the glyph is a flex item — an icon class
+ * sizes itself but sets no `display` — and the label keeps its own ellipsis inside it.
+ */
+.ShellProjectFolder-MenuRow {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 100%;
+  vertical-align: top;
 }
 
+.ShellProjectFolder-MenuIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--shell-text-secondary);
+  font-size: 16px;
+}
+
+.ShellProjectFolder-MenuText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/**
+ * A hairline in the text ink at 10%, not the opaque `--shell-border`: the panel is the refraction
+ * surface, whose tone shifts across it with what lies underneath, and an opaque light grey read as
+ * a white stripe over the darker part and vanished over the lighter one. A translucent ink darkens
+ * whatever it crosses by the same step. The 2px margin plus the panel's 4px gap leave 6px on both
+ * sides, so a hovered row's outline no longer runs 4px above it like a second underline.
+ */
 .ShellProjectFolder-MenuDivider {
-  margin: 0 6px;
-  border-top: 1px solid var(--shell-border);
+  flex: none;
+  margin: 2px 6px;
+  border-top: 1px solid color-mix(in srgb, var(--shell-text-primary) 10%, transparent);
+
+  // High contrast keeps the contrast ramp's own border, which `--shell-border` re-points to there.
+  html.contrast & {
+    border-top-color: var(--shell-border);
+  }
 }
 
 /** Inline-flex so the mark is a flex item: an icon class sizes itself but sets no `display`. */

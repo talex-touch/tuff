@@ -22,17 +22,18 @@ function safeGetUserDataPath(appLike: AppPathLike, fallbackBasePath: string): st
  *
  * `userData` is rewritten twice during startup, and the root must follow exactly one of them.
  * `precore` overrides it for startup benchmarking and then reads the root immediately, so a
- * benchmark run gets an isolated root — that one is deliberate. `polyfills` later points Chromium's
- * profile at a separate dev directory, which is about Chromium, not about where our own data lives.
+ * benchmark run gets an isolated root — that one is deliberate. Later, just before the
+ * single-instance lock, it points Electron's profile at a separate dev directory, which is about
+ * Electron, not about where our own data lives.
  *
  * Reading `userData` afresh on every call meant the answer depended on when you asked.
- * `getAllowedDownloadRoots` asked at download time and got the post-`polyfills` path, while the
+ * `getAllowedDownloadRoots` asked at download time and got the dev profile's path, while the
  * update system wrote under the root `precore` had captured at startup, so every update download
  * in a dev build was rejected as `destination-outside-roots` (#F2).
  *
  * Memoizing makes the first resolution authoritative for everyone. `precore` performs it at
- * module load, after the benchmark override and before the Chromium one, which is the point that
- * was always intended.
+ * module load, after the benchmark override and before the dev one, which is the point that was
+ * always intended.
  */
 let memoizedRootPath: string | null = null
 

@@ -75,8 +75,17 @@ export function fromHostMessage(host: WorkspaceHostMessage): ConversationMessage
     message.parts = host.parts as AiMessagePart[]
   }
   // Main persists only what it carried to the model, so every ref here reached it; the bubble's
-  // "stayed local" hint is decided at send time instead (HomePage `submit`).
-  if (host.attachments?.length) message.attachments = host.attachments.map(toDisplayAttachment)
+  // "stayed local" hint is decided at send time instead (HomePage `submit`). A voice message's
+  // recording is the exception — never carried, shown as the voice it was — and so not a tray item.
+  const audio = host.attachments?.find((ref) => ref.kind === 'audio' && ref.previewUrl)
+  if (audio?.previewUrl) {
+    message.voice = {
+      url: audio.previewUrl,
+      ...(audio.durationMs === undefined ? {} : { durationMs: audio.durationMs })
+    }
+  }
+  const shown = host.attachments?.filter((ref) => ref.kind !== 'audio') ?? []
+  if (shown.length) message.attachments = shown.map(toDisplayAttachment)
   return message
 }
 

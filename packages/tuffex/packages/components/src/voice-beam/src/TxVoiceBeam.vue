@@ -17,10 +17,11 @@ const InstanceStyle = Object.assign(
 // Vue port of the `VoiceBeam` React component
 // (https://github.com/Jakubantalik/Libraries — MIT © 2026 Jakub Antalik).
 // The stylesheet (styles.ts), presets (presets.ts), colour parsing (color.ts)
-// and the shared rAF driver (voice-driver.ts) are verbatim upstream; this SFC
-// only mirrors the wrapper behavior: fade lifecycle, offscreen pause, radius
-// auto-detection, the WebKit host-area gate on the warp filter, and the
-// per-frame level report.
+// and the shared rAF driver (voice-driver.ts) are verbatim upstream, except
+// for the `organic` motion (organic.ts), a TuffEx addition that is inert at
+// its default; this SFC only mirrors the wrapper behavior: fade lifecycle,
+// offscreen pause, radius auto-detection, the WebKit host-area gate on the
+// warp filter, and the per-frame level report.
 
 defineOptions({
   name: 'TxVoiceBeam',
@@ -301,6 +302,7 @@ const driverConfig = computed<VoiceDriverConfig>(() => {
     spread: Math.max(0, g.spread),
     bands: props.bands,
     flow: g.flow,
+    organic: Math.max(0, Math.min(1, props.organic ?? 0)),
     lobeSpacing: Math.max(0.1, g.lobeSpacing),
     bend: Math.max(0, g.bend),
     bandStrength: Math.max(0, g.bandStrength),

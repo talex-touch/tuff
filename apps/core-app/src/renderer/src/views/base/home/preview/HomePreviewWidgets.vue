@@ -34,8 +34,9 @@ const KIND_LABEL: Record<PreviewWidget['kind'], string> = {
 </script>
 
 <template>
-  <div class="HomePreviewWidgets">
-    <p v-if="!items.length" class="HomePreview-Empty">{{ t('home.preview.widgetsEmpty') }}</p>
+  <!-- A group of the outputs tab, under the files: mounted only with something to list. -->
+  <section class="HomePreviewWidgets">
+    <h3 class="HomePreview-GroupLabel">{{ t('home.preview.chartsAndForms') }}</h3>
 
     <button
       v-for="item in items"
@@ -52,14 +53,15 @@ const KIND_LABEL: Record<PreviewWidget['kind'], string> = {
       </span>
       <span class="i-ri-corner-up-left-line HomePreviewWidgets-Jump" aria-hidden="true" />
     </button>
-  </div>
+  </section>
 </template>
 
 <style lang="scss" scoped>
+// Spaced like the file groups above it in the same tab.
 .HomePreviewWidgets {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .HomePreviewWidgets-Row {

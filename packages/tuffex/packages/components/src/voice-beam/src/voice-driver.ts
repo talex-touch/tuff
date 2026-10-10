@@ -2,9 +2,21 @@
 // (https://github.com/Jakubantalik/Libraries). MIT License © 2026 Jakub Antalik.
 // Framework-free module kept intentionally close to upstream; local deviations
 // are limited to strict-TS (noUncheckedIndexedAccess) hardening so upstream
-// fixes stay diffable.
+// fixes stay diffable — and one addition, the `organic` motion (organic.ts),
+// whose hooks below are all scaled by its amplitude: at its default of 0 every
+// one of them is a no-op and the arithmetic is upstream's.
 
 import { acquireAnalyser } from './audio';
+import {
+  organicCrest,
+  organicLean,
+  organicLobeLift,
+  organicLobeShift,
+  organicRippleAt,
+  organicRippleFrame,
+  organicSway,
+  type OrganicRippleFrame,
+} from './organic';
 import { voiceLobes, LOBE_SPAN } from './styles';
 
 /**
@@ -38,6 +50,8 @@ export interface VoiceDriverConfig {
   bands: boolean;
   /** Flow speed in px/s at full level; negative flows right-to-left. */
   flow: number;
+  /** How much each part of the glow moves on its own while a voice is heard, 0–1 (organic.ts). */
+  organic: number;
   /** Multiplies the resting distance between lobes (and so the flow ring). */
   lobeSpacing: number;
   /** Bend: px of extra height the glow's top gains at the centre at full level. */
@@ -123,6 +137,10 @@ interface VoiceState {
   lastTs: number;
   /** The distortion's share, 0–1: 1 while listening, settling to 0 for processing. */
   warp: number;
+  /** The organic motion's amplitude, 0–1: `organic` × the voice level, on an envelope of its own. */
+  orgA: number;
+  /** The organic motion's clock, s — runs faster with a louder voice. */
+  orgT: number;
 }
 
 interface VoiceInstance {
@@ -162,7 +180,7 @@ const stateByElement = new WeakMap<HTMLElement, VoiceState>();
 function stateFor(el: HTMLElement): VoiceState {
   let s = stateByElement.get(el);
   if (!s) {
-    s = { level: 0, bands: [0, 0, 0], phase: 0, scanA: 0, scanT: 0, t: 0, lastTs: 0, warp: 1 };
+    s = { level: 0, bands: [0, 0, 0], phase: 0, scanA: 0, scanT: 0, t: 0, lastTs: 0, warp: 1, orgA: 0, orgT: 0 };
     stateByElement.set(el, s);
   }
   return s;
@@ -280,6 +298,22 @@ const CEILING_HALF_WIDTH = 170;
 const CEILING_HEIGHT = 64;
 const BAND_SAMPLES = 56;
 
+// Organic motion (organic.ts, the `organic` prop). Each budget is the most
+// that part moves at full voice and `organic: 1`, in px at scale 1 unless
+// noted. The amplitude rides the voice level on an envelope of its own: up
+// in 60 ms, so the first word already moves the shape, and down over a
+// third of a second, so the gap between two words does not freeze it.
+const ORGANIC_LOBE_DEPTH = 0.9; // a lobe's height swings up to ±90% around its band's
+const ORGANIC_LOBE_SHIFT = 9; // a lobe drifts sideways on its own
+const ORGANIC_SWAY = 14; // the whole arch sways sideways
+const ORGANIC_LEAN = 0.35; // added to `bandSkew`: the bell leans to one side
+const ORGANIC_CREST = 0.3; // the arch's crest rises or sinks by up to 30%
+const ORGANIC_RIPPLE = 24; // bumps along the band line, at the bell's peak
+const ORGANIC_ATTACK = 0.06;
+const ORGANIC_RELEASE = 0.35;
+/** One frame of the ripple, reused: the band line is traced once per instance per frame. */
+const rippleScratch: OrganicRippleFrame = { amplitude: [], shift: [] };
+
 /**
  * The band's bell, normalised so it is 1 at the centre and exactly 0 at
  * the ends: exp(-(|t| / σ)^p) with the tail value subtracted out. `p`
@@ -319,6 +353,11 @@ interface BandFrame {
   level: number;
   /** How much the beam follows the corner arcs, 0–1 (the processing blend). */
   corner: number;
+  /** Organic: the crest's multiplier, the lean added to `bandSkew`, the ripple's px at the bell's peak and its clock. */
+  crest: number;
+  skew: number;
+  ripple: number;
+  orgT: number;
 }
 
 /**
@@ -357,7 +396,9 @@ function bandPoints(config: VoiceDriverConfig, f: BandFrame, cw: number, ch: num
   // shrinks with the scale, so a scaled-down beam keeps the proportions
   // it had at 1 instead of keeping its height while losing its width.
   const apexCap = ch * 0.82 * Math.min(1, config.scale);
-  const apex = Math.min(apexCap, (CEILING_HEIGHT * config.rangeHeight * f.h + f.lift) * config.bandPosition);
+  // Organic: the crest rides on top of the cap, so the arch still changes
+  // height while a loud voice holds it there (1 when `organic` is off).
+  const apex = Math.min(apexCap, (CEILING_HEIGHT * config.rangeHeight * f.h + f.lift) * config.bandPosition) * f.crest;
   const base = ch - config.bandOffset;
   // With a tail, the line runs the element's full width — and `overflow`
   // px past each side, so the hook peaks outside and the component crops
@@ -372,20 +413,25 @@ function bandPoints(config: VoiceDriverConfig, f: BandFrame, cw: number, ch: num
   const over = withTail ? config.bandTailOverflow : 0;
   const x0 = withTail ? -over : centre - half;
   const x1 = withTail ? cw + over : centre + half;
+  // Organic: the bell leans, and bumps ride it in proportion to its height
+  // there, so they swell at the peak and leave the ends and the tail hooks
+  // alone. Both are zero unless `organic` is on and a voice is heard.
+  const skew = f.skew === 0 ? config.bandSkew : Math.max(-0.9, Math.min(0.9, config.bandSkew + f.skew));
+  const waves = f.ripple > 0 ? organicRippleFrame(f.orgT, rippleScratch) : null;
   const pts: Array<[number, number]> = [];
   for (let i = 0; i <= BAND_SAMPLES; i++) {
     const x = x0 + ((x1 - x0) * i) / BAND_SAMPLES;
     const t = Math.max(-1, Math.min(1, (x - centre) / Math.max(1, half)));
     const edge = (x < centre ? centre : cw - centre) + over;
-    const y =
-      bell(t, config.bandCurve, config.bandSpread, config.bandSkew) +
-      tailLift(Math.abs(x - centre), edge, tail, config.bandTailPosition, config.bandTailCurve);
+    const b = bell(t, config.bandCurve, config.bandSpread, skew);
+    const y = b + tailLift(Math.abs(x - centre), edge, tail, config.bandTailPosition, config.bandTailCurve);
     // While processing, the line rides the corner arcs instead of running
     // straight into the radius and being clipped.
     // The band line always rides the corner arc; `cornerFollow` only
     // governs whether the coloured glow rides it too.
     const arc = f.corner > 0 ? cornerLift(x, cw, paintedRadius(config.radius, cw, ch)) * f.corner : 0;
-    pts.push([x, base - apex * y - arc]);
+    const ripple = waves ? f.ripple * b * organicRippleAt(t, waves) : 0;
+    pts.push([x, base - apex * y - arc - ripple]);
   }
   return pts;
 }
@@ -682,6 +728,18 @@ function frame(ts: number): void {
     const eased = u < 0.5 ? 0.5 * Math.pow(2 * u, k) : 1 - 0.5 * Math.pow(2 - 2 * u, k);
     const pass = config.reducedMotion ? 0 : passIndex % 2 === 0 ? 2 * eased - 1 : 1 - 2 * eased;
     const cx = morph * travel * pass;
+    // ── Organic motion (TuffEx, organic.ts) ─────────────────────────
+    // Its amplitude follows the voice, so silence is still; it gives way
+    // to the processing morph, so the travelling beam is untouched; and
+    // reduced motion turns it off — it is motion of its own, like the
+    // breathing and the flow. Its clock runs faster with a louder voice,
+    // so a raised voice churns the shape and a quiet one lets it drift.
+    const organicTarget = config.reducedMotion ? 0 : config.organic * s.level * (1 - morph);
+    s.orgA = follow(s.orgA, organicTarget, dt, ORGANIC_ATTACK, ORGANIC_RELEASE);
+    s.orgT += dt * (0.35 + 0.65 * s.level);
+    const org = s.orgA;
+    // The whole arch sways: the lobes, the range it is masked to and the band line move together.
+    const beamCx = org > 0 ? cx + ORGANIC_SWAY * config.scale * org * organicSway(s.orgT) : cx;
     // The cluster: lobes pulled to 40% of their resting spread, the
     // visible range narrowed to match, and — as the line type does — the
     // beam a little wider mid-pass than at the turns.
@@ -708,14 +766,16 @@ function frame(ts: number): void {
     }
 
     el.style.setProperty(`--vb-level-${config.id}`, s.level.toFixed(3));
-    el.style.setProperty(`--vb-cx-${config.id}`, `${cx.toFixed(1)}px`);
+    el.style.setProperty(`--vb-cx-${config.id}`, `${beamCx.toFixed(1)}px`);
     el.style.setProperty(`--vb-mw-${config.id}`, maskWidth.toFixed(3));
 
     // ── Bend: the glow's ceiling humps up at the centre ──────────────
     // Extra height for the ellipse the glow is masked to, scaled by the
     // level, and the 0–1 strength the rim along that contour fades with.
-    // Flat at silence.
-    const lift = config.bend * eff;
+    // Flat at silence. Organic: the crest rises and sinks on its own, so
+    // the arch changes shape instead of only scaling with the level.
+    const crest = org > 0 ? 1 + ORGANIC_CREST * org * organicCrest(s.orgT) : 1;
+    const lift = config.bend * eff * crest;
     el.style.setProperty(`--vb-bh-${config.id}`, `${Math.max(0, lift).toFixed(1)}px`);
     const bendA = config.bend > 0 ? Math.min(1, lift / config.bend) : 0;
     el.style.setProperty(`--vb-bendA-${config.id}`, bendA.toFixed(3));
@@ -723,11 +783,24 @@ function frame(ts: number): void {
     // to the voice on its own (thickness and chromatic split).
     // The band line is computed even when the band is invisible: the
     // distortion is confined to the glow under it either way.
-    const frame: BandFrame = { cx, w, h, mw: maskWidth, lift, strength: bendA, level: s.level, corner: morph };
+    const frame: BandFrame = {
+      cx: beamCx,
+      w,
+      h,
+      mw: maskWidth,
+      lift,
+      strength: bendA,
+      level: s.level,
+      corner: morph,
+      crest,
+      skew: org > 0 ? ORGANIC_LEAN * org * organicLean(s.orgT) : 0,
+      ripple: ORGANIC_RIPPLE * config.scale * org,
+      orgT: s.orgT,
+    };
     // The beam's centre and every lobe lift along the corner arcs as they
     // pass through them while processing, so the cluster wraps the corner
     // the way the line type does instead of being cut off by it.
-    const beamAbsX = cw / 2 + cx * w;
+    const beamAbsX = cw / 2 + beamCx * w;
     const lobeReach = 30 * config.scale * w;
     const arcRadius = paintedRadius(config.radius, cw, ch);
     const cornerBlend = morph * config.cornerFollow;
@@ -770,14 +843,18 @@ function frame(ts: number): void {
 
     // Each lobe: its offset along the flow, and its amplitude — the band it
     // follows lifts it between 0.6× and 1.3× of the shared height, and the
-    // edge envelope fades it out toward the wrap.
+    // edge envelope fades it out toward the wrap. Organic: each lobe also
+    // rises, sinks and drifts on its own, so mirrored lobes that follow the
+    // same band no longer move as a pair.
     for (let i = 0; i < voiceLobes.length; i++) {
       const lobe = voiceLobes[i]!;
       const x = wrapX(lobe.x * config.lobeSpacing + s.phase, span);
       const bandLift = config.bands ? 0.6 + 0.7 * s.bands[lobe.band] : 1;
-      el.style.setProperty(`--vb-x${i}-${config.id}`, `${(x * gather).toFixed(1)}px`);
-      el.style.setProperty(`--vb-l${i}-${config.id}`, (bandLift * edgeEnvelope(x, span)).toFixed(3));
-      const lobeAbsX = cw / 2 + (cx + x * gather) * w;
+      const own = org > 0 ? Math.max(0.1, 1 + ORGANIC_LOBE_DEPTH * org * organicLobeLift(i, s.orgT)) : 1;
+      const lx = org > 0 ? x + ORGANIC_LOBE_SHIFT * config.scale * org * organicLobeShift(i, s.orgT) : x;
+      el.style.setProperty(`--vb-x${i}-${config.id}`, `${(lx * gather).toFixed(1)}px`);
+      el.style.setProperty(`--vb-l${i}-${config.id}`, (bandLift * own * edgeEnvelope(x, span)).toFixed(3));
+      const lobeAbsX = cw / 2 + (beamCx + lx * gather) * w;
       el.style.setProperty(`--vb-y${i}-${config.id}`, `${(-cornerLift(lobeAbsX, cw, arcRadius, lobeReach) * cornerBlend).toFixed(1)}px`);
     }
 

@@ -236,6 +236,7 @@ TAXONOMY: dict[str, list[str]] = {
         "stagger",
         "fusion",
         "fusion-surface",
+        "flow-light",
         "liquid",
         "flip-overlay",
         "image-generation",
@@ -265,6 +266,7 @@ TAXONOMY: dict[str, list[str]] = {
         "choice-card",
         "typing-indicator",
         "conversation-stream",
+        "voice-clip",
     ],
     "AiAgent": [
         "agents",

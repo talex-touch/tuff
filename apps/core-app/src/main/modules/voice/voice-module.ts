@@ -32,6 +32,7 @@ import { globalDictationController } from './global-dictation'
 import { captureUnavailableCode, voiceService } from './voice-service'
 import { getRecognitionStatus } from './voice-provider-runtime'
 import { voiceInsightsStore } from './voice-insights-store'
+import { voiceKeptRecordings } from './voice-kept-recordings'
 import {
   subscribeVoiceRecognitionRecordMutations,
   voiceRecognitionStore
@@ -92,6 +93,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
 
     voiceLog.info('Initializing Voice module')
     voiceRecognitionStore.initialize()
+    void voiceKeptRecordings.initialize()
     const mainWindow = runtime.window?.window
     this.cleanups.push(
       subscribeVoiceRecognitionRecordMutations((mutation) => {
@@ -137,6 +139,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     this.commandGestureController?.unregister()
     this.commandGestureController = null
     voiceService.dispose()
+    await voiceKeptRecordings.discardAll()
     globalDictationController.unregister()
     for (const cleanup of this.cleanups.splice(0)) {
       try {
@@ -265,6 +268,38 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           () => voiceService.getRecoveryStatus(),
           { onError: (error) => voiceLog.error('Voice recovery status failed:', { error }) }
+        )
+      )
+    )
+
+    // The composer's voice clip: recognize its kept audio again, or let it go. Host renderer only —
+    // a plugin never receives `keepRecording` (see the asrStream handler), so it has no clip.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.transcribeRecording,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECORDING_HOST_ONLY')
+            return voiceService.transcribeRecording(payload)
+          },
+          {
+            onError: (error) => voiceLog.error('Voice clip recognition failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceUsageLimit(error, context)
+          }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.discardRecording,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECORDING_HOST_ONLY')
+            return voiceKeptRecordings.discard(payload.recordingId)
+          },
+          { onError: (error) => voiceLog.error('Voice clip discard failed:', { error }) }
         )
       )
     )
@@ -454,8 +489,12 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             { permissionId: VOICE_PERMISSION },
             async (nextPayload, nextContext) => {
               const streamContext = nextContext as unknown as StreamContext<VoiceAsrStreamEvent>
+              // A kept clip is the host composer's: a plugin's session never leaves audio behind.
+              const streamPayload = nextContext.plugin
+                ? { ...(nextPayload as VoiceAsrStreamPayload), keepRecording: false }
+                : (nextPayload as VoiceAsrStreamPayload)
               for await (const event of voiceService.streamDictation(
-                nextPayload as VoiceAsrStreamPayload,
+                streamPayload,
                 streamContext.signal,
                 { stopSignal: streamContext.stopSignal }
               )) {

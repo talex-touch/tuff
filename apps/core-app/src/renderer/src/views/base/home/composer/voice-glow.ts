@@ -41,3 +41,52 @@ export function voiceGlowLobes(liveStops: string): string[] {
   if (colors.length <= Math.max(...LOBE_STOPS)) return []
   return LOBE_STOPS.map((index) => colors[index]!)
 }
+
+/**
+ * How fast the glow follows the ≈10 Hz level frames: the beam's envelope time constants, seconds.
+ *
+ * The beam's own (325ms up, 860ms down) are tuned for a microphone analysed every frame. On level
+ * frames they swelled over 0.7s and barely dipped between words, so the glow read as a slow tide
+ * rather than a voice. 50ms up shows a word within the frame that carries it; 180ms down lets the
+ * gap between two words show before the next one lands, and the glow settles within half a second
+ * of the last word. Under reduced motion the beam keeps its own, slower envelope.
+ */
+export const VOICE_GLOW_RESPONSE = { attack: 0.05, release: 0.18 } as const
+
+/**
+ * How much each part of the glow moves on its own while words are heard (TxVoiceBeam `organic`).
+ *
+ * The dictation session hands the glow one number, how loud the voice is, so on its own the beam
+ * shows one symmetric arch that grows and shrinks with it — a meter, not a voice. At 1 every lobe,
+ * the band line and the arch's crest, lean and sway move on their own, so successive words land in
+ * different shapes; silence stays still. Reduced motion drops it with the rest of the envelope.
+ */
+export const VOICE_GLOW_ORGANIC = 1
+
+/**
+ * The beam props for the composer's glow: {@link VOICE_GLOW_RESPONSE} and {@link VOICE_GLOW_ORGANIC},
+ * or none under reduced motion.
+ */
+export function voiceGlowResponse(reducedMotion: boolean): {
+  attack?: number
+  release?: number
+  organic?: number
+} {
+  return reducedMotion ? {} : { ...VOICE_GLOW_RESPONSE, organic: VOICE_GLOW_ORGANIC }
+}
+
+/**
+ * The level to hand the beam for a normalized dictation level (`voice-level.ts`, 0..1).
+ *
+ * The beam runs every level through its own saturating curve (built for raw microphone RMS), and
+ * the normalizer has already lifted speech to 0.6–1 so its waveform stays readable. Stacked, a
+ * speaking voice sat in the top fifth of the beam's range (0.77–0.95, measured on a recorded
+ * phrase), past the point where the arc stops growing, so it barely moved. The fourth power undoes
+ * the normalizer's square root and squares the result — each frame's energy relative to the recent
+ * peak — which spreads the same phrase over about 0.55–1: the arc drops between words and rises on
+ * each one.
+ */
+export function voiceGlowDriveLevel(level: number): number {
+  if (!Number.isFinite(level) || level <= 0) return 0
+  return Math.min(1, level) ** 4
+}

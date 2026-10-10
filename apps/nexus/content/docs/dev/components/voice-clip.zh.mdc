@@ -1,0 +1,165 @@
+---
+title: "VoiceClip 语音条"
+description: "可播放、可拖动定位的语音消息胶囊"
+category: AiChat
+status: beta
+since: 0.6.3
+tags: [voice, audio, waveform, playback]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
+  import '@talex-touch/tuffex/voice-clip/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+### 基础
+传入录音地址和已知时长；胶囊随时长变宽，同一页面同时只播放一条。
+:::TuffDemoWrapper{demo="VoiceClipBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxVoiceClip
+      :src="recording.url"
+      :duration-ms="recording.durationMs"
+      play-label="播放语音"
+      pause-label="暂停语音"
+      seek-label="播放位置"
+      unavailable-label="录音不可用"
+    />
+  </template>
+---
+:::
+
+### 波形来源与状态
+已有电平数据时传 `peaks`，组件不再解码录音；没有 `src` 时是不可用态。
+:::TuffDemoWrapper{demo="VoiceClipStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- 听写时记下的电平，直接画成波形 -->
+    <TxVoiceClip :src="url" :duration-ms="5600" :peaks="levels" />
+    <!-- 录音已不在：播放键禁用，显示 unavailableLabel -->
+    <TxVoiceClip :duration-ms="4200" unavailable-label="录音不可用" />
+    <TxVoiceClip :src="url" :duration-ms="5600" :peaks="levels" disabled />
+  </template>
+---
+:::
+
+### 自定义颜色
+在任一祖先上设置 `--tx-voice-clip-*` 变量，里面的语音条都会读到。
+:::TuffDemoWrapper{demo="VoiceClipThemeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="bubble">
+      <TxVoiceClip :src="url" :duration-ms="4400" />
+      <p>帮我看看这个分支的状态</p>
+    </div>
+  </template>
+
+  <style scoped>
+  .bubble {
+    --tx-voice-clip-bg: transparent;
+    --tx-voice-clip-accent: var(--tx-color-success);
+  }
+  </style>
+---
+:::
+
+### 最佳实践
+
+- 已知时长就传 `durationMs`：元素读到文件之前，胶囊已经是正确的宽度和时长，加载后不会跳动。
+- 宿主已有电平数据（如听写过程中的电平帧）时传 `peaks`，省掉一次读取和解码。
+- 远程录音要传 `peaks`：组件只会再读一次本地录音（`blob:`、`data:`、`tfile:`、`file:`）。
+- 本地化四个文案属性；读屏通过滑块的 `aria-valuetext` 读出位置，播放键的名称随状态切换。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `src` | `string` | `''` | 录音地址；为空或加载失败时进入不可用态。 |
+| `durationMs` | `number` | - | 已知时长（毫秒）；宽度按它算，元素读到时长后时间文字以元素为准。 |
+| `peaks` | `readonly number[]` | - | 0–1 的振幅，按容得下的条数重采样；不传时解码本地录音。 |
+| `disabled` | `boolean` | `false` | 禁用播放与定位；播放中被禁用会暂停。 |
+| `playLabel` | `string` | `'Play voice message'` | 播放键的可访问名称。 |
+| `pauseLabel` | `string` | `'Pause voice message'` | 播放中播放键的可访问名称。 |
+| `seekLabel` | `string` | `'Playback position'` | 波形滑块的可访问名称。 |
+| `unavailableLabel` | `string` | `'Recording unavailable'` | 不可用时代替波形显示的文字。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `play` | - | 开始播放。 |
+| `pause` | - | 暂停，包括被另一条接替和播放到结尾。 |
+| `ended` | - | 播放到结尾，随后回到开头。 |
+| `error` | `error: unknown` | 录音无法加载（`MediaError`）或播放被拒绝；被打断的开始不算。 |
+
+### 暴露方法
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `play` | `() => Promise<void>` | 从当前位置播放；已在结尾时从头开始。 |
+| `pause` | `() => void` | 暂停。 |
+| `toggle` | `() => void` | 播放或暂停。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-voice-clip-bg` | `--tx-fill-color-light` | 胶囊底色。 |
+| `--tx-voice-clip-control-bg` | `--tx-bg-color` | 播放键底色。 |
+| `--tx-voice-clip-control-ink` | `--tx-text-color-primary` | 播放键图标颜色。 |
+| `--tx-voice-clip-accent` | `--tx-color-primary` | 已播放部分的波形。 |
+| `--tx-voice-clip-track` | 主文字色的 28% | 未播放部分的波形。 |
+| `--tx-voice-clip-ink` | `--tx-text-color-regular` | 时长与不可用文字。 |
+| `--tx-voice-clip-focus` | `--tx-color-primary` | 焦点环。 |
+
+- 这些变量不在根元素上声明，写在组件或任一祖先上都会生效。
+
+## 概述
+
+- 播放键、波形、时长排成 36px 高的胶囊；宽度随时长按平方根增长，140px 起，60 秒及以上为 300px，条数随波形的实际宽度变化。
+- 静止时显示四舍五入的总时长（不足一秒记 1 秒）；播放中和暂停在中途时，用它减去已播放的整秒数倒数，开始播放时数字不跳；播放结束后回到开头，重新显示总时长。
+- 同一页面同时只播放一条，新开始的一条会暂停正在播放的那条。
+- 波形是 `role="slider"`：点击或拖动定位，←/→、↑/↓ 步进 1 秒，PageUp/PageDown 步进总时长的 10%，Home/End 跳到头尾；定位不会自动开始播放。
+- 传入 `peaks` 时直接绘制，否则解码本地录音，解码完成前或失败时是平直轨道；`src` 为空或加载失败时播放键禁用，波形换成 `unavailableLabel`。
+- 按压缩放和波形高度过渡只在 `prefers-reduced-motion: no-preference` 下出现，播放进度始终更新；按物理方向从左往右绘制，从右到左的页面不会镜像。
+
+## 技术实现
+
+- 用隐藏的 `<audio preload="metadata">` 播放；播放中由 rAF 读取 `currentTime`（窗口被节流时由元素的 `timeupdate` 兜底），写入 `--tx-voice-clip-progress` 裁切叠在上层的强调色波形，不逐帧重渲染。
+- 波形用 8 kHz 的 `OfflineAudioContext` 解码：按 96 段求 RMS，从最安静的一成拉伸到最响的一段，再按条取平均、让最高的一条撑满高度；按地址缓存最近 24 条。
+- 源码：`packages/tuffex/packages/components/src/voice-clip/`。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 对话里的语音消息：发送前后都可以回放用户录下的语音。
+- 听写结果旁的原始录音，用来重新识别或直接发送。
+
+## 相关组件
+
+- [AttachmentTray 附件区](/docs/dev/components/attachment-tray)：消息上方的图片与文件附件。
+- [VoiceBeam 语音光束](/docs/dev/components/voice-beam)：录音进行中随声音起伏的光效。
+- [ConversationStream 会话流](/docs/dev/components/conversation-stream)：承载语音消息的消息列表。

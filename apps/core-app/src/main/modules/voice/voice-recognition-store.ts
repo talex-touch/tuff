@@ -86,7 +86,7 @@ function boundedNumber(value?: number): number | undefined {
     : undefined
 }
 
-function pcm16ToWav(pcm: Buffer, sampleRate = 16_000): Buffer {
+export function pcm16ToWav(pcm: Buffer, sampleRate = 16_000): Buffer {
   const sampleBytes = pcm.byteLength - (pcm.byteLength % 2)
   const wav = Buffer.allocUnsafe(44 + sampleBytes)
   wav.write('RIFF', 0)

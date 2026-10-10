@@ -776,7 +776,7 @@ async function collectStorageSnapshots(
 
   for (const conversationId of new Set(requestedConversationIds)) {
     const snapshot = await getConversation(conversationId)
-    if (!snapshot) continue
+    if (!snapshot || snapshot.projectId !== null) continue
     const qualifiedName = buildConversationQualifiedName(conversationId)
     const rawText = JSON.stringify(toConversationSyncSnapshot(snapshot))
     const encrypted = await encryptSyncPayload(rawText)
@@ -1051,6 +1051,7 @@ async function applyPulledStorageItems(
 
       try {
         const local = await getConversation(conversationId)
+        if (local && local.projectId !== null) continue
         const localState = await getConversationSyncState(conversationId)
         const localUpdatedAt = Math.max(local?.updatedAt ?? 0, localState?.dirtyAt ?? 0)
 
@@ -1328,7 +1329,14 @@ function registerConversationMutationListener(): void {
   conversationMutationCleanup = subscribeConversationMutations((mutation) => {
     if (mutation.source === 'sync') return
     const qualifiedName = buildConversationQualifiedName(mutation.conversationId)
-    if (qualifiedName) markStorageDirty(qualifiedName)
+    if (!qualifiedName) return
+    if (mutation.projectId !== null) {
+      dirtyStorages.delete(qualifiedName)
+      pendingBlobStorages.delete(qualifiedName)
+      setQueueDepthByBuffers()
+      return
+    }
+    markStorageDirty(qualifiedName)
   })
 }
 

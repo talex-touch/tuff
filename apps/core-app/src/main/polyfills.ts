@@ -17,11 +17,6 @@ if (isolatedUserDataPath) {
   // isolates SQLite but leaves Chromium writing the real dev profile.
   app.setPath('userData', isolatedRoot)
   app.setPath('sessionData', isolatedRoot)
-} else if (!app.isPackaged) {
-  const devUserDataPath = path.join(app.getPath('appData'), `${packageJson.name}-dev`)
-  if (app.getPath('userData') !== devUserDataPath) {
-    app.setPath('userData', devUserDataPath)
-  }
 }
 
 // Set APP_VERSION from the CoreApp package when the host has not provided one.

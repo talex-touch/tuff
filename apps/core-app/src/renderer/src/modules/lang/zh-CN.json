@@ -1594,7 +1594,6 @@
         "createdElsewhere": "分支已创建，可在会话列表中找到。"
       },
       "panel": {
-        "activity": "活动",
         "context": "上下文",
         "review": "变更"
       },
@@ -1664,7 +1663,8 @@
         "WORKSPACE_FORK_NATIVE_UNSAFE": "CLI 会话当前无法安全分支。",
         "WORKSPACE_RUN_NOT_PENDING": "该运行已不在等待审批。",
         "WORKSPACE_STALE_TURN": "该回复已经结束。",
-        "WORKSPACE_TURN_INTERRUPTED": "回复在完成前已中断（应用关闭或运行结束）。"
+        "WORKSPACE_TURN_INTERRUPTED": "回复在完成前已中断（应用关闭或运行结束）。",
+        "WORKSPACE_VOICE_UNAVAILABLE": "这段录音已失效，没能发出去"
       }
     },
     "greeting": "今天想做点什么？",
@@ -1705,6 +1705,23 @@
     "modelNoResults": "没有匹配的模型",
     "modelSources": "模型来源",
     "configureProvider": "去配置",
+    "voiceClip": {
+      "label": "语音",
+      "inserted": "已转写到输入框",
+      "empty": "没有识别到说话内容",
+      "recognizing": "正在重新识别…",
+      "sending": "正在发送…",
+      "retry": "重新识别",
+      "send": "发送语音",
+      "sendDirect": "直接发送",
+      "dismiss": "关闭语音条",
+      "nothingToSend": "这段录音没有识别到内容，无法发送",
+      "expired": "这段录音已失效",
+      "play": "播放语音",
+      "pause": "暂停播放",
+      "seek": "播放位置",
+      "unavailable": "录音不可用"
+    },
     "panel": {
       "title": "会话信息",
       "turnInfo": "本轮信息",
@@ -1718,14 +1735,12 @@
     },
     "preview": {
       "artifacts": "产物",
-      "widgets": "组件",
       "toolCalls": "工作过程",
       "sources": "引用",
       "artifactsCreated": "本次生成",
       "artifactsUploaded": "你上传的",
-      "artifactsEmpty": "这次会话还没有生成或上传文件。",
-      "widgetsEmpty": "这次会话还没有出现图表或表单。",
-      "toolCallsEmpty": "这次会话还没有调用任何工具。",
+      "chartsAndForms": "图表与表单",
+      "outputsEmpty": "这次会话还没有生成或上传文件，也还没有出现图表或表单。",
       "sourcesEmpty": "这次会话还没有读取文件、搜索或调用 MCP。",
       "chart": "图表",
       "form": "表单",

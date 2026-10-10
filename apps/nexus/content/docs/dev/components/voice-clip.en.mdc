@@ -1,0 +1,165 @@
+---
+title: "VoiceClip"
+description: "A voice message capsule you can play and scrub through."
+category: AiChat
+status: beta
+since: 0.6.3
+tags: [voice, audio, waveform, playback]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
+  import '@talex-touch/tuffex/voice-clip/style.css'
+  import '@talex-touch/tuffex/base.css' // design tokens and resets, once per app
+---
+:::
+
+## Usage
+
+### Basic
+Pass the recording's URL and its known length. The capsule widens with the length, and one clip plays at a time on a page.
+:::TuffDemoWrapper{demo="VoiceClipBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxVoiceClip
+      :src="recording.url"
+      :duration-ms="recording.durationMs"
+      play-label="Play voice message"
+      pause-label="Pause voice message"
+      seek-label="Playback position"
+      unavailable-label="Recording unavailable"
+    />
+  </template>
+---
+:::
+
+### Waveform sources and states
+Pass `peaks` when the host already has levels, so the clip skips decoding; without `src` the clip is unavailable.
+:::TuffDemoWrapper{demo="VoiceClipStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- Levels recorded during dictation, drawn as they are -->
+    <TxVoiceClip :src="url" :duration-ms="5600" :peaks="levels" />
+    <!-- The recording is gone: the play key is disabled and unavailableLabel shows -->
+    <TxVoiceClip :duration-ms="4200" unavailable-label="Recording unavailable" />
+    <TxVoiceClip :src="url" :duration-ms="5600" :peaks="levels" disabled />
+  </template>
+---
+:::
+
+### Custom colours
+Set the `--tx-voice-clip-*` variables on any ancestor; every clip inside reads them.
+:::TuffDemoWrapper{demo="VoiceClipThemeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="bubble">
+      <TxVoiceClip :src="url" :duration-ms="4400" />
+      <p>Check the state of this branch for me</p>
+    </div>
+  </template>
+
+  <style scoped>
+  .bubble {
+    --tx-voice-clip-bg: transparent;
+    --tx-voice-clip-accent: var(--tx-color-success);
+  }
+  </style>
+---
+:::
+
+### Best Practices
+
+- Pass `durationMs` when you know it: the capsule has its final width and time before the element reads the file, so nothing shifts once it loads.
+- Pass `peaks` when the host already has levels (the level frames of a dictation, say) to save a read and a decode.
+- Pass `peaks` for remote recordings: the clip only reads local ones a second time (`blob:`, `data:`, `tfile:`, `file:`).
+- Localise the four label props; screen readers hear the position through the slider's `aria-valuetext`, and the play key's name follows its state.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | `''` | The recording's URL; empty or failing to load makes the clip unavailable. |
+| `durationMs` | `number` | - | Known length in ms; sets the width, and the time text until the element reads the file. |
+| `peaks` | `readonly number[]` | - | Amplitudes in 0–1, resampled to the bars that fit; omitted, a local recording is decoded. |
+| `disabled` | `boolean` | `false` | Blocks playback and seeking; disabling a playing clip pauses it. |
+| `playLabel` | `string` | `'Play voice message'` | Accessible name of the play key. |
+| `pauseLabel` | `string` | `'Pause voice message'` | Accessible name of the play key while playing. |
+| `seekLabel` | `string` | `'Playback position'` | Accessible name of the waveform slider. |
+| `unavailableLabel` | `string` | `'Recording unavailable'` | Shown in place of the waveform while unavailable. |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `play` | - | Playback started. |
+| `pause` | - | Playback paused, including when another clip takes over and at the end. |
+| `ended` | - | Playback reached the end; the clip then returns to the start. |
+| `error` | `error: unknown` | The recording could not load (`MediaError`) or playback was refused; an interrupted start is not an error. |
+
+### Exposed Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `play` | `() => Promise<void>` | Plays from the current position, or from the start once at the end. |
+| `pause` | `() => void` | Pauses. |
+| `toggle` | `() => void` | Plays or pauses. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-voice-clip-bg` | `--tx-fill-color-light` | Capsule fill. |
+| `--tx-voice-clip-control-bg` | `--tx-bg-color` | Play key fill. |
+| `--tx-voice-clip-control-ink` | `--tx-text-color-primary` | Play key glyph. |
+| `--tx-voice-clip-accent` | `--tx-color-primary` | The played part of the waveform. |
+| `--tx-voice-clip-track` | 28% of the primary ink | The part not yet played. |
+| `--tx-voice-clip-ink` | `--tx-text-color-regular` | The time and the unavailable note. |
+| `--tx-voice-clip-focus` | `--tx-color-primary` | Focus rings. |
+
+- None of these is declared on the root, so setting one on the clip or on any ancestor takes effect.
+
+## Overview
+
+- The play key, the waveform and the time form a 36px capsule; its width grows with the square root of the length, from 140px to 300px at 60 seconds and beyond, and the bar count follows the waveform's real width.
+- At rest the time is the length rounded to whole seconds (at least one); while playing, or paused part-way, it counts down from that number by the whole seconds played, so starting playback never changes it; at the end the clip returns to the start and shows the full length again.
+- One clip plays at a time on a page; starting one pauses whichever was playing.
+- The waveform is a `role="slider"`: click or drag to seek, ←/→ and ↑/↓ step one second, PageUp/PageDown step 10% of the length, Home/End jump to either end; seeking never starts playback.
+- `peaks` are drawn as given; otherwise a local recording is decoded, with a flat track until it lands or if it fails. An empty or failing `src` disables the play key and replaces the waveform with `unavailableLabel`.
+- The press scale and the bar-height transition only run under `prefers-reduced-motion: no-preference`; progress always updates. The clip draws left to right on every page; right-to-left pages do not mirror it.
+
+## Technologies
+
+- Plays through a hidden `<audio preload="metadata">`; while playing, a rAF loop (and the element's `timeupdate` when frames are throttled) reads `currentTime` into `--tx-voice-clip-progress`, which clips an accent-coloured copy of the waveform, so nothing re-renders per frame.
+- Decodes with an 8 kHz `OfflineAudioContext`: the RMS of 96 buckets is stretched from the quietest tenth to the loudest bucket, averaged per bar and scaled so the tallest bar fills the height; the last 24 recordings are cached per URL.
+- Source: `packages/tuffex/packages/components/src/voice-clip/`.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- Voice messages in a conversation: the user's recording, playable before and after it is sent.
+- The raw recording beside a dictation result, to recognise it again or send it as is.
+
+## Related components
+
+- [AttachmentTray](/docs/dev/components/attachment-tray): image and file attachments above a message.
+- [VoiceBeam](/docs/dev/components/voice-beam): the glow that follows the voice while recording.
+- [ConversationStream](/docs/dev/components/conversation-stream): the message list voice messages live in.

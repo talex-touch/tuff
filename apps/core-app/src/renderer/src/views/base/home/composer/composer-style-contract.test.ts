@@ -130,8 +130,9 @@ describe('composer toolbar style contract', () => {
         'ComposerToolbar.vue'
       ])
     )
-    // Only the send key morphs between its faces; the chips land a new value in the same frame
-    // (`home-composer` › 换档不做变形动画) and the microphone key swaps its glyph at once.
+    // Only the send key recolours between its faces under `.is-morphing`. The chips change value on
+    // WAAPI from script (a cross-fade and a width tween, 2026-10-08 — `ComposerChip.test.ts`), never
+    // with a CSS transition, and the microphone key swaps its glyph at once.
     for (const file of ['ComposerSendIsland.vue']) {
       const morphs = styleRules.filter(
         (rule) =>
@@ -142,6 +143,15 @@ describe('composer toolbar style contract', () => {
       expect(morphs.length, `${file} recolours under .is-morphing`).toBeGreaterThan(0)
     }
     expect(styleRules.some((rule) => rule.declarations.has('animation'))).toBe(true)
+  })
+
+  it('keeps the chip free of CSS motion: its value morph runs in script, gated on reduced motion', () => {
+    const chip = styleRules.filter((rule) => rule.file === 'ComposerChip.vue')
+    expect(chip.length, 'positive control: the chip compiled').toBeGreaterThan(0)
+    for (const rule of chip) {
+      expect(transitioned(rule), rule.selectors.join(', ')).toEqual([])
+      expect(rule.declarations.has('animation'), rule.selectors.join(', ')).toBe(false)
+    }
   })
 
   it('eases fill, ink and ring only while a state change is morphing', () => {

@@ -31,8 +31,8 @@ Tuffex（`@talex-touch/tuffex`）是服务 CoreBox、插件界面与本文档站
 | [理念](./index.zh.mdc) | 安装、设计规则与工具 | 8 | 纯文档 |
 | [模板](./template-shell.zh.mdc) | 应用框架 / 内容运营 / AI 应用 / 数据与流程 | 16 | 组合现有入口 |
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
-| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 38 | `@talex-touch/tuffex/pro` |
-| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 35 | `@talex-touch/tuffex/ai` |
+| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 39 | `@talex-touch/tuffex/pro` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 36 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
 | [动效套件](./motion-suite.zh.mdc) | 按钮、轮播、加载、文字、转场等 10 组 | 12 | `@talex-touch/tuffex/pro` + `/charts` |
@@ -254,6 +254,7 @@ code: |
 - [Stagger 依次进入](./stagger.zh.mdc)
 - [Fusion 交融](./fusion.zh.mdc)
 - [FusionSurface 融合表面](./fusion-surface.zh.mdc)
+- [FlowLight 流光底](./flow-light.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
 - [ImageGeneration 生图占位](./image-generation.zh.mdc)
@@ -284,6 +285,7 @@ code: |
 - [ChoiceCard 选项卡片](./choice-card.zh.mdc)
 - [TypingIndicator 打字中](./typing-indicator.zh.mdc)
 - [ConversationStream 会话流](./conversation-stream.zh.mdc)
+- [VoiceClip 语音条](./voice-clip.zh.mdc)
 
 ### 智能体
 
