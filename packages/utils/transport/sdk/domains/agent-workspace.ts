@@ -19,11 +19,17 @@ export interface ConversationWorkspaceSettings {
 /** IDs identify Main-owned copies; no caller-selected filesystem path is a reference. */
 export interface WorkspaceAttachmentRef {
   id: string
-  kind: 'image'
+  /**
+   * `audio` is a voice message's recording. It is shown and played, never given to a model: the
+   * turn's text is its transcript (see `WorkspaceSubmitRequest.voiceRecordingId`).
+   */
+  kind: 'image' | 'audio'
   name?: string
   mimeType: string
   size: number
   previewUrl?: string
+  /** Audio only: the recording's length. */
+  durationMs?: number
 }
 
 export interface WorkspaceQueuedInput {
@@ -113,6 +119,12 @@ export interface WorkspaceSubmitRequest {
   text: string
   settings?: ConversationWorkspaceSettings
   attachments?: IntelligenceMessageAttachment[]
+  /**
+   * Send this kept recording (`VoiceKeptRecording.id`) as the message's voice. Main copies it into
+   * the conversation and the user message shows it; `text` is its transcript, which is what the
+   * model reads — no adapter carries audio.
+   */
+  voiceRecordingId?: string
   create?: { projectId: string | null; title: string }
   lead?: { text: string; note: string }
   retryOfMessageId?: string

@@ -65,14 +65,15 @@ const settingsSchema = z
 const refSchema = z
   .object({
     id: idSchema,
-    kind: z.literal('image'),
+    kind: z.enum(['image', 'audio']),
     name: z.string().max(256).optional(),
-    mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+    mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'audio/wav']),
+    // The audio cap is 10MB of PCM plus the WAV header (`workspace-attachments.ts`).
     size: z
       .number()
       .int()
       .positive()
-      .max(10 * 1024 * 1024)
+      .max(10 * 1024 * 1024 + 44)
   })
   .strict()
 const inputSchema = z
@@ -126,7 +127,8 @@ const submitSchema = z
       .strict()
       .optional(),
     retryOfMessageId: idSchema.optional(),
-    answersToolCallId: idSchema.optional()
+    answersToolCallId: idSchema.optional(),
+    voiceRecordingId: z.string().uuid().optional()
   })
   .strict()
 
@@ -142,6 +144,10 @@ export interface WorkspaceServiceOptions {
   attachments?: WorkspaceAttachmentStore
   validateSettings?: (settings: ConversationWorkspaceSettings) => Promise<void>
   onChanged?: (state: ConversationWorkspaceState) => void
+  /** The file behind a kept voice clip's id, or `null` once it is gone (voice module). */
+  resolveVoiceRecording?: (recordingId: string) => string | null
+  /** The clip has been copied into the conversation; its kept original can go. */
+  releaseVoiceRecording?: (recordingId: string) => Promise<void> | void
 }
 
 interface PendingAdmission {
@@ -803,9 +809,20 @@ export class ConversationWorkspaceService {
         request.conversationId,
         request.attachments ?? []
       )
+      if (request.voiceRecordingId) {
+        // A voice message: the clip is copied here, the turn's text is its transcript.
+        const source = this.options.resolveVoiceRecording?.(request.voiceRecordingId) ?? null
+        try {
+          if (!source) throw new Error('WORKSPACE_VOICE_UNAVAILABLE')
+          stored.push(await this.attachments.persistAudio(request.conversationId, source))
+        } catch (error) {
+          await this.attachments.remove(stored)
+          throw error
+        }
+      }
       let refs = stored.map((asset) => ({
         id: asset.id,
-        kind: 'image' as const,
+        kind: asset.mimeType === 'audio/wav' ? ('audio' as const) : ('image' as const),
         mimeType: asset.mimeType,
         size: asset.size,
         ...(asset.name ? { name: asset.name } : {})
@@ -846,6 +863,13 @@ export class ConversationWorkspaceService {
         throw error
       } finally {
         this.admissions.delete(key(request.conversationId, request.id))
+      }
+      if (request.voiceRecordingId) {
+        // The conversation holds its own copy now. A clip that fails to go is swept by the voice
+        // module's retention, so this never fails the send.
+        void Promise.resolve(this.options.releaseVoiceRecording?.(request.voiceRecordingId)).catch(
+          () => undefined
+        )
       }
       return { disposition: 'queued', state: await this.changed(request.conversationId, !held) }
     })
@@ -1103,7 +1127,8 @@ export class ConversationWorkspaceService {
   }
 
   async getModelAttachments(input: WorkspaceQueuedInput): Promise<IntelligenceMessageAttachment[]> {
-    const refs = input.attachments ?? []
+    // Images only: no adapter carries audio, and a voice turn's text already is its transcript.
+    const refs = (input.attachments ?? []).filter((ref) => ref.kind === 'image')
     if (!refs.length) return []
     const records = await this.db()
       .select()

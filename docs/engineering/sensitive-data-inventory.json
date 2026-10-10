@@ -9,22 +9,29 @@
       "owner": "VoiceInsightsStore/VoiceInsightsPrivacyOwner",
       "storageLocations": [
         "auxiliary database: voice_insights_state, voice_insight_days, voice_insight_captures, voice_recognition_records",
-        "managed temp namespace: voice/recordings"
+        "managed temp namespace: voice/recordings",
+        "managed temp namespace: voice/kept-recordings (Home composer voice clips: one WAV per clip, registry in main memory only)"
       ],
       "writers": [
         "VoiceService successful aggregate finalization",
-        "VoiceService detailed capture lifecycle unless voiceInput.historyEnabled is false"
+        "VoiceService detailed capture lifecycle unless voiceInput.historyEnabled is false",
+        "VoiceService streaming session with keepRecording (host Home composer only; dropped for plugins)"
       ],
-      "readers": ["host Intelligence settings voice insights and recognition records", "main-owned Privacy export"],
+      "readers": [
+        "host Intelligence settings voice insights and recognition records",
+        "main-owned Privacy export",
+        "VoiceService.transcribeRecording and the voice-message send that copies a clip into its conversation"
+      ],
       "exportPolicy": "aggregate DTO only for insights; detailed transcript metadata stays host-only and source audio is excluded from ordinary Privacy export",
-      "deletionPolicy": "typed clearInsights or clearRecognitionRecords, or Privacy manual category deletion, removes aggregate rows, record rows, and owned audio with a generation/owner fence",
-      "retentionPolicy": "aggregates use 365-day daily buckets and opaque deduplication IDs; detailed history is enabled by default, can be turned off in Settings, and is bounded to 200 records",
-      "rendererExposure": "host-renderer-only aggregate and detailed record DTOs; source audio uses controlled tfile URLs; plugins denied",
+      "deletionPolicy": "typed clearInsights or clearRecognitionRecords, or Privacy manual category deletion, removes aggregate rows, record rows, and owned audio with a generation/owner fence; a composer voice clip is deleted when the host dismisses it, a new dictation replaces it, a typed send consumes it, or a voice send has copied it, and all clips are deleted on module destroy, with an earlier run's files swept at startup",
+      "retentionPolicy": "aggregates use 365-day daily buckets and opaque deduplication IDs; detailed history is enabled by default, can be turned off in Settings, and is bounded to 200 records; composer voice clips are kept regardless of the history setting only while their clip is on screen, at most four at a time, with a 24-hour namespace retention as backstop",
+      "rendererExposure": "host-renderer-only aggregate and detailed record DTOs; source audio uses controlled tfile URLs; composer clips expose only an opaque id, a tfile URL and a duration; plugins denied",
       "portable": false,
       "migrationStatus": "additive-0042-and-0043-primary-and-aux-parity",
       "evidence": [
         "apps/core-app/src/main/modules/voice/voice-insights-store.ts#symbol=VoiceInsightsStore",
-        "apps/core-app/src/main/modules/privacy/owners/voice-insights-privacy-owner.ts#symbol=createVoiceInsightsPrivacyOwner"
+        "apps/core-app/src/main/modules/privacy/owners/voice-insights-privacy-owner.ts#symbol=createVoiceInsightsPrivacyOwner",
+        "apps/core-app/src/main/modules/voice/voice-kept-recordings.ts#symbol=VoiceKeptRecordings"
       ]
     },
     {
@@ -295,7 +302,7 @@
         "database.db: conversations/conversation_messages",
         "database.db: conversation_sync_state (opaque ids, dirty revisions, and deletion timestamps only)",
         "database.db local-only: conversation_workspaces, conversation_queued_inputs, conversation_workspace_receipts, conversation_attachments, conversation_message_attachments, conversation_file_reviews",
-        "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies; original user files excluded",
+        "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies and voice-message WAV copies; original user files excluded",
         "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
       ],
       "writers": [
@@ -306,9 +313,9 @@
       ],
       "readers": ["host conversation UI", "main-owned encrypted sync collector"],
       "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots and credentials; local workspace/review tables never portable or ordinary-exported; no plaintext logs, analytics, config or plugin storage",
-      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and regular UUID images; original project files, parent/other sessions and external native JSONL files are never deleted",
-      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
-      "rendererExposure": "host-only typed public conversation/workspace/review DTOs and owned tfile image descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins rejected at every transport boundary",
+      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and its regular UUID images and voice recordings; original project files, parent/other sessions and external native JSONL files are never deleted",
+      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each and voice-message recordings at 10 MiB of PCM; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
+      "rendererExposure": "host-only typed public conversation/workspace/review DTOs and owned tfile image and voice-message audio descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins rejected at every transport boundary",
       "portable": false,
       "migrationStatus": "additive-0052-primary-owned; no auxiliary copy or second SQLite writer; encrypted public conversation sync unchanged",
       "evidence": [

@@ -17,6 +17,7 @@ import type {
   VoiceDictatePayload,
   VoiceDictateResult,
   VoiceFileTranscriptionEvent,
+  VoiceKeptRecording,
   VoiceRecognitionLocation,
   VoiceRecoveryKind,
   VoiceRecoveryStatus,
@@ -24,6 +25,8 @@ import type {
   VoiceRetryResult,
   VoiceSpeakPayload,
   VoiceSpeakResult,
+  VoiceTranscribeRecordingPayload,
+  VoiceTranscribeRecordingResult,
   VoiceTranscribeUploadPayload,
   VoiceTranscribeUploadResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
@@ -61,6 +64,7 @@ import {
 } from './quick-edit-prompt'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
+import { voiceKeptRecordings } from './voice-kept-recordings'
 import { createLiveDelivery } from './voice-live-delivery'
 import { getConfiguredAsrProvider, getVoiceRecognitionLocation } from './voice-provider-runtime'
 import { voiceRecognitionStore } from './voice-recognition-store'
@@ -313,6 +317,8 @@ const MAX_RETRY_BUFFER_BYTES = 10 * 1024 * 1024
 const MAX_TYPED_DELIVERY_CHARS = 80
 const PCM_BITS_PER_SAMPLE = 16
 const PCM_CHANNELS = 1
+/** 200ms of 16kHz mono 16-bit PCM: the slice a kept clip is replayed in. */
+const KEPT_REPLAY_CHUNK_BYTES = 6_400
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
 // mid-thought doesn't end the session — the user's second key press stops it; the
 // max duration is only a safety cap.
@@ -1845,8 +1851,11 @@ export class VoiceService {
           channel: provider.id
         })
       }
+      // Kept before the buffer is cleared: the buffer holds the only copy of the audio.
+      const kept = payload.keepRecording ? await this.keepSessionAudio(session.id) : null
       this.clearRetryBuffer(session.id)
       if (!hasFinal) yield { type: 'final', text: '' }
+      if (kept) yield { type: 'recording', recording: kept }
       yield { type: 'end' }
     } catch (error) {
       const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
@@ -1880,13 +1889,112 @@ export class VoiceService {
         channel: provider.id,
         errorCode
       })
+      // A cancel abandons the words; a failure keeps them for the clip's 重新识别 and 直接发送.
+      // Kept before the buffer is armed or cleared, for the same reason as on success.
+      const kept =
+        payload.keepRecording && !cancelled && preserveFailureAudio
+          ? await this.keepSessionAudio(session.id)
+          : null
       if (retryable) this.armRetryBuffer(session.id, cancelled ? 'cancelled' : 'failed')
       else this.clearRetryBuffer(session.id)
+      // Sent ahead of the error: a failure crosses the stream boundary as a message and a code,
+      // so this is the only way the clip's id reaches the renderer.
+      if (kept) yield { type: 'recording', recording: kept }
       throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
       if (!ownerReleased) this.cancelSession(sessionId)
     }
+  }
+
+  /**
+   * The session's audio as a kept clip (`keepRecording`), taken from the retry buffer that already
+   * holds it. `null` when there is none — an overflowed buffer, a write that failed — and the
+   * session carries on: a clip is an extra, never a reason for recognition to fail.
+   */
+  private async keepSessionAudio(captureId: string): Promise<VoiceKeptRecording | null> {
+    const pcm = this.snapshotRetryAudio(captureId)
+    if (!pcm) return null
+    try {
+      return await voiceKeptRecordings.keep(
+        pcm,
+        this.retryBuffer?.sampleRate ?? DEFAULT_ASR_SAMPLE_RATE
+      )
+    } catch (error) {
+      voiceLog.warn('Voice clip could not be kept', {
+        meta: { code: 'VOICE_RECORDING_KEEP_FAILED' },
+        error
+      })
+      return null
+    }
+  }
+
+  /**
+   * Recognizes a kept clip again through the recogniser configured now — not necessarily the one
+   * it was first sent to, which may be the very route that failed. No polish, as in the composer's
+   * own dictation (`deliveryTiming: 'live'`), and no record: the session already wrote one, and a
+   * second attempt at the same words is not a second dictation.
+   */
+  async transcribeRecording(
+    payload: VoiceTranscribeRecordingPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceTranscribeRecordingResult> {
+    throwIfCancelled(signal)
+    const audio = await voiceKeptRecordings.read(payload.recordingId)
+    if (!audio) {
+      throw Object.assign(new Error('VOICE_RECORDING_NOT_FOUND'), {
+        code: 'VOICE_RECORDING_NOT_FOUND',
+        retryable: false
+      })
+    }
+    const configured = getConfiguredAsrProvider()
+    const buffered = configured.mode === 'buffered'
+    const request: VoiceStreamRequest = {
+      model: configured.model,
+      audio: {
+        format: 'pcm',
+        sampleRate: audio.sampleRate,
+        channels: PCM_CHANNELS,
+        bitsPerSample: PCM_BITS_PER_SAMPLE,
+        codec: 'raw'
+      },
+      ...(payload.language ? { language: payload.language } : {}),
+      requestId: buffered ? randomUUID() : nextVoiceSessionId(),
+      signal,
+      timeoutMs: buffered ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
+      enableDdc: true
+    }
+    let connection: VoiceStreamConnection | null = null
+    let text = ''
+    let language: string | undefined
+    try {
+      connection = await configured.provider.createStream(request)
+      // Faster than real time, as a retry replays its buffer.
+      for (let offset = 0; offset < audio.pcm.byteLength; offset += KEPT_REPLAY_CHUNK_BYTES) {
+        throwIfCancelled(signal)
+        await connection.writePcm(audio.pcm.subarray(offset, offset + KEPT_REPLAY_CHUNK_BYTES))
+      }
+      throwIfCancelled(signal)
+      await connection.end()
+      for await (const event of connection.events) {
+        throwIfCancelled(signal)
+        if (event.type === 'error') {
+          const usageLimitCause = readUsageLimitCause(event)
+          throw Object.assign(new Error(event.code || 'VOICE_RECORDING_TRANSCRIPTION_FAILED'), {
+            code: event.code || 'VOICE_RECORDING_TRANSCRIPTION_FAILED',
+            retryable: event.retryable,
+            ...(usageLimitCause ? { cause: usageLimitCause } : {})
+          })
+        }
+        if (event.type !== 'final' || !event.text.trim()) continue
+        text += event.text
+        if (event.language) language = event.language
+      }
+    } finally {
+      if (connection) await connection.abort('Voice recording transcription ended').catch(() => {})
+    }
+    throwIfCancelled(signal)
+    return { text: text.trim(), ...(language ? { language } : {}) }
   }
 
   getRecoveryStatus(): VoiceRecoveryStatus {

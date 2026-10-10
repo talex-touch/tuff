@@ -106,3 +106,86 @@ describe('WorkspaceAttachmentStore owner isolation', () => {
     expect(await readFile(original, 'utf8')).toBe('hello')
   })
 })
+
+/** The composer's kept clip: a canonical WAV of 16 kHz mono 16-bit PCM. */
+function wav(samples: number, sampleRate = 16_000): Buffer {
+  const data = samples * 2
+  const bytes = Buffer.alloc(44 + data)
+  bytes.write('RIFF', 0)
+  bytes.writeUInt32LE(36 + data, 4)
+  bytes.write('WAVE', 8)
+  bytes.write('fmt ', 12)
+  bytes.writeUInt32LE(16, 16)
+  bytes.writeUInt16LE(1, 20)
+  bytes.writeUInt16LE(1, 22)
+  bytes.writeUInt32LE(sampleRate, 24)
+  bytes.writeUInt32LE(sampleRate * 2, 28)
+  bytes.writeUInt16LE(2, 32)
+  bytes.writeUInt16LE(16, 34)
+  bytes.write('data', 36)
+  bytes.writeUInt32LE(data, 40)
+  return bytes
+}
+
+describe('WorkspaceAttachmentStore voice audio', () => {
+  it('copies a clip in, shows it as audio with its length, and never hands it to a model', async () => {
+    const clip = join(root, 'clip.wav')
+    await writeFile(clip, wav(24_000))
+
+    const record = await store.persistAudio('parent', clip)
+
+    expect(record).toMatchObject({ mimeType: 'audio/wav', size: 44 + 48_000 })
+    expect(record.relativePath).toMatch(/^[a-f0-9-]{36}\.wav$/)
+    expect(await store.publicRef(record)).toMatchObject({
+      kind: 'audio',
+      mimeType: 'audio/wav',
+      durationMs: 1_500
+    })
+    await expect(store.toModel(record)).rejects.toThrow('WORKSPACE_ATTACHMENT_UNSAFE')
+    // The conversation's copy is its own: the kept original can go.
+    await unlink(clip)
+    expect((await store.publicRef(record)).previewUrl).toBeTruthy()
+  })
+
+  it('carries a clip into a fork and cleans it up with its owner', async () => {
+    const clip = join(root, 'clip.wav')
+    await writeFile(clip, wav(160))
+    const record = await store.persistAudio('parent', clip)
+
+    const child = await store.clone(record, 'child')
+
+    expect(await store.publicRef(child)).toMatchObject({ kind: 'audio' })
+    await store.cleanupOwner('child')
+    await expect(readFile(ownedFile(child))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await store.publicRef(record)).toMatchObject({ kind: 'audio' })
+  })
+
+  it.each([
+    { name: 'not a WAV', bytes: Buffer.from('hello') },
+    {
+      name: 'stereo',
+      bytes: (() => {
+        const b = wav(160)
+        b.writeUInt16LE(2, 22)
+        return b
+      })()
+    },
+    { name: 'truncated data', bytes: wav(160).subarray(0, 100) }
+  ])('refuses a clip that is $name, leaving nothing behind', async ({ bytes }) => {
+    const clip = join(root, 'clip.wav')
+    await writeFile(clip, bytes)
+
+    await expect(store.persistAudio('parent', clip)).rejects.toThrow('WORKSPACE_ATTACHMENT_INVALID')
+    const owner = join(root, 'owned', createHash('sha256').update('parent').digest('hex'))
+    expect(await readdir(owner).catch(() => [])).toEqual([])
+  })
+
+  it('refuses to follow a symlinked clip', async () => {
+    const real = join(root, 'real.wav')
+    await writeFile(real, wav(160))
+    const link = join(root, 'link.wav')
+    await symlink(real, link)
+
+    await expect(store.persistAudio('parent', link)).rejects.toMatchObject({ code: 'ELOOP' })
+  })
+})

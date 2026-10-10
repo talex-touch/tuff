@@ -40,6 +40,7 @@ import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { toolRegistry } from '../ai/agents'
 import { getProject } from '../project/project-store'
 import { toolGatewayModule } from '../tool-gateway'
+import { voiceKeptRecordings } from '../voice/voice-kept-recordings'
 import { getConversation } from './conversation-store'
 import { fileReviewService } from './file-review-service'
 import { ConversationWorkspaceService } from './workspace-service'
@@ -116,7 +117,9 @@ export class ConversationWorkspaceRunner {
           throw new Error('WORKSPACE_PROVIDER_UNAVAILABLE')
         }
       },
-      onChanged: (state) => options.onChanged(state)
+      onChanged: (state) => options.onChanged(state),
+      resolveVoiceRecording: (recordingId) => voiceKeptRecordings.get(recordingId)?.path ?? null,
+      releaseVoiceRecording: (recordingId) => voiceKeptRecordings.discard(recordingId)
     })
   }
 

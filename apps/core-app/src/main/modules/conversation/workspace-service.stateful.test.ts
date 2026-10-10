@@ -607,6 +607,91 @@ describe('ConversationWorkspaceService fork ownership', () => {
   })
 })
 
+describe('ConversationWorkspaceService voice messages', () => {
+  const CLIP_ID = '0d9c7a9e-1b7e-4a63-9c11-6f0e8a2f5b10'
+
+  /** 0.5 s of 16 kHz mono 16-bit PCM, as the composer's kept clip. */
+  function clipWav(): Buffer {
+    const data = 16_000
+    const bytes = Buffer.alloc(44 + data)
+    bytes.write('RIFF', 0)
+    bytes.writeUInt32LE(36 + data, 4)
+    bytes.write('WAVEfmt ', 8)
+    bytes.writeUInt32LE(16, 16)
+    bytes.writeUInt16LE(1, 20)
+    bytes.writeUInt16LE(1, 22)
+    bytes.writeUInt32LE(16_000, 24)
+    bytes.writeUInt32LE(32_000, 28)
+    bytes.writeUInt16LE(2, 32)
+    bytes.writeUInt16LE(16, 34)
+    bytes.write('data', 36)
+    bytes.writeUInt32LE(data, 40)
+    return bytes
+  }
+
+  async function voiceService(clipPath: string | null) {
+    const released: string[] = []
+    const voice = new ConversationWorkspaceService({
+      getDb: () => db,
+      attachments,
+      validateSettings: async () => {},
+      resolveVoiceRecording: (id) => (id === CLIP_ID ? clipPath : null),
+      releaseVoiceRecording: (id) => {
+        released.push(id)
+      }
+    })
+    await voice.initialize()
+    return { voice, released }
+  }
+
+  it('copies the clip into the conversation, shows it as audio, and gives the model only the transcript', async () => {
+    const clip = join(root, 'kept.wav')
+    await writeFile(clip, clipWav())
+    const { voice, released } = await voiceService(clip)
+
+    await voice.enqueue({
+      ...request('spoken'),
+      text: '帮我看看这个分支的状态',
+      attachments: [image],
+      voiceRecordingId: CLIP_ID
+    })
+
+    expect(released).toEqual([CLIP_ID])
+    const queued = (await voice.get('parent'))!.queue[0]!
+    expect(queued.text).toBe('帮我看看这个分支的状态')
+    expect(queued.attachments?.map((ref) => ref.kind)).toEqual(['image', 'audio'])
+    expect(queued.attachments?.[1]).toMatchObject({ mimeType: 'audio/wav', durationMs: 500 })
+
+    const admitted = await voice.takeNext('parent')
+    // The image still reaches the model; the recording never does.
+    expect(await voice.getModelAttachments(admitted!.input)).toEqual([image])
+    const userMessage = (await voice.get('parent'))!.messages.find((m) => m.role === 'user')!
+    // Links are read without an order, so compare the set.
+    expect(userMessage.attachments?.map((ref) => ref.kind).sort()).toEqual(['audio', 'image'])
+  })
+
+  it('refuses a clip that is gone and leaves no copy, receipt or queued turn behind', async () => {
+    const { voice, released } = await voiceService(null)
+
+    await expect(
+      voice.enqueue({ ...request('gone'), attachments: [image], voiceRecordingId: CLIP_ID })
+    ).rejects.toThrow('WORKSPACE_VOICE_UNAVAILABLE')
+
+    expect(released).toEqual([])
+    expect(await rows('conversation_queued_inputs', 'position')).toEqual([])
+    expect(await rows('conversation_workspace_receipts', 'id')).toEqual([])
+    const owner = join(root, 'attachments', createHash('sha256').update('parent').digest('hex'))
+    expect(await readdir(owner).catch(() => [])).toEqual([])
+  })
+
+  it('takes a clip id only, never a path', async () => {
+    const { voice } = await voiceService(join(root, 'kept.wav'))
+
+    await expect(
+      voice.enqueue({ ...request('path'), voiceRecordingId: '/etc/passwd' })
+    ).rejects.toThrow()
+  })
+})
 /**
  * Project conversations are excluded from sync dirt. Every workspace mutation path that writes a
  * `conversationSyncState` row must guard on `projectId === null`, so a project turn does not

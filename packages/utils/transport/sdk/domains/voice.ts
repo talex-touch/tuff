@@ -311,6 +311,45 @@ export interface VoiceAsrStreamPayload {
    * that only wants text must not have to filter frames it never asked for.
    */
   emitLevel?: boolean
+  /**
+   * Keep this session's audio once it ends — with words, with none, or failed; never after a
+   * cancel — and announce it with a `recording` event before `end` (a failed session sends it
+   * just before the error). The Home composer's voice clip is the reason: it plays the clip, has
+   * it recognized again, or sends it.
+   *
+   * Host renderer only: main drops the flag for a plugin. The audio lives until
+   * `discardRecording`, a send that takes it, or main's backstop expiry — not in the single
+   * recovery slot the HUD's undo and retry use.
+   */
+  keepRecording?: boolean
+}
+
+/**
+ * A session's audio kept for the composer's voice clip (`keepRecording`).
+ *
+ * `id` names main's copy and is what re-recognition and a send refer to; `url` is a `tfile:` URL
+ * the host renderer plays. Neither is a path a caller may hand back.
+ */
+export interface VoiceKeptRecording {
+  id: string
+  url: string
+  durationMs: number
+}
+
+/** Recognize a kept recording again through the recogniser configured now. */
+export interface VoiceTranscribeRecordingPayload {
+  recordingId: string
+  language?: string
+}
+
+export interface VoiceTranscribeRecordingResult {
+  /** The words heard; empty when the recording holds no speech. */
+  text: string
+  language?: string
+}
+
+export interface VoiceDiscardRecordingPayload {
+  recordingId: string
 }
 
 /**
@@ -445,6 +484,11 @@ export type VoiceAsrStreamEvent =
       language?: string
       delivery?: VoiceDeliveryResult
     }
+  /**
+   * The session's audio was kept (`keepRecording`). Sent once, after the last transcript event
+   * and before `end`; a failed session sends it just before the error.
+   */
+  | { type: 'recording'; recording: VoiceKeptRecording }
   | { type: 'end' }
 
 /**
@@ -567,6 +611,16 @@ export const voiceApiEvents = {
     .module('api')
     .event('retry-last-failure')
     .define<VoiceRetryPayload, VoiceApiResponse<VoiceRetryResult>>(),
+  /** Host-renderer-only: recognize a kept recording (`keepRecording`) again. */
+  transcribeRecording: defineEvent('voice')
+    .module('api')
+    .event('transcribe-recording')
+    .define<VoiceTranscribeRecordingPayload, VoiceApiResponse<VoiceTranscribeRecordingResult>>(),
+  /** Host-renderer-only: drop a kept recording. Dropping one that is already gone is not an error. */
+  discardRecording: defineEvent('voice')
+    .module('api')
+    .event('discard-recording')
+    .define<VoiceDiscardRecordingPayload, VoiceApiResponse>(),
   asrStream: defineEvent('voice')
     .module('api')
     .event('asr-stream')
@@ -646,6 +700,10 @@ export interface VoiceSdk {
   recoveryStatus: () => Promise<VoiceRecoveryStatus>
   /** Drop the held recording once its undo/retry button is off screen. */
   discardRecovery: () => Promise<void>
+  /** Recognize a kept recording again; host renderer only. */
+  transcribeRecording: (payload: VoiceTranscribeRecordingPayload) => Promise<VoiceTranscribeRecordingResult>
+  /** Drop a kept recording; host renderer only. */
+  discardRecording: (payload: VoiceDiscardRecordingPayload) => Promise<void>
   /** Open the OS microphone settings pane; rejects where the platform has none. */
   openMicrophoneSettings: () => Promise<void>
   /** Read detailed local recognition records; available only to the host renderer. */
@@ -730,6 +788,19 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
         timeout: VOICE_RETRY_TRANSPORT_TIMEOUT_MS,
       })
       return assertVoiceApiResponse(response, 'Voice retry failed')
+    },
+
+    async transcribeRecording(payload) {
+      // Replays a whole recording through the recogniser, like a retry does.
+      const response = await transport.send(voiceApiEvents.transcribeRecording, payload, {
+        timeout: VOICE_RETRY_TRANSPORT_TIMEOUT_MS,
+      })
+      return assertVoiceApiResponse(response, 'Voice recording transcription failed')
+    },
+
+    async discardRecording(payload) {
+      const response = await transport.send(voiceApiEvents.discardRecording, payload)
+      assertVoiceApiResponse(response, 'Voice recording discard failed')
     },
 
     async getInsights() {

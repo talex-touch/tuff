@@ -84,7 +84,23 @@ identity, and plugin permissions remain in main.
   `delivery: 'none'` so nothing is typed into another application, and its words land only in the
   composer's own draft. Every session rule above still applies to it — one generation per session,
   a stop asked for before the stream handle arrives is applied as `stop()`, never `cancel()` — and it
-  offers no retry or undo, because main's recovery slot is global and may hold the HUD's recording.
+  never uses main's recovery slot, which is global and may hold the HUD's recording.
+- The composer keeps its own audio instead: it asks for `keepRecording`, and once a session ends —
+  with words, with none, or failed, never after a cancel — main writes the session's PCM as a WAV
+  into the `voice/kept-recordings` temp namespace (`VoiceKeptRecordings`, registry in memory only)
+  and announces it with a `recording` event (opaque id, `tfile:` URL, duration) before `end`, or just
+  before the error of a failed session, since a failure crosses the stream boundary as a message and
+  a code only. The Home voice clip plays it, recognizes it again through the recogniser configured
+  now (`transcribeRecording`, a replay like the retry's, no polish, no second record), or sends it as
+  a voice message: `WorkspaceSubmitRequest.voiceRecordingId` makes Main copy the WAV into the
+  conversation's attachment store as an `audio` ref while the turn's text is the transcript — no
+  adapter carries audio, so the model only ever reads the words. A clip with no words is recognized
+  before it is sent; one that still has none is not sent.
+- A kept clip is deleted when the host discards it (dismissed, replaced by the next dictation,
+  consumed by a typed send), once a voice send has copied it, when more than four are held (oldest
+  first), on module destroy, and — for a crash or reload — by the startup sweep and the namespace's
+  24-hour retention. `keepRecording`, `transcribeRecording` and `discardRecording` are host-only: the
+  stream handler drops the flag for a plugin, and the other two refuse a plugin caller.
 - A `partial` is the provider's whole hypothesis for the utterance so far (main keeps it the same
   way, `lastPartialText = partial`): a consumer **replaces** its last partial with it. Merging it as
   new words appends every revision — a corrected word or a trailing `。` turned into `，` defeats a
