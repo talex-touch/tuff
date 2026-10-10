@@ -8,21 +8,23 @@
 
 ## 0. 结论
 
-- **慢在跨境链路，不在 Worker。** Free 计划把大陆流量分到美国 LAX 机房（`/cdn-cgi/trace` 返回 `loc=CN colo=LAX`），耗时主要花在 TLS 握手。Worker 自报的 `Server-Timing` 只有 18–525 ms，继续优化服务端代码，体感不会明显变快。
+- **慢在跨境链路，不在 Worker。** 本次观测点（北京联通）的请求落在美国 LAX 机房（`/cdn-cgi/trace` 返回 `loc=CN colo=LAX`），耗时主要花在 TCP 建连之后的 TLS 握手。其他运营商和晚高峰还没测，见 §5。Worker 自报的 `Server-Timing` 只有 18–525 ms，继续优化服务端代码，体感不会明显变快。
 - **推荐优选 IP。** 把 `tuff.tagzxia.com` 子域的 NS 委派给国内 DNS，按线路解析。访客仍直连 Cloudflare，Nexus 看到的 Host 和客户端 IP 不变，不用改代码；撤销委派即可回滚。它不是 Cloudflare 官方支持的用法，切换前要补完 §5 的实测。
-- **EdgeOne 能用，但代价大。** 大陆节点要 ICP 备案，SSR 页面和 API 仍要跨境回源到 Cloudflare，还要改 Nexus 取 Host 和客户端 IP 的代码。只建议在测试子域上试。
+- **EdgeOne 能用，但代价大。** 大陆节点要 ICP 备案。除了能缓存 5 分钟的文档页，首页、接口和登录后的请求仍要跨境回源到 Cloudflare。还要改 Nexus 取 Host 和客户端 IP 的代码。只建议在测试子域上试。
 - **自建境外中转、国内云主机反代都不建议进生产。**
 
 ## 1. 现状实测
 
 | 路径 | 结果 |
 | --- | --- |
-| 测试机 A → `/cdn-cgi/trace` | 2.2–12.3 s，5 次里 1 次超时；TCP 建连 0.2–0.57 s，TLS 握手 0.9–11.3 s |
+| 测试机 A → `/cdn-cgi/trace` | 2.2–12.3 s，5 次里 1 次超时；TCP 建连完成于 0.2–0.57 s，TLS 握手完成于 0.9–11.3 s |
 | 测试机 B → `/cdn-cgi/trace` | 2.6–24.9 s，5 次里 1 次失败 |
 | 同一出口 → baidu.com | 77 ms |
 | Worker 自报（`Server-Timing`） | 18–525 ms |
 
 `/cdn-cgi/trace` 由边缘直接返回、不进 Worker，所以前两行的耗时都是网络链路。
+
+建连和握手的数字是 curl 的 `time_connect` 与 `time_appconnect`，都从请求开始累计，握手本身的耗时是两者之差。建连最晚 0.57 s 就完成了，慢的那几次主要耗在握手上。
 
 ## 2. 方案对比
 
@@ -65,7 +67,13 @@
 
 - **套餐**：免费版仍在，属于限量内测。流量和请求不限量，1 个站点、200 个子域名、20 条规则；没有 QUIC、WebSocket，也没有 SLA；全站刷新每天 10 次。中国站要在实名认证后到活动页领取。个人版 29.9 元/月，商品页正在促销 9.9 元/月。
 - **大陆节点要 ICP 备案**：加速区域选「中国大陆」或「全球」都要备案，未备案只能选「全球（不含中国大陆）」。备案可以在任意接入商办理；只有源站是腾讯云服务器时，才要求在腾讯云接入备案。`tagzxia.com` 是否已备案，待确认。
-- **动态请求仍要跨境**：源站在境外时，官方说明跨境回源质量无法保障，跨境优化只有企业版能买。只有静态资源能在大陆缓存，SSR 页面和 API 仍要从 EdgeOne 回到 Cloudflare。
+- **动态请求仍要跨境**：源站在境外时，官方说明跨境回源质量无法保障，跨境优化只有企业版能买。节点缓存默认遵循源站的 `Cache-Control`（70777）。按 Nexus 现在的响应头（10-10 实测）：
+  - 文档页是 `public, max-age=300, s-maxage=300`，能在大陆节点缓存 5 分钟；
+  - 首页是 `max-age=0, must-revalidate`，每次都要回源；
+  - `/api/releases/latest`、`/api/store/plugins` 不带 `Cache-Control`，按 EdgeOne 的默认缓存策略处理，这部分没有核对；
+  - 带登录态的请求不能放进共享缓存。
+
+  所以除了文档页，首页、接口和登录后的请求仍要从 EdgeOne 回到 Cloudflare，除非另配缓存规则并自己处理失效。
 - **接入方式**：NS 可以留在 Cloudflare，用 CNAME 接入，用 TXT 记录或验证文件证明归属。tuff 的记录要改成灰云，CNAME 到 EdgeOne。Cloudflare 免费版不能按地区解析，所以海外访客也会经过 EdgeOne。
 - **回源**：源站填 Pages 默认域名，走 HTTPS。回源 SNI 跟随回源 Host，控制台改不了，所以 Host 必须是 `*.pages.dev`。博客提到两个坑：Host 不对时 Pages 返回 404；用 HTTP 回源会被 301 到 HTTPS，形成循环。
 - **要改 Nexus**：
@@ -129,12 +137,14 @@
 ## 6. 测量方法
 
 ```bash
-# 链路耗时（/cdn-cgi/trace 不进 Worker）
+# 链路耗时（/cdn-cgi/trace 不进 Worker；tcp、tls 都从请求开始累计）
 curl -so /dev/null -w 'tcp=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
   https://tuff.tagzxia.com/cdn-cgi/trace
 
-# 指定边缘 IP，看落在哪个机房
+# 指定边缘 IP：看落在哪个机房，再计 TTFB（§2.1 的数据，每个 IP 请求 3 次）
 curl -s --resolve tuff.tagzxia.com:443:<ip> https://tuff.tagzxia.com/cdn-cgi/trace | grep -E '^(colo|loc)='
+curl -so /dev/null --resolve tuff.tagzxia.com:443:<ip> -w 'code=%{http_code} ttfb=%{time_starttransfer}\n' \
+  https://tuff.tagzxia.com/cdn-cgi/trace
 
 # Worker 自身耗时
 curl -s -D - -o /dev/null https://tuff.tagzxia.com/<页面或接口> | grep -i -E 'server-timing|cf-placement|x-edge-cache'
@@ -154,6 +164,7 @@ curl -s -D - -o /dev/null https://tuff.tagzxia.com/<页面或接口> | grep -i -
 - 源站与回源 Host：90433、73024；回源 SNI：115260（2025-08-27）
 - CNAME 接入与归属验证：70789（2026-01-06）；CNAME 展平：122623（2025-09-04）
 - 回源请求头与客户端 IP：87654（2026-09-24）、73133、71012
+- 节点缓存 TTL：70777（2025-06-26）
 - 国际站：`https://edgeone.ai/document/55650`（价格，2026-08-19）、`70405`（免费版领取，2026-08-26）、`54208`（实名要求，2025-08-14）、`56448`（中国大陆网络优化，2026-09-07）
 
 社区文章（未经官方证实）：
