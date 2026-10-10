@@ -28,6 +28,8 @@ pids/
 *.pid
 *.pid.lock
 *.seed
+/temp/voice/recordings/
+/apps/core-app/temp/voice/recordings/
 
 # ========================
 # Dependencies (all package managers)
