@@ -4,6 +4,7 @@ import {
   MAX_SEARCH_DURATION_MS,
   MAX_SEARCH_RESULT_COUNT,
   PROVIDER_STATUS_VALUES,
+  TELEMETRY_EVENT_TYPES_SQL,
 } from './telemetrySanitizer'
 import { runAfterResponse } from './afterResponse'
 import { claimMaintenanceRun, holdMaintenanceRun } from './maintenanceLease'
@@ -111,7 +112,7 @@ const DAILY_AGGREGATES: readonly string[] = [
   `
     SELECT 'total_events' AS stat_type, '' AS stat_key, NULLIF(COUNT(*), 0) AS value
     FROM ${TELEMETRY_TABLE}
-    WHERE ${DAY_RANGE}
+    WHERE event_type IN (${TELEMETRY_EVENT_TYPES_SQL}) AND ${DAY_RANGE}
     UNION ALL
     SELECT 'hour', substr(created_at, 12, 2), COUNT(*)
     FROM ${TELEMETRY_TABLE}
@@ -453,9 +454,14 @@ export async function listTelemetryDaysToRollUp(db: D1Database, now = new Date()
   const today = toDate(now.getTime())
   const daysBack = toDate(now.getTime() - MAX_ROLLUP_DAYS_BACK * DAY_MS)
   const earliestCandidate = daysBack > ROLLUP_FIRST_DAY ? daysBack : ROLLUP_FIRST_DAY
+  // The oldest event is the oldest of each type's oldest, one index row apiece. With no index on
+  // `created_at` alone, a bare `MIN(created_at)` reads the whole table, once an hour.
   const row = await db.prepare(`
     SELECT
-      (SELECT MIN(created_at) FROM ${TELEMETRY_TABLE}) AS earliest_event,
+      (
+        SELECT MIN((SELECT MIN(created_at) FROM ${TELEMETRY_TABLE} WHERE event_type = type.value))
+        FROM json_each(json_array(${TELEMETRY_EVENT_TYPES_SQL})) AS type
+      ) AS earliest_event,
       (
         SELECT group_concat(date)
         FROM ${DAILY_STATS_TABLE}

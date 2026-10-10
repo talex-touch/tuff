@@ -12,6 +12,7 @@ import {
   MAX_PROVIDER_DURATION_MS,
   MAX_SEARCH_DURATION_MS,
   MAX_SEARCH_RESULT_COUNT,
+  TELEMETRY_EVENT_TYPES_SQL,
   isPlainObject,
   normalizeNumber,
   normalizeString,
@@ -122,30 +123,29 @@ async function ensureTelemetrySchema(db: D1Database) {
 
   await ensureTelemetryColumns(db)
 
-  // Indexes for efficient queries. Each one is another row written for every event, so there is no
-  // `event_type`-only index: every query that filters on the type also bounds `created_at`, which
-  // `idx_telemetry_event_geo` (event_type, created_at, ...) serves.
-  await db.batch([
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON ${TELEMETRY_TABLE}(created_at);
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON ${DAILY_STATS_TABLE}(date);
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_telemetry_quarantine_created_at ON ${TELEMETRY_QUARANTINE_TABLE}(created_at);
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_telemetry_batch_receipts_expires_at
-      ON ${TELEMETRY_BATCH_RECEIPTS_TABLE}(expires_at);
-    `),
-  ])
+  // Indexes for efficient queries. D1 bills each index entry an insert writes as another written
+  // row, and event inserts are most of the database's writes: on 2026-10-09 an event cost five, its
+  // row and four index entries. So `telemetry_events` has no `created_at`-only and no
+  // `event_type`-only index: a query bounds `created_at` and names the event types it reads
+  // (`TELEMETRY_EVENT_TYPES_SQL` for all of them), which `idx_telemetry_event_geo` (event_type,
+  // created_at, ...) serves; and only searches are looked up by IP, so only searches are in the IP
+  // index. `daily_stats` needs no `date` index beside its primary key, which leads with `date`, and
+  // nothing reads the batch receipts by `expires_at`. The indexes these replace
+  // (`idx_telemetry_created_at`, `idx_telemetry_ip_created_at`, `idx_daily_stats_date`,
+  // `idx_telemetry_batch_receipts_expires_at`) are dropped by hand, not here: an isolate still on
+  // the previous release would build them again, at a written row per row in the table.
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_telemetry_quarantine_created_at ON ${TELEMETRY_QUARANTINE_TABLE}(created_at);
+  `).run()
 
   // These two depend on columns added by `ensureTelemetryColumns`; an older schema that could not
   // be evolved must not block ingestion, so each stays on its own and may fail quietly.
   try {
+    // A query uses a partial index only when its WHERE repeats the index's term, literally:
+    // `event_type = 'search'`, not a bound parameter.
     await db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_telemetry_ip_created_at ON ${TELEMETRY_TABLE}(ip, created_at);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_search_ip
+      ON ${TELEMETRY_TABLE}(ip, created_at) WHERE event_type = 'search';
     `).run()
   }
   catch {
@@ -1329,14 +1329,16 @@ export async function getRealTimeStats(event: H3Event): Promise<{
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toISOString()
 
-  // Count recent events
+  // Count recent searches and visits, the two types read below. Bounded by `created_at` alone, the
+  // planner walked all of `idx_telemetry_event_geo` for the GROUP BY: every event in the table, on
+  // every view of the analytics page.
   const { results } = await db.prepare(`
-    SELECT 
+    SELECT
       event_type,
       COUNT(*) as count,
       AVG(search_duration_ms) as avg_duration
     FROM ${TELEMETRY_TABLE}
-    WHERE created_at >= ?1
+    WHERE event_type IN ('search', 'visit') AND created_at >= ?1
     GROUP BY event_type;
   `).bind(yesterdayStr).all<{ event_type: string, count: number, avg_duration: number | null }>()
 
@@ -1358,7 +1360,7 @@ export async function getRealTimeStats(event: H3Event): Promise<{
   const { results: userResults } = await db.prepare(`
     SELECT COUNT(DISTINCT user_id) as count
     FROM ${TELEMETRY_TABLE}
-    WHERE created_at >= ?1 AND user_id IS NOT NULL;
+    WHERE event_type IN (${TELEMETRY_EVENT_TYPES_SQL}) AND created_at >= ?1 AND user_id IS NOT NULL;
   `).bind(yesterdayStr).all<{ count: number }>()
 
   const activeUsers = userResults?.[0]?.count || 0

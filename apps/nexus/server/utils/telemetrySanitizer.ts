@@ -47,6 +47,15 @@ const ALLOWED_EVENT_TYPES = new Set([
   'performance',
 ])
 
+/**
+ * Every type an event can be stored with, as a SQL list. `telemetry_events` has no index on
+ * `created_at` alone: D1 bills each index entry an insert writes as another written row. A query over
+ * all events in a time range therefore names the types, `event_type IN (...) AND created_at ...`,
+ * and `idx_telemetry_event_geo` (event_type, created_at, ...) serves it; without them it reads the
+ * whole table.
+ */
+export const TELEMETRY_EVENT_TYPES_SQL = [...ALLOWED_EVENT_TYPES].map(type => `'${type}'`).join(', ')
+
 const MAX_STRING_LENGTH = 128
 export const MAX_METADATA_STRING_LENGTH = 256
 const MAX_METADATA_KEYS = 50

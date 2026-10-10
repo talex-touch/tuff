@@ -15,7 +15,7 @@ const SOURCE_DDL = `
     event_type TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
-  CREATE INDEX idx_telemetry_created_at ON telemetry_events(created_at);
+  CREATE INDEX idx_telemetry_event_geo ON telemetry_events(event_type, created_at);
   CREATE TABLE platform_governance_events (
     id TEXT PRIMARY KEY,
     scope TEXT NOT NULL,
