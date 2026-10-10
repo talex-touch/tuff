@@ -377,13 +377,15 @@ export class ConversationWorkspaceService {
               .update(conversationWorkspaces)
               .set({ revision: sql`${conversationWorkspaces.revision} + 1`, updatedAt: Date.now() })
               .where(eq(conversationWorkspaces.conversationId, conversationId))
-            await tx
-              .insert(conversationSyncState)
-              .values({ conversationId, dirtyAt: Date.now(), deletedAt: null })
-              .onConflictDoUpdate({
-                target: conversationSyncState.conversationId,
-                set: { dirtyAt: Date.now(), deletedAt: null }
-              })
+            if ((conversation ? conversation.projectId : input.projectId) === null) {
+              await tx
+                .insert(conversationSyncState)
+                .values({ conversationId, dirtyAt: Date.now(), deletedAt: null })
+                .onConflictDoUpdate({
+                  target: conversationSyncState.conversationId,
+                  set: { dirtyAt: Date.now(), deletedAt: null }
+                })
+            }
           })
         )
       },
@@ -508,7 +510,7 @@ export class ConversationWorkspaceService {
                 })
                 .where(eq(conversationWorkspaces.conversationId, conversationId))
             }
-            if (claim)
+            if (claim && claim.input.projectId === null)
               await tx
                 .insert(conversationSyncState)
                 .values({ conversationId, dirtyAt: Date.now(), deletedAt: null })
@@ -703,6 +705,7 @@ export class ConversationWorkspaceService {
       emitConversationMutation({
         type: 'upsert',
         conversationId,
+        projectId: state.projectId,
         updatedAt: state.updatedAt,
         source: 'local'
       })
@@ -975,13 +978,15 @@ export class ConversationWorkspaceService {
             .update(conversationWorkspaces)
             .set({ revision: sql`${conversationWorkspaces.revision} + 1`, updatedAt: Date.now() })
             .where(eq(conversationWorkspaces.conversationId, conversationId))
-          await tx
-            .insert(conversationSyncState)
-            .values({ conversationId, dirtyAt: Date.now(), deletedAt: null })
-            .onConflictDoUpdate({
-              target: conversationSyncState.conversationId,
-              set: { dirtyAt: Date.now(), deletedAt: null }
-            })
+          if (conversation.projectId === null) {
+            await tx
+              .insert(conversationSyncState)
+              .values({ conversationId, dirtyAt: Date.now(), deletedAt: null })
+              .onConflictDoUpdate({
+                target: conversationSyncState.conversationId,
+                set: { dirtyAt: Date.now(), deletedAt: null }
+              })
+          }
         })
       )
       return this.changed(conversationId, true)
@@ -1239,9 +1244,11 @@ export class ConversationWorkspaceService {
                 updatedAt: now,
                 lastSeenAt: now
               })
-            await tx
-              .insert(conversationSyncState)
-              .values({ conversationId: childId, dirtyAt: now, deletedAt: null })
+            if (source.projectId === null) {
+              await tx
+                .insert(conversationSyncState)
+                .values({ conversationId: childId, dirtyAt: now, deletedAt: null })
+            }
             await native?.verifySource()
           })
         )

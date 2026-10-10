@@ -1,5 +1,5 @@
 import { portableMessageMeta } from '@talex-touch/pi-desktop-reuse/session-fork'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
 import {
   conversationMessages,
@@ -51,6 +51,7 @@ export interface ConversationSyncState {
 export interface ConversationMutation {
   type: 'upsert' | 'delete'
   conversationId: string
+  projectId: string | null
   updatedAt: number
   source: 'local' | 'sync'
 }
@@ -97,21 +98,21 @@ function parseMeta(value: string | null): Record<string, unknown> | undefined {
 async function writeConversationSnapshot(
   snapshot: ConversationWithMessages,
   label: string,
-  notifySource: ConversationMutation['source'] | null,
-  preserveLocalProject = false
+  notifySource: ConversationMutation['source'] | null
 ): Promise<void> {
   const db = databaseModule.getDb()
+  let applied = false
   const write = () =>
     scheduleDbWrite(label, async () => {
-      await db.transaction(async (tx) => {
-        const projectId = preserveLocalProject
-          ? ((
-              await tx
-                .select({ projectId: conversations.projectId })
-                .from(conversations)
-                .where(eq(conversations.id, snapshot.id))
-            )[0]?.projectId ?? null)
-          : snapshot.projectId
+      applied = await db.transaction(async (tx) => {
+        if (notifySource === 'sync') {
+          const [local] = await tx
+            .select({ projectId: conversations.projectId })
+            .from(conversations)
+            .where(eq(conversations.id, snapshot.id))
+          if (local && local.projectId !== null) return false
+        }
+        const projectId = snapshot.projectId
         await tx
           .insert(conversations)
           .values({
@@ -150,7 +151,7 @@ async function writeConversationSnapshot(
           )
         }
 
-        if (notifySource === 'local') {
+        if (notifySource === 'local' && snapshot.projectId === null) {
           await tx
             .insert(conversationSyncState)
             .values({
@@ -167,14 +168,16 @@ async function writeConversationSnapshot(
             .delete(conversationSyncState)
             .where(eq(conversationSyncState.conversationId, snapshot.id))
         }
+        return true
       })
     })
   await (mutationFence ? mutationFence.write(snapshot.id, write) : write())
 
-  if (notifySource) {
+  if (notifySource && applied) {
     emitConversationMutation({
       type: 'upsert',
       conversationId: snapshot.id,
+      projectId: snapshot.projectId,
       updatedAt: snapshot.updatedAt,
       source: notifySource
     })
@@ -383,67 +386,130 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
 export async function deleteConversation(id: string): Promise<{ deleted: boolean }> {
   const db = databaseModule.getDb()
   const deletedAt = Date.now()
+  let projectId: string | null = null
+  let deleted = false
   const remove = () =>
     scheduleDbWrite('conversation.delete', async () => {
       await db.transaction(async (tx) => {
+        const [conversation] = await tx
+          .select({ projectId: conversations.projectId })
+          .from(conversations)
+          .where(eq(conversations.id, id))
+        if (!conversation) return
+        projectId = conversation.projectId
         await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
         await tx.delete(conversations).where(eq(conversations.id, id))
-        await tx
-          .insert(conversationSyncState)
-          .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
-          .onConflictDoUpdate({
-            target: conversationSyncState.conversationId,
-            set: { dirtyAt: deletedAt, deletedAt }
-          })
+        if (projectId === null) {
+          await tx
+            .insert(conversationSyncState)
+            .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
+            .onConflictDoUpdate({
+              target: conversationSyncState.conversationId,
+              set: { dirtyAt: deletedAt, deletedAt }
+            })
+        } else {
+          await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+        }
+        deleted = true
       })
     })
   await (mutationFence ? mutationFence.remove(id, remove) : remove())
-  emitConversationMutation({
-    type: 'delete',
-    conversationId: id,
-    updatedAt: deletedAt,
-    source: 'local'
-  })
+  if (deleted) {
+    emitConversationMutation({
+      type: 'delete',
+      conversationId: id,
+      projectId,
+      updatedAt: deletedAt,
+      source: 'local'
+    })
+  }
   return { deleted: true }
 }
 
 export async function renameConversation(id: string, title: string): Promise<{ renamed: boolean }> {
   const db = databaseModule.getDb()
   const updatedAt = Date.now()
+  let projectId: string | null = null
+  let renamed = false
   await scheduleDbWrite('conversation.rename', async () => {
     await db.transaction(async (tx) => {
-      await tx
-        .update(conversations)
-        .set({ title, updatedAt })
-        .where(and(eq(conversations.id, id)))
-      await tx
-        .insert(conversationSyncState)
-        .values({ conversationId: id, dirtyAt: updatedAt, deletedAt: null })
-        .onConflictDoUpdate({
-          target: conversationSyncState.conversationId,
-          set: { dirtyAt: updatedAt, deletedAt: null }
-        })
+      const [conversation] = await tx
+        .select({ projectId: conversations.projectId })
+        .from(conversations)
+        .where(eq(conversations.id, id))
+      if (!conversation) return
+      projectId = conversation.projectId
+      await tx.update(conversations).set({ title, updatedAt }).where(eq(conversations.id, id))
+      if (projectId === null) {
+        await tx
+          .insert(conversationSyncState)
+          .values({ conversationId: id, dirtyAt: updatedAt, deletedAt: null })
+          .onConflictDoUpdate({
+            target: conversationSyncState.conversationId,
+            set: { dirtyAt: updatedAt, deletedAt: null }
+          })
+      } else {
+        await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+      }
+      renamed = true
     })
   })
-  emitConversationMutation({ type: 'upsert', conversationId: id, updatedAt, source: 'local' })
+  if (renamed) {
+    emitConversationMutation({
+      type: 'upsert',
+      conversationId: id,
+      projectId,
+      updatedAt,
+      source: 'local'
+    })
+  }
   return { renamed: true }
 }
 
 export async function listConversationIdsForSync(): Promise<string[]> {
-  const rows = await databaseModule.getDb().select({ id: conversations.id }).from(conversations)
+  const rows = await databaseModule
+    .getDb()
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(isNull(conversations.projectId))
   return rows.map((row) => row.id)
 }
 
 export async function listConversationSyncStates(): Promise<ConversationSyncState[]> {
-  return databaseModule.getDb().select().from(conversationSyncState)
+  return databaseModule
+    .getDb()
+    .select({
+      conversationId: conversationSyncState.conversationId,
+      dirtyAt: conversationSyncState.dirtyAt,
+      deletedAt: conversationSyncState.deletedAt
+    })
+    .from(conversationSyncState)
+    .leftJoin(conversations, eq(conversations.id, conversationSyncState.conversationId))
+    .where(
+      and(
+        isNull(conversations.projectId),
+        or(isNotNull(conversations.id), isNotNull(conversationSyncState.deletedAt))
+      )
+    )
 }
 
 export async function getConversationSyncState(id: string): Promise<ConversationSyncState | null> {
   const [row] = await databaseModule
     .getDb()
-    .select()
+    .select({
+      conversationId: conversationSyncState.conversationId,
+      dirtyAt: conversationSyncState.dirtyAt,
+      deletedAt: conversationSyncState.deletedAt
+    })
     .from(conversationSyncState)
-    .where(eq(conversationSyncState.conversationId, id))
+    .leftJoin(conversations, eq(conversations.id, conversationSyncState.conversationId))
+    .where(
+      and(
+        eq(conversationSyncState.conversationId, id),
+        isNull(conversations.projectId),
+        or(isNotNull(conversations.id), isNotNull(conversationSyncState.deletedAt))
+      )
+    )
   return row ?? null
 }
 
@@ -469,6 +535,9 @@ export type ConversationSyncSnapshot = Omit<ConversationWithMessages, 'projectId
 export function toConversationSyncSnapshot(
   conversation: ConversationWithMessages
 ): ConversationSyncSnapshot {
+  if (conversation.projectId !== null) {
+    throw new Error('CONVERSATION_PROJECT_SYNC_EXCLUDED')
+  }
   const { projectId: _localProjectId, ...snapshot } = conversation
   return {
     ...snapshot,
@@ -485,28 +554,37 @@ export async function applyConversationSyncSnapshot(
   await writeConversationSnapshot(
     { ...snapshot, projectId: null },
     'conversation.sync-apply',
-    'sync',
-    true
+    'sync'
   )
 }
 
 export async function applyConversationSyncDeletion(id: string, deletedAt: number): Promise<void> {
   const db = databaseModule.getDb()
+  let applied = false
   const remove = () =>
     scheduleDbWrite('conversation.sync-delete', async () => {
-      await db.transaction(async (tx) => {
+      applied = await db.transaction(async (tx) => {
+        const [local] = await tx
+          .select({ projectId: conversations.projectId })
+          .from(conversations)
+          .where(eq(conversations.id, id))
+        if (local && local.projectId !== null) return false
         await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
         await tx.delete(conversations).where(eq(conversations.id, id))
         await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+        return true
       })
     })
   await (mutationFence ? mutationFence.remove(id, remove) : remove())
-  emitConversationMutation({
-    type: 'delete',
-    conversationId: id,
-    updatedAt: deletedAt,
-    source: 'sync'
-  })
+  if (applied) {
+    emitConversationMutation({
+      type: 'delete',
+      conversationId: id,
+      projectId: null,
+      updatedAt: deletedAt,
+      source: 'sync'
+    })
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -516,6 +594,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function normalizeConversationSyncSnapshot(value: unknown): ConversationSyncSnapshot | null {
   if (!isRecord(value) || !Array.isArray(value.messages)) return null
   if (
+    (value.projectId !== undefined && value.projectId !== null) ||
     typeof value.id !== 'string' ||
     typeof value.title !== 'string' ||
     typeof value.createdAt !== 'number' ||

@@ -72,6 +72,18 @@ async function countPointers(where: string): Promise<number> {
   return Number(result.rows[0]?.n ?? 0)
 }
 
+/** Seeds a dirty sync-state row directly, bypassing saveConversation, to test reader filtering. */
+async function seedDirtyState(
+  conversationId: string,
+  dirtyAt: number,
+  deletedAt: number | null = null
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO conversation_sync_state (conversation_id, dirty_at, deleted_at) VALUES (?, ?, ?)`,
+    args: [conversationId, dirtyAt, deletedAt]
+  })
+}
+
 describe('saveConversation rolls back a failed replace-all', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'conversation-store-'))
@@ -174,6 +186,10 @@ describe('saveConversation rolls back a failed replace-all', () => {
  * Project ownership is device-local. The encrypted conversation sync moves titles and messages, so
  * the snapshot handed to it must not carry an owner from this device, and applying a remote snapshot
  * must not overwrite an owner this device already has.
+ *
+ * A project thread is excluded from sync entirely: no dirty state is written on local edits, no
+ * tombstone is left on local delete, remote snapshots/deletes are no-ops, and the enumeration
+ * readers filter them out.
  */
 describe('conversation project ownership across local writes and sync', () => {
   beforeEach(async () => {
@@ -188,7 +204,7 @@ describe('conversation project ownership across local writes and sync', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('本地保存与重命名保留项目归属并标记同步脏状态', async () => {
+  it('local save and rename preserve project id and leave no sync dirt', async () => {
     await seedProject('project-1')
     const { getConversation, getConversationSyncState, renameConversation, saveConversation } =
       await loadStore()
@@ -207,12 +223,18 @@ describe('conversation project ownership across local writes and sync', () => {
     expect(renamed?.projectId).toBe('project-1')
     expect(renamed?.title).toBe('renamed')
 
-    const syncState = await getConversationSyncState('thread-owned')
-    expect(syncState?.deletedAt).toBeNull()
-    expect(syncState?.dirtyAt).toBe(renamed?.updatedAt)
+    // A project thread is never dirtied locally — sync does not track it.
+    expect(await getConversationSyncState('thread-owned')).toBeNull()
+    expect(
+      (
+        await client.execute(
+          `SELECT * FROM conversation_sync_state WHERE conversation_id = 'thread-owned'`
+        )
+      ).rows
+    ).toHaveLength(0)
   })
 
-  it('拒绝把会话归属到不存在或非法 id 的项目', async () => {
+  it('rejects saving with a missing or invalid project id', async () => {
     const { getConversation, saveConversation } = await loadStore()
 
     await expect(
@@ -237,7 +259,7 @@ describe('conversation project ownership across local writes and sync', () => {
     expect(await getConversation('thread-escape')).toBeNull()
   })
 
-  it('toConversationSyncSnapshot 不传输项目归属', async () => {
+  it('refuses to export a project thread to a sync snapshot', async () => {
     await seedProject('project-2')
     const { getConversation, saveConversation, toConversationSyncSnapshot } = await loadStore()
 
@@ -250,19 +272,13 @@ describe('conversation project ownership across local writes and sync', () => {
 
     const thread = await getConversation('thread-snap')
     expect(thread).not.toBeNull()
-    const snapshot = toConversationSyncSnapshot(thread!)
 
-    expect(Object.keys(snapshot).sort()).toEqual([
-      'createdAt',
-      'id',
-      'messages',
-      'title',
-      'updatedAt'
-    ])
-    expect(JSON.stringify(snapshot)).not.toContain('project-2')
+    // Project ownership is device-local; leaking it into the snapshot would let the remote pick
+    // which project a thread belongs to on another device.
+    expect(() => toConversationSyncSnapshot(thread!)).toThrow('CONVERSATION_PROJECT_SYNC_EXCLUDED')
   })
 
-  it('远端同步保留本地项目归属，新的远端会话归入 Home', async () => {
+  it('remote snapshot does not overwrite a local project; a new Home thread is admitted', async () => {
     await seedProject('project-3')
     const {
       applyConversationSyncSnapshot,
@@ -295,10 +311,13 @@ describe('conversation project ownership across local writes and sync', () => {
       ]
     })
 
+    // The remote apply is a no-op: project ownership is preserved, title and messages untouched,
+    // and no sync-state tombstone is written.
     const preserved = await getConversation('thread-local')
     expect(preserved?.projectId).toBe('project-3')
-    expect(preserved?.title).toBe('from other device')
-    // A remote apply acknowledges the sync, so it is no longer dirty here.
+    expect(preserved?.title).toBe('local')
+    expect(preserved?.messages).toHaveLength(1)
+    expect(preserved?.messages[0].id).toBe('m1')
     expect(await getConversationSyncState('thread-local')).toBeNull()
 
     await applyConversationSyncSnapshot({
@@ -310,6 +329,214 @@ describe('conversation project ownership across local writes and sync', () => {
     })
 
     expect((await getConversation('thread-remote'))?.projectId).toBeNull()
+  })
+
+  it('remote deletion does not remove a project thread', async () => {
+    await seedProject('project-del-sync')
+    const { applyConversationSyncDeletion, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-project',
+      projectId: 'project-del-sync',
+      title: 'doomed elsewhere',
+      messages: [{ id: 'm1', role: 'user', content: 'doomed', status: 'complete', createdAt: 1 }]
+    })
+
+    await applyConversationSyncDeletion('thread-project', 4242)
+
+    // The project thread survives a remote delete — ownership is local.
+    const survived = await getConversation('thread-project')
+    expect(survived?.projectId).toBe('project-del-sync')
+    expect(survived?.messages[0].content).toBe('doomed')
+  })
+
+  it('remote snapshot updates a Home thread title and messages', async () => {
+    const { applyConversationSyncSnapshot, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-home',
+      projectId: null,
+      title: 'home title',
+      messages: [
+        { id: 'm1', role: 'user', content: 'old content', status: 'complete', createdAt: 1 }
+      ]
+    })
+
+    await applyConversationSyncSnapshot({
+      id: 'thread-home',
+      title: 'remote title',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [
+        {
+          id: 'r1',
+          role: 'assistant',
+          content: 'remote content',
+          status: 'complete',
+          seq: 0,
+          createdAt: 2
+        }
+      ]
+    })
+
+    const updated = await getConversation('thread-home')
+    expect(updated?.title).toBe('remote title')
+    expect(updated?.projectId).toBeNull()
+    expect(updated?.messages[0].content).toBe('remote content')
+  })
+
+  it('remote deletion removes a Home thread and its native pointer only', async () => {
+    await seedProject('project-home')
+    const { applyConversationSyncDeletion, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-home',
+      projectId: null,
+      title: 'home',
+      messages: []
+    })
+    await insertPointer('ptr-home', 'thread-home', 'project-home')
+
+    await applyConversationSyncDeletion('thread-home', 3210)
+
+    expect(await getConversation('thread-home')).toBeNull()
+    expect(await countPointers(`conversation_id = 'thread-home'`)).toBe(0)
+  })
+
+  it('enumerate only Home threads eligible for sync, not project threads', async () => {
+    await seedProject('project-enum')
+    const { listConversationIdsForSync, saveConversation } = await loadStore()
+
+    await saveConversation({
+      id: 'home-thread',
+      projectId: null,
+      title: 'home',
+      messages: []
+    })
+    await saveConversation({
+      id: 'project-thread',
+      projectId: 'project-enum',
+      title: 'project',
+      messages: []
+    })
+
+    expect((await listConversationIdsForSync()).sort()).toEqual(['home-thread'])
+  })
+
+  it('listConversationSyncStates and getConversationSyncState exclude project threads', async () => {
+    await seedProject('project-list')
+    const { getConversationSyncState, listConversationSyncStates, saveConversation } =
+      await loadStore()
+
+    await saveConversation({
+      id: 'home-thread',
+      projectId: null,
+      title: 'home',
+      messages: []
+    })
+    await saveConversation({
+      id: 'project-thread',
+      projectId: 'project-list',
+      title: 'project',
+      messages: []
+    })
+
+    const states = await listConversationSyncStates()
+    expect(states.map((s) => s.conversationId).sort()).toEqual(['home-thread'])
+
+    // A project thread returns null even when a stale dirty row still exists in the raw table.
+    expect(await getConversationSyncState('project-thread')).toBeNull()
+  })
+
+  it('a stale dirty row on a project thread is invisible to the sync-state reader', async () => {
+    await seedProject('project-stale')
+    const { getConversationSyncState, listConversationSyncStates, saveConversation } =
+      await loadStore()
+
+    await saveConversation({
+      id: 'thread-stale',
+      projectId: 'project-stale',
+      title: 'project',
+      messages: []
+    })
+
+    // Simulate a legacy row that would have been written before the project boundary existed.
+    await seedDirtyState('thread-stale', 999, null)
+
+    // The raw row exists — …
+    const raw = await client.execute(
+      `SELECT COUNT(*) AS n FROM conversation_sync_state WHERE conversation_id = 'thread-stale'`
+    )
+    expect(Number(raw.rows[0]?.n ?? 0)).toBe(1)
+    // …but the readers filter it out because the conversation has a project.
+    expect(await getConversationSyncState('thread-stale')).toBeNull()
+    expect((await listConversationSyncStates()).map((s) => s.conversationId)).not.toContain(
+      'thread-stale'
+    )
+  })
+
+  it('normalizeConversationSyncSnapshot rejects a non-null project id', async () => {
+    const { normalizeConversationSyncSnapshot } = await loadStore()
+
+    expect(
+      normalizeConversationSyncSnapshot({
+        id: 'thread',
+        projectId: 'leaked-project',
+        title: 't',
+        createdAt: 1,
+        updatedAt: 2,
+        messages: []
+      })
+    ).toBeNull()
+
+    // A null-ish / absent project id is still accepted.
+    expect(
+      normalizeConversationSyncSnapshot({
+        id: 'thread',
+        projectId: null,
+        title: 't',
+        createdAt: 1,
+        updatedAt: 2,
+        messages: []
+      })
+    ).not.toBeNull()
+
+    expect(
+      normalizeConversationSyncSnapshot({
+        id: 'thread',
+        title: 't',
+        createdAt: 1,
+        updatedAt: 2,
+        messages: []
+      })
+    ).not.toBeNull()
+  })
+
+  it('moving a thread from Home to a project does not leak sync dirt', async () => {
+    await seedProject('project-move')
+    const { getConversationSyncState, listConversationSyncStates, saveConversation } =
+      await loadStore()
+
+    await saveConversation({
+      id: 'thread-move',
+      projectId: null,
+      title: 'home first',
+      messages: [{ id: 'm1', role: 'user', content: 'hi', status: 'complete', createdAt: 1 }]
+    })
+
+    const statesBefore = await listConversationSyncStates()
+    expect(statesBefore).toHaveLength(1)
+    expect(statesBefore[0]?.conversationId).toBe('thread-move')
+
+    // Now adopt it into a project — the dirty state must vanish.
+    await saveConversation({
+      id: 'thread-move',
+      projectId: 'project-move',
+      title: 'now in project',
+      messages: [{ id: 'm1', role: 'user', content: 'hi', status: 'complete', createdAt: 1 }]
+    })
+
+    expect(await getConversationSyncState('thread-move')).toBeNull()
+    expect((await listConversationSyncStates()).map((s) => s.conversationId)).not.toContain(
+      'thread-move'
+    )
   })
 })
 
@@ -332,9 +559,43 @@ describe('conversation deletion clears only its own native pointer', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('本地删除会话只移除指向它的指针', async () => {
+  it('local delete of a Home thread removes only its own pointer and leaves a tombstone', async () => {
+    await seedProject('project-home')
+    const { deleteConversation, getConversation, getConversationSyncState, saveConversation } =
+      await loadStore()
+    await saveConversation({
+      id: 'thread-doomed',
+      projectId: null,
+      title: 'doomed',
+      messages: []
+    })
+    await saveConversation({
+      id: 'thread-kept',
+      projectId: null,
+      title: 'kept',
+      messages: []
+    })
+    await insertPointer('ptr-doomed', 'thread-doomed', 'project-home')
+    await insertPointer('ptr-kept', 'thread-kept', 'project-home')
+    await insertPointer('ptr-unbound', null, 'project-home')
+
+    await deleteConversation('thread-doomed')
+
+    expect(await getConversation('thread-doomed')).toBeNull()
+    expect(await countPointers(`conversation_id = 'thread-doomed'`)).toBe(0)
+    expect(await countPointers(`id = 'ptr-kept'`)).toBe(1)
+    // An unbound pointer (quick invoke) must never be swept up by a conversation deletion.
+    expect(await countPointers(`id = 'ptr-unbound'`)).toBe(1)
+    // A Home deletion leaves a sync tombstone.
+    const state = await getConversationSyncState('thread-doomed')
+    expect(state?.deletedAt).toEqual(expect.any(Number))
+    expect(state?.dirtyAt).toBe(state?.deletedAt)
+  })
+
+  it('local delete of a project thread removes its pointer without a sync tombstone', async () => {
     await seedProject('project-del')
-    const { deleteConversation, getConversation, saveConversation } = await loadStore()
+    const { deleteConversation, getConversation, getConversationSyncState, saveConversation } =
+      await loadStore()
     await saveConversation({
       id: 'thread-doomed',
       projectId: 'project-del',
@@ -358,9 +619,36 @@ describe('conversation deletion clears only its own native pointer', () => {
     expect(await countPointers(`id = 'ptr-kept'`)).toBe(1)
     // An unbound pointer (quick invoke) must never be swept up by a conversation deletion.
     expect(await countPointers(`id = 'ptr-unbound'`)).toBe(1)
+    // A project deletion produces no sync tombstone — the thread was never synced.
+    expect(await getConversationSyncState('thread-doomed')).toBeNull()
   })
 
-  it('远端同步删除同样只移除指向该会话的指针', async () => {
+  it('remote sync delete of a Home thread removes only its own pointer', async () => {
+    await seedProject('project-sync-home')
+    const { applyConversationSyncDeletion, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-remote-gone',
+      projectId: null,
+      title: 'gone elsewhere',
+      messages: []
+    })
+    await saveConversation({
+      id: 'thread-remote-kept',
+      projectId: null,
+      title: 'kept elsewhere',
+      messages: []
+    })
+    await insertPointer('ptr-remote-gone', 'thread-remote-gone', 'project-sync-home')
+    await insertPointer('ptr-remote-kept', 'thread-remote-kept', 'project-sync-home')
+
+    await applyConversationSyncDeletion('thread-remote-gone', 4242)
+
+    expect(await getConversation('thread-remote-gone')).toBeNull()
+    expect(await countPointers(`conversation_id = 'thread-remote-gone'`)).toBe(0)
+    expect(await countPointers(`id = 'ptr-remote-kept'`)).toBe(1)
+  })
+
+  it('remote sync delete of a project thread is a no-op: thread and pointer survive', async () => {
     await seedProject('project-sync-del')
     const { applyConversationSyncDeletion, getConversation, saveConversation } = await loadStore()
     await saveConversation({
@@ -380,8 +668,11 @@ describe('conversation deletion clears only its own native pointer', () => {
 
     await applyConversationSyncDeletion('thread-remote-gone', 4242)
 
-    expect(await getConversation('thread-remote-gone')).toBeNull()
-    expect(await countPointers(`conversation_id = 'thread-remote-gone'`)).toBe(0)
+    // The project thread survives the remote delete entirely.
+    const survived = await getConversation('thread-remote-gone')
+    expect(survived?.projectId).toBe('project-sync-del')
+    expect(survived?.title).toBe('gone elsewhere')
+    expect(await countPointers(`id = 'ptr-remote-gone'`)).toBe(1)
     expect(await countPointers(`id = 'ptr-remote-kept'`)).toBe(1)
   })
 })

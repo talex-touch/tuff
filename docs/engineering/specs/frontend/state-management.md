@@ -136,6 +136,7 @@ const enabled = typeof storedValue === 'boolean' ? storedValue : appSettingOrigi
 
 - Trigger: changing home-conversation persistence, cloud-sync collection/apply logic, conversation deletion, or renderer history refresh.
 - Conversation text is sensitive user content. It may cross devices only through the existing device-key encrypted sync payload/blob path.
+- Only standalone sidebar conversations (`projectId === null`) participate. Project conversations and their local execution state remain device-local.
 
 #### 2. Signatures
 
@@ -156,12 +157,12 @@ applyConversationSyncDeletion(id, deletedAt): Promise<void>
 
 - `conversations` / `conversation_messages` remain the local business source of truth. `conversation_sync_state` is only the durable dirty queue and delete tombstone.
 - Migration `0039_conversation_sync_tombstones` is immutable once any developer profile has applied it. `0040_conversation_sync_state_migration` creates the durable state table, copies legacy tombstones as dirty deletes, and only then drops the old table.
-- Local save/rename and its dirty-state upsert share one scheduled SQLite transaction. Local delete and its tombstone upsert also share one transaction.
-- Every conversation is serialized independently, encrypted before push, and uses its domain `updatedAt` as sync conflict time. Prompts/responses never enter ordinary config, logs, analytics, or plugin storage.
+- Standalone local save/rename and its dirty-state upsert share one scheduled SQLite transaction. Standalone local delete and its tombstone upsert also share one transaction. Project save/rename/delete and workspace enqueue/claim/message edits/forks never create sync state; converting a standalone thread into a project clears its previous dirty state.
+- Every eligible conversation is serialized independently, encrypted before push, and uses its domain `updatedAt` as sync conflict time. Project conversations cannot be exported as portable snapshots. Prompts/responses never enter ordinary config, logs, analytics, or plugin storage.
 - A push acknowledgement clears state with compare-and-delete on `dirty_at`. A newer local mutation racing the push survives and remains dirty.
-- Pull compares the remote revision/delete time with the local conversation and durable dirty revision. Newer local state remains queued; otherwise the remote snapshot/delete applies without echoing another local mutation.
-- Initial bootstrap and explicit user sync may enumerate all conversations. Established-cursor startup rehydrates only durable dirty rows.
-- Remote apply broadcasts `ConversationEvents.changed` so the shared renderer history list refreshes, while the sync mutation listener ignores `source: 'sync'` to prevent feedback.
+- Pull compares the remote revision/delete time with the local standalone conversation and durable dirty revision. Newer local state remains queued; otherwise the remote snapshot/delete applies without echoing another local mutation. Remote payloads with explicit project ownership are rejected. Existing local project ownership is checked again inside the apply/delete transaction; remote changes cannot overwrite or delete project messages or native-session pointers.
+- Initial bootstrap and explicit user sync enumerate only standalone conversations. Incremental collection and startup dirty-state rehydration also exclude existing project conversations, including stale dirty rows written by older builds.
+- Internal conversation mutations carry `projectId` so the sync listener can ignore project changes while the renderer still receives local history refreshes. Remote standalone apply broadcasts `ConversationEvents.changed`; the sync listener ignores `source: 'sync'` to prevent feedback.
 
 #### 4. Validation & Error Matrix
 
@@ -171,8 +172,11 @@ applyConversationSyncDeletion(id, deletedAt): Promise<void>
 | Delete while offline | Tombstone survives; remote delete is sent after sync resumes |
 | New edit races push acknowledgement | Compare-and-delete misses; newer dirty revision stays queued |
 | Dirty local revision newer than pull | Keep local and repush; do not overwrite |
-| Remote revision/delete wins | Apply transactionally, clear local sync state, refresh renderer list |
+| Remote revision/delete wins for a standalone conversation | Apply transactionally, clear local sync state, refresh renderer list |
 | Payload is malformed or undecryptable | Reject it; do not mutate SQLite or log content |
+| Project save/rename/delete or workspace mutation/fork | Keep local business data and UI changes; never queue a cloud payload or delete tombstone |
+| Full/incremental push or legacy dirty row names a project conversation | Exclude it from cloud sync |
+| Remote snapshot/delete targets an existing local project conversation | Leave its title, messages, native pointer and ownership unchanged; do not emit a sync mutation |
 | Profile already recorded migration 0039 | Apply 0040 by its newer journal timestamp; preserve every tombstone as `dirtyAt === deletedAt` |
 
 #### 5. Good / Base / Bad Cases
@@ -184,6 +188,7 @@ applyConversationSyncDeletion(id, deletedAt): Promise<void>
 #### 6. Tests Required
 
 - Real migrated SQLite test: save creates `{ dirtyAt, deletedAt: null }`; stale acknowledgement does not clear; exact acknowledgement clears; delete writes `dirtyAt === deletedAt`.
+- Scope regressions use real SQLite: standalone and project lifecycle, project reassignment, legacy project dirty rows, remote project overwrite/delete rejection, and standalone/project workspace enqueue/claim/message/fork persistence.
 - Upgrade smoke: seed the 0039 tombstone table, execute 0040 statements, assert the row survives in `conversation_sync_state` and the legacy table is removed.
 - Sync wire tests retain encrypted inline/blob and tombstone metadata behavior.
 - Main typecheck covers the store/sync event and migration contracts; renderer typecheck covers `ConversationEvents.changed` refresh.

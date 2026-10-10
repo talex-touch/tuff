@@ -6,7 +6,7 @@ import type {
 import type { MainDatabase } from '../../db/db-write'
 import type { StoredWorkspaceAttachment } from './workspace-attachments'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-import { deleteConversation, getConversation } from './conversation-store'
+import { deleteConversation, getConversation, saveConversation } from './conversation-store'
 import { WorkspaceAttachmentStore } from './workspace-attachments'
 import { ConversationWorkspaceService } from './workspace-service'
 
@@ -604,5 +604,134 @@ describe('ConversationWorkspaceService fork ownership', () => {
     expect(await rows('local_ai_cli_sessions', 'id')).toEqual(pointersBefore)
     const parentAsset = (await db.select().from(schema.conversationAttachments))[0]
     expect(await attachments.toModel(parentAsset)).toEqual(image)
+  })
+})
+
+/**
+ * Project conversations are excluded from sync dirt. Every workspace mutation path that writes a
+ * `conversationSyncState` row must guard on `projectId === null`, so a project turn does not
+ * surface to the sync reader and a Home turn always does. These tests run the real SQLite
+ * transactions and assert on the persisted rows.
+ */
+describe('ConversationWorkspaceService project vs. Home sync dirt boundaries', () => {
+  async function seedProject(id: string): Promise<void> {
+    // The real path must exist on disk so that validate()'s realpath check passes.
+    const projectRoot = join(root, `projects/${id}`)
+    await mkdir(projectRoot, { recursive: true })
+    await client.execute({
+      sql: `INSERT INTO projects (id, root_path, name, pinned, archived, created_at, updated_at, last_opened_at) VALUES (?, ?, ?, 0, 0, 1, 1, 1)`,
+      args: [id, projectRoot, id]
+    })
+  }
+
+  function projectRequest(id: string, conversationId = 'parent'): WorkspaceSubmitRequest {
+    return {
+      conversationId,
+      id,
+      text: `input ${id}`,
+      settings: { ...settings },
+      create: { projectId: 'proj-ws', title: conversationId }
+    }
+  }
+
+  async function syncState(conversationId: string): Promise<Record<string, unknown> | null> {
+    const result = await client.execute(
+      `SELECT * FROM conversation_sync_state WHERE conversation_id = ?`,
+      [conversationId]
+    )
+    return result.rows[0] ?? null
+  }
+
+  it('enqueue writes sync dirt for a Home thread but not for a project thread', async () => {
+    await seedProject('proj-ws')
+
+    // Home enqueue:
+    await service.enqueue(request('home-input'))
+    expect(await syncState('parent')).toMatchObject({ deleted_at: null })
+
+    // Project enqueue:
+    await service.enqueue(projectRequest('proj-input', 'child'))
+    expect(await syncState('child')).toBeNull()
+  })
+
+  it('claim (takeNext) dirties a Home thread but not a project thread', async () => {
+    await seedProject('proj-ws')
+
+    await service.enqueue(request('home-input'))
+    await service.takeNext('parent')
+    expect(await syncState('parent')).toMatchObject({ deleted_at: null })
+
+    await service.enqueue(projectRequest('proj-input', 'child'))
+    await service.takeNext('child')
+    expect(await syncState('child')).toBeNull()
+  })
+
+  it('mutateMessages dirties a Home thread but not a project thread', async () => {
+    await seedProject('proj-ws')
+
+    await service.enqueue(request('home-input'))
+    await service.takeNext('parent')
+    await service.mutateMessages('parent', 'home-input', (messages) => {
+      const assistant = messages.at(-1)!
+      assistant.content = 'answer home-input'
+      assistant.status = 'complete'
+    })
+    await service.finishTurn('parent', 'home-input', 'idle')
+    expect(await syncState('parent')).toMatchObject({ deleted_at: null })
+
+    await service.enqueue(projectRequest('proj-input', 'child'))
+    await service.takeNext('child')
+    await service.mutateMessages('child', 'proj-input', (messages) => {
+      const assistant = messages.at(-1)!
+      assistant.content = 'answer proj-input'
+      assistant.status = 'complete'
+    })
+    await service.finishTurn('child', 'proj-input', 'idle')
+    expect(await syncState('child')).toBeNull()
+  })
+
+  it('fork dirties a Home child but not a project child', async () => {
+    await seedProject('proj-ws')
+
+    // Home fork:
+    await completedParent()
+    const homeChild = await service.fork({ conversationId: 'parent', messageId: 'assistant-first' })
+    expect(homeChild.projectId).toBeNull()
+    expect(await syncState(homeChild.conversationId)).toMatchObject({ deleted_at: null })
+
+    // Project fork:
+    await service.enqueue(projectRequest('fork-me', 'child'))
+    await service.takeNext('child')
+    await service.mutateMessages('child', 'fork-me', (messages) => {
+      messages[1].content = 'answer fork-me'
+      messages[1].status = 'complete'
+    })
+    await service.finishTurn('child', 'fork-me', 'idle')
+    const parent = await getConversation('child')
+    expect(parent?.projectId).toBe('proj-ws')
+    const projChild = await service.fork({
+      conversationId: 'child',
+      messageId: parent!.messages[1].id
+    })
+    expect(projChild.projectId).toBe('proj-ws')
+    expect(await syncState(projChild.conversationId)).toBeNull()
+  })
+
+  it('moving a thread from Home to a project drops its sync dirt mid-turn', async () => {
+    await seedProject('proj-ws')
+
+    await service.enqueue(request('home-input'))
+    expect(await syncState('parent')).toMatchObject({ deleted_at: null })
+
+    // Adopt into a project: saveConversation with the project id replaces the row.
+    await saveConversation({
+      id: 'parent',
+      projectId: 'proj-ws',
+      title: 'parent',
+      messages: [{ id: 'm1', role: 'user', content: 'hello', status: 'complete', createdAt: 1 }]
+    })
+
+    // The sync dirt must vanish — the thread is now project-scoped.
+    expect(await syncState('parent')).toBeNull()
   })
 })
