@@ -182,7 +182,7 @@ export function getProviderModelOptions(
     return []
   }
 
-  const options = getCapabilityOptions(capabilityId)
+  const options = getCapabilityOptions(capabilityId, { withCliChatBindings: true })
   const allowedProviderIds = new Set(options.allowedProviderIds ?? [])
   const capabilityBindings = getEffectiveCapabilityRoutingConfig(capabilityId)?.providers ?? []
   const systemTranslationProviderId =

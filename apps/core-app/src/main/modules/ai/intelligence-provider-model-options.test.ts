@@ -623,4 +623,38 @@ describe('pi provider model sourcing', () => {
       getProviderModelOptions('text.chat').some((option) => option.providerId === 'pi-cli-default')
     ).toBe(false)
   })
+
+  it('keeps an enabled pi the stored routing never bound, beside a bound provider', () => {
+    // Config assembly binds a found CLI to `text.chat` in the runtime config only, so a real
+    // profile's stored routing lists the user's other providers and nothing for pi.
+    chatBindings().providers = [{ providerId: 'openai-chat', priority: 1, enabled: true }]
+
+    const pi = getProviderModelOptions('text.chat').find(
+      (option) => option.providerId === 'pi-cli-default'
+    )
+
+    expect(pi).toMatchObject({
+      models: ['anthropic/claude-x', 'Custom/model-a'],
+      available: true
+    })
+  })
+
+  it('leaves pi out once the stored routing turned its binding off', () => {
+    chatBindings().providers = [
+      { providerId: 'pi-cli-default', priority: 1, enabled: false },
+      { providerId: 'openai-chat', priority: 2, enabled: true }
+    ]
+
+    const options = getProviderModelOptions('text.chat')
+
+    expect(options.some((option) => option.providerId === 'pi-cli-default')).toBe(false)
+    expect(options.some((option) => option.providerId === 'openai-chat')).toBe(true)
+  })
 })
+
+function chatBindings(): { providers: unknown[] } {
+  const stored = storageMocks.storedConfig as {
+    capabilities: Record<string, { providers: unknown[] }>
+  }
+  return stored.capabilities['text.chat']
+}

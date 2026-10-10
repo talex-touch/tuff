@@ -1182,6 +1182,16 @@ function withCliChatBindings(
   }
 }
 
+/** The local CLIs probed present on this machine — the ones `withCliChatBindings` binds. */
+function availableCliProviderIds(): string[] {
+  const ids: string[] = []
+  if (getResolvedOmpExecutable()) ids.push(OMP_CLI_PROVIDER_ID)
+  if (getResolvedPiExecutable()) ids.push(PI_CLI_PROVIDER_ID)
+  if (getResolvedCodexExecutable()) ids.push(CODEX_CLI_PROVIDER_ID)
+  if (getResolvedClaudeExecutable()) ids.push(CLAUDE_CLI_PROVIDER_ID)
+  return ids
+}
+
 function withSystemTranslationBinding(
   capabilities: Record<string, IntelligenceCapabilityRoutingConfig>
 ): Record<string, IntelligenceCapabilityRoutingConfig> {
@@ -1270,11 +1280,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     providers.push({ ...CLAUDE_CLI_PROVIDER })
   }
 
-  const availableCliIds: string[] = []
-  if (ompAvailable) availableCliIds.push(OMP_CLI_PROVIDER_ID)
-  if (piAvailable) availableCliIds.push(PI_CLI_PROVIDER_ID)
-  if (codexAvailable) availableCliIds.push(CODEX_CLI_PROVIDER_ID)
-  if (claudeAvailable) availableCliIds.push(CLAUDE_CLI_PROVIDER_ID)
+  const availableCliIds = availableCliProviderIds()
   const nextRuntimeConfig = {
     providers,
     defaultStrategy: normalizedStrategy,
@@ -1335,7 +1341,22 @@ export function getEffectiveCapabilityRoutingConfig(
   )
 }
 
-export function getCapabilityOptions(capabilityId: string): {
+export interface CapabilityOptionsQuery {
+  /**
+   * Narrow by the routing the runtime actually holds: the stored bindings plus the `text.chat`
+   * bindings `withCliChatBindings` injects for the local CLIs it found. Without it, the stored
+   * bindings alone drop every enabled CLI as soon as any other bound provider is enabled.
+   *
+   * Only the model options opt in. Capability tests and status still narrow by the stored bindings
+   * alone, so a CLI is not counted there — left as it was, outside the model menu fix.
+   */
+  withCliChatBindings?: boolean
+}
+
+export function getCapabilityOptions(
+  capabilityId: string,
+  query: CapabilityOptionsQuery = {}
+): {
   allowedProviderIds?: string[]
   modelPreference?: string[]
   promptTemplate?: string
@@ -1343,7 +1364,12 @@ export function getCapabilityOptions(capabilityId: string): {
   // 实时从 storage 读取
   const stored = getLatestConfig()
   const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
-  const capabilityMap = withSystemTranslationBinding(stored?.capabilities ?? {})
+  const storedCapabilities = stored?.capabilities ?? {}
+  const capabilityMap = withSystemTranslationBinding(
+    query.withCliChatBindings
+      ? withCliChatBindings(storedCapabilities, availableCliProviderIds())
+      : storedCapabilities
+  )
   const config = normalizedCapabilityId
     ? resolveEffectiveCapabilityRoutingConfig(capabilityMap, normalizedCapabilityId)
     : undefined
