@@ -70,10 +70,16 @@ export const COMPOSER_MOTION = {
   micYield: { outMs: 120, scale: 0.85, backDelayMs: 160, backFadeMs: 160 },
   /**
    * Colour changes run only while `.is-morphing` is on (reaching CSS as `--composer-tone-ms`).
-   * T1 / T2 recolour the circle; T3 / T5 take the key between primary and ink. The chips never
-   * morph (`home-composer` › 换档不做变形动画).
+   * T1 / T2 recolour the circle; T3 / T5 take the key between primary and ink. The chips never ease
+   * a colour: their value change is the script-driven morph in `chip` below.
    */
   tone: { circleMs: 180, islandMs: 200 },
+  /**
+   * A chip's value change (2026-10-08, overriding `home-composer` › 换档不做变形动画): the old icon and
+   * label fade out where they stood, the new ones fade in just behind them, and the width tweens
+   * between the two — all of it inside 220ms, so a pick reads as one move with the menu closing.
+   */
+  chip: { widthMs: 200, fadeOutMs: 110, fadeInDelayMs: 50, fadeInMs: 170 },
   /** T4: the stop square ticks once when the first token lands. */
   firstTokenTick: { scale: 1.06, ms: 240 },
   /**
