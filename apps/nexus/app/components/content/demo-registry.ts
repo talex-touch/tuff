@@ -477,6 +477,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   VersionCapsuleChannelTonesDemo: () => import('./demos/VersionCapsuleChannelTonesDemo.vue'),
   VersionCapsuleVersionCapsuleDemo: () => import('./demos/VersionCapsuleVersionCapsuleDemo.vue'),
   VirtualListVirtualListDemo: () => import('./demos/VirtualListVirtualListDemo.vue'),
+  VoiceBeamOrganicDemo: () => import('./demos/VoiceBeamOrganicDemo.vue'),
   VoiceBeamShowcaseDemo: () => import('./demos/VoiceBeamShowcaseDemo.vue'),
   WorkingIndicatorVariantsDemo: () => import('./demos/WorkingIndicatorVariantsDemo.vue'),
   WorkingIndicatorWorkingIndicatorDemo: () => import('./demos/WorkingIndicatorWorkingIndicatorDemo.vue'),

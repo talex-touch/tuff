@@ -4,12 +4,13 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `base-surface`, `card`, `dropdown-menu`
+- **更新组件**: `base-surface`, `card`, `dropdown-menu`, `voice-beam`
 - **新增组件（未独立发布）**: `flow-light`
 
 ### ✨ 组件增强
 
 - 新增 `TxFlowLight` 流光底：一层固定的 Tuff 品牌色光（蓝 `#0894ff`、紫 `#c959dd`、红 `#ff2e54`、橙 `#ff9004`），颜色不随面板背后的内容变化。`variant` 有三种：`corners` 双角柔光、`rim` 顶缘流光带、`aurora` 极光漫射；`intensity` 乘到主题透明度上，`colors` 覆盖四个色标；高对比度下隐藏。`TxBaseSurface` 与 `TxCard` 新增 `flowLight` / `flowLightIntensity`，任何 `mode`/`background` 都能开，光层位于遮罩之上、描边之下；锚点家族通过 `panelCard` 透传，`TxDropdownSubmenu` 未指定时沿用根菜单的流光。
+- `TxVoiceBeam` 新增 `organic`（0–1，默认 0）：有声音时各色瓣、光带与整道光弧各自起伏，不再整体同步缩放；每个分量是质数周期的正弦叠加平滑噪声，幅度随当前电平变化，静音时不动，处理中与 `prefers-reduced-motion: reduce` 时关闭。`organic` 为 0 时输出与此前逐帧一致。
 
 ## [0.7.0] - 2026-10-09
 

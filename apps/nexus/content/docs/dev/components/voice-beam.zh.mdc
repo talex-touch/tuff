@@ -47,6 +47,23 @@ code: |
 ---
 :::
 
+### 自然起伏
+`organic`（0-1）让各色瓣、光带与整道光弧在有声音时各自起伏，而不是一起缩放；静音时不动，处理中与减少动态效果时关闭。
+:::TuffDemoWrapper{demo="VoiceBeamOrganicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxVoiceBeam :level="() => level" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">一起缩放</TxCard>
+    </TxVoiceBeam>
+
+    <TxVoiceBeam :level="() => level" :organic="1" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">各自起伏</TxCard>
+    </TxVoiceBeam>
+  </template>
+---
+:::
+
 ### 麦克风输入
 `useMicrophone()` 关闭回声消除、降噪与自动增益后请求 `getUserMedia`；`start()` 必须在点击事件里调用。
 
@@ -107,6 +124,7 @@ const live = computed(() => mic.state.value === 'live')
 | `reach` / `spread` | `number` | `1.2` / `1.05` | 满电平时的升高与横向扩张倍数。 |
 | `bands` | `boolean` | `true` | 低 / 中 / 高频段独立驱动各色瓣。 |
 | `flow` | `number` | `48` | 满电平下频谱的横向流速（px/s）。 |
+| `organic` | `number` | `0` | 有声音时各色瓣、光带与光弧各自起伏的程度（0-1）；0 时随电平一起缩放。 |
 | `processing` | `boolean` | `false` | 收拢为一束往返行进的光束并保持点亮。 |
 | `processingDuration` / `processingLevel` / `processingEase` / `processingTravel` / `processingCurve` | `number` | `1.1` / `0.55` / `0.6` / `1.55` / `2.1` | 处理阶段的往返周期、保持亮度、形变时长、行程与缓动。 |
 | `cornerFollow` | `number` | `0.45` | 处理阶段辉光沿圆角抬起的程度。 |
@@ -156,11 +174,12 @@ const live = computed(() => mic.state.value === 'live')
 - 全页共用一个约 60 fps 封顶的 `requestAnimationFrame` 循环；实例滚出视口（256 px 边距）后注销并释放分析器。
 - 每页共用一个 `AudioContext`，每个 stream 一个 source 节点（引用计数），每个实例一个分析器；音频只分析，不播放。
 - 使用 `stream` 时读取 RMS 电平与三个频段（80-300、300-2000、2000-6000 Hz）。
-- 减少动态效果时停止待机呼吸、色彩流动、色相漂移、扭曲与处理扫描；对声音的反应保留，因为它本质是电平表。
+- 减少动态效果时停止待机呼吸、色彩流动、色相漂移、扭曲、自然起伏与处理扫描；对声音的反应保留，因为它本质是电平表。
 
 ## 技术实现
 
 - `styles.ts`、`presets.ts`、`voice-driver.ts`、`audio.ts`、`color.ts` 逐字移植自 [Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow)（MIT © Jakub Antalik）；`useMicrophone` 是上游 React hook 的 Vue 移植。
+- `organic` 起伏（`organic.ts`）是 TuffEx 新增：每个分量都是质数周期的正弦加平滑值噪声，幅度乘以当前电平；默认值 0 时驱动器的计算与上游逐帧一致。
 - 源码：`packages/tuffex/packages/components/src/voice-beam/`。
 
 <TuffDocSourceLink />

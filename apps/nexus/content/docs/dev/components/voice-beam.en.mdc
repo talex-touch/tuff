@@ -47,6 +47,23 @@ code: |
 ---
 :::
 
+### Organic Motion
+`organic` (0-1) lets the lobes, the band and the whole arch move on their own while a voice is heard, instead of scaling as one; it stays still in silence and turns off while processing and under reduced motion.
+:::TuffDemoWrapper{demo="VoiceBeamOrganicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxVoiceBeam :level="() => level" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">Scales as one</TxCard>
+    </TxVoiceBeam>
+
+    <TxVoiceBeam :level="() => level" :organic="1" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">Moves on its own</TxCard>
+    </TxVoiceBeam>
+  </template>
+---
+:::
+
 ### Microphone Input
 `useMicrophone()` requests `getUserMedia` with echo cancellation, noise suppression, and auto gain off; call `start()` from a click.
 
@@ -110,6 +127,7 @@ const live = computed(() => mic.state.value === 'live')
 | `spread` | `number` | `1.05` | How far the glow widens at full level. |
 | `bands` | `boolean` | `true` | Lets low, mid, and high bands move the lobes independently. |
 | `flow` | `number` | `48` | Sideways travel of the spectrum in px/s at full level. |
+| `organic` | `number` | `0` | How much the lobes, the band and the arch move on their own while a voice is heard (0-1); at 0 they scale with the level as one. |
 | `processing` | `boolean` | `false` | Gathers the glow into a travelling beam and holds it lit. |
 | `processingDuration` | `number` | `1.1` | Seconds for one pass of the processing beam. |
 | `processingLevel` | `number` | `0.55` | How lit the glow stays while processing. |
@@ -164,11 +182,12 @@ const live = computed(() => mic.state.value === 'live')
 - One shared `requestAnimationFrame` loop, capped at about 60 fps, drives every instance; an instance scrolled offscreen (256 px margin) unregisters and releases its analyser.
 - One `AudioContext` is shared per page, with one source node per stream (reference-counted) and one analyser per instance. Audio is analysed, never played.
 - With a `stream`, the analyser reads the RMS level plus three voice bands (80-300, 300-2000, 2000-6000 Hz).
-- Under reduced motion, the idle breathing, colour flow, hue drift, distortion, and processing sweep stop; the reaction to sound stays, since it is a meter.
+- Under reduced motion, the idle breathing, colour flow, hue drift, distortion, organic motion, and processing sweep stop; the reaction to sound stays, since it is a meter.
 
 ## Technologies
 
 - `styles.ts`, `presets.ts`, `voice-driver.ts`, `audio.ts`, and `color.ts` are verbatim ports of [Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow) (MIT © Jakub Antalik); `useMicrophone` is the Vue port of its React hook.
+- The `organic` motion (`organic.ts`) is a TuffEx addition: every component is a sine on a prime period plus smoothed value noise, its amplitude times the current level; at its default of 0 the driver computes, frame for frame, what upstream does.
 - Source: `packages/tuffex/packages/components/src/voice-beam/`.
 
 <TuffDocSourceLink />
