@@ -5,6 +5,7 @@ import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { runAfterResponse } from './afterResponse'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { resolveRequestIp } from './ipSecurityStore'
 import { normalizeLocaleCode, type SupportedLocaleCode } from './locale'
 import { resolveRequestGeo } from './requestGeo'
 
@@ -2266,14 +2267,7 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
 }
 
 function getRequestIp(event: H3Event): string | null {
-  const header = event.node.req.headers
-  const forwarded = header['x-forwarded-for']
-  if (typeof forwarded === 'string')
-    return forwarded.split(',')[0]?.trim() || null
-  const cfConnecting = header['cf-connecting-ip']
-  if (typeof cfConnecting === 'string')
-    return cfConnecting
-  return null
+  return resolveRequestIp(event) ?? null
 }
 
 export function readRequestIp(event: H3Event): string | null {

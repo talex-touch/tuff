@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { resolveRequestIp } from './ipSecurityStore'
 
 const AUDITS_TABLE = 'admin_audits'
 
@@ -48,15 +49,14 @@ function readRequestHeaders(event: H3Event): Record<string, unknown> {
   return event.node?.req?.headers ?? {}
 }
 
+// Same rule: resolveRequestIp reads event.context and event.node.req unguarded.
 function readRequestIp(event: H3Event): string | null {
-  const header = readRequestHeaders(event)
-  const forwarded = header['x-forwarded-for']
-  if (typeof forwarded === 'string')
-    return forwarded.split(',')[0]?.trim() || null
-  const cfConnecting = header['cf-connecting-ip']
-  if (typeof cfConnecting === 'string')
-    return cfConnecting
-  return null
+  try {
+    return resolveRequestIp(event) ?? null
+  }
+  catch {
+    return null
+  }
 }
 
 function readUserAgent(event: H3Event): string | null {
