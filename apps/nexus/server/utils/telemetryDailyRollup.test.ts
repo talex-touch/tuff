@@ -29,7 +29,7 @@ function createTables() {
       search_duration_ms INTEGER, search_result_count INTEGER, provider_timings TEXT, input_types TEXT,
       metadata TEXT, is_anonymous INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL
     );
-    CREATE INDEX idx_telemetry_created_at ON telemetry_events(created_at);
+    CREATE INDEX idx_telemetry_event_geo ON telemetry_events(event_type, created_at, country_code, region_code);
     CREATE TABLE daily_stats (
       date TEXT NOT NULL, stat_type TEXT NOT NULL, stat_key TEXT NOT NULL DEFAULT '',
       value INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (date, stat_type, stat_key)

@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { TELEMETRY_EVENT_TYPES_SQL } from './telemetrySanitizer'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
@@ -63,6 +64,16 @@ async function ensureDailyStatsSchema(db: D1Database) {
 }
 
 /**
+ * Each table's expiring rows, older than the cutoff `?1`. `telemetry_events` has no index on
+ * `created_at` alone, so its filter names the event types and `idx_telemetry_event_geo`
+ * (event_type, created_at, ...) serves the range; without them every pass reads the whole table.
+ */
+const EXPIRING_ROWS: Record<RetentionTableResult['table'], string> = {
+  [TELEMETRY_TABLE]: `event_type IN (${TELEMETRY_EVENT_TYPES_SQL}) AND created_at < ?1`,
+  [GOVERNANCE_EVENTS_TABLE]: 'occurred_at < ?1',
+}
+
+/**
  * Rolls one table's expiring rows into `daily_stats`. Each statement reads the expiring rows once and
  * derives every daily stat from that pass; the governance rollup was four statements, each a full
  * scan (`platform_governance_events` had no index leading with `occurred_at`), about 48k rows read
@@ -77,7 +88,7 @@ const TELEMETRY_ROLLUP_SQL = `
     WITH per_type AS (
       SELECT substr(created_at, 1, 10) AS date, event_type, COUNT(*) AS total
       FROM ${TELEMETRY_TABLE}
-      WHERE created_at < ?1
+      WHERE ${EXPIRING_ROWS[TELEMETRY_TABLE]}
       GROUP BY date, event_type
     )
     SELECT date, 'total_events' AS stat_type, '' AS stat_key, SUM(total) AS value FROM per_type GROUP BY date
@@ -94,7 +105,7 @@ const GOVERNANCE_ROLLUP_SQL = `
     WITH per_pair AS (
       SELECT substr(occurred_at, 1, 10) AS date, scope, action, COUNT(*) AS total
       FROM ${GOVERNANCE_EVENTS_TABLE}
-      WHERE occurred_at < ?1
+      WHERE ${EXPIRING_ROWS[GOVERNANCE_EVENTS_TABLE]}
       GROUP BY date, scope, action
     )
     SELECT date, 'governance_total_events' AS stat_type, '' AS stat_key, SUM(total) AS value FROM per_pair GROUP BY date
@@ -130,7 +141,7 @@ async function cleanupTable(
   const count = db.prepare(`
     SELECT COUNT(*) AS count
     FROM ${table}
-    WHERE ${timestampColumn} < ?1
+    WHERE ${EXPIRING_ROWS[table]}
   `).bind(cutoff)
 
   if (dryRun) {
@@ -148,7 +159,7 @@ async function cleanupTable(
       WHERE id IN (
         SELECT id
         FROM ${table}
-        WHERE ${timestampColumn} < ?1
+        WHERE ${EXPIRING_ROWS[table]}
         ORDER BY ${timestampColumn} ASC
         LIMIT ?2
       )
