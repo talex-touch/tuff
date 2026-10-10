@@ -38,6 +38,10 @@ async function ensureSecuritySchema(db: D1Database) {
   await ensureD1Schema(db, IP_SECURITY_SCHEMA)
 }
 
+// CF-Connecting-IP first: Cloudflare sets it itself, replacing anything the client sent.
+// X-Forwarded-For it does not replace: a value the client sent is kept and the real address
+// appended, so its first entry is whatever the client wrote. The forwarded headers below are
+// only for requests that never crossed Cloudflare (local dev, tests).
 export function resolveRequestIp(event: H3Event): string | undefined {
   const cfRequest = (event.context.cloudflare as any)?.request as any
   const cfHeaderValue = (name: string) => {

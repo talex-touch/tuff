@@ -1,18 +1,6 @@
 import type { H3Event } from 'h3'
-import { getRequestHeader, getRequestIP } from 'h3'
-
-function resolveClientIp(event: H3Event): string | null {
-  const direct = getRequestIP(event, { xForwardedFor: true })
-  if (direct)
-    return direct
-  const forwarded = getRequestHeader(event, 'x-forwarded-for')
-  if (forwarded) {
-    const value = forwarded.split(',')[0]?.trim()
-    return value || null
-  }
-  const cf = getRequestHeader(event, 'cf-connecting-ip')
-  return cf?.trim() || null
-}
+import { getRequestHeader } from 'h3'
+import { resolveRequestIp } from './ipSecurityStore'
 
 function resolveClientCountry(event: H3Event): string | null {
   const country = getRequestHeader(event, 'cf-ipcountry')
@@ -23,7 +11,7 @@ function resolveClientCountry(event: H3Event): string | null {
 
 export function resolveAuditMeta(event: H3Event): Record<string, string> {
   const meta: Record<string, string> = {}
-  const ip = resolveClientIp(event)
+  const ip = resolveRequestIp(event)
   if (ip)
     meta.ip = ip
   const country = resolveClientCountry(event)
