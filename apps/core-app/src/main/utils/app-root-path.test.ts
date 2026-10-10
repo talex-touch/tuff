@@ -64,8 +64,8 @@ describe('app-root-path', () => {
 
 /**
  * `userData` is rewritten twice during startup: `precore` overrides it for startup benchmarking and
- * resolves the root immediately after, then `polyfills` repoints Chromium's profile at a separate
- * dev directory. Resolving afresh on every call meant the answer depended on when you asked —
+ * resolves the root immediately after, then repoints Electron's profile at a separate dev directory
+ * before the lock. Resolving afresh on every call meant the answer depended on when you asked —
  * `precore` captured one root at module load, `getAllowedDownloadRoots` derived another at download
  * time, and every update package was rejected as `destination-outside-roots`.
  */
@@ -74,7 +74,7 @@ describe('app-root-path is stable across a userData rewrite', () => {
     const appLike = createMutableAppLike('/base/@scope/core-app')
 
     const first = resolveRuntimeRootPath(appLike)
-    appLike.userDataPath = '/base/@scope/tuff-dev' // what polyfills does in dev
+    appLike.userDataPath = '/base/@scope/tuff-dev' // what precore does in dev, after resolving
 
     expect(resolveRuntimeRootPath(appLike)).toBe(first)
   })
@@ -112,7 +112,7 @@ describe('the update package destination survives the rewrite', () => {
     const storageRoot = resolveRuntimeRootPath(appLike) // precore, at startup
     const destination = path.join(storageRoot, 'modules', 'update-packages')
 
-    appLike.userDataPath = '/base/@scope/tuff-dev' // polyfills, later
+    appLike.userDataPath = '/base/@scope/tuff-dev' // the dev profile switch, later
 
     const allowedRoots = [resolveRuntimeRootPath(appLike)] // download policy, later still
     const decision = evaluateDownloadTarget(

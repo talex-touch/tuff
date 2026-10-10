@@ -2,10 +2,10 @@
 /**
  * Guards the single-source contract for the app data root.
  *
- * `userData` is rewritten twice during startup — once deliberately for startup benchmarking
- * (`precore.ts`, immediately before the root is first resolved) and once by `polyfills.ts` to give
- * Chromium a separate dev profile. Anything that derives the app root from `app.getPath('userData')`
- * therefore gets a different answer depending on when it asks.
+ * `userData` is rewritten twice during startup, both times in `precore.ts` — once deliberately for
+ * startup benchmarking (immediately before the root is first resolved) and once after it, to give
+ * dev builds a separate Electron profile. Anything that derives the app root from
+ * `app.getPath('userData')` therefore gets a different answer depending on when it asks.
  *
  * That is not hypothetical: `getAllowedDownloadRoots` re-derived the root at download time and
  * disagreed with the root the update system had written under, so every update download in a dev
