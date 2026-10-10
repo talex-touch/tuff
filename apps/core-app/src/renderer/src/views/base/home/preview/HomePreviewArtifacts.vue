@@ -42,51 +42,47 @@ async function reveal(item: PreviewArtifact): Promise<void> {
 </script>
 
 <template>
+  <!-- Mounted only with something to list: the outputs tab says "nothing yet" once, for files and
+       widgets together. -->
   <div class="HomePreviewArtifacts">
-    <p v-if="!props.items.length" class="HomePreview-Empty">
-      {{ t('home.preview.artifactsEmpty') }}
-    </p>
+    <section v-if="created.length" class="HomePreviewArtifacts-Group">
+      <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsCreated') }}</h3>
+      <div v-for="item in created" :key="item.id" class="HomePreviewArtifacts-Row">
+        <!-- The tooltip carries both halves the row cannot: what the click does,
+             and the full path the name and directory lines truncate. -->
+        <button
+          class="HomePreviewArtifacts-Main"
+          type="button"
+          :title="`${t('home.preview.open')} — ${item.path}`"
+          @click="open(item)"
+        >
+          <span class="i-ri-file-text-line HomePreviewArtifacts-Icon" />
+          <span class="HomePreviewArtifacts-Text">
+            <span class="HomePreview-Name">{{ item.name }}</span>
+            <span v-if="item.dir" class="HomePreview-Detail">{{ item.dir }}</span>
+          </span>
+        </button>
+        <button
+          class="HomePreview-IconBtn"
+          type="button"
+          :aria-label="t('home.preview.reveal')"
+          :title="t('home.preview.reveal')"
+          @click="reveal(item)"
+        >
+          <span class="i-ri-folder-open-line" />
+        </button>
+      </div>
+    </section>
 
-    <template v-else>
-      <section v-if="created.length" class="HomePreviewArtifacts-Group">
-        <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsCreated') }}</h3>
-        <div v-for="item in created" :key="item.id" class="HomePreviewArtifacts-Row">
-          <!-- The tooltip carries both halves the row cannot: what the click does,
-               and the full path the name and directory lines truncate. -->
-          <button
-            class="HomePreviewArtifacts-Main"
-            type="button"
-            :title="`${t('home.preview.open')} — ${item.path}`"
-            @click="open(item)"
-          >
-            <span class="i-ri-file-text-line HomePreviewArtifacts-Icon" />
-            <span class="HomePreviewArtifacts-Text">
-              <span class="HomePreview-Name">{{ item.name }}</span>
-              <span v-if="item.dir" class="HomePreview-Detail">{{ item.dir }}</span>
-            </span>
-          </button>
-          <button
-            class="HomePreview-IconBtn"
-            type="button"
-            :aria-label="t('home.preview.reveal')"
-            :title="t('home.preview.reveal')"
-            @click="reveal(item)"
-          >
-            <span class="i-ri-folder-open-line" />
-          </button>
-        </div>
-      </section>
-
-      <section v-if="uploaded.length" class="HomePreviewArtifacts-Group">
-        <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsUploaded') }}</h3>
-        <!-- No open action: an upload lives as an object URL owned by the composer
-             and has no path on disk to hand the system. -->
-        <div v-for="item in uploaded" :key="item.id" class="HomePreviewArtifacts-Row is-static">
-          <span class="i-ri-attachment-2 HomePreviewArtifacts-Icon" />
-          <span class="HomePreview-Name">{{ item.name }}</span>
-        </div>
-      </section>
-    </template>
+    <section v-if="uploaded.length" class="HomePreviewArtifacts-Group">
+      <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsUploaded') }}</h3>
+      <!-- No open action: an upload lives as an object URL owned by the composer
+           and has no path on disk to hand the system. -->
+      <div v-for="item in uploaded" :key="item.id" class="HomePreviewArtifacts-Row is-static">
+        <span class="i-ri-attachment-2 HomePreviewArtifacts-Icon" />
+        <span class="HomePreview-Name">{{ item.name }}</span>
+      </div>
+    </section>
   </div>
 </template>
 

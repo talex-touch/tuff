@@ -1594,7 +1594,6 @@
         "createdElsewhere": "分支已创建，可在会话列表中找到。"
       },
       "panel": {
-        "activity": "活动",
         "context": "上下文",
         "review": "变更"
       },
@@ -1718,14 +1717,12 @@
     },
     "preview": {
       "artifacts": "产物",
-      "widgets": "组件",
       "toolCalls": "工作过程",
       "sources": "引用",
       "artifactsCreated": "本次生成",
       "artifactsUploaded": "你上传的",
-      "artifactsEmpty": "这次会话还没有生成或上传文件。",
-      "widgetsEmpty": "这次会话还没有出现图表或表单。",
-      "toolCallsEmpty": "这次会话还没有调用任何工具。",
+      "chartsAndForms": "图表与表单",
+      "outputsEmpty": "这次会话还没有生成或上传文件，也还没有出现图表或表单。",
       "sourcesEmpty": "这次会话还没有读取文件、搜索或调用 MCP。",
       "chart": "图表",
       "form": "表单",

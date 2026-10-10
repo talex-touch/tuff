@@ -1594,7 +1594,6 @@
         "createdElsewhere": "Branch created. It's in your conversation list."
       },
       "panel": {
-        "activity": "Activity",
         "context": "Context",
         "review": "Changes"
       },
@@ -1717,15 +1716,13 @@
       "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here."
     },
     "preview": {
-      "artifacts": "Files",
-      "widgets": "Widgets",
+      "artifacts": "Outputs",
       "toolCalls": "Work log",
       "sources": "Sources",
       "artifactsCreated": "Created here",
       "artifactsUploaded": "You uploaded",
-      "artifactsEmpty": "Nothing has been created or uploaded in this conversation yet.",
-      "widgetsEmpty": "No chart or form has appeared in this conversation yet.",
-      "toolCallsEmpty": "No tool has been called in this conversation yet.",
+      "chartsAndForms": "Charts and forms",
+      "outputsEmpty": "Nothing has been created or uploaded in this conversation yet, and no chart or form has appeared.",
       "sourcesEmpty": "No file has been read, searched or fetched over MCP yet.",
       "chart": "Chart",
       "form": "Form",

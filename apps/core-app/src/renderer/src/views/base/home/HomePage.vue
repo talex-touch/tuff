@@ -2378,12 +2378,12 @@ onBeforeUnmount(disposeCommands)
 .HomePage {
   /**
    * Shared by the animating slot and the panel inside it, so the two can never drift apart.
-   * 360 rather than the original 280: the panel now carries four tabs and file paths, and 280
+   * 360 rather than the original 280: the panel now carries five tabs and file paths, and 280
    * truncated both.
    */
   --home-panel-width: 360px;
   // Resolve against each lane's containing block, not the whole viewport: the right panel is a
-  // real flex sibling and must reduce the transcript, confirmation and composer together.
+  // real grid sibling and must reduce the transcript, confirmation and composer together.
   --home-chat-lane-width: min(720px, calc(100% - 64px));
 
   // ---------------------------------------------------------------------------
@@ -2431,8 +2431,14 @@ onBeforeUnmount(disposeCommands)
   --tx-fill-color-blank: var(--shell-bg);
   --tx-bg-color: var(--shell-bg);
 
-  display: flex;
-  flex-direction: column;
+  /**
+   * Two columns: the top bar over the conversation, and the right panel beside both. The panel
+   * spans the two rows, so it runs the full height and its own header sits level with the top
+   * bar. `.HomePage-Split` dissolves into this grid instead of laying out a row of its own.
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   container-type: inline-size;
@@ -2450,16 +2456,18 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
-/** Splits the area under the top bar between the conversation and the optional right panel. */
+/**
+ * A wrapper in the markup only: its children are cells of the page grid. The body takes the
+ * conversation column under the top bar; the panel slot takes the second column across both rows.
+ */
 .HomePage-Split {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
+  display: contents;
 }
 
 .HomePage-PanelSlot {
   display: flex;
-  flex: none;
+  grid-column: 2;
+  grid-row: 1 / -1;
   width: var(--home-panel-width);
   // Clips the fixed-width panel while the slot narrows, which is what keeps the rows from
   // re-wrapping on every frame of the animation.
@@ -2467,12 +2475,12 @@ onBeforeUnmount(disposeCommands)
 }
 
 @container (max-width: 720px) {
-  .HomePage-Split {
-    flex-direction: column;
-  }
-
+  // Under the conversation instead, across the full width: an implicit third row, so the second
+  // column is left empty and collapses to nothing.
   .HomePage-PanelSlot {
     --home-panel-width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 3;
     width: 100%;
     height: min(35vh, 300px);
     min-height: 160px;
@@ -2512,7 +2520,8 @@ onBeforeUnmount(disposeCommands)
 }
 
 .HomePage-Body {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 2;
   // Without this the stream's 720px column would push the panel off-screen instead of narrowing.
   min-width: 0;
   min-height: 0;

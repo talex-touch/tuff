@@ -8,6 +8,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
 /**
  * What the host's file tools changed in this conversation, and the way back (A13, A14).
@@ -137,9 +138,11 @@ function outcomeText(outcome: ReviewRollbackOutcome): string {
       </button>
     </div>
 
-    <p v-else-if="records.length === 0" class="HomePreview-Empty">
-      {{ t('home.workspace.review.empty') }}
-    </p>
+    <HomePreviewEmpty
+      v-else-if="records.length === 0"
+      icon="i-ri-file-edit-line"
+      :text="t('home.workspace.review.empty')"
+    />
 
     <ol v-else class="HomePreviewReview-List">
       <li v-for="record in records" :key="record.id" class="HomePreviewReview-Item">

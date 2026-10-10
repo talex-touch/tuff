@@ -7,6 +7,7 @@ import type {
 } from '~/modules/conversation/workspace-activity'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
 /**
  * The conversation's work, turn by turn: each reply's terminal state and the tools it called, plus
@@ -74,9 +75,11 @@ const hasPending = computed(() => props.gateway.length > 0 || Boolean(props.run)
       </div>
     </section>
 
-    <p v-if="!loading && turns.length === 0" class="HomePreview-Empty">
-      {{ t('home.workspace.activity.empty') }}
-    </p>
+    <HomePreviewEmpty
+      v-if="!loading && turns.length === 0"
+      icon="i-ri-terminal-box-line"
+      :text="t('home.workspace.activity.empty')"
+    />
 
     <ol class="HomePreviewActivity-Turns">
       <li v-for="turn in ordered" :key="turn.messageId" class="HomePreviewActivity-Turn">

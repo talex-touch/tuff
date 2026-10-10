@@ -20,15 +20,18 @@ import { useConversationReview } from '~/modules/conversation/useConversationRev
 import HomePreviewActivity from './preview/HomePreviewActivity.vue'
 import HomePreviewArtifacts from './preview/HomePreviewArtifacts.vue'
 import HomePreviewContext from './preview/HomePreviewContext.vue'
+import HomePreviewEmpty from './preview/HomePreviewEmpty.vue'
 import HomePreviewReview from './preview/HomePreviewReview.vue'
 import HomePreviewSources from './preview/HomePreviewSources.vue'
-import HomePreviewToolCalls from './preview/HomePreviewToolCalls.vue'
 import HomePreviewWidgets from './preview/HomePreviewWidgets.vue'
 
 /**
  * The right panel behind the top bar's `panel-right` toggle: a preview of what
  * the conversation produced, so nothing has to be found by scrolling back, plus
- * the workspace's context and activity as Main reports them.
+ * the workspace's context and file changes as Main reports them.
+ *
+ * It runs the full height of the page beside the conversation, and its tab row
+ * is the header that sits level with the top bar.
  *
  * Scope is the whole conversation, not the last turn — "I don't want to scroll
  * back" is the entire point, and a per-turn index would not answer it.
@@ -62,14 +65,16 @@ const { t } = useI18n()
 const index = computed(() => buildPreviewIndex(props.messages))
 
 /** Stable identity: the count lives in the `name` slot, never in the tab value. */
-const active = ref('artifacts')
+const active = ref('outputs')
 
 const counts = computed(() => ({
-  artifacts: index.value.artifacts.length,
-  widgets: index.value.widgets.length,
-  toolCalls: index.value.toolCalls.length,
-  sources: index.value.sources.length
+  outputs: index.value.artifacts.length + index.value.widgets.length,
+  sources: index.value.sources.length,
+  work: index.value.toolCalls.length
 }))
+
+/** Main is holding a tool request or an agent run for the user — marked on the work log tab. */
+const waiting = computed(() => props.gateway.length > 0 || Boolean(props.pendingRun))
 
 /** Host file-change records: read only while the panel is mounted, i.e. open. */
 const review = useConversationReview(() => props.conversationId)
@@ -85,8 +90,9 @@ function locate(messageIndex: number): void {
       v-model="active"
       class="HomeSidePanel-Tabs"
       placement="top"
+      borderless
       content-scrollable
-      indicator-variant="line"
+      indicator-variant="pill"
       :content-padding="0"
       :animation="{ size: false, content: true }"
     >
@@ -95,28 +101,22 @@ function locate(messageIndex: number): void {
         width open and closed, and a second size animation inside would fight it
         for the same frames. The panel is full-height regardless.
       -->
-      <TxTabItem name="artifacts">
+      <!-- Files and widgets share one tab: both are things the conversation made, and as two tabs
+           each sat empty for most conversations. They stay in groups of their own inside it. -->
+      <TxTabItem name="outputs">
         <template #name>
           {{ t('home.preview.artifacts') }}
-          <span v-if="counts.artifacts" class="HomeSidePanel-Count">{{ counts.artifacts }}</span>
+          <span v-if="counts.outputs" class="HomeSidePanel-Count">{{ counts.outputs }}</span>
         </template>
-        <HomePreviewArtifacts :items="index.artifacts" />
-      </TxTabItem>
-
-      <TxTabItem name="widgets">
-        <template #name>
-          {{ t('home.preview.widgets') }}
-          <span v-if="counts.widgets" class="HomeSidePanel-Count">{{ counts.widgets }}</span>
-        </template>
-        <HomePreviewWidgets :items="index.widgets" @locate="locate" />
-      </TxTabItem>
-
-      <TxTabItem name="toolCalls">
-        <template #name>
-          {{ t('home.preview.toolCalls') }}
-          <span v-if="counts.toolCalls" class="HomeSidePanel-Count">{{ counts.toolCalls }}</span>
-        </template>
-        <HomePreviewToolCalls :items="index.toolCalls" @locate="locate" />
+        <HomePreviewEmpty
+          v-if="!counts.outputs"
+          icon="i-ri-file-text-line"
+          :text="t('home.preview.outputsEmpty')"
+        />
+        <div v-else class="HomeSidePanel-Outputs">
+          <HomePreviewArtifacts v-if="index.artifacts.length" :items="index.artifacts" />
+          <HomePreviewWidgets v-if="index.widgets.length" :items="index.widgets" @locate="locate" />
+        </div>
       </TxTabItem>
 
       <TxTabItem name="sources">
@@ -127,12 +127,20 @@ function locate(messageIndex: number): void {
         <HomePreviewSources :items="index.sources" />
       </TxTabItem>
 
-      <TxTabItem name="activity">
+      <!-- The work log is the activity timeline: every call, grouped under the reply that made it,
+           below whatever Main is waiting on. A flat list of the same calls beside it said the same
+           thing twice. -->
+      <TxTabItem name="work">
         <template #name>
-          {{ t('home.workspace.panel.activity') }}
-          <span v-if="gateway.length || pendingRun" class="HomeSidePanel-Count">
-            {{ gateway.length + (pendingRun ? 1 : 0) }}
-          </span>
+          {{ t('home.preview.toolCalls') }}
+          <span v-if="counts.work" class="HomeSidePanel-Count">{{ counts.work }}</span>
+          <span
+            v-if="waiting"
+            class="HomeSidePanel-Waiting"
+            role="img"
+            :aria-label="t('home.workspace.activity.waiting')"
+            :title="t('home.workspace.activity.waiting')"
+          />
         </template>
         <HomePreviewActivity
           :turns="activityTurns"
@@ -198,15 +206,49 @@ function locate(messageIndex: number): void {
   min-height: 0;
   min-width: 0;
 
-  // Keep all seven sections reachable inside the panel's fixed-width slot.
+  /**
+   * The header: as tall as the top bar beside it, so the two read as one strip across the
+   * window, and like the top bar it drags the window. No rule under it, as there is none under
+   * the top bar. Doubled class: TxTabs' own `--top` rules here carry the same weight.
+   */
+  &.tx-tabs :deep(.tx-tabs__nav) {
+    flex: none;
+    height: 52px;
+    border-bottom: 0;
+    -webkit-app-region: drag;
+    // Resting ink matches the top bar's chips.
+    --tx-text-color-regular: var(--shell-text-secondary);
+    // A flat fill under the active tab, like the model chip's: TxTabs' raised pill is a thumb
+    // for a track, and with no track it read as a floating button.
+    --tx-surface-raised: var(--shell-surface-2);
+    --tx-elevation-1: 0 0 0 0 transparent;
+    --tx-border-color-lighter: transparent;
+  }
+
+  // Five sections fit in Chinese; longer labels and counts scroll rather than wrap.
   :deep(.tx-tabs__nav-bar),
   :deep(.tx-tabs__nav-inner) {
     min-width: 0;
   }
 
+  &.tx-tabs :deep(.tx-tabs__nav-inner) {
+    gap: 2px;
+    padding: 0 12px;
+  }
+
+  // The top bar's chip radius: the two headers sit level, so their pills should match.
   :deep(.tx-tab-item) {
     flex-shrink: 0;
+    margin: 0;
+    padding: 7px 10px;
+    border-radius: var(--shell-radius-sm);
     white-space: nowrap;
+    -webkit-app-region: no-drag;
+    --fake-radius: var(--shell-radius-sm);
+  }
+
+  :deep(.tx-tab-item__name) {
+    font-size: var(--shell-fs-sm);
   }
 }
 
@@ -217,8 +259,24 @@ function locate(messageIndex: number): void {
   font-variant-numeric: tabular-nums;
 }
 
+.HomeSidePanel-Waiting {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--shell-primary);
+  vertical-align: middle;
+}
+
+.HomeSidePanel-Outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /**
- * The four tab bodies are separate components, so their shared text vocabulary
+ * The tab bodies are separate components, so their shared text vocabulary
  * lives here rather than being copied into each of them. Each body is a
  * single-root component, which is what puts this scope id on it.
  */
@@ -280,8 +338,9 @@ function locate(messageIndex: number): void {
   }
 }
 
+// No rule under the header, so the first row starts close under the tabs.
 :deep(.tx-tabs__content-scroll) {
-  padding: 12px 12px 16px;
+  padding: 4px 12px 16px;
   overscroll-behavior: contain;
   box-sizing: border-box;
 }
