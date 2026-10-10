@@ -1,3 +1,5 @@
+import type { FlowLightVariant } from '../../flow-light/src/types'
+
 export type TxCardVariant = 'solid' | 'dashed' | 'plain'
 
 export type TxCardBackground = 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
@@ -30,6 +32,10 @@ export interface TxCardProps {
   refractionLightSpring?: boolean
   refractionLightSpringStiffness?: number
   refractionLightSpringDamping?: number
+  /** The flow light (TxFlowLight) over the card's surface, whatever its `background`; off when absent. */
+  flowLight?: FlowLightVariant | false
+  /** Multiplies the flow light's theme opacity; default 1. */
+  flowLightIntensity?: number
   clickable?: boolean
   loading?: boolean
   loadingSpinnerSize?: number

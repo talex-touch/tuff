@@ -108,6 +108,19 @@ code: |
 ---
 :::
 
+### Flow light
+`flowLight` lays a fixed brand-colour light ([FlowLight](/docs/dev/components/flow-light)) over the veil and under the edge, in any `mode`.
+:::TuffDemoWrapper{demo="BaseSurfaceFlowLightDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBaseSurface mode="refraction" flow-light="rim" :radius="14">
+      Panel content
+    </TxBaseSurface>
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Prefer `TxCard` for product containers, since it owns container semantics and interaction; use `TxBaseSurface` only to tune material, fallback, or refraction directly.
@@ -147,6 +160,8 @@ code: |
 | `refractionLightX` / `refractionLightY` | `number` | - | Light anchor (0–1). |
 | `refractionHaloOpacity` | `number` | - | Halo opacity (0–1); the built-in filmic model applies when unset. |
 | `overlayOpacity` | `number` | `0` | Extra mask opacity for non-mask modes. |
+| `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | The flow light's variant; absent or `false` is off, any `mode` can have it. |
+| `flowLightIntensity` | `number` | `1` | Flow light strength, multiplying the theme opacity. |
 | `preset` | `'default' \| 'card'` | `'default'` | Visual preset; `card` applies the card tuning. |
 | `refractionRenderer` | `'svg' \| 'css'` | `'svg'` | Refraction renderer. |
 | `moving` | `boolean` | `false` | Marks the surface as moving, which triggers the fallback. |

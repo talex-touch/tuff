@@ -139,6 +139,9 @@ provide<DropdownMenuContext>(TX_DROPDOWN_MENU_INJECTION_KEY, {
   get activationFeedback() {
     return props.activationFeedback
   },
+  get panelCard() {
+    return props.panelCard
+  },
 })
 </script>
 

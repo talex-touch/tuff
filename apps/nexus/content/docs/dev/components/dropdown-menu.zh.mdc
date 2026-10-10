@@ -122,6 +122,28 @@ code: |
 ---
 :::
 
+### 流光底
+`panelCard` 里的 `flowLight` 给菜单面板加上流光底；子菜单没有指定时沿用根菜单的画法和强度。
+:::TuffDemoWrapper{demo="FlowLightMenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu :panel-card="{ flowLight: 'rim' }">
+      <template #trigger>
+        <TxButton>项目操作</TxButton>
+      </template>
+      <TxDropdownItem>新建对话</TxDropdownItem>
+      <TxDropdownSubmenu>
+        在本机代理中打开
+        <template #menu>
+          <TxDropdownItem>OMP</TxDropdownItem>
+        </template>
+      </TxDropdownSubmenu>
+    </TxDropdownMenu>
+  </template>
+---
+:::
+
 ### 最佳实践
 
 - 只放短命令；需要段落、表单或多步交互时改用 `TxPopover`、`TxDrawer` 或 `TxContextMenuPanel`。
@@ -150,7 +172,7 @@ code: |
 | `maxHeight` | `number` | `420` | 面板最大高度（px），超出时滚动。 |
 | `unlimitedHeight` | `boolean` | `false` | 不限制面板高度。 |
 | `referenceClass` | `BaseAnchorClassValue` | - | 追加到触发锚点的 class。 |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给面板卡片的参数。 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给面板卡片的参数，含流光底 `flowLight` / `flowLightIntensity`。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式。 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影。 |
@@ -211,7 +233,7 @@ code: |
 | `maxHeight` | `number` | `420` | 子面板最大高度（px），超出时滚动。 |
 | `unlimitedHeight` | `boolean` | `false` | 不限制子面板高度。 |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 子面板动画。 |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给子面板卡片的参数。 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给子面板卡片的参数；`flowLight` / `flowLightIntensity` 不传时沿用根菜单，`flowLight: false` 关闭。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 子面板边框样式。 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 子面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 子面板阴影。 |

@@ -2,6 +2,7 @@
 import type { GlassSurfaceProps } from '../../glass-surface'
 import type { BaseSurfaceMode, BaseSurfaceProps } from './types'
 import { computed, ref, useAttrs } from 'vue'
+import TxFlowLight from '../../flow-light/src/TxFlowLight.vue'
 import TxGlassSurface from '../../glass-surface/src/TxGlassSurface.vue'
 import { clamp, createSurfaceValueResolver, easeOutQuad, lerp, normalizeAngleDeg, smoothstep01 } from './base-surface-math'
 import {
@@ -710,6 +711,13 @@ const rootClasses = computed(() => {
     <Transition name="tx-surface-layer-fade">
       <div v-if="showLayerMask" class="tx-base-surface__layer tx-base-surface__layer--mask" />
     </Transition>
+    <!-- The flow light paints CSS gradients, not the backdrop, so it stays put through motion. -->
+    <TxFlowLight
+      v-if="flowLight"
+      class="tx-base-surface__layer tx-base-surface__layer--flow-light"
+      :variant="flowLight"
+      :intensity="flowLightIntensity ?? 1"
+    />
     <Transition name="tx-surface-layer-fade">
       <div v-if="showLayerRefractionEdge" class="tx-base-surface__layer tx-base-surface__layer--refraction-edge" />
     </Transition>

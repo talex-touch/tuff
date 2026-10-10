@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.7.0",
-  "totalComponents": 183,
+  "totalComponents": 184,
   "versions": [
     {
       "version": "0.7.0",
@@ -680,6 +680,11 @@
     "floating": {
       "slug": "floating",
       "since": "0.3.4",
+      "suite": "pro"
+    },
+    "flow-light": {
+      "slug": "flow-light",
+      "since": "0.6.3",
       "suite": "pro"
     },
     "flowchart": {

@@ -202,6 +202,25 @@ code: |
 ---
 :::
 
+### Flow light
+`flowLight` is passed to the card's surface whatever its `background`; floating panels turn it on through `panelCard`.
+:::TuffDemoWrapper{demo="CardFlowLightDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard background="pure" shadow="soft" flow-light="rim">
+      Card content
+    </TxCard>
+    <TxPopover :panel-card="{ flowLight: 'corners' }">
+      <template #reference>
+        <TxButton>Floating panel</TxButton>
+      </template>
+      Panel content
+    </TxPopover>
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Use `clickable` only for whole-card navigation or selection; put separate actions on real buttons or links inside the slots.
@@ -236,6 +255,8 @@ code: |
 | refractionLightSpring | `boolean` | `true` | Springs the light as it follows the pointer. |
 | refractionLightSpringStiffness | `number` | `0.18` | Light spring stiffness, clamped to `0.01–0.55`. |
 | refractionLightSpringDamping | `number` | `0.84` | Light spring damping, clamped to `0.55–0.99`. |
+| flowLight | `'corners' \| 'rim' \| 'aurora' \| false` | - | The flow light on the surface; absent or `false` is off. |
+| flowLightIntensity | `number` | `1` | Flow light strength, multiplying the theme opacity. |
 | clickable | `boolean` | `false` | Enables hover and press feedback (scales to `0.985`) and emits `click`. |
 | loading | `boolean` | `false` | Covers the card with a `TxSpinner` overlay. |
 | loadingSpinnerSize | `number` | - | Spinner size in px; `12` when omitted. |

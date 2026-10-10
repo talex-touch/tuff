@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**183**。
+当前源码导出模块总数：**184**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -114,7 +114,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 - `高级交互 (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `动效复合控件 (3)`: `motion-control`, `motion-form`, `motion-metric`
 - `可视化 (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
-- `视觉效果 (24)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
+- `视觉效果 (25)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
 - `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 - `底层原语 (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 

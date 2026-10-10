@@ -1,5 +1,16 @@
 # TouchX UI 更新日志
 
+## [Unreleased]
+
+### 📦 组件变动 (Components)
+
+- **更新组件**: `base-surface`, `card`, `dropdown-menu`
+- **新增组件（未独立发布）**: `flow-light`
+
+### ✨ 组件增强
+
+- 新增 `TxFlowLight` 流光底：一层固定的 Tuff 品牌色光（蓝 `#0894ff`、紫 `#c959dd`、红 `#ff2e54`、橙 `#ff9004`），颜色不随面板背后的内容变化。`variant` 有三种：`corners` 双角柔光、`rim` 顶缘流光带、`aurora` 极光漫射；`intensity` 乘到主题透明度上，`colors` 覆盖四个色标；高对比度下隐藏。`TxBaseSurface` 与 `TxCard` 新增 `flowLight` / `flowLightIntensity`，任何 `mode`/`background` 都能开，光层位于遮罩之上、描边之下；锚点家族通过 `panelCard` 透传，`TxDropdownSubmenu` 未指定时沿用根菜单的流光。
+
 ## [0.7.0] - 2026-10-09
 
 ### 📦 组件变动 (Components)

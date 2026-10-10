@@ -1,0 +1,159 @@
+---
+title: "FlowLight"
+description: "A fixed brand-colour light laid over a panel."
+category: Effects
+status: beta
+since: 0.6.3
+tags: [light, surface, gradient, brand]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxFlowLight } from '@talex-touch/tuffex/flow-light'
+  import '@talex-touch/tuffex/flow-light/style.css'
+  import '@talex-touch/tuffex/base.css' // Design tokens and reset; import once per app
+---
+:::
+
+## Usage
+
+### Three variants
+`variant` picks corner glows, a rim band or an aurora wash; dark backgrounds get a stronger light.
+:::TuffDemoWrapper{demo="FlowLightVariantsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="panel">
+      <TxFlowLight variant="corners" />
+      <!-- panel content -->
+    </div>
+  </template>
+
+  <style scoped>
+  .panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+  }
+  </style>
+---
+:::
+
+### On a menu
+Anchored panels turn it on through `panelCard`; a submenu that names none uses the root menu's.
+:::TuffDemoWrapper{demo="FlowLightMenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu :panel-card="{ flowLight: 'rim' }">
+      <template #trigger>
+        <TxButton>Project actions</TxButton>
+      </template>
+      <TxDropdownItem>New chat</TxDropdownItem>
+      <TxDropdownSubmenu>
+        Open in local agent
+        <template #menu>
+          <TxDropdownItem>OMP</TxDropdownItem>
+        </template>
+      </TxDropdownSubmenu>
+    </TxDropdownMenu>
+  </template>
+---
+:::
+
+### Intensity
+`intensity` multiplies the theme opacity; `0` turns the light off.
+:::TuffDemoWrapper{demo="FlowLightIntensityDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlowLight variant="corners" :intensity="0.5" />
+    <TxFlowLight variant="corners" :intensity="1.6" />
+  </template>
+---
+:::
+
+### Custom colours
+`colors` replaces the blue, purple, red and orange stops in order; any not given keep their default.
+:::TuffDemoWrapper{demo="FlowLightColorsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlowLight
+      variant="rim"
+      :colors="['#06b6d4', '#14b8a6', '#22c55e', '#84cc16']"
+    />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Put it in a positioned, rounded box with `overflow: hidden`; it fills the box, inherits the radius and takes no pointer events.
+- On a panel, prefer the host's `flowLight` (TxBaseSurface, TxCard, `panelCard`): the layer then sits over the veil and under the edge.
+- Give a menu, its submenus and sibling popovers the same variant; submenus need not repeat it.
+- On text-heavy panels use `rim` or a lower `intensity` so the light stays at the edges.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'corners' \| 'rim' \| 'aurora'` | `'corners'` | How the light is drawn: corner glows, a rim band, an aurora wash. |
+| `intensity` | `number` | `1` | Multiplies the theme opacity; below 0 counts as 0. |
+| `colors` | `readonly string[]` | - | Replaces the blue, purple, red and orange stops in order, up to four. |
+
+### Turning it on in other components
+
+| Component | Prop | Description |
+|-----------|------|-------------|
+| TxBaseSurface | `flowLight` / `flowLightIntensity` | Works with any `mode`; absent or `false` is off. |
+| TxCard | `flowLight` / `flowLightIntensity` | Passed to the card's surface, whatever its `background`. |
+| Popover, DropdownMenu and other anchored panels | `panelCard.flowLight` / `panelCard.flowLightIntensity` | Passed to the panel card. |
+| TxDropdownSubmenu | `panelCard.flowLight` / `panelCard.flowLightIntensity` | When absent, each falls back to the root menu's value; `flowLight: false` turns it off. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-flow-light-color-1` … `-4` | `#0894ff`, `#c959dd`, `#ff2e54`, `#ff9004` | The four stops; `colors` writes these. |
+| `--tx-flow-light-opacity` | Per variant and theme | Overrides the theme opacity: light `corners` 0.2, `rim` 0.55, `aurora` 0.14; dark 0.34, 0.75, 0.26. |
+| `--tx-flow-light-intensity` | `1` | Opacity multiplier; `intensity` writes this. |
+
+- The variables are read where they are used, so they work on the component or any ancestor.
+
+## Overview
+
+- One decorative layer filling its box: `aria-hidden`, no pointer events, the box's own radius.
+- The colours are the Tuff brand stops (shared with the composer's live rim) and do not depend on what is behind the panel; refraction's dispersion can only tint with colours already behind it, so over an empty dark page it shows none.
+- Under a `[data-theme='dark']` or `.dark` ancestor each variant is brighter.
+- Hidden under high contrast (`html[data-tx-contrast='high']`, `html.contrast`) so it never lowers text contrast.
+- Static: no animation, so reduced motion needs no fallback.
+
+## Technologies
+
+- Plain CSS: `corners` and `aurora` are layered `radial-gradient`s (`aurora` adds a 14px blur); `rim` is one horizontal gradient, shaped by a vertical `mask-image` into a 1px rim and a glow over the top third.
+- In TxBaseSurface it renders as `.tx-base-surface__layer--flow-light`: `z-index: 3` like the veil and after it in the DOM, under the edge (4) and the content (5).
+- Source: `packages/tuffex/packages/components/src/flow-light/`.
+
+<TuffDocSourceLink />
+
+## Related components
+
+- [BaseSurface](/docs/dev/components/base-surface): the material layer that carries the light.
+- [Card](/docs/dev/components/card): the floating panels' card; `flowLight` reaches it.
+- [DropdownMenu](/docs/dev/components/dropdown-menu): submenus take the root menu's flow light.
+- [BorderBeam](/docs/dev/components/border-beam): a light that travels along the border; FlowLight is a fixed light on the panel's face.

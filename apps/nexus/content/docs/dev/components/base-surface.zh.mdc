@@ -108,6 +108,19 @@ code: |
 ---
 :::
 
+### 流光底
+`flowLight` 在遮罩之上、描边之下叠一层固定的品牌色光（[FlowLight](/docs/dev/components/flow-light)），任何 `mode` 都能开。
+:::TuffDemoWrapper{demo="BaseSurfaceFlowLightDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBaseSurface mode="refraction" flow-light="rim" :radius="14">
+      面板内容
+    </TxBaseSurface>
+  </template>
+---
+:::
+
 ### 最佳实践
 
 - 业务容器优先用 `TxCard`，它负责容器语义与交互；只在直接调材质、降级或折射参数时用 `TxBaseSurface`。
@@ -147,6 +160,8 @@ code: |
 | `refractionLightX` / `refractionLightY` | `number` | - | 光源锚点（0–1）。 |
 | `refractionHaloOpacity` | `number` | - | 光晕透明度（0–1）；不传时按内置 filmic 模型。 |
 | `overlayOpacity` | `number` | `0` | 非 mask 模式额外叠加的遮罩透明度。 |
+| `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | 流光底的画法；不传或 `false` 即关闭，任何 `mode` 都能开。 |
+| `flowLightIntensity` | `number` | `1` | 流光底强度，乘到主题透明度上。 |
 | `preset` | `'default' \| 'card'` | `'default'` | 视觉预设；`card` 为卡片调校。 |
 | `refractionRenderer` | `'svg' \| 'css'` | `'svg'` | 折射渲染器。 |
 | `moving` | `boolean` | `false` | 标记正在运动，触发降级。 |

@@ -102,6 +102,8 @@ export type BaseAnchorPanelCardProps = Partial<Pick<
   | 'refractionLightSpring'
   | 'refractionLightSpringStiffness'
   | 'refractionLightSpringDamping'
+  | 'flowLight'
+  | 'flowLightIntensity'
 >>
 
 export type BaseAnchorClassValue = string | Record<string, boolean> | BaseAnchorClassValue[]

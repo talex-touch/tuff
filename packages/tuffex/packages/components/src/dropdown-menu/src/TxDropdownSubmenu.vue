@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import type { DropdownSubmenuProps } from './types'
-import { nextTick, ref } from 'vue'
+import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+import type { DropdownMenuContext, DropdownSubmenuProps } from './types'
+import { computed, inject, nextTick, ref } from 'vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import TxDropdownItem from './TxDropdownItem.vue'
+import { TX_DROPDOWN_MENU_INJECTION_KEY } from './types'
 
 defineOptions({ name: 'TxDropdownSubmenu' })
 
@@ -34,6 +36,28 @@ const props = withDefaults(defineProps<DropdownSubmenuProps>(), {
  */
 const open = ref(false)
 const triggerRef = ref<InstanceType<typeof TxDropdownItem> | null>(null)
+const menu = inject<DropdownMenuContext | null>(TX_DROPDOWN_MENU_INJECTION_KEY, null)
+
+/**
+ * A submenu is the menu's own surface one level out: a plain panel beside a lit one reads as a
+ * different material. So it takes the root menu's flow light — variant and intensity, each on
+ * its own — unless its `panelCard` names one; `flowLight: false` there turns it off.
+ */
+const resolvedPanelCard = computed<BaseAnchorPanelCardProps | undefined>(() => {
+  const inherited = menu?.panelCard
+  if (!inherited || (inherited.flowLight === undefined && inherited.flowLightIntensity === undefined))
+    return props.panelCard
+  const own = props.panelCard ?? {}
+  return {
+    ...own,
+    ...(own.flowLight === undefined && inherited.flowLight !== undefined
+      ? { flowLight: inherited.flowLight }
+      : {}),
+    ...(own.flowLightIntensity === undefined && inherited.flowLightIntensity !== undefined
+      ? { flowLightIntensity: inherited.flowLightIntensity }
+      : {}),
+  }
+})
 const panelRef = ref<HTMLElement | null>(null)
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
@@ -135,7 +159,7 @@ function onPanelKeydown(event: KeyboardEvent) {
     :panel-shadow="panelShadow"
     :panel-radius="panelRadius"
     :panel-padding="panelPadding"
-    :panel-card="panelCard"
+    :panel-card="resolvedPanelCard"
   >
     <template #reference>
       <TxDropdownItem

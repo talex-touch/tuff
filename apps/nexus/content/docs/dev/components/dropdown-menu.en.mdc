@@ -122,6 +122,28 @@ code: |
 ---
 :::
 
+### Flow light
+`flowLight` in `panelCard` gives the menu panel a flow light; a submenu that names none takes the root menu's variant and intensity.
+:::TuffDemoWrapper{demo="FlowLightMenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu :panel-card="{ flowLight: 'rim' }">
+      <template #trigger>
+        <TxButton>Project actions</TxButton>
+      </template>
+      <TxDropdownItem>New chat</TxDropdownItem>
+      <TxDropdownSubmenu>
+        Open in local agent
+        <template #menu>
+          <TxDropdownItem>OMP</TxDropdownItem>
+        </template>
+      </TxDropdownSubmenu>
+    </TxDropdownMenu>
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Keep it to short commands. For paragraphs, forms, or multi-step interaction, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel`.
@@ -150,7 +172,7 @@ code: |
 | `maxHeight` | `number` | `420` | Maximum panel height in px; taller content scrolls. |
 | `unlimitedHeight` | `boolean` | `false` | Removes the panel's height limit. |
 | `referenceClass` | `BaseAnchorClassValue` | - | Extra class on the trigger anchor. |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the panel. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the panel, including the flow light's `flowLight` / `flowLightIntensity`. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
@@ -211,7 +233,7 @@ code: |
 | `maxHeight` | `number` | `420` | Maximum child panel height in px; taller content scrolls. |
 | `unlimitedHeight` | `boolean` | `false` | Removes the child panel's height limit. |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Child panel animation. |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the child panel. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the child panel; `flowLight` / `flowLightIntensity` fall back to the root menu's when absent, `flowLight: false` turns it off. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Child panel border style. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Child panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Child panel shadow. |

@@ -386,6 +386,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/stagger',
     '/docs/dev/components/fusion',
     '/docs/dev/components/fusion-surface',
+    '/docs/dev/components/flow-light',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
     '/docs/dev/components/image-generation',
