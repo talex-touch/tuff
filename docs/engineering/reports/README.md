@@ -38,6 +38,7 @@
 - `nexus-performance-2026-06-21/`：Nexus performance 当前工作表。
 - [`release-gate-and-worktree-closeout-2026-09-13.md`](./release-gate-and-worktree-closeout-2026-09-13.md)：工作树收口与 `quality:release` 在 clean committed HEAD 上的分阶段复跑证据。
 - [`cloudflare-ai-gateway-nexus-scene-routing-2026-09-25.md`](./cloudflare-ai-gateway-nexus-scene-routing-2026-09-25.md)：CF AI Gateway 接入 Nexus 的计费口径、硬限制、上游覆盖与本仓不变量冲突点调研结论（未落地，含待实测清单）。
+- [`nexus-cn-access-2026-10-10.md`](./nexus-cn-access-2026-10-10.md)：中国大陆访问 Nexus 的链路实测与方案对比（优选 IP、EdgeOne、自建中转、国内反代），**检测中**（含待实测清单），附同批待定的构建、边缘缓存与 Sentry 事项。
 
 ## 活报告
 
