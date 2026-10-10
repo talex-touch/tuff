@@ -1663,7 +1663,8 @@
         "WORKSPACE_FORK_NATIVE_UNSAFE": "The CLI session can't be branched safely right now.",
         "WORKSPACE_RUN_NOT_PENDING": "That run is no longer waiting for approval.",
         "WORKSPACE_STALE_TURN": "That reply has already moved on.",
-        "WORKSPACE_TURN_INTERRUPTED": "The reply stopped before it finished (the app closed or the run ended)."
+        "WORKSPACE_TURN_INTERRUPTED": "The reply stopped before it finished (the app closed or the run ended).",
+        "WORKSPACE_VOICE_UNAVAILABLE": "This recording is no longer available, so it was not sent"
       }
     },
     "greeting": "What shall we do today?",
@@ -1704,6 +1705,23 @@
     "modelNoResults": "No models match",
     "modelSources": "Model sources",
     "configureProvider": "Configure",
+    "voiceClip": {
+      "label": "Voice",
+      "inserted": "Transcribed into the message box",
+      "empty": "No speech was recognized",
+      "recognizing": "Recognizing again…",
+      "sending": "Sending…",
+      "retry": "Recognize again",
+      "send": "Send voice",
+      "sendDirect": "Send anyway",
+      "dismiss": "Close voice clip",
+      "nothingToSend": "No speech was recognized in this recording, so it cannot be sent",
+      "expired": "This recording is no longer available",
+      "play": "Play voice",
+      "pause": "Pause",
+      "seek": "Playback position",
+      "unavailable": "Recording unavailable"
+    },
     "panel": {
       "title": "Conversation info",
       "turnInfo": "This turn",

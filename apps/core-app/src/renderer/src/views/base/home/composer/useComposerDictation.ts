@@ -3,11 +3,12 @@ import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
   VoiceCaptureStatus,
+  VoiceKeptRecording,
   VoiceRecognitionStatus,
   VoiceSdk
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { ComputedRef, Ref } from 'vue'
-import type { DictationNoticeKind } from './dictation-notice'
+import type { DictationFailureNotice, DictationNoticeKind } from './dictation-notice'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
@@ -36,11 +37,49 @@ export type DictationState = 'idle' | 'starting' | 'listening' | 'finishing'
 /** How a session ended: words landed, nothing was heard, the user cancelled, or it failed. */
 export type DictationOutcome = 'inserted' | 'empty' | 'cancelled' | 'failed'
 
-/** The three Voice SDK methods the composer needs; injectable for tests. */
+/** The Voice SDK methods the composer needs; injectable for tests. */
 export type ComposerDictationSdk = Pick<
   VoiceSdk,
-  'asrStream' | 'getRecognitionStatus' | 'openMicrophoneSettings'
+  | 'asrStream'
+  | 'getRecognitionStatus'
+  | 'openMicrophoneSettings'
+  | 'transcribeRecording'
+  | 'discardRecording'
 >
+
+/** What a voice clip's words are doing: in the draft, none heard, or recognition failed. */
+export type DictationClipOutcome = 'inserted' | 'empty' | 'failed'
+
+/**
+ * The audio of the last finished session, kept by main (`keepRecording`) for the Home voice clip:
+ * played back, recognized again, or sent as a voice message. One at a time — the next session, a
+ * send, or dismissing it lets it go.
+ */
+export interface DictationClip {
+  recording: VoiceKeptRecording
+  outcome: DictationClipOutcome
+  /** Why recognition failed (`outcome === 'failed'`), or why the last attempt on the clip did. */
+  failure: DictationFailureNotice | null
+  /**
+   * The words the clip put in the draft and the draft on either side of them, so a send can take
+   * them back out and another recognition can replace them — as long as nobody has edited the
+   * draft since. `spoken` is empty when nothing landed.
+   */
+  spoken: string
+  before: string
+  after: string
+  /** The draft as the clip left it; another edit since means the clip no longer owns any of it. */
+  draft: string
+  /** The draft to go back to when the clip's words are taken out (before the session, usually). */
+  original: string
+  /** The session's levels, oldest first, bucketed for the clip's waveform. */
+  peaks: readonly number[]
+  /** A recognition or a send in flight on the clip. */
+  busy: 'recognizing' | 'sending' | null
+}
+
+/** Bars in a clip's waveform: the whole session's levels, bucketed to this many. */
+const CLIP_PEAK_COUNT = 48
 
 export interface UseComposerDictationOptions {
   draft: Ref<string>
@@ -81,6 +120,29 @@ export interface UseComposerDictationReturn {
   cancel: (options?: { restore?: boolean }) => void
   refreshReadiness: () => Promise<void>
   openMicrophoneSettings: () => Promise<void>
+  /** The finished session's voice clip, `null` when there is none (see {@link DictationClip}). */
+  clip: Readonly<Ref<DictationClip | null>>
+  /**
+   * Recognizes the clip again and puts the words in the draft — in place of the clip's earlier
+   * words while they are still there untouched, else where its words would have gone. Resolves
+   * with the clip's new outcome; a failure stays on the clip rather than throwing.
+   */
+  recognizeClip: () => Promise<DictationClipOutcome | null>
+  /** The clip's words for a send: its own when it has them, else recognized now (throws). */
+  clipTranscript: () => Promise<string>
+  /** The draft without the clip's words, when they are still there as they landed. */
+  draftWithoutClip: () => string
+  /**
+   * Marks the clip as sending, or done sending; a failure given with it replaces the clip's own
+   * (`null` clears it, absent leaves it as it was).
+   */
+  markClipSending: (sending: boolean, failure?: DictationFailureNotice | null) => void
+  /** Hands the clip to a send: off the screen, its audio left for main to take. */
+  takeClip: () => DictationClip | null
+  /** Puts back a clip whose send failed, unless a newer clip has taken its place. */
+  restoreClip: (clip: DictationClip) => void
+  /** Dismisses the clip and lets main delete its audio. */
+  dismissClip: () => void
 }
 
 interface Session {
@@ -99,7 +161,26 @@ interface Session {
   /** `ready` or a level frame arrived: the microphone answers. */
   captured: boolean
   normalize: (rms: number) => number
+  /** Every normalized level of the session, for the clip's waveform. */
+  allLevels: number[]
+  /** Main kept the session's audio (`recording` event). */
+  recording: VoiceKeptRecording | null
   waiters: Array<(outcome: DictationOutcome) => void>
+}
+
+/** A level history bucketed to `count` peaks: each bar is the loudest frame in its span. */
+export function bucketPeaks(levels: readonly number[], count = CLIP_PEAK_COUNT): number[] {
+  if (levels.length === 0) return []
+  if (levels.length <= count) return levels.map((level) => Math.min(1, Math.max(0, level)))
+  const peaks: number[] = []
+  for (let index = 0; index < count; index += 1) {
+    const start = Math.floor((index * levels.length) / count)
+    const end = Math.max(start + 1, Math.floor(((index + 1) * levels.length) / count))
+    let peak = 0
+    for (let at = start; at < end; at += 1) peak = Math.max(peak, levels[at] ?? 0)
+    peaks.push(Math.min(1, Math.max(0, peak)))
+  }
+  return peaks
 }
 
 /**
@@ -128,6 +209,7 @@ export function useComposerDictation(
   const elapsedMs = ref(0)
   const outcome = ref<DictationOutcome | null>(null)
   const active = computed(() => state.value !== 'idle')
+  const clip = shallowRef<DictationClip | null>(null)
 
   let session: Session | null = null
   let nextGeneration = 0
@@ -227,10 +309,15 @@ export function useComposerDictation(
         return
       case 'level': {
         markCaptured(current)
-        const next = [...levels.value.slice(1), current.normalize(event.rms)]
-        levels.value = next
+        const level = current.normalize(event.rms)
+        current.allLevels.push(level)
+        levels.value = [...levels.value.slice(1), level]
         return
       }
+      // Main kept the session's audio; it becomes the clip once the session has ended.
+      case 'recording':
+        current.recording = event.recording
+        return
       // A segment made out of silence (`。。。`, a subtitle credit) never reaches the draft, not
       // even for the moment a partial stays up; a session of nothing else ends as `empty`.
       // Each partial is the provider's whole hypothesis for the utterance so far — main keeps it
@@ -267,10 +354,12 @@ export function useComposerDictation(
     if (caret === null) {
       restoreSnapshot(current)
       finish(current, 'empty')
-      options.onNotice?.('empty')
+      // A clip says it itself, with the recording to try again on.
+      if (!offerClip(current, 'empty', null)) options.onNotice?.('empty')
       return
     }
     finish(current, 'inserted')
+    offerClip(current, 'inserted', null)
     // Focus goes back to the field when it was still in the composer (the mic key, the field
     // itself); a user who has moved on elsewhere keeps their focus.
     void nextTick(() => {
@@ -290,7 +379,150 @@ export function useComposerDictation(
     // What the user has already seen stays in the draft; only the notice is new.
     finish(current, 'failed')
     const notice = classifyDictationFailure(error)
+    // With the audio kept, the clip carries the failure and the way past it (recognize again, or
+    // send the voice); without it — a microphone that never opened — the toast does.
+    if (notice && offerClip(current, 'failed', notice)) return
     if (notice) options.onNotice?.(notice.kind, notice.detail)
+  }
+
+  function discardRecording(recordingId: string): void {
+    // Main also lets an unclaimed clip go on its own; a failed discard leaves nothing to show.
+    void sdk.discardRecording({ recordingId }).catch(() => undefined)
+  }
+
+  /** One clip at a time: the one it replaces lets its audio go. */
+  function replaceClip(next: DictationClip | null): void {
+    const previous = clip.value
+    clip.value = next
+    if (previous && previous.recording.id !== next?.recording.id)
+      discardRecording(previous.recording.id)
+  }
+
+  /** Shows the session's clip when main kept its audio; false when it did not. */
+  function offerClip(
+    current: Session,
+    result: DictationClipOutcome,
+    failure: DictationFailureNotice | null
+  ): boolean {
+    const recording = current.recording
+    if (!recording) return false
+    const spoken = result === 'empty' ? '' : mergeTranscript(current.committed, current.partial)
+    replaceClip({
+      recording,
+      outcome: result,
+      failure,
+      spoken: current.wrote ? spoken.trim() : '',
+      before: current.before,
+      after: current.after,
+      draft: options.draft.value,
+      original: current.snapshot.draft,
+      peaks: bucketPeaks(current.allLevels),
+      busy: null
+    })
+    return true
+  }
+
+  function recognitionPayload(recordingId: string) {
+    const language = options.language?.()
+    return { recordingId, ...(language ? { language } : {}) }
+  }
+
+  /** Whether the clip is still this one: dismissed, sent or replaced meanwhile, it is not. */
+  function stillHeld(held: DictationClip): DictationClip | null {
+    return clip.value?.recording.id === held.recording.id ? clip.value : null
+  }
+
+  async function recognizeClip(): Promise<DictationClipOutcome | null> {
+    const held = clip.value
+    if (!held || held.busy || session) return null
+    clip.value = { ...held, busy: 'recognizing' }
+    let words: string
+    try {
+      const result = await sdk.transcribeRecording(recognitionPayload(held.recording.id))
+      words = spokenSegment(result.text).trim()
+    } catch (error) {
+      const current = stillHeld(held)
+      if (!current) return null
+      clip.value = {
+        ...current,
+        busy: null,
+        failure: classifyDictationFailure(error) ?? { kind: 'failed' }
+      }
+      return clip.value.outcome
+    }
+    const current = stillHeld(held)
+    if (!current) return null
+    if (!words) {
+      // Nothing new: the clip keeps whatever words it already put in the draft.
+      clip.value = { ...current, busy: null, failure: { kind: 'empty' } }
+      return clip.value.outcome
+    }
+    // In place of the clip's earlier words while the draft is as the clip left it; after whatever
+    // the user has written since otherwise, which stays untouched.
+    const draftNow = options.draft.value
+    const inPlace = draftNow === current.draft
+    const before = inPlace ? current.before : draftNow
+    const after = inPlace ? current.after : ''
+    const { text, caret } = spliceDictation({ before, after, spoken: words })
+    options.draft.value = text
+    clip.value = {
+      ...current,
+      busy: null,
+      failure: null,
+      outcome: 'inserted',
+      spoken: words,
+      before,
+      after,
+      draft: text,
+      original: inPlace ? current.original : draftNow
+    }
+    void nextTick(() => {
+      options.onTextChange?.()
+      focusedInput()?.setSelectionRange(caret, caret)
+    })
+    return 'inserted'
+  }
+
+  async function clipTranscript(): Promise<string> {
+    const held = clip.value
+    if (!held) throw new Error('VOICE_RECORDING_NOT_FOUND')
+    if (held.outcome === 'inserted' && held.spoken) return held.spoken
+    const result = await sdk.transcribeRecording(recognitionPayload(held.recording.id))
+    return spokenSegment(result.text).trim()
+  }
+
+  function draftWithoutClip(): string {
+    const held = clip.value
+    const draftNow = options.draft.value
+    return held && held.spoken && draftNow === held.draft ? held.original : draftNow
+  }
+
+  function markClipSending(sending: boolean, failure?: DictationFailureNotice | null): void {
+    const held = clip.value
+    if (!held) return
+    clip.value = {
+      ...held,
+      busy: sending ? 'sending' : null,
+      ...(failure === undefined ? {} : { failure })
+    }
+  }
+
+  function takeClip(): DictationClip | null {
+    const held = clip.value
+    clip.value = null
+    return held
+  }
+
+  function restoreClip(held: DictationClip): void {
+    if (clip.value) {
+      if (clip.value.recording.id !== held.recording.id) discardRecording(held.recording.id)
+      return
+    }
+    clip.value = { ...held, busy: null }
+  }
+
+  function dismissClip(): void {
+    replaceClip(null)
   }
 
   async function start(): Promise<void> {
@@ -316,6 +548,8 @@ export function useComposerDictation(
       Math.max(input?.selectionEnd ?? selectionStart, selectionStart),
       draft.length
     )
+    // A new recording replaces the clip on screen.
+    replaceClip(null)
     const current: Session = {
       generation: ++nextGeneration,
       controller: null,
@@ -329,6 +563,8 @@ export function useComposerDictation(
       wrote: false,
       captured: false,
       normalize: createLevelNormalizer(),
+      allLevels: [],
+      recording: null,
       waiters: []
     }
     session = current
@@ -351,6 +587,8 @@ export function useComposerDictation(
       deliveryTiming: 'live',
       cleanup: true,
       emitLevel: true,
+      // The audio stays with main once the session ends, for the voice clip (`DictationClip`).
+      keepRecording: true,
       ...(options.language?.() ? { language: options.language() } : {})
     }
 
@@ -436,8 +674,11 @@ export function useComposerDictation(
       if (hasWindow()) window.removeEventListener('focus', onFocus)
     })
   }
-  // Unmounting abandons the session without writing the draft back.
-  onScopeDispose(() => cancel({ restore: false }))
+  // Unmounting abandons the session without writing the draft back, and lets the clip go.
+  onScopeDispose(() => {
+    cancel({ restore: false })
+    dismissClip()
+  })
 
   return {
     state: readonly(state),
@@ -451,6 +692,14 @@ export function useComposerDictation(
     stop,
     cancel,
     refreshReadiness,
-    openMicrophoneSettings
+    openMicrophoneSettings,
+    clip: readonly(clip),
+    recognizeClip,
+    clipTranscript,
+    draftWithoutClip,
+    markClipSending,
+    takeClip,
+    restoreClip,
+    dismissClip
   }
 }
