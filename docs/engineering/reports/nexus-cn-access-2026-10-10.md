@@ -4,7 +4,7 @@
 > 状态：**检测中**。方案对比已完成；推荐方案只在一个观测点、非高峰时段测过，§5 的待实测项完成前不切生产。
 > 观测点：北京联通家庭宽带出口一个，北京时间 10-10 上午 10:40–11:15。两台测试机共用这个出口，只算一个观测点。
 > 依据：`curl` 实测。EdgeOne 部分只读了腾讯云官方文档和社区文章，**未实测**（来源见 §7）。
-> 本仓核对基线：`origin/master` 06daf6fed。
+> 本仓核对基线：`origin/master` 06daf6fed。10-10 第二次更新（§2 补客户端 IP 的约束；§4 记录构建方式的决定，补入其余待定项）按 0f935867c 核对。
 
 ## 0. 结论
 
@@ -35,6 +35,8 @@
 | 自建境外中转（美西 VPS） | 6/6 成功，TTFB 0.56–0.86 s | 需要 | 单点；所有国内访客共用一个 IP | 不建议进生产 |
 | 国内云主机反代 | 新连接 1–5.5 s | 需要 | 到 Cloudflare 落在欧洲机房；合规风险 | 不建议 |
 | Cloudflare 中国网络 | — | 不需要 | 要 Enterprise 计划和 ICP 备案 | 不在考虑范围 |
+
+**客户端 IP**：10-10 起（#2091），Nexus 取客户端 IP 一律以 `CF-Connecting-IP` 为准。EdgeOne、自建中转和国内反代都会在 Cloudflare 前面多一层代理，这个头就变成了代理的地址：按 IP 的限流、封禁、设备授权的 IP 比对和审计记录，会全部落到同一个 IP 上。这三种方案上线前，都要先做一个用共享密钥认证的可信代理头。
 
 ### 2.1 优选 IP
 
@@ -112,17 +114,25 @@
 
 ## 4. 同批待定项（与链路无关）
 
-- **生产构建迁到 GitHub Actions**：Pages 构建需要 7–8 GB 堆，会随机超时，所以计划改在 Actions 里构建。部署用的 Cloudflare API token 已就绪（GitHub secret）。
-  - 卡点：`apps/nexus/nuxt.config.ts` 在**构建时**把下列值从 `process.env` 写进 runtimeConfig：
-    `ADMIN_CONTROL_PLANE_PEPPER`、`ADMIN_EMERGENCY_JWT_SECRET`、`ADMIN_SECRET`、`APP_AUTH_JWT_SECRET`、`AUTH_SECRET`、`EXCHANGE_RATE_API_KEY`、`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET`、`NOTIFICATION_SECURE_STORE_KEY`、`PROVIDER_REGISTRY_SECURE_STORE_KEY`。开启 source map 上传时还要 `SENTRY_AUTH_TOKEN`。
-  - Pages 构建环境里有这些值，Actions 里没有。Cloudflare 的密钥只能写、不能读，没法从 Pages 项目取出来。
-  - 方案 A：把这些值补成 GitHub secret。两个 `*_SECURE_STORE_KEY` 和 pepper 不能轮换（一换，已加密或已哈希的数据就失效），必须用原值。
-  - 方案 B：改成运行时从 Pages 环境读取。Nitro 的 `nitro.envExpansion` 支持在运行时展开 `{{VAR}}`。前提是先改掉 server 里 9 处不传 event 的 `useRuntimeConfig()`，再在 preview 部署上验证。这 9 处分布在 `api/auth/[...].ts`、`api/passkeys/` 下 4 个文件、`api/user/linked-accounts/[provider].delete.ts`、`plugins/sentry.ts`、`utils/docAnalyticsStore.ts`。
+- **生产构建：继续用 Cloudflare Pages 构建**（10-10 决定），不迁 GitHub Actions。
+  - Pages 构建需要 7–8 GB 堆，仍会随机超时。超时的构建不会替换线上版本，在控制台或用 Pages API 重试即可。
+  - Pages 同时只跑 1 个构建，而每次推送都会排一个构建，包括任务分支和只改文档的提交，preview 会挡在生产构建前面。可以考虑：
+    - preview 只构建 `stage`，或者关掉；
+    - 加构建监视路径，只在 Nexus 依赖的目录变化时构建。目录清单要先列准，漏了生产就不会更新。
+  - 搁置的 Actions 方案，以后重新考虑时从这里接着看：
+    - 卡点：`apps/nexus/nuxt.config.ts` 在**构建时**把下列值从 `process.env` 写进 runtimeConfig：
+      `ADMIN_CONTROL_PLANE_PEPPER`、`ADMIN_EMERGENCY_JWT_SECRET`、`ADMIN_SECRET`、`APP_AUTH_JWT_SECRET`、`AUTH_SECRET`、`EXCHANGE_RATE_API_KEY`、`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET`、`NOTIFICATION_SECURE_STORE_KEY`、`PROVIDER_REGISTRY_SECURE_STORE_KEY`。开启 source map 上传时还要 `SENTRY_AUTH_TOKEN`。
+    - Pages 构建环境里有这些值，Actions 里没有。Cloudflare 的密钥只能写、不能读，没法从 Pages 项目取出来。
+    - 方案 A：把这些值补成 GitHub secret。两个 `*_SECURE_STORE_KEY` 和 pepper 不能轮换（一换，已加密或已哈希的数据就失效），必须用原值。
+    - 方案 B：改成运行时从 Pages 环境读取。Nitro 的 `nitro.envExpansion` 支持在运行时展开 `{{VAR}}`。前提是先改掉 server 里 9 处不传 event 的 `useRuntimeConfig()`，再在 preview 部署上验证。这 9 处分布在 `api/auth/[...].ts`、`api/passkeys/` 下 4 个文件、`api/user/linked-accounts/[provider].delete.ts`、`plugins/sentry.ts`、`utils/docAnalyticsStore.ts`。
 - **边缘缓存命中时跳过检查**：命中时请求不进处理函数，存储策略检查和写 D1 的治理事件都会跳过。
   - 好处：不碰 D1 和 R2，应用耗时约 11–15 ms；未命中要往返 D1 1–4 次，每次约 146 ms。同时省下 D1 免费额度。
   - 代价：用量和下载计数偏低；改策略或下架后，要等缓存过期才生效（图片最长 1 小时，更新包 5 分钟，catalog 24 小时）。
   - 建议保留。
 - **前端 Sentry**：`sendDefaultPii` 已是 `true`，保持不变。全仓没有 `Sentry.setUser`，事件看不出是哪个账号；是否补上，待定。
+- **Nexus 维护定时任务**：`apps/nexus/maintenance-worker` 已经写好，但账号的定时任务名额（Workers 免费版 5 个）已经用满，触发器没挂上；升级付费版推迟。在它上线前，维护仍由请求顺带触发。
+- **共享的 D1 读额度**：D1 额度按账号算。同账号另一个项目的数据库每小时稳定读 7 万多行，九成来自它每 5 分钟整表读一次用户表的定时任务；10-10 之前一周每天约 173 万行，占每天 500 万行免费读额度的 35%，Nexus 实际能用的不到 65%。这个定时任务每次约用 50 ms CPU，超过 Workers 免费版 10 ms 的上限，10-10 03:55 UTC 起每次都被终止，但读取照样计数。要在那个项目里改，待定。
+- **Smart Placement 的执行位置变了**：配置仍是 smart。10-08 核验时请求被挪到 HKG 执行（`cf-placement: remote-HKG`），10-10 02:45 UTC 之后看到的都是在 LAX 本地执行（`local-LAX`）。目前服务端耗时正常（未命中缓存时 4 次 D1 往返共 0.26–0.53 s），原因待复查。
 
 ## 5. 待实测清单
 
