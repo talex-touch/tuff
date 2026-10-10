@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**184**。
+当前源码导出模块总数：**185**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -126,7 +126,7 @@ Nexus 为 Motion 提供独立文档章节，包含 Buttons、Card Spreads、3D C
 
 面向 AI 原生界面的对话、智能体、推理与上下文组件，从 `@talex-touch/tuffex/ai` 引入。
 
-- `对话 (8)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`
+- `对话 (9)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`, `voice-clip`
 - `智能体 (10)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`
 - `推理与生成 (10)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `上下文与洞察 (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`

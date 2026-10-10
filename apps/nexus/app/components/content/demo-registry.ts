@@ -479,6 +479,9 @@ export const demoLoaders: Record<string, DemoLoader> = {
   VirtualListVirtualListDemo: () => import('./demos/VirtualListVirtualListDemo.vue'),
   VoiceBeamOrganicDemo: () => import('./demos/VoiceBeamOrganicDemo.vue'),
   VoiceBeamShowcaseDemo: () => import('./demos/VoiceBeamShowcaseDemo.vue'),
+  VoiceClipBasicDemo: () => import('./demos/VoiceClipBasicDemo.vue'),
+  VoiceClipStatesDemo: () => import('./demos/VoiceClipStatesDemo.vue'),
+  VoiceClipThemeDemo: () => import('./demos/VoiceClipThemeDemo.vue'),
   WorkingIndicatorVariantsDemo: () => import('./demos/WorkingIndicatorVariantsDemo.vue'),
   WorkingIndicatorWorkingIndicatorDemo: () => import('./demos/WorkingIndicatorWorkingIndicatorDemo.vue'),
 }

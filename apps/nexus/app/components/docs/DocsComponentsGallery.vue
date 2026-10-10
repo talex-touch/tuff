@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue'
 import './DocsComponentsGallery.css'
 import {
   ChartPalette,
@@ -54,10 +54,11 @@ import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
 import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
 import GalleryAmicroSpecimen from './gallery/GalleryAmicroSpecimen.vue'
-
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
 const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
+
+const GalleryVoiceClip = defineAsyncComponent(() => import('./gallery/GalleryVoiceClip.vue'))
 
 const { locale } = useI18n()
 
@@ -3823,6 +3824,20 @@ const motionGalleryItems = [
             <div class="docs-gallery__block">
               <TxPromptBar v-model="promptDraft" :placeholder="copy.typeSomething" />
             </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('voice-clip')">
+          {{ cellLabel('VoiceClip', '语音条') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryVoiceClip />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

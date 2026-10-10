@@ -32,7 +32,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 16 | Compositions of existing entries |
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 39 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 35 | `@talex-touch/tuffex/ai` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
 | [Motion Suite](./motion-suite.en.mdc) | 10 groups: buttons, carousels, loaders, text, transitions… | 12 | `@talex-touch/tuffex/pro` + `/charts` |
@@ -285,6 +285,7 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 - [ChoiceCard](./choice-card.en.mdc)
 - [TypingIndicator](./typing-indicator.en.mdc)
 - [ConversationStream](./conversation-stream.en.mdc)
+- [VoiceClip](./voice-clip.en.mdc)
 
 ### Agents
 

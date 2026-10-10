@@ -266,6 +266,7 @@ TAXONOMY: dict[str, list[str]] = {
         "choice-card",
         "typing-indicator",
         "conversation-stream",
+        "voice-clip",
     ],
     "AiAgent": [
         "agents",

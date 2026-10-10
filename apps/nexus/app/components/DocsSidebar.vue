@@ -411,6 +411,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/choice-card',
     '/docs/dev/components/typing-indicator',
     '/docs/dev/components/conversation-stream',
+    '/docs/dev/components/voice-clip',
     // ai — AiAgent
     '/docs/dev/components/agents',
     '/docs/dev/components/agent-trace',
