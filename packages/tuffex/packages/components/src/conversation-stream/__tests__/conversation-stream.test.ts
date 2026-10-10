@@ -422,6 +422,25 @@ describe('txConversationStream', () => {
       expect(observedTargets.has(item.element)).toBe(true)
   })
 
+  it('observes the rows a short thread renders at mount, though its window never moves', async () => {
+    // The 40-item case above passes on the window shifting after mount: the
+    // opening scroll-to-latest remounts every row with the observer in place.
+    // A short restored thread fits the first window, so nothing remounts — its
+    // rows were registered during the first render, before the observer
+    // existed, and kept their estimates, stacked over one another, until a
+    // scroll happened to re-render the list.
+    const wrapper = mountStream({ items: makeMessages(0, 4) })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 4 * 96 })
+    fireResize(control.element, 600)
+    await nextTick()
+    await nextTick()
+
+    const rendered = wrapper.findAll('.tx-conversation-stream__item')
+    expect(rendered.length).toBe(3)
+    for (const item of rendered)
+      expect(observedTargets.has(item.element)).toBe(true)
+  })
+
   it('offsets range and scrollToIndex by the measured spacer origin', async () => {
     // Hosts pad the scroller (HomePage: 28px); the transcript's coordinate
     // space starts below that padding, not at the scroller's content top.

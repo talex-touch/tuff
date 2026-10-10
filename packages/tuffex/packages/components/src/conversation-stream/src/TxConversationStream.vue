@@ -438,6 +438,12 @@ onMounted(() => {
       observer.observe(topZoneRef.value)
     if (liveRef.value)
       observer.observe(liveRef.value)
+    // Function refs run during the first render, before this hook: the rows
+    // rendered then were registered with no observer to hand them to. A window
+    // that never moves after mount — a short restored thread — would otherwise
+    // keep every row at its estimate, stacked over its neighbours.
+    for (const element of elementToKey.keys())
+      observer.observe(element)
   }
 
   if (scroller)
