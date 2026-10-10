@@ -172,6 +172,42 @@ describe('shellProjectFolder menu on the real tuffex dropdown', () => {
     expect(visited).toEqual(items.slice(1).map((item) => item.text()))
   })
 
+  it('names its groups for screen readers, shows no headings, and leads every row with an icon', async () => {
+    const wrapper = await mountFolder()
+    await openMenu(wrapper)
+
+    const groups = wrapper.findAll('[role="group"]')
+    expect(groups.map((group) => group.attributes('aria-label'))).toEqual([
+      'shell.projects.chats',
+      'shell.projects.groupLocalAgents',
+      'shell.projects.groupProject'
+    ])
+    // The names stay out of the visible text: a heading only repeated what its rows say.
+    for (const name of [
+      'shell.projects.chats',
+      'shell.projects.groupLocalAgents',
+      'shell.projects.groupProject'
+    ]) {
+      expect(wrapper.text()).not.toContain(name)
+    }
+    expect(wrapper.findAll('[role="separator"]')).toHaveLength(2)
+
+    const icons = rootItems(wrapper).map((item) => {
+      const glyphs = item.findAll('.ShellProjectFolder-MenuIcon')
+      expect(glyphs).toHaveLength(1)
+      expect(glyphs[0]!.attributes('aria-hidden')).toBe('true')
+      return glyphs[0]!.classes().find((name) => name.startsWith('i-ri-'))
+    })
+    expect(icons).toEqual([
+      'i-ri-chat-new-line',
+      'i-ri-terminal-box-line',
+      'i-ri-download-2-line',
+      'i-ri-edit-line',
+      'i-ri-pushpin-line',
+      'i-ri-archive-line'
+    ])
+  })
+
   it('lists the agents with the reason a blocked one cannot run, and opens the chosen one', async () => {
     const wrapper = await mountFolder()
     await openMenu(wrapper)
@@ -208,7 +244,11 @@ describe('shellProjectFolder menu on the real tuffex dropdown', () => {
       'shell.projects.pin',
       'shell.projects.archive'
     ])
-    expect(wrapper.text()).not.toContain('shell.projects.groupLocalAgents')
+    expect(
+      wrapper.find('[role="group"][aria-label="shell.projects.groupLocalAgents"]').exists()
+    ).toBe(false)
+    // One hairline left, between the two groups that remain.
+    expect(wrapper.findAll('[role="separator"]')).toHaveLength(1)
   })
 
   it('puts the adopt hint where the DOM keeps it', async () => {
@@ -217,5 +257,17 @@ describe('shellProjectFolder menu on the real tuffex dropdown', () => {
     const adopt = rootItems(wrapper).find((item) => item.text() === 'shell.projects.adoptSessions')
     expect(adopt?.attributes('title')).toBeUndefined()
     expect(adopt?.find('span[title]').attributes('title')).toBe('shell.projects.adoptSessionsHint')
+  })
+
+  it('wears the corners flow light, which its agent submenu inherits', async () => {
+    const wrapper = await mountFolder()
+
+    // TxDropdownSubmenu takes the root's `panelCard.flowLight` when it sets none of its own. The
+    // stub declares only `modelValue`, so the card props arrive as attributes.
+    const cardOf = (popover: VueWrapper | undefined) =>
+      (popover?.vm.$attrs as Record<string, unknown> | undefined)?.['panel-card']
+    const [root, submenu] = wrapper.findAllComponents({ name: 'TxPopover' })
+    expect(cardOf(root)).toEqual({ flowLight: 'corners' })
+    expect(cardOf(submenu)).toMatchObject({ flowLight: 'corners' })
   })
 })
