@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
-    "astro": "^6.3.1",
+    "astro": "^7.3.5",
     "typescript": "catalog:dev",
     "wrangler": "catalog:dev"
   }
