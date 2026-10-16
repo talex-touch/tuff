@@ -67,7 +67,7 @@ catalog:
   gsap: ^3.15.0
   h3: 1.15.11
   jszip: ^3.10.2
-  markdown-it: 14.1.0
+  markdown-it: 15.0.2
   marked: ^17.0.6
   mermaid: ^11.16.1
   next-auth: ~4.24.15
