@@ -23,7 +23,9 @@ import type { BottomDialogProps, DialogButton } from './types'
  */
 import { computed, onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxSpinner } from '../../spinner'
+import { useDialogSurface } from './dialog-surface'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -40,7 +42,11 @@ const props = withDefaults(defineProps<BottomDialogProps>(), {
   icon: '',
   index: 0,
   closeLabel: 'Close',
+  surface: 'refraction',
+  surfaceColor: '',
 })
+
+const { surfaceMode, surfaceColor, surfaceOpacity } = useDialogSurface(props)
 
 /**
  * Internal button state interface.
@@ -55,6 +61,9 @@ interface ButtonState {
 }
 
 const wholeDom = ref<HTMLElement | null>(null)
+// The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
+const entering = ref(true)
+const closing = ref(false)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const baseZIndex = ref(zIndexAllocator.get())
 const zIndex = computed(() => baseZIndex.value + (props.index ?? 0))
@@ -192,11 +201,9 @@ onUnmounted(() => {
  */
 async function forClose(): Promise<void> {
   if (wholeDom.value) {
-    const style = wholeDom.value.style
-    style.transform = 'translate(-50%, 0) scale(.8) translateY(100%)'
-    await sleep(50)
-    style.opacity = '0'
-    await sleep(100)
+    // The sheet drops at once and its parts fade from 50ms on (see `--closing`).
+    closing.value = true
+    await sleep(150)
     props.close()
   }
 }
@@ -204,57 +211,70 @@ async function forClose(): Promise<void> {
 
 <template>
   <teleport to="body">
-    <div
-      ref="wholeDom"
-      class="tx-bottom-dialog"
-      :style="{ zIndex }"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      :aria-labelledby="title ? titleId : undefined"
-      :aria-describedby="message ? messageId : undefined"
-      @keydown.esc="forClose"
-    >
-      <div class="tx-bottom-dialog__container">
-        <header class="tx-bottom-dialog__header">
-          <p v-if="title" :id="titleId" class="tx-bottom-dialog__title">
-            {{ title }}
-          </p>
-          <button type="button" class="tx-bottom-dialog__close" :aria-label="closeLabel" @click="forClose">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </header>
+    <!-- The sheet never fades as a whole (see the styles), so the entrance's length is given here.
+         `tx-bottom-dialog-moving` marks both phases, and the styles key the parts' fades on it. -->
+    <Transition appear name="tx-bottom-dialog" :duration="200" @after-appear="entering = false">
+      <div
+        ref="wholeDom"
+        class="tx-bottom-dialog"
+        :class="{ 'tx-bottom-dialog-moving': entering || closing, 'tx-bottom-dialog--closing': closing }"
+        :style="{ zIndex }"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        :aria-labelledby="title ? titleId : undefined"
+        :aria-describedby="message ? messageId : undefined"
+        @keydown.esc="forClose"
+      >
+        <TxBaseSurface
+          class="tx-bottom-dialog__surface"
+          preset="card"
+          fake
+          :mode="surfaceMode"
+          :color="surfaceColor"
+          :opacity="surfaceOpacity"
+        />
+        <div class="tx-bottom-dialog__container">
+          <header class="tx-bottom-dialog__header">
+            <p v-if="title" :id="titleId" class="tx-bottom-dialog__title">
+              {{ title }}
+            </p>
+            <button type="button" class="tx-bottom-dialog__close" :aria-label="closeLabel" @click="forClose">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </header>
 
-        <div v-if="message" :id="messageId" class="tx-bottom-dialog__content">
-          {{ message }}
-        </div>
+          <div v-if="message" :id="messageId" class="tx-bottom-dialog__content">
+            {{ message }}
+          </div>
 
-        <div v-if="btnArray.length" class="tx-bottom-dialog__rows">
-          <button
-            v-for="(btn, i) in btnArray"
-            :key="i"
-            type="button"
-            class="tx-bottom-dialog__row"
-            :class="{ 'is-danger': isDestructive(btn.value.type) }"
-            :disabled="btn.value.loading"
-            @click="clickBtn(btn)"
-          >
-            <i
-              v-if="btn.value.icon"
-              class="tx-bottom-dialog__row-icon"
-              :class="btn.value.icon"
-              aria-hidden="true"
-            />
-            <span class="tx-bottom-dialog__row-label">
-              {{ btn.value.time ? `${btn.value.content} (${btn.value.time}s)` : btn.value.content }}
-            </span>
-            <TxSpinner v-if="btn.value.loading" :size="16" class="tx-bottom-dialog__row-spinner" />
-          </button>
+          <div v-if="btnArray.length" class="tx-bottom-dialog__rows">
+            <button
+              v-for="(btn, i) in btnArray"
+              :key="i"
+              type="button"
+              class="tx-bottom-dialog__row"
+              :class="{ 'is-danger': isDestructive(btn.value.type) }"
+              :disabled="btn.value.loading"
+              @click="clickBtn(btn)"
+            >
+              <i
+                v-if="btn.value.icon"
+                class="tx-bottom-dialog__row-icon"
+                :class="btn.value.icon"
+                aria-hidden="true"
+              />
+              <span class="tx-bottom-dialog__row-label">
+                {{ btn.value.time ? `${btn.value.content} (${btn.value.time}s)` : btn.value.content }}
+              </span>
+              <TxSpinner v-if="btn.value.loading" :size="16" class="tx-bottom-dialog__row-spinner" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </teleport>
 </template>
 
@@ -263,11 +283,9 @@ async function forClose(): Promise<void> {
 
 @keyframes tx-bottom-dialog-enter {
   0% {
-    opacity: 0;
     transform: scale(0.8) translateX(-50%) translateY(100%);
   }
   100% {
-    opacity: 1;
     transform: scale(1) translateX(-50%) translateY(0);
   }
 }
@@ -294,20 +312,35 @@ async function forClose(): Promise<void> {
   // loses its header off the top edge. Cap it and let the two bodies give way.
   max-height: calc(100vh - 48px);
   display: flex;
-  padding: 20px;
   box-sizing: border-box;
-
-  // Opaque on purpose: the sheet slides over live content, and
-  // `--tx-fill-color-blank` is transparent in the dark block.
-  background: var(--tx-bg-color, #fff);
-  box-shadow: var(--tx-box-shadow, 6px 12px 32px 4px rgba(0, 0, 0, 0.04));
   color: var(--tx-text-color-primary, #303133);
 
+  // The sheet travels and never fades or clips: it would be the backdrop root of its own
+  // material, or cut its own shadow. The container clips the content instead.
   transform: translateX(-50%);
-  animation: tx-bottom-dialog-enter 0.2s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-  overflow: hidden;
-  transition: transform 0.25s, opacity 0.25s;
+  transition: transform 0.25s;
   @include tx-squircle(24px);
+
+  // The shadow, on a layer of its own so it can fade while the sheet does not.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: var(--tx-box-shadow, 6px 12px 32px 4px rgba(0, 0, 0, 0.04));
+    pointer-events: none;
+  }
+
+  &__surface {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
+  }
 
   &__container {
     display: flex;
@@ -318,6 +351,11 @@ async function forClose(): Promise<void> {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: inherit;
+    corner-shape: inherit;
   }
 
   &__header {
@@ -465,11 +503,66 @@ async function forClose(): Promise<void> {
   }
 }
 
-// A sheet that slides in is motion, not meaning: drop the entrance, keep the
-// panel in its resting frame.
+// Sheet motion. The sheet slides and drops but never fades as a whole: an element whose opacity
+// animates is the backdrop root of every backdrop filter inside it, so the material would sample
+// nothing but the sheet. Each part fades on its own instead, and the material stays live from the
+// first frame to the last: the content, the shadow, and the surface. A surface with a backdrop
+// filter fades layer by layer; one without fades whole, and so does every surface under high
+// contrast, which drops the layers that blur. Each phase hands its fade down as
+// `--tx-bottom-dialog-fade`, so the parts are listed once.
+.tx-bottom-dialog-enter-active {
+  --tx-bottom-dialog-fade: tx-bottom-dialog-fade-in 0.2s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+
+  animation: tx-bottom-dialog-enter 0.2s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+}
+
+// Closing: the sheet drops at once, and its parts fade from 50ms on.
+.tx-bottom-dialog--closing {
+  --tx-bottom-dialog-fade: tx-bottom-dialog-fade-out 0.25s ease 50ms forwards;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transform: translate(-50%, 0) scale(0.8) translateY(100%);
+  }
+}
+
+.tx-bottom-dialog-moving {
+  > .tx-bottom-dialog__container,
+  &::after,
+  > .tx-bottom-dialog__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
+  > .tx-bottom-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
+  > .tx-bottom-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) :deep(.tx-base-surface__layer) {
+    animation: var(--tx-bottom-dialog-fade);
+  }
+
+  @include tx-when-high-contrast {
+    > .tx-bottom-dialog__surface {
+      animation: var(--tx-bottom-dialog-fade);
+    }
+  }
+}
+
+// A sheet that slides in is motion, not meaning: reduced motion keeps the fades and drops the
+// travel, so the sheet fades in and out in its resting frame.
 @media (prefers-reduced-motion: reduce) {
-  .tx-bottom-dialog {
+  .tx-bottom-dialog-enter-active {
     animation: none;
+  }
+}
+</style>
+
+<style lang="scss">
+// Unscoped: the parts take these through `--tx-bottom-dialog-fade`, and a scoped sheet renames its
+// keyframes only where an `animation` declaration names them, never inside a custom property.
+// Each gives only its far end, so a part fades from, or to, the opacity it rests at.
+@keyframes tx-bottom-dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tx-bottom-dialog-fade-out {
+  to {
+    opacity: 0;
   }
 }
 </style>

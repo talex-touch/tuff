@@ -89,7 +89,7 @@ watch(
       />
     </TuffSelect>
 
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+    <TxCard variant="plain" :padding="10" :radius="14">
       <div class="tx-demo__meta">
         {{ labels.selected }}: {{ value }}
       </div>

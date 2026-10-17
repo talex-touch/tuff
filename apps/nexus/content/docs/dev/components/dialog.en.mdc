@@ -201,6 +201,9 @@ code: |
 | `icon` | `string` | `''` | Legacy icon class; not rendered. |
 | `index` | `number` | `0` | z-index offset added to the allocated layer. |
 | `closeLabel` | `string` | `'Close'` | Accessible name of the header's close button. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
 
 ### TxBlowDialog / TxPopperDialog
 
@@ -217,6 +220,9 @@ Both take the same props.
 | `close` | `() => void` | *required* | Close callback. |
 | `comp` | `Component` | `undefined` | Component that replaces the default content. |
 | `render` | `() => VNode` | `undefined` | Render function that replaces the default content. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
 
 ### TxTouchTip
 
@@ -229,6 +235,9 @@ Both take the same props.
 | `messageHtml` | `DialogMessageHtml` | `''` | Sanitized, trusted HTML; takes precedence over `message`. |
 | `buttons` | `TouchTipButton[]` | `[]` | Action button configs. |
 | `close` | `() => void` | *required* | Close callback. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
 
 ### Types
 
@@ -252,6 +261,13 @@ code: |
     loading?: (done: () => void) => void
   }
 
+  // The material props all four variants share
+  interface DialogSurfaceProps {
+    surface?: BaseSurfaceMode // 'refraction' by default
+    surfaceColor?: string // follows the theme by default
+    surfaceOpacity?: number // 0.96 for mask, 0.5 otherwise
+  }
+
   function asTrustedDialogHtml(html: string): TrustedDialogHtml
 ---
 :::
@@ -264,10 +280,15 @@ code: |
 - Focus returns to the previously focused element on unmount; `useId()` ids wire the title and body to `aria-labelledby` / `aria-describedby`.
 - `message` renders as plain text with line breaks kept; `messageHtml` accepts only values marked by `asTrustedDialogHtml()`, which does not sanitize.
 - Bodies set `overflow-wrap: anywhere` and cap their own height with scrolling, so long tokens don't widen the panel and long content isn't clipped.
+- The panel background is a card-preset `TxBaseSurface` (`fake`) under the content, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted.
+- The overlay dim of `TxBlowDialog`, `TxPopperDialog` and `TxTouchTip` (and the blur of `TxBlowDialog`) is painted on a pseudo-element of the overlay rather than on its own background and opacity, so the panel's material samples the page, not only the dim; `TxBottomDialog` has no overlay.
+- Panels only move and scale as they open and close; they never fade as a whole. Once a panel's opacity animates, every backdrop filter inside it samples nothing but the panel, and the frost would drop out for the whole transition. What fades is each part of the panel instead: the content, the shadow and outline, and each layer of the material, so a material with a backdrop filter (such as the default `refraction`) samples the page from the first frame to the last.
 
 ## Technologies
 
 - The entry exports the four variants (each wrapped with `withInstall`), `asTrustedDialogHtml`, and the public types.
+- Under high contrast the panel's material turns solid on its own, and the `TxBlowDialog` overlay only dims the page without frosting it.
+- Under reduced motion (`prefers-reduced-motion: reduce`) the panels fade in place, without scaling or moving; the zoom and fade `TxBlowDialog` applies to `#app` on open ignores this setting.
 - Source: `packages/tuffex/packages/components/src/dialog/`.
 
 <TuffDocSourceLink />

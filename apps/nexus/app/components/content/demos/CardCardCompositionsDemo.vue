@@ -48,7 +48,6 @@ const treeNodes = [
         :offset="8"
         :reference-full-width="false"
         panel-variant="solid"
-        panel-background="glass"
         panel-shadow="soft"
         :panel-radius="18"
         :panel-padding="10"
@@ -83,7 +82,6 @@ const treeNodes = [
         { value: 'g', label: 'Gamma' },
       ]"
       panel-variant="solid"
-      panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
       :panel-padding="6"

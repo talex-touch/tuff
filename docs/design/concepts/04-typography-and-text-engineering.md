@@ -61,18 +61,24 @@ X 高度 (x-height) 适中，字宽紧凑，基线稳定。
 
 ### 19.2 TuffEx 解决方案
 
-TuffEx 里渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdownEditor、TxChainOfThought）都把它缩到 0.9em，TxStreamMarkdown 和 Nexus 文档正文用 0.875em。以 TxStreamText 为例：
+TuffEx 的标准行内代码样式在样式入口里：`.tx-prose` 中不在 `<pre>` 里的 `<code>`，以及任何加了 `tx-inline-code` 的元素，都缩到 0.9em。
 
 ```scss
-// packages/tuffex/packages/components/src/stream-text/src/TxStreamText.vue
-.tx-stream-text__code {
-  padding: 0.1em 0.35em;
+// packages/tuffex/packages/components/style/index.scss
+.tx-prose :not(pre) > code,
+.tx-inline-code {
+  padding: 0.15em 0.35em;
   border-radius: 4px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  font-family: var(--tx-font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+  background-color: var(--tx-fill-color-light, #f5f7fa);
+  font-family: var(--tx-font-family-mono);
+  // 缩放至 0.9em，抹平等宽字体略高的 x 高度
   font-size: 0.9em;
+  // 留在基线上，与中西文同排
+  vertical-align: baseline;
 }
 ```
+
+自己渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdownEditor、TxChainOfThought）同样缩到 0.9em，TxStreamMarkdown 和 Nexus 文档正文用 0.875em。
 
 0.9em 是个近似值。让两种 x 高度对齐的字号是「正文 x 高度 ÷ 代码 x 高度」：在 macOS 的 Chrome 里实测 Nexus 文档正文 0.508em、代码（落到 Menlo）0.547em，比值 1.077，恰好对齐要 0.929em，0.9em 还矮 3.1%。按上面几款字体两两组合，恰好对齐的字号落在 0.93em～0.98em 之间。
 
@@ -92,25 +98,47 @@ TuffEx 里渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdo
 
 ### 20.2 浏览器原生软换行（CSS Text Module Level 4）
 
-按 MDN 的兼容数据，`balance` 从 Chrome 114、Firefox 121、Safari 17.5 起可用；`pretty` 从 Chrome 117、Safari 26 起可用，Firefox 尚未支持。不支持的浏览器按普通 `wrap` 断行，不会出错。TuffEx 组件目前没有声明 `text-wrap`；Nexus 文档的页头（DocHero）是这样用的：
+按 MDN 的兼容数据，`balance` 从 Chrome 114、Firefox 121、Safari 17.5 起可用；`pretty` 从 Chrome 117、Safari 26 起可用，Firefox 尚未支持。不支持的浏览器按普通 `wrap` 断行，不会出错。TuffEx 将其确立为核心排版标准：样式入口提供四个文本工具类，`TxModal` 的标题也直接声明了 `balance`。
 
 ```scss
-// apps/nexus/app/components/docs/DocHero.vue（节选）
-// 标题：让各行宽度尽量接近
-.docs-hero__title {
+// packages/tuffex/packages/components/style/index.scss
+// 1. 标题与短提示：追求每行字数均衡对称
+.tx-heading {
   text-wrap: balance;
 }
 
-// 描述段落：避免末行只剩一两个字
-.docs-hero__desc {
+// 2. 长段落正文、卡片描述与帮助说明：追求终结孤字、优先版面优雅
+.tx-prose p,
+.tx-description,
+.tx-help-text {
   text-wrap: pretty;
 }
+
+// packages/tuffex/packages/components/src/modal/src/TxModal.vue
+.tx-modal__title {
+  text-wrap: balance;
+}
 ```
+
+标题加 `tx-heading`，描述加 `tx-description`，表单项下方的帮助说明加 `tx-help-text`，整段富文本的容器加 `tx-prose`（作用于其中的 `<p>`）。`TxCard` 没有自己的标题元素（标题由 `header` 插槽传入），卡片标题请加 `tx-heading`。Nexus 文档的页头（DocHero）同样是标题用 `balance`、描述用 `pretty`。
 
 * `text-wrap: balance`：浏览器通过多轮计算，寻找行宽方差最小的最优解，使标题呈现和谐的倒梯形或对称形态；Chrome 只对 6 行以内的文本生效。
 * `text-wrap: pretty`：专门针对末尾孤字进行优化。如果发现段末只剩下一个单字，排版引擎会自动将上一行的倒数第二个词拉至新行，保持双字或多字收尾。
 
-> **流式生成例外**：在 AI 流式输出中，正在接收 Token 的段落应保持普通 `wrap`，段落生成完毕后再切换为 `pretty`，防止每输出一个词都触发整段重排。`TxStreamText` 目前没有声明 `text-wrap`，始终按普通 `wrap` 断行。
+> **流式生成例外**：在 AI 流式输出中，正在接收 Token 的段落保持普通 `wrap`，段落彻底生成完毕后再切换为 `pretty`，防止每输出一个词都触发整段重排。`TxStreamElement` 的段落与标题这样切换：写入位置所在的那一段带 `is-live`，按 `auto` 断行，写入位置移走后回到 `pretty`。`TxStreamText` 自己是块级容器时（`tag` 为块级元素，或 `reserve` 回放时铺开的两份副本）同样如此，文字还没放完时（含暂停）根节点带 `is-live`；作为行内元素放在宿主段落里时，由宿主段落决定。
+>
+> ```scss
+> // packages/tuffex/packages/components/src/stream-element/src/TxStreamElement.vue
+> .tx-stream-element__text {
+>   text-wrap-style: pretty;
+>
+>   &.is-live {
+>     text-wrap-style: auto;
+>   }
+> }
+> ```
+>
+> 两者都写长写属性 `text-wrap-style`，不动宿主的 `nowrap`（简写 `text-wrap: pretty` 会把换行模式一并设回 `wrap`）；按 MDN 的兼容数据，它的 `pretty` 从 Chrome 130、Safari 26 起可用。`reserve` 的占位副本始终按 `pretty` 断行，因为它占住的是写完后的版面。
 
 ---
 

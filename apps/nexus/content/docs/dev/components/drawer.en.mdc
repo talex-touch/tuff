@@ -60,7 +60,7 @@ code: |
 :::
 
 ### Header, Footer, and Mask
-The `header` and `footer` slots receive `close`; `maskEffect` sets the mask look, and `panelTransparent` lets the page show through the panel.
+The `header` and `footer` slots receive `close`; `maskEffect` sets the mask look, and `panelTransparent` thins the colour under the panel's material so more of the page shows through.
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |
@@ -240,9 +240,21 @@ rows:
     type: "'blur' | 'opacity' | 'transparent'"
     default: "'blur'"
   - name: panelTransparent
-    description: 'Makes the panel translucent so the page shows through.'
+    description: 'Thins the colour under the panel material so more of the page shows through (see `surfaceOpacity`).'
     type: 'boolean'
     default: 'false'
+  - name: surface
+    description: 'Material of the panel.'
+    type: "'pure' | 'mask' | 'blur' | 'glass' | 'refraction' | 'acrylic' | 'mica' | 'flat' | 'plain'"
+    default: "'refraction'"
+  - name: surfaceColor
+    description: 'Colour laid under the material; empty uses `--tx-drawer-panel-background`, which follows the theme.'
+    type: 'string'
+    default: "''"
+  - name: surfaceOpacity
+    description: 'Opacity of that colour (0–1); when unset, `0.96` under `mask` and `0.5` otherwise, or `0.78` and `0.3` with `panelTransparent`. Used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour.'
+    type: 'number'
+    default: '-'
   - name: mobileAdapt
     description: 'Forces a bottom entrance when the viewport is 768px wide or less.'
     type: 'boolean'
@@ -305,6 +317,8 @@ rows:
 - The close button, the mask, and Escape all emit `update:visible(false)` and `close`; `closeOnClickMask` and `closeOnPressEscape` turn off the last two.
 - Only the topmost modal dialog handles Tab and Escape, and keys another control already handled are ignored, so a confirmation on top owns them.
 - When closed, the root stays in the DOM with `inert` and `aria-hidden`.
+- The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer, `refraction` by default. A sliding panel's filter samples where the panel was a frame earlier, so the material takes its motion fallback during the slide and recovers once it ends.
+- Under high contrast the mask only dims the page without frosting it, and the panel's material turns solid on its own.
 
 ## Technologies
 

@@ -77,7 +77,6 @@ code: |
       v-model="scope"
       :options="scopeOptions"
       placeholder="筛选范围"
-      panel-background="glass"
     />
     <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
   </template>
@@ -108,7 +107,7 @@ code: |
 | `dropdownMaxHeight` | `number` | `280` | 面板最大高度（px），超出后内部滚动。 |
 | `dropdownOffset` | `number` | `6` | 面板与输入框的间距。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态，同 TxCard `variant`。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景，同 TxCard `background`。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板背景，同 TxCard `background`。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影，同 TxCard `shadow`。 |
 | `panelRadius` | `number` | `18` | 面板圆角，同 TxCard `radius`。 |
 | `panelPadding` | `number` | `6` | 面板内边距，同 TxCard `padding`。 |

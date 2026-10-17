@@ -180,6 +180,7 @@ code: |
 - Text splits by word with `Intl.Segmenter`, punctuation staying with its word; without it, Latin splits on spaces and CJK by character.
 - `href` renders only for `http(s)`, `mailto`, `tel`, relative, query, and hash URLs; `//host` stays text. Links carry `rel="noopener noreferrer"`.
 - Under reduced motion, nothing enters or is paced and the caret rests; server rendering outputs plain text; the root carries `aria-busy="true"` while live.
+- Line breaking: where the text is itself a block container (a block `tag`, or the two copies a `reserve` playback lays out), finished text wraps with `text-wrap-style: pretty`, so its last line does not end on a word or two; while it streams it wraps as usual, so each released word does not re-run the line breaking. Inline in a host's paragraph, the host's paragraph decides.
 - The caret and the `reserve` copy are hidden from assistive technology (the copy is also `inert`); the text is not a live region, so wrap the conversation in `role="log"` to announce replies.
 
 ## Technologies

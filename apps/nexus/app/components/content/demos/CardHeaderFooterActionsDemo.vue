@@ -3,7 +3,7 @@
 
 <template>
   <div class="card-actions-shell">
-    <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
+    <TxCard variant="solid" shadow="soft" :radius="18" :padding="14">
       <template #header>
         <div class="card-actions-header">
           <div class="card-actions-title">

@@ -1,6 +1,6 @@
 ---
 title: Retinal Irradiation & Weight Tuning
-description: Helmholtz optical irradiation illusion, the perceived expansion of white text on dark, variable font 460/560 tuning, and discrete font fallback traps.
+description: Helmholtz optical irradiation illusion, the perceived expansion of white text on dark, the dark theme's 460/560/660 weight tuning, and static font fallback guards.
 ---
 
 # Retinal Irradiation & Weight Tuning
@@ -19,24 +19,37 @@ In 1867, physiological optics pioneer Hermann von Helmholtz documented this reti
 
 Reusing identical numeric weights across themes causes dark mode typography to read clumsy and congested.
 
-## Variable Font 460/560 Tuning in Action
+## Dark Theme 460/560/660 Tuning
 
-TuffEx does not lower weights in its dark theme today: components use the same `400/500/600` on both. The table below is a recommendation. When the font has a weight axis (variable fonts such as San Francisco, Segoe UI Variable or Inter), a dark theme can tune its weights like this:
+TuffEx's dark theme takes each of its three emphasis weights 40 lighter: `--tx-font-weight-medium` goes from `500` to `460`, `--tx-font-weight-semibold` from `600` to `560`, and `--tx-font-weight-bold` from `700` to `660`. Components read them for emphasis, headings and figures, as `var(--tx-font-weight-medium, 500)` and the like, so they lighten when the dark theme applies; body text stays at `400`.
 
-| Role | Light Weight | Recommended Dark Weight | Optical Target |
-|---|---|---|---|
-| **Body Default** | `400` (Regular) | `380` – `400` | Eliminates bloom and stroke fattening |
-| **Inline Emphasis** | `500` (Medium) | `460` | Crisp emphasis without interior stroke collision |
-| **Headings / Buttons** | `600` (Semi-Bold) | `560` | Preserves letter counters and structural posture |
+| Role | Weight Token | Light Weight | Dark Compensated Weight | Optical Target |
+|---|---|---|---|---|
+| **Body Default** | None | `400` (Regular) | `400` | Stays Regular: any lower and a static font falls to its Light face (see below) |
+| **Inline Emphasis** | `--tx-font-weight-medium` | `500` (Medium) | `460` | Crisp emphasis without interior stroke collision |
+| **Headings / Buttons** | `--tx-font-weight-semibold` | `600` (Semi-Bold) | `560` | Preserves letter counters and structural posture |
+| **Bold / Figures** | `--tx-font-weight-bold` | `700` (Bold) | `660` | Keeps bold text and figures from swelling on dark |
+
+These in-between values draw thinner only where the font has a weight axis: variable fonts (such as San Francisco, Segoe UI Variable or Inter Variable) draw `460` as it is; static fonts return to the light theme's face by the rules in the next section.
 
 ## Discrete Static Font Fallback Guards
 
-**A critical engineering pitfall**: If a platform lacks variable font axes and falls back to static fonts:
-- A CSS declaration of `font-weight: 460` triggers the browser's fallback algorithm.
-- Values between `400` and `500` round *up* to `500`!
-- Rather than compensating for optical bloom, this **unintentionally thickens the text**!
+A static font has a few fixed faces (PingFang SC and Microsoft YaHei both do), and CSS font matching assigns an in-between value to one of them:
+- A target between `400` and `500`: search upward as far as `500`, then downward, and only then above `500`;
+- A target above `500`: search upward, then downward;
+- A target below `400`: search downward, then upward.
 
-So declare these in-between weights only where the font is known to have a weight axis; with static fonts, keep `400/500/600` and dial back text contrast instead (`--tx-text-color-regular` rather than raw white) to offset the expansion. Measure CJK fonts too: with the Chinese system font on macOS, `390` draws exactly like `400`, so the body-text step has no effect there; Latin system-ui has a weight axis and draws the in-between values.
+So a static font draws `460` with the `500` face, `560` with the `600` face and `660` with the `700` face (or, where that face is missing, the next one in the same order): the same face as the light theme. The compensation does nothing there, but it does not thicken the text either. TuffEx picks its dark weights on exactly this basis: each dark value lies within (light − 100, light]. The Sass function `tx-dark-weight($light, $dark)` checks this at build time, and a value outside the range, or any attempt to lower `400`, fails the build.
+
+**The trap lies outside that range**:
+- Body text at `390`: the target is below `400`, so a static font searches downward and draws the Light face, a whole step thinner. Measured in Chromium on macOS: with the family named `PingFang SC`, `380` and `390` both draw `PingFangSC-Light`, while the Chinese font that `system-ui` falls back to draws `390` as Regular. The same value gives different results depending on how the stack is written, so TuffEx leaves body text alone.
+- `500` lowered to `400`: Medium on light becomes Regular on dark, again a whole step on a static font.
+
+Where the font is static and weights cannot compensate, keep `400/500/600` and dial back text contrast instead (`--tx-text-color-regular` rather than raw white) to offset the expansion.
+
+## What the Default Stack Shows
+
+TuffEx's default stack, `--tx-font-family`, is `"Inter", "PingFang SC", "Microsoft YaHei", …`. On macOS without Inter installed, PingFang SC draws both Latin and Chinese. Measured, `460`, `560` and `660` draw Medium, Semibold and Semibold, exactly like `500`, `600` and `700` (PingFang SC has no Bold face, so `700` draws Semibold too), and the dark tuning does not show with the default stack. PingFang, which draws Chinese on macOS, has no weight axis, whether named directly or reached through `system-ui`; only a Latin font with an axis gets thinner. If a host sets `--tx-font-family` to a stack that starts with `system-ui`, for example, variable San Francisco draws the Latin text and `460` lands between `400` and `500`. The Nexus docs site sets its body text in PingFang SC as well; the demo below sets its Latin text in the `system-ui` stack, so the two outcomes sit side by side.
 
 :::TuffDemoWrapper{demo="ConceptIrradiationDemo"}
 :::

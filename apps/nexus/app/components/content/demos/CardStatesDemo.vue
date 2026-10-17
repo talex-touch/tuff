@@ -5,7 +5,7 @@ function onClick() {}
 <template>
   <div class="card-states-wrap">
     <div class="card-states-grid">
-      <TxCard variant="solid" background="glass" shadow="none" clickable :padding="14" @click="onClick">
+      <TxCard variant="solid" shadow="none" clickable :padding="14" @click="onClick">
         <div class="card-demo-title">
           clickable
         </div>
@@ -14,7 +14,7 @@ function onClick() {}
         </div>
       </TxCard>
 
-      <TxCard variant="solid" background="glass" shadow="none" :loading="true" :padding="14" :loading-spinner-size="12">
+      <TxCard variant="solid" shadow="none" :loading="true" :padding="14" :loading-spinner-size="12">
         <div class="card-demo-title">
           loading
         </div>
@@ -23,7 +23,7 @@ function onClick() {}
         </div>
       </TxCard>
 
-      <TxCard variant="solid" background="glass" shadow="none" :loading="true" :padding="14" :loading-spinner-size="20">
+      <TxCard variant="solid" shadow="none" :loading="true" :padding="14" :loading-spinner-size="20">
         <div class="card-demo-title">
           loading
         </div>
@@ -32,7 +32,7 @@ function onClick() {}
         </div>
       </TxCard>
 
-      <TxCard variant="solid" background="glass" shadow="none" disabled :padding="14">
+      <TxCard variant="solid" shadow="none" disabled :padding="14">
         <div class="card-demo-title">
           disabled
         </div>

@@ -14,26 +14,37 @@ These orphans unbalance the bottom boundary of the paragraph, leaving awkward ne
 
 ## Modern CSS Soft Wrapping: pretty and balance
 
-According to MDN's compatibility data, `balance` works from Chrome 114, Firefox 121 and Safari 17.5; `pretty` from Chrome 117 and Safari 26, and Firefox does not support it yet. Browsers without support simply wrap as `wrap` does. TuffEx components do not declare `text-wrap` today; the header of these docs (DocHero) uses both:
+According to MDN's compatibility data, `balance` works from Chrome 114, Firefox 121 and Safari 17.5; `pretty` from Chrome 117 and Safari 26, and Firefox does not support it yet. Browsers without support simply wrap as `wrap` does. TuffEx establishes both as system defaults: its style entry provides four text utility classes, `.tx-heading`, `.tx-prose`, `.tx-description` and `.tx-help-text`, and `TxModal` declares `balance` on its title itself.
 
 :::TuffCodeBlock{lang="scss"}
 ---
 code: |
-  // apps/nexus/app/components/docs/DocHero.vue (excerpt)
-  // Title: keep the lines close in width
-  .docs-hero__title {
+  // packages/tuffex/packages/components/style/index.scss
+  // 1. Headings and short titles: keep the lines close in width
+  .tx-heading {
     text-wrap: balance;
   }
 
-  // Description: keep the last line from holding a word or two
-  .docs-hero__desc {
+  // 2. Body prose, descriptions and help text: keep the last line from holding a word or two
+  .tx-prose p,
+  .tx-description,
+  .tx-help-text {
     text-wrap: pretty;
+  }
+
+  // packages/tuffex/packages/components/src/modal/src/TxModal.vue
+  .tx-modal__title {
+    text-wrap: balance;
   }
 ---
 :::
 
+Give a heading `tx-heading`, a description `tx-description` and the help text under a form field `tx-help-text`, and put `tx-prose` on the container of a run of rich text (it applies to the `<p>` elements inside). `TxCard` has no title element of its own (its title comes in through the `header` slot), so give a card title `tx-heading`. The header of these docs (DocHero) does the same: `balance` on the title, `pretty` on the description.
+
 - `text-wrap: balance`: The layout engine minimizes character variance across lines, rendering harmonious inverted-pyramid or balanced blocks; Chrome applies it only to text of six lines or fewer.
 - `text-wrap: pretty`: Targets terminal orphans. When a single trailing word is detected, it pulls the preceding word down to form a balanced couplet.
+
+Streaming output is the exception: a paragraph still receiving tokens keeps plain `wrap` and switches to `pretty` once it is complete, so each arriving word does not re-run the whole paragraph's line breaking. `TxStreamElement` switches its paragraphs and headings this way; `TxStreamText` does the same where it is itself a block container (a block `tag`, or a `reserve` playback), and inside a host's paragraph the host's paragraph decides. Both set the longhand `text-wrap-style`, leaving a host's `nowrap` alone; by MDN's compatibility data its `pretty` works from Chrome 130 and Safari 26, and browsers without it wrap as `wrap` does.
 
 ## Banning Hardcoded Line Breaks
 

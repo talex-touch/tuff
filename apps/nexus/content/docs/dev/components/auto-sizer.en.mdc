@@ -102,7 +102,7 @@ code: |
       :duration-ms="duration"
       easing="cubic-bezier(0.2, 0, 0, 1)"
     >
-      <TxCard variant="plain" background="mask" :padding="12">
+      <TxCard variant="plain" :padding="12">
         <TxTextTransformer :text="label" :duration-ms="duration" :blur-px="blurPx" />
       </TxCard>
     </TxAutoSizer>

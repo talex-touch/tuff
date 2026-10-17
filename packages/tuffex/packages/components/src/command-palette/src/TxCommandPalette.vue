@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxIcon } from '../../icon'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
@@ -18,6 +20,27 @@ const props = withDefaults(defineProps<CommandPaletteProps>(), {
   autoFocus: true,
   closeOnSelect: true,
   ariaLabel: 'Command palette',
+  surface: 'refraction',
+  surfaceColor: '',
+})
+
+const SURFACE_MODES: readonly string[] = ['pure', 'mask', 'blur', 'glass', 'refraction', 'acrylic', 'mica', 'flat', 'plain']
+
+const surfaceMode = computed<BaseSurfaceMode>(() =>
+  SURFACE_MODES.includes(props.surface) ? props.surface : 'refraction',
+)
+
+const surfaceColor = computed(() => props.surfaceColor || 'var(--tx-bg-color-overlay, var(--tx-bg-color, #fff))')
+
+// As on TxModal: mask keeps a near-opaque fill, and the other materials sit over the colour at
+// half strength, so text stays legible and the page still shows through to be blurred and
+// refracted.
+const surfaceOpacity = computed(() => {
+  const fallback = surfaceMode.value === 'mask' ? 0.96 : 0.5
+  const value = typeof props.surfaceOpacity === 'number' ? props.surfaceOpacity : fallback
+  if (!Number.isFinite(value))
+    return fallback
+  return Math.max(0, Math.min(1, value))
 })
 
 const emit = defineEmits<CommandPaletteEmits>()
@@ -291,7 +314,14 @@ function onKeydown(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <transition name="tx-command-palette">
+    <!-- The overlay itself does not transition (see the styles), so the duration is given here.
+         Both phases also carry `tx-command-palette-moving`, which the styles key the parts' fades on. -->
+    <Transition
+      name="tx-command-palette"
+      enter-active-class="tx-command-palette-enter-active tx-command-palette-moving"
+      leave-active-class="tx-command-palette-leave-active tx-command-palette-moving"
+      :duration="340"
+    >
       <div
         v-if="visible"
         class="tx-command-palette__overlay"
@@ -309,75 +339,85 @@ function onKeydown(e: KeyboardEvent) {
           :class="panelClass"
           :style="{ '--tx-command-palette-max': `${maxHeight}px` }"
         >
-          <div class="tx-command-palette__search">
-            <span class="tx-command-palette__search-icon" aria-hidden="true">
-              <TxIcon :icon="{ type: 'builtin', value: 'search' }" :size="16" />
-            </span>
-            <input
-              ref="inputRef"
-              class="tx-command-palette__input"
-              :value="query"
-              :placeholder="placeholder"
-              role="combobox"
-              :aria-label="placeholder"
-              aria-expanded="true"
-              :aria-controls="listId"
-              :aria-activedescendant="activeOptionId"
-              @input="(e) => onInput((e.target as HTMLInputElement).value)"
-              @keydown="onKeydown"
-              @compositionstart="onCompositionStart"
-              @compositionend="onCompositionEnd"
-            >
-          </div>
-
-          <div :id="listId" class="tx-command-palette__list" role="listbox" :aria-label="ariaLabel">
-            <button
-              v-for="(cmd, index) in filteredCommands"
-              :id="`${listId}-opt-${index}`"
-              :key="cmd.id"
-              type="button"
-              class="tx-command-palette__item"
-              role="option"
-              :aria-selected="index === activeIndex"
-              :aria-disabled="cmd.disabled || undefined"
-              tabindex="-1"
-              :class="{
-                'is-active': index === activeIndex,
-                'is-disabled': cmd.disabled,
-              }"
-              @click="selectItem(cmd)"
-            >
-              <span v-if="cmd.icon" class="tx-command-palette__icon" aria-hidden="true">
-                <TxIcon :icon="resolveIcon(cmd.icon)" :size="16" />
+          <TxBaseSurface
+            class="tx-command-palette__surface"
+            preset="card"
+            fake
+            :mode="surfaceMode"
+            :color="surfaceColor"
+            :opacity="surfaceOpacity"
+          />
+          <div class="tx-command-palette__body">
+            <div class="tx-command-palette__search">
+              <span class="tx-command-palette__search-icon" aria-hidden="true">
+                <TxIcon :icon="{ type: 'builtin', value: 'search' }" :size="16" />
               </span>
-              <span class="tx-command-palette__content">
-                <span class="tx-command-palette__title">
-                  <template v-for="(part, partIndex) in getHighlightedParts(cmd.title)" :key="`${cmd.id}-title-${partIndex}`">
-                    <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
-                    <span v-else>{{ part.text }}</span>
-                  </template>
-                </span>
-                <span v-if="cmd.description" class="tx-command-palette__desc">
-                  <template v-for="(part, partIndex) in getHighlightedParts(cmd.description)" :key="`${cmd.id}-desc-${partIndex}`">
-                    <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
-                    <span v-else>{{ part.text }}</span>
-                  </template>
-                </span>
-              </span>
-              <span v-if="cmd.shortcut" class="tx-command-palette__shortcut">{{ cmd.shortcut }}</span>
-            </button>
-
-            <div v-if="!filteredCommands.length" class="tx-command-palette__empty">
-              <slot name="empty" :query="query" :empty-text="emptyText">
-                {{ emptyText }}
-              </slot>
+              <input
+                ref="inputRef"
+                class="tx-command-palette__input"
+                :value="query"
+                :placeholder="placeholder"
+                role="combobox"
+                :aria-label="placeholder"
+                aria-expanded="true"
+                :aria-controls="listId"
+                :aria-activedescendant="activeOptionId"
+                @input="(e) => onInput((e.target as HTMLInputElement).value)"
+                @keydown="onKeydown"
+                @compositionstart="onCompositionStart"
+                @compositionend="onCompositionEnd"
+              >
             </div>
-          </div>
 
-          <slot name="footer" :query="query" :visible-count="filteredCommands.length" />
+            <div :id="listId" class="tx-command-palette__list" role="listbox" :aria-label="ariaLabel">
+              <button
+                v-for="(cmd, index) in filteredCommands"
+                :id="`${listId}-opt-${index}`"
+                :key="cmd.id"
+                type="button"
+                class="tx-command-palette__item"
+                role="option"
+                :aria-selected="index === activeIndex"
+                :aria-disabled="cmd.disabled || undefined"
+                tabindex="-1"
+                :class="{
+                  'is-active': index === activeIndex,
+                  'is-disabled': cmd.disabled,
+                }"
+                @click="selectItem(cmd)"
+              >
+                <span v-if="cmd.icon" class="tx-command-palette__icon" aria-hidden="true">
+                  <TxIcon :icon="resolveIcon(cmd.icon)" :size="16" />
+                </span>
+                <span class="tx-command-palette__content">
+                  <span class="tx-command-palette__title">
+                    <template v-for="(part, partIndex) in getHighlightedParts(cmd.title)" :key="`${cmd.id}-title-${partIndex}`">
+                      <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
+                      <span v-else>{{ part.text }}</span>
+                    </template>
+                  </span>
+                  <span v-if="cmd.description" class="tx-command-palette__desc">
+                    <template v-for="(part, partIndex) in getHighlightedParts(cmd.description)" :key="`${cmd.id}-desc-${partIndex}`">
+                      <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
+                      <span v-else>{{ part.text }}</span>
+                    </template>
+                  </span>
+                </span>
+                <span v-if="cmd.shortcut" class="tx-command-palette__shortcut">{{ cmd.shortcut }}</span>
+              </button>
+
+              <div v-if="!filteredCommands.length" class="tx-command-palette__empty">
+                <slot name="empty" :query="query" :empty-text="emptyText">
+                  {{ emptyText }}
+                </slot>
+              </div>
+            </div>
+
+            <slot name="footer" :query="query" :visible-count="filteredCommands.length" />
+          </div>
         </div>
       </div>
-    </transition>
+    </Transition>
   </Teleport>
 </template>
 
@@ -387,20 +427,59 @@ function onKeydown(e: KeyboardEvent) {
 .tx-command-palette__overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.35);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 10vh 16px 24px;
+
+  // The dim is a layer under the panel rather than the overlay's own paint and opacity: an
+  // overlay fading through opacity would be the panel's backdrop root, and the panel's material
+  // would sample only the dim instead of the page.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+  }
 }
 
 .tx-command-palette__panel {
+  // Positioned and stacked, so the surface sits under the body without leaving the panel.
+  position: relative;
+  z-index: 0;
   width: min(90vw, 560px);
-  background: var(--tx-bg-color, #fff);
-  box-shadow: 10px 20px 70px rgba(15, 23, 42, 0.28);
-  border: 1px solid color-mix(in srgb, var(--tx-border-color, #e5e7eb) 50%, transparent);
-  overflow: hidden;
   @include tx-squircle(18px);
+
+  // The rim and the shadow, on a layer of their own so they can fade while the panel does not
+  // (see the motion below). Above the surface, which would cover the rim.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border: 1px solid color-mix(in srgb, var(--tx-border-color, #e5e7eb) 50%, transparent);
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: 10px 20px 70px rgba(15, 23, 42, 0.28);
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+}
+
+.tx-command-palette__surface {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: inherit;
+  pointer-events: none;
+}
+
+// Clips the content to the outline. The panel used to, and would cut its own shadow.
+.tx-command-palette__body {
+  overflow: hidden;
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .tx-command-palette__search {
@@ -512,13 +591,62 @@ function onKeydown(e: KeyboardEvent) {
   font-size: 13px;
 }
 
-.tx-command-palette-enter-active,
-.tx-command-palette-leave-active {
+// Dim fade. The dim layer fades, not the overlay: see `.tx-command-palette__overlay::before`.
+.tx-command-palette-enter-active::before,
+.tx-command-palette-leave-active::before {
   transition: opacity 0.34s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.tx-command-palette-enter-from,
-.tx-command-palette-leave-to {
+.tx-command-palette-enter-from::before,
+.tx-command-palette-leave-to::before {
   opacity: 0;
+}
+
+// Panel fade. The panel never fades as a whole: an element whose opacity animates is the backdrop
+// root of every backdrop filter inside it, so the material would sample nothing but the panel and
+// its frost would drop out for the whole transition. Each part fades on its own instead, and the
+// material stays live from the first frame to the last: the body, the rim and shadow, and the
+// surface. A surface with a backdrop filter fades layer by layer; one without fades whole, and so
+// does every surface under high contrast, which drops the layers that blur. Each phase hands its
+// fade down as `--tx-command-palette-fade`, so the parts are listed once.
+.tx-command-palette-enter-active {
+  --tx-command-palette-fade: tx-command-palette-fade-in 0.34s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tx-command-palette-leave-active {
+  --tx-command-palette-fade: tx-command-palette-fade-out 0.34s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.tx-command-palette-moving {
+  .tx-command-palette__body,
+  .tx-command-palette__panel::after,
+  .tx-command-palette__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
+  .tx-command-palette__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
+  .tx-command-palette__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) :deep(.tx-base-surface__layer) {
+    animation: var(--tx-command-palette-fade);
+  }
+
+  @include tx-when-high-contrast {
+    .tx-command-palette__surface {
+      animation: var(--tx-command-palette-fade);
+    }
+  }
+}
+</style>
+
+<style lang="scss">
+// Unscoped: the parts take these through `--tx-command-palette-fade`, and a scoped sheet renames
+// its keyframes only where an `animation` declaration names them, never inside a custom property.
+// Each gives only its far end, so a part fades from, or to, the opacity it rests at.
+@keyframes tx-command-palette-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tx-command-palette-fade-out {
+  to {
+    opacity: 0;
+  }
 }
 </style>

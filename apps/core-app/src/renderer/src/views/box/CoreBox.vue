@@ -25,6 +25,7 @@ import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { getStaggerDelay } from './stagger-delay'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
+import { TxBaseSurface } from '@talex-touch/tuffex/base-surface'
 
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -1205,7 +1206,13 @@ const customCss = computed(() => {
 
 <template>
   <teleport to="body">
-    <div class="CoreBox-Mask" />
+    <TxBaseSurface
+      class="CoreBox-Mask"
+      system-backdrop
+      fake
+      color="var(--tx-fill-color)"
+      :opacity="0.75"
+    />
   </teleport>
 
   <div
@@ -1964,14 +1971,17 @@ div.CoreBox {
   visibility: hidden;
 }
 
+// The launcher's surface: TuffEx's default refraction over the window material, which is the
+// system's (vibrancy on macOS, Mica on Windows). A backdrop filter in this transparent window
+// sees only the page's own pixels, so the surface runs none (`system-backdrop`): it would
+// re-sample its own veil and turn it opaque over the material. It lays the 75% veil of the fill
+// colour, its tint and its rim; the system blurs.
 .core-box .CoreBox-Mask {
   z-index: -100;
   position: absolute;
 
   inset: 0;
 
-  opacity: 0.75;
-  background-color: var(--tx-fill-color);
   pointer-events: none;
   // Teleported to `body`, so `body > :not(#app)` (`index.scss`, meant for interactive overlays)
   // sets `-webkit-app-region: no-drag` on it. Chromium composites drag regions per window across

@@ -53,25 +53,58 @@ Tuff 选定 `#141414`（极深温和碳灰）作为画布基底，并建立了�
 
 ### 13.2 字重梯度的双主题校准
 
-TuffEx 目前没有在暗色主题里自动下调字重，组件在深浅两面用的是同一套 `400/500/600`。下表是建议值：字体带字重轴时（可变字体，如 San Francisco、Segoe UI Variable、Inter），可以在暗色主题里这样微调：
+为了在深浅两种模式下获得更一致的粗细感知，TuffEx 利用可变字体（Variable Fonts）的无级调节能力，在暗色主题里把三档强调字重各调轻 40：`--tx-font-weight-medium` 从 `500` 变为 `460`，`--tx-font-weight-semibold` 从 `600` 变为 `560`，`--tx-font-weight-bold` 从 `700` 变为 `660`。组件的强调文字、标题与数值以 `var(--tx-font-weight-medium, 500)` 这样的写法读取它们，切到暗色主题就随之变轻；正文的 `400` 不动。
 
-| 文字角色 | 浅色模式（Light）标准 | 暗色建议字重 | 视觉校准目标 |
-|---|---|---|---|
-| **正文默认** | `400`（Regular） | `380` ～ `400` | 消除白字边缘发虚与膨胀 |
-| **微强调** | `500`（Medium） | `460` | 柔和微强调，不糊成团 |
-| **小标题/按钮** | `600`（Semi-Bold） | `560` | 清晰挺拔，笔画内腔不闭合 |
-| **大标题** | `600` / `700` | `580` / `650` | 保持稳固骨架 |
+```scss
+// packages/tuffex/packages/components/style/variables.scss
+[data-theme='dark'],
+.dark {
+  --tx-font-weight-medium: #{mixins.tx-dark-weight(500, 460)};
+  --tx-font-weight-semibold: #{mixins.tx-dark-weight(600, 560)};
+  --tx-font-weight-bold: #{mixins.tx-dark-weight(700, 660)};
+}
+```
+
+| 文字角色 | 字重变量 | 浅色模式（Light）标准 | 暗色模式（Dark）补偿 | 视觉校准目标 |
+|---|---|---|---|---|
+| **正文默认** | 无 | `400`（Regular） | `400` | 保持 Regular：再低，静态字体就会落到 Light 字面（见 13.3） |
+| **微强调** | `--tx-font-weight-medium` | `500`（Medium） | `460` | 柔和微强调，不糊成团 |
+| **小标题/按钮** | `--tx-font-weight-semibold` | `600`（Semi-Bold） | `560` | 清晰挺拔，笔画内腔不闭合 |
+| **大标题/加粗/数值** | `--tx-font-weight-bold` | `700`（Bold） | `660` | 保持稳固骨架，粗体与数字不在暗底上发胖 |
+
+这些中间值只在字体带字重轴时画得更细：可变字体（如 San Francisco、Segoe UI Variable、Inter Variable）按 `460` 原样绘制；静态字体按 13.3 的规则回到浅色模式的同一个字面。
 
 ### 13.3 离散字体回退的安全防线
 
-**严肃工程陷阱**：在 CSS 中写下 `font-weight: 460`，只有当系统字体支持可变字重轴（如 macOS 的 `-apple-system` San Francisco、Windows 的 Segoe UI Variable、`Inter Variable`）时才会真正生效！
-如果环境回退到了不支持可变字重的静态中文字体（如部分 Linux 发行版的思源黑体静态分包）：
-* `460` 落在 `400～500` 区间内，浏览器会根据回退算法将其向上就近匹配到 `500`！
-* 这不仅没有减轻膨胀，反而**进一步加粗了文字**！
+**严肃工程陷阱**：在 CSS 中写下 `font-weight: 460`，只有当字体带字重轴（如 macOS 经 `-apple-system` / `system-ui` 得到的 San Francisco、Windows 的 Segoe UI Variable、`Inter Variable`）时才会真正画出 460。静态字体只有几个固定字面（PingFang SC、Microsoft YaHei、部分 Linux 发行版的思源黑体静态分包都是），CSS 字体匹配会把中间值归到其中一个：
+* 目标在 `400`～`500` 之间：先向上找，最多找到 `500`；再向下找；最后才找 `500` 以上；
+* 目标高于 `500`：先向上找，再向下找；
+* 目标低于 `400`：先向下找，再向上找。
 
-因此建议只在确认字体带字重轴时声明这些中间值；静态字体环境下维持 `400/500/600` 阶梯，改由降低文字颜色对比度（使用 `--tx-text-color-regular` 替代纯白）来抵消光渗膨胀。`@supports (font-variation-settings: "wght" 460)` 只能说明浏览器认这个属性，判断不了当前字体有没有字重轴，不能拿来做这道门。
+所以静态字体把 `460` 画成 `500` 的字面、`560` 画成 `600` 的字面、`660` 画成 `700` 的字面（缺这个字面时按同样的顺序找下一个），与浅色模式落在同一个字面：补偿不生效，但也不会变粗。
 
-中文字体同样要先量：在 macOS 的中文字体下实测，`390` 画出来与 `400` 完全相同，正文这一档写了也不生效；英文的 system-ui 带字重轴，能画出中间值。
+TuffEx 的防异化工程解法，是把每个暗色值都卡在（浅色值 − 100，浅色值］之内。Sass 函数 `tx-dark-weight($light, $dark)` 在构建时检查，越界或试图下调 `400` 都直接报错：
+
+```scss
+// packages/tuffex/packages/components/style/mixins.scss
+@function tx-dark-weight($light, $dark) {
+  @if $light <= 400 and $dark != $light {
+    @error 'tx-dark-weight: #{$light} cannot go lighter; #{$dark} falls to a static font\'s Light face.';
+  }
+  @if $dark > $light or $dark <= $light - 100 {
+    @error 'tx-dark-weight: #{$dark} is outside (#{$light - 100}, #{$light}]; a static font would draw it with another face than #{$light}.';
+  }
+  @return $dark;
+}
+```
+
+**陷阱在这个区间之外**：
+* 正文写成 `390`：目标低于 `400`，静态字体先向下找，画成 Light，整整细了一档。在 macOS 的 Chromium 里实测，字体名写 `PingFang SC` 时，`380`、`390` 都画成 `PingFangSC-Light`；经 `system-ui` 回退到的中文字体却把 `390` 画成 Regular。同一个数值随字体栈的写法而变，所以 TuffEx 不下调正文，表里原先建议的正文 `380`～`400` 也就不再采用。
+* 把 `500` 降到 `400`：浅色是 Medium，暗色成了 Regular，静态字体上同样跳了一整档。
+
+静态字体环境下补偿不了字重，就维持 `400/500/600` 阶梯，改由降低文字颜色对比度（使用 `--tx-text-color-regular` 替代纯白）来抵消光渗膨胀。`@supports (font-variation-settings: "wght" 460)` 只能说明浏览器认这个属性，判断不了当前字体有没有字重轴，不能拿来做这道门。
+
+默认字体栈下要先量：TuffEx 的 `--tx-font-family` 是 `"Inter", "PingFang SC", "Microsoft YaHei", …`。在没装 Inter 的 macOS 上，中英文都由 PingFang SC 绘制，实测 `460`、`560`、`660` 分别画成 Medium、Semibold、Semibold，与 `500`、`600`、`700` 完全相同（PingFang SC 没有 Bold 字面，`700` 也画成 Semibold），所以默认字体栈下看不出暗色微调。macOS 上绘制中文的 PingFang 没有字重轴，直接点名或经 `system-ui` 回退都一样；只有带字重轴的拉丁字体会真正变细，比如宿主把 `--tx-font-family` 换成以 `system-ui` 开头的字体栈，英文就由可变的 San Francisco 绘制，`460` 落在 `400` 与 `500` 之间。
 
 ---
 

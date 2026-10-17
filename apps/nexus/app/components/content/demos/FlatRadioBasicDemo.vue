@@ -12,7 +12,7 @@ const value = ref<'light' | 'dark' | 'auto'>('light')
       <TxFlatRadioItem value="auto" label="Auto" />
     </TxFlatRadio>
 
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+    <TxCard variant="plain" :padding="10" :radius="14">
       <div class="tx-demo__meta">
         selected: {{ value }}
       </div>

@@ -1,6 +1,6 @@
 ---
 title: 流式文字节拍器与微渐显预设
-description: 大模型网络 Token 到达脉冲抖动、useStreamPacer 恒定节拍调度、Aurora 微渐显与全屏单光标交接契约。
+description: 大模型网络 Token 到达脉冲抖动、useStreamPacer 节拍调度、Aurora 微渐显与全屏单光标交接契约。
 ---
 
 # 流式文字节拍器与微渐显预设

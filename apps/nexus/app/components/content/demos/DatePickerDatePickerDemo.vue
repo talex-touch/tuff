@@ -78,7 +78,7 @@ const labels = computed(() => {
         </TxButton>
       </div>
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ popupValue }}
         </div>
@@ -115,7 +115,7 @@ const labels = computed(() => {
         max="2026-12-31"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ fieldValue }}
         </div>
@@ -141,7 +141,7 @@ const labels = computed(() => {
         :placeholder="labels.rangePlaceholder"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ rangeValue.join(' → ') }}
         </div>
@@ -169,7 +169,7 @@ const labels = computed(() => {
         max="2026-05-31"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ boundedValue }}
         </div>
@@ -197,7 +197,7 @@ const labels = computed(() => {
         :cancel-text="labels.inlineCancel"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ inlineValue }}
         </div>

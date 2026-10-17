@@ -47,7 +47,7 @@
 - **[Surface 8 种材质物理选型](./concepts/surface-taxonomy.zh.mdc)** — Refraction（默认）与 8 种材质选型矩阵。
 - **[#141414 深灰画布与三层表面阶梯](./concepts/dark-palette.zh.mdc)** — OLED 防拖尾残影与三层深灰空间阶梯。
 - **[微动效响应纪律与 Sub-100ms 瞬时悬停](./concepts/micro-motion.zh.mdc)** — 生产力微动效与瞬时悬停原则。
-- **[流式文字节拍器与双层防抖镜像](./concepts/stream-pacer.zh.mdc)** — useStreamPacer 恒定节拍与 Reserve 防抖几何。
+- **[流式文字节拍器与双层防抖镜像](./concepts/stream-pacer.zh.mdc)** — useStreamPacer 节拍与 Reserve 防抖几何。
 ## 发布
 - **[插件开发任务流](./getting-started/plugin-workflow.zh.mdc)** — 校验、构建并发布插件包。
 

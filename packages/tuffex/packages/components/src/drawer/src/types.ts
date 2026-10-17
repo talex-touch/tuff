@@ -1,3 +1,5 @@
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
+
 /**
  * Direction from which the drawer appears.
  *
@@ -108,10 +110,29 @@ export interface DrawerProps {
   maskEffect?: DrawerMaskEffect
 
   /**
-   * Whether the drawer panel background should let the back layer show through.
+   * Whether more of the back layer should show through the panel: thins the colour under its
+   * material (see `surfaceOpacity`).
    * @default false
    */
   panelTransparent?: boolean
+
+  /**
+   * Material of the panel.
+   * @default 'refraction'
+   */
+  surface?: BaseSurfaceMode
+
+  /**
+   * Colour laid under the material.
+   * @default 'var(--tx-drawer-panel-background)'
+   */
+  surfaceColor?: string
+
+  /**
+   * Opacity of that colour (0–1): 0.96 under `mask` and 0.5 under the other materials, which
+   * `panelTransparent` thins to 0.78 and 0.3.
+   */
+  surfaceOpacity?: number
 
   /**
    * Whether mobile viewport should force the drawer to slide from bottom.

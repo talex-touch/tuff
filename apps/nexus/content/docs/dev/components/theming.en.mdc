@@ -56,6 +56,7 @@ code: |
 
 - The two are equivalent, so Tuffex drops into a Tailwind app (`.dark`) or a `data-theme` app without an adapter.
 - Set either on a subtree to get a dark island on a light page.
+- Dark takes each of the three emphasis weights 40 lighter to offset the irradiation that makes light text on a dark ground look bolder: `--tx-font-weight-medium` 500 → 460, `--tx-font-weight-semibold` 600 → 560, `--tx-font-weight-bold` 700 → 660; body text stays at 400. Your own styles follow by reading `var(--tx-font-weight-medium, 500)`. When overriding them, keep each dark value within (light − 100, light], or static fonts switch to another face; see [Retinal Irradiation & Weight Tuning](../concepts/irradiation-tuning.en.mdc).
 
 ### View Transitions
 
@@ -127,7 +128,7 @@ Under high contrast, components stop letting the page through:
 
 | Part | Under high contrast |
 |------|---------------------|
-| Material panels: every `TxBaseSurface` mode (Card, BaseAnchor panels and the rest build on it), GlassSurface, Toast, NavBar, TabBar, Picker, PopperDialog, TouchTip, Slider, the RadioGroup indicator, the ProgressBar mask, StatCard, Drawer's transparent panel, MotionTransition's glass curtain | An opaque fill; no blur, no refraction, no rim light |
+| Material panels: every `TxBaseSurface` mode but `plain` (Card, BaseAnchor panels, the command palette, the dialogs and the rest build on it; `plain` paints no material and gets no fill in high contrast either), GlassSurface, Toast, NavBar, TabBar, Picker, Slider, the RadioGroup indicator, the ProgressBar mask, StatCard, Drawer's transparent panel, MotionTransition's glass curtain | An opaque fill; no blur, no refraction, no rim light |
 | Scrims: Modal, Drawer, BlowDialog | Keep their dimming, lose the frost |
 | Layers over content: LoadingOverlay, the Card and DataTable loading veils, ImageUploader's remove button | Opaque, hiding what's under them |
 | Decoration: FlowLight, the GlowText shine, GradualBlur | Hidden |

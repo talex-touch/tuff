@@ -26,7 +26,7 @@ const copy = computed(() => locale.value === 'zh'
   ? {
       default: '默认',
       modes: {
-        refraction: '玻璃层之上再叠一层背景模糊与饱和度滤镜和随光源移动的高光，外加折射描边',
+        refraction: '玻璃层之上再叠一层背景模糊与饱和度滤镜，外加折射描边',
         glass: '玻璃层：SVG 位移贴图让 R、G、B 三个通道各自错开，再提高饱和度；Safari、Firefox 退回背景模糊',
         acrylic: '三倍宽的背景模糊并提亮，叠一层带分形噪点的色膜',
         mica: '不读背景：不透明底色上两道锚定视口的主色与邻近色相色晕',
@@ -40,7 +40,7 @@ const copy = computed(() => locale.value === 'zh'
   : {
       default: 'Default',
       modes: {
-        refraction: 'The glass layer, with a backdrop blur-and-saturation layer, highlights that follow the light and a refraction rim over it',
+        refraction: 'The glass layer, with a backdrop blur-and-saturation layer and a refraction rim over it',
         glass: 'Glass layer: an SVG displacement map shifts R, G and B apart, then saturation is boosted; Safari and Firefox fall back to a backdrop blur',
         acrylic: 'A backdrop blur three times as wide, lifted, under a tint grained with fractal noise',
         mica: 'No backdrop read: two viewport-anchored glows of the brand and a neighbouring hue on an opaque base',

@@ -174,7 +174,7 @@ code: |
 | `referenceClass` | `BaseAnchorClassValue` | - | 追加到触发锚点的 class。 |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给面板卡片的参数，含流光底 `flowLight` / `flowLightIntensity`。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影。 |
 | `panelRadius` | `number` | `18` | 面板圆角（px）。 |
 | `panelPadding` | `number` | `8` | 面板内边距（px）。 |
@@ -237,7 +237,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 子面板动画。 |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给子面板卡片的参数；`flowLight` / `flowLightIntensity` 不传时沿用根菜单，`flowLight: false` 关闭。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 子面板边框样式。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 子面板背景效果。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 子面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 子面板阴影。 |
 | `panelRadius` | `number` | `14` | 子面板圆角（px）。 |
 | `panelPadding` | `number` | `6` | 子面板内边距（px）。 |

@@ -83,7 +83,7 @@ const resolvedGlass = computed(() => shouldShowIndicatorProps.value && indicator
 
 <template>
   <div class="tx-demo tx-demo__col" style="max-width: 720px;">
-    <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+    <TxCard variant="plain" :padding="14" :radius="14">
       <div class="tx-demo__col" style="gap: 12px;">
         <div class="tx-demo__row">
           <label class="tx-demo__row" style="gap: 8px;">
@@ -158,7 +158,7 @@ const resolvedGlass = computed(() => shouldShowIndicatorProps.value && indicator
       </div>
     </TxCard>
 
-    <TxCard variant="plain" background="mask" :padding="18" :radius="14" style="width: 100%;">
+    <TxCard variant="plain" :padding="18" :radius="14" style="width: 100%;">
       <TxRadioGroup
         v-model="value"
         :type="type"

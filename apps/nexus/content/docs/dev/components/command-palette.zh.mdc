@@ -71,6 +71,9 @@ code: |
 | `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板的 class。 |
 | `query` | `string` | - | 搜索文本，配合 `v-model:query`；不传时由组件自行管理。 |
 | `ariaLabel` | `string` | `'Command palette'` | 对话框与命令列表的无障碍名称。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 
 ### 事件
 
@@ -110,9 +113,13 @@ code: |
 - `↑` / `↓` 循环移动并跳过禁用项，`Enter` 选中，`Esc` 关闭。高亮初始落在第一个可用命令上。
 - 输入法组合期间不响应键盘选择，避免提前提交中日韩输入。
 - 遮罩层是 `role="dialog"` 与 `aria-modal="true"`；禁用项带 `aria-disabled="true"`，不触发 `select`。
+- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在搜索框、列表与 `footer` 插槽之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。
+- 遮罩的变暗画在遮罩的一层伪元素上，而不是遮罩自身的背景与透明度，所以面板材质采到的是页面，而不只是遮罩的暗色。
+- 面板开合时不整体淡入淡出：整体透明度一变，里面的背景滤镜就只能采到面板自己，磨砂会在整个过渡里消失。淡入淡出的是面板上的各个部分：内容、阴影与描边，以及材质的每一层，所以带背景滤镜的材质（如默认的 `refraction`）从第一帧到最后一帧都采着页面。
 
 ## 技术实现
 
+- 描边与阴影画在面板的 `::after` 上；用 `panelClass` 换描边或阴影时改这一层，换底色用 `surfaceColor`，不要给面板自身设背景。
 - 源码：`packages/tuffex/packages/components/src/command-palette/`。
 
 <TuffDocSourceLink />

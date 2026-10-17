@@ -561,7 +561,6 @@ async function openTypeReference(typeInfo: RefType) {
                   maxWidth: 460,
                   panelPadding: 10,
                   panelVariant: 'plain',
-                  panelBackground: 'glass',
                   panelShadow: 'soft',
                 }"
               >
@@ -636,7 +635,6 @@ async function openTypeReference(typeInfo: RefType) {
                   maxWidth: 560,
                   panelPadding: 10,
                   panelVariant: 'plain',
-                  panelBackground: 'glass',
                   panelShadow: 'soft',
                 }"
                 :reference-full-width="true"
@@ -697,7 +695,6 @@ async function openTypeReference(typeInfo: RefType) {
           v-for="row in normalizedRows"
           :key="row.key"
           variant="plain"
-          background="mask"
           :padding="14"
           :radius="14"
           class="doc-api-table__mobile-card"
@@ -766,7 +763,6 @@ async function openTypeReference(typeInfo: RefType) {
                       maxWidth: 420,
                       panelPadding: 10,
                       panelVariant: 'plain',
-                      panelBackground: 'glass',
                       panelShadow: 'soft',
                     }"
                   >
@@ -848,7 +844,6 @@ async function openTypeReference(typeInfo: RefType) {
                     maxWidth: 460,
                     panelPadding: 10,
                     panelVariant: 'plain',
-                    panelBackground: 'glass',
                     panelShadow: 'soft',
                   }"
                   :reference-full-width="true"

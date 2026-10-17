@@ -108,7 +108,6 @@ watch(open, (isOpen) => {
     :min-width="208"
     :panel-radius="12"
     :panel-padding="6"
-    panel-background="pure"
   >
     <template #trigger>
       <!-- display: contents — the wrapper exists only so closing can find the chip to refocus. -->

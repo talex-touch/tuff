@@ -36,7 +36,7 @@ const onPick = (item: string) => {
             />
           </template>
 
-          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="10">
+          <TxCard variant="solid" shadow="soft" :radius="18" :padding="10">
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
                 <span v-if="loading">Loading...</span>
@@ -77,7 +77,7 @@ const onPick = (item: string) => {
             />
           </template>
 
-          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="10">
+          <TxCard variant="solid" shadow="soft" :radius="18" :padding="10">
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
                 <span v-if="loading">Loading...</span>

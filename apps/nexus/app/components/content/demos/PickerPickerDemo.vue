@@ -138,7 +138,7 @@ function formatValue(value: PickerValue) {
         </TxButton>
       </div>
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ formatValue(popupValue) }}
         </div>
@@ -175,7 +175,7 @@ function formatValue(value: PickerValue) {
         :cancel-text="labels.inlineCancel"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ formatValue(inlineValue) }}
         </div>
@@ -203,7 +203,7 @@ function formatValue(value: PickerValue) {
         :visible-item-count="4"
       />
 
-      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+      <TxCard variant="plain" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ formatValue(denseValue) }}
         </div>

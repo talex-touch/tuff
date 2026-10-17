@@ -276,7 +276,7 @@ code: |
 | `optionPadding` | `number` | `0` | 选项水平缩进补偿。 |
 | `animation` | `BaseAnchorAnimationOptions` | - | 透传给 Popover / BaseAnchor 的动画配置。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板表面样式。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板背景。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影强度。 |
 | `panelRadius` | `number` | `18` | 面板圆角。 |
 | `panelPadding` | `number` | `0` | 面板内边距。 |

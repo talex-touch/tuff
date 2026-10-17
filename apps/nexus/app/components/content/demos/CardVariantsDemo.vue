@@ -4,7 +4,7 @@
 <template>
   <div class="card-variants-wrap">
     <div class="card-variants-grid">
-      <TxCard variant="solid" background="glass" shadow="none" :padding="14">
+      <TxCard variant="solid" shadow="none" :padding="14">
         <div class="card-demo-title">
           solid
         </div>
@@ -13,7 +13,7 @@
         </div>
       </TxCard>
 
-      <TxCard variant="dashed" background="glass" shadow="none" :padding="14">
+      <TxCard variant="dashed" shadow="none" :padding="14">
         <div class="card-demo-title">
           dashed
         </div>
@@ -22,7 +22,7 @@
         </div>
       </TxCard>
 
-      <TxCard variant="plain" background="glass" shadow="none" :padding="14">
+      <TxCard variant="plain" shadow="none" :padding="14">
         <div class="card-demo-title">
           plain
         </div>

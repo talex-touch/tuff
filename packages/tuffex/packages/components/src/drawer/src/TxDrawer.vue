@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { CSSProperties, Slots } from 'vue'
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 
@@ -9,6 +11,7 @@ import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-in
 const zIndexAllocator = useZIndexAllocator()
 
 const MOBILE_BREAKPOINT = 768
+const SURFACE_MODES: readonly string[] = ['pure', 'mask', 'blur', 'glass', 'refraction', 'acrylic', 'mica', 'flat', 'plain']
 const DRAWER_Z_INDEX_SEED = 10000
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -41,6 +44,8 @@ const props = withDefaults(defineProps<DrawerProps>(), {
   closeOnPressEscape: true,
   maskEffect: 'blur',
   panelTransparent: false,
+  surface: 'refraction',
+  surfaceColor: '',
   mobileAdapt: true,
   full: false,
   lazy: true,
@@ -73,6 +78,41 @@ const effectiveDirection = computed<DrawerDirection>(() => {
   }
   return props.direction
 })
+
+const surfaceMode = computed<BaseSurfaceMode>(() =>
+  SURFACE_MODES.includes(props.surface) ? props.surface : 'refraction',
+)
+
+const surfaceColor = computed(() => props.surfaceColor || 'var(--tx-drawer-panel-background)')
+
+// mask keeps a near-opaque fill, and the other materials sit over the colour at half strength,
+// so text stays legible and the page still shows through to be blurred and refracted.
+// `panelTransparent` thins either.
+const surfaceOpacity = computed(() => {
+  const fallback = surfaceMode.value === 'mask'
+    ? (props.panelTransparent ? 0.78 : 0.96)
+    : (props.panelTransparent ? 0.3 : 0.5)
+  const value = typeof props.surfaceOpacity === 'number' ? props.surfaceOpacity : fallback
+  if (!Number.isFinite(value))
+    return fallback
+  return Math.max(0, Math.min(1, value))
+})
+
+/**
+ * Transform transitions of the panel under way. A sliding panel's backdrop filter samples
+ * where the panel was a frame ago, so the surface takes its motion fallback until the slide
+ * ends. Counted rather than flagged: a slide reversed midway reports the new run and the old
+ * one's cancel in either order.
+ */
+const panelSlides = ref(0)
+
+function trackPanelSlide(event: TransitionEvent): void {
+  if (event.propertyName !== 'transform')
+    return
+  panelSlides.value = event.type === 'transitionrun'
+    ? panelSlides.value + 1
+    : Math.max(0, panelSlides.value - 1)
+}
 
 const resolvedSize = computed(() => normalizeDrawerSize(props.full ? 'full' : props.size ?? props.width))
 const isHorizontalDirection = computed(() => effectiveDirection.value === 'left' || effectiveDirection.value === 'right')
@@ -248,7 +288,22 @@ onUnmounted(() => {
         @click="handleMaskClick"
       />
 
-      <div class="tx-drawer__panel">
+      <div
+        class="tx-drawer__panel"
+        @transitionrun.self="trackPanelSlide"
+        @transitionend.self="trackPanelSlide"
+        @transitioncancel.self="trackPanelSlide"
+      >
+        <TxBaseSurface
+          v-if="shouldRenderContent"
+          class="tx-drawer__surface"
+          preset="card"
+          fake
+          :mode="surfaceMode"
+          :color="surfaceColor"
+          :opacity="surfaceOpacity"
+          :moving="panelSlides > 0"
+        />
         <header v-if="shouldRenderHeader" class="tx-drawer__header">
           <div v-if="$slots.header" :id="titleId" class="tx-drawer__header-content">
             <slot name="header" :close="handleClose" :title="title" :title-id="titleId" />
@@ -302,7 +357,6 @@ onUnmounted(() => {
   --tx-drawer-transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   --tx-drawer-mask-background: rgba(0, 0, 0, 0.45);
   --tx-drawer-panel-background: var(--tx-bg-color-overlay, var(--tx-bg-color, #fff));
-  --tx-drawer-panel-background-transparent: color-mix(in srgb, var(--tx-drawer-panel-background) 78%, transparent);
 
   position: fixed;
   top: 0;
@@ -398,14 +452,6 @@ onUnmounted(() => {
     }
   }
 
-  &--panel-transparent {
-    .tx-drawer__panel {
-      background: var(--tx-drawer-panel-background-transparent);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
-  }
-
   &__mask {
     position: absolute;
     inset: 0;
@@ -416,6 +462,8 @@ onUnmounted(() => {
     -webkit-backdrop-filter: blur(4px);
   }
 
+  // The panel paints no colour of its own: its surface, under the header, body and footer,
+  // is the panel's background.
   &__panel {
     position: absolute;
     z-index: 1;
@@ -425,8 +473,16 @@ onUnmounted(() => {
     height: var(--tx-drawer-height, 100%);
     max-width: 100vw;
     max-height: 100vh;
-    background: var(--tx-drawer-panel-background);
     transition: transform var(--tx-drawer-transition);
+  }
+
+  &__surface {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
   }
 
   &__header,
@@ -499,14 +555,11 @@ onUnmounted(() => {
   }
 }
 
-// High contrast: the see-through panel turns opaque, and neither it nor the mask frosts the
-// page. The mask still dims it.
+// High contrast: the mask still dims the page and no longer frosts it. The panel's surface
+// turns solid on its own.
 .tx-drawer {
   @include tx-when-high-contrast {
-    --tx-drawer-panel-background-transparent: var(--tx-drawer-panel-background);
-
-    .tx-drawer__mask,
-    .tx-drawer__panel {
+    .tx-drawer__mask {
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
     }

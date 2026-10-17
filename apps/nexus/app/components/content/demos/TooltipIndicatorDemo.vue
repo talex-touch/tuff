@@ -5,14 +5,14 @@ const { locale } = useI18n()
 
 const labels = computed(() => (locale.value === 'zh'
   ? {
-      primary: '遮罩背景 + 箭头',
-      secondary: '玻璃背景 + 右侧定位',
+      primary: '显示箭头',
+      secondary: '右侧定位 + 中等阴影',
       triggerA: '状态详情',
       triggerB: '服务状态',
     }
   : {
-      primary: 'Mask background + arrow',
-      secondary: 'Glass background + right placement',
+      primary: 'With arrow',
+      secondary: 'Right placement + medium shadow',
       triggerA: 'Status detail',
       triggerB: 'Service status',
     }))
@@ -22,7 +22,7 @@ const labels = computed(() => (locale.value === 'zh'
   <div class="tuff-demo-row">
     <TxTooltip
       :content="labels.primary"
-      :anchor="{ showArrow: true, panelBackground: 'mask' }"
+      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">
         {{ labels.triggerA }}
@@ -31,7 +31,7 @@ const labels = computed(() => (locale.value === 'zh'
 
     <TxTooltip
       :content="labels.secondary"
-      :anchor="{ placement: 'right', showArrow: true, panelBackground: 'glass', panelShadow: 'medium' }"
+      :anchor="{ placement: 'right', showArrow: true, panelShadow: 'medium' }"
     >
       <TxButton variant="ghost">
         {{ labels.triggerB }}

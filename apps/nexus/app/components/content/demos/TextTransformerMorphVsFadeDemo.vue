@@ -35,7 +35,7 @@ function next() {
       </div>
     </div>
 
-    <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+    <TxCard variant="plain" :padding="14" :radius="14">
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div style="display: flex; align-items: baseline; gap: 14px;">
           <code style="font-size: 11px; opacity: 0.6; min-width: 110px;">mode="morph"</code>

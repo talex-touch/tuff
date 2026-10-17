@@ -716,7 +716,6 @@ function formatHistoryTime(value: string) {
                   >
                     <TxCard
                       variant="plain"
-                      background="mask"
                       :radius="16"
                       :padding="12"
                       class="LoginHistoryCard"

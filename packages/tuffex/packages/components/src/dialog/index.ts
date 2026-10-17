@@ -11,6 +11,7 @@ export type {
   DialogButtonType,
   DialogEmits,
   DialogMessageHtml,
+  DialogSurfaceProps,
   PopperDialogProps,
   TouchTipButton,
   TouchTipProps,

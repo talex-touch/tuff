@@ -50,6 +50,7 @@ const props = withDefaults(defineProps<BaseSurfaceProps>(), {
   fake: false,
   fakeIndex: 0,
   preset: 'default',
+  systemBackdrop: false,
   refractionRenderer: 'svg',
   refractionTone: 'balanced',
   overlayOpacity: 0,
@@ -61,7 +62,9 @@ const attrs = useAttrs()
 const { toFinite, toEnum } = createSurfaceValueResolver(attrs as Record<string, unknown>)
 const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS), toFinite(props.settleDelay, 150)))
 
-const environment = useSurfaceEnvironment(() => !!props.autoDetect)
+// Over a system backdrop no layer samples the page: motion leaves nothing stale to hide and
+// the layers cost nothing to drop frames over, so the surface senses neither.
+const environment = useSurfaceEnvironment(() => !!props.autoDetect && !props.systemBackdrop)
 
 /** 当前环境下渲染的材质：`autoDetect` 在省电或掉帧时把重材质换成轻的 */
 const surfaceMode = computed<BaseSurfaceMode>(() =>
@@ -98,7 +101,11 @@ const {
   refractionMaskPeakRampProgress,
   refractionEdgeRevealProgress,
 } = useBaseSurfaceMotion({
-  props,
+  props: {
+    get mode() { return props.mode },
+    get moving() { return props.moving && !props.systemBackdrop },
+    get autoDetect() { return props.autoDetect && !props.systemBackdrop },
+  },
   mode: surfaceMode,
   environmentMoving: environment.moving,
   rootRef,
@@ -140,8 +147,9 @@ const easedRefractionParamProgress = computed(() => {
   return easeOutQuad(refractionParamProgress.value)
 })
 
+// The glass layer is a backdrop filter and nothing else, so a system backdrop drops it.
 const showLayerGlass = computed(() =>
-  activeMode.value === 'glass' || activeMode.value === 'refraction',
+  !props.systemBackdrop && (activeMode.value === 'glass' || activeMode.value === 'refraction'),
 )
 
 const showLayerFilter = computed(() =>
@@ -711,6 +719,10 @@ const rootClasses = computed(() => {
 
   if (props.fake) {
     classes.push('tx-base-surface--fake')
+  }
+
+  if (props.systemBackdrop) {
+    classes.push('tx-base-surface--system-backdrop')
   }
 
   if (settling.value) {

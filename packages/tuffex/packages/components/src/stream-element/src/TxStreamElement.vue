@@ -202,7 +202,7 @@ function renderLeaf(node: Exclude<PlanNode, { kind: 'list' | 'quote' }>, ctx: Re
   switch (node.kind) {
     case 'text': {
       const tag = node.part.type === 'heading' ? `h${node.part.depth}` : node.part.tight ? 'div' : 'p'
-      return h(tag, { key, class: ['tx-stream-element__text', node.part.type === 'paragraph' && node.part.tight && 'is-tight'] }, [
+      return h(tag, { key, class: ['tx-stream-element__text', node.part.type === 'paragraph' && node.part.tight && 'is-tight', head && 'is-live'] }, [
         h(TxStreamText, {
           content: textPrefix(node, count),
           paced: false,
@@ -363,6 +363,16 @@ defineExpose({
 
   .is-tight {
     margin: 0;
+  }
+
+  // A finished paragraph keeps its last line from ending on a word or two; the one the stream is
+  // still writing wraps as usual, so each arriving word does not re-run its line breaking.
+  .tx-stream-element__text {
+    text-wrap-style: pretty;
+
+    &.is-live {
+      text-wrap-style: auto;
+    }
   }
 
   h1,

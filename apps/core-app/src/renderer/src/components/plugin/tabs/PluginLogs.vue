@@ -20,7 +20,6 @@ const transport = useTuffTransport()
 const { t } = useI18n()
 const toolbarTooltipAnchor = {
   placement: 'bottom',
-  panelBackground: 'blur',
   panelShadow: 'soft'
 } as const
 

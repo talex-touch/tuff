@@ -73,6 +73,7 @@ stateDiagram-v2
     Settling --> Blur_Degraded: 299ms 后
     Refraction_Active --> Flat: 帧预算 minimal
     Blur_Degraded --> Flat: 帧预算 minimal
-    Flat --> Refraction_Active: 重测回到 ok
+    Flat --> Blur_Degraded: 重测为 reduced，或回到 ok 但仍在省电
+    Flat --> Refraction_Active: 重测回到 ok，且不在省电
 ```
 `mode` 本身就是 `blur`、`glass` 或 `acrylic` 的材质，静止时保持原材质，运动时同样走 `Fallback_Mode` 与 `Settling` 这一圈。运动中的材质因此不会拖着错位的背景走，停下后又回到完整的折射。

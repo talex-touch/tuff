@@ -53,7 +53,7 @@ function toggle() {
       easing="cubic-bezier(0.2, 0, 0, 1)"
       outer-class="overflow-hidden"
     >
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="max-width: 420px;">
+      <TxCard variant="plain" :padding="14" :radius="14" style="max-width: 420px;">
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <div style="font-size: 14px; font-weight: 700; line-height: 1.3;">
             <TxTextTransformer

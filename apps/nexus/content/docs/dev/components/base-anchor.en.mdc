@@ -202,7 +202,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Animation config; omitted fields take the type's defaults. |
 | `useCard` | `boolean` | `true` | Wraps content in the built-in `TxCard`. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | Border style of the `TxCard`. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
 | `panelRadius` | `number` | `18` | Panel corner radius in px. |
 | `panelPadding` | `number` | `10` | Panel padding in px. |

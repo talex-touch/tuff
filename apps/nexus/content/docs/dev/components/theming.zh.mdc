@@ -56,6 +56,7 @@ code: |
 
 - 两种写法等价：Tailwind 应用（`.dark`）与 `data-theme` 应用都无需适配层。
 - 设在子树上，即可在浅色页面里开一块深色区域。
+- 深色下三档强调字重各调轻 40，抵消白字在暗底上的光渗膨胀：`--tx-font-weight-medium` 500 → 460、`--tx-font-weight-semibold` 600 → 560、`--tx-font-weight-bold` 700 → 660，正文 400 不变。自己写的样式以 `var(--tx-font-weight-medium, 500)` 读取即可跟随；覆盖时让暗色值落在（浅色值 − 100，浅色值］之内，否则静态字体会换成另一个字面，见《[暗色视网膜光晕与字重微调补偿](../concepts/irradiation-tuning.zh.mdc)》。
 
 ### 视图过渡动效（View Transition）
 
@@ -127,7 +128,7 @@ code: |
 
 | 部件 | 高对比度下 |
 |------|-----------|
-| 材质面板：`TxBaseSurface` 的所有模式（Card、BaseAnchor 浮层等都基于它）、GlassSurface、Toast、NavBar、TabBar、Picker、PopperDialog、TouchTip、Slider、RadioGroup 指示块、ProgressBar 遮罩、StatCard、Drawer 的透明面板、MotionTransition 的玻璃幕 | 不透明底色，不模糊、不折射、没有边缘高光 |
+| 材质面板：`TxBaseSurface` 除 `plain` 外的所有模式（Card、BaseAnchor 浮层、命令面板与各类对话框等都基于它；`plain` 本来不画材质，高对比度下也不加底色）、GlassSurface、Toast、NavBar、TabBar、Picker、Slider、RadioGroup 指示块、ProgressBar 遮罩、StatCard、Drawer 的透明面板、MotionTransition 的玻璃幕 | 不透明底色，不模糊、不折射、没有边缘高光 |
 | 遮罩：Modal、Drawer、BlowDialog | 保留压暗，去掉磨砂 |
 | 盖在内容上的层：LoadingOverlay、Card 与 DataTable 的加载层、ImageUploader 的删除按钮 | 不透明，遮住下面的内容 |
 | 装饰：FlowLight、GlowText 的扫光、GradualBlur | 隐藏 |

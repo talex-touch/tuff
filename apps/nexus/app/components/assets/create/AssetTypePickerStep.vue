@@ -19,7 +19,7 @@ function handleSelect(option: AssetTypeOption) {
 
 <template>
   <div class="AssetTypePickerStep">
-    <TxCard variant="plain" background="mask" :radius="18" :padding="14" class="AssetTypePickerStep-CardShell">
+    <TxCard variant="plain" :radius="18" :padding="14" class="AssetTypePickerStep-CardShell">
       <div class="AssetTypePickerStep-Grid">
         <button
           v-for="option in props.options"

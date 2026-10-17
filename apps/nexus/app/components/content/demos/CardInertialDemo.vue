@@ -38,7 +38,6 @@ const maxOffset = ref(26)
 
     <TxCard
       variant="solid"
-      background="glass"
       shadow="none"
       inertial
       :inertial-max-offset="maxOffset"

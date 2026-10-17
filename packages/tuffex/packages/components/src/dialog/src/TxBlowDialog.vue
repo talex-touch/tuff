@@ -30,7 +30,9 @@ import {
 
 } from 'vue'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
+import { useDialogSurface } from './dialog-surface'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -46,8 +48,14 @@ const props = withDefaults(defineProps<BlowDialogProps>(), {
   confirmText: 'Confirm',
   comp: undefined,
   render: undefined,
+  surface: 'refraction',
+  surfaceColor: '',
 })
 
+const { surfaceMode, surfaceColor, surfaceOpacity } = useDialogSurface(props)
+
+// The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
+const isEntering = ref(true)
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
@@ -156,62 +164,76 @@ provide('destroy', destroy)
 
 <template>
   <teleport to="body">
-    <div
-      ref="dialogWrapper"
-      class="tx-blow-dialog"
-      :class="{ 'tx-blow-dialog--closing': isClosing }"
-      :style="{ zIndex }"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="title ? titleId : undefined"
-      :aria-describedby="(message || messageHtml) ? contentId : undefined"
-      @keydown.esc="destroy"
-    >
-      <div class="tx-blow-dialog__container">
-        <component :is="renderComp" v-if="renderComp" />
-        <component :is="comp" v-else-if="comp" />
-        <template v-else>
-          <p v-if="title" :id="titleId" class="tx-blow-dialog__title">
-            {{ title }}
-          </p>
-          <div v-if="message || messageHtml" :id="contentId" class="tx-blow-dialog__content">
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <span v-if="messageHtml" v-html="messageHtml" />
-            <span v-else>{{ message }}</span>
-          </div>
-          <TxButton
-            class="tx-blow-dialog__confirm"
-            type="primary"
-            native-type="button"
-            block
-            @click="destroy"
-          >
-            {{ confirmText }}
-          </TxButton>
-        </template>
+    <!-- Neither the overlay nor the card fades as a whole (see the styles), so the entrance's length
+         is given here. `tx-blow-dialog-moving` marks both phases, and the styles key the parts' fades
+         on it. -->
+    <Transition appear name="tx-blow-dialog" :duration="500" @after-appear="isEntering = false">
+      <div
+        ref="dialogWrapper"
+        class="tx-blow-dialog"
+        :class="{ 'tx-blow-dialog-moving': isEntering || isClosing, 'tx-blow-dialog--closing': isClosing }"
+        :style="{ zIndex }"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="title ? titleId : undefined"
+        :aria-describedby="(message || messageHtml) ? contentId : undefined"
+        @keydown.esc="destroy"
+      >
+        <div class="tx-blow-dialog__container">
+          <TxBaseSurface
+            class="tx-blow-dialog__surface"
+            preset="card"
+            fake
+            :mode="surfaceMode"
+            :color="surfaceColor"
+            :opacity="surfaceOpacity"
+          />
+          <component :is="renderComp" v-if="renderComp" />
+          <component :is="comp" v-else-if="comp" />
+          <template v-else>
+            <p v-if="title" :id="titleId" class="tx-blow-dialog__title">
+              {{ title }}
+            </p>
+            <div v-if="message || messageHtml" :id="contentId" class="tx-blow-dialog__content">
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <span v-if="messageHtml" v-html="messageHtml" />
+              <span v-else>{{ message }}</span>
+            </div>
+            <TxButton
+              class="tx-blow-dialog__confirm"
+              type="primary"
+              native-type="button"
+              block
+              @click="destroy"
+            >
+              {{ confirmText }}
+            </TxButton>
+          </template>
+        </div>
       </div>
-    </div>
+    </Transition>
   </teleport>
 </template>
 
 <style lang="scss">
 @use '../../../style/mixins.scss' as *;
 
+// Each fade gives only its far end, so a part fades from, or to, the opacity it rests at.
 @keyframes tx-blow-dialog-fade-in {
-  0% {
+  from {
     opacity: 0;
   }
-  100% {
-    opacity: 1;
+}
+
+@keyframes tx-blow-dialog-fade-out {
+  to {
+    opacity: 0;
   }
 }
 
 @keyframes tx-blow-dialog-scale {
-  0% {
+  from {
     transform: scale(0);
-  }
-  100% {
-    transform: scale(1);
   }
 }
 
@@ -223,22 +245,35 @@ provide('destroy', destroy)
   inset: 0;
   padding: 24px;
   box-sizing: border-box;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(5px);
-  transition: opacity 0.5s;
-  animation: tx-blow-dialog-fade-in 0.5s;
+
+  // The dim and the frost are a layer under the card rather than the overlay's own paint and
+  // opacity. An overlay with a backdrop filter, or one fading through opacity, would be the card's
+  // backdrop root, and the card's material would sample only the overlay instead of the page.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(5px);
+    transition: opacity 0.5s;
+  }
 
   // High contrast keeps the dimming and drops the frost.
   @include tx-when-high-contrast {
-    backdrop-filter: none;
+    &::before {
+      backdrop-filter: none;
+    }
   }
 
   &--closing {
-    opacity: 0;
-
-    .tx-blow-dialog__container {
+    &::before {
       opacity: 0;
-      transform: scale(0);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .tx-blow-dialog__container {
+        transform: scale(0);
+      }
     }
   }
 
@@ -250,7 +285,9 @@ provide('destroy', destroy)
   // highlight catches the top, and the shadow is long, low and ink-tinted so
   // it reads as depth rather than dirt. 18px radius matches the menu panels.
   &__container {
+    // Positioned and stacked, so the surface sits under the content without leaving the card.
     position: relative;
+    z-index: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -258,16 +295,36 @@ provide('destroy', destroy)
     max-height: 100%;
     // The height comes from the spacing rhythm, not a floor: a floor left a hole between the message and the action.
     padding: 32px 24px 24px;
-    border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
-    background: var(--tx-bg-color-overlay, #fff);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--tx-color-white, #fff) 10%, transparent),
-      12px 24px 64px -20px rgba(15, 23, 42, 0.45),
-      1px 2px 8px rgba(15, 23, 42, 0.08);
     box-sizing: border-box;
-    transition: transform 0.5s, opacity 0.5s;
-    animation: tx-blow-dialog-scale 0.5s;
+    transition: transform 0.5s;
     @include tx-squircle(18px);
+
+    // The rim, the highlight and the shadow, on a layer of their own so they can fade while the
+    // card does not (see the motion below). Above the surface, which would cover the rim.
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+      border-radius: inherit;
+      corner-shape: inherit;
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--tx-color-white, #fff) 10%, transparent),
+        12px 24px 64px -20px rgba(15, 23, 42, 0.45),
+        1px 2px 8px rgba(15, 23, 42, 0.08);
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+  }
+
+  &__surface {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
   }
 
   // Title / message / action: three steps, each one clearly under the last.
@@ -304,6 +361,52 @@ provide('destroy', destroy)
 
   &__confirm {
     margin-top: 14px;
+  }
+}
+
+// Card motion. The card scales but never fades as a whole: an element whose opacity animates is
+// the backdrop root of every backdrop filter inside it, so the material would sample nothing but
+// the card. Each part fades on its own instead, and the material stays live from the first frame
+// to the last: the content, the rim and shadow, and the surface. A surface with a backdrop filter
+// fades layer by layer; one without fades whole, and so does every surface under high contrast,
+// which drops the layers that blur. Each phase hands its fade down as `--tx-blow-dialog-fade`.
+.tx-blow-dialog-enter-active {
+  --tx-blow-dialog-fade: tx-blow-dialog-fade-in 0.5s;
+
+  &::before {
+    animation: tx-blow-dialog-fade-in 0.5s;
+  }
+
+  .tx-blow-dialog__container {
+    animation: tx-blow-dialog-scale 0.5s;
+  }
+}
+
+// After the entrance, so a card closed while it still enters fades out.
+.tx-blow-dialog--closing {
+  --tx-blow-dialog-fade: tx-blow-dialog-fade-out 0.5s forwards;
+}
+
+.tx-blow-dialog-moving {
+  .tx-blow-dialog__container > :not(.tx-blow-dialog__surface),
+  .tx-blow-dialog__container::after,
+  .tx-blow-dialog__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
+  .tx-blow-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
+  .tx-blow-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) .tx-base-surface__layer {
+    animation: var(--tx-blow-dialog-fade);
+  }
+
+  @include tx-when-high-contrast {
+    .tx-blow-dialog__surface {
+      animation: var(--tx-blow-dialog-fade);
+    }
+  }
+}
+
+// Reduced motion keeps the fades and drops the scale: the card fades in and out where it rests.
+@media (prefers-reduced-motion: reduce) {
+  .tx-blow-dialog-enter-active .tx-blow-dialog__container {
+    animation: none;
   }
 }
 </style>

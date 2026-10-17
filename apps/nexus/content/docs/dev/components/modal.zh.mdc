@@ -70,6 +70,9 @@ code: |
 | `width` | `string` | `'480px'` | 面板宽度，推荐 `min(92vw, 520px)` 这类响应式值；`fullscreen` 时忽略。 |
 | `fullscreen` | `boolean` | `false` | 面板撑满可见视口，去掉圆角与阴影。 |
 | `closeLabel` | `string` | `'Close'` | 头部关闭按钮的可访问名称。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 
 ### 事件
 
@@ -93,11 +96,15 @@ code: |
 - Tab 与 Shift+Tab 在最上层的模态框内循环；即使焦点落到 `body`，底层抽屉也不会响应 Escape。
 - 点击遮罩空白、Escape 与关闭按钮依次派发 `update:modelValue(false)` 与 `close`。
 - `fullscreen` 只改变布局，对话框语义与焦点管理不变；没有可点击的遮罩空白，因此头部或底栏必须保留可见的关闭入口。
+- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在头部、正文与底栏之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。
+- 遮罩的变暗与模糊画在遮罩的一层伪元素上，而不是遮罩自身的背景与透明度，所以面板材质采到的是页面，而不只是遮罩的暗色。
+- 面板开合时只缩放，不整体淡入淡出：整体透明度一变，里面的背景滤镜就只能采到面板自己，磨砂会在整个过渡里消失。淡入淡出的是面板上的各个部分：头部、正文、底栏、阴影与描边，以及材质的每一层，所以带背景滤镜的材质（如默认的 `refraction`）从第一帧到最后一帧都采着页面。
 - `TModal` 把 props、attrs、事件与 `default` / `header` / `footer` 插槽转发给 `TxModal`。
 
 ## 技术实现
 
-- 全屏面板在支持时使用 `100dvh` 高度，底栏下内边距带上 `safe-area-inset-bottom`。
+- 全屏面板在支持时使用 `100dvh` 高度，底栏下内边距带上 `safe-area-inset-bottom`；全屏时遮罩不再模糊，面板自己的材质已经盖住整个视口。
+- 减少动态效果（`prefers-reduced-motion: reduce`）时面板原地淡入淡出，不缩放、不位移。
 - 源码：`packages/tuffex/packages/components/src/modal/`（`TxModal.vue` 与包装组件 `TModal.vue`）。
 
 <TuffDocSourceLink />

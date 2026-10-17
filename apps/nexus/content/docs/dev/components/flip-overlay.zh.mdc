@@ -68,9 +68,9 @@ code: |
 | `maskClosable` | `boolean` | `true` | 点击遮罩或按 Escape 时关闭。 |
 | `preventAccidentalClose` | `boolean` | `false` | 拦截遮罩关闭与页面退出，并闪红光警示。 |
 | `globalMask` | `boolean` | `true` | 渲染 body 级共享遮罩。 |
-| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 内置卡片背景。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 内置卡片背景。 |
 | `surfaceColor` | `string` | `''` | 背景基础色；默认跟随主题。 |
-| `surfaceOpacity` | `number` | `mask` 为 `0.96`，`blur` / `glass` / `refraction` 为 `0.5` | 卡片底色的不透明度；`pure` 下恒为不透明。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 卡片底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 | `speedBoost` | `number` | `1.12` | 进度超过 `speedBoostAt` 后的加速倍率。 |
 | `speedBoostAt` | `number` | `0.7` | 启用 `speedBoost` 的动画进度阈值。 |
 | `transitionName` | `string` | `'TxFlipOverlay-Mask'` | 遮罩的 Vue transition 名称。 |

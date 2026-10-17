@@ -365,7 +365,6 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           :min-width="220"
           :max-width="260"
           :panel-padding="10"
-          panel-background="pure"
         >
           <template #reference>
             <TxButton class="DashboardDevices-FilterButton" size="sm" variant="secondary" icon="i-carbon-filter">
@@ -546,7 +545,6 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
                   :width="320"
                   :max-width="320"
                   :panel-padding="12"
-                  panel-background="pure"
                 >
                   <template #reference>
                     <button

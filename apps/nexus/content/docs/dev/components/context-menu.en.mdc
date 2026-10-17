@@ -125,7 +125,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Open and close animation: `transfer`, `boom`, `opacity`, or `none`. |
 | `keepAliveContent` | `boolean` | `true` | Keeps content state after closing. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | Panel shadow. |
 | `panelRadius` | `number` | `14` | Panel corner radius. |
 | `panelPadding` | `number` | `6` | Panel padding. |
@@ -231,7 +231,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Child panel animation. |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the child panel. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Child panel border style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Child panel background effect. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Child panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | Child panel shadow. |
 | `panelRadius` | `number` | `14` | Child panel corner radius. |
 | `panelPadding` | `number` | `6` | Child panel padding. |

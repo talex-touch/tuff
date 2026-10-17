@@ -201,6 +201,9 @@ code: |
 | `icon` | `string` | `''` | 旧版图标 class，当前不渲染。 |
 | `index` | `number` | `0` | 叠加在分配层级上的 z-index 偏移。 |
 | `closeLabel` | `string` | `'Close'` | 头部关闭按钮的可访问名称。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 
 ### TxBlowDialog / TxPopperDialog
 
@@ -217,6 +220,9 @@ code: |
 | `close` | `() => void` | *必填* | 关闭回调。 |
 | `comp` | `Component` | `undefined` | 替换默认内容的组件。 |
 | `render` | `() => VNode` | `undefined` | 替换默认内容的渲染函数。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 
 ### TxTouchTip
 
@@ -229,6 +235,9 @@ code: |
 | `messageHtml` | `DialogMessageHtml` | `''` | 已清洗的可信 HTML，优先于 `message`。 |
 | `buttons` | `TouchTipButton[]` | `[]` | 操作按钮配置。 |
 | `close` | `() => void` | *必填* | 关闭回调。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
 
 ### 类型
 
@@ -252,6 +261,13 @@ code: |
     loading?: (done: () => void) => void
   }
 
+  // 四个变体共有的材质属性
+  interface DialogSurfaceProps {
+    surface?: BaseSurfaceMode // 默认 'refraction'
+    surfaceColor?: string // 默认跟随主题
+    surfaceOpacity?: number // mask 为 0.96，其余为 0.5
+  }
+
   function asTrustedDialogHtml(html: string): TrustedDialogHtml
 ---
 :::
@@ -264,10 +280,15 @@ code: |
 - 卸载时焦点回到打开前的元素；标题与正文用 `useId()` 生成的 id 关联 `aria-labelledby` / `aria-describedby`。
 - `message` 按纯文本渲染并保留换行；`messageHtml` 只接受经 `asTrustedDialogHtml()` 标记的值，该函数本身不做清洗。
 - 正文设置 `overflow-wrap: anywhere` 并自行限高滚动：长 token 不会撑宽面板，长内容不会被裁切。
+- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在内容之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。
+- `TxBlowDialog`、`TxPopperDialog` 与 `TxTouchTip` 的遮罩变暗（`TxBlowDialog` 还有模糊）画在遮罩的一层伪元素上，而不是遮罩自身的背景与透明度，所以面板材质采到的是页面，而不只是遮罩的暗色；`TxBottomDialog` 没有遮罩。
+- 面板开合时只位移、缩放，不整体淡入淡出：整体透明度一变，里面的背景滤镜就只能采到面板自己，磨砂会在整个过渡里消失。淡入淡出的是面板上的各个部分：内容、阴影与描边，以及材质的每一层，所以带背景滤镜的材质（如默认的 `refraction`）从第一帧到最后一帧都采着页面。
 
 ## 技术实现
 
 - 入口导出四个变体（各自经 `withInstall` 包装）、`asTrustedDialogHtml` 与公共类型。
+- 高对比度下面板材质自行变为实色，`TxBlowDialog` 的遮罩只变暗、不再模糊。
+- 减少动态效果（`prefers-reduced-motion: reduce`）时面板原地淡入淡出，不缩放、不位移；`TxBlowDialog` 打开时对 `#app` 的放大与变淡不受这项设置影响。
 - 源码：`packages/tuffex/packages/components/src/dialog/`。
 
 <TuffDocSourceLink />

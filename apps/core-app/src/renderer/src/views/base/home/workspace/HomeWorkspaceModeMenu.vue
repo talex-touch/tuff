@@ -358,7 +358,6 @@ watch(open, (isOpen) => {
     :max-height="420"
     :panel-radius="12"
     :panel-padding="6"
-    panel-background="pure"
   >
     <template #trigger>
       <span ref="triggerWrapRef" class="HomeWorkspaceModeMenu-TriggerWrap">

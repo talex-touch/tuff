@@ -119,7 +119,7 @@ code: |
 | `keepAliveContent` | `boolean` | `true` | Keeps content and its state after close. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggles on reference click. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
 | `panelRadius` | `number` | `18` | Panel corner radius in px. |
 | `panelPadding` | `number` | `10` | Panel padding in px. |

@@ -15,7 +15,6 @@ const cards = computed(() => [
     <TxCard
       v-for="card in cards"
       :key="card.variant"
-      background="pure"
       shadow="soft"
       :flow-light="card.variant"
     >

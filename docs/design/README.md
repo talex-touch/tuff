@@ -13,7 +13,7 @@
 | [concepts/02-surfaces-and-materials.md](./concepts/02-surfaces-and-materials.md) | **第二篇：材质系统、折射着色器与环境自动感知**（第 5～11 章：8 种材质选型、Refraction 色散管线、autoDetect 动态感知降级、Alpha 噪点掩膜与光斑追踪） |
 | [concepts/03-color-science-and-dark-mode.md](./concepts/03-color-science-and-dark-mode.md) | **第三篇：色彩科学、暗色模式与感知光学**（第 12～17 章：#141414 深灰哲学、暗色视网膜光晕字重补偿、color-mix 墨水融合与 WCAG 4.5:1） |
 | [concepts/04-typography-and-text-engineering.md](./concepts/04-typography-and-text-engineering.md) | **第四篇：排版美学、字体工程与排版节奏**（第 18～22 章：13-14px 生产力基准、等宽 0.9em 调和、text-wrap: pretty/balance 软换行与零 Tracking 铁律） |
-| [concepts/05-motion-and-micro-interactions.md](./concepts/05-motion-and-micro-interactions.md) | **第五篇：微动态、物理弹簧与交互节拍**（第 23～30 章：Sub-100ms 瞬时悬停、90ms+90ms 确认律动、GPU 合成器四金刚属性、物理弹簧阻尼与双 Keyframe 重放） |
+| [concepts/05-motion-and-micro-interactions.md](./concepts/05-motion-and-micro-interactions.md) | **第五篇：微动态、物理弹簧与交互节拍**（第 23～30 章：Sub-100ms 瞬时悬停、90ms+90ms 确认律动、合成器四金刚属性、物理弹簧阻尼与双 Keyframe 重放） |
 | [concepts/06-ai-native-streaming-interfaces.md](./concepts/06-ai-native-streaming-interfaces.md) | **第六篇：AI 原生交互、流式节拍与防抖渲染**（第 31～33 章：useStreamPacer 节拍器、Reserve 双层防抖占位与零阻断阅读复制） |
 ## 命名
 

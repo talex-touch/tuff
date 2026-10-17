@@ -303,7 +303,6 @@ function onRailRowClick(row: RailConversationRow): void {
         :offset="10"
         :open-delay="100"
         :close-delay="80"
-        panel-background="pure"
         panel-shadow="soft"
       >
         <template #reference>

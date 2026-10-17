@@ -1,4 +1,5 @@
 import type { Component, VNode } from 'vue'
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
 
 declare const trustedDialogHtmlBrand: unique symbol
 
@@ -81,11 +82,35 @@ export interface DialogButton {
 }
 
 /**
+ * The panel material, shared by every dialog variant.
+ *
+ * @public
+ */
+export interface DialogSurfaceProps {
+  /**
+   * Material of the panel.
+   * @default 'refraction'
+   */
+  surface?: BaseSurfaceMode
+
+  /**
+   * Colour laid under the material; follows the theme by default.
+   * @default ''
+   */
+  surfaceColor?: string
+
+  /**
+   * Opacity of that colour (0–1): 0.96 under `mask`, 0.5 under the other materials.
+   */
+  surfaceOpacity?: number
+}
+
+/**
  * Props interface for the TxBottomDialog component.
  *
  * @public
  */
-export interface BottomDialogProps {
+export interface BottomDialogProps extends DialogSurfaceProps {
   /**
    * The title displayed in the dialog header.
    * @default ''
@@ -144,7 +169,7 @@ export interface BottomDialogProps {
  *
  * @public
  */
-export interface BlowDialogProps {
+export interface BlowDialogProps extends DialogSurfaceProps {
   /**
    * Callback function to close the dialog.
    */
@@ -197,7 +222,7 @@ export interface DialogEmits {
   (e: 'close'): void
 }
 
-export interface PopperDialogProps {
+export interface PopperDialogProps extends DialogSurfaceProps {
   close: () => void
   title?: string
   message?: string
@@ -214,7 +239,7 @@ export interface TouchTipButton {
   loading?: (done: () => void) => void
 }
 
-export interface TouchTipProps {
+export interface TouchTipProps extends DialogSurfaceProps {
   title?: string
   message?: string
   messageHtml?: DialogMessageHtml

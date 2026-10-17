@@ -37,21 +37,27 @@ If inline code inherits `font-size: 1em`:
 - Monospace tokens stick out awkwardly like unharmonized patches.
 - Inflated height distorts uniform line-height rhythms.
 
-The TuffEx components that render inline code (TxStreamText, TxMarkdownView, TxMarkdownEditor, TxChainOfThought) all scale it to 0.9em; TxStreamMarkdown and the body of these docs use 0.875em. TxStreamText, for example:
+TuffEx's standard solution lives in its style entry: `<code>` inside `.tx-prose` that is not in a `<pre>`, and any element with `tx-inline-code`, scales to 0.9em.
 
 :::TuffCodeBlock{lang="scss"}
 ---
 code: |
-  // stream-text/src/TxStreamText.vue
-  .tx-stream-text__code {
-    padding: 0.1em 0.35em;
+  // packages/tuffex/packages/components/style/index.scss
+  .tx-prose :not(pre) > code,
+  .tx-inline-code {
+    padding: 0.15em 0.35em;
     border-radius: 4px;
-    background: var(--tx-fill-color-light, #f5f7fa);
-    font-family: var(--tx-font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+    background-color: var(--tx-fill-color-light, #f5f7fa);
+    font-family: var(--tx-font-family-mono);
+    // Scale to 0.9em to hold back the monospace face's taller x-height
     font-size: 0.9em;
+    vertical-align: baseline;
   }
 ---
 :::
+
+The components that render inline code themselves (TxStreamText, TxMarkdownView, TxMarkdownEditor, TxChainOfThought) scale it to 0.9em as well; TxStreamMarkdown and the body of these docs use 0.875em.
+
 0.9em is an approximation. The size that lines the two x-heights up is the body x-height divided by the code x-height: measured in Chrome on macOS, these docs set body text at 0.508em and code, which falls back to Menlo, at 0.547em, a ratio of 1.077, so an exact match takes 0.929em and 0.9em sits 3.1% short. Across the pairs of faces above, the exact match falls between 0.93em and 0.98em. The figure below measures both x-heights in your browser.
 
 :::TuffDemoWrapper{demo="ConceptInlineCodeDemo"}

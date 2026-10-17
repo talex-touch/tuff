@@ -16,7 +16,7 @@ verified: true
 ---
 code: |
   <template>
-    <TxCard background="glass">
+    <TxCard>
       A generic container for content.
     </TxCard>
   </template>
@@ -28,7 +28,7 @@ code: |
 ---
 code: |
   <template>
-    <TxCard background="glass" shadow="soft">
+    <TxCard shadow="soft">
       <template #header>
         Card title
         <TxButton size="sm" variant="ghost">Action</TxButton>
@@ -103,7 +103,7 @@ code: |
 :::
 
 ### Backgrounds
-`background` picks the surface material; `refraction` is recommended.
+`background` picks the surface material from the same values as [BaseSurface](/docs/dev/components/base-surface)'s `mode`; `refraction` is the default and the recommendation.
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -118,12 +118,27 @@ code: |
 ---
 :::
 
+### Specular light
+`specular` gives the card a faint light that follows the pointer in dark themes: a 600px white radial light over the surface (6%, gone by 40%), and where it crosses the border, a tighter 240px glint in the ring the border occupies. The light trails the pointer by exponential smoothing, lights up right under the pointer on the way in, and fades out over 240ms on leave; with reduced motion it jumps straight to the pointer. Light themes and high contrast don't draw it, and a `dashed` border gets no glint. It follows `clickable` when absent and is off while disabled. Where each value comes from is in [Alpha Noise Masks & Specular Tracking](/docs/dev/concepts/noise-and-specular).
+:::TuffDemoWrapper{demo="ConceptCardSpecularDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="dark">
+      <TxCard specular>
+        A faint light follows the pointer over the surface
+      </TxCard>
+    </div>
+  </template>
+---
+:::
+
 ### Empty State
 :::TuffDemoWrapper{demo="CardCardWithEmptyDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxCard variant="plain" background="mask" :padding="16">
+    <TxCard variant="plain" :padding="16">
       <TxEmpty title="Nothing here" description="Create your first item to get started.">
         <template #action>
           <TxButton variant="primary" size="sm">Create</TxButton>
@@ -143,7 +158,6 @@ code: |
   <template>
     <TxPopover
       panel-variant="solid"
-      panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
       :panel-padding="10"
@@ -156,7 +170,6 @@ code: |
     <TxSearchSelect
       v-model="value"
       :options="options"
-      panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
       :panel-padding="6"
@@ -208,7 +221,7 @@ code: |
 ---
 code: |
   <template>
-    <TxCard background="pure" shadow="soft" flow-light="rim">
+    <TxCard shadow="soft" flow-light="rim">
       Card content
     </TxCard>
     <TxPopover :panel-card="{ flowLight: 'corners' }">
@@ -234,7 +247,7 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|--------|------|
 | variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Border style; `plain` has no border and no hover feedback. |
-| background | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'refraction'` | Surface material. |
+| background | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Surface material, the same values as `TxBaseSurface`'s `mode`. |
 | shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | Shadow strength. |
 | size | `'small' \| 'medium' \| 'large'` | `'medium'` | Padding preset: `10` / `12` / `16` px. |
 | radius | `number` | `18` | Corner radius in px. |
@@ -243,7 +256,7 @@ code: |
 | glassBlurAmount | `number` | `22` | Blur radius in px under `glass` / `refraction`. |
 | glassOverlay | `boolean` | `true` | Enables the highlight layer under `glass` / `refraction`. |
 | glassOverlayOpacity | `number` | `0.18` | Highlight layer opacity. |
-| maskOpacity | `number` | `0.75` | Surface opacity under `mask`, clamped to `0..1`. |
+| maskOpacity | `number` | `0.75` | Surface opacity under `mask`, clamped to `0..1`; `acrylic`'s tint takes 0.8 of it. |
 | fallbackMaskOpacity | `number` | `0.26` | Mask opacity (0–1) when the surface falls back during motion. |
 | surfaceMoving | `boolean` | `false` | External motion flag, merged with inertial motion and forwarded to the surface. |
 | refractionStrength | `number` | `62` | Refraction strength (0–100); drives dispersion and distortion. |
@@ -258,6 +271,7 @@ code: |
 | flowLight | `'corners' \| 'rim' \| 'aurora' \| false` | - | The flow light on the surface; absent or `false` is off. |
 | flowLightIntensity | `number` | `1` | Flow light strength, multiplying the theme opacity. |
 | clickable | `boolean` | `false` | Enables hover and press feedback (scales to `0.985`) and emits `click`. |
+| specular | `boolean` | - | A faint light that follows the pointer, with a glint along the border, in dark themes; follows `clickable` when absent and is off while disabled. |
 | loading | `boolean` | `false` | Covers the card with a `TxSpinner` overlay. |
 | loadingSpinnerSize | `number` | - | Spinner size in px; `12` when omitted. |
 | disabled | `boolean` | `false` | Disabled styling; blocks `click` and pointer motion. |
@@ -286,7 +300,7 @@ code: |
 - A disabled clickable card sets `aria-disabled` and leaves the tab order.
 - Only key presses on the card itself activate it; Enter / Space in slotted controls don't.
 - The `loading` overlay is `aria-hidden`; screen-reader and form-busy announcements are up to the caller.
-- `background` is forwarded to `TxBaseSurface` as the surface mode: `mask` uses `maskOpacity`, `glass` and `refraction` use the blur and overlay props; refraction props apply only under `refraction`.
+- `background` is forwarded to `TxBaseSurface` as the surface mode: `mask` and `acrylic` use `maskOpacity`, and `mask`, `acrylic` and `mica` take `--tx-card-fake-background` as their base colour; `blur` and `acrylic` both blur 30px; `glass` and `refraction` use the blur and overlay props; refraction props apply only under `refraction`.
 
 ## Technologies
 
@@ -313,7 +327,8 @@ code: |
 | `--tx-card-border-width` | `variant` | Border width: 1px for `solid` and `dashed`, 0 for `plain`. Do not set it by hand. |
 | `--tx-card-padding` | `padding` or `size` | Padding and the cover's negative margin. |
 | `--tx-card-dx` / `--tx-card-dy` | inertial motion | Root offset; don't set manually. |
-| `--tx-card-fake-background` | caller / theme | Base color of mask and refraction fallback surfaces. |
+| `--tx-card-fake-background` | caller / theme | Base color of `mask`, `acrylic` and `mica` surfaces and of refraction fallback surfaces. |
+| `--tx-card-light-x` / `--tx-card-light-y` | `specular` | Position of the light, in percent of the card's width and height, written on `.tx-card__specular`; don't set manually. |
 | `--tx-surface-refraction-mask-color` | root inline style | Forwards `--tx-card-fake-background` to `TxBaseSurface`; override that one instead. |
 
 To follow an app theme, override global tokens such as `--tx-bg-color-overlay`, `--tx-border-color-light`, and `--tx-color-primary`.

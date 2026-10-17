@@ -148,7 +148,7 @@ function state(variant: MotionFormVariant): string {
     <div class="motion-form-demo__toolbar">
       <div class="motion-form-demo__filter">
         <label :id="`${id}-filter`">{{ copy.filter }}</label>
-        <TxSelect :model-value="filter" :options="filterOptions" :aria-labelledby="`${id}-filter`" panel-background="pure" @update:model-value="value => filter = String(value)" />
+        <TxSelect :model-value="filter" :options="filterOptions" :aria-labelledby="`${id}-filter`" @update:model-value="value => filter = String(value)" />
       </div>
       <TxCheckbox v-model="disabled" :label="copy.disabled" />
       <TxCheckbox v-model="motion" :label="copy.motion" />

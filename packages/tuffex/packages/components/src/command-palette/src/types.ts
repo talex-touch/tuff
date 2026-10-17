@@ -1,3 +1,4 @@
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { TxIconSource } from '../../icon'
 
 export type CommandPaletteClassValue = string | string[] | Record<string, boolean>
@@ -26,6 +27,12 @@ export interface CommandPaletteProps {
   query?: string
   /** Accessible name for the palette's `role="dialog"` and command listbox. @default 'Command palette' */
   ariaLabel?: string
+  /** Material of the panel. @default 'refraction' */
+  surface?: BaseSurfaceMode
+  /** Colour laid under the material; follows the theme by default. */
+  surfaceColor?: string
+  /** Opacity of that colour (0–1): 0.96 under `mask`, 0.5 under the other materials. */
+  surfaceOpacity?: number
 }
 
 export interface CommandPaletteEmits {

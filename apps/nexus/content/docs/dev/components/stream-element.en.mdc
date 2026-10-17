@@ -172,6 +172,7 @@ code: |
 - Rendered natively, word by word: headings, paragraphs, emphasis, strikethrough, inline code, safe links, lists (nested, task), quotes, rules, and fenced code (`TxCodeStream`).
 - Tables, math, mermaid, raw HTML, and images are delegated whole to `TxStreamMarkdown`, with its sanitizing and remote-image policy, and reveal line by line; neighboring delegated blocks form one part.
 - The caret sits only at the write head: one per answer at any time, retracting when the answer ends.
+- Line breaking: finished paragraphs and headings wrap with `text-wrap-style: pretty`, so a last line does not end on a word or two; the one being written wraps as usual and switches once the write head moves on, so each released word does not re-run its line breaking.
 - `[n]` becomes a citation chip (a link named after its source) only in plain text, never in code or link text; without a matching source it stays text.
 
 ## Technologies

@@ -15,7 +15,7 @@ const value = ref<Mode[]>(['mention', 'reply'])
       <TxFlatRadioItem value="mute" label="Mute" icon="i-carbon-volume-mute" />
     </TxFlatRadio>
 
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+    <TxCard variant="plain" :padding="10" :radius="14">
       <div class="tx-demo__meta">
         selected: {{ value.join(', ') || 'none' }}
       </div>

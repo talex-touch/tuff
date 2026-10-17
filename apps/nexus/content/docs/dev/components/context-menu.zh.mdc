@@ -125,7 +125,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 开合动画：`transfer`、`boom`、`opacity` 或 `none`。 |
 | `keepAliveContent` | `boolean` | `true` | 关闭后保留内容状态。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | 面板阴影。 |
 | `panelRadius` | `number` | `14` | 面板圆角。 |
 | `panelPadding` | `number` | `6` | 面板内边距。 |
@@ -231,7 +231,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 子面板动画。 |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给子面板卡片的参数。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 子面板边框样式。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 子面板背景效果。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 子面板背景效果。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | 子面板阴影。 |
 | `panelRadius` | `number` | `14` | 子面板圆角。 |
 | `panelPadding` | `number` | `6` | 子面板内边距。 |

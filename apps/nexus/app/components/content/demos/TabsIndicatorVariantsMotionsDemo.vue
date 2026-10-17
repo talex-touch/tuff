@@ -82,7 +82,7 @@ function next() {
 
 <template>
   <div class="tx-demo tx-demo__col" style="max-width: 860px;">
-    <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+    <TxCard variant="plain" :padding="14" :radius="14">
       <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">{{ labels.motion }}</span>
@@ -133,7 +133,6 @@ function next() {
         v-for="variant in variants"
         :key="variant.value"
         variant="plain"
-        background="mask"
         :padding="12"
         :radius="14"
       >

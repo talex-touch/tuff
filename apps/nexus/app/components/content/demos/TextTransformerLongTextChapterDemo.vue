@@ -39,7 +39,7 @@ const toggle = () => {}
           outer-class="overflow-hidden"
           style="max-width: 720px;"
         >
-          <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+          <TxCard variant="plain" :padding="14" :radius="14">
             <div style="font-size: 13px; line-height: 1.6; max-width: 640px;">
               <TxTextTransformer :text="text" :duration-ms="duration" :blur-px="blurPx" wrap />
             </div>
@@ -82,7 +82,7 @@ const toggle = () => {}
           outer-class="overflow-hidden"
           style="max-width: 720px;"
         >
-          <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+          <TxCard variant="plain" :padding="14" :radius="14">
             <div style="font-size: 13px; line-height: 1.6; max-width: 640px;">
               <TxTextTransformer :text="text" :duration-ms="duration" :blur-px="blurPx" wrap />
             </div>

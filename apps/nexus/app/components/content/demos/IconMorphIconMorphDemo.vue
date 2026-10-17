@@ -56,7 +56,7 @@ const copy = computed(() => {
       </div>
     </div>
 
-    <TxCard variant="plain" background="mask" :padding="24" :radius="14">
+    <TxCard variant="plain" :padding="24" :radius="14">
       <div class="flex items-center justify-center p-6 text-primary text-3xl">
         <TxIconMorph
           v-if="!controlled"

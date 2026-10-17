@@ -119,7 +119,7 @@ code: |
 | `keepAliveContent` | `boolean` | `true` | 关闭后保留内容及其状态。 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 时切换开合。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态。 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板背景。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影。 |
 | `panelRadius` | `number` | `18` | 面板圆角（px）。 |
 | `panelPadding` | `number` | `10` | 面板内边距（px）。 |

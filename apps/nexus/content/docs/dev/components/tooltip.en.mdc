@@ -57,15 +57,15 @@ code: |
 code: |
   <template>
     <TxTooltip
-      content="Mask background + arrow"
-      :anchor="{ showArrow: true, panelBackground: 'mask' }"
+      content="With arrow"
+      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">Status detail</TxButton>
     </TxTooltip>
 
     <TxTooltip
-      content="Glass background + right placement"
-      :anchor="{ placement: 'right', panelBackground: 'glass', panelShadow: 'medium' }"
+      content="Right placement + medium shadow"
+      :anchor="{ placement: 'right', showArrow: true, panelShadow: 'medium' }"
     >
       <TxButton variant="ghost">Service status</TxButton>
     </TxTooltip>
@@ -112,7 +112,7 @@ code: |
   <template>
     <TxTooltip
       content="Tooltip explains the current action only."
-      :anchor="{ placement: 'bottom', panelBackground: 'glass' }"
+      :anchor="{ placement: 'bottom', panelShadow: 'medium' }"
     >
       <TxButton variant="secondary">Send toast</TxButton>
     </TxTooltip>

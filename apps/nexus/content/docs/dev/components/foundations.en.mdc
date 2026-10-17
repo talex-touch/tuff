@@ -35,22 +35,22 @@ $$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
 
 Corner curves encroach into content boxes. To prevent input carets from clipping into corner arcs, the horizontal inset must fully cover the radius:
 $$Padding_{\text{horizontal}} \ge R$$
-Single-line text containers apply a **0.65x golden optical padding ratio**, neutralizing the bottom-heavy illusion created by typographic leading.
+Single-line text containers set their vertical padding to **0.6–0.75x** the horizontal padding (TxModeChip and TxTag both use 0.625), neutralizing the bottom-heavy illusion created by typographic leading.
 
 ## Surfaces & Refraction
 
 ### The Default to Refraction Mandate
 
-All container components featuring a surface layer (modals, drawers, CoreBox panels, interactive cards) **must strictly default to `refraction`**.
-Switching to `flat` or `mask` **mandates explicit manual user confirmation**.
+All components featuring a surface layer **must strictly default to `refraction`**: `TxBaseSurface`'s `mode`, `TxCard`'s `background`, the `surface` of `TxFlipOverlay`, `TxModal`, `TxDrawer`, `TxCommandPalette` and the dialogs `TxPopperDialog`, `TxBlowDialog`, `TxBottomDialog` and `TxTouchTip`, and the `panelBackground` of the pop-up panels rendered through `TxBaseAnchor` (`TxPopover`, `TxTooltip`, dropdown and context menus, `TxSelect`, `TxSearchSelect`).
+Switching to another material (such as `flat`, `mask` or `glass`) **mandates explicit manual user confirmation**; the fallback a surface takes in motion and `autoDetect`'s temporary degradation leave the declared material alone and are not switches. See [Surface 8-Material Taxonomy & Gatekeepers](/docs/dev/concepts/surface-taxonomy).
 
 ### Snell's Refraction & RGB Dispersion Pipeline
 
-`TxBaseSurface` leverages a GPU-accelerated SVG Displacement Map filter simulating Snell's Law as light traverses crystal prisms. Red, Green, and Blue channels carry asymmetric angular offsets, separating subtle spectral dispersion fringes along refracted contours.
+`TxBaseSurface`'s `refraction` uses `TxGlassSurface` as its glass layer, where an SVG displacement map simulates Snell's Law as light traverses a prism: the Red, Green and Blue channels are each displaced once, by slightly different amounts (−180, −170 and −160 by default), and the offset channels separate subtle spectral dispersion fringes along refracted contours.
 
-### 120Hz Fallback & 140ms Elastic Recovery
+### 120Hz Fallback & 140ms Hysteresis Recovery
 
-During 120Hz window dragging, complex shaders **drop instantaneously (0ms) to an ultra-lightweight `mask`**, zeroing GPU load in one frame. Once motion ceases, the system applies **140ms damped recovery**, harmonizing material fidelity with smooth tracking.
+When a surface moves with its element, `backdrop-filter` sampling lags behind the element's position and the filter layers drag a misaligned patch of backdrop along; while a window is dragged on a 120Hz display, heavy filters also eat into a frame budget of only 8.3ms. So `TxBaseSurface` **falls back the frame motion starts (0ms, no debounce)**: `blur`, `glass` and `acrylic` switch wholesale to `fallbackMode` (`mask` by default), while `refraction` keeps its mode, fading its glass and filter layers out over 140ms under a translucent cover. Recovery follows once motion ends, and `autoDetect`'s signals must first stay quiet for **140ms** so a gesture trembling around the threshold does not flip it back and forth: `refraction` then recovers layer by layer, its cover gone at 287ms, while the other materials hold the fallback for 299ms before switching back. See [Adaptive Surface Deduction & 120Hz Fallback](/docs/dev/concepts/surface-deduction).
 
 ## Color Science & Dark Palette
 
@@ -59,40 +59,43 @@ During 120Hz window dragging, complex shaders **drop instantaneously (0ms) to an
 Why reject pure black `#000000`?
 1. **Preventing OLED Purple Smearing**: Switching OLED pixels off introduces latency, creating purple ghosting streaks when scrolling.
 2. **Preserving Shadow Elevation**: Shadows must physically register darker than the background. `#141414` provides depth headroom for cast shadows.
-3. **Three-Tier Elevation**: Canvas `--tx-bg-color: #141414`, Container `--tx-fill-color-blank: #1c1c1e`, Elevated `--tx-fill-color-light: #252528`.
+3. **Three-Tier Elevation**: L0 canvas `--tx-bg-color: #141414`, L1 container `--tx-bg-color-overlay: #1d1e1f` (cards, dialogs, drawers, pop-ups), L2 highlight `--tx-fill-color-light: #262727` (hover, selection). In the dark theme `--tx-fill-color-blank` is `transparent` and carries no container colour.
 
 ### Dark Mode Retinal Bloom Weight Compensation
 
 Under the Helmholtz optical irradiation effect, white strokes over dark canvases bleed into the retina, **reading bolder than the same weight in light mode**; how much depends on luminance, contrast and size, with no fixed percentage.
-TuffEx does not lower weights in its dark theme today. When the font has a weight axis, a dark theme can tune its weights like this:
-- Body copy: `400` (Light) $\to$ `380`–`400` (Dark)
-- Inline emphasis: `500` (Light) $\to$ `460` (Dark)
-- Headings: `600` (Light) $\to$ `560` (Dark)
+TuffEx's dark theme takes each of the three emphasis weights 40 lighter; components read them as `var(--tx-font-weight-medium, 500)` and the like, so they lighten when the theme switches:
+- Body copy: `400`, left alone (any lower and a static font drops to its Light face)
+- Inline emphasis, `--tx-font-weight-medium`: `500` (Light) $\to$ `460` (Dark)
+- Headings and buttons, `--tx-font-weight-semibold`: `600` (Light) $\to$ `560` (Dark)
+- Bold and numerals, `--tx-font-weight-bold`: `700` (Light) $\to$ `660` (Dark)
+
+Only fonts with a weight axis (San Francisco, Segoe UI Variable, Inter Variable) actually draw thinner; static fonts such as PingFang SC and Microsoft YaHei round these values back to the face light mode uses, so the compensation does nothing there but never makes text bolder. Every dark value sits within (light − 100, light], which the Sass function `tx-dark-weight` checks at build time. On macOS without Inter, the default font stack draws with PingFang SC and shows no difference. See [Retinal Irradiation & Weight Tuning](/docs/dev/concepts/irradiation-tuning).
 
 ### color-mix Ink Fusion & WCAG 4.5:1
 
-Semantic text never uses isolated raw hues; it blends dynamically with primary ink:
-`color: color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`.
-Contrast ratios consistently clear **4.58:1 – 4.81:1** across themes, ensuring strict WCAG 2.1 AA compliance.
+Semantic text never uses isolated raw hues; it blends dynamically with primary ink, as in TxModeChip's danger ink:
+`color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`.
+Each hue has its own share: danger 55%, success and warning 45%, info 50% of the primary colour. At 13px on the `-light-9` tints, the raw hues reach only **2.03:1–2.61:1**; the blends measure **5.07:1–5.32:1**, clearing WCAG 2.1 AA's 4.5:1.
 
 ## Typography & 13–14px Baseline
 
 - **13px–14px Productivity Anchor**: Desktop productivity tools avoid oversized marketing typography, keeping crucial context within the human 2-degree foveal vision window.
-- **Monospace 0.9em Optical Scale**: Code typefaces carry 15% taller x-heights; inline `<code>` scales to `0.9em` to preserve typographic line rhythm.
-- **Modern Soft Line Breaks**: Long prose uses `text-wrap: pretty` to eliminate terminal orphans; short titles use `text-wrap: balance`; hardcoded `<br>` tags are banned.
-- **Zero Tracking on Body Copy**: Modifying body `letter-spacing` destroys font kerning pairs and impairs reading velocity.
+- **Monospace 0.9em Optical Scale**: Code typefaces carry slightly taller x-heights than sans-serif faces at the same size (1.7%–7.7% taller, measured on the fonts shipped with macOS); inline `<code>` scales to `0.9em` and stays on the baseline to preserve typographic line rhythm. `<code>` outside `<pre>` inside `.tx-prose` gets this automatically; elsewhere, add `.tx-inline-code`.
+- **Modern Soft Line Breaks**: Short titles use `text-wrap: balance` (the `.tx-heading` utility; `TxModal`'s title has it built in); long prose uses `text-wrap: pretty` to eliminate terminal orphans (`.tx-prose p`, `.tx-description`, `.tx-help-text`); hardcoded `<br>` tags are banned. Streaming paragraphs are the exception: they wrap normally while text is still arriving and switch back to `pretty` once they are complete.
+- **Zero Tracking on Body Copy**: Body copy never touches `letter-spacing`. It does not remove kerning pairs; it adds the same space between every pair of characters on top of them, diluting the spacing the type foundry tuned, and with non-zero spacing browsers also stop applying optional ligatures such as `fi` and `fl`. Only three cases are exempt: uppercase micro-labels at 11px or below, headings and display numerals at 17px or above, and avatar initials.
 
 ## Micro-Motion & Micro-Interactions
 
-- **Motion as Spatial Anchors**: Micro-interactions resolve within **90ms–180ms**; animations must never block user keystrokes or clicks.
+- **Motion as Spatial Anchors**: Most micro-interactions resolve within **90ms–180ms**; animations must never block user keystrokes or clicks.
 - **0ms Instant Hover**: Transitioning colors on `:hover` is banned (preventing sluggish lag); semantic shifts isolate transitions to `.is-morphing`.
 - **90ms+90ms Confirmation Rhythm**: Menus apply a two-beat feedback rhythm (90ms clear highlight + 90ms active pulse) before closing.
-- **Four Compositor Properties**: Confined strictly to `translate`, `scale`, `rotate`, and `opacity`; variables are banned in keyframes; dual alternating keyframe names eliminate reflow.
+- **Four Compositor Properties**: High-frequency animations, loading effects and loops animate only `translate`, `scale`, `rotate` and `opacity`, which run whole on the compositor thread and keep up with the display even while the main thread is busy. Keyframes may use `var()` for start and end points and amplitudes, but never animate a custom property itself (it is interpolated on the main thread every frame); replays alternate two keyframe names instead of forcing a reflow with `void el.offsetWidth`.
 
 ## AI Streaming & Anti-Jitter
 
-- **useStreamPacer Cadence**: Releases units at 24ms intervals with a 600ms latency ceiling, smoothing network burstiness.
-- **Twin-Layer Reserve Mirror**: Pre-measures full grid heights, eliminating stream height jitter and scrollbar twitching.
+- **useStreamPacer Cadence**: Releases at least one unit every 24ms; a backlog speeds up evenly against a deadline, so every unit shows within 600ms of arriving; once the source ends, the rest clears within 320ms. A burst from the network reads as a quicker flow of text.
+- **Twin-Layer Reserve Mirror**: When finished content replays, a hidden copy (`aria-hidden`, `inert`, `visibility: hidden`) holds the full height first, so the container stops growing and the scrollbar stays put while the text plays out. `reserve` is off by default; live streaming (regeneration included) cannot know the final height, and the container still grows with the content.
 - **Immediate Text Selection & Copying**: Release tokens are standard DOM text nodes; users can drag-select and trigger `Cmd+C` at any millisecond without waiting.
 
 ## Color System Tokens

@@ -14,26 +14,37 @@ description: "text-wrap: pretty 孤字终结、balance 标题平衡、禁止硬�
 
 ## CSS 原生软换行：pretty 与 balance
 
-按 MDN 的兼容数据，`balance` 从 Chrome 114、Firefox 121、Safari 17.5 起可用；`pretty` 从 Chrome 117、Safari 26 起可用，Firefox 尚未支持。不支持的浏览器按普通 `wrap` 断行，不会出错。TuffEx 组件目前没有声明 `text-wrap`；本站文档的页头（DocHero）是这样用的：
+按 MDN 的兼容数据，`balance` 从 Chrome 114、Firefox 121、Safari 17.5 起可用；`pretty` 从 Chrome 117、Safari 26 起可用，Firefox 尚未支持。不支持的浏览器按普通 `wrap` 断行，不会出错。TuffEx 把这两种断行作为全系统标准：样式入口提供 `.tx-heading`、`.tx-prose`、`.tx-description`、`.tx-help-text` 四个文本工具类，`TxModal` 的标题也直接声明了 `balance`。
 
 :::TuffCodeBlock{lang="scss"}
 ---
 code: |
-  // apps/nexus/app/components/docs/DocHero.vue（节选）
-  // 标题：让各行宽度尽量接近
-  .docs-hero__title {
+  // packages/tuffex/packages/components/style/index.scss
+  // 1. 标题与短提示：让各行宽度尽量接近
+  .tx-heading {
     text-wrap: balance;
   }
 
-  // 描述段落：避免末行只剩一两个字
-  .docs-hero__desc {
+  // 2. 长段落正文、卡片描述与帮助说明：避免末行只剩一两个字
+  .tx-prose p,
+  .tx-description,
+  .tx-help-text {
     text-wrap: pretty;
+  }
+
+  // packages/tuffex/packages/components/src/modal/src/TxModal.vue
+  .tx-modal__title {
+    text-wrap: balance;
   }
 ---
 :::
 
+标题加 `tx-heading`，描述加 `tx-description`，表单项下方的帮助说明加 `tx-help-text`，整段富文本的容器加 `tx-prose`（作用于其中的 `<p>`）。`TxCard` 没有自己的标题元素（标题由 `header` 插槽传入），卡片标题请加 `tx-heading`。本站文档的页头（DocHero）同样是标题用 `balance`、描述用 `pretty`。
+
 - `text-wrap: balance`：浏览器计算各行字符分布，生成对称的倒梯形或居中平衡排版；Chrome 只对 6 行以内的文本生效。
 - `text-wrap: pretty`：专门检测段末孤字。一旦发现孤字，自动从上一行拉下倒数第二个词合并收尾。
+
+流式输出是例外：正在接收 Token 的段落保持普通 `wrap`，段落生成完毕后再切换为 `pretty`，免得每输出一个词都触发整段重排。`TxStreamElement` 的段落与标题这样切换；`TxStreamText` 在自己是块级容器时（`tag` 为块级元素，或 `reserve` 回放）同样如此，放在宿主段落里时由宿主段落决定。两者都写长写属性 `text-wrap-style`，不动宿主的 `nowrap`；按 MDN 的兼容数据，它的 `pretty` 从 Chrome 130、Safari 26 起可用，不支持的浏览器按普通 `wrap` 断行。
 
 ## 严禁硬编码插入换行符
 

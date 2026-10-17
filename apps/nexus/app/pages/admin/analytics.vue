@@ -689,19 +689,18 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           v-for="card in 4"
           :key="`realtime-skeleton-${card}`"
           variant="plain"
-          background="mask"
           :radius="16"
           :padding="16"
         >
           <TxSkeleton :loading="true" :lines="2" />
         </TxCard>
       </div>
-      <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard variant="plain" :radius="18" :padding="20">
         <TxSkeleton :loading="true" :lines="6" />
       </TxCard>
     </div>
 
-    <TxCard v-else-if="error" variant="plain" background="mask" :radius="18" :padding="24" class="text-center">
+    <TxCard v-else-if="error" variant="plain" :radius="18" :padding="24" class="text-center">
       <TxEmptyState
         variant="error"
         :title="t('common.error')"
@@ -736,7 +735,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div class="space-y-5">
       <!-- Search Quality -->
       <div v-if="activeSection === 'search'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             {{ t('dashboard.sections.analytics.search.firstResult') }}
           </h3>
@@ -744,7 +743,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             {{ analytics.summary.avgFirstResultMs }}ms
           </p>
         </TxCard>
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             {{ t('dashboard.sections.analytics.search.slowSearches') }}
           </h3>
@@ -753,7 +752,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <TxStatusBadge :text="`${searchSlowRate}%`" :status="searchSlowRate > 5 ? 'warning' : 'success'" size="sm" />
           </div>
         </TxCard>
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             {{ t('dashboard.sections.analytics.search.avgResults') }}
           </h3>
@@ -761,7 +760,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             {{ analytics.summary.avgResultCount }}
           </p>
         </TxCard>
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             {{ t('dashboard.sections.analytics.search.avgSorting') }}
           </h3>
@@ -772,7 +771,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Daily Trend Chart -->
-      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4">
           <h3 class="font-semibold text-black dark:text-white">
             {{ t('dashboard.sections.analytics.overview.dailyActivity') }}
@@ -792,7 +791,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- UI & Main Performance -->
       <div v-if="activeSection === 'performance'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ t('dashboard.sections.analytics.performance.longTasks') }}</span>
             <span class="i-carbon-time text-base text-emerald-500" />
@@ -808,7 +807,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </p>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-blue-600 dark:text-blue-400">{{ t('dashboard.sections.analytics.performance.longAnimationFrames') }}</span>
             <span class="i-carbon-chart-line-smooth text-base text-blue-500" />
@@ -824,7 +823,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </p>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-purple-600 dark:text-purple-400">{{ t('dashboard.sections.analytics.performance.mainLoopLag') }}</span>
             <span class="i-carbon-activity text-base text-purple-500" />
@@ -842,7 +841,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </p>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-sky-600 dark:text-sky-400">{{ t('dashboard.sections.analytics.performance.mainThreadCpu') }}</span>
             <span class="i-carbon-chip text-base text-sky-500" />
@@ -855,7 +854,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </p>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-amber-600 dark:text-amber-400">{{ t('dashboard.sections.analytics.performance.unresponsive') }}</span>
             <span class="i-carbon-warning-alt text-base text-amber-500" />
@@ -873,7 +872,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Module Load Performance -->
-      <TxCard v-if="activeSection === 'performance'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'performance'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
@@ -916,7 +915,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </TxCard>
 
       <!-- Version Distribution -->
-      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4">
           <h3 class="font-semibold text-black dark:text-white">
             {{ t('dashboard.sections.analytics.overview.versionDistribution') }}
@@ -992,7 +991,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </TxCard>
 
       <!-- Hourly Distribution -->
-      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="20">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
           {{ t('dashboard.sections.analytics.overview.hourlyDistribution') }}
         </h3>
@@ -1012,7 +1011,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </TxCard>
 
       <!-- Search Term Collection Disabled -->
-      <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'search'" variant="plain" :radius="18" :padding="20">
         <div class="flex items-start gap-3">
           <span class="i-carbon-locked text-xl text-black/45 dark:text-white/45 mt-0.5" />
           <div>
@@ -1026,7 +1025,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </TxCard>
 
-      <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'search'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
@@ -1120,7 +1119,7 @@ P95
 
       <!-- Secondary Insights -->
       <div v-if="activeSection === 'search' || activeSection === 'overview'" class="grid gap-4 lg:grid-cols-3">
-        <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'search'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.search.searchScenes') }}
@@ -1136,7 +1135,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'search'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.search.resultCategories') }}
@@ -1152,7 +1151,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.topCategories') }}
@@ -1170,7 +1169,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.updateActions') }}
@@ -1186,7 +1185,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.updateResults') }}
@@ -1202,7 +1201,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.updateChannels') }}
@@ -1218,7 +1217,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.updateSources') }}
@@ -1234,7 +1233,7 @@ P95
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               {{ t('dashboard.sections.analytics.usage.updateTags') }}
@@ -1255,7 +1254,7 @@ P95
       <!-- Docs Analytics -->
       <div v-if="activeSection === 'docs'" class="space-y-5">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.docs.docs') }}
             </h3>
@@ -1263,7 +1262,7 @@ P95
               {{ formatNumber(docsAnalytics?.overview.docCount || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.docs.views') }}
             </h3>
@@ -1271,7 +1270,7 @@ P95
               {{ formatNumber(docsAnalytics?.overview.totalViews || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.docs.activeReadTime') }}
             </h3>
@@ -1279,7 +1278,7 @@ P95
               {{ formatDuration(docsAnalytics?.overview.totalActiveMs || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.docs.copySelect') }}
             </h3>
@@ -1289,7 +1288,7 @@ P95
           </TxCard>
         </div>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+        <TxCard variant="plain" :radius="16" :padding="16">
           <div class="flex flex-wrap items-center gap-3">
             <TxInput
               v-model="docsPath"
@@ -1317,11 +1316,11 @@ P95
           </div>
         </TxCard>
 
-        <TxCard v-if="docsLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
+        <TxCard v-if="docsLoading" variant="plain" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
           {{ t('dashboard.sections.analytics.docs.loading') }}
         </TxCard>
-        <TxCard v-else-if="docsError" variant="plain" background="mask" :radius="18" :padding="24">
+        <TxCard v-else-if="docsError" variant="plain" :radius="18" :padding="24">
           <TxEmptyState
             variant="error"
             :title="t('common.error')"
@@ -1330,7 +1329,7 @@ P95
         </TxCard>
         <template v-else-if="docsAnalytics">
           <div class="grid gap-4 lg:grid-cols-2">
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.analytics.docs.summary') }}
               </h3>
@@ -1367,7 +1366,7 @@ P95
               </div>
             </TxCard>
 
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.analytics.docs.actionEvidence') }}
               </h3>
@@ -1400,7 +1399,7 @@ P95
           </div>
 
           <div v-if="docsDetail" class="grid gap-4 lg:grid-cols-2">
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.analytics.docs.sections') }} · {{ docsDetail.path }}
               </h3>
@@ -1428,7 +1427,7 @@ P95
               </div>
             </TxCard>
 
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.analytics.docs.heatBuckets') }}
               </h3>
@@ -1470,7 +1469,7 @@ P95
 
       <!-- Overview version and geography detail: one scope, two readings -->
       <div v-if="activeSection === 'overview'" class="space-y-5">
-        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+        <TxCard variant="plain" :radius="18" :padding="20">
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 class="font-semibold text-black dark:text-white">
@@ -1552,7 +1551,7 @@ P95
         </TxCard>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.versions.searches') }}
             </h3>
@@ -1560,7 +1559,7 @@ P95
               {{ formatNumber(geoAnalytics?.summary.totalSearches || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.versions.uniqueIps') }}
             </h3>
@@ -1568,7 +1567,7 @@ P95
               {{ formatNumber(geoAnalytics?.summary.uniqueIps || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.versions.countries') }}
             </h3>
@@ -1576,7 +1575,7 @@ P95
               {{ formatNumber(geoAnalytics?.summary.countryCount || 0) }}
             </p>
           </TxCard>
-          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <TxCard variant="plain" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               {{ t('dashboard.sections.analytics.versions.subdivisions') }}
             </h3>
@@ -1586,7 +1585,7 @@ P95
           </TxCard>
         </div>
 
-        <TxCard variant="plain" background="mask" :radius="16" :padding="14">
+        <TxCard variant="plain" :radius="16" :padding="14">
           <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-black/60 dark:text-white/60">{{ t('dashboard.sections.analytics.versions.scope') }}</span>
@@ -1610,11 +1609,11 @@ P95
           </div>
         </TxCard>
 
-        <TxCard v-if="geoLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
+        <TxCard v-if="geoLoading" variant="plain" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
           {{ t('dashboard.sections.analytics.versions.loadingGeo') }}
         </TxCard>
-        <TxCard v-else-if="geoError" variant="plain" background="mask" :radius="18" :padding="24">
+        <TxCard v-else-if="geoError" variant="plain" :radius="18" :padding="24">
           <TxEmptyState
             variant="error"
             :title="t('common.error')"
@@ -1623,7 +1622,7 @@ P95
         </TxCard>
 
         <template v-else-if="geoAnalytics">
-          <TxCard variant="plain" background="mask" :radius="18" :padding="16">
+          <TxCard variant="plain" :radius="18" :padding="16">
             <TxEmptyState
               v-if="!worldGeoJson || (selectedGeoCountry ? geoMapPoints.length === 0 : geoCountryMapRows.length === 0)"
               variant="no-data"
@@ -1659,7 +1658,7 @@ P95
           </TxCard>
 
           <div class="grid gap-4 lg:grid-cols-2">
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ selectedGeoCountry
                   ? t('dashboard.sections.analytics.versions.subdivisionBreakdown')
@@ -1711,7 +1710,7 @@ P95
               </div>
             </TxCard>
 
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+            <TxCard variant="plain" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.analytics.versions.topIps') }}
               </h3>
@@ -1743,7 +1742,7 @@ P95
       </div>
 
       <!-- Telemetry Messages (告警) -->
-      <TxCard v-if="activeSection === 'messages'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'messages'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
@@ -1807,7 +1806,7 @@ P95
       </TxCard>
 
       <!-- Exchange Rate History -->
-      <TxCard v-if="activeSection === 'exchange'" variant="plain" background="mask" :radius="18" :padding="20">
+      <TxCard v-if="activeSection === 'exchange'" variant="plain" :radius="18" :padding="20">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-semibold text-black dark:text-white">

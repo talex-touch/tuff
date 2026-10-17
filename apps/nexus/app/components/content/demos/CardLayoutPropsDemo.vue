@@ -4,7 +4,7 @@
 <template>
   <div class="card-layout-wrap">
     <div class="card-layout-grid">
-      <TxCard variant="solid" background="glass" shadow="none" :padding="10" :radius="10">
+      <TxCard variant="solid" shadow="none" :padding="10" :radius="10">
         <div class="card-demo-title">
           padding
         </div>
@@ -13,7 +13,7 @@
         </div>
       </TxCard>
 
-      <TxCard variant="solid" background="glass" shadow="none" :padding="18" :radius="10">
+      <TxCard variant="solid" shadow="none" :padding="18" :radius="10">
         <div class="card-demo-title">
           padding
         </div>
@@ -22,7 +22,7 @@
         </div>
       </TxCard>
 
-      <TxCard variant="plain" background="glass" shadow="none" :padding="14" :radius="22">
+      <TxCard variant="plain" shadow="none" :padding="14" :radius="22">
         <div class="card-demo-title">
           radius
         </div>

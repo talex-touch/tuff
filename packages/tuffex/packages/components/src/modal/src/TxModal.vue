@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import type { CSSProperties } from 'vue'
+import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -24,14 +26,41 @@ const props = withDefaults(
     fullscreen?: boolean
     /** Accessible label for the header's close button. @default 'Close' */
     closeLabel?: string
+    /** Material of the panel. @default 'refraction' */
+    surface?: BaseSurfaceMode
+    /** Colour laid under the material; follows the theme by default. */
+    surfaceColor?: string
+    /** Opacity of that colour (0–1): 0.96 under `mask`, 0.5 under the other materials. */
+    surfaceOpacity?: number
   }>(),
   {
     title: '',
     width: '480px',
     fullscreen: false,
     closeLabel: 'Close',
+    surface: 'refraction',
+    surfaceColor: '',
   },
 )
+
+const SURFACE_MODES: readonly string[] = ['pure', 'mask', 'blur', 'glass', 'refraction', 'acrylic', 'mica', 'flat', 'plain']
+
+const surfaceMode = computed<BaseSurfaceMode>(() =>
+  SURFACE_MODES.includes(props.surface) ? props.surface : 'refraction',
+)
+
+const surfaceColor = computed(() => props.surfaceColor || 'var(--tx-bg-color-overlay, var(--tx-bg-color, #fff))')
+
+// As on TxFlipOverlay: mask keeps a near-opaque fill, and the other materials sit over the
+// colour at half strength, so text stays legible and the page still shows through to be
+// blurred and refracted.
+const surfaceOpacity = computed(() => {
+  const fallback = surfaceMode.value === 'mask' ? 0.96 : 0.5
+  const value = typeof props.surfaceOpacity === 'number' ? props.surfaceOpacity : fallback
+  if (!Number.isFinite(value))
+    return fallback
+  return Math.max(0, Math.min(1, value))
+})
 
 // Fullscreen is sized by the overlay (`position: fixed; inset: 0`) through
 // `align-items: stretch`, so the inline width must not be bound at all — an
@@ -141,7 +170,15 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <Transition name="tx-modal">
+    <!-- The overlay itself does not transition (see the styles), so the duration is given here:
+         the panel's, which outlasts the dim's fade. Both phases also carry `tx-modal-moving`,
+         which the styles key the parts' fades on. -->
+    <Transition
+      name="tx-modal"
+      enter-active-class="tx-modal-enter-active tx-modal-moving"
+      leave-active-class="tx-modal-leave-active tx-modal-moving"
+      :duration="{ enter: 300, leave: 200 }"
+    >
       <div
         v-if="visible"
         ref="overlayRef"
@@ -155,6 +192,14 @@ onUnmounted(() => {
         @click.self="close"
       >
         <div class="tx-modal__content" :class="{ 'tx-modal__content--fullscreen': fullscreen }" :style="contentStyle">
+          <TxBaseSurface
+            class="tx-modal__surface"
+            preset="card"
+            fake
+            :mode="surfaceMode"
+            :color="surfaceColor"
+            :opacity="surfaceOpacity"
+          />
           <header v-if="title || $slots.header" class="tx-modal__header">
             <slot name="header">
               <h3 :id="titleId" class="tx-modal__title">
@@ -185,26 +230,67 @@ onUnmounted(() => {
 .tx-modal__overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
 
+  // The dim and the frost are a layer under the panel rather than the overlay's own paint and
+  // opacity. An overlay with a backdrop filter, or one fading through opacity, would be the
+  // panel's backdrop root, and the panel's material would sample only the overlay's dim
+  // instead of the page.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
   // High contrast keeps the dimming and drops the frost.
   @include tx-when-high-contrast {
-    backdrop-filter: none;
+    &::before {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
   }
 }
 
 .tx-modal__content {
-  background: var(--tx-bg-color, #fff);
+  // Positioned and stacked, so the surface sits under the header, body and footer without
+  // leaving the panel.
+  position: relative;
+  z-index: 0;
   padding: 20px;
-  box-shadow: 12px 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   width: min(90vw, 560px);
   color: var(--tx-text-color-primary, #303133);
   @include tx-squircle(16px);
+
+  // The shadow and the inner hairline, on a layer of their own so they can fade while the panel
+  // does not (see the panel motion below). Above the surface: as an inset shadow under it, the
+  // hairline would be covered. It paints nothing over the content but that hairline.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: 12px 24px 80px rgba(0, 0, 0, 0.18);
+    outline: 1px solid rgba(255, 255, 255, 0.05);
+    outline-offset: -1px;
+    pointer-events: none;
+  }
+}
+
+.tx-modal__surface {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: inherit;
+  pointer-events: none;
 }
 
 // Fullscreen: the overlay's own inset already spans the viewport, so the panel
@@ -214,13 +300,17 @@ onUnmounted(() => {
 .tx-modal__overlay--fullscreen {
   align-items: stretch;
   padding: 0;
-  // The panel is opaque and exactly viewport-sized, so the blur has nothing to
-  // show through while costing a full-screen compositing pass every frame.
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   // The panel cannot be taller than the viewport, so the overlay must never
   // gain its own scrollbar on a small screen.
   overflow: hidden;
+}
+
+// The panel is exactly viewport-sized and blurs what it covers with its own
+// material, so a blur under it would be a second full-screen compositing pass
+// for a difference no one can see.
+.tx-modal__overlay--fullscreen::before {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 // A fixed box is sized against the *layout* viewport, which on mobile keeps the
@@ -243,10 +333,13 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   border-radius: 0;
-  box-shadow: none;
   padding: 16px;
   display: flex;
   flex-direction: column;
+
+  &::after {
+    content: none;
+  }
 }
 
 .tx-modal__content--fullscreen > .tx-modal__header,
@@ -347,48 +440,95 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-// Overlay fade
-.tx-modal-enter-active {
+// Dim fade. The dim layer fades, not the overlay: see `.tx-modal__overlay::before`.
+.tx-modal-enter-active::before {
   transition: opacity 0.25s ease;
 }
 
-.tx-modal-leave-active {
+.tx-modal-leave-active::before {
   transition: opacity 0.2s ease;
 }
 
-.tx-modal-enter-from,
-.tx-modal-leave-to {
+.tx-modal-enter-from::before,
+.tx-modal-leave-to::before {
   opacity: 0;
 }
 
-// Content panel animation
-.tx-modal-enter-active .tx-modal__content {
-  animation: tx-modal-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+// Panel motion. The panel scales and drifts but never fades as a whole: an element whose opacity
+// animates is the backdrop root of every backdrop filter inside it, so the material would sample
+// nothing but the panel and its frost would drop out for the whole transition. Each part fades on
+// its own instead, and the material stays live from the first frame to the last: the header,
+// body and footer, the shadow and hairline, and the surface. A surface with a backdrop filter
+// fades layer by layer, as a backdrop filter can fade through its own opacity; one without fades
+// whole, and so does every surface under high contrast, which drops the layers that blur.
+// Each phase hands its fade down as `--tx-modal-fade`, so the parts are listed once.
+.tx-modal-enter-active {
+  --tx-modal-fade: tx-modal-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  .tx-modal__content {
+    animation: tx-modal-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }
 
-.tx-modal-leave-active .tx-modal__content {
-  animation: tx-modal-leave 0.2s ease forwards;
+.tx-modal-leave-active {
+  --tx-modal-fade: tx-modal-fade-out 0.2s ease forwards;
+
+  .tx-modal__content {
+    animation: tx-modal-leave 0.2s ease forwards;
+  }
+}
+
+.tx-modal-moving {
+  .tx-modal__header,
+  .tx-modal__body,
+  .tx-modal__footer,
+  .tx-modal__content::after,
+  .tx-modal__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
+  .tx-modal__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
+  .tx-modal__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) :deep(.tx-base-surface__layer) {
+    animation: var(--tx-modal-fade);
+  }
+
+  @include tx-when-high-contrast {
+    .tx-modal__surface {
+      animation: var(--tx-modal-fade);
+    }
+  }
+
+  // Reduced motion keeps the fades and drops the travel: the panel fades in place.
+  @media (prefers-reduced-motion: reduce) {
+    .tx-modal__content {
+      animation: none;
+    }
+  }
 }
 
 @keyframes tx-modal-enter {
   from {
-    opacity: 0;
     transform: scale(0.96) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 
 @keyframes tx-modal-leave {
-  from {
-    opacity: 1;
-    transform: scale(1) translateY(0);
+  to {
+    transform: scale(0.97) translateY(4px);
   }
+}
+</style>
+
+<style lang="scss">
+// Unscoped: the parts take these through `--tx-modal-fade`, and a scoped sheet renames its
+// keyframes only where an `animation` declaration names them, never inside a custom property.
+// Each gives only its far end, so a part fades from, or to, the opacity it rests at.
+@keyframes tx-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tx-modal-fade-out {
   to {
     opacity: 0;
-    transform: scale(0.97) translateY(4px);
   }
 }
 </style>

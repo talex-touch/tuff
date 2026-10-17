@@ -117,7 +117,6 @@ watch(
         placement="bottom-end"
         :min-width="280"
         :max-width="320"
-        panel-background="glass"
       >
         <template #reference>
           <TxButton variant="secondary" size="sm" icon="i-carbon-information">

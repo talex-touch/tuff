@@ -88,6 +88,12 @@ export interface BaseSurfaceProps {
   fakeIndex?: number
   /** 视觉预设，default 保持通用，card 用于卡片风格 */
   preset?: BaseSurfacePreset
+  /**
+   * 表面铺在窗口自身的系统材质上（透明 Electron 窗口的 vibrancy、Mica）。页面里的
+   * backdrop-filter 采不到它，只会把表面自己的底色再采一遍，所以此时没有任何层跑
+   * backdrop-filter：模糊交给系统，表面只铺底色、光与描边；`moving`、`autoDetect` 也随之失效
+   */
+  systemBackdrop?: boolean
   /** refraction 模式渲染器：svg 或 css */
   refractionRenderer?: BaseSurfaceRefractionRenderer
   /** 非 mask 模式下的可选 mask 层透明度（用于 1+3、2+3、1+2+3） */

@@ -187,7 +187,6 @@ function openClickMenu(event: MouseEvent) {
         :y="clickY"
         :width="230"
         :animation="{ type: 'boom', duration: 180, closeDuration: 120, scale: 0.92, blur: 10 }"
-        panel-background="glass"
       >
         <template #menu>
           <TxContextMenuItem shortcut="⌘N" @select="setAction('New file')">

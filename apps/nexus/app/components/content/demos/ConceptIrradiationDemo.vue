@@ -3,9 +3,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 
 import ConceptFigure from './ConceptFigure.vue'
 
 /**
- * One passage set dark on light and light on dark, a row per role at the article's weights:
- * body 400, emphasis 500, headings 600 on light, and the compensated 380–400, 460 and 560 on
- * dark.
+ * One passage set dark on light and light on dark, a row per role at TuffEx's weights: body 400,
+ * emphasis 500, headings 600 and bold 700 on light, and on dark what the `--tx-font-weight-*`
+ * tokens take there (style/variables.scss): body unchanged, 460, 560 and 660.
  *
  * Whether 460 is drawn at 460 depends on the font. A weight axis draws it; with static faces
  * CSS font matching picks a face instead: between 400 and 500 the nearest face up to 500, below
@@ -15,7 +15,7 @@ import ConceptFigure from './ConceptFigure.vue'
  * whatever the weight, so width cannot tell for them; the widths are reported to show it.
  */
 
-type Role = 'body' | 'emphasis' | 'heading'
+type Role = 'body' | 'emphasis' | 'heading' | 'bold'
 type Script = 'latin' | 'cjk'
 
 interface Sample {
@@ -43,10 +43,12 @@ const SAME_INK = 0.002
 const THEMES = ['light', 'dark'] as const
 
 const ROLES: Array<{ key: Role, light: number, dark: number, min: number, max: number, size: number }> = [
-  // The article gives body text 380–400 on dark; the figure starts in the middle.
-  { key: 'body', light: 400, dark: 390, min: 300, max: 450, size: 15 },
+  // TuffEx leaves body text at 400 on dark; the slider goes below it to show where a static font
+  // falls.
+  { key: 'body', light: 400, dark: 400, min: 300, max: 450, size: 15 },
   { key: 'emphasis', light: 500, dark: 460, min: 400, max: 550, size: 15 },
   { key: 'heading', light: 600, dark: 560, min: 500, max: 650, size: 18 },
+  { key: 'bold', light: 700, dark: 660, min: 600, max: 750, size: 15 },
 ]
 
 function createProbe(family: string, text: string): Probe | null {
@@ -110,13 +112,13 @@ const { locale } = useI18n()
 const stage = ref<HTMLElement | null>(null)
 const probes = shallowRef<Record<Script, Probe | null> | null>(null)
 const compensate = ref(true)
-const darkWeights = reactive<Record<Role, number>>({ body: 390, emphasis: 460, heading: 560 })
+const darkWeights = reactive<Record<Role, number>>({ body: 400, emphasis: 460, heading: 560, bold: 660 })
 
 const copy = computed(() => locale.value === 'zh'
   ? {
       light: '浅色 · 深字白底',
       dark: '暗色 · 亮字暗底',
-      roles: { body: '正文', emphasis: '强调', heading: '小标题' } as Record<Role, string>,
+      roles: { body: '正文', emphasis: '强调', heading: '小标题', bold: '加粗' } as Record<Role, string>,
       cjkText: '光渗让亮字显得更粗',
       latinText: 'Light text looks bolder',
       compensate: '暗色字重补偿',
@@ -133,12 +135,12 @@ const copy = computed(() => locale.value === 'zh'
       snapDown: '无字重轴：460 画成 400',
       flat: '400 到 500 只有一个字面',
       evidence: (latin: string, cjk: string) => `48px 画布上 400 / 460 / 500 的实测宽度：Latin ${latin} px，中文 ${cjk} px。汉字每字都占 1em，宽度看不出字重，所以判断依据是笔画的像素面积。`,
-      caption: '两栏固定为浅色（#303133 字 / #ffffff 底）与暗色（#e5eaf3 字 / #141414 底），中文用页面继承字体，英文用 system-ui 字体栈。打开补偿后，暗色一侧换成表中的字重（正文取 380–400 的中点 390）。字重是否生效要看字体：下方把同一串字在画布上分别按 400、460、500 绘制并比较笔画面积，460 与 500 完全相同就说明字体没有字重轴，460 被匹配成了 500；落在两者之间才是真正的 460。暗色每行下的小字是同样测出的实际字重。',
+      caption: '两栏固定为浅色（#303133 字 / #ffffff 底）与暗色（#e5eaf3 字 / #141414 底），中文用页面继承字体，英文用 system-ui 字体栈。打开补偿后，暗色一侧换成 TuffEx 暗色主题的字重：强调 460、小标题 560、加粗 660，正文保持 400。字重是否生效要看字体：下方把同一串字在画布上分别按 400、460、500 绘制并比较笔画面积，460 与 500 完全相同就说明字体没有字重轴，460 被匹配成了 500；落在两者之间才是真正的 460。暗色每行下的小字是同样测出的实际字重；把正文拖到 390，可以看到静态字体落到 300 的 Light 字面。',
     }
   : {
       light: 'Light · dark on light',
       dark: 'Dark · light on dark',
-      roles: { body: 'Body', emphasis: 'Emphasis', heading: 'Heading' } as Record<Role, string>,
+      roles: { body: 'Body', emphasis: 'Emphasis', heading: 'Heading', bold: 'Bold' } as Record<Role, string>,
       cjkText: '光渗让亮字显得更粗',
       latinText: 'Light text looks bolder',
       compensate: 'Dark weight compensation',
@@ -155,7 +157,7 @@ const copy = computed(() => locale.value === 'zh'
       snapDown: 'No weight axis: 460 draws as 400',
       flat: 'One face from 400 to 500',
       evidence: (latin: string, cjk: string) => `Widths measured on a 48px canvas at 400 / 460 / 500: Latin ${latin} px, CJK ${cjk} px. Every Han character advances 1em, so width cannot show weight; the verdict reads the inked area instead.`,
-      caption: 'The columns are fixed light (#303133 on #ffffff) and dark (#e5eaf3 on #141414) colours; Chinese uses the page\'s inherited font, Latin the system-ui stack. With compensation on, the dark column takes the table\'s weights (body at 390, the middle of 380–400). Whether a weight takes effect depends on the font: below, the same string is drawn on a canvas at 400, 460 and 500 and the inked areas compared. If 460 matches 500 exactly, the font has no weight axis and 460 was matched to 500; only a value in between is a real 460. The small print under each dark row is measured the same way.',
+      caption: 'The columns are fixed light (#303133 on #ffffff) and dark (#e5eaf3 on #141414) colours; Chinese uses the page\'s inherited font, Latin the system-ui stack. With compensation on, the dark column takes the weights of TuffEx\'s dark theme: emphasis 460, headings 560 and bold 660, with body text left at 400. Whether a weight takes effect depends on the font: below, the same string is drawn on a canvas at 400, 460 and 500 and the inked areas compared. If 460 matches 500 exactly, the font has no weight axis and 460 was matched to 500; only a value in between is a real 460. The small print under each dark row is measured the same way; drag body text to 390 to see a static font fall to its Light face at 300.',
     })
 
 function renderedLabel(rendered: Rendered, weight: number) {

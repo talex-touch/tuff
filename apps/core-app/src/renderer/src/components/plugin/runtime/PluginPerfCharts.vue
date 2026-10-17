@@ -59,14 +59,7 @@ const lastUpdatedAgeLabel = computed(() => {
 <template>
   <div class="PluginPerfCharts" :class="[`layout-${layoutMode}`]">
     <template v-if="layoutMode === 'card'">
-      <TxCard
-        class="perf-card"
-        variant="solid"
-        background="blur"
-        shadow="none"
-        :radius="12"
-        :padding="12"
-      >
+      <TxCard class="perf-card" variant="solid" shadow="none" :radius="12" :padding="12">
         <div class="header">
           <div class="title">
             <i class="i-ri-pulse-line" />

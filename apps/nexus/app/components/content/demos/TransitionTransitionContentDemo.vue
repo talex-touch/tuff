@@ -14,7 +14,7 @@ const toggle = () => {
 <template>
   <div v-if="locale === 'zh'">
       <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+        <TxCard variant="plain" :padding="14" :radius="14">
           <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
             <label class="tx-demo__row" style="gap: 8px;">
               <span class="tx-demo__label">preset</span>
@@ -37,7 +37,7 @@ const toggle = () => {
           </div>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <TxTransition :preset="preset" :duration="220" mode="out-in">
             <div :key="contentKey" style="padding: 10px 12px;">
               <div style="font-weight: 600; margin-bottom: 8px;">
@@ -56,7 +56,7 @@ const toggle = () => {
           </TxTransition>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <div class="tx-demo__label" style="margin-bottom: 8px;">
             Semantic Components
           </div>
@@ -85,7 +85,7 @@ const toggle = () => {
   </div>
   <div v-else>
       <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+        <TxCard variant="plain" :padding="14" :radius="14">
           <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
             <label class="tx-demo__row" style="gap: 8px;">
               <span class="tx-demo__label">preset</span>
@@ -108,7 +108,7 @@ const toggle = () => {
           </div>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <TxTransition :preset="preset" :duration="220" mode="out-in">
             <div :key="contentKey" style="padding: 10px 12px;">
               <div style="font-weight: 600; margin-bottom: 8px;">
@@ -127,7 +127,7 @@ const toggle = () => {
           </TxTransition>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <div class="tx-demo__label" style="margin-bottom: 8px;">
             Semantic Components
           </div>

@@ -11,6 +11,9 @@ const labels = computed(() => {
       blur: '模糊',
       glass: '玻璃',
       refraction: '折射',
+      acrylic: '亚克力',
+      mica: '云母',
+      plain: '无材质',
     }
   }
   return {
@@ -19,6 +22,9 @@ const labels = computed(() => {
     blur: 'Blur',
     glass: 'Glass',
     refraction: 'Refraction',
+    acrylic: 'Acrylic',
+    mica: 'Mica',
+    plain: 'Plain',
   }
 })
 </script>
@@ -46,6 +52,15 @@ const labels = computed(() => {
       </TxBaseSurface>
       <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" :radius="10" class="base-surface-modes-demo__item">
         {{ labels.refraction }}
+      </TxBaseSurface>
+      <TxBaseSurface mode="acrylic" :radius="10" class="base-surface-modes-demo__item">
+        {{ labels.acrylic }}
+      </TxBaseSurface>
+      <TxBaseSurface mode="mica" :radius="10" class="base-surface-modes-demo__item">
+        {{ labels.mica }}
+      </TxBaseSurface>
+      <TxBaseSurface mode="plain" :radius="10" class="base-surface-modes-demo__item">
+        {{ labels.plain }}
       </TxBaseSurface>
     </div>
   </div>

@@ -200,7 +200,7 @@ const panelCard = computed(() => ({
 
 <template>
   <div class="anchor-playground">
-    <TxCard variant="plain" background="mask" :radius="14" :padding="14" class="anchor-playground__controls">
+    <TxCard variant="plain" :radius="14" :padding="14" class="anchor-playground__controls">
       <div class="anchor-playground__heading">
         <div class="anchor-playground__title">
           {{ labels.controlsTitle }}

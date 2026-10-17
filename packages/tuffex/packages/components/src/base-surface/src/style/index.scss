@@ -342,8 +342,11 @@ $grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width=
       display: none;
     }
 
+    // A host fades the solid surface whole, so the backdrop takes no fade of its own: the two
+    // would compound.
     &.tx-base-surface--fake:not(.tx-base-surface--plain)::before {
       opacity: 1;
+      animation: none;
     }
   }
 }
@@ -375,4 +378,16 @@ $grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width=
       brightness(calc(var(--tx-surface-filter-brightness, 1) * 1.1));
   }
 
+}
+
+// ---- System backdrop ----
+// The window's own material (vibrancy, Mica) lies under the page, where a backdrop filter cannot
+// reach it: the filter would sample only the surface's own veil and lay its copy over that veil,
+// until none of the material showed through. The system blurs instead, and the filter layer keeps
+// only its tint. After the dark overrides and as specific as they are, so no preset or theme gives
+// the layer its filter back.
+.tx-base-surface.tx-base-surface--system-backdrop .tx-base-surface__layer.tx-base-surface__layer--filter {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  will-change: auto;
 }

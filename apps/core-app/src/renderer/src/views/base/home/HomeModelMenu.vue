@@ -567,7 +567,6 @@ onBeforeUnmount(() => {
     :match-reference-width="false"
     :panel-radius="12"
     :panel-padding="0"
-    panel-background="pure"
   >
     <template #reference>
       <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->

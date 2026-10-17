@@ -417,7 +417,7 @@ function onSubmit() {
 
 <template>
   <div class="AssetPluginFormStep">
-    <TxCard variant="plain" background="mask" :radius="18" :padding="16" class="AssetPluginFormStep-Card">
+    <TxCard variant="plain" :radius="18" :padding="16" class="AssetPluginFormStep-Card">
       <div class="AssetPluginFormStep-Steps" aria-label="Create plugin steps">
         <button
           v-for="(item, index) in createSteps"

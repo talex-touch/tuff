@@ -8,7 +8,7 @@ const { t } = useI18n()
 
 <template>
   <div class="AssetPluginStep">
-    <TxCard variant="plain" background="mask" :radius="18" :padding="18" class="AssetPluginStep-Card">
+    <TxCard variant="plain" :radius="18" :padding="18" class="AssetPluginStep-Card">
       <p class="AssetPluginStep-Title">
         {{ t('dashboard.sections.plugins.assetCreate.pluginTitle', 'Plugin Publishing') }}
       </p>

@@ -57,15 +57,15 @@ code: |
 code: |
   <template>
     <TxTooltip
-      content="遮罩背景 + 箭头"
-      :anchor="{ showArrow: true, panelBackground: 'mask' }"
+      content="显示箭头"
+      :anchor="{ showArrow: true }"
     >
       <TxButton variant="ghost">状态详情</TxButton>
     </TxTooltip>
 
     <TxTooltip
-      content="玻璃背景 + 右侧定位"
-      :anchor="{ placement: 'right', panelBackground: 'glass', panelShadow: 'medium' }"
+      content="右侧定位 + 中等阴影"
+      :anchor="{ placement: 'right', showArrow: true, panelShadow: 'medium' }"
     >
       <TxButton variant="ghost">服务状态</TxButton>
     </TxTooltip>
@@ -112,7 +112,7 @@ code: |
   <template>
     <TxTooltip
       content="Tooltip 只解释当前动作。"
-      :anchor="{ placement: 'bottom', panelBackground: 'glass' }"
+      :anchor="{ placement: 'bottom', panelShadow: 'medium' }"
     >
       <TxButton variant="secondary">发送提示</TxButton>
     </TxTooltip>

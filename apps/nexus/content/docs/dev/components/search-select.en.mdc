@@ -77,7 +77,6 @@ code: |
       v-model="scope"
       :options="scopeOptions"
       placeholder="Filter scope"
-      panel-background="glass"
     />
     <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
   </template>
@@ -108,7 +107,7 @@ code: |
 | `dropdownMaxHeight` | `number` | `280` | Maximum panel height (px); taller content scrolls inside. |
 | `dropdownOffset` | `number` | `6` | Gap between the panel and the input. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style, as TxCard `variant`. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background, as TxCard `background`. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background, as TxCard `background`. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow, as TxCard `shadow`. |
 | `panelRadius` | `number` | `18` | Panel corner radius, as TxCard `radius`. |
 | `panelPadding` | `number` | `6` | Panel padding, as TxCard `padding`. |

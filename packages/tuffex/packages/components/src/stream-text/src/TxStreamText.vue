@@ -242,7 +242,7 @@ defineExpose({
   <component
     :is="tag"
     class="tx-stream-text"
-    :class="[`is-reveal-${preset}`, { 'is-reserving': reserving }]"
+    :class="[`is-reveal-${preset}`, { 'is-live': live, 'is-reserving': reserving }]"
     :style="rootStyle"
     :aria-busy="live ? 'true' : undefined"
   >
@@ -271,6 +271,17 @@ defineExpose({
 .tx-stream-text {
   @include stream-reveal-presets('.tx-stream-text__word');
 
+  // Finished text keeps its last line from ending on a word or two; while words still arrive it
+  // wraps as usual, so each one does not re-run the line breaking. Only a block container breaks
+  // lines, so this holds where the stream is one: a block `tag`, or the two copies a reserving
+  // stream lays in its grid. Inside a host's paragraph the host decides, as TxStreamElement does.
+  // The longhand leaves a host's `nowrap` alone.
+  text-wrap-style: pretty;
+
+  &.is-live {
+    text-wrap-style: auto;
+  }
+
   // The final layout, held by an invisible copy in the same grid cell, so a
   // playback never reflows the lines around it.
   &.is-reserving {
@@ -283,8 +294,10 @@ defineExpose({
   grid-area: 1 / 1;
 }
 
+// It holds the finished layout, so it wraps as the finished text will.
 .tx-stream-text__reserve {
   visibility: hidden;
+  text-wrap-style: pretty;
 }
 
 .tx-stream-text__code {

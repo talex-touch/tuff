@@ -14,9 +14,13 @@ interface MotionFrame {
   x: number
   y: number
   scale: number
+  /** How far the panel has faded in, as a share of each part's resting opacity. */
   opacity: number
   backdrop: number
 }
+
+/** An element, or one of its pseudo-elements, that fades with the panel. */
+type FadeTarget = readonly [element: Element, pseudoElement?: string]
 
 // Open: the panel fades in fast while it drifts in from the trigger's side and grows
 // from 96%, settling on the house spring (`createSpringEase` defaults, ~3% overshoot,
@@ -229,17 +233,57 @@ function resolveDrift(panel: HTMLElement, drift: { ratio: number, max: number })
   return { x: dx / distance * length, y: dy / distance * length }
 }
 
+/**
+ * What fades with the panel. Not the panel itself: an element whose opacity animates is the
+ * backdrop root of every backdrop filter inside it, so the palette's material would sample nothing
+ * but the panel for the whole motion. As in TxCommandPalette's own fade, the parts fade instead:
+ * the body, the rim and shadow, and the surface, layer by layer while a layer blurs, and whole
+ * when none does (high contrast drops them).
+ */
+function fadeTargets(panel: HTMLElement): FadeTarget[] {
+  const targets: FadeTarget[] = [[panel, '::after']]
+  const body = panel.querySelector('.tx-command-palette__body')
+  if (body)
+    targets.push([body])
+  const surface = panel.querySelector('.tx-command-palette__surface')
+  if (!surface)
+    return targets
+  const blurs = Array.from(surface.querySelectorAll('.tx-base-surface__layer--glass, .tx-base-surface__layer--filter'))
+    .some(layer => getComputedStyle(layer).display !== 'none')
+  if (!blurs) {
+    targets.push([surface])
+    return targets
+  }
+  targets.push([surface, '::before'])
+  for (const layer of Array.from(surface.querySelectorAll('.tx-base-surface__layer')))
+    targets.push([layer])
+  return targets
+}
+
+function readOpacity([element, pseudoElement]: FadeTarget) {
+  return Number.parseFloat(getComputedStyle(element, pseudoElement).opacity)
+}
+
+/** Fades a part from `from` to `to`, each a share of the opacity it rests at. */
+function fade(target: FadeTarget, from: number, to: number, options: KeyframeAnimationOptions) {
+  const [element, pseudoElement] = target
+  const rest = readOpacity(target)
+  return element.animate([{ opacity: from * rest }, { opacity: to * rest }], { ...options, pseudoElement })
+}
+
 function readFrame(panel: HTMLElement, overlay: HTMLElement): MotionFrame {
   const style = getComputedStyle(panel)
   const [x = 0, y = 0] = style.translate === 'none'
     ? []
     : style.translate.split(' ').map(value => Number.parseFloat(value))
+  // The body rests fully opaque, so its opacity is the share every part has faded to.
+  const body = panel.querySelector('.tx-command-palette__body')
   return {
     x,
     y,
     scale: style.scale === 'none' ? 1 : Number.parseFloat(style.scale),
-    opacity: Number.parseFloat(style.opacity),
-    backdrop: Number.parseFloat(getComputedStyle(overlay).opacity),
+    opacity: body ? readOpacity([body]) : 1,
+    backdrop: readOpacity([overlay, '::before']),
   }
 }
 
@@ -266,9 +310,14 @@ function playEnter(panel: HTMLElement, overlay: HTMLElement) {
     return
   const drift = resolveDrift(panel, ENTER_DRIFT)
   const from = interrupted ?? { x: drift.x, y: drift.y, scale: ENTER_SCALE, opacity: 0, backdrop: 0 }
+  // The parts' resting opacities are read here, with the interrupted motion cancelled.
   motion = [
-    overlay.animate([{ opacity: from.backdrop }, { opacity: 1 }], { duration: BACKDROP_IN_MS, easing: EASE_OUT }),
-    panel.animate([{ opacity: from.opacity }, { opacity: 1 }], { duration: ENTER_FADE_MS, easing: EASE_OUT }),
+    overlay.animate(
+      [{ opacity: from.backdrop }, { opacity: 1 }],
+      { duration: BACKDROP_IN_MS, easing: EASE_OUT, pseudoElement: '::before' },
+    ),
+    ...fadeTargets(panel).map(target =>
+      fade(target, from.opacity, 1, { duration: ENTER_FADE_MS, easing: EASE_OUT })),
     panel.animate(
       [{ translate: `${from.x}px ${from.y}px`, scale: from.scale }, { translate: '0px 0px', scale: 1 }],
       { duration: ENTER_MS, easing: resolveSpringEasing() },
@@ -298,8 +347,11 @@ function playExit(): Promise<void> {
   const drift = resolveDrift(panel, EXIT_DRIFT)
   const options: KeyframeAnimationOptions = { duration: EXIT_MS, easing: EASE_OUT, fill: 'forwards' }
   motion = [
-    overlay.animate([{ opacity: from.backdrop }, { opacity: 0 }], { ...options, duration: BACKDROP_OUT_MS }),
-    panel.animate([{ opacity: from.opacity }, { opacity: 0 }], options),
+    overlay.animate(
+      [{ opacity: from.backdrop }, { opacity: 0 }],
+      { ...options, duration: BACKDROP_OUT_MS, pseudoElement: '::before' },
+    ),
+    ...fadeTargets(panel).map(target => fade(target, from.opacity, 0, options)),
     panel.animate(
       [{ translate: `${from.x}px ${from.y}px`, scale: from.scale }, { translate: `${drift.x}px ${drift.y}px`, scale: EXIT_SCALE }],
       options,
@@ -427,23 +479,32 @@ onBeforeUnmount(() => {
   // as a safety margin once the panel runs out of room.
   align-items: center;
   padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(4, 7, 13, 0.58), rgba(4, 7, 13, 0.74)),
-    rgba(4, 7, 13, 0.36);
   overscroll-behavior: contain;
   touch-action: none;
 }
 
+// On the palette's dim layer, not the overlay: the overlay fading would be the panel's backdrop
+// root, and the panel's material would sample only the backdrop instead of the page.
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay::before) {
+  background:
+    linear-gradient(180deg, rgba(4, 7, 13, 0.58), rgba(4, 7, 13, 0.74)),
+    rgba(4, 7, 13, 0.36);
+}
+
 // The backdrop and panel are animated with WAAPI in the script. The palette's own CSS
-// fade would compete with that (a running CSS transition outranks an animation), so it
-// is switched off here: the classes still come and go, but change nothing.
-:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-enter-active),
-:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-leave-active) {
+// fades would compete with that (a running CSS transition outranks an animation), so they
+// are switched off here: the classes still come and go, but change nothing.
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-moving) {
+  --tx-command-palette-fade: none;
+}
+
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-enter-active::before),
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-leave-active::before) {
   transition: none;
 }
 
-:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-enter-from),
-:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-leave-to) {
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-enter-from::before),
+:global(.NexusGlobalSearchOverlay.tx-command-palette__overlay.tx-command-palette-leave-to::before) {
   opacity: 1;
 }
 
@@ -457,9 +518,12 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: var(--nexus-search-layer, 1);
   width: min(593px, calc(100vw - 32px));
-  background: color-mix(in srgb, var(--tx-bg-color, #fff) 92%, rgba(12, 14, 18, 0.08));
-  border-color: color-mix(in srgb, var(--tx-border-color, #d4d7de) 62%, transparent);
   border-radius: 21px;
+}
+
+// The rim and the shadow are the palette's own layer, so they fade with the panel's parts.
+:global(.NexusGlobalSearchPanel.tx-command-palette__panel::after) {
+  border-color: color-mix(in srgb, var(--tx-border-color, #d4d7de) 62%, transparent);
   box-shadow:
     0 18px 55px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -583,8 +647,7 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 
-:global(.dark .NexusGlobalSearchPanel.tx-command-palette__panel) {
-  background: rgba(18, 18, 20, 0.96);
+:global(.dark .NexusGlobalSearchPanel.tx-command-palette__panel::after) {
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow:
     0 28px 90px rgba(0, 0, 0, 0.48),
@@ -593,10 +656,6 @@ onBeforeUnmount(() => {
 
 :global(.dark .NexusGlobalSearchPanel .tx-command-palette__search) {
   border-bottom-color: rgba(255, 255, 255, 0.13);
-}
-
-:global(.dark .NexusGlobalSearchPanel .tx-command-palette__list) {
-  background: rgba(14, 14, 16, 0.78);
 }
 
 :global(.dark .NexusGlobalSearchPanel .tx-command-palette__item.is-active) {

@@ -174,7 +174,7 @@ code: |
 | `referenceClass` | `BaseAnchorClassValue` | - | Extra class on the trigger anchor. |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the panel, including the flow light's `flowLight` / `flowLightIntensity`. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
 | `panelRadius` | `number` | `18` | Panel corner radius in px. |
 | `panelPadding` | `number` | `8` | Panel padding in px. |
@@ -237,7 +237,7 @@ code: |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Child panel animation. |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | Card props forwarded to the child panel; `flowLight` / `flowLightIntensity` fall back to the root menu's when absent, `flowLight: false` turns it off. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Child panel border style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Child panel background effect. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Child panel background effect. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Child panel shadow. |
 | `panelRadius` | `number` | `14` | Child panel corner radius in px. |
 | `panelPadding` | `number` | `6` | Child panel padding in px. |

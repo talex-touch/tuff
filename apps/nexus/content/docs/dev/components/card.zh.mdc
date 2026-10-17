@@ -16,7 +16,7 @@ verified: true
 ---
 code: |
   <template>
-    <TxCard background="glass">
+    <TxCard>
       A generic container for content.
     </TxCard>
   </template>
@@ -28,7 +28,7 @@ code: |
 ---
 code: |
   <template>
-    <TxCard background="glass" shadow="soft">
+    <TxCard shadow="soft">
       <template #header>
         Card title
         <TxButton size="sm" variant="ghost">Action</TxButton>
@@ -103,7 +103,7 @@ code: |
 :::
 
 ### 背景材质
-`background` 选择表面材质，推荐 `refraction`。
+`background` 选择表面材质，取值与 [BaseSurface](/docs/dev/components/base-surface) 的 `mode` 相同，默认且推荐 `refraction`。
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -118,12 +118,27 @@ code: |
 ---
 :::
 
+### 动态反光
+`specular` 在暗色主题下给卡片加一团跟随指针的微光：表面上是一层 600px 的白色径向光（6%，到 40% 处淡尽），经过边框时，边框那一圈再闪过一道 240px 的窄光。光斑按指数平滑追上指针，移入时直接在指针处亮起，移出后 240ms 淡出；开启减弱动态效果时光斑直接跳到指针处。浅色主题与高对比度下不绘制，`dashed` 边框不画边缘那一圈。不传时跟随 `clickable`，禁用时关闭。各参数的由来见《[Alpha 噪点掩膜与光斑追踪](/docs/dev/concepts/noise-and-specular)》。
+:::TuffDemoWrapper{demo="ConceptCardSpecularDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="dark">
+      <TxCard specular>
+        指针经过时，表面跟着一团微光
+      </TxCard>
+    </div>
+  </template>
+---
+:::
+
 ### 空状态
 :::TuffDemoWrapper{demo="CardCardWithEmptyDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxCard variant="plain" background="mask" :padding="16">
+    <TxCard variant="plain" :padding="16">
       <TxEmpty title="Nothing here" description="Create your first item to get started.">
         <template #action>
           <TxButton variant="primary" size="sm">Create</TxButton>
@@ -143,7 +158,6 @@ code: |
   <template>
     <TxPopover
       panel-variant="solid"
-      panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
       :panel-padding="10"
@@ -156,7 +170,6 @@ code: |
     <TxSearchSelect
       v-model="value"
       :options="options"
-      panel-background="glass"
       panel-shadow="soft"
       :panel-radius="18"
       :panel-padding="6"
@@ -208,7 +221,7 @@ code: |
 ---
 code: |
   <template>
-    <TxCard background="pure" shadow="soft" flow-light="rim">
+    <TxCard shadow="soft" flow-light="rim">
       卡片内容
     </TxCard>
     <TxPopover :panel-card="{ flowLight: 'corners' }">
@@ -234,7 +247,7 @@ code: |
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `variant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框形态；`plain` 无边框、无悬停反馈。 |
-| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'refraction'` | 表面材质。 |
+| `background` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 表面材质，取值同 `TxBaseSurface` 的 `mode`。 |
 | `shadow` | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度。 |
 | `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 内边距预设：`10` / `12` / `16` px。 |
 | `radius` | `number` | `18` | 圆角（px）。 |
@@ -243,7 +256,7 @@ code: |
 | `glassBlurAmount` | `number` | `22` | `glass` / `refraction` 下的模糊半径（px）。 |
 | `glassOverlay` | `boolean` | `true` | `glass` / `refraction` 下启用高光层。 |
 | `glassOverlayOpacity` | `number` | `0.18` | 高光层透明度。 |
-| `maskOpacity` | `number` | `0.75` | `mask` 下的表面透明度，收敛到 `0..1`。 |
+| `maskOpacity` | `number` | `0.75` | `mask` 下的表面透明度，收敛到 `0..1`；`acrylic` 的着色层取它的 0.8 倍。 |
 | `fallbackMaskOpacity` | `number` | `0.26` | 运动中降级为遮罩时的透明度（0–1）。 |
 | `surfaceMoving` | `boolean` | `false` | 外部运动标记，与惯性运动合并后转发给表面。 |
 | `refractionStrength` | `number` | `62` | 折射强度（0–100），驱动色散与扭曲。 |
@@ -258,6 +271,7 @@ code: |
 | `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | 表面上的流光底；不传或 `false` 即关闭。 |
 | `flowLightIntensity` | `number` | `1` | 流光底强度，乘到主题透明度上。 |
 | `clickable` | `boolean` | `false` | 启用悬停与按压反馈（缩至 `0.985`），并派发 `click`。 |
+| `specular` | `boolean` | - | 暗色主题下跟随指针的微光与边框反光；不传时跟随 `clickable`，禁用时关闭。 |
 | `loading` | `boolean` | `false` | 用 `TxSpinner` 遮罩覆盖卡片。 |
 | `loadingSpinnerSize` | `number` | - | Spinner 尺寸（px），省略时为 `12`。 |
 | `disabled` | `boolean` | `false` | 禁用样式，阻止 `click` 与指针动效。 |
@@ -286,7 +300,7 @@ code: |
 - 可点击卡片禁用时设置 `aria-disabled` 并移出 Tab 序列。
 - 只响应卡片自身的 Enter / Space，插槽内控件的按键不会触发卡片。
 - `loading` 的遮罩带 `aria-hidden`，读屏或表单忙碌提示由调用方负责。
-- `background` 作为表面模式转发给 `TxBaseSurface`：`mask` 使用 `maskOpacity`，`glass` 与 `refraction` 使用模糊与高光参数；折射参数只在 `refraction` 下生效。
+- `background` 作为表面模式转发给 `TxBaseSurface`：`mask` 与 `acrylic` 使用 `maskOpacity`，`mask`、`acrylic`、`mica` 的底色取 `--tx-card-fake-background`；`blur` 与 `acrylic` 都模糊 30px；`glass` 与 `refraction` 使用模糊与高光参数；折射参数只在 `refraction` 下生效。
 
 ## 技术实现
 
@@ -313,7 +327,8 @@ code: |
 | `--tx-card-border-width` | `variant` | 边框宽度：`solid`、`dashed` 为 1px，`plain` 为 0；不要手动设置。 |
 | `--tx-card-padding` | `padding` 或 `size` | 内边距与封面的负外边距。 |
 | `--tx-card-dx` / `--tx-card-dy` | 惯性动效 | 根节点位移；不要手动设置。 |
-| `--tx-card-fake-background` | 调用方 / 主题 | `mask` 与折射降级表面的底色。 |
+| `--tx-card-fake-background` | 调用方 / 主题 | `mask`、`acrylic`、`mica` 表面与折射降级表面的底色。 |
+| `--tx-card-light-x` / `--tx-card-light-y` | `specular` | 反光的位置（卡片宽高的百分比），写在 `.tx-card__specular` 上；不要手动设置。 |
 | `--tx-surface-refraction-mask-color` | 根节点内联样式 | 把 `--tx-card-fake-background` 转给 `TxBaseSurface`；改前者即可。 |
 
 跟随应用主题时覆盖全局 token，如 `--tx-bg-color-overlay`、`--tx-border-color-light`、`--tx-color-primary`。

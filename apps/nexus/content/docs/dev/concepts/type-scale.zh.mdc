@@ -37,21 +37,27 @@ description: 生产力工具与营销官网的字号认知差异、13-14px 黄�
 - 代码文字在视觉上会突兀地凸出，犹如正文中的硬补丁。
 - 上下撑开原本匀称的行高，打乱排版呼吸节奏。
 
-TuffEx 里渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdownEditor、TxChainOfThought）都把它缩到 0.9em，TxStreamMarkdown 和本站文档正文用 0.875em。以 TxStreamText 为例：
+TuffEx 的标准解决方案在样式入口里：`.tx-prose` 中不在 `<pre>` 里的 `<code>`，以及任何加了 `tx-inline-code` 的元素，都缩到 0.9em。
 
 :::TuffCodeBlock{lang="scss"}
 ---
 code: |
-  // stream-text/src/TxStreamText.vue
-  .tx-stream-text__code {
-    padding: 0.1em 0.35em;
+  // packages/tuffex/packages/components/style/index.scss
+  .tx-prose :not(pre) > code,
+  .tx-inline-code {
+    padding: 0.15em 0.35em;
     border-radius: 4px;
-    background: var(--tx-fill-color-light, #f5f7fa);
-    font-family: var(--tx-font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+    background-color: var(--tx-fill-color-light, #f5f7fa);
+    font-family: var(--tx-font-family-mono);
+    // 缩到 0.9em，压住等宽字体偏高的 x 高度
     font-size: 0.9em;
+    vertical-align: baseline;
   }
 ---
 :::
+
+自己渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdownEditor、TxChainOfThought）同样缩到 0.9em；TxStreamMarkdown 和本站文档正文用 0.875em。
+
 0.9em 是个近似值。让两种 x 高度对齐的字号是「正文 x 高度 ÷ 代码 x 高度」：本站在 macOS 的 Chrome 里实测正文 0.508em、代码（落到 Menlo）0.547em，比值 1.077，恰好对齐要 0.929em，0.9em 还矮 3.1%。按上面几款字体两两组合，恰好对齐的字号落在 0.93em～0.98em 之间。下图在当前浏览器里实测这两个 x 高度。
 
 :::TuffDemoWrapper{demo="ConceptInlineCodeDemo"}

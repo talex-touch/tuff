@@ -2,7 +2,9 @@
 import type { TouchTipButton, TouchTipProps } from './types'
 import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
+import { useDialogSurface } from './dialog-surface'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -16,7 +18,11 @@ const props = withDefaults(defineProps<TouchTipProps>(), {
   message: '',
   messageHtml: '',
   buttons: () => [],
+  surface: 'refraction',
+  surfaceColor: '',
 })
+
+const { surfaceMode, surfaceColor, surfaceOpacity } = useDialogSurface(props)
 
 interface ButtonState {
   content: string
@@ -27,6 +33,9 @@ interface ButtonState {
 
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
+// The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
+const entering = ref(true)
+const closing = ref(false)
 const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const messageId = useId()
@@ -84,16 +93,13 @@ function scrollListener(): void {
 }
 
 async function forClose(): Promise<void> {
-  const el = wholeDom.value
-  if (!el)
+  if (!wholeDom.value)
     return
-
-  const style = el.style
 
   await sleep(60)
 
-  style.transform = 'translate(-50%, -50%) scale(1.08)'
-  style.opacity = '0'
+  // The panel grows a touch while its parts fade (see `--closing`).
+  closing.value = true
 
   await sleep(220)
 
@@ -123,51 +129,67 @@ onUnmounted(() => {
 
 <template>
   <teleport to="body">
-    <div class="tx-touch-tip" :style="{ zIndex }">
+    <!-- The panel never fades as a whole (see the styles), so the entrance's length is given here.
+         `tx-touch-tip-moving` marks both phases, and the styles key the parts' fades on it. -->
+    <Transition appear name="tx-touch-tip" :duration="250" @after-appear="entering = false">
       <div
-        ref="wholeDom"
-        class="tx-touch-tip__container fake-background"
-        :class="{ 'tx-touch-tip__container--loading': false }"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="title ? titleId : undefined"
-        :aria-describedby="message || messageHtml ? messageId : undefined"
-        @keydown.esc="forClose"
+        class="tx-touch-tip"
+        :class="{ 'tx-touch-tip-moving': entering || closing, 'tx-touch-tip--closing': closing }"
+        :style="{ zIndex }"
       >
-        <h1 v-if="title" :id="titleId" class="tx-touch-tip__title" v-text="title" />
-
-        <!-- eslint-disable vue/no-v-html -->
-        <span
-          v-if="messageHtml"
-          :id="messageId"
-          class="tx-touch-tip__content"
-          v-html="messageHtml"
-        />
-        <!-- eslint-enable vue/no-v-html -->
-        <span
-          v-else-if="message"
-          :id="messageId"
-          class="tx-touch-tip__content"
+        <div
+          ref="wholeDom"
+          class="tx-touch-tip__container"
+          :class="{ 'tx-touch-tip__container--loading': false }"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="title ? titleId : undefined"
+          :aria-describedby="message || messageHtml ? messageId : undefined"
+          @keydown.esc="forClose"
         >
-          {{ message }}
-        </span>
+          <TxBaseSurface
+            class="tx-touch-tip__surface"
+            preset="card"
+            fake
+            :mode="surfaceMode"
+            :color="surfaceColor"
+            :opacity="surfaceOpacity"
+          />
+          <h1 v-if="title" :id="titleId" class="tx-touch-tip__title" v-text="title" />
 
-        <div class="tx-touch-tip__btns">
-          <TxButton
-            v-for="(btn, index) in btnArray"
-            :key="index"
-            class="tx-touch-tip__btn"
-            :type="resolveButtonType(btn.value?.type)"
-            :loading="btn.value.loading"
-            block
-            native-type="button"
-            @click="clickBtn(btn)"
+          <!-- eslint-disable vue/no-v-html -->
+          <span
+            v-if="messageHtml"
+            :id="messageId"
+            class="tx-touch-tip__content"
+            v-html="messageHtml"
+          />
+          <!-- eslint-enable vue/no-v-html -->
+          <span
+            v-else-if="message"
+            :id="messageId"
+            class="tx-touch-tip__content"
           >
-            {{ btn.value.content }}
-          </TxButton>
+            {{ message }}
+          </span>
+
+          <div class="tx-touch-tip__btns">
+            <TxButton
+              v-for="(btn, index) in btnArray"
+              :key="index"
+              class="tx-touch-tip__btn"
+              :type="resolveButtonType(btn.value?.type)"
+              :loading="btn.value.loading"
+              block
+              native-type="button"
+              @click="clickBtn(btn)"
+            >
+              {{ btn.value.content }}
+            </TxButton>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </teleport>
 </template>
 
@@ -176,11 +198,9 @@ onUnmounted(() => {
 
 @keyframes tx-touch-tip-enter {
   0% {
-    opacity: 0;
     transform: translate(-50%, -50%) scale(1.1);
   }
   100% {
-    opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
 }
@@ -200,6 +220,8 @@ onUnmounted(() => {
     position: absolute;
     left: 50%;
     top: 50%;
+    // Stacked, so the surface sits under the content without leaving the panel.
+    z-index: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -208,21 +230,30 @@ onUnmounted(() => {
     min-height: 260px;
     width: min(420px, 88vw);
     color: var(--tx-text-color-primary, #303133);
-    box-shadow: 9px 18px 65px rgba(0, 0, 0, 0.25);
     transform: translate(-50%, -50%);
-    animation: tx-touch-tip-enter 0.25s ease;
-    backdrop-filter: blur(16px) saturate(150%) brightness(1.2);
-
-    --fake-opacity: 0.75;
-    --fake-inner-opacity: 0.75;
-    // No `--fake-radius`: the backdrop layer inherits the smoothed outline below.
+    transition: transform 0.22s ease;
     @include tx-squircle(12px);
 
-    // High contrast: the panel is opaque and frosts nothing.
-    @include tx-when-high-contrast {
-      --fake-opacity: 1;
-      backdrop-filter: none;
+    // The shadow, on a layer of its own so it can fade while the panel does not.
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      border-radius: inherit;
+      corner-shape: inherit;
+      box-shadow: 9px 18px 65px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
     }
+  }
+
+  &__surface {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
   }
 
   &__title {
@@ -265,6 +296,75 @@ onUnmounted(() => {
 
   &__btn {
     flex: 1;
+  }
+}
+
+// Panel motion. The panel scales but never fades as a whole: an element whose opacity animates is
+// the backdrop root of every backdrop filter inside it, so the material would sample nothing but
+// the panel. Each part fades on its own instead, and the material stays live from the first frame
+// to the last: the title, message and buttons, the shadow, and the surface. A surface with a
+// backdrop filter fades layer by layer; one without fades whole, and so does every surface under
+// high contrast, which drops the layers that blur. Each phase hands its fade down as
+// `--tx-touch-tip-fade`, so the parts are listed once.
+.tx-touch-tip-enter-active {
+  --tx-touch-tip-fade: tx-touch-tip-fade-in 0.25s ease;
+
+  .tx-touch-tip__container {
+    animation: tx-touch-tip-enter 0.25s ease;
+  }
+}
+
+// Closing: the panel grows a touch while its parts fade. After the entrance, so a panel closed
+// while it still enters fades out.
+.tx-touch-tip--closing {
+  --tx-touch-tip-fade: tx-touch-tip-fade-out 0.22s ease forwards;
+
+  @media (prefers-reduced-motion: no-preference) {
+    .tx-touch-tip__container {
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+  }
+}
+
+.tx-touch-tip-moving {
+  .tx-touch-tip__title,
+  .tx-touch-tip__content,
+  .tx-touch-tip__btns,
+  .tx-touch-tip__container::after,
+  .tx-touch-tip__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
+  .tx-touch-tip__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
+  .tx-touch-tip__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) :deep(.tx-base-surface__layer) {
+    animation: var(--tx-touch-tip-fade);
+  }
+
+  @include tx-when-high-contrast {
+    .tx-touch-tip__surface {
+      animation: var(--tx-touch-tip-fade);
+    }
+  }
+}
+
+// Reduced motion keeps the fades and drops the scale: the panel fades in and out where it rests.
+@media (prefers-reduced-motion: reduce) {
+  .tx-touch-tip-enter-active .tx-touch-tip__container {
+    animation: none;
+  }
+}
+</style>
+
+<style lang="scss">
+// Unscoped: the parts take these through `--tx-touch-tip-fade`, and a scoped sheet renames its
+// keyframes only where an `animation` declaration names them, never inside a custom property.
+// Each gives only its far end, so a part fades from, or to, the opacity it rests at.
+@keyframes tx-touch-tip-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tx-touch-tip-fade-out {
+  to {
+    opacity: 0;
   }
 }
 </style>

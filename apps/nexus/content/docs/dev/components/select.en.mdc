@@ -276,7 +276,7 @@ code: |
 | `optionPadding` | `number` | `0` | Horizontal inset compensation for options. |
 | `animation` | `BaseAnchorAnimationOptions` | - | Animation options forwarded to Popover / BaseAnchor. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel surface style. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow strength. |
 | `panelRadius` | `number` | `18` | Panel corner radius. |
 | `panelPadding` | `number` | `0` | Panel padding. |

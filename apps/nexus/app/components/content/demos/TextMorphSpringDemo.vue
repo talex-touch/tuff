@@ -23,7 +23,7 @@ function next() {
       Change value
     </TxButton>
 
-    <TxCard variant="plain" background="mask" :padding="16" :radius="14">
+    <TxCard variant="plain" :padding="16" :radius="14">
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div
           v-for="row in rows"

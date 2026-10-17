@@ -1,6 +1,6 @@
 ---
 title: Compositor Thread Priority & Dual Keyframes
-description: High-frequency and looping animations must never trigger layout reflow; four GPU compositor properties and alternating dual keyframe names to eliminate DOM reflow.
+description: High-frequency and looping animations must never trigger layout reflow; four compositor properties and alternating dual keyframe names to eliminate DOM reflow.
 ---
 
 # Compositor Thread Priority & Dual Keyframes
@@ -16,7 +16,7 @@ The browser rendering pipeline comprises three sequential stages:
 
 If an animation mutates `width`, `height`, `margin`, or `top/left`, the engine forces full-page recalculations on every frame, plummeting framerates below 60Hz.
 
-## The Four Safe GPU Compositor Properties
+## The Four Safe Compositor Properties
 
 TuffEx strictly confines all high-frequency motion, micro-interactions and looping background effects to **four compositor properties**:
 

@@ -3,7 +3,7 @@
 
 <template>
   <div class="card-size-grid">
-    <TxCard size="small" variant="solid" background="glass" shadow="none" :padding="undefined">
+    <TxCard size="small" variant="solid" shadow="none" :padding="undefined">
       <div class="card-demo-title">
         size=small
       </div>
@@ -12,7 +12,7 @@
       </div>
     </TxCard>
 
-    <TxCard size="medium" variant="solid" background="glass" shadow="none">
+    <TxCard size="medium" variant="solid" shadow="none">
       <div class="card-demo-title">
         size=medium
       </div>
@@ -21,7 +21,7 @@
       </div>
     </TxCard>
 
-    <TxCard size="large" variant="solid" background="glass" shadow="none">
+    <TxCard size="large" variant="solid" shadow="none">
       <div class="card-demo-title">
         size=large
       </div>

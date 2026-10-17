@@ -106,7 +106,6 @@ function resetFilters() {
         v-model="selectedScope"
         :options="scopeOptions"
         :placeholder="labels.scope"
-        panel-background="glass"
       />
     </div>
 

@@ -68,9 +68,9 @@ code: |
 | `maskClosable` | `boolean` | `true` | Closes on a mask click or Escape. |
 | `preventAccidentalClose` | `boolean` | `false` | Blocks mask close and page exit, flashing a red warning glow. |
 | `globalMask` | `boolean` | `true` | Renders the shared body-level mask. |
-| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Built-in card surface. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Built-in card surface. |
 | `surfaceColor` | `string` | `''` | Surface base color; follows the theme by default. |
-| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` for `blur` / `glass` / `refraction` | Opacity of the card's base colour; always opaque under `pure`. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of the card's base colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
 | `speedBoost` | `number` | `1.12` | Time-scale boost after `speedBoostAt` progress. |
 | `speedBoostAt` | `number` | `0.7` | Animation progress at which `speedBoost` starts. |
 | `transitionName` | `string` | `'TxFlipOverlay-Mask'` | Vue transition name for the mask. |

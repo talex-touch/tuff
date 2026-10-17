@@ -16,7 +16,7 @@ const { t } = useI18n()
 
 <template>
   <div class="AssetBetaStep">
-    <TxCard variant="plain" background="mask" :radius="18" :padding="18" class="AssetBetaStep-Card">
+    <TxCard variant="plain" :radius="18" :padding="18" class="AssetBetaStep-Card">
       <div class="AssetBetaStep-Header">
         <p class="AssetBetaStep-Title">
           {{ props.title }}

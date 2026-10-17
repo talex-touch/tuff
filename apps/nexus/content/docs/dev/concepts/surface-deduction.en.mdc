@@ -73,6 +73,7 @@ stateDiagram-v2
     Settling --> Blur_Degraded: After 299ms
     Refraction_Active --> Flat: Frame budget minimal
     Blur_Degraded --> Flat: Frame budget minimal
-    Flat --> Refraction_Active: A later probe reads ok
+    Flat --> Blur_Degraded: A later probe reads reduced, or ok with power saving on
+    Flat --> Refraction_Active: A later probe reads ok, with power saving off
 ```
 A surface whose `mode` is `blur`, `glass` or `acrylic` keeps its own material at rest and goes round the same `Fallback_Mode` and `Settling` loop in motion. So a moving surface never drags a misaligned backdrop along, and it returns to full refraction once it stops.

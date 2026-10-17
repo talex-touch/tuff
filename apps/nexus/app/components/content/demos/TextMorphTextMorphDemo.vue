@@ -38,7 +38,7 @@ function next() {
       <TxSwitch v-model="debug" label="debug" />
     </div>
 
-    <TxCard variant="plain" background="mask" :padding="16" :radius="14">
+    <TxCard variant="plain" :padding="16" :radius="14">
       <div style="font-size: 20px; font-weight: 600; line-height: 1.4;">
         <TxTextMorph
           :text="phrase"

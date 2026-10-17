@@ -48,7 +48,7 @@ function toggle() {
           easing="cubic-bezier(0.2, 0, 0, 1)"
           outer-class="overflow-hidden"
         >
-          <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
+          <TxCard variant="plain" :padding="12" :radius="14" style="max-width: 360px;">
             <div style="font-size: 13px; line-height: 1.4;">
               <TxTextTransformer
                 mode="fade"
@@ -93,7 +93,7 @@ function toggle() {
           easing="cubic-bezier(0.2, 0, 0, 1)"
           outer-class="overflow-hidden"
         >
-          <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
+          <TxCard variant="plain" :padding="12" :radius="14" style="max-width: 360px;">
             <div style="font-size: 13px; line-height: 1.4;">
               <TxTextTransformer
                 mode="fade"

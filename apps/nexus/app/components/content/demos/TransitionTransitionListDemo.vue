@@ -20,7 +20,7 @@ const remove = () => {
 <template>
   <div v-if="locale === 'zh'">
       <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+        <TxCard variant="plain" :padding="14" :radius="14">
           <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
             <label class="tx-demo__row" style="gap: 8px;">
               <span class="tx-demo__label">preset</span>
@@ -40,7 +40,7 @@ const remove = () => {
           </div>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <TxTransition :preset="preset" group tag="div" :duration="180" style="display: grid; gap: 10px;">
             <div
               v-for="item in list"
@@ -55,7 +55,7 @@ const remove = () => {
   </div>
   <div v-else>
       <div class="tx-demo tx-demo__col" style="gap: 12px; width: 520px;">
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+        <TxCard variant="plain" :padding="14" :radius="14">
           <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
             <label class="tx-demo__row" style="gap: 8px;">
               <span class="tx-demo__label">preset</span>
@@ -75,7 +75,7 @@ const remove = () => {
           </div>
         </TxCard>
 
-        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
+        <TxCard variant="plain" :padding="14" :radius="14" style="width: 100%;">
           <TxTransition :preset="preset" group tag="div" :duration="180" style="display: grid; gap: 10px;">
             <div
               v-for="item in list"

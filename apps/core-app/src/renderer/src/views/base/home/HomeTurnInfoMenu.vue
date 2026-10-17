@@ -55,7 +55,6 @@ watch(open, (isOpen) => {
     :min-width="240"
     :panel-radius="12"
     :panel-padding="12"
-    panel-background="pure"
   >
     <template #trigger>
       <!-- display: contents — the wrapper exists only so closing can find the button to refocus. -->

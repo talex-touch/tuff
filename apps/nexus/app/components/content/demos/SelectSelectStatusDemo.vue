@@ -46,7 +46,7 @@ const labels = computed(() => {
       :placeholder="labels.warningPlaceholder"
     />
 
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+    <TxCard variant="plain" :padding="10" :radius="14">
       <div class="select-demo__hint">
         {{ labels.hint }}
       </div>

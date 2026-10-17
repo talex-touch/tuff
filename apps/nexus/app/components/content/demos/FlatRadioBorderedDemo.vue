@@ -12,7 +12,7 @@ const value = ref<'a' | 'b' | 'c'>('a')
       <TxFlatRadioItem value="c" label="Option C" />
     </TxFlatRadio>
 
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+    <TxCard variant="plain" :padding="10" :radius="14">
       <div class="tx-demo__meta">
         selected: {{ value }}
       </div>

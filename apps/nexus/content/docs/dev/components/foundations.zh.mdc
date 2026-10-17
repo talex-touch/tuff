@@ -35,22 +35,22 @@ $$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
 
 圆角弧线会向内侵占内容空间。为了防止输入框光标（Caret）切入圆弧，水平内边距必须完全覆盖圆角半径：
 $$Padding_{\text{horizontal}} \ge R$$
-单行文本容器的垂直与水平内边距保持 **0.65x 黄金光学比例**，抵消字体自带行高造成的头重脚轻感。
+单行文字包裹层的垂直内边距取水平内边距的 **0.6～0.75 倍**（TxModeChip、TxTag 都是 0.625），抵消字体自带行高造成的头重脚轻感。
 
 ## 表面材质与次表面折射（Surfaces & Refraction）
 
 ### Refraction（琉光折射）默认法则
 
-所有带有表面容器的组件（弹窗、抽屉、CoreBox 视窗、操作卡片），**默认材质一律且必须为 `refraction`**。
-若因极端场景需切换为 `flat` 或 `mask`，**必须经过用户明确手动确认**。
+所有带材质层的组件，**默认材质一律且必须为 `refraction`**：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxDrawer`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及经 `TxBaseAnchor` 渲染的弹出面板（`TxPopover`、`TxTooltip`、下拉与右键菜单、`TxSelect`、`TxSearchSelect`）的 `panelBackground`。
+若因极端场景要换成其他材质（如 `flat`、`mask`、`glass`），**必须经过用户明确手动确认**；运动中的降级与 `autoDetect` 的临时降级不改声明的材质，不算切换。详见《[Surface 8 种材质物理选型与确认门禁](/docs/dev/concepts/surface-taxonomy)》。
 
 ### 斯涅尔折射与 RGB 色散管线
 
-`TxBaseSurface` 结合 GPU 加速的 SVG Displacement Map 位移滤镜，模拟光线穿透棱镜时的斯涅尔偏折（Snell's Law）。Red、Green、Blue 通道被赋予微小的非对称角偏移，在边缘自然分离出微弱的光谱彩虹色相（Chromatic Dispersion），彻底打破塑料单调感。
+`TxBaseSurface` 的 `refraction` 以 `TxGlassSurface` 为玻璃层，用 SVG 位移贴图（Displacement Map）模拟光线穿透棱镜时的斯涅尔偏折（Snell's Law）：Red、Green、Blue 三个通道各自位移一次，幅度略有不同（默认依次为 −180、−170、−160），通道错开后在折射边缘分离出微弱的光谱彩边（Chromatic Dispersion），打破塑料般的单调感。
 
-### 120Hz 运动降级与 140ms 弹性恢复
+### 120Hz 运动降级与 140ms 迟滞恢复
 
-在 120Hz 高刷屏拖拽窗口时，复杂的折射滤镜会在 **0ms 内瞬间降级为极轻量的 `mask` 材质**，GPU 负荷在 1 帧内归零；运动平息后经过 **140ms 滞后缓冲弹性恢复**，兼顾极致质感与丝绸般跟手性。
+材质随元素移动时，`backdrop-filter` 的取样落后于元素的位置，滤镜层会拖着一块错位的背景走；在 120Hz 屏幕上拖动窗口时，重滤镜还要挤占只有 8.3ms 的帧预算。所以 `TxBaseSurface` 一运动就**当帧降级（0ms，不做防抖）**：`blur`、`glass`、`acrylic` 整体换成 `fallbackMode`（默认 `mask`）；`refraction` 不换材质，玻璃层与滤镜层在 140ms 内淡出，换上一层半透明遮盖。运动结束后再恢复，`autoDetect` 的信号要先安静 **140ms**，防止手势在阈值附近颤抖时反复切换：`refraction` 随即分层恢复，287ms 撤完遮盖；其他材质先保持降级 299ms 再换回。详见《[材质自动推断与 120Hz 运动降级](/docs/dev/concepts/surface-deduction)》。
 
 ## 色彩科学与暗色光学（Color Science）
 
@@ -59,40 +59,43 @@ $$Padding_{\text{horizontal}} \ge R$$
 为什么不用绝对纯黑 `#000000`？
 1. **防 OLED 拖尾残影**：纯黑导致子像素关闭，滚动时会产生令人眩晕的紫色拖尾（Purple Smearing）。
 2. **保留阴影空间**：阴影的物理本质是比底板更暗。`#141414` 为弥散投影保留了空间纵深。
-3. **三层阶梯**：底板 `--tx-bg-color: #141414`、容器 `--tx-fill-color-blank: #1c1c1e`、悬浮 `--tx-fill-color-light: #252528`。
+3. **三层阶梯**：L0 底板 `--tx-bg-color: #141414`，L1 容器 `--tx-bg-color-overlay: #1d1e1f`（卡片、对话框、抽屉、弹出浮层），L2 高亮 `--tx-fill-color-light: #262727`（悬停、选中）。暗色下 `--tx-fill-color-blank` 是 `transparent`，不承担容器色。
 
 ### 暗色模式视网膜光晕字重补偿
 
 根据亥姆霍兹视网膜光渗效应（Optical Irradiation），白字在暗黑底板上会向外发光扩散，**看起来比浅色模式下同字重的字更粗**，粗多少随亮度、对比度和字号而变，没有固定的百分比。
-TuffEx 目前没有在暗色主题里自动下调字重；字体带字重轴时，建议在暗色主题里这样微调：
-- 默认正文：`400`（浅色） $\to$ `380`～`400`（暗色）
-- 行内强调：`500`（浅色） $\to$ `460`（暗色）
-- 小标题：`600`（浅色） $\to$ `560`（暗色）
+TuffEx 在暗色主题里把三档强调字重各调轻 40，组件以 `var(--tx-font-weight-medium, 500)` 这样的写法读取，切到暗色主题就随之变轻：
+- 默认正文：`400`，不下调（再低，静态字体就会落到 Light 字面）
+- 行内强调 `--tx-font-weight-medium`：`500`（浅色） $\to$ `460`（暗色）
+- 小标题与按钮 `--tx-font-weight-semibold`：`600`（浅色） $\to$ `560`（暗色）
+- 加粗与数值 `--tx-font-weight-bold`：`700`（浅色） $\to$ `660`（暗色）
+
+只有带字重轴的字体（San Francisco、Segoe UI Variable、Inter Variable）会真正画细；PingFang SC、Microsoft YaHei 这类静态字体把这些值归回浅色模式的同一个字面，补偿不生效，也不会变粗。每个暗色值都落在（浅色值 − 100，浅色值］之内，由 Sass 函数 `tx-dark-weight` 在构建时检查。默认字体栈在没装 Inter 的 macOS 上由 PingFang SC 绘制，看不出这档微调。详见《[暗色视网膜光晕与字重微调补偿](/docs/dev/concepts/irradiation-tuning)》。
 
 ### color-mix 墨水融合与 WCAG 4.5:1
 
-语义文字颜色绝不使用孤立纯色相，而是与主墨水在 sRGB 色彩空间动态混色：
-`color: color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`。
-在深浅两套主题下实测对比度均稳定维持在 **4.58:1 ～ 4.81:1**，严格符合 WCAG 2.1 AA 级无障碍标准。
+语义文字颜色绝不使用孤立纯色相，而是与主墨水在 sRGB 色彩空间动态混色，例如 TxModeChip 危险态的墨水：
+`color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`。
+占比按色相分开定：危险 55%，成功与警告 45%，信息取主色 50%。13px 文字放在 `-light-9` 淡底上，纯色相只有 **2.03:1～2.61:1**，混色后实测 **5.07:1～5.32:1**，达到 WCAG 2.1 AA 的 4.5:1。
 
 ## 排版工程与 13–14px 基准（Typography）
 
 - **13px～14px 生产力基准**：桌面生产力工具避免采用营销类大字号，确保关键上下文落在人眼 2 度中央凹扫读视窗内。
-- **等宽代码 0.9em 调和**：等宽编程字体 X 高度比无衬线字体高出约 15%，行内 `<code>` 必须缩减至 `0.9em` 保持垂直行间节奏。
-- **现代软换行**：长段落采用 `text-wrap: pretty` 自动规避段末单字孤行（Orphans）；短标题采用 `text-wrap: balance`；严禁硬编码 `<br>`。
-- **正文零 Tracking 铁律**：正文严禁触碰 `letter-spacing`，防止破坏字体字偶间距（Kerning Pairs）。
+- **等宽代码 0.9em 调和**：等宽字体的 x 高度略高于同字号的无衬线字体（按 macOS 自带字体实测，高出约 1.7%～7.7%），行内 `<code>` 缩到 `0.9em` 并留在基线上，保持垂直行间节奏。`.tx-prose` 里不在 `<pre>` 中的 `<code>` 自动套用，其他地方加 `.tx-inline-code`。
+- **现代软换行**：短标题采用 `text-wrap: balance`（工具类 `.tx-heading`，`TxModal` 的标题已内置）；长段落采用 `text-wrap: pretty` 自动规避段末单字孤行（Orphans；`.tx-prose p`、`.tx-description`、`.tx-help-text`）；严禁硬编码 `<br>`。流式生成的段落例外：还在写入时按普通断行，写完再换回 `pretty`。
+- **正文零 Tracking 铁律**：正文严禁触碰 `letter-spacing`。它不会去掉字偶间距（Kerning Pairs），而是在其外给相邻字符统一加距，冲淡厂商调好的字距节奏；字距不为 0 时，浏览器也不再应用 `fi`、`fl` 这类可选连字。只有 ≤11px 的全大写微型标签、≥17px 的标题与展示数字、头像缩写三类豁免。
 
 ## 微动效与微交互节拍（Micro-Motion）
 
-- **动效是空间锚点**：微交互严格控制在 **90ms～180ms**，动画绝不允许阻碍下一次点击或键盘输入。
+- **动效是空间锚点**：绝大部分微交互压缩在 **90ms～180ms** 之间，动画绝不允许阻碍下一次点击或键盘输入。
 - **悬停必须 0ms 瞬间响应**：严禁在 `:hover` 上过渡背景色和文字颜色（防止产生“泡在浆糊里”的迟滞感）；仅状态形变允许挂载 `.is-morphing` 类名过渡。
 - **90ms+90ms 确认律动**：菜单点击后经历“90ms 清除高亮 + 90ms 激活脉冲”，消除点击即消失的不确定感。
-- **四大 GPU 合成属性**：仅允许 `translate`、`scale`、`rotate`、`opacity`，Keyframes 严禁引入 CSS 变量，双 Keyframe 名字交替重播规避 DOM 重排。
+- **四大合成器属性**：高频动画、加载效果与循环特效只动 `translate`、`scale`、`rotate`、`opacity`，整段交给合成器线程，主线程繁忙时也跟得上刷新率。关键帧里可以用 `var()` 给起点、终点和幅度，但不给自定义属性本身做关键帧动画（它每一帧都在主线程上插值）；重播动画靠两个关键帧名字交替，不用 `void el.offsetWidth` 强制重排。
 
 ## AI 流式生成与防抖底线（Streaming & Anti-Jitter）
 
-- **useStreamPacer 恒定节拍器**：24ms 步进释放词元，600ms 积压强制加速排空，平滑大模型网络传输抖动。
-- **双层 Reserve 镜像占位**：预先占据完整网格高度，彻底消灭流式输出中的视窗抖动与滚动条跳跃。
+- **useStreamPacer 节拍器**：至少每 24ms 释放一个词元；积压时按期限均匀提速，每个词元最迟在到达后 600ms 显示；源结束后，剩余积压在 320ms 内放完。网络一次倾泻下来的大块文字，读起来是一段加快的字流。
+- **双层 Reserve 镜像占位**：重放已完成的内容时，隐形的占位层（`aria-hidden`、`inert`、`visibility: hidden`）先撑住完整高度，文字放出期间容器不再长高、滚动条不跳。`reserve` 默认关闭；实时流式输出（包括重新生成）还不知道最终高度，容器仍随内容增高。
 - **即刻可读与框选复制**：文字释放至 DOM 即为纯文本节点，严禁 `user-select: none`，用户在生成过程中随时按下 `Cmd+C` 立即完成复制。
 
 ## 颜色体系令牌

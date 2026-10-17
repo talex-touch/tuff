@@ -3,7 +3,7 @@
 
 <template>
   <div class="card-empty-shell">
-    <TxCard class="card-empty-mask" variant="plain" background="mask" shadow="none" :padding="16">
+    <TxCard class="card-empty-mask" variant="plain" shadow="none" :padding="16">
       <TxEmpty title="Nothing here" description="Create your first item to get started.">
         <template #action>
           <TxButton variant="primary" size="sm">

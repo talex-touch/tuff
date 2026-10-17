@@ -25,7 +25,7 @@ This section systematically breaks down the "why" and "how" behind every design 
 ## Color Science and Dark Mode
 
 - **[#141414 Canvas & 3-Tier Elevation](./dark-palette.en.mdc)** — Why not pure `#000000`? Preventing OLED purple smearing, preserving shadows, and the 3-tier dark grey scale.
-- **[Retinal Irradiation & Weight Tuning](./irradiation-tuning.en.mdc)** — Helmholtz optical irradiation illusion, perceived expansion of white text on dark, variable font 460/560 tuning, and discrete font fallbacks.
+- **[Retinal Irradiation & Weight Tuning](./irradiation-tuning.en.mdc)** — Helmholtz optical irradiation illusion, perceived expansion of white text on dark, the dark theme's 460/560/660 weight tuning, and static font fallbacks.
 - **[Bipolar Semantic Tints & WCAG 4.5:1](./color-mix-contrast.en.mdc)** — Resolving dark mode `-light-9` distortion, `color-mix` ink fusion, and WCAG 4.5:1 verified across all themes.
 - **[Light Modes & Hue Sorting](./light-modes.en.mdc)** — Why `plus-lighter` turns grey on light backgrounds, and the dual independent hue ordering pipeline.
 
@@ -38,7 +38,7 @@ This section systematically breaks down the "why" and "how" behind every design 
 
 - **[Micro-Motion Philosophy & Sub-100ms Hover](./micro-motion.en.mdc)** — Motion as spatial anchors not entertainment, 0ms instant hover response, and `.is-morphing` state class isolation.
 - **[90ms+90ms Confirmation & Spring Physics](./activation-and-springs.en.mdc)** — Eliminating dismissal uncertainty with a two-beat rhythm, and the second-order damped spring equation.
-- **[Compositor Thread Priority & Dual Keyframes](./compositor-and-replay.en.mdc)** — Four GPU compositor properties, keeping variables out of keyframes, and dual keyframe name replay.
+- **[Compositor Thread Priority & Dual Keyframes](./compositor-and-replay.en.mdc)** — Four compositor properties for high-frequency animation, `var()` in keyframes versus animating custom properties, and dual keyframe name replay.
 
 ## AI Native Streaming Interfaces
 

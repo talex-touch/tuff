@@ -262,7 +262,8 @@ this.hide()
 - Changing `CoreBoxEvents.metaOverlay.panelState`, `MetaOverlayManager.publishPanelState` or its
   hand-back watch, `useMetaPanelFill`, or the `CoreBox-Wrapper--meta-fill` rule.
 - Why it exists: CoreBox has no opaque surface. Its only paint is the teleported `.CoreBox-Mask`
-  (75% `--tx-fill-color`) over the window material (vibrancy on macOS, Mica on Windows), so space
+  (a TuffEx `refraction` surface with `systemBackdrop`: a 75% `--tx-fill-color` veil, its tint and
+  rim, no backdrop filter) over the window material (vibrancy on macOS, Mica on Windows), so space
   the panel adds under the results shows a blur of the desktop behind CoreBox, which the overlay's
   ~10% dim does not hide. Only main knows whether it grew the window.
 

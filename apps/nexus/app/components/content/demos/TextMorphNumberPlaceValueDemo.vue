@@ -31,7 +31,7 @@ function bump(delta: number) {
       <TxSwitch v-model="numbers" label="numbers" />
     </div>
 
-    <TxCard variant="plain" background="mask" :padding="16" :radius="14">
+    <TxCard variant="plain" :padding="16" :radius="14">
       <div style="font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums;">
         <TxTextMorph :text="`$${total.toLocaleString('en')}`" :numbers="numbers" />
       </div>

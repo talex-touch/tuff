@@ -147,7 +147,6 @@ watch(
 
     <TxCard
       variant="plain"
-      background="mask"
       shadow="none"
       :radius="10"
       :padding="0"

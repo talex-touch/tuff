@@ -101,7 +101,7 @@ function decrement() {
       :animation="{ size: { enabled: true, durationMs: 260, easing: 'ease' } }"
     >
       <TxTabItem :name="labels.overviewTab" activation icon-class="i-carbon-dashboard">
-        <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+        <TxCard variant="solid" shadow="soft" :radius="18" :padding="12">
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <div style="font-weight: 650;">
               {{ labels.overviewTitle }}
@@ -122,7 +122,7 @@ function decrement() {
       </TxTabItem>
 
       <TxTabItem :name="labels.detailsTab" icon-class="i-carbon-list">
-        <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+        <TxCard variant="solid" shadow="soft" :radius="18" :padding="12">
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
               <div style="font-weight: 650;">
@@ -164,7 +164,7 @@ function decrement() {
       </TxTabItem>
 
       <TxTabItem :name="labels.formTab" icon-class="i-carbon-settings">
-        <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+        <TxCard variant="solid" shadow="soft" :radius="18" :padding="12">
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <div style="font-weight: 650;">
               {{ labels.formTitle }}
