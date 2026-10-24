@@ -5,6 +5,7 @@ import type {
   IPluginBuildInfo,
   IPluginDev,
   IPluginFeature,
+  PluginStorageSyncManifest,
   SdkApiVersion
 } from '@talex-touch/utils/plugin'
 import type {
@@ -86,6 +87,82 @@ interface PluginManifest {
    * Permission reasons for user display
    */
   permissionReasons?: ManifestPermissionReasons
+  storageSync?: PluginStorageSyncManifest
+}
+
+type StorageSyncManifestResolution =
+  | { mode: 'legacy' }
+  | { mode: 'allowlist'; manifest: PluginStorageSyncManifest }
+  | { mode: 'invalid'; reason: string }
+
+function resolveStorageSyncManifest(value: unknown): StorageSyncManifestResolution {
+  if (value === undefined) {
+    return { mode: 'legacy' }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { mode: 'invalid', reason: 'storageSync must be an object.' }
+  }
+
+  const storageSyncRecord = value as Record<string, unknown>
+  const rawFiles = storageSyncRecord.files
+  if (!Array.isArray(rawFiles) || rawFiles.length > 64) {
+    return { mode: 'invalid', reason: 'storageSync.files must contain at most 64 entries.' }
+  }
+
+  const seen = new Set<string>()
+  const files: Array<PluginStorageSyncManifest['files'][number]> = []
+  for (const rawFile of rawFiles) {
+    if (!rawFile || typeof rawFile !== 'object' || Array.isArray(rawFile)) {
+      return { mode: 'invalid', reason: 'Every storageSync.files entry must be an object.' }
+    }
+
+    const record = rawFile as Record<string, unknown>
+    const pathValue = record.path
+    const kind = record.kind
+    const displayName = record.displayName
+    const rawPath = typeof pathValue === 'string' ? pathValue.trim() : ''
+    const normalizedPath = rawPath.replaceAll('\\', '/')
+    const segments = normalizedPath.split('/')
+    if (
+      !normalizedPath ||
+      normalizedPath.length > 256 ||
+      normalizedPath.includes('\0') ||
+      normalizedPath.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalizedPath) ||
+      !normalizedPath.toLowerCase().endsWith('.json') ||
+      segments.some((segment) => !segment || segment === '.' || segment === '..') ||
+      seen.has(normalizedPath)
+    ) {
+      return {
+        mode: 'invalid',
+        reason: `Invalid or duplicate storageSync path: ${rawPath || '<empty>'}.`
+      }
+    }
+    if (kind !== 'settings' && kind !== 'data') {
+      return { mode: 'invalid', reason: `Invalid storageSync kind for ${normalizedPath}.` }
+    }
+    if (
+      displayName !== undefined &&
+      typeof displayName !== 'string' &&
+      !isLocalizedText(displayName)
+    ) {
+      return { mode: 'invalid', reason: `Invalid storageSync displayName for ${normalizedPath}.` }
+    }
+
+    const normalizedDisplayName =
+      displayName === undefined ? undefined : (displayName as LocalizedTextValue)
+    seen.add(normalizedPath)
+    files.push({
+      path: normalizedPath,
+      kind,
+      ...(normalizedDisplayName === undefined ? {} : { displayName: normalizedDisplayName })
+    })
+  }
+
+  return {
+    mode: 'allowlist',
+    manifest: Object.freeze({ files: Object.freeze(files) })
+  }
 }
 
 type LocalizedPluginFeature = Omit<IPluginFeature, 'name' | 'desc' | 'keywords'> & {
@@ -243,6 +320,10 @@ abstract class BasePluginLoader {
     }
 
     this.touchPlugin.name = manifestPluginName || this.pluginName
+    this.touchPlugin.pluginId =
+      typeof pluginInfo.id === 'string' && pluginInfo.id.trim()
+        ? pluginInfo.id.trim()
+        : this.touchPlugin.name
     this.touchPlugin.displayName = manifestDisplayName || this.touchPlugin.name
     this.touchPlugin.localizedName = localizedName
     this.touchPlugin.localizedDescription = localizedDescription
@@ -270,6 +351,22 @@ abstract class BasePluginLoader {
       typeof pluginInfo.category === 'string' && pluginInfo.category.trim()
         ? pluginInfo.category.trim()
         : undefined
+    const storageSyncResolution = resolveStorageSyncManifest(pluginInfo.storageSync)
+    this.touchPlugin.setStorageSyncPolicy(
+      storageSyncResolution.mode,
+      storageSyncResolution.mode === 'allowlist' ? storageSyncResolution.manifest : undefined
+    )
+    if (storageSyncResolution.mode === 'invalid') {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: storageSyncResolution.reason,
+        source: 'manifest.json',
+        code: 'PLUGIN_STORAGE_SYNC_MANIFEST_INVALID',
+        suggestion:
+          'Declare exact JSON paths under storageSync.files, or omit storageSync for legacy compatibility.',
+        timestamp: Date.now()
+      })
+    }
 
     // SDK version hard-cut gate
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)

@@ -13,7 +13,9 @@ import type {
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
-  PluginMeta
+  PluginMeta,
+  PluginStorageSyncKind,
+  PluginStorageSyncManifest
 } from '@talex-touch/utils/plugin'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
 import type {
@@ -362,6 +364,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   dev: IPluginDev
   name: string
+  pluginId: string
   displayName?: string
   localizedName?: LocalizedTextValue
   localizedDescription?: LocalizedTextValue
@@ -372,6 +375,8 @@ export class TouchPlugin implements ITouchPlugin {
   logger: PluginLogger
   platforms: IPlatform
   category?: string
+  storageSync?: PluginStorageSyncManifest
+  storageSyncMode: 'legacy' | 'allowlist' | 'invalid' = 'legacy'
   meta?: PluginMeta
   build?: IPluginBuildInfo
   searchProviders?: SearchProviderDescriptor[]
@@ -993,6 +998,7 @@ export class TouchPlugin implements ITouchPlugin {
     options?: { skipDataInit?: boolean; runtime?: TouchPluginRuntimeContext }
   ) {
     this.name = name
+    this.pluginId = name
     this.icon = icon
     this.version = version
     this.desc = desc
@@ -3549,6 +3555,53 @@ export class TouchPlugin implements ITouchPlugin {
     if (!fse.existsSync(configPath)) return []
 
     return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
+  }
+
+  setStorageSyncPolicy(
+    mode: 'legacy' | 'allowlist' | 'invalid',
+    manifest?: PluginStorageSyncManifest
+  ): void {
+    this.storageSyncMode = mode
+    this.storageSync = manifest
+  }
+
+  getPluginStorageSyncFiles(): string[] {
+    if (this.storageSyncMode === 'invalid') return []
+    if (this.storageSyncMode === 'legacy') return this.listPluginFiles()
+
+    const configPath = this.getConfigPath()
+    return (this.storageSync?.files ?? [])
+      .map((file) => file.path)
+      .filter((fileName) => {
+        const safePath = resolveSafePath(configPath, fileName)
+        return Boolean(
+          safePath.resolvedPath &&
+          fse.existsSync(safePath.resolvedPath) &&
+          fse.statSync(safePath.resolvedPath).isFile()
+        )
+      })
+  }
+
+  isPluginStorageSyncFile(fileName: string): boolean {
+    const normalized = fileName.trim().replaceAll('\\', '/')
+    if (!normalized) return false
+    if (this.storageSyncMode === 'invalid') return false
+    if (this.storageSyncMode === 'legacy') {
+      return !normalized.includes('/') && normalized.endsWith('.json')
+    }
+    return this.storageSync?.files.some((file) => file.path === normalized) === true
+  }
+  getPluginStorageSyncMetadata(fileName: string): {
+    kind: PluginStorageSyncKind
+    displayName?: string
+  } {
+    const entry = this.storageSync?.files.find((file) => file.path === fileName)
+    return {
+      kind: entry?.kind ?? 'settings',
+      ...(typeof entry?.displayName === 'string' && entry.displayName.trim()
+        ? { displayName: entry.displayName.trim() }
+        : {})
+    }
   }
 
   /**

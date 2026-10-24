@@ -56,6 +56,18 @@ export interface PluginMeta {
    */
   internal?: boolean
 }
+export type PluginStorageSyncKind = 'settings' | 'data'
+
+export interface PluginStorageSyncFile {
+  readonly path: string
+  readonly kind: PluginStorageSyncKind
+  readonly displayName?: LocalizedTextValue
+}
+
+export interface PluginStorageSyncManifest {
+  readonly files: readonly PluginStorageSyncFile[]
+}
+
 
 export interface DevServerHealthCheckResult {
   healthy: boolean
@@ -659,6 +671,11 @@ export interface IManifest {
    * Optional supported runtime platforms declared by the manifest.
    */
   platforms?: Record<string, boolean>
+  /**
+   * Explicit allowlist for plugin files eligible for account sync.
+   * Omitted means legacy top-level JSON compatibility mode.
+   */
+  storageSync?: PluginStorageSyncManifest
   /**
    * Optional feature declarations exposed by the plugin runtime.
    */
