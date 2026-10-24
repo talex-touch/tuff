@@ -38,7 +38,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const { releases, fetchReleases } = useReleases()
+const { fetchLatestRelease } = useReleases()
 const { data: updatesPayload } = await useAsyncData('public-updates', () =>
   requestJson<{ updates: DashboardUpdate[] }>('/api/updates'),
 )
@@ -46,6 +46,7 @@ const { data: updatesPayload } = await useAsyncData('public-updates', () =>
 // Detect user's platform
 const userPlatform = ref(detectPlatform())
 const userArch = ref(detectArch())
+const latestRelease = ref<AppRelease | null>(null)
 
 onMounted(() => {
   userPlatform.value = detectPlatform()
@@ -53,21 +54,8 @@ onMounted(() => {
 })
 
 onMounted(async () => {
-  await fetchReleases({
-    channel: STABLE_RELEASE_CHANNEL,
-    status: 'published',
-    includeAssets: true,
-  })
+  latestRelease.value = await fetchLatestRelease(STABLE_RELEASE_CHANNEL)
 })
-
-const filteredReleases = computed(() => {
-  return releases.value
-    .filter(r => r.channel === STABLE_RELEASE_CHANNEL)
-    .slice()
-    .sort((a, b) => new Date(b.publishedAt ?? b.createdAt).getTime() - new Date(a.publishedAt ?? a.createdAt).getTime())
-})
-
-const latestRelease = computed<AppRelease | null>(() => filteredReleases.value[0] ?? null)
 
 // Get download asset for user's platform
 const primaryDownload = computed(() => {

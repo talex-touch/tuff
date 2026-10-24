@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { onMounted, shallowRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 
 /**
@@ -12,6 +12,7 @@ import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 const { mounted, mountSearch, closeSearch } = useGlobalSearchState()
 const palette = shallowRef<Component | null>(null)
 let loading: Promise<void> | null = null
+const searchIntentDisposers: Array<() => void> = []
 
 /**
  * Loads the palette here rather than through its Lazy component, which keeps a failed load for
@@ -37,13 +38,26 @@ watch(mounted, (value) => {
     loadPalette()
 }, { immediate: true })
 
-// Mounts the closed palette once the page is idle, so the first ⌘K or click does not
-// wait on its chunk before anything appears.
+function mountSearchOnIntent() {
+  mountSearch()
+  for (const dispose of searchIntentDisposers)
+    dispose()
+  searchIntentDisposers.length = 0
+}
+
+// The search chunk is non-critical on a passive landing visit. Start it on the first real
+// interaction; the boot script already queues an early shortcut/click until the boundary resolves.
 onMounted(() => {
-  if ('requestIdleCallback' in window)
-    window.requestIdleCallback(mountSearch, { timeout: 4000 })
-  else
-    setTimeout(mountSearch, 2000)
+  for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+    window.addEventListener(eventName, mountSearchOnIntent, { passive: true, once: true })
+    searchIntentDisposers.push(() => window.removeEventListener(eventName, mountSearchOnIntent))
+  }
+})
+
+onBeforeUnmount(() => {
+  for (const dispose of searchIntentDisposers)
+    dispose()
+  searchIntentDisposers.length = 0
 })
 </script>
 
