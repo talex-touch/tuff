@@ -83,10 +83,24 @@ interface StorageDetailsResponse {
     last_updated_at: string
     sample_items: string[]
   }>
+  blob_usage: {
+    active: { bytes: number, objects: number }
+    staged: { bytes: number, objects: number }
+    orphaned: { bytes: number, objects: number }
+    delete_failed: { bytes: number, objects: number }
+    deleted: { bytes: number, objects: number }
+  }
   items: Array<{
     item_id: string
     type: string
     qualified_name: string | null
+    plugin_id: string | null
+    plugin_display_name: string | null
+    file_path: string | null
+    file_display_name: string | null
+    kind: 'settings' | 'data' | null
+    storage_state: 'inline' | 'blob'
+    lifecycle_status: 'active' | 'deleted'
     category: string
     category_label: string
     payload_size: number
@@ -364,6 +378,38 @@ const detailsData = ref<StorageDetailsResponse | null>(null)
 const syncDetailSummary = computed(() => detailsData.value?.summary ?? null)
 const syncDetailCategories = computed(() => detailsData.value?.categories ?? [])
 const syncDetailItems = computed(() => detailsData.value?.items ?? [])
+const syncBlobUsage = computed(() => detailsData.value?.blob_usage ?? null)
+
+const syncDetailPluginGroups = computed(() => {
+  const groups = new Map<string, {
+    key: string
+    label: string
+    count: number
+    totalBytes: number
+    items: StorageDetailsResponse['items']
+  }>()
+  for (const item of syncDetailItems.value) {
+    const isPlugin = Boolean(item.plugin_id || item.plugin_display_name || item.qualified_name?.startsWith('plugin::'))
+    if (!isPlugin) continue
+    const key = item.plugin_id || item.plugin_display_name || item.qualified_name?.split('::')[1]?.split('::')[0] || 'unknown-plugin'
+    const group = groups.get(key) ?? {
+      key,
+      label: item.plugin_display_name || item.plugin_id || key,
+      count: 0,
+      totalBytes: 0,
+      items: []
+    }
+    group.count += 1
+    group.totalBytes += item.payload_size
+    group.items.push(item)
+    groups.set(key, group)
+  }
+  return Array.from(groups.values()).sort((left, right) => right.totalBytes - left.totalBytes)
+})
+
+const syncDetailOtherItems = computed(() => syncDetailItems.value.filter((item) =>
+  !(item.plugin_id || item.plugin_display_name || item.qualified_name?.startsWith('plugin::'))
+))
 
 function resolveFetchErrorMessage(error: unknown): string {
   if (!error || typeof error !== 'object') {
@@ -411,10 +457,11 @@ function refreshSyncDetails(): void {
 }
 
 function resolveItemName(item: StorageDetailsResponse['items'][number]): string {
-  if (item.qualified_name) {
-    return item.qualified_name
+  const fileName = item.file_display_name || item.file_path || item.qualified_name || item.item_id
+  if (item.plugin_display_name && fileName !== item.plugin_display_name) {
+    return `${item.plugin_display_name} · ${fileName}`
   }
-  return item.item_id
+  return fileName
 }
 
 function resolveItemStatus(item: StorageDetailsResponse['items'][number]): string {
@@ -793,6 +840,21 @@ watch(showDetailsOverlay, (open) => {
                   </div>
                 </div>
               </div>
+              <div v-if="syncBlobUsage" class="StorageDetailOverlay-BillingGrid">
+                <div class="StorageDetailOverlay-BillingCard">
+                  <strong>{{ t('dashboard.storage.syncBlobActive', '当前 Blob') }}</strong>
+                  <span>{{ formatBytes(syncBlobUsage.active.bytes) }} · {{ syncBlobUsage.active.objects }} 个</span>
+                </div>
+                <div class="StorageDetailOverlay-BillingCard">
+                  <strong>{{ t('dashboard.storage.syncBlobPending', '待回收') }}</strong>
+                  <span>{{ formatBytes(syncBlobUsage.staged.bytes + syncBlobUsage.orphaned.bytes) }} · {{ syncBlobUsage.staged.objects + syncBlobUsage.orphaned.objects }} 个</span>
+                </div>
+                <div class="StorageDetailOverlay-BillingCard">
+                  <strong>{{ t('dashboard.storage.syncBlobFailed', '回收失败') }}</strong>
+                  <span>{{ formatBytes(syncBlobUsage.delete_failed.bytes) }} · {{ syncBlobUsage.delete_failed.objects }} 个</span>
+                </div>
+              </div>
+
 
               <div class="space-y-3">
                 <h3 class="StorageDetailOverlay-SectionTitle">
@@ -838,9 +900,45 @@ watch(showDetailsOverlay, (open) => {
                 <h3 class="StorageDetailOverlay-SectionTitle">
                   {{ t('dashboard.storage.syncDetailItems', '最近同步项') }}
                 </h3>
-                <ul v-if="syncDetailItems.length" class="StorageDetailOverlay-ItemList">
+                <div v-if="syncDetailPluginGroups.length" class="StorageDetailOverlay-PluginGroups">
+                  <article
+                    v-for="group in syncDetailPluginGroups"
+                    :key="group.key"
+                    class="StorageDetailOverlay-PluginGroup"
+                  >
+                    <div class="StorageDetailOverlay-PluginGroupHead">
+                      <strong>{{ group.label }}</strong>
+                      <span>{{ group.count }} 个文件 · {{ formatBytes(group.totalBytes) }}</span>
+                    </div>
+                    <ul class="StorageDetailOverlay-ItemList">
+                      <li
+                        v-for="item in group.items"
+                        :key="item.item_id"
+                        class="StorageDetailOverlay-ItemRow"
+                      >
+                        <div class="StorageDetailOverlay-ItemMain">
+                          <div class="StorageDetailOverlay-ItemName">
+                            {{ item.file_display_name || item.file_path || resolveItemName(item) }}
+                          </div>
+                          <div class="StorageDetailOverlay-ItemMeta">
+                            <span class="StorageDetailOverlay-ItemBadge">
+                              {{ resolveCategoryLabel(item.category, item.category_label) }}
+                            </span>
+                            <span>{{ formatBytes(item.payload_size) }}</span>
+                            <span>{{ formatTime(item.updated_at) }}</span>
+                            <span>{{ resolveItemStatus(item) }}</span>
+                          </div>
+                        </div>
+                        <div class="text-xs text-black/45 dark:text-white/45">
+                          {{ item.type }}
+                        </div>
+                      </li>
+                    </ul>
+                  </article>
+                </div>
+                <ul v-if="syncDetailOtherItems.length" class="StorageDetailOverlay-ItemList">
                   <li
-                    v-for="item in syncDetailItems"
+                    v-for="item in syncDetailOtherItems"
                     :key="item.item_id"
                     class="StorageDetailOverlay-ItemRow"
                   >
@@ -862,10 +960,10 @@ watch(showDetailsOverlay, (open) => {
                     </div>
                   </li>
                 </ul>
-                <p v-else class="text-sm text-black/55 dark:text-white/55">
+                <p v-if="!syncDetailPluginGroups.length && !syncDetailOtherItems.length" class="text-sm text-black/55 dark:text-white/55">
                   {{ t('dashboard.storage.syncDetailItemsEmpty', '暂无同步项') }}
                 </p>
-              </div>
+            </div>
             </div>
             <div v-else class="StorageDetailOverlay-State">
               {{ t('dashboard.storage.syncDetailEmpty', '暂无同步数据') }}
@@ -1311,6 +1409,54 @@ watch(showDetailsOverlay, (open) => {
   padding: 2px 8px;
   color: var(--tx-text-color-secondary);
   background: color-mix(in srgb, var(--tx-bg-color-primary) 65%, transparent);
+}
+
+.StorageDetailOverlay-BillingGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.StorageDetailOverlay-BillingCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--tx-border-color-lighter);
+  padding: 10px;
+  background: color-mix(in srgb, var(--tx-bg-color-secondary) 78%, transparent);
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.StorageDetailOverlay-BillingCard strong {
+  color: var(--tx-text-color-primary);
+}
+
+.StorageDetailOverlay-PluginGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.StorageDetailOverlay-PluginGroup {
+  border-radius: 12px;
+  border: 1px solid var(--tx-border-color-lighter);
+  padding: 10px;
+  background: color-mix(in srgb, var(--tx-bg-color-secondary) 55%, transparent);
+}
+
+.StorageDetailOverlay-PluginGroupHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.StorageDetailOverlay-PluginGroupHead strong {
+  color: var(--tx-text-color-primary);
 }
 
 .StorageDetailOverlay-ItemList {
