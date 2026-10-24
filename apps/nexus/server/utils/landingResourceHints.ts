@@ -1,4 +1,5 @@
 const IMAGE_PREFETCH_LINK_RE = /<link\b(?=[^>]*\brel=(["'])prefetch\1)(?=[^>]*\bas=(["'])image\2)[^>]*>/gi
+const MODULE_PRELOAD_LINK_RE = /<link\b(?=[^>]*\brel=(['"])modulepreload\1)[^>]*>/gi
 
 function normalizeRoutePath(path: string | null | undefined) {
   if (!path)
@@ -28,4 +29,11 @@ export function stripLandingImagePrefetches(html: string, routePath?: string | n
     return html
 
   return html.replace(IMAGE_PREFETCH_LINK_RE, '')
+}
+
+export function stripLandingModulepreloads(html: string, routePath?: string | null) {
+  if (!isLandingRoute(routePath))
+    return html
+
+  return html.replace(MODULE_PRELOAD_LINK_RE, '')
 }

@@ -1,27 +1,21 @@
-import { installErrorBuffer, scheduleAfterIdle } from '~/utils/sentry-deferred'
+import { installErrorBuffer } from '~/utils/sentry-deferred'
 
 /**
- * How long after mount the SDK may wait for an idle slot before it is loaded regardless.
- * Long enough for the demos above the fold to start, short enough that a crash in the
- * first seconds of a session still reaches Sentry with its context intact.
+ * Passive visits keep the reporter out of the critical path. Interaction starts it immediately;
+ * the timeout is only a fallback for sessions that never interact.
  */
-const SENTRY_DEFERRED_INIT_TIMEOUT_MS = 2000
+const SENTRY_DEFERRED_INIT_TIMEOUT_MS = 30000
 
 /**
  * Loads the Sentry client after the app has mounted instead of before it hydrates.
  *
  * `@sentry/nuxt` registers two plugins that run in the plugin phase: one `await import`s
- * `sentry.client.config.ts` (the SDK, ~47 KB, one network round trip) and one attaches the Vue
- * and error-hook integrations. Both had to finish before Nuxt would mount the app, so every page
- * paid that round trip between DOMContentLoaded and interactivity — 0.5 s at the latencies
- * measured from CN, on a page whose content was already on screen. `nuxt.config.ts` drops those
- * two plugins in `app:resolve`; this one takes their place with the same DSN and integrations
- * but runs the load on the first idle slot after mount.
+ * `sentry.client.config.ts` and one attaches the Vue/error integrations. Both used to occupy
+ * the critical path. This replacement buffers errors immediately, then starts on the first
+ * meaningful interaction or a long passive-session fallback.
  *
- * Nothing is lost in the gap: a tiny listener pair buffers `error` and `unhandledrejection`
- * events from the moment this plugin runs, and the buffer is flushed into `captureException`
- * once the SDK is up, and the same `app:error` / `vue:error` hooks the module used are
- * registered here.
+ * Nothing is lost in the gap: the buffer is flushed into `captureException` once the SDK is up,
+ * and the same `app:error` / `vue:error` hooks the module used are registered here.
  */
 export default defineNuxtPlugin({
   name: 'nexus:sentry-deferred',
@@ -75,8 +69,21 @@ export default defineNuxtPlugin({
       return loading
     }
 
-    nuxtApp.hook('app:mounted', () => {
-      scheduleAfterIdle(() => { void loadSentry() }, SENTRY_DEFERRED_INIT_TIMEOUT_MS, window)
-    })
+    const disposers: Array<() => void> = []
+    let started = false
+    const start = () => {
+      if (started)
+        return
+      started = true
+      for (const dispose of disposers)
+        dispose()
+      disposers.length = 0
+      void loadSentry()
+    }
+    for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+      window.addEventListener(eventName, start, { passive: true, once: true })
+      disposers.push(() => window.removeEventListener(eventName, start))
+    }
+    window.setTimeout(start, SENTRY_DEFERRED_INIT_TIMEOUT_MS)
   },
 })

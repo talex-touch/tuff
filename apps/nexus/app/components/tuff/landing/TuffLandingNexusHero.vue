@@ -46,6 +46,27 @@ const isZh = computed(() => locale.value.startsWith('zh'))
 const heroPlatform = ref<HeroPlatform>('darwin')
 const ready = ref(false)
 const enableMotion = ref(false)
+const shouldMountEventHorizon = ref(false)
+const eventHorizonIntentDisposers: Array<() => void> = []
+
+function mountEventHorizon() {
+  if (shouldMountEventHorizon.value)
+    return
+  shouldMountEventHorizon.value = true
+  startSceneDemo()
+  for (const dispose of eventHorizonIntentDisposers)
+    dispose()
+  eventHorizonIntentDisposers.length = 0
+}
+
+function bindEventHorizonIntentListeners() {
+  if (!hasWindow())
+    return
+  for (const eventName of ['pointermove', 'scroll', 'touchstart', 'keydown'] as const) {
+    window.addEventListener(eventName, mountEventHorizon, { passive: true, once: true })
+    eventHorizonIntentDisposers.push(() => window.removeEventListener(eventName, mountEventHorizon))
+  }
+}
 
 const triggerRef = ref<InstanceType<typeof TxVersionCapsule> | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
@@ -363,10 +384,10 @@ function toReleaseItem(release: AppRelease): ReleaseItem {
 }
 
 async function loadReleases() {
-  // Assets ride along so the capsule can hand out a real download URL, and the
-  // stable build is fetched on its own because the mixed list may not hold one.
+  // The history list only needs assets for the newest release in each channel; the stable build is
+  // fetched separately because the mixed page may not contain one.
   const [live, stable] = await Promise.all([
-    fetchReleases({ limit: 12, includeAssets: true }),
+    fetchReleases({ limit: 12, includeAssets: 'featured' }),
     fetchLatestRelease('RELEASE'),
   ])
 
@@ -481,9 +502,9 @@ onMounted(() => {
   revealFrame = requestAnimationFrame(() => {
     ready.value = true
   })
+  bindEventHorizonIntentListeners()
 
   loadReleases()
-  startSceneDemo()
   if (hasWindow()) {
     const route = useRoute()
     if (route.query.video !== undefined || route.query.watch !== undefined || route.hash === '#video' || route.hash === '#watch-video')
@@ -492,8 +513,13 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (revealFrame !== null)
+  if (revealFrame !== null) {
     cancelAnimationFrame(revealFrame)
+    revealFrame = null
+  }
+  for (const dispose of eventHorizonIntentDisposers)
+    dispose()
+  eventHorizonIntentDisposers.length = 0
   demoCancelled = true
   demoTimers.forEach(id => hasWindow() && window.clearTimeout(id))
   demoTimers.clear()
@@ -514,7 +540,7 @@ onBeforeUnmount(() => {
          by a centered water-ripple wavefront on load -->
     <div class="ExpHero-Sky" aria-hidden="true">
       <ClientOnly>
-        <div class="ExpHero-SkyCanvas">
+        <div v-if="shouldMountEventHorizon" class="ExpHero-SkyCanvas">
           <LazyEventHorizon ripple-in :resolution-scale="0.75" />
         </div>
       </ClientOnly>

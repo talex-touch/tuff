@@ -43,6 +43,23 @@ const center = ref<[number, number]>([0, 0])
 const ctx = shallowRef<CanvasRenderingContext2D | null>(null)
 
 const canvasRef = templateRef<HTMLCanvasElement | null>('canvasRef')
+let isVisible = true
+let visibilityObserver: IntersectionObserver | null = null
+
+function stopAnimation() {
+  if (animationFrame.value !== null)
+    cancelAnimationFrame(animationFrame.value)
+  animationFrame.value = null
+}
+
+function updateAnimationState() {
+  if (!isVisible || document.visibilityState === 'hidden') {
+    stopAnimation()
+    return
+  }
+  if (animationFrame.value === null)
+    draw()
+}
 
 const particleCache: any = {
   x: 0,
@@ -162,6 +179,9 @@ function updateParticle(i: number) {
 }
 
 function draw() {
+  animationFrame.value = null
+  if (!isVisible || document.visibilityState === 'hidden')
+    return
   if (!canvasRef.value || !ctx.value || !particleProps.value)
     return
 
@@ -223,14 +243,21 @@ onMounted(() => {
     initParticle(i)
   }
 
+  visibilityObserver = new IntersectionObserver(([entry]) => {
+    isVisible = entry?.isIntersecting ?? true
+    updateAnimationState()
+  })
+  visibilityObserver.observe(canvas)
+  document.addEventListener('visibilitychange', updateAnimationState)
   draw()
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
-  if (animationFrame.value) {
-    cancelAnimationFrame(animationFrame.value)
-  }
+  stopAnimation()
+  visibilityObserver?.disconnect()
+  visibilityObserver = null
+  document.removeEventListener('visibilitychange', updateAnimationState)
   window.removeEventListener('resize', handleResize)
 
   ctx.value = null

@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import type * as ReleaseSignature from '../../server/utils/releaseSignature'
 import { Buffer } from 'node:buffer'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeEdgeCache, flushAfterResponse } from '../helpers/edge-cache'
@@ -20,7 +21,10 @@ const auth = vi.hoisted(() => ({ requireAuth: vi.fn() }))
 const speech = vi.hoisted(() => ({ readSpeechCatalog: vi.fn() }))
 
 vi.mock('../../server/utils/releasesStore', () => releases)
-vi.mock('../../server/utils/releaseSignature', () => signatures)
+vi.mock('../../server/utils/releaseSignature', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReleaseSignature>()),
+  attachSignatureUrls: signatures.attachSignatureUrls,
+}))
 vi.mock('../../server/utils/dashboardStore', () => dashboard)
 vi.mock('../../server/utils/updateAssetStorage', () => updateAssets)
 vi.mock('../../server/utils/pluginsStore', () => plugins)

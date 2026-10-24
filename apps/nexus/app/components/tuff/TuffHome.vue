@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TuffLandingNexusHero from './landing/TuffLandingNexusHero.vue'
 import { useTuffHomeAdaptation } from '~/composables/useTuffHomeAdaptation'
 import { useTuffHomeSections } from '~/composables/useTuffHomeSections'
 
-const TuffLandingStats = defineAsyncComponent(() => import('./landing/TuffLandingStats.vue'))
-const TuffLandingPlugins = defineAsyncComponent(() => import('./landing/TuffLandingPlugins.vue'))
-const TuffLandingAiOverview = defineAsyncComponent(() => import('./landing/TuffLandingAiOverview.vue'))
-const TuffLandingInstantPreview = defineAsyncComponent(() => import('./landing/TuffLandingInstantPreview.vue'))
-const TuffLandingFeatureShowcase = defineAsyncComponent(() => import('./landing/TuffLandingFeatureShowcase.vue'))
-const TuffLandingDesignSystem = defineAsyncComponent(() => import('./landing/TuffLandingDesignSystem.vue'))
-const TuffLandingFaq = defineAsyncComponent(() => import('./landing/TuffLandingFaq.vue'))
+const TuffLandingStats = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingStats.vue'))
+const TuffLandingPlugins = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingPlugins.vue'))
+const TuffLandingAiOverview = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingAiOverview.vue'))
+const TuffLandingInstantPreview = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingInstantPreview.vue'))
+const TuffLandingFeatureShowcase = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingFeatureShowcase.vue'))
+const TuffLandingDesignSystem = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingDesignSystem.vue'))
+const TuffLandingFaq = defineLazyHydrationComponent('visible', () => import('./landing/TuffLandingFaq.vue'))
 
 const { enableSmoothScroll } = useTuffHomeAdaptation()
 

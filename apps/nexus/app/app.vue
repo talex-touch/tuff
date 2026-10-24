@@ -197,19 +197,11 @@ function answerSearchRequest(request: GlobalSearchRequest) {
     summonSearch(resolveGlobalSearchTrigger())
 }
 
-// Requested by the first click instead, the palette's chunk queued behind the page's own modules
-// for over a second.
-if (import.meta.client)
-  void import('~/components/search/GlobalSearch.vue').catch(() => undefined)
 
 /**
- * Answers the trigger and the shortcuts from here on, through the boot script in the document
- * head (utils/global-search-boot.ts). The palette's boundary in the template resolves as it
- * hydrates, while onMounted waits for every async component on the page: in local dev that came
- * 1.5 s after the header could first be clicked, and the click opened nothing until then. Not
- * taken over in setup: with the `await` above, a flush runs before this component first renders,
- * so an early click mounted the palette into the hydration, where the server had rendered nothing.
- * `forward` is missing from a page whose head predates it.
+ * The boot script keeps the shortcut/click path alive before the search boundary resolves.
+ * GlobalSearchHost loads the palette on the first real interaction, so passive landing visits do
+ * not download the search chunk.
  */
 function onSearchBoundaryResolved() {
   window.__nexusSearchBoot?.forward?.(answerSearchRequest)

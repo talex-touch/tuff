@@ -380,7 +380,7 @@ watch([manifestPreview, packageLoading, packageError], () => {
                       {{ t('dashboard.sections.plugins.license.title') }}
                     </h3>
                     <div class="VersionOverlay-LicenseText">
-                      <div class="prose prose-sm dark:prose-invert">
+                      <div class="VersionOverlay-LicenseMarkdown">
                         <MDC :value="t('dashboard.sections.plugins.license.agreement')" />
                       </div>
                     </div>
@@ -478,6 +478,29 @@ watch([manifestPreview, packageLoading, packageError], () => {
     background: rgba(255, 255, 255, 0.03);
     color: rgba(255, 255, 255, 0.72);
   }
+}
+.VersionOverlay-LicenseMarkdown :deep(p) {
+  margin: 0 0 0.75rem;
+}
+
+.VersionOverlay-LicenseMarkdown :deep(h1),
+.VersionOverlay-LicenseMarkdown :deep(h2),
+.VersionOverlay-LicenseMarkdown :deep(h3),
+.VersionOverlay-LicenseMarkdown :deep(h4) {
+  margin: 1rem 0 0.5rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.VersionOverlay-LicenseMarkdown :deep(ul),
+.VersionOverlay-LicenseMarkdown :deep(ol) {
+  margin: 0.5rem 0;
+  padding-inline-start: 1.5rem;
+}
+
+.VersionOverlay-LicenseMarkdown :deep(a) {
+  color: var(--tx-color-primary);
+  text-decoration: underline;
 }
 
 :deep(.VersionOverlay-SizerOuter) {
