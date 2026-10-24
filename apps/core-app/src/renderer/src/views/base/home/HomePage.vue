@@ -1403,6 +1403,7 @@ function removeAttachment(id: string): void {
  * buttons it has props for; everything else in the preview would stay at its English defaults.
  */
 const attachPreviewProps = computed(() => ({
+  zoomLabel: t('home.attachViewer.zoom'),
   rotateLabel: t('home.attachViewer.rotate'),
   copyLabel: t('home.attachViewer.copy'),
   shareLabel: t('home.attachViewer.share'),

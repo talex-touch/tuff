@@ -2318,6 +2318,7 @@
     "attachViewer": {
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
+      "zoom": "Zoom",
       "reset": "Fit to screen",
       "failed": "This image could not be loaded",
       "rotate": "Rotate",

@@ -2318,6 +2318,7 @@
     "attachViewer": {
       "zoomIn": "放大",
       "zoomOut": "缩小",
+      "zoom": "缩放",
       "reset": "适应屏幕",
       "failed": "图片加载失败",
       "rotate": "旋转",
