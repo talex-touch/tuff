@@ -35,7 +35,7 @@
     "build:app": "pnpm -F @talex-touch/core-app run build:target",
     "screenshot:acceptance": "pnpm -C apps/screenshot-acceptance start",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
-    "nexus:dev": "node scripts/nexus-dev-supervisor.mjs",
+    "nexus:dev": "pnpm -F @talex-touch/tuff-nexus run dev:pure",
     "nexus:build": "pnpm -F @talex-touch/tuff-nexus run build",
     "tuffex:build": "pnpm -F @talex-touch/tuffex run build",
     "unplugin:build": "pnpm -F @talex-touch/unplugin-export-plugin run build",
