@@ -24,7 +24,8 @@ import { AccountEvents } from '../transport/events'
 
 /**
  * Default plan quotas. The AI limits are the weekly ones Nexus enforces; the deprecated
- * day and month names carry the same numbers.
+ * day and month names carry the same numbers. Team members are the seats Nexus's invite check
+ * allows (`PLAN_CONFIG` in its team store).
  */
 export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
   [SubscriptionPlan.FREE]: {
@@ -73,7 +74,7 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
     aiTokensPerMonth: 1000000,
     maxPlugins: 100,
     maxStorageBytes: 20 * 1024 * 1024 * 1024, // 20GB
-    maxTeamMembers: 10,
+    maxTeamMembers: 5,
     maxWorkspaces: 50,
     customModelAccess: true,
     prioritySupport: true,
@@ -87,7 +88,7 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
     aiTokensPerMonth: -1, // Unlimited
     maxPlugins: -1, // Unlimited
     maxStorageBytes: -1, // Unlimited
-    maxTeamMembers: -1, // Unlimited
+    maxTeamMembers: 10,
     maxWorkspaces: -1, // Unlimited
     customModelAccess: true,
     prioritySupport: true,
@@ -145,7 +146,7 @@ export const UPGRADE_OPTIONS: UpgradeOption[] = [
       '1M tokens/week',
       'Unlimited plugins',
       '20GB storage',
-      'Up to 10 team members',
+      'Up to 5 team members',
       'Team management',
     ],
   },
@@ -860,7 +861,7 @@ export class AccountSDK {
       { feature: 'Plugins', free: 5, pro: 20, plus: 50, team: 100, enterprise: 'Unlimited' },
       { feature: 'Storage', free: '100MB', pro: '1GB', plus: '5GB', team: '20GB', enterprise: 'Unlimited' },
       { feature: 'Workspaces', free: 1, pro: 5, plus: 20, team: 50, enterprise: 'Unlimited' },
-      { feature: 'Team Members', free: false, pro: false, plus: false, team: 10, enterprise: 'Unlimited' },
+      { feature: 'Team Members', free: false, pro: false, plus: false, team: 5, enterprise: 10 },
       { feature: 'Custom Models', free: false, pro: true, plus: true, team: true, enterprise: true },
       { feature: 'API Access', free: false, pro: true, plus: true, team: true, enterprise: true },
       { feature: 'Priority Support', free: false, pro: false, plus: true, team: true, enterprise: true },
