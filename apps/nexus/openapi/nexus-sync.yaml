@@ -370,6 +370,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/blobs/prepare:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item_id:
+                  type: string
+                logical_version:
+                  type: string
+                sha256:
+                  type: string
+                size_bytes:
+                  type: integer
+              required: [item_id, logical_version, sha256, size_bytes]
+      responses:
+        '200':
+          description: Reuse an existing Blob or upload a new one
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action:
+                    type: string
+                    enum: [reuse, upload]
+                  blob_id:
+                    type: string
+                  object_key:
+                    type: string
+                  sha256:
+                    type: string
+                  size_bytes:
+                    type: integer
+                required: [action]
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/blobs/prepare-chunked:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item_id: { type: string }
+                logical_version: { type: string }
+                sha256: { type: string }
+                size_bytes: { type: integer }
+                chunk_size: { type: integer }
+                chunks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      index: { type: integer }
+                      sha256: { type: string }
+                      size_bytes: { type: integer }
+                    required: [index, sha256, size_bytes]
+              required: [item_id, logical_version, sha256, size_bytes, chunk_size, chunks]
+      responses:
+        '200':
+          description: Prepare or reuse chunked Blob upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action: { type: string, enum: [reuse, upload] }
+                  blob_id: { type: string }
+                  object_key: { type: string }
+                  sha256: { type: string }
+                  size_bytes: { type: integer }
+                  session_id: { type: string }
+                  missing:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        sha256: { type: string }
+                        size_bytes: { type: integer }
+                      required: [index, sha256, size_bytes]
+                required: [action, missing]
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/blobs/chunks/upload:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                session_id: { type: string }
+                index: { type: integer }
+                sha256: { type: string }
+                size_bytes: { type: integer }
+              required: [file, session_id, index, sha256, size_bytes]
+      responses:
+        '200':
+          description: Chunk accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chunk_id: { type: string }
+                  sha256: { type: string }
+                  size_bytes: { type: integer }
+                required: [chunk_id, sha256, size_bytes]
+  /api/v1/sync/blobs/chunks/commit:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string }
+              required: [session_id]
+      responses:
+        '200':
+          description: Chunked Blob committed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blob_id: { type: string }
+                  object_key: { type: string }
+                  sha256: { type: string }
+                  size_bytes: { type: integer }
+                required: [blob_id, object_key, sha256, size_bytes]
   /api/v1/sync/blobs/upload:
     post:
       security:

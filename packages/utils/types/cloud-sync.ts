@@ -101,6 +101,34 @@ export interface UploadResponse {
   sha256: string
   size_bytes: number
 }
+export interface PrepareBlobResponse {
+  action: 'reuse' | 'upload'
+  blob_id?: string
+  object_key?: string
+  sha256?: string
+  size_bytes?: number
+}
+export interface SyncBlobChunkDescriptor {
+  index: number
+  sha256: string
+  size_bytes: number
+}
+
+export interface PrepareChunkedBlobResponse {
+  action: 'reuse' | 'upload'
+  blob_id?: string
+  object_key?: string
+  sha256?: string
+  size_bytes?: number
+  session_id?: string
+  missing: SyncBlobChunkDescriptor[]
+}
+
+export interface UploadChunkResponse {
+  chunk_id: string
+  sha256: string
+  size_bytes: number
+}
 
 export interface QuotaValidateResponse {
   ok: boolean

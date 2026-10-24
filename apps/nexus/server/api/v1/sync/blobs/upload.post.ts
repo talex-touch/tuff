@@ -4,7 +4,7 @@ import type { paths } from '../../../../../types/sync-api'
 import { requireAppAuth } from '../../../../utils/auth'
 import { readDeviceId } from '../../../../utils/authStore'
 import { createSyncError } from '../../../../utils/syncErrors'
-import { applyQuotaDelta, getSyncSession, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
+import { applyQuotaDelta, findExistingSyncBlob, getSyncSession, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
 import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from '../../../../utils/uploadGovernance'
 
 type UploadResponse = paths['/api/v1/sync/blobs/upload']['post']['responses']['200']['content']['application/json']
@@ -56,6 +56,53 @@ export default defineEventHandler(async (event) => {
   if (!file || !isFile(file))
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'No file provided')
 
+  const rawItemId = formData.get('item_id')
+  const rawLogicalVersion = formData.get('logical_version')
+  const rawSha256 = formData.get('sha256')
+  const rawSizeBytes = formData.get('size_bytes')
+  if (
+    (rawItemId !== null && typeof rawItemId !== 'string')
+    || (rawLogicalVersion !== null && typeof rawLogicalVersion !== 'string')
+    || (rawSha256 !== null && typeof rawSha256 !== 'string')
+    || (rawSizeBytes !== null && typeof rawSizeBytes !== 'string')
+  ) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid blob idempotency fields')
+  }
+  const itemId = typeof rawItemId === 'string' ? rawItemId.trim() : ''
+  const logicalVersion = typeof rawLogicalVersion === 'string' ? rawLogicalVersion.trim() : ''
+  const sha256 = typeof rawSha256 === 'string' ? rawSha256.trim().toLowerCase() : ''
+  const sizeBytes = typeof rawSizeBytes === 'string' ? Number(rawSizeBytes) : undefined
+  if (
+    Boolean(itemId) !== Boolean(logicalVersion)
+    || itemId.length > 512
+    || logicalVersion.length > 256
+    || (sha256 && !/^[a-f0-9]{64}$/.test(sha256))
+    || (sizeBytes !== undefined && (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0))
+  ) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid blob idempotency fields')
+  }
+  const expectedSizeBytes = sizeBytes ?? Number(file.size)
+  if (expectedSizeBytes !== Number(file.size)) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Blob size does not match upload')
+  }
+  const expectedSha256 = sha256 || undefined
+  const existingBlob = await findExistingSyncBlob(
+    event,
+    userId,
+    itemId || undefined,
+    logicalVersion || undefined,
+    { sha256: expectedSha256, sizeBytes: expectedSizeBytes }
+  )
+  if (existingBlob) {
+    const response: UploadResponse = {
+      blob_id: existingBlob.blobId,
+      object_key: existingBlob.objectKey,
+      sha256: existingBlob.sha256,
+      size_bytes: existingBlob.sizeBytes
+    }
+    return response
+  }
+
   const uploadResourceId = `sync-blob:${randomUUID()}`
   const uploadAttempt = await startUploadGovernance(event, {
     actorId: userId,
@@ -72,8 +119,15 @@ export default defineEventHandler(async (event) => {
     if (!quotaCheck.ok)
       throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
 
-    const result = await uploadSyncBlob(event, userId, file)
-    await applyQuotaDelta(event, userId, { storageDelta: result.sizeBytes, objectsDelta: 1 })
+    const result = await uploadSyncBlob(event, userId, file, {
+      itemId: itemId || undefined,
+      logicalVersion: logicalVersion || undefined,
+      sha256: expectedSha256,
+      sizeBytes: expectedSizeBytes
+    })
+    if (!result.deduplicated) {
+      await applyQuotaDelta(event, userId, { storageDelta: result.sizeBytes, objectsDelta: 1 })
+    }
     await completeUploadGovernance(event, uploadAttempt, {
       resourceId: uploadResourceId,
       contentType: file.type || 'application/octet-stream',

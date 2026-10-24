@@ -3,492 +3,1000 @@
  * Do not make direct changes to the file.
  */
 
-
 export interface paths {
-  "/api/v1/sync/handshake": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
+    "/api/v1/sync/handshake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              sync_token: string;
-              sync_token_expires_at: string;
-              server_cursor: number;
-              device_id: string;
-              quotas: components["schemas"]["QuotaInfo"];
-              evicted_devices?: {
-                device_id: string;
-                device_name?: string | null;
-                platform?: string | null;
-                last_seen_at?: string | null;
-              }[];
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
             };
-          };
-        };
-        /** @description Quota exceeded */
-        403: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/sync/push": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-          "x-sync-token": components["parameters"]["XSyncToken"];
-        };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            items: components["schemas"]["SyncItemInput"][];
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              ack_cursor: number;
-              conflicts: components["schemas"]["ConflictItem"][];
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sync_token: string;
+                            sync_token_expires_at: string;
+                            server_cursor: number;
+                            device_id: string;
+                            quotas: components["schemas"]["QuotaInfo"];
+                            evicted_devices?: components["schemas"]["EvictedDeviceInfo"][];
+                        };
+                    };
+                };
+                /** @description Quota exceeded */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
-          };
         };
-        /** @description Invalid payload */
-        400: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        /** @description Quota exceeded */
-        403: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/v1/sync/pull": {
-    get: {
-      parameters: {
-        query?: {
-          cursor?: number;
-          limit?: number;
+    "/api/v1/sync/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-          "x-sync-token": components["parameters"]["XSyncToken"];
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              items: components["schemas"]["SyncItemOutput"][];
-              oplog: components["schemas"]["OplogOutput"][];
-              next_cursor: number;
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
             };
-          };
-        };
-        /** @description Invalid cursor */
-        400: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/sync/blobs/upload": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-          "x-sync-token": components["parameters"]["XSyncToken"];
-        };
-      };
-      requestBody: {
-        content: {
-          "multipart/form-data": {
-            /** Format: binary */
-            file: string;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              blob_id: string;
-              object_key: string;
-              sha256: string;
-              size_bytes: number;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SyncItemInput"][];
+                    };
+                };
             };
-          };
-        };
-        /** @description Quota exceeded */
-        403: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/sync/blobs/{blob_id}/download": {
-    get: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-          "x-sync-token": components["parameters"]["XSyncToken"];
-        };
-        path: {
-          blob_id: string;
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/octet-stream": string;
-          };
-        };
-        /** @description Not found */
-        404: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/quotas": {
-    get: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": components["schemas"]["QuotaInfo"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/quotas/validate": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-        };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            storage_bytes_delta: number;
-            objects_delta: number;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              ok: boolean;
-              code?: string | null;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ack_cursor: number;
+                            conflicts: components["schemas"]["ConflictItem"][];
+                        };
+                    };
+                };
+                /** @description Invalid payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Quota exceeded */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
-          };
         };
-      };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/v1/keys/register": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
+    "/api/v1/sync/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            key_type: string;
-            encrypted_key: string;
-            recovery_code_hash?: string | null;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              keyring_id: string;
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: number;
+                    limit?: number;
+                };
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
             };
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/keys/list": {
-    get: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              keyrings: components["schemas"]["KeyringMeta"][];
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["SyncItemOutput"][];
+                            oplog: components["schemas"]["OplogOutput"][];
+                            next_cursor: number;
+                        };
+                    };
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
-          };
         };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/v1/keys/issue-device": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
+    "/api/v1/sync/blobs/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            target_device_id: string;
-            key_type: string;
-            encrypted_key: string;
-            recovery_code_hash?: string | null;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              keyring_id: string;
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
             };
-          };
-        };
-        /** @description Forbidden */
-        403: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/keys/recover-device": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-        };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            recovery_code: string;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              keyrings: components["schemas"]["KeyringSecret"][];
+            requestBody: {
+                content: {
+                    "application/json": {
+                        item_id: string;
+                        logical_version: string;
+                        sha256: string;
+                        size_bytes: number;
+                    };
+                };
             };
-          };
-        };
-        /** @description Forbidden */
-        403: {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/devices/attest": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
-        };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            machine_code_hash: string;
-            fingerprint_hash?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              ok: boolean;
-              device_id: string;
-              updated_at: string;
+            responses: {
+                /** @description Reuse an existing Blob or upload a new one */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            action: "reuse" | "upload";
+                            blob_id?: string;
+                            object_key?: string;
+                            sha256?: string;
+                            size_bytes?: number;
+                        };
+                    };
+                };
+                /** @description Quota exceeded */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
-          };
         };
-      };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/v1/keys/rotate": {
-    post: {
-      parameters: {
-        header: {
-          "x-device-id": components["parameters"]["XDeviceId"];
+    "/api/v1/sync/blobs/prepare-chunked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            key_type: string;
-            encrypted_key: string;
-          };
-        };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/json": {
-              rotated_at: string;
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
             };
-          };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        item_id: string;
+                        logical_version: string;
+                        sha256: string;
+                        size_bytes: number;
+                        chunk_size: number;
+                        chunks: {
+                            index: number;
+                            sha256: string;
+                            size_bytes: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Prepare or reuse chunked Blob upload */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            action: "reuse" | "upload";
+                            blob_id?: string;
+                            object_key?: string;
+                            sha256?: string;
+                            size_bytes?: number;
+                            session_id?: string;
+                            missing: {
+                                index: number;
+                                sha256: string;
+                                size_bytes: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Quota exceeded */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
         };
-      };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
+    "/api/v1/sync/blobs/chunks/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        session_id: string;
+                        index: number;
+                        sha256: string;
+                        size_bytes: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Chunk accepted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            chunk_id: string;
+                            sha256: string;
+                            size_bytes: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/blobs/chunks/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        session_id: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Chunked Blob committed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            blob_id: string;
+                            object_key: string;
+                            sha256: string;
+                            size_bytes: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/blobs/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            blob_id: string;
+                            object_key: string;
+                            sha256: string;
+                            size_bytes: number;
+                        };
+                    };
+                };
+                /** @description Quota exceeded */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/blobs/{blob_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                    "x-sync-token": components["parameters"]["XSyncToken"];
+                };
+                path: {
+                    blob_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quotas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuotaInfo"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quotas/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        storage_bytes_delta: number;
+                        objects_delta: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            code?: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        key_type: string;
+                        encrypted_key: string;
+                        recovery_code_hash?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            keyring_id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            keyrings: components["schemas"]["KeyringMeta"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/issue-device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        target_device_id: string;
+                        key_type: string;
+                        encrypted_key: string;
+                        recovery_code_hash?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            keyring_id: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/recover-device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        recovery_code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            keyrings: components["schemas"]["KeyringSecret"][];
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        machine_code_hash: string;
+                        fingerprint_hash?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            device_id: string;
+                            updated_at: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keys/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-device-id": components["parameters"]["XDeviceId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        key_type: string;
+                        encrypted_key: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rotated_at: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
-
 export type webhooks = Record<string, never>;
-
 export interface components {
-  schemas: {
-    ErrorResponse: {
-      errorCode: string;
+    schemas: {
+        ErrorResponse: {
+            errorCode: string;
+        };
+        QuotaInfo: {
+            plan_tier: string;
+            limits: {
+                storage_limit_bytes?: number;
+                object_limit?: number;
+                item_limit?: number;
+                device_limit?: number;
+            };
+            usage: {
+                used_storage_bytes?: number;
+                used_objects?: number;
+                used_devices?: number;
+            };
+        };
+        EvictedDeviceInfo: {
+            device_id: string;
+            device_name?: string | null;
+            platform?: string | null;
+            last_seen_at?: string | null;
+        };
+        KeyringMeta: {
+            keyring_id: string;
+            device_id: string;
+            key_type: string;
+            rotated_at?: string | null;
+            created_at: string;
+            has_recovery_code: boolean;
+        };
+        KeyringSecret: {
+            keyring_id: string;
+            device_id: string;
+            key_type: string;
+            encrypted_key: string;
+            rotated_at?: string | null;
+            created_at: string;
+        };
+        SyncItemInput: {
+            item_id: string;
+            type: string;
+            schema_version: number;
+            payload_enc?: string | null;
+            payload_ref?: string | null;
+            meta_plain?: {
+                [key: string]: unknown;
+            } | null;
+            payload_size?: number | null;
+            updated_at: string;
+            deleted_at?: string | null;
+            op_seq: number;
+            op_hash: string;
+            /** @enum {string} */
+            op_type: "upsert" | "delete";
+        };
+        SyncItemOutput: {
+            item_id: string;
+            type: string;
+            schema_version: number;
+            payload_enc?: string | null;
+            payload_ref?: string | null;
+            meta_plain?: {
+                [key: string]: unknown;
+            } | null;
+            payload_size?: number | null;
+            updated_at: string;
+            deleted_at?: string | null;
+            device_id?: string | null;
+        };
+        OplogOutput: {
+            cursor: number;
+            item_id: string;
+            op_seq: number;
+            op_hash: string;
+            /** @enum {string} */
+            op_type: "upsert" | "delete";
+            updated_at: string;
+            device_id: string;
+        };
+        ConflictItem: {
+            item_id: string;
+            server_updated_at: string;
+            server_device_id?: string | null;
+        };
     };
-    QuotaInfo: {
-      plan_tier: string;
-      limits: {
-        storage_limit_bytes?: number;
-        object_limit?: number;
-        item_limit?: number;
-        device_limit?: number;
-      };
-      usage: {
-        used_storage_bytes?: number;
-        used_objects?: number;
-        used_devices?: number;
-      };
+    responses: never;
+    parameters: {
+        XDeviceId: string;
+        XSyncToken: string;
     };
-    KeyringMeta: {
-      keyring_id: string;
-      device_id: string;
-      key_type: string;
-      rotated_at?: string | null;
-      created_at: string;
-      has_recovery_code: boolean;
-    };
-    KeyringSecret: {
-      keyring_id: string;
-      device_id: string;
-      key_type: string;
-      encrypted_key: string;
-      rotated_at?: string | null;
-      created_at: string;
-    };
-    SyncItemInput: {
-      item_id: string;
-      type: string;
-      schema_version: number;
-      payload_enc?: string | null;
-      payload_ref?: string | null;
-      meta_plain?: {
-        [key: string]: unknown;
-      } | null;
-      payload_size?: number | null;
-      updated_at: string;
-      deleted_at?: string | null;
-      op_seq: number;
-      op_hash: string;
-      /** @enum {string} */
-      op_type: "upsert" | "delete";
-    };
-    SyncItemOutput: {
-      item_id: string;
-      type: string;
-      schema_version: number;
-      payload_enc?: string | null;
-      payload_ref?: string | null;
-      meta_plain?: {
-        [key: string]: unknown;
-      } | null;
-      payload_size?: number | null;
-      updated_at: string;
-      deleted_at?: string | null;
-      device_id?: string | null;
-    };
-    OplogOutput: {
-      cursor: number;
-      item_id: string;
-      op_seq: number;
-      op_hash: string;
-      /** @enum {string} */
-      op_type: "upsert" | "delete";
-      updated_at: string;
-      device_id: string;
-    };
-    ConflictItem: {
-      item_id: string;
-      server_updated_at: string;
-      server_device_id?: string | null;
-    };
-  };
-  responses: never;
-  parameters: {
-    XDeviceId: string;
-    XSyncToken: string;
-  };
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
-
 export type $defs = Record<string, never>;
-
-export type external = Record<string, never>;
-
 export type operations = Record<string, never>;

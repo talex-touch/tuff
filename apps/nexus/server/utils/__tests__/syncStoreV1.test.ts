@@ -403,7 +403,7 @@ class MockD1Database {
       return { results: [{ cursor: this.getCursor(String(userId)) }] }
     }
 
-    if (sql.includes('INSERT INTO sync_blobs_v1')) {
+    if (sql.includes('INSERT INTO sync_blobs_v1') || sql.includes('INSERT OR IGNORE INTO sync_blobs_v1')) {
       const [userId, blobId, objectKey, sha256, sizeBytes, contentType, createdAt, status] = args
       const key = `${String(userId)}:${String(blobId)}`
       this.blobs.set(key, {
@@ -501,11 +501,13 @@ class MockD1Database {
   }
 
   private firstResult(sql: string, args: unknown[]): unknown {
-    if (sql.includes('SELECT object_key, sha256, size_bytes, content_type') && sql.includes('sync_blobs_v1')) {
+    if (
+      (sql.includes('SELECT object_key, sha256, size_bytes, content_type') || sql.includes('SELECT blob_id, object_key, sha256, size_bytes, content_type'))
+      && sql.includes('sync_blobs_v1')
+    ) {
       const [userId, blobId] = args
       return this.blobs.get(`${String(userId)}:${String(blobId)}`) ?? null
     }
-
     if (sql.includes('SELECT updated_at') && sql.includes('sync_items_v1')) {
       const [userId, itemId] = args
       const row = this.items.get(`${String(userId)}:${String(itemId)}`)

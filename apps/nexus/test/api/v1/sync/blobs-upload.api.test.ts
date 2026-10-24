@@ -16,6 +16,7 @@ const h3Mocks = vi.hoisted(() => ({
 
 const syncStoreMocks = vi.hoisted(() => ({
   applyQuotaDelta: vi.fn(),
+  findExistingSyncBlob: vi.fn(),
   getSyncSession: vi.fn(),
   uploadSyncBlob: vi.fn(),
   validateQuota: vi.fn(),
@@ -66,6 +67,7 @@ describe('/api/v1/sync/blobs/upload', () => {
     authStoreMocks.readDeviceId.mockReturnValue('private-device-id')
     h3Mocks.getHeader.mockReturnValue('sync-token')
     syncStoreMocks.getSyncSession.mockResolvedValue({ syncToken: 'sync-token' })
+    syncStoreMocks.findExistingSyncBlob.mockResolvedValue(null)
     syncStoreMocks.validateQuota.mockResolvedValue({ ok: true, code: null })
     syncStoreMocks.uploadSyncBlob.mockResolvedValue({
       blobId: 'blob-id',

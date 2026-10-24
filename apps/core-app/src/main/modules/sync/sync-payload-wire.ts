@@ -15,6 +15,11 @@ export interface StorageSyncSnapshot {
   cryptoVersion: string
   keyId: string
   rawText: string
+  pluginId?: string
+  pluginDisplayName?: string
+  filePath?: string
+  fileKind?: 'settings' | 'data'
+  fileDisplayName?: string
   /** Domain mutation time used for conflict ordering when available. */
   updatedAt?: string
 }
@@ -50,6 +55,22 @@ export async function resolveEncryptedPayloadText(
   return decryptPayload(payloadEnc)
 }
 
+function buildSnapshotMeta(snapshot: StorageSyncSnapshot): Record<string, unknown> {
+  return {
+    qualified_name: snapshot.qualifiedName,
+    schema_version: STORAGE_SCHEMA_VERSION,
+    payload_size: snapshot.payloadSize,
+    content_hash: snapshot.contentHash,
+    crypto_version: snapshot.cryptoVersion,
+    key_id: snapshot.keyId,
+    ...(snapshot.pluginId ? { plugin_id: snapshot.pluginId } : {}),
+    ...(snapshot.pluginDisplayName ? { plugin_display_name: snapshot.pluginDisplayName } : {}),
+    ...(snapshot.filePath ? { file_path: snapshot.filePath } : {}),
+    ...(snapshot.fileKind ? { file_kind: snapshot.fileKind } : {}),
+    ...(snapshot.fileDisplayName ? { file_display_name: snapshot.fileDisplayName } : {})
+  }
+}
+
 export function buildSyncItemFromSnapshot(
   snapshot: StorageSyncSnapshot,
   opSeq: number,
@@ -61,14 +82,7 @@ export function buildSyncItemFromSnapshot(
     schema_version: STORAGE_SCHEMA_VERSION,
     payload_enc: snapshot.payloadEnc,
     payload_ref: null,
-    meta_plain: {
-      qualified_name: snapshot.qualifiedName,
-      schema_version: STORAGE_SCHEMA_VERSION,
-      payload_size: snapshot.payloadSize,
-      content_hash: snapshot.contentHash,
-      crypto_version: snapshot.cryptoVersion,
-      key_id: snapshot.keyId
-    },
+    meta_plain: buildSnapshotMeta(snapshot),
     payload_size: snapshot.payloadSize,
     updated_at: updatedAt,
     deleted_at: null,
@@ -90,14 +104,7 @@ export function buildBlobSyncItem(
     schema_version: STORAGE_SCHEMA_VERSION,
     payload_enc: null,
     payload_ref: `blob:${blobId}`,
-    meta_plain: {
-      qualified_name: snapshot.qualifiedName,
-      schema_version: STORAGE_SCHEMA_VERSION,
-      payload_size: snapshot.payloadSize,
-      content_hash: snapshot.contentHash,
-      crypto_version: snapshot.cryptoVersion,
-      key_id: snapshot.keyId
-    },
+    meta_plain: buildSnapshotMeta(snapshot),
     payload_size: snapshot.payloadSize,
     updated_at: updatedAt,
     deleted_at: null,

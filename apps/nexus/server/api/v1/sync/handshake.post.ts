@@ -9,7 +9,7 @@ import {
   revokeOldestDevices
 } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
-import { getOrInitQuota, handshakeSyncSession } from '../../../utils/syncStoreV1'
+import { getOrInitQuota, handshakeSyncSession, reconcileSyncBlobsV1 } from '../../../utils/syncStoreV1'
 
 type HandshakeResponse = paths['/api/v1/sync/handshake']['post']['responses']['200']['content']['application/json']
 
@@ -46,6 +46,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const session = await handshakeSyncSession(event, userId, deviceId)
+  try {
+    await reconcileSyncBlobsV1(event, userId)
+  } catch {
+    // Reconciliation is best-effort and must not prevent a device from syncing.
+  }
 
   const response: HandshakeResponse = {
     sync_token: session.syncToken,

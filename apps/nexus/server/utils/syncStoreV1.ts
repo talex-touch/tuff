@@ -1,13 +1,14 @@
 import type { D1Database, D1PreparedStatement, R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
+import { createHash, randomUUID } from 'node:crypto'
 import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
 import { getDevice, prepareActiveDeviceCount, readDeviceId, readDeviceMetadata, touchDevice } from './authStore'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { createSyncError } from './syncErrors'
 import type { SubscriptionPlan } from './subscriptionStore'
 import { getUserSubscription } from './subscriptionStore'
-import { putStorageObject, type StorageObjectMemory } from './storageObjectStore'
+import { deleteStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const SYNC_ITEMS_TABLE = 'sync_items_v1'
@@ -15,6 +16,10 @@ const SYNC_OPLOG_TABLE = 'sync_oplog_v1'
 const SYNC_BLOBS_TABLE = 'sync_blobs_v1'
 const SYNC_KEYRINGS_TABLE = 'sync_keyrings_v1'
 const SYNC_QUOTAS_TABLE = 'sync_quotas_v1'
+const SYNC_BLOB_CHUNKS_TABLE = 'sync_blob_chunks_v1'
+const SYNC_BLOB_CHUNK_REFS_TABLE = 'sync_blob_chunk_refs_v1'
+const SYNC_BLOB_UPLOAD_SESSIONS_TABLE = 'sync_blob_upload_sessions_v1'
+const SYNC_BLOB_UPLOAD_REFS_TABLE = 'sync_blob_upload_refs_v1'
 const SYNC_SESSIONS_TABLE = 'sync_sessions_v1'
 
 const DEFAULT_QUOTAS = {
@@ -173,6 +178,45 @@ const SYNC_SCHEMA_V1 = defineD1Schema('sync-v1', {
         status TEXT NOT NULL,
         PRIMARY KEY (user_id, blob_id)
       )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_BLOB_CHUNKS_TABLE} (
+        user_id TEXT NOT NULL,
+        chunk_id TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        object_key TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        PRIMARY KEY (user_id, chunk_id),
+        UNIQUE (user_id, sha256, size_bytes)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_BLOB_CHUNK_REFS_TABLE} (
+        user_id TEXT NOT NULL,
+        blob_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        chunk_id TEXT NOT NULL,
+        PRIMARY KEY (user_id, blob_id, chunk_index)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE} (
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        logical_version TEXT NOT NULL,
+        payload_sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        chunk_size INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, session_id),
+        UNIQUE (user_id, item_id, logical_version, payload_sha256)
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${SYNC_BLOB_UPLOAD_REFS_TABLE} (
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        chunk_id TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        PRIMARY KEY (user_id, session_id, chunk_index)
+      )`,
     `CREATE TABLE IF NOT EXISTS ${SYNC_KEYRINGS_TABLE} (
         user_id TEXT NOT NULL,
         device_id TEXT NOT NULL,
@@ -210,6 +254,11 @@ const SYNC_SCHEMA_V1 = defineD1Schema('sync-v1', {
     `CREATE INDEX IF NOT EXISTS idx_sync_items_user_updated ON ${SYNC_ITEMS_TABLE}(user_id, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_sync_items_user_type ON ${SYNC_ITEMS_TABLE}(user_id, type)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blobs_object ON ${SYNC_BLOBS_TABLE}(user_id, object_key)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blobs_logical ON ${SYNC_BLOBS_TABLE}(user_id, item_id, logical_version) WHERE item_id IS NOT NULL AND logical_version IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_blob_chunks_lookup ON ${SYNC_BLOB_CHUNKS_TABLE}(user_id, sha256, size_bytes, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_blob_chunk_refs_chunk ON ${SYNC_BLOB_CHUNK_REFS_TABLE}(user_id, chunk_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_blob_upload_refs_session ON ${SYNC_BLOB_UPLOAD_REFS_TABLE}(user_id, session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_blob_upload_sessions_created ON ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}(user_id, created_at)`
   ],
   columns: [
     {
@@ -218,6 +267,14 @@ const SYNC_SCHEMA_V1 = defineD1Schema('sync-v1', {
         { name: 'last_push_at', ddl: 'last_push_at TEXT' },
         { name: 'last_pull_at', ddl: 'last_pull_at TEXT' },
         { name: 'last_error_code', ddl: 'last_error_code TEXT' },
+      ],
+    },
+    {
+      table: SYNC_BLOBS_TABLE,
+      columns: [
+        { name: 'item_id', ddl: 'item_id TEXT' },
+        { name: 'logical_version', ddl: 'logical_version TEXT' },
+        { name: 'last_referenced_at', ddl: 'last_referenced_at TEXT' },
       ],
     },
   ],
@@ -381,7 +438,7 @@ export async function handshakeSyncSession(event: H3Event, userId: string, devic
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const now = new Date().toISOString()
-  const syncToken = crypto.randomUUID()
+  const syncToken = randomUUID()
   const expiresAt = new Date(Date.now() + SYNC_TOKEN_TTL_MS).toISOString()
   // The server cursor is read by the statement that stores it; they were two round trips.
   const row = await db.prepare(`
@@ -755,19 +812,48 @@ function buildSyncItemWriteStatement(
   `).bind(jsonRows, userId, deviceId)
 }
 
+function buildSyncBlobCommitStatement(
+  db: D1Database,
+  jsonRows: string,
+  userId: string,
+  now: string
+): D1PreparedStatement {
+  return db.prepare(`
+    UPDATE ${SYNC_BLOBS_TABLE}
+    SET status = 'committed', last_referenced_at = ?3
+    WHERE user_id = ?2
+      AND blob_id IN (
+        SELECT substr(CAST(json_extract(value, '$.payloadRef') AS TEXT), 6)
+        FROM json_each(?1)
+        WHERE CAST(json_extract(value, '$.opType') AS TEXT) = 'upsert'
+          AND CAST(json_extract(value, '$.payloadRef') AS TEXT) LIKE 'blob:%'
+      )
+  `).bind(jsonRows, userId, now)
+}
+
 function buildSyncQuotaReconcileStatement(db: D1Database, userId: string, now: string): D1PreparedStatement {
   return db.prepare(`
     UPDATE ${SYNC_QUOTAS_TABLE}
     SET used_storage_bytes = CASE
           WHEN (
-            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
+            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL AND payload_ref IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
             FROM ${SYNC_ITEMS_TABLE}
             WHERE user_id = ?1
+          ) + (
+            SELECT COALESCE(SUM(size_bytes), 0)
+            FROM ${SYNC_BLOBS_TABLE}
+            WHERE user_id = ?1
+              AND status IN ('staged', 'committed', 'ready', 'orphaned', 'delete_failed')
           ) <= storage_limit_bytes
           THEN (
-            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
+            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL AND payload_ref IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
             FROM ${SYNC_ITEMS_TABLE}
             WHERE user_id = ?1
+          ) + (
+            SELECT COALESCE(SUM(size_bytes), 0)
+            FROM ${SYNC_BLOBS_TABLE}
+            WHERE user_id = ?1
+              AND status IN ('staged', 'committed', 'ready', 'orphaned', 'delete_failed')
           )
           ELSE NULL
         END,
@@ -938,7 +1024,11 @@ export async function pushSyncItemsV1(
     return invalidResult(quotaCheck.code ?? 'SYNC_INVALID_PAYLOAD')
 
   const writeChunks = serializeJsonChunks(candidates.map(toSyncWriteRow))
-  const plannedQueryCount = preloaded.queryCount + (writeChunks.length * 2) + (candidates.length ? 1 : 0) + 2
+  const plannedQueryCount =
+    preloaded.queryCount
+    + (writeChunks.length * 2)
+    + (candidates.length ? writeChunks.length + 1 : 0)
+    + 2
   if (plannedQueryCount > SYNC_PUSH_D1_QUERY_BUDGET)
     return invalidResult('SYNC_INVALID_PAYLOAD')
 
@@ -948,6 +1038,8 @@ export async function pushSyncItemsV1(
     statements.push(buildSyncOplogWriteStatement(db, chunk, userId, deviceId))
   for (const chunk of writeChunks)
     statements.push(buildSyncItemWriteStatement(db, chunk, userId, deviceId))
+  for (const chunk of writeChunks)
+    statements.push(buildSyncBlobCommitStatement(db, chunk, userId, now))
 
   const quotaResultIndex = candidates.length ? statements.length : -1
   if (candidates.length)
@@ -972,7 +1064,200 @@ export async function pushSyncItemsV1(
     }
   }
 
+  try {
+    await reconcileSyncBlobsV1(event, userId)
+  } catch {
+    // Blob GC is best-effort and must not turn a committed sync push into a failure.
+  }
   return { conflicts, ackCursor, appliedStorageDelta, appliedObjectsDelta }
+}
+const SYNC_BLOB_STAGED_TTL_MS = 24 * 60 * 60 * 1000
+const SYNC_BLOB_VERSION_RETENTION_MS = 24 * 60 * 60 * 1000
+const SYNC_BLOB_GC_LIMIT = 64
+async function releaseSyncBlobChunks(event: H3Event, userId: string, blobId: string): Promise<void> {
+  const db = requireDatabase(event)
+  const bucket = getSyncBlobBucket(event)
+  if (!bucket) throw new Error('R2 bucket is not available.')
+  const refs = await db.prepare(`
+    SELECT DISTINCT r.chunk_id, c.object_key
+    FROM ${SYNC_BLOB_CHUNK_REFS_TABLE} AS r
+    JOIN ${SYNC_BLOB_CHUNKS_TABLE} AS c
+      ON c.user_id = r.user_id AND c.chunk_id = r.chunk_id
+    WHERE r.user_id = ? AND r.blob_id = ?
+  `).bind(userId, blobId).all<{ chunk_id: string, object_key: string }>()
+  await db.prepare(`DELETE FROM ${SYNC_BLOB_CHUNK_REFS_TABLE} WHERE user_id = ? AND blob_id = ?`).bind(userId, blobId).run()
+  for (const ref of refs.results ?? []) {
+    const stillReferenced = await db.prepare(`
+      SELECT 1 AS present
+      FROM ${SYNC_BLOB_CHUNK_REFS_TABLE}
+      WHERE user_id = ? AND chunk_id = ?
+      LIMIT 1
+    `).bind(userId, ref.chunk_id).first<{ present: number }>()
+    if (stillReferenced) continue
+    await deleteStorageObject({
+      event,
+      bucket,
+      memoryStorage: syncBlobMemoryStorage,
+      externalStorage: null,
+      key: ref.object_key,
+      resourceType: 'sync-blob-chunk',
+      governanceResourceId: `sync-blob-chunk:${ref.chunk_id}`,
+      actorId: userId,
+    })
+    await db.prepare(`DELETE FROM ${SYNC_BLOB_CHUNKS_TABLE} WHERE user_id = ? AND chunk_id = ?`).bind(userId, ref.chunk_id).run()
+  }
+}
+async function reconcileStaleSyncBlobChunks(
+  event: H3Event,
+  userId: string,
+  staleBefore: string,
+  limit: number
+): Promise<void> {
+  const db = requireDatabase(event)
+  const bucket = getSyncBlobBucket(event)
+  if (!bucket) throw new Error('R2 bucket is not available.')
+  const sessions = await db.prepare(`
+    SELECT session_id
+    FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+    WHERE user_id = ? AND created_at < ?
+    ORDER BY created_at ASC
+    LIMIT ?
+  `).bind(userId, staleBefore, limit).all<{ session_id: string }>()
+  for (const session of sessions.results ?? []) {
+    await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, session.session_id).run()
+    await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, session.session_id).run()
+  }
+  const chunks = await db.prepare(`
+    SELECT c.chunk_id, c.object_key
+    FROM ${SYNC_BLOB_CHUNKS_TABLE} AS c
+    WHERE c.user_id = ? AND c.created_at < ?
+      AND NOT EXISTS (
+        SELECT 1 FROM ${SYNC_BLOB_CHUNK_REFS_TABLE} AS r
+        WHERE r.user_id = c.user_id AND r.chunk_id = c.chunk_id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} AS r
+        WHERE r.user_id = c.user_id AND r.chunk_id = c.chunk_id
+      )
+    ORDER BY c.created_at ASC
+    LIMIT ?
+  `).bind(userId, staleBefore, limit).all<{ chunk_id: string, object_key: string }>()
+  for (const chunk of chunks.results ?? []) {
+    await deleteStorageObject({
+      event,
+      bucket,
+      memoryStorage: syncBlobMemoryStorage,
+      externalStorage: null,
+      key: chunk.object_key,
+      resourceType: 'sync-blob-chunk',
+      governanceResourceId: `sync-blob-chunk:${chunk.chunk_id}`,
+      actorId: userId,
+    })
+    await db.prepare(`DELETE FROM ${SYNC_BLOB_CHUNKS_TABLE} WHERE user_id = ? AND chunk_id = ?`).bind(userId, chunk.chunk_id).run()
+  }
+}
+
+
+export async function reconcileSyncBlobsV1(
+  event: H3Event,
+  userId: string,
+  requestedLimit = SYNC_BLOB_GC_LIMIT
+): Promise<{ markedOrphaned: number, deleted: number, deleteFailed: number }> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const bucket = getSyncBlobBucket(event)
+  if (!bucket)
+    throw new Error('R2 bucket is not available.')
+
+  const limit = Math.min(Math.max(Math.floor(requestedLimit) || SYNC_BLOB_GC_LIMIT, 1), SYNC_BLOB_GC_LIMIT)
+  const now = new Date()
+  const nowIso = now.toISOString()
+  const versionStaleBefore = new Date(now.getTime() - SYNC_BLOB_VERSION_RETENTION_MS).toISOString()
+  const staleBefore = new Date(now.getTime() - SYNC_BLOB_STAGED_TTL_MS).toISOString()
+  const markResult = await db.prepare(`
+    UPDATE ${SYNC_BLOBS_TABLE}
+    SET status = 'orphaned', last_referenced_at = created_at
+    WHERE user_id = ?1
+      AND status IN ('staged', 'committed', 'ready')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ${SYNC_ITEMS_TABLE}
+        WHERE user_id = ?1
+          AND deleted_at IS NULL
+          AND payload_ref = 'blob:' || ${SYNC_BLOBS_TABLE}.blob_id
+      )
+      AND (
+        (status IN ('committed', 'ready') AND created_at < ?2)
+        OR (status = 'staged' AND created_at < ?3)
+      )
+  `).bind(userId, versionStaleBefore, staleBefore).run()
+
+  const candidates = await db.prepare(`
+    SELECT blob_id, object_key
+    FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ?1
+      AND status IN ('orphaned', 'delete_failed')
+      AND COALESCE(last_referenced_at, created_at) < ?2
+    ORDER BY COALESCE(last_referenced_at, created_at) ASC
+    LIMIT ?3
+  `).bind(userId, staleBefore, limit).all<{ blob_id: string, object_key: string }>()
+
+  let deleted = 0
+  let deleteFailed = 0
+  for (const candidate of candidates.results ?? []) {
+    const liveReference = await db.prepare(`
+      SELECT 1 AS present
+      FROM ${SYNC_ITEMS_TABLE}
+      WHERE user_id = ? AND deleted_at IS NULL AND payload_ref = ?
+      LIMIT 1
+    `).bind(userId, `blob:${candidate.blob_id}`).first<{ present: number }>()
+    if (liveReference) {
+      await db.prepare(`
+        UPDATE ${SYNC_BLOBS_TABLE}
+        SET status = 'committed', last_referenced_at = ?
+        WHERE user_id = ? AND blob_id = ? AND status IN ('orphaned', 'delete_failed')
+      `).bind(nowIso, userId, candidate.blob_id).run()
+      continue
+    }
+
+    try {
+      if (candidate.object_key.startsWith('chunks:')) {
+        await releaseSyncBlobChunks(event, userId, candidate.blob_id)
+      } else {
+        await deleteStorageObject({
+          event,
+          bucket,
+          memoryStorage: syncBlobMemoryStorage,
+          externalStorage: null,
+          key: candidate.object_key,
+          resourceType: 'sync-blob',
+          governanceResourceId: `sync-blob:${candidate.blob_id}`,
+          actorId: userId,
+        })
+      }
+      await db.prepare(`
+        UPDATE ${SYNC_BLOBS_TABLE}
+        SET status = 'deleted'
+        WHERE user_id = ? AND blob_id = ? AND status IN ('orphaned', 'delete_failed')
+      `).bind(userId, candidate.blob_id).run()
+      deleted += 1
+    } catch {
+      await db.prepare(`
+        UPDATE ${SYNC_BLOBS_TABLE}
+        SET status = 'delete_failed', last_referenced_at = ?
+        WHERE user_id = ? AND blob_id = ? AND status IN ('orphaned', 'delete_failed')
+      `).bind(nowIso, userId, candidate.blob_id).run()
+      deleteFailed += 1
+    }
+  }
+
+  await reconcileStaleSyncBlobChunks(event, userId, staleBefore, limit)
+  await buildSyncQuotaReconcileStatement(db, userId, nowIso).run()
+  return {
+    markedOrphaned: Number(markResult.meta?.changes ?? 0),
+    deleted,
+    deleteFailed
+  }
 }
 
 async function getServerCursor(db: D1Database, userId: string) {
@@ -1049,18 +1334,86 @@ export async function pullSyncItemsV1(
   return { items, oplog, nextCursor }
 }
 
-export async function uploadSyncBlob(event: H3Event, userId: string, file: File) {
+interface SyncBlobUploadOptions {
+  itemId?: string
+  logicalVersion?: string
+  sha256?: string
+  sizeBytes?: number
+}
+
+interface SyncBlobRecord {
+  blob_id: string
+  object_key: string
+  sha256: string
+  size_bytes: number
+  content_type: string | null
+  storage_channel?: string
+  storage_provider?: string
+}
+export async function findExistingSyncBlob(
+  event: H3Event,
+  userId: string,
+  itemId?: string,
+  logicalVersion?: string,
+  expected?: Pick<SyncBlobUploadOptions, 'sha256' | 'sizeBytes'>
+) {
+  const normalizedItemId = itemId?.trim() || ''
+  const normalizedLogicalVersion = logicalVersion?.trim() || ''
+  if (!normalizedItemId || !normalizedLogicalVersion) return null
+
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const existing = await db.prepare(`
+    SELECT blob_id, object_key, sha256, size_bytes, content_type
+    FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ? AND item_id = ? AND logical_version = ?
+      AND status IN ('staged', 'committed', 'ready')
+    LIMIT 1
+  `).bind(userId, normalizedItemId, normalizedLogicalVersion).first<SyncBlobRecord>()
+  if (!existing) return null
+  if (expected?.sha256 && existing.sha256 !== expected.sha256) return null
+  if (expected?.sizeBytes !== undefined && Number(existing.size_bytes) !== expected.sizeBytes) return null
+
+  return {
+    blobId: existing.blob_id,
+    objectKey: existing.object_key,
+    sha256: existing.sha256,
+    sizeBytes: Number(existing.size_bytes),
+    storageChannel: 'existing',
+    storageProvider: 'existing',
+    uploadRetry: undefined,
+    deduplicated: true
+  }
+}
+
+export async function uploadSyncBlob(
+  event: H3Event,
+  userId: string,
+  file: File,
+  options: SyncBlobUploadOptions = {}
+) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const bucket = getSyncBlobBucket(event)
   if (!bucket)
     throw new Error('R2 bucket is not available.')
 
+  const itemId = options.itemId?.trim() || null
+  const logicalVersion = options.logicalVersion?.trim() || null
+  const existing = await findExistingSyncBlob(
+    event,
+    userId,
+    itemId ?? undefined,
+    logicalVersion ?? undefined,
+    options
+  )
+  if (existing) return existing
+
   const arrayBuffer = await file.arrayBuffer()
   const sizeBytes = Number(file.size || arrayBuffer.byteLength)
-
-  const blobId = crypto.randomUUID()
+  const blobId = randomUUID()
   const objectKey = `${userId}/${blobId}`
+  const contentType = file.type || 'application/octet-stream'
   const stored = await putStorageObject({
     event,
     bucket,
@@ -1068,34 +1421,338 @@ export async function uploadSyncBlob(event: H3Event, userId: string, file: File)
     externalStorage: null,
     key: objectKey,
     data: Buffer.from(arrayBuffer),
-    contentType: file.type || 'application/octet-stream',
+    contentType,
     resourceType: 'sync-blob',
     governanceResourceId: `sync-blob:${blobId}`,
     actorId: userId,
   })
+  if (
+    (options.sha256 && stored.sha256 !== options.sha256)
+    || (options.sizeBytes !== undefined && options.sizeBytes !== sizeBytes)
+  ) {
+    await deleteStorageObject({
+      event,
+      bucket,
+      memoryStorage: syncBlobMemoryStorage,
+      externalStorage: null,
+      key: objectKey,
+      resourceType: 'sync-blob',
+      governanceResourceId: `sync-blob:${blobId}`,
+      actorId: userId,
+    })
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Blob content does not match its declared hash or size')
+  }
 
   await db.prepare(`
-    INSERT INTO ${SYNC_BLOBS_TABLE} (user_id, blob_id, object_key, sha256, size_bytes, content_type, created_at, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO ${SYNC_BLOBS_TABLE}
+      (user_id, blob_id, object_key, sha256, size_bytes, content_type, created_at, status, item_id, logical_version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'staged', ?, ?)
   `).bind(
     userId,
     blobId,
     objectKey,
     stored.sha256,
     sizeBytes,
-    file.type || 'application/octet-stream',
+    contentType,
     new Date().toISOString(),
-    'ready',
+    itemId,
+    logicalVersion
   ).run()
 
+  const row = await db.prepare(`
+    SELECT blob_id, object_key, sha256, size_bytes, content_type
+    FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ? AND blob_id = ?
+  `).bind(userId, blobId).first<SyncBlobRecord>()
+  if (row) {
+    return {
+      blobId: row.blob_id,
+      objectKey: row.object_key,
+      sha256: row.sha256,
+      sizeBytes: Number(row.size_bytes),
+      storageChannel: stored.storageChannel,
+      storageProvider: stored.storageProvider,
+      uploadRetry: stored.uploadRetry,
+      deduplicated: false
+    }
+  }
+
+  if (itemId && logicalVersion) {
+    const winner = await db.prepare(`
+      SELECT blob_id, object_key, sha256, size_bytes, content_type
+      FROM ${SYNC_BLOBS_TABLE}
+      WHERE user_id = ? AND item_id = ? AND logical_version = ?
+        AND status IN ('staged', 'committed', 'ready')
+      LIMIT 1
+    `).bind(userId, itemId, logicalVersion).first<SyncBlobRecord>()
+    await deleteStorageObject({
+      event,
+      bucket,
+      memoryStorage: syncBlobMemoryStorage,
+      externalStorage: null,
+      key: objectKey,
+      resourceType: 'sync-blob',
+      governanceResourceId: `sync-blob:${blobId}`,
+      actorId: userId,
+    })
+    if (winner) {
+      return {
+        blobId: winner.blob_id,
+        objectKey: winner.object_key,
+        sha256: winner.sha256,
+        sizeBytes: Number(winner.size_bytes),
+        storageChannel: 'existing',
+        storageProvider: 'existing',
+        uploadRetry: undefined,
+        deduplicated: true
+      }
+    }
+  }
+
+  throw new Error('SYNC_BLOB_METADATA_MISSING')
+}
+
+export interface SyncBlobChunkDescriptor {
+  index: number
+  sha256: string
+  sizeBytes: number
+}
+
+export interface SyncBlobChunkPrepareResult {
+  action: 'reuse' | 'upload'
+  blob?: { blobId: string, objectKey: string, sha256: string, sizeBytes: number }
+  sessionId?: string
+  missing: SyncBlobChunkDescriptor[]
+}
+
+export async function prepareSyncBlobChunks(
+  event: H3Event,
+  userId: string,
+  options: {
+    itemId: string
+    logicalVersion: string
+    sha256: string
+    sizeBytes: number
+    chunkSize: number
+    chunks: SyncBlobChunkDescriptor[]
+  }
+): Promise<SyncBlobChunkPrepareResult> {
+  const existing = await findExistingSyncBlob(event, userId, options.itemId, options.logicalVersion, {
+    sha256: options.sha256,
+    sizeBytes: options.sizeBytes
+  })
+  if (existing) {
+    return {
+      action: 'reuse',
+      blob: {
+        blobId: existing.blobId,
+        objectKey: existing.objectKey,
+        sha256: existing.sha256,
+        sizeBytes: existing.sizeBytes
+      },
+      missing: []
+    }
+  }
+
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const existingSession = await db.prepare(`
+    SELECT session_id
+    FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+    WHERE user_id = ? AND item_id = ? AND logical_version = ? AND payload_sha256 = ?
+    LIMIT 1
+  `).bind(userId, options.itemId, options.logicalVersion, options.sha256).first<{ session_id: string }>()
+  const sessionId = existingSession?.session_id ?? randomUUID()
+  await db.prepare(`
+    INSERT OR IGNORE INTO ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+      (user_id, session_id, item_id, logical_version, payload_sha256, size_bytes, chunk_size, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    userId,
+    sessionId,
+    options.itemId,
+    options.logicalVersion,
+    options.sha256,
+    options.sizeBytes,
+    options.chunkSize,
+    new Date().toISOString()
+  ).run()
+
+  const missing: SyncBlobChunkDescriptor[] = []
+  for (const chunk of options.chunks) {
+    const stored = await db.prepare(`
+      SELECT chunk_id
+      FROM ${SYNC_BLOB_CHUNKS_TABLE}
+      WHERE user_id = ? AND sha256 = ? AND size_bytes = ? AND status = 'ready'
+      LIMIT 1
+    `).bind(userId, chunk.sha256, chunk.sizeBytes).first<{ chunk_id: string }>()
+    await db.prepare(`
+      INSERT INTO ${SYNC_BLOB_UPLOAD_REFS_TABLE}
+        (user_id, session_id, chunk_index, chunk_id, sha256, size_bytes)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, session_id, chunk_index) DO UPDATE SET
+        chunk_id = excluded.chunk_id,
+        sha256 = excluded.sha256,
+        size_bytes = excluded.size_bytes
+    `).bind(userId, sessionId, chunk.index, stored?.chunk_id ?? '', chunk.sha256, chunk.sizeBytes).run()
+    if (!stored) missing.push(chunk)
+  }
+
+  return { action: 'upload', sessionId, missing }
+}
+
+export async function uploadSyncBlobChunk(
+  event: H3Event,
+  userId: string,
+  sessionId: string,
+  chunk: SyncBlobChunkDescriptor,
+  file: File
+): Promise<{ chunkId: string, sha256: string, sizeBytes: number }> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const expected = await db.prepare(`
+    SELECT sha256, size_bytes, chunk_id
+    FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE}
+    WHERE user_id = ? AND session_id = ? AND chunk_index = ?
+  `).bind(userId, sessionId, chunk.index).first<{ sha256: string, size_bytes: number, chunk_id: string }>()
+  if (!expected || expected.sha256 !== chunk.sha256 || Number(expected.size_bytes) !== chunk.sizeBytes) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Unknown or invalid upload chunk')
+  }
+  if (expected.chunk_id) {
+    return { chunkId: expected.chunk_id, sha256: expected.sha256, sizeBytes: Number(expected.size_bytes) }
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const actualSha256 = createHash('sha256').update(bytes).digest('hex')
+  if (bytes.byteLength !== chunk.sizeBytes || actualSha256 !== chunk.sha256) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload chunk does not match its hash or size')
+  }
+  const existing = await db.prepare(`
+    SELECT chunk_id, object_key
+    FROM ${SYNC_BLOB_CHUNKS_TABLE}
+    WHERE user_id = ? AND sha256 = ? AND size_bytes = ? AND status = 'ready'
+    LIMIT 1
+  `).bind(userId, chunk.sha256, chunk.sizeBytes).first<{ chunk_id: string, object_key: string }>()
+  let chunkId = existing?.chunk_id
+  if (!chunkId) {
+    chunkId = chunk.sha256
+    const objectKey = `${userId}/sync-chunks/${chunk.sha256}`
+    const bucket = getSyncBlobBucket(event)
+    if (!bucket) throw new Error('R2 bucket is not available.')
+    await putStorageObject({
+      event,
+      bucket,
+      memoryStorage: syncBlobMemoryStorage,
+      externalStorage: null,
+      key: objectKey,
+      data: bytes,
+      contentType: file.type || 'application/octet-stream',
+      resourceType: 'sync-blob-chunk',
+      governanceResourceId: `sync-blob-chunk:${chunkId}`,
+      actorId: userId,
+    })
+    await db.prepare(`
+      INSERT OR IGNORE INTO ${SYNC_BLOB_CHUNKS_TABLE}
+        (user_id, chunk_id, sha256, size_bytes, object_key, created_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'ready')
+    `).bind(userId, chunkId, chunk.sha256, chunk.sizeBytes, objectKey, new Date().toISOString()).run()
+  }
+  await db.prepare(`
+    UPDATE ${SYNC_BLOB_UPLOAD_REFS_TABLE}
+    SET chunk_id = ?
+    WHERE user_id = ? AND session_id = ? AND chunk_index = ?
+  `).bind(chunkId, userId, sessionId, chunk.index).run()
+  return { chunkId, sha256: chunk.sha256, sizeBytes: chunk.sizeBytes }
+}
+
+export async function commitSyncBlobChunks(
+  event: H3Event,
+  userId: string,
+  sessionId: string
+) {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const session = await db.prepare(`
+    SELECT item_id, logical_version, payload_sha256, size_bytes
+    FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+    WHERE user_id = ? AND session_id = ?
+  `).bind(userId, sessionId).first<{
+    item_id: string
+    logical_version: string
+    payload_sha256: string
+    size_bytes: number
+  }>()
+  if (!session) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload session not found')
+  const refs = await db.prepare(`
+    SELECT r.chunk_index, r.chunk_id, r.sha256, r.size_bytes, c.object_key
+    FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} AS r
+    JOIN ${SYNC_BLOB_CHUNKS_TABLE} AS c
+      ON c.user_id = r.user_id AND c.chunk_id = r.chunk_id AND c.status = 'ready'
+    WHERE r.user_id = ? AND r.session_id = ?
+    ORDER BY r.chunk_index ASC
+  `).bind(userId, sessionId).all<{
+    chunk_index: number
+    chunk_id: string
+    sha256: string
+    size_bytes: number
+    object_key: string
+  }>()
+  if (!refs.results?.length) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'No upload chunks are ready')
+
+  const bucket = getSyncBlobBucket(event)
+  if (!bucket) throw new Error('R2 bucket is not available.')
+  const buffers: Buffer[] = []
+  for (const ref of refs.results) {
+    const object = await bucket.get(ref.object_key)
+    if (!object) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload chunk is unavailable')
+    buffers.push(Buffer.from(await object.arrayBuffer()))
+  }
+  const payload = Buffer.concat(buffers)
+  const payloadSha256 = createHash('sha256').update(payload).digest('hex')
+  if (payload.byteLength !== Number(session.size_bytes) || payloadSha256 !== session.payload_sha256) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Chunked payload does not match its manifest')
+  }
+
+  const existing = await findExistingSyncBlob(event, userId, session.item_id, session.logical_version, {
+    sha256: session.payload_sha256,
+    sizeBytes: Number(session.size_bytes)
+  })
+  if (existing) return existing
+
+  const blobId = randomUUID()
+  const nowIso = new Date().toISOString()
+  await db.prepare(`
+    INSERT INTO ${SYNC_BLOBS_TABLE}
+      (user_id, blob_id, object_key, sha256, size_bytes, content_type, created_at, status, item_id, logical_version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'staged', ?, ?)
+  `).bind(
+    userId,
+    blobId,
+    `chunks:${blobId}`,
+    payloadSha256,
+    payload.byteLength,
+    'text/plain;charset=utf-8',
+    nowIso,
+    session.item_id,
+    session.logical_version
+  ).run()
+  for (const ref of refs.results) {
+    await db.prepare(`
+      INSERT INTO ${SYNC_BLOB_CHUNK_REFS_TABLE} (user_id, blob_id, chunk_index, chunk_id)
+      VALUES (?, ?, ?, ?)
+    `).bind(userId, blobId, ref.chunk_index, ref.chunk_id).run()
+  }
+  await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId).run()
+  await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId).run()
   return {
     blobId,
-    objectKey,
-    sha256: stored.sha256,
-    sizeBytes,
-    storageChannel: stored.storageChannel,
-    storageProvider: stored.storageProvider,
-    uploadRetry: stored.uploadRetry,
+    objectKey: `chunks:${blobId}`,
+    sha256: payloadSha256,
+    sizeBytes: payload.byteLength,
+    storageChannel: 'r2-chunks',
+    storageProvider: 'r2',
+    uploadRetry: undefined,
+    deduplicated: false
   }
 }
 
@@ -1120,11 +1777,45 @@ export async function getSyncBlob(event: H3Event, userId: string, blobId: string
   const row = await db.prepare(`
     SELECT object_key, sha256, size_bytes, content_type
     FROM ${SYNC_BLOBS_TABLE}
-    WHERE user_id = ? AND blob_id = ?
+    WHERE user_id = ? AND blob_id = ? AND status <> 'deleted'
   `).bind(userId, blobId).first<{ object_key: string, sha256: string, size_bytes: number, content_type: string | null }>()
 
   if (!row)
     return null
+  if (row.object_key.startsWith('chunks:')) {
+    const refs = await db.prepare(`
+      SELECT r.chunk_index, c.object_key
+      FROM ${SYNC_BLOB_CHUNK_REFS_TABLE} AS r
+      JOIN ${SYNC_BLOB_CHUNKS_TABLE} AS c
+        ON c.user_id = r.user_id AND c.chunk_id = r.chunk_id AND c.status = 'ready'
+      WHERE r.user_id = ? AND r.blob_id = ?
+      ORDER BY r.chunk_index ASC
+    `).bind(userId, blobId).all<{ chunk_index: number, object_key: string }>()
+    if (!refs.results?.length) return null
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for (const ref of refs.results ?? []) {
+            const chunk = await bucket.get(ref.object_key)
+            if (!chunk) throw new Error('Sync Blob chunk is unavailable.')
+            controller.enqueue(new Uint8Array(await chunk.arrayBuffer()))
+          }
+          controller.close()
+        } catch (error) {
+          controller.error(error)
+        }
+      }
+    })
+    return {
+      body,
+      byteLength: Number(row.size_bytes),
+      contentType: row.content_type || 'application/octet-stream',
+      sha256: row.sha256,
+      sizeBytes: Number(row.size_bytes),
+      objectKey: row.object_key,
+    }
+  }
+
 
   const object = await bucket.get(row.object_key)
   if (!object)
@@ -1206,6 +1897,13 @@ export interface SyncCatalogItem {
   item_id: string
   type: string
   qualified_name: string | null
+  plugin_id: string | null
+  plugin_display_name: string | null
+  file_path: string | null
+  file_display_name: string | null
+  kind: 'settings' | 'data' | null
+  storage_state: 'inline' | 'blob'
+  lifecycle_status: 'active' | 'deleted'
   category: string
   category_label: string
   payload_size: number
@@ -1222,9 +1920,23 @@ export interface SyncCatalogSummary {
   total_payload_bytes: number
   last_updated_at: string
 }
+export interface SyncBlobUsageBucket {
+  bytes: number
+  objects: number
+}
+
+export interface SyncBlobUsage {
+  active: SyncBlobUsageBucket
+  staged: SyncBlobUsageBucket
+  orphaned: SyncBlobUsageBucket
+  delete_failed: SyncBlobUsageBucket
+  deleted: SyncBlobUsageBucket
+}
+
 
 export interface SyncItemCatalog {
   summary: SyncCatalogSummary
+  blob_usage: SyncBlobUsage
   categories: SyncCatalogCategory[]
   items: SyncCatalogItem[]
   generated_at: string
@@ -1410,12 +2122,31 @@ export async function getSyncItemCatalog(
     const category = resolveCatalogCategory(row.type, row.item_id, qualifiedName)
     const payloadSize = normalizePayloadSize(row.payload_size)
     const deletedAt = row.deleted_at ?? null
-    const sampleName = qualifiedName || row.item_id
+    const pluginId = typeof metaPlain?.plugin_id === 'string' ? metaPlain.plugin_id.trim() || null : null
+    const pluginDisplayName =
+      typeof metaPlain?.plugin_display_name === 'string'
+        ? metaPlain.plugin_display_name.trim() || null
+        : null
+    const filePath = typeof metaPlain?.file_path === 'string' ? metaPlain.file_path.trim() || null : null
+    const fileDisplayName =
+      typeof metaPlain?.file_display_name === 'string'
+        ? metaPlain.file_display_name.trim() || null
+        : null
+    const rawKind = metaPlain?.file_kind
+    const kind = rawKind === 'settings' || rawKind === 'data' ? rawKind : null
+    const sampleName = fileDisplayName || filePath || pluginDisplayName || qualifiedName || row.item_id
 
     items.push({
       item_id: row.item_id,
       type: row.type,
       qualified_name: qualifiedName,
+      plugin_id: pluginId,
+      plugin_display_name: pluginDisplayName,
+      file_path: filePath,
+      file_display_name: fileDisplayName,
+      kind,
+      storage_state: row.payload_ref ? 'blob' : 'inline',
+      lifecycle_status: deletedAt ? 'deleted' : 'active',
       category: category.key,
       category_label: category.label,
       payload_size: payloadSize,
@@ -1456,6 +2187,27 @@ export async function getSyncItemCatalog(
     }
     return left.key.localeCompare(right.key)
   })
+  const blobUsageRows = await db.prepare(`
+    SELECT status, COUNT(*) AS objects, COALESCE(SUM(size_bytes), 0) AS bytes
+    FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ?
+    GROUP BY status
+  `).bind(userId).all<{ status: string, objects: number, bytes: number }>()
+  const emptyBlobUsage = (): SyncBlobUsageBucket => ({ bytes: 0, objects: 0 })
+  const blobUsage: SyncBlobUsage = {
+    active: emptyBlobUsage(),
+    staged: emptyBlobUsage(),
+    orphaned: emptyBlobUsage(),
+    delete_failed: emptyBlobUsage(),
+    deleted: emptyBlobUsage(),
+  }
+  for (const row of blobUsageRows.results ?? []) {
+    if (!(row.status in blobUsage)) continue
+    const bucket = blobUsage[row.status as keyof SyncBlobUsage]
+    bucket.bytes = normalizePayloadSize(row.bytes)
+    bucket.objects = Math.max(0, Math.floor(Number(row.objects ?? 0)))
+  }
+
 
   return {
     summary: {
@@ -1465,6 +2217,7 @@ export async function getSyncItemCatalog(
       total_payload_bytes: totalPayloadBytes,
       last_updated_at: lastUpdatedAt,
     },
+    blob_usage: blobUsage,
     categories,
     items,
     generated_at: new Date().toISOString(),

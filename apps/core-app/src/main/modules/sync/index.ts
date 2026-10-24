@@ -77,6 +77,8 @@ const AUTO_PULL_INTERVAL_MINUTES = 10
 const PUSH_DEBOUNCE_MS = 10_000
 const LARGE_BLOB_BATCH_MS = 60_000
 const LARGE_PAYLOAD_THRESHOLD_BYTES = 64 * 1024
+const CHUNKED_PAYLOAD_THRESHOLD_BYTES = 1024 * 1024
+const SYNC_BLOB_CHUNK_SIZE = 1024 * 1024
 const STARTUP_PULL_TIMEOUT_MS = 8_000
 const NORMAL_PULL_TIMEOUT_MS = 20_000
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000, 300_000, 600_000] as const
@@ -109,6 +111,7 @@ const knownPluginQualifiedNames = new Set<string>()
 const storageWatchers = new Map<string, () => void>()
 const remoteApplyInFlight = new Set<string>()
 const lastSyncedSnapshots = new Map<string, unknown>()
+const lastSyncedPluginHashes = new Map<string, string>()
 
 let started = false
 let sdk: CloudSyncSDK | null = null
@@ -158,6 +161,11 @@ function isSyncStorageKey(name: string): boolean {
 
 function sha256Hex(value: string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+async function sha256Blob(blob: Blob): Promise<string> {
+  return createHash('sha256')
+    .update(new Uint8Array(await blob.arrayBuffer()))
+    .digest('hex')
 }
 
 function cloneValue<T>(value: T): T {
@@ -643,7 +651,11 @@ function getPluginStorageContent(
 
 function collectPluginSyncItems(qualifiedNames?: string[]): Array<{
   pluginName: string
+  pluginId: string
+  pluginDisplayName: string
   fileName: string
+  fileKind: 'settings' | 'data'
+  fileDisplayName?: string
   qualifiedName: string
   content: unknown
 }> {
@@ -686,7 +698,11 @@ function collectPluginSyncItems(qualifiedNames?: string[]): Array<{
 
   const items: Array<{
     pluginName: string
+    pluginId: string
+    pluginDisplayName: string
     fileName: string
+    fileKind: 'settings' | 'data'
+    fileDisplayName?: string
     qualifiedName: string
     content: unknown
   }> = []
@@ -697,14 +713,19 @@ function collectPluginSyncItems(qualifiedNames?: string[]): Array<{
       continue
     }
     const allowedFiles = requestedByPlugin.get(pluginName) ?? null
-    const fileNames = plugin.listPluginFiles()
+    const fileNames = plugin.getPluginStorageSyncFiles()
     for (const fileName of fileNames) {
       if (allowedFiles && !allowedFiles.has(fileName)) {
         continue
       }
+      const metadata = plugin.getPluginStorageSyncMetadata(fileName)
       items.push({
         pluginName,
+        pluginId: plugin.pluginId,
+        pluginDisplayName: plugin.displayName?.trim() || plugin.name,
         fileName,
+        fileKind: metadata.kind,
+        ...(metadata.displayName ? { fileDisplayName: metadata.displayName } : {}),
         qualifiedName: `${PLUGIN_SYNC_QUALIFIED_PREFIX}${pluginName}::${fileName}`,
         content: plugin.getPluginFile(fileName)
       })
@@ -769,7 +790,12 @@ async function collectStorageSnapshots(
         contentHash: sha256Hex(rawText),
         cryptoVersion: encrypted.cryptoVersion,
         keyId: encrypted.keyId,
-        rawText
+        rawText,
+        pluginId: item.pluginId,
+        pluginDisplayName: item.pluginDisplayName,
+        filePath: item.fileName,
+        fileKind: item.fileKind,
+        ...(item.fileDisplayName ? { fileDisplayName: item.fileDisplayName } : {})
       })
     }
   }
@@ -1316,6 +1342,10 @@ function handlePluginStorageUpdate(event: ITouchEvent<TalexEvents>): void {
     markStorageDirty(PLUGIN_SYNC_ALL_SCOPE)
     return
   }
+  const plugin = getPluginManager()?.getPluginByName(pluginName) as TouchPlugin | undefined
+  if (storageEvent.fileName && plugin && !plugin.isPluginStorageSyncFile(storageEvent.fileName)) {
+    return
+  }
   const qualifiedName = buildPluginStorageQualifiedName(pluginName, storageEvent.fileName)
   if (qualifiedName) {
     markStorageDirty(qualifiedName)
@@ -1644,12 +1674,21 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       const items: SyncItemInput[] = []
       const processed = new Set<string>()
       const currentPluginQualifiedNames = new Set<string>()
+      const processedPluginHashes = new Map<string, string>()
       const processedConversationDirtyAt = new Map<string, number>()
       let lastAllocatedOpSeq = Math.max(0, Math.floor(getSyncPreferenceState().opSeq || 0))
 
       for (const snapshot of snapshots) {
         if (isPluginStorageQualifiedName(snapshot.qualifiedName)) {
           currentPluginQualifiedNames.add(snapshot.qualifiedName)
+        }
+        const isPluginSnapshot = isPluginStorageQualifiedName(snapshot.qualifiedName)
+        if (
+          isPluginSnapshot &&
+          lastSyncedPluginHashes.get(snapshot.qualifiedName) === snapshot.contentHash
+        ) {
+          processed.add(snapshot.qualifiedName)
+          continue
         }
 
         const isLarge = snapshot.payloadSize > LARGE_PAYLOAD_THRESHOLD_BYTES
@@ -1663,15 +1702,78 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         lastAllocatedOpSeq += 1
         const opSeq = lastAllocatedOpSeq
         if (isLarge) {
-          const blob = new Blob([snapshot.payloadEnc], { type: 'text/plain;charset=utf-8' })
-          const upload = await client.uploadBlob(blob, {
-            filename: `${snapshot.qualifiedName}.sync`,
-            contentType: 'text/plain;charset=utf-8'
-          })
-          items.push(buildBlobSyncItem(snapshot, opSeq, updatedAt, upload.blob_id))
+          const payloadSha256 = sha256Hex(snapshot.payloadEnc)
+          const payloadBlob = new Blob([snapshot.payloadEnc], { type: 'text/plain;charset=utf-8' })
+          let blobId = ''
+          if (snapshot.payloadSize >= CHUNKED_PAYLOAD_THRESHOLD_BYTES) {
+            const chunks: Array<{ index: number; sha256: string; size_bytes: number }> = []
+            for (
+              let offset = 0, index = 0;
+              offset < snapshot.payloadSize;
+              offset += SYNC_BLOB_CHUNK_SIZE, index += 1
+            ) {
+              const chunkBlob = payloadBlob.slice(
+                offset,
+                Math.min(offset + SYNC_BLOB_CHUNK_SIZE, snapshot.payloadSize)
+              )
+              chunks.push({
+                index,
+                sha256: await sha256Blob(chunkBlob),
+                size_bytes: chunkBlob.size
+              })
+            }
+            const prepared = await client.prepareChunkedBlob({
+              itemId: snapshot.itemId,
+              logicalVersion: snapshot.contentHash,
+              sha256: payloadSha256,
+              sizeBytes: snapshot.payloadSize,
+              chunkSize: SYNC_BLOB_CHUNK_SIZE,
+              chunks
+            })
+            if (prepared.action === 'reuse') {
+              blobId = prepared.blob_id ?? ''
+            } else {
+              if (!prepared.session_id) throw new Error('Chunked Blob upload session is missing')
+              for (const chunk of prepared.missing) {
+                const start = chunk.index * SYNC_BLOB_CHUNK_SIZE
+                await client.uploadBlobChunk(payloadBlob.slice(start, start + chunk.size_bytes), {
+                  sessionId: prepared.session_id,
+                  index: chunk.index,
+                  sha256: chunk.sha256,
+                  sizeBytes: chunk.size_bytes
+                })
+              }
+              blobId = (await client.commitBlobChunks(prepared.session_id)).blob_id
+            }
+          } else {
+            const prepared = await client.prepareBlob({
+              itemId: snapshot.itemId,
+              logicalVersion: snapshot.contentHash,
+              sha256: payloadSha256,
+              sizeBytes: snapshot.payloadSize
+            })
+            blobId =
+              prepared.action === 'reuse'
+                ? (prepared.blob_id ?? '')
+                : (
+                    await client.uploadBlob(payloadBlob, {
+                      filename: `${snapshot.qualifiedName}.sync`,
+                      contentType: 'text/plain;charset=utf-8',
+                      itemId: snapshot.itemId,
+                      logicalVersion: snapshot.contentHash,
+                      sha256: payloadSha256,
+                      sizeBytes: snapshot.payloadSize
+                    })
+                  ).blob_id
+          }
+          if (!blobId) throw new Error('Blob upload did not return a blob id')
+          items.push(buildBlobSyncItem(snapshot, opSeq, updatedAt, blobId))
           pendingBlobStorages.delete(snapshot.qualifiedName)
         } else {
           items.push(buildSyncItemFromSnapshot(snapshot, opSeq, updatedAt))
+        }
+        if (isPluginSnapshot) {
+          processedPluginHashes.set(snapshot.qualifiedName, snapshot.contentHash)
         }
         processed.add(snapshot.qualifiedName)
         const conversationId = parseConversationQualifiedName(snapshot.qualifiedName)
@@ -1755,6 +1857,10 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
           if (data && typeof data === 'object') {
             lastSyncedSnapshots.set(key, cloneValue(data))
           }
+        }
+        const pluginHash = processedPluginHashes.get(key)
+        if (pluginHash && isPluginStorageQualifiedName(key)) {
+          lastSyncedPluginHashes.set(key, pluginHash)
         }
       }
       for (const marker of scopeMarkers) {
@@ -1868,6 +1974,7 @@ function stopAutoSync(reason = 'stop'): void {
   dirtyStorages.clear()
   pendingBlobStorages.clear()
   knownPluginQualifiedNames.clear()
+  lastSyncedPluginHashes.clear()
   setQueueDepthByBuffers()
   cleanupStorageWatchers()
   cleanupPluginStorageListener()

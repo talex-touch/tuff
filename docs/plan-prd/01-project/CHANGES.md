@@ -18,6 +18,14 @@
 - 上游模型拉取支持增量候选选择，不再覆盖现有模型列表；场景绑定固定代码产品功能清单，种子不钉死供应商默认模型并保留已有的手动路由配置。
 - 补齐 `corebox.selection.translate` 与 `corebox.fx.*` 种子场景，缺少上游能力时对外显式呈现 degraded；92 项测试通过，ESLint 零警告通过。未修改生产 D1 数据库。
 
+### core-app + nexus: 收敛插件存储云同步
+
+- 插件普通存储新增 `storageSync.files` 精确 JSON allowlist；未声明插件保留 legacy 顶层 JSON 兼容，非法声明 fail-closed。同步快照携带插件与文件展示元数据，Dashboard 不再把内部 qualified name 当主标题。
+- 大对象上传新增 item + logical version 幂等键；Blob 进入 staged/committed/orphaned/delete_failed 生命周期，Push 提交引用后才 committed，成功 Push 或同步握手后执行有界 best-effort 孤儿回收与 quota 对账。
+- 新增 Blob `prepare` 预检，重复内容在发送文件字节前直接复用；超过 1 MiB 走 1 MiB 分块上传与按块复用，下载按 Manifest 重组，过期上传会话和无引用块纳入 GC。
+- 旧版本 Blob 默认保留 24 小时并计入 quota 对账；Dashboard 增加 active/staged/orphaned/delete_failed/deleted 账单，插件文件按插件分组展示。
+- CoreApp Node 类型检查、Nexus raw typecheck、CoreApp 同步回归 4 项、Nexus Pull 回归 4 项及相关 ESLint 通过。真实独立 tsx Blob smoke 被 Nexus `#imports` Nuxt 运行时别名阻塞，未冒充 Preview/R2 完整验收。
+
 ### search: 修复缓存键易失失效与对话消息全表扫描风险（C3 / C7）
 
 - `buildSearchCacheKey` 显式过滤 `sessionId`、`requestId`、`timestamp`、`_traceId` 等动态键，并对 JSON 字符串 content 进行稳定结构化解析；10 项测试断言相同查询严格产出相同缓存键、序列化与激活顺序无关性。

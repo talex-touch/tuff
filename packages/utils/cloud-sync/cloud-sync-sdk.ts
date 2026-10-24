@@ -11,12 +11,16 @@ import type {
   KeysIssueDeviceResponse,
   KeysListResponse,
   KeysRecoverDeviceResponse,
+  PrepareBlobResponse,
+  PrepareChunkedBlobResponse,
   PullResponse,
   PushResponse,
   QuotaInfo,
   QuotaValidateResponse,
+  SyncBlobChunkDescriptor,
   SyncErrorCode,
   SyncItemInput,
+  UploadChunkResponse,
   UploadResponse,
 } from '../types/cloud-sync'
 
@@ -125,10 +129,87 @@ export class CloudSyncSDK {
     })
   }
 
-  async uploadBlob(file: Blob | File, opts?: { filename?: string, contentType?: string }): Promise<UploadResponse> {
+  async prepareBlob(opts: {
+    itemId: string
+    logicalVersion: string
+    sha256: string
+    sizeBytes: number
+  }): Promise<PrepareBlobResponse> {
+    return this.requestWithSyncToken<PrepareBlobResponse>('/api/v1/sync/blobs/prepare', {
+      method: 'POST',
+      json: {
+        item_id: opts.itemId,
+        logical_version: opts.logicalVersion,
+        sha256: opts.sha256,
+        size_bytes: opts.sizeBytes,
+      },
+    })
+  }
+
+  async prepareChunkedBlob(opts: {
+    itemId: string
+    logicalVersion: string
+    sha256: string
+    sizeBytes: number
+    chunkSize: number
+    chunks: SyncBlobChunkDescriptor[]
+  }): Promise<PrepareChunkedBlobResponse> {
+    return this.requestWithSyncToken<PrepareChunkedBlobResponse>('/api/v1/sync/blobs/prepare-chunked', {
+      method: 'POST',
+      json: {
+        item_id: opts.itemId,
+        logical_version: opts.logicalVersion,
+        sha256: opts.sha256,
+        size_bytes: opts.sizeBytes,
+        chunk_size: opts.chunkSize,
+        chunks: opts.chunks,
+      },
+    })
+  }
+
+  async uploadBlobChunk(file: Blob | File, opts: {
+    sessionId: string
+    index: number
+    sha256: string
+    sizeBytes: number
+  }): Promise<UploadChunkResponse> {
+    const formData = this.createFormData()
+    formData.append('file', file, `chunk-${opts.index}`)
+    formData.append('session_id', opts.sessionId)
+    formData.append('index', String(opts.index))
+    formData.append('sha256', opts.sha256)
+    formData.append('size_bytes', String(opts.sizeBytes))
+    return this.requestWithSyncToken<UploadChunkResponse>('/api/v1/sync/blobs/chunks/upload', {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
+  async commitBlobChunks(sessionId: string): Promise<UploadResponse> {
+    return this.requestWithSyncToken<UploadResponse>('/api/v1/sync/blobs/chunks/commit', {
+      method: 'POST',
+      json: { session_id: sessionId },
+    })
+  }
+
+  async uploadBlob(
+    file: Blob | File,
+    opts?: {
+      filename?: string
+      contentType?: string
+      itemId?: string
+      logicalVersion?: string
+      sha256?: string
+      sizeBytes?: number
+    }
+  ): Promise<UploadResponse> {
     const formData = this.createFormData()
     const name = opts?.filename ?? (file as File).name ?? 'blob'
     formData.append('file', file, name)
+    if (opts?.itemId) formData.append('item_id', opts.itemId)
+    if (opts?.logicalVersion) formData.append('logical_version', opts.logicalVersion)
+    if (opts?.sha256) formData.append('sha256', opts.sha256)
+    if (opts?.sizeBytes !== undefined) formData.append('size_bytes', String(opts.sizeBytes))
     return this.requestWithSyncToken<UploadResponse>('/api/v1/sync/blobs/upload', {
       method: 'POST',
       body: formData,
