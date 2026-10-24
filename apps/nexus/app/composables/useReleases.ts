@@ -139,7 +139,7 @@ export function useReleases() {
     options: {
       channel?: ReleaseChannel
       status?: ReleaseStatus
-      includeAssets?: boolean
+      includeAssets?: boolean | 'featured'
       limit?: number
     } = {},
   ) {
@@ -152,8 +152,10 @@ export function useReleases() {
         params.set('channel', options.channel)
       if (options.status)
         params.set('status', options.status)
-      if (options.includeAssets)
+      if (options.includeAssets === true)
         params.set('assets', 'true')
+      else if (options.includeAssets === 'featured')
+        params.set('assets', 'featured')
       if (options.limit)
         params.set('limit', options.limit.toString())
 

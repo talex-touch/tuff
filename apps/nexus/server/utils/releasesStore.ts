@@ -500,6 +500,7 @@ export async function listReleases(
     channel?: ReleaseChannel
     status?: ReleaseStatus
     includeAssets?: boolean
+    assetMode?: 'featured'
     limit?: number
     offset?: number
   } = {},
@@ -545,16 +546,36 @@ export async function listReleases(
       return (results ?? []).map(mapReleaseRow)
     }
 
-    // The page and its assets in one round trip. The assets used to follow with an `IN` list of the
-    // page's ids: a second round trip, and past 100 releases more parameters than D1 binds.
-    const [releaseResult, assetResults] = await db.batch([
-      bound(query),
-      bound(`
+    const assetQuery = options.assetMode === 'featured'
+      ? `
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id IN (
+          SELECT id
+          FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (
+                PARTITION BY channel
+                ORDER BY datetime(COALESCE(published_at, created_at)) DESC, datetime(created_at) DESC, id DESC
+              ) AS channel_rank
+            FROM (${query})
+          )
+          WHERE channel_rank = 1
+        )
+        ORDER BY platform, arch;
+      `
+      : `
         SELECT *
         FROM ${RELEASE_ASSETS_TABLE}
         WHERE release_id IN (SELECT id FROM (${query}))
         ORDER BY platform, arch;
-      `),
+      `
+
+    // Keep the release page and its selected assets in one D1 batch. Featured mode only returns
+    // assets for the newest release in each channel represented by the page.
+    const [releaseResult, assetResults] = await db.batch([
+      bound(query),
+      bound(assetQuery),
     ])
     const releases = ((releaseResult?.results ?? []) as D1ReleaseRow[]).map(mapReleaseRow)
 
@@ -566,6 +587,13 @@ export async function listReleases(
         if (!assetsByRelease.has(asset.releaseId))
           assetsByRelease.set(asset.releaseId, [])
         assetsByRelease.get(asset.releaseId)!.push(asset)
+      }
+
+      if (options.assetMode === 'featured') {
+        return releases.map((release) => {
+          const releaseAssets = assetsByRelease.get(release.id)
+          return releaseAssets ? { ...release, assets: releaseAssets } : release
+        })
       }
 
       return releases.map(release => ({
@@ -599,11 +627,31 @@ export async function listReleases(
   if (options.includeAssets) {
     const allAssets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
     const assetsByRelease = new Map<string, ReleaseAsset[]>()
+    const featuredReleaseIds = new Set<string>()
+    const featuredChannels = new Set<ReleaseChannel>()
+
+    if (options.assetMode === 'featured') {
+      for (const release of releases) {
+        if (featuredChannels.has(release.channel))
+          continue
+        featuredChannels.add(release.channel)
+        featuredReleaseIds.add(release.id)
+      }
+    }
 
     for (const asset of allAssets) {
       if (!assetsByRelease.has(asset.releaseId))
         assetsByRelease.set(asset.releaseId, [])
       assetsByRelease.get(asset.releaseId)!.push(asset)
+    }
+
+    if (options.assetMode === 'featured') {
+      return releases.map((release) => {
+        const releaseAssets = assetsByRelease.get(release.id)
+        return featuredReleaseIds.has(release.id) && releaseAssets
+          ? { ...release, assets: releaseAssets }
+          : release
+      })
     }
 
     return releases.map(release => ({

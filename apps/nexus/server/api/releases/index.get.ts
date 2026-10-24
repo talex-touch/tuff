@@ -1,6 +1,7 @@
 import type { ReleaseChannel, ReleaseStatus } from '../../utils/releasesStore'
 import { createError, getQuery } from 'h3'
-import { attachSignatureUrls } from '../../utils/releaseSignature'
+import { openEdgeCache } from '../../utils/edgeCache'
+import { attachSignatureUrls, getReleaseMetadataEdgeTtlSeconds } from '../../utils/releaseSignature'
 import { listReleases } from '../../utils/releasesStore'
 
 const MAX_PAGE_SIZE = 50
@@ -13,26 +14,45 @@ export default defineEventHandler(async (event) => {
   const channel = parseChannel(query.channel)
   const status = parseStatus(query.status)
   const includeAssets = query.assets === 'true' || query.assets === '1'
+  const assetMode = query.assets === 'featured' ? 'featured' : includeAssets ? 'all' : 'none'
   const paginationRequested = query.limit !== undefined || query.cursor !== undefined
   const limit = paginationRequested ? parseLimit(query.limit) : undefined
   const offset = paginationRequested ? parseCursor(query.cursor) : 0
+  const edge = query.assets === undefined || typeof query.assets === 'string'
+    ? await openEdgeCache(event, {
+        name: 'releases',
+        params: { channel, status, assets: assetMode, limit, offset },
+      })
+    : null
+
+  if (edge?.hit)
+    return edge.hit
 
   const releases = await listReleases(event, {
     channel,
     status,
-    includeAssets,
+    includeAssets: assetMode !== 'none',
+    ...(assetMode === 'featured' ? { assetMode: 'featured' as const } : {}),
     ...(limit === undefined ? {} : { limit: limit + 1, offset }),
   })
   const hasMore = limit !== undefined && releases.length > limit
   const page = limit === undefined ? releases : releases.slice(0, limit)
-
-  return {
+  const body = {
     releases: page.map(release => attachSignatureUrls(release, event)),
     pageInfo: {
       hasMore,
       nextCursor: hasMore ? encodeCursor(offset + limit) : null,
     },
   }
+
+  if (edge) {
+    return edge.store(
+      { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } },
+      getReleaseMetadataEdgeTtlSeconds(body.releases),
+    )
+  }
+
+  return body
 })
 
 function parseChannel(value: unknown): ReleaseChannel | undefined {
