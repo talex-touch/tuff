@@ -118,7 +118,9 @@ export const docsPrerenderEvidenceRoutes = [
  * value and the rule's TTL equal. `/_i18n/**` is hash-versioned in the path, so it can be held
  * longer.
  */
-export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
+export const PRERENDERED_HTML_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
+export const DOCS_STATIC_CACHE_CONTROL = PRERENDERED_HTML_CACHE_CONTROL
+
 export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
 
 /**
@@ -127,6 +129,8 @@ export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400
  * `max-age=0, must-revalidate` while every page below it carried the window.
  */
 export const docsStaticHtmlHeaderRoutes = ['/en/docs', '/zh/docs', '/en/docs/**', '/zh/docs/**']
+/** Public prerendered pages contain no user-specific state and can share a short edge copy. */
+export const publicStaticHtmlHeaderRoutes = ['/', '/new', '/next', '/pricing', '/license', '/privacy', '/protocol', '/updates']
 /**
  * Prerendered JSON has no file extension, so Pages served it as `application/octet-stream`;
  * the explicit content-type is part of the same rule.
@@ -159,6 +163,8 @@ export const CLOUDFLARE_HEADERS_MAX_LINE_LENGTH = 2000
 
 export function createStaticCacheRouteRules() {
   const rules = {}
+  for (const route of publicStaticHtmlHeaderRoutes)
+    rules[route] = { headers: { 'cache-control': PRERENDERED_HTML_CACHE_CONTROL } }
   for (const route of docsStaticHtmlHeaderRoutes)
     rules[route] = { headers: { 'cache-control': DOCS_STATIC_CACHE_CONTROL } }
   for (const route of docsStaticJsonHeaderRoutes) {

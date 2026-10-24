@@ -113,6 +113,7 @@ code: |
 - `ArrowDown` / `ArrowUp` cycle and skip disabled commands, `Enter` selects, `Escape` closes. The highlight starts on the first enabled command.
 - Keyboard selection is ignored during IME composition, so Chinese, Japanese, and Korean input is not submitted early.
 - The overlay is `role="dialog"` with `aria-modal="true"`; disabled commands carry `aria-disabled="true"` and never emit `select`.
+- Tab and Shift+Tab cycle inside the panel, stopping only at controls that show and are in the tab order; the commands are not among them and move with `↑` / `↓`.
 - The panel background is a card-preset `TxBaseSurface` (`fake`) under the search input, the list and the `footer` slot, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted.
 - The overlay's dim is painted on a pseudo-element of the overlay rather than on its own background and opacity, so the panel's material samples the page, not only the dim.
 - The panel never fades as a whole as it opens and closes. Once its opacity animates, every backdrop filter inside it samples nothing but the panel, and the frost would drop out for the whole transition. What fades is each part of the panel instead: the content, the shadow and outline, and each layer of the material, so a material with a backdrop filter (such as the default `refraction`) samples the page from the first frame to the last.

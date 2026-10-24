@@ -101,6 +101,7 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 - The document renders block by block, so appended text never reflows the whole page.
 - While streaming, the still-growing tail fence defers its final rendering until it closes; renderers get `closed: false` only for that fence.
 - Unregistered languages use the built-ins: `TxMermaidBlock` for `mermaid`, `TxCodeBlock` for the rest.
+- Clicking a diagram opens a fullscreen preview: focus moves to its close button and Tab stays inside. Escape or a click on the backdrop closes it, Escape only while it is topmost, and focus then returns to the diagram.
 - The caret is `TxStreamText`'s: right after the last character of a paragraph, heading, or quote, otherwise on its own line below. Under reduced motion nothing enters and the caret rests.
 - DOMPurify loads dynamically; with `sanitize` on, nothing renders until it loads, or at all if loading fails. Sanitizing is no substitute for a server-side trust boundary.
 - Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.

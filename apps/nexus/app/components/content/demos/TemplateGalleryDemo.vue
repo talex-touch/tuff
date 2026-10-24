@@ -632,6 +632,8 @@ const copy = computed(() => zh.value
         variantZoomIn: '放大',
         variantZoomOut: '缩小',
         variantReset: '适应屏幕',
+        // The preview's own text, which the gallery does not forward.
+        variantPreview: { zoomLabel: '缩放' },
         variantFailed: '图片加载失败',
         variantTitle: '变体预览',
         variantName: (i: number) => (i === 0 ? '原图' : `变体 ${String.fromCharCode(64 + i)}`),
@@ -703,6 +705,7 @@ const copy = computed(() => zh.value
         variantZoomIn: 'Zoom in',
         variantZoomOut: 'Zoom out',
         variantReset: 'Fit to screen',
+        variantPreview: { zoomLabel: 'Zoom' },
         variantFailed: 'This image could not be loaded',
         variantTitle: 'Variant preview',
         variantName: (i: number) => (i === 0 ? 'Original' : `Variant ${String.fromCharCode(64 + i)}`),
@@ -1505,6 +1508,7 @@ onBeforeUnmount(() => {
                   :failed-text="copy.detail.variantFailed"
                   :item-label-formatter="copy.detail.variantName"
                   :open-label-formatter="copy.detail.variantOpen"
+                  :preview-props="copy.detail.variantPreview"
                 />
               </div>
             </div>

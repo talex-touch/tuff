@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxChoroplethMap } from '@talex-touch/tuffex/charts'
+import { TxChoroplethMap } from '@talex-touch/tuffex/charts/src/maps'
 import { computed } from 'vue'
 import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
 import { MINI_WORLD_GEO } from '../mini-world-geo'

@@ -5,10 +5,12 @@ import {
   CLOUDFLARE_HEADERS_MAX_RULES,
   DOCS_STATIC_CACHE_CONTROL,
   I18N_MESSAGES_CACHE_CONTROL,
+  PRERENDERED_HTML_CACHE_CONTROL,
   createStaticCacheRouteRules,
   docsStaticHtmlHeaderRoutes,
   docsStaticJsonHeaderRoutes,
   i18nMessagesHeaderRoutes,
+  publicStaticHtmlHeaderRoutes,
 } from './nexus-static-routes.mjs'
 
 /** Renders route rules the way nitro's Cloudflare preset writes `_headers` (`/**` → `/*`). */
@@ -87,8 +89,19 @@ describe('static cache headers guard', () => {
 
     expect(result.findings).toEqual([])
     expect(result.verified).toBe(
-      docsStaticHtmlHeaderRoutes.length + docsStaticJsonHeaderRoutes.length + i18nMessagesHeaderRoutes.length,
+      publicStaticHtmlHeaderRoutes.length + docsStaticHtmlHeaderRoutes.length + docsStaticJsonHeaderRoutes.length + i18nMessagesHeaderRoutes.length,
     )
+  })
+  it('keeps every public prerendered HTML route on the shared edge window', () => {
+    const expectedRoutes = ['/', '/new', '/next', '/pricing', '/license', '/privacy', '/protocol', '/updates']
+    const rules = createStaticCacheRouteRules()
+
+    expect(publicStaticHtmlHeaderRoutes).toEqual(expectedRoutes)
+    for (const route of expectedRoutes)
+      expect(rules[route]?.headers).toEqual({ 'cache-control': PRERENDERED_HTML_CACHE_CONTROL })
+
+    const result = checkStaticCacheHeaders(renderHeadersFile(rules))
+    expect(result.findings).toEqual([])
   })
 
   it('names every route whose block is missing, and a missing file', () => {

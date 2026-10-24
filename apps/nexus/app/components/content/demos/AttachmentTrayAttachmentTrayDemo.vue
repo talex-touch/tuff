@@ -21,6 +21,7 @@ const copy = computed(() => (locale.value === 'zh'
       openLabel: (name: string) => `预览：${name}`,
       // The preview's own text, which the tray does not forward.
       preview: {
+        zoomLabel: '缩放',
         rotateLabel: '旋转',
         copyLabel: '复制图片',
         shareLabel: '分享',
@@ -50,6 +51,7 @@ const copy = computed(() => (locale.value === 'zh'
       failedText: 'This image could not be loaded',
       openLabel: (name: string) => `Preview: ${name}`,
       preview: {
+        zoomLabel: 'Zoom',
         rotateLabel: 'Rotate',
         copyLabel: 'Copy image',
         shareLabel: 'Share',

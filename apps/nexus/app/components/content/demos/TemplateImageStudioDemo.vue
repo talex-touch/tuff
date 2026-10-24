@@ -208,6 +208,7 @@ const ZH = {
   viewerClose: '关闭预览',
   viewerZoomIn: '放大',
   viewerZoomOut: '缩小',
+  viewerZoom: '缩放',
   viewerReset: '适应屏幕',
   viewerFailed: '图片加载失败',
   viewerRotate: '旋转',
@@ -286,6 +287,7 @@ const EN: Copy = {
   viewerClose: 'Close preview',
   viewerZoomIn: 'Zoom in',
   viewerZoomOut: 'Zoom out',
+  viewerZoom: 'Zoom',
   viewerReset: 'Fit to screen',
   viewerFailed: 'This image could not be loaded',
   viewerRotate: 'Rotate',
@@ -1971,6 +1973,7 @@ onBeforeUnmount(() => {
           :close-label="copy.viewerClose"
           :zoom-in-label="copy.viewerZoomIn"
           :zoom-out-label="copy.viewerZoomOut"
+          :zoom-label="copy.viewerZoom"
           :reset-label="copy.viewerReset"
           :failed-text="copy.viewerFailed"
           :rotate-label="copy.viewerRotate"

@@ -322,7 +322,8 @@ rows:
 ## Overview
 
 - The root is `role="dialog"` with `aria-modal="true"`; with a header it uses `aria-labelledby`, otherwise `title` becomes the `aria-label`.
-- Opening focuses the drawer and Tab cycles inside it; closing or unmounting returns focus to the previously focused element.
+- Opening focuses the drawer and Tab cycles inside it; closing or unmounting returns focus to the previously focused element without scrolling the page.
+- Tab stops only at controls that show and are in the tab order: it passes by hidden ones, ones under `inert` and ones with `tabindex="-1"`, and stops at an editable region (`contenteditable`) too.
 - The close button, the mask, and Escape ask `beforeClose`, then emit `update:visible(false)` and `close`; `closeOnClickMask` and `closeOnPressEscape` turn off the last two.
 - Only the topmost modal dialog handles Tab and Escape, and keys another control already handled are ignored, so a confirmation on top owns them.
 - When closed, the root stays in the DOM with `inert` and `aria-hidden`.

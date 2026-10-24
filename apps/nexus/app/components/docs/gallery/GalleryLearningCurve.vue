@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { LearningCurveRun } from '@talex-touch/tuffex/charts'
-import { TxLearningCurve } from '@talex-touch/tuffex/charts'
+import type { LearningCurveRun } from '@talex-touch/tuffex/charts/src/learning-curve'
+import { TxLearningCurve } from '@talex-touch/tuffex/charts/src/learning-curve'
 import { computed } from 'vue'
 import { seedsOf } from '../../content/demos/learning-curve-sample'
 import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'

@@ -118,6 +118,7 @@ code: |
 ## 概述
 
 - 浮层 Teleport 到 `<body>`；非 prop 属性落在遮罩上。
+- `source` 是元素时，卡片从它露出来的部分飞出，关闭时飞回那里：被滚动容器裁掉一部分的元素，从可见的部分起飞。
 - 关闭顺序为 `close` → `update:modelValue(false)` → `closed`；父级回写 `v-model` 后才完全关闭。
 - 遮罩点击与 Escape 受 `maskClosable` 约束，`preventAccidentalClose` 时改为闪烁警示；关闭按钮与 `close()` 不受这两项限制。
 - 头部优先级：`#header` 覆盖内置头部；否则由 `header` 决定是否渲染。

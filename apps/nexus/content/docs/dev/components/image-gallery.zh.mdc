@@ -59,7 +59,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 - 列表规模保持适中：组件渲染全部缩略图，不做虚拟化。
 - 不可信的远程图片 URL 先在应用边界归一化或代理。
 - 不要在 `@open` 中同步改动 `items`，以免已打开的图片失效。
-- 非英文界面覆盖全部文案 prop 与两个 formatter，预览的 `labelFormatter` 经 `previewProps` 传入：预览的按钮只有图标，读屏读到的就是这些名称；`failedText` 是可见文字。
+- 非英文界面覆盖全部文案 prop 与两个 formatter，预览的 `labelFormatter` 与 `zoomLabel` 经 `previewProps` 传入：预览的按钮只有图标，读屏读到的就是这些名称；`failedText` 是可见文字。
 
 ## API 参考
 
@@ -76,7 +76,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 | `closeLabel` | `string` | `'Close'` | 预览关闭按钮的可访问名称。 |
 | `zoomInLabel` | `string` | `'Zoom in'` | 预览放大按钮的可访问名称。 |
 | `zoomOutLabel` | `string` | `'Zoom out'` | 预览缩小按钮的可访问名称。 |
-| `resetLabel` | `string` | `'Fit to screen'` | 预览缩放读数按钮的可访问名称，接在读数之后；点击恢复整张图片。 |
+| `resetLabel` | `string` | `'Fit to screen'` | 预览缩放菜单的第一项，恢复整张图片。 |
 | `failedText` | `string` | `'This image could not be loaded'` | 预览图加载失败时显示在占位里的文字。 |
 | `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | 图片没有 `name` 时生成显示名称。 |
 | `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | 由显示名称生成缩略图的 `aria-label`。 |

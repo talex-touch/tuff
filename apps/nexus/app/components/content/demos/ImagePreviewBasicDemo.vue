@@ -24,6 +24,7 @@ const copy = computed(() => (locale.value === 'zh'
       next: '下一张',
       zoomIn: '放大',
       zoomOut: '缩小',
+      zoom: '缩放',
       reset: '适应屏幕',
       rotate: '旋转',
       copyImage: '复制图片',
@@ -48,6 +49,7 @@ const copy = computed(() => (locale.value === 'zh'
       next: 'Next image',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
+      zoom: 'Zoom',
       reset: 'Fit to screen',
       rotate: 'Rotate',
       copyImage: 'Copy image',
@@ -105,6 +107,7 @@ function show(at: number, event: MouseEvent): void {
       :next-label="copy.next"
       :zoom-in-label="copy.zoomIn"
       :zoom-out-label="copy.zoomOut"
+      :zoom-label="copy.zoom"
       :reset-label="copy.reset"
       :rotate-label="copy.rotate"
       :copy-label="copy.copyImage"

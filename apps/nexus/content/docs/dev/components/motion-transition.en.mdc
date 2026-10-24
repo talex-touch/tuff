@@ -138,7 +138,7 @@ code: |
 
 The outgoing slot subtree is retained during leave. At full coverage, it is removed and the requested keyed subtree mounts. Enter reveals the new content, then `completed` fires after Vue's commit. Waves retain layered point delays; doors retain their independent hinge geometry; flip and fade animate the actual view instead of a branded placeholder.
 
-A content action transfers focus to the stage during motion and then to the first focusable item in the incoming view. Dialog opening focuses the dialog. Only the topmost modal owns Tab and Escape; closure restores the connected opener without scrolling. Reduced motion and activity loss stop the single RAF and commit the target. Listeners, observers and pending frames are released on deactivation/unmount. `useId` supplies stable stage/title IDs and deterministic wave delay seeds for SSR and hydration.
+A content action transfers focus to the stage during motion and then to the first focusable item in the incoming view. Dialog opening focuses the dialog. Only the topmost modal owns Tab and Escape, and Tab stops only at controls that show and are in the tab order; closure restores the connected opener without scrolling. Reduced motion and activity loss stop the single RAF and commit the target. Listeners, observers and pending frames are released on deactivation/unmount. `useId` supplies stable stage/title IDs and deterministic wave delay seeds for SSR and hydration.
 
 ## Technologies
 

@@ -53,7 +53,7 @@ code: |
 - Set `removable` in a composer and drop the `id` on `remove` and `cancel`; keep sent messages read-only.
 - Give an in-flight attachment both `uploading: true` and `progress` (0–1); without `progress`, no progress shows.
 - Handle `open`; otherwise clicking a file chip does nothing.
-- On non-English surfaces, override every text prop, `sizeFormatter` and `openLabelFormatter`, and pass the preview's `labelFormatter` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
+- On non-English surfaces, override every text prop, `sizeFormatter` and `openLabelFormatter`, and pass the preview's `labelFormatter` and `zoomLabel` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
 - Resize thumbnails with `--tx-attachment-tray-thumb-size` rather than overriding the component's internal classes.
 
 ## API Reference
@@ -73,7 +73,7 @@ code: |
 | `closeLabel` | `string` | `'Close'` | Accessible name of the preview's close button. |
 | `zoomInLabel` | `string` | `'Zoom in'` | Accessible name of the preview's zoom-in button. |
 | `zoomOutLabel` | `string` | `'Zoom out'` | Accessible name of the preview's zoom-out button. |
-| `resetLabel` | `string` | `'Fit to screen'` | Accessible name of the preview's zoom readout, after the readout itself; clicking it shows the whole image again. |
+| `resetLabel` | `string` | `'Fit to screen'` | The first item of the preview's zoom menu, which shows the whole image again. |
 | `failedText` | `string` | `'This image could not be loaded'` | Text in the preview's placeholder for an image that failed to load. |
 | `removeLabel` | `string` | `'Remove attachment'` | Accessible name of remove buttons. |
 | `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of cancel-upload buttons. |

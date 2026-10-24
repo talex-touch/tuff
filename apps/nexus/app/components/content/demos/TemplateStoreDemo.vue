@@ -1057,6 +1057,8 @@ const zhCopy = {
       failed: '截图加载失败',
       item: (index: number) => `截图 ${index + 1}`,
       open: (label: string) => `放大查看${label}`,
+      // The preview's own text, which the gallery does not forward.
+      preview: { zoomLabel: '缩放' },
     },
   },
   modal: {
@@ -1206,6 +1208,7 @@ const enCopy: typeof zhCopy = {
       failed: 'This screenshot could not be loaded',
       item: (index: number) => `Screenshot ${index + 1}`,
       open: (label: string) => `Enlarge ${label}`,
+      preview: { zoomLabel: 'Zoom' },
     },
   },
   modal: {
@@ -2761,6 +2764,7 @@ onBeforeUnmount(clearTimers)
                       :failed-text="copy.detail.gallery.failed"
                       :item-label-formatter="copy.detail.gallery.item"
                       :open-label-formatter="copy.detail.gallery.open"
+                      :preview-props="copy.detail.gallery.preview"
                     />
                   </div>
                   <div class="store-block">

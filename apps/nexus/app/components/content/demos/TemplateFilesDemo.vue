@@ -453,6 +453,7 @@ const copy = computed(() => zh.value
         galleryOpen: (name: string) => `查看 ${name}`,
         // The preview's own text, which the gallery does not forward.
         galleryPreview: {
+          zoomLabel: '缩放',
           rotateLabel: '旋转',
           copyLabel: '复制图片',
           shareLabel: '分享',
@@ -603,6 +604,7 @@ const copy = computed(() => zh.value
         galleryItem: (index: number) => `Image ${index + 1}`,
         galleryOpen: (name: string) => `View ${name}`,
         galleryPreview: {
+          zoomLabel: 'Zoom',
           rotateLabel: 'Rotate',
           copyLabel: 'Copy image',
           shareLabel: 'Share',

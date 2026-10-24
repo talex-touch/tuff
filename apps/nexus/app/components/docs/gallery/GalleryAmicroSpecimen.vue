@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { DitherSeries, MonoChartData, MonoChartSeriesMode } from '@talex-touch/tuffex/charts'
+import type { DitherSeries } from '@talex-touch/tuffex/charts/src/dither-chart'
+import type { MonoChartData, MonoChartSeriesMode } from '@talex-touch/tuffex/charts/src/mono-chart'
 import type { MotionControlValue } from '@tuffex-components/motion-control'
 import type { MotionDockId, MotionDockItem } from '@tuffex-components/motion-dock'
 import type { MotionFormValue } from '@tuffex-components/motion-form'
 import type { MotionToggleValue } from '@tuffex-components/motion-toggle'
-import { TxDitherChart, TxMonoChart } from '@talex-touch/tuffex/charts'
+import { TxDitherChart } from '@talex-touch/tuffex/charts/src/dither-chart'
+import { TxMonoChart } from '@talex-touch/tuffex/charts/src/mono-chart'
 import { computed, ref } from 'vue'
 import {
   TxButton,

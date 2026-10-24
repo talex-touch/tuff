@@ -8,11 +8,13 @@ import {
   CLOUDFLARE_HEADERS_MAX_RULES,
   DOCS_STATIC_CACHE_CONTROL,
   I18N_MESSAGES_CACHE_CONTROL,
+  PRERENDERED_HTML_CACHE_CONTROL,
   docsApiPrerenderRoutes,
   docsStaticHtmlHeaderRoutes,
   docsStaticJsonHeaderRoutes,
   i18nMessagesHeaderRoutes,
   publicPrerenderRoutes,
+  publicStaticHtmlHeaderRoutes,
   PAGES_CATCH_ALL_SOURCE,
   docsStaticRedirects,
 } from './nexus-static-routes.mjs'
@@ -644,10 +646,9 @@ export function checkHeadersFileLimits(headersSource) {
 }
 
 /**
- * Every static docs response must be edge-cacheable. Nitro writes `routeRules[*].headers` into
- * `_headers` with `/**` folded to `/*`; a rule that silently stops being emitted would put the
- * whole docs site back on `max-age=0, must-revalidate` (`DYNAMIC` at the edge) without any
- * test noticing — which is exactly how it shipped before.
+ * Every public prerendered HTML response must be edge-cacheable. Nitro writes `routeRules[*].headers`
+ * into `_headers`; a rule that silently stops being emitted puts the site back on
+ * `max-age=0, must-revalidate` without any test noticing.
  */
 export function checkStaticCacheHeaders(headersSource) {
   const findings = []
@@ -659,6 +660,7 @@ export function checkStaticCacheHeaders(headersSource) {
   const blocks = parseCloudflareHeadersFile(headersSource)
   const byPattern = new Map(blocks.map(block => [block.pattern, block.headers]))
   const expectations = [
+    ...publicStaticHtmlHeaderRoutes.map(route => ({ route, cacheControl: PRERENDERED_HTML_CACHE_CONTROL, contentType: null })),
     ...docsStaticHtmlHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: null })),
     ...docsStaticJsonHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: 'application/json' })),
     ...i18nMessagesHeaderRoutes.map(route => ({ route, cacheControl: I18N_MESSAGES_CACHE_CONTROL, contentType: null })),

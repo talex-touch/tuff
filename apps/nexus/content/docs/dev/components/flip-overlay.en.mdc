@@ -118,6 +118,7 @@ code: |
 ## Overview
 
 - The overlay teleports to `<body>`; non-prop attributes land on the mask.
+- With an element as `source`, the card flies out of the part of it that shows, and back into it on close: one partly scrolled out of its container starts from its visible part.
 - Closing emits `close`, `update:modelValue(false)`, then `closed`; it fully closes once the parent writes `v-model` back.
 - Mask clicks and Escape obey `maskClosable` and flash the warning under `preventAccidentalClose`; the close button and `close()` bypass both.
 - Header priority: `#header` overrides the built-in header; otherwise `header` decides whether it renders.

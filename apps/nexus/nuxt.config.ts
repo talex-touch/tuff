@@ -463,13 +463,14 @@ export default defineNuxtConfig({
   },
 
   experimental: {
-    // when using generate, payload js assets included in sw precache manifest
-    // but missing on offline, disabling extraction it until fixed
+    // When using generate, payload JS assets are included in the SW precache manifest
+    // but missing on offline; keep payload extraction disabled until that is fixed.
     defaults: {
       nuxtLink: {
         prefetch: false,
       },
     },
+    lazyHydration: true,
     emitRouteChunkError: 'automatic-immediate',
     payloadExtraction: enablePayloadExtraction,
     renderJsonPayloads: true,

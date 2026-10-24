@@ -26,6 +26,7 @@ const copy = computed(() => (locale.value === 'zh'
       openLabel: (label: string) => `预览：${label}`,
       // The preview's own text, which the gallery does not forward.
       preview: {
+        zoomLabel: '缩放',
         rotateLabel: '旋转',
         copyLabel: '复制图片',
         shareLabel: '分享',
@@ -53,6 +54,7 @@ const copy = computed(() => (locale.value === 'zh'
       itemLabel: (index: number) => `Image ${index + 1}`,
       openLabel: (label: string) => `Open ${label} preview`,
       preview: {
+        zoomLabel: 'Zoom',
         rotateLabel: 'Rotate',
         copyLabel: 'Copy image',
         shareLabel: 'Share',

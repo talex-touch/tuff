@@ -11,7 +11,7 @@ export function loadDemoComponent(name: string): Promise<DemoModule> {
 
   const request = (async (): Promise<DemoModule> => {
     if (import.meta.dev) {
-      // Dev-only runtime registry; static import would also enter the production graph.
+      // Dev-only registries stay dynamic so production never preloads every implementation.
       const { demoLoaders } = await import('./demo-registry')
       const loader = demoLoaders[name]
       if (!loader)

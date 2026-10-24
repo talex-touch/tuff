@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxSankeyChart } from '@talex-touch/tuffex/charts'
+import { TxSankeyChart } from '@talex-touch/tuffex/charts/src/sankey'
 import { computed } from 'vue'
 import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
 

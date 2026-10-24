@@ -93,8 +93,9 @@ code: |
 ## 概述
 
 - 遮罩 teleport 到 `body`，打开时从共享 z-index manager 取得新层级，关闭时由 `v-if` 移除。
-- 遮罩为 `role="dialog"`、`aria-modal="true"`；打开时获得焦点，关闭或卸载时焦点回到打开前的元素。
+- 遮罩为 `role="dialog"`、`aria-modal="true"`；打开时获得焦点，关闭或卸载时焦点回到打开前的元素，不滚动页面。
 - Tab 与 Shift+Tab 在最上层的模态框内循环；即使焦点落到 `body`，底层抽屉也不会响应 Escape。
+- Tab 只停在显示出来、排在 Tab 顺序里的控件上：隐藏的、`inert` 里的与 `tabindex="-1"` 的都跳过，可编辑区域（`contenteditable`）也算一站。
 - 点击遮罩空白、Escape 与关闭按钮先询问 `beforeClose`，再依次派发 `update:modelValue(false)` 与 `close`；直接修改 `modelValue` 不询问。
 - `fullscreen` 只改变布局，对话框语义与焦点管理不变；没有可点击的遮罩空白，因此头部或底栏必须保留可见的关闭入口。
 - 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在头部、正文与底栏之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。

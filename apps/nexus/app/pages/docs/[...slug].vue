@@ -1208,7 +1208,10 @@ const currentDocRenderKey = computed(() => {
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 const deferredBodySplitIndex = computed(() => resolveDeferredBodySplitIndex(renderDoc.value?.body))
-const shouldDeferDocBodySections = computed(() => false)
+const shouldDeferDocBodySections = computed(() => (
+  docScope.value.isComponent
+  && deferredBodySplitIndex.value > 0
+))
 const primaryRenderDoc = computed(() => {
   if (!shouldDeferDocBodySections.value)
     return renderDoc.value
@@ -1493,6 +1496,7 @@ let engagementPanelTimer: ReturnType<typeof setTimeout> | null = null
 let engagementPanelIdleId: number | null = null
 let engagementPanelObserver: IntersectionObserver | null = null
 let deferredBodyTimer: ReturnType<typeof setTimeout> | null = null
+let deferredBodyIntentTimer: ReturnType<typeof setTimeout> | null = null
 let deferredBodyIntentDisposers: Array<() => void> = []
 let docClientPanelIdleId: number | null = null
 let docClientPanelFrameId: number | null = null
@@ -1552,6 +1556,10 @@ function clearDeferredDocBodySchedule() {
     clearTimeout(deferredBodyTimer)
     deferredBodyTimer = null
   }
+  if (deferredBodyIntentTimer) {
+    clearTimeout(deferredBodyIntentTimer)
+    deferredBodyIntentTimer = null
+  }
   for (const dispose of deferredBodyIntentDisposers)
     dispose()
   deferredBodyIntentDisposers = []
@@ -1588,7 +1596,14 @@ function revealDeferredDocBodyForHash(hash = route.hash) {
 }
 
 function handleDeferredDocBodyIntent() {
-  mountDeferredDocBodySections()
+  if (shouldRenderDeferredDocBody.value)
+    return
+  if (deferredBodyIntentTimer)
+    clearTimeout(deferredBodyIntentTimer)
+  deferredBodyIntentTimer = setTimeout(() => {
+    deferredBodyIntentTimer = null
+    mountDeferredDocBodySections()
+  }, 500)
 }
 
 function bindDeferredDocBodyIntentListeners() {

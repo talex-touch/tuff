@@ -59,7 +59,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 - Keep the list modest: every thumbnail renders, with no virtualization.
 - Normalize or proxy untrusted remote image URLs at your application boundary.
 - Don't mutate `items` synchronously in `@open` in a way that invalidates the opened image.
-- On non-English surfaces, override every text prop and both formatters, and pass the preview's `labelFormatter` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
+- On non-English surfaces, override every text prop and both formatters, and pass the preview's `labelFormatter` and `zoomLabel` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
 
 ## API Reference
 
@@ -76,7 +76,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 | `closeLabel` | `string` | `'Close'` | Accessible name of the preview's close button. |
 | `zoomInLabel` | `string` | `'Zoom in'` | Accessible name of the preview's zoom-in button. |
 | `zoomOutLabel` | `string` | `'Zoom out'` | Accessible name of the preview's zoom-out button. |
-| `resetLabel` | `string` | `'Fit to screen'` | Accessible name of the preview's zoom readout, after the readout itself; clicking it shows the whole image again. |
+| `resetLabel` | `string` | `'Fit to screen'` | The first item of the preview's zoom menu, which shows the whole image again. |
 | `failedText` | `string` | `'This image could not be loaded'` | Text in the preview's placeholder for an image that failed to load. |
 | `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | Builds a display name when `item.name` is absent. |
 | `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | Builds a thumbnail's `aria-label` from its display name. |

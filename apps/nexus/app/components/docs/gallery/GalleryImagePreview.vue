@@ -13,6 +13,7 @@ const labels = computed(() => zh.value
       next: '下一张',
       zoomIn: '放大',
       zoomOut: '缩小',
+      zoom: '缩放',
       reset: '适应屏幕',
       failed: '图片加载失败',
       rotate: '旋转',
@@ -36,6 +37,7 @@ const labels = computed(() => zh.value
       next: 'Next image',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
+      zoom: 'Zoom',
       reset: 'Fit to screen',
       failed: 'This image could not be loaded',
       rotate: 'Rotate',
@@ -110,6 +112,7 @@ function show(at: number, event: MouseEvent): void {
       :next-label="labels.next"
       :zoom-in-label="labels.zoomIn"
       :zoom-out-label="labels.zoomOut"
+      :zoom-label="labels.zoom"
       :reset-label="labels.reset"
       :failed-text="labels.failed"
       :rotate-label="labels.rotate"

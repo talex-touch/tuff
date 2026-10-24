@@ -3,7 +3,6 @@ import {
   defineConfig,
   presetAttributify,
   presetIcons,
-  presetTypography,
   presetWind,
   transformerDirectives,
   transformerVariantGroup,
@@ -130,7 +129,6 @@ export default defineConfig({
     presetIcons({
       scale: 1.2,
     }),
-    presetTypography(),
     presetWebFonts({
       provider: useWebFonts ? 'google' : 'none',
       fonts: {

@@ -53,7 +53,7 @@ code: |
 - 输入框中设置 `removable`，在 `remove`、`cancel` 中按 `id` 删除附件；已发送的消息保持只读。
 - 上传中的附件同时设置 `uploading: true` 与 `progress`（0–1）；缺 `progress` 时不显示进度。
 - 处理 `open`，否则点击文件胶囊没有反应。
-- 非英文界面覆盖全部文案 prop、`sizeFormatter` 与 `openLabelFormatter`，预览的 `labelFormatter` 经 `previewProps` 传入：预览的按钮只有图标，读屏读到的就是这些名称；`failedText` 是可见文字。
+- 非英文界面覆盖全部文案 prop、`sizeFormatter` 与 `openLabelFormatter`，预览的 `labelFormatter` 与 `zoomLabel` 经 `previewProps` 传入：预览的按钮只有图标，读屏读到的就是这些名称；`failedText` 是可见文字。
 - 用 `--tx-attachment-tray-thumb-size` 调整缩略图尺寸，不要覆盖组件内部的类名。
 
 ## API 参考
@@ -73,7 +73,7 @@ code: |
 | `closeLabel` | `string` | `'Close'` | 预览关闭按钮的可访问名称。 |
 | `zoomInLabel` | `string` | `'Zoom in'` | 预览放大按钮的可访问名称。 |
 | `zoomOutLabel` | `string` | `'Zoom out'` | 预览缩小按钮的可访问名称。 |
-| `resetLabel` | `string` | `'Fit to screen'` | 预览缩放读数按钮的可访问名称，接在读数之后；点击恢复整张图片。 |
+| `resetLabel` | `string` | `'Fit to screen'` | 预览缩放菜单的第一项，恢复整张图片。 |
 | `failedText` | `string` | `'This image could not be loaded'` | 预览图加载失败时显示在占位里的文字。 |
 | `removeLabel` | `string` | `'Remove attachment'` | 移除按钮的可访问名称。 |
 | `cancelLabel` | `string` | `'Cancel upload'` | 取消上传按钮的可访问名称。 |

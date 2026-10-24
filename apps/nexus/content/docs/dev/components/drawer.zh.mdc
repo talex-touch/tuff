@@ -322,7 +322,8 @@ rows:
 ## 概述
 
 - 根节点为 `role="dialog"`、`aria-modal="true"`；渲染 Header 时用 `aria-labelledby` 关联标题，否则以 `title` 作为 `aria-label`。
-- 打开时聚焦抽屉，Tab 在抽屉内循环；关闭或卸载时焦点回到打开前的元素。
+- 打开时聚焦抽屉，Tab 在抽屉内循环；关闭或卸载时焦点回到打开前的元素，不滚动页面。
+- Tab 只停在显示出来、排在 Tab 顺序里的控件上：隐藏的、`inert` 里的与 `tabindex="-1"` 的都跳过，可编辑区域（`contenteditable`）也算一站。
 - 关闭按钮、遮罩与 Escape 先询问 `beforeClose`，再派发 `update:visible(false)` 与 `close`；`closeOnClickMask`、`closeOnPressEscape` 分别关闭后两条路径。
 - 只有最上层的模态对话框响应 Tab 与 Escape，已被其他控件处理的按键会被忽略，因此上层确认框独占这些按键。
 - 关闭后根节点仍留在 DOM 中，并设置 `inert` 与 `aria-hidden`。

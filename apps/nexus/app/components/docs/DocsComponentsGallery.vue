@@ -1,19 +1,12 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, shallowRef, type Component } from 'vue'
 import './DocsComponentsGallery.css'
-import {
-  ChartPalette,
-  TxArcSeries,
-  TxChart,
-  TxChartLegendItem,
-  TxChartTooltip,
-  TxTimeseriesChart,
-} from '@talex-touch/tuffex/charts'
 import type { FileUploaderFile } from '@tuffex-components/file-uploader'
 import type { ImageUploaderFile } from '@tuffex-components/image-uploader'
 import type { AiChainStep, AiElementMessage } from '@tuffex-components/ai-elements'
 import type { ContextChunk } from '@tuffex-components/context-cards'
 import {
+  ClientOnly as NuxtClientOnly,
   TxBlankSlate,
   TxEmpty,
   TxEmptyState,
@@ -35,32 +28,39 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // in a cell's stage, and the wrapper adds the reset button that remounts the
 // specimen so its entrance can be watched again.
 import ClientOnly from './DocsGallerySpecimen.vue'
-import GalleryChoiceCard from './gallery/GalleryChoiceCard.vue'
-import GalleryChoroplethMap from './gallery/GalleryChoroplethMap.vue'
-import GalleryEChart from './gallery/GalleryEChart.vue'
-import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
-import GalleryFusion from './gallery/GalleryFusion.vue'
-import GalleryFusionSurface from './gallery/GalleryFusionSurface.vue'
-import GalleryLiquidMenu from './gallery/GalleryLiquidMenu.vue'
-import GallerySankeyChart from './gallery/GallerySankeyChart.vue'
-import GalleryStreamElement from './gallery/GalleryStreamElement.vue'
-import GalleryStreamMarkdown from './gallery/GalleryStreamMarkdown.vue'
-import GalleryStreamText from './gallery/GalleryStreamText.vue'
-import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
-import GalleryThinkingOrb from './gallery/GalleryThinkingOrb.vue'
-import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
-import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
-import type { DocsSuiteKey } from '~/utils/docs-suites'
-import GalleryAmicroSpecimen from './gallery/GalleryAmicroSpecimen.vue'
-import GalleryAttachmentTray from './gallery/GalleryAttachmentTray.vue'
-import GalleryImageGallery from './gallery/GalleryImageGallery.vue'
 import { tileImage } from './gallery/tile-image'
+import type { DocsSuiteKey } from '~/utils/docs-suites'
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
 const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
+const galleryAmicroSpecimen = shallowRef<Component | null>(null)
+const galleryChoroplethMap = shallowRef<Component | null>(null)
+const galleryLearningCurve = shallowRef<Component | null>(null)
+const gallerySankeyChart = shallowRef<Component | null>(null)
+const chartScrubber = shallowRef<Component | null>(null)
+const sparkChart = shallowRef<Component | null>(null)
+const chartLegendItem = shallowRef<Component | null>(null)
+const chart = shallowRef<Component | null>(null)
+const arcSeries = shallowRef<Component | null>(null)
+const chartTooltip = shallowRef<Component | null>(null)
+const timeseriesChart = shallowRef<Component | null>(null)
+const GalleryChoiceCard = defineAsyncComponent(() => import('./gallery/GalleryChoiceCard.vue'))
+const GalleryEChart = defineAsyncComponent(() => import('./gallery/GalleryEChart.vue'))
+const GalleryEdgeMarquee = defineAsyncComponent(() => import('./gallery/GalleryEdgeMarquee.vue'))
+const GalleryFusion = defineAsyncComponent(() => import('./gallery/GalleryFusion.vue'))
+const GalleryFusionSurface = defineAsyncComponent(() => import('./gallery/GalleryFusionSurface.vue'))
+const GalleryLiquidMenu = defineAsyncComponent(() => import('./gallery/GalleryLiquidMenu.vue'))
+const GalleryStreamElement = defineAsyncComponent(() => import('./gallery/GalleryStreamElement.vue'))
+const GalleryStreamMarkdown = defineAsyncComponent(() => import('./gallery/GalleryStreamMarkdown.vue'))
+const GalleryStreamText = defineAsyncComponent(() => import('./gallery/GalleryStreamText.vue'))
+const GalleryTextMorph = defineAsyncComponent(() => import('./gallery/GalleryTextMorph.vue'))
+const GalleryThinkingOrb = defineAsyncComponent(() => import('./gallery/GalleryThinkingOrb.vue'))
+const GalleryTransitionLanes = defineAsyncComponent(() => import('./gallery/GalleryTransitionLanes.vue'))
+const GalleryVirtualList = defineAsyncComponent(() => import('./gallery/GalleryVirtualList.vue'))
+const GalleryAttachmentTray = defineAsyncComponent(() => import('./gallery/GalleryAttachmentTray.vue'))
+const GalleryImageGallery = defineAsyncComponent(() => import('./gallery/GalleryImageGallery.vue'))
 
 const GalleryVoiceClip = defineAsyncComponent(() => import('./gallery/GalleryVoiceClip.vue'))
-const GalleryLearningCurve = defineAsyncComponent(() => import('./gallery/GalleryLearningCurve.vue'))
 const GalleryImagePreview = defineAsyncComponent(() => import('./gallery/GalleryImagePreview.vue'))
 
 const { locale } = useI18n()
@@ -357,6 +357,38 @@ const progressSegments = computed(() => [
 let progressTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
+  if (props.suite === 'data') {
+    void import('./gallery/GalleryAmicroSpecimen.vue').then(({ default: component }) => {
+      galleryAmicroSpecimen.value = component
+    })
+    void Promise.all([
+      import('@talex-touch/tuffex/spark-chart'),
+      import('@talex-touch/tuffex/charts/src/chart-legend'),
+      import('@talex-touch/tuffex/charts/src/chart'),
+      import('@talex-touch/tuffex/charts/src/series'),
+      import('@talex-touch/tuffex/charts/src/tooltip'),
+      import('@talex-touch/tuffex/charts/src/timeseries'),
+      import('./gallery/GalleryChoroplethMap.vue'),
+      import('./gallery/GallerySankeyChart.vue'),
+      import('./gallery/GalleryLearningCurve.vue'),
+    ]).then(([spark, legend, chartModule, series, tooltip, timeseries, choropleth, sankey, learning]) => {
+      chartScrubber.value = spark.TxChartScrubber
+      sparkChart.value = spark.TxSparkChart
+      chartLegendItem.value = legend.TxChartLegendItem
+      chart.value = chartModule.TxChart
+      arcSeries.value = series.TxArcSeries
+      chartTooltip.value = tooltip.TxChartTooltip
+      timeseriesChart.value = timeseries.TxTimeseriesChart
+      galleryChoroplethMap.value = choropleth.default
+      gallerySankeyChart.value = sankey.default
+      galleryLearningCurve.value = learning.default
+    })
+  }
+  else if (props.suite === 'motion') {
+    void import('./gallery/GalleryAmicroSpecimen.vue').then(({ default: component }) => {
+      galleryAmicroSpecimen.value = component
+    })
+  }
   // A bar that never settles is exactly what reduced motion asks us not to
   // ship, so those viewers get one mid-run frame and no timer.
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -779,9 +811,15 @@ const recommendationOptions = computed(() => [
   { key: 'stable', label: copy.value.channels[0]?.label ?? '', short: copy.value.installBody, text: copy.value.installBody, confidence: 'high' as const },
   { key: 'beta', label: copy.value.channels[1]?.label ?? '', short: copy.value.aboutBody, text: copy.value.aboutBody, confidence: 'medium' as const },
 ])
-/* ── Data band. Charts come from `@talex-touch/tuffex/charts`, which is aliased
-   but not globally registered, so they are imported explicitly — and never as
-   `TxGrid`, which would shadow the layout grid used above.
+const CHART_CATEGORICAL_FALLBACKS = ['#4290F0', '#F5B647', '#E8649D', '#8D58EE', '#50C3B6', '#D37536']
+
+function categoricalVar(index: number): string {
+  const slot = ((index % CHART_CATEGORICAL_FALLBACKS.length) + CHART_CATEGORICAL_FALLBACKS.length) % CHART_CATEGORICAL_FALLBACKS.length
+  return `var(--tx-chart-categorical-${slot + 1}, ${CHART_CATEGORICAL_FALLBACKS[slot]})`
+}
+
+/* ── Data band. Chart components load only for the data suite;
+   other docs suites keep the chart implementation out of their route chunk.
    Every specimen below is the component's real interaction rather than a
    still picture: hover reports values, and Cartesian charts carry both axes. ── */
 const donutSlices = [
@@ -794,7 +832,7 @@ const donutHover = ref<{ name?: string, index: number, value: number } | null>(n
 const donutRows = computed(() => donutHover.value
   ? [{
       name: 'Installs',
-      color: ChartPalette.categoricalVar(donutHover.value.index),
+      color: categoricalVar(donutHover.value.index),
       value: `${donutHover.value.value.toLocaleString()} · ${Math.round(donutHover.value.value / donutTotal * 100)}%`,
     }]
   : [])
@@ -810,8 +848,8 @@ const timeseriesData = [
    axis has something to label, and the gaps are uniform so the default
    monotone curve reads as a trend instead of a zig-zag. */
 const sparkSeries = [
-  { id: 'installs', label: 'Installs', color: ChartPalette.categoricalVar(0), data: [420, 468, 512, 494, 548, 610, 586, 642, 705, 678, 742, 804].map((value, time) => ({ time, value })) },
-  { id: 'errors', label: 'Errors', color: ChartPalette.categoricalVar(2), data: [186, 204, 178, 216, 232, 208, 244, 226, 258, 240, 268, 286].map((value, time) => ({ time, value })) },
+  { id: 'installs', label: 'Installs', color: categoricalVar(0), data: [420, 468, 512, 494, 548, 610, 586, 642, 705, 678, 742, 804].map((value, time) => ({ time, value })) },
+  { id: 'errors', label: 'Errors', color: categoricalVar(2), data: [186, 204, 178, 216, 232, 208, 244, 226, 258, 240, 268, 286].map((value, time) => ({ time, value })) },
 ]
 const sparkIndex = ref<number | null>(null)
 const sparkRows = computed(() => sparkIndex.value === null
@@ -2758,7 +2796,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <GalleryAmicroSpecimen kind="motion-form" />
+            <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-form" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2772,7 +2810,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <GalleryAmicroSpecimen kind="motion-control" />
+            <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-control" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2786,7 +2824,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <GalleryAmicroSpecimen kind="motion-metric" />
+            <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-metric" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -4156,7 +4194,9 @@ const motionGalleryItems = [
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__spark">
-              <TxChartScrubber
+              <component
+                :is="chartScrubber"
+                v-if="chartScrubber"
                 class="docs-gallery__spark-stage"
                 :point-count="sparkSeries[0]?.data.length ?? 0"
                 :active-index="sparkIndex"
@@ -4164,7 +4204,9 @@ const motionGalleryItems = [
                 :time-label="sparkTimeLabel"
                 @update:active-index="sparkIndex = $event"
               >
-                <TxSparkChart
+                <component
+                  :is="sparkChart"
+                  v-if="sparkChart"
                   :series="sparkSeries"
                   :active-index="sparkIndex"
                   :padding="{ top: 14, right: 10, bottom: 24, left: 36 }"
@@ -4173,7 +4215,7 @@ const motionGalleryItems = [
                   x-axis
                   y-axis
                 />
-              </TxChartScrubber>
+              </component>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -4228,7 +4270,7 @@ const motionGalleryItems = [
                 v-for="index in 6"
                 :key="index"
                 class="docs-gallery__swatch"
-                :style="{ background: ChartPalette.categoricalVar(index - 1) }"
+                :style="{ background: categoricalVar(index - 1) }"
               />
             </div>
             <template #fallback>
@@ -4245,8 +4287,8 @@ const motionGalleryItems = [
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack">
-              <TxChartLegendItem name="Installs" :color="ChartPalette.categoricalVar(0)" value="4,820" />
-              <TxChartLegendItem name="Errors" :color="ChartPalette.categoricalVar(2)" value="87" />
+              <component :is="chartLegendItem" v-if="chartLegendItem" name="Installs" :color="categoricalVar(0)" value="4,820" />
+              <component :is="chartLegendItem" v-if="chartLegendItem" name="Errors" :color="categoricalVar(2)" value="87" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -4262,8 +4304,15 @@ const motionGalleryItems = [
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxChart :height="150" :padding="8">
-                <TxArcSeries
+              <component
+                :is="chart"
+                v-if="chart"
+                :height="150"
+                :padding="8"
+              >
+                <component
+                  :is="arcSeries"
+                  v-if="arcSeries"
                   :data="donutSlices"
                   value="count"
                   name="label"
@@ -4271,13 +4320,15 @@ const motionGalleryItems = [
                   @slice-hover="donutHover = $event"
                 />
                 <template #overlay>
-                  <TxChartTooltip
+                  <component
+                    :is="chartTooltip"
+                    v-if="chartTooltip"
                     :open="donutHover !== null"
                     :title="donutHover?.name"
                     :rows="donutRows"
                   />
                 </template>
-              </TxChart>
+              </component>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -4290,14 +4341,24 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('maps')">
           {{ cellLabel('Maps', '地图') }}
         </NuxtLink>
-        <GalleryChoroplethMap />
+        <NuxtClientOnly>
+          <component :is="galleryChoroplethMap" v-if="galleryChoroplethMap" />
+          <template #fallback>
+            <div class="docs-gallery__ph" />
+          </template>
+        </NuxtClientOnly>
       </section>
 
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('sankey-chart')">
           {{ cellLabel('SankeyChart', '桑基图') }}
         </NuxtLink>
-        <GallerySankeyChart />
+        <NuxtClientOnly>
+          <component :is="gallerySankeyChart" v-if="gallerySankeyChart" />
+          <template #fallback>
+            <div class="docs-gallery__ph" />
+          </template>
+        </NuxtClientOnly>
       </section>
 
       <section class="docs-gallery__cell">
@@ -4307,7 +4368,7 @@ const motionGalleryItems = [
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxTimeseriesChart type="bar" :data="timeseriesData" :height="150" />
+              <component :is="timeseriesChart" v-if="timeseriesChart" type="bar" :data="timeseriesData" :height="150" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -4320,7 +4381,12 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('learning-curve')">
           {{ cellLabel('LearningCurve', '学习曲线') }}
         </NuxtLink>
-        <GalleryLearningCurve />
+        <NuxtClientOnly>
+          <component :is="galleryLearningCurve" v-if="galleryLearningCurve" />
+          <template #fallback>
+            <div class="docs-gallery__ph" />
+          </template>
+        </NuxtClientOnly>
       </section>
 
       <section class="docs-gallery__cell">
@@ -4328,12 +4394,17 @@ const motionGalleryItems = [
           {{ cellLabel('MonoChart', '单色图表') }}
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
-          <ClientOnly>
-            <GalleryAmicroSpecimen kind="mono-chart" />
+          <NuxtClientOnly>
+            <ClientOnly>
+            <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="mono-chart" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
-          </ClientOnly>
+            </ClientOnly>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </NuxtClientOnly>
         </div>
       </section>
 
@@ -4401,7 +4472,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <GalleryAmicroSpecimen :kind="item.kind" />
+            <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" :kind="item.kind" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

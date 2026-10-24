@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { EChartsOption } from 'echarts'
-import { TxEChart } from '@talex-touch/tuffex/charts'
+import { TxEChart } from '@talex-touch/tuffex/charts/src/echart'
 import { computed } from 'vue'
 import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
 

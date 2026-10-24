@@ -618,6 +618,7 @@ const copy = computed(() => zh.value
         open: (name: string) => `预览：${name}`,
         // The preview's own text, which the tray does not forward.
         viewer: {
+          zoomLabel: '缩放',
           rotateLabel: '旋转',
           copyLabel: '复制图片',
           shareLabel: '分享',
@@ -716,6 +717,7 @@ const copy = computed(() => zh.value
         cancel: 'Cancel upload',
         open: (name: string) => `Preview: ${name}`,
         viewer: {
+          zoomLabel: 'Zoom',
           rotateLabel: 'Rotate',
           copyLabel: 'Copy image',
           shareLabel: 'Share',
