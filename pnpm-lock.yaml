@@ -1506,7 +1506,7 @@ importers:
     dependencies:
       '@guolao/vue-monaco-editor':
         specifier: ^1.5.5
-        version: 1.6.0(monaco-editor@0.55.1)(vue@3.5.39(typescript@5.9.3))
+        version: 1.6.0(monaco-editor@0.57.0)(vue@3.5.39(typescript@5.9.3))
       '@monaco-editor/loader':
         specifier: ^1.6.1
         version: 1.7.0
@@ -1523,8 +1523,8 @@ importers:
         specifier: ^14.4.0
         version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       monaco-editor:
-        specifier: ^0.55.0
-        version: 0.55.1
+        specifier: ^0.57.0
+        version: 0.57.0
       nprogress:
         specifier: ^0.2.0
         version: 0.2.0
@@ -11200,8 +11200,8 @@ packages:
   module-details-from-path@1.0.4:
     resolution: {integrity: sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w==}
 
-  monaco-editor@0.55.1:
-    resolution: {integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==}
+  monaco-editor@0.57.0:
+    resolution: {integrity: sha512-5BkI9KGoqrNvBGUe15/QlZq3OooZ8WLg1AxTpaqHRCP3HNpzPPZKE2EDz8M7c+VRmCeUw1Brp4cx/PWm3kI/5A==}
 
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
@@ -16797,10 +16797,10 @@ snapshots:
     dependencies:
       is-negated-glob: 1.0.0
 
-  '@guolao/vue-monaco-editor@1.6.0(monaco-editor@0.55.1)(vue@3.5.39(typescript@5.9.3))':
+  '@guolao/vue-monaco-editor@1.6.0(monaco-editor@0.57.0)(vue@3.5.39(typescript@5.9.3))':
     dependencies:
       '@monaco-editor/loader': 1.7.0
-      monaco-editor: 0.55.1
+      monaco-editor: 0.57.0
       vue: 3.5.39(typescript@5.9.3)
       vue-demi: 0.14.10(vue@3.5.39(typescript@5.9.3))
 
@@ -25705,7 +25705,7 @@ snapshots:
 
   module-details-from-path@1.0.4: {}
 
-  monaco-editor@0.55.1:
+  monaco-editor@0.57.0:
     dependencies:
       dompurify: 3.4.17
       marked: 14.0.0

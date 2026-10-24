@@ -30,7 +30,7 @@ interface MonacoEnvironment {
   getWorker: (moduleId: string, label: string) => Worker
 }
 
-declare module 'monaco-editor/esm/vs/editor/editor.worker?worker' {
+declare module 'monaco-editor/editor/editor.worker?worker' {
   class MonacoEditorWorker extends Worker {
     constructor()
   }
@@ -38,7 +38,7 @@ declare module 'monaco-editor/esm/vs/editor/editor.worker?worker' {
   export default MonacoEditorWorker
 }
 
-declare module 'monaco-editor/esm/vs/language/json/json.worker?worker' {
+declare module 'monaco-editor/languages/features/json/json.worker?worker' {
   class MonacoJsonWorker extends Worker {
     constructor()
   }
@@ -46,7 +46,7 @@ declare module 'monaco-editor/esm/vs/language/json/json.worker?worker' {
   export default MonacoJsonWorker
 }
 
-declare module 'monaco-editor/esm/vs/language/css/css.worker?worker' {
+declare module 'monaco-editor/languages/features/css/css.worker?worker' {
   class MonacoCssWorker extends Worker {
     constructor()
   }
@@ -54,7 +54,7 @@ declare module 'monaco-editor/esm/vs/language/css/css.worker?worker' {
   export default MonacoCssWorker
 }
 
-declare module 'monaco-editor/esm/vs/language/html/html.worker?worker' {
+declare module 'monaco-editor/languages/features/html/html.worker?worker' {
   class MonacoHtmlWorker extends Worker {
     constructor()
   }
@@ -62,7 +62,7 @@ declare module 'monaco-editor/esm/vs/language/html/html.worker?worker' {
   export default MonacoHtmlWorker
 }
 
-declare module 'monaco-editor/esm/vs/language/typescript/ts.worker?worker' {
+declare module 'monaco-editor/languages/features/typescript/ts.worker?worker' {
   class MonacoTsWorker extends Worker {
     constructor()
   }

@@ -3,16 +3,16 @@
   "waivers": [
     {
       "id": "json-formatter-monaco-editor-core-size",
-      "fileSha256": "6f776ba260eae23cc8cb19851414af44ae27cd653431230541d41462cc86f7f3",
+      "fileSha256": "b547fe0b144695e016a56418395577803c074189115a67c13219253dccf9aa55",
       "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
       "owner": "TalexTouch Team",
-      "reason": "Monaco 编辑器核心包 3.7MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，内容由 monaco-editor 0.55.1 锁定。",
+      "reason": "Monaco 编辑器核心包 4.1MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，来自 monaco-editor 0.57.0；它从应用主 chunk 引入 Vite 的预加载函数，带着那个文件名，插件代码一改哈希也会跟着变。",
       "createdAt": "2026-08-15T00:00:00.000Z",
       "expiresAt": "2026-11-15T00:00:00.000Z"
     },
     {
       "id": "json-formatter-monaco-ts-worker-size",
-      "fileSha256": "b033291ac1f01f919bbe3fa3d424918dceb597afe86c7b7912946a0368590b68",
+      "fileSha256": "d391876390ce4c2df139538a46c401e50a6eb1a9d81289bccbc4dbd0f042ccc6",
       "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
       "owner": "TalexTouch Team",
       "reason": "Monaco TypeScript 语言 worker 7MB，同样超过单文件扫描上限。第三方产物，随 monaco-editor 版本固定。",
@@ -21,7 +21,7 @@
     },
     {
       "id": "json-formatter-expression-query-eval",
-      "fileSha256": "ed89fc71cc65c32bcb172cba0e958cc7abfbff9be707c2cccebdaf8d3036b916",
+      "fileSha256": "464b0aa4569584a254aa9dc8db48305b9098d9046ab0765ce9c43b8e5ba138c9",
       "ruleId": "PLUGIN_SCAN_DYNAMIC_EXECUTION",
       "owner": "TalexTouch Team",
       "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。",
