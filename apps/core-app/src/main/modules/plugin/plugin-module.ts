@@ -1703,11 +1703,10 @@ function createPluginModuleInternal(
     input: PluginApiUninstallRequest
   ): Promise<PluginApiUninstallResponse> => {
     const request = normalizePluginUninstallRequest(input)
-    const installedSdkapi = pluginModule.pluginManager?.plugins.get(request.plugin.name)?.sdkapi
-    if (
-      PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name) &&
-      (installedSdkapi === undefined || installedSdkapi < 261011)
-    ) {
+    // By name, not sdkapi: sdkapi 261011 opened the host capabilities, not removal. The official
+    // seed force-replaces privileged plugins at every launch, so an uninstall would only come back.
+    // Same rule as the uninstall transport handler.
+    if (PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name)) {
       throw new Error('PRIVILEGED_PLUGIN_UNINSTALL_DENIED')
     }
     return pluginDataDispositionCoordinator!.uninstall(request)
