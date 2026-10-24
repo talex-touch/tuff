@@ -301,7 +301,14 @@ const LIMITS = {
   // (`image-preview/style.css` 13,758 -> 17,300 B). The full entry went 886,956 -> 890,498 B,
   // exactly that growth. Checked for inlining: the new rules are `.tx-image-preview__minimap*`
   // alone. Actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 870 * 1024,
+  // 870 -> 870.5 the same day for TxImagePreview's zoom menu: the readout opens the whole picture
+  // and the zooms past it in a menu laid over the preview, above the minimap and the page
+  // buttons, with room for the check on every item and the readout lit while it is open
+  // (`image-preview/style.css` 17,300 -> 17,790 B). No other sheet moved, and the full entry
+  // went 890,498 -> 890,988 B, exactly that growth. Checked for inlining: the new rules sit on
+  // `.tx-image-preview__menu*` and `.tx-image-preview__readout` alone. Actuals plus minimal
+  // headroom, growth from here fails.
+  fullCssBytes: 870.5 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

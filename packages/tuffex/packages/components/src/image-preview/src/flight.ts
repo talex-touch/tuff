@@ -1,5 +1,6 @@
 import type { ImagePreviewOrigin, ImagePreviewOriginRect } from './types'
 import type { PreviewBox, PreviewSize, PreviewView } from './zoom'
+import { cornerRadius, shownBox } from '../../../../utils/shown-box'
 
 // A picture flying between its thumbnail and the stage, as a photo does in and out of its grid
 // cell: one progress moves its centre and scale, uncrops it from the thumbnail's window to the
@@ -37,57 +38,18 @@ export interface FlightPose {
   radius: number
 }
 
-function px(value: string | undefined): number {
-  const n = Number.parseFloat(value ?? '')
-  return Number.isFinite(n) ? n : 0
-}
-
-/** The top-left corner's radius in pixels; a percentage is of the box's width. */
-function cornerRadius(style: CSSStyleDeclaration, width: number): number {
-  const value = style.borderTopLeftRadius.split(' ')[0] ?? ''
-  return value.endsWith('%') ? (px(value) / 100) * width : px(value)
-}
-
-/** Where `target`'s picture shows: the part of `rect` inside every ancestor that clips its overflow, and the corners of the cell it fills. */
-function clipOf(target: Element, rect: DOMRect): { clip: PreviewBox, radius: number } {
-  let left = rect.left
-  let top = rect.top
-  let right = rect.right
-  let bottom = rect.bottom
-  let radius: number | null = null
-  for (let parent = target.parentElement; parent && parent !== document.body && parent !== document.documentElement; parent = parent.parentElement) {
-    const style = getComputedStyle(parent)
-    const clipsX = style.overflowX !== 'visible'
-    const clipsY = style.overflowY !== 'visible'
-    if (!clipsX && !clipsY)
-      continue
-    // Its padding box on the screen, where a transform scales its borders with it.
-    const box = parent.getBoundingClientRect()
-    const sx = parent instanceof HTMLElement && parent.offsetWidth > 0 ? box.width / parent.offsetWidth : 1
-    const sy = parent instanceof HTMLElement && parent.offsetHeight > 0 ? box.height / parent.offsetHeight : 1
-    const padLeft = box.left + parent.clientLeft * sx
-    const padTop = box.top + parent.clientTop * sy
-    const padRight = padLeft + parent.clientWidth * sx
-    const padBottom = padTop + parent.clientHeight * sy
-    // Only the first cell that clips the picture, and that the picture fills or overflows, says
-    // anything about its corners: not one it sits small inside, nor a scroller further out.
-    if (radius === null) {
-      const fills = rect.left <= padLeft + 2 && rect.top <= padTop + 2 && rect.right >= padRight - 2 && rect.bottom >= padBottom - 2
-      radius = fills ? Math.max(0, cornerRadius(style, box.width / sx) - px(style.borderTopWidth)) * sx : 0
-    }
-    if (clipsX) {
-      left = Math.max(left, padLeft)
-      right = Math.min(right, padRight)
-    }
-    if (clipsY) {
-      top = Math.max(top, padTop)
-      bottom = Math.min(bottom, padBottom)
-    }
-  }
-  return {
-    clip: { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) },
-    radius: radius ?? 0,
-  }
+/** A picture flying between its thumbnail and the stage. */
+export interface PreviewFlight {
+  index: number
+  /** In its thumbnail: where it flies out of, and home to. */
+  from: FlightPose
+  /**
+   * Where it leaves the stage from on the way home. Flying out, it lands on the picture as drawn:
+   * its fit, which follows the stage, or where a wheel has zoomed it to mid-air.
+   */
+  to: FlightPose | null
+  /** The size it is drawn at the whole way. */
+  size: PreviewSize
 }
 
 /**
@@ -104,7 +66,7 @@ export function resolveOrigin(origin: ImagePreviewOrigin | null | undefined): Pr
     if (!(rect.width >= 2 && rect.height >= 2))
       return null
     const style = getComputedStyle(target)
-    const shown = clipOf(target, rect)
+    const shown = shownBox(target, rect)
     const box = { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
     const clipped = Math.abs(shown.clip.x - box.x) > 0.5 || Math.abs(shown.clip.y - box.y) > 0.5
       || Math.abs(shown.clip.width - box.width) > 0.5 || Math.abs(shown.clip.height - box.height) > 0.5

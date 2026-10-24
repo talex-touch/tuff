@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuContext, DropdownMenuProps } from './types'
 import { computed, nextTick, provide, ref, watch } from 'vue'
+import { createRovingFocus } from '../../../../utils/roving-focus'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import { TX_DROPDOWN_MENU_INJECTION_KEY } from './types'
 
@@ -58,68 +59,23 @@ function close() {
 // ARIA menus also hold radio/checkbox items; arrow navigation must not skip them.
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
 
-function getEnabledItems(): HTMLElement[] {
-  if (!panelRef.value)
-    return []
-
-  return Array.from(panelRef.value.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
-    .filter(item => item.closest('[role="menu"]') === panelRef.value)
-    .filter(item => item.getAttribute('aria-disabled') !== 'true')
-}
+// A field inside the panel (a search box) owns its caret keys: Home / End move
+// the caret, not to the first / last item.
+const roving = createRovingFocus(
+  () => Array.from(panelRef.value?.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR) ?? [])
+    .filter(item => item.closest('[role="menu"]') === panelRef.value),
+  { skipDisabled: true, editableKeepsHomeEnd: true },
+)
 
 function focusFirstItem() {
-  nextTick(() => getEnabledItems()[0]?.focus())
-}
-
-// A field inside the panel (a search box) owns its caret keys: Home / End must
-// move the caret, not jump to the first / last item. `isContentEditable`
-// covers inherited editability (the caret sits in a <b> inside the editable
-// host); the `closest` walk covers engines without the property, jsdom among
-// them. Neither alone is sufficient.
-function isEditableTarget(target: HTMLElement | null): boolean {
-  if (!target)
-    return false
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
-    return true
-  return target.isContentEditable || !!target.closest('[contenteditable]:not([contenteditable="false"])')
+  nextTick(() => roving.items()[0]?.focus())
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
-    return
-
   const eventTarget = event.target instanceof HTMLElement ? event.target : null
   if (eventTarget?.closest('[role="menu"]') !== panelRef.value)
     return
-
-  // Arrow keys are still taken on an editable target: that is how the field
-  // hands focus to the list without the host wiring a handler of its own.
-  if ((event.key === 'Home' || event.key === 'End') && isEditableTarget(eventTarget))
-    return
-
-  const items = getEnabledItems()
-  if (items.length === 0)
-    return
-
-  event.preventDefault()
-  const targetItem = eventTarget?.closest<HTMLElement>(MENU_ITEM_SELECTOR)
-  const activeItem = targetItem
-    ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
-  const activeIndex = activeItem ? items.indexOf(activeItem) : -1
-
-  if (event.key === 'Home') {
-    items[0]?.focus()
-    return
-  }
-  if (event.key === 'End') {
-    items[items.length - 1]?.focus()
-    return
-  }
-
-  const direction = event.key === 'ArrowDown' ? 1 : -1
-  const fallbackIndex = direction > 0 ? -1 : 0
-  const nextIndex = (Math.max(activeIndex, fallbackIndex) + direction + items.length) % items.length
-  items[nextIndex]?.focus()
+  roving.move(event, eventTarget?.closest(MENU_ITEM_SELECTOR))
 }
 
 watch(

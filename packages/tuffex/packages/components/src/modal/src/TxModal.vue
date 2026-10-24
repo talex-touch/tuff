@@ -2,7 +2,7 @@
 import type { CSSProperties } from 'vue'
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
-import { hasDocument } from '../../../../utils/env'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useGuardedClose } from '../../../../utils/guarded-close'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
@@ -89,22 +89,20 @@ const visible = computed({
 const zIndex = ref(zIndexAllocator.get())
 const overlayRef = ref<HTMLElement | null>(null)
 const titleId = useId()
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 
 watch(
   visible,
   (v) => {
     if (v) {
       zIndex.value = zIndexAllocator.next()
-      if (hasDocument())
-        previouslyFocusedElement = document.activeElement as HTMLElement
+      focusReturn.save()
       nextTick(() => {
         overlayRef.value?.focus()
       })
     }
-    else if (previouslyFocusedElement) {
-      previouslyFocusedElement.focus()
-      previouslyFocusedElement = null
+    else {
+      focusReturn.restore()
     }
   },
   // `immediate` so a modal mounted already open (`modelValue: true`) still
@@ -120,45 +118,15 @@ function close() {
 
 const requestClose = useGuardedClose(() => props.beforeClose, () => visible.value, close)
 
-// Focus trap: aria-modal="true" promises the background is inert, so Tab must cycle
-// within the dialog instead of walking into the page behind it.
-function trapFocus(event: KeyboardEvent) {
-  const root = overlayRef.value
-  if (!root)
-    return
-  const focusable = Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
-  )
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (!first || !last) {
-    // Nothing tabbable inside — keep focus on the dialog itself.
-    event.preventDefault()
-    root.focus()
-    return
-  }
-  const active = hasDocument() ? document.activeElement : null
-  if (event.shiftKey) {
-    if (!root.contains(active) || active === first || active === root) {
-      event.preventDefault()
-      last.focus()
-    }
-  }
-  else if (!root.contains(active) || active === root || active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
 function handleKeydown(event: KeyboardEvent) {
   if (!visible.value || event.defaultPrevented || (event.key !== 'Tab' && event.key !== 'Escape'))
     return
   if (!isTopmostModalDialog(overlayRef.value))
     return
   if (event.key === 'Tab') {
-    trapFocus(event)
+    // aria-modal="true" promises the background is inert, so Tab cycles within the dialog.
+    if (overlayRef.value)
+      trapTab(event, overlayRef.value)
     return
   }
   event.preventDefault()
@@ -171,9 +139,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
+  focusReturn.restore()
 })
 </script>
 

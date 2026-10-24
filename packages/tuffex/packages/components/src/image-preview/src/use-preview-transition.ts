@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { getCurrentScope, onBeforeUnmount, onScopeDispose, ref, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
 import { responseSpring } from '../../../../utils/gesture'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
@@ -38,7 +38,7 @@ export interface PreviewTransition {
   finish: () => void
   /** Out and still, without calling `done`. */
   reset: () => void
-  /** A fade toward shown or hidden as `shown` turns, over `ms`; 0 to 1. */
+  /** A fade toward shown or hidden as `shown` turns, over `ms`; 0 to 1. It ends with the component that asked for it. */
   level: (shown: () => boolean, ms: number) => Ref<number>
 }
 
@@ -201,13 +201,22 @@ export function usePreviewTransition(options: PreviewTransitionOptions): Preview
 
   function level(shown: () => boolean, ms: number): Ref<number> {
     const value = ref(shown() ? 1 : 0)
-    levels.push({ value, shown, ms })
+    const entry: Level = { value, shown, ms }
+    levels.push(entry)
     watch(shown, (visible) => {
       if (hasFrames())
         run()
       else
         value.value = visible ? 1 : 0
     })
+    // The toolbar, mounted afresh with each opening, asks for one too.
+    if (getCurrentScope()) {
+      onScopeDispose(() => {
+        const at = levels.indexOf(entry)
+        if (at >= 0)
+          levels.splice(at, 1)
+      })
+    }
     return value
   }
 

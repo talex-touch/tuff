@@ -1,7 +1,9 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
+import type { MotionAxis, ViewMotion } from '../../../../utils/pan-zoom'
 import type { PreviewBounds, PreviewBox, PreviewPoint, PreviewSize, PreviewView } from './zoom'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { stepSpring } from '../../../../utils/animation/spring'
+import { drawnScale } from '../../../../utils/drawn-scale'
+import { createFrameLoop } from '../../../../utils/frame-loop'
 import {
   createVelocityTracker,
   isZoomWheel,
@@ -10,17 +12,28 @@ import {
   wheelPixels,
   wheelZoomFactor,
 } from '../../../../utils/gesture'
-import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import {
   clampView,
+  releaseAxis,
+  resistView,
+  restingAxis,
+  restingView,
+  scaleAbout,
+  springView,
+  stepAxis,
+  stepView,
+  VIEW_SPRING,
+  viewGoal,
+  viewNow,
+} from '../../../../utils/pan-zoom'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
+import {
   detailScale,
   fitView,
-  glideAxis,
   isNotchWheel,
   panBounds,
   resistScale,
-  resistView,
-  scaleAbout,
+  zoomPresets,
 } from './zoom'
 
 // The preview's hands. A drag pans a zoomed picture 1:1 and resists past its edges, and a flick
@@ -86,6 +99,8 @@ export interface PreviewGestures {
   zoomed: ComputedRef<boolean>
   atMinScale: ComputedRef<boolean>
   atMaxScale: ComputedRef<boolean>
+  /** The scales the zoom readout's menu offers for the current picture, below its whole. */
+  presets: ComputedRef<number[]>
   onPointerDown: (event: PointerEvent) => void
   onPointerMove: (event: PointerEvent) => void
   onPointerUp: (event: PointerEvent) => void
@@ -101,6 +116,8 @@ export interface PreviewGestures {
   onKey: (event: KeyboardEvent) => boolean
   zoomIn: () => void
   zoomOut: () => void
+  /** Springs to scale `k`, about the middle of the fit box, as the zoom buttons do. */
+  zoomTo: (k: number) => void
   /** Springs back to the whole picture. */
   resetZoom: () => void
   /** Turns the current picture a quarter clockwise (1) or back (-1), and shows it whole. */
@@ -123,12 +140,8 @@ export interface PreviewGestures {
   resetAll: () => void
 }
 
-/** Zooms, resets, wheel notches and anything let go past an edge settle on this. */
-const VIEW_SPRING = responseSpring(0.35, 1)
 /** A slide coming in, and a closing drag going back. */
 const SLIDE_SPRING = responseSpring(0.4, 1)
-/** A gliding axis slower than this (px/s) has stopped. */
-const GLIDE_REST = 10
 /** A press moving further than this (px) drags instead of clicking. */
 const DRAG_SLOP_PX = 4
 /** Room between two slides (px). */
@@ -159,18 +172,7 @@ const KEY_PAN = 0.1
 /** A touch held this long (ms) without moving asks for the menu. */
 const LONG_PRESS_MS = 480
 
-interface Axis {
-  mode: 'rest' | 'glide' | 'spring'
-  value: number
-  velocity: number
-  target: number
-}
-
-interface ViewMotion {
-  k: Axis
-  tx: Axis
-  ty: Axis
-  bounds: PreviewBounds
+interface PreviewMotion extends ViewMotion {
   /** Lands on the fit view, which then follows the stage through resizes. */
   toFit: boolean
 }
@@ -207,10 +209,6 @@ interface SafariGestureEvent extends Event {
   clientY: number
 }
 
-function rest(value: number): Axis {
-  return { mode: 'rest', value, velocity: 0, target: value }
-}
-
 function midpoint(a: PreviewPoint, b: PreviewPoint): PreviewPoint {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 }
@@ -241,6 +239,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
   const zoomed = computed(() => view.value !== null && view.value.k > minScale.value * (1 + 1e-3))
   const atMinScale = computed(() => !zoomed.value)
   const atMaxScale = computed(() => view.value === null || view.value.k >= maxScale.value * (1 - 1e-3))
+  const presets = computed(() => zoomPresets(minScale.value, maxScale.value))
 
   const track = ref(0)
   const dismiss = shallowRef<PreviewPoint>({ x: 0, y: 0 })
@@ -262,14 +261,12 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
 
   // -- Motion ------------------------------------------------------------------------------
 
-  let viewMotion: ViewMotion | null = null
-  let angleMotion: Axis | null = null
-  let trackMotion: Axis | null = null
+  let viewMotion: PreviewMotion | null = null
+  let angleMotion: MotionAxis | null = null
+  let trackMotion: MotionAxis | null = null
   /** The page the slide in flight turns once it lands. */
   let trackStep: -1 | 0 | 1 = 0
-  let dismissMotion: { x: Axis, y: Axis } | null = null
-  let frame = 0
-  let lastTime = 0
+  let dismissMotion: { x: MotionAxis, y: MotionAxis } | null = null
 
   // A stage not laid out yet has nothing to move across: everything lands at once.
   function canAnimate(): boolean {
@@ -286,29 +283,6 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     return bounce > 0 ? responseSpring(0.4, 1 - bounce) : SLIDE_SPRING
   }
 
-  function stepAxis(a: Axis, dt: number, spring: { stiffness: number, damping: number }, limits: [number, number] | null, epsilon: number): void {
-    if (a.mode === 'glide') {
-      ;[a.value, a.velocity] = glideAxis(a.value, a.velocity, dt)
-      if (limits && (a.value < limits[0] || a.value > limits[1])) {
-        // Coasting into an edge, a spring takes the velocity over and brings the picture back.
-        a.mode = 'spring'
-        a.target = Math.max(limits[0], Math.min(limits[1], a.value))
-      }
-      else if (Math.abs(a.velocity) < GLIDE_REST) {
-        a.mode = 'rest'
-        a.velocity = 0
-      }
-    }
-    else if (a.mode === 'spring') {
-      ;[a.value, a.velocity] = stepSpring(a.value, a.velocity, a.target, spring, dt)
-      if (Math.abs(a.target - a.value) < epsilon && Math.abs(a.velocity) < epsilon * 16) {
-        a.value = a.target
-        a.velocity = 0
-        a.mode = 'rest'
-      }
-    }
-  }
-
   function land(): void {
     const step = trackStep
     trackMotion = null
@@ -318,22 +292,15 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       options.onStep(step)
   }
 
-  function tick(now: number): void {
-    frame = 0
-    const dt = Math.min(0.064, Math.max(0, (now - lastTime) / 1000))
-    lastTime = now
+  const loop = createFrameLoop((dt) => {
     const vm = viewMotion
     if (vm) {
-      stepAxis(vm.k, dt, VIEW_SPRING, null, 1e-4)
-      stepAxis(vm.tx, dt, VIEW_SPRING, vm.bounds.tx, 0.1)
-      stepAxis(vm.ty, dt, VIEW_SPRING, vm.bounds.ty, 0.1)
-      const next = { k: vm.k.value, tx: vm.tx.value, ty: vm.ty.value }
-      if (vm.k.mode === 'rest' && vm.tx.mode === 'rest' && vm.ty.mode === 'rest') {
+      if (stepView(vm, dt)) {
         viewMotion = null
-        drawn.value = vm.toFit ? null : next
+        drawn.value = vm.toFit ? null : viewNow(vm)
       }
       else {
-        drawn.value = next
+        drawn.value = viewNow(vm)
       }
     }
     const am = angleMotion
@@ -375,22 +342,12 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
         dismissMotion = null
     }
     syncMoving()
-    if (moving.value)
-      frame = requestAnimationFrame(tick)
-  }
+    return moving.value
+  })
 
   function run(): void {
     moving.value = true
-    if (frame)
-      return
-    lastTime = performance.now()
-    frame = requestAnimationFrame(tick)
-  }
-
-  function stopFrame(): void {
-    if (frame && typeof cancelAnimationFrame !== 'undefined')
-      cancelAnimationFrame(frame)
-    frame = 0
+    loop.start()
   }
 
   function stopView(): void {
@@ -400,11 +357,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
 
   /** Where the view is heading: a key press or a notch builds on the last one. */
   function goal(): PreviewView | null {
-    const vm = viewMotion
-    if (!vm)
-      return view.value
-    const pick = (a: Axis): number => (a.mode === 'spring' ? a.target : a.value)
-    return { k: pick(vm.k), tx: pick(vm.tx), ty: pick(vm.ty) }
+    return viewMotion ? viewGoal(viewMotion) : view.value
   }
 
   /** Springs to `target`, keeping any velocity in flight. */
@@ -417,12 +370,10 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       drawn.value = toFit ? null : target
       return
     }
-    const next = viewMotion ?? { k: rest(from.k), tx: rest(from.tx), ty: rest(from.ty), bounds: boundsAt(target.k), toFit }
-    for (const key of ['k', 'tx', 'ty'] as const) {
-      next[key].mode = 'spring'
-      next[key].target = target[key]
-    }
-    next.bounds = boundsAt(target.k)
+    const bounds = boundsAt(target.k)
+    const next = viewMotion ?? { ...restingView(from, bounds), toFit }
+    springView(next, target)
+    next.bounds = bounds
     next.toFit = toFit
     viewMotion = next
     run()
@@ -456,6 +407,12 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
 
   function zoomOut(): void {
     zoomAbout(Math.SQRT1_2, boxCentre())
+  }
+
+  function zoomTo(k: number): void {
+    const from = goal()
+    if (from)
+      aim(scaleAbout(from, clampScale(k), boxCentre()))
   }
 
   function resetZoom(): void {
@@ -526,15 +483,9 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     // Two samples with one timestamp read as 0 / 0; that is no momentum.
     const [vx, vy] = velocity.map(v => (Number.isFinite(v) ? v : 0)) as [number, number]
     const bounds = boundsAt(k)
-    const plan = (value: number, speed: number, [lo, hi]: [number, number]): Axis => {
-      if (value < lo || value > hi)
-        return { mode: 'spring', value, velocity: speed, target: Math.max(lo, Math.min(hi, value)) }
-      if (Math.abs(speed) > GLIDE_REST && lo < hi)
-        return { mode: 'glide', value, velocity: speed, target: value }
-      return rest(value)
-    }
-    const tx = plan(from.tx, vx, bounds.tx)
-    const ty = plan(from.ty, vy, bounds.ty)
+    // Along an axis held centred, there is nowhere to glide.
+    const tx = releaseAxis(from.tx, vx, bounds.tx, bounds.tx[0] < bounds.tx[1])
+    const ty = releaseAxis(from.ty, vy, bounds.ty, bounds.ty[0] < bounds.ty[1])
     const toFit = !zoomed.value
     if (tx.mode === 'rest' && ty.mode === 'rest') {
       if (toFit)
@@ -545,7 +496,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       drawn.value = toFit ? null : clampView(from, bounds)
       return
     }
-    viewMotion = { k: rest(k), tx, ty, bounds, toFit }
+    viewMotion = { k: restingAxis(k), tx, ty, bounds, toFit }
     run()
   }
 
@@ -705,10 +656,8 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       return { x: 0, y: 0 }
     const rect = el.getBoundingClientRect()
     // The stage scales in as the preview opens: read the point in its own, unscaled pixels.
-    const size = options.size()
-    const sx = rect.width > 0 && size.width > 0 ? size.width / rect.width : 1
-    const sy = rect.height > 0 && size.height > 0 ? size.height / rect.height : 1
-    return { x: (event.clientX - rect.left) * sx, y: (event.clientY - rect.top) * sy }
+    const scale = drawnScale(el, rect)
+    return { x: (event.clientX - rect.left) / scale.x, y: (event.clientY - rect.top) / scale.y }
   }
 
   function startPinch(): void {
@@ -1034,15 +983,15 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
    * Pans a zoom still on its way by `delta`, as far as where it lands allows. The picture moves
    * with the pan now, and the zoom carries on to its scale.
    */
-  function panMotion(vm: ViewMotion, delta: { x: number, y: number }): void {
-    const shift = (a: Axis, d: number, [lo, hi]: [number, number]): void => {
+  function panMotion(vm: PreviewMotion, delta: { x: number, y: number }): void {
+    const shift = (a: MotionAxis, d: number, [lo, hi]: [number, number]): void => {
       const target = Math.max(lo, Math.min(hi, a.target - d))
       a.value += target - a.target
       a.target = target
     }
     shift(vm.tx, delta.x, vm.bounds.tx)
     shift(vm.ty, delta.y, vm.bounds.ty)
-    drawn.value = { k: vm.k.value, tx: vm.tx.value, ty: vm.ty.value }
+    drawn.value = viewNow(vm)
   }
 
   function scroll(delta: { x: number, y: number }, current: WheelStream): void {
@@ -1190,7 +1139,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     suppressClick = false
     gesture.value = 'idle'
     syncMoving()
-    stopFrame()
+    loop.stop()
   }
 
   // A zoomed view keeps what was in the middle of the old box in the middle of the new one, and
@@ -1212,7 +1161,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
   )
 
   onBeforeUnmount(() => {
-    stopFrame()
+    loop.stop()
     clearWheelPinch()
     clearTap()
     clearHold()
@@ -1230,6 +1179,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     zoomed,
     atMinScale,
     atMaxScale,
+    presets,
     onPointerDown,
     onPointerMove,
     onPointerUp,
@@ -1243,6 +1193,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     onKey,
     zoomIn,
     zoomOut,
+    zoomTo,
     resetZoom,
     rotate,
     lookAt,

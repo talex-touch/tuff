@@ -7,6 +7,7 @@ import type {
   SensitiveInputProps,
 } from './types'
 import { computed, nextTick, onBeforeUnmount, ref, useAttrs, useId, watch } from 'vue'
+import { writeClipboardText } from '../../../../utils/clipboard'
 import { useTxFormField } from '../../../../utils/form-field'
 import { SENSITIVE_INPUT_DEFAULT_LABELS } from './types'
 
@@ -189,36 +190,12 @@ function handleToggle(): void {
   reveal()
 }
 
-async function writeClipboard(value: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.top = '-9999px'
-  document.body.appendChild(textarea)
-  try {
-    textarea.select()
-    if (!document.execCommand('copy'))
-      throw new Error('Copy command failed')
-  }
-  finally {
-    // Detach even when select()/execCommand throws, so a failed copy never
-    // orphans a node holding the secret in the DOM.
-    document.body.removeChild(textarea)
-  }
-}
-
 async function handleCopy(): Promise<void> {
   if (isDisabled.value || !hasValue.value)
     return
 
   try {
-    await writeClipboard(props.modelValue)
+    await writeClipboardText(props.modelValue)
     copied.value = true
     emit('copy', props.modelValue)
     if (copiedTimer)

@@ -197,3 +197,150 @@ onBeforeUnmount(release)
     </div>
   </div>
 </template>
+
+<style lang="scss">
+@use '../../../style/mixins.scss' as *;
+@use './preview-shared' as *;
+
+// In the corner while a picture is zoomed in: all of it, the part on the stage
+// framed and the rest dimmed. It fades on a level of its own, which the chrome's gates. Its
+// corners are smooth (`tx-squircle`), and the map's concentric with them inside the padding.
+
+$tx-image-preview-minimap-radius: 12px;
+$tx-image-preview-minimap-padding: 4px;
+
+.tx-image-preview__minimap {
+  --tx-image-preview-level: var(--tx-image-preview-minimap, 1);
+
+  position: absolute;
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  isolation: isolate;
+  padding: $tx-image-preview-minimap-padding;
+  pointer-events: none;
+  @include tx-squircle($tx-image-preview-minimap-radius);
+
+  &.is-shown {
+    pointer-events: auto;
+  }
+}
+
+.tx-image-preview__minimap-map {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(160px, calc(112px * var(--tx-image-preview-minimap-ratio, 1)));
+  aspect-ratio: var(--tx-image-preview-minimap-ratio, 1);
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+  // The frame measures its corners against the map's width.
+  container-type: inline-size;
+  @include tx-squircle($tx-image-preview-minimap-radius, $inset: $tx-image-preview-minimap-padding);
+}
+
+.tx-image-preview__minimap-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+// At the map's corner a corner of the frame is the map's own, and on the way there concentric with
+// it: the map's radius less how far off it is (`--…-reach-*`, in shares of the map's width), never
+// under the frame's own. So the map's clip never cuts into the frame.
+.tx-image-preview__minimap-viewport {
+  --tx-image-preview-minimap-outer: #{$tx-image-preview-minimap-radius - $tx-image-preview-minimap-padding};
+  --tx-image-preview-minimap-inner: 3px;
+
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 8px;
+  min-height: 8px;
+  border: 1.5px solid var(--tx-image-preview-ink);
+  border-radius:
+    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-tl) * 100cqw)
+    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-tr) * 100cqw)
+    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-br) * 100cqw)
+    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-bl) * 100cqw);
+  // A dark hairline inside keeps it seen on a bright picture. The spread dims all that is off the
+  // stage, and the map clips it.
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+
+  @supports (corner-shape: superellipse(2)) {
+    --tx-image-preview-minimap-outer: #{tx-squircle-inset(tx-squircle-radius($tx-image-preview-minimap-radius), $tx-image-preview-minimap-padding)};
+    --tx-image-preview-minimap-inner: #{tx-squircle-radius(3px)};
+    corner-shape: superellipse(#{tx-squircle-exponent()});
+  }
+}
+
+.tx-image-preview__minimap-map.is-dragging,
+.tx-image-preview__minimap-map.is-dragging .tx-image-preview__minimap-viewport {
+  cursor: grabbing;
+}
+
+// Where the toolbar, with all four actions, reaches the corner, above it.
+@media (max-width: 713px) {
+  .tx-image-preview__minimap {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
+
+// Where the strip reaches the corner, above it. Up there the next-page button at the middle of the
+// side comes near, so a short window takes a shorter map: the room under the button is half the
+// window less half the button, a gap, the minimap's offset and its padding.
+@media (max-width: 1167px) {
+  .tx-image-preview.has-thumbnails .tx-image-preview__minimap {
+    bottom: calc(140px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview.has-thumbnails .tx-image-preview__minimap-map {
+    width: min(
+      160px,
+      calc(112px * var(--tx-image-preview-minimap-ratio, 1)),
+      calc((50vh - 184px - env(safe-area-inset-bottom)) * var(--tx-image-preview-minimap-ratio, 1))
+    );
+  }
+}
+
+@media #{$tx-image-preview-phone} {
+  // Above whatever runs along the bottom: the toolbar, the strip, or the page buttons.
+  .tx-image-preview__minimap {
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview.has-thumbnails .tx-image-preview__minimap {
+    bottom: calc(124px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview.has-dots .tx-image-preview__minimap {
+    bottom: calc(102px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview:not(.has-actions).has-thumbnails .tx-image-preview__minimap {
+    bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview:not(.has-actions).has-dots .tx-image-preview__minimap {
+    bottom: calc(48px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview.is-single:not(.has-actions) .tx-image-preview__minimap {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview__minimap-map,
+  .tx-image-preview.has-thumbnails .tx-image-preview__minimap-map {
+    width: min(112px, calc(80px * var(--tx-image-preview-minimap-ratio, 1)));
+  }
+}
+</style>

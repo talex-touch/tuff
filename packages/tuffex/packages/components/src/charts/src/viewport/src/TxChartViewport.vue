@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { stepSpring } from '../../../../../../utils/animation/spring'
 import {
   createVelocityTracker,
+  glideAxis,
   isZoomWheel,
   projectMomentum,
   responseSpring,
@@ -25,7 +26,6 @@ import {
   brushRect,
   containWindow,
   coversExtent,
-  glideStep,
   minimumSpan,
   overshoot,
   resistWindow,
@@ -231,7 +231,7 @@ function tick(now: number): void {
     return
   }
   if (mode === 'glide') {
-    const [start, speed] = glideStep(from[0], velocity[0], dt)
+    const [start, speed] = glideAxis(from[0], velocity[0], dt)
     const next: ViewWindow = [start, start + (from[1] - from[0])]
     velocity = [speed, speed]
     publish(next)

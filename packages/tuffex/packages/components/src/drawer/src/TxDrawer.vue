@@ -5,6 +5,7 @@ import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useGuardedClose } from '../../../../utils/guarded-close'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 
@@ -14,15 +15,6 @@ const zIndexAllocator = useZIndexAllocator()
 const MOBILE_BREAKPOINT = 768
 const SURFACE_MODES: readonly string[] = ['pure', 'mask', 'blur', 'glass', 'refraction', 'acrylic', 'mica', 'flat', 'plain']
 const DRAWER_Z_INDEX_SEED = 10000
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[contenteditable="true"]',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',')
 
 /**
  * TxDrawer Component
@@ -59,7 +51,7 @@ const drawerRef = ref<HTMLElement | null>(null)
 const internalZIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const isMobile = ref(false)
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 /**
  * Latched on the drawer's first open and never cleared: gating the slot content on `visible`
  * alone would tear the content down mid-close, so content outlives the first open and reopening
@@ -169,52 +161,14 @@ function handleMaskClick(): void {
   }
 }
 
-function getFocusableElements(): HTMLElement[] {
-  if (!drawerRef.value)
-    return []
-
-  return Array.from(drawerRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter(element => element.getAttribute('aria-hidden') !== 'true')
-}
-
-function trapFocus(event: KeyboardEvent): void {
-  const drawer = drawerRef.value
-  if (!drawer)
-    return
-
-  const focusableElements = getFocusableElements()
-  if (focusableElements.length === 0) {
-    event.preventDefault()
-    drawer.focus()
-    return
-  }
-
-  const firstElement = focusableElements[0]
-  const lastElement = focusableElements[focusableElements.length - 1]
-  const activeElement = document.activeElement
-  const activeInsideDrawer = drawer.contains(activeElement)
-
-  if (event.shiftKey) {
-    if (!activeInsideDrawer || activeElement === drawer || activeElement === firstElement) {
-      event.preventDefault()
-      lastElement?.focus()
-    }
-    return
-  }
-
-  if (!activeInsideDrawer || activeElement === drawer || activeElement === lastElement) {
-    event.preventDefault()
-    firstElement?.focus()
-  }
-}
-
 function handleKeydown(event: KeyboardEvent): void {
   if (!display.value || event.defaultPrevented || (event.key !== 'Tab' && event.key !== 'Escape'))
     return
   if (!isTopmostModalDialog(drawerRef.value))
     return
   if (event.key === 'Tab') {
-    trapFocus(event)
+    if (drawerRef.value)
+      trapTab(event, drawerRef.value)
     return
   }
   if (event.key === 'Escape' && props.closeOnPressEscape) {
@@ -240,15 +194,14 @@ watch(
         zIndexAllocator.refresh(DRAWER_Z_INDEX_SEED, 'drawer')
       }
       internalZIndex.value = props.zIndex ?? zIndexAllocator.next()
-      previouslyFocusedElement = typeof document !== 'undefined' ? document.activeElement as HTMLElement : null
+      focusReturn.save()
       emit('open')
       nextTick(() => {
         focusDrawer()
       })
     }
-    else if (previouslyFocusedElement) {
-      previouslyFocusedElement.focus()
-      previouslyFocusedElement = null
+    else {
+      focusReturn.restore()
     }
   },
   { immediate: true },
@@ -263,7 +216,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', updateMobileState)
-  previouslyFocusedElement?.focus()
+  focusReturn.restore()
 })
 </script>
 

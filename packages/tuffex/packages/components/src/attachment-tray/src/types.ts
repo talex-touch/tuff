@@ -34,7 +34,7 @@ export interface AttachmentTrayProps {
   zoomInLabel?: string
   /** Accessible label for the preview's zoom-out button. @default 'Zoom out' */
   zoomOutLabel?: string
-  /** Accessible name of the preview's zoom readout, after the readout itself; it shows the whole image again. @default 'Fit to screen' */
+  /** The first item of the menu the preview's zoom readout opens, which shows the whole image again. @default 'Fit to screen' */
   resetLabel?: string
   /** Shown in the preview in place of an image that failed to load. @default 'This image could not be loaded' */
   failedText?: string

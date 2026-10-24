@@ -26,6 +26,17 @@ export function projectMomentum(velocity: number, decelerationRate = 0.998): num
 }
 
 /**
+ * One frame (`dt`, in seconds) of a released pan coasting to a stop with a
+ * scroll view's exponential deceleration (`rate` per millisecond). In total it
+ * carries `projectMomentum(velocity, rate)`. Returns `[position, velocity]`.
+ */
+export function glideAxis(position: number, velocity: number, dt: number, rate = 0.998): [number, number] {
+  const tau = -0.001 / Math.log(rate)
+  const decay = Math.exp(-dt / tau)
+  return [position + velocity * tau * (1 - decay), velocity * decay]
+}
+
+/**
  * Unit-mass stiffness and damping for a spring given as response (seconds, the
  * period it would swing at undamped) and damping ratio: 1 settles without
  * overshoot, below 1 overshoots. Use a ratio below 1 only where a release

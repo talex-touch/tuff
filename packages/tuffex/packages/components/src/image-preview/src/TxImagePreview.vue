@@ -1,34 +1,40 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import type { FlightPose, PreviewOrigin } from './flight'
 import type { ImagePreviewEmits, ImagePreviewIndicator, ImagePreviewItem, ImagePreviewProps } from './types'
-import type { PreviewBox, PreviewPoint, PreviewSize, PreviewView } from './zoom'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import type { PreviewSize, PreviewView } from './zoom'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
+import { trapTab } from '../../../../utils/focus-trap'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
-import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { isTopmostModalDialog } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
-import { isOriginInView, lerpPose, originPose, poseStyles, resolveOrigin, uprightAngle, viewPose } from './flight'
+import { PREVIEW_ICONS } from './icons'
+import ImagePreviewIcon from './ImagePreviewIcon.vue'
+import ImagePreviewMenu from './ImagePreviewMenu.vue'
 import ImagePreviewMinimap from './ImagePreviewMinimap.vue'
+import ImagePreviewSlide from './ImagePreviewSlide.vue'
 import ImagePreviewStrip from './ImagePreviewStrip.vue'
 import ImagePreviewToolbar from './ImagePreviewToolbar.vue'
-import { ACTION_ICONS, usePreviewActions } from './use-preview-actions'
+import { usePreviewActions } from './use-preview-actions'
 import { SLIDE_GAP, usePreviewGestures } from './use-preview-gestures'
 import { usePreviewMenu } from './use-preview-menu'
+import { usePreviewOrigins } from './use-preview-origin'
 import { usePreviewPictures } from './use-preview-pictures'
+import { usePreviewPresence } from './use-preview-presence'
+import { usePreviewSlides } from './use-preview-slides'
+import { usePreviewStage } from './use-preview-stage'
 import { usePreviewTransition } from './use-preview-transition'
-import { fitView } from './zoom'
 
-// One picture at a time over the whole window, with its neighbours waiting on either side. The
-// hands are use-preview-gestures'; the comings and goings use-preview-transition's, and a flight
-// between a thumbnail and the stage is drawn with flight's poses. The pictures' loading is
-// use-preview-pictures', the actions use-preview-actions' and their menu use-preview-menu's, the
-// strip along the bottom ImagePreviewStrip's, and the minimap in the corner ImagePreviewMinimap's.
-// This file owns opening and closing, focus, the keyboard, and the chrome around it all, which a
-// touch tap hides and shows.
-
-// Resolved in setup: inject is only valid here, while allocation happens on opening.
-const zIndexAllocator = useZIndexAllocator()
+// One picture at a time over the whole window, with its neighbours waiting on either side. This
+// file puts the parts together, and owns the keyboard and the chrome around it all, which a touch
+// tap hides and shows. The hands are use-preview-gestures'. Opening and closing are
+// use-preview-presence's, on use-preview-transition's progress: a picture flies between its
+// thumbnail, use-preview-origin's, and the stage on flight's poses. The stage is measured by
+// use-preview-stage, its pages posed by use-preview-slides and drawn by ImagePreviewSlide, and
+// the pictures loaded by use-preview-pictures. The actions are use-preview-actions', and their
+// menu use-preview-menu's, drawn by ImagePreviewMenu as the zoom readout's is. The toolbar, the
+// strip along the bottom and the minimap in the corner are ImagePreviewToolbar, ImagePreviewStrip
+// and ImagePreviewMinimap.
 
 defineOptions({ name: 'TxImagePreview' })
 
@@ -55,6 +61,7 @@ const props = withDefaults(defineProps<ImagePreviewProps>(), {
   nextLabel: 'Next image',
   zoomInLabel: 'Zoom in',
   zoomOutLabel: 'Zoom out',
+  zoomLabel: 'Zoom',
   resetLabel: 'Fit to screen',
   rotateLabel: 'Rotate',
   copyLabel: 'Copy image',
@@ -117,162 +124,58 @@ const controlMaterial = computed(() => ({
   blur: props.controlBlur,
 }))
 
-// -- The stage. The fit box is an invisible element the stylesheet places, so the room the
-// chrome takes, the safe areas and the phone layout are all CSS; this only reads it back.
+// -- The stage, use-preview-stage's: its size, and where a whole picture fits on it.
 
 const overlayRef = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 const fitRef = ref<HTMLElement | null>(null)
-const stageSize = shallowRef<PreviewSize>({ width: 0, height: 0 })
-const fitBox = shallowRef<PreviewBox>({ x: 0, y: 0, width: 0, height: 0 })
-let resizeObserver: ResizeObserver | undefined
-
-function measure(): void {
-  const stage = stageRef.value
-  const fit = fitRef.value
-  if (!stage || !fit)
-    return
-  const size = stageSize.value
-  if (size.width !== stage.clientWidth || size.height !== stage.clientHeight)
-    stageSize.value = { width: stage.clientWidth, height: stage.clientHeight }
-  const box = fitBox.value
-  if (box.x !== fit.offsetLeft || box.y !== fit.offsetTop || box.width !== fit.offsetWidth || box.height !== fit.offsetHeight)
-    fitBox.value = { x: fit.offsetLeft, y: fit.offsetTop, width: fit.offsetWidth, height: fit.offsetHeight }
-}
-
-watch(stageRef, (stage) => {
-  resizeObserver?.disconnect()
-  resizeObserver = undefined
-  if (!stage)
-    return
-  measure()
-  if (typeof ResizeObserver === 'undefined')
-    return
-  resizeObserver = new ResizeObserver(measure)
-  resizeObserver.observe(stage)
-  if (fitRef.value)
-    resizeObserver.observe(fitRef.value)
-}, { flush: 'post' })
-
-/** A point in the overlay's pixels, which are the stage's. */
-function overlayPoint(event: { clientX: number, clientY: number }): PreviewPoint {
-  const rect = overlayRef.value?.getBoundingClientRect()
-  return { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) }
-}
+const { stageSize, fitBox, overlayPoint } = usePreviewStage({ overlay: overlayRef, stage: stageRef, fit: fitRef })
 
 // -- Pictures, use-preview-pictures': their sizes once loaded, the failed ones, and the stand-ins.
 
-const {
-  sizes,
-  standIns,
-  skeletonShown,
-  isFailed,
-  isLoaded,
-  shapeOf,
-  sizeOf,
-  markLoaded,
-  onImageLoad,
-  onImageError,
-  bindImage,
-  adoptOrigin,
-  clearStandIns,
-  armSkeleton,
-  clearSkeletonTimer,
-} = usePreviewPictures({
+const pictures = usePreviewPictures({
   items: () => items.value,
   current,
   hostFailed: () => props.failed,
   fitBox: () => fitBox.value,
   onError: (url, at) => emit('error', url, at),
 })
+const { sizes, isFailed, onImageLoad, onImageError, bindImage } = pictures
 
-// -- Origins. The host says where a picture sits on the page. It flies out of there on opening
-// and back on closing, and the thumbnail it left stays hidden while it is in the air.
+// -- Coming and going, use-preview-presence's. A picture flies out of the thumbnail the host
+// points at, and back, only for `zoom`, and never with reduced motion.
 
-/**
- * Where picture `at` sits, in the stage's pixels, if the preview may fly it there: asked for, and
- * in view. A picture already in the air follows its thumbnail out of view too (`inView: false`).
- */
-function zoomOrigin(at: number, inView = true): PreviewOrigin | null {
-  if (props.transition !== 'zoom' || reduced.value || !props.origin || !hasDocument())
-    return null
-  const origin = resolveOrigin(props.origin(at))
-  if (!origin || (inView && !isOriginInView(origin, { width: window.innerWidth, height: window.innerHeight })))
-    return null
-  const root = overlayRef.value?.getBoundingClientRect()
-  if (root && (root.left || root.top)) {
-    origin.box = { ...origin.box, x: origin.box.x - root.left, y: origin.box.y - root.top }
-    if (origin.clip)
-      origin.clip = { ...origin.clip, x: origin.clip.x - root.left, y: origin.clip.y - root.top }
-  }
-  return origin
-}
-
-let hiddenOrigin: { element: HTMLElement, opacity: string, transition: string } | null = null
-
-function hideOrigin(origin: PreviewOrigin): void {
-  const element = origin.element
-  if (hiddenOrigin?.element === element)
-    return
-  showOrigin()
-  if (!element)
-    return
-  hiddenOrigin = { element, opacity: element.style.opacity, transition: element.style.transition }
-  element.style.transition = 'none'
-  element.style.opacity = '0'
-}
-
-function showOrigin(): void {
-  const saved = hiddenOrigin
-  hiddenOrigin = null
-  if (!saved)
-    return
-  const { element } = saved
-  element.style.opacity = saved.opacity
-  // Back at once: a fade of its own would show the page through where the picture landed.
-  void getComputedStyle(element).opacity
-  element.style.transition = saved.transition
-}
-
-// -- Coming and going.
-
+const origins = usePreviewOrigins({
+  origin: () => (props.transition === 'zoom' && !reduced.value ? props.origin ?? null : null),
+  overlay: overlayRef,
+})
 const transition = usePreviewTransition({ bounce: () => bounce.value })
-
-/** A picture flying between its thumbnail and the stage. */
-interface Flight {
-  index: number
-  /** In its thumbnail: where it flies out of, and home to. */
-  from: FlightPose
-  /**
-   * Where it leaves the stage from on the way home. Flying out, it lands on the picture as drawn:
-   * its fit, which follows the stage, or where a wheel has zoomed it to mid-air.
-   */
-  to: FlightPose | null
-  /** The size it is drawn at the whole way. */
-  size: PreviewSize
-}
-
-const flight = shallowRef<Flight | null>(null)
-const rendered = ref(false)
-const closing = ref(false)
-/** The preview has begun to come in; a flight first waits a moment for its picture. */
-const arrived = ref(false)
 // A touch tap hides the chrome, so the picture can be seen whole.
 const chromeHidden = ref(false)
-const zIndex = ref(zIndexAllocator.get())
-let previouslyFocused: HTMLElement | null = null
-/** Every opening and closing bumps it, so an opening still waiting for its picture gives up. */
-let openToken = 0
-/** How fast a drag threw the picture away (px/s), for its flight home. */
-let pendingVelocity: [number, number] | null = null
-/** How long an opening waits for its picture before it fades in instead (ms). */
-const PICTURE_WAIT_MS = 150
-/** How far a closing drag shrinks the picture, at its furthest. */
-const DISMISS_SHRINK = 0.25
 
-// A zoomed or turned picture paged away from keeps its view while it slides out of sight: the
-// page turns halfway through the slide, with the picture still in view.
-const outgoing = shallowRef<{ index: number, view: PreviewView, turns: number, angle: number } | null>(null)
+const { rendered, closing, arrived, flight, zIndex, enter, leave, requestClose, settleOpen } = usePreviewPresence({
+  open,
+  items: () => items.value,
+  current,
+  clampIndex,
+  overlay: overlayRef,
+  stage: stageRef,
+  transition,
+  pictures,
+  origins,
+  drawnPose: size => drawnPose(size),
+  onEnter: () => {
+    chromeHidden.value = false
+    closeMenu(false)
+  },
+  onLeave: () => {
+    gestures.cancel()
+    closeMenu(false)
+  },
+  resetGestures: () => gestures.resetAll(),
+  onGone: () => clearStatus(),
+  onClose: () => emit('close'),
+})
 
 const PICTURE = '.tx-image-preview__image, .tx-image-preview__stand-in, .tx-image-preview__frame, .tx-image-preview__placeholder, .tx-image-preview__failed'
 
@@ -294,36 +197,35 @@ const { actionList, actionLabel, actionDisabled, runAction, statusText, statusLe
   level: transition.level,
 })
 
-const menuRef = ref<HTMLElement | null>(null)
+const actionMenu = ref<InstanceType<typeof ImagePreviewMenu> | null>(null)
 const {
   menuOpen,
   menuArmed,
-  menuPlaced,
-  menuStyle,
   menuLevel,
+  menuItems,
+  menuPlace,
   openMenu,
   closeMenu,
   chooseFromMenu,
   openMenuFromKeyboard,
   onContextMenu,
   onMouseDown,
-  onMenuKey,
 } = usePreviewMenu({
   enabled: () => props.contextMenu,
   live: () => rendered.value && !closing.value,
   overlay: overlayRef,
-  menu: menuRef,
+  holdsFocus: () => actionMenu.value?.holdsFocus() ?? false,
   actions: () => actionList.value,
+  label: actionLabel,
   disabled: actionDisabled,
   run: runAction,
   fitBox: () => fitBox.value,
   isPicture,
   point: overlayPoint,
-  settle: () => settleOpen(),
+  settle: settleOpen,
   endPress: () => gestures.endPress(),
   level: transition.level,
 })
-const menuRendered = computed(() => rendered.value && (menuOpen.value || menuLevel.value > 0))
 
 const gestures = usePreviewGestures({
   stage: stageRef,
@@ -336,14 +238,10 @@ const gestures = usePreviewGestures({
   maxScale: () => (Number.isFinite(props.maxScale) && props.maxScale > 0 ? props.maxScale : 4),
   active: () => rendered.value && !closing.value && !menuOpen.value,
   canStep: step => current.value + step >= 0 && current.value + step < count.value,
-  // A page turned while the picture is still flying out leaves it in the air: it lands beside the
-  // one turned to (see landingPose).
+  // A zoomed or turned picture paged away from keeps its view as it slides out, and one still
+  // flying out stays in the air, to land beside the one turned to (see use-preview-slides).
   onStep: (step) => {
-    const view = gestures.view.value
-    const turns = gestures.turns.value
-    outgoing.value = view && gestures.moving.value && (gestures.zoomed.value || turns % 4 !== 0)
-      ? { index: current.value, view, turns, angle: gestures.angle.value }
-      : null
+    holdOutgoing()
     setCurrent(clampIndex(current.value + step))
     gestures.resetView()
   },
@@ -363,6 +261,20 @@ const gestures = usePreviewGestures({
   bounce: () => bounce.value,
 })
 
+// -- Drawing, use-preview-slides': the current page and its neighbours, at rest or in flight.
+
+const { drawnSlides, boxStyle, drawnPose, holdOutgoing } = usePreviewSlides({
+  items: () => items.value,
+  current,
+  gestures,
+  pictures,
+  stageSize: () => stageSize.value,
+  fitBox: () => fitBox.value,
+  flight: () => flight.value,
+  presence: () => transition.presence.value,
+  closing: () => closing.value,
+})
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
@@ -375,266 +287,13 @@ const maskLevel = computed(() => clamp01(transition.presence.value) * (1 - gestu
 // A fade carries the pictures in and out; a flight carries itself.
 const stageLevel = computed(() => (!arrived.value ? 0 : transition.kind.value === 'fade' ? clamp01(transition.presence.value) : 1))
 
-/**
- * A hand reaching for the picture flying out lands it at once. A wheel or a key does not: the
- * flight lands on whatever they do to it, and Escape turns it round.
- */
-function settleOpen(): void {
-  if (flight.value && !closing.value)
-    transition.finish()
-}
-
-/** The flight out has landed: the thumbnail shows again, under the mask. */
-function landed(): void {
-  flight.value = null
-  showOrigin()
-}
-
-// The page can move under a picture in the air. On the way home the dialog is inert and a wheel
-// scrolls the page behind it; on the way out a scroll already under way runs on. The picture
-// flies to and from its thumbnail where it is now, not where it was when the flight began.
-function followOrigin(): void {
-  const shown = flight.value
-  const origin = shown ? zoomOrigin(shown.index, false) : null
-  if (!shown || !origin)
-    return
-  hideOrigin(origin)
-  flight.value = { ...shown, from: { ...originPose(shown.size, origin), angle: shown.from.angle } }
-}
-
-watch(() => flight.value !== null, (flying, _, onCleanup) => {
-  if (!flying || !hasDocument())
-    return
-  // Scroll events do not bubble; capturing them on the window hears every scroller's.
-  window.addEventListener('scroll', followOrigin, { capture: true, passive: true })
-  window.addEventListener('resize', followOrigin, { passive: true })
-  onCleanup(() => {
-    window.removeEventListener('scroll', followOrigin, { capture: true })
-    window.removeEventListener('resize', followOrigin)
-  })
-})
-
-/** Waits up to `ms` for the current picture to be ready to draw, so a flight never starts empty. */
-function pictureReady(ms: number): Promise<void> {
-  const image = stageRef.value?.querySelector<HTMLImageElement>('.tx-image-preview__slide:not([aria-hidden]) .tx-image-preview__image')
-  if (!image || typeof image.decode !== 'function')
-    return Promise.resolve()
-  return Promise.race([
-    image.decode().catch(() => {}),
-    new Promise<void>(resolve => setTimeout(resolve, ms)),
-  ]).then(() => {
-    if (image.complete && image.naturalWidth > 0)
-      markLoaded(image)
-  })
-}
-
-async function startOpen(token: number): Promise<void> {
-  const at = current.value
-  const item = items.value[at]
-  let origin = item && !isFailed(item.url) ? zoomOrigin(at) : null
-  if (item && origin) {
-    adoptOrigin(item, origin)
-    if (!standIns.value.has(item.url)) {
-      await pictureReady(PICTURE_WAIT_MS)
-      if (token !== openToken)
-        return
-      // The page may have scrolled on while the picture got ready.
-      origin = zoomOrigin(at)
-    }
-  }
-  arrived.value = true
-  const size = item ? sizes.value.get(item.url) ?? standIns.value.get(item.url)?.size : undefined
-  if (!item || !origin || !size || isFailed(item.url) || current.value !== at) {
-    transition.enter('fade')
-    return
-  }
-  flight.value = { index: at, from: originPose(size, origin), to: null, size }
-  hideOrigin(origin)
-  transition.enter('zoom', landed)
-}
-
-function enter(): void {
-  if (count.value === 0) {
-    open.value = false
-    return
-  }
-  const root = overlayRef.value
-  if (hasDocument() && !(root && root.contains(document.activeElement)))
-    previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  zIndex.value = zIndexAllocator.next()
-  current.value = clampIndex(current.value)
-  const reopening = rendered.value && closing.value
-  closing.value = false
-  chromeHidden.value = false
-  closeMenu(false)
-  const token = ++openToken
-  const shown = flight.value
-  if (reopening && shown?.index === current.value && transition.kind.value === 'zoom') {
-    // Opened again on its way home: it turns round and flies back out, landing on its fit.
-    gestures.resetAll()
-    flight.value = { ...shown, to: null }
-    transition.enter('zoom', landed)
-  }
-  else if (reopening && !shown && transition.kind.value === 'fade') {
-    gestures.resetAll()
-    transition.enter('fade')
-  }
-  else {
-    showOrigin()
-    flight.value = null
-    transition.reset()
-    gestures.resetAll()
-    arrived.value = false
-    if (!rendered.value) {
-      rendered.value = true
-      armSkeleton()
-    }
-    nextTick(() => {
-      if (token === openToken)
-        void startOpen(token)
-    })
-  }
-  nextTick(() => {
-    overlayRef.value?.focus({ preventScroll: true })
-  })
-}
-
-function restoreFocus(): void {
-  const target = previouslyFocused
-  previouslyFocused = null
-  if (target?.isConnected)
-    target.focus({ preventScroll: true })
-}
-
-function orient(size: PreviewSize, turns: number): PreviewSize {
-  return Math.abs(turns) % 2 === 1 ? { width: size.height, height: size.width } : size
-}
-
-/** The current picture as drawn now, with its slide's shift and a closing drag's pull. */
-function drawnPose(size: PreviewSize): FlightPose {
-  const oriented = orient(size, gestures.turns.value)
-  const view = gestures.view.value ?? fitView(oriented, fitBox.value)
-  const { x, y } = gestures.dismiss.value
-  return viewPose(view, oriented, gestures.angle.value, stageSize.value, {
-    x: gestures.track.value + x,
-    y,
-    scale: 1 - gestures.dismissProgress.value * DISMISS_SHRINK,
-  })
-}
-
-/**
- * Where a picture flying out lands: as drawn now, posed for the copy that flies, `size` big. That
- * copy can be its thumbnail's pixels standing in, while the view is measured in the picture's own,
- * which may load mid-air. One paged away from mid-air lands where it waits beside the current one.
- */
-function landingPose(slide: Slide, size: PreviewSize): FlightPose {
-  const own = isFailed(slide.item.url) ? undefined : sizes.value.get(slide.item.url)
-  const base = own ?? size
-  // A neighbour at rest has its place across from its slide; a flight is drawn without one.
-  const rest = slide.offset === 0 ? null : restPose(slide, base)
-  const pose = rest ? { ...rest, x: rest.x + slideX(slide) } : drawnPose(base)
-  return base.width === size.width ? pose : { ...pose, k: (pose.k * base.width) / size.width }
-}
-
-/** A throw's speed (px/s) as the flight home's (progress/s): its share along the way there. */
-function flightSpeed(velocity: [number, number] | null, from: FlightPose, to: FlightPose): number | undefined {
-  if (!velocity)
-    return undefined
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const distance = dx * dx + dy * dy
-  if (distance < 1)
-    return 0
-  return Math.min(0.5, Math.max(-10, (velocity[0] * dx + velocity[1] * dy) / distance))
-}
-
-type Leaving =
-  | { kind: 'turn' }
-  | { kind: 'home', origin: PreviewOrigin, size: PreviewSize }
-  | { kind: 'fade' }
-
-/** How the preview would go now: back the way a flight still coming in came, home from where the picture is drawn, or a fade. */
-function leaving(): Leaving {
-  const shown = flight.value
-  // A picture paged away from mid-air lands beside at once, and the current one goes (see leave).
-  const aside = shown !== null && shown.index !== current.value
-  if (shown && !aside && transition.kind.value === 'zoom')
-    return { kind: 'turn' }
-  if (!aside && (transition.running.value || transition.presence.value !== 1))
-    return { kind: 'fade' }
-  const item = currentItem.value
-  const size = item && !isFailed(item.url) ? sizes.value.get(item.url) ?? standIns.value.get(item.url)?.size : undefined
-  const origin = size ? zoomOrigin(current.value) : null
-  return origin && size ? { kind: 'home', origin, size } : { kind: 'fade' }
-}
-
-function finishLeave(): void {
-  showOrigin()
-  flight.value = null
-  rendered.value = false
-  closing.value = false
-  arrived.value = false
-  clearSkeletonTimer()
-  gestures.resetAll()
-  transition.reset()
-  clearStandIns()
-  clearStatus()
-}
-
-function leave(): void {
-  if (!rendered.value || closing.value)
-    return
-  const plan = leaving()
-  openToken++
-  const velocity = pendingVelocity
-  pendingVelocity = null
-  gestures.cancel()
-  closeMenu(false)
-  closing.value = true
-  restoreFocus()
-  if (plan.kind === 'turn') {
-    // Closed while still flying out: it turns round and goes home the way it came, keeping its speed.
-    transition.leave('zoom', finishLeave)
-    return
-  }
-  // Still in the air, the picture paged away from lands beside, out of the way of this one's going.
-  if (flight.value)
-    transition.finish()
-  if (plan.kind === 'home') {
-    // Home from where it is drawn: zoomed, turned, paged part-way or pulled down. The gestures
-    // are left as they are, so a closing drag's fade carries on from where it was let go.
-    const to = drawnPose(plan.size)
-    const from = { ...originPose(plan.size, plan.origin), angle: uprightAngle(to.angle) }
-    flight.value = { index: current.value, from, to, size: plan.size }
-    hideOrigin(plan.origin)
-    transition.leave('zoom', finishLeave, flightSpeed(velocity, from, to))
-    return
-  }
-  // A picture thrown away keeps flying while everything fades; anything still held goes back.
-  transition.leave('fade', finishLeave)
-}
-
+// Once everything an opening touches is there, as the model may be open from the start.
 watch(open, (value) => {
   if (value)
     enter()
   else
     leave()
 }, { immediate: true, flush: 'sync' })
-
-/**
- * The person closed it: the close button, Escape, the backdrop, or a drag away (`velocity`, in
- * px/s). Returns whether the picture flies home, rather than gliding on as thrown.
- */
-function requestClose(velocity?: [number, number]): boolean {
-  if (!open.value)
-    return false
-  // Decided first: with a v-model the preview hears of the close a moment later.
-  const flies = !closing.value && rendered.value && leaving().kind !== 'fade'
-  pendingVelocity = velocity ?? null
-  open.value = false
-  emit('close')
-  return flies
-}
 
 watch(index, (value) => {
   const next = clampIndex(value)
@@ -658,108 +317,8 @@ watch(count, (length) => {
   }
 })
 
-// -- Drawing. A slide's picture sits in a frame, the window of it shown. At rest that is all of
-// it, drawn at its view; in flight the frame is the thumbnail's crop, opening out on the way.
-
-interface Slide {
-  index: number
-  offset: -1 | 0 | 1
-  item: ImagePreviewItem
-}
-
-const slides = computed<Slide[]>(() => {
-  const list: Slide[] = []
-  for (const offset of [-1, 0, 1] as const) {
-    const item = items.value[current.value + offset]
-    if (item)
-      list.push({ index: current.value + offset, offset, item })
-  }
-  return list
-})
-
-function restPose(slide: Slide, size: PreviewSize): FlightPose {
-  const stage = stageSize.value
-  if (slide.offset === 0) {
-    const oriented = orient(size, gestures.turns.value)
-    return viewPose(gestures.view.value ?? fitView(oriented, fitBox.value), oriented, gestures.angle.value, stage)
-  }
-  const frozen = outgoing.value?.index === slide.index ? outgoing.value : null
-  if (frozen) {
-    const oriented = orient(size, frozen.turns)
-    return viewPose(frozen.view, oriented, frozen.angle, stage)
-  }
-  return viewPose(fitView(size, fitBox.value), size, 0, stage)
-}
-
-/** Where a slide sits across the stage: a page either side of the current one, moved by a swipe. */
-function slideX(slide: Slide): number {
-  return slide.offset * (stageSize.value.width + SLIDE_GAP) + gestures.track.value
-}
-
-function slideStyle(slide: Slide): CSSProperties {
-  const x = slideX(slide)
-  if (slide.offset !== 0)
-    return { transform: `translate3d(${x}px, 0, 0)` }
-  const { x: dx, y: dy } = gestures.dismiss.value
-  const scale = 1 - gestures.dismissProgress.value * DISMISS_SHRINK
-  return { transform: `translate3d(${x + dx}px, ${dy}px, 0) scale(${scale})` }
-}
-
-watch(gestures.moving, (moving) => {
-  if (!moving)
-    outgoing.value = null
-})
-
-const drawnSlides = computed(() => {
-  const shown = flight.value
-  const presence = transition.presence.value
-  return slides.value.map((slide) => {
-    const flying = shown?.index === slide.index
-    const size = shown && flying ? shown.size : sizeOf(slide.item)
-    // A flight lands on the picture as drawn now, so it follows a resize mid-air, and a wheel's
-    // or a key's zoom or page turn on the way out carries it along rather than cutting it short.
-    const pose = shown && flying
-      ? lerpPose(shown.from, shown.to ?? landingPose(slide, size), presence)
-      : restPose(slide, size)
-    const styles = poseStyles(pose, size)
-    return {
-      ...slide,
-      key: `${slide.index}:${slide.item.url}`,
-      flying,
-      // Out of sight while a picture flies home. On the way out they wait off the stage, and a
-      // page turned mid-air slides the next one in.
-      hidden: shown !== null && !flying && closing.value,
-      style: flying ? undefined : slideStyle(slide),
-      frame: styles.frame,
-      picture: styles.image,
-      standIn: standIns.value.get(slide.item.url)?.src ?? null,
-      loaded: isLoaded(slide.item.url),
-      failed: isFailed(slide.item.url),
-    }
-  })
-})
-
-function placeholderStyle(slide: Slide): CSSProperties {
-  const shape = shapeOf(slide.item)
-  const view = fitView(shape, fitBox.value)
-  return {
-    width: `${shape.width * view.k}px`,
-    height: `${shape.height * view.k}px`,
-    transform: `translate3d(${view.tx}px, ${view.ty}px, 0)`,
-  }
-}
-
-const boxStyle = computed<CSSProperties>(() => ({
-  left: `${fitBox.value.x}px`,
-  top: `${fitBox.value.y}px`,
-  width: `${fitBox.value.width}px`,
-  height: `${fitBox.value.height}px`,
-}))
-
 const dialogLabel = computed(() => (currentItem.value?.name ? props.labelFormatter(props.label, currentItem.value.name) : props.label))
 const counterText = computed(() => props.counterFormatter(current.value + 1, count.value))
-const readout = computed(() => (gestures.view.value ? props.scaleFormatter(gestures.view.value.k) : ''))
-const readoutLabel = computed(() => (readout.value ? props.readoutLabelFormatter(readout.value, props.resetLabel) : props.resetLabel))
 const canZoomOut = computed(() => gestures.view.value !== null && !gestures.atMinScale.value)
 const canZoomIn = computed(() => gestures.view.value !== null && !gestures.atMaxScale.value)
 
@@ -869,60 +428,29 @@ const overlayStyle = computed<CSSProperties>(() => ({
   '--tx-image-preview-stage': `${stageLevel.value}`,
   '--tx-image-preview-chrome': `${chromeLevel.value}`,
   '--tx-image-preview-minimap': `${minimapLevel.value}`,
-  '--tx-image-preview-menu': `${menuLevel.value}`,
   '--tx-image-preview-status': `${statusLevel.value}`,
   '--tx-image-preview-bounce-ease': `cubic-bezier(0.32, ${1 + bounce.value * 1.6}, 0.5, 1)`,
 }))
 
 // -- Keyboard. Tab stays inside the dialog: aria-modal promises the page behind is inert.
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]'
 const PAGE_KEYS = new Set([' ', 'PageUp', 'PageDown', 'Home', 'End'])
-
-/** What Tab reaches: not the strip's other thumbnails, nor chrome hidden or laid out of the way. */
-function tabbable(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el =>
-    el.tabIndex >= 0 && (el.checkVisibility?.({ checkVisibilityCSS: true, visibilityProperty: true }) ?? true))
-}
-
-function trapFocus(event: KeyboardEvent): void {
-  const root = overlayRef.value
-  if (!root)
-    return
-  const focusable = tabbable(root)
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (!first || !last) {
-    event.preventDefault()
-    root.focus({ preventScroll: true })
-    return
-  }
-  const active = document.activeElement
-  if (event.shiftKey) {
-    if (!root.contains(active) || active === first || active === root) {
-      event.preventDefault()
-      last.focus()
-    }
-  }
-  else if (!root.contains(active) || active === root || active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
 
 function onKeydown(event: KeyboardEvent): void {
   if (!rendered.value || closing.value || event.defaultPrevented)
     return
   if (!isTopmostModalDialog(overlayRef.value))
     return
+  // Keys the menu does not take reach nothing else while it is open.
   if (menuOpen.value) {
-    onMenuKey(event)
+    actionMenu.value?.onKey(event)
     return
   }
   // A keyboard has nothing to tap the chrome back with.
   chromeHidden.value = false
   if (event.key === 'Tab') {
-    trapFocus(event)
+    if (overlayRef.value)
+      trapTab(event, overlayRef.value)
     return
   }
   if (event.key === 'Escape') {
@@ -974,10 +502,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
-  resizeObserver?.disconnect()
-  showOrigin()
-  if (rendered.value && !closing.value)
-    restoreFocus()
 })
 
 defineExpose({
@@ -1036,54 +560,16 @@ defineExpose({
         @dragstart.prevent
       >
         <div ref="fitRef" class="tx-image-preview__fit" aria-hidden="true" />
-        <div
+        <ImagePreviewSlide
           v-for="slide in drawnSlides"
           :key="slide.key"
-          class="tx-image-preview__slide"
-          :class="{ 'is-flying': slide.flying, 'is-hidden': slide.hidden }"
-          :style="slide.style"
-          :aria-hidden="slide.offset !== 0 || undefined"
-        >
-          <div v-if="slide.failed" class="tx-image-preview__failed" :style="boxStyle">
-            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="m3 15 5-5 4 4 3-3 6 6" />
-              <circle cx="9" cy="9" r="1.4" />
-            </svg>
-            <span>{{ failedText }}</span>
-          </div>
-          <template v-else>
-            <span
-              v-if="skeletonShown && !slide.loaded && !slide.standIn"
-              class="tx-image-preview__placeholder"
-              :style="placeholderStyle(slide)"
-              aria-hidden="true"
-            />
-            <div class="tx-image-preview__frame" :style="slide.frame">
-              <img
-                v-if="slide.standIn"
-                class="tx-image-preview__stand-in"
-                :src="slide.standIn"
-                alt=""
-                aria-hidden="true"
-                draggable="false"
-                :style="slide.picture"
-              >
-              <img
-                :ref="bindImage"
-                class="tx-image-preview__image"
-                :class="{ 'is-loaded': slide.loaded }"
-                :src="slide.item.url"
-                :alt="slide.item.alt ?? slide.item.name ?? ''"
-                :style="slide.picture"
-                draggable="false"
-                decoding="async"
-                @load="onImageLoad"
-                @error="onImageError($event, slide.index)"
-              >
-            </div>
-          </template>
-        </div>
+          :slide="slide"
+          :box-style="boxStyle"
+          :failed-text="failedText"
+          :bind="bindImage"
+          @load="onImageLoad"
+          @error="onImageError($event, slide.index)"
+        />
       </div>
 
       <div class="tx-image-preview__bar tx-image-preview__chrome">
@@ -1093,9 +579,7 @@ defineExpose({
         </div>
         <button type="button" class="tx-image-preview__button" :aria-label="closeLabel" @click="requestClose()">
           <TxBaseSurface class="tx-image-preview__surface tx-image-preview__control-surface" tag="span" fake v-bind="controlMaterial" />
-          <svg class="tx-image-preview__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
+          <ImagePreviewIcon :paths="PREVIEW_ICONS.close" />
         </button>
       </div>
 
@@ -1108,9 +592,7 @@ defineExpose({
         @click="step(-1)"
       >
         <TxBaseSurface class="tx-image-preview__surface tx-image-preview__control-surface" tag="span" fake v-bind="controlMaterial" />
-        <svg class="tx-image-preview__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m15 6-6 6 6 6" />
-        </svg>
+        <ImagePreviewIcon :paths="PREVIEW_ICONS.previous" />
       </button>
 
       <ImagePreviewStrip
@@ -1129,8 +611,12 @@ defineExpose({
       />
 
       <ImagePreviewToolbar
-        :readout="readout"
-        :readout-label="readoutLabel"
+        :scale="gestures.view.value?.k"
+        :presets="gestures.presets.value"
+        :formatter="scaleFormatter"
+        :label="zoomLabel"
+        :label-formatter="readoutLabelFormatter"
+        :reset-label="resetLabel"
         :zoom-in-label="zoomInLabel"
         :zoom-out-label="zoomOutLabel"
         :can-zoom-in="canZoomIn"
@@ -1139,8 +625,10 @@ defineExpose({
         :action-label="actionLabel"
         :action-disabled="actionDisabled"
         :material="controlMaterial"
+        :level="transition.level"
         @zoom-in="zoomIn"
         @zoom-out="zoomOut"
+        @zoom-to="gestures.zoomTo"
         @reset="resetZoom"
         @action="runAction"
       />
@@ -1163,9 +651,7 @@ defineExpose({
         @click="step(1)"
       >
         <TxBaseSurface class="tx-image-preview__surface tx-image-preview__control-surface" tag="span" fake v-bind="controlMaterial" />
-        <svg class="tx-image-preview__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m9 6 6 6-6 6" />
-        </svg>
+        <ImagePreviewIcon :paths="PREVIEW_ICONS.next" />
       </button>
 
       <div class="tx-image-preview__status" role="status" aria-live="polite" aria-atomic="true">
@@ -1175,46 +661,29 @@ defineExpose({
         </div>
       </div>
 
-      <div v-if="menuRendered" class="tx-image-preview__menu-layer" :class="{ 'is-armed': menuArmed }">
-        <div class="tx-image-preview__scrim" aria-hidden="true" @pointerdown.prevent="closeMenu(true)" />
-        <div
-          ref="menuRef"
-          class="tx-image-preview__menu"
-          :class="{ 'is-open': menuOpen, 'is-placed': menuPlaced }"
-          role="menu"
-          :aria-label="menuLabel"
-          :style="menuStyle"
-        >
-          <span class="tx-image-preview__menu-shadow tx-image-preview__part" aria-hidden="true" />
-          <TxBaseSurface class="tx-image-preview__surface tx-image-preview__control-surface" fake v-bind="controlMaterial" />
-          <button
-            v-for="action in actionList"
-            :key="action"
-            type="button"
-            role="menuitem"
-            tabindex="-1"
-            class="tx-image-preview__menu-item"
-            :aria-disabled="actionDisabled(action) || undefined"
-            @click="chooseFromMenu(action, $event.shiftKey)"
-          >
-            <span class="tx-image-preview__menu-text tx-image-preview__part">{{ actionLabel(action) }}</span>
-            <svg class="tx-image-preview__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path v-for="d in ACTION_ICONS[action]" :key="d" :d="d" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <ImagePreviewMenu
+        ref="actionMenu"
+        :open="menuOpen"
+        :armed="menuArmed"
+        :level="menuLevel"
+        :label="menuLabel"
+        :items="menuItems"
+        :place="menuPlace"
+        :material="controlMaterial"
+        @choose="chooseFromMenu"
+        @close="closeMenu(true)"
+      />
     </div>
   </Teleport>
 </template>
 
 <style lang="scss">
 @use '../../../style/mixins.scss' as *;
-
-@include skeleton-keyframes;
+@use './preview-shared' as *;
 
 // Teleported to <body>, so nothing here may be nested in a host's class. Always dark, as a
-// photo viewer is, whatever the page's theme.
+// photo viewer is, whatever the page's theme. Each part styles its own pieces; what they share
+// is here.
 
 // A part fades with its container's level (`--tx-image-preview-level`, 0 to 1), from nothing up
 // to the opacity it has at rest: its animation is held that far through, and at 1 is over and
@@ -1274,10 +743,6 @@ defineExpose({
   --tx-image-preview-level: var(--tx-image-preview-chrome, 1);
 }
 
-.tx-image-preview__menu-layer {
-  --tx-image-preview-level: var(--tx-image-preview-menu, 1);
-}
-
 .tx-image-preview__status {
   --tx-image-preview-level: var(--tx-image-preview-status, 1);
 }
@@ -1316,7 +781,7 @@ defineExpose({
   pointer-events: none;
 }
 
-// -- The stage.
+// -- The stage. Its pages are ImagePreviewSlide's.
 
 .tx-image-preview__stage {
   position: absolute;
@@ -1347,90 +812,8 @@ defineExpose({
   bottom: 120px;
 }
 
-.tx-image-preview__slide {
-  position: absolute;
-  inset: 0;
-}
-
-// The neighbours wait out of sight while a picture flies home.
-.tx-image-preview__slide.is-hidden {
-  visibility: hidden;
-}
-
-// The window of the picture shown: all of it at rest; in flight, as much as its thumbnail
-// shows, with the thumbnail's corners.
-.tx-image-preview__frame {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-}
-
-.tx-image-preview__slide.is-flying .tx-image-preview__frame {
-  overflow: hidden;
-}
-
-.tx-image-preview__image,
-.tx-image-preview__stand-in {
-  position: absolute;
-  top: 0;
-  left: 0;
-  max-width: none;
-  max-height: none;
-  -webkit-user-drag: none;
-}
-
-.tx-image-preview__stand-in {
-  object-fit: cover;
-}
-
-.tx-image-preview__image {
-  opacity: 0;
-  cursor: zoom-in;
-  transition: opacity 0.2s ease-out;
-}
-
-.tx-image-preview__image.is-loaded {
-  opacity: 1;
-}
-
-// Composited only while something moves: a layer kept at rest stays rasterised at the scale it
-// started at, and a picture zoomed into would stay blurred.
-.tx-image-preview.is-moving .tx-image-preview__frame {
-  will-change: transform;
-}
-
-.tx-image-preview.is-zoomed .tx-image-preview__image {
-  cursor: grab;
-}
-
-.tx-image-preview.is-grabbing .tx-image-preview__stage,
-.tx-image-preview.is-grabbing .tx-image-preview__image {
+.tx-image-preview.is-grabbing .tx-image-preview__stage {
   cursor: grabbing;
-}
-
-.tx-image-preview__placeholder {
-  --tx-skeleton-base-color: rgba(255, 255, 255, 0.16);
-
-  position: absolute;
-  top: 0;
-  left: 0;
-  border-radius: 6px;
-
-  @include skeleton-surface;
-}
-
-.tx-image-preview__failed {
-  position: absolute;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  color: var(--tx-image-preview-ink-muted);
-  text-align: center;
 }
 
 // -- Chrome. Hidden, it lets the pointer through to the picture as it fades, and once gone it
@@ -1555,14 +938,6 @@ defineExpose({
   }
 }
 
-.tx-image-preview__icon {
-  position: relative;
-  z-index: 2;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-}
-
 .tx-image-preview__nav {
   position: absolute;
   top: 50%;
@@ -1577,270 +952,6 @@ defineExpose({
   &.is-next {
     right: calc(20px + env(safe-area-inset-right));
   }
-}
-
-.tx-image-preview__toolbar {
-  position: absolute;
-  bottom: calc(24px + env(safe-area-inset-bottom));
-  left: 50%;
-  isolation: isolate;
-  display: flex;
-  gap: 2px;
-  align-items: center;
-  padding: 4px;
-  border-radius: 999px;
-  transform: translateX(-50%);
-
-  .tx-image-preview__button {
-    width: 36px;
-    height: 36px;
-  }
-}
-
-.tx-image-preview__zoom {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-}
-
-.tx-image-preview__divider {
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-  width: 1px;
-  height: 20px;
-  margin: 0 4px;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-// The readout stays legible at fit, where it has nothing to reset.
-.tx-image-preview__toolbar .tx-image-preview__readout {
-  width: auto;
-  min-width: 58px;
-  padding: 0 8px;
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-
-  &[aria-disabled='true'] {
-    color: inherit;
-  }
-}
-
-.tx-image-preview__readout-text {
-  position: relative;
-  z-index: 2;
-}
-
-// -- The minimap, in the corner while a picture is zoomed in: all of it, the part on the stage
-// framed and the rest dimmed. It fades on a level of its own, which the chrome's gates. Its
-// corners are smooth (`tx-squircle`), and the map's concentric with them inside the padding.
-
-$tx-image-preview-minimap-radius: 12px;
-$tx-image-preview-minimap-padding: 4px;
-
-.tx-image-preview__minimap {
-  --tx-image-preview-level: var(--tx-image-preview-minimap, 1);
-
-  position: absolute;
-  right: calc(24px + env(safe-area-inset-right));
-  bottom: calc(24px + env(safe-area-inset-bottom));
-  isolation: isolate;
-  padding: $tx-image-preview-minimap-padding;
-  pointer-events: none;
-  @include tx-squircle($tx-image-preview-minimap-radius);
-
-  &.is-shown {
-    pointer-events: auto;
-  }
-}
-
-.tx-image-preview__minimap-map {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: min(160px, calc(112px * var(--tx-image-preview-minimap-ratio, 1)));
-  aspect-ratio: var(--tx-image-preview-minimap-ratio, 1);
-  overflow: hidden;
-  cursor: pointer;
-  touch-action: none;
-  // The frame measures its corners against the map's width.
-  container-type: inline-size;
-  @include tx-squircle($tx-image-preview-minimap-radius, $inset: $tx-image-preview-minimap-padding);
-}
-
-.tx-image-preview__minimap-image {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: block;
-  max-width: none;
-  max-height: none;
-  pointer-events: none;
-  -webkit-user-drag: none;
-}
-
-// At the map's corner a corner of the frame is the map's own, and on the way there concentric with
-// it: the map's radius less how far off it is (`--…-reach-*`, in shares of the map's width), never
-// under the frame's own. So the map's clip never cuts into the frame.
-.tx-image-preview__minimap-viewport {
-  --tx-image-preview-minimap-outer: #{$tx-image-preview-minimap-radius - $tx-image-preview-minimap-padding};
-  --tx-image-preview-minimap-inner: 3px;
-
-  position: absolute;
-  box-sizing: border-box;
-  min-width: 8px;
-  min-height: 8px;
-  border: 1.5px solid var(--tx-image-preview-ink);
-  border-radius:
-    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-tl) * 100cqw)
-    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-tr) * 100cqw)
-    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-br) * 100cqw)
-    max(var(--tx-image-preview-minimap-inner), var(--tx-image-preview-minimap-outer) - var(--tx-image-preview-minimap-reach-bl) * 100cqw);
-  // A dark hairline inside keeps it seen on a bright picture. The spread dims all that is off the
-  // stage, and the map clips it.
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 0 0 100vmax rgba(0, 0, 0, 0.45);
-  transform: translate(-50%, -50%);
-  cursor: grab;
-
-  @supports (corner-shape: superellipse(2)) {
-    --tx-image-preview-minimap-outer: #{tx-squircle-inset(tx-squircle-radius($tx-image-preview-minimap-radius), $tx-image-preview-minimap-padding)};
-    --tx-image-preview-minimap-inner: #{tx-squircle-radius(3px)};
-    corner-shape: superellipse(#{tx-squircle-exponent()});
-  }
-}
-
-.tx-image-preview__minimap-map.is-dragging,
-.tx-image-preview__minimap-map.is-dragging .tx-image-preview__minimap-viewport {
-  cursor: grabbing;
-}
-
-// Where the toolbar, with all four actions, reaches the corner, above it.
-@media (max-width: 713px) {
-  .tx-image-preview__minimap {
-    bottom: calc(80px + env(safe-area-inset-bottom));
-  }
-}
-
-// Where the strip reaches the corner, above it. Up there the next-page button at the middle of the
-// side comes near, so a short window takes a shorter map: the room under the button is half the
-// window less half the button, a gap, the minimap's offset and its padding.
-@media (max-width: 1167px) {
-  .tx-image-preview.has-thumbnails .tx-image-preview__minimap {
-    bottom: calc(140px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview.has-thumbnails .tx-image-preview__minimap-map {
-    width: min(
-      160px,
-      calc(112px * var(--tx-image-preview-minimap-ratio, 1)),
-      calc((50vh - 184px - env(safe-area-inset-bottom)) * var(--tx-image-preview-minimap-ratio, 1))
-    );
-  }
-}
-
-// -- The strip. The thumbnails have no material behind them, so the strip fades as a whole.
-
-.tx-image-preview__strip {
-  position: absolute;
-  bottom: calc(78px + env(safe-area-inset-bottom));
-  left: 50%;
-  width: min(calc(100% - 32px), 760px);
-  height: 50px;
-  overflow: hidden;
-  opacity: var(--tx-image-preview-chrome, 1);
-  transform: translateX(-50%);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-
-.tx-image-preview__cell {
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  box-sizing: border-box;
-  height: 42px;
-  padding: 0;
-  overflow: hidden;
-  border: none;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  cursor: pointer;
-
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    pointer-events: none;
-    -webkit-user-drag: none;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-image-preview-ink);
-    outline-offset: 2px;
-  }
-}
-
-.tx-image-preview__cell-failed {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.tx-image-preview__cell.is-jumping {
-  transition:
-    transform 0.32s var(--tx-image-preview-bounce-ease),
-    width 0.32s var(--tx-image-preview-bounce-ease),
-    opacity 0.32s ease;
-}
-
-.tx-image-preview__dots {
-  position: absolute;
-  bottom: calc(82px + env(safe-area-inset-bottom));
-  left: 50%;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 999px;
-  transform: translateX(-50%);
-}
-
-.tx-image-preview__dot {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 24px;
-  padding: 0 4px;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-image-preview-ink);
-    outline-offset: -2px;
-  }
-}
-
-.tx-image-preview__dot-mark {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--tx-image-preview-ink);
-}
-
-.tx-image-preview__dot-mark.is-jumping {
-  transition:
-    width 0.32s var(--tx-image-preview-bounce-ease),
-    transform 0.32s var(--tx-image-preview-bounce-ease);
 }
 
 // -- The status.
@@ -1866,123 +977,8 @@ $tx-image-preview-minimap-padding: 4px;
   z-index: 1;
 }
 
-// -- The menu.
-
-.tx-image-preview__menu-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-// Not until the press that opened it is let go, so the release picks nothing.
-.tx-image-preview__menu-layer.is-armed {
-  pointer-events: auto;
-}
-
-.tx-image-preview__scrim {
-  position: absolute;
-  inset: 0;
-}
-
-.tx-image-preview__menu {
-  position: absolute;
-  isolation: isolate;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  width: max-content;
-  min-width: 196px;
-  max-width: calc(100% - 16px);
-  padding: 6px;
-  border-radius: 14px;
-  transform: scale(0.9);
-  transition: transform 0.16s ease;
-}
-
-.tx-image-preview__menu:not(.is-placed) {
-  visibility: hidden;
-}
-
-// It pops out of the press with the host's bounce.
-.tx-image-preview__menu.is-open.is-placed {
-  transform: none;
-  transition: transform 0.36s var(--tx-image-preview-bounce-ease);
-}
-
-.tx-image-preview__menu-shadow {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow:
-    6px 12px 40px rgba(0, 0, 0, 0.36),
-    1px 2px 8px rgba(0, 0, 0, 0.2);
-  pointer-events: none;
-}
-
-.tx-image-preview__menu-item {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 40px;
-  padding: 0 10px 0 12px;
-  border: none;
-  border-radius: 8px;
-  outline: none;
-  color: inherit;
-  font: inherit;
-  font-size: 14px;
-  text-align: start;
-  background: none;
-  cursor: pointer;
-
-  &::after {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border-radius: inherit;
-    background-color: transparent;
-    content: '';
-    pointer-events: none;
-  }
-
-  &:hover::after,
-  &:focus-visible::after {
-    background-color: var(--tx-image-preview-tint-hover);
-  }
-
-  &:active::after {
-    background-color: var(--tx-image-preview-tint-active);
-  }
-
-  &[aria-disabled='true'] {
-    color: var(--tx-image-preview-ink-disabled);
-    cursor: default;
-
-    &::after {
-      background-color: transparent;
-    }
-  }
-
-  @include tx-when-high-contrast {
-    &:focus-visible {
-      outline: 2px solid var(--tx-image-preview-ink);
-      outline-offset: -2px;
-    }
-  }
-}
-
-.tx-image-preview__menu-text {
-  position: relative;
-  z-index: 2;
-}
-
-// -- Phones, upright or on their side: the picture takes the whole screen, under the chrome,
-// which a tap hides. Two fingers zoom, so the toolbar keeps only the actions, and the strip or
-// the page buttons sit low, within a thumb's reach.
-@media (max-width: 640px), (max-height: 480px) {
+// -- Phones (see preview-shared): the picture takes the whole screen, under the chrome.
+@media #{$tx-image-preview-phone} {
   .tx-image-preview__fit,
   .tx-image-preview.is-single .tx-image-preview__fit,
   .tx-image-preview.has-thumbnails .tx-image-preview__fit,
@@ -2018,83 +1014,11 @@ $tx-image-preview-minimap-padding: 4px;
   .tx-image-preview.has-strip .tx-image-preview__nav {
     display: none;
   }
-
-  .tx-image-preview__toolbar {
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    padding: 0;
-
-    .tx-image-preview__button {
-      width: 44px;
-      height: 44px;
-    }
-  }
-
-  .tx-image-preview__zoom,
-  .tx-image-preview__divider {
-    display: none;
-  }
-
-  .tx-image-preview:not(.has-actions) .tx-image-preview__toolbar {
-    display: none;
-  }
-
-  .tx-image-preview__strip {
-    bottom: calc(62px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview__dots {
-    bottom: calc(66px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview:not(.has-actions) .tx-image-preview__strip {
-    bottom: calc(8px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview:not(.has-actions) .tx-image-preview__dots {
-    bottom: calc(12px + env(safe-area-inset-bottom));
-  }
-
-  // Above whatever runs along the bottom: the toolbar, the strip, or the page buttons.
-  .tx-image-preview__minimap {
-    right: calc(12px + env(safe-area-inset-right));
-    bottom: calc(68px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview.has-thumbnails .tx-image-preview__minimap {
-    bottom: calc(124px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview.has-dots .tx-image-preview__minimap {
-    bottom: calc(102px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview:not(.has-actions).has-thumbnails .tx-image-preview__minimap {
-    bottom: calc(70px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview:not(.has-actions).has-dots .tx-image-preview__minimap {
-    bottom: calc(48px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview.is-single:not(.has-actions) .tx-image-preview__minimap {
-    bottom: calc(12px + env(safe-area-inset-bottom));
-  }
-
-  .tx-image-preview__minimap-map,
-  .tx-image-preview.has-thumbnails .tx-image-preview__minimap-map {
-    width: min(112px, calc(80px * var(--tx-image-preview-minimap-ratio, 1)));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tx-image-preview__stage {
     transform: none;
-  }
-
-  .tx-image-preview__menu,
-  .tx-image-preview__menu.is-open.is-placed {
-    transform: none;
-    transition: none;
   }
 }
 </style>

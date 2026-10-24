@@ -2,6 +2,7 @@
 
 import type { Ref } from 'vue'
 import { onBeforeUnmount, readonly, ref, watch } from 'vue'
+import { drawnScale } from './drawn-scale'
 
 export interface IndicatorBox {
   top: number
@@ -76,10 +77,9 @@ export function useIndicatorBox(options: UseIndicatorBoxOptions): UseIndicatorBo
     const containerRect = container.getBoundingClientRect()
     const targetRect = target.getBoundingClientRect()
 
-    // offsetWidth is layout pixels and the rect is visual pixels, so their
-    // ratio is whatever an ancestor transform or zoom is doing to us.
-    const ratio = container.offsetWidth > 0 ? containerRect.width / container.offsetWidth : 1
-    const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
+    // The rects are visual pixels; undo whatever an ancestor transform or zoom
+    // is doing to us.
+    const scale = drawnScale(container, containerRect).x
 
     box.value = {
       top: (targetRect.top - containerRect.top) / scale - container.clientTop,

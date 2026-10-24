@@ -3,6 +3,7 @@ import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import { trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxIcon } from '../../icon'
@@ -160,40 +161,12 @@ function selectItem(item: CommandPaletteItem) {
 
 /**
  * aria-modal="true" promises the background is inert, so Tab must cycle inside
- * the dialog. Mirrors TxModal/TxDrawer, which both implement this already.
+ * the dialog, as it does in TxModal and TxDrawer. The options are <button>s held
+ * out of the tab order with tabindex="-1", so Tab passes them by.
  */
 function trapFocus(event: KeyboardEvent): void {
-  const root = overlayRef.value
-  if (!root)
-    return
-
-  const focusable = Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]',
-    ),
-    // The options are real <button>s held out of the tab order with
-    // tabindex="-1", so the selector alone is not enough — a tag-based match
-    // would hand Tab straight back to them.
-  ).filter(el => el.tabIndex >= 0)
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (!first || !last) {
-    event.preventDefault()
-    inputRef.value?.focus()
-    return
-  }
-
-  const active = document.activeElement
-  if (event.shiftKey) {
-    if (active === first || active === root) {
-      event.preventDefault()
-      last.focus()
-    }
-  }
-  else if (active === last) {
-    event.preventDefault()
-    first.focus()
-  }
+  if (overlayRef.value)
+    trapTab(event, overlayRef.value, { fallback: inputRef.value })
 }
 
 function onInput(value: string) {

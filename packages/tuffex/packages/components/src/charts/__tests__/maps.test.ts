@@ -4,7 +4,7 @@ import type { MapGeoJson } from '../src/maps/src/types'
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, toRaw } from 'vue'
-import { projectMomentum } from '../../../../utils/gesture'
+import { glideAxis, projectMomentum } from '../../../../utils/gesture'
 import { MAP_DEFAULT_LABELS, TxBubbleMap, TxChoroplethMap } from '../src/maps'
 import { DEFAULT_MAP_SCALE_VARS, rampColor, rampGradient } from '../src/maps/src/color'
 import {
@@ -17,7 +17,6 @@ import {
   applyRoam,
   clampRoam,
   clampScale,
-  glideAxis,
   IDENTITY_ROAM,
   initialRoam,
   panBy,

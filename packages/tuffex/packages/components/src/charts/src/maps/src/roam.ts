@@ -1,4 +1,7 @@
-import { rubberband } from '../../../../../../utils/gesture'
+import { clampView, resistView, scaleAbout } from '../../../../../../utils/pan-zoom'
+
+// The view math is the shared pan-zoom's. The types are declared here, not taken from it: the
+// published declarations carry no internal util, so roam's must stand on their own.
 
 /** Pan/zoom state applied as `translate(tx, ty) scale(k)` over the fitted map. */
 export interface RoamState {
@@ -23,12 +26,7 @@ export function scaleAboutPoint(
   targetK: number,
   point: { x: number, y: number },
 ): RoamState {
-  const ratio = targetK / state.k
-  return {
-    k: targetK,
-    tx: point.x - (point.x - state.tx) * ratio,
-    ty: point.y - (point.y - state.ty) * ratio,
-  }
+  return scaleAbout(state, targetK, point)
 }
 
 export function panBy(state: RoamState, dx: number, dy: number): RoamState {
@@ -105,21 +103,9 @@ export function roamBounds(
   }
 }
 
-function clampAxis(value: number, [lo, hi]: [number, number]): number {
-  return Math.max(lo, Math.min(hi, value))
-}
-
 /** The state moved inside `bounds`; the scale is left as it is. */
 export function clampRoam(state: RoamState, bounds: RoamBounds): RoamState {
-  return { k: state.k, tx: clampAxis(state.tx, bounds.tx), ty: clampAxis(state.ty, bounds.ty) }
-}
-
-function resistAxis(value: number, [lo, hi]: [number, number], size: number): number {
-  if (value < lo)
-    return lo + rubberband(value - lo, size)
-  if (value > hi)
-    return hi + rubberband(value - hi, size)
-  return value
+  return clampView(state, bounds)
 }
 
 /**
@@ -127,20 +113,5 @@ function resistAxis(value: number, [lo, hi]: [number, number], size: number): nu
  * rubber band (c = 0.55), measured against the container's size.
  */
 export function resistRoam(state: RoamState, bounds: RoamBounds, width: number, height: number): RoamState {
-  return {
-    k: state.k,
-    tx: resistAxis(state.tx, bounds.tx, width),
-    ty: resistAxis(state.ty, bounds.ty, height),
-  }
-}
-
-/**
- * One frame of a released pan coasting to a stop with a scroll view's
- * exponential deceleration (`rate` per millisecond). In total it carries
- * `projectMomentum(velocity, rate)`. Returns `[position, velocity]`.
- */
-export function glideAxis(position: number, velocity: number, dt: number, rate = 0.998): [number, number] {
-  const tau = -0.001 / Math.log(rate)
-  const decay = Math.exp(-dt / tau)
-  return [position + velocity * tau * (1 - decay), velocity * decay]
+  return resistView(state, bounds, { width, height })
 }

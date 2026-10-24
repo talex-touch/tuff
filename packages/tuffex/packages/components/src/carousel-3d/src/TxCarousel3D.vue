@@ -6,6 +6,7 @@ import type { VelocityTracker } from '../../../../utils/gesture'
 import type { Carousel3DEmits, Carousel3DProps, Carousel3DSlotProps } from './types'
 import { computed, onBeforeUnmount, onDeactivated, ref, useId, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
+import { drawnScale } from '../../../../utils/drawn-scale'
 import { createVelocityTracker, projectMomentum, rubberband } from '../../../../utils/gesture'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import { presets, resolveTransition } from '../../liquid/src/spring'
@@ -177,11 +178,11 @@ function pointerDown(event: PointerEvent) {
   if (!props.draggable || props.disabled || drag?.moved || event.button !== 0 || !event.isPrimary) return
   suppressClick = false
   const vertical = mode.value === 'time-machine'
-  const bounds = stage.value?.getBoundingClientRect()
+  const el = stage.value
+  const bounds = el?.getBoundingClientRect()
   const drawn = (vertical ? bounds?.height : bounds?.width) ?? 0
-  const laid = (vertical ? stage.value?.offsetHeight : stage.value?.offsetWidth) ?? 0
   // Under CSS zoom or a scaling transform the pointer moves in viewport px, the deck in the stage's own.
-  const scale = drawn > 0 && laid > 0 ? drawn / laid : 1
+  const scale = el ? drawnScale(el, bounds)[vertical ? 'y' : 'x'] : 1
   drag = {
     pointerId: event.pointerId, x: event.clientX, y: event.clientY, from: position.value,
     size: drawn / scale, scale, moved: false, tracker: createVelocityTracker(),

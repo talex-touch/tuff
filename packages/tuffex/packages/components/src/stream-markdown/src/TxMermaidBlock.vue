@@ -10,8 +10,9 @@ let mermaidIdSeq = 0
 
 <script setup lang="ts">
 import { hasDocument } from '@talex-touch/utils/env'
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
+import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCodeBlock from './TxCodeBlock.vue'
 
 defineOptions({ name: 'TxMermaidBlock' })
@@ -59,6 +60,10 @@ const zoomOpen = ref(false)
 // literal above the seed, so later dialogs/drawers still stack above it.
 const zIndexAllocator = useZIndexAllocator()
 const overlayZIndex = ref(zIndexAllocator.get())
+const overlayRef = ref<HTMLElement | null>(null)
+const closeRef = ref<HTMLButtonElement | null>(null)
+// Focus moves into the preview, stays there, and goes back to the diagram once it closes.
+const focusReturn = createFocusReturn()
 let renderToken = 0
 
 /**
@@ -111,13 +116,28 @@ watch(
   { immediate: true },
 )
 
+function openZoom(event: MouseEvent): void {
+  // WebKit does not focus a clicked button, and focus comes back to it on closing.
+  ;(event.currentTarget as HTMLButtonElement).focus()
+  zoomOpen.value = true
+}
+
 function closeZoom(): void {
   zoomOpen.value = false
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape')
+  const root = overlayRef.value
+  if (event.defaultPrevented || !root || !isTopmostModalDialog(root))
+    return
+  if (event.key === 'Escape') {
+    event.preventDefault()
     closeZoom()
+  }
+  else if (event.key === 'Tab') {
+    // aria-modal promises the page behind is inert, so Tab stays inside.
+    trapTab(event, root)
+  }
 }
 
 watch(zoomOpen, (open) => {
@@ -125,16 +145,20 @@ watch(zoomOpen, (open) => {
     return
   if (open) {
     overlayZIndex.value = zIndexAllocator.next()
+    focusReturn.save()
     document.addEventListener('keydown', handleKeydown)
+    void nextTick(() => closeRef.value?.focus({ preventScroll: true }))
   }
   else {
     document.removeEventListener('keydown', handleKeydown)
+    focusReturn.restore()
   }
 })
 
 onBeforeUnmount(() => {
   if (hasDocument())
     document.removeEventListener('keydown', handleKeydown)
+  focusReturn.restore()
 })
 </script>
 
@@ -147,7 +171,7 @@ onBeforeUnmount(() => {
       type="button"
       class="tx-mermaid-block__figure"
       :aria-label="zoomLabel"
-      @click="zoomOpen = true"
+      @click="openZoom"
     >
       <div class="tx-mermaid-block__svg" v-html="svg" />
     </button>
@@ -174,6 +198,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div
         v-if="zoomOpen"
+        ref="overlayRef"
         class="tx-mermaid-block__overlay"
         role="dialog"
         aria-modal="true"
@@ -182,6 +207,7 @@ onBeforeUnmount(() => {
         @click.self="closeZoom"
       >
         <button
+          ref="closeRef"
           type="button"
           class="tx-mermaid-block__close"
           :aria-label="closeLabel"

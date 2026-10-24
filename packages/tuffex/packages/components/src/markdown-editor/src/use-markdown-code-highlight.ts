@@ -1,3 +1,4 @@
+import { createShikiRuntime } from '../../shiki-runtime'
 import type { MarkdownEditorCodeTheme } from './types'
 import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 
@@ -80,24 +81,10 @@ const loaded = new Set<string>()
 const missing = new Set<string>()
 
 function loadRuntime(): Promise<CodeHighlighter | null> {
-  runtime ??= (async () => {
-    try {
-      const [{ createHighlighter }, { createJavaScriptRegexEngine }] = await Promise.all([
-        import('shiki'),
-        import('@shikijs/engine-javascript'),
-      ])
-      const created = await createHighlighter({
-        themes: [],
-        langs: [],
-        engine: createJavaScriptRegexEngine({ forgiving: true }),
-      })
-      highlighter = created as unknown as CodeHighlighter
-      return highlighter
-    }
-    catch {
-      return null
-    }
-  })()
+  runtime ??= createShikiRuntime().then((created) => {
+    highlighter = created
+    return created
+  })
   return runtime
 }
 

@@ -290,3 +290,128 @@ onBeforeUnmount(() => {
     </button>
   </div>
 </template>
+
+<style lang="scss">
+@use './preview-shared' as *;
+
+// The thumbnails have no material behind them, so the strip fades as a whole.
+
+.tx-image-preview__strip {
+  position: absolute;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  left: 50%;
+  width: min(calc(100% - 32px), 760px);
+  height: 50px;
+  overflow: hidden;
+  opacity: var(--tx-image-preview-chrome, 1);
+  transform: translateX(-50%);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.tx-image-preview__cell {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    -webkit-user-drag: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-image-preview-ink);
+    outline-offset: 2px;
+  }
+}
+
+.tx-image-preview__cell-failed {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.tx-image-preview__cell.is-jumping {
+  transition:
+    transform 0.32s var(--tx-image-preview-bounce-ease),
+    width 0.32s var(--tx-image-preview-bounce-ease),
+    opacity 0.32s ease;
+}
+
+.tx-image-preview__dots {
+  position: absolute;
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  left: 50%;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+
+.tx-image-preview__dot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-image-preview-ink);
+    outline-offset: -2px;
+  }
+}
+
+.tx-image-preview__dot-mark {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tx-image-preview-ink);
+}
+
+.tx-image-preview__dot-mark.is-jumping {
+  transition:
+    width 0.32s var(--tx-image-preview-bounce-ease),
+    transform 0.32s var(--tx-image-preview-bounce-ease);
+}
+
+@media #{$tx-image-preview-phone} {
+  .tx-image-preview__strip {
+    bottom: calc(62px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview__dots {
+    bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview:not(.has-actions) .tx-image-preview__strip {
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .tx-image-preview:not(.has-actions) .tx-image-preview__dots {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+</style>

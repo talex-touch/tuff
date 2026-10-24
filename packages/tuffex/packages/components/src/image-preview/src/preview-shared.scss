@@ -1,0 +1,7 @@
+// Shared by the parts of TxImagePreview, each of which styles its own: values only, so nothing
+// here is emitted once per part.
+
+// Phones, upright or on their side: the picture takes the whole screen, under the chrome, which
+// a tap hides. Two fingers zoom, so the toolbar keeps only the actions, and the strip or the page
+// buttons sit low, within a thumb's reach.
+$tx-image-preview-phone: '(max-width: 640px), (max-height: 480px)';

@@ -2,6 +2,7 @@
 import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
 import type { DropdownMenuContext, DropdownSubmenuProps } from './types'
 import { computed, inject, nextTick, ref } from 'vue'
+import { createRovingFocus } from '../../../../utils/roving-focus'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import TxDropdownItem from './TxDropdownItem.vue'
@@ -62,13 +63,11 @@ const panelRef = ref<HTMLElement | null>(null)
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
 
-function ownItems(): HTMLElement[] {
-  if (!panelRef.value)
-    return []
-  return Array.from(panelRef.value.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
-    .filter(item => item.closest('[role="menu"]') === panelRef.value)
-    .filter(item => item.getAttribute('aria-disabled') !== 'true')
-}
+const roving = createRovingFocus(
+  () => Array.from(panelRef.value?.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR) ?? [])
+    .filter(item => item.closest('[role="menu"]') === panelRef.value),
+  { skipDisabled: true },
+)
 
 async function openAndFocus() {
   if (props.disabled)
@@ -78,7 +77,7 @@ async function openAndFocus() {
   const attempt = () => {
     if (!open.value)
       return
-    ownItems()[0]?.focus()
+    roving.items()[0]?.focus()
     const active = document.activeElement
     if (active && active !== triggerEl() && panelRef.value?.contains(active))
       return
@@ -109,31 +108,7 @@ function onPanelKeydown(event: KeyboardEvent) {
     triggerEl()?.focus()
     return
   }
-
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
-    return
-
-  const items = ownItems()
-  if (items.length === 0)
-    return
-
-  event.preventDefault()
-  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  const activeIndex = active ? items.indexOf(active) : -1
-
-  if (event.key === 'Home') {
-    items[0]?.focus()
-    return
-  }
-  if (event.key === 'End') {
-    items[items.length - 1]?.focus()
-    return
-  }
-
-  const direction = event.key === 'ArrowDown' ? 1 : -1
-  const fallbackIndex = direction > 0 ? -1 : 0
-  const nextIndex = (Math.max(activeIndex, fallbackIndex) + direction + items.length) % items.length
-  items[nextIndex]?.focus()
+  roving.move(event)
 }
 </script>
 

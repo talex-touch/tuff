@@ -1,5 +1,8 @@
 import { rubberband } from '../../../../utils/gesture'
 
+// The view math the preview shares with the maps is utils/pan-zoom's; these types match its own,
+// declared here because the published declarations carry no internal util.
+
 /**
  * Where the current image is drawn: `translate(tx, ty) scale(k)` over its natural size, in stage
  * pixels. `k` is the zoom against the image's own pixels, so 1 is 100%.
@@ -71,42 +74,6 @@ export function panBounds(k: number, image: PreviewSize, box: PreviewBox, stage:
   }
 }
 
-function clampAxis(value: number, [lo, hi]: [number, number]): number {
-  return Math.max(lo, Math.min(hi, value))
-}
-
-/** The view moved inside `bounds`; the scale is left as it is. */
-export function clampView(view: PreviewView, bounds: PreviewBounds): PreviewView {
-  return { k: view.k, tx: clampAxis(view.tx, bounds.tx), ty: clampAxis(view.ty, bounds.ty) }
-}
-
-function resistAxis(value: number, [lo, hi]: [number, number], size: number): number {
-  if (value < lo)
-    return lo + rubberband(value - lo, size)
-  if (value > hi)
-    return hi + rubberband(value - hi, size)
-  return value
-}
-
-/** A dragged view as drawn: the part pulled past `bounds` resists like a rubber band, measured against the stage. */
-export function resistView(view: PreviewView, bounds: PreviewBounds, stage: PreviewSize): PreviewView {
-  return {
-    k: view.k,
-    tx: resistAxis(view.tx, bounds.tx, stage.width),
-    ty: resistAxis(view.ty, bounds.ty, stage.height),
-  }
-}
-
-/** Rescales about a point on the stage, so the part of the image under it stays put. */
-export function scaleAbout(view: PreviewView, k: number, point: PreviewPoint): PreviewView {
-  const ratio = k / view.k
-  return {
-    k,
-    tx: point.x - (point.x - view.tx) * ratio,
-    ty: point.y - (point.y - view.ty) * ratio,
-  }
-}
-
 /**
  * A pinched scale as drawn: inside `[min, max]` it follows the fingers, and past either end it
  * resists, measured in octaves, so pinching out twice as far shows as about 1.4 times.
@@ -128,15 +95,14 @@ export function detailScale(fit: number, max: number): number {
   return Math.max(fit, Math.min(max, Math.max(fit * 2, Math.min(1, fit * 4))))
 }
 
+const ZOOM_PRESETS = [0.25, 0.5, 1, 2, 4, 8, 16]
+
 /**
- * One frame of a released pan coasting to a stop with a scroll view's exponential deceleration
- * (`rate` per millisecond); in total it carries `projectMomentum(velocity, rate)`. Returns
- * `[position, velocity]`. The maps' roam glides the same way.
+ * The scales the zoom readout's menu offers below the whole picture: 100% and its halvings and
+ * doublings, those past the fit and no further than `max`.
  */
-export function glideAxis(position: number, velocity: number, dt: number, rate = 0.998): [number, number] {
-  const tau = -0.001 / Math.log(rate)
-  const decay = Math.exp(-dt / tau)
-  return [position + velocity * tau * (1 - decay), velocity * decay]
+export function zoomPresets(fit: number, max: number): number[] {
+  return ZOOM_PRESETS.filter(k => k > fit * (1 + 1e-3) && k <= max * (1 + 1e-3))
 }
 
 /** `WheelEvent` with the legacy deltas Chromium and WebKit still report. */

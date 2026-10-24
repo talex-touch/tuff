@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AiAttachment } from '../../ai-elements/src/types'
 import { computed } from 'vue'
+import { BrokenImageIcon } from '../../../../utils/broken-image-icon'
 
 // Internal: the image cell of TxAttachmentTray, the counterpart of TxAttachmentChip.
 // Not exported — the tray owns the viewer and the failed-URL set it reads from.
@@ -60,21 +61,7 @@ function onAction(): void {
       :aria-label="openLabel"
       @click="onOpen"
     >
-      <svg
-        v-if="broken"
-        class="tx-attachment-tray__broken"
-        viewBox="0 0 24 24"
-        width="20"
-        height="20"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        aria-hidden="true"
-      >
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="m3 15 5-5 4 4 3-3 6 6" />
-        <circle cx="9" cy="9" r="1.4" />
-      </svg>
+      <BrokenImageIcon v-if="broken" class="tx-attachment-tray__broken" :size="20" :stroke-width="2" />
       <img
         v-else
         :src="attachment.url"

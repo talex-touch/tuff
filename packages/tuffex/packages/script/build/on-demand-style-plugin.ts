@@ -40,10 +40,11 @@ function isComponentSubpath(componentName: string) {
 function createStyleImports(
   closure: string[],
   existingStyles: Set<string>,
+  specifierFor: (componentName: string) => string = componentName => `@talex-touch/tuffex/${componentName}/style.css`,
 ): string {
   return closure
     .filter(componentName => !existingStyles.has(componentName))
-    .map(componentName => `import '@talex-touch/tuffex/${componentName}/style.css';`)
+    .map(componentName => `import '${specifierFor(componentName)}';`)
     .join('\n')
 }
 
@@ -440,8 +441,13 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
           componentNames.add(name)
       }
       if (distComponentName) {
-        dependents.set(id.split('?')[0]!, [distComponentName])
-        const styleImports = createStyleImports(expandStyleClosure([distComponentName], styleDeps), existingStyles)
+        const file = id.split('?')[0]!
+        dependents.set(file, [distComponentName])
+        const styleImports = createStyleImports(
+          expandStyleClosure([distComponentName], styleDeps),
+          existingStyles,
+          style => relativeSpecifier(dirname(file), `${options.componentDistRoot}/${style}/style.css`),
+        )
         return styleImports ? { code: `${styleImports}\n${code}`, map: null } : null
       }
       const closure = closureOf([...componentNames])

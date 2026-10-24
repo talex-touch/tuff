@@ -2,7 +2,8 @@
 import type { AiAttachmentFile, AiAttachmentImage } from '../../ai-elements/src/types'
 import type TxImagePreviewComponent from '../../image-preview/src/TxImagePreview.vue'
 import type { AttachmentTrayEmits, AttachmentTrayProps } from './types'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref } from 'vue'
+import { useLazyComponent } from '../../../../utils/use-lazy-component'
 import AttachmentThumb from './AttachmentThumb.vue'
 import TxAttachmentChip from './TxAttachmentChip.vue'
 
@@ -67,22 +68,17 @@ function openLabel(image: ImageAttachment): string {
   return props.openLabelFormatter ? props.openLabelFormatter(name) : `${props.previewTitle}: ${name}`
 }
 
-const preview = shallowRef<typeof TxImagePreviewComponent | null>(null)
-let previewLoad: Promise<void> | null = null
+const { component: preview, load: startPreviewLoad } = useLazyComponent<typeof TxImagePreviewComponent>(
+  () => import('../../image-preview').then(module => module.TxImagePreview),
+  () => {
+    // The next press tries again; until then the tray is not left open on nothing.
+    viewerOpen.value = false
+  },
+)
 
 function loadPreview(): void {
-  if (images.value.length <= 0)
-    return
-  previewLoad ??= import('../../image-preview').then(
-    (module) => {
-      preview.value = module.TxImagePreview
-    },
-    () => {
-      // The next press tries again; until then the tray is not left open on nothing.
-      previewLoad = null
-      viewerOpen.value = false
-    },
-  )
+  if (images.value.length > 0)
+    startPreviewLoad()
 }
 
 function openViewer(index: number): void {

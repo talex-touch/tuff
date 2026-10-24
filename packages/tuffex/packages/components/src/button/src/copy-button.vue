@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { writeClipboardText } from '../../../../utils/clipboard'
 import { TxTextTransformer } from '../../text-transformer'
 
 defineOptions({
@@ -160,38 +161,13 @@ function setState(next: CopyState) {
     resetTimer = setTimeout(() => setState('idle'), props.timeout)
 }
 
-async function writeClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.top = '-9999px'
-  document.body.appendChild(textarea)
-  try {
-    textarea.select()
-    const ok = document.execCommand('copy')
-    if (!ok)
-      throw new Error('Copy command failed')
-  }
-  finally {
-    // Always detach the hidden textarea — even if select()/execCommand throws — so
-    // a failed copy never orphans a node on <body>.
-    document.body.removeChild(textarea)
-  }
-}
-
 async function handleCopy() {
   if (props.disabled || copying.value)
     return
 
   copying.value = true
   try {
-    await writeClipboard(props.text)
+    await writeClipboardText(props.text)
     setState('copied')
     emit('copy', props.text)
   }

@@ -4,6 +4,7 @@ import type { VNode } from 'vue'
 import type { MotionTransitionCompletion, MotionTransitionEmits, MotionTransitionKey, MotionTransitionPhase, MotionTransitionProps, MotionTransitionReason, MotionTransitionSlotProps, MotionTransitionStatus, MotionTransitionVariant } from './types'
 import { computed, defineComponent, h, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useId, watch } from 'vue'
 import { resolveCssEase } from '../../../../utils/animation/easing'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { resolveTransition } from '../../liquid/src/spring'
@@ -43,7 +44,7 @@ const wave = computed(() => renderVariant.value === 'obsidian-liquid-wave' || re
 const doors = computed(() => renderVariant.value === 'spatial-door-portal' || renderVariant.value === 'french-doors-3d')
 let mounted = false
 let listening = false
-let previousFocus: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 let focusAfterSwap = false
 let raf: number | undefined
 let panes: HTMLElement[] = []
@@ -235,9 +236,7 @@ function requestClose(reason: 'button' | 'escape' | 'mask' | 'api'): void {
 }
 
 function restoreFocus(): void {
-  if (previousFocus?.isConnected)
-    previousFocus.focus({ preventScroll: true })
-  previousFocus = null
+  focusReturn.restore()
   focusAfterSwap = false
 }
 
@@ -251,22 +250,7 @@ function handleKeydown(event: KeyboardEvent): void {
     requestClose('escape')
   }
   else if (event.key === 'Tab') {
-    const focusable = Array.from(root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(el => !el.closest('[inert]') && el.getClientRects().length > 0)
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-    if (!first || !last) {
-      event.preventDefault()
-      root.focus({ preventScroll: true })
-    }
-    else if (event.shiftKey && (active === first || active === root || !root.contains(active))) {
-      event.preventDefault()
-      last.focus({ preventScroll: true })
-    }
-    else if (!event.shiftKey && (active === last || active === root || !root.contains(active))) {
-      event.preventDefault()
-      first.focus({ preventScroll: true })
-    }
+    trapTab(event, root)
   }
 }
 
@@ -285,7 +269,7 @@ function openDialog(): void {
   if (!mounted || !overlay.value || !props.open)
     return
   zIndex.value = allocator.next()
-  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  focusReturn.save()
   listen()
   void nextTick(() => {
     if (!mounted || !overlay.value || !props.open)

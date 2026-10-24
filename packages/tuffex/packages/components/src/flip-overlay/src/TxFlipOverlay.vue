@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import { hasWindow } from '../../../../utils/env'
+import { shownBox } from '../../../../utils/shown-box'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import {
   lockFlipOverlayBodyScroll,
@@ -428,7 +429,11 @@ function resolveSource(): void {
   }
 
   if (source instanceof HTMLElement) {
-    sourceRect.value = source.getBoundingClientRect()
+    const rect = source.getBoundingClientRect()
+    // A card half scrolled out of its row flies from the part of it that shows, not from behind
+    // the row's edge.
+    const { clip } = shownBox(source, rect)
+    sourceRect.value = clip.width >= 2 && clip.height >= 2 ? new DOMRect(clip.x, clip.y, clip.width, clip.height) : rect
     sourceRadius.value = props.sourceRadius ?? getComputedStyle(source).borderRadius
     return
   }

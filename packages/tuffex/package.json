@@ -52,6 +52,11 @@
       "import": "./dist/es/*/style.css",
       "require": "./dist/lib/*/style.css"
     },
+    "./charts/src/*": {
+      "types": "./dist/es/charts/src/*/index.d.ts",
+      "import": "./dist/es/charts/src/*/index.js",
+      "require": "./dist/lib/charts/src/*/index.js"
+    },
     "./*": {
       "types": "./dist/es/*/index.d.ts",
       "import": "./dist/es/*/index.js",

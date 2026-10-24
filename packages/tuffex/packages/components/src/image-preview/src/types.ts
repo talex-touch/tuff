@@ -92,7 +92,7 @@ export interface ImagePreviewProps {
   controlSurface?: BaseSurfaceMode
   /** The colour of that material. @default 'rgb(64, 64, 70)' */
   controlColor?: string
-  /** The opacity of that colour, 0 to 1. @default 0.35 */
+  /** The opacity of that colour, 0 to 1. @default 0.6 */
   controlOpacity?: number
   /** How far that material blurs what is behind it (px). @default 16 */
   controlBlur?: number
@@ -108,7 +108,13 @@ export interface ImagePreviewProps {
   zoomInLabel?: string
   /** @default 'Zoom out' */
   zoomOutLabel?: string
-  /** The zoom readout's accessible name, joined after the readout by `readoutLabelFormatter`; it shows the whole picture again. @default 'Fit to screen' */
+  /**
+   * The accessible name of the menu the zoom readout opens: the whole picture, then those of 25%,
+   * 50%, 100% and its doublings that lie past it, up to `maxScale`. The readout's name too, joined
+   * after the readout by `readoutLabelFormatter`. @default 'Zoom'
+   */
+  zoomLabel?: string
+  /** The first item of the zoom readout's menu, which shows the whole picture again. @default 'Fit to screen' */
   resetLabel?: string
   /** Turns the picture a quarter clockwise; Shift + R turns it back. @default 'Rotate' */
   rotateLabel?: string
@@ -132,13 +138,13 @@ export interface ImagePreviewProps {
   failedText?: string
   /** @default (current, total) => `${current} / ${total}` */
   counterFormatter?: (current: number, total: number) => string
-  /** The zoom readout, from the scale against the picture's own pixels. @default (scale) => `${Math.round(scale * 100)}%` */
+  /** The zoom readout and the scales in its menu, from a scale against the picture's own pixels. @default (scale) => `${Math.round(scale * 100)}%` */
   scaleFormatter?: (scale: number) => string
   /** The accessible name of a thumbnail or a dot in the strip. @default (current, total, name) => name ? `${name}, ${current} of ${total}` : `Image ${current} of ${total}` */
   indicatorItemFormatter?: (current: number, total: number, name?: string) => string
   /** The dialog's accessible name while the picture shown has a `name`. @default (label, name) => `${label}: ${name}` */
   labelFormatter?: (label: string, name: string) => string
-  /** The zoom readout's accessible name, from the readout and `resetLabel`. @default (readout, label) => `${readout}, ${label}` */
+  /** The zoom readout's accessible name, from the readout and `zoomLabel`. @default (readout, label) => `${readout}, ${label}` */
   readoutLabelFormatter?: (readout: string, label: string) => string
 }
 

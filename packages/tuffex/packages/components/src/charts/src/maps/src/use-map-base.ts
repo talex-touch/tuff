@@ -1,17 +1,26 @@
 import type { GeoProjection } from 'd3-geo'
 import type { ComputedRef, Ref } from 'vue'
+import type { ViewMotion } from '../../../../../../utils/pan-zoom'
 import type { RoamBounds, RoamBox, RoamState } from './roam'
 import type { MapBaseProps, MapLabels } from './types'
 import { geoPath } from 'd3-geo'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, useId, watch } from 'vue'
-import { stepSpring } from '../../../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import {
   createVelocityTracker,
   isZoomWheel,
-  responseSpring,
   wheelPixels,
   wheelZoomFactor,
 } from '../../../../../../utils/gesture'
+import {
+  releaseAxis,
+  restingAxis,
+  restingView,
+  springView,
+  stepView,
+  viewGoal,
+  viewNow,
+} from '../../../../../../utils/pan-zoom'
 import { useReducedMotion } from '../../../../../../utils/use-reduced-motion'
 import { easings, STATE_DURATION, tween } from '../../core/animate'
 import { placeTooltip } from '../../tooltip'
@@ -26,7 +35,6 @@ import {
 import {
   clampRoam,
   clampScale,
-  glideAxis,
   initialRoam,
   panBy,
   resistRoam,
@@ -299,92 +307,39 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
 
   // ── Motion ──
 
-  /** Resets, key presses, wheel notches and overshoots all settle on this. */
-  const VIEW_SPRING = responseSpring(0.35, 1)
-  /** A gliding axis slower than this (px/s) has stopped. */
-  const GLIDE_REST = 10
-
-  interface Axis { mode: 'rest' | 'glide' | 'spring', value: number, velocity: number, target: number }
-  interface Motion { k: Axis, tx: Axis, ty: Axis, bounds: RoamBounds, home: boolean }
+  interface Motion extends ViewMotion { home: boolean }
 
   let motion: Motion | null = null
-  let frame = 0
-  let lastTime = 0
-
-  function axis(value: number, velocity = 0): Axis {
-    return { mode: 'rest', value, velocity, target: value }
-  }
+  const loop = createFrameLoop((dt) => {
+    const m = motion
+    if (!m)
+      return false
+    if (stepView(m, dt)) {
+      motion = null
+      drawn.value = m.home ? null : viewNow(m)
+      return false
+    }
+    drawn.value = viewNow(m)
+    return true
+  })
 
   function canAnimate(): boolean {
     return !reduced.value && typeof requestAnimationFrame !== 'undefined'
   }
 
   function stopMotion(): void {
-    if (frame)
-      cancelAnimationFrame(frame)
-    frame = 0
+    loop.stop()
     motion = null
-  }
-
-  function stepAxis(a: Axis, dt: number, limits: [number, number] | null, rest: number): void {
-    if (a.mode === 'glide') {
-      ;[a.value, a.velocity] = glideAxis(a.value, a.velocity, dt)
-      if (limits && (a.value < limits[0] || a.value > limits[1])) {
-        // Coasting into the edge, a spring takes the velocity over and
-        // brings the map back inside.
-        a.mode = 'spring'
-        a.target = Math.max(limits[0], Math.min(limits[1], a.value))
-      }
-      else if (Math.abs(a.velocity) < GLIDE_REST) {
-        a.mode = 'rest'
-        a.velocity = 0
-      }
-    }
-    else if (a.mode === 'spring') {
-      ;[a.value, a.velocity] = stepSpring(a.value, a.velocity, a.target, VIEW_SPRING, dt)
-      if (Math.abs(a.target - a.value) < rest && Math.abs(a.velocity) < rest * 16) {
-        a.value = a.target
-        a.velocity = 0
-        a.mode = 'rest'
-      }
-    }
-  }
-
-  function tick(now: number): void {
-    frame = 0
-    const m = motion
-    if (!m)
-      return
-    const dt = Math.min(0.064, Math.max(0, (now - lastTime) / 1000))
-    lastTime = now
-    stepAxis(m.k, dt, null, 1e-4)
-    stepAxis(m.tx, dt, m.bounds.tx, 0.1)
-    stepAxis(m.ty, dt, m.bounds.ty, 0.1)
-    const settled = m.k.mode === 'rest' && m.tx.mode === 'rest' && m.ty.mode === 'rest'
-    if (settled) {
-      motion = null
-      drawn.value = m.home ? null : { k: m.k.value, tx: m.tx.value, ty: m.ty.value }
-      return
-    }
-    drawn.value = { k: m.k.value, tx: m.tx.value, ty: m.ty.value }
-    frame = requestAnimationFrame(tick)
   }
 
   function run(next: Motion): void {
     motion = next
-    if (frame)
-      return
-    lastTime = performance.now()
-    frame = requestAnimationFrame(tick)
+    loop.start()
   }
 
   /** Where the view is heading: a key press or notch builds on the last one. */
   function goal(): RoamState {
-    const m = motion
-    if (!m)
-      return roamState.value
-    const pick = (a: Axis): number => (a.mode === 'spring' ? a.target : a.value)
-    return { k: pick(m.k), tx: pick(m.tx), ty: pick(m.ty) }
+    return motion ? viewGoal(motion) : roamState.value
   }
 
   /** Springs to `target`, keeping any velocity in flight. `toHome` follows `home` once there. */
@@ -395,11 +350,8 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
       return
     }
     const from = roamState.value
-    const next = motion ?? { k: axis(from.k), tx: axis(from.tx), ty: axis(from.ty), bounds: boundsAt(from.k), home: false }
-    for (const key of ['k', 'tx', 'ty'] as const) {
-      next[key].mode = 'spring'
-      next[key].target = target[key]
-    }
+    const next = motion ?? { ...restingView(from, boundsAt(from.k)), home: false }
+    springView(next, target)
     next.home = toHome
     run(next)
   }
@@ -414,15 +366,8 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
     const [vx, vy] = velocity.map(v => (Number.isFinite(v) ? v : 0))
     const from = roamState.value
     const bounds = boundsAt(from.k)
-    const plan = (value: number, velocity: number, [lo, hi]: [number, number]): Axis => {
-      if (value < lo || value > hi)
-        return { mode: 'spring', value, velocity, target: Math.max(lo, Math.min(hi, value)) }
-      if (Math.abs(velocity) > GLIDE_REST)
-        return { mode: 'glide', value, velocity, target: value }
-      return axis(value)
-    }
-    const tx = plan(from.tx, vx ?? 0, bounds.tx)
-    const ty = plan(from.ty, vy ?? 0, bounds.ty)
+    const tx = releaseAxis(from.tx, vx ?? 0, bounds.tx)
+    const ty = releaseAxis(from.ty, vy ?? 0, bounds.ty)
     if (tx.mode === 'rest' && ty.mode === 'rest')
       return
     if (!canAnimate()) {
@@ -430,7 +375,7 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
       drawn.value = clampRoam(from, bounds)
       return
     }
-    run({ k: axis(from.k), tx, ty, bounds, home: false })
+    run({ k: restingAxis(from.k), tx, ty, bounds, home: false })
   }
 
   // ── Pointer gestures ──

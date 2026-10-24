@@ -1,19 +1,45 @@
-import type { CSSProperties, Ref } from 'vue'
+import type { Ref } from 'vue'
+import type { PreviewMenuItem, PreviewMenuPlace, PreviewMenuPlacer } from './menu'
 import type { ImagePreviewAction } from './types'
-import type { PreviewBox, PreviewPoint } from './zoom'
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef } from 'vue'
+import type { PreviewBox, PreviewPoint, PreviewSize } from './zoom'
+import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { hasDocument } from '../../../../utils/env'
 import { useVibrate } from '../../../../utils/vibrate'
+import { ACTION_ICONS } from './icons'
+import { MENU_MARGIN } from './menu'
 
-// The menu: a long press on the picture, a right-click, or the context-menu key. The preview
-// draws its own rather than using TxContextMenu, which teleports to <body>: there it would sit
-// under the preview, outside its focus trap, and answer Escape alongside it.
+// The actions' menu: a long press on the picture, a right-click, or the context-menu key. The
+// preview draws its own (ImagePreviewMenu) rather than using TxContextMenu, which teleports to
+// <body>: there it would sit outside the preview's focus trap, and answer Escape alongside it.
+// This says when it opens, where, and what it holds; the menu does the rest.
 
 export type PreviewMenuKind = 'touch' | 'pointer' | 'keyboard'
 
-const MENU_MARGIN = 8
 /** A finger's menu opens this far above it (px), clear of the fingertip. */
 const MENU_FINGER_GAP = 16
+
+/** Over a finger, above it; at a pointer, beside it, turned back from the edges; from the keyboard, on the picture. */
+function placeAt({ x, y }: PreviewPoint, kind: PreviewMenuKind, size: PreviewSize, room: PreviewSize): PreviewMenuPlace {
+  let left = x
+  let top = y
+  if (kind === 'touch') {
+    left = x - size.width / 2
+    top = y - MENU_FINGER_GAP - size.height
+    if (top < MENU_MARGIN)
+      top = y + MENU_FINGER_GAP
+  }
+  else if (kind === 'pointer') {
+    if (x + size.width > room.width - MENU_MARGIN)
+      left = x - size.width
+    if (y + size.height > room.height - MENU_MARGIN)
+      top = y - size.height
+  }
+  else {
+    left = x - size.width / 2
+    top = y - size.height / 2
+  }
+  return { left, top, x, y }
+}
 
 export interface PreviewMenuOptions {
   /** The host asked for the menu. */
@@ -21,8 +47,10 @@ export interface PreviewMenuOptions {
   /** The preview is up and not leaving. */
   live: () => boolean
   overlay: Readonly<Ref<HTMLElement | null>>
-  menu: Readonly<Ref<HTMLElement | null>>
+  /** The menu holds focus. */
+  holdsFocus: () => boolean
   actions: () => readonly ImagePreviewAction[]
+  label: (action: ImagePreviewAction) => string
   disabled: (action: ImagePreviewAction) => boolean
   run: (action: ImagePreviewAction, reverse: boolean) => void
   /** Where the picture is fitted, in the overlay's pixels: the keyboard opens the menu on it. */
@@ -42,10 +70,11 @@ export interface PreviewMenu {
   menuOpen: Readonly<Ref<boolean>>
   /** Takes the pointer, once the press that opened it is let go. */
   menuArmed: Readonly<Ref<boolean>>
-  /** Placed, and so shown. */
-  menuPlaced: Readonly<Ref<boolean>>
-  menuStyle: Readonly<Ref<CSSProperties>>
   menuLevel: Readonly<Ref<number>>
+  /** The actions on offer, as the menu's items. */
+  menuItems: Readonly<Ref<PreviewMenuItem[]>>
+  /** Where it goes: where it was opened. */
+  menuPlace: Readonly<Ref<PreviewMenuPlacer>>
   /**
    * Opens the menu at `point`, in the overlay's pixels. `waitForRelease` keeps it from taking the
    * press that opened it: it takes the pointer only once that press is let go.
@@ -53,33 +82,27 @@ export interface PreviewMenu {
   openMenu: (point: PreviewPoint, kind: PreviewMenuKind, waitForRelease: boolean) => boolean
   /** Closes it, putting focus back where it was when `restore`, or when the menu held it. */
   closeMenu: (restore: boolean) => void
-  chooseFromMenu: (action: ImagePreviewAction, reverse: boolean) => void
+  chooseFromMenu: (key: string, reverse: boolean) => void
   openMenuFromKeyboard: () => boolean
   onContextMenu: (event: MouseEvent) => void
   onMouseDown: (event: MouseEvent) => void
-  onMenuKey: (event: KeyboardEvent) => void
 }
 
 export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
   const menuOpen = ref(false)
   const menuArmed = ref(false)
-  const menuPlaced = ref(false)
-  const menuRef = options.menu
-  const menuPlace = shallowRef({ left: 0, top: 0, originX: 0, originY: 0 })
   const menuLevel = options.level(() => menuOpen.value, 150)
-  let menuAnchor: PreviewPoint & { kind: PreviewMenuKind } = { x: 0, y: 0, kind: 'pointer' }
+  const menuPlace = shallowRef<PreviewMenuPlacer>((size, room) => placeAt({ x: 0, y: 0 }, 'pointer', size, room))
   let menuReturnFocus: HTMLElement | null = null
   let releaseWait: (() => void) | null = null
   let armTimer: ReturnType<typeof setTimeout> | undefined
 
-  const menuStyle = computed<CSSProperties>(() => {
-    const place = menuPlace.value
-    return {
-      left: `${place.left}px`,
-      top: `${place.top}px`,
-      transformOrigin: `${place.originX}px ${place.originY}px`,
-    }
-  })
+  const menuItems = computed<PreviewMenuItem[]>(() => options.actions().map(action => ({
+    key: action,
+    label: options.label(action),
+    icon: ACTION_ICONS[action],
+    disabled: options.disabled(action),
+  })))
 
   function stopWaiting(): void {
     if (releaseWait && hasDocument()) {
@@ -90,17 +113,6 @@ export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
     if (armTimer !== undefined)
       clearTimeout(armTimer)
     armTimer = undefined
-  }
-
-  function menuItems(): HTMLElement[] {
-    return Array.from(menuRef.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
-  }
-
-  function focusMenuItem(at: number): void {
-    const list = menuItems()
-    if (!menuOpen.value || list.length === 0)
-      return
-    list[((at % list.length) + list.length) % list.length]!.focus({ preventScroll: true })
   }
 
   function openMenu(point: PreviewPoint, kind: PreviewMenuKind, waitForRelease: boolean): boolean {
@@ -114,10 +126,10 @@ export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
       const active = hasDocument() ? document.activeElement : null
       menuReturnFocus = active instanceof HTMLElement && options.overlay.value?.contains(active) ? active : null
     }
-    menuAnchor = { x: point.x, y: point.y, kind }
+    // A new one, so a menu open already moves to the new point.
+    menuPlace.value = (size, room) => placeAt(point, kind, size, room)
     menuOpen.value = true
     menuArmed.value = false
-    menuPlaced.value = false
     if (waitForRelease && hasDocument()) {
       const release = (): void => {
         stopWaiting()
@@ -135,51 +147,7 @@ export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
     else {
       menuArmed.value = true
     }
-    nextTick(placeMenu)
     return true
-  }
-
-  /** Over a finger, above it; at a pointer, beside it, turned back from the edges; from the keyboard, on the picture. */
-  function placeMenu(): void {
-    const menu = menuRef.value
-    const root = options.overlay.value
-    if (!menu || !root || !menuOpen.value)
-      return
-    const width = menu.offsetWidth
-    const height = menu.offsetHeight
-    const roomX = root.clientWidth
-    const roomY = root.clientHeight
-    const { x, y, kind } = menuAnchor
-    let left = x
-    let top = y
-    if (kind === 'touch') {
-      left = x - width / 2
-      top = y - MENU_FINGER_GAP - height
-      if (top < MENU_MARGIN)
-        top = y + MENU_FINGER_GAP
-    }
-    else if (kind === 'pointer') {
-      if (x + width > roomX - MENU_MARGIN)
-        left = x - width
-      if (y + height > roomY - MENU_MARGIN)
-        top = y - height
-    }
-    else {
-      left = x - width / 2
-      top = y - height / 2
-    }
-    left = Math.max(MENU_MARGIN, Math.min(left, roomX - MENU_MARGIN - width))
-    top = Math.max(MENU_MARGIN, Math.min(top, roomY - MENU_MARGIN - height))
-    // It grows out of the point it was opened at.
-    menuPlace.value = {
-      left,
-      top,
-      originX: Math.max(0, Math.min(width, x - left)),
-      originY: Math.max(0, Math.min(height, y - top)),
-    }
-    menuPlaced.value = true
-    // Once shown: a hidden item takes no focus.
-    nextTick(() => focusMenuItem(0))
   }
 
   function closeMenu(restore: boolean): void {
@@ -191,13 +159,13 @@ export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
     const target = menuReturnFocus
     menuReturnFocus = null
     // Focus leaves with the menu: back where it was, or onto the dialog.
-    const active = hasDocument() ? document.activeElement : null
-    if (options.live() && (restore || (active && menuRef.value?.contains(active))))
+    if (options.live() && (restore || options.holdsFocus()))
       (target?.isConnected ? target : options.overlay.value)?.focus({ preventScroll: true })
   }
 
-  function chooseFromMenu(action: ImagePreviewAction, reverse: boolean): void {
-    if (options.disabled(action))
+  function chooseFromMenu(key: string, reverse: boolean): void {
+    const action = options.actions().find(candidate => candidate === key)
+    if (!action || options.disabled(action))
       return
     // Closed first: the gestures, rotate's among them, wait while it is open.
     closeMenu(true)
@@ -234,53 +202,19 @@ export function usePreviewMenu(options: PreviewMenuOptions): PreviewMenu {
       event.preventDefault()
   }
 
-  function onMenuKey(event: KeyboardEvent): void {
-    const at = menuItems().indexOf(document.activeElement as HTMLElement)
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault()
-        focusMenuItem(at + 1)
-        break
-      case 'ArrowUp':
-        event.preventDefault()
-        focusMenuItem(at < 0 ? -1 : at - 1)
-        break
-      case 'Home':
-        event.preventDefault()
-        focusMenuItem(0)
-        break
-      case 'End':
-        event.preventDefault()
-        focusMenuItem(-1)
-        break
-      case 'Escape':
-      case 'Tab':
-        event.preventDefault()
-        closeMenu(true)
-        break
-      case 'ContextMenu':
-        event.preventDefault()
-        break
-      default:
-        // Enter and Space press the item; nothing else reaches the picture while the menu is open.
-        break
-    }
-  }
-
   onBeforeUnmount(stopWaiting)
 
   return {
     menuOpen,
     menuArmed,
-    menuPlaced,
-    menuStyle,
     menuLevel,
+    menuItems,
+    menuPlace,
     openMenu,
     closeMenu,
     chooseFromMenu,
     openMenuFromKeyboard,
     onContextMenu,
     onMouseDown,
-    onMenuKey,
   }
 }

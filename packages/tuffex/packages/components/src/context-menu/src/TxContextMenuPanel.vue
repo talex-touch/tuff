@@ -2,6 +2,7 @@
 import type { StyleValue } from 'vue'
 import type { ContextMenuContext, ContextMenuPanelProps } from './types'
 import { computed, provide, reactive, ref, toRef } from 'vue'
+import { createRovingFocus } from '../../../../utils/roving-focus'
 import { TX_CONTEXT_MENU_INJECTION_KEY } from './types'
 
 defineOptions({ name: 'TxContextMenuPanel' })
@@ -39,45 +40,22 @@ function close() {
   props.close?.()
 }
 
-function getEnabledItems(): HTMLElement[] {
+const roving = createRovingFocus(() => {
   if (!panelRef.value)
     return []
   // Keyboard navigation only applies to real menu/listbox roles; `none` opts out.
   const itemRole = props.role === 'listbox' ? 'option' : props.role === 'menu' ? 'menuitem' : null
   if (!itemRole)
     return []
-  return Array.from(panelRef.value.querySelectorAll<HTMLElement>(`[role="${itemRole}"]`))
-    .filter(item => item.getAttribute('aria-disabled') !== 'true')
-}
+  return panelRef.value.querySelectorAll<HTMLElement>(`[role="${itemRole}"]`)
+}, { skipDisabled: true })
 
 function focusFirstItem(): void {
-  getEnabledItems()[0]?.focus()
+  roving.items()[0]?.focus()
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
-    return
-
-  const items = getEnabledItems()
-  if (items.length === 0)
-    return
-
-  event.preventDefault()
-  const activeIndex = items.indexOf(document.activeElement as HTMLElement)
-
-  if (event.key === 'Home') {
-    items[0]?.focus()
-    return
-  }
-  if (event.key === 'End') {
-    items[items.length - 1]?.focus()
-    return
-  }
-
-  const direction = event.key === 'ArrowDown' ? 1 : -1
-  const fallbackIndex = direction > 0 ? -1 : 0
-  const nextIndex = (Math.max(activeIndex, fallbackIndex) + direction + items.length) % items.length
-  items[nextIndex]?.focus()
+  roving.move(event)
 }
 
 provide<ContextMenuContext>(TX_CONTEXT_MENU_INJECTION_KEY, reactive({

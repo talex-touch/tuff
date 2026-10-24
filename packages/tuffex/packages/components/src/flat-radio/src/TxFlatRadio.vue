@@ -2,6 +2,7 @@
 import type { JellyIndicatorFrame } from '../../../../utils/use-jelly-indicator'
 import type { TxFlatRadioProps, TxFlatRadioSize, TxFlatRadioValue } from './types'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
+import { drawnScale } from '../../../../utils/drawn-scale'
 import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
 import { springSteps } from '../../liquid/src/spring'
 import { FLAT_RADIO_KEY } from './types'
@@ -171,8 +172,7 @@ function readGeometry(el: HTMLElement, root: HTMLElement): { left: number, width
 
   // Rects are visual pixels: an ancestor transform or browser zoom scales them,
   // while the translate below is in the container's own coordinate space.
-  const ratio = root.offsetWidth > 0 ? box.width / root.offsetWidth : 1
-  const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
+  const scale = drawnScale(root, box).x
 
   // The indicator's `left: 0` resolves against the padding box; a rect delta
   // starts at the border box, so the border has to come back off.

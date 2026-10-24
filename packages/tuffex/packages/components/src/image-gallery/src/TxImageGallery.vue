@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type TxImagePreviewComponent from '../../image-preview/src/TxImagePreview.vue'
 import type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps } from './types'
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useLazyComponent } from '../../../../utils/use-lazy-component'
 
 defineOptions({
   name: 'TxImageGallery',
@@ -49,25 +50,20 @@ function thumbOf(i: number): Element | null {
 // The preview is loaded the first time it is about to be needed, so a page of thumbnails carries
 // neither it nor its stylesheet until then: pointing at or focusing the gallery starts the load,
 // and a press that lands first opens it as soon as it arrives.
-const preview = shallowRef<typeof TxImagePreviewComponent | null>(null)
-let previewLoad: Promise<void> | null = null
+const { component: preview, load: startPreviewLoad } = useLazyComponent<typeof TxImagePreviewComponent>(
+  () => import('../../image-preview').then(module => module.TxImagePreview),
+  () => {
+    // The next press tries again; until then the gallery is not left open on nothing.
+    if (visible.value) {
+      visible.value = false
+      emit('close')
+    }
+  },
+)
 
 function loadPreview(): void {
-  if (list.value.length <= 0)
-    return
-  previewLoad ??= import('../../image-preview').then(
-    (module) => {
-      preview.value = module.TxImagePreview
-    },
-    () => {
-      // The next press tries again; until then the gallery is not left open on nothing.
-      previewLoad = null
-      if (visible.value) {
-        visible.value = false
-        emit('close')
-      }
-    },
-  )
+  if (list.value.length > 0)
+    startPreviewLoad()
 }
 
 function getItemLabel(item: ImageGalleryItem, i: number): string {

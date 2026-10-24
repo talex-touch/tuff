@@ -134,14 +134,3 @@ export function coversExtent(window: ViewWindow, extent: ViewWindow): boolean {
   const slack = (extent[1] - extent[0]) * 1e-6
   return window[0] <= extent[0] + slack && window[1] >= extent[1] - slack
 }
-
-/**
- * One frame of a released pan coasting to a stop, with a scroll view's
- * exponential deceleration (`rate` per millisecond). It carries
- * `projectMomentum(velocity, rate)` in total. Returns `[position, velocity]`.
- */
-export function glideStep(position: number, velocity: number, dt: number, rate = 0.998): [number, number] {
-  const tau = -0.001 / Math.log(rate)
-  const decay = Math.exp(-dt / tau)
-  return [position + velocity * tau * (1 - decay), velocity * decay]
-}
