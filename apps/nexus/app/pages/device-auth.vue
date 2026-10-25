@@ -181,7 +181,8 @@ async function ensureSession(): Promise<boolean> {
 
 async function loadProfile() {
   // Decides whether a long-lived grant is on offer: a passkey or a link added a moment ago counts.
-  const profile = await fetchCurrentUserProfile({ force: true })
+  // A failed read offers none; the short grant needs none of them.
+  const profile = await fetchCurrentUserProfile({ force: true }).catch(() => null)
   const passkeyCount = profile?.passkeyCount ?? 0
   const hasEmailLink = profile?.emailState === 'verified'
   const linkedProviders = profile?.linkedProviders ?? []
@@ -191,11 +192,12 @@ async function loadProfile() {
   }
 }
 
-async function loadInfo() {
+/** True when the request is still pending, so the page can go on to offer approving or cancelling it. */
+async function loadInfo(): Promise<boolean> {
   if (!code.value) {
     state.value = 'error'
     errorMessage.value = t('auth.loginFailed', 'Invalid authorization code.')
-    return
+    return false
   }
   state.value = 'loading'
   try {
@@ -219,17 +221,17 @@ async function loadInfo() {
     if (info?.status === 'expired') {
       state.value = 'expired'
       requestCloseTab()
-      return
+      return false
     }
     if (info?.status === 'cancelled') {
       state.value = 'cancelled'
       requestCloseTab()
-      return
+      return false
     }
     if (info?.status === 'approved') {
       state.value = 'approved'
       requestCloseTab()
-      return
+      return false
     }
     if (info?.status === 'rejected') {
       state.value = 'error'
@@ -239,12 +241,12 @@ async function loadInfo() {
       else {
         errorMessage.value = info?.rejectMessage || t('auth.authFailed', '授权失败')
       }
-      return
+      return false
     }
     if (info?.ipMismatch) {
       state.value = 'error'
       errorMessage.value = t('auth.deviceAuthIpMismatch', '授权来源 IP 与设备 IP 不一致，已拒绝。')
-      return
+      return false
     }
     ipMismatchWarning.value = info?.ipMismatchWarning ?? false
     requestIp.value = info?.requestIp ?? null
@@ -259,11 +261,12 @@ async function loadInfo() {
     if (!longTermAllowed.value && !longTermNeedsReauth.value) {
       grantType.value = 'short'
     }
-    state.value = 'ready'
+    return true
   }
   catch (error: any) {
     state.value = 'error'
     errorMessage.value = error?.data?.statusMessage || error?.message || 'Failed to load authorization request.'
+    return false
   }
 }
 
@@ -313,10 +316,13 @@ async function loadRequest(): Promise<void> {
   startPresenceHeartbeat()
   if (authParam.value)
     grantType.value = 'long'
-  await Promise.all([loadInfo(), loadProfile()])
+  const [pending] = await Promise.all([loadInfo(), loadProfile()])
   // The reads finish in either order, and the request can ask for a long grant this account is not offered.
   if (!longTermAvailable.value)
     grantType.value = 'short'
+  // The buttons wait for both: shown on the request alone, they would approve a long grant the profile has not cleared.
+  if (pending)
+    state.value = 'ready'
 }
 
 onMounted(async () => {
