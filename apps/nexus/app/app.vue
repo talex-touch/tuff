@@ -16,7 +16,10 @@ useHead({
   titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff`),
 })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+// Screen readers, hyphenation and CJK line breaking take the page language from here; the tags
+// match the hreflang the docs pages advertise.
+useHead({ htmlAttrs: { lang: computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en')) } })
 const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
