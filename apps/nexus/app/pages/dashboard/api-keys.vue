@@ -416,6 +416,7 @@ const expiryOptions = computed(() => [
       size="small"
       layout="vertical"
       :title="error"
+      description=""
       :primary-action="{ label: t('dashboard.sections.apiKeys.errors.retry'), variant: 'flat' }"
       @primary="retryLoad"
     />

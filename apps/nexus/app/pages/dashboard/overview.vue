@@ -561,6 +561,7 @@ function isCurrentDevice(device: DeviceItem) {
             class="mt-4"
             variant="no-data"
             :title="t('dashboard.overview.trends.noSearchData')"
+            description=""
             size="small"
             layout="vertical"
           />
@@ -613,6 +614,7 @@ function isCurrentDevice(device: DeviceItem) {
             class="mt-4"
             variant="no-data"
             :title="t('dashboard.overview.trends.noLatencyData')"
+            description=""
             size="small"
             layout="vertical"
           />
@@ -659,6 +661,7 @@ function isCurrentDevice(device: DeviceItem) {
             v-else-if="!viewModel.recentActivities.length"
             variant="no-data"
             :title="t('dashboard.overview.stream.empty')"
+            description=""
             size="small"
             layout="vertical"
           />
@@ -721,6 +724,7 @@ function isCurrentDevice(device: DeviceItem) {
             v-else-if="!viewModel.devices.length"
             variant="no-data"
             :title="t('dashboard.overview.devices.empty')"
+            description=""
             size="small"
             layout="vertical"
           />

@@ -604,6 +604,7 @@ onBeforeUnmount(() => {
       size="small"
       layout="vertical"
       :title="t('dashboard.team.loadFailed', '团队信息没能加载出来，请检查网络后重试。')"
+      description=""
       :primary-action="{ label: t('common.retry', '重试'), variant: 'flat' }"
       @primary="refresh"
     />

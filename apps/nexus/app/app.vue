@@ -549,6 +549,7 @@ watchEffect(() => {
       <LazyAuthGateState
         variant="loading"
         :title="t('auth.checkingSession')"
+        description=""
         size="small"
         layout="vertical"
       />
@@ -560,6 +561,7 @@ watchEffect(() => {
       <LazyAuthGateState
         variant="loading"
         :title="t('auth.redirecting')"
+        description=""
         size="small"
         layout="vertical"
       />

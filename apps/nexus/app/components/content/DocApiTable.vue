@@ -675,7 +675,7 @@ async function openTypeReference(typeInfo: RefType) {
         </template>
 
         <template #empty>
-          <TxEmptyState variant="no-data" :title="props.emptyText || labels.empty" size="small" layout="vertical" />
+          <TxEmptyState variant="no-data" :title="props.emptyText || labels.empty" description="" size="small" layout="vertical" />
         </template>
       </TxDataTable>
     </div>
@@ -685,6 +685,7 @@ async function openTypeReference(typeInfo: RefType) {
         <TxEmptyState
           variant="no-data"
           :title="props.emptyText || labels.empty"
+          description=""
           size="small"
           layout="vertical"
         />

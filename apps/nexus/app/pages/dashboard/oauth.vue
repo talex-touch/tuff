@@ -480,6 +480,7 @@ async function copySecret() {
           v-else-if="applications.length <= 0"
           variant="no-data"
           :title="t('dashboard.sections.oauth.empty', 'No OAuth applications yet.')"
+          description=""
           size="small"
           layout="vertical"
         />

@@ -678,6 +678,7 @@ watch(showDetailsOverlay, (open) => {
         v-if="sessionsErrorText"
         variant="error"
         :title="t('dashboard.storage.loadFailed')"
+        description=""
         size="small"
         layout="vertical"
         :primary-action="{ label: t('dashboard.storage.refresh', 'Refresh'), variant: 'flat' }"
@@ -745,6 +746,7 @@ watch(showDetailsOverlay, (open) => {
         class="StorageKeyringEmpty"
         variant="no-data"
         :title="t('dashboard.storage.keyringsEmpty')"
+        description=""
         size="small"
         layout="vertical"
       />

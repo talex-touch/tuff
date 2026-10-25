@@ -614,6 +614,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
         size="small"
         layout="vertical"
         :title="t('dashboard.devices.loadFailed', '加载设备列表失败')"
+        description=""
         :primary-action="{ label: t('dashboard.devices.retry', '重试'), variant: 'flat' }"
         @primary="refresh"
       />

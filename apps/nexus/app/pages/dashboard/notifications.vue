@@ -555,6 +555,7 @@ onMounted(() => {
         class="mt-5"
         variant="error"
         :title="error"
+        description=""
         size="small"
         layout="vertical"
         :primary-action="{ label: t('dashboard.notifications.refresh', '刷新'), variant: 'flat' }"
@@ -566,6 +567,7 @@ onMounted(() => {
         class="mt-5"
         variant="no-data"
         :title="filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知')"
+        description=""
         size="small"
         layout="vertical"
       />
