@@ -98,7 +98,7 @@ export function useDashboardTeamData() {
 }
 
 interface SubscriptionStatus {
-  plan: 'FREE' | 'PRO' | 'PLUS' | 'TEAM' | 'ENTERPRISE'
+  plan: 'FREE' | 'PLUS' | 'PRO' | 'TEAM' | 'ENTERPRISE'
   expiresAt: string | null
   activatedAt: string | null
   isActive: boolean

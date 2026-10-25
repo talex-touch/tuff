@@ -22,10 +22,27 @@ import {
 } from './types'
 import { AccountEvents } from '../transport/events'
 
+/** The plans from the lowest tier to the highest; each includes everything in the ones before it. */
+const PLAN_TIERS: readonly SubscriptionPlan[] = [
+  SubscriptionPlan.FREE,
+  SubscriptionPlan.PLUS,
+  SubscriptionPlan.PRO,
+  SubscriptionPlan.TEAM,
+  SubscriptionPlan.ENTERPRISE,
+]
+
+/** Whether `plan` is `minimum` or a higher tier. A plan this SDK does not know ranks below all. */
+function isPlanAtLeast(plan: SubscriptionPlan, minimum: SubscriptionPlan): boolean {
+  const rank = PLAN_TIERS.indexOf(plan)
+  return rank !== -1 && rank >= PLAN_TIERS.indexOf(minimum)
+}
+
 /**
- * Default plan quotas. The AI limits are the weekly ones Nexus enforces; the deprecated
- * day and month names carry the same numbers. Team members are the seats Nexus's invite check
- * allows (`PLAN_CONFIG` in its team store).
+ * Default plan quotas, lowest tier first. The AI limits are the weekly ones Nexus reports; the
+ * deprecated day and month names carry the same numbers. The AI limits, the three flags Nexus
+ * reports and the team members match its plan catalog (`apps/nexus/server/utils/planCatalog.ts`);
+ * a signed-in host lays Nexus's own values over this table. The upgrade options and the plan
+ * comparison below are written from it.
  */
 export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
   [SubscriptionPlan.FREE]: {
@@ -41,7 +58,7 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
     apiAccess: false,
     advancedAnalytics: false,
   },
-  [SubscriptionPlan.PRO]: {
+  [SubscriptionPlan.PLUS]: {
     aiRequestsPerWeek: 500,
     aiTokensPerWeek: 100000,
     aiRequestsPerDay: 500,
@@ -50,11 +67,11 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
     maxStorageBytes: 1024 * 1024 * 1024, // 1GB
     maxWorkspaces: 5,
     customModelAccess: true,
-    prioritySupport: false,
+    prioritySupport: true,
     apiAccess: true,
     advancedAnalytics: false,
   },
-  [SubscriptionPlan.PLUS]: {
+  [SubscriptionPlan.PRO]: {
     aiRequestsPerWeek: 2000,
     aiTokensPerWeek: 500000,
     aiRequestsPerDay: 2000,
@@ -82,10 +99,10 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
     advancedAnalytics: true,
   },
   [SubscriptionPlan.ENTERPRISE]: {
-    aiRequestsPerWeek: -1, // Unlimited
-    aiTokensPerWeek: -1, // Unlimited
-    aiRequestsPerDay: -1, // Unlimited
-    aiTokensPerMonth: -1, // Unlimited
+    aiRequestsPerWeek: 50000,
+    aiTokensPerWeek: 10000000,
+    aiRequestsPerDay: 50000,
+    aiTokensPerMonth: 10000000,
     maxPlugins: -1, // Unlimited
     maxStorageBytes: -1, // Unlimited
     maxTeamMembers: 10,
@@ -97,59 +114,98 @@ export const DEFAULT_PLAN_QUOTAS: Record<SubscriptionPlan, PlanQuota> = {
   },
 }
 
+/** `500000` as `500K` and `1000000` as `1M`, the way the plan copy writes token counts. */
+function formatCount(value: number): string {
+  if (value >= 1_000_000)
+    return `${value / 1_000_000}M`
+  if (value >= 1000)
+    return `${value / 1000}K`
+  return String(value)
+}
+
+function formatStorage(bytes: number): string {
+  const gigabyte = 1024 * 1024 * 1024
+  return bytes >= gigabyte ? `${bytes / gigabyte}GB` : `${bytes / (1024 * 1024)}MB`
+}
+
+/** A limit as the copy shows it: `-1` is unlimited. */
+function limitText<T>(value: number, format: (value: number) => T): T | 'Unlimited' {
+  return value === -1 ? 'Unlimited' : format(value)
+}
+
+const PLAN_FLAG_LABELS = [
+  ['customModelAccess', 'Custom model access'],
+  ['apiAccess', 'API access'],
+  ['prioritySupport', 'Priority support'],
+  ['advancedAnalytics', 'Advanced analytics'],
+] as const
+
 /**
- * Upgrade options with pricing
+ * A plan's selling points: its limits, then the flags it adds over the plan below it, which it
+ * includes in full.
+ */
+function upgradeFeatures(plan: SubscriptionPlan, extras: readonly string[] = []): string[] {
+  const quota = DEFAULT_PLAN_QUOTAS[plan]
+  const below = DEFAULT_PLAN_QUOTAS[PLAN_TIERS[PLAN_TIERS.indexOf(plan) - 1] ?? SubscriptionPlan.FREE]
+  const features = [
+    `${limitText(quota.aiRequestsPerWeek, String)} AI requests/week`,
+    `${limitText(quota.aiTokensPerWeek, formatCount)} tokens/week`,
+    `${limitText(quota.maxPlugins, String)} plugins`,
+    `${limitText(quota.maxStorageBytes, formatStorage)} storage`,
+  ]
+  if (quota.maxTeamMembers !== undefined)
+    features.push(`Up to ${quota.maxTeamMembers} team members`)
+  for (const [flag, label] of PLAN_FLAG_LABELS) {
+    if (quota[flag] && !below[flag])
+      features.push(label)
+  }
+  return [...features, ...extras]
+}
+
+/**
+ * Upgrade options. They carry no price: Tuff is free during its Pioneer period, and a price
+ * appears here only once Nexus publishes one.
  */
 export const UPGRADE_OPTIONS: UpgradeOption[] = [
   {
-    plan: SubscriptionPlan.PRO,
-    name: 'Pro',
-    description: 'For power users who need more AI capabilities',
-    priceMonthly: 9.99,
-    priceYearly: 99.99,
-    currency: 'USD',
-    features: [
-      '500 AI requests/week',
-      '100K tokens/week',
-      '20 plugins',
-      '1GB storage',
-      'Custom model access',
-      'API access',
-    ],
-  },
-  {
     plan: SubscriptionPlan.PLUS,
     name: 'Plus',
+    description: 'For power users who need more AI capabilities',
+    features: upgradeFeatures(SubscriptionPlan.PLUS),
+  },
+  {
+    plan: SubscriptionPlan.PRO,
+    name: 'Pro',
     description: 'For professionals who demand the best',
-    priceMonthly: 19.99,
-    priceYearly: 199.99,
-    currency: 'USD',
-    features: [
-      '2000 AI requests/week',
-      '500K tokens/week',
-      '50 plugins',
-      '5GB storage',
-      'Priority support',
-      'Advanced analytics',
-    ],
+    features: upgradeFeatures(SubscriptionPlan.PRO),
     recommended: true,
   },
   {
     plan: SubscriptionPlan.TEAM,
     name: 'Team',
     description: 'For teams that collaborate',
-    priceMonthly: 49.99,
-    priceYearly: 499.99,
-    currency: 'USD',
-    features: [
-      '5000 AI requests/week',
-      '1M tokens/week',
-      'Unlimited plugins',
-      '20GB storage',
-      'Up to 5 team members',
-      'Team management',
-    ],
+    features: upgradeFeatures(SubscriptionPlan.TEAM, ['Team management']),
   },
+]
+
+/** The rows of `getPlanComparison()`, each read from `DEFAULT_PLAN_QUOTAS`. */
+const PLAN_COMPARISON_ROWS: ReadonlyArray<{
+  feature: string
+  value: (quota: PlanQuota) => string | number | boolean
+}> = [
+  { feature: 'AI Requests/Week', value: quota => limitText(quota.aiRequestsPerWeek, value => value) },
+  { feature: 'AI Tokens/Week', value: quota => limitText(quota.aiTokensPerWeek, formatCount) },
+  { feature: 'Plugins', value: quota => limitText(quota.maxPlugins, value => value) },
+  { feature: 'Storage', value: quota => limitText(quota.maxStorageBytes, formatStorage) },
+  {
+    feature: 'Workspaces',
+    value: quota => quota.maxWorkspaces === undefined ? false : limitText(quota.maxWorkspaces, value => value),
+  },
+  { feature: 'Team Members', value: quota => quota.maxTeamMembers ?? false },
+  { feature: 'Custom Models', value: quota => quota.customModelAccess },
+  { feature: 'API Access', value: quota => quota.apiAccess },
+  { feature: 'Priority Support', value: quota => quota.prioritySupport },
+  { feature: 'Advanced Analytics', value: quota => quota.advancedAnalytics },
 ]
 
 /** When Nexus starts counting a new week of AI usage: the next Monday, 00:00 UTC. */
@@ -405,36 +461,21 @@ export class AccountSDK {
    * Check if user is Pro or above
    */
   async isProOrAbove(): Promise<boolean> {
-    const plan = await this.getPlan()
-    return [
-      SubscriptionPlan.PRO,
-      SubscriptionPlan.PLUS,
-      SubscriptionPlan.TEAM,
-      SubscriptionPlan.ENTERPRISE,
-    ].includes(plan)
+    return isPlanAtLeast(await this.getPlan(), SubscriptionPlan.PRO)
   }
 
   /**
    * Check if user is Plus or above
    */
   async isPlusOrAbove(): Promise<boolean> {
-    const plan = await this.getPlan()
-    return [
-      SubscriptionPlan.PLUS,
-      SubscriptionPlan.TEAM,
-      SubscriptionPlan.ENTERPRISE,
-    ].includes(plan)
+    return isPlanAtLeast(await this.getPlan(), SubscriptionPlan.PLUS)
   }
 
   /**
    * Check if user is Team or above
    */
   async isTeamOrAbove(): Promise<boolean> {
-    const plan = await this.getPlan()
-    return [
-      SubscriptionPlan.TEAM,
-      SubscriptionPlan.ENTERPRISE,
-    ].includes(plan)
+    return isPlanAtLeast(await this.getPlan(), SubscriptionPlan.TEAM)
   }
 
   /**
@@ -855,18 +896,15 @@ export class AccountSDK {
    * Get plan comparison table
    */
   getPlanComparison(): PlanComparisonItem[] {
-    return [
-      { feature: 'AI Requests/Week', free: 50, pro: 500, plus: 2000, team: 5000, enterprise: 'Unlimited' },
-      { feature: 'AI Tokens/Week', free: '10K', pro: '100K', plus: '500K', team: '1M', enterprise: 'Unlimited' },
-      { feature: 'Plugins', free: 5, pro: 20, plus: 50, team: 100, enterprise: 'Unlimited' },
-      { feature: 'Storage', free: '100MB', pro: '1GB', plus: '5GB', team: '20GB', enterprise: 'Unlimited' },
-      { feature: 'Workspaces', free: 1, pro: 5, plus: 20, team: 50, enterprise: 'Unlimited' },
-      { feature: 'Team Members', free: false, pro: false, plus: false, team: 5, enterprise: 10 },
-      { feature: 'Custom Models', free: false, pro: true, plus: true, team: true, enterprise: true },
-      { feature: 'API Access', free: false, pro: true, plus: true, team: true, enterprise: true },
-      { feature: 'Priority Support', free: false, pro: false, plus: true, team: true, enterprise: true },
-      { feature: 'Advanced Analytics', free: false, pro: false, plus: true, team: true, enterprise: true },
-    ]
+    const quotas = DEFAULT_PLAN_QUOTAS
+    return PLAN_COMPARISON_ROWS.map(({ feature, value }) => ({
+      feature,
+      free: value(quotas[SubscriptionPlan.FREE]),
+      plus: value(quotas[SubscriptionPlan.PLUS]),
+      pro: value(quotas[SubscriptionPlan.PRO]),
+      team: value(quotas[SubscriptionPlan.TEAM]),
+      enterprise: value(quotas[SubscriptionPlan.ENTERPRISE]),
+    }))
   }
 
   /**

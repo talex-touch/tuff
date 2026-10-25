@@ -5,19 +5,11 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { PLAN_CATALOG } from './planCatalog'
 
 const INVITES_TABLE = 'team_invites'
 const TEAM_QUOTA_TABLE = 'team_quotas'
 const TEAM_MEMBER_USAGE_TABLE = 'team_member_usage'
-
-// Plan-based configuration
-export const PLAN_CONFIG = {
-  FREE: { seats: 1, aiRequests: 50, aiTokens: 10000 },
-  PLUS: { seats: 1, aiRequests: 2000, aiTokens: 500000 },
-  PRO: { seats: 1, aiRequests: 500, aiTokens: 100000 },
-  ENTERPRISE: { seats: 10, aiRequests: 50000, aiTokens: 10000000 },
-  TEAM: { seats: 5, aiRequests: 5000, aiTokens: 1000000 },
-} as const
 
 export interface TeamQuota {
   organizationId: string
@@ -180,7 +172,7 @@ function normalizeEmail(value?: string | null): string {
 }
 
 function getPlanConfig(plan?: SubscriptionPlan) {
-  return PLAN_CONFIG[plan || 'FREE'] || PLAN_CONFIG.FREE
+  return PLAN_CATALOG[plan || 'FREE'] || PLAN_CATALOG.FREE
 }
 
 function isInviteExpired(invite: TeamInvite): boolean {
