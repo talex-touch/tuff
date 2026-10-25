@@ -693,6 +693,7 @@ export default {
       loadFailed: 'Could not load these records. Check your connection and retry.',
       keyringCount: 'Keyrings: {count}',
       lastActive: 'Last active',
+      createdAt: 'Created at',
       recoveryEnabled: 'Recovery enabled',
       recoveryMissing: 'Recovery missing',
       syncDetailTitle: 'Sync detail',

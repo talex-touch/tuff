@@ -761,7 +761,7 @@ watch(showDetailsOverlay, (open) => {
               </span>
             </div>
             <p class="StorageKeyringItem-Line">
-              created: {{ formatTime(item.created_at) }}
+              {{ t('dashboard.storage.createdAt', 'Created at') }}: {{ formatTime(item.created_at) }}
             </p>
             <p class="StorageKeyringItem-Line">
               {{ t('dashboard.storage.lastActive', 'Last active') }}:

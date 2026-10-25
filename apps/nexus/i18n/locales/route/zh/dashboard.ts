@@ -690,6 +690,7 @@ export default {
       loadFailed: '这些记录没能加载出来，请检查网络后重试。',
       keyringCount: '密钥：{count}',
       lastActive: '最近活跃',
+      createdAt: '创建时间',
       recoveryEnabled: '已配置恢复码',
       recoveryMissing: '未配置恢复码',
       syncDetailTitle: '同步内容明细',
