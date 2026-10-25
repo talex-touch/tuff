@@ -3,6 +3,7 @@ import type { SliderEmits, SliderProps } from './types'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
 import { stepSpring } from '../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../utils/frame-loop'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { useThumbJelly } from './use-thumb-jelly'
@@ -124,7 +125,7 @@ const overdragEnabled = computed(() => props.overdrag && trackingActive.value &&
 const overshootPx = ref(0)
 let overshootVelocity = 0
 let overshootTs = 0
-let returnFrame = 0
+const returnLoop = createFrameLoop(stepReturn, { firstStep: 1 / 60 })
 
 /** Past an end by `distance` px, drawn at most `limit` px past it, and never quite there. */
 function rubberBand(distance: number, limit: number): number {
@@ -146,31 +147,26 @@ function trackOverdrag(clientX: number, now: number): void {
 }
 
 function cancelReturn(): void {
-  if (returnFrame)
-    cancelAnimationFrame(returnFrame)
-  returnFrame = 0
+  returnLoop.stop()
+}
+
+function stepReturn(dt: number): boolean {
+  const [position, velocity] = stepSpring(overshootPx.value, overshootVelocity, 0, OVERDRAG_SPRING, dt)
+  if (Math.abs(position) < 0.1 && Math.abs(velocity) < 5) {
+    overshootPx.value = 0
+    overshootVelocity = 0
+    return false
+  }
+  overshootPx.value = position
+  overshootVelocity = velocity
+  return true
 }
 
 function springHome(): void {
   cancelReturn()
   if (overshootPx.value === 0)
     return
-  let last = 0
-  const step = (ts: number) => {
-    const dt = last ? Math.min((ts - last) / 1000, 0.064) : 1 / 60
-    last = ts
-    const [position, velocity] = stepSpring(overshootPx.value, overshootVelocity, 0, OVERDRAG_SPRING, dt)
-    if (Math.abs(position) < 0.1 && Math.abs(velocity) < 5) {
-      overshootPx.value = 0
-      overshootVelocity = 0
-      returnFrame = 0
-      return
-    }
-    overshootPx.value = position
-    overshootVelocity = velocity
-    returnFrame = requestAnimationFrame(step)
-  }
-  returnFrame = requestAnimationFrame(step)
+  returnLoop.start()
 }
 
 function dropOverdrag(): void {

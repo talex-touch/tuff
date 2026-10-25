@@ -572,6 +572,9 @@ export default defineNuxtConfig({
       __NEXUS_DEMO_LOADER_BASE__: JSON.stringify(nexusDemoLoaderBase),
     },
     build: {
+      // Dynamic demos and route chunks are fetched on demand; Vite's generated preload map
+      // otherwise re-fetches the entire registry on every prerendered docs page.
+      modulePreload: false,
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {

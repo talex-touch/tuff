@@ -1,6 +1,7 @@
 import { Marked } from 'marked'
 import { describe, expect, it } from 'vitest'
-import { looksLikeInlineMath, mathExtension } from '../src/math-extension'
+import { looksLikeInlineMath } from '../../../../utils/markdown-math-syntax'
+import { mathExtension } from '../src/math-extension'
 
 function render(content: string): string {
   return new Marked({ gfm: true, breaks: true }).use(mathExtension()).parse(content) as string

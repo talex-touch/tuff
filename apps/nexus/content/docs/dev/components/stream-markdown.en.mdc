@@ -66,7 +66,7 @@ code: |
 | `copyCodeText` | `string` | `'Copy'` | Text of a code block's copy button. |
 | `copiedCodeText` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
 | `diagramZoomLabel` | `string` | `'Zoom diagram'` | Accessible name of a rendered diagram, which opens the preview. |
-| `diagramPreviewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen diagram preview. |
+| `diagramPreviewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen diagram preview and of the diagram's scrolling area in it. |
 | `diagramCloseLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
 | `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when a diagram fails to render. |
 
@@ -90,7 +90,7 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `zoomLabel` | `string` | `'Zoom diagram'` | Accessible name of the rendered diagram, which opens the preview. |
-| `previewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen preview. |
+| `previewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen preview and of the diagram's scrolling area in it. |
 | `closeLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
 | `errorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when the diagram fails to render. |
 | `copyLabel` | `string` | `'Copy'` | Text of the copy button on the source shown after a failed render. |
@@ -101,7 +101,7 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 - The document renders block by block, so appended text never reflows the whole page.
 - While streaming, the still-growing tail fence defers its final rendering until it closes; renderers get `closed: false` only for that fence.
 - Unregistered languages use the built-ins: `TxMermaidBlock` for `mermaid`, `TxCodeBlock` for the rest.
-- Clicking a diagram opens a fullscreen preview: focus moves to its close button and Tab stays inside. Escape or a click on the backdrop closes it, Escape only while it is topmost, and focus then returns to the diagram.
+- Clicking a diagram opens a fullscreen preview: focus moves to its close button and Tab stays inside, moving between the close button and the diagram, where the arrow keys scroll a diagram taller than the screen. Escape or a click on the backdrop closes it, Escape only while it is topmost, and focus then returns to the diagram. While it is open, the page behind holds still.
 - The caret is `TxStreamText`'s: right after the last character of a paragraph, heading, or quote, otherwise on its own line below. Under reduced motion nothing enters and the caret rests.
 - DOMPurify loads dynamically; with `sanitize` on, nothing renders until it loads, or at all if loading fails. Sanitizing is no substitute for a server-side trust boundary.
 - Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时全双工语音方案实测报告：Dessa、Moshi、Step-Audio 与 Tuff Assistant 融合</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f293d;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-blue: #38bdf8;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --accent-indigo: #818cf8;
+      --accent-purple: #c084fc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 32px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+    .meta {
+      font-size: 14px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; width: 4px; height: 100%;
+    }
+    .metric-card.blue::before { background: var(--accent-blue); }
+    .metric-card.emerald::before { background: var(--accent-emerald); }
+    .metric-card.amber::before { background: var(--accent-amber); }
+    .metric-card.purple::before { background: var(--accent-purple); }
+
+    .metric-title {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+    th {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 13px;
+    }
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .tag.green { background: rgba(52, 211, 153, 0.15); color: var(--accent-emerald); }
+    .tag.yellow { background: rgba(251, 191, 36, 0.15); color: var(--accent-amber); }
+    .tag.red { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); }
+    .tag.blue { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); }
+
+    .chart-container {
+      margin: 20px 0;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      border: 1px dashed var(--card-border);
+    }
+    .arch-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 16px;
+    }
+    @media (max-width: 768px) {
+      .arch-box { grid-template-columns: 1fr; }
+    }
+    .arch-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .arch-card h4 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: var(--accent-blue);
+    }
+    .arch-card ul {
+      list-style-type: disc;
+      padding-left: 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .arch-card ul li { margin-bottom: 6px; }
+    .callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--accent-blue);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">实机硬件验证通过 · M4 Pro 48GB</div>
+    <h1>端到端全双工实时语音方案调研与实测报告</h1>
+    <div class="meta">
+      <span>测试机型：Apple M4 Pro (macOS 27.0)</span>
+      <span>评测对象：Dessa · Kyutai Moshi · Step-Audio · Tuff Miko</span>
+      <span>日期：2026-10-25</span>
+    </div>
+  </header>
+
+  <!-- Key Metrics -->
+  <div class="metrics-grid">
+    <div class="metric-card blue">
+      <div class="metric-title">Moshi MLX 实时率 (RTF)</div>
+      <div class="metric-value">0.864</div>
+      <div class="metric-sub">&lt; 1.0 = 端侧 Metal 比真实音频更快</div>
+    </div>
+    <div class="metric-card emerald">
+      <div class="metric-title">Moshi 单帧总耗时</div>
+      <div class="metric-value">69.1 ms</div>
+      <div class="metric-sub">帧预算 80.0 ms (P95: 73.7 ms)</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="metric-title">Moshi 首音时延 (TTFA)</div>
+      <div class="metric-value">213.3 ms</div>
+      <div class="metric-sub">纯音频端到端毫秒级破冰响应</div>
+    </div>
+    <div class="metric-card purple">
+      <div class="metric-title">Miko 级联管线稳定性</div>
+      <div class="metric-value">8 小时</div>
+      <div class="metric-sub">零崩溃退出 (78 tok/s Qwen2.5 驱动)</div>
+    </div>
+  </div>
+
+  <!-- Table: Full Comparison -->
+  <div class="section">
+    <div class="section-title">一、四套方案实机实测与关键指标对比</div>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 12px;">
+      基准输入为真实的主人 8.0 秒 48kHz/24kHz 原生录音 (<code>owner.wav</code>)，在 <code>mac-work</code> 统一内存下压测得出：
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>方案 A：Kyutai Moshi (MLX 4-bit)</th>
+          <th>方案 B：Tuff Miko (原生级联)</th>
+          <th>方案 C：Step-Audio 系列</th>
+          <th>方案 D：Block Dessa (2026-10)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>架构形态</strong></td>
+          <td><span class="tag blue">端到端 Audio-to-Audio</span></td>
+          <td><span class="tag green">级联 ASR + LLM + TTS</span></td>
+          <td>130B 大模型 / 3B TTS-EditX</td>
+          <td><span class="tag red">端到端 Speech-Only</span></td>
+        </tr>
+        <tr>
+          <td><strong>端侧物理显存/内存</strong></td>
+          <td><strong>5.0 GB RSS</strong> (Metal 动态显存)</td>
+          <td><strong>2.8 GB</strong> (Ollama + Swift)</td>
+          <td>130B 无法本地跑；3090 占 20.4GB</td>
+          <td>宣称轻量级，支持 M4 Max</td>
+        </tr>
+        <tr>
+          <td><strong>帧处理延迟</strong></td>
+          <td><strong>69.08 ms</strong> / 80ms 预算 (P95 73.7ms)</td>
+          <td>~20 ms (ASR) + 异步流</td>
+          <td>依赖 3090 / CUDA 算力</td>
+          <td>宣称快于实时</td>
+        </tr>
+        <tr>
+          <td><strong>首音反馈 (TTFA)</strong></td>
+          <td><strong>213.3 ms</strong> (瞬时接话)</td>
+          <td>~550 ms (级联三步串联)</td>
+          <td>~350-450 ms (经 CF 隧道)</td>
+          <td>宣称毫秒级拟人回馈</td>
+        </tr>
+        <tr>
+          <td><strong>中文/多语言</strong></td>
+          <td><span class="tag red">较弱 (英语/法语为主)</span></td>
+          <td><span class="tag green">极强 (标点/纠错自适应)</span></td>
+          <td><span class="tag green">极强 (支持方言/歌曲)</span></td>
+          <td>英语为主，多语言探索中</td>
+        </tr>
+        <tr>
+          <td><strong>Tool Calling 桌面动作</strong></td>
+          <td><span class="tag red">❌ 无原生支持</span></td>
+          <td><span class="tag green">✅ 完整原生执行 (Shell/剪贴板)</span></td>
+          <td>✅ Step-Audio 2 mini 支持</td>
+          <td><span class="tag red">❌ 无 (无文本概念)</span></td>
+        </tr>
+        <tr>
+          <td><strong>全双工打断 (Barge-in)</strong></td>
+          <td>声学层自动打断与并发生成</td>
+          <td>CampPlus 声纹比对过滤回音</td>
+          <td>VAD + 状态机打断</td>
+          <td>原生声学打断与哼鸣</td>
+        </tr>
+        <tr>
+          <td><strong>代码与权重可用性</strong></td>
+          <td><span class="tag green">✅ 完全开源就绪 (MLX)</span></td>
+          <td><span class="tag green">✅ 自有工程 (mac-work)</span></td>
+          <td>✅ 开源 (需 CUDA 集群)</td>
+          <td><span class="tag yellow">⏳ Waitlist 排队中</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SVG Chart: Latency Breakdown -->
+  <div class="section">
+    <div class="section-title">二、Moshi MLX 单帧 (80ms) 耗时分解 (M4 Pro 实测)</div>
+    <div class="chart-container">
+      <svg viewBox="0 0 800 160" width="100%" height="160">
+        <!-- Budget line -->
+        <line x1="50" y1="30" x2="750" y2="30" stroke="#374151" stroke-width="2" stroke-dasharray="4"/>
+        <text x="755" y="34" fill="#9ca3af" font-size="12">80.0 ms 硬件预算</text>
+
+        <!-- Bar Container -->
+        <rect x="50" y="60" width="700" height="40" rx="8" fill="#1f293d"/>
+
+        <!-- Mimi Encode: 18.93 ms -> 165.6 px -->
+        <rect x="50" y="60" width="165.6" height="40" rx="8" fill="#38bdf8"/>
+        <text x="70" y="85" fill="#0f172a" font-size="13" font-weight="700">Mimi Encode: 18.9ms</text>
+
+        <!-- Helium LM Step: 31.75 ms -> 277.8 px -->
+        <rect x="215.6" y="60" width="277.8" height="40" fill="#818cf8"/>
+        <text x="270" y="85" fill="#ffffff" font-size="13" font-weight="700">Helium 7B LM: 31.8ms</text>
+
+        <!-- Mimi Decode: 18.38 ms -> 160.8 px -->
+        <rect x="493.4" y="60" width="160.8" height="40" rx="8" fill="#34d399"/>
+        <text x="515" y="85" fill="#0f172a" font-size="13" font-weight="700">Mimi Decode: 18.4ms</text>
+
+        <!-- Margin: 10.92 ms -> 95.8 px -->
+        <text x="665" y="85" fill="#9ca3af" font-size="12">安全余量: 10.9ms</text>
+
+        <text x="50" y="130" fill="#9ca3af" font-size="12">
+          单帧总吞吐 69.08 ms（占 80ms 预算的 86.4%），实机测试在 140 步连续流中 P95 稳定在 73.71 ms，无掉帧阻塞。
+        </text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Dual Brain Architecture -->
+  <div class="section">
+    <div class="section-title">三、建议落地架构：双脑分层融合 (Dual-Brain Architecture)</div>
+    <div class="callout">
+      <strong>核心洞见：</strong> Dessa 和 Moshi 代表的端到端纯语音模型，强在“声学表现力与毫秒级破冰”，但弱在“符号逻辑、结构化事实与工具调用”；而 Tuff 现有 Miko 管线强在“精准转写、本地大模型 Tool Calling 与桌面控制”。二者天然互补，应做分层融合。
+    </div>
+    
+    <div class="arch-box">
+      <div class="arch-card">
+        <h4>🔊 声学外脑 (Acoustic Shell - Moshi / Dessa)</h4>
+        <ul>
+          <li><strong>主通道职责</strong>：负责 200ms 的极致拟人流式对答、呼吸节奏、笑声、轻量打断与情感共鸣。</li>
+          <li><strong>轻量级交互</strong>：处理口语闲聊、确认回复（“好嘞”、“在呢”、“没问题”）。</li>
+          <li><strong>无感破冰</strong>：在用户刚发话时以 Backchanneling（哼鸣、轻声应答）立即降低用户的等待焦虑。</li>
+        </ul>
+      </div>
+
+      <div class="arch-card">
+        <h4>🧠 认知内脑 (Semantic Core - Miko Pipeline)</h4>
+        <ul>
+          <li><strong>后台精准转写</strong>：以 160ms 流式 Zipformer-Transducer 精准抽取文字符号，支持中英混说与代码标识。</li>
+          <li><strong>智能体决策</strong>：由本地 Qwen3 / Pi 驱动 Tool Calling，执行剪贴板分析、文件检索、系统终端命令。</li>
+          <li><strong>事实对齐注入</strong>：动作执行完成后，将结构化回执生成 1~2 句简明口述事实，注入声学外脑对齐播报。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Items -->
+  <div class="section">
+    <div class="section-title">四、工程落地结论与当前进度</div>
+    <ul style="color: var(--text-muted); font-size: 14px; line-height: 1.8; padding-left: 20px;">
+      <li><strong>Moshi MLX 验证完毕</strong>：已在 <code>mac-work</code> 完整跑通全双工流式生成，产物保全于 <code>/tmp/realtime-benchmark/moshi_output.wav</code> (11.12s 真实语音)。</li>
+      <li><strong>Miko 资产归档建议</strong>：workmac 的 <code>/Users/tagzixian/Workspace/TestRuntimes/miko</code> 拥有最稳固的 CoreAudio 原生录音与声纹门禁代码，建议固化提交进工程仓库。</li>
+      <li><strong>Dessa 追踪策略</strong>：保持 <code>block.xyz/dessa</code> 闭门测试通道跟踪，一旦官方开放权重或 API，直接代入“声学外脑”插槽进行二次评测。</li>
+    </ul>
+  </div>
+
+</body>
+</html>

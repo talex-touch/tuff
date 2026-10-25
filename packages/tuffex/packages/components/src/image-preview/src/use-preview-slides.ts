@@ -27,8 +27,8 @@ export interface DrawnSlide extends PreviewSlide {
   key: string
   /** Its picture flies between its thumbnail and the stage. */
   flying: boolean
-  /** Out of sight while a picture flies home. */
-  hidden: boolean
+  /** Fading out with the backdrop while a picture flies home. */
+  fading: boolean
   /** Where the slide sits across the stage; a flight carries itself. */
   style: CSSProperties | undefined
   frame: Record<string, string>
@@ -185,9 +185,9 @@ export function usePreviewSlides(options: PreviewSlidesOptions): PreviewSlides {
         ...slide,
         key: `${slide.index}:${slide.item.url}`,
         flying,
-        // Out of sight while a picture flies home. On the way out they wait off the stage, and a
-        // page turned mid-air slides the next one in.
-        hidden: shown !== null && !flying && closing,
+        // Fading out with the backdrop while a picture flies home, from wherever a page turn left
+        // them. On the way out they wait off the stage, and a page turned mid-air slides the next one in.
+        fading: shown !== null && !flying && closing,
         style: flying ? undefined : slideStyle(slide),
         frame: styles.frame,
         picture: styles.image,

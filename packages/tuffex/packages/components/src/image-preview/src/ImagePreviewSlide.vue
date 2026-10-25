@@ -26,7 +26,7 @@ const emit = defineEmits<{
 <template>
   <div
     class="tx-image-preview__slide"
-    :class="{ 'is-flying': slide.flying, 'is-hidden': slide.hidden }"
+    :class="{ 'is-flying': slide.flying, 'is-fading': slide.fading }"
     :style="slide.style"
     :aria-hidden="slide.offset !== 0 || undefined"
   >
@@ -73,9 +73,9 @@ const emit = defineEmits<{
   inset: 0;
 }
 
-// The neighbours wait out of sight while a picture flies home.
-.tx-image-preview__slide.is-hidden {
-  visibility: hidden;
+// The neighbours fade out with the backdrop while a picture flies home.
+.tx-image-preview__slide.is-fading {
+  opacity: var(--tx-image-preview-mask, 0);
 }
 
 // The window of the picture shown: all of it at rest; in flight, as much as its thumbnail

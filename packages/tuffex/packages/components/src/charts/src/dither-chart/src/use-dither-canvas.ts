@@ -4,6 +4,7 @@ import type { SceneInput } from './geometry'
 import type { PreparedShape } from './paint'
 import type { DitherDataset, DitherHover, DitherPattern } from './types'
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import { useMotionActivity } from '../../../../../../utils/motion-activity'
 import { springSteps } from '../../../../liquid/src/spring'
 import { createDitherScene, finite } from './geometry'
@@ -31,8 +32,8 @@ export function useDitherCanvas(
   let observer: ResizeObserver | undefined
   let themeObserver: MutationObserver | undefined
   let dprMedia: MediaQueryList | undefined
-  let raf: number | undefined
-  let previousTime = 0
+  // The first frame after a start steps nothing; a stall steps at most 0.1 s.
+  const frames = createFrameLoop(onFrame, { firstStep: 0, maxStep: 0.1 })
   let lastPaintTime = 0
   let phase = 0
   let dpr = 1
@@ -47,9 +48,7 @@ export function useDitherCanvas(
   let forcePaint = true
 
   function stopFrame(): void {
-    if (raf !== undefined) cancelAnimationFrame(raf)
-    raf = undefined
-    previousTime = 0
+    frames.stop()
     lastPaintTime = 0
   }
 
@@ -211,11 +210,8 @@ export function useDitherCanvas(
     forcePaint = false
   }
 
-  function onFrame(now: number): void {
-    raf = undefined
-    if (!active.value || !mounted || !documentVisible) return
-    const dt = previousTime ? Math.min(0.1, (now - previousTime) / 1000) : 0
-    previousTime = now
+  function onFrame(dt: number, now: number): boolean {
+    if (!active.value || !mounted || !documentVisible) return false
     const slow = input.value.variant === 'dither-funnel' || input.value.variant === 'dither-storage' || input.value.variant === 'dither-uptime'
     phase += dt * (input.value.variant === 'dither-gauge' ? 3 : input.value.variant === 'dither-growth' || input.value.variant === 'members-growth' ? 1.8 : 1.2)
     let changing = false
@@ -241,7 +237,7 @@ export function useDitherCanvas(
       lastPaintTime = now
       drawStatic()
     }
-    raf = requestAnimationFrame(onFrame)
+    return true
   }
 
   function sync(): void {
@@ -256,9 +252,8 @@ export function useDitherCanvas(
       stopFrame()
       settle()
       drawStatic()
-    } else if (raf === undefined) {
-      previousTime = 0
-      raf = requestAnimationFrame(onFrame)
+    } else {
+      frames.start()
     }
   }
 

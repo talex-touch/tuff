@@ -14,6 +14,8 @@ export interface FlipOverlayStackEntry {
   width: number
   height: number
   visible: boolean
+  /** Flying back to its source, and inert: the pointer goes to the overlay under it. */
+  closing: boolean
   globalMask: boolean
   maskClass: string
 }
@@ -105,6 +107,7 @@ function isSameStackEntry(current: FlipOverlayStackEntry, next: FlipOverlayStack
     && current.width === next.width
     && current.height === next.height
     && current.visible === next.visible
+    && current.closing === next.closing
     && current.globalMask === next.globalMask
     && current.maskClass === next.maskClass
 }

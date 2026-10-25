@@ -2,12 +2,12 @@ import type { ImagePreviewActionEvent, ImagePreviewProps } from '../../image-pre
 
 /**
  * The preview's options the gallery leaves to its host: the actions and their menu, the strip
- * along the bottom, the motion and the materials. The gallery sets the pictures, where each one
- * flies from, and the labels it has props of its own for.
+ * along the bottom, the motion and the materials. The gallery sets the pictures, the ones that
+ * failed, where each one flies from, and the labels it has props of its own for.
  */
 export type ImageGalleryPreviewProps = Omit<
   ImagePreviewProps,
-  'images' | 'origin' | 'label' | 'previousLabel' | 'nextLabel' | 'closeLabel' | 'zoomInLabel' | 'zoomOutLabel' | 'resetLabel' | 'failedText'
+  'images' | 'failed' | 'origin' | 'label' | 'previousLabel' | 'nextLabel' | 'closeLabel' | 'zoomInLabel' | 'zoomOutLabel' | 'resetLabel' | 'failedText'
 >
 
 export interface ImageGalleryItem {

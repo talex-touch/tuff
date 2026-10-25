@@ -94,9 +94,9 @@ function shouldSplitDocsPageBody(path: string) {
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePath.value))
-// SSR and hydration share the complete-body key. SPA navigation uses the static
-// complete response too, without a metadata round trip or an idle timer.
-const DOCS_PAGE_RENDER_BODY_MODE = '1'
+// SSR ships metadata and a stable skeleton; the browser fetches the immutable body JSON after hydration.
+// SPA navigation uses the same static body response, so the full document never inflates prerendered HTML.
+const DOCS_PAGE_RENDER_BODY_MODE = '0'
 const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${DOCS_PAGE_RENDER_BODY_MODE}`)
 // The concepts handbook shows in the components sidebar, so it asks for the same scope DocsSidebar does.
 const docsNavigationScope = computed(() => (

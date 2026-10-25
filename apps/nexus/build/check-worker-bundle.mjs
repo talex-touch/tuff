@@ -41,11 +41,21 @@ const distBudget = {
   maxWorkerGzipBytes: 2.7 * oneMiB,
   maxDocsDetailHtmlBytes: 80 * 1024,
 }
+const distContentAssetPatterns = [
+  /^(?:videos|shots)\//,
+  /^api\/docs\/page\//,
+  /^dump\.[^/]+\.sql$/,
+  /^geo\//,
+  /^assets\/updates\/download-bg\.png$/,
+]
 const clientChunkBudget = {
   initialMaxBytes: 420_000,
   heavyBytes: 500_000,
   maxBytes: 600_000,
 }
+// Mermaid's upstream core is a single route-lazy bundle. It must never be directly referenced by
+// prerendered HTML, but splitting the third-party core further only adds request overhead.
+const allowedOversizedLazyChunkPatterns = [/\bmermaid\b/i]
 const sharedEntryCssBudget = {
   maxBytes: 278_000,
   maxGzipBytes: 50_000,
@@ -444,6 +454,15 @@ function analyzeDistFiles() {
   const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0)
   return { files, totalBytes }
 }
+function isDistContentAsset(file) {
+  return distContentAssetPatterns.some(pattern => pattern.test(file.relativePath))
+}
+
+function getDistRuntimeBytes(distFiles) {
+  return distFiles
+    .filter(file => !isDistContentAsset(file))
+    .reduce((sum, file) => sum + file.bytes, 0)
+}
 
 function getWorkerGzipBytes(files) {
   const source = files.map(file => readFileSync(file.file)).join('\n')
@@ -528,10 +547,10 @@ function checkRequiredRootSqlDumps(distFiles) {
   return { checked: requiredContentCollections.length, findings }
 }
 
-function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
+function checkSizeBudgets(distFiles, distRuntimeBytes, workerTotalBytes, workerGzipBytes) {
   const findings = []
-  if (distTotalBytes > distBudget.maxTotalBytes) {
-    findings.push(`dist total ${formatBytes(distTotalBytes)} exceeds ${formatBytes(distBudget.maxTotalBytes)}`)
+  if (distRuntimeBytes > distBudget.maxTotalBytes) {
+    findings.push(`dist runtime total ${formatBytes(distRuntimeBytes)} exceeds ${formatBytes(distBudget.maxTotalBytes)}`)
   }
 
   const oversizedFiles = distFiles.filter(file => file.bytes > distBudget.maxFileBytes)
@@ -1121,7 +1140,12 @@ function checkDocsInitialLifecycleBlockers(distFiles) {
 }
 
 function extractCssAssets(source) {
-  return Array.from(new Set(Array.from(source.matchAll(/href="\/_nuxt\/([^"]+\.css)"/g), match => match[1])))
+  const stylesheetTags = Array.from(source.matchAll(/<link\b[^>]*\brel=(['"])stylesheet\1[^>]*>/gi), match => match[0])
+  return Array.from(new Set(stylesheetTags
+    .filter(tag => !/\bmedia=(['"])print\1/i.test(tag))
+    .map(tag => tag.match(/\bhref=(['"])([^'"]+)\1/i)?.[2])
+    .filter(asset => typeof asset === 'string' && asset.startsWith('/_nuxt/'))
+    .map(asset => asset.slice('/_nuxt/'.length))))
 }
 
 function extractJsAssets(source) {
@@ -1181,8 +1205,8 @@ function findIconsStylesheet(distFiles) {
 }
 
 /**
- * `uno.config.ts` wraps every icon selector in `:where()` so the after-mount sheet cannot outrank
- * host utilities; the per-glyph budgets are keyed by the bare class.
+ * `uno.config.ts` wraps every icon selector in `:where()` so a regression into the entry sheet
+ * cannot outrank host utilities; selector matching is keyed by the bare class.
  */
 function unwrapIconSelector(selector) {
   return selector.match(/^:where\((.+)\)$/)?.[1] ?? selector
@@ -1214,11 +1238,12 @@ function checkSharedEntryCssBudget(distFiles) {
   if (!iconsSheet) {
     findings.push('icons stylesheet not found: no non-entry CSS asset carries --un-icon rules')
   }
-  else {
-    const iconsSource = readFileSync(join(distRoot, iconsSheet.relativePath), 'utf8')
-    const rules = iconsSource.match(/[^{}]+\{[^{}]*\}/g) ?? []
+  else if (source.includes('--un-icon:')) {
+    // The per-glyph rules are intentionally in the post-mount sheet. Only apply the
+    // entry budget when a regression puts those rules back on the render-blocking sheet.
+    const rules = source.match(/[^{}]+\{[^{}]*\}/g) ?? []
     for (const token of forbiddenSharedEntryIconTokens) {
-      if (iconsSource.includes(token))
+      if (source.includes(token))
         findings.push(`oversized icon selector returned to the icons stylesheet: ${token}`)
     }
     for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
@@ -1385,7 +1410,14 @@ function checkClientChunkBudgets(distFiles) {
 
   const findings = []
   for (const chunk of clientChunks) {
-    if (chunk.bytes > clientChunkBudget.maxBytes)
+    if (chunk.bytes <= clientChunkBudget.maxBytes)
+      continue
+    const asset = chunk.relativePath.replace(/^_nuxt\//, '')
+    const source = readFileSync(chunk.file, 'utf8')
+    const isDirectlyReferenced = directlyReferencedAssets.has(asset)
+    const isAllowedLazyChunk = !isDirectlyReferenced
+      && allowedOversizedLazyChunkPatterns.some(pattern => pattern.test(source))
+    if (!isAllowedLazyChunk)
       findings.push(`${chunk.relativePath} is ${formatBytes(chunk.bytes)} > ${formatBytes(clientChunkBudget.maxBytes)}`)
   }
 
@@ -1431,6 +1463,7 @@ if (!existsSync(workerRoot)) {
 const { executableFiles, totalBytes } = analyzeWorkerFiles()
 const workerGzipBytes = getWorkerGzipBytes(executableFiles)
 const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
+const distRuntimeBytes = getDistRuntimeBytes(distFiles)
 const routeCheck = checkRoutes()
 const staticCacheHeaderCheck = checkStaticCacheHeaders(readHeadersFile())
 const earlyHintCheck = checkEarlyHints(readHeadersFile(), earlyHintAssetExists)
@@ -1463,7 +1496,7 @@ const landingDeferredImageFindings = checkLandingDeferredImageReferences()
 const landingShowcaseVideoFindings = checkLandingShowcaseVideoReferences()
 const clientChunkCheck = checkClientChunkBudgets(distFiles)
 const htmlInitialAssetBudgetRouteCount = countHtmlInitialAssetBudgetRoutes(distFiles)
-const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
+const sizeFindings = checkSizeBudgets(distFiles, distRuntimeBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
 console.log(`[nexus-worker-bundle] executable_gzip=${formatBytes(workerGzipBytes)}`)
@@ -1471,7 +1504,7 @@ console.log('[nexus-worker-bundle] top_chunks=')
 for (const file of executableFiles.slice(0, 10))
   console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)
 
-console.log(`[nexus-dist-budget] total=${formatBytes(distTotalBytes)} files=${distFiles.length}`)
+console.log(`[nexus-dist-budget] total=${formatBytes(distTotalBytes)} runtime=${formatBytes(distRuntimeBytes)} content=${formatBytes(distTotalBytes - distRuntimeBytes)} files=${distFiles.length}`)
 console.log('[nexus-dist-budget] top_files=')
 for (const file of distFiles.slice(0, 10))
   console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)

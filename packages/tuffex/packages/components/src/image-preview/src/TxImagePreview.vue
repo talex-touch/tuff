@@ -170,6 +170,8 @@ const { rendered, closing, arrived, flight, zIndex, enter, leave, requestClose, 
   },
   onLeave: () => {
     gestures.cancel()
+    // A page half turned goes back as the neighbour fades: the host keeps the page that left.
+    gestures.keepPage()
     closeMenu(false)
   },
   resetGestures: () => gestures.resetAll(),
@@ -198,6 +200,7 @@ const { actionList, actionLabel, actionDisabled, runAction, statusText, statusLe
 })
 
 const actionMenu = ref<InstanceType<typeof ImagePreviewMenu> | null>(null)
+const toolbarRef = ref<InstanceType<typeof ImagePreviewToolbar> | null>(null)
 const {
   menuOpen,
   menuArmed,
@@ -393,7 +396,8 @@ const minimapPicture = computed<MinimapPicture | null>(() => {
     return null
   return { src: item.url, size, turns: gestures.turns.value, view, stage: stageSize.value }
 })
-const minimapWanted = computed(() => chromeWanted.value && minimapPicture.value !== null)
+// Springing back to the whole picture, it fades as the spring sets off, following the view meanwhile.
+const minimapWanted = computed(() => chromeWanted.value && minimapPicture.value !== null && !gestures.fitting.value)
 const minimapLevel = transition.level(() => minimapWanted.value, 180)
 // It fades out on what it showed last: before a turn, a page turned, or the whole picture again.
 const minimapShown = shallowRef<MinimapPicture | null>(null)
@@ -402,6 +406,12 @@ watch(minimapPicture, (picture) => {
     minimapShown.value = picture
 }, { immediate: true })
 const minimapDragging = ref(false)
+
+// A wheel over the minimap zooms about the middle of the stage, which its frame is drawn around,
+// rather than about the corner of the picture under the pointer.
+function onMinimapWheel(event: WheelEvent): void {
+  gestures.onWheel(event, { x: stageSize.value.width / 2, y: stageSize.value.height / 2 })
+}
 
 watch(current, () => closeMenu(false))
 
@@ -446,6 +456,9 @@ function onKeydown(event: KeyboardEvent): void {
     actionMenu.value?.onKey(event)
     return
   }
+  // The zoom menu's keys reach it wherever focus is; the others still work the picture under it.
+  if (toolbarRef.value?.onMenuKey(event))
+    return
   // A keyboard has nothing to tap the chrome back with.
   chromeHidden.value = false
   if (event.key === 'Tab') {
@@ -611,6 +624,7 @@ defineExpose({
       />
 
       <ImagePreviewToolbar
+        ref="toolbarRef"
         :scale="gestures.view.value?.k"
         :presets="gestures.presets.value"
         :formatter="scaleFormatter"
@@ -640,6 +654,7 @@ defineExpose({
         :material="controlMaterial"
         @look="gestures.lookAt"
         @drag="minimapDragging = $event"
+        @wheel="onMinimapWheel"
       />
 
       <button

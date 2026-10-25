@@ -5,7 +5,7 @@ import type { VelocityTracker } from '../../../../utils/gesture'
 import type { CardSpreadEmits, CardSpreadProps, CardSpreadSlotProps } from './types'
 import { computed, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
-import { createVelocityTracker, projectMomentum, rubberband } from '../../../../utils/gesture'
+import { createVelocityTracker, projectMomentum, tether } from '../../../../utils/gesture'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import { resolveTransition } from '../../liquid/src/spring'
 import { SPREAD_DEFAULTS, spreadGeometry } from './geometry'
@@ -117,10 +117,6 @@ let drag: {
 function releaseSpring(flick: boolean): Spring {
   const omega = Math.sqrt(cardSpring.value.stiffness / cardSpring.value.mass) * resolveTransition(cardSpring.value).duration / props.duration
   return { stiffness: omega * omega, damping: 2 * (flick ? 0.8 : 1) * omega }
-}
-/** 1:1 between `min` and `max`, resisting past either, the more the further it is pulled. */
-function tether(value: number, min: number, max: number, size: number) {
-  return value < min ? min + rubberband(value - min, size) : value > max ? max + rubberband(value - max, size) : value
 }
 function paint(state: NonNullable<typeof loose>) {
   // Shifted by what the lift moves the grabbed point, so that point stays under the pointer.

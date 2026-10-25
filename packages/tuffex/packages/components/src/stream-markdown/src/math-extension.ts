@@ -7,9 +7,6 @@ import { createMathExtension } from '../../../../utils/markdown-math-syntax'
  * their false-positive guards live in `utils/markdown-math-syntax.ts`.
  */
 
-export { looksLikeInlineMath } from '../../../../utils/markdown-math-syntax'
-export type { MathToken } from '../../../../utils/markdown-math-syntax'
-
 function renderTex(tex: string, displayMode: boolean): string {
   try {
     return katex.renderToString(tex, {

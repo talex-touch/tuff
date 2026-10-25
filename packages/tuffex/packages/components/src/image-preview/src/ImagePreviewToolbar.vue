@@ -120,6 +120,19 @@ function choose(key: string): void {
   else
     emit('zoomTo', Number(key))
 }
+
+defineExpose({
+  /**
+   * A key pressed while the zoom menu is open and focus is not in it: the menu's keys still go to
+   * the menu. Returns whether it took it.
+   */
+  onMenuKey(event: KeyboardEvent): boolean {
+    if (!menuOpen.value || menuRef.value?.holdsFocus())
+      return false
+    menuRef.value?.onKey(event)
+    return event.defaultPrevented
+  },
+})
 </script>
 
 <template>

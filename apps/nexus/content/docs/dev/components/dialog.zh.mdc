@@ -277,7 +277,8 @@ code: |
 - 四个变体都 teleport 到 `body`，由共享 z-index manager 分配层级。
 - 不派发事件、不提供插槽，只通过必填的 `close` 回调关闭。
 - Escape 在离场动画后调用 `close()`；`TxBottomDialog` 的关闭按钮同样只取消，不触发任何行动行。
-- 卸载时焦点回到打开前的元素；标题与正文用 `useId()` 生成的 id 关联 `aria-labelledby` / `aria-describedby`。
+- 打开期间 Tab 留在面板内；一开始关闭焦点就回到打开前的元素（未经关闭就被卸载的，在卸载时回去），离场期间面板为 `inert`，指针与按键交给下面的一层。标题与正文用 `useId()` 生成的 id 关联 `aria-labelledby` / `aria-describedby`。
+- `TxBottomDialog` 与 `TxTouchTip` 打开期间锁住页面滚动。
 - `message` 按纯文本渲染并保留换行；`messageHtml` 只接受经 `asTrustedDialogHtml()` 标记的值，该函数本身不做清洗。
 - 正文设置 `overflow-wrap: anywhere` 并自行限高滚动：长 token 不会撑宽面板，长内容不会被裁切。
 - 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在内容之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。

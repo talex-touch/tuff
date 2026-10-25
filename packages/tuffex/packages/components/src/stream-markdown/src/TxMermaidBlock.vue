@@ -11,6 +11,7 @@ let mermaidIdSeq = 0
 <script setup lang="ts">
 import { hasDocument } from '@talex-touch/utils/env'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../../../utils/body-scroll-lock'
 import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCodeBlock from './TxCodeBlock.vue'
@@ -64,6 +65,9 @@ const overlayRef = ref<HTMLElement | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 // Focus moves into the preview, stays there, and goes back to the diagram once it closes.
 const focusReturn = createFocusReturn()
+// Whether the preview holds a page scroll lock. A close in the same tick as an unmount never
+// reaches the watcher below, so the unmount lets go of this one, and of no other overlay's.
+let holdsScrollLock = false
 let renderToken = 0
 
 /**
@@ -140,17 +144,29 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
+function releaseScrollLock(): void {
+  if (!holdsScrollLock)
+    return
+  holdsScrollLock = false
+  unlockBodyScroll()
+}
+
 watch(zoomOpen, (open) => {
   if (!hasDocument())
     return
   if (open) {
     overlayZIndex.value = zIndexAllocator.next()
     focusReturn.save()
+    // The page behind holds still: the wheel over the dim, or past the end of a tall diagram,
+    // would scroll it.
+    lockBodyScroll()
+    holdsScrollLock = true
     document.addEventListener('keydown', handleKeydown)
     void nextTick(() => closeRef.value?.focus({ preventScroll: true }))
   }
   else {
     document.removeEventListener('keydown', handleKeydown)
+    releaseScrollLock()
     focusReturn.restore()
   }
 })
@@ -158,6 +174,7 @@ watch(zoomOpen, (open) => {
 onBeforeUnmount(() => {
   if (hasDocument())
     document.removeEventListener('keydown', handleKeydown)
+  releaseScrollLock()
   focusReturn.restore()
 })
 </script>
@@ -195,9 +212,8 @@ onBeforeUnmount(() => {
       <pre class="tx-mermaid-block__draft"><code>{{ code }}</code></pre>
     </div>
 
-    <Teleport to="body">
+    <Teleport v-if="zoomOpen" to="body">
       <div
-        v-if="zoomOpen"
         ref="overlayRef"
         class="tx-mermaid-block__overlay"
         role="dialog"
@@ -215,7 +231,14 @@ onBeforeUnmount(() => {
         >
           ×
         </button>
-        <div class="tx-mermaid-block__zoomed" v-html="svg" />
+        <!-- Focusable, so the keys scroll a diagram taller than the screen. -->
+        <div
+          class="tx-mermaid-block__zoomed"
+          role="region"
+          :aria-label="previewLabel"
+          tabindex="0"
+          v-html="svg"
+        />
       </div>
     </Teleport>
   </div>

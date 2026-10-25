@@ -83,3 +83,11 @@ export function createFocusReturn(): FocusReturn {
     },
   }
 }
+
+/**
+ * For a modal dialog's <Transition> `@before-leave`: inert while it fades, so it takes neither the
+ * pointer nor focus, and no longer counts as the dialog on top for `isTopmostModalDialog`.
+ */
+export function markDialogLeaving(el: Element): void {
+  el.setAttribute('inert', '')
+}

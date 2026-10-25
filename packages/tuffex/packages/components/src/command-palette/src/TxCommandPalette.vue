@@ -2,9 +2,9 @@
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
-import { computed, nextTick, ref, useId, watch } from 'vue'
-import { trapTab } from '../../../../utils/focus-trap'
-import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { createFocusReturn, markDialogLeaving, trapTab } from '../../../../utils/focus-trap'
+import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxIcon } from '../../icon'
 
@@ -63,6 +63,7 @@ watch(
 const activeIndex = ref(0)
 const zIndex = ref(zIndexAllocator.get())
 const composing = ref(false)
+const focusReturn = createFocusReturn()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -121,6 +122,7 @@ watch(
   async (v, oldValue) => {
     if (v) {
       zIndex.value = zIndexAllocator.next()
+      focusReturn.save()
       emit('open')
       activeIndex.value = firstEnabledIndex()
       await nextTick()
@@ -130,6 +132,7 @@ watch(
     }
     if (oldValue !== undefined)
       emit('close')
+    focusReturn.restore()
     // Mirror the reset to v-model:query listeners; onInput is the only other writer
     // and it always emits, so a close must too or the parent keeps the stale string.
     if (query.value !== '')
@@ -159,15 +162,41 @@ function selectItem(item: CommandPaletteItem) {
     close()
 }
 
+function isComposing(e: KeyboardEvent): boolean {
+  return e.isComposing || e.keyCode === 229 || composing.value
+}
+
 /**
  * aria-modal="true" promises the background is inert, so Tab must cycle inside
- * the dialog, as it does in TxModal and TxDrawer. The options are <button>s held
- * out of the tab order with tabindex="-1", so Tab passes them by.
+ * the dialog, as it does in TxModal and TxDrawer, and Escape closes it wherever
+ * focus is. Heard on the document: a click on the panel's background leaves
+ * focus on the page behind, where the overlay hears no keys. The options are
+ * <button>s held out of the tab order with tabindex="-1", so Tab passes them by.
  */
-function trapFocus(event: KeyboardEvent): void {
-  if (overlayRef.value)
-    trapTab(event, overlayRef.value, { fallback: inputRef.value })
+function handleKeydown(e: KeyboardEvent): void {
+  if (!visible.value || e.defaultPrevented || (e.key !== 'Tab' && e.key !== 'Escape'))
+    return
+  if (!isTopmostModalDialog(overlayRef.value))
+    return
+  if (e.key === 'Tab') {
+    if (overlayRef.value)
+      trapTab(e, overlayRef.value, { fallback: inputRef.value })
+    return
+  }
+  if (isComposing(e))
+    return
+  e.preventDefault()
+  close()
 }
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  focusReturn.restore()
+})
 
 function onInput(value: string) {
   query.value = value
@@ -257,14 +286,7 @@ function onCompositionEnd() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.isComposing || e.keyCode === 229 || composing.value)
-    return
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    close()
-    return
-  }
-  if (!filteredCommands.value.length)
+  if (isComposing(e) || !filteredCommands.value.length)
     return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -294,6 +316,7 @@ function onKeydown(e: KeyboardEvent) {
       enter-active-class="tx-command-palette-enter-active tx-command-palette-moving"
       leave-active-class="tx-command-palette-leave-active tx-command-palette-moving"
       :duration="340"
+      @before-leave="markDialogLeaving"
     >
       <div
         v-if="visible"
@@ -305,7 +328,6 @@ function onKeydown(e: KeyboardEvent) {
         aria-modal="true"
         :aria-label="ariaLabel"
         @click.self="close"
-        @keydown.tab="trapFocus"
       >
         <div
           class="tx-command-palette__panel"

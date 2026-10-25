@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { AvatarProps } from './types'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxIcon } from '../../icon'
 
 defineOptions({
@@ -21,6 +21,11 @@ interface Emits {
 }
 
 const imageError = ref(false)
+
+// A new `src` gets its own try: the failure was the image before it.
+watch(() => props.src, () => {
+  imageError.value = false
+})
 
 const sizePresets = new Set(['small', 'medium', 'large', 'xlarge'])
 

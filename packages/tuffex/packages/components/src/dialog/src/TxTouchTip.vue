@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TouchTipButton, TouchTipProps } from './types'
 import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../../../utils/body-scroll-lock'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
@@ -36,10 +38,12 @@ const wholeDom = ref<HTMLElement | null>(null)
 // The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
 const entering = ref(true)
 const closing = ref(false)
+// From the moment the close starts, 60ms before `closing`: the tip is inert from then on.
+const leaving = ref(false)
 const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const messageId = useId()
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -88,14 +92,22 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
   btn.value.loading = false
 }
 
-function scrollListener(): void {
-  window.scrollTo({ top: 0 })
+/** aria-modal="true" promises the page behind is inert, so Tab stays inside. */
+function keepTab(event: KeyboardEvent): void {
+  if (wholeDom.value)
+    trapTab(event, wholeDom.value)
 }
 
+/**
+ * Gone for the keys and the pointer at once: focus goes back, the tip is inert while it leaves,
+ * and a second Escape reaches what is under it.
+ */
 async function forClose(): Promise<void> {
-  if (!wholeDom.value)
+  if (!wholeDom.value || leaving.value)
     return
 
+  leaving.value = true
+  focusReturn.restore()
   await sleep(60)
 
   // The panel grows a touch while its parts fade (see `--closing`).
@@ -108,22 +120,20 @@ async function forClose(): Promise<void> {
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
-  previouslyFocusedElement = document.activeElement as HTMLElement
+  focusReturn.save()
 
   if (wholeDom.value) {
     wholeDom.value.setAttribute('tabindex', '-1')
     wholeDom.value.focus()
   }
 
-  window.addEventListener('scroll', scrollListener)
+  // The page holds still while the tip is open.
+  lockBodyScroll()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', scrollListener)
-
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
+  unlockBodyScroll()
+  focusReturn.restore()
 })
 </script>
 
@@ -136,6 +146,7 @@ onUnmounted(() => {
         class="tx-touch-tip"
         :class="{ 'tx-touch-tip-moving': entering || closing, 'tx-touch-tip--closing': closing }"
         :style="{ zIndex }"
+        :inert="leaving || undefined"
       >
         <div
           ref="wholeDom"
@@ -145,7 +156,8 @@ onUnmounted(() => {
           aria-modal="true"
           :aria-labelledby="title ? titleId : undefined"
           :aria-describedby="message || messageHtml ? messageId : undefined"
-          @keydown.esc="forClose"
+          @keydown.esc.prevent="forClose"
+          @keydown.tab="keepTab"
         >
           <TxBaseSurface
             class="tx-touch-tip__surface"

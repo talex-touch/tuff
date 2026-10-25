@@ -92,7 +92,7 @@ code: |
 
 ## 概述
 
-- 遮罩 teleport 到 `body`，打开时从共享 z-index manager 取得新层级，关闭时由 `v-if` 移除。
+- 遮罩 teleport 到 `body`，打开时从共享 z-index manager 取得新层级，关闭时由 `v-if` 移除。淡出的 200 ms 里遮罩是 `inert` 的：指针与焦点落到下面一层，它也不再算作最上层，下面的抽屉这时就响应 Escape。
 - 遮罩为 `role="dialog"`、`aria-modal="true"`；打开时获得焦点，关闭或卸载时焦点回到打开前的元素，不滚动页面。
 - Tab 与 Shift+Tab 在最上层的模态框内循环；即使焦点落到 `body`，底层抽屉也不会响应 Escape。
 - Tab 只停在显示出来、排在 Tab 顺序里的控件上：隐藏的、`inert` 里的与 `tabindex="-1"` 的都跳过，可编辑区域（`contenteditable`）也算一站。

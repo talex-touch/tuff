@@ -344,6 +344,10 @@ onUnmounted(() => {
   &--visible {
     pointer-events: auto;
     visibility: visible;
+    // Opening shows it at once. A transition from `hidden` is still `hidden` at its start, where
+    // the drawer is focused, and focusing a hidden element does nothing. `none`, not a zero
+    // duration, which would keep a delay a host puts in `--tx-drawer-transition`.
+    transition: none;
 
     .tx-drawer__mask {
       opacity: 1;

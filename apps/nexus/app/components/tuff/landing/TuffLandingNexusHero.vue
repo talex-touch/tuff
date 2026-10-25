@@ -861,6 +861,11 @@ onBeforeUnmount(() => {
     transform 720ms cubic-bezier(0.22, 0.61, 0.36, 1);
   transition-delay: var(--d, 0ms);
 }
+/* The SSR heading is the first meaningful paint; never hide it behind hydration. */
+.ExpHero-Title.reveal {
+  opacity: 1;
+  transform: none;
+}
 
 .is-visible .reveal {
   opacity: 1;

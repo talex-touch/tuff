@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { getCurrentScope, onBeforeUnmount, onScopeDispose, ref, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../utils/frame-loop'
 import { responseSpring } from '../../../../utils/gesture'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 
@@ -74,8 +75,6 @@ export function usePreviewTransition(options: PreviewTransitionOptions): Preview
   let fade: { from: number, start: number, ms: number, ease: (t: number) => number } | null = null
   let done: (() => void) | null = null
   const levels: Level[] = []
-  let frame = 0
-  let last = 0
 
   function hasFrames(): boolean {
     return typeof requestAnimationFrame !== 'undefined'
@@ -106,10 +105,7 @@ export function usePreviewTransition(options: PreviewTransitionOptions): Preview
     return moving
   }
 
-  function tick(now: number): void {
-    frame = 0
-    const dt = Math.min(0.064, Math.max(0, (now - last) / 1000))
-    last = now
+  const loop = createFrameLoop((dt, now) => {
     if (spring) {
       const [p, v] = stepSpring(presence.value, spring.velocity, goal, spring.params, dt)
       if (Math.abs(goal - p) < 5e-4 && Math.abs(v) < 5e-3) {
@@ -128,15 +124,12 @@ export function usePreviewTransition(options: PreviewTransitionOptions): Preview
         presence.value = fade.from + (goal - fade.from) * fade.ease(t)
     }
     const levelsMoving = stepLevels(dt)
-    if (spring || fade || levelsMoving)
-      frame = requestAnimationFrame(tick)
-  }
+    return !!(spring || fade || levelsMoving)
+  })
 
   function run(): void {
-    if (frame || !hasFrames())
-      return
-    last = performance.now()
-    frame = requestAnimationFrame(tick)
+    if (hasFrames())
+      loop.start()
   }
 
   function startFade(ms: number, ease: (t: number) => number): void {
@@ -220,11 +213,7 @@ export function usePreviewTransition(options: PreviewTransitionOptions): Preview
     return value
   }
 
-  onBeforeUnmount(() => {
-    if (frame && typeof cancelAnimationFrame !== 'undefined')
-      cancelAnimationFrame(frame)
-    frame = 0
-  })
+  onBeforeUnmount(() => loop.stop())
 
   return { presence, kind, running, enter, leave, finish, reset, level }
 }

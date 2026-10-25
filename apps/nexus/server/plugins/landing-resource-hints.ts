@@ -1,4 +1,4 @@
-import { stripLandingImagePrefetches, stripLandingModulepreloads } from '../utils/landingResourceHints'
+import { stripLandingImagePrefetches, stripStaticModulepreloads } from '../utils/landingResourceHints'
 
 export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('render:response', (response, context) => {
@@ -10,6 +10,6 @@ export default defineNitroPlugin((nitroApp) => {
       return
 
     response.body = stripLandingImagePrefetches(response.body, context.event.path)
-    response.body = stripLandingModulepreloads(response.body, context.event.path)
+    response.body = stripStaticModulepreloads(response.body, context.event.path)
   })
 })

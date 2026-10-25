@@ -5,6 +5,7 @@ import type { RoamBounds, RoamBox, RoamState } from './roam'
 import type { MapBaseProps, MapLabels } from './types'
 import { geoPath } from 'd3-geo'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, useId, watch } from 'vue'
+import { drawnScale } from '../../../../../../utils/drawn-scale'
 import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import {
   createVelocityTracker,
@@ -400,7 +401,10 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
     if (!el)
       return { x: 0, y: 0 }
     const rect = el.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    // Under a scaling transform or CSS zoom the map is drawn at another size than it is laid
+    // out: read the point in its own, unscaled pixels.
+    const scale = drawnScale(el, rect)
+    return { x: (event.clientX - rect.left) / scale.x, y: (event.clientY - rect.top) / scale.y }
   }
 
   function beginGesture(): void {

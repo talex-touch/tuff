@@ -17,6 +17,18 @@ export function rubberband(offset: number, dimension: number, constant = 0.55): 
 }
 
 /**
+ * 1:1 between `min` and `max`, resisting past either, the more the further it
+ * is pulled; `size` is what the resistance is measured against.
+ */
+export function tether(value: number, min: number, max: number, size: number): number {
+  if (value < min)
+    return min + rubberband(value - min, size)
+  if (value > max)
+    return max + rubberband(value - max, size)
+  return value
+}
+
+/**
  * How far a flick at `velocity` (units per second) carries under scroll-like
  * deceleration: 0.998 is a scroll view's, 0.99 a snappier stop. Snap to the
  * target nearest the release point plus this, not to the one nearest the release.

@@ -22,6 +22,8 @@ import type { BottomDialogProps, DialogButton } from './types'
  * @component
  */
 import { computed, onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../../../utils/body-scroll-lock'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxSpinner } from '../../spinner'
@@ -69,7 +71,7 @@ const baseZIndex = ref(zIndexAllocator.get())
 const zIndex = computed(() => baseZIndex.value + (props.index ?? 0))
 const titleId = useId()
 const messageId = useId()
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 
 /**
  * Pending auto-click countdown timers, tracked so they can be cancelled
@@ -172,40 +174,42 @@ watchEffect((onCleanup) => {
   btnArray.value = array
 })
 
-/**
- * Prevents page scrolling while dialog is open.
- */
-function scrollListener(): void {
-  window.scrollTo({ top: 0 })
-}
-
 onMounted(() => {
   baseZIndex.value = zIndexAllocator.next()
-  previouslyFocusedElement = document.activeElement as HTMLElement
+  focusReturn.save()
   if (wholeDom.value) {
     wholeDom.value.focus()
   }
-  window.addEventListener('scroll', scrollListener)
+  // The page holds still while the dialog is open.
+  lockBodyScroll()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', scrollListener)
+  unlockBodyScroll()
   clearCountdownTimers()
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
+  focusReturn.restore()
 })
 
+/** aria-modal="true" promises the page behind is inert, so Tab stays inside. */
+function keepTab(event: KeyboardEvent): void {
+  if (wholeDom.value)
+    trapTab(event, wholeDom.value)
+}
+
 /**
- * Closes the dialog with animation.
+ * Closes the dialog with animation. It is gone for the keys and the pointer at once: focus goes
+ * back, the sheet is inert while it drops, a second Escape reaches what is under it, and no
+ * countdown fires.
  */
 async function forClose(): Promise<void> {
-  if (wholeDom.value) {
-    // The sheet drops at once and its parts fade from 50ms on (see `--closing`).
-    closing.value = true
-    await sleep(150)
-    props.close()
-  }
+  if (!wholeDom.value || closing.value)
+    return
+  clearCountdownTimers()
+  focusReturn.restore()
+  // The sheet drops at once and its parts fade from 50ms on (see `--closing`).
+  closing.value = true
+  await sleep(150)
+  props.close()
 }
 </script>
 
@@ -224,7 +228,9 @@ async function forClose(): Promise<void> {
         tabindex="-1"
         :aria-labelledby="title ? titleId : undefined"
         :aria-describedby="message ? messageId : undefined"
-        @keydown.esc="forClose"
+        :inert="closing || undefined"
+        @keydown.esc.prevent="forClose"
+        @keydown.tab="keepTab"
       >
         <TxBaseSurface
           class="tx-bottom-dialog__surface"
