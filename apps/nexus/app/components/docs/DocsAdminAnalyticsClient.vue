@@ -838,7 +838,7 @@ watch(
         </div>
         <p class="docs-analytics-toolbar__meta docs-analytics-toolbar__meta--compact">
           {{ docsAnalyticsOverviewLabel }}
-          <span v-if="docsAnalyticsUpdatedAt"> · {{ isZh ? '更' : 'Up' }} {{ new Date(docsAnalyticsUpdatedAt).toLocaleTimeString() }}</span>
+          <span v-if="docsAnalyticsUpdatedAt"> · {{ isZh ? '更' : 'Up' }} {{ new Date(docsAnalyticsUpdatedAt).toLocaleTimeString(isZh ? 'zh-CN' : 'en-US') }}</span>
         </p>
         <p v-if="docsAnalyticsError" class="docs-analytics-toolbar__error">
           {{ docsAnalyticsError }}

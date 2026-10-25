@@ -13,7 +13,8 @@ definePageMeta({
   layout: 'dashboard',
 })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const { user, error: userError, refresh: refreshUser } = useAuthUser()
 const { isAdmin } = useAccountRole()
 
@@ -230,7 +231,7 @@ function toggleScope(scopeId: string, enabled: boolean) {
 function formatDate(date: string | null): string {
   if (!date)
     return '-'
-  return new Date(date).toLocaleDateString()
+  return new Date(date).toLocaleDateString(localeTag.value)
 }
 
 function isExpired(date: string | null): boolean {

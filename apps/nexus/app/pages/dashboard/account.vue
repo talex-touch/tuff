@@ -23,7 +23,8 @@ const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dial
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const toast = useToast()
 const { user, refresh } = useAuthUser()
 const { subscription, pending: subscriptionPending } = useSubscriptionData()
@@ -201,7 +202,7 @@ function formatAccountDate(value: string | null | undefined) {
   if (!value)
     return '-'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(localeTag.value)
 }
 
 async function copyAccountDetail(item: AccountDetailItem) {
@@ -520,7 +521,7 @@ function formatLoginClient(value: string | null | undefined) {
 
 function formatHistoryTime(value: string) {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(localeTag.value)
 }
 </script>
 

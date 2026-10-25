@@ -52,7 +52,8 @@ interface ListOauthApplicationsResponse {
   applications: OauthApplication[]
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const { user } = useAuthUser()
 
 const { data: teamData, pending: teamPending } = useTypedFetch<TeamSummaryResponse>('/api/dashboard/team')
@@ -131,7 +132,7 @@ function formatDateTime(value: string | null): string {
     return '-'
   }
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(localeTag.value)
 }
 
 async function fetchApplications() {

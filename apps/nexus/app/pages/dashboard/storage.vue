@@ -13,7 +13,8 @@ definePageMeta({
 })
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 
 interface StorageStatusResponse {
   plan_tier: string
@@ -255,7 +256,7 @@ function formatTime(value: string | null): string {
   if (!Number.isFinite(timestamp)) {
     return value
   }
-  return new Date(timestamp).toLocaleString()
+  return new Date(timestamp).toLocaleString(localeTag.value)
 }
 
 function formatRelativeTime(value: string): string {

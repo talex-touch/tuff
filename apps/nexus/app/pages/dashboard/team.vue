@@ -104,7 +104,8 @@ interface Pagination {
   totalPages: number
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const { data, pending, refresh } = useTypedFetch<{ team: DashboardTeam }>('/api/dashboard/team')
 
 const team = computed(() => data.value?.team)
@@ -174,19 +175,19 @@ function formatDateTime(value: string | null) {
   if (!value)
     return '-'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(localeTag.value)
 }
 
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== 'number')
     return '0'
-  return new Intl.NumberFormat().format(value)
+  return new Intl.NumberFormat(localeTag.value).format(value)
 }
 
 function formatCreditAmount(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value))
     return '0'
-  return new Intl.NumberFormat().format(Math.abs(Math.round(value)))
+  return new Intl.NumberFormat(localeTag.value).format(Math.abs(Math.round(value)))
 }
 
 function resolveCreditUserLabel(item: { name?: string | null; email?: string | null; userId?: string | null }) {
