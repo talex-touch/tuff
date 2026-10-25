@@ -103,6 +103,7 @@ vi.mock('./plugin', () => ({
       this.loadState = state
       this.loadError = loadError
     }
+    setStorageSyncPolicy(_mode: string, _manifest?: unknown) {}
   }
 }))
 
