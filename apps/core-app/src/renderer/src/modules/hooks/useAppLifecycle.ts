@@ -39,7 +39,18 @@ export function useAppLifecycle() {
       return
     }
 
-    checkApplicationUpgrade()
+    void (async () => {
+      const result = await checkApplicationUpgrade()
+      // UpdateService is a foreground module, but the renderer can finish its warmup before
+      // that module has registered its transport handlers. One bounded retry turns the old
+      // startup `No handler registered for update:service:check` into a normal check without
+      // delaying first paint or retrying a real network failure indefinitely.
+      if (result !== undefined) return
+      const { promise, resolve } = Promise.withResolvers<void>()
+      setTimeout(resolve, 1_000)
+      await promise
+      await checkApplicationUpgrade()
+    })()
   }
 
   /**
