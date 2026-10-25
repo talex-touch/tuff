@@ -75,6 +75,15 @@ export class EverythingBackendService {
     const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
     return [
       envPath,
+      this.resourcesPath
+        ? path.join(
+            this.resourcesPath,
+            'node_modules',
+            '@talex-touch',
+            'tuff-native',
+            'everything.js'
+          )
+        : null,
       this.resourcesPath ? path.join(this.resourcesPath, 'native', 'everything.node') : null,
       this.resourcesPath ? path.join(this.resourcesPath, 'everything', 'everything.node') : null,
       path.join(this.cwd(), 'resources', 'native', 'everything.node'),
