@@ -79,7 +79,7 @@ const creditsRemaining = computed(() => {
   const used = userBalance.value?.used ?? 0
   return Math.max(0, quota - used)
 })
-const creditsLabel = computed(() => new Intl.NumberFormat().format(creditsRemaining.value))
+const creditsLabel = computed(() => new Intl.NumberFormat(locale.value).format(creditsRemaining.value))
 
 const fullPath = computed(() => route.fullPath || '/')
 const authRedirectTarget = computed(() => {

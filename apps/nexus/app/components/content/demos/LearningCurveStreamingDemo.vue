@@ -62,7 +62,7 @@ const viewText = computed(() => {
   if (!view.value)
     return copy.value.all
   const [from, to] = view.value
-  const range = `${Math.round(from).toLocaleString()} – ${Math.round(to).toLocaleString()}`
+  const range = `${Math.round(from).toLocaleString(locale.value)} – ${Math.round(to).toLocaleString(locale.value)}`
   return to >= newest.value ? `${range} · ${copy.value.follow}` : range
 })
 

@@ -82,7 +82,7 @@ defineExpose({ resetDemo })
       value="requests"
       name="city"
       :labels="copy.labels"
-      :value-format="(value: number) => `${value.toLocaleString()} ${copy.unit}`"
+      :value-format="(value: number) => `${value.toLocaleString(locale)} ${copy.unit}`"
       @bubble-click="selected = $event"
     />
     <p v-if="world" class="map-demo__selection" aria-live="polite">

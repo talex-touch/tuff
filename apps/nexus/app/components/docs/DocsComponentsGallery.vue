@@ -837,7 +837,7 @@ const donutRows = computed(() => donutHover.value
   ? [{
       name: 'Installs',
       color: categoricalVar(donutHover.value.index),
-      value: `${donutHover.value.value.toLocaleString()} · ${Math.round(donutHover.value.value / donutTotal * 100)}%`,
+      value: `${donutHover.value.value.toLocaleString(localeKey.value)} · ${Math.round(donutHover.value.value / donutTotal * 100)}%`,
     }]
   : [])
 
@@ -861,7 +861,7 @@ const sparkRows = computed(() => sparkIndex.value === null
   : sparkSeries.map(series => ({
       label: series.label,
       color: series.color,
-      value: (series.data[sparkIndex.value!]?.value ?? 0).toLocaleString(),
+      value: (series.data[sparkIndex.value!]?.value ?? 0).toLocaleString(localeKey.value),
     })))
 const sparkTimeLabel = computed(() =>
   sparkIndex.value === null ? '' : `Mar ${sparkIndex.value + 1}`)

@@ -33,7 +33,7 @@ export function createGovernanceFormatters(
   locale: () => string,
 ) {
   function formatNumber(value: number): string {
-    return new Intl.NumberFormat().format(Math.round(value));
+    return new Intl.NumberFormat(locale()).format(Math.round(value));
   }
 
   function formatBytes(value: number): string {
