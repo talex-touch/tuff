@@ -36,6 +36,8 @@ export default {
     geoMap: {
       empty: '暂无地理位置数据',
       failed: '地图加载失败',
+      label: '世界地图',
+      instructions: '拖拽或用方向键平移。双指捏合、按住 Control 或 Command 滚动，或按加号减号缩放。双击或按 0 复位。',
     },
   },
   common: {

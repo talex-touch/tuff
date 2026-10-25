@@ -43,7 +43,7 @@ code: |
 
 `yAxisMinInterval` 丢掉比间隔更近的刻度，适合离散计数；`tooltipFooter` 在 tooltip 行列表下方追加一行说明。
 
-:::TuffDemoWrapper{demo="TimeseriesChartAxisDemo" code-lang="vue" title="Integer ticks + tooltip footer" description="yAxisMinInterval 1 只留下整数刻度，tooltipFooter 补一行说明。"}
+:::TuffDemoWrapper{demo="TimeseriesChartAxisDemo" code-lang="vue" title="整数刻度 + tooltip 页脚" description="yAxisMinInterval 1 只留下整数刻度，tooltipFooter 补一行说明。"}
 ---
 code: |
   <script setup lang="ts">
@@ -76,11 +76,11 @@ code: |
 | `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
 | `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
 | `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
-| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。 |
+| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。不传 `xAxisTickFormat` 时，时间刻度用 d3 的默认格式，是英文。 |
 | `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
 | `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
-| `tooltipMaxItems` | `number` | `10` | 超出折叠为「+N more」。 |
+| `tooltipMaxItems` | `number` | `10` | 超出的序列收成一行，文案来自 `labels.more`，默认「+N more」。 |
 | `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
 | `tooltipFooter` | `string` | — | 在 tooltip 行列表下方追加一行文本。 |
 | `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | tooltip 碰撞边界；默认沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交后翻转。类型 `TimeseriesTooltipBoundary` 从 `@talex-touch/tuffex/charts` 入口导出。 |
@@ -92,10 +92,10 @@ code: |
 | `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
 | `ariaDescription` | `string` | — | 图表的无障碍名称（svg `role="group"`，按键说明作为描述）；缺省用 `labels.chart`。 |
 | `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | 聚簇标签文案。 |
-| `timestampFormat` | `(ts: number) => string` | 紧凑本地化 | tooltip 时间行格式。 |
+| `timestampFormat` | `(ts: number) => string` | 紧凑格式，按浏览器语言 | tooltip 时间行与读屏播报的时间格式。页面语言可能与浏览器不同时，传入按页面语言格式化的函数。 |
 | `zoom` | `boolean` | `true` | 在图上缩放、平移时间轴；`false` 固定视图，此时挂上 `time-range-change` 仍可刷选。 |
 | `window` | `[number, number] \| null` | `null` | 显示的时间窗口（毫秒时间戳），支持 `v-model:window`；`null` 显示全部。 |
-| `labels` | `Partial<ChartLabels>` | 英文 | 无障碍名称与按键说明：`chart`、`instructions`、`zoomInstructions`。 |
+| `labels` | `Partial<TimeseriesChartLabels>` | 英文 | 无障碍名称与按键说明（`chart`、`instructions`、`zoomInstructions`），加载骨架的名称 `loading`，以及 tooltip 收起多余序列的那一行 `more`。 |
 
 ### TimeseriesChart Events
 
@@ -111,7 +111,7 @@ code: |
 
 ### 部署标记 + SLO 线
 
-:::TuffDemoWrapper{demo="TimeseriesChartMarkersDemo" code-lang="vue" title="Markers + Thresholds" description="后两个标记相距很近，被聚成一簇。"}
+:::TuffDemoWrapper{demo="TimeseriesChartMarkersDemo" code-lang="vue" title="标记 + 阈值线" description="后两个标记相距很近，被聚成一簇。"}
 ---
 code: |
   <script setup lang="ts">
@@ -137,7 +137,7 @@ code: |
 
 ### 渐变 + 两端虚线
 
-:::TuffDemoWrapper{demo="TimeseriesChartGradientDemo" code-lang="vue" title="Gradient + Incomplete" description="首尾各三小时是不完整周期。"}
+:::TuffDemoWrapper{demo="TimeseriesChartGradientDemo" code-lang="vue" title="渐变 + 不完整区间" description="首尾各三小时是不完整周期。"}
 ---
 code: |
   <template>
@@ -156,7 +156,7 @@ code: |
 
 ### 按天堆叠
 
-:::TuffDemoWrapper{demo="TimeseriesChartBarDemo" code-lang="vue" title="Stacked bars" description="三条序列堆在同一根柱上。"}
+:::TuffDemoWrapper{demo="TimeseriesChartBarDemo" code-lang="vue" title="堆叠柱" description="三条序列堆在同一根柱上。"}
 ---
 code: |
   <template>
@@ -173,7 +173,7 @@ code: |
 
 ### 拖拽选段
 
-:::TuffDemoWrapper{demo="TimeseriesChartRangeDemo" code-lang="vue" title="Brush selection" description="拖拽后下方显示所选区间。"}
+:::TuffDemoWrapper{demo="TimeseriesChartRangeDemo" code-lang="vue" title="刷选" description="拖拽后下方显示所选区间。"}
 ---
 code: |
   <template>
@@ -188,7 +188,7 @@ code: |
 
 ### 点击隐藏 + 悬停高亮
 
-:::TuffDemoWrapper{demo="TimeseriesChartLegendDemo" code-lang="vue" title="Legend interplay" description="点图例项切换显隐，悬停高亮对应序列。"}
+:::TuffDemoWrapper{demo="TimeseriesChartLegendDemo" code-lang="vue" title="图例联动" description="点图例项切换显隐，悬停高亮对应序列。"}
 ---
 code: |
   <template>
@@ -214,7 +214,7 @@ code: |
 
 ### 骨架轮播
 
-:::TuffDemoWrapper{demo="TimeseriesChartLoadingDemo" code-lang="vue" title="Loading skeleton" description="loading 循环开关，交替展示 line / bar 两种骨架。"}
+:::TuffDemoWrapper{demo="TimeseriesChartLoadingDemo" code-lang="vue" title="加载骨架" description="loading 循环开关，交替展示 line / bar 两种骨架。"}
 ---
 code: |
   <template>

@@ -84,6 +84,8 @@ function chartData(variant: MonoChartVariant): MonoChartData {
 }
 const nestedTree = computed<MonoChartData>(() => ({ tree: [{ label: copy.value.primary, children: [{ label: copy.value.items[0]!, value: 45 }, { label: copy.value.items[1]!, value: alternate.value ? 60 : 30 }] }, { label: copy.value.items[2]!, value: alternate.value ? 35 : 15 }, { label: copy.value.items[3]!, value: 10 }] }))
 const timeData = computed<MonoChartData>(() => ({ series: [{ name: copy.value.primary, data: sample.value.primary.map((value, index) => ({ x: Date.UTC(2026, 9, index + 1), value })) }] }))
+const dayFormat = computed(() => new Intl.DateTimeFormat(locale.value, { month: 'short', day: 'numeric', timeZone: 'UTC' }))
+const formatDay = (x: string | number) => typeof x === 'number' ? dayFormat.value.format(x) : x
 const periods = computed(() => [{ value: 'all', label: copy.value.all }, { value: 'recent', label: copy.value.recent, range: [Date.UTC(2026, 9, 3), Date.UTC(2026, 9, 6)] as [number, number] }])
 const datasetPeriods = computed(() => [{ value: 'primary', label: copy.value.primary }, { value: 'baseline', label: copy.value.baseline }])
 const gaugeDatasets = computed<Record<string, MonoChartData>>(() => ({ primary: { items: [{ label: copy.value.primary, value: sample.value.primary.at(-1)!, max: 100 }] }, baseline: { items: [{ label: copy.value.baseline, value: sample.value.secondary.at(-1)!, max: 100 }] } }))
@@ -126,7 +128,7 @@ const gaugeDatasets = computed<Record<string, MonoChartData>>(() => ({ primary: 
 </div>
     <TxMonoChart v-if="requestedUser" :key="requestedUser" variant="github-activity" :username="requestedUser" :title="requestedUser" :aria-label="requestedUser" :labels="labels" :locale="locale" :width="680" />
     <div class="mono-demo__grid">
-      <TxMonoChart variant="mono-rounded-area" :title="copy.range" :aria-label="copy.range" :data="timeData" :periods="periods" :labels="labels" :locale="locale" :width="360" :height="180" />
+      <TxMonoChart variant="mono-rounded-area" :title="copy.range" :aria-label="copy.range" :data="timeData" :periods="periods" :labels="labels" :locale="locale" :format-x="formatDay" :width="360" :height="180" />
       <TxMonoChart variant="mono-rounded-treemap" :title="copy.nested" :aria-label="copy.nested" :data="nestedTree" :labels="labels" :locale="locale" :width="360" :height="180" />
       <TxMonoChart variant="mono-rounded-gauge-arc" :title="copy.metric" :aria-label="copy.metric" :periods="datasetPeriods" :period-data="gaugeDatasets" :labels="labels" :locale="locale" :width="360" :height="180" />
       <TxMonoChart variant="mono-rounded-line" :title="copy.empty" :aria-label="copy.empty" :data="{}" :labels="labels" :locale="locale" :width="360" :height="180" />

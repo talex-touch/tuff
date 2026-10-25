@@ -2,16 +2,39 @@
 import type { SankeyLinkData, SankeyNodeData } from '@talex-touch/tuffex/charts'
 import { TxSankeyChart } from '@talex-touch/tuffex/charts'
 import { computed, shallowRef } from 'vue'
+import { SANKEY_ZH_LABELS } from './chart-demo-locale'
 
-const nodes: SankeyNodeData[] = [
-  { name: 'Organic', value: 5200 },
-  { name: 'Referral', value: 2100 },
-  { name: 'Ads', value: 1400 },
-  { name: 'Landing', value: 8700, tooltipData: { Sessions: 8700, 'Bounce rate': '34%' } },
-  { name: 'Signup', value: 2600, isDrillable: true, childCount: 4 },
-  { name: 'Docs', value: 3100 },
-  { name: 'Bounce', value: 3000 },
-]
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? {
+      names: ['自然搜索', '外部引荐', '广告', '落地页', '注册', '文档', '跳出'],
+      sessions: '会话',
+      bounceRate: '跳出率',
+      hint: '拖动节点可重新排列；点击节点或连线。',
+      clicked: (kind: 'node' | 'link', text: string) => `${kind === 'node' ? '节点' : '连线'}：${text}`,
+      labels: SANKEY_ZH_LABELS,
+    }
+  : {
+      names: ['Organic', 'Referral', 'Ads', 'Landing', 'Signup', 'Docs', 'Bounce'],
+      sessions: 'Sessions',
+      bounceRate: 'Bounce rate',
+      hint: 'Drag a node to move it; click nodes or links.',
+      clicked: (kind: 'node' | 'link', text: string) => `${kind}: ${text}`,
+      labels: undefined,
+    })
+
+const nodes = computed<SankeyNodeData[]>(() => {
+  const [organic, referral, ads, landing, signup, docs, bounce] = copy.value.names
+  return [
+    { name: organic!, value: 5200 },
+    { name: referral!, value: 2100 },
+    { name: ads!, value: 1400 },
+    { name: landing!, value: 8700, tooltipData: { [copy.value.sessions]: 8700, [copy.value.bounceRate]: '34%' } },
+    { name: signup!, value: 2600, isDrillable: true, childCount: 4 },
+    { name: docs!, value: 3100 },
+    { name: bounce!, value: 3000 },
+  ]
+})
 
 // Landing's outflows add up to its inflow (2600 + 3100 + 3000 = 8700): a node
 // whose links carry less than its own value leaves a bare tail where d3 lays
@@ -25,18 +48,12 @@ const links: SankeyLinkData[] = [
   { source: 3, target: 6, value: 3000 },
 ]
 
-const { locale } = useI18n()
-const copy = computed(() => locale.value === 'zh'
-  ? {
-      hint: '拖动节点可重新排列；点击节点或连线。',
-      node: '节点',
-      link: '连线',
-      labels: { instructions: '按回车键选中节点。按住 Alt 加上下方向键可移动它；也可拖动节点重新排列，双击背景复位。' },
-    }
-  : { hint: 'Drag a node to move it; click nodes or links.', node: 'node', link: 'link', labels: undefined })
+function formatValue(value: number): string {
+  return value.toLocaleString(locale.value)
+}
 
 const lastClick = shallowRef<{ kind: 'node' | 'link', text: string } | null>(null)
-const readout = computed(() => lastClick.value ? `${copy.value[lastClick.value.kind]}: ${lastClick.value.text}` : copy.value.hint)
+const readout = computed(() => lastClick.value ? copy.value.clicked(lastClick.value.kind, lastClick.value.text) : copy.value.hint)
 </script>
 
 <template>
@@ -46,8 +63,9 @@ const readout = computed(() => lastClick.value ? `${copy.value[lastClick.value.k
       :links="links"
       :height="320"
       :labels="copy.labels"
+      :format-value="formatValue"
       @node-click="lastClick = { kind: 'node', text: $event.name }"
-      @link-click="lastClick = { kind: 'link', text: String($event.value) }"
+      @link-click="lastClick = { kind: 'link', text: formatValue($event.value) }"
     />
     <p class="sankey-demo__readout">
       {{ readout }}

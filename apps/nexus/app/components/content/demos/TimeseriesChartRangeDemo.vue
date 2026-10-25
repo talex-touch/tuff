@@ -1,35 +1,43 @@
 <script setup lang="ts">
 import type { TimeseriesData } from '@talex-touch/tuffex/charts'
 import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { chartTimeFormats, TIMESERIES_ZH_LABELS } from './chart-demo-locale'
 
 const start = Date.UTC(2026, 7, 30)
 const halfHour = 1_800_000
 
-const data: TimeseriesData[] = [{
-  name: 'Requests',
-  data: Array.from({ length: 48 }, (_, i) => [
-    start + i * halfHour,
-    Math.round(300 + 120 * Math.sin(i / 5)),
-  ]),
-}]
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { requests: '请求', hint: '在图上横向拖拽，选出一段时间。', labels: TIMESERIES_ZH_LABELS }
+  : { requests: 'Requests', hint: 'Drag horizontally on the plot to select a range.', labels: undefined })
+const time = computed(() => chartTimeFormats(locale.value))
+
+const requests = Array.from({ length: 48 }, (_, i): [number, number] => [
+  start + i * halfHour,
+  Math.round(300 + 120 * Math.sin(i / 5)),
+])
+const data = computed<TimeseriesData[]>(() => [{ name: copy.value.requests, data: requests }])
 
 const range = ref<[number, number] | null>(null)
 
 function onRange(from: number, to: number): void {
   range.value = [from, to]
 }
-
-function fmt(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-}
 </script>
 
 <template>
   <div class="ts-range-demo">
-    <TxTimeseriesChart :data="data" :height="260" @time-range-change="onRange" />
+    <TxTimeseriesChart
+      :data="data"
+      :height="260"
+      :x-axis-tick-format="time.tick"
+      :timestamp-format="time.stamp"
+      :labels="copy.labels"
+      @time-range-change="onRange"
+    />
     <p class="ts-range-demo__readout">
-      {{ range ? `${fmt(range[0])} → ${fmt(range[1])}` : 'Drag horizontally on the plot to select a range.' }}
+      {{ range ? `${time.clock(range[0])} → ${time.clock(range[1])}` : copy.hint }}
     </p>
   </div>
 </template>

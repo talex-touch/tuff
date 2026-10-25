@@ -60,7 +60,7 @@ code: |
 :::
 
 ### 头尾插槽与遮罩
-`header`、`footer` 插槽接收 `close`；`maskEffect` 设置遮罩效果，`panelTransparent` 调薄面板材质下的底色，透出更多背部内容。
+`header`、`footer` 插槽接收 `close`；`maskEffect` 设置遮罩效果。面板默认是实色的 `pure`；换成 `refraction` 等半透明材质后，`panelTransparent` 调薄材质下的底色，透出更多背部内容。
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |
@@ -70,6 +70,7 @@ code: |
       title="发布策略"
       size="min(460px, 92vw)"
       mask-effect="opacity"
+      surface="refraction"
       panel-transparent
     >
       <template #header="{ close }">
@@ -249,13 +250,13 @@ rows:
     type: "'blur' | 'opacity' | 'transparent'"
     default: "'blur'"
   - name: panelTransparent
-    description: '调薄面板材质下的底色，透出更多背部内容（见 `surfaceOpacity`）。'
+    description: '调薄半透明材质下的底色，透出更多背部内容（见 `surfaceOpacity`）；`pure`、`flat` 面板保持不透明。'
     type: 'boolean'
     default: 'false'
   - name: surface
-    description: '面板材质。'
+    description: '面板材质。`pure` 以 `surfaceColor` 实色铺底；`mask`、`blur`、`acrylic`、`glass`、`refraction` 透出后面的页面。'
     type: "'pure' | 'mask' | 'blur' | 'glass' | 'refraction' | 'acrylic' | 'mica' | 'flat' | 'plain'"
-    default: "'refraction'"
+    default: "'pure'"
   - name: surfaceColor
     description: '材质下垫的底色；留空时用 `--tx-drawer-panel-background`，跟随主题。'
     type: 'string'
@@ -327,7 +328,7 @@ rows:
 - 关闭按钮、遮罩与 Escape 先询问 `beforeClose`，再派发 `update:visible(false)` 与 `close`；`closeOnClickMask`、`closeOnPressEscape` 分别关闭后两条路径。
 - 只有最上层的模态对话框响应 Tab 与 Escape，已被其他控件处理的按键会被忽略，因此上层确认框独占这些按键。
 - 关闭后根节点仍留在 DOM 中，并设置 `inert` 与 `aria-hidden`。
-- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在头部、正文与底栏之下，默认 `refraction`。面板滑入滑出时滤镜采到的是它上一帧所在位置的背景，所以滑动期间材质走运动降级，滑动结束后恢复。
+- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在头部、正文与底栏之下，默认 `pure`，以 `--tx-drawer-panel-background` 实色铺底。换成 `blur`、`acrylic`、`glass` 或 `refraction` 时，面板滑入滑出期间滤镜采到的是它上一帧所在位置的背景，所以滑动期间材质走运动降级，滑动结束后恢复。
 - 高对比度下遮罩只变暗、不再模糊，面板材质自行变为实色。
 
 ## 技术实现

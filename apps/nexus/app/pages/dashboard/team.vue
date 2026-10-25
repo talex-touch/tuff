@@ -200,6 +200,15 @@ function usagePercent(item: { used: number; quota: number }) {
   return Math.min(100, Math.round((item.used / item.quota) * 100))
 }
 
+// The trend's days are UTC calendar days ('YYYY-MM-DD'), so they are read and written in UTC.
+const creditTrendLabels = computed(() => {
+  const dayLabel = new Intl.DateTimeFormat(localeTag.value, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return (creditTrend.value?.days ?? []).map((day) => {
+    const date = new Date(`${day}T00:00:00Z`)
+    return Number.isNaN(date.getTime()) ? day : dayLabel.format(date)
+  })
+})
+
 const creditTrendSparkline = computed(() => {
   const values = creditTrend.value?.values ?? []
   if (!values.length) {
@@ -880,7 +889,7 @@ onBeforeUnmount(() => {
                 <LazyDashboardSparklineChart
                   class="mt-3"
                   :values="creditTrend.values"
-                  :labels="creditTrend.days"
+                  :labels="creditTrendLabels"
                   :height="96"
                   color="var(--tx-color-primary, #409eff)"
                   :aria-label="t('dashboard.team.credits.trendLabel', '最近趋势')"

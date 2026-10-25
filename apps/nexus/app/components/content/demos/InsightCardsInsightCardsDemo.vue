@@ -22,14 +22,6 @@ const anomalyHover = ref<number | null>(null)
 const allocation = ref('van')
 const asked = ref<string | null>(null)
 
-const compareSeries = [
-  { id: 'mint', data: MINT, color: 'var(--tx-bui-orange)' },
-  { id: 'pistachio', data: PISTACHIO, color: 'var(--tx-bui-accent)' },
-]
-const anomalySeries = computed(() => [
-  { id: metric.value, data: metric.value === 'spend' ? SPEND : USAGE, color: 'var(--tx-bui-red)' },
-])
-
 const segments = computed(() => zh.value
   ? [
       { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: '当前库存价值的贡献快照。' },
@@ -70,6 +62,15 @@ function formatMetric(value: number): string {
 const copy = computed(() => zh.value
   ? { mint: '薄荷脆片', pistachio: '开心果', snapshot: '快照', trend: '趋势快照', time: '今天 12:00', spend: '支出', usage: '用电', freezer: '冷柜支出偏高', spent: '已花费', vs: '对比近 3 个月', threshold: '阈值' }
   : { mint: 'Mint Chip', pistachio: 'Pistachio', snapshot: 'Snapshot', trend: 'Trend snapshot', time: 'Today, 12:00', spend: 'Spend', usage: 'Usage', freezer: 'High freezer spend', spent: 'spent', vs: 'vs 3 months', threshold: 'threshold' })
+
+// Labelled, so the chart reads each value out under its name rather than its id.
+const compareSeries = computed(() => [
+  { id: 'mint', label: copy.value.mint, data: MINT, color: 'var(--tx-bui-orange)' },
+  { id: 'pistachio', label: copy.value.pistachio, data: PISTACHIO, color: 'var(--tx-bui-accent)' },
+])
+const anomalySeries = computed(() => [
+  { id: metric.value, label: metric.value === 'spend' ? copy.value.spend : copy.value.usage, data: metric.value === 'spend' ? SPEND : USAGE, color: 'var(--tx-bui-red)' },
+])
 
 const compareRows = computed(() => compareHover.value === null
   ? []

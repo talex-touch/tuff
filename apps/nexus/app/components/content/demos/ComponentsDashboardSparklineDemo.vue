@@ -11,6 +11,7 @@ const labels = computed(() => (locale.value === 'zh'
       search: '搜索',
       storage: '同步',
       healthy: '运行正常',
+      weekdays: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
     }
   : {
       title: 'Dashboard trend chart',
@@ -18,6 +19,7 @@ const labels = computed(() => (locale.value === 'zh'
       search: 'Search',
       storage: 'Sync',
       healthy: 'Healthy',
+      weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     }))
 </script>
 
@@ -42,7 +44,7 @@ const labels = computed(() => (locale.value === 'zh'
         </div>
         <DashboardSparklineChart
           :values="[18, 24, 21, 36, 42, 38, 54]"
-          :labels="['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']"
+          :labels="labels.weekdays"
           :height="116"
           color="var(--tx-color-primary, #409eff)"
           :aria-label="labels.search"

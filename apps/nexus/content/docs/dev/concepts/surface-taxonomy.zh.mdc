@@ -20,13 +20,13 @@ description: 为什么专业桌面界面需要物理材质？解析 refraction�
 
 | 材质模式 | 渲染管线（默认参数） | 物理隐喻 | 适用场景与开销 |
 |---|---|---|---|
-| `refraction`（默认） | 玻璃层：SVG 位移贴图让 R、G、B 三个通道各自错开（色散）；其上叠背景模糊与饱和度滤镜层，外加 1px 折射描边。卡片预设（`TxCard`、`TxFlipOverlay`）的滤镜层还带按光源位置排布的高光 | 冰晶 / 棱镜 | 所有带材质层组件的默认材质：卡片、翻转浮层、模态框、抽屉与各类弹出面板。两层都采样背景，开销最高；运动中分层降级 |
+| `refraction`（默认） | 玻璃层：SVG 位移贴图让 R、G、B 三个通道各自错开（色散）；其上叠背景模糊与饱和度滤镜层，外加 1px 折射描边。卡片预设（`TxCard`、`TxFlipOverlay`）的滤镜层还带按光源位置排布的高光 | 冰晶 / 棱镜 | 所有带材质层组件的默认材质：卡片、翻转浮层、模态框与各类弹出面板（抽屉除外，见下文）。两层都采样背景，开销最高；运动中分层降级 |
 | `glass` | 玻璃层：同样的位移贴图与色散，再 `saturate(1.8)`；在 Safari、Firefox 上退回 `blur(10px) saturate(1.8) brightness(1.06)` 与 1px 高光外环 | 棱镜玻璃 | 要折光、不要雾化的小块面板，背景简单时上面的字才读得清。只有一层采样背景，开销低于 `refraction` |
 | `acrylic` | 三倍宽的背景模糊（30px），饱和度 ×1.2、亮度 ×1.06；其上一层 0.6 的色膜，色膜的 alpha 带 140px 平铺的分形噪点（88%～100%） | 漫反射亚克力 | 系统侧边栏、状态面板一类大面积的次级面板。采样背景，模糊半径是 `blur` 的三倍，开销随之上升 |
 | `mica` | 不透明底：表面色混入 5% 主色，上面两道锚定视口（`background-attachment: fixed`）的宽幅色晕，视口左上角是 12% 的主色，右下角是 8% 的相邻色相（主色色相 +40°）；不读背景 | 云母薄片 | 不滚动的窗口基底底板。不采样背景，开销极低；但容器每次滚动都要重绘，不要用在会滚动的底板上 |
 | `mask` | 半透明色膜（不透明度 0.75），不做模糊 | 墨色薄膜 | `blur`、`glass`、`acrylic` 运动时的默认降级态；高密度列表行。不采样背景，开销低 |
 | `blur` | `backdrop-filter: blur(10px) saturate(1.5)`，叠一层 10% 的浮层底色 | 雾化毛玻璃 | 低端核显与省电环境：`autoDetect` 在省电或帧预算 `reduced` 时把 `refraction`、`glass`、`acrylic` 换成它。采样一次背景，开销中等 |
-| `flat`（同 `pure`） | 不透明实色（`--tx-fill-color-lighter`），背景完全不透出 | 坚硬塑料底板 | 高对比度模式（除 `plain` 外的材质都按它绘制）、帧预算 `minimal` 时的降级目标、要求完全不透明的底盘。开销最低 |
+| `flat`（同 `pure`） | 不透明实色（`--tx-fill-color-lighter`），背景完全不透出 | 坚硬塑料底板 | `TxDrawer` 面板的默认材质；高对比度模式（除 `plain` 外的材质都按它绘制）、帧预算 `minimal` 时的降级目标、要求完全不透明的底盘。开销最低 |
 | `plain` | 不画任何材质层，只保留圆角与溢出裁切；高对比度下也不加底色 | 空无一物 | 只需要圆角与裁切的逻辑布局容器。没有开销 |
 
 :::TuffDemoWrapper{demo="ConceptSurfaceModesDemo"}
@@ -36,9 +36,11 @@ description: 为什么专业桌面界面需要物理材质？解析 refraction�
 
 在 TuffEx 体系中，**所有带有材质层（Surface）的容器组件，默认材质一律且必须为 `refraction`（琉光/折射）**。
 
-这是整个系统的统一视觉灵魂。无论是详情卡片、翻转浮层、模态框与抽屉，还是弹出层、下拉与右键菜单、选择器面板，都必须保持高阶的晶莹折射质感，绝不允许各自为政。
+这是整个系统的统一视觉灵魂。无论是详情卡片、翻转浮层与模态框，还是弹出层、下拉与右键菜单、选择器面板，都必须保持高阶的晶莹折射质感，绝不允许各自为政。
 
-组件的默认值都照这条铁律取 `refraction`：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxDrawer`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及 `TxPopover`、`TxTooltip`、`TxDropdownMenu` 与 `TxContextMenu`（及各自的子菜单）、`TxSelect`、`TxSearchSelect` 的 `panelBackground`（它们都经 `TxBaseAnchor` 渲染）。
+组件的默认值都照这条铁律取 `refraction`：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及 `TxPopover`、`TxTooltip`、`TxDropdownMenu` 与 `TxContextMenu`（及各自的子菜单）、`TxSelect`、`TxSearchSelect` 的 `panelBackground`（它们都经 `TxBaseAnchor` 渲染）。
+
+经用户确认的例外是 `TxDrawer`（2026-10-25）：面板默认 `pure` 实色，后面的页面不透进正文与表单；要琉光时传 `surface="refraction"`。
 
 core-app 的 CoreBox 同样铺 `refraction`，但它是透明窗口，模糊来自窗口自身的系统材质（macOS 的 vibrancy、Windows 的 Mica）。页面里的 `backdrop-filter` 采不到这层材质，只会把表面自己的底色再采一遍、叠在原底色上，直到它不再透明；所以 CoreBox 的表面开着 `systemBackdrop`：不跑任何 `backdrop-filter`，模糊交给系统，表面只铺底色、光与描边（见 [BaseSurface](/docs/dev/components/base-surface)）。
 

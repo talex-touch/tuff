@@ -35,7 +35,7 @@ const labels = computed(() => (locale.value === 'zh'
       maskTransparentTitle: 'maskEffect = transparent',
       maskTransparentBody: '遮罩透明，但仍可点击遮罩关闭。',
       panelTitle: '透明面板',
-      panelBody: 'panelTransparent 调薄面板材质下的底色，透出更多背部内容。',
+      panelBody: '面板默认是实色的 pure。这里换成 refraction，panelTransparent 再调薄材质下的底色，透出更多背部内容。',
       mobileDefaultTitle: '移动端默认 bottom',
       mobileDefaultBody: '移动端视口下，direction="right" 会自动以 bottom 打开。',
       mobileDisabledTitle: '保持指定方向',
@@ -69,7 +69,7 @@ const labels = computed(() => (locale.value === 'zh'
       maskTransparentTitle: 'maskEffect = transparent',
       maskTransparentBody: 'Invisible mask that can still close on click.',
       panelTitle: 'Transparent panel',
-      panelBody: 'panelTransparent thins the colour under the panel material so more of the page shows through.',
+      panelBody: 'The panel is solid pure by default. This one uses refraction, and panelTransparent thins the colour under it so more of the page shows through.',
       mobileDefaultTitle: 'Mobile defaults to bottom',
       mobileDefaultBody: 'On mobile viewports, direction="right" opens from bottom.',
       mobileDisabledTitle: 'Preserve direction',
@@ -157,7 +157,7 @@ const labels = computed(() => (locale.value === 'zh'
     <p>{{ labels.maskTransparentBody }}</p>
   </TxDrawer>
 
-  <TxDrawer v-model:visible="visiblePanelTransparent" :title="labels.panelTitle" :close-label="labels.close" mask-effect="opacity" panel-transparent size="420px" :mobile-adapt="false">
+  <TxDrawer v-model:visible="visiblePanelTransparent" :title="labels.panelTitle" :close-label="labels.close" mask-effect="opacity" surface="refraction" panel-transparent size="420px" :mobile-adapt="false">
     <p>{{ labels.panelBody }}</p>
   </TxDrawer>
 

@@ -36,6 +36,8 @@ export default {
     geoMap: {
       empty: 'No geographic data',
       failed: 'Could not load the map',
+      label: 'World map',
+      instructions: 'Drag or use the arrow keys to pan. Pinch, hold Control or Command while scrolling, or press plus and minus to zoom. Double-click or press 0 to reset.',
     },
   },
   common: {

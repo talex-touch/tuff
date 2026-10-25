@@ -1,9 +1,6 @@
-export function formatAnalyticsNumber(value: number): string {
-  if (value >= 1_000_000)
-    return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000)
-    return `${(value / 1_000).toFixed(1)}K`
-  return value.toString()
+/** A count written short in the page's language: `12.3K` in English, `1.2万` in Chinese. */
+export function formatAnalyticsNumber(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
 export function toSortedAnalyticsList(source: Record<string, number> | undefined, limit = 6): Array<[string, number]> {

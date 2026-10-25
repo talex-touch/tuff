@@ -34,27 +34,24 @@ import type { DocsSuiteKey } from '~/utils/docs-suites'
 // only ever shows that page's suite. There is no cross-suite hub grid.
 const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
 const galleryAmicroSpecimen = shallowRef<Component | null>(null)
-const galleryChoroplethMap = shallowRef<Component | null>(null)
-const galleryLearningCurve = shallowRef<Component | null>(null)
-const gallerySankeyChart = shallowRef<Component | null>(null)
-const chartScrubber = shallowRef<Component | null>(null)
-const sparkChart = shallowRef<Component | null>(null)
-const chartLegendItem = shallowRef<Component | null>(null)
-const chart = shallowRef<Component | null>(null)
-const arcSeries = shallowRef<Component | null>(null)
-const chartTooltip = shallowRef<Component | null>(null)
-const timeseriesChart = shallowRef<Component | null>(null)
+const GalleryChartLegend = defineAsyncComponent(() => import('./gallery/GalleryChartLegend.vue'))
 const GalleryChoiceCard = defineAsyncComponent(() => import('./gallery/GalleryChoiceCard.vue'))
+const GalleryChoroplethMap = defineAsyncComponent(() => import('./gallery/GalleryChoroplethMap.vue'))
+const GalleryCustomChart = defineAsyncComponent(() => import('./gallery/GalleryCustomChart.vue'))
 const GalleryEChart = defineAsyncComponent(() => import('./gallery/GalleryEChart.vue'))
 const GalleryEdgeMarquee = defineAsyncComponent(() => import('./gallery/GalleryEdgeMarquee.vue'))
 const GalleryFusion = defineAsyncComponent(() => import('./gallery/GalleryFusion.vue'))
 const GalleryFusionSurface = defineAsyncComponent(() => import('./gallery/GalleryFusionSurface.vue'))
+const GalleryLearningCurve = defineAsyncComponent(() => import('./gallery/GalleryLearningCurve.vue'))
 const GalleryLiquidMenu = defineAsyncComponent(() => import('./gallery/GalleryLiquidMenu.vue'))
+const GallerySankeyChart = defineAsyncComponent(() => import('./gallery/GallerySankeyChart.vue'))
+const GallerySparkChart = defineAsyncComponent(() => import('./gallery/GallerySparkChart.vue'))
 const GalleryStreamElement = defineAsyncComponent(() => import('./gallery/GalleryStreamElement.vue'))
 const GalleryStreamMarkdown = defineAsyncComponent(() => import('./gallery/GalleryStreamMarkdown.vue'))
 const GalleryStreamText = defineAsyncComponent(() => import('./gallery/GalleryStreamText.vue'))
 const GalleryTextMorph = defineAsyncComponent(() => import('./gallery/GalleryTextMorph.vue'))
 const GalleryThinkingOrb = defineAsyncComponent(() => import('./gallery/GalleryThinkingOrb.vue'))
+const GalleryTimeseriesChart = defineAsyncComponent(() => import('./gallery/GalleryTimeseriesChart.vue'))
 const GalleryTransitionLanes = defineAsyncComponent(() => import('./gallery/GalleryTransitionLanes.vue'))
 const GalleryVirtualList = defineAsyncComponent(() => import('./gallery/GalleryVirtualList.vue'))
 const GalleryAttachmentTray = defineAsyncComponent(() => import('./gallery/GalleryAttachmentTray.vue'))
@@ -361,34 +358,7 @@ const progressSegments = computed(() => [
 let progressTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-  if (props.suite === 'data') {
-    void import('./gallery/GalleryAmicroSpecimen.vue').then(({ default: component }) => {
-      galleryAmicroSpecimen.value = component
-    })
-    void Promise.all([
-      import('@talex-touch/tuffex/spark-chart'),
-      import('@talex-touch/tuffex/charts/src/chart-legend'),
-      import('@talex-touch/tuffex/charts/src/chart'),
-      import('@talex-touch/tuffex/charts/src/series'),
-      import('@talex-touch/tuffex/charts/src/tooltip'),
-      import('@talex-touch/tuffex/charts/src/timeseries'),
-      import('./gallery/GalleryChoroplethMap.vue'),
-      import('./gallery/GallerySankeyChart.vue'),
-      import('./gallery/GalleryLearningCurve.vue'),
-    ]).then(([spark, legend, chartModule, series, tooltip, timeseries, choropleth, sankey, learning]) => {
-      chartScrubber.value = spark.TxChartScrubber
-      sparkChart.value = spark.TxSparkChart
-      chartLegendItem.value = legend.TxChartLegendItem
-      chart.value = chartModule.TxChart
-      arcSeries.value = series.TxArcSeries
-      chartTooltip.value = tooltip.TxChartTooltip
-      timeseriesChart.value = timeseries.TxTimeseriesChart
-      galleryChoroplethMap.value = choropleth.default
-      gallerySankeyChart.value = sankey.default
-      galleryLearningCurve.value = learning.default
-    })
-  }
-  else if (props.suite === 'motion') {
+  if (props.suite === 'data' || props.suite === 'motion') {
     void import('./gallery/GalleryAmicroSpecimen.vue').then(({ default: component }) => {
       galleryAmicroSpecimen.value = component
     })
@@ -822,53 +792,10 @@ function categoricalVar(index: number): string {
   return `var(--tx-chart-categorical-${slot + 1}, ${CHART_CATEGORICAL_FALLBACKS[slot]})`
 }
 
-/* ── Data band. Chart components load only for the data suite;
+/* ── Data band. Its chart cells are async components under gallery/, so the
    other docs suites keep the chart implementation out of their route chunk.
-   Every specimen below is the component's real interaction rather than a
+   Every chart specimen is the component's real interaction rather than a
    still picture: hover reports values, and Cartesian charts carry both axes. ── */
-const donutSlices = [
-  { label: 'Stable', count: 4820 },
-  { label: 'Beta', count: 3160 },
-  { label: 'Snapshot', count: 940 },
-]
-const donutTotal = donutSlices.reduce((sum, slice) => sum + slice.count, 0)
-const donutHover = ref<{ name?: string, index: number, value: number } | null>(null)
-const donutRows = computed(() => donutHover.value
-  ? [{
-      name: 'Installs',
-      color: categoricalVar(donutHover.value.index),
-      value: `${donutHover.value.value.toLocaleString(localeKey.value)} · ${Math.round(donutHover.value.value / donutTotal * 100)}%`,
-    }]
-  : [])
-
-const DAY = 86_400_000
-const seriesStart = Date.UTC(2026, 1, 9)
-const timeseriesData = [
-  { name: 'Installs', data: Array.from({ length: 7 }, (_, i) => [seriesStart + i * DAY, 420 + (i % 3) * 80] as [number, number]) },
-  { name: 'Errors', data: Array.from({ length: 7 }, (_, i) => [seriesStart + i * DAY, 40 + (i % 4) * 18] as [number, number]) },
-]
-
-/* Twelve evenly spaced days. Both series stay inside one value band so the y
-   axis has something to label, and the gaps are uniform so the default
-   monotone curve reads as a trend instead of a zig-zag. */
-const sparkSeries = [
-  { id: 'installs', label: 'Installs', color: categoricalVar(0), data: [420, 468, 512, 494, 548, 610, 586, 642, 705, 678, 742, 804].map((value, time) => ({ time, value })) },
-  { id: 'errors', label: 'Errors', color: categoricalVar(2), data: [186, 204, 178, 216, 232, 208, 244, 226, 258, 240, 268, 286].map((value, time) => ({ time, value })) },
-]
-const sparkIndex = ref<number | null>(null)
-const sparkRows = computed(() => sparkIndex.value === null
-  ? []
-  : sparkSeries.map(series => ({
-      label: series.label,
-      color: series.color,
-      value: (series.data[sparkIndex.value!]?.value ?? 0).toLocaleString(localeKey.value),
-    })))
-const sparkTimeLabel = computed(() =>
-  sparkIndex.value === null ? '' : `Mar ${sparkIndex.value + 1}`)
-function sparkTick(value: number): string {
-  return `Mar ${Math.round(value) + 1}`
-}
-
 const allocationKey = ref('stable')
 const diffColumns = [
   { key: 'name', title: 'Plugin', width: '55%' },
@@ -989,20 +916,32 @@ async function copyInstall() {
     clearTimeout(copyTimer)
   copyTimer = setTimeout(() => (copied.value = false), 1600)
 }
+// `height` is the specimen's tallest height in px, given only where it outgrows
+// the default stage, and `narrowHeight` its height in the narrowest two-column
+// cells where that is taller still: the stage reserves both
+// (`--docs-gallery-specimen` and `--docs-gallery-specimen-narrow`).
 const motionGalleryItems = [
   { doc: 'motion-button', name: 'MotionButton', zh: '动效按钮', kind: 'motion-button' },
-  { doc: 'card-spread', name: 'CardSpread', zh: '卡片展开', kind: 'card-spread' },
-  { doc: 'carousel-3d', name: 'Carousel3D', zh: '三维轮播', kind: 'carousel-3d' },
-  { doc: 'flip-book', name: 'FlipBook', zh: '翻页书', kind: 'flip-book' },
-  { doc: 'motion-loader', name: 'MotionLoader', zh: '加载动效', kind: 'motion-loader' },
-  { doc: 'dither-chart', name: 'DitherChart', zh: '抖动图表', kind: 'dither-chart' },
+  { doc: 'card-spread', name: 'CardSpread', zh: '卡片展开', kind: 'card-spread', height: 264 },
+  { doc: 'carousel-3d', name: 'Carousel3D', zh: '三维轮播', kind: 'carousel-3d', height: 279, narrowHeight: 318 },
+  { doc: 'flip-book', name: 'FlipBook', zh: '翻页书', kind: 'flip-book', height: 253 },
+  { doc: 'motion-loader', name: 'MotionLoader', zh: '加载动效', kind: 'motion-loader', height: 139 },
+  { doc: 'dither-chart', name: 'DitherChart', zh: '抖动图表', kind: 'dither-chart', height: 331 },
   { doc: 'motion-text', name: 'MotionText', zh: '文字动效', kind: 'motion-text' },
-  { doc: 'physics-motion', name: 'PhysicsMotion', zh: '物理动效', kind: 'physics-motion' },
+  { doc: 'physics-motion', name: 'PhysicsMotion', zh: '物理动效', kind: 'physics-motion', height: 128 },
   { doc: 'motion-dock', name: 'MotionDock', zh: '动态应用栏', kind: 'motion-dock' },
-  { doc: 'motion', name: 'Motion', zh: '悬停与滚动', kind: 'motion' },
+  { doc: 'motion', name: 'Motion', zh: '悬停与滚动', kind: 'motion', height: 150 },
   { doc: 'motion-toggle', name: 'MotionToggle', zh: '动效切换', kind: 'motion-toggle' },
-  { doc: 'motion-transition', name: 'MotionTransition', zh: '动效转场', kind: 'motion-transition' },
+  { doc: 'motion-transition', name: 'MotionTransition', zh: '动效转场', kind: 'motion-transition', height: 198 },
 ] as const
+
+function specimenStyle(item: { height?: number, narrowHeight?: number }) {
+  if (!item.height)
+    return undefined
+  return item.narrowHeight
+    ? { '--docs-gallery-specimen': `${item.height}px`, '--docs-gallery-specimen-narrow': `${item.narrowHeight}px` }
+    : { '--docs-gallery-specimen': `${item.height}px` }
+}
 </script>
 
 <template>
@@ -2612,9 +2551,9 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('image-gallery')">
           {{ cellLabel('ImageGallery', '图片画廊') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage docs-gallery__stage--thumbs not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
+            <div class="docs-gallery__block docs-gallery__thumbs">
               <GalleryImageGallery :items="galleryItems" />
             </div>
             <template #fallback>
@@ -2644,7 +2583,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('markdown-view')">
           {{ cellLabel('MarkdownView', 'Markdown 视图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 202px; --docs-gallery-specimen-narrow: 265px">
           <ClientOnly>
             <div class="docs-gallery__block">
               <div class="docs-gallery__doc">
@@ -2949,7 +2888,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('image-generation')">
           {{ cellLabel('ImageGeneration', '生图占位') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 120px">
           <ClientOnly>
             <GalleryImageGeneration preset="pixels-organic">
               <div style="width: 180px; height: 120px; border-radius: 14px" />
@@ -2965,7 +2904,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('code-editor')">
           {{ cellLabel('CodeEditor', '代码编辑器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 135px">
           <ClientOnly>
             <!-- Editable, at its natural height. The old 128px frame cropped the
                  editor's 160px floor and took its bottom edge with it. -->
@@ -3064,7 +3003,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('virtual-list')">
           {{ cellLabel('VirtualList', '虚拟列表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 160px">
           <ClientOnly>
             <GalleryVirtualList :title="copy.virtualTitle" :count-label="copy.virtualCount" />
             <template #fallback>
@@ -3186,7 +3125,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('fusion-surface')">
           {{ cellLabel('FusionSurface', '融合表面') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 128px">
           <ClientOnly>
             <GalleryFusionSurface />
             <template #fallback>
@@ -3303,7 +3242,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('liquid')">
           {{ cellLabel('Liquid', '液态') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 132px">
           <ClientOnly>
             <GalleryLiquidMenu :toggle-label="copy.liquidToggle" :item-labels="copy.liquidItems" />
             <template #fallback>
@@ -3420,7 +3359,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('transition')">
           {{ cellLabel('Transition', '过渡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 154px">
           <ClientOnly>
             <GalleryTransitionLanes :states="laneStates" />
             <template #fallback>
@@ -3614,7 +3553,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('choice-card')">
           {{ cellLabel('ChoiceCard', '选项卡片') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 272px">
           <ClientOnly>
             <div class="docs-gallery__block">
               <GalleryChoiceCard />
@@ -3706,7 +3645,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('chat')">
           {{ cellLabel('Chat', '对话') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 195px; --docs-gallery-specimen-narrow: 219px">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChatList :messages="chatListMessages" markdown />
@@ -4099,7 +4038,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('stream-markdown')">
           {{ cellLabel('StreamMarkdown', '流式 Markdown') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 206px">
           <ClientOnly>
             <div class="docs-gallery__block">
               <GalleryStreamMarkdown :markdown="copy.streamMarkdown" />
@@ -4197,30 +4136,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__spark">
-              <component
-                :is="chartScrubber"
-                v-if="chartScrubber"
-                class="docs-gallery__spark-stage"
-                :point-count="sparkSeries[0]?.data.length ?? 0"
-                :active-index="sparkIndex"
-                :rows="sparkRows"
-                :time-label="sparkTimeLabel"
-                @update:active-index="sparkIndex = $event"
-              >
-                <component
-                  :is="sparkChart"
-                  v-if="sparkChart"
-                  :series="sparkSeries"
-                  :active-index="sparkIndex"
-                  :padding="{ top: 14, right: 10, bottom: 24, left: 36 }"
-                  :x-tick-format="sparkTick"
-                  grid
-                  x-axis
-                  y-axis
-                />
-              </component>
-            </div>
+            <GallerySparkChart />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -4290,10 +4206,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__stack">
-              <component :is="chartLegendItem" v-if="chartLegendItem" name="Installs" :color="categoricalVar(0)" value="4,820" />
-              <component :is="chartLegendItem" v-if="chartLegendItem" name="Errors" :color="categoricalVar(2)" value="87" />
-            </div>
+            <GalleryChartLegend />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -4307,33 +4220,7 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <component
-                :is="chart"
-                v-if="chart"
-                :height="150"
-                :padding="8"
-              >
-                <component
-                  :is="arcSeries"
-                  v-if="arcSeries"
-                  :data="donutSlices"
-                  value="count"
-                  name="label"
-                  :inner-radius="0.65"
-                  @slice-hover="donutHover = $event"
-                />
-                <template #overlay>
-                  <component
-                    :is="chartTooltip"
-                    v-if="chartTooltip"
-                    :open="donutHover !== null"
-                    :title="donutHover?.name"
-                    :rows="donutRows"
-                  />
-                </template>
-              </component>
-            </div>
+            <GalleryCustomChart />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -4345,35 +4232,37 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('maps')">
           {{ cellLabel('Maps', '地图') }}
         </NuxtLink>
-        <NuxtClientOnly>
-          <component :is="galleryChoroplethMap" v-if="galleryChoroplethMap" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </NuxtClientOnly>
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 204px">
+          <ClientOnly>
+            <GalleryChoroplethMap />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
       </section>
 
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('sankey-chart')">
           {{ cellLabel('SankeyChart', '桑基图') }}
         </NuxtLink>
-        <NuxtClientOnly>
-          <component :is="gallerySankeyChart" v-if="gallerySankeyChart" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </NuxtClientOnly>
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 198px; --docs-gallery-specimen-narrow: 216px">
+          <ClientOnly>
+            <GallerySankeyChart />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
       </section>
 
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('timeseries-chart')">
           {{ cellLabel('TimeseriesChart', '时序图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <component :is="timeseriesChart" v-if="timeseriesChart" type="bar" :data="timeseriesData" :height="150" />
-            </div>
+            <GalleryTimeseriesChart />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -4385,19 +4274,21 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('learning-curve')">
           {{ cellLabel('LearningCurve', '学习曲线') }}
         </NuxtLink>
-        <NuxtClientOnly>
-          <component :is="galleryLearningCurve" v-if="galleryLearningCurve" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </NuxtClientOnly>
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
+          <ClientOnly>
+            <GalleryLearningCurve />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
       </section>
 
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('mono-chart')">
           {{ cellLabel('MonoChart', '单色图表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 290px">
           <NuxtClientOnly>
             <ClientOnly>
             <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="mono-chart" />
@@ -4416,7 +4307,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
           {{ cellLabel('DiffTable', '差异表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 119px">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDiffTable :columns="diffColumns" :rows="diffRows" play="auto" />
@@ -4474,7 +4365,7 @@ const motionGalleryItems = [
         <NuxtLink class="docs-gallery__label" :to="docPath(item.doc)">
           {{ cellLabel(item.name, item.zh) }}
         </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
+        <div class="docs-gallery__stage not-prose" :style="specimenStyle(item)">
           <ClientOnly>
             <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" :kind="item.kind" />
             <template #fallback>

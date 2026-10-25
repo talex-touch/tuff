@@ -41,7 +41,8 @@ $$Padding_{\text{horizontal}} \ge R$$
 
 ### Refraction（琉光折射）默认法则
 
-所有带材质层的组件，**默认材质一律且必须为 `refraction`**：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxDrawer`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及经 `TxBaseAnchor` 渲染的弹出面板（`TxPopover`、`TxTooltip`、下拉与右键菜单、`TxSelect`、`TxSearchSelect`）的 `panelBackground`。
+所有带材质层的组件，**默认材质一律且必须为 `refraction`**：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及经 `TxBaseAnchor` 渲染的弹出面板（`TxPopover`、`TxTooltip`、下拉与右键菜单、`TxSelect`、`TxSearchSelect`）的 `panelBackground`。
+`TxDrawer` 是经用户确认的例外（2026-10-25）：面板默认 `pure` 实色，后面的页面不透进正文与表单；要琉光时传 `surface="refraction"`。
 若因极端场景要换成其他材质（如 `flat`、`mask`、`glass`），**必须经过用户明确手动确认**；运动中的降级与 `autoDetect` 的临时降级不改声明的材质，不算切换。详见《[Surface 8 种材质物理选型与确认门禁](/docs/dev/concepts/surface-taxonomy)》。
 
 ### 斯涅尔折射与 RGB 色散管线

@@ -21,7 +21,8 @@ const copy = computed(() => locale.value === 'zh'
       loading: '正在加载世界地图…',
       failed: '世界地图加载失败。',
       hint: '点击气泡查看城市；拖拽平移，⌘/Ctrl + 滚轮缩放。',
-      selected: '已选择',
+      cities: ['圣何塞', '阿什本', '圣保罗', '法兰克福', '约翰内斯堡', '新加坡', '东京', '悉尼'],
+      selected: (city: string) => `已选择：${city}`,
       unit: '请求/秒',
       labels: {
         map: '边缘节点地图',
@@ -32,21 +33,24 @@ const copy = computed(() => locale.value === 'zh'
       loading: 'Loading world GeoJSON…',
       failed: 'World GeoJSON failed to load.',
       hint: 'Select a bubble to inspect its city; drag to pan, ⌘/Ctrl + scroll to zoom.',
-      selected: 'Selected',
+      cities: ['San Jose', 'Ashburn', 'São Paulo', 'Frankfurt', 'Johannesburg', 'Singapore', 'Tokyo', 'Sydney'],
+      selected: (city: string) => `Selected: ${city}`,
       unit: 'req/s',
       labels: { map: 'Edge locations map' },
     })
 
-const colos: Colo[] = [
-  { city: 'San Jose', lon: -121.89, lat: 37.34, requests: 9200 },
-  { city: 'Ashburn', lon: -77.49, lat: 39.04, requests: 12400 },
-  { city: 'São Paulo', lon: -46.63, lat: -23.55, requests: 4100 },
-  { city: 'Frankfurt', lon: 8.68, lat: 50.11, requests: 10800 },
-  { city: 'Johannesburg', lon: 28.05, lat: -26.2, requests: 1900 },
-  { city: 'Singapore', lon: 103.82, lat: 1.35, requests: 7600 },
-  { city: 'Tokyo', lon: 139.69, lat: 35.69, requests: 8900 },
-  { city: 'Sydney', lon: 151.21, lat: -33.87, requests: 3200 },
+// Bubbles sit at lon/lat; the city is only shown, so it takes the page's language.
+const sites = [
+  { lon: -121.89, lat: 37.34, requests: 9200 },
+  { lon: -77.49, lat: 39.04, requests: 12400 },
+  { lon: -46.63, lat: -23.55, requests: 4100 },
+  { lon: 8.68, lat: 50.11, requests: 10800 },
+  { lon: 28.05, lat: -26.2, requests: 1900 },
+  { lon: 103.82, lat: 1.35, requests: 7600 },
+  { lon: 139.69, lat: 35.69, requests: 8900 },
+  { lon: 151.21, lat: -33.87, requests: 3200 },
 ]
+const colos = computed<Colo[]>(() => sites.map((site, index) => ({ city: copy.value.cities[index]!, ...site })))
 
 // Plain-function view of $fetch: Nitro's typed-route inference explodes on
 // arbitrary external URLs (TS2589).
@@ -86,7 +90,7 @@ defineExpose({ resetDemo })
       @bubble-click="selected = $event"
     />
     <p v-if="world" class="map-demo__selection" aria-live="polite">
-      {{ selected ? `${copy.selected}: ${selected.city}` : copy.hint }}
+      {{ selected ? copy.selected(selected.city) : copy.hint }}
     </p>
     <p v-else class="map-demo__placeholder">
       {{ copy[failed ? 'failed' : 'loading'] }}

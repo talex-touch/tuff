@@ -2,24 +2,21 @@
 import type { SankeyLinkData, SankeyNodeData } from '@talex-touch/tuffex/charts'
 import { TxSankeyChart } from '@talex-touch/tuffex/charts'
 import { computed } from 'vue'
+import { SANKEY_ZH_LABELS } from './chart-demo-locale'
 
-const nodes: SankeyNodeData[] = [
-  { name: 'Free', value: 12400 },
-  { name: 'Trial', value: 3600 },
-  { name: 'Pro', value: 2100 },
-  { name: 'Churn', value: 1500 },
-]
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { names: ['免费', '试用', 'Pro', '流失'], labels: SANKEY_ZH_LABELS }
+  : { names: ['Free', 'Trial', 'Pro', 'Churn'], labels: undefined })
+
+const values = [12400, 3600, 2100, 1500]
+const nodes = computed<SankeyNodeData[]>(() => copy.value.names.map((name, index) => ({ name, value: values[index] })))
 
 const links: SankeyLinkData[] = [
   { source: 0, target: 1, value: 3600 },
   { source: 1, target: 2, value: 2100 },
   { source: 1, target: 3, value: 1500 },
 ]
-
-const { locale } = useI18n()
-const labels = computed(() => locale.value === 'zh'
-  ? { instructions: '按回车键选中节点。按住 Alt 加上下方向键可移动它；也可拖动节点重新排列，双击背景复位。' }
-  : undefined)
 </script>
 
 <template>
@@ -27,7 +24,7 @@ const labels = computed(() => locale.value === 'zh'
     :nodes="nodes"
     :links="links"
     :height="260"
-    :labels="labels"
+    :labels="copy.labels"
     node-label-layout="inline"
     link-color="gray"
     :node-width="12"

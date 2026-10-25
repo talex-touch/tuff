@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import type { ChartSemanticColorName } from '@talex-touch/tuffex/charts'
 import { ChartPalette } from '@talex-touch/tuffex/charts'
+import { computed } from 'vue'
+
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { categorical: '分类色', semantic: '语义色', sequential: '顺序色（蓝）' }
+  : { categorical: 'Categorical', semantic: 'Semantic', sequential: 'Sequential (blues)' })
 
 const semanticNames: ChartSemanticColorName[] = ['Attention', 'Warning', 'Success', 'Neutral', 'Disabled', 'Skeleton']
 const sequential = ChartPalette.sequential('blues')
@@ -9,7 +15,7 @@ const sequential = ChartPalette.sequential('blues')
 <template>
   <div class="chart-colors-demo">
     <div class="chart-colors-demo__group">
-      <span class="chart-colors-demo__label">Categorical</span>
+      <span class="chart-colors-demo__label">{{ copy.categorical }}</span>
       <div class="chart-colors-demo__swatches">
         <span
           v-for="index in 6"
@@ -21,7 +27,7 @@ const sequential = ChartPalette.sequential('blues')
       </div>
     </div>
     <div class="chart-colors-demo__group">
-      <span class="chart-colors-demo__label">Semantic</span>
+      <span class="chart-colors-demo__label">{{ copy.semantic }}</span>
       <div class="chart-colors-demo__swatches">
         <span
           v-for="name in semanticNames"
@@ -33,7 +39,7 @@ const sequential = ChartPalette.sequential('blues')
       </div>
     </div>
     <div class="chart-colors-demo__group">
-      <span class="chart-colors-demo__label">Sequential (blues)</span>
+      <span class="chart-colors-demo__label">{{ copy.sequential }}</span>
       <div class="chart-colors-demo__swatches">
         <span
           v-for="(color, index) in sequential"

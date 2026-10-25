@@ -81,7 +81,7 @@ code: |
 | `left` / `right` | `number \| string` | `'5%'` | 布局左右留白（px 或百分比）。 |
 | `linkColor` | `'gradient' \| 'gray'` | `'gradient'` | 连线填充模式。 |
 | `linkOpacity` | `number` | `0.5` | 渐变连线不透明度。 |
-| `labels` | `Partial<SankeyLabels>` | 英文 | `{ instructions }`：在每个节点名称之后朗读。 |
+| `labels` | `Partial<SankeyLabels>` | 英文 | `{ instructions, value, items }`：`instructions` 在每个节点名称之后朗读；`value` 是提示框里数值行的名称，`items` 是可下钻节点的条目数。 |
 
 ### SankeyChart Events
 
