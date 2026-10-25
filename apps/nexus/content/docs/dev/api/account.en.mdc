@@ -33,13 +33,15 @@ code: |
 
 ## Subscription Plans
 
+Listed from the lowest tier to the highest; each includes everything in the ones before it.
+
 | Plan | Enum Value | Description |
 |------|------------|-------------|
 | Free | `SubscriptionPlan.FREE` | Basic features with quota limits |
-| Pro | `SubscriptionPlan.PRO` | More quota, custom models |
-| Plus | `SubscriptionPlan.PLUS` | Priority support, advanced analytics |
+| Plus | `SubscriptionPlan.PLUS` | More quota, custom models, priority support |
+| Pro | `SubscriptionPlan.PRO` | Higher quota, advanced analytics |
 | Team | `SubscriptionPlan.TEAM` | Team collaboration, management |
-| Enterprise | `SubscriptionPlan.ENTERPRISE` | Unlimited quota, dedicated support |
+| Enterprise | `SubscriptionPlan.ENTERPRISE` | Highest quota, more team seats |
 
 ---
 
@@ -266,7 +268,7 @@ code: |
   //   plan: 'pro',
   //   status: 'active',
   //   billingCycle: 'monthly',
-  //   quota: { aiRequestsPerWeek: 500, ... },
+  //   quota: { aiRequestsPerWeek: 2000, ... },
   //   usage: { aiRequestsThisWeek: 123, ... },
   //   currentPeriodEnd: 1704067200000,
   //   autoRenew: true
@@ -295,7 +297,7 @@ Check if Pro tier or higher.
 ---
 code: |
   if (await accountSDK.isProOrAbove()) {
-    // Pro / Plus / Team / Enterprise
+    // Pro / Team / Enterprise
   }
 ---
 :::
@@ -308,7 +310,7 @@ Check if Plus tier or higher.
 ---
 code: |
   if (await accountSDK.isPlusOrAbove()) {
-    // Plus / Team / Enterprise
+    // Plus / Pro / Team / Enterprise
   }
 ---
 :::
@@ -626,15 +628,16 @@ code: |
 
 **`getUpgradeOptions()`**
 
-Get available upgrade options.
+Get available upgrade options. They carry no price: Tuff is free during its Pioneer period, and the price fields stay unset until Nexus publishes a price.
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
   const options = accountSDK.getUpgradeOptions()
   // [
-  //   { plan: 'pro', name: 'Pro', priceMonthly: 9.99, features: [...] },
-  //   { plan: 'plus', name: 'Plus', priceMonthly: 19.99, recommended: true, ... }
+  //   { plan: 'plus', name: 'Plus', features: ['500 AI requests/week', ...] },
+  //   { plan: 'pro', name: 'Pro', recommended: true, ... },
+  //   { plan: 'team', name: 'Team', ... }
   // ]
 ---
 :::
@@ -648,8 +651,8 @@ Get plan comparison table.
 code: |
   const comparison = accountSDK.getPlanComparison()
   // [
-  //   { feature: 'AI Requests/Week', free: 50, pro: 500, plus: 2000, ... },
-  //   { feature: 'Custom Models', free: false, pro: true, ... }
+  //   { feature: 'AI Requests/Week', free: 50, plus: 500, pro: 2000, ... },
+  //   { feature: 'Custom Models', free: false, plus: true, ... }
   // ]
 ---
 :::
@@ -789,8 +792,8 @@ code: |
 code: |
   enum SubscriptionPlan {
     FREE = 'free',
-    PRO = 'pro',
     PLUS = 'plus',
+    PRO = 'pro',
     TEAM = 'team',
     ENTERPRISE = 'enterprise',
   }

@@ -1,5 +1,6 @@
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import { stringify as yamlStringify } from 'yaml'
+import { evaluateObjectLiteral, evaluateQuery } from '~/utils/expression-eval'
 
 export interface ParseResult {
   data: any
@@ -66,9 +67,7 @@ export function smartParse(text: string): ParseResult {
         },
       )
 
-      // eslint-disable-next-line no-new-func
-      const fn = new Function(`"use strict"; return (${trimmed})`)
-      const result = fn()
+      const result = evaluateObjectLiteral(trimmed)
 
       if (result === null || (typeof result !== 'object')) {
         throw new Error('Result is not an object')
@@ -235,9 +234,7 @@ export function useJsonFormatter() {
 
     try {
       const { data: parsed } = smartParse(inputJson.value)
-      // eslint-disable-next-line no-new-func
-      const fn = new Function('data', `with(data) { return ${queryExpression.value} }`)
-      const result = fn({ this: parsed, ...parsed })
+      const result = evaluateQuery(queryExpression.value, parsed)
       outputJson.value = JSON.stringify(result, null, 2)
       outputLanguage.value = 'json'
       errorMessage.value = ''

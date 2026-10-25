@@ -1075,32 +1075,40 @@ export async function build(userOptions?: Options) {
   await checkVersionSync(opts, chalk)
 
   // 步骤1：备份 Vite 构建产物到 dist/out
-  console.info(
-    chalk.bgBlack.white(' Talex-Touch ')
-    + chalk.blueBright(
-      ` Backing up Vite build output to ${opts.outDir}/out/...`,
-    ),
-  )
-
-  fs.rmSync(outDir, { recursive: true, force: true })
-  fs.mkdirSync(outDir, { recursive: true })
-
-  // Move source build output into dist/out without feeding prior package artifacts back into the next package.
-  if (fs.existsSync(distPath)) {
-    const distFiles = fs.readdirSync(distPath)
-    for (const file of distFiles) {
-      if (!isGeneratedPackageOutputEntry(file)) {
-        const sourcePath = path.join(distPath, file)
-        const destPath = path.join(outDir, file)
-        fs.moveSync(sourcePath, destPath, { overwrite: true })
-      }
-    }
+  // Prior package artifacts are not build output, so none of them feed back into the next package.
+  const viteOutputEntries = fs.existsSync(distPath)
+    ? fs.readdirSync(distPath).filter(entry => !isGeneratedPackageOutputEntry(entry))
+    : []
+  // `tuff builder` run again without a new Vite build, as after a failed security scan, finds
+  // nothing new in dist/: the build is still what the last run moved into dist/out, and clearing
+  // that would package the plugin without its pages and report success.
+  if (viteOutputEntries.length === 0 && fs.existsSync(outDir) && fs.readdirSync(outDir).length > 0) {
+    console.warn(
+      chalk.bgYellow.black(' WARNING ')
+      + chalk.yellow(
+        ` No new Vite output in ${opts.outDir}/, packaging the previous run's ${opts.outDir}/out/ again`,
+      ),
+    )
   }
+  else {
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.blueBright(
+        ` Backing up Vite build output to ${opts.outDir}/out/...`,
+      ),
+    )
 
-  console.info(
-    chalk.bgBlack.white(' Talex-Touch ')
-    + chalk.greenBright(` Vite output backed up to ${opts.outDir}/out/`),
-  )
+    fs.rmSync(outDir, { recursive: true, force: true })
+    fs.mkdirSync(outDir, { recursive: true })
+    for (const entry of viteOutputEntries) {
+      fs.moveSync(path.join(distPath, entry), path.join(outDir, entry), { overwrite: true })
+    }
+
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(` Vite output backed up to ${opts.outDir}/out/`),
+    )
+  }
 
   // 步骤2：收集文件到 dist/build
   console.info(

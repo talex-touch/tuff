@@ -387,7 +387,7 @@ This package is shared between the main app, plugins, and published to npm for e
 
 Provides user account information, subscription status, and quota management for plugins and Prelude scripts.
 
-**Subscription Plans**: `FREE`, `PRO`, `PLUS`, `TEAM`, `ENTERPRISE`
+**Subscription Plans**, lowest tier first: `FREE`, `PLUS`, `PRO`, `TEAM`, `ENTERPRISE`
 
 **Core API**:
 ```typescript

@@ -80,6 +80,7 @@ vi.mock('./creditPricingStore', async () => {
   }
 })
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+vi.mock('./teamStore', () => ({ recordWeeklyAiUsage: vi.fn(async () => {}) }))
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class {
     invoke(messages: unknown) { return langchainMocks.invoke(messages) }

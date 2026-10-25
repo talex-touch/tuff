@@ -1,0 +1,58 @@
+name: JSON Formatter Plugin CI
+
+# json-formatter is the one plugin that packages with security waivers: plugins/json-formatter/
+# security-waivers.json accepts three scan findings, each pinned to the sha256 of a built chunk and
+# expiring on 2026-11-15. `tuff builder` fails when a waiver stops matching its chunk or expires,
+# and no job ran that build -- Typecheck (workspace) checks the plugin's types, nothing packages it.
+# So a dependency bump that reshapes a chunk, or the expiry date, surfaced only when someone next
+# built the plugin by hand.
+#
+# Not part of a required job: the expiry is a date rather than a change, and on that day it would
+# fail every pull request for a reason none of them caused. Path-filtered instead, so it reports
+# on the pull requests that change the plugin, the toolchain that packages it, or the scan rules
+# in packages/utils.
+
+on:
+  pull_request:
+    paths:
+      - "plugins/json-formatter/**"
+      - "packages/tuff-cli/**"
+      - "packages/tuff-cli-core/**"
+      - "packages/unplugin-export-plugin/**"
+      - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/plugin-json-formatter-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "plugins/json-formatter/**"
+      - "packages/tuff-cli/**"
+      - "packages/tuff-cli-core/**"
+      - "packages/unplugin-export-plugin/**"
+      - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/plugin-json-formatter-ci.yml"
+      - ".github/workflows/package-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: json-formatter
+      package-path: plugins/json-formatter
+      run-build: true
+      # `pnpm build` is `vite build && tuff builder`: vite.config.ts loads the export plugin and
+      # `tuff` runs from tuff-cli's dist, so the toolchain is built first, in its own order.
+      build-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuff-cli-core" run build
+        pnpm --dir ../.. --filter "@talex-touch/unplugin-export-plugin" run build
+        pnpm --dir ../.. --filter "@talex-touch/tuff-cli" run build
+        pnpm build
