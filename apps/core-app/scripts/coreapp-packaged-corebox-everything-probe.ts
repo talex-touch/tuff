@@ -733,15 +733,22 @@ export function buildModeRunExpression(input: {
       const rows = resultRows()
       const texts = rows.map((node) => (node.textContent || '').replace(/\\s+/g, ' ').trim())
       rowCount = rows.length
-      markerMatchCount = texts.filter((text) => text.toLowerCase().includes(markerToken)).length
+      markerMatchCount = markerToken ? texts.filter((text) => text.toLowerCase().includes(markerToken)).length : 0
       noticeVisible = noticeRows().length > 0
       const nextSignature = rowCount + '|' + noticeVisible + '|' + texts.map((text) => text.length).join(',') + '|' + texts.slice(0, 3).join('~')
       if (nextSignature !== signature) {
         signature = nextSignature
         stableSince = Date.now()
       }
+      const waitingForExpectedMarker =
+        markerToken.length > 0 &&
+        markerMatchCount === 0 &&
+        !noticeVisible &&
+        !document.querySelector('.CoreBox-SearchStatus--error')
       const settled =
-        Date.now() - startedAt >= ${MODE_MIN_WAIT_MS} && Date.now() - stableSince >= ${MODE_STABLE_MS}
+        Date.now() - startedAt >= ${MODE_MIN_WAIT_MS} &&
+        Date.now() - stableSince >= ${MODE_STABLE_MS} &&
+        !waitingForExpectedMarker
       if (settled) break
     }
     const statusNode = document.querySelector('.CoreBox-SearchStatus-Live')
@@ -1212,7 +1219,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
         send,
         buildModeRunExpression({
           query: queries.empty,
-          markerToken: options.emptyToken,
+          markerToken: '',
           timeoutMs: options.modeTimeoutMs
         }),
         options.modeTimeoutMs + 20_000
