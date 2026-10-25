@@ -37,7 +37,7 @@ const props = withDefaults(defineProps<DrawerProps>(), {
   closeOnPressEscape: true,
   maskEffect: 'blur',
   panelTransparent: false,
-  surface: 'refraction',
+  surface: 'pure',
   surfaceColor: '',
   mobileAdapt: true,
   full: false,
@@ -73,14 +73,14 @@ const effectiveDirection = computed<DrawerDirection>(() => {
 })
 
 const surfaceMode = computed<BaseSurfaceMode>(() =>
-  SURFACE_MODES.includes(props.surface) ? props.surface : 'refraction',
+  SURFACE_MODES.includes(props.surface) ? props.surface : 'pure',
 )
 
 const surfaceColor = computed(() => props.surfaceColor || 'var(--tx-drawer-panel-background)')
 
-// mask keeps a near-opaque fill, and the other materials sit over the colour at half strength,
-// so text stays legible and the page still shows through to be blurred and refracted.
-// `panelTransparent` thins either.
+// pure, the default, paints the colour solid whatever this says. mask keeps a near-opaque fill,
+// and the other materials sit over the colour at half strength, so text stays legible and the
+// page still shows through to be blurred and refracted. `panelTransparent` thins either.
 const surfaceOpacity = computed(() => {
   const fallback = surfaceMode.value === 'mask'
     ? (props.panelTransparent ? 0.78 : 0.96)
