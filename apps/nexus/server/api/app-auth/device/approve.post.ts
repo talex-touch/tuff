@@ -1,14 +1,25 @@
+import type { H3Event } from 'h3'
+import type { AuthUser } from '../../../utils/authStore'
 import { createError, readBody } from 'h3'
 import { requireSessionAuth } from '../../../utils/auth'
-import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, getUserById, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
+import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, getUserAccountOverview, getUserById, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
 
 interface ApproveBody {
   code?: string
   grantType?: string
 }
 
+// A passkey, a verified email or a linked account: what device-auth.vue offers a long-lived grant by, read from the
+// same overview `/api/user/me` reports.
+async function hasLongTermSignInMethod(event: H3Event, user: AuthUser): Promise<boolean> {
+  if (user.emailState === 'verified')
+    return true
+  const overview = await getUserAccountOverview(event, user)
+  return overview.passkeyCount > 0 || overview.linkedAccounts.length > 0
+}
+
 export default defineEventHandler(async (event) => {
-  const { userId, sessionAuthenticatedAt } = await requireSessionAuth(event)
+  const { userId, sessionAuthenticatedAt, user: sessionUser } = await requireSessionAuth(event)
   const body = await readBody<ApproveBody>(event)
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
   const requestedGrantType = body?.grantType === 'long'
@@ -113,6 +124,28 @@ export default defineEventHandler(async (event) => {
   }
 
   if (grantType === 'long') {
+    // The page only offers this grant to an account with a sign-in method, but what it sends proves nothing.
+    const accountUser = sessionUser ?? await getUserById(event, userId)
+    if (!accountUser || !await hasLongTermSignInMethod(event, accountUser)) {
+      await recordDeviceAuthAudit(event, {
+        action: 'reject',
+        status: 'blocked',
+        userId,
+        deviceId: request.deviceId,
+        deviceCode: request.deviceCode,
+        userCode: request.userCode,
+        clientType: request.clientType ?? null,
+        actorUserId: userId,
+        reason: 'long_term_not_allowed',
+        metadata: {
+          policyReason: 'sign_in_method',
+        },
+      })
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Long-term authorization requires a passkey, a verified email or a linked account',
+      })
+    }
     const policy = await evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId, { sessionAuthenticatedAt })
     if (!policy.allowLongTerm) {
       await recordDeviceAuthAudit(event, {
