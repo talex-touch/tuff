@@ -14,7 +14,6 @@ import type {
   ITouchPlugin,
   PluginIssue,
   PluginMeta,
-  PluginStorageSyncKind,
   PluginStorageSyncManifest
 } from '@talex-touch/utils/plugin'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
@@ -95,6 +94,7 @@ import type {
 } from './plugin-runtime-capabilities'
 import type { PluginInjections } from './runtime/plugin-injections'
 import type { PluginPreludeManifestContract } from './runtime/plugin-prelude-resolver'
+import { listPluginStorageSyncFiles, matchesPluginStorageSyncFile, readPluginStorageSyncMetadata } from './plugin-storage-sync'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
@@ -3557,52 +3557,9 @@ export class TouchPlugin implements ITouchPlugin {
     return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
   }
 
-  setStorageSyncPolicy(
-    mode: 'legacy' | 'allowlist' | 'invalid',
-    manifest?: PluginStorageSyncManifest
-  ): void {
-    this.storageSyncMode = mode
-    this.storageSync = manifest
-  }
-
-  getPluginStorageSyncFiles(): string[] {
-    if (this.storageSyncMode === 'invalid') return []
-    if (this.storageSyncMode === 'legacy') return this.listPluginFiles()
-
-    const configPath = this.getConfigPath()
-    return (this.storageSync?.files ?? [])
-      .map((file) => file.path)
-      .filter((fileName) => {
-        const safePath = resolveSafePath(configPath, fileName)
-        return Boolean(
-          safePath.resolvedPath &&
-          fse.existsSync(safePath.resolvedPath) &&
-          fse.statSync(safePath.resolvedPath).isFile()
-        )
-      })
-  }
-
-  isPluginStorageSyncFile(fileName: string): boolean {
-    const normalized = fileName.trim().replaceAll('\\', '/')
-    if (!normalized) return false
-    if (this.storageSyncMode === 'invalid') return false
-    if (this.storageSyncMode === 'legacy') {
-      return !normalized.includes('/') && normalized.endsWith('.json')
-    }
-    return this.storageSync?.files.some((file) => file.path === normalized) === true
-  }
-  getPluginStorageSyncMetadata(fileName: string): {
-    kind: PluginStorageSyncKind
-    displayName?: string
-  } {
-    const entry = this.storageSync?.files.find((file) => file.path === fileName)
-    return {
-      kind: entry?.kind ?? 'settings',
-      ...(typeof entry?.displayName === 'string' && entry.displayName.trim()
-        ? { displayName: entry.displayName.trim() }
-        : {})
-    }
-  }
+  getPluginStorageSyncFiles(): string[] { return listPluginStorageSyncFiles(this) }
+  isPluginStorageSyncFile(fileName: string): boolean { return matchesPluginStorageSyncFile(this, fileName) }
+  getPluginStorageSyncMetadata(fileName: string) { return readPluginStorageSyncMetadata(this, fileName) }
 
   /**
    * 获取存储统计信息

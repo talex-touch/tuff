@@ -715,6 +715,9 @@ export default {
       categoryBlob: 'Large attachments',
       categoryStorage: 'Other snapshots',
       categoryOther: 'Other',
+      syncBlobActive: 'Active Blob',
+      syncBlobPending: 'Pending cleanup',
+      syncBlobFailed: 'Cleanup failed',
     },
     notifications: {
       unreadBadgeLabel: '{count} unread notifications',

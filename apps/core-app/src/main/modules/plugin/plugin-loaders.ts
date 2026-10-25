@@ -48,6 +48,7 @@ import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
 import { getNetworkService } from '../network'
 import { getLocale } from '../../utils/i18n-helper'
 import { TouchPlugin } from './plugin'
+import { setPluginStorageSyncPolicy } from './plugin-storage-sync'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
@@ -351,8 +352,8 @@ abstract class BasePluginLoader {
       typeof pluginInfo.category === 'string' && pluginInfo.category.trim()
         ? pluginInfo.category.trim()
         : undefined
-    const storageSyncResolution = resolveStorageSyncManifest(pluginInfo.storageSync)
-    this.touchPlugin.setStorageSyncPolicy(
+    setPluginStorageSyncPolicy(
+      this.touchPlugin,
       storageSyncResolution.mode,
       storageSyncResolution.mode === 'allowlist' ? storageSyncResolution.manifest : undefined
     )

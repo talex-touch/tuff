@@ -712,6 +712,9 @@ export default {
       categoryBlob: '大对象附件',
       categoryStorage: '其他存储快照',
       categoryOther: '未分类数据',
+      syncBlobActive: '当前 Blob',
+      syncBlobPending: '待回收',
+      syncBlobFailed: '回收失败',
     },
     notifications: {
       unreadBadgeLabel: '{count} 条未读通知',
