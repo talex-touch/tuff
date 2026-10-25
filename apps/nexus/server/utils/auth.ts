@@ -14,6 +14,7 @@ import {
   getUserByEmail,
   getUserById,
   getUserWithDevice,
+  hasLongTermSignInMethod,
   readDeviceId,
   readDeviceMetadata,
   upsertDevice,
@@ -470,6 +471,11 @@ export async function requireAppRefreshAuth(event: H3Event): Promise<AuthContext
   const context = await requireAppTokenKind(event, 'refresh')
   if (!context.deviceId || (context.tokenGrantType !== 'short' && context.tokenGrantType !== 'long')) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+  // Access tokens last 24 hours under either grant; a long one only adds renewal past 30 days, so renewal is where it
+  // ends once the account has lost its last sign-in method. Nothing records which devices hold one.
+  if (context.tokenGrantType === 'long' && !(context.user && await hasLongTermSignInMethod(event, context.user))) {
+    throw createError({ statusCode: 401, statusMessage: 'Long-term authorization requires a passkey, a verified email or a linked account' })
   }
   return context
 }

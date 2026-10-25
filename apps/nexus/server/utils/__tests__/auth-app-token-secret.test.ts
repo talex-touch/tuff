@@ -76,6 +76,7 @@ vi.mock('../authStore', () => ({
     const user = users.get(userId) ?? null
     return { user, deviceId: user?.status === 'active' ? 'device-1' : null }
   }),
+  hasLongTermSignInMethod: vi.fn(async () => true),
   readDeviceId: vi.fn(() => 'device-1'),
   readDeviceMetadata: vi.fn(() => ({ deviceName: 'Unit Test CLI', platform: 'test', clientType: 'cli' })),
   upsertDevice: vi.fn(async (_event: unknown, userId: string, deviceId: string) => {

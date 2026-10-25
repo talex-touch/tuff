@@ -1,21 +1,10 @@
-import type { H3Event } from 'h3'
-import type { AuthUser } from '../../../utils/authStore'
 import { createError, readBody } from 'h3'
 import { requireSessionAuth } from '../../../utils/auth'
-import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, getUserAccountOverview, getUserById, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
+import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, getUserById, hasLongTermSignInMethod, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
 
 interface ApproveBody {
   code?: string
   grantType?: string
-}
-
-// A passkey, a verified email or a linked account: what device-auth.vue offers a long-lived grant by, read from the
-// same overview `/api/user/me` reports.
-async function hasLongTermSignInMethod(event: H3Event, user: AuthUser): Promise<boolean> {
-  if (user.emailState === 'verified')
-    return true
-  const overview = await getUserAccountOverview(event, user)
-  return overview.passkeyCount > 0 || overview.linkedAccounts.length > 0
 }
 
 export default defineEventHandler(async (event) => {

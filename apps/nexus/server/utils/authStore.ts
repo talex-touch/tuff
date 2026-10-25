@@ -1965,6 +1965,18 @@ export async function getUserAccountOverview(event: H3Event, user: AuthUser): Pr
   }
 }
 
+/**
+ * A passkey, a verified email or a linked account: what an app grant needs to be long-lived, read from the same
+ * overview `/api/user/me` reports, so device-auth.vue offers the grant by it too. Approving, issuing and renewing a
+ * long grant all ask, so the grant lasts only while the account keeps one.
+ */
+export async function hasLongTermSignInMethod(event: H3Event, user: AuthUser): Promise<boolean> {
+  if (user.emailState === 'verified')
+    return true
+  const overview = await getUserAccountOverview(event, user)
+  return overview.passkeyCount > 0 || overview.linkedAccounts.length > 0
+}
+
 export async function listPasskeys(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)

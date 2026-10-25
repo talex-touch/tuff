@@ -24,6 +24,7 @@ const authStoreMocks = vi.hoisted(() => ({
   evaluateDeviceAuthRateLimit: vi.fn(),
   getDeviceAuthByUserCode: vi.fn(),
   getUserById: vi.fn(),
+  hasLongTermSignInMethod: vi.fn(),
   isDeviceAuthExpired: vi.fn(),
   readRequestIp: vi.fn(),
   recordDeviceAuthAudit: vi.fn(),
@@ -89,6 +90,7 @@ describe('/api/app-auth/device/approve grant type selection', () => {
       reason: null,
     })
     authStoreMocks.getUserById.mockResolvedValue(null)
+    authStoreMocks.hasLongTermSignInMethod.mockResolvedValue(true)
     authStoreMocks.isDeviceAuthExpired.mockReturnValue(false)
     authStoreMocks.readRequestIp.mockReturnValue('203.0.113.10')
     authStoreMocks.recordDeviceAuthAudit.mockResolvedValue({})
