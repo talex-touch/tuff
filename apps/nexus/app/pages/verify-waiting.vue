@@ -8,7 +8,7 @@ definePageMeta({
 })
 
 defineI18nRoute(false)
-
+const { t } = useI18n()
 const pageTitle = computed(() => t('auth.verifyWaitingTitle', 'Check your email'))
 useSeoMeta({
   title: pageTitle,
@@ -16,7 +16,6 @@ useSeoMeta({
   description: computed(() => t('auth.verifyWaitingSubtitle', 'We sent a verification link to your inbox.')),
 })
 
-const { t } = useI18n()
 const route = useRoute()
 
 const email = computed(() => (typeof route.query.email === 'string' ? route.query.email : ''))

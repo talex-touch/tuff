@@ -516,13 +516,13 @@ export function useSignIn() {
       || passkeyPhase.value === 'verifying'
       || passkeyPhase.value === 'success'
   })
+  // Session discovery may be slow on cross-region auth; keep the sign-in controls usable while it runs.
   const { loading: authLoading } = useAuthLoadingState([
     passkeyLoading,
     emailCheckLoading,
     bindLoading,
     oauthLoading,
     passkeyBusy,
-    isSessionVerifying,
   ])
 
   watch(step, (value) => {

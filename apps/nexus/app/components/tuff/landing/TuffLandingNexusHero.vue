@@ -47,26 +47,14 @@ const heroPlatform = ref<HeroPlatform>('darwin')
 const ready = ref(false)
 const enableMotion = ref(false)
 const shouldMountEventHorizon = ref(false)
-const eventHorizonIntentDisposers: Array<() => void> = []
 
 function mountEventHorizon() {
   if (shouldMountEventHorizon.value)
     return
   shouldMountEventHorizon.value = true
   startSceneDemo()
-  for (const dispose of eventHorizonIntentDisposers)
-    dispose()
-  eventHorizonIntentDisposers.length = 0
 }
 
-function bindEventHorizonIntentListeners() {
-  if (!hasWindow())
-    return
-  for (const eventName of ['pointermove', 'scroll', 'touchstart', 'keydown'] as const) {
-    window.addEventListener(eventName, mountEventHorizon, { passive: true, once: true })
-    eventHorizonIntentDisposers.push(() => window.removeEventListener(eventName, mountEventHorizon))
-  }
-}
 
 const triggerRef = ref<InstanceType<typeof TxVersionCapsule> | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
@@ -279,6 +267,7 @@ function rowDelay(index: number, count: number): number {
 }
 
 let demoCancelled = false
+let sceneDemoStarted = false
 const demoTimers = new Set<number>()
 
 function demoSleep(ms: number): Promise<void> {
@@ -331,6 +320,9 @@ async function runSceneLoop(): Promise<void> {
 }
 
 function startSceneDemo() {
+  if (sceneDemoStarted)
+    return
+  sceneDemoStarted = true
   if (enableMotion.value) {
     void runSceneLoop()
     return
@@ -502,7 +494,7 @@ onMounted(() => {
   revealFrame = requestAnimationFrame(() => {
     ready.value = true
   })
-  bindEventHorizonIntentListeners()
+  mountEventHorizon()
 
   loadReleases()
   if (hasWindow()) {
@@ -517,9 +509,6 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(revealFrame)
     revealFrame = null
   }
-  for (const dispose of eventHorizonIntentDisposers)
-    dispose()
-  eventHorizonIntentDisposers.length = 0
   demoCancelled = true
   demoTimers.forEach(id => hasWindow() && window.clearTimeout(id))
   demoTimers.clear()

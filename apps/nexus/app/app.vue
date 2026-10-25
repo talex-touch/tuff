@@ -236,7 +236,7 @@ onMounted(() => {
       void getSession()
   }
   takeOverSearchBoot()
-  window.addEventListener('keydown', handleGlobalSearchShortcut)
+  window.addEventListener('keydown', handleGlobalSearchShortcut, { capture: true })
   window.addEventListener(toastHostRequestedEvent, mountToastHost)
   void (async () => {
     if (docsRouteLocale.value) {
@@ -259,7 +259,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleGlobalSearchShortcut)
+  window.removeEventListener('keydown', handleGlobalSearchShortcut, { capture: true })
   window.removeEventListener(toastHostRequestedEvent, mountToastHost)
 })
 
