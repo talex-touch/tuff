@@ -21,7 +21,7 @@
     },
     {
       "id": "json-formatter-expression-query-eval",
-      "fileSha256": "92b35a2a6e64a6e1165f8f3b01ca0440b24dca155f2e6792c3610956f87683a1",
+      "fileSha256": "59d71ad765f9257691eee79198db54f14a4933734aaeea5896067ddc664e29bd",
       "ruleId": "PLUGIN_SCAN_DYNAMIC_EXECUTION",
       "owner": "TalexTouch Team",
       "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。求值代码在 src/utils/expression-eval.ts，单独成块，只有改这个文件才需要更新哈希。",
