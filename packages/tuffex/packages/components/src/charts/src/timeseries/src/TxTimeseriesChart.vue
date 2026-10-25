@@ -4,7 +4,7 @@
 
 import type { TooltipRow } from '../../tooltip'
 import type { BrushRect } from '../../viewport'
-import type { TimeseriesChartProps, TimeseriesData, TimeseriesMarkerCluster } from './types'
+import type { TimeseriesChartLabels, TimeseriesChartProps, TimeseriesData, TimeseriesMarkerCluster } from './types'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import { TxAxis } from '../../axis'
 import { TxChart } from '../../chart'
@@ -20,6 +20,7 @@ import { clusterTimeseriesMarkers, getApproximateMarkerClusterInterval } from '.
 import { findNearest, getAllTooltipRowsAtTimestamp, limitTooltipRows } from './tooltip-data'
 import TxTimeseriesAnnotations from './TxTimeseriesAnnotations.vue'
 import TxTimeseriesSkeleton from './TxTimeseriesSkeleton.vue'
+import { TIMESERIES_DEFAULT_LABELS } from './types'
 
 defineOptions({ name: 'TxTimeseriesChart' })
 
@@ -49,6 +50,8 @@ const emit = defineEmits<{
 const hiddenSeries = defineModel<string[]>('hiddenSeries', { default: () => [] })
 /** The time window shown, `[from, to]` in ms; `null` shows the whole range. */
 const viewWindow = defineModel<[number, number] | null>('window', { default: null })
+
+const labels = computed<TimeseriesChartLabels>(() => ({ ...TIMESERIES_DEFAULT_LABELS, ...props.labels }))
 
 const chartRef = ref<InstanceType<typeof TxChart> | null>(null)
 const ctx = computed(() => chartRef.value?.context ?? null)
@@ -355,7 +358,7 @@ function onBrushRange(from: number, to: number): void {
 
 <template>
   <div class="tx-timeseries" :aria-busy="props.loading || undefined">
-    <TxTimeseriesSkeleton v-if="props.loading" :height="props.height" :type="props.type" />
+    <TxTimeseriesSkeleton v-if="props.loading" :height="props.height" :type="props.type" :label="labels.loading" />
     <TxChart
       v-else
       ref="chartRef"
@@ -501,6 +504,7 @@ function onBrushRange(from: number, to: number): void {
           :title="tooltipData?.title"
           :rows="tooltipData?.rows"
           :hidden-count="tooltipData?.hiddenCount ?? 0"
+          :more-label="labels.more"
           :footer="props.tooltipFooter"
           :boundary="props.tooltipBoundary"
         >

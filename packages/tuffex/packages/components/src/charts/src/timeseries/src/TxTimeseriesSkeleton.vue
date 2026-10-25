@@ -10,9 +10,12 @@ defineOptions({ name: 'TxTimeseriesSkeleton' })
 const props = withDefaults(defineProps<{
   height?: number
   type?: 'line' | 'bar'
+  /** Accessible name of the loading state. */
+  label?: string
 }>(), {
   height: 350,
   type: 'line',
+  label: 'Loading chart',
 })
 
 const WIDTH = 400
@@ -72,7 +75,7 @@ const isBar = computed(() => props.type === 'bar')
   <div
     class="tx-ts-skeleton"
     role="status"
-    aria-label="Loading chart"
+    :aria-label="props.label"
     :style="{ height: `${props.height}px` }"
   >
     <svg

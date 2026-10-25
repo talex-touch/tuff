@@ -1,4 +1,5 @@
 import type {
+  TimeseriesChartLabels,
   TimeseriesChartProps,
   TimeseriesData,
   TimeseriesMarker,
@@ -21,7 +22,9 @@ export type { IncompleteSegments } from './src/incomplete'
 export { clusterTimeseriesMarkers, getApproximateMarkerClusterInterval } from './src/markers'
 export { findNearest, getAllTooltipRowsAtTimestamp, limitTooltipRows } from './src/tooltip-data'
 export type { TimeseriesTooltipRow } from './src/tooltip-data'
+export { TIMESERIES_DEFAULT_LABELS } from './src/types'
 export type {
+  TimeseriesChartLabels,
   TimeseriesChartProps,
   TimeseriesData,
   TimeseriesMarker,

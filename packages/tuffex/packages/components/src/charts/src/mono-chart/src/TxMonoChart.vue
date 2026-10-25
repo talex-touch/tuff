@@ -138,6 +138,7 @@ const geometry = computed(() => buildMonoGeometry({
   cellSize: props.cellSize, months: props.months, showMonths: props.showMonths, accent: activityAccent.value,
   monthNames: props.variant.startsWith('mono-activity-') || props.variant === 'github-activity' ? monthNames.value : [],
   labels: labels.value,
+  formatX: props.formatX ?? String,
 }))
 const hitIndex = computed(() => new Map(geometry.value.hits.map(hit => [hit.key, hit])))
 const selected = ref<string | null>(null)

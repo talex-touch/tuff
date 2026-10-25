@@ -227,11 +227,13 @@ export {
   formatTimestamp,
   getApproximateMarkerClusterInterval,
   splitIncompleteSegments,
+  TIMESERIES_DEFAULT_LABELS,
   TxTimeseriesChart,
   TxTimeseriesSkeleton,
 } from './src/timeseries'
 export type {
   IncompleteSegments,
+  TimeseriesChartLabels,
   TimeseriesChartProps,
   TimeseriesData,
   TimeseriesMarker,
