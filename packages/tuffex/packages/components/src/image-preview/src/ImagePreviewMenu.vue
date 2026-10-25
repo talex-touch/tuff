@@ -95,6 +95,18 @@ watch(() => [props.open, props.place] as const, ([open]) => {
   nextTick(placeMenu)
 }, { immediate: true })
 
+// The items can change under focus: a turn changes the zooms on offer. Focus on one that goes
+// moves to the item in its place, the last if it was last, rather than dropping to <body>.
+watch(() => props.items.map(item => item.key).join('\n'), () => {
+  if (!holdsFocus())
+    return
+  const at = roving.items().indexOf(document.activeElement as HTMLElement)
+  nextTick(() => {
+    if (!holdsFocus())
+      focusItem(Math.min(at, roving.items().length - 1))
+  })
+})
+
 /**
  * The keys it takes, with their defaults prevented: the preview leaves those alone. The rest go
  * on to the preview, which zooms and turns the picture under the zoom menu.

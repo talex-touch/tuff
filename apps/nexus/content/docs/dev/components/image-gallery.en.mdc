@@ -80,7 +80,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 | `failedText` | `string` | `'This image could not be loaded'` | Text in the preview's placeholder for an image that failed to load. |
 | `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | Builds a display name when `item.name` is absent. |
 | `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | Builds a thumbnail's `aria-label` from its display name. |
-| `previewProps` | `ImageGalleryPreviewProps` | - | The preview's other options, such as `actions`, `indicator`, `bounce`, and the materials; the gallery sets the images, where they fly from, and the labels above. |
+| `previewProps` | `ImageGalleryPreviewProps` | - | The preview's other options, such as `actions`, `indicator`, `bounce`, and the materials; the gallery sets the images, the failures, where they fly from, and the labels above. |
 
 ### Events
 
@@ -107,7 +107,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 - The top bar's image name and position count are an `aria-live` region, so screen readers announce each page.
 - The preview grows out of the clicked thumbnail and shrinks back into it on closing. It opens on the whole image, never cropped, and never blows a small image up past its own pixels; at 640px wide or less, or 480px tall or less, the image fills the screen under floating controls.
 - Until an image loads, its place is held at the shape of the last image looked at (4:3 for the first), and a shimmering placeholder appears only after 150 ms; with reduced motion, it does not shimmer.
-- A preview image that fails to load shows a placeholder with `failedText`; the same URL is not retried, and a new `url` loads again.
+- An image that fails to load shows a placeholder icon in the thumbnail and a placeholder with `failedText` in the preview; the two share the record of failures, so the same URL is not retried, and a new `url` loads again.
 - When `items` becomes empty, the preview closes.
 
 ## Technologies

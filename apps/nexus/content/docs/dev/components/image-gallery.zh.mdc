@@ -80,7 +80,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 | `failedText` | `string` | `'This image could not be loaded'` | 预览图加载失败时显示在占位里的文字。 |
 | `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | 图片没有 `name` 时生成显示名称。 |
 | `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | 由显示名称生成缩略图的 `aria-label`。 |
-| `previewProps` | `ImageGalleryPreviewProps` | - | 传给预览的其余选项，如 `actions`、`indicator`、`bounce` 与材质；图片、飞出位置与上面这些文案由画廊设置。 |
+| `previewProps` | `ImageGalleryPreviewProps` | - | 传给预览的其余选项，如 `actions`、`indicator`、`bounce` 与材质；图片、失败记录、飞出位置与上面这些文案由画廊设置。 |
 
 ### 事件
 
@@ -107,7 +107,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 - 顶栏的图片名称与「当前 / 总数」计数是 `aria-live` 区域，翻页后读屏会播报。
 - 预览从点击的缩略图放大飞出，关闭时缩回它；打开后整张图片完整显示、不裁切，小图不放大到超过原始像素；宽度不超过 640px 或高度不超过 480px 时图片铺满屏幕，控件浮在图片上。
 - 图片加载完成前按上一张看过的图片的比例（第一张按 4:3）留出位置，150 ms 后仍未加载才显示闪烁占位；减少动态效果时占位不闪烁。
-- 预览图加载失败时显示占位与 `failedText`；同一地址不再重试，`url` 变化后重新加载。
+- 图片加载失败后，缩略图显示占位图标，预览显示占位与 `failedText`；两边共用失败记录，同一地址不再重试，`url` 变化后重新加载。
 - `items` 变为空时预览关闭。
 
 ## 技术实现

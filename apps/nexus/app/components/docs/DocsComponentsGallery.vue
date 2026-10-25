@@ -63,6 +63,10 @@ const GalleryImageGallery = defineAsyncComponent(() => import('./gallery/Gallery
 const GalleryVoiceClip = defineAsyncComponent(() => import('./gallery/GalleryVoiceClip.vue'))
 const GalleryImagePreview = defineAsyncComponent(() => import('./gallery/GalleryImagePreview.vue'))
 
+const GalleryImageGeneration = defineAsyncComponent(async () => {
+  const { TxImageGeneration } = await import('@talex-touch/tuffex/image-generation')
+  return TxImageGeneration
+})
 const { locale } = useI18n()
 
 const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
@@ -2947,9 +2951,9 @@ const motionGalleryItems = [
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxImageGeneration preset="pixels-organic">
+            <GalleryImageGeneration preset="pixels-organic">
               <div style="width: 180px; height: 120px; border-radius: 14px" />
-            </TxImageGeneration>
+            </GalleryImageGeneration>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

@@ -14,14 +14,24 @@ function normalizeRoutePath(path: string | null | undefined) {
   }
 }
 
-function isLandingRoute(path: string | null | undefined) {
+export function isLandingRoute(path: string | null | undefined) {
   const normalizedPath = normalizeRoutePath(path)
   return normalizedPath === '/' || normalizedPath === '/new' || normalizedPath === '/next'
 }
 
-function isDocsRoute(path: string | null | undefined) {
+export function isDocsRoute(path: string | null | undefined) {
   const normalizedPath = normalizeRoutePath(path)
   return normalizedPath.startsWith('/docs') || /^\/(?:zh|en)\/docs(?:\/|$)/.test(normalizedPath)
+}
+
+const STATIC_PUBLIC_ROUTE_RE = /^\/(?:store|pricing|license|privacy|protocol|updates|login|sign-in|verify-waiting|device-auth)(?:\/|$)/
+
+export function isStaticPublicRoute(path: string | null | undefined) {
+  return STATIC_PUBLIC_ROUTE_RE.test(normalizeRoutePath(path))
+}
+
+export function isStaticHtmlRoute(path: string | null | undefined) {
+  return isLandingRoute(path) || isDocsRoute(path) || isStaticPublicRoute(path)
 }
 
 export function stripLandingImagePrefetches(html: string, routePath?: string | null) {
@@ -31,8 +41,8 @@ export function stripLandingImagePrefetches(html: string, routePath?: string | n
   return html.replace(IMAGE_PREFETCH_LINK_RE, '')
 }
 
-export function stripLandingModulepreloads(html: string, routePath?: string | null) {
-  if (!isLandingRoute(routePath))
+export function stripStaticModulepreloads(html: string, routePath?: string | null) {
+  if (!isStaticHtmlRoute(routePath))
     return html
 
   return html.replace(MODULE_PRELOAD_LINK_RE, '')

@@ -29,6 +29,7 @@ import {
   useId,
 
 } from 'vue'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
@@ -64,7 +65,7 @@ const zIndex = ref(zIndexAllocator.get())
 // title and its message, and stacked dialogs never collide on a hard-coded id.
 const titleId = useId()
 const contentId = useId()
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 let didApplyBackgroundBlur = false
 
 /**
@@ -77,7 +78,7 @@ function sleep(ms: number): Promise<void> {
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
-  previouslyFocusedElement = document.activeElement as HTMLElement
+  focusReturn.save()
 
   if (props.render) {
     renderComp.value = defineComponent({
@@ -90,7 +91,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  restoreFocus()
+  focusReturn.restore()
 })
 
 /**
@@ -103,13 +104,10 @@ function setFocusToDialog(): void {
   }
 }
 
-/**
- * Restores focus to the previously focused element.
- */
-function restoreFocus(): void {
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
+/** aria-modal="true" promises the page behind is inert, so Tab stays inside. */
+function keepTab(event: KeyboardEvent): void {
+  if (dialogWrapper.value)
+    trapTab(event, dialogWrapper.value)
 }
 
 /**
@@ -142,9 +140,13 @@ function applyBackgroundBlur(apply: boolean): void {
 }
 
 /**
- * Destroys the dialog with animation.
+ * Destroys the dialog with animation. It is gone for the keys and the pointer at once: focus goes
+ * back, the dialog is inert while it leaves, and a second Escape reaches what is under it.
  */
 async function destroy(): Promise<void> {
+  if (isClosing.value)
+    return
+  focusReturn.restore()
   applyBackgroundBlur(false)
   isClosing.value = true
   await sleep(550)
@@ -177,7 +179,9 @@ provide('destroy', destroy)
         aria-modal="true"
         :aria-labelledby="title ? titleId : undefined"
         :aria-describedby="(message || messageHtml) ? contentId : undefined"
-        @keydown.esc="destroy"
+        :inert="isClosing || undefined"
+        @keydown.esc.prevent="destroy"
+        @keydown.tab="keepTab"
       >
         <div class="tx-blow-dialog__container">
           <TxBaseSurface

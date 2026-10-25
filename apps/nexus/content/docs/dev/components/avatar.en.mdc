@@ -191,7 +191,7 @@ code: |
 
 ## Overview
 
-- Content falls back from the image to the default slot, `icon`, initials from `name`, then the default `user` icon; a failed image load falls back the same way.
+- Content falls back from the image to the default slot, `icon`, initials from `name`, then the default `user` icon; a failed image load falls back the same way, and a new `src` loads the image again.
 - Initials are the first characters of the first and last words, uppercased.
 - With `clickable`, the root gets `role="button"` and `tabindex="0"`, and Enter / Space emit `click` like a click does.
 - In a group, `z-index` rises left to right, so each avatar covers the bottom-right corner — status dot included — of the one before; `lift` brings the hovered avatar forward.

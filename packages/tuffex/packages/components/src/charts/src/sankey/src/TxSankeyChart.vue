@@ -7,6 +7,7 @@ import type { PositionedSankeyLink, PositionedSankeyNode } from './layout'
 import type { SankeyChartProps, SankeyLabels, SankeyLinkData, SankeyNodeData, SankeyTooltipParams } from './types'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, useId, watch } from 'vue'
 import { stepSpring } from '../../../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import { responseSpring } from '../../../../../../utils/gesture'
 import { useReducedMotion } from '../../../../../../utils/use-reduced-motion'
 import { nextUid } from '../../core/uid'
@@ -114,20 +115,14 @@ function writeOffsets(changes: Iterable<[number, number]>): void {
 
 const reduced = useReducedMotion()
 const settling = new Map<number, { value: number, velocity: number, target: number }>()
-let frame = 0
-let lastTime = 0
+const settleLoop = createFrameLoop(tickSettle)
 
 function stopSettling(): void {
-  if (frame)
-    cancelAnimationFrame(frame)
-  frame = 0
+  settleLoop.stop()
   settling.clear()
 }
 
-function tickSettle(now: number): void {
-  frame = 0
-  const dt = Math.min(0.064, Math.max(0, (now - lastTime) / 1000))
-  lastTime = now
+function tickSettle(dt: number): boolean {
   const changes: Array<[number, number]> = []
   for (const [index, motion] of settling) {
     ;[motion.value, motion.velocity] = stepSpring(motion.value, motion.velocity, motion.target, SETTLE_SPRING, dt)
@@ -138,8 +133,7 @@ function tickSettle(now: number): void {
     changes.push([index, motion.value])
   }
   writeOffsets(changes)
-  if (settling.size > 0)
-    frame = requestAnimationFrame(tickSettle)
+  return settling.size > 0
 }
 
 /** Springs each node in `targets` (index → offset) there; reduced motion jumps. */
@@ -156,10 +150,7 @@ function settle(targets: Map<number, number>): void {
       target,
     })
   }
-  if (frame)
-    return
-  lastTime = performance.now()
-  frame = requestAnimationFrame(tickSettle)
+  settleLoop.start()
 }
 
 onBeforeUnmount(stopSettling)

@@ -10,6 +10,7 @@
 import type { CurveReadout, DrawnRun, LearningCurveProps } from './types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { stepSpring } from '../../../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import { responseSpring } from '../../../../../../utils/gesture'
 import { useReducedMotion } from '../../../../../../utils/use-reduced-motion'
 import { TxAxis } from '../../axis'
@@ -176,27 +177,21 @@ const yFit = computed<[number, number] | undefined>(() => {
 const Y_SPRING = responseSpring(0.35, 1)
 const yDomain = ref<[number, number] | undefined>(yFit.value)
 let yVelocity: [number, number] = [0, 0]
-let yFrame = 0
-let yLastTime = 0
+const yLoop = createFrameLoop(stepY)
 
 function stopY(): void {
-  if (yFrame)
-    cancelAnimationFrame(yFrame)
-  yFrame = 0
+  yLoop.stop()
   yVelocity = [0, 0]
 }
 
-function stepY(now: number): void {
-  yFrame = 0
+function stepY(dt: number): boolean {
   const goal = yFit.value
   const from = yDomain.value
   if (!goal || !from) {
     yDomain.value = goal
     yVelocity = [0, 0]
-    return
+    return false
   }
-  const dt = Math.min(0.064, Math.max(0, (now - yLastTime) / 1000))
-  yLastTime = now
   const [lo, vlo] = stepSpring(from[0], yVelocity[0], goal[0], Y_SPRING, dt)
   const [hi, vhi] = stepSpring(from[1], yVelocity[1], goal[1], Y_SPRING, dt)
   // At rest within a quarter pixel, moving under four pixels a second.
@@ -207,11 +202,11 @@ function stepY(now: number): void {
   ) {
     yDomain.value = goal
     yVelocity = [0, 0]
-    return
+    return false
   }
   yVelocity = [vlo, vhi]
   yDomain.value = [lo, hi]
-  yFrame = requestAnimationFrame(stepY)
+  return true
 }
 
 watch(yFit, (goal) => {
@@ -221,12 +216,9 @@ watch(yFit, (goal) => {
     yDomain.value = goal
     return
   }
-  if (goal[0] === from[0] && goal[1] === from[1] && yFrame === 0)
+  if (goal[0] === from[0] && goal[1] === from[1] && !yLoop.running())
     return
-  if (!yFrame) {
-    yLastTime = performance.now()
-    yFrame = requestAnimationFrame(stepY)
-  }
+  yLoop.start()
 })
 onBeforeUnmount(stopY)
 

@@ -1,5 +1,5 @@
 import { stepSpring } from './animation/spring'
-import { glideAxis, responseSpring, rubberband } from './gesture'
+import { glideAxis, responseSpring, tether } from './gesture'
 
 // A view drawn as `translate(tx, ty) scale(k)` that pointers pan and zoom, and its motion once let
 // go. The maps' roam and the image preview move on this: the same spring, rubber band and glide.
@@ -35,14 +35,6 @@ export function clampView(view: PanZoomView, bounds: PanZoomBounds): PanZoomView
   return { k: view.k, tx: clampAxis(view.tx, bounds.tx), ty: clampAxis(view.ty, bounds.ty) }
 }
 
-function resistAxis(value: number, [lo, hi]: [number, number], size: number): number {
-  if (value < lo)
-    return lo + rubberband(value - lo, size)
-  if (value > hi)
-    return hi + rubberband(value - hi, size)
-  return value
-}
-
 /**
  * A dragged view as drawn: the part pulled past `bounds` resists like a rubber band, measured
  * against the size of what it is dragged across.
@@ -50,8 +42,8 @@ function resistAxis(value: number, [lo, hi]: [number, number], size: number): nu
 export function resistView(view: PanZoomView, bounds: PanZoomBounds, size: { width: number, height: number }): PanZoomView {
   return {
     k: view.k,
-    tx: resistAxis(view.tx, bounds.tx, size.width),
-    ty: resistAxis(view.ty, bounds.ty, size.height),
+    tx: tether(view.tx, bounds.tx[0], bounds.tx[1], size.width),
+    ty: tether(view.ty, bounds.ty[0], bounds.ty[1], size.height),
   }
 }
 

@@ -12,6 +12,7 @@ import {
   useId,
 
 } from 'vue'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
@@ -46,7 +47,7 @@ const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
 const zIndex = ref(zIndexAllocator.get())
-let previouslyFocusedElement: HTMLElement | null = null
+const focusReturn = createFocusReturn()
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -54,7 +55,7 @@ function sleep(ms: number): Promise<void> {
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
-  previouslyFocusedElement = document.activeElement as HTMLElement
+  focusReturn.save()
 
   if (props.render) {
     renderComp.value = defineComponent({
@@ -69,12 +70,23 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
+  focusReturn.restore()
 })
 
+/** aria-modal="true" promises the page behind is inert, so Tab stays inside. */
+function keepTab(event: KeyboardEvent): void {
+  if (dialogWrapper.value)
+    trapTab(event, dialogWrapper.value)
+}
+
+/**
+ * Gone for the keys and the pointer at once: focus goes back, the dialog is inert while it leaves,
+ * and a second Escape reaches what is under it.
+ */
 async function destroy(): Promise<void> {
+  if (isClosing.value)
+    return
+  focusReturn.restore()
   isClosing.value = true
   await sleep(250)
   props.close()
@@ -97,7 +109,9 @@ provide('destroy', destroy)
         aria-modal="true"
         :aria-labelledby="title ? titleId : undefined"
         :aria-describedby="message || messageHtml ? contentId : undefined"
-        @keydown.esc="destroy"
+        :inert="isClosing || undefined"
+        @keydown.esc.prevent="destroy"
+        @keydown.tab="keepTab"
       >
         <div class="tx-popper-dialog__container">
           <TxBaseSurface

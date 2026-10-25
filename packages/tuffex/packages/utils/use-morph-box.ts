@@ -2,6 +2,7 @@ import type { MaybeRefOrGetter, Ref } from 'vue'
 import { onBeforeUnmount, onMounted, ref, toValue, watch } from 'vue'
 import { stepSpring } from './animation/spring'
 import { hasWindow } from './env'
+import { createFrameLoop } from './frame-loop'
 import { useReducedMotion } from './use-reduced-motion'
 
 /**
@@ -58,8 +59,6 @@ export const MORPH_BOX_SPRING: MorphBoxSpring = { stiffness: 480, damping: 34 }
 
 const SETTLE_DISTANCE = 0.25
 const SETTLE_SPEED = 8
-/** A stalled tab must not hand the spring one giant step. */
-const MAX_FRAME_S = 0.064
 const MIN_CHANGE = 0.5
 
 type Axis = 'width' | 'height'
@@ -97,8 +96,6 @@ export function useMorphBox(
   const morphing = ref(false)
 
   let observer: ResizeObserver | null = null
-  let frameId = 0
-  let lastTs = 0
   /** The content's size at the last observation; the box rests at this plus `chrome`. */
   let natural: Size | null = null
   let chrome: Chrome = { width: 0, height: 0, contentBox: false }
@@ -118,14 +115,10 @@ export function useMorphBox(
       el.style[axis] = animates(axis) ? `${position[axis] - (chrome.contentBox ? chrome[axis] : 0)}px` : ''
   }
 
-  function cancelFrame() {
-    if (frameId && hasWindow())
-      cancelAnimationFrame(frameId)
-    frameId = 0
-  }
+  const loop = createFrameLoop(step, { firstStep: 1 / 60 })
 
   function land() {
-    cancelFrame()
+    loop.stop()
     const el = box.value
     if (el) {
       el.style.width = ''
@@ -139,10 +132,7 @@ export function useMorphBox(
     }
   }
 
-  function step(ts: number) {
-    frameId = 0
-    const dt = lastTs ? Math.min(Math.max((ts - lastTs) / 1000, 0), MAX_FRAME_S) : 1 / 60
-    lastTs = ts
+  function step(dt: number): boolean {
     const spring = toValue(options.spring) ?? MORPH_BOX_SPRING
     let settled = true
     for (const axis of AXES) {
@@ -156,11 +146,11 @@ export function useMorphBox(
     }
     if (settled) {
       land()
-      return
+      return false
     }
     write()
     options.onFrame?.({ width: position.width, height: position.height, settled: false })
-    frameId = requestAnimationFrame(step)
+    return true
   }
 
   function onResize(entry?: ResizeObserverEntry) {
@@ -194,12 +184,11 @@ export function useMorphBox(
       position.height = previous.height + restChrome.height
       velocity.width = 0
       velocity.height = 0
-      lastTs = 0
       morphing.value = true
       write()
     }
-    if (!frameId && hasWindow())
-      frameId = requestAnimationFrame(step)
+    if (hasWindow())
+      loop.start()
   }
 
   // A new content element, or the morph turned off or on: start over from rest.
@@ -229,7 +218,7 @@ export function useMorphBox(
   onBeforeUnmount(() => {
     observer?.disconnect()
     observer = null
-    cancelFrame()
+    loop.stop()
   })
 
   return { morphing, settle: land }

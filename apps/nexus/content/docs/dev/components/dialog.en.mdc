@@ -277,7 +277,8 @@ code: |
 - All four variants teleport to `body` and take their layer from the shared z-index manager.
 - They emit no events and have no slots; they close only through the required `close` callback.
 - Escape calls `close()` after the leave animation; the `TxBottomDialog` close button also only cancels and never fires a row action.
-- Focus returns to the previously focused element on unmount; `useId()` ids wire the title and body to `aria-labelledby` / `aria-describedby`.
+- While open, Tab stays inside the panel. Focus returns to the previously focused element as soon as the close starts (on unmount, for one unmounted open), and the panel is `inert` while it leaves, handing the pointer and the keys to the layer below. `useId()` ids wire the title and body to `aria-labelledby` / `aria-describedby`.
+- `TxBottomDialog` and `TxTouchTip` lock page scrolling while open.
 - `message` renders as plain text with line breaks kept; `messageHtml` accepts only values marked by `asTrustedDialogHtml()`, which does not sanitize.
 - Bodies set `overflow-wrap: anywhere` and cap their own height with scrolling, so long tokens don't widen the panel and long content isn't clipped.
 - The panel background is a card-preset `TxBaseSurface` (`fake`) under the content, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted.

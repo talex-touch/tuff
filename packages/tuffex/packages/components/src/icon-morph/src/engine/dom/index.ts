@@ -1,8 +1,9 @@
 /* DOM driver: createMorph over a <path> element — the vanilla instance the
    bindings wrap. Writes the `d` attribute per frame and all instances share
-   ONE rAF (singleton scheduler). Compiles without `lib: DOM`: browser
-   globals are resolved safely at runtime. */
+   ONE frame loop (singleton scheduler). Browser globals are resolved safely
+   at runtime: with no frames to wait for, the loop runs on a timer. */
 
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import { allocOutputs, interpPolar } from '../core/interpolate'
 import { iconToCubics } from '../core/normalize'
 import { buildPlan, type MorphPlan } from '../core/plan'
@@ -10,22 +11,6 @@ import { resampleIcon } from '../core/resample'
 import { cubicsToPathD, serialize } from '../core/serialize'
 import { Spring, SPRING_PRESETS, type SpringPreset } from '../core/spring'
 import type { IconInput, IconNode, Sampled } from '../core/types'
-
-function getRaf(): (cb: (ts: number) => void) => number {
-  if (typeof requestAnimationFrame !== 'undefined')
-    return requestAnimationFrame
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame !== 'undefined')
-    return window.requestAnimationFrame.bind(window)
-  return (cb: (ts: number) => void) => setTimeout(() => cb(Date.now()), 16) as unknown as number
-}
-
-function getCaf(): (id: number) => void {
-  if (typeof cancelAnimationFrame !== 'undefined')
-    return cancelAnimationFrame
-  if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame !== 'undefined')
-    return window.cancelAnimationFrame.bind(window)
-  return (id: number) => clearTimeout(id)
-}
 
 /** Target element, structurally typed: any object with setAttribute works
  *  (a real SVGPathElement, or a fake in tests). */
@@ -70,44 +55,26 @@ export interface Morph {
 }
 
 // ---------------------------------------------------------------------------
-// Singleton scheduler: a Set of tickers and a single live rAF while any
-// exist. dt in seconds clamped to 0.1 (backgrounded tab); the first frame
-// after starting receives dt = 0 (paints the current state, no jump).
+// Singleton scheduler: a Set of tickers and one frame loop while any exist.
+// dt in seconds clamped to 0.1 (backgrounded tab); the first frame after
+// starting receives dt = 0 (paints the current state, no jump).
 
 type Ticker = (dt: number) => void
 
 const tickers = new Set<Ticker>()
-let rafId = 0
-let last = -1
-
-function loop(ts: number): void {
-  const dt = last < 0 ? 0 : Math.min(Math.max((ts - last) / 1000, 0), 0.1)
-  last = ts
+const loop = createFrameLoop((dt) => {
   for (const tick of [...tickers]) tick(dt)
-  if (tickers.size > 0) {
-    rafId = getRaf()(loop)
-  }
-  else {
-    rafId = 0
-    last = -1
-  }
-}
+  return tickers.size > 0
+}, { firstStep: 0, maxStep: 0.1 })
 
 function addTicker(tick: Ticker): void {
   tickers.add(tick)
-  if (rafId === 0) {
-    last = -1
-    rafId = getRaf()(loop)
-  }
+  loop.start()
 }
 
 function removeTicker(tick: Ticker): void {
   tickers.delete(tick)
-  if (tickers.size === 0 && rafId !== 0) {
-    getCaf()(rafId)
-    rafId = 0
-    last = -1
-  }
+  if (tickers.size === 0) loop.stop()
 }
 
 // ---------------------------------------------------------------------------

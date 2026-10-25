@@ -32,6 +32,8 @@ const emit = defineEmits<{
   look: [point: PreviewPoint, follow: boolean]
   /** A press on it began or ended. */
   drag: [dragging: boolean]
+  /** A wheel over it, which does not reach the preview under it. */
+  wheel: [event: WheelEvent]
 }>()
 
 const mapRef = ref<HTMLElement | null>(null)
@@ -179,7 +181,7 @@ onBeforeUnmount(release)
 </script>
 
 <template>
-  <div class="tx-image-preview__minimap" :class="{ 'is-shown': shown }" aria-hidden="true">
+  <div class="tx-image-preview__minimap" :class="{ 'is-shown': shown }" aria-hidden="true" @wheel.stop="emit('wheel', $event)">
     <TxBaseSurface class="tx-image-preview__surface tx-image-preview__control-surface" fake v-bind="material" />
     <div
       ref="mapRef"

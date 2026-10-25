@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -7,6 +8,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const nexusRoot = join(currentDir, '..')
 const distRoot = join(nexusRoot, 'dist')
 const nuxtRoot = join(distRoot, '_nuxt')
+const workerRoot = join(distRoot, '_worker.js')
 
 function walkFiles(dir) {
   if (!existsSync(dir))
@@ -99,9 +101,179 @@ function trimPrerenderedClientSqlDumps() {
   console.log(`[nexus-content-assets] verified Cloudflare root SQL dumps: ${verifiedDumps.join(', ')}`)
   console.log(`[nexus-content-assets] removed prerendered client SQL dumps: ${removedBytes} bytes`)
 }
+function findMatchingBrace(source, openingIndex) {
+  let depth = 0
+  let quote = null
+  let escaped = false
+
+  for (let index = openingIndex; index < source.length; index++) {
+    const character = source[index]
+    if (quote) {
+      if (escaped)
+        escaped = false
+      else if (character === '\\')
+        escaped = true
+      else if (character === quote)
+        quote = null
+      continue
+    }
+
+    if (character === '"' || character === '\'' || character === '`') {
+      quote = character
+      continue
+    }
+    if (character === '{') {
+      depth++
+      continue
+    }
+    if (character === '}') {
+      depth--
+      if (depth === 0)
+        return index
+    }
+  }
+
+  throw new Error(`unclosed object starting at ${openingIndex}`)
+}
+
+function trimTopLevelProperties(source, marker, keyPrefix) {
+  const markerIndex = source.indexOf(marker)
+  if (markerIndex === -1)
+    throw new Error(`precomputed manifest marker is missing: ${marker}`)
+
+  const openingIndex = markerIndex + marker.length - 1
+  const closingIndex = findMatchingBrace(source, openingIndex)
+  const removals = []
+  let depth = 1
+  let index = openingIndex + 1
+
+  while (index < closingIndex) {
+    const character = source[index]
+    if (character === '"' || character === '\'' || character === '`') {
+      const quote = character
+      let end = index + 1
+      let escaped = false
+      while (end < closingIndex) {
+        const value = source[end]
+        if (escaped)
+          escaped = false
+        else if (value === '\\')
+          escaped = true
+        else if (value === quote)
+          break
+        end++
+      }
+
+      const key = source.slice(index + 1, end)
+      if (depth === 1 && quote === '"' && key.startsWith(keyPrefix)) {
+        let valueStart = end + 1
+        while (/\s/.test(source[valueStart] ?? ''))
+          valueStart++
+        if (source[valueStart] !== ':') {
+          index = end + 1
+          continue
+        }
+        valueStart++
+        while (/\s/.test(source[valueStart] ?? ''))
+          valueStart++
+        if (source[valueStart] !== '{')
+          throw new Error(`precomputed demo property is not an object: ${key}`)
+
+        let propertyEnd = findMatchingBrace(source, valueStart) + 1
+        while (/\s/.test(source[propertyEnd] ?? ''))
+          propertyEnd++
+        if (source[propertyEnd] === ',')
+          propertyEnd++
+        removals.push([index, propertyEnd])
+        index = propertyEnd
+        continue
+      }
+
+      index = end + 1
+      continue
+    }
+
+    if (character === '{')
+      depth++
+    else if (character === '}')
+      depth--
+    index++
+  }
+
+  for (let index = removals.length - 1; index >= 0; index--) {
+    const [start, end] = removals[index]
+    source = source.slice(0, start) + source.slice(end)
+  }
+  return { source, removed: removals.length }
+}
+
+function replaceObjectSection(source, marker, replacement) {
+  const markerIndex = source.indexOf(marker)
+  if (markerIndex === -1)
+    throw new Error(`precomputed manifest marker is missing: ${marker}`)
+  const openingIndex = markerIndex + marker.length - 1
+  const closingIndex = findMatchingBrace(source, openingIndex)
+  return source.slice(0, openingIndex) + replacement + source.slice(closingIndex + 1)
+}
+function replaceLastObjectSection(source, marker, replacement) {
+  const markerIndex = source.lastIndexOf(marker)
+  if (markerIndex === -1)
+    throw new Error(`precomputed manifest marker is missing: ${marker}`)
+  const openingIndex = markerIndex + marker.length - 1
+  const closingIndex = findMatchingBrace(source, openingIndex)
+  return source.slice(0, openingIndex) + replacement + source.slice(closingIndex + 1)
+}
+function removeObjectProperties(source, marker) {
+  let removed = 0
+  let markerIndex = source.indexOf(marker)
+  while (markerIndex !== -1) {
+    const openingIndex = markerIndex + marker.length - 1
+    const closingIndex = findMatchingBrace(source, openingIndex)
+    let trailingIndex = closingIndex + 1
+    while (/\s/.test(source[trailingIndex] ?? ''))
+      trailingIndex++
+
+    const hasTrailingComma = source[trailingIndex] === ','
+    let start = markerIndex
+    const end = hasTrailingComma ? trailingIndex + 1 : trailingIndex
+    if (!hasTrailingComma) {
+      let previousIndex = markerIndex - 1
+      while (/\s/.test(source[previousIndex] ?? ''))
+        previousIndex--
+      if (source[previousIndex] === ',')
+        start = previousIndex
+    }
+
+    source = source.slice(0, start) + source.slice(end)
+    removed++
+    markerIndex = source.indexOf(marker, start)
+  }
+  return { source, removed }
+}
+
+function trimPrecomputedClientManifest() {
+  const manifestPath = walkFiles(workerRoot).find(file => file.endsWith('/chunks/build/client.precomputed.mjs'))
+  if (!manifestPath)
+    return
+
+  const original = readFileSync(manifestPath, 'utf8')
+  let source = original
+  const trimmedDependencies = trimTopLevelProperties(source, 'dependencies:{', '../nexus-demo-loader:')
+  source = trimmedDependencies.source
+  source = replaceLastObjectSection(source, 'modules:{', '{}')
+  const trimmedPrefetch = removeObjectProperties(source, 'prefetch:{')
+  source = trimmedPrefetch.source
+
+  if (source === original)
+    return
+  writeFileSync(manifestPath, source)
+  console.log(`[nexus-content-assets] trimmed client precomputed manifest: ${trimmedDependencies.removed} demo loaders, ${trimmedPrefetch.removed} prefetch maps; ${Buffer.byteLength(original) - Buffer.byteLength(source)} bytes removed`)
+}
+
 
 trimDuplicateSqliteWasm()
 trimPrerenderedClientSqlDumps()
+trimPrecomputedClientManifest()
 
 const remainingDuplicateWasm = walkFiles(nuxtRoot)
   .map(file => relative(nuxtRoot, file))

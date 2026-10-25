@@ -2,7 +2,7 @@
 import type { CSSProperties } from 'vue'
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
-import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
+import { createFocusReturn, markDialogLeaving, trapTab } from '../../../../utils/focus-trap'
 import { useGuardedClose } from '../../../../utils/guarded-close'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
@@ -153,6 +153,7 @@ onUnmounted(() => {
       enter-active-class="tx-modal-enter-active tx-modal-moving"
       leave-active-class="tx-modal-leave-active tx-modal-moving"
       :duration="{ enter: 300, leave: 200 }"
+      @before-leave="markDialogLeaving"
     >
       <div
         v-if="visible"

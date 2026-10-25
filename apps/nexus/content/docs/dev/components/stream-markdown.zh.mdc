@@ -66,7 +66,7 @@ code: |
 | `copyCodeText` | `string` | `'Copy'` | 代码块复制按钮的文字。 |
 | `copiedCodeText` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
 | `diagramZoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
-| `diagramPreviewLabel` | `string` | `'Diagram preview'` | 图表全屏预览的可访问名称。 |
+| `diagramPreviewLabel` | `string` | `'Diagram preview'` | 图表全屏预览及其中图表滚动区的可访问名称。 |
 | `diagramCloseLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
 | `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
 
@@ -90,7 +90,7 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `zoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
-| `previewLabel` | `string` | `'Diagram preview'` | 全屏预览的可访问名称。 |
+| `previewLabel` | `string` | `'Diagram preview'` | 全屏预览及其中图表滚动区的可访问名称。 |
 | `closeLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
 | `errorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
 | `copyLabel` | `string` | `'Copy'` | 渲染失败后所显示源码的复制按钮文字。 |
@@ -101,7 +101,7 @@ code: |
 - 文档按块渲染：追加文本不会重排整篇。
 - 流式中仍在增长的尾部围栏推迟到闭合后再渲染最终形态；渲染器收到的 `closed` 只对它为 `false`。
 - 未注册的语言走内置渲染：`mermaid` 用 `TxMermaidBlock`，其余用 `TxCodeBlock`。
-- 点图表打开全屏预览：焦点移到关闭按钮，Tab 留在预览内；Escape 或点空白处关闭，Escape 只在预览位于最上层时生效；关闭后焦点回到图表。
+- 点图表打开全屏预览：焦点移到关闭按钮，Tab 留在预览内，在关闭按钮和图表之间切换；图表比屏幕高时，Tab 到图表上再用方向键滚动。Escape 或点空白处关闭，Escape 只在预览位于最上层时生效；关闭后焦点回到图表。预览打开期间，后面的页面不滚动。
 - 光标同 `TxStreamText`：尾部是段落、标题或引用时紧跟末字符，否则单独位于下方一行；减弱动效时不播放进场，光标静止。
 - DOMPurify 动态加载；`sanitize` 开启时，加载完成前或加载失败时不渲染任何内容。净化不能替代服务端的信任边界。
 - 图片放行记录是模块级的，所有实例共享；切换会话时调用导出的 `resetRemoteImagePolicy()` 清除。

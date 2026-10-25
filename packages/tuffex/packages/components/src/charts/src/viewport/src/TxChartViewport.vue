@@ -8,6 +8,7 @@
 import type { BrushRect, ViewWindow } from './viewport'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { stepSpring } from '../../../../../../utils/animation/spring'
+import { createFrameLoop } from '../../../../../../utils/frame-loop'
 import {
   createVelocityTracker,
   glideAxis,
@@ -117,8 +118,7 @@ let shown: ViewWindow | null = null
 let target: ViewWindow | null = null
 let velocity: [number, number] = [0, 0]
 let mode: 'idle' | 'spring' | 'glide' = 'idle'
-let frame = 0
-let lastTime = 0
+const loop = createFrameLoop(tick)
 
 /** Mirrors `target !== null`, for the cursor. */
 const zoomed = ref(false)
@@ -152,9 +152,7 @@ function valueAt(px: number, window: ViewWindow): number {
 }
 
 function stopMotion(): void {
-  if (frame)
-    cancelAnimationFrame(frame)
-  frame = 0
+  loop.stop()
   mode = 'idle'
   velocity = [0, 0]
 }
@@ -170,10 +168,7 @@ function settle(): void {
 
 function run(): void {
   ctx.immediate.value = true
-  if (frame)
-    return
-  lastTime = performance.now()
-  frame = requestAnimationFrame(tick)
+  loop.start()
 }
 
 /** Moves the view to `next` (`null`: the full range), springing unless motion is reduced. */
@@ -220,15 +215,12 @@ function atRest(window: ViewWindow, goal: ViewWindow): boolean {
     && Math.abs(velocity[1]) < perPx * 4
 }
 
-function tick(now: number): void {
-  frame = 0
-  const dt = Math.min(0.064, Math.max(0, (now - lastTime) / 1000))
-  lastTime = now
+function tick(dt: number): boolean {
   const full = extent.value
   const from = shown
   if (!full || !from) {
     settle()
-    return
+    return false
   }
   if (mode === 'glide') {
     const [start, speed] = glideAxis(from[0], velocity[0], dt)
@@ -247,15 +239,15 @@ function tick(now: number): void {
     velocity = [va, vb]
     if (atRest([a, b], goal)) {
       settle()
-      return
+      return false
     }
     publish([a, b])
   }
   else {
     settle()
-    return
+    return false
   }
-  frame = requestAnimationFrame(tick)
+  return true
 }
 
 // ── The model ────────────────────────────────────────────────────────────────

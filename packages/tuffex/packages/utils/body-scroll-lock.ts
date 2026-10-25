@@ -1,3 +1,7 @@
+// The page behind an overlay holds still: the body stops scrolling, and keeps the width the
+// scrollbar took. Counted, so the page scrolls again only once the last overlay lets go. The count
+// keeps the name its first owner, TxFlipOverlay, gave it: two copies of the library on one page,
+// an older and a newer, still share it.
 const BODY_LOCK_COUNT_KEY = 'txFlipOverlayLockCount'
 const BODY_LOCK_OVERFLOW_KEY = 'txFlipOverlayLockOverflow'
 const BODY_LOCK_PADDING_KEY = 'txFlipOverlayLockPaddingRight'
@@ -6,7 +10,7 @@ function canUseDom(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
 }
 
-export function lockFlipOverlayBodyScroll(): void {
+export function lockBodyScroll(): void {
   if (!canUseDom())
     return
 
@@ -29,7 +33,7 @@ export function lockFlipOverlayBodyScroll(): void {
   body.dataset[BODY_LOCK_COUNT_KEY] = String(currentCount + 1)
 }
 
-export function unlockFlipOverlayBodyScroll(): void {
+export function unlockBodyScroll(): void {
   if (!canUseDom())
     return
 

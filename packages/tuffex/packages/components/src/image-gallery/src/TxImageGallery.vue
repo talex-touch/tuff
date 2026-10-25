@@ -2,6 +2,7 @@
 import type TxImagePreviewComponent from '../../image-preview/src/TxImagePreview.vue'
 import type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps } from './types'
 import { computed, ref, watch } from 'vue'
+import { BrokenImageIcon } from '../../../../utils/broken-image-icon'
 import { useLazyComponent } from '../../../../utils/use-lazy-component'
 
 defineOptions({
@@ -41,6 +42,14 @@ watch(
   },
   { immediate: true },
 )
+
+// Broken images become a placeholder, in the thumbnail and in the preview, instead of a browser
+// broken-image glyph. Keyed by URL, so a host that swaps a failed URL for a new one gets a fresh load.
+const failedUrls = ref(new Set<string>())
+
+function markFailed(url: string): void {
+  failedUrls.value = new Set(failedUrls.value).add(url)
+}
 
 // The preview flies each picture out of its thumbnail and back into it.
 function thumbOf(i: number): Element | null {
@@ -94,10 +103,12 @@ function openAt(i: number, event: MouseEvent): void {
         :key="item.id"
         type="button"
         class="tx-image-gallery__thumb"
+        :class="{ 'is-broken': failedUrls.has(item.url) }"
         :aria-label="openLabelFormatter(getItemLabel(item, i))"
         @click="openAt(i, $event)"
       >
-        <img :src="item.url" :alt="item.name || ''" loading="lazy">
+        <BrokenImageIcon v-if="failedUrls.has(item.url)" :size="20" :stroke-width="2" />
+        <img v-else :src="item.url" :alt="item.name || ''" loading="lazy" @error="markFailed(item.url)">
       </button>
     </div>
 
@@ -108,6 +119,7 @@ function openAt(i: number, event: MouseEvent): void {
       v-model:open="visible"
       v-model:index="index"
       :images="list"
+      :failed="failedUrls"
       :origin="thumbOf"
       :label="previewTitle"
       :previous-label="previousLabel"
@@ -118,6 +130,7 @@ function openAt(i: number, event: MouseEvent): void {
       :reset-label="resetLabel"
       :failed-text="failedText"
       @close="emit('close')"
+      @error="markFailed"
       @action="emit('action', $event)"
     />
   </div>
@@ -148,5 +161,13 @@ function openAt(i: number, event: MouseEvent): void {
   margin: 0;
   object-fit: cover;
   display: block;
+}
+
+// A picture that failed leaves its placeholder, centred on the fill, as in TxAttachmentTray.
+.tx-image-gallery__thumb.is-broken {
+  display: grid;
+  place-items: center;
+  background: var(--tx-fill-color, #f0f2f5);
+  color: var(--tx-text-color-secondary, #6b7280);
 }
 </style>

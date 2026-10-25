@@ -70,26 +70,46 @@ function parseCssZIndex(value: string): number | null {
   return n
 }
 
+/**
+ * The z-indexes that stack `el`, outermost first: one for each element from the root down to it
+ * that sets one. A dialog can stack inside a layer it does not set itself: TxTouchTip's panel and
+ * TxFlipOverlay's card sit in the z-index their wrapper or mask was given, with 0 or 1 of their own.
+ */
+function zIndexPath(el: Element): Array<[Element, number]> {
+  const path: Array<[Element, number]> = []
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    const zIndex = parseCssZIndex(getComputedStyle(node).zIndex)
+    if (zIndex != null)
+      path.unshift([node, zIndex])
+  }
+  return path
+}
+
 /** Resolve keyboard ownership from live dialog semantics, including across source/dist instances. */
 export function isTopmostModalDialog(dialog: HTMLElement | null): boolean {
   if (!dialog?.isConnected)
     return false
 
-  const currentZIndex = parseCssZIndex(getComputedStyle(dialog).zIndex) ?? 0
+  const dialogPath = zIndexPath(dialog)
   const dialogs = dialog.ownerDocument.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]:not([aria-hidden="true"]):not([inert])')
   for (const candidate of dialogs) {
     if (candidate === dialog)
       continue
-    if (candidate.getAttribute('aria-hidden') === 'true' || candidate.hasAttribute('inert'))
+    // Inside a layer that is leaving or hidden, as TxTouchTip's panel is once its wrapper goes inert.
+    if (candidate.closest('[aria-hidden="true"], [inert]'))
       continue
     if (candidate.classList.contains('tx-drawer') && !candidate.classList.contains('tx-drawer--visible'))
-      continue
-    if (candidate.classList.contains('tx-modal') && !candidate.classList.contains('tx-modal--visible'))
       continue
     const style = getComputedStyle(candidate)
     if (style.display === 'none' || style.visibility === 'hidden')
       continue
-    const candidateZIndex = parseCssZIndex(style.zIndex) ?? 0
+    // Compared where the two layers part: past the ancestors they share, the first z-index each sets.
+    const candidatePath = zIndexPath(candidate)
+    let at = 0
+    while (at < candidatePath.length && at < dialogPath.length && candidatePath[at]![0] === dialogPath[at]![0])
+      at++
+    const candidateZIndex = candidatePath[at]?.[1] ?? 0
+    const currentZIndex = dialogPath[at]?.[1] ?? 0
     if (candidateZIndex > currentZIndex
       || (candidateZIndex === currentZIndex && (dialog.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING)))
       return false

@@ -6,13 +6,11 @@ import TxButton from '../../button/src/button.vue'
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../../../utils/body-scroll-lock'
 import { hasWindow } from '../../../../utils/env'
+import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { shownBox } from '../../../../utils/shown-box'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
-import {
-  lockFlipOverlayBodyScroll,
-  unlockFlipOverlayBodyScroll,
-} from './flip-overlay-body-scroll-lock'
 import {
   getOverlayStackVersion,
   getVisibleOverlayStackEntries,
@@ -76,10 +74,15 @@ const slots: Slots = useSlots()
 const instanceId = nextOverlayInstanceId()
 const titleId = useId()
 const descId = useId()
-let previouslyFocused: HTMLElement | null = null
+// aria-modal="true" promises focus is inside the dialog: it moves into the card as the overlay
+// opens, and back as it starts to close.
+const focusReturn = createFocusReturn()
 
 const cardRef = ref<HTMLElement | null>(null)
 const visible = ref(Boolean(props.modelValue))
+// From the close until the overlay is gone, while the card flies back to its source. Inert the
+// whole time, so the pointer and the keys reach what is under it.
+const closing = ref(false)
 const expanded = ref(typeof props.expanded === 'boolean' ? props.expanded : false)
 const animating = ref(typeof props.animating === 'boolean' ? props.animating : false)
 const zIndex = ref(zIndexAllocator.get())
@@ -106,6 +109,7 @@ const stackMeta = computed(() => {
       depth: 0,
       stackSize: 0,
       isMaskOwner: true,
+      takesPointer: true,
       isLayered: false,
       isDepthHidden: false,
       translateY: 0,
@@ -122,6 +126,7 @@ const stackMeta = computed(() => {
       depth: 0,
       stackSize: stackEntries.length,
       isMaskOwner: true,
+      takesPointer: true,
       isLayered: false,
       isDepthHidden: false,
       translateY: 0,
@@ -150,6 +155,8 @@ const stackMeta = computed(() => {
     depth,
     stackSize: stackEntries.length,
     isMaskOwner: depth === 0,
+    // Under overlays that are only flying back, the pointer is this mask's: they are inert.
+    takesPointer: stackEntries.slice(selfIndex + 1).every(entry => entry.closing),
     isLayered,
     isDepthHidden: opacity <= 0,
     translateY: STACK_LAYER_OFFSET_Y * layeredDepth,
@@ -218,7 +225,7 @@ const shellClassName = computed(() => {
 const maskStyle = computed(() => {
   const style: Record<string, number | string> = {
     zIndex: zIndex.value,
-    pointerEvents: stackMeta.value.isMaskOwner ? 'auto' : 'none',
+    pointerEvents: stackMeta.value.takesPointer ? 'auto' : 'none',
   }
 
   const usesSharedStackMask = props.globalMask && stackMeta.value.stackSize > 1
@@ -403,6 +410,7 @@ function upsertStackEntry(): void {
     width: size.width,
     height: size.height,
     visible: true,
+    closing: closing.value,
     globalMask: props.globalMask,
     maskClass: props.maskClass,
   }
@@ -479,12 +487,14 @@ const {
 function requestOpen(): void {
   zIndex.value = zIndexAllocator.next()
   openSequence.value = nextOverlayOpenSequence()
+  closing.value = false
   if (!hasWindow()) {
     visible.value = true
     syncExpanded(true)
     emit('opened')
     return
   }
+  focusReturn.save(cardRef.value)
   visible.value = true
   upsertStackEntry()
   runId += 1
@@ -496,14 +506,17 @@ function requestOpen(): void {
   nextTick(() => {
     if (currentRunId !== runId)
       return
+    cardRef.value?.focus()
     upsertStackEntry()
     startOpenAnimation(currentRunId)
   })
 }
 
 function requestClose(): void {
-  if (!visible.value)
+  if (!visible.value || closing.value)
     return
+  closing.value = true
+  focusReturn.restore()
   runId += 1
   const currentRunId = runId
   syncExpanded(false)
@@ -560,26 +573,16 @@ watch(
   { immediate: true },
 )
 
-// aria-modal="true" promises focus is inside the dialog, so move focus into the card
-// on open and restore it to the previously focused element on close.
-watch(visible, (isVisible) => {
-  if (!hasWindow())
-    return
-  if (isVisible) {
-    previouslyFocused = document.activeElement as HTMLElement | null
-    nextTick(() => {
-      cardRef.value?.focus()
-    })
-  }
-  else if (previouslyFocused) {
-    previouslyFocused.focus()
-    previouslyFocused = null
-  }
-})
+/** Keeps Tab inside the card, as aria-modal="true" promises. */
+function handleCardTab(event: KeyboardEvent): void {
+  if (cardRef.value)
+    trapTab(event, cardRef.value)
+}
 
 watch(
   () => [
     visible.value,
+    closing.value,
     expanded.value,
     animating.value,
     zIndex.value,
@@ -608,12 +611,12 @@ watch(
   visible,
   (value) => {
     if (value && !bodyScrollLocked.value) {
-      lockFlipOverlayBodyScroll()
+      lockBodyScroll()
       bodyScrollLocked.value = true
       return
     }
     if (!value && bodyScrollLocked.value) {
-      unlockFlipOverlayBodyScroll()
+      unlockBodyScroll()
       bodyScrollLocked.value = false
     }
   },
@@ -642,9 +645,10 @@ onBeforeUnmount(() => {
   clearBlockedCloseWarning()
   removeStackEntry()
   if (bodyScrollLocked.value) {
-    unlockFlipOverlayBodyScroll()
+    unlockBodyScroll()
     bodyScrollLocked.value = false
   }
+  focusReturn.restore()
 })
 
 defineExpose({
@@ -670,7 +674,7 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
        870px, and the trigger it flips from left the screen. -->
   <Teleport to="body">
     <Transition :name="transitionName" :css="useMaskCssTransition">
-      <div v-if="visible" v-bind="$attrs" :class="maskClassName" :style="maskStyle" @click="handleMaskClick">
+      <div v-if="visible" v-bind="$attrs" :class="maskClassName" :style="maskStyle" :inert="closing || undefined" @click="handleMaskClick">
         <div
           v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
           class="TxFlipOverlay-GlobalMask"
@@ -685,7 +689,8 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
           :aria-labelledby="(shouldRenderBuiltInHeader && props.headerTitle) ? titleId : undefined"
           :aria-describedby="(shouldRenderBuiltInHeader && props.headerDesc) ? descId : undefined"
           @click.stop
-          @keydown.esc="handleMaskClick"
+          @keydown.esc.prevent="handleMaskClick"
+          @keydown.tab="handleCardTab"
         >
           <TxBaseSurface
             class="TxFlipOverlay-Surface"

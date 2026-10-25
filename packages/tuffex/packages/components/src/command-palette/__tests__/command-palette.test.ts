@@ -69,7 +69,9 @@ describe('txCommandPalette', () => {
   })
 
   it('closes on Escape even when the filtered list is empty', async () => {
+    // Escape is heard on the document, so the palette has to be in it.
     const wrapper = mount(TxCommandPalette, {
+      attachTo: document.body,
       props: {
         modelValue: true,
         commands: [
@@ -89,6 +91,7 @@ describe('txCommandPalette', () => {
     await input.trigger('keydown', { key: 'Escape' })
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false])
+    wrapper.unmount()
   })
 
   it('renders custom empty and footer slots', () => {

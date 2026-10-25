@@ -4,7 +4,7 @@ import type { VelocityTracker } from '../../../../utils/gesture'
 import type { PhysicsMotionEmits, PhysicsMotionProps } from './types'
 import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, useId, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
-import { createVelocityTracker, responseSpring, rubberband } from '../../../../utils/gesture'
+import { createVelocityTracker, responseSpring, tether } from '../../../../utils/gesture'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import { resolveTransition } from '../../liquid/src/spring'
 import PhysicsNode from './PhysicsNode.vue'
@@ -253,11 +253,6 @@ function onDragKeydown(event: KeyboardEvent): void {
   event.preventDefault()
   event.stopPropagation()
   cancelDrag()
-}
-
-/** 1:1 between `min` and `max`, resisting past either, the more the further it is pulled. */
-function tether(value: number, min: number, max: number, size: number): number {
-  return value < min ? min + rubberband(value - min, size) : value > max ? max + rubberband(value - max, size) : value
 }
 
 function pointerDown(event: PointerEvent): void {

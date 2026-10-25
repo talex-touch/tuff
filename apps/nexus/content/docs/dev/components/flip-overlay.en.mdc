@@ -122,8 +122,8 @@ code: |
 - Closing emits `close`, `update:modelValue(false)`, then `closed`; it fully closes once the parent writes `v-model` back.
 - Mask clicks and Escape obey `maskClosable` and flash the warning under `preventAccidentalClose`; the close button and `close()` bypass both.
 - Header priority: `#header` overrides the built-in header; otherwise `header` decides whether it renders.
-- With `globalMask`, stacked overlays share one mask and only the top one takes clicks; similar-sized neighbors offset (up to 3 layers) and deeper layers fade out.
-- The card is `role="dialog"` with `aria-modal="true"`; focus moves into it on open and returns to the previously focused element on close.
+- With `globalMask`, stacked overlays share one mask and only the top one takes clicks, not counting one flying back; similar-sized neighbors offset (up to 3 layers) and deeper layers fade out.
+- The card is `role="dialog"` with `aria-modal="true"`; focus moves into it on open, and Tab stays inside. Focus returns to the previously focused element as soon as the close starts, and the overlay is `inert` while the card flies back, handing the pointer and the keys to the layer below.
 
 ## Technologies
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // Adapted from Amicro Dock. MIT License. Copyright (c) 2026 SYED  SUBHAN UDDIN.
 import type { ComponentPublicInstance, CSSProperties } from 'vue'
+import type { VelocityTracker } from '../../../../utils/gesture'
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { MotionDockEmits, MotionDockId, MotionDockItem, MotionDockProps, MotionDockReorder } from './types'
 import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, useId, watch } from 'vue'
 import { stepSpring } from '../../../../utils/animation/spring'
+import { createVelocityTracker, rubberband } from '../../../../utils/gesture'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { MOTION_DOCK_DEFAULT_LABELS } from './types'
@@ -18,7 +20,6 @@ const emit = defineEmits<MotionDockEmits>()
 interface Spring { stiffness: number, damping: number, mass?: number }
 interface Axis { value: number, velocity: number, target: number }
 interface ItemMotion { size: Axis, x: Axis, y: Axis, lift: Axis, released: boolean }
-interface Sample { time: number, x: number, y: number }
 
 const SIZES: Record<string, number> = { xs: 20, sm: 24, md: 28, lg: 36 }
 const SURFACES: readonly string[] = ['pure', 'mask', 'blur', 'glass', 'refraction', 'acrylic', 'mica', 'flat', 'plain']
@@ -30,8 +31,6 @@ const MOVE_SPRING: Spring = { stiffness: 440, damping: 42 }
 const DROP_SPRING: Spring = { stiffness: 320, damping: 29 }
 const LIFT = 1.06
 const DRAG_SLOP = 4
-const VELOCITY_WINDOW = 100
-const MAX_VELOCITY = 4000
 
 const root = ref<HTMLElement | null>(null)
 const shelf = ref<HTMLElement | null>(null)
@@ -72,7 +71,7 @@ let drag: {
   moved: boolean
   capture: HTMLElement
   original: MotionDockItem[]
-  samples: Sample[]
+  tracker: VelocityTracker
 } | undefined
 
 function axis(value: number): Axis {
@@ -273,22 +272,6 @@ function commit(items: MotionDockItem[], detail: MotionDockReorder): void {
     announce(item, detail.to, items.length)
 }
 
-/** Resistance past the dock's edge: follows less the further it is pulled. */
-function rubberband(offset: number, dimension: number, constant = .55): number {
-  return (offset * dimension * constant) / (dimension + constant * Math.abs(offset))
-}
-
-function releaseVelocity(samples: readonly Sample[], now: number): [number, number] {
-  const last = samples[samples.length - 1]
-  const first = samples.find(sample => last && last.time - sample.time <= VELOCITY_WINDOW)
-  // A pointer that stopped before letting go hands over no momentum.
-  if (!last || !first || last === first || now - last.time > VELOCITY_WINDOW / 2)
-    return [0, 0]
-  const seconds = (last.time - first.time) / 1000
-  const clamp = (value: number) => Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, value))
-  return [clamp((last.x - first.x) / seconds), clamp((last.y - first.y) / seconds)]
-}
-
 function endDrag(): void {
   const current = drag
   drag = undefined
@@ -323,8 +306,9 @@ function pointerDown(item: MotionDockItem, event: PointerEvent): void {
     moved: false,
     capture: element,
     original: Array.from(props.items),
-    samples: [{ time: event.timeStamp, x: event.clientX, y: event.clientY }],
+    tracker: createVelocityTracker(),
   }
+  drag.tracker.reset(event.timeStamp, event.clientX, event.clientY)
   element.setPointerCapture(event.pointerId)
 }
 
@@ -333,9 +317,7 @@ function pointerMove(event: PointerEvent): void {
   const current = drag
   if (!current || current.pointerId !== event.pointerId)
     return
-  current.samples.push({ time: event.timeStamp, x: event.clientX, y: event.clientY })
-  while (current.samples.length > 2 && event.timeStamp - current.samples[0]!.time > VELOCITY_WINDOW)
-    current.samples.shift()
+  current.tracker.push(event.timeStamp, event.clientX, event.clientY)
   const dy = event.clientY - current.startY
   if (!current.moved) {
     if (Math.hypot(event.clientX - current.startX, dy) < DRAG_SLOP)
@@ -392,7 +374,7 @@ function pointerUp(event: PointerEvent): void {
   if (current.moved) {
     suppressClick = current.id
     const motion = motionOf(current.id)
-    const [vx, vy] = releaseVelocity(current.samples, event.timeStamp)
+    const [vx, vy] = current.tracker.velocity(event.timeStamp)
     // The release continues at the pointer's speed; across the dock, at the tether's.
     const pull = itemSize.value / (itemSize.value + .55 * Math.abs(event.clientY - current.startY))
     motion.x.velocity = vx

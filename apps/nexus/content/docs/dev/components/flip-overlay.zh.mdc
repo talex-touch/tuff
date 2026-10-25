@@ -122,8 +122,8 @@ code: |
 - 关闭顺序为 `close` → `update:modelValue(false)` → `closed`；父级回写 `v-model` 后才完全关闭。
 - 遮罩点击与 Escape 受 `maskClosable` 约束，`preventAccidentalClose` 时改为闪烁警示；关闭按钮与 `close()` 不受这两项限制。
 - 头部优先级：`#header` 覆盖内置头部；否则由 `header` 决定是否渲染。
-- `globalMask` 下堆叠的浮层共享遮罩，只有顶层响应点击；尺寸相近的相邻层错位（最多 3 层），更深层逐级淡出。
-- 卡片是 `role="dialog"`，带 `aria-modal="true"`；打开时焦点移入卡片，关闭后回到打开前的元素。
+- `globalMask` 下堆叠的浮层共享遮罩，只有顶层响应点击（正在飞回的不算）；尺寸相近的相邻层错位（最多 3 层），更深层逐级淡出。
+- 卡片是 `role="dialog"`，带 `aria-modal="true"`；打开时焦点移入卡片，Tab 留在卡片内。一开始关闭焦点就回到打开前的元素，卡片飞回期间浮层为 `inert`，指针与按键交给下面的一层。
 
 ## 技术实现
 

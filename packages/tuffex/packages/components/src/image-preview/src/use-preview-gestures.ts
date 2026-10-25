@@ -97,6 +97,8 @@ export interface PreviewGestures {
   /** Something moves on its own: a glide, a spring or a slide. */
   moving: Ref<boolean>
   zoomed: ComputedRef<boolean>
+  /** The view springs back to the whole picture: zoomed as drawn still, but not where it is headed. */
+  fitting: Ref<boolean>
   atMinScale: ComputedRef<boolean>
   atMaxScale: ComputedRef<boolean>
   /** The scales the zoom readout's menu offers for the current picture, below its whole. */
@@ -107,7 +109,8 @@ export interface PreviewGestures {
   onPointerCancel: (event: PointerEvent) => void
   onLostPointerCapture: (event: PointerEvent) => void
   onClick: (event: MouseEvent) => void
-  onWheel: (event: WheelEvent) => void
+  /** A wheel zooms about the pointer, or about `about`, in the stage's pixels, when given. */
+  onWheel: (event: WheelEvent, about?: PreviewPoint) => void
   /** Safari's trackpad pinch, which arrives as these rather than as a zoom wheel. */
   onGestureStart: (event: Event) => void
   onGestureChange: (event: Event) => void
@@ -130,6 +133,8 @@ export interface PreviewGestures {
   lookAt: (point: PreviewPoint, follow?: boolean) => void
   /** Turns the page, sliding the next picture in. */
   go: (step: -1 | 1) => void
+  /** A slide under way goes back rather than turning the page: closing, the picture flying home stays current. */
+  keepPage: () => void
   /** Escape: the gesture under way goes back to where it started. Returns whether there was one. */
   cancel: () => boolean
   /** The press under way opened something else, a menu say: it ends here, without a click or a tap. */
@@ -249,6 +254,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
   })
   const gesture = ref<PreviewGesture>('idle')
   const moving = ref(false)
+  const fitting = ref(false)
 
   function boundsAt(k: number): PreviewBounds {
     const image = oriented()
@@ -275,6 +281,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
 
   function syncMoving(): void {
     moving.value = viewMotion !== null || angleMotion !== null || trackMotion !== null || dismissMotion !== null
+    fitting.value = viewMotion?.toFit === true
   }
 
   /** Page turns overshoot by the host's bounce; at none they stop where they land. */
@@ -346,7 +353,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
   })
 
   function run(): void {
-    moving.value = true
+    syncMoving()
     loop.start()
   }
 
@@ -522,14 +529,20 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     run()
   }
 
+  function keepPage(): void {
+    if (!trackMotion || trackStep === 0)
+      return
+    trackMotion.target = 0
+    trackMotion.mode = 'spring'
+    trackStep = 0
+  }
+
   function go(step: -1 | 1): void {
     if (!options.active() || busy())
       return
     if (trackMotion && trackStep === -step) {
       // The other way while a slide comes in: it goes back instead.
-      trackMotion.target = 0
-      trackMotion.mode = 'spring'
-      trackStep = 0
+      keepPage()
       return
     }
     if (trackMotion && trackStep !== 0) {
@@ -1016,13 +1029,13 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     go(current.swipe > 0 ? 1 : -1)
   }
 
-  function onWheel(event: WheelEvent): void {
+  function onWheel(event: WheelEvent, about?: PreviewPoint): void {
     // Nothing behind the preview scrolls or zooms while it is open.
     event.preventDefault()
     if (!options.active() || busy())
       return
     const delta = wheelPixels(event, options.size().height || 800)
-    const point = toLocal(event)
+    const point = about ?? toLocal(event)
     if (isZoomWheel(event)) {
       if (event.deltaMode === 0 && Math.abs(delta.y) < CONTINUOUS_WHEEL_PX)
         followWheelPinch(wheelZoomFactor(delta.y), point)
@@ -1177,6 +1190,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     gesture,
     moving,
     zoomed,
+    fitting,
     atMinScale,
     atMaxScale,
     presets,
@@ -1198,6 +1212,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     rotate,
     lookAt,
     go,
+    keepPage,
     cancel,
     endPress,
     resetView,
