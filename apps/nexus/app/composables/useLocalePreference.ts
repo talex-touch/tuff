@@ -62,8 +62,9 @@ export function useLocalePreference() {
     const currentPath = window.location.pathname || '/'
     const pathSegments = currentPath.split('/').filter(Boolean)
     const currentPathScopes = pathSegments.map((_, index) => `/${pathSegments.slice(0, index + 1).join('/')}`)
+    // Never '/': that is the cookie being kept. `useCookie` skips writing a value it already
+    // holds, so expiring the root cookie here deleted it on every other page load.
     const knownPathScopes = [
-      '/',
       '/auth',
       '/dashboard',
       '/device-auth',
