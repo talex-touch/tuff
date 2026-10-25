@@ -3,6 +3,7 @@ import type { StorePluginListItem } from './useStoreData'
 import type { PluginVersionStatus } from './usePluginVersionStatus'
 import { CURRENT_SDK_VERSION, PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'
 
 interface DetailMetaItem {
@@ -20,6 +21,7 @@ export function useStoreDetail(
   versionStatus?: ComputedRef<PluginVersionStatus>
 ) {
   const { packageJson } = useEnv()
+  const { locale } = useI18n()
   const compatibilityHint = computed(() => {
     const sdkapi = plugin.value?.manifest?.sdkapi
     if (!plugin.value) return ''
@@ -47,7 +49,7 @@ export function useStoreDetail(
           ? new Date(timestamp)
           : new Date(Number(timestamp) || Date.parse(timestamp))
     try {
-      return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
+      return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium' }).format(date)
     } catch {
       return ''
     }

@@ -28,7 +28,7 @@ const props = withDefaults(
   { showTrigger: true, reference: null }
 )
 const emit = defineEmits<{ 'visible-change': [visible: boolean] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { openLoginSettings, requestStepUp } = useAuth()
 const { isLoggedIn, displayId, displayName, displayEmail, profileBio, avatarUrl, displayInitial } =
   useUserIdentity()
@@ -169,7 +169,7 @@ function formatDate(value: string | number | null | undefined): string {
   if (Number.isNaN(date.getTime())) {
     return '-'
   }
-  return date.toLocaleDateString()
+  return date.toLocaleDateString(locale.value)
 }
 
 function formatQuota(used?: number, limit?: number): string {

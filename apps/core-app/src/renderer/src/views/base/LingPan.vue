@@ -177,7 +177,7 @@ const loading = ref<boolean>(false)
 const error = ref<string | null>(null)
 const snapshot = ref<TuffDashboardSnapshot | null>(null)
 const activeTab = ref('system')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 type DashboardResponse = {
   ok: boolean
@@ -357,7 +357,7 @@ async function load(): Promise<void> {
 function formatDateTime(value: string | null): string {
   if (!value) return 'N/A'
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale.value, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -521,7 +521,7 @@ function sourceLabel(job: OcrJobEntry): string {
   }
   if (job.source.type === 'data-url') {
     const length = job.source.dataUrlLength ?? 0
-    return t('settingAbout.dashboardDataUrlSource', { count: length.toLocaleString() })
+    return t('settingAbout.dashboardDataUrlSource', { count: length.toLocaleString(locale.value) })
   }
   return t('settingAbout.dashboardUnknownSource')
 }

@@ -46,7 +46,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { isLoggedIn } = useAuth()
 const appSdk = useAppSdk()
 
@@ -245,7 +245,7 @@ function formatContentPackageDate(value: string | null | undefined): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return t('store.detailDialog.contentUnknownDate')
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale.value, {
     year: 'numeric',
     month: 'short',
     day: '2-digit'

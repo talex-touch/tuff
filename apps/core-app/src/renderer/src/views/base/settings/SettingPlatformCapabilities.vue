@@ -17,7 +17,7 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const platformSdk = usePlatformSdk()
 const settingPlatformCapabilitiesLog = createRendererLogger('SettingPlatformCapabilities')
 
@@ -93,7 +93,7 @@ const groupedCapabilities = computed(() =>
 
 const lastUpdatedText = computed(() => {
   if (!lastUpdated.value) return ''
-  return lastUpdated.value.toLocaleString()
+  return lastUpdated.value.toLocaleString(locale.value)
 })
 
 const statusSummary = computed(() =>

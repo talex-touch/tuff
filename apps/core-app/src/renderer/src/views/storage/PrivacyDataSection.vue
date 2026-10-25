@@ -52,7 +52,7 @@ const DEFAULT_SELECTIONS: Record<PrivacyRetentionCategory, PrivacyRetentionPrese
 }
 
 const privacySdk = createPrivacySdk(useTuffTransport())
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /** 验证码可选时长。比这更长的话，一次性码的意义本身就没了。 */
 const VERIFICATION_CODE_OPTIONS = [
@@ -202,7 +202,7 @@ function summaryFor(category: PrivacyDataCategory): PrivacyCategorySummary | und
 function lastCleanupLabel(category: PrivacyDataCategory): string {
   const value = summaryFor(category)?.lastCleanupAt
   return value
-    ? t('privacyData.summary.lastCleanup', { value: new Date(value).toLocaleString() })
+    ? t('privacyData.summary.lastCleanup', { value: new Date(value).toLocaleString(locale.value) })
     : t('privacyData.summary.neverCleaned')
 }
 

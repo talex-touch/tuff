@@ -1566,7 +1566,7 @@ async function triggerRebuild() {
       active-icon="i-carbon-time"
     >
       <div class="time-text">
-        {{ lastChecked.toLocaleTimeString() }}
+        {{ lastChecked.toLocaleTimeString(locale) }}
       </div>
     </TuffBlockSlot>
   </TuffGroupBlock>
@@ -1590,7 +1590,7 @@ async function triggerRebuild() {
         <span v-if="sourceDiagnosticsCheckedAt" class="diagnostic-time">
           {{
             t('settings.settingFileIndex.diagnosticLastChecked', {
-              time: sourceDiagnosticsCheckedAt.toLocaleTimeString()
+              time: sourceDiagnosticsCheckedAt.toLocaleTimeString(locale)
             })
           }}
         </span>
@@ -2129,7 +2129,7 @@ async function triggerRebuild() {
           <span v-if="deviceIdleDiagnosticCheckedAt" class="diagnostic-time">
             {{
               t('settings.settingFileIndex.diagnosticLastChecked', {
-                time: deviceIdleDiagnosticCheckedAt.toLocaleTimeString()
+                time: deviceIdleDiagnosticCheckedAt.toLocaleTimeString(locale)
               })
             }}
           </span>

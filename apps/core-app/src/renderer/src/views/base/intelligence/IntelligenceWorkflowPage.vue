@@ -168,7 +168,7 @@ function formatDate(value?: number): string {
   if (!value) {
     return '-'
   }
-  return new Date(value).toLocaleString()
+  return new Date(value).toLocaleString(locale.value)
 }
 
 function formatLatency(value?: number): string {

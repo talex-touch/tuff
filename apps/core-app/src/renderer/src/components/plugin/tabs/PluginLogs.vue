@@ -18,7 +18,7 @@ const props = defineProps<{
 }>()
 
 const transport = useTuffTransport()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toolbarTooltipAnchor = {
   placement: 'bottom',
   panelShadow: 'soft'
@@ -72,7 +72,7 @@ const openFileLabel = withFallback('plugin.logs.openFile', '打开日志文件')
 const openDirectoryLabel = withFallback('plugin.logs.openDirectory', '打开日志目录')
 const liveLabel = withFallback('plugin.logs.liveLabel', '实时')
 const liveStreamLabel = withFallback('plugin.logs.liveStreamLabel', 'Live Stream')
-const liveClockLabel = computed(() => new Date(liveClock.value).toLocaleTimeString())
+const liveClockLabel = computed(() => new Date(liveClock.value).toLocaleTimeString(locale.value))
 const loadingLabel = withFallback('common.loading', '加载中…')
 const emptyLabel = withFallback('plugin.logs.noLogs', '暂无日志输出')
 const historyEmpty = withFallback('plugin.logs.historyEmpty', '暂无历史日志')
