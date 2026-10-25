@@ -1055,11 +1055,10 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       return result
     }
     logPhase(`CoreBox renderer ready (${target.id})`)
-    const probeTarget =
-      targets.find(
-        (entry) =>
-          entry.type === 'page' && entry.id !== target.id && Boolean(entry.webSocketDebuggerUrl)
-      ) ?? target
+    // The CoreBox renderer already owns the trusted transport bridge used by the typed query below.
+    // Do not select an arbitrary second /json/list page: on Windows that can be the main renderer or
+    // a DevTools page whose CDP Runtime.enable never answers, before the actual CoreBox check starts.
+    const probeTarget = target
 
     const show = await withTarget(probeTarget, (send) =>
       evaluate<{ shown: boolean; visible: boolean; packaged: boolean; href: string }>(
