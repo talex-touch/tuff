@@ -715,6 +715,9 @@ export default {
       syncBlobActive: '当前 Blob',
       syncBlobPending: '待回收',
       syncBlobFailed: '回收失败',
+      syncBlobObjectCount: '{count} 个',
+      syncDetailItemCount: '{count} 条',
+      syncDetailFileCount: '{count} 个文件',
     },
     notifications: {
       unreadBadgeLabel: '{count} 条未读通知',

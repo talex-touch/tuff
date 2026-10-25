@@ -243,6 +243,10 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(precision)} ${units[unitIndex]}`
 }
 
+function formatObjectCount(objects: number): string {
+  return t('dashboard.storage.syncBlobObjectCount', { count: objects }, objects)
+}
+
 function formatTime(value: string | null): string {
   if (!value) {
     return '-'
@@ -843,15 +847,15 @@ watch(showDetailsOverlay, (open) => {
               <div v-if="syncBlobUsage" class="StorageDetailOverlay-BillingGrid">
                 <div class="StorageDetailOverlay-BillingCard">
                   <strong>{{ t('dashboard.storage.syncBlobActive', '当前 Blob') }}</strong>
-                  <span>{{ formatBytes(syncBlobUsage.active.bytes) }} · {{ syncBlobUsage.active.objects }} 个</span>
+                  <span>{{ formatBytes(syncBlobUsage.active.bytes) }} · {{ formatObjectCount(syncBlobUsage.active.objects) }}</span>
                 </div>
                 <div class="StorageDetailOverlay-BillingCard">
                   <strong>{{ t('dashboard.storage.syncBlobPending', '待回收') }}</strong>
-                  <span>{{ formatBytes(syncBlobUsage.staged.bytes + syncBlobUsage.orphaned.bytes) }} · {{ syncBlobUsage.staged.objects + syncBlobUsage.orphaned.objects }} 个</span>
+                  <span>{{ formatBytes(syncBlobUsage.staged.bytes + syncBlobUsage.orphaned.bytes) }} · {{ formatObjectCount(syncBlobUsage.staged.objects + syncBlobUsage.orphaned.objects) }}</span>
                 </div>
                 <div class="StorageDetailOverlay-BillingCard">
                   <strong>{{ t('dashboard.storage.syncBlobFailed', '回收失败') }}</strong>
-                  <span>{{ formatBytes(syncBlobUsage.delete_failed.bytes) }} · {{ syncBlobUsage.delete_failed.objects }} 个</span>
+                  <span>{{ formatBytes(syncBlobUsage.delete_failed.bytes) }} · {{ formatObjectCount(syncBlobUsage.delete_failed.objects) }}</span>
                 </div>
               </div>
 
@@ -874,7 +878,7 @@ watch(showDetailsOverlay, (open) => {
                       <strong>{{ resolveCategoryLabel(category.key, category.label) }}</strong>
                     </div>
                     <div class="text-xs text-black/55 dark:text-white/55">
-                      {{ category.count }} 条 · {{ formatBytes(category.total_payload_bytes) }}
+                      {{ t('dashboard.storage.syncDetailItemCount', { count: category.count }, category.count) }} · {{ formatBytes(category.total_payload_bytes) }}
                     </div>
                     <div class="mt-1 text-xs text-black/50 dark:text-white/50">
                       {{ t('dashboard.storage.updatedAt', '最近更新') }}:
@@ -908,7 +912,7 @@ watch(showDetailsOverlay, (open) => {
                   >
                     <div class="StorageDetailOverlay-PluginGroupHead">
                       <strong>{{ group.label }}</strong>
-                      <span>{{ group.count }} 个文件 · {{ formatBytes(group.totalBytes) }}</span>
+                      <span>{{ t('dashboard.storage.syncDetailFileCount', { count: group.count }, group.count) }} · {{ formatBytes(group.totalBytes) }}</span>
                     </div>
                     <ul class="StorageDetailOverlay-ItemList">
                       <li

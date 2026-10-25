@@ -718,6 +718,9 @@ export default {
       syncBlobActive: 'Active Blob',
       syncBlobPending: 'Pending cleanup',
       syncBlobFailed: 'Cleanup failed',
+      syncBlobObjectCount: '{count} object | {count} objects',
+      syncDetailItemCount: '{count} item | {count} items',
+      syncDetailFileCount: '{count} file | {count} files',
     },
     notifications: {
       unreadBadgeLabel: '{count} unread notifications',
