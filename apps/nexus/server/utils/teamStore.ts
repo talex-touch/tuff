@@ -692,41 +692,59 @@ export async function ensureTeamTables(db: D1Database): Promise<void> {
   await ensureTeamSchema(db)
 }
 
-export async function updateTeamQuotaUsage(
+/**
+ * Counts AI usage toward the week: on the team's row, which `/subscription/status` and the team
+ * endpoints report against the plan's weekly limits, and on the member's own row for the team's
+ * breakdown. Each row is one upsert, so concurrent calls add up instead of overwriting each other,
+ * a row left from an earlier week starts over from this usage, and a team with no row yet gets one
+ * at the FREE limits, which the next read with the owner's plan corrects (`planTeamQuota`).
+ * Nothing is refused over the weekly limits: the credits a call is charged are what is enforced.
+ */
+export async function recordWeeklyAiUsage(
   event: H3Event,
   organizationId: string,
-  usage: { aiRequests?: number, aiTokens?: number },
-): Promise<TeamQuota> {
+  userId: string,
+  usage: { aiRequests: number, aiTokens: number },
+): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
   }
 
   await ensureTeamSchema(db)
+  const currentWeek = getWeekStartDate()
+  const now = new Date().toISOString()
+  const requests = Math.max(0, Math.floor(usage.aiRequests) || 0)
+  const tokens = Math.max(0, Math.floor(usage.aiTokens) || 0)
+  const free = getPlanConfig('FREE')
+  // In an upsert's SET, the bare column names read the stored row and `excluded.*` this usage.
+  const addThisWeek = (column: string) => `${column} = CASE WHEN week_start_date = excluded.week_start_date
+    THEN ${column} + excluded.${column} ELSE excluded.${column} END`
 
-  // Get current quota (this also handles weekly reset)
-  const current = await getTeamQuota(event, organizationId)
-
-  const newRequestsUsed = current.aiRequestsUsed + (usage.aiRequests || 0)
-  const newTokensUsed = current.aiTokensUsed + (usage.aiTokens || 0)
-
-  await db.prepare(`
-    UPDATE ${TEAM_QUOTA_TABLE}
-    SET ai_requests_used = ?1, ai_tokens_used = ?2, updated_at = ?3
-    WHERE organization_id = ?4;
-  `).bind(
-    newRequestsUsed,
-    newTokensUsed,
-    new Date().toISOString(),
-    organizationId,
-  ).run()
-
-  return {
-    ...current,
-    aiRequestsUsed: newRequestsUsed,
-    aiTokensUsed: newTokensUsed,
-    updatedAt: new Date().toISOString(),
-  }
+  await db.batch([
+    db.prepare(`
+      INSERT INTO ${TEAM_QUOTA_TABLE} (
+        organization_id, plan, ai_requests_used, ai_requests_limit,
+        ai_tokens_used, ai_tokens_limit, seats_used, seats_limit,
+        week_start_date, updated_at
+      ) VALUES (?1, 'FREE', ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)
+      ON CONFLICT(organization_id) DO UPDATE SET
+        ${addThisWeek('ai_requests_used')},
+        ${addThisWeek('ai_tokens_used')},
+        week_start_date = excluded.week_start_date,
+        updated_at = excluded.updated_at;
+    `).bind(organizationId, requests, free.aiRequests, tokens, free.aiTokens, free.seats, currentWeek, now),
+    db.prepare(`
+      INSERT INTO ${TEAM_MEMBER_USAGE_TABLE} (
+        organization_id, user_id, ai_requests_used, ai_tokens_used, week_start_date, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      ON CONFLICT(organization_id, user_id) DO UPDATE SET
+        ${addThisWeek('ai_requests_used')},
+        ${addThisWeek('ai_tokens_used')},
+        week_start_date = excluded.week_start_date,
+        updated_at = excluded.updated_at;
+    `).bind(organizationId, userId, requests, tokens, currentWeek, now),
+  ])
 }
 
 export async function updateTeamSeats(
@@ -775,62 +793,6 @@ export async function deleteTeamQuota(
   `).bind(organizationId).run()
 }
 
-export async function getOrInitTeamMemberUsage(
-  event: H3Event,
-  organizationId: string,
-  userId: string,
-): Promise<TeamMemberUsage> {
-  const db = getD1Database(event)
-  if (!db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  }
-
-  await ensureTeamSchema(db)
-
-  const currentWeek = getWeekStartDate()
-  const row = await db.prepare(`
-    SELECT * FROM ${TEAM_MEMBER_USAGE_TABLE}
-    WHERE organization_id = ?1 AND user_id = ?2;
-  `).bind(organizationId, userId).first<D1MemberUsageRow>()
-
-  const now = new Date().toISOString()
-
-  if (row) {
-    if (row.week_start_date !== currentWeek) {
-      await db.prepare(`
-        UPDATE ${TEAM_MEMBER_USAGE_TABLE}
-        SET ai_requests_used = 0, ai_tokens_used = 0, week_start_date = ?1, updated_at = ?2
-        WHERE organization_id = ?3 AND user_id = ?4;
-      `).bind(currentWeek, now, organizationId, userId).run()
-
-      return {
-        organizationId,
-        userId,
-        aiRequestsUsed: 0,
-        aiTokensUsed: 0,
-        weekStartDate: currentWeek,
-        updatedAt: now,
-      }
-    }
-    return mapMemberUsageRow(row)
-  }
-
-  await db.prepare(`
-    INSERT INTO ${TEAM_MEMBER_USAGE_TABLE} (
-      organization_id, user_id, ai_requests_used, ai_tokens_used, week_start_date, updated_at
-    ) VALUES (?1, ?2, 0, 0, ?3, ?4);
-  `).bind(organizationId, userId, currentWeek, now).run()
-
-  return {
-    organizationId,
-    userId,
-    aiRequestsUsed: 0,
-    aiTokensUsed: 0,
-    weekStartDate: currentWeek,
-    updatedAt: now,
-  }
-}
-
 export async function listTeamMemberUsage(
   event: H3Event,
   organizationId: string,
@@ -864,36 +826,4 @@ export async function listTeamMemberUsage(
 
   return ((result?.results ?? []) as Array<D1MemberUsageRow & { user_name?: string | null, user_email?: string | null }>)
     .map(row => ({ ...mapMemberUsageRow(row), name: row.user_name ?? null, email: row.user_email ?? null }))
-}
-
-export async function addTeamMemberUsage(
-  event: H3Event,
-  organizationId: string,
-  userId: string,
-  usage: { aiRequests?: number, aiTokens?: number },
-): Promise<TeamMemberUsage> {
-  const db = getD1Database(event)
-  if (!db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  }
-
-  await ensureTeamSchema(db)
-  const current = await getOrInitTeamMemberUsage(event, organizationId, userId)
-
-  const now = new Date().toISOString()
-  const nextRequests = current.aiRequestsUsed + (usage.aiRequests || 0)
-  const nextTokens = current.aiTokensUsed + (usage.aiTokens || 0)
-
-  await db.prepare(`
-    UPDATE ${TEAM_MEMBER_USAGE_TABLE}
-    SET ai_requests_used = ?1, ai_tokens_used = ?2, updated_at = ?3
-    WHERE organization_id = ?4 AND user_id = ?5;
-  `).bind(nextRequests, nextTokens, now, organizationId, userId).run()
-
-  return {
-    ...current,
-    aiRequestsUsed: nextRequests,
-    aiTokensUsed: nextTokens,
-    updatedAt: now,
-  }
 }

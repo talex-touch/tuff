@@ -39,6 +39,7 @@ import {
   recordPlatformGovernanceEvent,
 } from "./platformGovernanceStore";
 import { recordProviderUsageLedger } from "./providerUsageLedgerStore";
+import { recordWeeklyAiUsage } from "./teamStore";
 import type {
   SceneRunFallbackTrailItem,
   SceneRunResult,
@@ -140,6 +141,8 @@ interface IntelligenceInvokeReservation {
   reservedCredits: number;
   /** Ledger entry of the hold, so a settlement can point at the money it kept. */
   ledgerId?: string;
+  /** Team whose credits hold it: the call counts toward that team's weekly AI usage. */
+  teamId: string;
 }
 
 interface InvokeModelAttemptError {
@@ -1184,8 +1187,10 @@ function buildInvokeTrace(
 
 async function recordIntelligenceInvokeUsageLedger(
   event: H3Event,
+  userId: string,
   invocation: NexusIntelligenceInvokeResult,
   audit: NexusInvokeAuditContext,
+  reservation: IntelligenceInvokeReservation,
   meter: IntelligenceInvokeMeter,
 ): Promise<string[]> {
   const createdAt = new Date().toISOString();
@@ -1277,6 +1282,15 @@ async function recordIntelligenceInvokeUsageLedger(
       error,
     );
   });
+
+  // The weekly AI requests and tokens `/subscription/status` reports: one request per completed
+  // call, its tokens as the provider reported them. Nothing in the response reads them.
+  runAfterResponse(event, "intelligence weekly AI usage", () =>
+    recordWeeklyAiUsage(event, reservation.teamId, userId, {
+      aiRequests: 1,
+      aiTokens: invocation.usage.totalTokens,
+    }),
+  );
 
   const [entries] = await Promise.all([ledgerWrite, governanceWrite]);
   return entries.map((entry) => entry.id);
@@ -1435,6 +1449,7 @@ async function reserveIntelligenceInvokeCredits(
       rule,
       reservedCredits: consumption.amount,
       ledgerId: consumption.ledgerId,
+      teamId: consumption.teamId,
     };
   } catch (error) {
     if (isCreditsExceededError(error)) {
@@ -1893,7 +1908,14 @@ export async function invokeIntelligenceCapability(
       meter,
     );
     result.metadata.providerUsageLedgerIds =
-      await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
+      await recordIntelligenceInvokeUsageLedger(
+        event,
+        userId,
+        result,
+        audit,
+        reservation,
+        meter,
+      );
     return result;
   }
 
@@ -1976,7 +1998,14 @@ export async function invokeIntelligenceCapability(
     meter,
   );
   result.metadata.providerUsageLedgerIds =
-    await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
+    await recordIntelligenceInvokeUsageLedger(
+      event,
+      userId,
+      result,
+      audit,
+      reservation,
+      meter,
+    );
   return result;
 }
 
@@ -2081,7 +2110,14 @@ export async function streamIntelligenceCapability(
     meter,
   );
   result.metadata.providerUsageLedgerIds =
-    await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
+    await recordIntelligenceInvokeUsageLedger(
+      event,
+      userId,
+      result,
+      audit,
+      reservation,
+      meter,
+    );
   return result;
 }
 

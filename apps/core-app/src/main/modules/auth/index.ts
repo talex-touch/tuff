@@ -2300,8 +2300,9 @@ async function fetchSubscriptionStatus(): Promise<SubscriptionStatusPayload | nu
 }
 
 /**
- * The plan's limits as Nexus enforces them, over the local table for those it does not report.
- * Nexus counts AI requests and tokens per week, the same window as the usage mapped above.
+ * The plan's limits as Nexus reports them, over the local table for those it does not report.
+ * Nexus counts AI requests and tokens per week, the same window as the usage mapped above, and
+ * refuses no call over them: what it enforces is credits.
  */
 function mapSubscriptionQuota(
   plan: SubscriptionPlan,

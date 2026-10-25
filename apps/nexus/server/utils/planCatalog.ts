@@ -3,9 +3,12 @@ import type { SubscriptionPlan } from './subscriptionStore'
 export interface PlanEntitlements {
   /** Members a team on the plan can hold, the owner included; the invite check stops there. */
   seats: number
-  /** AI requests a week, counted from Monday, 00:00 UTC. */
+  /**
+   * Intelligence API calls a week, counted from Monday, 00:00 UTC, on the team whose credits pay
+   * for them (`recordWeeklyAiUsage`). Reported to clients, not enforced: credits are.
+   */
   aiRequests: number
-  /** AI tokens a week, over the same window as `aiRequests`. */
+  /** Tokens those calls used, as their providers reported them, over the same window. */
   aiTokens: number
   customModels: boolean
   prioritySupport: boolean

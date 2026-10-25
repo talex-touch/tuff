@@ -76,6 +76,7 @@ vi.mock('./creditsStore', async () => {
   }
 })
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+vi.mock('./teamStore', () => ({ recordWeeklyAiUsage: vi.fn(async () => {}) }))
 vi.mock('./creditPricingStore', async () => {
   const actual = await vi.importActual<typeof import('./creditPricingStore')>('./creditPricingStore')
   return { ...actual, resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule }

@@ -38,8 +38,6 @@ describe('/api/subscription/status', () => {
       isActive: true,
     })
     subscriptionMocks.getPlanFeatures.mockReturnValue({
-      aiRequestsLimit: 5000,
-      aiTokensLimit: 1000000,
       customModels: true,
       prioritySupport: true,
       apiAccess: true,
@@ -64,9 +62,12 @@ describe('/api/subscription/status', () => {
         required: false,
         targetPlan: null,
       },
+      // The weekly limits are the team's, as the usage is: the organization's owner's plan.
       quota: {
         aiRequestsUsed: 120,
+        aiRequestsLimit: 5000,
         aiTokensUsed: 3500,
+        aiTokensLimit: 1000000,
       },
     })
 
