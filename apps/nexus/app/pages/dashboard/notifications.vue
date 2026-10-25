@@ -158,19 +158,10 @@ function readErrorMessage(errorValue: unknown): string {
   return t('dashboard.notifications.errors.unknown', '通知加载失败')
 }
 
-function formatDateTime(value: string | null): string {
-  if (!value)
-    return '-'
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp))
-    return value
-  return new Date(timestamp).toLocaleString()
-}
-
 function formatRelativeTime(value: string): string {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp))
-    return formatDateTime(value)
+    return value || '-'
 
   const diffMs = Date.now() - timestamp
   const absMs = Math.abs(diffMs)

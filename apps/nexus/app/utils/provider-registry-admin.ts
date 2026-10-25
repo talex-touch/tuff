@@ -984,11 +984,6 @@ export function formatEditJson(value: Record<string, unknown> | null) {
   return value ? JSON.stringify(value, null, 2) : ''
 }
 
-export function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
 export function parseCommaList(value: string) {
   return value
     .split(',')
