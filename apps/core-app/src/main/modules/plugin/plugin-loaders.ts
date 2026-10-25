@@ -352,6 +352,7 @@ abstract class BasePluginLoader {
       typeof pluginInfo.category === 'string' && pluginInfo.category.trim()
         ? pluginInfo.category.trim()
         : undefined
+    const storageSyncResolution = resolveStorageSyncManifest(pluginInfo.storageSync)
     setPluginStorageSyncPolicy(
       this.touchPlugin,
       storageSyncResolution.mode,

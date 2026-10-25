@@ -94,7 +94,7 @@ import type {
 } from './plugin-runtime-capabilities'
 import type { PluginInjections } from './runtime/plugin-injections'
 import type { PluginPreludeManifestContract } from './runtime/plugin-prelude-resolver'
-import { listPluginStorageSyncFiles, matchesPluginStorageSyncFile, readPluginStorageSyncMetadata } from './plugin-storage-sync'
+import { installPluginStorageSyncMethods } from './plugin-storage-sync'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
@@ -3557,10 +3557,6 @@ export class TouchPlugin implements ITouchPlugin {
     return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
   }
 
-  getPluginStorageSyncFiles(): string[] { return listPluginStorageSyncFiles(this) }
-  isPluginStorageSyncFile(fileName: string): boolean { return matchesPluginStorageSyncFile(this, fileName) }
-  getPluginStorageSyncMetadata(fileName: string) { return readPluginStorageSyncMetadata(this, fileName) }
-
   /**
    * 获取存储统计信息
    * @returns 存储统计数据
@@ -3857,3 +3853,4 @@ export class TouchPlugin implements ITouchPlugin {
     )
   }
 }
+installPluginStorageSyncMethods(TouchPlugin.prototype)

@@ -3,6 +3,17 @@ import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import type { PluginStorageSyncKind, PluginStorageSyncManifest } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from './plugin'
 
+declare module './plugin' {
+  interface TouchPlugin {
+    getPluginStorageSyncFiles(): string[]
+    isPluginStorageSyncFile(fileName: string): boolean
+    getPluginStorageSyncMetadata(fileName: string): {
+      kind: PluginStorageSyncKind
+      displayName?: string
+    }
+  }
+}
+
 type PluginStorageSyncHost = Pick<
   TouchPlugin,
   'getConfigPath' | 'listPluginFiles' | 'storageSync' | 'storageSyncMode'
@@ -49,6 +60,29 @@ export function readPluginStorageSyncMetadata(
       ? { displayName: entry.displayName.trim() }
       : {})
   }
+}
+
+export function installPluginStorageSyncMethods(target: TouchPlugin): void {
+  Object.defineProperties(target, {
+    getPluginStorageSyncFiles: {
+      configurable: true,
+      value(this: TouchPlugin): string[] {
+        return listPluginStorageSyncFiles(this)
+      }
+    },
+    isPluginStorageSyncFile: {
+      configurable: true,
+      value(this: TouchPlugin, fileName: string): boolean {
+        return matchesPluginStorageSyncFile(this, fileName)
+      }
+    },
+    getPluginStorageSyncMetadata: {
+      configurable: true,
+      value(this: TouchPlugin, fileName: string) {
+        return readPluginStorageSyncMetadata(this, fileName)
+      }
+    }
+  })
 }
 
 export function setPluginStorageSyncPolicy(
