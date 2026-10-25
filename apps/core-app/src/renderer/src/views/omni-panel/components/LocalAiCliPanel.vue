@@ -73,6 +73,7 @@ type PendingTerminalEvent =
   | { kind: 'exit'; exit: LocalAiCliTerminalExit }
 let pendingTerminalEvents: PendingTerminalEvent[] = []
 let streamController: { cancel: () => void } | null = null
+let terminalInputBuffer = ''
 
 const runnableProviders = computed(() =>
   (status.value?.providers ?? []).filter(
@@ -113,6 +114,7 @@ const canOpenTerminal = computed(
     selectedProviderStatus.value?.capabilities.terminalRead === true &&
     (!sessionRef.value || selectedProviderStatus.value.capabilities.terminalResume) &&
     !terminalSessionId.value &&
+    !terminalVisible.value &&
     !terminalOpening.value
 )
 watch(provider, () => {
@@ -287,7 +289,8 @@ async function run(): Promise<void> {
         access: access.value,
         context: contexts.value.map(({ kind, text }) => ({ kind, text })),
         projectId: projectId.value,
-        sessionRef: sessionRef.value
+        sessionRef: sessionRef.value,
+        persistent: provider.value === 'pi'
       },
       {
         onData: handleChunk,
@@ -390,7 +393,84 @@ function handleTerminalExit(payload: LocalAiCliTerminalExit): void {
   terminalSessionId.value = null
 }
 
+async function runSharedPiPrompt(value: string): Promise<void> {
+  if (!provider.value || !sessionRef.value || phase.value === 'running') return
+  const promptText = value.trim()
+  if (!promptText) {
+    writeTerminalOutput('> ')
+    return
+  }
+  phase.value = 'running'
+  output.value = ''
+  errorCode.value = ''
+  approval.value = null
+  prompt.value = ''
+  try {
+    streamController = await sdk.streamTask(
+      {
+        provider: provider.value,
+        prompt: promptText,
+        access: access.value,
+        context: [],
+        projectId: projectId.value,
+        sessionRef: sessionRef.value,
+        persistent: provider.value === 'pi'
+      },
+      {
+        onData: handleChunk,
+        onError: (error) => {
+          log.error('Shared Pi terminal task stream failed')
+          errorCode.value = stableTaskErrorCode(error, 'PROCESS_EXITED')
+          if (phase.value === 'running') phase.value = 'failed'
+        },
+        onEnd: () => {
+          streamController = null
+          if (phase.value === 'running') phase.value = output.value ? 'done' : 'failed'
+          if (terminalVisible.value) writeTerminalOutput('\r\n> ')
+        }
+      }
+    )
+  } catch (error) {
+    log.error('Failed to start shared Pi terminal task')
+    errorCode.value = stableTaskErrorCode(error, 'PROCESS_START_FAILED')
+    phase.value = 'failed'
+    writeTerminalOutput(`\r\n[failed: ${errorCode.value}]\r\n> `)
+  }
+}
+
+function handleSharedPiTerminalInput(data: string): void {
+  if (provider.value !== 'pi' || phase.value === 'running') return
+  for (const character of data) {
+    if (character === '\u0003') {
+      terminalInputBuffer = ''
+      stop()
+      writeTerminalOutput('^C\r\n> ')
+      return
+    }
+    if (character === '\r' || character === '\n') {
+      const value = terminalInputBuffer
+      terminalInputBuffer = ''
+      void runSharedPiPrompt(value)
+      continue
+    }
+    if (character === '\u007f' || character === '\b') {
+      if (terminalInputBuffer.length > 0) {
+        terminalInputBuffer = terminalInputBuffer.slice(0, -1)
+        writeTerminalOutput('\b \b')
+      }
+      continue
+    }
+    if (character === '\u001b') continue
+    terminalInputBuffer += character
+    writeTerminalOutput(character)
+  }
+}
+
 function handleTerminalInput(data: string): void {
+  if (provider.value === 'pi') {
+    handleSharedPiTerminalInput(data)
+    return
+  }
   const sessionId = terminalSessionId.value
   if (!sessionId) return
   void sdk.terminal.write({ sessionId, data }).catch(() => {
@@ -399,6 +479,7 @@ function handleTerminalInput(data: string): void {
 }
 
 function handleTerminalResize(size: TerminalSize): void {
+  if (provider.value === 'pi') return
   const sessionId = terminalSessionId.value
   if (!sessionId) return
   void sdk.terminal.resize({ sessionId, ...size }).catch(() => {
@@ -410,11 +491,28 @@ function handleTerminalReady(view: TerminalInstance): void {
   terminalView.value = view
   const size = view.getSize()
   if (size) handleTerminalResize(size)
-  if (terminalSessionId.value) view.focus()
+  if (provider.value === 'pi' || terminalSessionId.value) view.focus()
+}
+async function openSharedPiTerminal(): Promise<void> {
+  if (!sessionRef.value) return
+  activeView.value = 'terminal'
+  terminalGeneration += 1
+  terminalOpening.value = false
+  terminalVisible.value = true
+  terminalInputBuffer = ''
+  await nextTick()
+  terminalView.value?.reset()
+  if (output.value.trim()) writeTerminalOutput(`\r\n${output.value.trim()}\r\n`)
+  writeTerminalOutput('> ')
+  terminalView.value?.focus()
 }
 
 async function openTerminal(): Promise<void> {
   if (!provider.value || !canOpenTerminal.value) return
+  if (provider.value === 'pi') {
+    await openSharedPiTerminal()
+    return
+  }
   activeView.value = 'terminal'
   const generation = ++terminalGeneration
   const controller = new AbortController()
@@ -483,7 +581,7 @@ async function switchToTerminal(): Promise<void> {
   } else {
     terminalVisible.value = true
     await nextTick()
-    if (terminalSessionId.value) terminalView.value?.focus()
+    if (provider.value === 'pi' || terminalSessionId.value) terminalView.value?.focus()
   }
 }
 
@@ -500,6 +598,7 @@ async function closeTerminal(): Promise<void> {
   pendingTerminalEvents = []
   terminalSessionId.value = null
   pacedTerminalSession = null
+  terminalInputBuffer = ''
   terminalView.value = null
   if (sessionId) {
     await sdk.terminal.kill({ sessionId }).catch(() => {
@@ -723,7 +822,7 @@ defineExpose({ open, reset, newTask })
         v-show="activeView === 'terminal' || !output"
         ref="terminalView"
         class="LocalAiCliPanel__terminal"
-        :read-only="!terminalSessionId"
+        :read-only="provider !== 'pi' && !terminalSessionId"
         :auto-focus="true"
         :screen-reader-mode="screenReaderMode"
         @ready="handleTerminalReady"
