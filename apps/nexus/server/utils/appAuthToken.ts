@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { createAppTokenPair, requireSessionAuth } from './auth'
+import { hasLongTermSignInMethod } from './authStore'
 
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message)
@@ -10,7 +11,7 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 }
 
 export async function issueAppSignInToken(event: Parameters<typeof requireSessionAuth>[0]) {
-  const { userId, deviceId } = await requireSessionAuth(event)
+  const { userId, deviceId, user } = await requireSessionAuth(event)
   if (!deviceId) {
     throw createError({
       statusCode: 400,
@@ -18,14 +19,17 @@ export async function issueAppSignInToken(event: Parameters<typeof requireSessio
     })
   }
 
+  // Long only for an account with a sign-in method, as device authorization grants it: one without would lose the
+  // grant at its first renewal and be signed out a day later.
+  const grantType = user && await hasLongTermSignInMethod(event, user) ? 'long' : 'short'
   try {
     const tokens = await createAppTokenPair(event, userId, {
       deviceId,
-      grantType: 'long',
+      grantType,
     })
     return {
       ...tokens,
-      grantType: 'long' as const,
+      grantType,
       refreshable: true,
     }
   }

@@ -41,6 +41,7 @@ describe('/api/app-auth/sign-in-token', () => {
       userId: 'user-1',
       deviceId: 'device-1',
       authSource: 'session',
+      user: { id: 'user-1', emailState: 'verified' },
     })
     authMocks.createAppTokenPair.mockResolvedValue({
       appToken: 'access-token-long',
