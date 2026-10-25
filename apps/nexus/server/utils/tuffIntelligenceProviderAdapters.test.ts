@@ -75,6 +75,7 @@ vi.mock('./creditsStore', async () => {
   }
 })
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+vi.mock('./teamStore', () => ({ recordWeeklyAiUsage: vi.fn(async () => {}) }))
 
 // The price list is a database read; the rule lookup over it is not. Keeping the real
 // pure lookup means the metering asserted here is the shipped price table.

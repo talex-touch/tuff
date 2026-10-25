@@ -2,6 +2,7 @@
 
 > 更新时间：2026-06-18
 > 2026-09-11 修订：§3.1 记录 Nexus 服务端内部 credit 记账口径（单价、月度赠额、预留/结算）。§1/§2 的公开口径不变。
+> 2026-10-24 修订：§2 写明层级顺序 `FREE < PLUS < PRO < TEAM < ENTERPRISE`，Pro 包含 Plus 全部能力；此前代码里 PLUS 排在 PRO 之上，已随之更正。公开口径不变。
 > 定位：当前公开定价、套餐分层与待决策项的单一口径。本文是 pricing 决策入口。
 
 ## 1. 当前公开口径
@@ -12,11 +13,13 @@
 
 ## 2. 套餐分层状态
 
+层级从低到高排列，每一层包含前面各层的全部能力。各层的周 AI 额度、团队席位与能力开关在 Nexus `server/utils/planCatalog.ts`，SDK 的 `DEFAULT_PLAN_QUOTAS` 与它同步。
+
 | 层级 | 当前状态 | 可表达内容 | 禁止表达 |
 | --- | --- | --- | --- |
 | `FREE` | 权限层级占位 | 免费基础能力、有限配额方向 | 具体额度、永久免费承诺 |
-| `PRO` | 权限层级占位 | 个人高级能力方向 | 具体月费/年费、正式权益清单 |
-| `PLUS` | 权限层级占位 | 更高配额或更完整能力方向 | 与 Pro 的正式价格差异 |
+| `PLUS` | 权限层级占位 | 个人增强方向：比 Free 更多配额 | 与 Pro 的正式价格差异 |
+| `PRO` | 权限层级占位 | 个人高级能力方向，包含 Plus 全部能力 | 具体月费/年费、正式权益清单 |
 | `TEAM` | 权限层级占位 | 团队协作、共享配额方向 | seat 单价、团队池具体额度 |
 | `ENTERPRISE` | 权限层级占位 | 定制、合规、专属支持方向 | 标准报价或默认 SLA |
 
@@ -61,7 +64,7 @@
 
 - Pricing 页面缺配置时，只能显示 Pioneer 免费阶段或 pricing table 未配置提示。
 - 禁止返回 mock payment URL、伪成功购买结果或固定假价格。
-- `FREE / PRO / PLUS / TEAM / ENTERPRISE` 只能作为权限层级、feature gate 或未来占位展示。
+- `FREE / PLUS / PRO / TEAM / ENTERPRISE` 只能作为权限层级、feature gate 或未来占位展示。
 - 任何新增价格、credits 单价、团队席位价，必须同步 `README`、`TODO`、Roadmap、Quality Baseline、Nexus pricing UI 与 CHANGES。
 
 ## 6. 下一步

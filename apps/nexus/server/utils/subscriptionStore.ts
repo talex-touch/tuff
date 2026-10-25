@@ -4,11 +4,13 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { PLAN_CATALOG } from './planCatalog'
 
 const ACTIVATION_CODES_TABLE = 'activation_codes'
 const ACTIVATION_LOGS_TABLE = 'activation_logs'
 
-export type SubscriptionPlan = 'FREE' | 'PRO' | 'PLUS' | 'TEAM' | 'ENTERPRISE'
+/** Lowest tier first; `PLAN_CATALOG` holds what each includes. */
+export type SubscriptionPlan = 'FREE' | 'PLUS' | 'PRO' | 'TEAM' | 'ENTERPRISE'
 
 interface D1ActivationCodeRow {
   id: string
@@ -396,12 +398,12 @@ export function getPlanFeatures(plan: SubscriptionPlan): {
   prioritySupport: boolean
   apiAccess: boolean
 } {
-  const features = {
-    FREE: { aiRequestsLimit: 50, aiTokensLimit: 10000, customModels: false, prioritySupport: false, apiAccess: false },
-    PRO: { aiRequestsLimit: 500, aiTokensLimit: 100000, customModels: true, prioritySupport: false, apiAccess: true },
-    PLUS: { aiRequestsLimit: 2000, aiTokensLimit: 500000, customModels: true, prioritySupport: true, apiAccess: true },
-    TEAM: { aiRequestsLimit: 5000, aiTokensLimit: 1000000, customModels: true, prioritySupport: true, apiAccess: true },
-    ENTERPRISE: { aiRequestsLimit: -1, aiTokensLimit: -1, customModels: true, prioritySupport: true, apiAccess: true },
+  const entitlements = PLAN_CATALOG[plan] || PLAN_CATALOG.FREE
+  return {
+    aiRequestsLimit: entitlements.aiRequests,
+    aiTokensLimit: entitlements.aiTokens,
+    customModels: entitlements.customModels,
+    prioritySupport: entitlements.prioritySupport,
+    apiAccess: entitlements.apiAccess,
   }
-  return features[plan] || features.FREE
 }

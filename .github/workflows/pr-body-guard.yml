@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # The body goes through the environment rather than being interpolated into the shell, so a
       # description cannot inject commands. `printf '%s'` rather than `echo` so a body starting with

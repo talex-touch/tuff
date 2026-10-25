@@ -44,7 +44,7 @@ export const ADMIN_USER_STATUSES = ['active', 'disabled', 'merged', 'deletion_pe
 export const ADMIN_USER_ROLES = ['admin', 'user'] as const
 
 /** Plans an administrator can grant from the subscription drawer (`/api/admin/subscriptions/grant`). */
-export const GRANTABLE_SUBSCRIPTION_PLANS = ['PRO', 'PLUS', 'TEAM', 'ENTERPRISE'] as const
+export const GRANTABLE_SUBSCRIPTION_PLANS = ['PLUS', 'PRO', 'TEAM', 'ENTERPRISE'] as const
 
 /** Upper bound of the grant duration field; the API takes any positive number. */
 export const SUBSCRIPTION_GRANT_MAX_DAYS = 3650

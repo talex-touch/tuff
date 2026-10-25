@@ -38,6 +38,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The script below reads origin again (ls-remote, tag fetches) without the token. That
+          # works because the repository is public. On a private one those reads would fail, and the
+          # script tolerates a failed read, so the remote branch and tag audits would quietly SKIP.
+          persist-credentials: false
 
       # No arguments: the script reads GITHUB_HEAD_REF / GITHUB_REF_NAME / GITHUB_REF_TYPE itself, so
       # the PR source branch, the pushed branch and the pushed tag are all read the way GitHub means

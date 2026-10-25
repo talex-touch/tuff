@@ -24,6 +24,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "clean": "rimraf dist"

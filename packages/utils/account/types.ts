@@ -1,10 +1,11 @@
 /**
- * Account subscription plan types
+ * Account subscription plans, lowest tier first: each includes everything in the ones before it,
+ * so Pro sits above Plus.
  */
 export enum SubscriptionPlan {
   FREE = 'free',
-  PRO = 'pro',
   PLUS = 'plus',
+  PRO = 'pro',
   TEAM = 'team',
   ENTERPRISE = 'enterprise',
 }
@@ -329,8 +330,8 @@ export interface QuotaCheckResult {
 export interface PlanComparisonItem {
   feature: string
   free: string | boolean | number
-  pro: string | boolean | number
   plus: string | boolean | number
+  pro: string | boolean | number
   team: string | boolean | number
   enterprise: string | boolean | number
 }
@@ -342,9 +343,15 @@ export interface UpgradeOption {
   plan: SubscriptionPlan
   name: string
   description: string
-  priceMonthly: number
-  priceYearly: number
-  currency: string
+  /**
+   * Unset while no price is published: Tuff is free during its Pioneer period, and the plans
+   * describe tiers rather than offers.
+   */
+  priceMonthly?: number
+  /** Unset while no price is published, as `priceMonthly`. */
+  priceYearly?: number
+  /** Set together with the prices. */
+  currency?: string
   features: string[]
   recommended?: boolean
 }

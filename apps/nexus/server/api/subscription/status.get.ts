@@ -17,12 +17,14 @@ export default defineEventHandler(async (event) => {
     activatedAt: subscription.activatedAt,
     isActive: subscription.isActive,
     features: {
+      // The week's usage is counted on the active team, so its limits are the team's too: the
+      // owner's plan for an organization, the caller's own for the personal team.
       aiRequests: {
-        limit: features.aiRequestsLimit,
+        limit: teamContext.quota.aiRequestsLimit,
         used: teamContext.quota.aiRequestsUsed,
       },
       aiTokens: {
-        limit: features.aiTokensLimit,
+        limit: teamContext.quota.aiTokensLimit,
         used: teamContext.quota.aiTokensUsed,
       },
       customModels: features.customModels,

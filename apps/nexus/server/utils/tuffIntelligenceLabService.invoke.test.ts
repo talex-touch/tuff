@@ -93,6 +93,7 @@ vi.mock('./providerCredentialStore', () => ({
 
 vi.mock('./creditsStore', () => creditStoreMocks)
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+vi.mock('./teamStore', () => ({ recordWeeklyAiUsage: vi.fn(async () => {}) }))
 
 // The price list itself is a database read; the rule it resolves is not. Keeping the real
 // pure lookup means these tests assert the shipped prices rather than a hand-rolled table.
