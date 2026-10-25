@@ -363,12 +363,19 @@ function createMessageQueue<T>(messages: readonly T[]): AsyncIterable<T> {
   }
 }
 
+/**
+ * Polls once per event-loop turn until `condition` holds. The budget is time, not turns: some
+ * conditions sit behind real session-file reads, which a loaded CI runner can stretch past
+ * thousands of turns. The two seconds are per call and sit under Vitest's 5 s test timeout, so a
+ * condition that never holds usually fails here, with its description, rather than as a bare
+ * test timeout.
+ */
 async function waitFor(condition: () => boolean, description: string): Promise<void> {
-  for (let attempt = 0; attempt < 5_000; attempt += 1) {
-    if (condition()) return
+  const deadline = performance.now() + 2_000
+  while (!condition()) {
+    if (performance.now() > deadline) throw new Error(`Timed out waiting for ${description}`)
     await new Promise<void>((resolveTick) => setImmediate(resolveTick))
   }
-  throw new Error(`Timed out waiting for ${description}`)
 }
 
 /**
