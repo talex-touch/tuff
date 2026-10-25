@@ -3,10 +3,10 @@
   "waivers": [
     {
       "id": "json-formatter-monaco-editor-core-size",
-      "fileSha256": "b547fe0b144695e016a56418395577803c074189115a67c13219253dccf9aa55",
+      "fileSha256": "95cd1b1f8b006c0dd47858a4fed844e0c87d188da55066102b34bd0e766b1139",
       "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
       "owner": "TalexTouch Team",
-      "reason": "Monaco 编辑器核心包 4.1MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，来自 monaco-editor 0.57.0；它从应用主 chunk 引入 Vite 的预加载函数，带着那个文件名，插件代码一改哈希也会跟着变。",
+      "reason": "Monaco 编辑器核心包 4.1MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，来自 monaco-editor 0.57.0。它只引入单独成块的 Vite 预加载函数（vite.config.ts 的 manualChunks），插件自身代码改动不会再改变它的哈希。",
       "createdAt": "2026-08-15T00:00:00.000Z",
       "expiresAt": "2026-11-15T00:00:00.000Z"
     },
@@ -21,10 +21,10 @@
     },
     {
       "id": "json-formatter-expression-query-eval",
-      "fileSha256": "464b0aa4569584a254aa9dc8db48305b9098d9046ab0765ce9c43b8e5ba138c9",
+      "fileSha256": "92b35a2a6e64a6e1165f8f3b01ca0440b24dca155f2e6792c3610956f87683a1",
       "ruleId": "PLUGIN_SCAN_DYNAMIC_EXECUTION",
       "owner": "TalexTouch Team",
-      "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。",
+      "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。求值代码在 src/utils/expression-eval.ts，单独成块，只有改这个文件才需要更新哈希。",
       "createdAt": "2026-08-15T00:00:00.000Z",
       "expiresAt": "2026-11-15T00:00:00.000Z"
     }

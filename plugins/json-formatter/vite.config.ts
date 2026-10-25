@@ -78,6 +78,24 @@ export default defineConfig(async ({ command }) => {
       include: ['monaco-editor'],
     },
 
+    build: {
+      rollupOptions: {
+        output: {
+          // `security-waivers.json` pins three built files by sha256, so they must not change
+          // when unrelated code does. A chunk embeds the hashed file names of the chunks it
+          // imports: Monaco's core used to import Vite's preload helper from the app's entry
+          // chunk, and the eval code sat in the JSON page's chunk, so any edit to the plugin
+          // re-hashed both. In chunks of their own, each changes only with its own code.
+          manualChunks(id) {
+            if (id.includes('vite/preload-helper'))
+              return 'preload-helper'
+            if (id.endsWith('/src/utils/expression-eval.ts'))
+              return 'expression-eval'
+          },
+        },
+      },
+    },
+
     plugins,
   }
 
