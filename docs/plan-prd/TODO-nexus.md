@@ -138,6 +138,12 @@
 | production chunk / payload / CSS | guarded | docs/store/dashboard/landing/public-info/auth source boundary、docs metadata-only payload、client Content SQLite zero-runtime guard、静态 route files、初始 JS/CSS budget、worker/dist budget、Worker sourcemap retention、PWA precache trim、remote font artifact guard、local static HAR/screenshot smoke 与 local Wrangler runtime smoke 已有守卫；仍需 deployed Cloudflare Pages preview HAR 作为最终结论。 |
 | 首页 warnings | guarded | `Invalid scope`、async lifecycle `onBeforeUnmount` 与 ScrollTo `autoKill` 配置已修复；desktop/mobile local Wrangler 加载、滚动、截图 smoke warning/error `0`。WebGL `ReadPixels` 在当前干净 Chrome 样本中未复现。 |
 
+## 2026-10-24 本轮剩余
+
+- [ ] **生产 bundle / CSS 预算收口**：本轮 `pnpm -C apps/nexus run build` 已通过，但 `build:analyze-worker` 仍被当前工作区的初始资产、shared icon CSS、Worker gzip 与 dist 总大小预算拦截；观测值包括 Worker gzip `2.76 MiB > 2.70 MiB`、dist `106.34 MiB > 60 MiB`，以及 docs/updates/auth route family 的初始 JS/CSS 超预算。下一步做独立的 route-level code splitting / CSS 收口，再重跑完整预算门禁；不能把本地构建通过当作预算通过。
+- [ ] **Pages API runtime smoke**：本地 Pages 预览的根页面返回 `200` 且 `cache-control: public, max-age=300, s-maxage=300` 正确；`/api/releases?limit=12&assets=featured` 仍因本地 Worker build/runtime credential 未配置有效值返回 `NEXUS_RUNTIME_CREDENTIAL_INVALID`。下一步使用有效本地 runtime bindings 或 deployed preview 复验 API，不用当前结果宣称生产 API 已验收。
+- [ ] **开发实例切换**：代码已将 `nexus:dev` 指向 `dev:pure`；现有 3200 端口进程仍是旧 supervisor，需重启开发实例后再做一次实际页面 smoke。
+
 ## 下批建议顺序
 
 1. 跑 deployed Cloudflare Pages preview HAR：先用 `cd apps/nexus && node scripts/collect-deployed-preview-evidence.mjs` dry-run 核对采集计划，再用 `--base-url https://<cloudflare-pages-preview-host>`、必要的 `--auth-state output/playwright/<storage-state>.json` 与真实 OAuth 回调摘要 `--provider-callback-evidence output/playwright/<provider-callback-evidence>.json` 采集 docs / store / dashboard / landing / `/new` / auth callback smoke，生成 `output/playwright/nexus-cloudflare-pages-preview-runtime-smoke-YYYY-MM-DD.{json,md}` 与 HAR sidecars，然后跑 `cd apps/nexus && node build/check-runtime-evidence.mjs --require-deployed-preview` 作为 production 结论最终证据。
