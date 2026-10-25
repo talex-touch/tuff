@@ -1,3 +1,4 @@
+import type { PluginSecurityFindingCode } from '@talex-touch/utils/plugin'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import os from 'node:os'
@@ -111,7 +112,7 @@ describe('security scan waivers', () => {
     return filePath
   }
 
-  function waiverFor(artifactSha256: string, ruleId: string) {
+  function waiverFor(artifactSha256: string, ruleId: PluginSecurityFindingCode) {
     return {
       id: 'waiver-raw-runtime',
       artifactSha256,
@@ -247,7 +248,7 @@ describe('security scan waivers', () => {
 describe('file-scoped security waivers', () => {
   const DYNAMIC_SOURCE = 'export const run = (code) => eval(code)'
 
-  function fileWaiver(fileSha256: string, ruleId: string, extra: Record<string, unknown> = {}) {
+  function fileWaiver(fileSha256: string, ruleId: PluginSecurityFindingCode, extra: Record<string, unknown> = {}) {
     return {
       id: 'waiver-dynamic-exec',
       fileSha256,

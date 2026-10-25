@@ -13,5 +13,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["../utils/types/path-browserify.d.ts", "src"]
 }
