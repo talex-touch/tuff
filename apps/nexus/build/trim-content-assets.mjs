@@ -207,14 +207,6 @@ function trimTopLevelProperties(source, marker, keyPrefix) {
   return { source, removed: removals.length }
 }
 
-function replaceObjectSection(source, marker, replacement) {
-  const markerIndex = source.indexOf(marker)
-  if (markerIndex === -1)
-    throw new Error(`precomputed manifest marker is missing: ${marker}`)
-  const openingIndex = markerIndex + marker.length - 1
-  const closingIndex = findMatchingBrace(source, openingIndex)
-  return source.slice(0, openingIndex) + replacement + source.slice(closingIndex + 1)
-}
 function replaceLastObjectSection(source, marker, replacement) {
   const markerIndex = source.lastIndexOf(marker)
   if (markerIndex === -1)
