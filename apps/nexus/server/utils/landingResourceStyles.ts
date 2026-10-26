@@ -2,7 +2,9 @@ import { isLandingRoute, isStaticHtmlRoute } from './landingResourceHints'
 
 const STATIC_STYLESHEET_RE = /<link\b[^>]*\brel=(['"])stylesheet\1[^>]*>/gi
 const DEFERRED_LANDING_STYLE_RE = /\/_nuxt\/(?:TuffLanding(?:Stats|Plugins|AiOverview|InstantPreview|FeatureShowcase|DesignSystem|Faq|Section|Hairline)|TuffShowcase|CoreBoxMock|TuffPromoVideoModal|shown-box|ordinal|data-table-demo-labels|shiki-runtime|TxCardItem|highlight|admin-client-list|guarded-close|TxDropdownSubmenu|uid|use-fresh-chunks|types|addon-fit|TxDivider|TxDrawer|DocsOutline|focus-trap|virtual_nuxt_[^/]+)\.[^\s"']+\.css(?:\?[^\s"']*)?$/
-const STATIC_CORE_STYLE_RE = /\/_nuxt\/(?:entry|TheHeader|Logo|LanguageToggle|docs|store|pricing|license|privacy|protocol|updates|AuthLegalFooter|AuthVisualShell|index)\.[^\s"']+\.css(?:\?[^\s"']*)?$/
+// A catch-all page such as docs/[...slug].vue ships its stylesheet as `_...<hash>.css`: the
+// build reads `.slug_` in the sanitized `_...slug_` as an extension and drops it.
+const STATIC_CORE_STYLE_RE = /\/_nuxt\/(?:entry|TheHeader|Logo|LanguageToggle|docs|store|pricing|license|privacy|protocol|updates|AuthLegalFooter|AuthVisualShell|index|_\.\.)\.[^\s"']+\.css(?:\?[^\s"']*)?$/
 
 function hrefOfStylesheetTag(tag: string): string | null {
   const match = tag.match(/\bhref=(['"])([^'"]+)\1/i)
