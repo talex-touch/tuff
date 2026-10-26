@@ -13,16 +13,16 @@ function series(values: number[]) {
 const MINT = series([-2.9, -3.02, -3.18, -3.4, -3.23, -3.05, -3.12, -3.42, -3.86, -3.71, -3.52, -3.68, -3.93, -4.1, -3.96, -3.82, -3.95, -4.2, -4.41, -4.28, -4.12, -4.24, -4.04, -3.88])
 const PISTACHIO = series([0.22, 0.31, 0.45, 0.58, 0.51, 0.42, 0.55, 0.74, 0.91, 0.84, 0.76, 0.89, 1.02, 1.08, 1.01, 0.96, 1.05, 1.18, 1.15, 1.23, 1.16, 1.28, 1.35, 1.31])
 
-const chartSeries = [
-  { id: 'mint', label: 'Mint Chip', data: MINT, color: 'var(--tx-bui-orange)' },
-  { id: 'pistachio', label: 'Pistachio', data: PISTACHIO, color: 'var(--tx-bui-accent)' },
-]
-
 const hoverIndex = ref<number | null>(null)
 
 const copy = computed(() => locale.value === 'zh'
   ? { mint: '薄荷脆片', pistachio: '开心果', caption: '趋势快照', badge: '实时趋势' }
   : { mint: 'Mint Chip', pistachio: 'Pistachio', caption: 'Trend snapshot', badge: 'Live trend' })
+
+const chartSeries = computed(() => [
+  { id: 'mint', label: copy.value.mint, data: MINT, color: 'var(--tx-bui-orange)' },
+  { id: 'pistachio', label: copy.value.pistachio, data: PISTACHIO, color: 'var(--tx-bui-accent)' },
+])
 
 function formatPercent(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '−' : ''

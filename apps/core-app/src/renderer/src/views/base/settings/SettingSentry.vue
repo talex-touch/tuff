@@ -34,7 +34,7 @@ interface SentryConfigDocument {
   anonymous?: boolean
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const { isLoggedIn } = useAuth()
@@ -128,7 +128,7 @@ function openPrivacySettings(): void {
 
 function formatTimestamp(timestamp: number | null | undefined): string {
   if (!timestamp) return t('settingSentry.never')
-  return new Date(timestamp).toLocaleString()
+  return new Date(timestamp).toLocaleString(locale.value)
 }
 
 onMounted(async () => {

@@ -81,7 +81,7 @@ code: |
 | `left` / `right` | `number \| string` | `'5%'` | Layout insets (px or percent). |
 | `linkColor` | `'gradient' \| 'gray'` | `'gradient'` | Link fill mode. |
 | `linkOpacity` | `number` | `0.5` | Gradient link opacity. |
-| `labels` | `Partial<SankeyLabels>` | English | `{ instructions }`: read after each node's name. |
+| `labels` | `Partial<SankeyLabels>` | English | `{ instructions, value, items }`: `instructions` is read after each node's name; `value` names the tooltip's value row and `items` counts a drillable node's items. |
 
 ### SankeyChart Events
 

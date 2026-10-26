@@ -131,6 +131,7 @@ code: |
 | `labels` | `MonoChartLabels` | 英文默认值 | 来源控件、状态、展开及提示字段名称。 |
 | `locale` | `string` | `'en-US'` | 月份标题语言，服务端与客户端需一致。 |
 | `formatValue` | `(number) => string` | `String(value)` | 数值指标、图例与提示格式化。 |
+| `formatX` | `(string \| number) => string` | `String(x)` | 横轴标签与提示标题里的 x 值，例如把时间戳写成日期。 |
 
 ### 数据类型
 

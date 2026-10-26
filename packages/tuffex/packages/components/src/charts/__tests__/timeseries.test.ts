@@ -88,8 +88,14 @@ describe('txTimeseriesChart', () => {
       props: { data: twoSeries, loading: true, width: 400 } as never,
     })
     expect(wrapper.find('.tx-ts-skeleton').exists()).toBe(true)
+    expect(wrapper.find('.tx-ts-skeleton').attributes('aria-label')).toBe('Loading chart')
     expect(wrapper.find('svg.tx-chart__svg').exists()).toBe(false)
     expect(wrapper.attributes('aria-busy')).toBe('true')
+
+    const named = mount(TxTimeseriesChart, {
+      props: { data: twoSeries, loading: true, width: 400, labels: { loading: '正在加载图表' } } as never,
+    })
+    expect(named.find('.tx-ts-skeleton').attributes('aria-label')).toBe('正在加载图表')
   })
 
   it('with zoom off, brushes only when a time-range listener is attached', async () => {

@@ -38,6 +38,7 @@ const runs: LearningCurveRun[] = [
   { name: 'PPO', seeds: seedsOf({ ceiling: 1900, tau: 360_000, steps: 1_000_000, every: 5000 }, 3) },
 ]
 
+const stepFormat = (step: number) => step.toLocaleString(locale.value, { maximumFractionDigits: 3 })
 const smoothing = ref(0.6)
 const showRaw = ref(true)
 const showBand = ref(true)
@@ -76,6 +77,7 @@ function toggle(name: string): void {
       :x-axis-name="copy.steps"
       :y-axis-name="copy.reward"
       :labels="copy.labels"
+      :step-format="stepFormat"
     />
     <div class="lc-basic-demo__controls">
       <label class="lc-basic-demo__smoothing">

@@ -111,12 +111,27 @@
   border-bottom: none;
 }
 
+/* A specimen that arrives on its own (an async chunk) mounts after its cell, so
+   the stage first lays out around the 34px placeholder and would then grow,
+   pushing every row below it down. A cell whose specimen is taller than the
+   default stage names that height, the tallest it reaches across widths and
+   locales, in --docs-gallery-specimen, and the stage holds it from the start. */
 .docs-gallery__stage {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 236px;
+  min-height: max(236px, calc(var(--docs-gallery-specimen, 0px) + 96px));
   padding: 56px 28px 40px;
+}
+
+/* Just above the single-column switch the two columns are at their narrowest
+   (stages 250 to 300px wide), and text-heavy specimens wrap onto more lines.
+   Those cells name the taller height in --docs-gallery-specimen-narrow; a phone
+   narrower than 375px gives the single column the same width, below. */
+@media (min-width: 641px) and (max-width: 760px) {
+  .docs-gallery__stage {
+    min-height: max(236px, calc(var(--docs-gallery-specimen-narrow, var(--docs-gallery-specimen, 0px)) + 96px));
+  }
 }
 
 .docs-gallery__stack {
@@ -237,6 +252,14 @@
 }
 .docs-gallery__chrome-body--compact {
   min-height: 28px;
+}
+
+/* Small primary text, as on the NavBar docs page. Bare text inherits the stage
+   font through the button's `font: inherit` and reads larger than the title. */
+.docs-gallery__navbar-action {
+  color: var(--tx-color-primary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 
@@ -553,6 +576,24 @@
   height: 100%;
 }
 
+/* The image gallery fills its row with 92px thumbnails 10px apart: its three
+   pictures sit in one row from 296px wide, and two to a row, a square block,
+   below that. Their chunk arrives after the cell, so the block holds the height
+   they will take, read off the stage's width rather than named per width. */
+.docs-gallery__stage--thumbs {
+  container-type: inline-size;
+}
+
+.docs-gallery__thumbs {
+  min-height: calc((min(320px, 100cqw) - 20px) / 3);
+}
+
+@container (width < 296px) {
+  .docs-gallery__thumbs {
+    min-height: 100cqw;
+  }
+}
+
 /* A suite with one component: a lone cell in a two-column grid leaves the other
    half blank, which reads as a missing specimen rather than a complete suite. */
 .docs-gallery__grid--single {
@@ -704,8 +745,14 @@
   }
 
   .docs-gallery__stage {
-    min-height: 196px;
+    min-height: max(196px, calc(var(--docs-gallery-specimen, 0px) + 84px));
     padding: 52px 20px 32px;
+  }
+}
+
+@media (max-width: 374px) {
+  .docs-gallery__stage {
+    min-height: max(196px, calc(var(--docs-gallery-specimen-narrow, var(--docs-gallery-specimen, 0px)) + 84px));
   }
 }
 

@@ -61,7 +61,8 @@ const creditsMock = vi.hoisted(() => {
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key)
+    t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key),
+    locale: { value: 'en-US' }
   })
 }))
 

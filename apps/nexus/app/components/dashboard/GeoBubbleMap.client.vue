@@ -25,7 +25,7 @@ const emit = defineEmits<{
   'point-click': [point: GeoPoint]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const validPoints = computed(() => props.points.filter(point =>
   Number.isFinite(point.latitude) && Number.isFinite(point.longitude),
 ))
@@ -33,6 +33,8 @@ const worldUrl: string = '/geo/world-countries.geo.json'
 const { data: world, error, refresh } = useTypedFetch<MapGeoJson | null>(worldUrl, { server: false, default: () => null })
 const pointValue = (point: GeoPoint): number => Number.isFinite(point.value) ? Number(point.value) : 0
 const pointColor = (point: GeoPoint): string => point.color || 'var(--tx-chart-categorical-1, #4290F0)'
+const numberFormat = computed(() => new Intl.NumberFormat(locale.value))
+const mapLabels = computed(() => ({ map: t('ui.geoMap.label'), instructions: t('ui.geoMap.instructions') }))
 </script>
 
 <template>
@@ -65,12 +67,13 @@ const pointColor = (point: GeoPoint): string => point.color || 'var(--tx-chart-c
       :bubble-color="pointColor"
       :bubble-border-color="pointColor"
       :bubble-border-width="1"
+      :labels="mapLabels"
       roam
       @bubble-click="emit('point-click', $event)"
     >
       <template #tooltip="{ row }">
         <strong>{{ row.label }}</strong>
-        <span v-if="Number.isFinite(row.value)"> · {{ row.value }}</span>
+        <span v-if="Number.isFinite(row.value)"> · {{ numberFormat.format(pointValue(row)) }}</span>
       </template>
     </TxBubbleMap>
     <TxSkeleton v-else width="100%" :height="height" />

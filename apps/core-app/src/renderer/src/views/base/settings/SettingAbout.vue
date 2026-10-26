@@ -30,7 +30,7 @@ import { normalizeStoredUpdateChannel } from '~/modules/update/channel'
 import { getBuildInfo } from '~/utils/build-info'
 import { createRendererLogger } from '~/utils/renderer-log'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const { packageJson, os, processInfo } = useEnv()
@@ -334,7 +334,7 @@ function openSoftwareLicense() {
     <TuffBlockLine
       v-if="buildInfo.buildTime"
       :title="t('settingAbout.buildMetadataTime')"
-      :description="new Date(buildInfo.buildTime).toLocaleString()"
+      :description="new Date(buildInfo.buildTime).toLocaleString(locale)"
     />
     <TuffBlockLine :title="t('settingAbout.startCosts')">
       <template #description>

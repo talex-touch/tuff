@@ -18,7 +18,7 @@ defineEmits<{
   clear: [historyId: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const statusClass = computed(() => `status-${props.history.status}`)
 
@@ -98,7 +98,7 @@ function formatDate(date: Date | undefined): string {
   }
 
   // 显示完整日期
-  return d.toLocaleDateString()
+  return d.toLocaleDateString(locale.value)
 }
 
 function formatSize(bytes: number): string {

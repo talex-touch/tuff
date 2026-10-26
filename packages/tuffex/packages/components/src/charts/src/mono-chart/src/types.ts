@@ -145,6 +145,8 @@ export interface MonoChartProps {
   /** Explicit month-header locale keeps SSR and hydration deterministic. */
   locale?: string
   formatValue?: (value: number) => string
+  /** Writes an x value on the axis and as the tooltip title, e.g. a timestamp as a date. @default String */
+  formatX?: (x: string | number) => string
 }
 export interface MonoChartEmits {
   (e: 'update:seriesMode', value: MonoChartSeriesMode): void

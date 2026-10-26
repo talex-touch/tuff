@@ -461,10 +461,10 @@ const tooltipRows = computed<Array<[string, string]>>(() => {
   if (!params)
     return []
   if (params.type === 'link' && params.link)
-    return [['Value', props.formatValue(params.link.value)]]
+    return [[labels.value.value, props.formatValue(params.link.value)]]
   const rows: Array<[string, string]> = []
   if (params.node?.value !== undefined)
-    rows.push(['Value', props.formatValue(params.node.value)])
+    rows.push([labels.value.value, props.formatValue(params.node.value)])
   for (const [key, value] of Object.entries(params.node?.tooltipData ?? {}))
     rows.push([key, typeof value === 'number' ? props.formatValue(value) : String(value)])
   return rows
@@ -610,7 +610,7 @@ const tooltipRows = computed<Array<[string, string]>>(() => {
           v-if="hovered.type === 'node' && hovered.node?.isDrillable && hovered.node.childCount"
           class="tx-sankey__tooltip-row tx-sankey__tooltip-drill"
         >
-          {{ hovered.node.childCount }} items
+          {{ labels.items(hovered.node.childCount) }}
         </div>
       </slot>
     </div>

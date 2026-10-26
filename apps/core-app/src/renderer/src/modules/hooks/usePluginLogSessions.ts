@@ -2,6 +2,7 @@ import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const pluginLogsLog = createRendererLogger('PluginLogs')
@@ -41,6 +42,7 @@ const pluginLogEvents = {
 }
 
 export function usePluginLogSessions(transport: ITuffTransport) {
+  const { locale } = useI18n()
   const sessions = ref<LogSessionMeta[]>([])
   const sessionCache = ref<Record<string, LogSessionMeta>>({})
   const selectedSessionId = ref<string | null>(null)
@@ -82,7 +84,7 @@ export function usePluginLogSessions(transport: ITuffTransport) {
     if (session.startedAt) {
       const date = new Date(session.startedAt)
       if (!Number.isNaN(date.getTime())) {
-        return date.toLocaleString()
+        return date.toLocaleString(locale.value)
       }
     }
     return session.id

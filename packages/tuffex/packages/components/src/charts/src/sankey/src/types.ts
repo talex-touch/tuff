@@ -67,16 +67,22 @@ export interface SankeyChartProps {
   linkColor?: 'gradient' | 'gray'
   /** Link opacity in gradient mode. @default 0.5 */
   linkOpacity?: number
-  /** Keyboard instructions read with each node. English by default. */
+  /** Keyboard instructions read with each node, and the tooltip's own words. English by default. */
   labels?: Partial<SankeyLabels>
 }
 
-/** Text the diagram gives assistive technology. */
+/** Text the diagram writes itself: its keyboard instructions and the default tooltip's wording. */
 export interface SankeyLabels {
   /** How to select and move a focused node, and how to reset the layout. */
   instructions: string
+  /** Key of the tooltip row holding a node's or a link's value. */
+  value: string
+  /** Tooltip line under a drillable node, counting what it holds. */
+  items: (count: number) => string
 }
 
 export const SANKEY_DEFAULT_LABELS: SankeyLabels = {
   instructions: 'Press Enter to select the node. Alt plus the up or down arrow moves it; drag nodes to rearrange, and double-click the background to reset the layout.',
+  value: 'Value',
+  items: count => `${count} items`,
 }

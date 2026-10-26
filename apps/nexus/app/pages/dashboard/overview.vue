@@ -247,21 +247,18 @@ const latencyTrendMax = computed(() => {
 
 const searchTrendValues = computed(() => currentTelemetryPoints.value.map(point => point.searches))
 
+// One label per point, which the chart's tooltip names the hovered day by.
+const pointLabels = computed<string[]>(() => currentTelemetryPoints.value.map((point) => {
+  const date = new Date(`${point.date}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? point.date : dayFormatter.value.format(date)
+}))
+
+// The first, middle and last day, written under the chart.
 const rangeLabels = computed<string[]>(() => {
-  const keys = currentTelemetryPoints.value.map(point => point.date)
-  if (!keys.length)
+  const labels = pointLabels.value
+  if (!labels.length)
     return []
-
-  const first = keys[0] ?? ''
-  const middle = keys[Math.floor((keys.length - 1) / 2)] ?? first
-  const last = keys[keys.length - 1] ?? middle
-
-  return [first, middle, last].map((value) => {
-    const date = new Date(`${value}T00:00:00`)
-    if (Number.isNaN(date.getTime()))
-      return value
-    return dayFormatter.value.format(date)
-  })
+  return [labels[0]!, labels[Math.floor((labels.length - 1) / 2)]!, labels[labels.length - 1]!]
 })
 
 const viewModel = computed<OverviewViewModel>(() => ({
@@ -581,7 +578,7 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="mt-3 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
               <LazyDashboardSparklineChart
                 :values="searchTrendValues"
-                :labels="rangeLabels"
+                :labels="pointLabels"
                 :height="152"
                 color="var(--tx-color-primary, #409eff)"
                 :aria-label="t('dashboard.overview.trends.searchTitle')"

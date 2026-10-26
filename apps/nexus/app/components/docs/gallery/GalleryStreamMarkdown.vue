@@ -46,8 +46,9 @@ onBeforeUnmount(() => clearTimeout(timer))
 .docs-gallery__stream-markdown {
   width: 100%;
   max-width: 17rem;
-  /* The finished answer's height, held so the cell never jumps while it streams. */
-  min-height: 10.5rem;
+  /* The finished answer's height in its longer language (English, 205px at
+     17rem wide), held so the answer never grows under the reader as it streams. */
+  min-height: 12.875rem;
 }
 
 /* The gallery stage zeroes list padding for its own specimens, which pushes a

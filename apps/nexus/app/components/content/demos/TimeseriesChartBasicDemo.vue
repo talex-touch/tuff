@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TimeseriesData } from '@talex-touch/tuffex/charts'
 import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+import { computed } from 'vue'
+import { chartTimeFormats, TIMESERIES_ZH_LABELS } from './chart-demo-locale'
 
 const start = Date.UTC(2026, 7, 30)
 const hour = 3_600_000
@@ -12,23 +14,29 @@ function wave(base: number, amp: number, phase: number): Array<[number, number]>
   ])
 }
 
-const data: TimeseriesData[] = [
-  { name: 'Requests', data: wave(320, 80, 0) },
-  { name: 'Cache hits', data: wave(240, 60, 1.2) },
-]
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { requests: '请求', cacheHits: '缓存命中', time: '时间', count: '次数', unit: '请求/秒', labels: TIMESERIES_ZH_LABELS }
+  : { requests: 'Requests', cacheHits: 'Cache hits', time: 'Time', count: 'Count', unit: 'req/s', labels: undefined })
+const time = computed(() => chartTimeFormats(locale.value))
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-}
+const requests = wave(320, 80, 0)
+const cacheHits = wave(240, 60, 1.2)
+const data = computed<TimeseriesData[]>(() => [
+  { name: copy.value.requests, data: requests },
+  { name: copy.value.cacheHits, data: cacheHits },
+])
 </script>
 
 <template>
   <TxTimeseriesChart
     :data="data"
     :height="280"
-    x-axis-name="Time"
-    y-axis-name="Count"
-    :x-axis-tick-format="formatTime"
-    :tooltip-value-format="(value: number) => `${value} req/s`"
+    :x-axis-name="copy.time"
+    :y-axis-name="copy.count"
+    :x-axis-tick-format="time.clock"
+    :tooltip-value-format="(value: number) => `${value} ${copy.unit}`"
+    :timestamp-format="time.stamp"
+    :labels="copy.labels"
   />
 </template>

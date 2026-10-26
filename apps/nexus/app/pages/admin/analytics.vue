@@ -585,7 +585,8 @@ onBeforeUnmount(() => {
   if (docsQueryTimer)
     clearTimeout(docsQueryTimer)
 })
-const formatNumber = formatAnalyticsNumber
+const formatNumber = (value: number) => formatAnalyticsNumber(value, locale.value)
+const mapLabels = computed(() => ({ map: t('ui.geoMap.label'), instructions: t('ui.geoMap.instructions') }))
 const toSortedList = toSortedAnalyticsList
 const formatCategoryLabel = formatAnalyticsCategoryLabel
 const formatCategoryKey = formatAnalyticsCategoryKey
@@ -1639,10 +1640,16 @@ P95
               name="geoName"
               value="count"
               :value-format="formatNumber"
+              :labels="mapLabels"
               show-legend
               :height="320"
               @region-click="handleMapPointClick($event)"
-            />
+            >
+              <template #tooltip="{ row, value }">
+                <strong>{{ resolveCountryLabel(row.countryCode) }}</strong>
+                <span class="font-medium tabular-nums">{{ formatNumber(value) }}</span>
+              </template>
+            </TxChoroplethMap>
             <TxBubbleMap
               v-else
               :geo-json="worldGeoJson"
@@ -1652,6 +1659,7 @@ P95
               value="value"
               name="label"
               :value-format="formatNumber"
+              :labels="mapLabels"
               :height="320"
               @bubble-click="handleMapPointClick($event)"
             />

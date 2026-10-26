@@ -63,7 +63,7 @@ function datasetFor(kind: DitherChartVariant, periodIndex = 1): DitherDataset {
     return { series: [1240, 980, 620, 410, 300].map((base, index) => ({ id: `plan-${index}`, label: names[index]!, value: Math.round(base * periods.value[periodIndex]!.mult * (0.78 + 0.4 * (0.5 + 0.5 * Math.sin(index * 1.9 + periodIndex * 1.3))) * m) })) }
   }
   if (['dither-stacked', 'payments'].includes(kind)) {
-    const branches = ['Bishkek', 'Osh', 'Jalal-Abad', 'Karakol']
+    const branches = zh ? ['比什凯克', '奥什', '贾拉拉巴德', '卡拉科尔'] : ['Bishkek', 'Osh', 'Jalal-Abad', 'Karakol']
     const names = zh ? ['现金', '二维码', '银行'] : ['Cash', 'QR', 'Bank']
     return { series: [0.46, 0.31, 0.23].map((share, band) => ({ id: `band-${band}`, label: names[band]!, unit: '$', data: [0.45, 0.25, 0.18, 0.12].map((weight, branch) => ({ label: branches[branch]!, value: Math.round(150000 * weight * [1, 4, 13, 52][periodIndex]! * share * (0.9 + 0.14 * Math.sin(branch * 3.1 + band * 1.7)) * m) })) })) }
   }
@@ -75,7 +75,7 @@ function datasetFor(kind: DitherChartVariant, periodIndex = 1): DitherDataset {
     const weeks = periodIndex === 0 ? 12 : 24
     return { cells: Array.from({ length: weeks * 7 }, (_, index) => {
       const column = Math.floor(index / 7); const row = index % 7
-      return { id: `activity-${index}`, row, column, label: `${zh ? '第' : 'Week '}${column + 1} · ${weekdays.value[row]}`, value: Math.max(0, Math.min(4, Math.floor(Math.sin(column * 0.5 + row * 0.2) * 2 + Math.cos(column * 1.2) * 1.5 + 2))) * m }
+      return { id: `activity-${index}`, row, column, label: `${zh ? `第 ${column + 1} 周` : `Week ${column + 1}`} · ${weekdays.value[row]}`, value: Math.max(0, Math.min(4, Math.floor(Math.sin(column * 0.5 + row * 0.2) * 2 + Math.cos(column * 1.2) * 1.5 + 2))) * m }
     }) }
   }
   if (kind === 'dither-gauge') return { series: [65, 82, 45].map((value, index) => ({ id: `metric-${index}`, label: (zh ? ['CPU负载', '内存', '网络'] : ['CPU load', 'Memory', 'Network'])[index]!, value: value * m, capacity: 100, unit: '%' })) }
@@ -92,11 +92,11 @@ function datasetFor(kind: DitherChartVariant, periodIndex = 1): DitherDataset {
   if (kind === 'dither-device') return { series: (periodIndex === 0 ? [65, 25, 10] : [55, 35, 10]).map((value, index) => ({ id: `device-${index}`, label: (zh ? ['手机', '桌面', '平板'] : ['Mobile', 'Desktop', 'Tablet'])[index]!, value: value * m })) }
   if (kind === 'dither-storage') return { series: [[500, 340], [1000, 850], [2000, 450]].map(([capacity, value], index) => ({ id: `storage-${index}`, label: (zh ? ['数据库', '资源', '备份'] : ['Database', 'Assets', 'Backups'])[index]!, value: value! * m, capacity, unit: 'GB' })) }
   if (kind === 'dither-revenue') return { series: [{ id: 'revenue', label: zh ? '收入' : 'Revenue', unit: '$', data: (periodIndex === 0 ? [1200, 1500, 1100, 1800, 2200, 2900, 1750] : [900, 1100, 800, 1300, 1600, 2100, 2000]).map((value, index) => ({ label: weekdays.value[index]!, value: value * m })) }] }
-  if (kind === 'dither-uptime') return { cells: Array.from({ length: 90 }, (_, index) => ({ id: `uptime-${index}`, label: `${zh ? '第' : 'Day '}${index + 1}`, row: 0, column: index, value: Math.min(1, ([22, 60].includes(index) ? 0 : [12, 45, 78].includes(index) ? 0.8 : 1) * m) })) }
+  if (kind === 'dither-uptime') return { cells: Array.from({ length: 90 }, (_, index) => ({ id: `uptime-${index}`, label: zh ? `第 ${index + 1} 天` : `Day ${index + 1}`, row: 0, column: index, value: Math.min(1, ([22, 60].includes(index) ? 0 : [12, 45, 78].includes(index) ? 0.8 : 1) * m) })) }
   if (kind === 'dither-bar') return { series: [{ id: 'events', label: zh ? '事件' : 'Events', data: [42, 68, 55, 92, 85, 110, 74].map((value, index) => ({ label: weekdays.value[index]!, value: Math.round(value * [1, 3.8, 11.2, 42.5][periodIndex]! * m) })) }] }
   if (kind === 'dither-heatmap-grid') return { cells: Array.from({ length: 84 }, (_, index) => {
     const row = Math.floor(index / 12); const column = index % 12
-    return { id: `hour-${index}`, row, column, label: `${weekdays.value[row]} @ ${column * 2}:00`, value: Math.max(0, Math.round(20 + Math.sin(row * 1.5 + column * 0.8) * 35 + ((index * 17) % 40))) * m }
+    return { id: `hour-${index}`, row, column, label: `${weekdays.value[row]}${zh ? ' ' : ' @ '}${column * 2}:00`, value: Math.max(0, Math.round(20 + Math.sin(row * 1.5 + column * 0.8) * 35 + ((index * 17) % 40))) * m }
   }) }
   const metrics = [
     { id: 'arr', label: zh ? 'ARR增长' : 'ARR growth', value: 1_400_000 * m, unit: '$', change: '+24%', data: [20, 35, 45, 60, 55, 80, 95] },
@@ -110,7 +110,7 @@ function datasetFor(kind: DitherChartVariant, periodIndex = 1): DitherDataset {
 function periodsFor(kind: DitherChartVariant): DitherPeriod[] {
   const zh = locale.value === 'zh'
   let labels = periods.value.map(item => item.label)
-  if (['dither-growth', 'members-growth', 'dither-bar'].includes(kind)) labels = kind === 'dither-bar' ? ['7D', '30D', '90D', '1Y'] : ['7D', '14D', '30D', '90D']
+  if (['dither-growth', 'members-growth', 'dither-bar'].includes(kind)) labels = kind === 'dither-bar' ? (zh ? ['7天', '30天', '90天', '1年'] : ['7D', '30D', '90D', '1Y']) : (zh ? ['7天', '14天', '30天', '90天'] : ['7D', '14D', '30D', '90D'])
   else if (kind === 'dither-heatmap') labels = zh ? ['最近3个月', '最近6个月'] : ['Last 3 months', 'Last 6 months']
   else if (kind === 'dither-traffic') labels = zh ? ['直接访问', '社交'] : ['Direct', 'Social']
   else if (kind === 'dither-scatter') labels = zh ? ['散点', '趋势', '峰值'] : ['Scatter', 'Trend', 'Peak']

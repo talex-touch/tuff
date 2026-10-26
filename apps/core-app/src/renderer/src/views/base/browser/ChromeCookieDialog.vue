@@ -19,7 +19,7 @@ const emit = defineEmits<{
   'sync-success': [count: number, domain: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const connection = useBrowserConnection()
 
 const isConnected = computed(() => connection.activeProfile.value?.status === 'connected')
@@ -121,7 +121,7 @@ function formatExpiry(timestamp?: number): string {
   if (!timestamp || timestamp <= 0) return t('browser.cookies.sessionExpiry')
   try {
     const d = new Date(timestamp * 1000)
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleDateString(locale.value, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'

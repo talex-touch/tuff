@@ -68,9 +68,11 @@ catalog:
   gsap: ^3.15.0
   h3: 1.15.11
   jszip: ^3.10.2
+  katex: ^0.16.45
   markdown-it: 14.1.0
   marked: ^17.0.6
   mermaid: ^11.16.1
+  micromark-extension-math: ^3.1.0
   next-auth: ~4.24.15
   nitropack: ^2.13.4
   ogl: ^1.0.11

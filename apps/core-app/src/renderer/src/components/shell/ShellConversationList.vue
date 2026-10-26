@@ -25,7 +25,7 @@ import MetaHintBadge from './MetaHintBadge.vue'
 import ShellProjectFolder from './ShellProjectFolder.vue'
 import ShellProjectRows from './ShellProjectRows.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { isConversationLoading } = useConversationLoading()
 /**
  * The skeleton's folder-name bars, one per row. In pixels because a percentage has nothing to resolve
@@ -248,9 +248,9 @@ function formatRowTime(timestamp?: number): string {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate()
   if (isToday) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
   }
-  return date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
+  return date.toLocaleDateString(locale.value, { month: 'numeric', day: 'numeric' })
 }
 
 function onRailRowClick(row: RailConversationRow): void {

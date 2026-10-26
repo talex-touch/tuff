@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
  * so the translation coverage test can see them.
  */
 export function useMemoryLabels() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
 
   function typeLabel(type: MemoryType): string {
     return t(`intelligence.memoryReview.types.${type}`)
@@ -29,7 +29,7 @@ export function useMemoryLabels() {
 
   function formatTimestamp(value?: number): string {
     if (!value) return t('intelligence.memoryReview.notAvailable')
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale?.value, {
       dateStyle: 'medium',
       timeStyle: 'short'
     }).format(value)

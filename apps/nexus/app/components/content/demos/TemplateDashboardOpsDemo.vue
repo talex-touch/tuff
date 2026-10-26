@@ -25,6 +25,7 @@ import { ChartPalette } from '@talex-touch/tuffex/charts'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { MAP_ZH_INSTRUCTIONS, SANKEY_ZH_LABELS } from './chart-demo-locale'
 import TemplateFrame from './TemplateFrame.vue'
 
 type Layout = 'narrow' | 'column' | 'wide'
@@ -966,7 +967,7 @@ defineExpose({ resetDemo })
               <span class="ops-panel__title">{{ copy.mapTitle }}</span>
               <span class="ops-panel__sub">{{ copy.mapSub(CITIES.length) }}</span>
             </div>
-            <div class="ops-map__stage" :style="{ height: `${geometry(width, height).map}px` }" role="img" :aria-label="copy.mapLabel">
+            <div class="ops-map__stage" :style="{ height: `${geometry(width, height).map}px` }">
               <TxBubbleMap
                 v-if="entered && world"
                 :geo-json="world"
@@ -981,6 +982,7 @@ defineExpose({ resetDemo })
                 :bubble-color="bubbleColor"
                 :bubble-border-color="bubbleBorderColor"
                 :bubble-border-width="bubbleBorderWidth"
+                :labels="zh ? { map: copy.mapLabel, instructions: MAP_ZH_INSTRUCTIONS } : { map: copy.mapLabel }"
                 @bubble-click="onBubbleClick"
               >
                 <template #tooltip="{ row }">
@@ -1077,7 +1079,7 @@ defineExpose({ resetDemo })
               <span class="ops-panel__title">{{ copy.flowTitle }}</span>
               <span class="ops-panel__sub">{{ copy.flowSub }}</span>
             </div>
-            <div class="ops-flow__stage" role="img" :aria-label="copy.flowLabel">
+            <div class="ops-flow__stage" role="group" :aria-label="copy.flowLabel">
               <TxSankeyChart
                 v-if="entered"
                 :nodes="flowNodeSets[layoutOf(width) === 'wide' ? 'wide' : 'compact']"
@@ -1090,6 +1092,7 @@ defineExpose({ resetDemo })
                 :right="4"
                 :link-opacity="0.42"
                 :format-value="formatCount"
+                :labels="zh ? SANKEY_ZH_LABELS : undefined"
               >
                 <template #tooltip="{ params }">
                   <span class="ops-tip">

@@ -60,7 +60,7 @@ code: |
 :::
 
 ### Header, Footer, and Mask
-The `header` and `footer` slots receive `close`; `maskEffect` sets the mask look, and `panelTransparent` thins the colour under the panel's material so more of the page shows through.
+The `header` and `footer` slots receive `close`; `maskEffect` sets the mask look. The panel is a solid `pure` by default; on a translucent material such as `refraction`, `panelTransparent` thins the colour under it so more of the page shows through.
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |
@@ -70,6 +70,7 @@ code: |
       title="Release policy"
       size="min(460px, 92vw)"
       mask-effect="opacity"
+      surface="refraction"
       panel-transparent
     >
       <template #header="{ close }">
@@ -249,13 +250,13 @@ rows:
     type: "'blur' | 'opacity' | 'transparent'"
     default: "'blur'"
   - name: panelTransparent
-    description: 'Thins the colour under the panel material so more of the page shows through (see `surfaceOpacity`).'
+    description: 'Thins the colour under a translucent material so more of the page shows through (see `surfaceOpacity`); a `pure` or `flat` panel stays opaque.'
     type: 'boolean'
     default: 'false'
   - name: surface
-    description: 'Material of the panel.'
+    description: 'Material of the panel. `pure` paints `surfaceColor` solid; `mask`, `blur`, `acrylic`, `glass` and `refraction` let the page show through.'
     type: "'pure' | 'mask' | 'blur' | 'glass' | 'refraction' | 'acrylic' | 'mica' | 'flat' | 'plain'"
-    default: "'refraction'"
+    default: "'pure'"
   - name: surfaceColor
     description: 'Colour laid under the material; empty uses `--tx-drawer-panel-background`, which follows the theme.'
     type: 'string'
@@ -327,7 +328,7 @@ rows:
 - The close button, the mask, and Escape ask `beforeClose`, then emit `update:visible(false)` and `close`; `closeOnClickMask` and `closeOnPressEscape` turn off the last two.
 - Only the topmost modal dialog handles Tab and Escape, and keys another control already handled are ignored, so a confirmation on top owns them.
 - When closed, the root stays in the DOM with `inert` and `aria-hidden`.
-- The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer, `refraction` by default. A sliding panel's filter samples where the panel was a frame earlier, so the material takes its motion fallback during the slide and recovers once it ends.
+- The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer: `pure` by default, a solid fill of `--tx-drawer-panel-background`. Under `blur`, `acrylic`, `glass` or `refraction`, a sliding panel's filter samples where the panel was a frame earlier, so the material takes its motion fallback during the slide and recovers once it ends.
 - Under high contrast the mask only dims the page without frosting it, and the panel's material turns solid on its own.
 
 ## Technologies

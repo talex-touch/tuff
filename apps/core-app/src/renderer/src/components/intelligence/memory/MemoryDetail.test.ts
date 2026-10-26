@@ -22,7 +22,8 @@ vi.mock('@talex-touch/tuffex/scroll', () => ({
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string, params?: Record<string, unknown>) =>
-      params ? `${key}:${JSON.stringify(params)}` : key
+      params ? `${key}:${JSON.stringify(params)}` : key,
+    locale: { value: 'en-US' }
   })
 }))
 

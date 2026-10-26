@@ -21,7 +21,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -134,7 +134,7 @@ function formatRemainingTime(seconds: number): string {
 function formatDate(date: Date | number | undefined): string {
   if (!date) return '-'
   const d = typeof date === 'number' ? new Date(date) : date
-  return d.toLocaleString()
+  return d.toLocaleString(locale.value)
 }
 </script>
 

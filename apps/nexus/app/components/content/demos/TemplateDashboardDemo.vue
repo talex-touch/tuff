@@ -19,6 +19,7 @@ import type { StatCardInsight } from '@talex-touch/tuffex/stat-card'
 import { ChartPalette } from '@talex-touch/tuffex/charts'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { TIMESERIES_ZH_LABELS } from './chart-demo-locale'
 import TemplateFrame from './TemplateFrame.vue'
 
 type Layout = 'narrow' | 'column' | 'wide'
@@ -644,12 +645,13 @@ const compareHover = ref<number | null>(null)
 const anomalyHover = ref<number | null>(null)
 const aiRoute = ref('local')
 
+// Labelled, so the chart reads each value out under its name rather than its id.
 const compareSeries: SparkSeries[] = [
-  { id: 'linux', data: LINUX_CHANGE, color: ChartPalette.categoricalVar(2) },
-  { id: 'windows', data: WINDOWS_CHANGE, color: ChartPalette.categoricalVar(1) },
+  { id: 'linux', label: 'Linux', data: LINUX_CHANGE, color: ChartPalette.categoricalVar(2) },
+  { id: 'windows', label: 'Windows', data: WINDOWS_CHANGE, color: ChartPalette.categoricalVar(1) },
 ]
 const anomalySeries: SparkSeries[] = [
-  { id: 'windows-crashes', data: WINDOWS_CRASHES, color: RED },
+  { id: 'windows-crashes', label: 'Windows', data: WINDOWS_CRASHES, color: RED },
 ]
 
 const insightPages = computed<InsightPage[]>(() => {
@@ -976,6 +978,7 @@ defineExpose({ resetDemo })
               :timestamp-format="formatStamp"
               :cluster-label="copy.cluster"
               :aria-description="copy.chartDescription"
+              :labels="zh ? TIMESERIES_ZH_LABELS : undefined"
               @time-range-change="onZoom"
             />
           </section>

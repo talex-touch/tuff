@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TimeseriesData } from '@talex-touch/tuffex/charts'
 import { ChartPalette, TxChartLegendItem, TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+import { computed } from 'vue'
+import { TIMESERIES_ZH_LABELS } from './chart-demo-locale'
 
 interface PercentileMetric {
   /** Series name, shared by the metric item and the chart series. */
@@ -46,9 +48,14 @@ const data: TimeseriesData[] = metrics.map(metric => ({
   ]),
 }))
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { time: '时间（UTC）', footer: '百分位按五分钟滚动窗口计算。', labels: TIMESERIES_ZH_LABELS }
+  : { time: 'Time (UTC)', footer: 'Percentiles use a five-minute rolling window.', labels: undefined })
 
-const stampFormat = new Intl.DateTimeFormat(undefined, {
+const timeFormat = computed(() => new Intl.DateTimeFormat(locale.value, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }))
+
+const stampFormat = computed(() => new Intl.DateTimeFormat(locale.value, {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
@@ -56,14 +63,14 @@ const stampFormat = new Intl.DateTimeFormat(undefined, {
   second: '2-digit',
   hour12: false,
   timeZone: 'UTC',
-})
+}))
 
 function formatTime(timestamp: number): string {
-  return timeFormat.format(new Date(timestamp))
+  return timeFormat.value.format(new Date(timestamp))
 }
 
 function formatStamp(timestamp: number): string {
-  return stampFormat.format(new Date(timestamp))
+  return stampFormat.value.format(new Date(timestamp))
 }
 
 /** Tooltip readings keep up to three decimals so small P50 moves stay visible. */
@@ -88,11 +95,12 @@ function formatValue(value: number): string {
     <TxTimeseriesChart
       :data="data"
       :height="300"
-      x-axis-name="Time (UTC)"
+      :x-axis-name="copy.time"
       :x-axis-tick-format="formatTime"
       :timestamp-format="formatStamp"
       :tooltip-value-format="formatValue"
-      tooltip-footer="Percentiles use a five-minute rolling window."
+      :tooltip-footer="copy.footer"
+      :labels="copy.labels"
     />
   </div>
 </template>

@@ -37,7 +37,7 @@ const zh = computed(() => locale.value === 'zh')
 const copy = computed(() => zh.value
   ? {
       star: '标记项目', starred: '已标记项目', cards: '旅行照片', expand: '展开卡片', collapse: '收起卡片',
-      carousel: '旅行照片轮播', previous: '上一项', next: '下一项', item: '照片', timeline: '拍摄时间线',
+      carousel: '旅行照片轮播', carouselRole: '轮播', previous: '上一项', next: '下一项', item: '照片', timeline: '拍摄时间线',
       book: '旅行手记', page: '章节', pages: ['出发', '山路', '湖畔', '归途'],
       pageContent: ['背包六点就收好了。', '雾从松林间散开。', '在湖边歇了很久。', '带回一袋松果。'],
       loader: '正在同步照片', pause: '暂停', resume: '继续', replay: '重放',
@@ -59,7 +59,7 @@ const copy = computed(() => zh.value
     }
   : {
       star: 'Mark project', starred: 'Project marked', cards: 'Trip photos', expand: 'Expand cards', collapse: 'Collapse cards',
-      carousel: 'Trip photo carousel', previous: 'Previous', next: 'Next', item: 'Photo', timeline: 'Photo timeline',
+      carousel: 'Trip photo carousel', carouselRole: 'carousel', previous: 'Previous', next: 'Next', item: 'Photo', timeline: 'Photo timeline',
       book: 'Travel journal', page: 'Chapter', pages: ['Depart', 'Trail', 'Lake', 'Home'],
       pageContent: ['Packed and out the door by six.', 'Mist lifting slowly off the pines.', 'A long, lazy lunch by the water.', 'Home with a bag of pine cones.'],
       loader: 'Syncing photos', pause: 'Pause', resume: 'Resume', replay: 'Replay',
@@ -160,6 +160,7 @@ const metricData = computed(() => ({
       variant="card-cover-flow-mono"
       size="sm"
       :aria-label="copy.carousel"
+      :aria-roledescription="copy.carouselRole"
       :previous-label="copy.previous"
       :next-label="copy.next"
       :item-label="copy.item"

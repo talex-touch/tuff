@@ -39,6 +39,7 @@ export interface MonoGeometryOptions {
   monthNames: string[]
   accent?: string | string[]
   labels: Required<MonoChartLabels>
+  formatX: (x: string | number) => string
 }
 const INK = 'var(--tx-mono-ink, var(--tx-text-color-primary, #303133))'
 const GRID = 'var(--tx-chart-grid-line, var(--tx-border-color-light, #e4e7ed))'
@@ -344,7 +345,7 @@ export function buildMonoGeometry(o: MonoGeometryOptions): MonoGeometry {
         label(plot.x - 8, y(value) + 3, String(value), 'end')
       }
     })
-    xs.forEach((value, i) => label(row ? plot.x + 28 : x(value), row ? plot.y + (i + 0.55) * plot.height / Math.max(1, xs.length) : h - 16, String(value), row ? 'end' : 'middle'))
+    xs.forEach((value, i) => label(row ? plot.x + 28 : x(value), row ? plot.y + (i + 0.55) * plot.height / Math.max(1, xs.length) : h - 16, o.formatX(value), row ? 'end' : 'middle'))
   }
   if (variant === 'mono-rounded-scatter' || variant === 'mono-rounded-bubble') {
     const points = (data.points ?? []).filter(point => finite(point.x) && finite(point.y) && finite(point.z ?? 1))
@@ -359,7 +360,7 @@ export function buildMonoGeometry(o: MonoGeometryOptions): MonoGeometry {
       const r = Math.sqrt(Math.max(0, point.z ?? 1) / maxZ) * (variant === 'mono-rounded-bubble' ? 26 : 11) + 3
       mark('circle', { cx: px, cy: py, r, fill: INK, 'fill-opacity': variant === 'mono-rounded-bubble' ? 0.2 : 1, stroke: INK, 'stroke-width': variant === 'mono-rounded-bubble' ? 2 : 1 }, key)
     })
-    xTickValues(sx, 4).forEach(value => label(xPosition(sx, Number(value)), h - 16, String(value)))
+    xTickValues(sx, 4).forEach(value => label(xPosition(sx, Number(value)), h - 16, o.formatX(Number(value))))
     sy.ticks(4).forEach(value => label(plot.x - 8, sy(value) + 3, String(value), 'end'))
     result.total = points.length
     return result
@@ -370,7 +371,7 @@ export function buildMonoGeometry(o: MonoGeometryOptions): MonoGeometry {
     candles.forEach((candle, i) => {
       if (![candle.open, candle.high, candle.low, candle.close].every(finite)) return
       const px = x(candle.x)
-      const key = hit(`candle-${i}`, String(candle.x), [{ name: o.labels.open, value: candle.open }, { name: o.labels.high, value: candle.high }, { name: o.labels.low, value: candle.low }, { name: o.labels.close, value: candle.close }], px, y(candle.high), candle.close)
+      const key = hit(`candle-${i}`, o.formatX(candle.x), [{ name: o.labels.open, value: candle.open }, { name: o.labels.high, value: candle.high }, { name: o.labels.low, value: candle.low }, { name: o.labels.close, value: candle.close }], px, y(candle.high), candle.close)
       mark('line', { x1: px, x2: px, y1: y(candle.high), y2: y(candle.low), stroke: INK, 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0.5 }, key)
       mark('rect', { x: px - Math.min(12, band * 0.28), y: y(Math.max(candle.open, candle.close)), width: Math.min(24, band * 0.56), height: Math.max(2, Math.abs(y(candle.open) - y(candle.close))), rx: 5, fill: candle.close >= candle.open ? INK : TRACK, stroke: INK, 'stroke-width': 1.5 }, key)
     })
@@ -392,7 +393,7 @@ export function buildMonoGeometry(o: MonoGeometryOptions): MonoGeometry {
     const generator = area<typeof ranges[number]>().x(point => x(point.x)).y0(point => y(point.min)).y1(point => y(point.max)).curve(curveFactory(o.curve))
     mark('path', { d: generator(ranges) ?? '', fill: 'var(--tx-mono-gradient)', stroke: INK, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
     ranges.forEach((range, i) => {
-      const key = hit(`range-${i}`, String(range.x), [{ name: o.labels.min, value: range.min }, { name: o.labels.max, value: range.max }], x(range.x), y(range.max), range.max - range.min)
+      const key = hit(`range-${i}`, o.formatX(range.x), [{ name: o.labels.min, value: range.min }, { name: o.labels.max, value: range.max }], x(range.x), y(range.max), range.max - range.min)
       rect(x(range.x) - band / 2, plot.y, band, plot.height, key, 0, 'transparent', 0)
     })
     result.total = ranges.at(-1) ? ranges.at(-1)!.max - ranges.at(-1)!.min : 0
@@ -406,7 +407,7 @@ export function buildMonoGeometry(o: MonoGeometryOptions): MonoGeometry {
     })
     if (!rows.length) return undefined
     const primary = seriesPoints[0]?.get(category)?.value
-    return hit(`category-${i}`, String(category), rows, x(category), y(primary ?? 0), primary)
+    return hit(`category-${i}`, o.formatX(category), rows, x(category), y(primary ?? 0), primary)
   })
   if (variant === 'mono-rounded-bar' || variant === 'mono-rounded-stacked-bar' || variant === 'mono-rounded-composed') {
     const barSeries = variant === 'mono-rounded-composed' ? series.slice(0, 1) : series

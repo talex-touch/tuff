@@ -180,6 +180,18 @@ describe('txSankeyChart', () => {
     const wrapper = mountChart()
     await wrapper.findAll('.tx-sankey__link')[0]!.trigger('pointerenter')
     expect(wrapper.find('.tx-sankey__tooltip').text()).toContain('Source A → Target')
+    expect(wrapper.find('.tx-sankey__tooltip-key').text()).toBe('Value')
+  })
+
+  it('takes the tooltip wording from labels', async () => {
+    const drillable = [nodes[0]!, nodes[1]!, { ...nodes[2]!, isDrillable: true, childCount: 4 }]
+    const wrapper = mountChart({ nodes: drillable, labels: { value: '数值', items: (count: number) => `${count} 项` } })
+    await wrapper.findAll('.tx-sankey__link')[0]!.trigger('pointerenter')
+    expect(wrapper.find('.tx-sankey__tooltip-key').text()).toBe('数值')
+
+    await wrapper.findAll('.tx-sankey__link')[0]!.trigger('pointerleave')
+    await wrapper.findAll('.tx-sankey__node')[2]!.trigger('pointerenter')
+    expect(wrapper.find('.tx-sankey__tooltip-drill').text()).toBe('4 项')
   })
 })
 

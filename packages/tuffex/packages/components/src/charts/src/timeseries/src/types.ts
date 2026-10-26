@@ -1,4 +1,18 @@
 import type { ChartLabels } from '../../chart/src/types'
+import { CHART_DEFAULT_LABELS } from '../../chart/src/types'
+
+export interface TimeseriesChartLabels extends ChartLabels {
+  /** Accessible name of the skeleton shown while `loading`. */
+  loading: string
+  /** Tooltip row standing in for the series `tooltipMaxItems` leaves out. */
+  more: (count: number) => string
+}
+
+export const TIMESERIES_DEFAULT_LABELS: TimeseriesChartLabels = {
+  ...CHART_DEFAULT_LABELS,
+  loading: 'Loading chart',
+  more: count => `+${count} more`,
+}
 
 /** A single data series rendered on a `TxTimeseriesChart`. */
 export interface TimeseriesData {
@@ -85,7 +99,7 @@ export interface TimeseriesChartProps {
    * the series whose value is closest to the cursor. @default 'all'
    */
   tooltipMode?: 'all' | 'single'
-  /** Max series rows in the tooltip (`all` mode); the rest fold into "+N more". @default 10 */
+  /** Max series rows in the tooltip (`all` mode); the rest fold into `labels.more`. @default 10 */
   tooltipMaxItems?: number
   /** Extra line rendered below the tooltip rows (kumo `tooltipFooter`). */
   tooltipFooter?: string
@@ -128,6 +142,9 @@ export interface TimeseriesChartProps {
    * view fixed; a `time-range-change` listener still brushes. @default true
    */
   zoom?: boolean
-  /** Accessible name and keyboard instructions. English by default. */
-  labels?: Partial<ChartLabels>
+  /**
+   * Accessible name, keyboard instructions, the loading skeleton's name and the
+   * tooltip's "+N more" row. English by default.
+   */
+  labels?: Partial<TimeseriesChartLabels>
 }

@@ -16,6 +16,7 @@ const copy = computed(() => locale.value === 'zh'
       view: '窗口：',
       all: '全部步数',
       follow: '跟随最新',
+      runs: ['基线', '+ 好奇心'],
       labels: {
         chart: '学习曲线',
         step: (step: string) => `第 ${step} 步`,
@@ -33,6 +34,7 @@ const copy = computed(() => locale.value === 'zh'
       view: 'Window: ',
       all: 'every step',
       follow: 'following the newest step',
+      runs: ['baseline', '+ curiosity'],
       labels: {},
     })
 
@@ -42,18 +44,19 @@ const TOTAL = STEPS / EVERY + 1
 
 // The whole run is drawn up front and revealed a logged point at a time.
 const finished = [
-  { name: 'baseline', seeds: seedsOf({ ceiling: 2400, tau: 150_000, steps: STEPS, every: EVERY }, 7) },
-  { name: '+ curiosity', seeds: seedsOf({ ceiling: 2900, tau: 120_000, steps: STEPS, every: EVERY }, 8) },
+  seedsOf({ ceiling: 2400, tau: 150_000, steps: STEPS, every: EVERY }, 7),
+  seedsOf({ ceiling: 2900, tau: 120_000, steps: STEPS, every: EVERY }, 8),
 ]
 
 const logged = ref(16)
 const running = ref(true)
 const view = ref<[number, number] | null>(null)
 
-const runs = computed<LearningCurveRun[]>(() => finished.map(run => ({
-  name: run.name,
-  seeds: run.seeds.map(seed => seed.slice(0, logged.value)),
+const runs = computed<LearningCurveRun[]>(() => finished.map((seeds, index) => ({
+  name: copy.value.runs[index]!,
+  seeds: seeds.map(seed => seed.slice(0, logged.value)),
 })))
+const stepFormat = (step: number) => step.toLocaleString(locale.value, { maximumFractionDigits: 3 })
 
 const done = computed(() => logged.value >= TOTAL)
 const newest = computed(() => (logged.value - 1) * EVERY)
@@ -105,6 +108,7 @@ onBeforeUnmount(stop)
       :x-axis-name="copy.steps"
       :y-axis-name="copy.reward"
       :labels="copy.labels"
+      :step-format="stepFormat"
       :height="280"
     />
     <div class="lc-stream-demo__bar">

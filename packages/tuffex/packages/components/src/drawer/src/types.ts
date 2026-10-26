@@ -124,15 +124,16 @@ export interface DrawerProps {
   maskEffect?: DrawerMaskEffect
 
   /**
-   * Whether more of the back layer should show through the panel: thins the colour under its
-   * material (see `surfaceOpacity`).
+   * Whether more of the back layer should show through the panel: thins the colour under a
+   * translucent material (see `surfaceOpacity`). A `pure` or `flat` panel stays opaque.
    * @default false
    */
   panelTransparent?: boolean
 
   /**
-   * Material of the panel.
-   * @default 'refraction'
+   * Material of the panel. `pure` paints `surfaceColor` solid; `mask`, `blur`, `acrylic`,
+   * `glass` and `refraction` let the page show through.
+   * @default 'pure'
    */
   surface?: BaseSurfaceMode
 
@@ -143,8 +144,9 @@ export interface DrawerProps {
   surfaceColor?: string
 
   /**
-   * Opacity of that colour (0–1): 0.96 under `mask` and 0.5 under the other materials, which
-   * `panelTransparent` thins to 0.78 and 0.3.
+   * Opacity of that colour (0–1): 0.96 under `mask` and 0.5 under `blur`, `acrylic`, `glass`
+   * and `refraction`, which `panelTransparent` thins to 0.78 and 0.3. `pure` and `flat` stay
+   * opaque, and `mica` and `plain` lay no colour.
    */
   surfaceOpacity?: number
 

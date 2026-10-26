@@ -3,11 +3,7 @@ import type { LearningCurveRun } from '@talex-touch/tuffex/charts/src/learning-c
 import { TxLearningCurve } from '@talex-touch/tuffex/charts/src/learning-curve'
 import { computed } from 'vue'
 import { seedsOf } from '../../content/demos/learning-curve-sample'
-import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
 
-// This cell renders its own stage because DocsComponentsGallery.vue sits a few lines under the
-// SFC line ceiling. The gallery loads this file asynchronously, so a dev server whose tuffex dist
-// predates TxLearningCurve loses this one cell, not every suite's gallery.
 const { locale } = useI18n()
 const labels = computed(() => locale.value === 'zh'
   ? {
@@ -19,6 +15,8 @@ const labels = computed(() => locale.value === 'zh'
     }
   : {})
 
+const stepFormat = (step: number) => step.toLocaleString(locale.value, { maximumFractionDigits: 3 })
+
 // Two algorithms on one task, three seeds each, logged every 10,000 steps.
 const runs: LearningCurveRun[] = [
   { name: 'SAC', seeds: seedsOf({ ceiling: 3200, tau: 160_000, steps: 1_000_000, every: 10_000 }, 1) },
@@ -27,14 +25,7 @@ const runs: LearningCurveRun[] = [
 </script>
 
 <template>
-  <div class="docs-gallery__stage not-prose">
-    <DocsGallerySpecimen>
-      <div class="docs-gallery__block">
-        <TxLearningCurve :runs="runs" :smoothing="0.8" :labels="labels" :height="150" />
-      </div>
-      <template #fallback>
-        <div class="docs-gallery__ph" />
-      </template>
-    </DocsGallerySpecimen>
+  <div class="docs-gallery__block">
+    <TxLearningCurve :runs="runs" :smoothing="0.8" :labels="labels" :step-format="stepFormat" :height="150" />
   </div>
 </template>

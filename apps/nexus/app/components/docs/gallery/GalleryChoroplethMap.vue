@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { TxChoroplethMap } from '@talex-touch/tuffex/charts/src/maps'
 import { computed } from 'vue'
-import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
 import { MINI_WORLD_GEO } from '../mini-world-geo'
 
 /* Real but rounded country outlines, inlined so the specimen never waits on a
    fetch — and joined on `properties.name`, which is the key the choropleth
-   reads by default. */
-const shares = [
-  { country: 'United States of America', share: 31 },
-  { country: 'Brazil', share: 12 },
-  { country: 'China', share: 24 },
-  { country: 'India', share: 14 },
-  { country: 'Australia', share: 7 },
-  { country: 'South Africa', share: 4 },
+   reads by default. `iso` names the country in the page's language. */
+interface Share { country: string, iso: string, share: number }
+const shares: Share[] = [
+  { country: 'United States of America', iso: 'US', share: 31 },
+  { country: 'Brazil', iso: 'BR', share: 12 },
+  { country: 'China', iso: 'CN', share: 24 },
+  { country: 'India', iso: 'IN', share: 14 },
+  { country: 'Australia', iso: 'AU', share: 7 },
+  { country: 'South Africa', iso: 'ZA', share: 4 },
 ]
 
 const { locale } = useI18n()
@@ -26,34 +26,42 @@ const copy = computed(() => locale.value === 'zh'
       },
     }
   : { hint: 'Drag to pan · ⌘/Ctrl + scroll to zoom', labels: { map: 'World map' } })
+
+const regions = computed(() => new Intl.DisplayNames([locale.value], { type: 'region' }))
+function countryName(row: Share): string {
+  return regions.value.of(row.iso) ?? row.country
+}
 </script>
 
 <template>
-  <div class="docs-gallery__stage not-prose">
-    <DocsGallerySpecimen>
-      <div class="docs-gallery__block">
-        <TxChoroplethMap
-          :geo-json="MINI_WORLD_GEO"
-          :data="shares"
-          name="country"
-          value="share"
-          :height="176"
-          :value-format="(value: number) => `${value}%`"
-          :labels="copy.labels"
-          show-legend
-        />
-        <p class="gallery-hint">
-          {{ copy.hint }}
-        </p>
-      </div>
-      <template #fallback>
-        <div class="docs-gallery__ph" />
+  <div class="docs-gallery__block">
+    <TxChoroplethMap
+      :geo-json="MINI_WORLD_GEO"
+      :data="shares"
+      name="country"
+      value="share"
+      :height="176"
+      :value-format="(value: number) => `${value}%`"
+      :labels="copy.labels"
+      show-legend
+    >
+      <template #tooltip="{ row }">
+        <strong>{{ countryName(row) }}</strong>
+        <span class="gallery-tooltip-value">{{ row.share }}%</span>
       </template>
-    </DocsGallerySpecimen>
+    </TxChoroplethMap>
+    <p class="gallery-hint">
+      {{ copy.hint }}
+    </p>
   </div>
 </template>
 
 <style scoped>
+.gallery-tooltip-value {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .gallery-hint {
   margin: 10px 0 0;
   font-size: 12px;

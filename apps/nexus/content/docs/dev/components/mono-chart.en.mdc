@@ -131,6 +131,7 @@ For real public data, pass `username`. Missing contribution/repository fields ar
 | `labels` | `MonoChartLabels` | English defaults | Source controls, statuses, disclosure and tooltip field names. |
 | `locale` | `string` | `'en-US'` | Month-header locale; use the same locale server/client. |
 | `formatValue` | `(number) => string` | `String(value)` | Numeric metric, legend and tooltip formatting. |
+| `formatX` | `(string \| number) => string` | `String(x)` | Writes an x value on the axis and as the tooltip title, e.g. a timestamp as a date. |
 
 ### Data types
 

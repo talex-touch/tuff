@@ -17,7 +17,7 @@ import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { useUserPlugins } from '~/composables/store/useUserPlugins'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const {
   records,
   stats,
@@ -108,7 +108,7 @@ function resetForm() {
 function formatDate(value?: string | null) {
   if (!value) return '—'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale.value)
 }
 
 function statusTone(status?: string | null) {

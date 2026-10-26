@@ -19,6 +19,8 @@ const copy = computed(() => locale.value === 'zh'
     }
   : { steps: 'Training steps (log)', loss: 'Training loss', labels: {} })
 
+const stepFormat = (step: number) => step.toLocaleString(locale.value, { maximumFractionDigits: 3 })
+
 // A learning-rate sweep, one seed each, logged every 20 steps from step 0.
 const runs: LearningCurveRun[] = [
   { name: 'lr 1e-3', data: trainingLoss({ floor: 0.9, height: 4.2, onset: 120, steps: 60_000, every: 20 }, 11) },
@@ -33,6 +35,7 @@ const runs: LearningCurveRun[] = [
     :x-axis-name="copy.steps"
     :y-axis-name="copy.loss"
     :labels="copy.labels"
+    :step-format="stepFormat"
     :height="280"
   />
 </template>

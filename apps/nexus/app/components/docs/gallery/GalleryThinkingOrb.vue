@@ -21,7 +21,7 @@ function ink(state: OrbState): string {
   <div class="docs-gallery__stack">
     <div v-for="state in states" :key="state" class="docs-gallery__orb-row">
       <!-- The label beside it already announces the status. -->
-      <TxThinkingOrb :state="state" variant="gradient" aria-hidden="true" />
+      <TxThinkingOrb :state="state" variant="gradient" :label="labels[state]" aria-hidden="true" />
       <span class="docs-gallery__orb-label" :style="{ backgroundImage: ink(state) }">{{ labels[state] }}</span>
     </div>
   </div>

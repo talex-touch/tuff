@@ -284,23 +284,36 @@ function formatRelativeTime(value: string): string {
   return `${days}${t('dashboard.storage.daysAgo', ' 天前')}`
 }
 
+// A calendar day in the viewer's time zone. Sessions are stamped in UTC, so
+// both sides of the count go through this rather than slicing ISO strings.
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 const storageSparkline = computed(() => {
   const days: string[] = []
+  const labels: string[] = []
   const counts = new Map<string, number>()
+  const dayLabel = new Intl.DateTimeFormat(localeTag.value, { month: 'short', day: 'numeric' })
   const now = new Date()
 
   for (let index = 6; index >= 0; index -= 1) {
     const date = new Date(now)
     date.setHours(0, 0, 0, 0)
     date.setDate(date.getDate() - index)
-    const key = date.toISOString().slice(0, 10)
+    const key = localDayKey(date)
     days.push(key)
+    labels.push(dayLabel.format(date))
     counts.set(key, 0)
   }
 
   for (const item of recentSessions.value) {
-    const key = item.updated_at.slice(0, 10)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
+    const at = new Date(item.updated_at)
+    if (Number.isNaN(at.getTime()))
+      continue
+    const key = localDayKey(at)
+    if (counts.has(key))
+      counts.set(key, (counts.get(key) ?? 0) + 1)
   }
 
   const values = days.map((key) => counts.get(key) ?? 0)
@@ -312,7 +325,7 @@ const storageSparkline = computed(() => {
   return {
     trend,
     values,
-    days,
+    labels,
   }
 })
 
@@ -602,7 +615,7 @@ watch(showDetailsOverlay, (open) => {
           </div>
           <LazyDashboardSparklineChart
             :values="storageSparkline.values"
-            :labels="storageSparkline.days"
+            :labels="storageSparkline.labels"
             :height="70"
             color="#3b82f6"
             :aria-label="t('dashboard.storage.activity7Day', '7-Day Activity')"

@@ -70,7 +70,7 @@ import '@talex-touch/tuffex/charts/style.css'
 
 ### 图例项
 
-:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Loading" description="点击第一项切换第二项的 inactive 态。"}
+:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="small 单行 / 加载态" description="点击第一项切换第二项的 inactive 态。"}
 ---
 code: |
   <script setup lang="ts">

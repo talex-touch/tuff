@@ -76,11 +76,11 @@ code: |
 | `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`; the y domain extends to cover them. |
 | `xAxisName` / `yAxisName` | `string` | — | Axis names. |
 | `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | Suggested tick counts. |
-| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | Tick formatters. |
+| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | Tick formatters. Without `xAxisTickFormat`, time ticks use d3's default format, which is English. |
 | `yAxisMinInterval` | `number` | — | Minimum interval between y-axis ticks (ECharts `yAxis.minInterval`): closer ticks drop, the lowest and highest always stay, and integer ticks stop printing as `1.0` when set to `1`. |
 | `tooltipValueFormat` | `(v: number) => string` | raw value | Tooltip value formatter. |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` shows only the series closest to the cursor's y value. |
-| `tooltipMaxItems` | `number` | `10` | Overflow folds into "+N more". |
+| `tooltipMaxItems` | `number` | `10` | Overflow folds into one row worded by `labels.more`, "+N more" by default. |
 | `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position to avoid jitter. |
 | `tooltipFooter` | `string` | — | Extra line of text appended below the tooltip rows. |
 | `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | Tooltip collision boundary; by default it walks clipping ancestors (offsetParents whose `overflow` is not `visible`) and intersects them with the viewport before flipping. The `TimeseriesTooltipBoundary` type is exported from the `@talex-touch/tuffex/charts` entry. |
@@ -92,10 +92,10 @@ code: |
 | `width` | `number` | measured | Explicit width (SSR/tests). |
 | `ariaDescription` | `string` | — | Accessible name of the chart (svg `role="group"`, with the key instructions as its description); falls back to `labels.chart`. |
 | `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | Cluster label wording. |
-| `timestampFormat` | `(ts: number) => string` | compact locale | Tooltip timestamp format. |
+| `timestampFormat` | `(ts: number) => string` | compact, in the browser's language | Timestamp format of the tooltip and the screen-reader reading. Pass one in the page's language when that can differ from the browser's. |
 | `zoom` | `boolean` | `true` | Zooms and pans the time axis on the chart; `false` keeps the view fixed, and a `time-range-change` listener still brushes. |
 | `window` | `[number, number] \| null` | `null` | Time window shown, in millisecond timestamps, bindable with `v-model:window`; `null` shows everything. |
-| `labels` | `Partial<ChartLabels>` | English | Accessible name and key instructions: `chart`, `instructions`, `zoomInstructions`. |
+| `labels` | `Partial<TimeseriesChartLabels>` | English | Accessible name and key instructions (`chart`, `instructions`, `zoomInstructions`), the loading skeleton's name `loading`, and `more`, the tooltip row for the series `tooltipMaxItems` leaves out. |
 
 ### TimeseriesChart Events
 
