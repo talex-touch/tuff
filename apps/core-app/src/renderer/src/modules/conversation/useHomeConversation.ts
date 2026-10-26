@@ -28,6 +28,7 @@ import {
 } from '@talex-touch/utils/types/intelligence'
 import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
+import { INTERRUPTED_TOOL_CALL_ERROR } from './chain-steps'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   isGovernanceFailure,
@@ -562,7 +563,7 @@ export function useHomeConversation(
         if (part.type === 'reasoning' && !part.done) part.done = true
         if (part.type === 'tool-call' && (part.status === 'running' || part.status === 'pending')) {
           part.status = 'error'
-          part.error = 'Interrupted'
+          part.error = INTERRUPTED_TOOL_CALL_ERROR
         }
       }
       recordMeta({ latencyMs: Date.now() - startedAt })
