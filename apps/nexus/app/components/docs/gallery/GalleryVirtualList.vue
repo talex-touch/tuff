@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { prefersReducedMotion } from './use-gallery-loop'
 
 const props = defineProps<{
   title: string
   /** Formats the counter, e.g. `12 / 10,000 in the DOM`. */
   countLabel: (rendered: number, total: string) => string
+  /** Plugin names in the page's language; the rows cycle through them. */
+  names: Record<string, string>
 }>()
 
 const ROW_HEIGHT = 28
@@ -15,12 +17,15 @@ const VIEW_HEIGHT = 112
 // what the component renders before any scroll event arrives.
 const OVERSCAN = 4
 
-const PLUGINS = ['Clipboard', 'Browser', 'Quick actions', 'Window presets', 'Workspace scripts', 'System actions', 'Intelligence']
+// Each row holds an index into the names rather than a name, so a language
+// switch relabels the rows without rebuilding ten thousand of them.
+const names = computed(() => Object.values(props.names))
+const PLUGIN_COUNT = Object.keys(props.names).length
 
 const rows = Array.from({ length: 10_000 }, (_, index) => ({
   id: index,
-  name: PLUGINS[index % PLUGINS.length],
-  version: `1.${Math.floor(index / PLUGINS.length) % 10}.${index % PLUGINS.length}`,
+  plugin: index % PLUGIN_COUNT,
+  version: `1.${Math.floor(index / PLUGIN_COUNT) % 10}.${index % PLUGIN_COUNT}`,
 }))
 const total = rows.length.toLocaleString('en-US')
 
@@ -63,7 +68,7 @@ onBeforeUnmount(() => clearTimeout(timer))
       <template #item="{ item, index }">
         <div class="docs-gallery__vrow">
           <span class="docs-gallery__vrow-index">{{ index + 1 }}</span>
-          <span class="docs-gallery__vrow-name">{{ item.name }}</span>
+          <span class="docs-gallery__vrow-name">{{ names[item.plugin] }}</span>
           <span class="docs-gallery__vrow-meta">{{ item.version }}</span>
         </div>
       </template>

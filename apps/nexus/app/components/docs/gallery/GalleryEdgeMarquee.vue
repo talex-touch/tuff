@@ -2,14 +2,19 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { prefersReducedMotion } from './use-gallery-loop'
 
+const props = defineProps<{
+  /** Plugin names in the page's language, keyed by plugin id. */
+  names: Record<string, string>
+}>()
+
 const chips = [
-  { icon: 'i-carbon-copy', label: 'Clipboard' },
-  { icon: 'i-carbon-earth', label: 'Browser' },
-  { icon: 'i-carbon-flash', label: 'Quick actions' },
-  { icon: 'i-carbon-window-base', label: 'Window presets' },
-  { icon: 'i-carbon-terminal', label: 'Workspace scripts' },
-  { icon: 'i-carbon-settings', label: 'System actions' },
-  { icon: 'i-carbon-machine-learning-model', label: 'Intelligence' },
+  { id: 'clipboard', icon: 'i-carbon-copy' },
+  { id: 'browser', icon: 'i-carbon-earth' },
+  { id: 'actions', icon: 'i-carbon-flash' },
+  { id: 'windows', icon: 'i-carbon-window-base' },
+  { id: 'scripts', icon: 'i-carbon-terminal' },
+  { id: 'system', icon: 'i-carbon-settings' },
+  { id: 'intelligence', icon: 'i-carbon-machine-learning-model' },
 ]
 
 const trackRef = ref<HTMLElement | null>(null)
@@ -78,9 +83,9 @@ onBeforeUnmount(() => {
           class="docs-gallery__marquee-segment"
           :aria-hidden="copyIndex === 2 || undefined"
         >
-          <span v-for="chip in chips" :key="chip.label" class="docs-gallery__marquee-chip">
+          <span v-for="chip in chips" :key="chip.id" class="docs-gallery__marquee-chip">
             <span :class="chip.icon" aria-hidden="true" />
-            {{ chip.label }}
+            {{ props.names[chip.id] }}
           </span>
         </span>
       </div>

@@ -254,6 +254,14 @@
   min-height: 28px;
 }
 
+/* Small primary text, as on the NavBar docs page. Bare text inherits the stage
+   font through the button's `font: inherit` and reads larger than the title. */
+.docs-gallery__navbar-action {
+  color: var(--tx-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 
 /* The strip was a blank slab taller than the bar above it, so the NavBar cell
    read as a component that had failed to render rather than as chrome over a
