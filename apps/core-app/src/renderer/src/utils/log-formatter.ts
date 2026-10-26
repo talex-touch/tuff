@@ -35,10 +35,11 @@ function sanitizeLogText(value: string): string {
 /**
  * Formats a LogItem object into a colored string for terminal display.
  * @param log - The log item to format.
+ * @param locale - The interface's locale, which the time is written in.
  * @returns A formatted and colored string.
  */
-export function formatLogForTerminal(log: LogItem): string {
-  const time = new Date(log.timestamp).toLocaleTimeString()
+export function formatLogForTerminal(log: LogItem, locale?: string): string {
+  const time = new Date(log.timestamp).toLocaleTimeString(locale)
   const levelColor = levelColors[log.level] || colors.gray
   const level = log.level.padEnd(5, ' ')
   const messageText = sanitizeLogText(String(log.message))

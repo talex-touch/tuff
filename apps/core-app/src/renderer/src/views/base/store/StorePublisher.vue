@@ -118,6 +118,41 @@ function statusTone(status?: string | null) {
   return 'muted'
 }
 
+function statusLabel(status?: string | null): string {
+  if (status === 'approved') return t('store.publisher.approved')
+  if (status === 'rejected') return t('store.publisher.rejected')
+  if (status === 'pending') return t('store.publisher.pending')
+  if (status === 'draft') return t('store.publisher.draft')
+  return status || '-'
+}
+
+function timelineActorLabel(role: UserPluginTimelineEvent['actorRole']): string {
+  if (role === 'owner') return t('store.publisher.timelineActors.owner')
+  if (role === 'admin') return t('store.publisher.timelineActors.admin')
+  if (role === 'system') return t('store.publisher.timelineActors.system')
+  return role
+}
+
+/** Mirrors the Nexus dashboard's wording for the same events. */
+function timelineEventLabel(item: UserPluginTimelineEvent): string {
+  const version =
+    typeof item.meta?.version === 'string' && item.meta.version ? item.meta.version : '-'
+  switch (item.eventType) {
+    case 'plugin.created':
+      return t('store.publisher.timelineEvents.pluginCreated')
+    case 'plugin.status.changed':
+      return t('store.publisher.timelineEvents.pluginStatusChanged')
+    case 'version.created':
+      return t('store.publisher.timelineEvents.versionCreated', { version })
+    case 'version.status.changed':
+      return t('store.publisher.timelineEvents.versionStatusChanged', { version })
+    case 'version.reedited':
+      return t('store.publisher.timelineEvents.versionReedited', { version })
+    default:
+      return item.eventType
+  }
+}
+
 function openDetail(plugin: UserPluginRecord, event?: MouseEvent) {
   selected.value = plugin
   detailSource.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -383,14 +418,18 @@ onMounted(() => {
         <div class="publisher-card-main">
           <div class="publisher-card-title">
             <h3>{{ plugin.name }}</h3>
-            <TxStatusBadge :status="statusTone(plugin.status)" :text="plugin.status" />
+            <TxStatusBadge :status="statusTone(plugin.status)" :text="statusLabel(plugin.status)" />
           </div>
           <p>{{ plugin.summary || plugin.slug }}</p>
           <div class="publisher-meta">
             <TxTag :label="plugin.category" size="sm" />
-            <span>{{ plugin.installs }} installs</span>
             <span>{{
-              plugin.latestVersion ? `v${plugin.latestVersion.version}` : 'No version'
+              t('store.publisher.installs', { count: plugin.installs }, plugin.installs)
+            }}</span>
+            <span>{{
+              plugin.latestVersion
+                ? `v${plugin.latestVersion.version}`
+                : t('store.publisher.noVersions')
             }}</span>
             <span>{{ formatDate(plugin.updatedAt) }}</span>
           </div>
@@ -445,7 +484,10 @@ onMounted(() => {
               <div v-for="version in selected.versions" :key="version.id" class="publisher-version">
                 <strong>v{{ version.version }}</strong>
                 <TxTag :label="version.channel" size="sm" />
-                <TxStatusBadge :status="statusTone(version.status)" :text="version.status" />
+                <TxStatusBadge
+                  :status="statusTone(version.status)"
+                  :text="statusLabel(version.status)"
+                />
                 <span>{{ formatDate(version.createdAt) }}</span>
                 <p v-if="version.rejectReason">{{ version.rejectReason }}</p>
                 <TxButton
@@ -488,9 +530,9 @@ onMounted(() => {
 
             <div v-else class="publisher-timeline">
               <div v-for="item in timeline" :key="item.id" class="publisher-timeline-item">
-                <strong>{{ item.eventType }}</strong>
-                <span>{{ item.actorRole }}</span>
-                <span>{{ item.fromStatus || '-' }} → {{ item.toStatus || '-' }}</span>
+                <strong>{{ timelineEventLabel(item) }}</strong>
+                <span>{{ timelineActorLabel(item.actorRole) }}</span>
+                <span>{{ statusLabel(item.fromStatus) }} → {{ statusLabel(item.toStatus) }}</span>
                 <small>{{ formatDate(item.createdAt) }}</small>
                 <p v-if="item.reason">{{ item.reason }}</p>
               </div>
