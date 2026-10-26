@@ -1,25 +1,13 @@
 <script lang="ts" name="PluginIssues" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { i18nResolver, resolveI18nMessage } from '@talex-touch/utils/i18n'
-import { watch } from 'vue'
+import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{
   plugin: ITouchPlugin
 }>()
 
-const { t, locale } = useI18n()
-
-watch(
-  () => locale.value,
-  (value) => {
-    if (value) {
-      const resolvedLocale = value.startsWith('zh') ? 'zh' : 'en'
-      i18nResolver.setLocale(resolvedLocale)
-    }
-  },
-  { immediate: true }
-)
+const { t } = useI18n()
 
 function resolveIssueMessage(message: string): string {
   return resolveI18nMessage(message)

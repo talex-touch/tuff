@@ -68,10 +68,12 @@ const accentStyle = computed(() => {
           {{ resolvedPayload?.primaryLabel || t('previewCard.common.result', '结果') }}
         </div>
         <div v-if="qrCodeSrc" class="qr-preview">
-          <img :src="qrCodeSrc" alt="QR Code" />
+          <img :src="qrCodeSrc" :alt="t('previewCard.common.qrAlt')" />
         </div>
         <div class="primary-value" :style="accentStyle">
-          {{ qrCodeSrc ? 'SVG Data URL' : resolvedPayload?.primaryValue || '--' }}
+          {{
+            qrCodeSrc ? t('previewCard.common.qrValueLabel') : resolvedPayload?.primaryValue || '--'
+          }}
           <span v-if="resolvedPayload?.primaryUnit" class="primary-unit">
             {{ resolvedPayload?.primaryUnit }}
           </span>
@@ -110,7 +112,9 @@ const accentStyle = computed(() => {
         </div>
       </div>
 
-      <div class="absolute right-3 bottom-3 text-[10px] op-20">Powered by TuffIntelligence</div>
+      <div class="absolute right-3 bottom-3 text-[10px] op-20">
+        {{ t('previewCard.common.poweredBy', { brand: 'TuffIntelligence' }) }}
+      </div>
     </div>
   </div>
 </template>

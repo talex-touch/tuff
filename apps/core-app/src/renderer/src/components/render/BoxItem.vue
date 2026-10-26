@@ -167,7 +167,7 @@ const shouldShowNoticeReason = computed(
       <TuffIcon
         :empty="DefaultIcon"
         :icon="effectiveIcon"
-        :alt="resolvedTitle || 'Tuff Item'"
+        :alt="resolvedTitle || t('corebox.itemIconAlt')"
         :size="32"
         :colorful="shouldRenderIconColorful"
         :style="iconStyle"
@@ -188,7 +188,7 @@ const shouldShowNoticeReason = computed(
       >
         <img
           :src="openerLogo"
-          :alt="openerName || 'Opener'"
+          :alt="openerName || t('corebox.openerIconAlt')"
           class="w-[10px] h-[10px] object-contain"
         />
       </div>

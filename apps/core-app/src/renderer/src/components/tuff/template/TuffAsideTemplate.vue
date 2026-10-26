@@ -1,6 +1,7 @@
 <script setup lang="ts" name="TuffAsideTemplate">
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { useI18n } from 'vue-i18n'
 import TuffAsideSearchBar from './TuffAsideSearchBar.vue'
 
 const props = withDefaults(
@@ -22,7 +23,7 @@ const props = withDefaults(
     searchPlaceholder: '',
     searchId: 'tuff-aside-template-search',
     searchable: true,
-    clearLabel: 'Clear search',
+    clearLabel: '',
     mainAriaLive: 'polite' as const,
     mainEdgeBlur: true,
     windowDragRegion: false
@@ -34,11 +35,13 @@ const emit = defineEmits<{
   (event: 'search', value: string): void
   (event: 'clear'): void
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <div class="TuffAsideTemplate" :class="{ 'has-window-drag-region': props.windowDragRegion }">
-    <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
+    <aside class="TuffAsideTemplate-Aside w-76" :aria-label="t('common.asideLandmark')">
       <slot name="aside">
         <div class="TuffAsideTemplate-AsideDefault">
           <header

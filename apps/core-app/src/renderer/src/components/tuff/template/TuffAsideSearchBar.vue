@@ -2,6 +2,7 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -16,9 +17,13 @@ const props = withDefaults(
     searchLabel: '',
     searchPlaceholder: '',
     searchId: 'tuff-aside-template-search',
-    clearLabel: 'Clear search'
+    clearLabel: ''
   }
 )
+
+const { t } = useI18n()
+// The store's plugin list passes no label, and an empty one would leave the button nameless.
+const clearLabelText = computed(() => props.clearLabel || t('common.clearSearch'))
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void
@@ -59,7 +64,7 @@ function handleClear(): void {
         variant="flat"
         size="sm"
         class="TuffAsideSearch-Clear"
-        :aria-label="props.clearLabel"
+        :aria-label="clearLabelText"
         @click="handleClear"
       >
         <i class="i-carbon-close" aria-hidden="true" />

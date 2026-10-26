@@ -58,7 +58,7 @@ const metaItems = computed(() => {
     </template>
     <template #title-extra>
       <span v-if="isOfficial" class="StorePluginMetaHeader-OfficialBadge">
-        {{ t('store.official', 'Official') }}
+        {{ t('store.official') }}
       </span>
     </template>
   </TxPluginMetaHeader>

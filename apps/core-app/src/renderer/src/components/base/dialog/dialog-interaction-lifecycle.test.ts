@@ -7,6 +7,14 @@ import TBottomDialog from './TBottomDialog.vue'
 import TDialogMention from './TDialogMention.vue'
 import TouchTip from './TouchTip.vue'
 
+// The dialogs' own labels come from vue-i18n. These tests are about rendering and focus, so the
+// translator answers in English instead of installing the catalogs.
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => ({ 'common.confirm': 'Confirm' })[key] ?? key
+  })
+}))
+
 const matchMediaMock = vi.hoisted(() => {
   const mock = vi.fn().mockImplementation((query: string) => ({
     matches: false,

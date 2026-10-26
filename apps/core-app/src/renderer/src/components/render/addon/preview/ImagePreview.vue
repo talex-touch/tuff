@@ -61,7 +61,7 @@ watch(
     </div>
     <div v-if="imageError" class="error-state">
       <i class="i-ri-image-line error-icon" />
-      <span class="error-text">Failed to load image</span>
+      <span class="error-text">{{ t('common.imagePreviewFailed') }}</span>
     </div>
     <Transition name="image-switch">
       <img
@@ -69,7 +69,7 @@ watch(
         :key="imageSrc"
         :class="{ 'is-loading': imageLoading }"
         :src="imageSrc"
-        :alt="t('common.imagePreviewAlt', '图片预览')"
+        :alt="t('common.imagePreviewAlt')"
         @error="handleError"
         @load="handleLoad"
       />

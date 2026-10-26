@@ -8,6 +8,14 @@ import TDialogMention from './TDialogMention.vue'
 import TPopperDialog from './TPopperDialog.vue'
 import TouchTip from './TouchTip.vue'
 
+// The dialogs' own labels come from vue-i18n. These tests are about rendering and focus, so the
+// translator answers in English instead of installing the catalogs.
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => ({ 'common.confirm': 'Confirm' })[key] ?? key
+  })
+}))
+
 describe('base dialog message rendering', () => {
   afterEach(() => {
     document.body.innerHTML = ''

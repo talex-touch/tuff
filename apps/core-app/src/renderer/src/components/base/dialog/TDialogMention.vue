@@ -4,6 +4,7 @@ import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import type { ITuffIcon } from '@talex-touch/utils'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Loading from '~/components/icon/LoadingIcon.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
@@ -49,6 +50,8 @@ const props = withDefaults(defineProps<Props>(), {
   icon: '',
   loading: false
 })
+
+const { t } = useI18n()
 
 // Refs
 const wholeDom = ref<HTMLElement | null>(null)
@@ -146,10 +149,14 @@ function clickBtn(button: DialogButtonEntry): Promise<void> {
 
       <!-- Dialog icon display -->
       <div class="TDialogTip-Icon">
-        <PluginIcon v-if="icon instanceof Object" :icon="icon" :alt="title || 'Plugin'" />
+        <PluginIcon
+          v-if="icon instanceof Object"
+          :icon="icon"
+          :alt="title || t('notifications.pluginIconAlt')"
+        />
         <RemixIcon v-else-if="icon && icon.at(0) === '#'" :name="icon.substring(1)" />
         <img v-else-if="icon" :src="icon" :alt="title" />
-        <span v-else class="tip-icon" v-text="`Tip`" />
+        <span v-else class="tip-icon" v-text="t('notifications.dialogIconPlaceholder')" />
       </div>
     </div>
   </div>

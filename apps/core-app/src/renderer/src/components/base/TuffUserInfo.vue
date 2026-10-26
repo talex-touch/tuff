@@ -210,7 +210,7 @@ defineExpose({ openProfileDialog, closeProfileDialog })
         <img
           v-if="avatarUrl"
           :src="avatarUrl"
-          :alt="displayName || displayEmail || 'User'"
+          :alt="displayName || displayEmail || t('userProfile.unknownName')"
           class="avatar-image"
         />
         <div v-else class="avatar-placeholder">
@@ -219,7 +219,7 @@ defineExpose({ openProfileDialog, closeProfileDialog })
       </div>
       <div class="user-info">
         <p class="user-name">
-          {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName', 'User') }}
+          {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName') }}
         </p>
         <span class="user-email">
           {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
@@ -264,10 +264,7 @@ defineExpose({ openProfileDialog, closeProfileDialog })
                   <div class="UserProfile-Identity">
                     <div class="UserProfile-NameRow">
                       <p class="UserProfile-Name">
-                        {{
-                          formatCompactAccountLabel(displayName) ||
-                          t('userProfile.unknownName', 'User')
-                        }}
+                        {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName') }}
                       </p>
                       <span class="UserProfile-Badge">
                         {{ statusBadgeLabel }}

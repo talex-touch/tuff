@@ -2,6 +2,7 @@
 import { DownloadStatus } from '@talex-touch/utils'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   percentage: number
@@ -16,6 +17,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   compact: false
 })
+
+const { t } = useI18n()
 
 const progressStatus = computed(() => {
   switch (props.status) {
@@ -54,15 +57,19 @@ function formatSize(bytes: number): string {
 
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
-    return `${Math.round(seconds)}秒`
+    return t('download.duration_seconds', { count: Math.round(seconds) })
   } else if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
-    return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`
+    return secs > 0
+      ? t('download.duration_minutes_seconds', { minutes, seconds: secs })
+      : t('download.duration_minutes', { count: minutes })
   } else {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
-    return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`
+    return minutes > 0
+      ? t('download.duration_hours_minutes', { hours, minutes })
+      : t('download.duration_hours', { count: hours })
   }
 }
 </script>

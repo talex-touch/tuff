@@ -1,5 +1,6 @@
 <script lang="ts" name="TBlowDialog" setup>
 import { defineComponent, onMounted, ref, type Component, type VNode } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { TxButton } from '@talex-touch/tuffex/button'
 import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
@@ -35,6 +36,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /** Reactive reference to control dialog closing state */
+const { t } = useI18n()
 const isClosing = ref(false)
 
 /** Reactive reference for the render component */
@@ -148,7 +150,9 @@ provide('destroy', destroy)
             {{ message }}
           </span>
         </div>
-        <TxButton variant="flat" type="primary" block @click="destroy"> Confirm </TxButton>
+        <TxButton variant="flat" type="primary" block @click="destroy">
+          {{ t('common.confirm') }}
+        </TxButton>
       </template>
     </div>
   </div>

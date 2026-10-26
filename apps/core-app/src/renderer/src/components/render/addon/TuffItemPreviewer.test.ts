@@ -229,8 +229,8 @@ describe('TuffItemPreviewer application metadata', () => {
         .find((row) => row.firstElementChild?.textContent?.trim() === label)
         ?.lastElementChild?.textContent?.trim()
 
-    expect(valueFor('Bundle ID')).toBe('com.example.Reader')
-    expect(valueFor('Version')).toBe('2.5.1')
+    expect(valueFor('fileInfo.bundleId')).toBe('com.example.Reader')
+    expect(valueFor('fileInfo.version')).toBe('2.5.1')
     expect(valueFor('fileInfo.createdAt')).toBe('2026-06-17T10:30:00.000Z')
   })
 })

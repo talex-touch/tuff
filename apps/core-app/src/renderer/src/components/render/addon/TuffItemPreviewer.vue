@@ -472,7 +472,7 @@ const snippetSegments = computed(() =>
             v-if="item?.meta?.app?.bundleId"
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">Bundle ID</div>
+            <div class="w-[80px] text-right">{{ t('fileInfo.bundleId') }}</div>
             <div class="w-[65%] truncate font-mono text-[11px]">
               {{ item.meta.app.bundleId }}
             </div>
@@ -481,7 +481,7 @@ const snippetSegments = computed(() =>
             v-if="item?.meta?.app?.version"
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">Version</div>
+            <div class="w-[80px] text-right">{{ t('fileInfo.version') }}</div>
             <div class="w-[65%] truncate font-mono text-[11px]">
               {{ item.meta.app.version }}
             </div>
