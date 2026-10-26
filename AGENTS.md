@@ -11,6 +11,13 @@ Work directly from the user's confirmed scope and the repository's engineering g
 - Check the current branch/worktree before writing and verify changed behavior in its actual runtime. Git commit, merge, push, PR creation, and release require explicit user authorization.
 - Preserve concurrent changes, engineering records, and user configuration. Do not copy local runtime/logs into formal artifacts.
 
+## Branch and merge discipline
+
+- Normal feature, fix, docs, and maintenance work MUST start from `origin/master` on a `task/<type>/<slug>` branch. Do not develop or commit directly on `master` or `stage`.
+- Push the task branch and open a pull request into `master`; required checks MUST pass before merging. Direct pushes to protected long-lived branches are not the normal landing path.
+- After the PR is merged, delete the task branch only when no active work still depends on it. Release version bumps and beta/stable tags continue to follow `docs/engineering/specs/guides/branch-and-release.md`.
+
+
 Project Skill roots are `.omp/skills/`, `.claude/skills/`, and `.agents/skills/`; Codex-specific hooks and rules remain under `.codex/`.
 
 ## Shared-machine discipline
