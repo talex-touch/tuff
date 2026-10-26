@@ -935,7 +935,7 @@ const motionGalleryItems = [
   { doc: 'motion-transition', name: 'MotionTransition', zh: '动效转场', kind: 'motion-transition', height: 198 },
 ] as const
 
-function specimenStyle(item: { height?: number, narrowHeight?: number }) {
+function specimenStyle(item: { readonly doc?: string, readonly name?: string, readonly zh?: string, readonly kind?: string, readonly height?: number, readonly narrowHeight?: number }) {
   if (!item.height)
     return undefined
   return item.narrowHeight
