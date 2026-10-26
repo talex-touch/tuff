@@ -1,5 +1,6 @@
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatLogForTerminal } from '~/utils/log-formatter'
 
 // The terminal keeps 1000 rows of scrollback, so older records could not be scrolled back to.
@@ -25,6 +26,7 @@ function dedupeLogs(items: LogItem[]): LogItem[] {
 }
 
 export function usePluginLogManager() {
+  const { locale } = useI18n()
   const terminalLogs = ref<string[]>([])
   // Every record of the session, which export saves in full.
   let records: string[] = []
@@ -34,7 +36,7 @@ export function usePluginLogManager() {
     const deduped = dedupeLogs(items)
     logKeySet.clear()
     deduped.forEach((log) => logKeySet.add(computeLogKey(log)))
-    records = deduped.map((log) => formatLogForTerminal(log))
+    records = deduped.map((log) => formatLogForTerminal(log, locale.value))
     terminalLogs.value = records.slice(-DISPLAY_RECORDS)
   }
 
@@ -42,7 +44,7 @@ export function usePluginLogManager() {
     const key = computeLogKey(log)
     if (logKeySet.has(key)) return
     logKeySet.add(key)
-    const line = formatLogForTerminal(log)
+    const line = formatLogForTerminal(log, locale.value)
     records.push(line)
     if (terminalLogs.value.length < 2 * DISPLAY_RECORDS) terminalLogs.value.push(line)
     else terminalLogs.value = records.slice(-DISPLAY_RECORDS)

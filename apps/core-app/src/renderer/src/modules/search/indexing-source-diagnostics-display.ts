@@ -116,7 +116,8 @@ export function resolveIndexingSourceMaintenanceActions(
 }
 
 export function resolveIndexingSourceRecoveryChip(
-  source: IndexedSourceDiagnostics
+  source: IndexedSourceDiagnostics,
+  locale?: string
 ): IndexingSourceRecoveryChip | null {
   const recommendation = resolveIndexedSourceRecoveryRecommendation(source)
   if (recommendation.action === 'none') return null
@@ -127,7 +128,7 @@ export function resolveIndexingSourceRecoveryChip(
     labelKey: `settings.settingFileIndex.sourceRecoveryChip.${recommendation.action}`,
     values: {
       reason: recommendation.reason ?? '',
-      ...resolveRecoveryReasonValues(recommendation.reason),
+      ...resolveRecoveryReasonValues(recommendation.reason, locale),
       maintenanceAction: recommendation.maintenanceAction ?? '',
       blockedReason: recommendation.blockedReason ?? ''
     }
@@ -179,12 +180,13 @@ export function resolveIndexingSourceDetailKey(
   return 'emptyRoots'
 }
 
-export function formatIndexingSourceTimestamp(value?: number): string {
+/** In the interface's `locale` when the caller passes it, else in the runtime's own format. */
+export function formatIndexingSourceTimestamp(value?: number, locale?: string): string {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return '-'
   }
 
-  return new Date(value).toLocaleString()
+  return new Date(value).toLocaleString(locale)
 }
 
 export function summarizeIndexingSourceRoots(
@@ -233,15 +235,18 @@ function resolveRecoveryTone(
   return 'muted'
 }
 
-function resolveRecoveryReasonValues(reason: string | undefined): Record<string, string | number> {
+function resolveRecoveryReasonValues(
+  reason: string | undefined,
+  locale?: string
+): Record<string, string | number> {
   const retry = parseRetryWindowReason(reason)
   if (retry) {
     return {
       taskKind: retry.taskKind,
       nextRetryAt: retry.nextRetryAt,
-      nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt),
+      nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt, locale),
       runGateReason: '',
-      waitDetail: `retry after ${formatIndexingSourceTimestamp(retry.nextRetryAt)}`
+      waitDetail: `retry after ${formatIndexingSourceTimestamp(retry.nextRetryAt, locale)}`
     }
   }
 
@@ -404,7 +409,7 @@ function resolveEvidenceChipValues(
     skipped: toEvidenceNumber(metadata.skippedFiles),
     pendingRoots: toEvidenceNumber(metadata.pendingRoots),
     pendingPermissionRoots: toEvidenceNumber(metadata.pendingPermissionRoots),
-    lastScannedAt: formatIndexingSourceTimestamp(toOptionalNumber(metadata.lastScannedAt)),
+    lastScannedAt: formatIndexingSourceTimestamp(toOptionalNumber(metadata.lastScannedAt), locale),
     entries: toEvidenceNumber(metadata.entries),
     pending: toEvidenceNumber(metadata.pending),
     inflight: toEvidenceNumber(metadata.inflight),
@@ -480,15 +485,16 @@ function resolveRunGateSortPriority(entry: IndexedSourceTaskRunGateSnapshotEntry
 }
 
 function resolveRunGateValues(
-  entry: IndexedSourceTaskRunGateSnapshotEntry
+  entry: IndexedSourceTaskRunGateSnapshotEntry,
+  locale?: string
 ): Record<string, string | number> {
   return {
     kind: entry.kind,
     blockedCount: entry.blockedCount,
-    runningSince: formatIndexingSourceTimestamp(entry.runningSince),
-    lastCompletedAt: formatIndexingSourceTimestamp(entry.lastCompletedAt),
-    lastBlockedAt: formatIndexingSourceTimestamp(entry.lastBlockedAt),
-    nextAllowedAt: formatIndexingSourceTimestamp(entry.nextAllowedAt),
+    runningSince: formatIndexingSourceTimestamp(entry.runningSince, locale),
+    lastCompletedAt: formatIndexingSourceTimestamp(entry.lastCompletedAt, locale),
+    lastBlockedAt: formatIndexingSourceTimestamp(entry.lastBlockedAt, locale),
+    nextAllowedAt: formatIndexingSourceTimestamp(entry.nextAllowedAt, locale),
     reason: entry.lastBlockedReason ?? ''
   }
 }
@@ -579,7 +585,8 @@ function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
 }
 
 export function resolveIndexingSourceTaskChips(
-  source: IndexedSourceDiagnostics
+  source: IndexedSourceDiagnostics,
+  locale?: string
 ): IndexingSourceTaskChip[] {
   const chips: IndexingSourceTaskChip[] = []
 
@@ -591,7 +598,7 @@ export function resolveIndexingSourceTaskChips(
         ? 'settings.settingFileIndex.sourceTask.scanFailed'
         : 'settings.settingFileIndex.sourceTask.scanDone',
       values: {
-        time: formatIndexingSourceTimestamp(source.lastScan.completedAt),
+        time: formatIndexingSourceTimestamp(source.lastScan.completedAt, locale),
         jobId: source.lastScan.jobId ?? '-',
         batches: source.lastScan.batches,
         records: source.lastScan.records,
@@ -612,7 +619,7 @@ export function resolveIndexingSourceTaskChips(
           ? 'settings.settingFileIndex.sourceTask.watchFailed'
           : 'settings.settingFileIndex.sourceTask.watchDone',
       values: {
-        time: formatIndexingSourceTimestamp(source.lastWatch.completedAt),
+        time: formatIndexingSourceTimestamp(source.lastWatch.completedAt, locale),
         jobId: source.lastWatch.jobId ?? '-',
         action: source.lastWatch.action,
         deltas: source.lastWatch.deltas,
@@ -632,7 +639,7 @@ export function resolveIndexingSourceTaskChips(
         ? 'settings.settingFileIndex.sourceTask.reconcileFailed'
         : 'settings.settingFileIndex.sourceTask.reconcileDone',
       values: {
-        time: formatIndexingSourceTimestamp(source.lastReconcile.completedAt),
+        time: formatIndexingSourceTimestamp(source.lastReconcile.completedAt, locale),
         jobId: source.lastReconcile.jobId ?? '-',
         added: source.lastReconcile.added,
         changed: source.lastReconcile.changed,
@@ -654,7 +661,7 @@ export function resolveIndexingSourceTaskChips(
         ? 'settings.settingFileIndex.sourceTask.resetFailed'
         : 'settings.settingFileIndex.sourceTask.resetDone',
       values: {
-        time: formatIndexingSourceTimestamp(source.lastReset.completedAt),
+        time: formatIndexingSourceTimestamp(source.lastReset.completedAt, locale),
         jobId: source.lastReset.jobId ?? '-',
         reason: source.lastReset.reason,
         clearedSearchIndex: source.lastReset.clearedSearchIndex ? 'yes' : 'no',
@@ -671,7 +678,8 @@ export function resolveIndexingSourceTaskChips(
 
 export function resolveIndexingSourceRecentTaskChips(
   source: IndexedSourceDiagnostics,
-  limit = 3
+  limit = 3,
+  locale?: string
 ): IndexingSourceRecentTaskChip[] {
   return (source.recentTasks ?? []).slice(0, limit).map((task, index) => ({
     id: `${task.kind}:${task.jobId ?? task.completedAt}:${index}`,
@@ -679,7 +687,7 @@ export function resolveIndexingSourceRecentTaskChips(
     labelKey: resolveRecentTaskLabelKey(task.kind, task.status),
     values: {
       jobId: task.jobId ?? '-',
-      time: formatIndexingSourceTimestamp(task.completedAt),
+      time: formatIndexingSourceTimestamp(task.completedAt, locale),
       duration: toSummaryValue(task.summary?.durationMs ?? task.durationMs),
       trigger: toSummaryValue(task.summary?.trigger ?? task.trigger),
       reason: toSummaryValue(task.summary?.reason ?? task.reason),
@@ -693,7 +701,8 @@ export function resolveIndexingSourceRecentTaskChips(
 
 export function resolveIndexingSourceRunGateChips(
   source: IndexedSourceDiagnostics,
-  limit = 3
+  limit = 3,
+  locale?: string
 ): IndexingSourceRunGateChip[] {
   return [...(source.taskRunGate ?? [])]
     .sort(
@@ -706,7 +715,7 @@ export function resolveIndexingSourceRunGateChips(
       id: `${entry.sourceId}:${entry.kind}`,
       tone: resolveRunGateTone(entry),
       labelKey: resolveRunGateLabelKey(entry),
-      values: resolveRunGateValues(entry)
+      values: resolveRunGateValues(entry, locale)
     }))
 }
 
@@ -765,7 +774,8 @@ export function resolveIndexingSourceEvidenceChips(
 }
 
 export function resolveIndexingSourceProgressChip(
-  source: IndexedSourceDiagnostics
+  source: IndexedSourceDiagnostics,
+  locale?: string
 ): IndexingSourceProgressChip | null {
   const progress = source.progress
   if (!progress) return null
@@ -781,7 +791,7 @@ export function resolveIndexingSourceProgressChip(
       current: progress.current,
       total: progress.total,
       remaining: formatProgressDuration(progress.estimatedRemainingMs),
-      eta: formatIndexingSourceTimestamp(progress.estimatedCompletionAt ?? undefined),
+      eta: formatIndexingSourceTimestamp(progress.estimatedCompletionAt ?? undefined, locale),
       speed: formatProgressSpeed(progress.averageItemsPerSecond),
       samples: progress.speedSampleCount ?? 0,
       basis: progress.estimateBasis ?? 'none',

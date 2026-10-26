@@ -1,8 +1,9 @@
-import { computed, ref, watch, type ComputedRef } from 'vue'
+import { computed, ref, shallowRef, watch, type ComputedRef } from 'vue'
 import { isTimeoutLikeError, isTransportFailureError } from '@talex-touch/utils/network'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
+import { useI18nText, type Translate } from '~/modules/lang/useI18nText'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { normalizeCreditSummary, type CreditSummary } from './credits-summary-normalizer'
 
@@ -26,29 +27,58 @@ export interface RefreshCreditsOptions {
   force?: boolean
 }
 
-function resolveCreditsError(status: number, statusText: string): string {
-  if (status === 401 || status === 403) {
-    return '登录状态已失效，请重新登录后刷新。'
+/**
+ * Why the last read failed, kept apart from its wording. The state outlives any one caller, so it
+ * is worded when read: a language switch rewords an error that is already on screen.
+ */
+type CreditsError =
+  | { reason: 'session-expired' | 'signed-out' | 'unavailable' }
+  | { reason: 'http'; status: number; statusText: string }
+  | { reason: 'thrown'; message: string }
+
+function describeCreditsError(failure: CreditsError, t: Translate): string {
+  switch (failure.reason) {
+    case 'session-expired':
+      return t('creditsSummary.errorSessionExpired')
+    case 'signed-out':
+      return t('creditsSummary.errorSignInRequired')
+    case 'http':
+      return t('creditsSummary.errorHttp', {
+        status: failure.status,
+        statusText: failure.statusText
+      })
+    case 'thrown':
+      return failure.message
+    case 'unavailable':
+      return t('creditsSummary.errorFetch')
   }
-  return statusText ? `Credits 信息获取失败：${status} ${statusText}` : 'Credits 信息获取失败。'
 }
 
-function resolveCreditsRequestError(error: unknown): string {
+function resolveCreditsError(status: number, statusText: string): CreditsError {
+  if (status === 401 || status === 403) {
+    return { reason: 'session-expired' }
+  }
+  return statusText ? { reason: 'http', status, statusText } : { reason: 'unavailable' }
+}
+
+function resolveCreditsRequestError(error: unknown): CreditsError {
   if (isTimeoutLikeError(error) || isTransportFailureError(error)) {
-    return 'Credits 信息获取失败。'
+    return { reason: 'unavailable' }
   }
   if (
     error instanceof Error &&
     /NETWORK_COOLDOWN_ACTIVE|Network guard cooldown active/i.test(error.message)
   ) {
-    return 'Credits 信息获取失败。'
+    return { reason: 'unavailable' }
   }
-  return error instanceof Error && error.message ? error.message : 'Credits 信息获取失败。'
+  return error instanceof Error && error.message
+    ? { reason: 'thrown', message: error.message }
+    : { reason: 'unavailable' }
 }
 
 const rawSummary = ref<CreditSummary | null>(null)
 const loading = ref(false)
-const error = ref('')
+const error = shallowRef<CreditsError | null>(null)
 let activeRequestId = 0
 let lastFetchedAt = 0
 let inFlightPromise: Promise<void> | null = null
@@ -58,6 +88,7 @@ const CREDITS_SUMMARY_CACHE_TTL_MS = 15_000
 export function useCreditsSummary(): CreditSummaryState {
   const { isLoggedIn } = useAuth()
   const appSdk = useAppSdk()
+  const { t } = useI18nText()
 
   const summary = computed(() => rawSummary.value)
   const personalRemaining = computed(() => summary.value?.user.remaining ?? 0)
@@ -77,7 +108,7 @@ export function useCreditsSummary(): CreditSummaryState {
   async function refresh(options: RefreshCreditsOptions = { force: true }): Promise<void> {
     if (!isLoggedIn.value) {
       rawSummary.value = null
-      error.value = ''
+      error.value = null
       lastFetchedAt = 0
       return
     }
@@ -99,7 +130,7 @@ export function useCreditsSummary(): CreditSummaryState {
 
     const requestId = ++activeRequestId
     loading.value = true
-    error.value = ''
+    error.value = null
 
     inFlightPromise = (async () => {
       try {
@@ -107,7 +138,7 @@ export function useCreditsSummary(): CreditSummaryState {
         if (requestId !== activeRequestId) return
         if (!response) {
           rawSummary.value = null
-          error.value = '登录后才能获取 AI 积分信息。'
+          error.value = { reason: 'signed-out' }
           return
         }
         if (!response.ok) {
@@ -147,7 +178,7 @@ export function useCreditsSummary(): CreditSummaryState {
           return
         }
         rawSummary.value = null
-        error.value = ''
+        error.value = null
         lastFetchedAt = 0
       },
       { immediate: true }
@@ -157,7 +188,7 @@ export function useCreditsSummary(): CreditSummaryState {
   return {
     summary,
     loading: computed(() => loading.value),
-    error: computed(() => error.value),
+    error: computed(() => (error.value ? describeCreditsError(error.value, t) : '')),
     isLoggedIn,
     personalRemaining,
     personalUsed,

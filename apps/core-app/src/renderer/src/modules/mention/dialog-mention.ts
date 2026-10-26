@@ -7,6 +7,7 @@ import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
 import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
 import TouchTip from '~/components/base/dialog/TouchTip.vue'
 import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import { useDialogManager } from './dialog-manager'
 
 /**
@@ -152,6 +153,11 @@ function renderComponent(
   return { cleanup, id: dialogId }
 }
 
+/** The single button a dialog gets when its caller passes none. */
+function defaultConfirmButtons(): DialogBtn[] {
+  return [{ content: useI18nText().t('common.confirm'), type: 'info', onClick: async () => true }]
+}
+
 /**
  * Create and mount a touch tip dialog
  *
@@ -163,7 +169,7 @@ function renderComponent(
 export async function forTouchTip(
   title: string,
   message: string,
-  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
+  buttons: DialogBtn[] = defaultConfirmButtons(),
   atomicKey?: string
 ): Promise<void> {
   if (atomicKey) {
@@ -241,7 +247,7 @@ export async function forDialogMention(
   title: string,
   message: string,
   icon: ITuffIcon | string | null = null,
-  btns: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
+  btns: DialogBtn[] = defaultConfirmButtons()
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')

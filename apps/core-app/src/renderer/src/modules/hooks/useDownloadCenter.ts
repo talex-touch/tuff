@@ -7,6 +7,7 @@ import type {
 import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 
@@ -19,6 +20,12 @@ export function useDownloadCenter() {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const downloadSdk = useDownloadSdk()
+  const { t } = useI18nText()
+  /**
+   * The reason when main gave none. Callers toast it after a localized "pause failed:"-style
+   * prefix, so it must not restate the action, and must be in the same language as the prefix.
+   */
+  const unknownError = (): string => t('download.error.unknown')
   const transportDisposers: Array<() => void> = []
   const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 
@@ -45,10 +52,10 @@ export function useDownloadCenter() {
       if (response.success) {
         return response.taskId || ''
       } else {
-        throw new Error(response.error || 'Failed to add download task')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     } finally {
       loading.value = false
@@ -65,10 +72,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.pauseTask({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to pause task')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -83,10 +90,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.resumeTask({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to resume task')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -101,10 +108,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.cancelTask({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to cancel task')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -122,7 +129,7 @@ export function useDownloadCenter() {
         downloadTasks.value = tasks
         return tasks
       } else {
-        throw new Error(response.error || 'Failed to get tasks')
+        throw new Error(response.error || unknownError())
       }
     } catch (err: unknown) {
       // Ignore timeout errors during startup - module may not be ready yet
@@ -131,7 +138,7 @@ export function useDownloadCenter() {
         devLog('[DownloadCenter] Tasks fetch timed out, module may be initializing')
         return []
       }
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -148,10 +155,10 @@ export function useDownloadCenter() {
       if (response.success) {
         return response.task ?? null
       } else {
-        throw new Error(response.error || 'Failed to get task status')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -166,10 +173,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.updateConfig({ config })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to update config')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -184,10 +191,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.retryTask({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to retry task')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -201,10 +208,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.pauseAll()
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to pause all tasks')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -218,10 +225,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.resumeAll()
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to resume all tasks')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -235,10 +242,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.cancelAll()
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to cancel all tasks')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -253,10 +260,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.openFile({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to open file')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -271,10 +278,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.showInFolder({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to show in folder')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -289,7 +296,7 @@ export function useDownloadCenter() {
       const response = await downloadSdk.deleteFile({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to delete file')
+        throw new Error(response.error || unknownError())
       }
 
       // Remove from local tasks list
@@ -298,7 +305,7 @@ export function useDownloadCenter() {
         downloadTasks.value.splice(index, 1)
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -313,7 +320,7 @@ export function useDownloadCenter() {
       const response = await downloadSdk.removeTask({ taskId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to remove task')
+        throw new Error(response.error || unknownError())
       }
 
       // Also remove from local list
@@ -322,7 +329,7 @@ export function useDownloadCenter() {
         downloadTasks.value.splice(index, 1)
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -341,7 +348,7 @@ export function useDownloadCenter() {
       })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to update priority')
+        throw new Error(response.error || unknownError())
       }
 
       // Update local task
@@ -350,7 +357,7 @@ export function useDownloadCenter() {
         task.priority = priority
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -367,10 +374,10 @@ export function useDownloadCenter() {
       if (response.success) {
         return response.history || []
       } else {
-        throw new Error(response.error || 'Failed to get history')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -384,10 +391,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.clearHistory()
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to clear history')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
@@ -402,10 +409,10 @@ export function useDownloadCenter() {
       const response = await downloadSdk.clearHistoryItem({ historyId })
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to clear history item')
+        throw new Error(response.error || unknownError())
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = err instanceof Error ? err.message : unknownError()
       throw err
     }
   }
