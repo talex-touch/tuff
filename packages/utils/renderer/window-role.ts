@@ -1,3 +1,6 @@
+import type { AppLocale } from '../i18n/locale'
+import { normalizeLocale } from '../i18n/locale'
+
 const FLAG_PREFIX = '--'
 
 export const TOUCH_TYPES = ['main', 'core-box', 'assistant', 'screenshot'] as const
@@ -92,6 +95,21 @@ export function buildWindowArgs(role: WindowRole): string[] {
     args.push(`--meta-overlay=${role.metaOverlay ? 'true' : 'false'}`)
   }
   return args
+}
+
+const LOCALE_FLAG = 'app-locale'
+
+/**
+ * The interface language main opens a window in, for what the window writes before its renderer has
+ * read settings - the main window's startup overlay. It is a snapshot taken at creation: a window
+ * that reloads after a language switch starts in the old language until settings land.
+ */
+export function buildWindowLocaleArg(locale: AppLocale): string {
+  return `${FLAG_PREFIX}${LOCALE_FLAG}=${locale}`
+}
+
+export function parseWindowLocale(argv: string[]): AppLocale | undefined {
+  return normalizeLocale(parseRawArgs(argv)[LOCALE_FLAG]) ?? undefined
 }
 
 export function resolveRendererWindowMode(role: WindowRole): RendererWindowMode {
