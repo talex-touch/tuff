@@ -428,7 +428,7 @@ async function handleInstallDegit(): Promise<void> {
           <button
             type="button"
             class="PluginNew-Back"
-            :aria-label="t('common.back', 'Back')"
+            :aria-label="t('common.back')"
             @click="emits('close')"
           >
             <span i-ri-arrow-left-s-line aria-hidden="true" />

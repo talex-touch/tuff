@@ -1555,6 +1555,15 @@ watch(
  * just read, is not the model. TuffEx carries no i18n, so the wording comes
  * from here.
  */
+const toolCallLabels = computed(() => ({
+  retryLabel: t('home.retry'),
+  pendingLabel: t('home.toolCall.pending'),
+  runningLabel: t('home.toolCall.running'),
+  doneLabel: t('home.toolCall.done'),
+  errorLabel: t('home.toolCall.error'),
+  inputLabel: t('home.toolCall.input')
+}))
+
 const markdownLabels = computed(() => ({
   blockedImageText: t('home.image.blocked'),
   loadImageOnceText: t('home.image.loadOnce'),
@@ -2281,7 +2290,7 @@ onBeforeUnmount(() => disposeCommands?.())
                           v-else
                           class="HomePage-Tool"
                           :tool-call="segment.part"
-                          :retry-label="t('home.retry')"
+                          v-bind="toolCallLabels"
                         />
                       </template>
 

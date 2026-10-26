@@ -16,15 +16,15 @@ defineProps<{
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
-const areaOptions: CanvasAreaOption[] = [
-  { area: 'logo', label: 'Logo' },
-  { area: 'input', label: 'Input' },
-  { area: 'tags', label: 'Tags' },
-  { area: 'actions', label: 'Actions' },
-  { area: 'results', label: 'Results' },
-  { area: 'addon', label: 'Addon' },
-  { area: 'footer', label: 'Footer' }
-]
+const areaOptions = computed<CanvasAreaOption[]>(() => [
+  { area: 'logo', label: t('layoutSection.canvasEditor.area.logo') },
+  { area: 'input', label: t('layoutSection.canvasEditor.area.input') },
+  { area: 'tags', label: t('layoutSection.canvasEditor.area.tags') },
+  { area: 'actions', label: t('layoutSection.canvasEditor.area.actions') },
+  { area: 'results', label: t('layoutSection.canvasEditor.area.results') },
+  { area: 'addon', label: t('layoutSection.canvasEditor.area.addon') },
+  { area: 'footer', label: t('layoutSection.canvasEditor.area.footer') }
+])
 
 function cloneConfig<T extends CanvasConfig>(config: T): T {
   return JSON.parse(JSON.stringify(config)) as T
@@ -76,12 +76,12 @@ function handleCancel(close: () => void): void {
             </div>
           </div>
           <div class="CoreBoxEditorOverlay-Actions">
-            <TxStatusBadge text="Beta" status="warning" size="sm" />
+            <TxStatusBadge :text="t('settings.platformTags.beta')" status="warning" size="sm" />
             <TxButton variant="flat" size="sm" @click="handleCancel(close)">
               {{ t('common.cancel', 'Cancel') }}
             </TxButton>
             <TxButton variant="flat" size="sm" @click="handleSave(close)">
-              {{ t('common.confirm', 'Save') }}
+              {{ t('common.save') }}
             </TxButton>
           </div>
         </div>

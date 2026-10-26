@@ -44,7 +44,7 @@ const stackWidth = computed(() => {
           left: 0
         }"
         class="preview-image"
-        alt="clipboard image"
+        :alt="t('boxTag.imageAlt')"
       />
     </div>
     <span class="label">{{

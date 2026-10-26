@@ -165,7 +165,7 @@ function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceP
   return {
     ...copyableProvider,
     id,
-    name: `${provider.name} Copy`,
+    name: t('settings.intelligence.providerCopyName', { name: provider.name }),
     enabled: false,
     metadata: {
       ...(provider.metadata || {}),
@@ -234,7 +234,12 @@ async function chooseProviderIconFile(): Promise<string | null> {
     const result = await transport.send(openFileEvent, {
       title: t('settings.intelligence.providerIcon'),
       properties: ['openFile'],
-      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ico'] }]
+      filters: [
+        {
+          name: t('common.imageFileFilter'),
+          extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ico']
+        }
+      ]
     })
     return result?.filePaths?.[0] ?? null
   } catch (error) {
@@ -374,7 +379,7 @@ useKeyboardNavigation({
         </div>
         <IntelligenceList
           class="flex-1 min-h-0 w-full"
-          aria-label="AI Provider List"
+          :aria-label="t('settings.intelligence.providerListLabel')"
           :providers="visibleProviders"
           :selected-id="selectedProviderId"
           :search-query="searchQuery"

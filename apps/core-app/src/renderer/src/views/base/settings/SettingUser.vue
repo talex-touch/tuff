@@ -355,7 +355,7 @@ function openProfileEditor() {
           <img
             v-if="avatarUrl"
             :src="avatarUrl"
-            :alt="displayName || displayEmail || 'User'"
+            :alt="displayName || displayEmail || t('settingUser.defaultName')"
             class="user-avatar-image"
           />
           <div v-else class="user-avatar-placeholder">

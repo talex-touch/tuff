@@ -48,9 +48,9 @@ const detailText = computed(() => {
 })
 const sourceLabel = computed(() => {
   if (props.item.source === 'plugin') {
-    return props.item.pluginName || 'plugin'
+    return props.item.pluginName || t('coreBox.sourceTypes.plugin')
   }
-  return props.item.source
+  return t('corebox.omniPanel.sourceBuiltin')
 })
 </script>
 

@@ -34,7 +34,7 @@ function openEditor(event: MouseEvent): void {
     >
       <template #tags>
         <TxTag
-          label="Beta"
+          :label="t('settings.platformTags.beta')"
           size="sm"
           color="var(--shell-text-muted)"
           background="var(--shell-surface-2)"

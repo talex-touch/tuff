@@ -5,21 +5,20 @@ import { TxSlider } from '@talex-touch/tuffex/slider'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useFlip } from '@talex-touch/tuffex/utils'
 import { computed, ref, watch, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { moveItem, normalizeCanvasConfig } from './canvas-types'
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: CanvasConfig
-    defaultConfig: CanvasConfig
-    title: string
-    description: string
-    areas: CanvasAreaOption[]
-    betaTag?: string
-  }>(),
-  {
-    betaTag: 'Beta'
-  }
-)
+const props = defineProps<{
+  modelValue: CanvasConfig
+  defaultConfig: CanvasConfig
+  title: string
+  description: string
+  areas: CanvasAreaOption[]
+  betaTag?: string
+}>()
+
+const { t } = useI18n()
+const betaTagText = computed(() => props.betaTag ?? t('settings.platformTags.beta'))
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: CanvasConfig): void
@@ -182,9 +181,9 @@ function setItemVisibility(itemId: string, visible: boolean): void {
         <p>{{ description }}</p>
       </div>
       <div class="CanvasGridEditor-HeaderActions">
-        <TxStatusBadge :text="betaTag" status="warning" size="sm" />
+        <TxStatusBadge :text="betaTagText" status="warning" size="sm" />
         <TxButton variant="bare" class="CanvasGridEditor-ResetBtn" @click="resetToDefault">
-          Reset
+          {{ t('layoutSection.canvasEditor.reset') }}
         </TxButton>
       </div>
     </div>
@@ -221,9 +220,9 @@ function setItemVisibility(itemId: string, visible: boolean): void {
 
       <div class="CanvasGridEditor-Panel">
         <section class="CanvasGridEditor-PanelSection">
-          <h4>Canvas</h4>
+          <h4>{{ t('layoutSection.canvasEditor.canvas') }}</h4>
           <label>
-            <span>Enabled</span>
+            <span>{{ t('layoutSection.canvasEditor.enabled') }}</span>
             <input
               type="checkbox"
               :checked="localConfig.enabled"
@@ -231,7 +230,7 @@ function setItemVisibility(itemId: string, visible: boolean): void {
             />
           </label>
           <label>
-            <span>Columns</span>
+            <span>{{ t('layoutSection.canvasEditor.columns') }}</span>
             <TxSlider
               :model-value="localConfig.columns"
               :min="4"
@@ -242,7 +241,7 @@ function setItemVisibility(itemId: string, visible: boolean): void {
             <em>{{ localConfig.columns }}</em>
           </label>
           <label>
-            <span>Row Height</span>
+            <span>{{ t('layoutSection.canvasEditor.rowHeight') }}</span>
             <TxSlider
               :model-value="localConfig.rowHeight"
               :min="12"
@@ -253,7 +252,7 @@ function setItemVisibility(itemId: string, visible: boolean): void {
             <em>{{ localConfig.rowHeight }}</em>
           </label>
           <label>
-            <span>Gap</span>
+            <span>{{ t('layoutSection.canvasEditor.gap') }}</span>
             <TxSlider
               :model-value="localConfig.gap"
               :min="0"
@@ -266,10 +265,10 @@ function setItemVisibility(itemId: string, visible: boolean): void {
         </section>
 
         <section v-if="selectedItem" class="CanvasGridEditor-PanelSection">
-          <h4>Item</h4>
+          <h4>{{ t('layoutSection.canvasEditor.item') }}</h4>
           <p>{{ areaLabelMap[selectedItem.area] || selectedItem.area }}</p>
           <label>
-            <span>Visible</span>
+            <span>{{ t('layoutSection.canvasEditor.visible') }}</span>
             <input
               type="checkbox"
               :checked="selectedItem.visible !== false"

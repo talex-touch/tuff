@@ -340,7 +340,7 @@ async function selectBackgroundImageInternal(options?: { setSource?: boolean }):
   try {
     const result = await transport.send(openFileEvent, {
       title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
-      filters: [{ name: 'Images', extensions: [...WALLPAPER_IMAGE_EXTENSIONS] }],
+      filters: [{ name: t('common.imageFileFilter'), extensions: [...WALLPAPER_IMAGE_EXTENSIONS] }],
       properties: ['openFile']
     })
     if (result && result.filePaths && result.filePaths.length > 0) {

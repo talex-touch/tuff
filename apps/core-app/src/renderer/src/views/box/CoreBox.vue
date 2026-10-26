@@ -676,9 +676,9 @@ const copyPreviewHandler = async (payload: CoreBoxPreviewCopyRequest) => {
   if (payload.item) {
     try {
       await transport.send(CoreBoxEvents.item.execute, { item: payload.item })
-      toast.success('结果已复制')
+      toast.success(t('corebox.previewCopied'))
     } catch {
-      toast.error('复制失败')
+      toast.error(t('corebox.copyFailed'))
     }
     return
   }
@@ -686,9 +686,9 @@ const copyPreviewHandler = async (payload: CoreBoxPreviewCopyRequest) => {
   if (!payload.value) return
   try {
     await transport.send(ClipboardEvents.write, { text: payload.value })
-    toast.success('结果已复制')
+    toast.success(t('corebox.previewCopied'))
   } catch {
-    toast.error('复制失败')
+    toast.error(t('corebox.copyFailed'))
   }
 }
 const unregCopyPreview = transport.on(CoreBoxEvents.preview.copy, copyPreviewHandler)

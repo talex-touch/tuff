@@ -182,7 +182,7 @@ const runtimeArch = computed(() => getRuntimeArch())
 const currentRuntimeLabel = computed(() =>
   t('settings.settingUpdate.assetsCurrentRuntime', {
     platform: formatPlatform(platform.value as DownloadAsset['platform']),
-    arch: runtimeArch.value || t('settings.settingUpdate.status.unknownVersion')
+    arch: runtimeArch.value || t('settings.settingUpdate.unknown')
   })
 )
 const allCachedAssets = computed(() => {
@@ -693,7 +693,7 @@ function formatPlatform(platform: DownloadAsset['platform'] | 'unknown'): string
   if (platform === 'win32') return 'Windows'
   if (platform === 'darwin') return 'macOS'
   if (platform === 'linux') return 'Linux'
-  return 'Unknown'
+  return t('settings.settingUpdate.unknown')
 }
 
 function isAssetCompatibleWithCurrentRuntime(asset: DownloadAsset): boolean {
@@ -714,7 +714,7 @@ function getAssetCompatibilityLabels(asset: DownloadAsset): string[] {
   } else if (asset.arch !== runtimeArch.value) {
     labels.push(
       t('settings.settingUpdate.assetsCompatibilityArchMismatch', {
-        arch: asset.arch ?? 'unknown'
+        arch: asset.arch ?? t('settings.settingUpdate.unknown')
       })
     )
   } else {
