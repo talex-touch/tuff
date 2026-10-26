@@ -62,6 +62,29 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_LOG_BYTES = 32 * 1024 * 1024
 
 const opts = parseArgs(process.argv.slice(2))
+if (opts.help === true || opts.h === true) {
+  console.log(
+    [
+      'Usage: node scripts/nexus-dev-supervisor.mjs [options]',
+      '',
+      'Options:',
+      '  --app <dir>            app dir to run (default apps/nexus)',
+      '  --port <n>             listen port (default 3200)',
+      '  --heap-mb <n>          V8 old-space ceiling (default 4096)',
+      '  --rss-limit <mb>       proactive restart threshold (default 4600)',
+      '  --log <file>           log file',
+      '  --health-interval <s> health probe period (default 10)',
+      '  --unhealthy-limit <n>  consecutive failed probes before restart (default 3)',
+      '  --startup-timeout <s>  startup answer window (default 300)',
+      '  --cloudflare-env <e>   CLOUDFLARE_DEV_ENVIRONMENT (default preview)',
+      '  --liveness-path <path> static path for liveness (default /favicon.ico)',
+      '  --deep-probe-every <n> render app root every n checks (default 90)',
+      '  --once                 supervise a single incarnation then exit',
+      '  --help, -h             print this message',
+    ].join('\n'),
+  )
+  process.exit(0)
+}
 const appDir = resolve(opts.app ?? join(REPO_ROOT, 'apps/nexus'))
 const port = Number(opts.port ?? 3200)
 const heapMb = Number(opts['heap-mb'] ?? 4096)
