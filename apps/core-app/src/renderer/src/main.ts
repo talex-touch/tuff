@@ -1,6 +1,11 @@
 import '~/modules/channel/channel-core'
 import { setRuntimeEnv } from '@talex-touch/utils/env'
-import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
+import {
+  getStartupContextSnapshot,
+  preloadDebugStep,
+  preloadLog,
+  preloadState
+} from '@talex-touch/utils/preload'
 import { initializeRendererStorage } from '@talex-touch/utils/renderer'
 import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
@@ -14,6 +19,7 @@ import { flushTxForms, provideTxFormHost } from '@talex-touch/tuffex/form'
 import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import type { I18nInstance } from '~/modules/lang/i18n'
+import { resolveLoadedMessageText } from '~/modules/lang/i18n'
 import { readLanguagePreference, setupI18n, setupLanguageFollow } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { registerAccessibilitySupport } from '~/modules/platform/accessibility-support'
@@ -213,7 +219,7 @@ async function ensureRouter(): Promise<Router> {
 }
 
 preloadState('start')
-preloadLog('Bootstrapping Talex Touch renderer...')
+preloadLog(bootCaption('startup.overlay.bootstrap'))
 
 const APP_SETTINGS_HYDRATION_SOFT_TIMEOUT_MS = 600
 
@@ -227,23 +233,25 @@ async function bootstrap() {
   await waitForInitialAppSettingsHydration()
   const router = isLightweightWindow ? null : await ensureRouter()
   const initialLanguage = resolveInitialLanguage()
-  const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
+  const i18n = await runBootStep(bootCaption('startup.overlay.loadingLocale'), 0.05, () =>
     setupI18n({ locale: initialLanguage })
   )
   // Every window, not only the main one: a locale switched in settings must reach CoreBox too.
   setupLanguageFollow()
 
-  const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
+  const app = await runBootStep(bootCaption('startup.overlay.createApp'), 0.05, () =>
+    createApp(App)
+  )
   app.provide(TX_ICON_CONFIG_KEY, createCoreAppIconConfig())
   provideTxFormHost(createCoreAppFormHost(i18n), app)
   installComponentErrorHandler(app)
 
-  await runBootStep('Registering plugins and global modules', 0.05, () => {
+  await runBootStep(bootCaption('startup.overlay.registerPlugins'), 0.05, () => {
     return registerCorePlugins(app, i18n, router)
   })
 
   if (router) {
-    await runBootStep('Registering main window modules', 0.05, async () => {
+    await runBootStep(bootCaption('startup.overlay.registerMainWindow'), 0.05, async () => {
       const { registerPluginInstallListener } =
         await import('~/modules/plugin/plugin-install-listener')
       registerPluginInstallListener(transport, router)
@@ -251,7 +259,7 @@ async function bootstrap() {
     })
   }
 
-  await runBootStep('Mounting renderer root container', 0.05, () => {
+  await runBootStep(bootCaption('startup.overlay.mount'), 0.05, () => {
     app.mount('#app')
   })
 
@@ -266,7 +274,7 @@ async function bootstrap() {
     await announceRendererReadyAfterRouter(transport, router)
   }
 
-  preloadDebugStep('Renderer shell mounted', 0.02)
+  preloadDebugStep(bootCaption('startup.overlay.mounted'), 0.02)
 }
 
 async function waitForInitialAppSettingsHydration(): Promise<void> {
@@ -358,6 +366,14 @@ function schedulePluginStoreInitialization() {
         mainLog.error('Background plugin store initialization failed', error)
       })
   }, 0)
+}
+
+/**
+ * A startup overlay caption. The first ones are written before vue-i18n exists, so they read the
+ * bundles directly, in the language main opened this window in until i18n names its own.
+ */
+function bootCaption(key: string): string {
+  return resolveLoadedMessageText(key, undefined, getStartupContextSnapshot()?.locale) ?? key
 }
 
 /**
