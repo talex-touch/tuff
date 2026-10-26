@@ -1906,6 +1906,9 @@ watch(
 watch(
   () => route.hash,
   (hash) => {
+    // The latest fragment wins: a heading the reader has since left, or cleared, is
+    // not scrolled to when the part holding it renders.
+    pendingDocHash = ''
     if (hash)
       revealDeferredDocBodyForHash(hash)
   },
