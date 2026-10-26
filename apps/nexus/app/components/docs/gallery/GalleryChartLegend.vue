@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { TxChartLegendItem } from '@talex-touch/tuffex/charts/src/chart-legend'
-import { ChartPalette } from '@talex-touch/tuffex/charts/src/palette'
+import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex/charts'
 import { computed } from 'vue'
 
 const { locale } = useI18n()

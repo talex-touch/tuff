@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import { TxChart } from '@talex-touch/tuffex/charts/src/chart'
-import { ChartPalette } from '@talex-touch/tuffex/charts/src/palette'
-import { TxArcSeries } from '@talex-touch/tuffex/charts/src/series'
-import { TxChartTooltip } from '@talex-touch/tuffex/charts/src/tooltip'
+import { ChartPalette, TxArcSeries, TxChart, TxChartTooltip } from '@talex-touch/tuffex/charts'
 import { computed, ref } from 'vue'
 import { CHART_ZH_LABELS } from '../../content/demos/chart-demo-locale'
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { TimeseriesData } from '@talex-touch/tuffex/charts/src/timeseries'
-import { TxTimeseriesChart } from '@talex-touch/tuffex/charts/src/timeseries'
+import type { TimeseriesData } from '@talex-touch/tuffex/charts'
+import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 import { computed } from 'vue'
 import { chartTimeFormats, TIMESERIES_ZH_LABELS } from '../../content/demos/chart-demo-locale'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChartPalette } from '@talex-touch/tuffex/charts/src/palette'
+import { ChartPalette } from '@talex-touch/tuffex/charts'
 import { TxChartScrubber, TxSparkChart } from '@talex-touch/tuffex/spark-chart'
 import { computed, ref } from 'vue'
 
