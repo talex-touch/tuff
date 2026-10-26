@@ -556,6 +556,17 @@ const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 const shouldMountDocEngagementPanels = ref(false)
 const shouldRenderDeferredDocBody = ref(false)
+// The renderer resolves the components a body uses before it draws anything, so
+// a part can be mounted and still empty. Each part sits in a Suspense, and these
+// record its resolve: the skeleton and the deferred shell hold their space until
+// then, and work on the rendered DOM waits for it. The deferred part mounts only
+// after the primary one, which it would otherwise be able to land above. A body
+// that is already here at setup was rendered on the server, and hydration must
+// agree with that.
+const primaryDocBodyResolved = ref(Boolean(renderDoc.value?.body))
+const deferredDocBodyResolved = ref(false)
+// The heading the URL points at, until the part of the body holding it renders.
+let pendingDocHash = ''
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
 const deferredDocBodySentinelRef = ref<HTMLElement | null>(null)
 
@@ -572,6 +583,8 @@ watch(
     shouldMountDocClientPanels.value = false
     shouldMountDocEngagementPanels.value = false
     shouldRenderDeferredDocBody.value = false
+    deferredDocBodyResolved.value = false
+    pendingDocHash = ''
   },
 )
 
@@ -1033,6 +1046,16 @@ function resolveDeferredBodySplitIndex(body: unknown) {
   return secondH2SplitIndex
 }
 
+// Demos, API tables and galleries are what deferral saves. Prose, lists and plain
+// tables cost little to draw, and holding them back only buys a placeholder that
+// cannot know how tall they are.
+function hasDeferredBodyWeight(children: unknown[]) {
+  return children.some(node =>
+    isDeferredBoundaryNode(node)
+    || readBodyNodeTag(node).toLowerCase() === 'docs-components-gallery',
+  )
+}
+
 function cloneDocWithBodyChildren(source: Record<string, any> | null | undefined, children: unknown[]) {
   if (!source?.body || typeof source.body !== 'object')
     return source
@@ -1211,6 +1234,7 @@ const deferredBodySplitIndex = computed(() => resolveDeferredBodySplitIndex(rend
 const shouldDeferDocBodySections = computed(() => (
   docScope.value.isComponent
   && deferredBodySplitIndex.value > 0
+  && hasDeferredBodyWeight(readBodyChildren(renderDoc.value?.body).slice(deferredBodySplitIndex.value))
 ))
 const primaryRenderDoc = computed(() => {
   if (!shouldDeferDocBodySections.value)
@@ -1230,10 +1254,16 @@ const deferredRenderDoc = computed(() => {
     readBodyChildren(renderDoc.value?.body).slice(deferredBodySplitIndex.value),
   )
 })
+// The shell arrives with the primary part, which would push it down if it were
+// already showing, and stays until the deferred part has rendered in its place.
 const shouldShowDeferredDocBodyShell = computed(() =>
   shouldDeferDocBodySections.value
   && Boolean(deferredRenderDoc.value?.body)
-  && !shouldRenderDeferredDocBody.value,
+  && primaryDocBodyResolved.value
+  && !deferredDocBodyResolved.value,
+)
+const shouldShowDocBodySkeleton = computed(() =>
+  renderDoc.value?.body ? !primaryDocBodyResolved.value : !fullDocError.value,
 )
 let lastEnhancedDocKey = ''
 const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
@@ -1573,16 +1603,48 @@ function mountDeferredDocBodySections() {
   clearDeferredDocBodySchedule()
 }
 
-function scrollToDeferredHashTarget(hash: string) {
-  if (!hash)
-    return
+function handlePrimaryDocBodyPending() {
+  primaryDocBodyResolved.value = false
+  // The deferred part is the rest of this body, so it waits for the primary again.
+  deferredDocBodyResolved.value = false
+}
 
-  const id = decodeURIComponent(hash.slice(1))
+function handlePrimaryDocBodyResolve() {
+  primaryDocBodyResolved.value = true
+  void scheduleCodeEnhance(80)
+  void scheduleOutlineSync(80)
+  // The body arrives after hydration, so the browser found no heading to scroll to.
+  scrollToDocHashTarget(pendingDocHash || window.location.hash)
+}
+
+function handleDeferredDocBodyResolve() {
+  deferredDocBodyResolved.value = true
+  void scheduleCodeEnhance(80)
+  void scheduleOutlineSync(80)
+  if (pendingDocHash)
+    scrollToDocHashTarget(pendingDocHash)
+}
+
+function scrollToDocHashTarget(hash: string) {
+  let id = ''
+  try {
+    id = decodeURIComponent(hash.slice(1))
+  }
+  catch {
+    return
+  }
   if (!id)
     return
 
   void nextTick(() => {
-    document.getElementById(id)?.scrollIntoView({ block: 'start' })
+    const target = document.getElementById(id)
+    // A heading exists only once the part of the body holding it has rendered.
+    if (!target) {
+      pendingDocHash = hash
+      return
+    }
+    pendingDocHash = ''
+    target.scrollIntoView({ block: 'start' })
   })
 }
 
@@ -1591,7 +1653,7 @@ function revealDeferredDocBodyForHash(hash = route.hash) {
     return false
 
   mountDeferredDocBodySections()
-  scrollToDeferredHashTarget(hash)
+  scrollToDocHashTarget(hash)
   return true
 }
 
@@ -1842,17 +1904,6 @@ watch(
 )
 
 watch(
-  shouldRenderDeferredDocBody,
-  (isRendered) => {
-    if (!isRendered)
-      return
-
-    void scheduleCodeEnhance(80)
-    void scheduleOutlineSync(80)
-  },
-)
-
-watch(
   () => route.hash,
   (hash) => {
     if (hash)
@@ -1956,21 +2007,25 @@ watch(
             </div>
           </div>
           <template v-if="renderDoc?.body">
-            <ContentRenderer
-              :key="currentDocRenderKey"
-              :value="primaryRenderDoc ?? {}"
-              :prose="false"
-              :components="docsProseComponents"
-              :class="[
-                'docs-prose',
-                'markdown-body',
-                'max-w-none',
-                'prose',
-                'prose-neutral',
-                'dark:prose-invert',
-                { 'docs-prose--hero': showDocHero },
-              ]"
-            />
+            <!-- A new document hides the previous one at once (timeout 0); the
+                 skeleton below stands in until it resolves. -->
+            <Suspense :timeout="0" @pending="handlePrimaryDocBodyPending" @resolve="handlePrimaryDocBodyResolve">
+              <ContentRenderer
+                :key="currentDocRenderKey"
+                :value="primaryRenderDoc ?? {}"
+                :prose="false"
+                :components="docsProseComponents"
+                :class="[
+                  'docs-prose',
+                  'markdown-body',
+                  'max-w-none',
+                  'prose',
+                  'prose-neutral',
+                  'dark:prose-invert',
+                  { 'docs-prose--hero': showDocHero },
+                ]"
+              />
+            </Suspense>
             <div
               v-if="shouldShowDeferredDocBodyShell"
               ref="deferredDocBodySentinelRef"
@@ -1981,14 +2036,18 @@ watch(
               <span class="docs-deferred-body-shell__line" />
               <span class="docs-deferred-body-shell__block" />
             </div>
-            <ContentRenderer
-              v-if="shouldRenderDeferredDocBody && deferredRenderDoc?.body"
-              :key="`${currentDocRenderKey}:deferred`"
-              :value="deferredRenderDoc ?? {}"
-              :prose="false"
-              :components="docsProseComponents"
-              class="docs-prose docs-prose--deferred markdown-body max-w-none prose prose-neutral dark:prose-invert"
-            />
+            <Suspense
+              v-if="shouldRenderDeferredDocBody && primaryDocBodyResolved && deferredRenderDoc?.body"
+              @resolve="handleDeferredDocBodyResolve"
+            >
+              <ContentRenderer
+                :key="`${currentDocRenderKey}:deferred`"
+                :value="deferredRenderDoc ?? {}"
+                :prose="false"
+                :components="docsProseComponents"
+                class="docs-prose docs-prose--deferred markdown-body max-w-none prose prose-neutral dark:prose-invert"
+              />
+            </Suspense>
           </template>
           <div v-else-if="fullDocError" class="docs-body-error" role="alert">
             <span class="docs-body-error__icon i-carbon-warning" aria-hidden="true" />
@@ -2004,7 +2063,12 @@ watch(
               {{ t('docs.bodyErrorRetry') }}
             </button>
           </div>
-          <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
+          <div
+            v-if="shouldShowDocBodySkeleton"
+            class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert"
+            :class="{ 'docs-prose-skeleton--component': docScope.isComponent }"
+            aria-hidden="true"
+          >
             <span class="docs-prose-skeleton__line is-wide" />
             <span class="docs-prose-skeleton__line" />
             <span class="docs-prose-skeleton__line is-short" />
@@ -2201,9 +2265,14 @@ watch(
   transform: translateY(6px);
 }
 
+/* Holds a screen for the demos still to come, so the pager and footer stay below the
+   fold until they arrive. Only parts with a demo, API table or gallery are deferred,
+   and those run longer than that. */
 .docs-deferred-body-shell {
   display: grid;
+  align-content: start;
   gap: 14px;
+  min-height: 100vh;
   padding-block: 8px 4px;
 }
 
@@ -2394,6 +2463,11 @@ watch(
   flex-direction: column;
   gap: 14px;
   min-height: 320px;
+}
+
+/* A component page's body outgrows the viewport: keep what follows below the fold. */
+.docs-prose-skeleton--component {
+  min-height: 100vh;
 }
 
 .docs-prose-skeleton__line,
