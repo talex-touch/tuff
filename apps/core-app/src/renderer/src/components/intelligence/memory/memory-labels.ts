@@ -29,7 +29,7 @@ export function useMemoryLabels() {
 
   function formatTimestamp(value?: number): string {
     if (!value) return t('intelligence.memoryReview.notAvailable')
-    return new Intl.DateTimeFormat(locale.value, {
+    return new Intl.DateTimeFormat(locale?.value, {
       dateStyle: 'medium',
       timeStyle: 'short'
     }).format(value)

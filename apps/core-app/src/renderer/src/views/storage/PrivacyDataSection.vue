@@ -202,7 +202,7 @@ function summaryFor(category: PrivacyDataCategory): PrivacyCategorySummary | und
 function lastCleanupLabel(category: PrivacyDataCategory): string {
   const value = summaryFor(category)?.lastCleanupAt
   return value
-    ? t('privacyData.summary.lastCleanup', { value: new Date(value).toLocaleString(locale.value) })
+    ? t('privacyData.summary.lastCleanup', { value: new Date(value).toLocaleString(locale?.value) })
     : t('privacyData.summary.neverCleaned')
 }
 

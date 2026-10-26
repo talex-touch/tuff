@@ -54,7 +54,7 @@ function formatCredits(value: number): string {
   if (!Number.isFinite(value)) {
     return '0'
   }
-  return new Intl.NumberFormat(locale.value, { maximumFractionDigits: 2 }).format(value)
+  return new Intl.NumberFormat(locale?.value, { maximumFractionDigits: 2 }).format(value)
 }
 
 function refreshCredits() {
