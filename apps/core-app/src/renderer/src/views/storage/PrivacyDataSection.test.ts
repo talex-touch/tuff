@@ -51,7 +51,8 @@ vi.mock('vue-i18n', () => ({
     t: (key: string, params?: Record<string, unknown>) => {
       if (!params) return key
       return `${key}:${Object.values(params).join(':')}`
-    }
+    },
+    locale: { value: 'en-US' }
   })
 }))
 
