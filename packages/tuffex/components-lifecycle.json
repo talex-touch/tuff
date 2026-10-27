@@ -1,8 +1,44 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.1",
+  "currentVersion": "0.9.2",
   "totalComponents": 189,
   "versions": [
+    {
+      "version": "0.9.2",
+      "date": "2026-10-27",
+      "title": "表单体系、图片预览与抽屉实色材质 (Forms, Image Preview & Opaque Drawer)",
+      "newComponents": [
+        "drawer-form",
+        "image-preview",
+        "modal-form",
+        "steps-form"
+      ],
+      "updatedComponents": [
+        "attachment-tray",
+        "avatar",
+        "base-surface",
+        "charts",
+        "checkbox",
+        "command-palette",
+        "dialog",
+        "drawer",
+        "flip-overlay",
+        "form",
+        "group-block",
+        "image-gallery",
+        "input",
+        "modal",
+        "motion-transition",
+        "number-input",
+        "radio",
+        "select",
+        "sensitive-input",
+        "stream-markdown",
+        "switch",
+        "textarea"
+      ],
+      "summary": "重写 TxForm/TxFormItem 并新增 TxModalForm、TxDrawerForm、TxStepsForm，表单支持草稿、自动保存与只读态；新增 TxImagePreview，TxImageGallery 与 TxAttachmentTray 改走它；TxDrawer 面板默认改为实色材质，图表标签可交给界面语言。"
+    },
     {
       "version": "0.9.1",
       "date": "2026-10-21",
@@ -647,7 +683,7 @@
     },
     "drawer-form": {
       "slug": "drawer-form",
-      "since": "0.9.1",
+      "since": "0.9.2",
       "suite": "base"
     },
     "dropdown-menu": {
@@ -822,7 +858,7 @@
     },
     "image-preview": {
       "slug": "image-preview",
-      "since": "0.9.1",
+      "since": "0.9.2",
       "suite": "base"
     },
     "image-uploader": {
@@ -902,7 +938,7 @@
     },
     "modal-form": {
       "slug": "modal-form",
-      "since": "0.9.1",
+      "since": "0.9.2",
       "suite": "base"
     },
     "mode-chip": {
@@ -1192,7 +1228,7 @@
     },
     "steps-form": {
       "slug": "steps-form",
-      "since": "0.9.1",
+      "since": "0.9.2",
       "suite": "base"
     },
     "stream-element": {

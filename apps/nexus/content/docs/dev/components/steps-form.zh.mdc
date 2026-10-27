@@ -3,7 +3,7 @@ title: "StepsForm 分步表单"
 description: "把一张长表单分成几步填写"
 category: Form
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [form, steps, wizard]
 syncStatus: reviewed
 verified: true

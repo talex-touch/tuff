@@ -3,7 +3,7 @@ title: "DrawerForm"
 description: "A form in a side drawer for creating or editing records."
 category: Form
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [form, drawer, panel]
 syncStatus: reviewed
 verified: true
