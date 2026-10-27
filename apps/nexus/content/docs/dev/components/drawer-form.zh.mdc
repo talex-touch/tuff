@@ -3,7 +3,7 @@ title: "DrawerForm 抽屉表单"
 description: "在侧边抽屉里新建或编辑记录的表单"
 category: Form
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [form, drawer, panel]
 syncStatus: reviewed
 verified: true

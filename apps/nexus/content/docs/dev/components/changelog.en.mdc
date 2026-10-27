@@ -13,11 +13,27 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.1** |
-| Release version | **0.9.1** (this npm release) |
-| Component modules | **185**: Base 94 · Pro 56 · AI 35 |
+| Source version | **0.9.2** |
+| Release version | **0.9.2** (this npm release) |
+| Component modules | **189**: Base 98 · Pro 56 · AI 35 |
 
 ## Release History
+
+### Version 0.9.2 (2026-10-27)
+
+A rewritten form system, a full-window image preview, and solid drawer surfaces by default.
+
+- **New components**: drawer-form, image-preview, modal-form, steps-form
+- **Main updated components**: attachment-tray, base-surface, charts, command-palette, dialog, drawer, flip-overlay, form, image-gallery, input, modal, motion-transition, number-input, select, sensitive-input, stream-markdown, switch, textarea
+- **Key features**:
+  - `TxForm` and `TxFormItem` are rewritten. `layout` moves labels beside or above fields by the form's own width; rules gain `type`, `min` / `max`, length and `pattern`; `level: 'warning'` reports without blocking submit, and `deps` revalidates a field when the fields it depends on change. Controls inside a form item pick up its label, required state, error and readonly state automatically.
+  - `TxForm` gains drafts (`persist`), autosave (`autosave`) and `readonly`: drafts are keyed by the form's `id`, survive a reload or a closed tab, and are dropped after a successful submit or `reset()`.
+  - New `TxModalForm`, `TxDrawerForm` and `TxStepsForm` / `TxFormStep` edit a record in a dialog, a drawer or across steps, always on a copy of `initialValues`, and close only after a successful submit.
+  - New `TxImagePreview`: wheel and pinch zoom, pan with momentum once zoomed, horizontal swipe to page while unzoomed, drag up or down to close, and a flight from the thumbnail. `TxImageGallery` and `TxAttachmentTray` route through it and load it the first time it is needed.
+  - `TxDrawer` panels use a solid surface by default (`surface` defaults to `pure`), so the page behind no longer shows through; pass `surface="refraction"` for the glass look.
+  - Chart labels can follow the interface language: `TxTimeseriesChart` and `TxSankeyChart` gain `labels` entries, `TxMonoChart` gains `formatX`.
+  - One Tab-cycle rule across dialogs: only visible, tabbable controls are stops, skipping hidden ones, `inert` subtrees and `tabindex="-1"`; `TxDrawer` moves focus into the panel when it opens.
+  - dompurify is upgraded past its critical and high advisories.
 
 ### Version 0.9.1 (2026-10-21)
 

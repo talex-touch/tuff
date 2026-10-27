@@ -1,6 +1,6 @@
 # TouchX UI 更新日志
 
-## [Unreleased]
+## [0.9.2] - 2026-10-27
 
 ### 📦 组件变动 (Components)
 
