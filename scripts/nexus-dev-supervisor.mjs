@@ -412,6 +412,9 @@ async function supervise(proc) {
   }
   if (!rendered)
     return `answered ${livenessPath} but the app root never rendered within ${startupTimeoutS}s`
+  // The startup render counts as the first one: a child restarted near the threshold must not
+  // render `/` again on the very next probe.
+  checksSinceRender = 0
   log(`up on http://localhost:${port}/ (heap ceiling ${heapMb} MB, restart at ${rssLimitMb} MB RSS, liveness ${livenessPath} every ${healthIntervalS}s, app root every ${deepProbeEvery} checks)`)
 
   let unhealthy = 0
@@ -516,7 +519,10 @@ while (!isStopping()) {
 function parseArgs(argv) {
   const parsed = {}
   for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]
+    const raw = argv[index]
+    // `-h` is advertised in the help text; without this it would fall through the `--` filter
+    // below and start supervision instead of printing anything.
+    const token = raw === '-h' ? '--help' : raw
     if (!token.startsWith('--'))
       continue
     const key = token.slice(2)

@@ -6049,7 +6049,7 @@
       "compatible": "Compatible",
       "providerName": "Provider Name",
       "providerActionsLabel": "Provider actions",
-      "toggleProvider": "Enable {name}",
+      "toggleProvider": "Toggle {name}",
       "providerNamePlaceholder": "e.g. My Custom AI",
       "channelPageTitle": "Channel Manager",
       "channelPageDesc": "Configure AI provider settings and parameters",

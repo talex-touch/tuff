@@ -6049,7 +6049,7 @@
       "compatible": "兼容",
       "providerName": "提供商名称",
       "providerActionsLabel": "提供商操作",
-      "toggleProvider": "启用 {name}",
+      "toggleProvider": "切换 {name}",
       "providerNamePlaceholder": "例如：我的自定义 AI",
       "channelPageTitle": "渠道配置商",
       "channelPageDesc": "配置AI提供商的设置和参数",
