@@ -28,7 +28,7 @@ verified: false
 - **关键特性**：
   - 重写 `TxForm` 与 `TxFormItem`：`layout` 按表单宽度在侧边与上方之间切换，规则新增 `type`、`min` / `max`、长度与 `pattern`，`level: 'warning'` 只提示不拦提交，`deps` 让依赖字段变化时重新校验；表单项里的输入控件自动接入 label、必填、错误与只读状态。
   - `TxForm` 新增草稿（`persist`）、自动保存（`autosave`）与只读（`readonly`）：草稿按表单 `id` 存在本地，刷新或重开标签页后仍在，提交成功或 `reset()` 后删除。
-  - 新增 `TxModalForm`、`TxDrawerForm` 与 `TxStepsForm` / `TxFormStep`：在对话框、抽屉或多步流程里编辑记录，每次打开编辑 `initialValues` 的副本，提交成功才关闭。
+  - 新增 `TxModalForm` 与 `TxDrawerForm`：在对话框或抽屉里编辑记录，每次打开编辑 `initialValues` 的副本，提交成功才关闭。新增 `TxStepsForm` 与 `TxFormStep`：把一个表单分成几步，用 `v-model` 传值，逐步校验后再提交整个表单。
   - 新增 `TxImagePreview`：滚轮与捏合缩放、放大后拖动滑行、未放大时横滑翻页、上下拖走关闭，支持缩略图飞入飞出。`TxImageGallery` 与 `TxAttachmentTray` 改走它，首次要用时才加载预览与样式。
   - `TxDrawer` 面板默认改为实色材质（`surface` 默认 `pure`），正文不再透出后面页面；要琉光传 `surface="refraction"`。
   - 图表标签可交给界面语言：`TxTimeseriesChart`、`TxSankeyChart` 的 `labels` 新增条目，`TxMonoChart` 新增 `formatX`。
