@@ -36,6 +36,8 @@ import {
   type AnnotationObject,
   type AnnotationPoint
 } from './annotation'
+import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
+import { shortcutChordLabel } from '~/modules/shortcuts/shortcut-chord'
 
 interface PointerInteraction {
   kind: 'create' | 'move' | 'resize'
@@ -71,6 +73,20 @@ const VIEWFINDER_POINTS = [
 
 const transport = useTuffTransport()
 const { t } = useI18n()
+// The undo/redo handlers accept ⌘ or Ctrl; the tooltip names the platform's own.
+const isMacPlatform = getCurrentRendererPlatformState().isMac
+const undoShortcut = shortcutChordLabel({ code: 'KeyZ' }, isMacPlatform)
+const redoShortcut = shortcutChordLabel({ code: 'KeyY' }, isMacPlatform)
+const handleLabels = computed<Record<ScreenshotResizeHandle, string>>(() => ({
+  n: t('screenshot.overlay.handle.n'),
+  ne: t('screenshot.overlay.handle.ne'),
+  e: t('screenshot.overlay.handle.e'),
+  se: t('screenshot.overlay.handle.se'),
+  s: t('screenshot.overlay.handle.s'),
+  sw: t('screenshot.overlay.handle.sw'),
+  w: t('screenshot.overlay.handle.w'),
+  nw: t('screenshot.overlay.handle.nw')
+}))
 
 const state = ref<ScreenshotOverlayState | null>(null)
 const selection = ref<ScreenshotGeometryRect | null>(null)
@@ -726,7 +742,7 @@ function handleCanvasPointerDown(event: PointerEvent): void {
       }
       break
     case 'text': {
-      const defaultText = window.prompt('输入文本内容：')
+      const defaultText = window.prompt(t('screenshot.editor.textPrompt'))
       if (defaultText && defaultText.trim()) {
         annotationDoc.value.add({
           id,
@@ -1152,7 +1168,7 @@ onBeforeUnmount(() => {
         <span class="point-cross" />
       </div>
       <div class="viewfinder-hint">
-        拖拽框选截图区域 · 空格切换窗口模式 · 按 G 九宫格定位 · Esc 退出
+        {{ t('screenshot.overlay.selectionHint') }}
       </div>
     </div>
 
@@ -1173,10 +1189,7 @@ onBeforeUnmount(() => {
         <span class="grid-cell-label">{{ cell.key }}</span>
       </div>
       <div class="grid-nav-hint">
-        {{
-          t('screenshot.overlay.gridNavHint') ||
-          '按 1-9 / Q-C 细分区域，Backspace 返回，Enter 确认，Esc 退出'
-        }}
+        {{ t('screenshot.overlay.gridNavHint') }}
       </div>
     </div>
 
@@ -1195,11 +1208,18 @@ onBeforeUnmount(() => {
       />
       <div v-if="state?.candidate" class="candidate-tag">
         <span class="candidate-kind">{{
-          state.candidate.kind === 'ui-element' ? 'UI 控件' : '窗口'
+          state.candidate.kind === 'ui-element'
+            ? t('screenshot.overlay.candidateUiElement')
+            : t('screenshot.overlay.candidateWindow')
         }}</span>
         <span v-if="state.candidate.role" class="candidate-role">{{ state.candidate.role }}</span>
         <span v-if="state.candidate.levels > 1" class="candidate-level">
-          {{ state.candidate.level + 1 }}/{{ state.candidate.levels }} (Tab 切换)
+          {{
+            t('screenshot.overlay.candidateLevel', {
+              level: state.candidate.level + 1,
+              levels: state.candidate.levels
+            })
+          }}
         </span>
       </div>
     </section>
@@ -1209,7 +1229,7 @@ onBeforeUnmount(() => {
       v-if="localSelection && !isEditing"
       class="selection"
       :style="selectionStyle"
-      aria-label="Screenshot selection"
+      :aria-label="t('screenshot.overlay.selectionRegion')"
       @pointerdown.stop="startMove"
     >
       <span
@@ -1227,7 +1247,7 @@ onBeforeUnmount(() => {
         type="button"
         class="resize-handle"
         :class="`is-${handle}`"
-        :aria-label="t('screenshot.overlay.resizeHandle', { handle })"
+        :aria-label="t('screenshot.overlay.resizeHandle', { handle: handleLabels[handle] })"
         @pointerdown.stop="startResize(handle, $event)"
       />
     </section>
@@ -1266,7 +1286,11 @@ onBeforeUnmount(() => {
           <span class="loupe-color-rgb">{{ loupeColorRgb }}</span>
         </div>
         <div class="loupe-row secondary">
-          <span class="loupe-mode-tag">{{ isObjectMode ? '窗口识别' : '区域选择' }}</span>
+          <span class="loupe-mode-tag">{{
+            isObjectMode
+              ? t('screenshot.overlay.loupeObjectMode')
+              : t('screenshot.overlay.loupeRegionMode')
+          }}</span>
           <span class="loupe-coord">
             <template v-if="interaction?.kind === 'create' && selection">
               {{ Math.round(selection.width) }} × {{ Math.round(selection.height) }}
@@ -1318,7 +1342,7 @@ onBeforeUnmount(() => {
           <select
             v-model="selectedAnchor"
             class="anchor-select"
-            :title="t('screenshot.overlay.anchor') || '缩放固定锚点'"
+            :title="t('screenshot.overlay.anchor')"
             @change="applyManualSize"
           >
             <option value="nw">↖</option>
@@ -1406,7 +1430,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="icon-button highlight-tool"
-          :title="t('screenshot.editor.annotation') || '标注 (E)'"
+          :title="t('screenshot.editor.annotation')"
           @click="startEdit"
         >
           <i class="i-ri-pencil-line" />
@@ -1419,7 +1443,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'select' }"
-          title="选择 / 调整 (V)"
+          :title="t('screenshot.editor.toolSelect')"
           @click="activeTool = 'select'"
         >
           <i class="i-ri-cursor-line" />
@@ -1428,7 +1452,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'rectangle' }"
-          title="矩形 (R)"
+          :title="t('screenshot.editor.toolRect')"
           @click="activeTool = 'rectangle'"
         >
           <i class="i-ri-checkbox-blank-line" />
@@ -1437,7 +1461,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'ellipse' }"
-          title="圆形 (O)"
+          :title="t('screenshot.editor.toolEllipse')"
           @click="activeTool = 'ellipse'"
         >
           <i class="i-ri-checkbox-blank-circle-line" />
@@ -1446,7 +1470,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'arrow' }"
-          title="箭头 (A)"
+          :title="t('screenshot.editor.toolArrow')"
           @click="activeTool = 'arrow'"
         >
           <i class="i-ri-arrow-right-up-line" />
@@ -1455,7 +1479,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'line' }"
-          title="直线 (L)"
+          :title="t('screenshot.editor.toolLine')"
           @click="activeTool = 'line'"
         >
           <i class="i-ri-subtract-line" />
@@ -1464,7 +1488,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'brush' }"
-          title="画笔 (P)"
+          :title="t('screenshot.editor.toolPen')"
           @click="activeTool = 'brush'"
         >
           <i class="i-ri-brush-line" />
@@ -1473,7 +1497,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'text' }"
-          title="文字 (T)"
+          :title="t('screenshot.editor.toolText')"
           @click="activeTool = 'text'"
         >
           <i class="i-ri-text" />
@@ -1482,7 +1506,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :class="{ active: activeTool === 'pixelate' }"
-          title="马赛克 (M)"
+          :title="t('screenshot.editor.toolMosaic')"
           @click="activeTool = 'pixelate'"
         >
           <i class="i-ri-blur-off-line" />
@@ -1495,7 +1519,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button style-toggle-btn"
           :class="{ active: styleCapsuleOpen }"
-          title="样式面板"
+          :title="t('screenshot.editor.stylePanel')"
           @click="styleCapsuleOpen = !styleCapsuleOpen"
         >
           <span class="color-indicator" :style="{ backgroundColor: currentStyle.color }" />
@@ -1532,7 +1556,11 @@ onBeforeUnmount(() => {
             :class="{ active: currentStyle.filled }"
             @click="currentStyle.filled = !currentStyle.filled"
           >
-            {{ currentStyle.filled ? '填充' : '描边' }}
+            {{
+              currentStyle.filled
+                ? t('screenshot.editor.styleFill')
+                : t('screenshot.editor.styleStroke')
+            }}
           </button>
         </div>
 
@@ -1543,7 +1571,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :disabled="!annotationDoc.canUndo"
-          title="撤销 (⌘Z)"
+          :title="t('screenshot.editor.undo', { shortcut: undoShortcut })"
           @click="undoAnnotation"
         >
           <i class="i-ri-arrow-go-back-line" />
@@ -1552,7 +1580,7 @@ onBeforeUnmount(() => {
           type="button"
           class="icon-button"
           :disabled="!annotationDoc.canRedo"
-          title="重做 (⌘Y)"
+          :title="t('screenshot.editor.redo', { shortcut: redoShortcut })"
           @click="redoAnnotation"
         >
           <i class="i-ri-arrow-go-forward-line" />
@@ -1561,7 +1589,12 @@ onBeforeUnmount(() => {
         <span class="separator" />
 
         <!-- Exit Edit Mode -->
-        <button type="button" class="icon-button" title="退出编辑模式" @click="endEdit">
+        <button
+          type="button"
+          class="icon-button"
+          :title="t('screenshot.editor.exitEdit')"
+          @click="endEdit"
+        >
           <i class="i-ri-close-circle-line" />
         </button>
       </template>
@@ -1573,7 +1606,7 @@ onBeforeUnmount(() => {
         type="button"
         class="icon-button"
         :disabled="!hasOutputTarget || busy"
-        :title="t('screenshot.editor.copy') || '复制到剪贴板'"
+        :title="t('screenshot.editor.copy')"
         @click="runOutput('copy')"
       >
         <i class="i-ri-file-copy-line" />
@@ -1583,7 +1616,7 @@ onBeforeUnmount(() => {
         type="button"
         class="icon-button"
         :disabled="!hasOutputTarget || busy"
-        :title="t('screenshot.editor.save') || '保存图片'"
+        :title="t('screenshot.editor.save')"
         @click="runOutput('save')"
       >
         <i class="i-ri-save-line" />
@@ -1592,7 +1625,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="icon-button danger-btn"
-        :title="t('screenshot.overlay.cancel') || '取消 (Esc)'"
+        :title="t('screenshot.overlay.cancel')"
         @click="cancel"
       >
         <i class="i-ri-close-line" />
@@ -1602,11 +1635,11 @@ onBeforeUnmount(() => {
         type="button"
         class="icon-button primary-confirm"
         :disabled="!hasOutputTarget || busy"
-        :title="t('screenshot.editor.done') || '完成并复制 (Enter)'"
+        :title="t('screenshot.editor.done')"
         @click="confirm"
       >
         <i class="i-ri-check-line" />
-        <span>完成</span>
+        <span>{{ t('screenshot.editor.done') }}</span>
       </button>
     </footer>
 

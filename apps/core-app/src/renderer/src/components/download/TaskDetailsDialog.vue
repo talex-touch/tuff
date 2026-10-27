@@ -157,7 +157,7 @@ function formatDate(date: Date | number | undefined): string {
           <span class="detail-value">{{ task.filename }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ t('download.status') }}:</span>
+          <span class="detail-label">{{ t('download.status_label') }}:</span>
           <TxTag :type="getStatusType(task.status)">
             {{ getStatusText(task.status) }}
           </TxTag>

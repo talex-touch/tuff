@@ -224,9 +224,8 @@ const railRows = computed<RailConversationRow[]>(() => {
 })
 
 function shortTitle(title: string): string {
-  if (!title) return '对话'
   const trimmed = title.trim()
-  if (!trimmed) return '对话'
+  if (!trimmed) return t('shell.projects.railUntitled')
 
   const emojiMatch = /^\p{Extended_Pictographic}/u.exec(trimmed)
   if (emojiMatch) return emojiMatch[0]

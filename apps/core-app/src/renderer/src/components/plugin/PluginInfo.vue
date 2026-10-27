@@ -537,7 +537,7 @@ async function handlePrimaryAction(): Promise<void> {
     }
   } catch (error) {
     pluginInfoLog.error(`Failed primary action "${action}" for plugin "${pluginName}":`, error)
-    toast.error(t('system.unknownError'))
+    toast.error(t('common.unknownError'))
   } finally {
     loadingStates.value.toggle = false
   }

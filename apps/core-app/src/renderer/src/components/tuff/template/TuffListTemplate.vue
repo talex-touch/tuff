@@ -1,6 +1,7 @@
 <script setup lang="ts" name="TuffListTemplate">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export interface TuffListGroup<TItem> {
   id: string
@@ -24,6 +25,7 @@ export interface TuffListTemplateProps<TItem> {
 }
 
 const props = defineProps<TuffListTemplateProps<unknown>>()
+const { t } = useI18n()
 
 const emits = defineEmits<{
   'toggle-group': [groupId: string, collapsed: boolean]
@@ -148,7 +150,7 @@ function onCollapseAfterLeave(el: Element) {
               variant="bare"
               native-type="button"
               class="TuffListTemplate-Toggle"
-              aria-label="Toggle group"
+              :aria-label="t('common.toggleGroup')"
               :aria-expanded="!isGroupCollapsed(group)"
               @click.stop="toggleGroup(group)"
             >
@@ -186,7 +188,7 @@ function onCollapseAfterLeave(el: Element) {
             </template>
           </template>
           <p v-else class="TuffListTemplate-EmptyGroup" role="status">
-            {{ group.emptyText ?? props.emptyText ?? 'No items' }}
+            {{ group.emptyText ?? props.emptyText ?? t('common.noItems') }}
           </p>
         </div>
       </Transition>

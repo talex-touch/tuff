@@ -174,7 +174,7 @@ const isLoading = computed(() => {
         v-if="thumbnail && !isLoading"
         :src="thumbnail"
         class="file-icon thumbnail"
-        alt="file thumbnail"
+        :alt="t('boxTag.fileThumbnailAlt')"
         @error="handlePreviewError"
       />
       <!-- Priority 2: File icon via tfile:// protocol -->
@@ -182,7 +182,7 @@ const isLoading = computed(() => {
         v-else-if="fileIconUrl && !isLoading"
         :src="fileIconUrl"
         class="file-icon"
-        alt="file icon"
+        :alt="t('boxTag.fileIconAlt')"
         @error="handlePreviewError"
       />
       <!-- Priority 3: Fallback icon -->

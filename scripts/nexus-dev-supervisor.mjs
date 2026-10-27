@@ -42,11 +42,11 @@
  *   --heap-mb <n>        V8 old-space ceiling for the child (default 4096)
  *   --rss-limit <mb>     proactive restart threshold for the whole tree (default 4600)
  *   --log <file>         log file (default /tmp/nexus-dev-<port>.log)
- *   --health-interval <s> health probe period (default 15)
+ *   --health-interval <s> health probe period (default 10)
  *   --liveness-path <path> static path used for the periodic check (default /favicon.ico)
  *   --deep-probe-every <n> render the app root once every n checks; 0 = startup only
- *                        (default 60 = one render every 15 min at the default cadence)
- *   --unhealthy-limit <n> consecutive failed probes before restart (default 4)
+ *                        (default 90 = one render every 15 min at the default cadence)
+ *   --unhealthy-limit <n> consecutive failed probes before restart (default 3)
  *   --startup-timeout <s> how long a fresh child may take to answer (default 300)
  *   --cloudflare-env <e> CLOUDFLARE_DEV_ENVIRONMENT (default preview)
  *   --once               supervise a single incarnation, then exit with its status
@@ -62,17 +62,42 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_LOG_BYTES = 32 * 1024 * 1024
 
 const opts = parseArgs(process.argv.slice(2))
+if (opts.help === true || opts.h === true) {
+  console.log(
+    [
+      'Usage: node scripts/nexus-dev-supervisor.mjs [options]',
+      '',
+      'Options:',
+      '  --app <dir>            app dir to run (default apps/nexus)',
+      '  --port <n>             listen port (default 3200)',
+      '  --heap-mb <n>          V8 old-space ceiling (default 4096)',
+      '  --rss-limit <mb>       proactive restart threshold (default 4600)',
+      '  --log <file>           log file',
+      '  --health-interval <s> health probe period (default 10)',
+      '  --unhealthy-limit <n>  consecutive failed probes before restart (default 3)',
+      '  --startup-timeout <s>  startup answer window (default 300)',
+      '  --cloudflare-env <e>   CLOUDFLARE_DEV_ENVIRONMENT (default preview)',
+      '  --liveness-path <path> static path for liveness (default /favicon.ico)',
+      '  --deep-probe-every <n> render app root every n checks (default 90)',
+      '  --once                 supervise a single incarnation then exit',
+      '  --help, -h             print this message',
+    ].join('\n'),
+  )
+  process.exit(0)
+}
 const appDir = resolve(opts.app ?? join(REPO_ROOT, 'apps/nexus'))
 const port = Number(opts.port ?? 3200)
 const heapMb = Number(opts['heap-mb'] ?? 4096)
 const rssLimitMb = Number(opts['rss-limit'] ?? 4600)
 const logFile = opts.log ?? `/tmp/nexus-dev-${port}.log`
-const healthIntervalS = Number(opts['health-interval'] ?? 15)
-const unhealthyLimit = Number(opts['unhealthy-limit'] ?? 4)
+const healthIntervalS = Number(opts['health-interval'] ?? 10)
+const unhealthyLimit = Number(opts['unhealthy-limit'] ?? 3)
 const startupTimeoutS = Number(opts['startup-timeout'] ?? 300)
 const cloudflareEnv = opts['cloudflare-env'] ?? 'preview'
 const livenessPath = opts['liveness-path'] ?? '/favicon.ico'
-const deepProbeEvery = Number(opts['deep-probe-every'] ?? 60)
+// 90 checks at the default 10s cadence is the same ~15 minute render budget the header
+// measures against; lowering the health interval must not multiply the RSS cost of `/`.
+const deepProbeEvery = Number(opts['deep-probe-every'] ?? 90)
 const once = opts.once === true
 
 const nuxtBin = join(appDir, 'node_modules/nuxt/bin/nuxt.mjs')
@@ -89,9 +114,7 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
       return
     stopRequested = true
     log(`received ${signal} — shutting down`)
-    if (child?.pid)
-      killTree(child.pid)
-    process.exit(0)
+    void (child?.pid ? killTree(child.pid) : Promise.resolve()).finally(() => process.exit(0))
   })
 }
 
@@ -186,7 +209,7 @@ function pidAlive(pid) {
 }
 
 /** SIGTERM then SIGKILL the child's whole process group. */
-function killTree(pid) {
+async function killTree(pid) {
   if (!pid || !pidAlive(pid))
     return
   for (const signal of ['SIGTERM', 'SIGKILL']) {
@@ -199,8 +222,10 @@ function killTree(pid) {
       }
       catch {}
     }
-    const deadline = Date.now() + 6000
-    while (pidAlive(pid) && Date.now() < deadline) execFileSync('sleep', ['0.2'])
+    // Poll instead of blocking the event loop: the supervisor still has to answer its own
+    // signals and keep the log draining while a dev server winds down.
+    const deadline = Date.now() + (signal === 'SIGTERM' ? 2_000 : 3_000)
+    while (pidAlive(pid) && Date.now() < deadline) await sleepMs(50)
   }
 }
 
@@ -262,7 +287,7 @@ function managedByAnotherSupervisor(pid) {
  * Free the port before listening. Only app-owned leftovers are killed — a foreign
  * listener is reported and retried instead of being taken down behind someone's back.
  */
-function reclaimPort() {
+async function reclaimPort() {
   for (const pid of listenersOnPort(port)) {
     if (managedByAnotherSupervisor(pid)) {
       return {
@@ -279,12 +304,12 @@ function reclaimPort() {
       }
     }
     log(`port ${port} held by stale listener pid ${pid} of this app — killing it`)
-    killTree(pid)
+    await killTree(pid)
   }
-  const deadline = Date.now() + 60_000
-  while (listenersOnPort(port).length && Date.now() < deadline) execFileSync('sleep', ['1'])
+  const deadline = Date.now() + 15_000
+  while (listenersOnPort(port).length && Date.now() < deadline) await sleepMs(100)
   if (listenersOnPort(port).length)
-    return { ok: false, code: 'busy', message: `port ${port} is still busy after 60s` }
+    return { ok: false, code: 'busy', message: `port ${port} is still busy after 15s` }
   return { ok: true }
 }
 
@@ -359,17 +384,37 @@ async function supervise(proc) {
   })
 
   const startupDeadline = Date.now() + startupTimeoutS * 1000
-  while (Date.now() < startupDeadline) {
+  // Warm-up is polled against the cheap liveness path. Rendering `/` on every poll competed
+  // with the very compilation it was waiting for, and each render costs RSS the server never
+  // returns (see the header) — so the app root is rendered once it answers, not before.
+  let live = false
+  while (!live && Date.now() < startupDeadline) {
     if (exit)
       return `exited during startup (${exit})`
-    if (await httpServing({ deep: true }))
-      break
-    await sleepMs(2000)
+    live = await livenessServing()
+    if (!live)
+      await sleepMs(1000)
   }
   if (exit)
     return `exited during startup (${exit})`
-  if (!(await httpServing({ deep: true })))
+  if (!live)
     return `never served within ${startupTimeoutS}s`
+
+  // A live port is not a working app: the root still has to render. Retried, because a render
+  // that lands mid-compile is a slow start rather than a broken server.
+  let rendered = false
+  while (!rendered && Date.now() < startupDeadline) {
+    if (exit)
+      return `exited during startup (${exit})`
+    rendered = await renderServing()
+    if (!rendered)
+      await sleepMs(1000)
+  }
+  if (!rendered)
+    return `answered ${livenessPath} but the app root never rendered within ${startupTimeoutS}s`
+  // The startup render counts as the first one: a child restarted near the threshold must not
+  // render `/` again on the very next probe.
+  checksSinceRender = 0
   log(`up on http://localhost:${port}/ (heap ceiling ${heapMb} MB, restart at ${rssLimitMb} MB RSS, liveness ${livenessPath} every ${healthIntervalS}s, app root every ${deepProbeEvery} checks)`)
 
   let unhealthy = 0
@@ -422,7 +467,7 @@ ensureTuffexReady()
 
 let attempt = 0
 while (!isStopping()) {
-  const claim = reclaimPort()
+  const claim = await reclaimPort()
   if (!claim.ok) {
     log(claim.message)
     // Somebody's supervisor already serves this port: Nexus is up, so `pnpm nexus:dev` has
@@ -459,7 +504,7 @@ while (!isStopping()) {
   pipeToLog(child.stderr)
 
   const reason = await supervise(child)
-  killTree(child.pid)
+  await killTree(child.pid)
   reapOrphans()
   child = null
   log(`restarting because ${reason}`)
@@ -467,14 +512,17 @@ while (!isStopping()) {
     process.exit(reason === 'shutdown' ? 0 : 1)
   if (isStopping())
     break
-  const backoff = Math.min(5 + attempt * 5, 60)
+  const backoff = Math.min(2 + attempt * 2, 20)
   await sleepMs(backoff * 1000)
 }
 
 function parseArgs(argv) {
   const parsed = {}
   for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]
+    const raw = argv[index]
+    // `-h` is advertised in the help text; without this it would fall through the `--` filter
+    // below and start supervision instead of printing anything.
+    const token = raw === '-h' ? '--help' : raw
     if (!token.startsWith('--'))
       continue
     const key = token.slice(2)

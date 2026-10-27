@@ -86,11 +86,11 @@ const stabilityClass = computed(() => {
     <div v-if="hasMetrics" class="test-result__section">
       <div class="test-result__meta-grid">
         <div v-if="result.provider" class="test-result__meta-item">
-          <span class="test-result__meta-label">Provider</span>
+          <span class="test-result__meta-label">{{ t('settings.intelligence.testProvider') }}</span>
           <span class="test-result__meta-value">{{ result.provider }}</span>
         </div>
         <div v-if="result.model" class="test-result__meta-item">
-          <span class="test-result__meta-label">Model</span>
+          <span class="test-result__meta-label">{{ t('settings.intelligence.testModel') }}</span>
           <span class="test-result__meta-value">{{ result.model }}</span>
         </div>
         <div v-if="result.latency" class="test-result__meta-item">
@@ -98,15 +98,21 @@ const stabilityClass = computed(() => {
           <span class="test-result__meta-value">{{ result.latency }}ms</span>
         </div>
         <div v-if="result.usage" class="test-result__meta-item">
-          <span class="test-result__meta-label">Prompt Tokens</span>
+          <span class="test-result__meta-label">{{
+            t('settings.intelligence.testPromptTokens')
+          }}</span>
           <span class="test-result__meta-value">{{ result.usage.promptTokens }}</span>
         </div>
         <div v-if="result.usage" class="test-result__meta-item">
-          <span class="test-result__meta-label">Completion Tokens</span>
+          <span class="test-result__meta-label">{{
+            t('settings.intelligence.testCompletionTokens')
+          }}</span>
           <span class="test-result__meta-value">{{ result.usage.completionTokens }}</span>
         </div>
         <div v-if="result.usage" class="test-result__meta-item">
-          <span class="test-result__meta-label">Total Tokens</span>
+          <span class="test-result__meta-label">{{
+            t('settings.intelligence.testTotalTokens')
+          }}</span>
           <span class="test-result__meta-value">{{ result.usage.totalTokens }}</span>
         </div>
         <div v-if="result.tokensPerSecond" class="test-result__meta-item">
@@ -148,12 +154,16 @@ const stabilityClass = computed(() => {
     </div>
 
     <div v-if="result.reasoning" class="test-result__section">
-      <div class="test-result__preview-label">Reasoning</div>
+      <div class="test-result__preview-label">
+        {{ t('settings.intelligence.testReasoning') }}
+      </div>
       <pre class="test-result__preview test-result__preview--reasoning">{{ result.reasoning }}</pre>
     </div>
 
     <div v-if="result.textPreview" class="test-result__section">
-      <div class="test-result__preview-label">Response</div>
+      <div class="test-result__preview-label">
+        {{ t('settings.intelligence.testResponse') }}
+      </div>
       <pre class="test-result__preview">{{ result.textPreview }}</pre>
     </div>
   </div>

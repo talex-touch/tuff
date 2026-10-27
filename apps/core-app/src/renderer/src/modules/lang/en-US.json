@@ -16,21 +16,53 @@
       "shadow": "Add shadow",
       "cancel": "Cancel capture",
       "confirm": "Confirm selection",
-      "resizeHandle": "Resize {handle}",
+      "resizeHandle": "Resize from the {handle}",
       "anchor": "Resize anchor point",
-      "gridNavHint": "Press 1-9 / Q-C to subdivide, Backspace to go back, Enter to confirm, Esc to exit"
+      "gridNavHint": "Press 1-9 / Q-C to subdivide, Backspace to go back, Enter to confirm, Esc to exit",
+      "selectionHint": "Drag to select an area · Space switches to window mode · G for grid positioning · Esc to exit",
+      "candidateUiElement": "UI element",
+      "candidateWindow": "Window",
+      "candidateLevel": "{level}/{levels} (Tab to switch)",
+      "selectionRegion": "Screenshot selection",
+      "loupeObjectMode": "Window detection",
+      "loupeRegionMode": "Region selection",
+      "handle": {
+        "n": "top edge",
+        "ne": "top-right corner",
+        "e": "right edge",
+        "se": "bottom-right corner",
+        "s": "bottom edge",
+        "sw": "bottom-left corner",
+        "w": "left edge",
+        "nw": "top-left corner"
+      }
     },
     "editor": {
       "title": "Screenshot",
       "tools": "Editing tools",
-      "annotation": "Annotation (coming next)",
+      "annotation": "Annotate (E)",
       "longCapture": "Long capture (unavailable)",
       "ocr": "OCR (unavailable)",
       "pin": "Pin image (unavailable)",
       "copy": "Copy",
       "save": "Save",
       "done": "Done",
-      "cancel": "Close editor"
+      "cancel": "Close editor",
+      "textPrompt": "Enter the text:",
+      "toolSelect": "Select / adjust (V)",
+      "toolRect": "Rectangle (R)",
+      "toolEllipse": "Ellipse (O)",
+      "toolArrow": "Arrow (A)",
+      "toolLine": "Line (L)",
+      "toolPen": "Brush (P)",
+      "toolText": "Text (T)",
+      "toolMosaic": "Pixelate (M)",
+      "stylePanel": "Style",
+      "styleFill": "Fill",
+      "styleStroke": "Stroke",
+      "undo": "Undo ({shortcut})",
+      "redo": "Redo ({shortcut})",
+      "exitEdit": "Exit editing"
     },
     "errors": {
       "overlay-unavailable": "Screenshot overlay is unavailable",
@@ -1152,6 +1184,10 @@
     "teamRemaining": "Team pool remaining",
     "loginTitle": "Sign-in required",
     "errorTitle": "Credits unavailable",
+    "errorSessionExpired": "Your session has expired. Sign in again, then refresh.",
+    "errorSignInRequired": "Sign in to see your AI credits.",
+    "errorHttp": "Couldn't load credits: {status} {statusText}",
+    "errorFetch": "Couldn't load credits.",
     "retry": "Retry",
     "billingNoticeTitle": "Billing notice"
   },
@@ -1354,7 +1390,26 @@
     "atomNav": "Navigation",
     "atomNavStyle": "Style",
     "atomCustomCss": "Custom CSS",
-    "atomCustomCssTip": "Applied to app layout. Unsafe directives are blocked."
+    "atomCustomCssTip": "Applied to app layout. Unsafe directives are blocked.",
+    "canvasEditor": {
+      "reset": "Reset",
+      "canvas": "Canvas",
+      "enabled": "Enabled",
+      "columns": "Columns",
+      "rowHeight": "Row height",
+      "gap": "Gap",
+      "item": "Item",
+      "visible": "Visible",
+      "area": {
+        "logo": "Logo",
+        "input": "Input",
+        "tags": "Tags",
+        "actions": "Actions",
+        "results": "Results",
+        "addon": "Add-on",
+        "footer": "Footer"
+      }
+    }
   },
   "windowSection": {
     "title": "Window Effects",
@@ -1640,7 +1695,8 @@
       "importSuccess": "Successfully imported {count} cookie(s) for: {domains}",
       "importEmpty": "No valid cookies found for the selected domains in Chrome",
       "importFailed": "Import failed: {error}",
-      "tip": "After importing, opening these websites in Tuff tabs will immediately reflect your signed-in state."
+      "tip": "After importing, opening these websites in Tuff tabs will immediately reflect your signed-in state.",
+      "removeDomain": "Stop importing cookies for {domain}"
     },
     "tabs": "Tabs ({count})",
     "folderPath": "Folder path",
@@ -1779,7 +1835,8 @@
       "sessionConflict": "This session has a conflicting branch and cannot be continued safely.",
       "sessionBusy": "This native session is already running.",
       "renameFailed": "Project name must contain 1–80 characters.",
-      "actionFailed": "The project action could not be completed."
+      "actionFailed": "The project action could not be completed.",
+      "railUntitled": "Chat"
     }
   },
   "voiceInsights": {
@@ -2495,6 +2552,13 @@
       "dictationFinishing": "Recognizing",
       "dictationInserted": "Dictated text inserted",
       "modelPill": "Choose model and reasoning effort, current: {current}"
+    },
+    "toolCall": {
+      "pending": "Queued",
+      "running": "Running",
+      "done": "Done",
+      "error": "Failed",
+      "input": "Input"
     }
   },
   "settingsNav": {
@@ -3070,6 +3134,8 @@
       "approved": "Approved",
       "pending": "Pending",
       "draft": "Draft",
+      "rejected": "Rejected",
+      "installs": "{count} install | {count} installs",
       "empty": "No releases yet. Upload a .tpex package to initialize the first version.",
       "details": "Details",
       "submitReview": "Submit Review",
@@ -3098,8 +3164,21 @@
         "readmeRequired": "README is required.",
         "versionRequired": "Version is required.",
         "changelogRequired": "Changelog is required."
+      },
+      "timelineActors": {
+        "owner": "Publisher",
+        "admin": "Administrator",
+        "system": "System"
+      },
+      "timelineEvents": {
+        "pluginCreated": "Created this asset",
+        "pluginStatusChanged": "Asset status changed",
+        "versionCreated": "Created version v{version}",
+        "versionStatusChanged": "Version v{version} status changed",
+        "versionReedited": "Version v{version} was re-edited and re-submitted"
       }
-    }
+    },
+    "official": "Official"
   },
   "auth": {
     "loginResumePrompt": {
@@ -3525,7 +3604,9 @@
     },
     "issues": {
       "title": "Plugin Load Issues",
-      "source": "Source"
+      "source": "Source",
+      "categoryMissingTitle": "Plugin \"{name}\" has no category field and was not started",
+      "categoryMissingDesc": "Add \"category\": \"utilities\" to manifest.json (required from sdkapi 260114)."
     },
     "overview": {
       "environment": "Environment Support",
@@ -3750,7 +3831,17 @@
     },
     "logs": {
       "historyTitle": "History",
-      "historyEmpty": "No historical logs yet"
+      "historyEmpty": "No historical logs yet",
+      "openFile": "Open log file",
+      "openDirectory": "Open log folder",
+      "liveLabel": "Live",
+      "liveStreamLabel": "Live Stream",
+      "noLogs": "No log output yet",
+      "newLogs": "New live logs",
+      "toolbar": {
+        "pause": "Pause",
+        "resume": "Resume"
+      }
     },
     "uninstall": {
       "confirmTitle": "Uninstall Plugin",
@@ -3974,7 +4065,9 @@
       "hotkey": "Ask Talex AI",
       "suggestionTitle": "Not finding what you need?",
       "suggestionDesc": "Ask Talex AI to dig deeper, summarize results, or provide next steps based on your query.",
-      "suggestionAction": "Ask Talex AI"
+      "suggestionAction": "Ask Talex AI",
+      "userLabel": "You",
+      "assistantLabel": "AI"
     },
     "sourceTypes": {
       "application": "Application",
@@ -4223,6 +4316,26 @@
       "stay": "Stay"
     }
   },
+  "startup": {
+    "overlay": {
+      "bootstrap": "Bootstrapping Tuff renderer...",
+      "loadingLocale": "Loading localization resources...",
+      "createApp": "Creating Vue application instance",
+      "registerPlugins": "Registering plugins and global modules",
+      "registerMainWindow": "Registering main window modules",
+      "mount": "Mounting renderer root container",
+      "mounted": "Renderer shell mounted",
+      "handshake": "Requesting startup handshake...",
+      "handshakeDone": "Startup handshake acknowledged",
+      "cachedMetadata": "Using cached startup metadata",
+      "sdk": "Initializing Touch SDK and storage transport",
+      "sentry": "Initializing Sentry...",
+      "warmup": "Running renderer warmup tasks",
+      "warmupDone": "Renderer warmup completed",
+      "ready": "Tuff is ready.",
+      "failed": "Renderer initialization failed. Check console output."
+    }
+  },
   "router": {
     "home": "Home",
     "browser": "Browser",
@@ -4287,7 +4400,9 @@
     "deepMatchContent": "Content Match",
     "deepMatchCode": "Code Match",
     "deepMatchScore": "Relevance {score}%",
-    "deepMatchNavigationUnsupported": "This app cannot jump to the matching position. Choose a supported editor for lines or Skim for PDF pages."
+    "deepMatchNavigationUnsupported": "This app cannot jump to the matching position. Choose a supported editor for lines or Skim for PDF pages.",
+    "bundleId": "Bundle ID",
+    "version": "Version"
   },
   "download": {
     "migration": {
@@ -4443,7 +4558,9 @@
     "priority_background": "Background",
     "duration_seconds": "{count}s",
     "duration_minutes": "{count}min",
+    "duration_minutes_seconds": "{minutes}min {seconds}s",
     "duration_hours": "{count}hr",
+    "duration_hours_minutes": "{hours}hr {minutes}min",
     "error": {
       "network": "Network connection failed",
       "timeout": "Download timeout",
@@ -4481,7 +4598,9 @@
     "minutes_ago": "{count} minutes ago",
     "hours_ago": "{count} hours ago",
     "days_ago": "{count} days ago",
-    "module_unknown": "Unknown Module"
+    "module_unknown": "Unknown Module",
+    "status_label": "Status",
+    "view_logs": "View logs"
   },
   "releaseNotes": {
     "title": "What's Changed",
@@ -4567,6 +4686,7 @@
     "no_release_notes": "No release notes available",
     "download_started": "Update download started",
     "download_failed_with_reason": "Download failed: {reason}",
+    "request_timed_out": "The request timed out",
     "remind_later_success": "We'll remind you again in {hours} hours.",
     "remind_later_failed": "Failed to set a reminder. Please try again later.",
     "ignore_version_success": "Version ignored",
@@ -4756,7 +4876,8 @@
       "toggleFailed": "Toggle failed",
       "mcp": {
         "probeUnavailable": "Server unavailable",
-        "probeUnknownError": "Unknown error"
+        "probeUnknownError": "Unknown error",
+        "notConfigured": "MCP server “{name}” is no longer configured. Refresh and try again."
       },
       "host": {
         "label": "Local MCP server",
@@ -5691,6 +5812,13 @@
       "testLatency": "Latency",
       "testTokenSpeed": "Token speed",
       "testStabilityAnalysis": "Stability analysis",
+      "testProvider": "Provider",
+      "testModel": "Model",
+      "testPromptTokens": "Prompt tokens",
+      "testCompletionTokens": "Completion tokens",
+      "testTotalTokens": "Total tokens",
+      "testReasoning": "Reasoning",
+      "testResponse": "Response",
       "userMessageLabel": "User message",
       "userMessagePlaceholder": "Hello, can you summarize this...",
       "promptVariablesLabel": "Prompt variables (JSON)",
@@ -5920,6 +6048,8 @@
       "customCompatible": "Custom Compatible",
       "compatible": "Compatible",
       "providerName": "Provider Name",
+      "providerActionsLabel": "Provider actions",
+      "toggleProvider": "Toggle {name}",
       "providerNamePlaceholder": "e.g. My Custom AI",
       "channelPageTitle": "Channel Manager",
       "channelPageDesc": "Configure AI provider settings and parameters",
@@ -6121,6 +6251,34 @@
           "title": "GitHub Documentation",
           "desc": "Browse official guides and examples."
         }
+      },
+      "providerCopyName": "{name} Copy",
+      "providerListLabel": "AI provider list",
+      "builtinPromptTemplate": {
+        "assistant_default": {
+          "name": "General assistant",
+          "description": "For everyday conversation and general questions"
+        },
+        "ocr_assistant": {
+          "name": "OCR assistant",
+          "description": "Reads the text in images and returns it as structured output"
+        },
+        "translation_assistant": {
+          "name": "Translation assistant",
+          "description": "Professional translation between languages"
+        },
+        "code_assistant": {
+          "name": "Coding assistant",
+          "description": "Answers programming questions and writes code"
+        },
+        "data_analyst": {
+          "name": "Data analyst",
+          "description": "Data analysis and business insight"
+        },
+        "creative_writer": {
+          "name": "Creative writing assistant",
+          "description": "Creative writing and content creation"
+        }
       }
     },
     "settingUpdate": {
@@ -6280,7 +6438,8 @@
         "showMore": "Show more",
         "showLess": "Show less"
       },
-      "exportEvidence": "Export diagnostics"
+      "exportEvidence": "Export diagnostics",
+      "unknown": "Unknown"
     },
     "updateModal": {
       "title": "New Version Available",
@@ -6489,7 +6648,10 @@
       "copyResult": "Copy Result",
       "expression": "Expression",
       "details": "Details",
-      "conversion": "{from} → {to}"
+      "conversion": "{from} → {to}",
+      "qrValueLabel": "SVG Data URL",
+      "qrAlt": "QR Code",
+      "poweredBy": "Powered by {brand}"
     },
     "basic": {
       "subtitle": "Quick math",
@@ -6742,12 +6904,16 @@
   },
   "boxTag": {
     "image": "Image",
+    "imageAlt": "Clipboard image",
+    "fileIconAlt": "File icon",
+    "fileThumbnailAlt": "File thumbnail",
     "imageCount": "{count} images",
     "charCount": "{count} chars total",
     "preparingFiles": "Preparing files…"
   },
   "common": {
     "imagePreviewAlt": "Image preview",
+    "imagePreviewFailed": "This image could not be loaded",
     "wallpaperPreviewAlt": "Custom background preview",
     "loadMore": "Load more",
     "copy": "Copy",
@@ -6778,7 +6944,17 @@
     "hours": "hr",
     "import": "Import",
     "comingSoon": "Coming Soon",
-    "clearShortcut": "Clear shortcut"
+    "clearShortcut": "Clear shortcut",
+    "confirmAndClose": "Confirm and close dialog",
+    "imageFileFilter": "Images",
+    "unknownError": "Unknown error",
+    "clear": "Clear",
+    "export": "Export",
+    "back": "Back",
+    "asideLandmark": "Sidebar",
+    "clearSearch": "Clear search",
+    "noItems": "Nothing here yet",
+    "toggleGroup": "Toggle group"
   },
   "form": {
     "field": "Field",
@@ -6933,7 +7109,10 @@
     "syncDeviceEvictedBodyWithNames": "Removed {count} device(s): {devices}.",
     "syncDeviceListSeparator": ", ",
     "syncDeviceListMore": " and others",
-    "syncDeviceUnknown": "Unknown device"
+    "syncDeviceUnknown": "Unknown device",
+    "defaultTitle": "Notification",
+    "dialogIconPlaceholder": "Tip",
+    "pluginIconAlt": "Plugin"
   },
   "assistant": {
     "voicePanel": {
@@ -7139,7 +7318,8 @@
       "configError": "Setup needed",
       "nexusOfficial": "Official",
       "nexusAuthReady": "Nexus auth ready",
-      "nexusAuthRequired": "Nexus sign-in required"
+      "nexusAuthRequired": "Nexus sign-in required",
+      "selectProvider": "Select {name}"
     },
     "status": {
       "enabled": "Enabled",
@@ -7671,6 +7851,9 @@
       "validationFieldReason": "{field}: {reason}",
       "validationFieldReasonAtStep": "Step {index} {field}: {reason}",
       "notRunCount": "Not Run Steps"
+    },
+    "info": {
+      "configurationPanel": "Configuration panel"
     }
   },
   "flow": {
@@ -7786,6 +7969,8 @@
       }
     },
     "actionUnsupported": "This action isn't supported yet",
+    "itemIconAlt": "Item icon",
+    "openerIconAlt": "Opener icon",
     "opacity": "Opacity",
     "debug": "Debug",
     "alwaysOnTop": "Always on top",
@@ -7806,9 +7991,11 @@
     "imageTranslateFailed": "Image translation failed",
     "detached": "Detached to separate window",
     "detachFailed": "Detach failed",
+    "detachedDefaultTitle": "Detached feature",
     "omniPanel": {
       "title": "OmniPanel",
       "source": "Source",
+      "sourceBuiltin": "Built-in",
       "emptySelection": "No selected text was captured. Select text in any app, then trigger OmniPanel.",
       "translate": "Quick Translate",
       "translateDesc": "Send selected text to a translation page",
@@ -7875,6 +8062,7 @@
     },
     "actions": {
       "title": "Actions",
+      "fallbackItemTitle": "Quick Actions",
       "close": "Close",
       "pin": "Pin to Recommendations",
       "unpin": "Unpin",
@@ -7993,7 +8181,9 @@
         "title": "Videos",
         "subtitle": "Open the Videos folder"
       }
-    }
+    },
+    "previewCopied": "Result copied",
+    "copyFailed": "Copy failed"
   },
   "shortcuts": {
     "palette": "Command palette",

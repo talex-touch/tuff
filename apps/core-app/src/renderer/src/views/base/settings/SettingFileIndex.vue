@@ -525,7 +525,7 @@ function formatSourceDiagnosticDescription(source: IndexedSourceDiagnostics): st
     error: source.health.lastError,
     reason: source.health.reason,
     issue: source.admissionIssues?.[0] ?? source.lifecycleIssues?.[0] ?? '',
-    time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
+    time: formatIndexingSourceTimestamp(source.health.lastIndexedAt, locale.value),
     roots: summarizeIndexingSourceRoots(source)
   })
 }
@@ -1201,7 +1201,7 @@ function isBrowserBookmarksMaintenanceEnabled(action: IndexedSourceMaintenanceAc
 }
 
 function formatSourceProgress(source: IndexedSourceDiagnostics): string | null {
-  const chip = resolveIndexingSourceProgressChip(source)
+  const chip = resolveIndexingSourceProgressChip(source, locale.value)
   return chip ? t(chip.labelKey, chip.values) : null
 }
 
@@ -1210,7 +1210,7 @@ function getSourceProgressTone(source: IndexedSourceDiagnostics): string {
 }
 
 function formatSourceRecovery(source: IndexedSourceDiagnostics): string | null {
-  const chip = resolveIndexingSourceRecoveryChip(source)
+  const chip = resolveIndexingSourceRecoveryChip(source, locale.value)
   return chip ? t(chip.labelKey, chip.values) : null
 }
 
@@ -1803,7 +1803,7 @@ async function triggerRebuild() {
               }}
             </span>
             <span
-              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic)"
+              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic, locale)"
               :key="task.id"
               class="source-diagnostic-chip source-diagnostic-task-chip"
               :class="`source-diagnostic-task-chip--${task.tone}`"
@@ -1914,7 +1914,7 @@ async function triggerRebuild() {
           </div>
           <div class="source-diagnostics-row source-diagnostics-row--dialog">
             <span
-              v-for="gate in resolveIndexingSourceRunGateChips(selectedSourceDiagnostic)"
+              v-for="gate in resolveIndexingSourceRunGateChips(selectedSourceDiagnostic, 3, locale)"
               :key="gate.id"
               class="source-diagnostic-chip source-history-chip"
               :class="`source-diagnostic-task-chip--${gate.tone}`"
@@ -1935,7 +1935,11 @@ async function triggerRebuild() {
             class="source-diagnostics-row source-diagnostics-row--dialog source-recent-tasks-row"
           >
             <span
-              v-for="task in resolveIndexingSourceRecentTaskChips(selectedSourceDiagnostic)"
+              v-for="task in resolveIndexingSourceRecentTaskChips(
+                selectedSourceDiagnostic,
+                3,
+                locale
+              )"
               :key="task.id"
               class="source-diagnostic-chip source-history-chip source-recent-task-chip"
               :class="`source-diagnostic-task-chip--${task.tone}`"

@@ -517,16 +517,6 @@ export class GithubUpdateProvider extends UpdateProvider {
     return new Date(release.published_at)
   }
 
-  // 格式化发布日期
-  formatReleaseDate(release: GitHubRelease): string {
-    const date = this.getReleaseDate(release)
-    return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
-
   // 检查错误是否可重试
   private isRetryableError(error: unknown): boolean {
     if (this.isRequestTimeout(error)) {

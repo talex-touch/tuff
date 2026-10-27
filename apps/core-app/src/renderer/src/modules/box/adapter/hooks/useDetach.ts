@@ -86,7 +86,8 @@ function resolveDetachedContentBounds(
 export function buildDetachedFeatureConfig(
   item: TuffItem,
   query: string,
-  sourceBounds?: { x: number; y: number; width: number; height: number } | null
+  sourceBounds?: { x: number; y: number; width: number; height: number } | null,
+  fallbackTitle = ''
 ): { config: DivisionBoxConfig; isWidget: boolean } | null {
   const interaction = item.meta?.interaction as DetachedFeatureInteraction | undefined
   const showInput =
@@ -111,7 +112,7 @@ export function buildDetachedFeatureConfig(
       url: isWidget
         ? buildDetachedFeatureUrl(item, query, pluginId)
         : `plugin://${pluginId}/${path}`,
-      title: item.render?.basic?.title || 'Detached Item',
+      title: item.render?.basic?.title || fallbackTitle,
       icon: resolveIcon(item),
       size: 'medium',
       keepAlive: true,
@@ -196,7 +197,8 @@ export function useDetach(options: UseDetachOptions) {
       const detached = buildDetachedFeatureConfig(
         item,
         searchVal.value,
-        await getCurrentCoreBoxBounds()
+        await getCurrentCoreBoxBounds(),
+        t('corebox.detachedDefaultTitle')
       )
       if (!detached) {
         return

@@ -1,3 +1,4 @@
+import { i18nResolver } from '@talex-touch/utils/i18n'
 import { nextTick } from 'vue'
 import type { I18n } from 'vue-i18n'
 import { createI18n } from 'vue-i18n'
@@ -44,6 +45,9 @@ export async function setupI18n(
  */
 export function setI18nLanguage(i18n: I18nInstance, locale: string): void {
   i18n.global.locale.value = locale
+  // Main and plugins report some text as `$i18n:` markers (plugin issues, dev-server state), and
+  // the resolver that words them keeps a locale of its own, English until told otherwise.
+  i18nResolver.setLocale(locale)
 
   /**
    * NOTE:
@@ -94,15 +98,19 @@ function fillLoadedMessage(template: string, params?: Record<string, unknown>): 
  *
  * Returns null when no loaded bundle carries the key, which is the one case a caller has to decide
  * about itself.
+ *
+ * `preferredLocale` is read when there is no active locale yet, so a window still booting can name
+ * the language it should speak in the meantime.
  */
 export function resolveLoadedMessageText(
   key: string,
-  params?: Record<string, unknown>
+  params?: Record<string, unknown>,
+  preferredLocale?: string
 ): string | null {
   if (!key) return null
 
   const activeLocale = getGlobalI18nInstance()?.global?.locale?.value
-  const candidates = [activeLocale, ...Object.keys(localeMessages)]
+  const candidates = [activeLocale, preferredLocale, ...Object.keys(localeMessages)]
   const tried = new Set<string>()
 
   for (const locale of candidates) {

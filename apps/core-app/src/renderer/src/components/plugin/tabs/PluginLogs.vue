@@ -59,26 +59,22 @@ const {
   reset: resetSessions
 } = usePluginLogSessions(transport)
 
-const withFallback = (key: string, fallback: string) =>
-  computed(() => {
-    const value = t(key)
-    return value === key ? fallback : value
-  })
-
-const historyTitle = withFallback('plugin.logs.historyTitle', '历史记录')
-const historyActionLabel = withFallback('plugin.logs.toolbar.history', '历史记录')
-const refreshLabel = withFallback('plugin.logs.refresh', '刷新')
-const openFileLabel = withFallback('plugin.logs.openFile', '打开日志文件')
-const openDirectoryLabel = withFallback('plugin.logs.openDirectory', '打开日志目录')
-const liveLabel = withFallback('plugin.logs.liveLabel', '实时')
-const liveStreamLabel = withFallback('plugin.logs.liveStreamLabel', 'Live Stream')
+const historyTitle = computed(() => t('plugin.logs.historyTitle'))
+const refreshLabel = computed(() => t('common.refresh'))
+const openFileLabel = computed(() => t('plugin.logs.openFile'))
+const openDirectoryLabel = computed(() => t('plugin.logs.openDirectory'))
+const liveLabel = computed(() => t('plugin.logs.liveLabel'))
+const liveStreamLabel = computed(() => t('plugin.logs.liveStreamLabel'))
+const liveToggleLabel = computed(() =>
+  isLivePaused.value ? t('plugin.logs.toolbar.resume') : t('plugin.logs.toolbar.pause')
+)
 const liveClockLabel = computed(() => new Date(liveClock.value).toLocaleTimeString(locale.value))
-const loadingLabel = withFallback('common.loading', '加载中…')
-const emptyLabel = withFallback('plugin.logs.noLogs', '暂无日志输出')
-const historyEmpty = withFallback('plugin.logs.historyEmpty', '暂无历史日志')
-const pendingUpdatesLabel = withFallback('plugin.logs.newLogs', '有新的实时日志')
-const clearLabel = withFallback('common.clear', '清空')
-const exportLabel = withFallback('common.export', '导出')
+const loadingLabel = computed(() => t('common.loading'))
+const emptyLabel = computed(() => t('plugin.logs.noLogs'))
+const historyEmpty = computed(() => t('plugin.logs.historyEmpty'))
+const pendingUpdatesLabel = computed(() => t('plugin.logs.newLogs'))
+const clearLabel = computed(() => t('common.clear'))
+const exportLabel = computed(() => t('common.export'))
 
 const isLiveStreaming = computed(() => isViewingLiveSession.value && !isLivePaused.value)
 
@@ -371,11 +367,12 @@ defineExpose({
         </div>
       </div>
       <div class="terminal-toolbar">
-        <TxTooltip :content="isLivePaused ? 'RESUME' : 'PAUSE'" :anchor="toolbarTooltipAnchor">
+        <TxTooltip :content="liveToggleLabel" :anchor="toolbarTooltipAnchor">
           <TxButton
             variant="bare"
             class="terminal-icon terminal-icon-live"
             native-type="button"
+            :aria-label="liveToggleLabel"
             :disabled="!isViewingLiveSession"
             :class="{ active: isLiveStreaming, paused: isViewingLiveSession && isLivePaused }"
             @click="toggleLiveStream"
@@ -393,6 +390,7 @@ defineExpose({
             variant="bare"
             class="terminal-icon terminal-icon-new"
             native-type="button"
+            :aria-label="pendingUpdatesLabel"
             @click="jumpToLive"
           >
             <i class="i-ri-sparkling-fill" />
@@ -404,6 +402,7 @@ defineExpose({
             variant="bare"
             class="terminal-icon"
             native-type="button"
+            :aria-label="clearLabel"
             @click="clearTerminal"
           >
             <i class="i-ri-delete-bin-6-line" />
@@ -415,6 +414,7 @@ defineExpose({
             variant="bare"
             class="terminal-icon"
             native-type="button"
+            :aria-label="exportLabel"
             :disabled="!terminalLogs.length"
             @click="exportTerminalLogs"
           >
@@ -423,11 +423,12 @@ defineExpose({
         </TxTooltip>
       </div>
       <div class="toolbar-actions">
-        <TxTooltip :content="historyActionLabel" :anchor="toolbarTooltipAnchor">
+        <TxTooltip :content="historyTitle" :anchor="toolbarTooltipAnchor">
           <TxButton
             variant="bare"
             class="toolbar-icon"
             native-type="button"
+            :aria-label="historyTitle"
             @click="openHistoryDrawer"
           >
             <i class="i-ri-history-line" />
@@ -439,6 +440,7 @@ defineExpose({
             variant="bare"
             class="toolbar-icon"
             native-type="button"
+            :aria-label="refreshLabel"
             @click="handleManualRefresh"
           >
             <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
@@ -450,6 +452,7 @@ defineExpose({
             variant="bare"
             class="toolbar-icon"
             native-type="button"
+            :aria-label="openFileLabel"
             :disabled="!canOpenLogFile"
             @click="openSelectedSessionFile"
           >
@@ -462,6 +465,7 @@ defineExpose({
             variant="bare"
             class="toolbar-icon"
             native-type="button"
+            :aria-label="openDirectoryLabel"
             :disabled="!canOpenLogDirectory"
             @click="openLogDirectory"
           >

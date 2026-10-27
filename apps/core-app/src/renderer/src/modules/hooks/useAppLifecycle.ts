@@ -6,6 +6,7 @@ import {
 } from '@talex-touch/utils/preload'
 import { initializeRendererStorage, isCoreBox } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { useI18nText } from '~/modules/lang'
 import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -22,6 +23,8 @@ const lifecycleLog = createRendererLogger('useAppLifecycle')
  * Handles complete application initialization and post-initialization tasks.
  */
 export function useAppLifecycle() {
+  const { t } = useI18nText()
+
   /**
    * Execute main window tasks.
    * Skips update check on first launch before onboarding is complete.
@@ -68,18 +71,18 @@ export function useAppLifecycle() {
     try {
       const { startupInfo, ensureStartupContext } = useStartupInfo()
       if (!startupInfo.value) {
-        preloadDebugStep('Requesting startup handshake...', 0.05)
+        preloadDebugStep(t('startup.overlay.handshake'), 0.05)
         await ensureStartupContext()
-        preloadDebugStep('Startup handshake acknowledged', 0.05)
+        preloadDebugStep(t('startup.overlay.handshakeDone'), 0.05)
       } else {
-        preloadDebugStep('Using cached startup metadata', 0.02)
+        preloadDebugStep(t('startup.overlay.cachedMetadata'), 0.02)
       }
 
-      preloadDebugStep('Initializing Touch SDK and storage transport', 0.05)
+      preloadDebugStep(t('startup.overlay.sdk'), 0.05)
       const transport = useTuffTransport()
       initializeRendererStorage(transport)
 
-      preloadDebugStep('Initializing Sentry...', 0.01)
+      preloadDebugStep(t('startup.overlay.sentry'), 0.01)
       void (async () => {
         try {
           const { initSentryRenderer } = await import('~/modules/sentry/sentry-renderer')
@@ -99,18 +102,18 @@ export function useAppLifecycle() {
         }
       })()
 
-      preloadDebugStep('Running renderer warmup tasks', 0.05)
+      preloadDebugStep(t('startup.overlay.warmup'), 0.05)
       await onReady()
 
-      preloadDebugStep('Renderer warmup completed', 0.06)
+      preloadDebugStep(t('startup.overlay.warmupDone'), 0.06)
       preloadState('finish')
-      preloadLog('Tuff is ready.')
+      preloadLog(t('startup.overlay.ready'))
       preloadRemoveOverlay()
 
       await start()
     } catch (error) {
       lifecycleLog.error('Initialization failed', error)
-      preloadLog('Renderer initialization failed. Check console output.')
+      preloadLog(t('startup.overlay.failed'))
     }
   }
 

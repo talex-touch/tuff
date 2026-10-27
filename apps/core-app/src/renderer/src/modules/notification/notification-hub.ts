@@ -9,6 +9,7 @@ import type {
 } from '@talex-touch/utils/transport/events'
 import { NotificationEvents } from '@talex-touch/utils/transport/events'
 import { toast } from 'vue-sonner'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import {
   blowMention,
   forDialogMention,
@@ -97,9 +98,14 @@ function mergeRequest(
   }
 }
 
+/** The title a notification sent without one is shown under. */
+function defaultTitle(): string {
+  return useI18nText().t('notifications.defaultTitle')
+}
+
 async function showDialog(request: NotificationRequest, transport: ITuffTransport, id: string) {
   if (!request.title) {
-    request.title = 'Notification'
+    request.title = defaultTitle()
   }
   const buttons = request.actions?.map((action) => ({
     content: action.label,
@@ -117,7 +123,7 @@ async function showDialog(request: NotificationRequest, transport: ITuffTranspor
 }
 
 async function showMention(request: NotificationRequest, transport: ITuffTransport, id: string) {
-  const title = request.title ?? 'Notification'
+  const title = request.title ?? defaultTitle()
   const buttons = request.actions?.map((action) => ({
     content: action.label,
     type: request.level ?? 'info',
@@ -134,12 +140,12 @@ async function showMention(request: NotificationRequest, transport: ITuffTranspo
 }
 
 async function showBlow(request: NotificationRequest) {
-  const title = request.title ?? 'Notification'
+  const title = request.title ?? defaultTitle()
   await blowMention(title, request.message)
 }
 
 async function showPopper(request: NotificationRequest) {
-  const title = request.title ?? 'Notification'
+  const title = request.title ?? defaultTitle()
   await popperMention(title, request.message)
 }
 

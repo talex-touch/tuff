@@ -126,14 +126,14 @@ function handleInstall(): void {
     :class="{ 'official-provider': item.providerTrustLevel === 'official' }"
     role="button"
     tabindex="0"
-    :aria-label="t('store.openPluginDetails', { name: item.name || 'Unnamed Plugin' })"
+    :aria-label="t('store.openPluginDetails', { name: item.name || t('store.unnamedItem') })"
     @click="handleOpen"
     @keydown="handleOpenKeydown"
   >
     <div class="StoreItemCard-Inner">
       <TxPluginMetaHeader
         class="StoreItemCard-MetaHeader"
-        :title="item.name || 'Unnamed Plugin'"
+        :title="item.name || t('store.unnamedItem')"
         :description="null"
         :meta-items="[]"
         :icon-framed="false"

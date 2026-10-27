@@ -4,6 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 
 interface Props {
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
   render: undefined
 })
 
+const { t } = useI18n()
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 
@@ -89,10 +91,10 @@ provide('destroy', destroy)
           variant="flat"
           type="primary"
           block
-          aria-label="Confirm and close dialog"
+          :aria-label="t('common.confirmAndClose')"
           @click="destroy"
         >
-          Confirm
+          {{ t('common.confirm') }}
         </TxButton>
       </template>
     </div>

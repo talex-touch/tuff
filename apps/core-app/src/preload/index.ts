@@ -1,3 +1,4 @@
+import type { AppLocale } from '@talex-touch/utils/i18n/locale'
 import type { LoadingEvent, LoadingMode, StartupContext } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
 /**
@@ -16,9 +17,14 @@ import type { StartupInfo } from '../shared/types/startup-info'
  */
 import '@sentry/electron/preload'
 import { getBooleanEnv, hasWindow } from '@talex-touch/utils/env'
+import { DEFAULT_APP_LOCALE } from '@talex-touch/utils/i18n/locale'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'
-import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
+import {
+  parseWindowArgs,
+  parseWindowLocale,
+  resolveRendererWindowMode
+} from '@talex-touch/utils/renderer/window-role'
 import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents, installTransportPortHandoff } from '@talex-touch/utils/transport'
 import appLogoSvgRaw from '../../public/logo.svg?raw'
@@ -91,7 +97,8 @@ function resolvePreloadStartupContext(startupInfo: StartupInfo | null): StartupC
     windowMode: resolveRendererWindowMode({
       ...role,
       metaOverlay
-    })
+    }),
+    locale: parseWindowLocale(process.argv)
   }
 }
 
@@ -105,6 +112,17 @@ const startupContextPromise = requestStartupInfo().then((startupInfo) => {
 })
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
+
+/**
+ * What the overlay says until the renderer takes over. The renderer's catalogs are ~370 KB each and
+ * this script runs in every window, so these two lines live here instead; keep them in step with
+ * the `startup.overlay` captions there.
+ */
+const PRELOAD_CAPTIONS: Record<AppLocale, { initial: string; domReady: string }> = {
+  'zh-CN': { initial: '正在启动 Tuff…', domReady: '正在初始化渲染模块…' },
+  'en-US': { initial: 'Initializing Tuff...', domReady: 'Renderer initializing modules...' }
+}
+const preloadCaptions = PRELOAD_CAPTIONS[parseWindowLocale(process.argv) ?? DEFAULT_APP_LOCALE]
 
 function parsePositiveIntegerEnv(name: string): number | undefined {
   const raw = process.env[name]?.trim()
@@ -466,7 +484,7 @@ function useLoading(options: LoadingOptions) {
 
   const messageEl = document.createElement('div')
   messageEl.className = `${className}__message`
-  messageEl.textContent = 'Initializing Talex Touch...'
+  messageEl.textContent = preloadCaptions.initial
 
   container.append(brand, progressBar, messageEl)
 
@@ -813,7 +831,7 @@ window.addEventListener('message', (ev) => {
 })
 
 window.addEventListener('DOMContentLoaded', () => {
-  updateMessage('Renderer initializing modules...')
+  updateMessage(preloadCaptions.domReady)
 })
 
 window.addEventListener('load', () => {

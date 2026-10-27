@@ -6,6 +6,7 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import { computed } from 'vue'
+import { INTERRUPTED_TOOL_CALL_ERROR } from '~/modules/conversation/chain-steps'
 import { useI18n } from 'vue-i18n'
 import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
@@ -28,6 +29,10 @@ const props = defineProps<{
 defineEmits<{ (event: 'locate', messageIndex: number): void }>()
 
 const { t } = useI18n()
+
+function toolErrorText(error: string): string {
+  return error === INTERRUPTED_TOOL_CALL_ERROR ? t('home.toolInterrupted') : error
+}
 
 const TOOL_ICON: Record<ActivityTool['status'], string> = {
   pending: 'i-ri-time-line',
@@ -121,7 +126,9 @@ const hasPending = computed(() => props.gateway.length > 0 || Boolean(props.run)
               />
               <span class="HomePreviewActivity-Text">
                 <span class="HomePreview-Name">{{ tool.name }}</span>
-                <span v-if="tool.error" class="HomePreviewActivity-Error">{{ tool.error }}</span>
+                <span v-if="tool.error" class="HomePreviewActivity-Error">{{
+                  toolErrorText(tool.error)
+                }}</span>
                 <span v-else-if="tool.summary" class="HomePreview-Detail">{{ tool.summary }}</span>
               </span>
             </button>

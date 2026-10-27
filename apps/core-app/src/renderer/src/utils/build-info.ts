@@ -60,14 +60,6 @@ export function isDevelopmentBuild(): boolean {
 }
 
 /**
- * 获取构建时间的格式化字符串
- */
-export function getBuildTimeString(): string {
-  const info = getBuildInfo()
-  return new Date(info.buildTime).toLocaleString()
-}
-
-/**
  * 获取构建标识符
  */
 export function getBuildIdentifier(): string {

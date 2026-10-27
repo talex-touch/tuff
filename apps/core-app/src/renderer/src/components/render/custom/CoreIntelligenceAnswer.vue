@@ -86,7 +86,7 @@ const conversationMessages = computed<AiElementMessage[]>(() => {
     {
       id: `${aiData.value.requestId || 'core-intelligence'}-prompt`,
       role: 'user',
-      name: t('coreBox.intelligence.userLabel', 'You'),
+      name: t('coreBox.intelligence.userLabel'),
       content: formattedPrompt.value
     }
   ]
@@ -95,7 +95,7 @@ const conversationMessages = computed<AiElementMessage[]>(() => {
     messages.push({
       id: `${aiData.value.requestId || 'core-intelligence'}-answer`,
       role: 'assistant',
-      name: t('coreBox.intelligence.assistantLabel', 'AI'),
+      name: t('coreBox.intelligence.assistantLabel'),
       content: aiData.value.answer ?? '',
       status: 'complete'
     })

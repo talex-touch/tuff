@@ -1,6 +1,7 @@
 import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
+import { buildWindowLocaleArg } from '@talex-touch/utils/renderer/window-role'
 import { BrowserWindow, app, dialog, screen, shell } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
@@ -10,6 +11,7 @@ import { getMainConfig, saveMainConfig } from '../modules/storage'
 import { TalexTouch } from '../types'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
+import { getLocale } from '../utils/i18n-helper'
 import { mainLog } from '../utils/logger'
 import { getAppVersionSafe } from '../utils/version-util'
 import { genTouchChannel } from './channel-core'
@@ -365,6 +367,15 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
+      webPreferences: {
+        ...MainWindowOption.webPreferences,
+        // The preload captions the startup overlay before the renderer can read settings. The
+        // persisted language was adopted before this constructor ran, so this is the user's.
+        additionalArguments: [
+          ...(MainWindowOption.webPreferences?.additionalArguments ?? []),
+          buildWindowLocaleArg(getLocale())
+        ]
+      },
       autoShow: !this._startSilent,
       ...(initialBounds ?? {})
     }

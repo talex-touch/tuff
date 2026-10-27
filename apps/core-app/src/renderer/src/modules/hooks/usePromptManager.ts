@@ -1,14 +1,18 @@
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { getBuiltinPromptTemplates } from '~/modules/intelligence/builtin-prompts'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import { promptLibraryStorage } from '~/modules/storage/prompt-library'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const promptManagerLog = createRendererLogger('PromptManager')
 
 export function usePromptManager() {
+  const { t } = useI18nText()
   const prompts = reactive({
-    builtin: getBuiltinPromptTemplates(),
+    // Computed so the built-in names and descriptions follow a language switch: the manager is a
+    // singleton and would otherwise keep the language it was first created in.
+    builtin: computed(() => getBuiltinPromptTemplates(t)),
     custom: promptLibraryStorage.getCustomPrompts()
   })
 

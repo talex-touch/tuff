@@ -10,11 +10,9 @@ import { describe, expect, it } from 'vitest'
  * this — `t()` returns the key rather than throwing, so the only symptom is in the UI, on an error
  * path, in the moment the user is already stuck.
  *
- * Rather than pin the one key, this is a ratchet over the whole renderer: the inventory below
- * is the gap that exists today, and the assertions are that nothing outside it is broken *and* that
- * everything inside it is still broken. A new gap fails the first; fixing a listed one fails the
- * second, so the list cannot rot into a permanent excuse. Locale parity is already exact, so that
- * half is asserted as an equality.
+ * Rather than pin the one key, this covers the whole renderer. It began as a ratchet over the gap
+ * that existed then; the last nine keys in it were added on 2026-10-26, so both halves - every
+ * statically written key resolves, and the two locales hold the same keys - are equalities now.
  *
  * Only statically written keys are covered. `t(\`a.${b}\`)` cannot be resolved by reading source,
  * and there is no attempt to pretend otherwise.
@@ -22,30 +20,6 @@ import { describe, expect, it } from 'vitest'
 
 const LANG_DIR = __dirname
 const RENDERER_SRC = path.resolve(__dirname, '../..')
-
-/**
- * Keys the renderer passes to `t()` that resolve to no string in either locale.
- *
- * Mostly plain absences, tracked by #487, #491 and #503. `download.status` is the other shape:
- * it exists in both files as a *namespace* holding pending/downloading/paused/…, so `t()` is
- * handed an object and the label renders as the key. Absent and non-leaf are the same defect
- * from the user's side, so they are listed together.
- */
-const MISSING_FROM_BOTH = [
-  'common.back',
-  'download.status',
-  'coreBox.intelligence.assistantLabel',
-  'coreBox.intelligence.userLabel',
-  'download.view_logs',
-  'intelligence.info.configurationPanel',
-  'intelligence.item.selectProvider',
-  // 10 entries left this baseline on 2026-08-13: the app-shell-v2 convergence deleted
-  // SettingMessages.vue and the intelligence search clear affordance, taking their unresolved
-  // keys' only call sites with them. A baseline may only shrink; carrying them would let 10 new
-  // dead keys in unnoticed.
-  'store.official',
-  'system.unknownError'
-]
 
 function loadLocale(name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(LANG_DIR, `${name}.json`), 'utf8'))
@@ -111,10 +85,11 @@ describe('translation coverage', () => {
 
   it('introduces no key that resolves to nothing in both locales', () => {
     // flatten() keeps leaves only, so a key pointing at a namespace counts as unresolved — which
-    // is what it is: t() returns no string for it.
+    // is what it is: t() returns no string for it. `download.status` was that shape: a namespace
+    // of status names, handed to t() as the "Status" label.
     const missing = [...usedKeys].filter((key) => !enUS.has(key) && !zhCN.has(key)).sort()
 
-    expect(missing).toEqual([...MISSING_FROM_BOTH].sort())
+    expect(missing).toEqual([])
   })
 
   it('keeps the two locales on exactly the same key set', () => {

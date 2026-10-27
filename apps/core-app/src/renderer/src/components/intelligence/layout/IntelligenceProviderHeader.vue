@@ -190,7 +190,11 @@ function closeDeleteConfirm() {
         </p>
       </div>
     </div>
-    <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
+    <div
+      class="flex items-center gap-3"
+      role="group"
+      :aria-label="t('settings.intelligence.providerActionsLabel')"
+    >
       <TxDropdownMenu v-model="actionMenuOpen" placement="bottom-end">
         <template #trigger>
           <TxButton
@@ -300,7 +304,10 @@ function closeDeleteConfirm() {
           </span>
         </TxDropdownItem>
       </TxDropdownMenu>
-      <TxSwitch v-model="localEnabled" :aria-label="`Toggle ${provider.name}`" />
+      <TxSwitch
+        v-model="localEnabled"
+        :aria-label="t('settings.intelligence.toggleProvider', { name: provider.name })"
+      />
     </div>
   </header>
 

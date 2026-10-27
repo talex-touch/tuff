@@ -8,6 +8,13 @@ import type {
 /** Trimmed so a step title stays one readable line. */
 const TITLE_LIMIT = 48
 
+/**
+ * What a turn that ends stores on a call that never answered. It persists with the thread, so it is
+ * a code rather than wording, and it stays the English word it has always been so threads saved
+ * before the card localized it read the same way.
+ */
+export const INTERRUPTED_TOOL_CALL_ERROR = 'Interrupted'
+
 function firstLine(text: string): string {
   const line = text.trim().split('\n')[0] ?? ''
   return line.length > TITLE_LIMIT ? `${line.slice(0, TITLE_LIMIT)}…` : line
@@ -85,7 +92,8 @@ function toReasoningStep(
 /**
  * A call still pending or running once the turn has settled never came back —
  * the card renders straight from `status`, so left alone it would spin for the
- * life of the thread.
+ * life of the thread. One the turn already marked interrupted carries
+ * `INTERRUPTED_TOOL_CALL_ERROR`, which the label words for the reader.
  *
  * The original part is returned whenever nothing needs correcting: callers
  * write back to it (a submitted form marks itself on the part so the answer
@@ -98,6 +106,9 @@ function settledToolPart(
   streaming: boolean,
   interruptedLabel?: string
 ): AiToolCallPart {
+  if (part.status === 'error' && part.error === INTERRUPTED_TOOL_CALL_ERROR) {
+    return interruptedLabel ? { ...part, error: interruptedLabel } : part
+  }
   if (streaming || part.status === 'done' || part.status === 'error') return part
   // The card renders `error` as its alert text; without a fallback an
   // interrupted call would show an empty red block.

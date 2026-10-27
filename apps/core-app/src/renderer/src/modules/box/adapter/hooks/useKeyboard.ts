@@ -23,6 +23,7 @@ import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { resolveVisibleBoxGridColumnCount } from '~/components/render/box-grid-layout'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -305,7 +306,8 @@ export function resolveQuickActionsItem(
     render: {
       mode: 'default',
       basic: {
-        title: fallbackActivation.name || 'Quick Actions',
+        // Built on a key press, with no component around it to own a composer.
+        title: fallbackActivation.name || useI18nText().t('corebox.actions.fallbackItemTitle'),
         subtitle: pluginName
       }
     },

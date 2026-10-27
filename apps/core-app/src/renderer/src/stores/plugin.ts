@@ -3,6 +3,7 @@ import type { PluginStateEvent } from '@talex-touch/utils/plugin/sdk/types'
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { toast } from 'vue-sonner'
+import { useI18nText } from '~/modules/lang/useI18nText'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -26,8 +27,9 @@ export const usePluginStore = defineStore('plugin', () => {
     if (notifiedCategoryMissing.has(plugin.name)) return
     notifiedCategoryMissing.add(plugin.name)
 
-    toast.error(`插件「${plugin.name}」缺少分类字段 category，已拒绝启动`, {
-      description: '请在 manifest.json 补充 "category": "utilities"（sdkapi >= 260114 必填）。'
+    const { t } = useI18nText()
+    toast.error(t('plugin.issues.categoryMissingTitle', { name: plugin.name }), {
+      description: t('plugin.issues.categoryMissingDesc')
     })
   }
 

@@ -39,9 +39,9 @@ function resolveWallpaperUrl(pathOrUrl: string): string {
   return toTfileUrl(pathOrUrl)
 }
 
-function toErrorMessage(error: unknown): string {
+function toErrorMessage(error: unknown, unknownError = 'Unknown error'): string {
   if (error instanceof Error && error.message) return error.message
-  return typeof error === 'string' ? error : 'Unknown error'
+  return typeof error === 'string' ? error : unknownError
 }
 
 export function useWallpaper() {
@@ -152,7 +152,7 @@ export function useWallpaper() {
       }
       return Boolean(path)
     } catch (error) {
-      const message = toErrorMessage(error)
+      const message = toErrorMessage(error, t('common.unknownError'))
       logDesktopWallpaperFailure(message, false)
       if (!options?.silentError && lastDesktopErrorToast.value !== message) {
         toast.error(message)

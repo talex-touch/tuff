@@ -99,21 +99,15 @@ const useShadowHost = computed(() => props.renderMode === 'shadow')
 const canRenderShadow = computed(() => useShadowHost.value && Boolean(renderer.value))
 const renderModeLabel = computed(() => (useShadowHost.value ? 'shadow' : 'light'))
 const widgetFailure = computed(() => getWidgetFailure(props.rendererId))
-const emptyStateLabel = computed(() => {
-  if (widgetFailure.value) return 'Widget compile failed'
-  if (!props.rendererId) return 'Widget renderer missing'
-  if (rendererState.value === 'loading') return 'Widget renderer loading'
-  return 'Widget renderer unavailable'
-})
 const emptyStateText = computed(() => {
-  if (widgetFailure.value) return t('widgetFrame.compileFailed', 'Widget 编译失败')
-  if (rendererState.value === 'loading') return t('widgetFrame.loading', 'Widget 加载中')
-  if (!props.rendererId) return t('widgetFrame.rendererMissing', 'Widget renderer 缺失')
-  return t('widgetFrame.rendererUnregistered', 'Widget renderer 未注册')
+  if (widgetFailure.value) return t('widgetFrame.compileFailed')
+  if (rendererState.value === 'loading') return t('widgetFrame.loading')
+  if (!props.rendererId) return t('widgetFrame.rendererMissing')
+  return t('widgetFrame.rendererUnregistered')
 })
 const emptyStateMessage = computed(() => {
   if (widgetFailure.value) return widgetFailure.value.message
-  if (!props.rendererId) return t('widgetFrame.missingRendererId', '缺少 rendererId')
+  if (!props.rendererId) return t('widgetFrame.missingRendererId')
   if (rendererState.value === 'loading') return ''
   return props.rendererId
 })
@@ -425,7 +419,7 @@ onBeforeUnmount(() => {
   >
     <div v-if="renderError" class="WidgetFrame-Error text-xs text-[var(--tx-color-danger)]">
       <div class="WidgetFrame-ErrorTitle">
-        {{ t('widgetFrame.renderFailed', 'Widget 渲染失败') }}
+        {{ t('widgetFrame.renderFailed') }}
       </div>
       <div class="WidgetFrame-ErrorMessage">{{ renderError.message }}</div>
     </div>
@@ -450,7 +444,6 @@ onBeforeUnmount(() => {
       class="WidgetFrame-Empty text-xs text-[var(--tx-text-color-secondary)]"
       :class="{ 'is-failed': !!widgetFailure }"
       :data-state="rendererState"
-      :aria-label="emptyStateLabel"
     >
       <div class="WidgetFrame-EmptyTitle">{{ emptyStateText }}</div>
       <div v-if="emptyStateMessage" class="WidgetFrame-EmptyMessage">

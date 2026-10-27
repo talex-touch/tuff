@@ -493,7 +493,7 @@ async function startEdit(row: McpServerRow): Promise<void> {
   try {
     const snapshot = await aiClient.orchestratorGetSnapshot()
     const item = snapshot.importedItems.find((candidate) => candidate.id === itemId)
-    if (!item) throw new Error(`MCP server ${itemId} is not configured`)
+    if (!item) throw new Error(t('settings.skillsMcp.mcp.notConfigured', { name: row.name }))
     draft.value = manualDraftFromItem(item, row.name)
     editSecretNames.value = mcpCredentialNames(row)
     drawerView.value = { mode: 'edit', key: row.key }

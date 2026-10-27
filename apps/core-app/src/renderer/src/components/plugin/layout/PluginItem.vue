@@ -1,6 +1,7 @@
 <script lang="ts" name="PluginItem" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { TxPopover } from '@talex-touch/tuffex/popover'
+import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
@@ -59,7 +60,7 @@ const pluginIconStyle = {
         />
       </template>
       <div class="plugin-issues-panel">
-        <div class="plugin-issues-title">Plugin Issues</div>
+        <div class="plugin-issues-title">{{ t('plugin.issues.title') }}</div>
         <TxScroll native no-padding class="issues-list h-60">
           <div
             v-for="(issue, index) in plugin.issues"
@@ -82,7 +83,7 @@ const pluginIconStyle = {
                 {{ issue.source }}
               </p>
               <p class="mt-0.5 text-gray-600 dark:text-gray-300">
-                {{ issue.message }}
+                {{ resolveI18nMessage(issue.message) }}
               </p>
             </div>
           </div>

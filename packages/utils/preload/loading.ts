@@ -1,3 +1,4 @@
+import type { AppLocale } from '../i18n/locale'
 import type { RendererWindowMode, WindowRole } from '../renderer/window-role'
 import type { StartupInfo } from '../types/startup-info'
 
@@ -30,6 +31,12 @@ export interface StartupContext {
    * Only the validated `WindowRole` crosses the bridge, never raw argv.
    */
   role: WindowRole
+
+  /**
+   * The interface language main opened this window in (`--app-locale`), for what is written before
+   * the renderer has read settings: the startup overlay's captions. Absent when main passed none.
+   */
+  locale?: AppLocale
 }
 
 export interface PreloadAPI {

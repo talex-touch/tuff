@@ -808,7 +808,7 @@ watch(
                 <button
                   type="button"
                   class="ml-0.5 text-[var(--tx-text-color-secondary)] hover:text-[var(--tx-color-danger)] transition-colors cursor-pointer"
-                  :aria-label="`移除 ${dom}`"
+                  :aria-label="t('chromeLibrary.cookies.removeDomain', { domain: dom })"
                   @click="removeDomain(dom)"
                 >
                   <span class="i-ri-close-line text-xs" />

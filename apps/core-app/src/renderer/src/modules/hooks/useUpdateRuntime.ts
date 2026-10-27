@@ -46,6 +46,20 @@ const DOWNLOAD_START_TIMEOUT = 30_000
 const INSTALL_TIMEOUT = 10 * 60 * 1000
 const UPDATE_HISTORY_OUTCOMES: ReadonlySet<string> = new Set(['updated', 'rolled-back', 'failed'])
 
+/**
+ * Main did not answer a request in time. A type of its own, so a caller can single out one
+ * channel's timeout without matching the message, which is worded in the interface language.
+ */
+class UpdateRequestTimeoutError extends Error {
+  constructor(
+    readonly channel: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'UpdateRequestTimeoutError'
+  }
+}
+
 const updateListenerDisposers: Array<() => void> = []
 let updateListenerInitialized = false
 const updateRuntimeLog = createRendererLogger('useUpdateRuntime')
@@ -161,7 +175,7 @@ export function useUpdateRuntime() {
       return await withTimeout(operation(), timeout)
     } catch (requestError) {
       if (requestError instanceof TimeoutError) {
-        throw new Error(`Update request timed out for channel: ${channel}`)
+        throw new UpdateRequestTimeoutError(channel, t('update.request_timed_out'))
       }
       throw requestError
     }
@@ -469,7 +483,7 @@ export function useUpdateRuntime() {
           ? response.data
           : {
               hasUpdate: false,
-              error: response.error || 'Update check failed',
+              error: response.error || t('common.unknownError'),
               source: 'Unknown'
             }
 
@@ -508,7 +522,7 @@ export function useUpdateRuntime() {
       return result
     } catch (checkError) {
       updateRuntimeLog.error('Update check failed', checkError)
-      error.value = checkError instanceof Error ? checkError.message : 'Unknown error'
+      error.value = checkError instanceof Error ? checkError.message : t('common.unknownError')
       handleUpdateError(error.value, 'Unknown')
       appStates.noUpdateAvailable = false
       return undefined
@@ -528,7 +542,7 @@ export function useUpdateRuntime() {
         acceptUpdateLifecycleSnapshot(response.snapshot)
       }
       if (!response.success) {
-        throw new Error(response.error || 'Failed to start update download')
+        throw new Error(response.error || t('common.unknownError'))
       }
       toast.success(t('update.download_started'))
       return true
@@ -536,7 +550,7 @@ export function useUpdateRuntime() {
       updateRuntimeLog.error('Download failed', downloadError)
       toast.error(
         t('update.download_failed_with_reason', {
-          reason: downloadError instanceof Error ? downloadError.message : 'Unknown error'
+          reason: downloadError instanceof Error ? downloadError.message : t('common.unknownError')
         })
       )
       return false
@@ -559,15 +573,15 @@ export function useUpdateRuntime() {
             ? t('settings.settingUpdate.messages.macSilentUpdateNotWritable')
             : response.errorCode === 'MAC_UPDATE_BUILD_UNTRUSTED'
               ? t('settings.settingUpdate.messages.macSilentUpdateUntrusted')
-              : response.error || 'Failed to install update'
+              : response.error || t('common.unknownError')
         throw new Error(reason)
       }
       toast.success(t('settings.settingUpdate.messages.installStarted'))
       return true
     } catch (installError) {
       if (
-        installError instanceof Error &&
-        installError.message.includes('Update request timed out for channel: update:install')
+        installError instanceof UpdateRequestTimeoutError &&
+        installError.channel === 'update:install'
       ) {
         updateRuntimeLog.warn('Install request ack timeout, waiting for main-process handoff')
         toast.info(t('settings.settingUpdate.messages.installPendingConfirmation'))
@@ -577,7 +591,7 @@ export function useUpdateRuntime() {
       updateRuntimeLog.error('Install update failed', installError)
       toast.error(
         t('settings.settingUpdate.messages.installFailedWithReason', {
-          reason: installError instanceof Error ? installError.message : 'Unknown error'
+          reason: installError instanceof Error ? installError.message : t('common.unknownError')
         })
       )
       return false
