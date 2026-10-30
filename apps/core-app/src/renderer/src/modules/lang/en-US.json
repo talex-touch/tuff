@@ -5527,6 +5527,12 @@
         "resetDone": "Reset index {clearedSearchIndexRows} · progress {scanProgressRows} · {reason} · {jobId}",
         "resetFailed": "Reset failed: {error} · {reason} · {jobId}"
       },
+      "sourceTaskKind": {
+        "scan": "Scan",
+        "watch": "Watch",
+        "reconcile": "Reconcile",
+        "reset": "Reset"
+      },
       "sourceRecentTasks": "Recent",
       "sourceRecentTask": {
         "scan": {
@@ -5549,6 +5555,23 @@
           "failed": "Reset failed · {summary} · {jobId}",
           "skipped": "Reset skipped · {summary} · {jobId}"
         }
+      },
+      "sourceRecentTaskSummary": {
+        "indexed": "indexed {indexed}/{records}",
+        "batches": "batches {batches}",
+        "phase": "phase {phase}",
+        "delta": "delta {applied}/{deltas}",
+        "action": "action {action}",
+        "skipped": "skipped {skipped}",
+        "clearIndex": "clear index {cleared}",
+        "indexRows": "index rows {rows}",
+        "progress": "progress {cleared}",
+        "progressRows": "progress rows {rows}",
+        "duration": "duration {ms}ms",
+        "trigger": "trigger {trigger}",
+        "reason": "reason {reason}",
+        "attempt": "attempt {attempt}",
+        "code": "code {code}"
       },
       "sourceRunGateTitle": "Scheduler",
       "sourceRunGate": {
@@ -5608,6 +5631,11 @@
         "reset": "Reset index · {reason}",
         "inspect-contract": "Inspect source contract · {reason}",
         "inspect-source": "Inspect source state · {reason} · {blockedReason}"
+      },
+      "sourceRecoveryWait": {
+        "retryAfter": "retry after {time}",
+        "alreadyRunning": "already running",
+        "debounced": "debounced"
       },
       "sourceStatus": {
         "ready": "Ready",

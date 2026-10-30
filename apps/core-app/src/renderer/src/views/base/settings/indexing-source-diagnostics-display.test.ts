@@ -436,9 +436,7 @@ describe('indexing source diagnostics display helpers', () => {
     ).toEqual({
       labelKey: 'settings.settingFileIndex.sourceActionResetSuccess',
       values: {
-        clearedSearchIndex: 'yes',
         clearedSearchIndexRows: 5,
-        clearedScanProgress: 'yes',
         scanProgressRows: 3
       }
     })

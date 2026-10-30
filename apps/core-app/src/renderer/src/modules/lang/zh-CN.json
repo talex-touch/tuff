@@ -5522,10 +5522,16 @@
         "scanFailed": "扫描失败：{error} · 阶段 {phase} · {jobId}",
         "watchDone": "监听 {action} {applied}/{deltas} · {jobId}",
         "watchFailed": "监听失败 {failed}/{deltas} · {jobId}",
-        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
+        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · 根 {rootCount} · {jobId}",
         "reconcileFailed": "补漏错误：{errors} · {reason} · {jobId}",
         "resetDone": "重置索引 {clearedSearchIndexRows} · 进度 {scanProgressRows} · {reason} · {jobId}",
         "resetFailed": "重置失败：{error} · {reason} · {jobId}"
+      },
+      "sourceTaskKind": {
+        "scan": "扫描",
+        "watch": "监听",
+        "reconcile": "补漏",
+        "reset": "重置"
       },
       "sourceRecentTasks": "最近",
       "sourceRecentTask": {
@@ -5550,12 +5556,29 @@
           "skipped": "重置跳过 · {summary} · {jobId}"
         }
       },
+      "sourceRecentTaskSummary": {
+        "indexed": "写入 {indexed}/{records}",
+        "batches": "批次 {batches}",
+        "phase": "阶段 {phase}",
+        "delta": "增量 {applied}/{deltas}",
+        "action": "动作 {action}",
+        "skipped": "跳过 {skipped}",
+        "clearIndex": "清空索引 {cleared}",
+        "indexRows": "索引行 {rows}",
+        "progress": "清空进度 {cleared}",
+        "progressRows": "进度行 {rows}",
+        "duration": "耗时 {ms}ms",
+        "trigger": "触发 {trigger}",
+        "reason": "原因 {reason}",
+        "attempt": "第 {attempt} 次尝试",
+        "code": "错误码 {code}"
+      },
       "sourceRunGateTitle": "调度",
       "sourceRunGate": {
-        "running": "{kind} 运行中，自 {runningSince} · 阻挡 {blockedCount} 次",
-        "already-running": "{kind} 被运行中任务阻挡 · {blockedCount} 次 · {lastBlockedAt}",
-        "debounced": "{kind} 防抖至 {nextAllowedAt} · {blockedCount} 次",
-        "idle": "{kind} 空闲 · 上次完成 {lastCompletedAt}"
+        "running": "{kind}运行中，自 {runningSince} · 阻挡 {blockedCount} 次",
+        "already-running": "{kind}被运行中任务阻挡 · {blockedCount} 次 · {lastBlockedAt}",
+        "debounced": "{kind}防抖至 {nextAllowedAt} · {blockedCount} 次",
+        "idle": "{kind}空闲 · 上次完成 {lastCompletedAt}"
       },
       "sourceAdmissionIssues": "准入",
       "sourceAdmissionIssue": {
@@ -5583,16 +5606,16 @@
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
         "scanProgress": "{label} · {status} · 根 {completed}/{total} · 失败 {failed} · 待授权 {pendingPermissionRoots} · 最近 {lastScannedAt}",
-        "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
-        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · reset {resetSearchIndexRows}/{resetScanProgressRows} · orphan {orphanedKeywordsRemoved}",
+        "indexFlush": "{label} · {status} · 待写入 {pending} · 写入中 {inflight} · 条目 {entries} · {duration} · {reason}",
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · 需重建 {needsRebuild} · 重置 {resetSearchIndexRows}/{resetScanProgressRows} · 清理孤立关键词 {orphanedKeywordsRemoved}",
         "embeddingPause": "语义索引已暂停 · AI 用量上限「{limit}」已用完 · {resumesAt} 后恢复"
       },
       "sourceProgress": "进度",
       "sourceProgressChip": {
-        "unknown": "{stage} · {percent}% · {current}/{total} · 暂无 ETA",
+        "unknown": "{stage} · {percent}% · {current}/{total} · 暂无预计完成时间",
         "idle": "{stage} · 空闲 · {percent}% · {current}/{total}",
-        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · ETA {eta}",
-        "stabilizing": "{stage} · 稳定采样 · {percent}% · {current}/{total} · samples {samples}",
+        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · 预计完成 {eta}",
+        "stabilizing": "{stage} · 稳定采样 · {percent}% · {current}/{total} · 样本 {samples}",
         "estimated": "{stage} · 剩余 {remaining} · {percent}% · {current}/{total} · {speed}/s · {basis}",
         "stalled": "{stage} · 停滞 · {percent}% · {current}/{total} · {reason}",
         "complete": "{stage} · 完成 · {current}/{total}",
@@ -5606,8 +5629,13 @@
         "scan": "建议扫描 · {reason}",
         "reconcile": "建议补漏 · {reason}",
         "reset": "建议重置 · {reason}",
-        "inspect-contract": "检查 Source 合同 · {reason}",
-        "inspect-source": "检查 Source 状态 · {reason} · {blockedReason}"
+        "inspect-contract": "检查源合同 · {reason}",
+        "inspect-source": "检查源状态 · {reason} · {blockedReason}"
+      },
+      "sourceRecoveryWait": {
+        "retryAfter": "{time} 后重试",
+        "alreadyRunning": "被运行中任务阻挡",
+        "debounced": "防抖中"
       },
       "sourceStatus": {
         "ready": "就绪",
