@@ -754,10 +754,16 @@ export function resolveReviewQueueMetaChips(
   return chips
 }
 
-async function writeClipboardText(text: string, t: Translate): Promise<void> {
+/**
+ * Recorded on a review item this window had no clipboard to write to. The item keeps the code, not
+ * a sentence, so the page words it in whatever language it is read in later.
+ */
+export const REVIEW_CLIPBOARD_UNAVAILABLE = 'WORKFLOW_REVIEW_CLIPBOARD_UNAVAILABLE'
+
+async function writeClipboardText(text: string): Promise<void> {
   const clipboard = globalThis.navigator?.clipboard
   if (!clipboard?.writeText) {
-    throw new Error(t(workflowTextKey('reviewClipboardUnavailable')))
+    throw new Error(REVIEW_CLIPBOARD_UNAVAILABLE)
   }
   await clipboard.writeText(text)
 }
@@ -918,7 +924,7 @@ export function useWorkflowEditor() {
   async function copyReviewItemToClipboard(itemId: string): Promise<WorkflowReviewQueueItem> {
     const item = getReviewQueueItem(itemId)
     try {
-      await writeClipboardText(item.text, t)
+      await writeClipboardText(item.text)
       await setReviewQueueItemStatus(itemId, 'copied')
       reviewQueueReplaceConfirmId.value = null
       return { ...item, status: 'copied' }
@@ -939,7 +945,7 @@ export function useWorkflowEditor() {
     }
 
     try {
-      await writeClipboardText(item.text, t)
+      await writeClipboardText(item.text)
       await setReviewQueueItemStatus(itemId, 'clipboard_replaced')
       reviewQueueReplaceConfirmId.value = null
       return { item: { ...item, status: 'clipboard_replaced' }, confirmed: true }

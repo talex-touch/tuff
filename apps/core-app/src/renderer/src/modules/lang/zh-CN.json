@@ -1116,7 +1116,7 @@
     "messages": {
       "loadFailed": "无法读取本机代理状态",
       "saveFailed": "无法保存本机代理设置",
-      "locateFailed": "所选程序未通过代理版本校验"
+      "locateFailed": "无法使用所选程序"
     }
   },
   "localAiCliPanel": {
@@ -1144,6 +1144,8 @@
     "viewTerminal": "终端 (TTY)",
     "running": "本机代理正在处理…",
     "failed": "任务失败（{code}）",
+    "failedWithReason": "任务失败：{reason}",
+    "failedNoReason": "任务失败",
     "cancelled": "任务已取消",
     "deny": "拒绝",
     "allowOnce": "仅允许一次",
@@ -1172,6 +1174,23 @@
       "clipboard": "剪贴板文本",
       "activeApp": "当前应用",
       "activeWindow": "当前窗口"
+    },
+    "failures": {
+      "betaUnavailable": "当前系统暂不支持本机代理。",
+      "featureDisabled": "本机代理已在设置中关闭。",
+      "providerDisabled": "这个代理已在设置中关闭。",
+      "providerUnavailable": "未找到这个代理的程序。",
+      "providerVersionUnsupported": "不支持这个版本的代理程序。",
+      "writeApprovalUnavailable": "这个代理无法在修改文件前征求同意，不能以写入权限运行。",
+      "resumeUnsupported": "这个代理无法继续之前的会话。",
+      "sessionBusy": "这个会话正被另一个任务使用。",
+      "sessionMissing": "这个会话已不存在。",
+      "sessionConflict": "这个会话与 Tuff 记录的不一致，无法继续。",
+      "workspaceInvalid": "项目文件夹不存在或已被移动。",
+      "processStartFailed": "无法启动代理程序。",
+      "protocolInvalid": "无法识别代理返回的内容。",
+      "processExited": "代理程序在完成前退出了。",
+      "statusFailed": "无法读取本机代理的状态。"
     }
   },
   "permission": {
@@ -8338,14 +8357,17 @@
       "toastDeleted": "工作流已删除",
       "toastWaitingApproval": "工作流已暂停，等待工具审批",
       "toastRunCompleted": "工作流执行完成",
+      "toastRunCancelled": "工作流运行已取消",
       "toastNoResumableRun": "当前没有可恢复的运行",
       "toastStillWaitingApproval": "仍有工具等待审批",
       "toastResumed": "工作流已恢复",
       "toastToolApproved": "已批准工具调用",
       "toastToolRejected": "已拒绝工具调用",
       "toastReviewCopied": "已复制审阅结果",
+      "toastReviewCopyFailed": "未能复制审阅结果",
       "toastReviewReplaceConfirm": "再次点击确认替换剪贴板",
       "toastReviewClipboardReplaced": "剪贴板已替换",
+      "toastReviewReplaceFailed": "未能替换剪贴板",
       "toastReviewDismissed": "已忽略审阅项",
       "toastReviewReset": "审阅项已恢复为待处理",
       "defaults": {
@@ -8603,6 +8625,14 @@
         "neutral": "中性",
         "mixed": "混合"
       }
+    },
+    "runFailures": {
+      "failed": "AI 运行失败。",
+      "cancelled": "AI 运行已取消。",
+      "interrupted": "AI 运行在完成前被中断。",
+      "inputUnavailable": "这次运行的输入已不可用。",
+      "authorityChanged": "这次运行开始后，代理的设置或权限已变更。",
+      "beingDeleted": "这次运行正在被删除。"
     }
   },
   "flow": {

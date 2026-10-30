@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import {
+  describeAiRunFailure,
   isUsageLimitFailure,
   resolveIntelligenceErrorRecovery
 } from '~/modules/intelligence/ai-error-recovery'
@@ -14,13 +15,14 @@ import {
   filterReviewQueueItems,
   resolveReviewQueueActionHint,
   resolveReviewQueueMetaChips,
+  REVIEW_CLIPBOARD_UNAVAILABLE,
   summarizeReviewQueueItems,
   useWorkflowEditor,
   WorkflowValidationError,
   type WorkflowReviewQueueFilter,
   type WorkflowReviewQueueItem
 } from '~/modules/hooks/useWorkflowEditor'
-import { describeFailure } from '~/utils/failure-text'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -76,7 +78,7 @@ function usageLimitRecovery(error: unknown) {
 /**
  * A run the user's own usage limit stopped says so in the interface's language — the limit set in
  * Audit is used up — with the way there, instead of the run's stable code on every step. Every
- * other failure keeps the message it came with.
+ * other failure is worded by `describeRunError`.
  */
 const runUsageLimit = computed(() => {
   const run = currentRun.value
@@ -88,9 +90,30 @@ const runUsageLimit = computed(() => {
   return null
 })
 
-function stepErrorText(error: string): string {
-  return usageLimitRecovery(error)?.title ?? error
+/**
+ * A failure main recorded on a run or a step: one it has a code for, such as `AI_RUN_FAILED: AI run
+ * failed.`, in the interface language; anything else, such as a provider's reason, as it came.
+ */
+function describeRunError(error: string): string {
+  return describeAiRunFailure(describeFailure(error, t, error), t)
 }
+
+function stepErrorText(error: string): string {
+  return usageLimitRecovery(error)?.title ?? describeRunError(error)
+}
+
+/**
+ * Why the run on screen did not finish, for its summary and the toast: the run's own failure, else
+ * its first failed step's. A run main failed before any step ran has only the former, and nothing
+ * else on the page says why.
+ */
+const runFailureText = computed(() => {
+  const run = currentRun.value
+  if (!run || (run.status !== 'failed' && run.status !== 'cancelled') || runUsageLimit.value)
+    return ''
+  const error = run.error || run.steps.find((step) => step.error)?.error
+  return error ? describeRunError(error) : ''
+})
 
 /** Covers run and step statuses; a status this page does not know is shown as it came. */
 function runStatusLabel(status?: string): string {
@@ -260,12 +283,18 @@ function reviewActionHint(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'
 
 function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>): string {
   const hint = reviewActionHint(item)
-  return t(`intelligence.workflow.${hint.labelKey}`, { error: item.error || '' })
+  return t(`intelligence.workflow.${hint.labelKey}`, {
+    error: item.error ? reviewFailureText(item.error) : ''
+  })
 }
 
 function reviewMetaChips(item: WorkflowReviewQueueItem) {
   return resolveReviewQueueMetaChips(item).map((chip) =>
-    chip.labelKey === 'reviewMetaRisk' ? { ...chip, value: riskLevelLabel(chip.value) } : chip
+    chip.labelKey === 'reviewMetaRisk'
+      ? { ...chip, value: riskLevelLabel(chip.value) }
+      : chip.labelKey === 'reviewMetaFailure'
+        ? { ...chip, value: reviewFailureText(chip.value) }
+        : chip
   )
 }
 
@@ -290,7 +319,43 @@ function resolveValidationMessage(error: unknown): string {
   return error.reason
 }
 
-const executionErrorText = computed(() => describeFailure(executionError.value, t, ''))
+/** A run that could not be asked for, else why the run on screen did not finish. */
+const runtimeErrorText = computed(
+  () => describeFailure(executionError.value, t, '') || runFailureText.value
+)
+
+/** A run that came back failed or cancelled is not a run that completed. */
+function toastUnfinishedRun(status: string): boolean {
+  if (runUsageLimit.value) {
+    toast.error(runUsageLimit.value.title)
+    return true
+  }
+  if (status === 'failed') {
+    toast.error(t('intelligence.workflow.runFailed'), {
+      description: runFailureText.value || undefined
+    })
+    return true
+  }
+  if (status === 'cancelled') {
+    toast.warning(t('intelligence.workflow.toastRunCancelled'))
+    return true
+  }
+  return false
+}
+
+/**
+ * A review item's recorded failure: the page's own code and the transport's failures in words, the
+ * system's text, such as the clipboard's refusal, as it came.
+ */
+function reviewFailureText(error: string): string {
+  return error === REVIEW_CLIPBOARD_UNAVAILABLE
+    ? t('intelligence.workflow.reviewClipboardUnavailable')
+    : describeFailure(error, t, error)
+}
+
+function reviewActionFailure(error: unknown): string {
+  return reviewFailureText(failureMessage(error)) || t('common.failures.operationFailed')
+}
 
 async function handleSave(): Promise<void> {
   try {
@@ -317,10 +382,7 @@ async function handleRun(): Promise<void> {
       toast.info(t('intelligence.workflow.toastWaitingApproval'))
       return
     }
-    if (runUsageLimit.value) {
-      toast.error(runUsageLimit.value.title)
-      return
-    }
+    if (toastUnfinishedRun(result.status)) return
     toast.success(t('intelligence.workflow.toastRunCompleted'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
@@ -338,10 +400,7 @@ async function handleResume(): Promise<void> {
       toast.info(t('intelligence.workflow.toastStillWaitingApproval'))
       return
     }
-    if (runUsageLimit.value) {
-      toast.error(runUsageLimit.value.title)
-      return
-    }
+    if (toastUnfinishedRun(result.status)) return
     toast.success(t('intelligence.workflow.toastResumed'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
@@ -366,7 +425,9 @@ async function handleCopyReviewItem(itemId: string): Promise<void> {
     await copyReviewItemToClipboard(itemId)
     toast.success(t('intelligence.workflow.toastReviewCopied'))
   } catch (error) {
-    toast.error(resolveValidationMessage(error))
+    toast.error(t('intelligence.workflow.toastReviewCopyFailed'), {
+      description: reviewActionFailure(error)
+    })
   }
 }
 
@@ -379,7 +440,9 @@ async function handleReplaceClipboardReviewItem(itemId: string): Promise<void> {
     }
     toast.success(t('intelligence.workflow.toastReviewClipboardReplaced'))
   } catch (error) {
-    toast.error(resolveValidationMessage(error))
+    toast.error(t('intelligence.workflow.toastReviewReplaceFailed'), {
+      description: reviewActionFailure(error)
+    })
   }
 }
 
@@ -876,8 +939,8 @@ onMounted(async () => {
             <span>{{ t('intelligence.workflow.completedAt') }}</span>
             <strong>{{ formatDate(currentRun?.completedAt) }}</strong>
           </div>
-          <div v-if="executionErrorText" class="runtime-error">
-            {{ executionErrorText }}
+          <div v-if="runtimeErrorText" class="runtime-error">
+            {{ runtimeErrorText }}
           </div>
           <div
             v-if="runUsageLimit"
@@ -1080,7 +1143,7 @@ onMounted(async () => {
             </div>
             <pre class="result-pre">{{ item.preview }}</pre>
             <div v-if="item.error" class="runtime-error">
-              {{ item.error }}
+              {{ reviewFailureText(item.error) }}
             </div>
             <div
               class="review-action-hint"

@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * The agent detail pane when a task fails: a task the user's own usage limit stopped arrives with
  * the stable code main records for it (`USAGE_LIMIT_REACHED: AI usage limit reached.`) and is told
- * in the interface's words, with the way to Audit; every other failure keeps its own message.
+ * in the interface's words, with the way to Audit; a run that failed for another reason main has a
+ * code for is told in the interface's words, without it.
  */
 
 const REFUSED = 'USAGE_LIMIT_REACHED: AI usage limit reached.'
@@ -141,13 +142,13 @@ describe('AgentDetail: a task the usage limit stopped', () => {
     expect(toast.error).toHaveBeenCalledWith('intelligence.errorRecovery.usageLimitTitle')
   })
 
-  it('keeps any other failure’s own message and offers no way to Audit', async () => {
+  it('words any other failure main recorded and offers no way to Audit', async () => {
     const wrapper = await startTask()
     sdk.listeners.get('failed')!({ taskId: taskId(), error: 'AI_RUN_FAILED: AI run failed.' })
     await flushPromises()
 
     expect(wrapper.find('[data-testid="agent-task-usage-limit"]').exists()).toBe(false)
-    expect(wrapper.get('.execute-error').text()).toBe('AI_RUN_FAILED: AI run failed.')
-    expect(toast.error).toHaveBeenCalledWith('AI_RUN_FAILED: AI run failed.')
+    expect(wrapper.get('.execute-error').text()).toBe('intelligence.runFailures.failed')
+    expect(toast.error).toHaveBeenCalledWith('intelligence.runFailures.failed')
   })
 })

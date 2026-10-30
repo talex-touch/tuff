@@ -1116,7 +1116,7 @@
     "messages": {
       "loadFailed": "Could not load local agent status",
       "saveFailed": "Could not save local agent settings",
-      "locateFailed": "The selected executable did not pass the provider version check"
+      "locateFailed": "Could not use the selected executable"
     }
   },
   "localAiCliPanel": {
@@ -1144,6 +1144,8 @@
     "viewTerminal": "Terminal (TTY)",
     "running": "The local agent is working…",
     "failed": "Task failed ({code})",
+    "failedWithReason": "Task failed: {reason}",
+    "failedNoReason": "Task failed",
     "cancelled": "Task cancelled",
     "deny": "Deny",
     "allowOnce": "Allow once",
@@ -1172,6 +1174,23 @@
       "clipboard": "Clipboard text",
       "activeApp": "Active app",
       "activeWindow": "Active window"
+    },
+    "failures": {
+      "betaUnavailable": "Local agents aren't available on this system.",
+      "featureDisabled": "Local agents are turned off in Settings.",
+      "providerDisabled": "This agent is turned off in Settings.",
+      "providerUnavailable": "The agent's program wasn't found.",
+      "providerVersionUnsupported": "This version of the agent isn't supported.",
+      "writeApprovalUnavailable": "This agent can't ask before changing files, so it can't run with write access.",
+      "resumeUnsupported": "This agent can't continue an earlier session.",
+      "sessionBusy": "This session is being used by another task.",
+      "sessionMissing": "This session no longer exists.",
+      "sessionConflict": "This session no longer matches what Tuff recorded, so it can't be continued.",
+      "workspaceInvalid": "The project folder is missing or has moved.",
+      "processStartFailed": "The agent's program couldn't be started.",
+      "protocolInvalid": "The agent's reply couldn't be read.",
+      "processExited": "The agent's program quit before it finished.",
+      "statusFailed": "Couldn't read the local agents' status."
     }
   },
   "permission": {
@@ -8338,14 +8357,17 @@
       "toastDeleted": "Workflow deleted",
       "toastWaitingApproval": "Workflow paused for tool approval",
       "toastRunCompleted": "Workflow run completed",
+      "toastRunCancelled": "Workflow run cancelled",
       "toastNoResumableRun": "There is no run to resume",
       "toastStillWaitingApproval": "Tools are still waiting for approval",
       "toastResumed": "Workflow resumed",
       "toastToolApproved": "Tool call approved",
       "toastToolRejected": "Tool call rejected",
       "toastReviewCopied": "Review result copied",
+      "toastReviewCopyFailed": "Couldn't copy the review result",
       "toastReviewReplaceConfirm": "Click again to confirm clipboard replacement",
       "toastReviewClipboardReplaced": "Clipboard replaced",
+      "toastReviewReplaceFailed": "Couldn't replace the clipboard",
       "toastReviewDismissed": "Review item dismissed",
       "toastReviewReset": "Review item restored to pending",
       "defaults": {
@@ -8603,6 +8625,14 @@
         "neutral": "neutral",
         "mixed": "mixed"
       }
+    },
+    "runFailures": {
+      "failed": "The AI run failed.",
+      "cancelled": "The AI run was cancelled.",
+      "interrupted": "The AI run was interrupted before it finished.",
+      "inputUnavailable": "The run's input is no longer available.",
+      "authorityChanged": "The agent's settings or permissions changed since this run started.",
+      "beingDeleted": "This run is being deleted."
     }
   },
   "flow": {

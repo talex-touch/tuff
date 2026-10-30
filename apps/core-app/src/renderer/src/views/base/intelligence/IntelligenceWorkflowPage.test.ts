@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * The Workflows page when a run fails: a run the user's own usage limit stopped is recorded with
  * the stable code main writes for it (`USAGE_LIMIT_REACHED: AI usage limit reached.`) on the run
  * and its steps, and the page tells it in the interface's words with the way to Audit — on the run
- * just started and on one reopened from history. Every other failure keeps its own message.
+ * just started and on one reopened from history. A run that failed for another reason main has a
+ * code for is told in the interface's words, without it.
  */
 
 const REFUSED = 'USAGE_LIMIT_REACHED: AI usage limit reached.'
@@ -162,14 +163,17 @@ describe('IntelligenceWorkflowPage: a run the usage limit stopped', () => {
     expect(stepErrors(wrapper)).toEqual(['intelligence.errorRecovery.usageLimitTitle'])
   })
 
-  it('keeps any other failure’s own message and offers no way to Audit', async () => {
+  it('words any other failure main recorded and offers no way to Audit', async () => {
     sdk.workflowRun.mockResolvedValue(failedRun(OTHER_FAILURE))
     const wrapper = await mountPage()
     await run(wrapper)
 
     expect(wrapper.find('[data-testid="workflow-usage-limit"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="workflow-open-usage-limits"]').exists()).toBe(false)
-    expect(stepErrors(wrapper)).toEqual([OTHER_FAILURE])
-    expect(toast.error).not.toHaveBeenCalledWith('intelligence.errorRecovery.usageLimitTitle')
+    expect(stepErrors(wrapper)).toEqual(['intelligence.runFailures.failed'])
+    expect(toast.error).toHaveBeenCalledWith('intelligence.workflow.runFailed', {
+      description: 'intelligence.runFailures.failed'
+    })
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

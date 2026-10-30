@@ -64,6 +64,27 @@ export function formatUsageLimitResetTime(resetsAt: number, locale: string): str
   return formatResetTime(resetsAt, locale)
 }
 
+/**
+ * How main records a run that did not finish: `<CODE>: <sentence>` (`AI_RUN_FAILED: AI run
+ * failed.`), the same for agent tasks and workflow steps. The usage limit's code has its own branch
+ * below.
+ */
+const AI_RUN_FAILURE = /^(AI_RUN_[A-Z_]+):/
+const AI_RUN_FAILURE_KEYS: Record<string, string> = {
+  AI_RUN_FAILED: 'failed',
+  AI_RUN_CANCELLED: 'cancelled',
+  AI_RUN_INTERRUPTED: 'interrupted',
+  AI_RUN_INPUT_UNAVAILABLE: 'inputUnavailable',
+  AI_RUN_AUTHORITY_CHANGED: 'authorityChanged',
+  AI_RUN_PRIVACY_DELETION_FENCED: 'beingDeleted'
+}
+
+/** A run's recorded failure in the interface language; any other text is returned as it is. */
+export function describeAiRunFailure(text: string, t: (key: string) => string): string {
+  const key = AI_RUN_FAILURE_KEYS[AI_RUN_FAILURE.exec(text.trim())?.[1] ?? '']
+  return key ? t(`intelligence.runFailures.${key}`) : text
+}
+
 function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }

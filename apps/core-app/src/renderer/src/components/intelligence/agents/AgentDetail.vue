@@ -13,9 +13,11 @@ import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
+  describeAiRunFailure,
   isUsageLimitFailure,
   resolveIntelligenceErrorRecovery
 } from '~/modules/intelligence/ai-error-recovery'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -31,29 +33,45 @@ const taskInput = ref('')
 const executing = ref(false)
 const canceling = ref(false)
 const taskResult = ref<unknown>(null)
-const taskError = ref<string | null>(null)
+/**
+ * How the last task ended badly, kept as it came so its words follow the interface language: the
+ * failure main reported, empty when it gave none, or a cancellation.
+ */
+const taskFailure = ref<{ kind: 'failed'; error: string } | { kind: 'cancelled' } | null>(null)
 const currentTaskId = ref<string | null>(null)
 const taskProgress = ref(0)
 const taskStep = ref('')
 
 const STATUS_POLL_INTERVAL_MS = 1500
+/** This page's own complaint when main answers without a task id; the log keeps it. */
+const MISSING_TASK_ID = 'Missing task id from execute response'
 let taskStatusPollTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * A task the user's own usage limit stopped says so in the interface's language — the limit set in
- * Audit is used up — with the way there, instead of the run's stable code. Every other failure
- * keeps the message it came with.
+ * Audit is used up — with the way there, instead of the run's stable code. Every other failure is
+ * the failure line's.
  */
 const taskUsageLimit = computed(() => {
-  const error = taskError.value
-  if (!error || !isUsageLimitFailure(error)) return null
-  return resolveIntelligenceErrorRecovery({ error }, t, locale.value)
+  const failure = taskFailure.value
+  if (failure?.kind !== 'failed' || !isUsageLimitFailure(failure.error)) return null
+  return resolveIntelligenceErrorRecovery({ error: failure.error }, t, locale.value)
+})
+
+/**
+ * The failure line: a run main ended with one of its codes, and a failure of the channel, read in
+ * the interface language; anything else, such as a provider's own reason, is shown as it came.
+ */
+const taskError = computed(() => {
+  const failure = taskFailure.value
+  if (!failure) return ''
+  if (failure.kind === 'cancelled') return t('intelligence.agents.task_cancelled')
+  const described = failure.error ? describeFailure(failure.error, t, '') : ''
+  return described ? describeAiRunFailure(described, t) : t('intelligence.agents.task_failed')
 })
 
 function toastTaskFailure(): void {
-  toast.error(
-    taskUsageLimit.value?.title ?? taskError.value ?? t('intelligence.agents.task_failed')
-  )
+  toast.error(taskUsageLimit.value?.title ?? taskError.value)
 }
 
 function stopTaskStatusPolling() {
@@ -81,7 +99,7 @@ function finalizeTaskByPolledStatus(status: string) {
   }
 
   if (normalized === 'failed') {
-    taskError.value = t('intelligence.agents.task_failed')
+    taskFailure.value = { kind: 'failed', error: '' }
     taskStep.value = t('intelligence.agents.task_failed')
     executing.value = false
     canceling.value = false
@@ -92,7 +110,7 @@ function finalizeTaskByPolledStatus(status: string) {
   }
 
   if (normalized === 'cancelled') {
-    taskError.value = t('intelligence.agents.task_cancelled')
+    taskFailure.value = { kind: 'cancelled' }
     taskStep.value = t('intelligence.agents.task_cancelled')
     executing.value = false
     canceling.value = false
@@ -154,9 +172,9 @@ const taskListeners = [
     }
 
     taskResult.value = payload.result
-    taskError.value = payload.result?.success
+    taskFailure.value = payload.result?.success
       ? null
-      : payload.result?.error || t('intelligence.agents.task_failed')
+      : { kind: 'failed', error: payload.result?.error ?? '' }
     taskProgress.value = 100
     taskStep.value = t('intelligence.agents.task_completed')
     executing.value = false
@@ -175,7 +193,7 @@ const taskListeners = [
       return
     }
 
-    taskError.value = payload.error || t('intelligence.agents.task_failed')
+    taskFailure.value = { kind: 'failed', error: payload.error ?? '' }
     taskStep.value = t('intelligence.agents.task_failed')
     executing.value = false
     canceling.value = false
@@ -188,7 +206,7 @@ const taskListeners = [
       return
     }
 
-    taskError.value = t('intelligence.agents.task_cancelled')
+    taskFailure.value = { kind: 'cancelled' }
     taskStep.value = t('intelligence.agents.task_cancelled')
     executing.value = false
     canceling.value = false
@@ -218,7 +236,7 @@ async function executeTask() {
   executing.value = true
   currentTaskId.value = taskId
   taskResult.value = null
-  taskError.value = null
+  taskFailure.value = null
   taskProgress.value = 0
   canceling.value = false
   taskStep.value = t('intelligence.agents.task_queued')
@@ -233,7 +251,7 @@ async function executeTask() {
 
     const queued = await agentsSdk.execute(task)
     if (!queued?.taskId) {
-      throw new Error('Missing task id from execute response')
+      throw new Error(MISSING_TASK_ID)
     }
     if (queued.taskId !== taskId) {
       currentTaskId.value = queued.taskId
@@ -242,7 +260,8 @@ async function executeTask() {
     startTaskStatusPolling()
   } catch (err) {
     agentDetailLog.error('Task execution failed:', err)
-    taskError.value = err instanceof Error ? err.message : t('intelligence.agents.task_failed')
+    const message = failureMessage(err)
+    taskFailure.value = { kind: 'failed', error: message === MISSING_TASK_ID ? '' : message }
     taskStep.value = t('intelligence.agents.task_failed')
     executing.value = false
     canceling.value = false
@@ -263,15 +282,18 @@ async function cancelTask() {
   try {
     const result = await agentsSdk.cancel(taskId)
     if (!result?.success) {
-      throw new Error(t('intelligence.agents.cancel_failed'))
+      canceling.value = false
+      toast.error(t('intelligence.agents.cancel_failed'))
+      return
     }
 
     taskStep.value = t('intelligence.agents.task_cancel_requested')
     toast.info(t('intelligence.agents.task_cancel_requested'))
   } catch (err) {
     canceling.value = false
-    const message = err instanceof Error ? err.message : t('intelligence.agents.cancel_failed')
-    toast.error(message)
+    toast.error(t('intelligence.agents.cancel_failed'), {
+      description: describeFailure(err, t, '') || undefined
+    })
   }
 }
 
