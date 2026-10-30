@@ -4,6 +4,7 @@ import type {
   StoreProviderListOptions,
   StoreProviderResultMeta
 } from '@talex-touch/utils/store'
+import { failureMessage } from '~/utils/failure-text'
 import { storeHttpRequest } from './store-http-client'
 import { createStoreProvider } from './provider-factory'
 
@@ -42,7 +43,7 @@ export async function fetchStoreCatalog(options: FetchOptions): Promise<StoreCat
           meta: buildMeta(definition, true, undefined, plugins.length)
         }
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : undefined
+        const message = failureMessage(error)
         return {
           plugins: [],
           meta: buildMeta(definition, false, message || 'STORE_PROVIDER_FAILED', 0)
@@ -66,8 +67,7 @@ export async function fetchStoreCatalog(options: FetchOptions): Promise<StoreCat
       stats.push(meta)
     } else {
       // A rejected promise indicates unexpected failure
-      const reason =
-        result.reason instanceof Error ? result.reason.message : 'STORE_PROVIDER_FAILED'
+      const reason = failureMessage(result.reason) || 'STORE_PROVIDER_FAILED'
       stats.push({
         providerId: 'unknown',
         // Named where it is shown, in the interface language.

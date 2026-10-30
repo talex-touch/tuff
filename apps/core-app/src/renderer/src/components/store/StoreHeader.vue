@@ -1,5 +1,6 @@
 <script setup lang="ts" name="StoreHeader">
 import type { StoreProviderResultMeta, StoreProviderType } from '@talex-touch/utils/store'
+import { isTransportFailureError } from '@talex-touch/utils/network'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
 import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
@@ -8,6 +9,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
+import { describeFailure, unwrapTransportFailure } from '~/utils/failure-text'
 
 const props = defineProps<{
   loading: boolean
@@ -44,6 +46,44 @@ function openErrorDetails(event?: MouseEvent): void {
     errorDrawerSource.value = event.currentTarget
   }
   showErrorDrawer.value = true
+}
+
+// What a store source reports when it could not be read (`modules/store`), by the code it leads with.
+const SOURCE_FAILURE_KEYS: Record<string, string> = {
+  STORE_PROVIDER_UNSUPPORTED: 'unsupported',
+  STORE_HTTP_INVALID_URL: 'addressInvalid',
+  STORE_HTTP_UNSUPPORTED_PROTOCOL: 'addressInvalid',
+  STORE_NEXUS_API_URL_REQUIRED: 'addressInvalid',
+  STORE_NEXUS_INVALID_JSON: 'unreadable',
+  STORE_NEXUS_INVALID_MANIFEST: 'unreadable',
+  STORE_TPEX_API_INVALID_RESPONSE: 'unreadable',
+  STORE_NEXUS_LEGACY_MANIFEST_UNSUPPORTED: 'legacyManifest',
+  STORE_NEXUS_PACKAGE_URL_REQUIRED: 'packageUrlMissing'
+}
+const SOURCE_FAILURE_CODE = /^STORE_[A-Z_]+/
+const REQUEST_FAILED_PREFIX = /^STORE_NEXUS_REQUEST_FAILED(?::\s*|$)/
+
+/** Why a request to a source failed, when it failed in a way the drawer has words for. */
+function requestFailureReason(failure: string): string | null {
+  const status = /^STORE_HTTP_STATUS_(\d{3})$/.exec(failure)?.[1]
+  if (status) return t('common.failures.httpStatus', { status })
+  if (isTransportFailureError(new Error(failure))) return t('store.sourceFailures.unreachable')
+  const worded = describeFailure(failure, t, '')
+  return worded && worded !== failure ? worded : null
+}
+
+/**
+ * A source's failure in the interface language. Sources report a code, the request's own failure
+ * after `STORE_NEXUS_REQUEST_FAILED`, or the request's failure alone; the drawer keeps what they
+ * reported beneath this sentence, for whoever reports the problem.
+ */
+function describeSourceFailure(error: string): string {
+  const failure = unwrapTransportFailure(error)
+  const code = SOURCE_FAILURE_CODE.exec(failure)?.[0]
+  const key = code ? SOURCE_FAILURE_KEYS[code] : undefined
+  if (key) return t(`store.sourceFailures.${key}`)
+  const request = unwrapTransportFailure(failure.replace(REQUEST_FAILED_PREFIX, ''))
+  return (request && requestFailureReason(request)) || t('store.sourceFailures.failed')
 }
 
 function openSourceEditor(event?: MouseEvent): void {
@@ -226,6 +266,7 @@ function resolveProviderTypeLabel(type: StoreProviderType): string {
                 }}</span>
               </div>
               <div v-if="!provider.success && provider.error" class="error-message">
+                <p>{{ describeSourceFailure(provider.error) }}</p>
                 <code>{{ provider.error }}</code>
               </div>
             </div>
@@ -399,6 +440,12 @@ function resolveProviderTypeLabel(type: StoreProviderType): string {
   border-radius: 4px;
   background: var(--tx-fill-color-dark);
   overflow-x: auto;
+
+  p {
+    margin: 0 0 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--tx-text-color-primary);
+  }
 
   code {
     font-size: 0.75rem;

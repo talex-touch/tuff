@@ -1382,6 +1382,7 @@
     "subscriptionFailed": "Failed to load subscription",
     "teamFailed": "Failed to load team",
     "loadFailed": "Failed to load account data",
+    "loadFailedReason": "Failed to load account data: {reason}",
     "actions": "Profile actions",
     "manage": "Manage",
     "editProfile": "Edit profile",
@@ -3382,9 +3383,28 @@
         "versionCreated": "Created version v{version}",
         "versionStatusChanged": "Version v{version} status changed",
         "versionReedited": "Version v{version} was re-edited and re-submitted"
+      },
+      "failures": {
+        "load": "Couldn't load your plugins",
+        "timeline": "Couldn't load the timeline",
+        "preview": "Couldn't read the package",
+        "submit": "Couldn't submit",
+        "status": "Couldn't change the review status",
+        "deleteVersion": "Couldn't delete the version",
+        "withReason": "{action}: {reason}",
+        "signInRequired": "Sign in to Nexus first."
       }
     },
-    "official": "Official"
+    "official": "Official",
+    "sourceFailures": {
+      "failed": "Couldn't read this source.",
+      "unsupported": "This kind of source isn't supported.",
+      "addressInvalid": "This source's address isn't valid.",
+      "unreadable": "The source answered with data Tuff couldn't read.",
+      "legacyManifest": "This source uses an old catalog format that's no longer supported.",
+      "packageUrlMissing": "A plugin in this source has no download address.",
+      "unreachable": "Couldn't reach this source. Check your network and try again."
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -3530,7 +3550,35 @@
         "empty": "This plugin has no registered search sources",
         "providerDesc": "{mode} · source {source}",
         "issueCount": "{count} registration issue | {count} registration issues",
-        "consentRequired": "Consent required"
+        "consentRequired": "Consent required",
+        "modes": {
+          "push": "Pushes results",
+          "pull": "Answers searches",
+          "indexed": "Searches an index"
+        },
+        "owners": {
+          "core": "Built-in",
+          "official-plugin": "Official plugin",
+          "third-party-plugin": "Third-party plugin"
+        },
+        "issues": {
+          "derived": "No search sources declared, so they were derived from its push features: {features}",
+          "uncovered": "Push features without a search source of their own reach root results unchecked: {features}",
+          "invalidList": "searchProviders in manifest.json is not a list",
+          "invalidEntry": "Search source {position} in manifest.json is missing its id, mode or permission scopes",
+          "blocked": "{provider} was blocked: {reasons}",
+          "permissionMissing": "{provider} needs permissions the manifest does not declare: {permissions}",
+          "idCollision": "{provider} was ignored: another search source already uses this id"
+        },
+        "blockReasons": {
+          "missing-owner": "no owner declared",
+          "missing-permission-scope": "no permission scope declared",
+          "third-party-push-requires-root-results": "third-party push sources must declare the root-results scope",
+          "third-party-push-requires-explicit-consent": "third-party push sources must ask for consent first",
+          "third-party-indexed-requires-explicit-consent": "third-party indexed sources must require consent",
+          "high-privacy-requires-explicit-consent": "sources that need consent cannot be on by default",
+          "browser-data-requires-official-plugin": "only official plugins can read browser data"
+        }
       },
       "blockedTitle": "Plugin Blocked",
       "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
@@ -7378,7 +7426,9 @@
       "operationFailed": "The operation couldn't be completed. Try again.",
       "databaseBusy": "The database is busy. Try again in a moment.",
       "indexWriterBusy": "The search index is busy saving changes. Try again in a moment.",
-      "timedOut": "The request timed out. Try again."
+      "timedOut": "The request timed out. Try again.",
+      "coolingDown": "The last request failed moments ago. Try again in a few seconds.",
+      "httpStatus": "The server returned an error (HTTP {status})."
     }
   },
   "form": {

@@ -1382,6 +1382,7 @@
     "subscriptionFailed": "订阅信息获取失败",
     "teamFailed": "团队信息获取失败",
     "loadFailed": "加载账户信息失败",
+    "loadFailedReason": "加载账户信息失败：{reason}",
     "actions": "账户操作",
     "manage": "管理",
     "editProfile": "编辑资料",
@@ -3382,9 +3383,28 @@
         "versionCreated": "创建版本 v{version}",
         "versionStatusChanged": "版本 v{version} 状态变更",
         "versionReedited": "版本 v{version} 已重新编辑并提交审核"
+      },
+      "failures": {
+        "load": "未能读取你的插件",
+        "timeline": "未能读取时间线",
+        "preview": "未能解析插件包",
+        "submit": "未能提交",
+        "status": "未能更改审核状态",
+        "deleteVersion": "未能删除版本",
+        "withReason": "{action}：{reason}",
+        "signInRequired": "请先登录 Nexus。"
       }
     },
-    "official": "官方"
+    "official": "官方",
+    "sourceFailures": {
+      "failed": "未能读取这个来源。",
+      "unsupported": "不支持这种类型的来源。",
+      "addressInvalid": "来源地址无效。",
+      "unreadable": "来源返回的数据无法识别。",
+      "legacyManifest": "这个来源使用的旧版目录格式已不再支持。",
+      "packageUrlMissing": "这个来源里有插件缺少下载地址。",
+      "unreachable": "无法连接这个来源，请检查网络后重试。"
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -3530,7 +3550,35 @@
         "empty": "此插件未注册搜索源",
         "providerDesc": "{mode} · 源 {source}",
         "issueCount": "{count} 个注册问题",
-        "consentRequired": "需授权"
+        "consentRequired": "需授权",
+        "modes": {
+          "push": "推送结果",
+          "pull": "响应搜索",
+          "indexed": "检索索引"
+        },
+        "owners": {
+          "core": "内置",
+          "official-plugin": "官方插件",
+          "third-party-plugin": "第三方插件"
+        },
+        "issues": {
+          "derived": "未声明搜索源，已按推送功能自动生成：{features}",
+          "uncovered": "没有自己搜索源的推送功能会不经准入进入根结果：{features}",
+          "invalidList": "manifest.json 中的 searchProviders 不是列表",
+          "invalidEntry": "manifest.json 中第 {position} 个搜索源缺少 id、模式或权限范围",
+          "blocked": "{provider} 已被拦截：{reasons}",
+          "permissionMissing": "{provider} 需要清单未声明的权限：{permissions}",
+          "idCollision": "{provider} 已被忽略：已有搜索源使用了这个 id"
+        },
+        "blockReasons": {
+          "missing-owner": "未声明归属",
+          "missing-permission-scope": "未声明权限范围",
+          "third-party-push-requires-root-results": "第三方推送源必须声明 root-results 权限范围",
+          "third-party-push-requires-explicit-consent": "第三方推送源必须先征得用户同意",
+          "third-party-indexed-requires-explicit-consent": "第三方索引源必须要求用户同意",
+          "high-privacy-requires-explicit-consent": "需要用户同意的来源不能默认开启",
+          "browser-data-requires-official-plugin": "只有官方插件可以读取浏览器数据"
+        }
       },
       "blockedTitle": "插件已阻断",
       "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
@@ -5783,7 +5831,7 @@
         "persistent-source-must-be-clearable": "持久索引源必须支持清理",
         "watch-capability-requires-reconcile": "监听源必须支持补漏"
       },
-      "sourceLifecycleIssues": "合同",
+      "sourceLifecycleIssues": "契约",
       "sourceLifecycleIssue": {
         "missing-scan-handler": "缺少扫描入口",
         "open-capability-missing-handler": "声明了打开能力但缺少入口",
@@ -5853,7 +5901,7 @@
       "sourceDetail": {
         "lastError": "最近错误：{error}",
         "admissionIssue": "准入问题：{issue}",
-        "lifecycleIssue": "合同问题：{issue}",
+        "lifecycleIssue": "契约问题：{issue}",
         "reason": "原因：{reason}",
         "lastIndexedAt": "最近索引：{time}",
         "roots": "监听根：{roots}",
@@ -7378,7 +7426,9 @@
       "operationFailed": "操作没能完成，请重试。",
       "databaseBusy": "数据库正忙，请稍后重试。",
       "indexWriterBusy": "搜索索引正在写入，请稍后重试。",
-      "timedOut": "请求超时，请重试。"
+      "timedOut": "请求超时，请重试。",
+      "coolingDown": "刚才的请求失败了，请过几秒再试。",
+      "httpStatus": "服务器返回了错误（HTTP {status}）。"
     }
   },
   "form": {

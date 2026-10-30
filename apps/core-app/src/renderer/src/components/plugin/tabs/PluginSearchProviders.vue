@@ -1,6 +1,8 @@
 <script setup lang="ts" name="PluginSearchProviders">
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type {
+  SearchProviderMode,
+  SearchProviderOwner,
   SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
@@ -15,6 +17,7 @@ import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { resolvePermissionDisplayName } from '~/modules/permission/permission-request-card'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -22,7 +25,7 @@ const props = defineProps<{
 }>()
 
 const settingsSdk = useSettingsSdk()
-const { t } = useI18n()
+const { t, te, locale } = useI18n()
 const pluginSearchProvidersLog = createRendererLogger('PluginSearchProviders')
 
 const providers = ref<SearchProviderRuntimeConfig[]>([])
@@ -67,25 +70,93 @@ function toSearchProviderUserConfigs(nextProviders = providers.value): SearchPro
   }))
 }
 
-function formatProviderDescription(provider: SearchProviderRuntimeConfig): string {
-  const source =
-    provider.descriptor.policy.indexedSourceId ??
-    provider.descriptor.policy.indexedSource?.id ??
-    t('settings.settingFileIndex.providerConfigSourceUnknown')
+/** A word Main reports as an identifier, in the interface language when there is one for it. */
+function wordFor(group: string, value: string): string {
+  const key = `plugin.permissions.searchProviders.${group}.${value}`
+  return te(key) ? t(key) : value
+}
 
-  return t('plugin.permissions.searchProviders.providerDesc', {
-    mode: provider.descriptor.mode,
-    source
-  })
+function modeLabel(mode: SearchProviderMode): string {
+  return wordFor('modes', mode)
+}
+
+function ownerLabel(owner: SearchProviderOwner): string {
+  return wordFor('owners', owner)
+}
+
+/** Only an indexed source is fed from somewhere; a push or pull source has nothing to name. */
+function formatProviderDescription(provider: SearchProviderRuntimeConfig): string {
+  const mode = modeLabel(provider.descriptor.mode)
+  const source =
+    provider.descriptor.policy.indexedSourceId ?? provider.descriptor.policy.indexedSource?.id
+  return source ? t('plugin.permissions.searchProviders.providerDesc', { mode, source }) : mode
+}
+
+function joinList(items: string[]): string {
+  try {
+    return new Intl.ListFormat(locale.value, { style: 'long', type: 'conjunction' }).format(items)
+  } catch {
+    return items.join(', ')
+  }
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
+}
+
+/**
+ * The sentence for one registration issue, built from the fields Main reports with it. Main's
+ * `message` is the plugin developer's English; it is shown only for an issue this window has no
+ * words for, or one that arrived without the fields its sentence needs.
+ */
+function issueSentence(issue: SearchProviderRegistryIssue): string | null {
+  const meta = issue.meta ?? {}
+  const provider = issue.providerId || issue.pluginName || ''
+  const words = 'plugin.permissions.searchProviders.issues'
+
+  switch (issue.code) {
+    case 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE':
+    case 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE': {
+      const features = stringList(meta.featureIds)
+      if (features.length === 0) return null
+      const key =
+        issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE' ? 'derived' : 'uncovered'
+      return t(`${words}.${key}`, { features: joinList(features) })
+    }
+    case 'SEARCH_PROVIDER_INVALID':
+      return typeof meta.index === 'number'
+        ? t(`${words}.invalidEntry`, { position: meta.index + 1 })
+        : t(`${words}.invalidList`)
+    case 'SEARCH_PROVIDER_POLICY_BLOCKED': {
+      const reasons = stringList(meta.issues).map((reason) => wordFor('blockReasons', reason))
+      if (!provider || reasons.length === 0) return null
+      return t(`${words}.blocked`, { provider, reasons: joinList(reasons) })
+    }
+    case 'SEARCH_PROVIDER_PERMISSION_MISSING': {
+      const permissions = stringList(meta.missingPermissionIds).map((id) =>
+        resolvePermissionDisplayName(id, t)
+      )
+      if (!provider || permissions.length === 0) return null
+      return t(`${words}.permissionMissing`, { provider, permissions: joinList(permissions) })
+    }
+    case 'SEARCH_PROVIDER_ID_COLLISION':
+      return provider ? t(`${words}.idCollision`, { provider }) : null
+    default:
+      return null
+  }
 }
 
 function formatIssue(issue: SearchProviderRegistryIssue): string {
-  const provider = issue.providerId || issue.pluginName || issue.source || issue.code
-  return t('settings.settingFileIndex.providerConfigIssue', {
-    provider,
-    code: issue.code,
-    message: issue.message
-  })
+  return (
+    issueSentence(issue) ??
+    t('settings.settingFileIndex.providerConfigIssue', {
+      provider: issue.providerId || issue.pluginName || issue.source || issue.code,
+      code: issue.code,
+      message: issue.message
+    })
+  )
 }
 
 async function loadProviderConfig() {
@@ -181,8 +252,8 @@ onMounted(() => {
     >
       <div class="PluginSearchProviders-Issues">
         <TxTag
-          v-for="issue in pluginIssues"
-          :key="`${issue.providerId ?? issue.pluginName ?? issue.code}:${issue.source ?? ''}`"
+          v-for="(issue, index) in pluginIssues"
+          :key="`${index}:${issue.code}:${issue.providerId ?? issue.pluginName ?? ''}`"
           :color="issue.type === 'error' ? 'var(--tx-color-danger)' : 'var(--tx-color-warning)'"
           size="sm"
         >
@@ -205,7 +276,7 @@ onMounted(() => {
     >
       <template #tags>
         <TxTag color="var(--tx-color-info)" size="sm">
-          {{ provider.descriptor.owner }}
+          {{ ownerLabel(provider.descriptor.owner) }}
         </TxTag>
         <TxTag
           v-if="provider.descriptor.policy.requiresUserConsent"
