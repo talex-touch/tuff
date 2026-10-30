@@ -201,30 +201,37 @@ export function t(key: TranslationKey, params?: Record<string, string | number>)
 }
 
 /**
- * Format duration in seconds to human-readable string
+ * Format duration in seconds to human-readable string, in the current locale:
+ * "1小时30分钟" / "1 hr, 30 min". Hours drop the seconds; zero parts after the first are left out.
  */
 export function formatDuration(seconds: number): string {
-  if (seconds < 60) {
-    return t('timeUnits.seconds', { count: seconds })
-  }
+  const total = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const remainingSeconds = total % 60
 
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
+  const parts: Array<[number, 'hour' | 'minute' | 'second']> =
+    hours > 0
+      ? [
+          [hours, 'hour'],
+          [minutes, 'minute']
+        ]
+      : minutes > 0
+        ? [
+            [minutes, 'minute'],
+            [remainingSeconds, 'second']
+          ]
+        : [[remainingSeconds, 'second']]
 
-  if (minutes < 60) {
-    if (remainingSeconds > 0) {
-      return `${minutes}${t('timeUnits.minutes')}${remainingSeconds}${t('timeUnits.seconds')}`
-    }
-    return `${minutes}${t('timeUnits.minutes')}`
-  }
-
-  const hours = Math.floor(minutes / 60)
-  const remainingMinutes = minutes % 60
-
-  if (remainingMinutes > 0) {
-    return `${hours}${t('timeUnits.hours')}${remainingMinutes}${t('timeUnits.minutes')}`
-  }
-  return `${hours}${t('timeUnits.hours')}`
+  // Unit names, their spacing and the joiner all come from CLDR, which a catalog cannot express.
+  const units = parts
+    .filter(([value], index) => index === 0 || value > 0)
+    .map(([value, unit]) =>
+      new Intl.NumberFormat(currentLocale, { style: 'unit', unit, unitDisplay: 'short' }).format(
+        value
+      )
+    )
+  return new Intl.ListFormat(currentLocale, { type: 'unit', style: 'short' }).format(units)
 }
 
 /**

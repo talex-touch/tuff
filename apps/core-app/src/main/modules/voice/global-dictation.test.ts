@@ -25,7 +25,9 @@ const { FakeNotification } = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({
-  Notification: FakeNotification
+  Notification: FakeNotification,
+  // The notifications are worded through main's translations; these tests read them in Chinese.
+  app: { getLocale: () => 'zh-CN' }
 }))
 
 vi.mock('../global-shortcon', () => ({
@@ -168,7 +170,8 @@ describe('global quick edit', () => {
   it('surfaces the selection reader’s own reason instead of the generic prompt', async () => {
     mocks.captureSelection.mockResolvedValue({
       text: '',
-      issueMessage: '当前应用不允许读取选区'
+      issueCode: 'unsupported',
+      issueMessage: 'Selection capture is unsupported on platform: linux'
     })
     const { press } = pressQuickEdit()
 
@@ -176,7 +179,8 @@ describe('global quick edit', () => {
 
     await vi.waitFor(() => expect(FakeNotification.instances).toHaveLength(1))
     expect(mocks.startSession).not.toHaveBeenCalled()
-    expect(FakeNotification.instances[0]?.options.body).toBe('当前应用不允许读取选区')
+    // The reader's message is an English diagnostic; its code is what reaches the user, worded.
+    expect(FakeNotification.instances[0]?.options.body).toBe('当前系统无法读取选中的文字')
   })
 
   it('starts a session carrying the trimmed passage it read', async () => {

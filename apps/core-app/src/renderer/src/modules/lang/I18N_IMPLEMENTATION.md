@@ -88,7 +88,6 @@ Located in `notifications` namespace:
 
 Located in `timeUnits` namespace:
 
-- `seconds`, `minutes`, `hours`, `days`: Time unit labels
 - `justNow`: "Just now" label
 - `minutesAgo`, `hoursAgo`, `daysAgo`: Relative time with count parameter
 
@@ -177,8 +176,8 @@ import {
   formatRelativeTime
 } from '../../utils/i18n-helper'
 
-// Format duration in seconds
-const duration = formatDuration(125) // "2分5秒" or "2min5s"
+// Format duration in seconds (unit names come from Intl, not the catalog)
+const duration = formatDuration(125) // "2分钟5秒" or "2 min, 5 sec"
 
 // Format file size
 const size = formatFileSize(1048576) // "1.0 MB"

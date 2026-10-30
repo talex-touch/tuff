@@ -14,6 +14,9 @@ vi.mock('electron', () => ({
     showSaveDialog: vi.fn(async () => ({ canceled: true }))
   }
 }))
+// Dialog wording goes through main's translator, which reads Electron's `app` on import; this
+// suite does not assert the wording.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
 
 const roots: string[] = []
 

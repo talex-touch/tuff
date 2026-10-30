@@ -845,7 +845,7 @@ onBeforeUnmount(() => {
           <TxIconButton
             icon="i-ri-close-line"
             size="xs"
-            :label="t('browser.closeTab', { title: tab.title || t('browser.newTab') })"
+            :label="t('browser.closeTab', { title: tabTitle(tab) })"
             @click="command(() => sdk.closeTab(tab.id))"
           />
           <span

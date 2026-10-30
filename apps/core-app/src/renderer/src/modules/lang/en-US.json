@@ -7304,7 +7304,75 @@
     "syncDeviceUnknown": "Unknown device",
     "defaultTitle": "Notification",
     "dialogIconPlaceholder": "Tip",
-    "pluginIconAlt": "Plugin"
+    "pluginIconAlt": "Plugin",
+    "share": {
+      "completeTitle": "Share Complete",
+      "completeBody": "Shared via {target}",
+      "copiedTitle": "Copied to Clipboard",
+      "copiedBody": "Content has been copied to your clipboard",
+      "fileRevealedTitle": "File Revealed",
+      "filesRevealedBody": "{count} files revealed in the file manager",
+      "fileRevealedBody": "File revealed in the file manager",
+      "failedTitle": "Share Failed",
+      "failedBody": "Unable to share: {error}",
+      "airdropReadyTitle": "AirDrop Ready",
+      "airdropReadyBody": "Select a device to send your files",
+      "mailReadyTitle": "Mail Opened",
+      "mailReadyBody": "Complete your email in the Mail app",
+      "messagesReadyTitle": "Messages Opened",
+      "messagesReadyBody": "Content copied - paste in Messages to send"
+    },
+    "voice": {
+      "captureUnavailableTitle": "Voice Input Unavailable",
+      "captureUnavailableBody": "This installation is missing its recording component. Update or reinstall Tuff, then try again.",
+      "gestureFailedTitle": "Voice Shortcut Failed",
+      "gestureFailedBody": "Check the microphone permission and the voice service settings.",
+      "quickEditNoSelectionTitle": "Quick Edit: Select Some Text First",
+      "quickEditNoSelectionBody": "Select text in any app, then press the shortcut again.",
+      "selectionUnsupportedBody": "This system cannot read selected text.",
+      "selectionDisabledBody": "Reading selected text is turned off.",
+      "selectionFailedBody": "Could not read the selected text. Try again.",
+      "quickEditListeningTitle": "Listening for Your Edit…",
+      "quickEditListeningBody": "Press the shortcut again when you're done ({count} selected).",
+      "dictationListeningTitle": "Dictating…",
+      "dictationListeningBody": "Press the shortcut again to stop and type.",
+      "noSpeechTitle": "No Speech Detected",
+      "noSpeechBody": "Move closer to the microphone and try again.",
+      "dictationCopiedTitle": "Dictation Copied",
+      "pasteManuallyBody": "Paste it manually.",
+      "dictationNotDeliveredTitle": "Dictation Not Typed",
+      "targetUnavailableBody": "Could not tell which app to type into. Try again.",
+      "targetChangedBody": "The active app changed. Try again.",
+      "dictationRetryBody": "Try again.",
+      "quickEditCancelledTitle": "Quick Edit Cancelled",
+      "selectionUnchangedBody": "The selected text is unchanged.",
+      "quickEditNotAppliedTitle": "Quick Edit Not Applied",
+      "quickEditNotHeardBody": "The edit was not heard clearly. The selected text is unchanged.",
+      "quickEditCopiedTitle": "Quick Edit Result Copied",
+      "quickEditNotDeliveredTitle": "Quick Edit Not Typed",
+      "quickEditTargetChangedBody": "The active app changed. The selected text is unchanged.",
+      "selectionUnchangedRetryBody": "The selected text is unchanged. Try again."
+    },
+    "quickOps": {
+      "timerFinishedTitle": "QuickOps Timer Finished",
+      "timerFinishedBody": "Your {duration} timer has finished.",
+      "pomodoroFinishedTitle": "QuickOps Pomodoro Finished",
+      "pomodoroFinishedBody": "Your {duration} focus session has finished.",
+      "pomodoroCycleFinishedTitle": "QuickOps Pomodoro Cycle Finished",
+      "pomodoroCycleFinishedBody": "Focus rounds completed: {cycles} × {duration}.",
+      "pomodoroFocusFinishedTitle": "QuickOps Focus Finished",
+      "pomodoroFocusFinishedBody": "{focus} of focus done. Time for a {breakDuration} break.",
+      "pomodoroFocusFinishedLongBreakBody": "{focus} of focus done. Time for a {breakDuration} long break.",
+      "pomodoroBreakFinishedTitle": "QuickOps Break Finished",
+      "pomodoroBreakFinishedBody": "{duration} break is over. Starting focus round {cycle}.",
+      "flowFallbackBody": "QuickOps notification"
+    },
+    "ocr": {
+      "queuePausedTitle": "OCR Paused After Repeated Failures",
+      "queuePausedBody": "The OCR queue is paused until {until}. Reason: {reason}. {hint}",
+      "queuePausedConfigHint": "Check the OCR provider and model settings; OCR resumes on its own.",
+      "queuePausedNetworkHint": "Check your network or the OCR service; OCR resumes on its own later."
+    }
   },
   "assistant": {
     "voicePanel": {
@@ -7397,10 +7465,6 @@
     }
   },
   "timeUnits": {
-    "seconds": "s",
-    "minutes": "min",
-    "hours": "hr",
-    "days": "d",
     "justNow": "Just now",
     "minutesAgo": "{count} minutes ago",
     "hoursAgo": "{count} hours ago",
@@ -8409,7 +8473,18 @@
       }
     },
     "previewCopied": "Result copied",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "imageTranslatePin": {
+      "windowTitle": "Image Translation",
+      "copyImage": "Copy Translated Image",
+      "copyTranslation": "Copy Translation",
+      "copySource": "Copy Source Text",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "resetZoom": "Reset Zoom",
+      "opacity": "Opacity",
+      "close": "Close"
+    }
   },
   "shortcuts": {
     "palette": "Command palette",
@@ -8466,5 +8541,138 @@
     "minimize": "Minimize",
     "zoom": "Zoom",
     "bringAllToFront": "Bring All to Front"
+  },
+  "nativeShare": {
+    "pickerPrompt": "Choose a macOS share target",
+    "targets": {
+      "systemShare": "System Share",
+      "airdrop": "AirDrop",
+      "mail": "Mail",
+      "messages": "Messages",
+      "clipboard": "Clipboard",
+      "finder": "Finder",
+      "explorer": "File Explorer",
+      "browser": "Browser"
+    },
+    "errors": {
+      "failed": "Share failed",
+      "noContent": "No content to share",
+      "cancelled": "Share cancelled",
+      "targetUnsupported": "This share target cannot handle the current content",
+      "mailRefused": "Mail link refused: {reason}",
+      "mailAttachmentsUnsupported": "The Mail target does not support file attachments on this platform",
+      "messagesMacOnly": "Messages is only available on macOS",
+      "noShareSheet": "{platform} does not provide a system share sheet to Tuff; only the Mail target is available."
+    }
+  },
+  "nativeDialogs": {
+    "ok": "OK",
+    "database": {
+      "title": "Database Initialization Failed",
+      "message": "Database migration failed. The app cannot start.",
+      "migrationsFolderMissing": "Migrations folder not found:\n{path}",
+      "checkInstallation": "Please check that the app is installed completely.",
+      "debugInformation": "Debug information:",
+      "journalMissing": "Migration journal file not found:\n{path}",
+      "migrationsFolderExists": "Migrations folder exists: {exists}",
+      "folderContents": "Folder contents: {contents}",
+      "migrationFailed": "Database migration failed:\n{error}",
+      "checkLogs": "Check the log files for more information.\nLog location: {path}"
+    },
+    "rendererMissing": {
+      "title": "File Not Found",
+      "message": "A file the app needs is missing.",
+      "damaged": "The application files appear to be incomplete or damaged.",
+      "reinstall": "Reinstalling usually fixes this.",
+      "attachLog": "If you are reporting the problem, please attach the log file.",
+      "openLogFolder": "Open Log Folder"
+    },
+    "unsupportedFile": {
+      "title": "Unsupported File Type",
+      "body": "No plugin is registered to handle \".{extension}\" files. Install a compatible plugin from the Plugin Store."
+    },
+    "unsupportedInput": {
+      "title": "Unsupported Input",
+      "body": "Folder input is not supported by plugin services."
+    },
+    "pluginInstallRisk": {
+      "title": "Plugin Installation Risk Confirmation",
+      "message": "This plugin comes from an unofficial source",
+      "detail": "Source type: {sourceType}\nSource ID: {sourceId}\nPlease confirm you trust this source before continuing.",
+      "continue": "Continue Installation",
+      "githubDescription": "This plugin will be downloaded from a custom GitHub repository, which carries potential risk.",
+      "npmDescription": "This plugin will be downloaded from a third-party npm package, which carries potential risk.",
+      "rejected": "The risk confirmation was declined"
+    },
+    "workspaceScript": {
+      "selectTitle": "Select Workspace",
+      "selectButton": "Select",
+      "runTitle": "Run Workspace Script",
+      "runMessage": "Run \"{script}\"?",
+      "runDetail": "Workspace: {workspace}\nThe package script is project-owned code and may perform arbitrary actions.",
+      "run": "Run"
+    },
+    "hosts": {
+      "title": "Confirm Hosts Update",
+      "removeMessage": "Remove {hostname}?",
+      "updateMessage": "Update {hostname}?",
+      "removeDetail": "This removes the managed hostname from the system Hosts file.",
+      "updateDetail": "Addresses: {addresses}",
+      "apply": "Apply"
+    },
+    "systemAction": {
+      "detail": "This takes effect immediately. Make sure you have saved your work.",
+      "restart": {
+        "title": "Confirm Restart",
+        "message": "Restart this computer now?",
+        "messageAgain": "Confirm once more to restart this computer.",
+        "confirm": "Restart"
+      },
+      "shutdown": {
+        "title": "Confirm Shutdown",
+        "message": "Shut down this computer now?",
+        "messageAgain": "Confirm once more to shut down this computer.",
+        "confirm": "Shut Down"
+      }
+    },
+    "files": {
+      "saveFile": "Save File",
+      "locateCli": "Locate {name}",
+      "exportPluginData": "Export Plugin Data",
+      "privacyExportFilter": "Talex Touch Privacy Export",
+      "exportPluginCredentials": "Export Encrypted Plugin Credentials",
+      "secretBackupFilter": "Talex Touch Secret Backup",
+      "exportPrivacyData": "Export Privacy Data",
+      "exportCredentials": "Export Encrypted Credentials",
+      "restoreCredentials": "Restore Encrypted Credentials",
+      "saveScreenshot": "Save Screenshot",
+      "screenshotName": "Screenshot-{time}",
+      "pngFilter": "PNG Image",
+      "selectAudio": "Select Audio File",
+      "transcribe": "Transcribe",
+      "audioFilter": "Audio"
+    }
+  },
+  "clipboardActions": {
+    "automationPermissionDenied": "Auto-paste failed: allow Tuff to control System Events in System Settings > Privacy & Security > Automation.",
+    "accessibilityPermissionDenied": "Auto-paste failed: allow Tuff in System Settings > Privacy & Security > Accessibility.",
+    "autoPasteFailed": "Copied to the clipboard, but auto-paste failed. Make sure the target app is still in front, or press Cmd/Ctrl+V.",
+    "databaseUnavailable": "Clipboard history is not ready yet. Try again shortly.",
+    "itemNotFound": "This clipboard history item was not found.",
+    "voiceTextEmpty": "There is no voice text to paste.",
+    "voiceClipboardNotRestored": "Voice text was pasted, but the previous clipboard could not be restored.",
+    "notificationTitle": "Auto-Paste Failed"
+  },
+  "quickOps": {
+    "screenClean": {
+      "hint": "QuickOps {mode} · Exits in {duration} · Hold Esc to exit",
+      "modes": {
+        "white": "White screen for cleaning",
+        "black": "Black screen for cleaning",
+        "red": "Red screen test",
+        "green": "Green screen test",
+        "blue": "Blue screen test"
+      }
+    }
   }
 }

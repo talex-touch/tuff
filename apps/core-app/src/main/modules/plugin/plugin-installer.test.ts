@@ -32,6 +32,10 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('../../utils/i18n-helper', () => ({
+  t: (key: string) => key
+}))
+
 import { PluginInstaller } from './plugin-installer'
 
 describe('PluginInstaller', () => {

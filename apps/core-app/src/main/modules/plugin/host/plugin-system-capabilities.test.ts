@@ -16,6 +16,9 @@ import {
   type PluginSystemActionProcess
 } from './plugin-system-capabilities'
 
+/** Echoes each key, so a test reads which wording was asked for. */
+const translate = (key: string): string => key
+
 const activation: PluginActivationIdentity = Object.freeze({
   name: 'touch-quick-actions',
   pluginInstanceId: 'quick-actions-instance',
@@ -390,22 +393,25 @@ describe('isolated Quick Actions system capability', () => {
     const showMessageBox = vi.fn(async (_options: PluginSystemActionMessageBoxOptions) => ({
       response: 1
     }))
-    const confirmation = createFixedPluginSystemActionConfirmation({ showMessageBox })
+    const confirmation = createFixedPluginSystemActionConfirmation({ showMessageBox, translate })
     const signal = new AbortController().signal
 
     await expect(confirmation.confirm('restart', signal)).resolves.toBe(true)
     expect(showMessageBox).toHaveBeenCalledTimes(2)
     expect(showMessageBox.mock.calls[0]?.[0]).toEqual({
       type: 'warning',
-      title: '确认重启',
-      message: '确定要执行重启吗？',
-      detail: '该操作会立即影响系统状态，请确认你已保存当前工作内容。',
-      buttons: ['取消', '确定'],
+      title: 'nativeDialogs.systemAction.restart.title',
+      message: 'nativeDialogs.systemAction.restart.message',
+      detail: 'nativeDialogs.systemAction.detail',
+      buttons: ['common.cancel', 'nativeDialogs.systemAction.restart.confirm'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
       signal
     })
+    expect(showMessageBox.mock.calls[1]?.[0].message).toBe(
+      'nativeDialogs.systemAction.restart.messageAgain'
+    )
     await expect(confirmation.confirm('lock-screen', signal)).resolves.toBe(true)
     expect(showMessageBox).toHaveBeenCalledTimes(2)
   })
@@ -417,7 +423,7 @@ describe('isolated Quick Actions system capability', () => {
           options.signal.addEventListener('abort', () => resolve({ response: 0 }), { once: true })
         })
     )
-    const confirmation = createFixedPluginSystemActionConfirmation({ showMessageBox })
+    const confirmation = createFixedPluginSystemActionConfirmation({ showMessageBox, translate })
     const controller = new AbortController()
     const pending = confirmation.confirm('shutdown', controller.signal)
     await vi.waitFor(() => expect(showMessageBox).toHaveBeenCalledOnce())
@@ -433,7 +439,8 @@ describe('isolated Quick Actions system capability', () => {
     const hostile = {}
     Object.defineProperty(hostile, 'response', { enumerable: true, get: response })
     const confirmation = createFixedPluginSystemActionConfirmation({
-      showMessageBox: vi.fn(async () => hostile as { response: number })
+      showMessageBox: vi.fn(async () => hostile as { response: number }),
+      translate
     })
 
     await expect(confirmation.confirm('restart', new AbortController().signal)).rejects.toThrow(

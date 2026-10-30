@@ -74,6 +74,9 @@ vi.mock('electron', () => ({
   clipboard: { writeText: vi.fn() },
   dialog: { showOpenDialog: vi.fn() }
 }))
+// Dialog wording goes through main's translator, which reads Electron's `app` on import; this
+// suite does not assert the wording.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: getTuffTransportMainMock

@@ -45,6 +45,7 @@ import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
 import { clipboard, shell } from 'electron'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { flowBus } from '../flow-bus/flow-bus'
 import { flowTargetRegistry } from '../flow-bus/target-registry'
@@ -2539,7 +2540,7 @@ function resolveFlowNotificationRequest(session: FlowSession): FlowNotificationR
   if (typeof data !== 'object' || !data) {
     return {
       title: 'QuickOps',
-      message: readBoundedText(data, 1000) ?? 'QuickOps notification',
+      message: readBoundedText(data, 1000) ?? t('notifications.quickOps.flowFallbackBody'),
       level: 'info'
     }
   }
@@ -2550,7 +2551,7 @@ function resolveFlowNotificationRequest(session: FlowSession): FlowNotificationR
     message:
       readBoundedText(payload.message, 1000) ??
       readBoundedText(payload.text, 1000) ??
-      'QuickOps notification',
+      t('notifications.quickOps.flowFallbackBody'),
     level: readNotificationLevel(payload.level) ?? 'info',
     system: typeof payload.silent === 'boolean' ? { silent: payload.silent } : undefined
   }

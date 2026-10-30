@@ -18,6 +18,7 @@ import path from 'node:path'
 import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
+import { t } from '../../utils/i18n-helper'
 import { shareNotificationService } from './share-notification'
 
 async function runAppleScript(script: string): Promise<void> {
@@ -159,7 +160,7 @@ export class NativeShareService {
     } catch (error) {
       result = {
         success: false,
-        error: error instanceof Error ? error.message : 'Share failed'
+        error: error instanceof Error ? error.message : t('nativeShare.errors.failed')
       }
     }
 
@@ -193,18 +194,20 @@ export class NativeShareService {
       return await this.shareMacSystem(options)
     }
 
-    return { success: false, error: 'No content to share' }
+    return { success: false, error: t('nativeShare.errors.noContent') }
   }
 
   private async shareMacSystem(options: NativeShareOptions): Promise<NativeShareResult> {
+    // The picker answers with the label it showed, so the labels are both what the user reads and
+    // how the choice is matched back to a target.
     const availableTargets: Array<{ label: string; target: NativeShareTarget }> = []
     if (options.files?.length) {
-      availableTargets.push({ label: 'AirDrop', target: 'airdrop' })
-      availableTargets.push({ label: 'Mail', target: 'mail' })
+      availableTargets.push({ label: t('nativeShare.targets.airdrop'), target: 'airdrop' })
+      availableTargets.push({ label: t('nativeShare.targets.mail'), target: 'mail' })
     }
     if (options.text || options.url) {
-      availableTargets.push({ label: 'Mail', target: 'mail' })
-      availableTargets.push({ label: 'Messages', target: 'messages' })
+      availableTargets.push({ label: t('nativeShare.targets.mail'), target: 'mail' })
+      availableTargets.push({ label: t('nativeShare.targets.messages'), target: 'messages' })
     }
 
     const dedupedTargets = availableTargets.filter(
@@ -213,16 +216,19 @@ export class NativeShareService {
     )
 
     if (dedupedTargets.length === 0) {
-      return { success: false, error: 'No content to share' }
+      return { success: false, error: t('nativeShare.errors.noContent') }
     }
 
     if (dedupedTargets.length === 1) {
       return await this.shareMacTarget(dedupedTargets[0].target, options)
     }
 
-    const choices = dedupedTargets.map((item) => `"${item.label}"`).join(', ')
+    const choices = dedupedTargets
+      .map((item) => `"${escapeAppleScriptString(item.label)}"`)
+      .join(', ')
+    const prompt = escapeAppleScriptString(t('nativeShare.pickerPrompt'))
     const selected = await runAppleScriptWithOutput(`
-set shareChoice to choose from list {${choices}} with prompt "Choose a macOS share target" without multiple selections allowed
+set shareChoice to choose from list {${choices}} with prompt "${prompt}" without multiple selections allowed
 if shareChoice is false then
   return ""
 end if
@@ -231,7 +237,7 @@ return item 1 of shareChoice
 
     const choice = dedupedTargets.find((item) => item.label === selected)
     if (!choice) {
-      return { success: false, error: 'Share cancelled' }
+      return { success: false, error: t('nativeShare.errors.cancelled') }
     }
 
     return await this.shareMacTarget(choice.target, options)
@@ -251,7 +257,7 @@ return item 1 of shareChoice
     if (target === 'messages' && shareBody) {
       return await this.shareMessages(shareBody)
     }
-    return { success: false, error: `Target ${target} cannot handle current payload` }
+    return { success: false, error: t('nativeShare.errors.targetUnsupported') }
   }
 
   /**
@@ -314,15 +320,15 @@ return item 1 of shareChoice
           opener: shell.openExternal
         })
         if (!decision.allowed) {
-          return { success: false, error: `Mail link refused: ${decision.reason}` }
+          return {
+            success: false,
+            error: t('nativeShare.errors.mailRefused', { reason: decision.reason })
+          }
         }
       }
     } else {
       if (files?.length) {
-        return {
-          success: false,
-          error: 'Mail target does not support file attachments on this platform'
-        }
+        return { success: false, error: t('nativeShare.errors.mailAttachmentsUnsupported') }
       }
       const subject = encodeURIComponent(title || '')
       const body = encodeURIComponent(normalizedBody)
@@ -330,7 +336,10 @@ return item 1 of shareChoice
         opener: shell.openExternal
       })
       if (!decision.allowed) {
-        return { success: false, error: `Mail link refused: ${decision.reason}` }
+        return {
+          success: false,
+          error: t('nativeShare.errors.mailRefused', { reason: decision.reason })
+        }
       }
     }
 
@@ -342,7 +351,7 @@ return item 1 of shareChoice
    */
   private async shareMessages(text: string): Promise<NativeShareResult> {
     if (process.platform !== 'darwin') {
-      return { success: false, error: 'Messages only available on macOS' }
+      return { success: false, error: t('nativeShare.errors.messagesMacOnly') }
     }
 
     const script = `
@@ -371,8 +380,7 @@ return item 1 of shareChoice
 
     return {
       success: false,
-      error:
-        'Windows does not provide a system share sheet in core-app; only the explicit mail target is available.'
+      error: t('nativeShare.errors.noShareSheet', { platform: 'Windows' })
     }
   }
 
@@ -388,8 +396,7 @@ return item 1 of shareChoice
 
     return {
       success: false,
-      error:
-        'Linux does not provide a system share sheet in core-app; only the explicit mail target is available.'
+      error: t('nativeShare.errors.noShareSheet', { platform: 'Linux' })
     }
   }
 

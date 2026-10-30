@@ -18,6 +18,7 @@ import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
+import { t } from '../../utils/i18n-helper'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
@@ -191,10 +192,10 @@ export class DatabaseModule extends BaseModule {
 
     await dialog.showMessageBox(window || undefined, {
       type: 'error',
-      title: 'Database Initialization Failed',
-      message: 'Database migration failed, application cannot start',
-      detail: details || error.message || 'Unknown error',
-      buttons: ['OK'],
+      title: t('nativeDialogs.database.title'),
+      message: t('nativeDialogs.database.message'),
+      detail: details || error.message || t('common.unknownError'),
+      buttons: [t('nativeDialogs.ok')],
       defaultId: 0,
       noLink: true
     })
@@ -1509,7 +1510,7 @@ export class DatabaseModule extends BaseModule {
           : [])
       ]
 
-      const detail = `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
+      const detail = `${t('nativeDialogs.database.migrationsFolderMissing', { path: migrationsFolderResolved })}\n\n${t('nativeDialogs.database.checkInstallation')}\n\n${t('nativeDialogs.database.debugInformation')}\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
 
       await this.showDatabaseErrorDialog(error, detail)
       throw error
@@ -1524,7 +1525,7 @@ export class DatabaseModule extends BaseModule {
         ? fse.readdirSync(migrationsFolderResolved).join(', ')
         : 'N/A'
 
-      const detail = `Migration journal file not found:\n${metaJournalPath}\n\nMigrations folder exists: ${fse.existsSync(migrationsFolderResolved)}\nFolder contents: ${folderContents}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Migrations folder: ${migrationsFolderResolved}`
+      const detail = `${t('nativeDialogs.database.journalMissing', { path: metaJournalPath })}\n\n${t('nativeDialogs.database.migrationsFolderExists', { exists: t(fse.existsSync(migrationsFolderResolved) ? 'common.yes' : 'common.no') })}\n${t('nativeDialogs.database.folderContents', { contents: folderContents })}\n\n${t('nativeDialogs.database.checkInstallation')}\n\n${t('nativeDialogs.database.debugInformation')}\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Migrations folder: ${migrationsFolderResolved}`
 
       await this.showDatabaseErrorDialog(error, detail)
       throw error
@@ -1598,7 +1599,7 @@ export class DatabaseModule extends BaseModule {
       const errorInstance = error instanceof Error ? error : new Error(errorMessage)
       await this.showDatabaseErrorDialog(
         errorInstance,
-        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${path.join(resolveRuntimeRootPath(app), 'logs')}`
+        `${t('nativeDialogs.database.migrationFailed', { error: errorMessage })}\n\n${t('nativeDialogs.database.checkLogs', { path: path.join(resolveRuntimeRootPath(app), 'logs') })}`
       )
 
       process.exit(1)

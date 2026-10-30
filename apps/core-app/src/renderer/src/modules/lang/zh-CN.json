@@ -7304,7 +7304,75 @@
     "syncDeviceUnknown": "未知设备",
     "defaultTitle": "通知",
     "dialogIconPlaceholder": "提示",
-    "pluginIconAlt": "插件"
+    "pluginIconAlt": "插件",
+    "share": {
+      "completeTitle": "分享完成",
+      "completeBody": "已通过「{target}」分享",
+      "copiedTitle": "已复制到剪贴板",
+      "copiedBody": "内容已复制到剪贴板",
+      "fileRevealedTitle": "文件已显示",
+      "filesRevealedBody": "已在文件管理器中显示 {count} 个文件",
+      "fileRevealedBody": "已在文件管理器中显示文件",
+      "failedTitle": "分享失败",
+      "failedBody": "无法分享：{error}",
+      "airdropReadyTitle": "AirDrop 已就绪",
+      "airdropReadyBody": "选择要发送到的设备",
+      "mailReadyTitle": "邮件已打开",
+      "mailReadyBody": "请在「邮件」中写完并发送",
+      "messagesReadyTitle": "信息已打开",
+      "messagesReadyBody": "内容已复制，请在「信息」中粘贴后发送"
+    },
+    "voice": {
+      "captureUnavailableTitle": "语音输入不可用",
+      "captureUnavailableBody": "本机应用缺少录音组件，请更新或重新安装后再试",
+      "gestureFailedTitle": "语音手势失败",
+      "gestureFailedBody": "请检查麦克风权限与语音服务配置",
+      "quickEditNoSelectionTitle": "划词改口：先选中一段文字",
+      "quickEditNoSelectionBody": "在任意应用里选中文字，再按一次快捷键",
+      "selectionUnsupportedBody": "当前系统无法读取选中的文字",
+      "selectionDisabledBody": "读取选中文字的功能已关闭",
+      "selectionFailedBody": "未能读取选中的文字，请重试",
+      "quickEditListeningTitle": "正在改口…",
+      "quickEditListeningBody": "选中 {count} 字，说完再按一次快捷键",
+      "dictationListeningTitle": "正在听写…",
+      "dictationListeningBody": "再次按下快捷键停止并键入",
+      "noSpeechTitle": "没有识别到语音",
+      "noSpeechBody": "请靠近麦克风再试一次",
+      "dictationCopiedTitle": "听写已复制",
+      "pasteManuallyBody": "请手动粘贴",
+      "dictationNotDeliveredTitle": "听写未写入",
+      "targetUnavailableBody": "没有找到要写入的应用，请重试",
+      "targetChangedBody": "当前应用目标已变化，请重试",
+      "dictationRetryBody": "请重试",
+      "quickEditCancelledTitle": "已取消改口",
+      "selectionUnchangedBody": "选中文字保持原样",
+      "quickEditNotAppliedTitle": "改口未应用",
+      "quickEditNotHeardBody": "没听清改写要求，选中文字保持原样",
+      "quickEditCopiedTitle": "改口结果已复制",
+      "quickEditNotDeliveredTitle": "改口未写入",
+      "quickEditTargetChangedBody": "当前应用已切换，选中文字保持原样",
+      "selectionUnchangedRetryBody": "选中文字保持原样，请重试"
+    },
+    "quickOps": {
+      "timerFinishedTitle": "QuickOps 计时结束",
+      "timerFinishedBody": "{duration}计时已结束",
+      "pomodoroFinishedTitle": "QuickOps 番茄钟结束",
+      "pomodoroFinishedBody": "{duration}专注已结束",
+      "pomodoroCycleFinishedTitle": "QuickOps 番茄钟循环结束",
+      "pomodoroCycleFinishedBody": "已完成{cycles}轮{duration}专注",
+      "pomodoroFocusFinishedTitle": "QuickOps 番茄钟专注结束",
+      "pomodoroFocusFinishedBody": "{focus}专注已结束，进入{breakDuration}休息",
+      "pomodoroFocusFinishedLongBreakBody": "{focus}专注已结束，进入{breakDuration}长休息",
+      "pomodoroBreakFinishedTitle": "QuickOps 番茄钟休息结束",
+      "pomodoroBreakFinishedBody": "{duration}休息已结束，开始第{cycle}轮专注",
+      "flowFallbackBody": "QuickOps 通知"
+    },
+    "ocr": {
+      "queuePausedTitle": "OCR 多次失败已自动暂停",
+      "queuePausedBody": "OCR 队列已自动关闭至 {until}。原因：{reason}。{hint}",
+      "queuePausedConfigHint": "请检查 OCR 提供者与模型配置后，等待自动恢复。",
+      "queuePausedNetworkHint": "请检查网络或 OCR 服务可用性，稍后会自动恢复。"
+    }
   },
   "assistant": {
     "voicePanel": {
@@ -7397,10 +7465,6 @@
     }
   },
   "timeUnits": {
-    "seconds": "秒",
-    "minutes": "分钟",
-    "hours": "小时",
-    "days": "天",
     "justNow": "刚刚",
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
@@ -8409,7 +8473,18 @@
       }
     },
     "previewCopied": "结果已复制",
-    "copyFailed": "复制失败"
+    "copyFailed": "复制失败",
+    "imageTranslatePin": {
+      "windowTitle": "图片翻译",
+      "copyImage": "复制翻译后的图片",
+      "copyTranslation": "复制译文",
+      "copySource": "复制原文",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "resetZoom": "重置缩放",
+      "opacity": "不透明度",
+      "close": "关闭"
+    }
   },
   "shortcuts": {
     "palette": "快捷命令",
@@ -8466,5 +8541,138 @@
     "minimize": "最小化",
     "zoom": "缩放",
     "bringAllToFront": "全部置于顶层"
+  },
+  "nativeShare": {
+    "pickerPrompt": "选择 macOS 分享目标",
+    "targets": {
+      "systemShare": "系统分享",
+      "airdrop": "AirDrop",
+      "mail": "邮件",
+      "messages": "信息",
+      "clipboard": "剪贴板",
+      "finder": "Finder",
+      "explorer": "资源管理器",
+      "browser": "浏览器"
+    },
+    "errors": {
+      "failed": "分享失败",
+      "noContent": "没有可分享的内容",
+      "cancelled": "已取消分享",
+      "targetUnsupported": "这个分享目标无法处理当前内容",
+      "mailRefused": "邮件链接被拒绝：{reason}",
+      "mailAttachmentsUnsupported": "此平台上的邮件目标不支持附件",
+      "messagesMacOnly": "「信息」仅在 macOS 上可用",
+      "noShareSheet": "{platform} 没有可供 Tuff 使用的系统分享面板，只能使用邮件目标。"
+    }
+  },
+  "nativeDialogs": {
+    "ok": "确定",
+    "database": {
+      "title": "数据库初始化失败",
+      "message": "数据库迁移失败，应用无法启动",
+      "migrationsFolderMissing": "找不到迁移文件夹：\n{path}",
+      "checkInstallation": "请检查应用是否完整安装。",
+      "debugInformation": "调试信息：",
+      "journalMissing": "找不到迁移日志文件：\n{path}",
+      "migrationsFolderExists": "迁移文件夹存在：{exists}",
+      "folderContents": "文件夹内容：{contents}",
+      "migrationFailed": "数据库迁移失败：\n{error}",
+      "checkLogs": "更多信息请查看日志文件。\n日志位置：{path}"
+    },
+    "rendererMissing": {
+      "title": "找不到文件",
+      "message": "缺少应用运行所需的文件。",
+      "damaged": "应用文件可能不完整或已损坏。",
+      "reinstall": "重新安装通常可以解决这个问题。",
+      "attachLog": "如需反馈问题，请附上日志文件。",
+      "openLogFolder": "打开日志文件夹"
+    },
+    "unsupportedFile": {
+      "title": "不支持的文件类型",
+      "body": "没有插件可以处理「.{extension}」文件。请从插件市场安装兼容的插件。"
+    },
+    "unsupportedInput": {
+      "title": "不支持的输入",
+      "body": "插件服务不支持文件夹输入。"
+    },
+    "pluginInstallRisk": {
+      "title": "插件安装风险确认",
+      "message": "检测到来自非官方来源的插件",
+      "detail": "来源类型：{sourceType}\n来源 ID：{sourceId}\n继续之前，请确认你信任这个来源。",
+      "continue": "继续安装",
+      "githubDescription": "即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。",
+      "npmDescription": "即将下载来自第三方 NPM 包的插件，存在潜在风险。",
+      "rejected": "风险确认被用户拒绝"
+    },
+    "workspaceScript": {
+      "selectTitle": "选择工作区",
+      "selectButton": "选择",
+      "runTitle": "运行工作区脚本",
+      "runMessage": "运行「{script}」？",
+      "runDetail": "工作区：{workspace}\n这个 package 脚本是项目自带的代码，可能执行任意操作。",
+      "run": "运行"
+    },
+    "hosts": {
+      "title": "确认修改 Hosts",
+      "removeMessage": "移除 {hostname}？",
+      "updateMessage": "更新 {hostname}？",
+      "removeDetail": "这会从系统 Hosts 文件中移除这条受管理的主机名。",
+      "updateDetail": "地址：{addresses}",
+      "apply": "应用"
+    },
+    "systemAction": {
+      "detail": "该操作会立即影响系统状态，请确认你已保存当前工作内容。",
+      "restart": {
+        "title": "确认重启",
+        "message": "确定要执行重启吗？",
+        "messageAgain": "请再次确认执行重启",
+        "confirm": "重启"
+      },
+      "shutdown": {
+        "title": "确认关机",
+        "message": "确定要执行关机吗？",
+        "messageAgain": "请再次确认执行关机",
+        "confirm": "关机"
+      }
+    },
+    "files": {
+      "saveFile": "保存文件",
+      "locateCli": "定位 {name}",
+      "exportPluginData": "导出插件数据",
+      "privacyExportFilter": "Talex Touch 隐私导出",
+      "exportPluginCredentials": "导出加密的插件凭据",
+      "secretBackupFilter": "Talex Touch 密钥备份",
+      "exportPrivacyData": "导出隐私数据",
+      "exportCredentials": "导出加密凭据",
+      "restoreCredentials": "恢复加密凭据",
+      "saveScreenshot": "保存截图",
+      "screenshotName": "截图-{time}",
+      "pngFilter": "PNG 图片",
+      "selectAudio": "选择音频文件",
+      "transcribe": "转写",
+      "audioFilter": "音频"
+    }
+  },
+  "clipboardActions": {
+    "automationPermissionDenied": "自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。",
+    "accessibilityPermissionDenied": "自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 辅助功能”中允许 Tuff。",
+    "autoPasteFailed": "已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。",
+    "databaseUnavailable": "剪贴板历史还没有准备好，请稍后再试。",
+    "itemNotFound": "找不到这条剪贴板记录。",
+    "voiceTextEmpty": "没有可粘贴的语音文字。",
+    "voiceClipboardNotRestored": "语音文字已粘贴，但未能恢复之前的剪贴板内容。",
+    "notificationTitle": "自动粘贴失败"
+  },
+  "quickOps": {
+    "screenClean": {
+      "hint": "QuickOps {mode} · {duration}后自动退出 · 长按 Esc 退出",
+      "modes": {
+        "white": "白底清洁屏幕",
+        "black": "黑底清洁屏幕",
+        "red": "红色屏幕测试",
+        "green": "绿色屏幕测试",
+        "blue": "蓝色屏幕测试"
+      }
+    }
   }
 }

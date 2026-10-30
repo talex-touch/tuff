@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils/plugin/providers'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { resolvePackageDownloadTimeout } from '@talex-touch/utils/plugin/install-budgets'
+import { t } from '../../../utils/i18n-helper'
 import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, ensureRiskAccepted } from './utils'
@@ -112,7 +113,7 @@ export class NpmPluginProvider implements PluginProvider {
           request,
           context,
           'needs_confirmation',
-          '即将下载来自第三方 NPM 包的插件，存在潜在风险。',
+          t('nativeDialogs.pluginInstallRisk.npmDescription'),
           { package: parsed.name }
         )
       }

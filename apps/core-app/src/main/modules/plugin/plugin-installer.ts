@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
@@ -23,14 +24,17 @@ function createDialogRiskPrompt(): RiskPromptHandler {
     const window = BrowserWindow.getFocusedWindow()
     const dialogOptions: MessageBoxOptions = {
       type: 'warning',
-      buttons: ['Continue Installation', 'Cancel'],
+      buttons: [t('nativeDialogs.pluginInstallRisk.continue'), t('common.cancel')],
       defaultId: 1,
       cancelId: 1,
-      title: 'Plugin Installation Risk Confirmation',
-      message: 'Detected plugin from unofficial source',
+      title: t('nativeDialogs.pluginInstallRisk.title'),
+      message: t('nativeDialogs.pluginInstallRisk.message'),
       detail:
         input.description ??
-        `Source Type: ${input.sourceType}\nSource ID: ${input.sourceId}\nPlease confirm you trust this source before continuing.`,
+        t('nativeDialogs.pluginInstallRisk.detail', {
+          sourceType: input.sourceType,
+          sourceId: input.sourceId
+        }),
       noLink: true
     }
     const { response } = window

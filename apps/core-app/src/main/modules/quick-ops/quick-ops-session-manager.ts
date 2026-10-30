@@ -3,6 +3,7 @@ import type { NotificationRequest } from '@talex-touch/utils/transport/events/ty
 import { BrowserWindow, powerSaveBlocker, screen } from 'electron'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { buildWindowWebPreferences } from '../../core/window-security-profile'
+import { formatDuration as formatDurationSeconds, getLocale, t } from '../../utils/i18n-helper'
 import { notificationModule } from '../notification'
 
 export type QuickOpsSessionKind =
@@ -489,8 +490,10 @@ export class QuickOpsSessionManager {
     if (kind === 'timer') {
       this.notify({
         id: `quick-ops:timer-finished:${session.startedAt}`,
-        title: 'QuickOps 计时结束',
-        message: `${formatDuration(session.durationMs)}计时已结束`,
+        title: t('notifications.quickOps.timerFinishedTitle'),
+        message: t('notifications.quickOps.timerFinishedBody', {
+          duration: formatInterfaceDuration(session.durationMs)
+        }),
         level: 'success',
         dedupeKey: `quick-ops:timer-finished:${session.id}`,
         system: { silent: false },
@@ -514,8 +517,10 @@ export class QuickOpsSessionManager {
     if (state?.mode !== 'cycle') {
       this.notify({
         id: `quick-ops:pomodoro-finished:${session.startedAt}`,
-        title: 'QuickOps 番茄钟结束',
-        message: `${formatDuration(session.durationMs)}专注已结束`,
+        title: t('notifications.quickOps.pomodoroFinishedTitle'),
+        message: t('notifications.quickOps.pomodoroFinishedBody', {
+          duration: formatInterfaceDuration(session.durationMs)
+        }),
         level: 'success',
         dedupeKey: `quick-ops:pomodoro-finished:${session.id}`,
         system: { silent: false },
@@ -534,8 +539,11 @@ export class QuickOpsSessionManager {
       if (state.totalCycles && state.cycle >= state.totalCycles) {
         this.notify({
           id: `quick-ops:pomodoro-cycle-finished:${session.startedAt}`,
-          title: 'QuickOps 番茄钟循环结束',
-          message: `已完成${state.totalCycles}轮${formatDuration(state.focusDurationMs)}专注`,
+          title: t('notifications.quickOps.pomodoroCycleFinishedTitle'),
+          message: t('notifications.quickOps.pomodoroCycleFinishedBody', {
+            cycles: state.totalCycles,
+            duration: formatInterfaceDuration(state.focusDurationMs)
+          }),
           level: 'success',
           dedupeKey: `quick-ops:pomodoro-cycle-finished:${session.id}`,
           system: { silent: false },
@@ -557,8 +565,16 @@ export class QuickOpsSessionManager {
       const isLongBreak = nextBreakDurationMs !== state.breakDurationMs
       this.notify({
         id: `quick-ops:pomodoro-focus-finished:${session.startedAt}`,
-        title: 'QuickOps 番茄钟专注结束',
-        message: `${formatDuration(state.focusDurationMs)}专注已结束，进入${formatDuration(nextBreakDurationMs)}${isLongBreak ? '长休息' : '休息'}`,
+        title: t('notifications.quickOps.pomodoroFocusFinishedTitle'),
+        message: t(
+          isLongBreak
+            ? 'notifications.quickOps.pomodoroFocusFinishedLongBreakBody'
+            : 'notifications.quickOps.pomodoroFocusFinishedBody',
+          {
+            focus: formatInterfaceDuration(state.focusDurationMs),
+            breakDuration: formatInterfaceDuration(nextBreakDurationMs)
+          }
+        ),
         level: 'success',
         dedupeKey: `quick-ops:pomodoro-focus-finished:${session.id}:${state.cycle}`,
         system: { silent: false },
@@ -577,8 +593,11 @@ export class QuickOpsSessionManager {
 
     this.notify({
       id: `quick-ops:pomodoro-break-finished:${session.startedAt}`,
-      title: 'QuickOps 番茄钟休息结束',
-      message: `${formatDuration(session.durationMs)}休息已结束，开始第${state.cycle + 1}轮专注`,
+      title: t('notifications.quickOps.pomodoroBreakFinishedTitle'),
+      message: t('notifications.quickOps.pomodoroBreakFinishedBody', {
+        duration: formatInterfaceDuration(session.durationMs),
+        cycle: state.cycle + 1
+      }),
       level: 'success',
       dedupeKey: `quick-ops:pomodoro-break-finished:${session.id}:${state.cycle}`,
       system: { silent: false },
@@ -692,10 +711,13 @@ export function createScreenCleanOverlayUrl(
   durationMs: number,
   screenMode: QuickOpsScreenCleanMode
 ): string {
-  const durationLabel = formatDuration(durationMs)
   const palette = getScreenCleanPalette(screenMode)
+  const hint = t('quickOps.screenClean.hint', {
+    mode: t(palette.labelKey),
+    duration: formatInterfaceDuration(durationMs)
+  })
   const html = `<!doctype html>
-<html lang="zh-CN">
+<html lang="${getLocale()}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -740,7 +762,7 @@ export function createScreenCleanOverlayUrl(
     </style>
   </head>
   <body>
-    <div id="hint" class="hint">QuickOps ${palette.label} · ${escapeHtml(durationLabel)} 后自动退出 · 长按 Esc 退出<span class="hold-progress"></span></div>
+    <div id="hint" class="hint">${escapeHtml(hint)}<span class="hold-progress"></span></div>
     <script>
       const hint = document.getElementById('hint')
       let closeTimer = null
@@ -766,7 +788,7 @@ export function createScreenCleanOverlayUrl(
 }
 
 function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
-  label: string
+  labelKey: string
   windowBackground: string
   background: string
   text: string
@@ -775,7 +797,7 @@ function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
   switch (screenMode) {
     case 'white':
       return {
-        label: '白底清洁屏幕',
+        labelKey: 'quickOps.screenClean.modes.white',
         windowBackground: '#ffffff',
         background: '#f7f7f2',
         text: 'rgba(0, 0, 0, 0.62)',
@@ -783,7 +805,7 @@ function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
       }
     case 'red':
       return {
-        label: '红色屏幕测试',
+        labelKey: 'quickOps.screenClean.modes.red',
         windowBackground: '#ff0000',
         background: '#ff0000',
         text: 'rgba(255, 255, 255, 0.86)',
@@ -791,7 +813,7 @@ function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
       }
     case 'green':
       return {
-        label: '绿色屏幕测试',
+        labelKey: 'quickOps.screenClean.modes.green',
         windowBackground: '#00ff00',
         background: '#00ff00',
         text: 'rgba(0, 0, 0, 0.68)',
@@ -799,7 +821,7 @@ function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
       }
     case 'blue':
       return {
-        label: '蓝色屏幕测试',
+        labelKey: 'quickOps.screenClean.modes.blue',
         windowBackground: '#0000ff',
         background: '#0000ff',
         text: 'rgba(255, 255, 255, 0.86)',
@@ -807,7 +829,7 @@ function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
       }
     case 'black':
       return {
-        label: '黑底清洁屏幕',
+        labelKey: 'quickOps.screenClean.modes.black',
         windowBackground: '#000000',
         background: '#050505',
         text: 'rgba(255, 255, 255, 0.74)',
@@ -823,6 +845,14 @@ function escapeHtml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+/**
+ * In the interface language, for what the user reads: notifications and the screen-clean hint.
+ * Session titles and the text returned to Flow senders keep using `formatDuration` below.
+ */
+function formatInterfaceDuration(durationMs: number): string {
+  return formatDurationSeconds(durationMs / 1000)
 }
 
 export function formatDuration(durationMs: number): string {

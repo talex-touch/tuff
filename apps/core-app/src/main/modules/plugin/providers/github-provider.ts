@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils/plugin/providers'
 import path from 'node:path'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import { t } from '../../../utils/i18n-helper'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, ensureRiskAccepted } from './utils'
 
@@ -160,7 +161,7 @@ export class GithubPluginProvider implements PluginProvider {
           request,
           context,
           'needs_confirmation',
-          '即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。',
+          t('nativeDialogs.pluginInstallRisk.githubDescription'),
           { owner: parsed.owner, repo: parsed.repo }
         )
       }

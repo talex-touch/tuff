@@ -10,6 +10,7 @@ import { BrowserWindow, dialog, screen, webContents } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
@@ -132,9 +133,11 @@ export class ScreenshotSessionModule extends BaseModule {
       windowFactory: createWindowFactory(),
       saveResource: async (resource, parentWebContentsId) => {
         const options: Electron.SaveDialogOptions = {
-          title: 'Save Screenshot',
-          defaultPath: `Screenshot-${new Date().toISOString().replaceAll(':', '-')}.png`,
-          filters: [{ name: 'PNG Image', extensions: ['png'] }]
+          title: t('nativeDialogs.files.saveScreenshot'),
+          defaultPath: `${t('nativeDialogs.files.screenshotName', {
+            time: new Date().toISOString().replaceAll(':', '-')
+          })}.png`,
+          filters: [{ name: t('nativeDialogs.files.pngFilter'), extensions: ['png'] }]
         }
         const parentContents = parentWebContentsId ? webContents.fromId(parentWebContentsId) : null
         const parentWindow = parentContents ? BrowserWindow.fromWebContents(parentContents) : null

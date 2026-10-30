@@ -26,6 +26,7 @@ import {
   ocrJobs,
   ocrResults
 } from '../../db/schema'
+import { getLocale, t } from '../../utils/i18n-helper'
 import {
   INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   ensureIntelligenceConfigLoaded,
@@ -1282,14 +1283,19 @@ class OcrService {
       failureWindowCount: this.recentFailureTimestamps.length
     })
 
-    const disabledUntilText = new Date(disabledUntil).toLocaleString()
-    const userHint = this.isLikelyConfigError(reason)
-      ? '请检查 OCR 提供者与模型配置后，等待自动恢复。'
-      : '请检查网络或 OCR 服务可用性，稍后会自动恢复。'
+    const userHint = t(
+      this.isLikelyConfigError(reason)
+        ? 'notifications.ocr.queuePausedConfigHint'
+        : 'notifications.ocr.queuePausedNetworkHint'
+    )
 
     notificationModule.pushInboxEntry({
-      title: 'OCR 多次失败已自动暂停',
-      message: `OCR 队列已自动关闭至 ${disabledUntilText}。原因: ${reason}。${userHint}`,
+      title: t('notifications.ocr.queuePausedTitle'),
+      message: t('notifications.ocr.queuePausedBody', {
+        until: new Date(disabledUntil).toLocaleString(getLocale()),
+        reason,
+        hint: userHint
+      }),
       level: 'warning',
       dedupeKey: 'ocr-queue-auto-disabled',
       payload: {

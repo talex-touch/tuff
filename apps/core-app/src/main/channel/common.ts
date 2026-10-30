@@ -2536,7 +2536,7 @@ export class CommonChannelModule extends BaseModule {
         if (!win) return { filePath: undefined }
 
         const result = await dialog.showSaveDialog(win, {
-          title: payload?.title ?? 'Save File',
+          title: payload?.title ?? t('nativeDialogs.files.saveFile'),
           defaultPath: payload?.defaultPath,
           filters: payload?.filters
         })

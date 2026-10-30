@@ -75,6 +75,9 @@ vi.mock('electron', () => ({
   clipboard: {},
   dialog: {}
 }))
+// Dialog wording goes through main's translator, which reads Electron's `app` on import; this
+// suite does not assert the wording.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
 // The module reaches the session store, and through it `../database`, which resolves the app
 // root from Electron's `app` at import time. These tests never touch persistence, so the store's
 // database handle is doubled rather than the runtime root being faked.

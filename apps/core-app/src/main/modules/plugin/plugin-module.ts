@@ -76,7 +76,7 @@ import {
 } from './plugin-data-disposition-production'
 import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { getLocale } from '../../utils/i18n-helper'
+import { getLocale, t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -2413,6 +2413,7 @@ export class PluginModule extends BaseModule {
         )
     })
     const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
+      translate: (key) => t(key),
       showMessageBox: async (options) => {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
@@ -2645,8 +2646,8 @@ export class PluginModule extends BaseModule {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return null
         const selection = dialog.showOpenDialog(parentWindow, {
-          title: 'Select Workspace',
-          buttonLabel: 'Select',
+          title: t('nativeDialogs.workspaceScript.selectTitle'),
+          buttonLabel: t('nativeDialogs.workspaceScript.selectButton'),
           properties: ['openDirectory', 'noResolveAliases']
         })
         void selection.catch(() => undefined)
@@ -2682,10 +2683,10 @@ export class PluginModule extends BaseModule {
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
         const result = await dialog.showMessageBox(parentWindow, {
           type: 'warning',
-          title: 'Run Workspace Script',
-          message: `Run "${input.scriptName}"?`,
-          detail: `Workspace: ${input.workspaceName}\nThe package script is project-owned code and may perform arbitrary actions.`,
-          buttons: ['Cancel', 'Run'],
+          title: t('nativeDialogs.workspaceScript.runTitle'),
+          message: t('nativeDialogs.workspaceScript.runMessage', { script: input.scriptName }),
+          detail: t('nativeDialogs.workspaceScript.runDetail', { workspace: input.workspaceName }),
+          buttons: [t('common.cancel'), t('nativeDialogs.workspaceScript.run')],
           defaultId: 0,
           cancelId: 0,
           noLink: true,
@@ -2732,16 +2733,18 @@ export class PluginModule extends BaseModule {
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
         const result = await dialog.showMessageBox(parentWindow, {
           type: 'warning',
-          title: 'Confirm Hosts Update',
+          title: t('nativeDialogs.hosts.title'),
           message:
             request.operation === 'remove'
-              ? `Remove ${request.hostname}?`
-              : `Update ${request.hostname}?`,
+              ? t('nativeDialogs.hosts.removeMessage', { hostname: request.hostname })
+              : t('nativeDialogs.hosts.updateMessage', { hostname: request.hostname }),
           detail:
             request.operation === 'remove'
-              ? 'This removes the managed hostname from the system Hosts file.'
-              : `Addresses: ${request.addresses?.join(', ') ?? ''}`,
-          buttons: ['Cancel', 'Apply'],
+              ? t('nativeDialogs.hosts.removeDetail')
+              : t('nativeDialogs.hosts.updateDetail', {
+                  addresses: request.addresses?.join(', ') ?? ''
+                }),
+          buttons: [t('common.cancel'), t('nativeDialogs.hosts.apply')],
           defaultId: 0,
           cancelId: 0,
           noLink: true,
