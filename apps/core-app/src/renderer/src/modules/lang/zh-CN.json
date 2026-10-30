@@ -3268,7 +3268,37 @@
         "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
         "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
         "sdkapiInvalid": "该插件声明的 sdkapi 格式无效。",
-        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。"
+        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。",
+        "networkCooldown": "插件源多次请求失败，已暂停访问，请稍后再试。",
+        "networkUnavailable": "无法连接插件源，请检查网络后重试。",
+        "sourceInvalid": "无法识别这个安装来源。",
+        "sourceFileMissing": "插件文件不存在。",
+        "pluginNotFound": "插件市场里找不到这个插件。",
+        "versionUnavailable": "这个版本没有可下载的安装包。",
+        "downloadUrlInvalid": "下载地址无效。",
+        "downloadRedirectFailed": "下载服务器的跳转无法继续。",
+        "downloadEmpty": "下载到的文件是空的。",
+        "packageUnreadable": "无法打开插件包，文件可能已损坏。",
+        "manifestMissing": "插件包里缺少 manifest.json。",
+        "manifestInvalid": "插件的 manifest.json 无效。",
+        "nameInvalid": "插件名称不能用作文件夹名。",
+        "alreadyInstalled": "这个插件已经安装了。",
+        "replaceFailed": "无法移除已安装的版本，没有完成替换。",
+        "entryFilesMissing": "安装包缺少插件运行所需的文件。",
+        "uninstallPending": "之前的卸载还在清理，完成后再试。",
+        "notReady": "插件系统还在启动，请稍后再试。",
+        "declined": "已取消安装。",
+        "activeUi": "插件正在使用中（{ui}），请关闭后再试。",
+        "trustMetadataInvalid": "插件市场没有提供这个安装包的有效校验信息。",
+        "trustPackageMismatch": "下载的安装包与插件市场发布的不一致，请重试。",
+        "trustNotApproved": "插件市场未允许安装这个版本。",
+        "trustReviewPending": "这个版本仍在插件市场审核中。",
+        "trustUnverified": "安装包的签名未通过校验，已停止安装。"
+      },
+      "activeUi": {
+        "coreBox": "CoreBox",
+        "windows": "{count} 个独立窗口",
+        "coreBoxAndWindows": "CoreBox 和 {count} 个独立窗口"
       }
     },
     "upgradeDialog": {

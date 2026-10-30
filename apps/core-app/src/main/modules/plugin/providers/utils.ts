@@ -212,7 +212,7 @@ export async function downloadToTempFile(
   const stat = await fse.stat(filePath).catch(() => null)
   if (!stat || stat.size === 0) {
     await fse.remove(filePath).catch(() => {})
-    throw new Error('Downloaded file is empty or was not created')
+    throw new Error('PLUGIN_DOWNLOAD_EMPTY')
   }
 
   // Verify file size matches expected if Content-Length was provided

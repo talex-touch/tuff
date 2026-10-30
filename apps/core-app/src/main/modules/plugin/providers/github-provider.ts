@@ -148,7 +148,7 @@ export class GithubPluginProvider implements PluginProvider {
         this.log.error('GitHub 来源解析失败', {
           meta: { source: request.source }
         })
-        throw new Error('无法解析的 GitHub 插件来源')
+        throw new Error('PLUGIN_SOURCE_INVALID')
       }
 
       const isOfficial = OFFICIAL_GITHUB_OWNERS.includes(parsed.owner)

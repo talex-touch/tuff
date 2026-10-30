@@ -100,7 +100,7 @@ export class NpmPluginProvider implements PluginProvider {
         this.log.error('NPM 来源解析失败', {
           meta: { source: request.source }
         })
-        throw new Error('无法解析的 NPM 插件来源')
+        throw new Error('PLUGIN_SOURCE_INVALID')
       }
 
       const official = parsed.name.startsWith(OFFICIAL_NPM_PREFIX)
@@ -132,17 +132,17 @@ export class NpmPluginProvider implements PluginProvider {
 
       const version = parsed.version || body['dist-tags']?.latest
       if (!version) {
-        throw new Error('无法确定插件的版本信息')
+        throw new Error('PLUGIN_VERSION_UNAVAILABLE')
       }
 
       const versionMeta = body.versions?.[version]
       if (!versionMeta) {
-        throw new Error(`NPM 包 ${parsed.name} 未找到版本 ${version}`)
+        throw new Error('PLUGIN_VERSION_UNAVAILABLE')
       }
 
       const tarballUrl: string | undefined = versionMeta.dist?.tarball
       if (!tarballUrl) {
-        throw new Error('NPM 包缺少可下载的 tarball 地址')
+        throw new Error('PLUGIN_VERSION_UNAVAILABLE')
       }
 
       this.log.debug('即将下载 NPM tarball', {

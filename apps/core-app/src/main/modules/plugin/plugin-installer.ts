@@ -49,6 +49,13 @@ function isRemoteSource(source: string): boolean {
   return /^https?:\/\//i.test(source)
 }
 
+/** The install failure code for each `ResolverStatus` a package read can fail with, by name. */
+const RESOLVER_FAILURE_CODES: Record<string, string> = {
+  UNCOMPRESS_ERROR: 'PLUGIN_PACKAGE_UNREADABLE',
+  MANIFEST_NOT_FOUND: 'PLUGIN_MANIFEST_NOT_FOUND',
+  INVALID_MANIFEST: 'PLUGIN_MANIFEST_INVALID'
+}
+
 /**
  * Resolves and validates plugin manifest.
  *
@@ -60,14 +67,18 @@ async function runResolver(
   whole: boolean,
   options?: ResolverOptions
 ): Promise<{ manifest?: IManifest } & { code: string }> {
-  const { PluginResolver } = await import('./plugin-resolver')
+  const { PluginResolver, ResolverStatus } = await import('./plugin-resolver')
   return new Promise((resolve, reject) => {
     const resolver = new PluginResolver(filePath)
     resolver
       .resolve(
         ({ event, type }) => {
           if (type === 'error') {
-            reject(new Error(String(event.msg)))
+            // A failed read reports a `ResolverStatus` number, which says nothing to whoever reads
+            // the failure; an install step reports its own message, which is passed on as it is.
+            const status = typeof event.msg === 'number' ? ResolverStatus[event.msg] : undefined
+            const message = status ? RESOLVER_FAILURE_CODES[status] : undefined
+            reject(new Error(message ?? String(event.msg)))
             return
           }
           if (event.msg && typeof event.msg === 'object') {
@@ -78,7 +89,7 @@ async function runResolver(
             resolve({ code: typeof event.msg === 'string' ? event.msg : 'success' })
             return
           }
-          reject(new Error('Invalid manifest payload'))
+          reject(new Error('PLUGIN_MANIFEST_INVALID'))
         },
         whole,
         options

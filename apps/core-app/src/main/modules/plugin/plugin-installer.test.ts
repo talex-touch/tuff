@@ -14,9 +14,16 @@ const {
   ensureDefaultProvidersRegisteredMock: vi.fn()
 }))
 
-vi.mock('./plugin-resolver', () => ({
-  PluginResolver: pluginResolverCtorMock
-}))
+vi.mock('./plugin-resolver', () => {
+  // Numbered as the real one: a failed read reports one of these.
+  enum ResolverStatus {
+    UNCOMPRESS_ERROR,
+    MANIFEST_NOT_FOUND,
+    INVALID_MANIFEST,
+    SUCCESS
+  }
+  return { PluginResolver: pluginResolverCtorMock, ResolverStatus }
+})
 
 vi.mock('./providers', () => ({
   installFromRegistry: installFromRegistryMock,
