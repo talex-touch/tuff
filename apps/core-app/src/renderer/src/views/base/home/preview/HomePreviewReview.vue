@@ -87,7 +87,9 @@ function existence(value: boolean | null): string {
 function sideSummary(side: FileReviewPath['before']): string {
   const parts = [existence(side.exists)]
   if (side.size !== undefined)
-    parts.push(t('home.workspace.review.bytes', { count: sizeFormat.value.format(side.size) }))
+    parts.push(
+      t('home.workspace.review.bytes', { count: sizeFormat.value.format(side.size) }, side.size)
+    )
   return parts.join(' · ')
 }
 

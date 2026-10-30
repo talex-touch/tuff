@@ -564,7 +564,7 @@
       "semantic": "语义检索通道"
     },
     "nativeRuntimes": "原生运行时",
-    "tokioBudget": "Tokio 运行时每个 {workerThreads} 个工作线程。",
+    "tokioBudget": "每个 Tokio 运行时有 {workerThreads} 个工作线程。",
     "budgetSources": {
       "host-budget": "Tuff 上限",
       "environment": "来自 TOKIO_WORKER_THREADS"
@@ -2050,7 +2050,9 @@
       "minutesSeconds": "{minutes} 分 {seconds} 秒"
     },
     "streak": {
-      "summary": "连着说了 {current} 天 · 最长连过 {longest} 天 · 一共 {active} 天开过口"
+      "summary": "{current} · 最长连过 {longest} 天 · {active}",
+      "current": "连着说了 {count} 天",
+      "active": "一共 {count} 天开过口"
     },
     "heatmap": {
       "title": "过去一年",
@@ -2062,7 +2064,9 @@
       "scrollLabel": "可横向滚动的语音活动日历，滚动查看全部 365 天",
       "beforeTracking": "{date}：当时尚未开始记录统计",
       "noActivity": "{date}：没有记录到语音活动",
-      "daySummary": "{date}：{sessions} 次成功输入，共 {characters} 字，时长 {duration}"
+      "daySummary": "{date}：{sessions}，共 {characters}，时长 {duration}",
+      "characterCount": "{count} 字",
+      "sessionCount": "{count} 次成功输入"
     },
     "empty": {
       "title": "从下一次语音输入开始",
@@ -3489,12 +3493,13 @@
       "searchProviders": {
         "title": "搜索源",
         "loading": "正在读取插件搜索源",
-        "summary": "此插件注册 {total} 个搜索源，{enabled} 个已启用，{issues} 个注册问题",
+        "summary": "此插件注册 {total}，{enabled} 个已启用，{issues}",
+        "sourceCount": "{count} 个搜索源",
         "statusTitle": "搜索源状态",
         "statusDesc": "控制此插件的搜索结果是否进入根搜索结果",
         "empty": "此插件未注册搜索源",
         "providerDesc": "{mode} · 源 {source}",
-        "issueDesc": "{count} 个注册问题",
+        "issueCount": "{count} 个注册问题",
         "consentRequired": "需授权"
       },
       "blockedTitle": "插件已阻断",
@@ -3742,7 +3747,9 @@
       },
       "details": {
         "title": "存储文件详情",
-        "description": "{files} 个文件，{directories} 个目录"
+        "description": "{files}，{directories}",
+        "fileCount": "{count} 个文件",
+        "directoryCount": "{count} 个目录"
       },
       "confirm": {
         "clearTitle": "清空存储",
@@ -3767,7 +3774,9 @@
       },
       "files": {
         "title": "插件文件",
-        "summary": "{files} 个文件，{directories} 个目录",
+        "summary": "{files}，{directories}",
+        "fileCount": "{count} 个文件",
+        "folderCount": "{count} 个目录",
         "empty": "未发现插件文件",
         "name": "名称",
         "size": "大小",
@@ -5517,7 +5526,9 @@
       "estimatedSeconds": "预计 {seconds} 秒后完成",
       "estimatedMinutes": "预计 {minutes} 分钟后完成",
       "estimatedHours": "预计 {hours} 小时后完成",
-      "estimatedHoursMinutes": "预计 {hours} 小时 {minutes} 分钟后完成",
+      "estimatedHoursMinutes": "预计 {hours} {minutes}后完成",
+      "estimatedHourCount": "{count} 小时",
+      "estimatedMinuteCount": "{count} 分钟",
       "warningAlert": "⚠️ 重建文件索引会产生以下影响：",
       "warningSearch": "• 会暂时影响文件搜索功能",
       "warningPerformance": "• 索引过程中系统可能会变慢",
@@ -5588,7 +5599,9 @@
       "sourceDiagnosticsGroupDesc": "统一查看 App、File、Everything 等索引源的健康状态",
       "sourceDiagnosticsSummaryTitle": "源健康总览",
       "sourceDiagnosticsChecking": "正在读取统一搜索源状态",
-      "sourceDiagnosticsSummary": "共 {total} 个源，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention} 个需处理",
+      "sourceDiagnosticsSummary": "{total}，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention}",
+      "sourceDiagnosticsSources": "共 {count} 个源",
+      "sourceDiagnosticsAttention": "{count} 个需处理",
       "sourceDiagnosticsLoadFailed": "读取搜索源诊断失败",
       "sourceDiagnosticDetailTitle": "搜索源详情",
       "sourceDiagnosticOverview": "概览",
@@ -5624,7 +5637,9 @@
       "providerConfigSourceUnknown": "未知状态",
       "browserBookmarksTitle": "Browser Bookmarks 官方运行时",
       "browserBookmarksLoading": "正在读取 Browser Bookmarks 运行时状态",
-      "browserBookmarksDesc": "{status} · {items} 项 · {roots} 个监听根 · {evidence} 条证据 · {reason}",
+      "browserBookmarksDesc": "{status} · {items} · {roots} · {evidence} · {reason}",
+      "browserBookmarksRoots": "{count} 个监听根",
+      "browserBookmarksEvidence": "{count} 条证据",
       "browserBookmarksConsentRequired": "需要授权",
       "browserBookmarksConsentGranted": "已授权",
       "browserBookmarksConsentAction": "授权并重建",

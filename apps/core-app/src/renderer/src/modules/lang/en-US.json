@@ -564,7 +564,7 @@
       "semantic": "Semantic retrieval lane"
     },
     "nativeRuntimes": "Native runtimes",
-    "tokioBudget": "Each Tokio runtime has {workerThreads} worker threads.",
+    "tokioBudget": "Each Tokio runtime has {workerThreads} worker thread. | Each Tokio runtime has {workerThreads} worker threads.",
     "budgetSources": {
       "host-budget": "Tuff limit",
       "environment": "From TOKIO_WORKER_THREADS"
@@ -597,7 +597,7 @@
     "treeError": "Deep sampling failed. The previous result is retained; click Deep sample to retry.",
     "treeCapturedAt": "Deep sample: {time} · Collection {collectMs} ms",
     "totalThreads": "Known thread total: {count}",
-    "unknownThreadCounts": "Another {count} processes have no thread count and are excluded from the total.",
+    "unknownThreadCounts": "One more process has no thread count and is excluded from the total. | Another {count} processes have no thread count and are excluded from the total.",
     "command": "Command",
     "threadCount": "Threads",
     "rss": "Resident memory (RSS)",
@@ -617,7 +617,7 @@
       "providers": "Remote processing disclosure"
     },
     "summary": {
-      "itemCount": "{count} items",
+      "itemCount": "{count} item | {count} items",
       "byteCount": "{size}",
       "lastCleanup": "Last cleanup: {value}",
       "neverCleaned": "No cleanup recorded"
@@ -687,7 +687,7 @@
       "outcomeUnknown": "The operation outcome could not be confirmed. Reload this page and review current data before retrying."
     },
     "secret": {
-      "backupAvailable": "{count} portable credential entries are available.",
+      "backupAvailable": "{count} portable credential entry is available. | {count} portable credential entries are available.",
       "backupUnavailable": "Encrypted credential backup is unavailable.",
       "backupOpen": "Back up credentials",
       "backupDescription": "Choose a strong password for the separate authenticated backup file.",
@@ -1082,7 +1082,7 @@
       "installing": "Installing...",
       "progress": "{percent}% downloaded ({size})",
       "moreTitle": "More models",
-      "expandHint": "{count} more bundles, for when a specific engine or size matters.",
+      "expandHint": "{count} more bundle, for when a specific engine or size matters. | {count} more bundles, for when a specific engine or size matters.",
       "collapseHint": "Showing only the recommended and installed models.",
       "expand": "Show {count}",
       "collapse": "Show less",
@@ -1660,7 +1660,7 @@
     "saveToChromeUnavailable": "Connect and select a Chrome profile to add http/https pages to Chrome bookmarks",
     "syncCookiesFromChrome": "Sync sign-in cookies from Chrome ({profile})",
     "syncCookiesUnavailable": "Connect and select a Chrome profile to sync sign-in cookies for this website",
-    "syncCookiesSuccess": "Imported {count} cookie(s) for {domain} from Chrome. Refreshing page...",
+    "syncCookiesSuccess": "Imported {count} cookie for {domain} from Chrome. Refreshing page... | Imported {count} cookies for {domain} from Chrome. Refreshing page...",
     "syncCookiesEmpty": "No valid cookies found for {domain} in Chrome",
     "syncCookiesFailed": "Failed to sync cookies: {error}",
     "cookies": {
@@ -1777,7 +1777,7 @@
       "lastSeen": "Last online {time}",
       "neverSynced": "Not synced yet",
       "lastSynced": "Last synced {time}",
-      "pending": "{count} change(s) waiting to be written to Chrome",
+      "pending": "{count} change waiting to be written to Chrome | {count} changes waiting to be written to Chrome",
       "revokeTitle": "Revoke {name}",
       "revokeConfirm": "After revoking, “{name}” must be paired again and changes not yet written to Chrome stop syncing. Bookmarks and tabs already in Chrome are not affected.",
       "revokeAction": "Revoke",
@@ -1848,7 +1848,7 @@
     "chooseProfile": "Choose the Chrome profile to manage in Tuff.",
     "noProfile": "No Chrome profile is connected yet.",
     "connectHint": "Click your avatar in the top-right corner and use “Manage Chrome connection” to install the connector and pair.",
-    "conflictHint": "{count} bookmark change(s) conflict. Resolve them in “Manage Chrome connection” from the avatar menu.",
+    "conflictHint": "{count} bookmark change conflicts. Resolve it in “Manage Chrome connection” from the avatar menu. | {count} bookmark changes conflict. Resolve them in “Manage Chrome connection” from the avatar menu.",
     "bookmarks": "Bookmarks",
     "cookies": {
       "title": "Sign-ins & Cookies",
@@ -1863,7 +1863,7 @@
       "passwordLabel": "Confirmation password (optional)",
       "passwordPlaceholder": "Enter password to confirm importing sensitive credentials",
       "importAction": "Batch import sign-ins",
-      "importSuccess": "Successfully imported {count} cookie(s) for: {domains}",
+      "importSuccess": "Successfully imported {count} cookie for: {domains} | Successfully imported {count} cookies for: {domains}",
       "importEmpty": "No valid cookies found for the selected domains in Chrome",
       "importFailed": "Import failed: {error}",
       "tip": "After importing, opening these websites in Tuff tabs will immediately reflect your signed-in state.",
@@ -1881,7 +1881,7 @@
     "notSynced": "Chrome bookmarks haven't synced to Tuff yet.",
     "folderEmpty": "This folder is empty.",
     "openFolder": "Open folder {title}",
-    "itemCount": "{count} item(s)",
+    "itemCount": "{count} item | {count} items",
     "notOpenableUrl": "Can't open in Tuff: {url}",
     "notOpenable": "Only http/https pages can be opened in Tuff.",
     "openCopyInTuff": "Open a copy in Tuff: {title} (uses Tuff's own website sign-ins)",
@@ -1902,8 +1902,8 @@
     "closeChromeTab": "Close {title} in Chrome",
     "removeTitle": "Delete from Chrome",
     "removeMessage": "“{title}” will be deleted from the Chrome profile “{profile}”.",
-    "removeFolderMessage": "“{title}” still contains {count} item(s). Deleting removes the folder and everything in it from the Chrome profile “{profile}”.",
-    "removeRecursiveConfirm": "I confirm deleting the {count} item(s) inside too",
+    "removeFolderMessage": "“{title}” still contains {count} item. Deleting removes the folder and everything in it from the Chrome profile “{profile}”. | “{title}” still contains {count} items. Deleting removes the folder and everything in it from the Chrome profile “{profile}”.",
+    "removeRecursiveConfirm": "I confirm deleting the {count} item inside too | I confirm deleting the {count} items inside too",
     "removeAction": "Delete",
     "navigateTitle": "Open a new address in Chrome",
     "newTabTitle": "New tab in Chrome",
@@ -1987,8 +1987,8 @@
       "adoptSessionsHint": "Find the sessions local agents left in this project's folder and add them to the sidebar to continue",
       "discoverSessions": "Discover Local Sessions",
       "discoveringSessions": "Discovering Sessions…",
-      "discoveryComplete": "Adopted {count} local session(s).",
-      "discoveryPartial": "Adopted {count} session(s), but some provider archives could not be fully scanned.",
+      "discoveryComplete": "Adopted {count} local session. | Adopted {count} local sessions.",
+      "discoveryPartial": "Adopted {count} session, but some provider archives could not be fully scanned. | Adopted {count} sessions, but some provider archives could not be fully scanned.",
       "discoveryEmpty": "No new local sessions were found for this project.",
       "discoveryFailed": "Local sessions could not be discovered.",
       "rename": "Rename",
@@ -2050,7 +2050,9 @@
       "minutesSeconds": "{minutes} min {seconds} s"
     },
     "streak": {
-      "summary": "{current} days running · longest {longest} · {active} days with anything said"
+      "summary": "{current} · longest {longest} · {active}",
+      "current": "{count} day running | {count} days running",
+      "active": "{count} day with anything said | {count} days with anything said"
     },
     "heatmap": {
       "title": "The past year",
@@ -2062,7 +2064,9 @@
       "scrollLabel": "Scrollable voice activity calendar; use horizontal scrolling to review all 365 days",
       "beforeTracking": "{date}: statistics were not recording yet",
       "noActivity": "{date}: no recorded voice activity",
-      "daySummary": "{date}: {characters} characters across {sessions} successful captures, {duration}"
+      "daySummary": "{date}: {characters} across {sessions}, {duration}",
+      "characterCount": "{count} character | {count} characters",
+      "sessionCount": "{count} successful capture | {count} successful captures"
     },
     "empty": {
       "title": "Your voice history starts here",
@@ -2078,14 +2082,14 @@
       "copied": "Voice input statistics copied",
       "copyFailed": "Could not copy the aggregate summary",
       "unavailable": "not available yet",
-      "rateValue": "{count} characters/minute",
+      "rateValue": "{count} character/minute | {count} characters/minute",
       "characters": "Dictated characters: {count}",
       "saved": "Estimated time saved: {duration}",
       "rate": "Average dictation rate: {rate}",
       "duration": "Total dictation time: {duration}",
       "activeDays": "Active days in the last 365 local days: {count}",
-      "currentStreak": "Current streak in the last 365 local days: {count} days",
-      "longestStreak": "Longest streak in the last 365 local days: {count} days",
+      "currentStreak": "Current streak in the last 365 local days: {count} day | Current streak in the last 365 local days: {count} days",
+      "longestStreak": "Longest streak in the last 365 local days: {count} day | Longest streak in the last 365 local days: {count} days",
       "sessions": "Successful captures: {count}",
       "polishedSessions": "Polished captures: {count}",
       "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
@@ -2171,7 +2175,7 @@
     "weeks": {
       "title": "The last 12 weeks",
       "note": "Taller means more said that week, against your busiest one.",
-      "streak": "{current}-day streak · longest {longest} · {active} active days"
+      "streak": "{current}-day streak · longest {longest} · {active} active day | {current}-day streak · longest {longest} · {active} active days"
     }
   },
   "home": {
@@ -2185,13 +2189,13 @@
         "unknown": "unknown",
         "exists": "exists",
         "absent": "absent",
-        "bytes": "{count} bytes",
+        "bytes": "{count} byte | {count} bytes",
         "before": "Before",
         "after": "After",
         "diff": "Changes in {path}",
         "undo": "Undo",
         "confirmUndo": "Confirm undo",
-        "rolledBack": "Restored {count} path(s).",
+        "rolledBack": "Restored {count} path. | Restored {count} paths.",
         "rollbackRequestFailed": "No confirmation of the undo result. Refresh the change record before retrying.",
         "line": {
           "context": "unchanged",
@@ -2258,7 +2262,7 @@
         "unavailable": "The profile this conversation uses is switched off or gone. Choose another one.",
         "manage": "Manage agents",
         "required": "Choose an enabled agent profile before sending in Agent mode.",
-        "summary": "{runtime} · {tools} tools · {approval}",
+        "summary": "{runtime} · {tools} tool · {approval} | {runtime} · {tools} tools · {approval}",
         "approval": {
           "manual": "asks before running",
           "preauthorized": "pre-authorized"
@@ -2281,7 +2285,7 @@
         "down": "Move down",
         "remove": "Remove from queue",
         "rowLabel": "Queued {position}: {text}",
-        "attachments": "{count} image(s)",
+        "attachments": "{count} image | {count} images",
         "expand": "Show {count} more",
         "collapse": "Show less",
         "full": "The queue is full ({max}). Your message stayed in the composer.",
@@ -2356,7 +2360,7 @@
         "outputNotEnforced": "not sent; the CLI applies its own cap",
         "limitsSource": "Capability limits from the model binding, not how much is in use.",
         "unknown": "Unknown",
-        "tokens": "{count} tokens",
+        "tokens": "{count} token | {count} tokens",
         "compactions": "Compactions",
         "compactionStart": "Compaction started",
         "compactionEnd": "Compaction finished",
@@ -2881,7 +2885,7 @@
       "unpriced": "No price found"
     },
     "zeroCost": {
-      "title": "{calls} to {models} aren't in the estimated cost",
+      "title": "{calls} to {models} isn't in the estimated cost | {calls} to {models} aren't in the estimated cost",
       "modelCount": "{count} model | {count} models",
       "callCount": "{count} call | {count} calls",
       "description": "They're free, run on this machine, are billed in Nexus credits, or have no price found. Cost limits don't cover them either.",
@@ -3110,7 +3114,7 @@
       "namePlaceholder": "Source name",
       "urlPlaceholder": "Source url",
       "outdatedSection": "Outdated sources",
-      "outdatedHiddenHint": "{count} outdated source(s) are hidden. Enable Advanced Settings to view.",
+      "outdatedHiddenHint": "{count} outdated source is hidden. Enable Advanced Settings to view. | {count} outdated sources are hidden. Enable Advanced Settings to view.",
       "readonlyBadge": "readonly",
       "outdatedBadge": "outdated",
       "providerTypes": {
@@ -3186,14 +3190,14 @@
       "contentRefresh": "Refresh",
       "contentLoading": "Loading shared content...",
       "contentEmpty": "No public content packages yet",
-      "contentInstalls": "{count} installs",
+      "contentInstalls": "{count} install | {count} installs",
       "contentUpdatedAt": "Updated {date}",
       "contentUnknownDate": "Unknown date",
       "contentInstall": "Install Content",
       "contentInstalling": "Installing...",
       "contentInstallPluginFirst": "Install Plugin First",
       "contentInstallSuccessTitle": "Content Installed",
-      "contentInstallSuccessMessage": "Imported \"{title}\" with {count} new snippets.",
+      "contentInstallSuccessMessage": "Imported \"{title}\" with {count} new snippet. | Imported \"{title}\" with {count} new snippets.",
       "contentInstallFailedTitle": "Content Install Failed",
       "contentErrors": {
         "packageIdRequired": "Content package ID is missing.",
@@ -3283,7 +3287,7 @@
       "subtitle": "Try adjusting your search or browse different categories"
     },
     "updates": {
-      "available": "{count} plugin update(s) available",
+      "available": "{count} plugin update available | {count} plugin updates available",
       "viewAll": "View updates",
       "checking": "Checking for updates...",
       "noUpdates": "All plugins are up to date",
@@ -3423,10 +3427,10 @@
       "version": "v{version}"
     },
     "navTree": {
-      "groupCount": "{count} plugins in this category",
+      "groupCount": "{count} plugin in this category | {count} plugins in this category",
       "badges": {
-        "error": "{count} error(s): {message}",
-        "warning": "{count} warning(s): {message}"
+        "error": "{count} error: {message} | {count} errors: {message}",
+        "warning": "{count} warning: {message} | {count} warnings: {message}"
       }
     },
     "status": {
@@ -3466,8 +3470,8 @@
       "empty": "This plugin has no declared permissions",
       "statusTitle": "Permission Status",
       "statusGranted": "All required permissions granted",
-      "statusMissing": "Missing {count} required permission(s)",
-      "statusDeprecated": "{count} historical grants were disabled",
+      "statusMissing": "Missing {count} required permission | Missing {count} required permissions",
+      "statusDeprecated": "{count} historical grant was disabled | {count} historical grants were disabled",
       "required": "Required Permissions",
       "optional": "Optional Permissions",
       "granted": "Granted",
@@ -3489,12 +3493,13 @@
       "searchProviders": {
         "title": "Search Sources",
         "loading": "Reading plugin search sources",
-        "summary": "This plugin registers {total} search source(s), {enabled} enabled, {issues} registration issue(s)",
+        "summary": "This plugin registers {total}, {enabled} enabled, {issues}",
+        "sourceCount": "{count} search source | {count} search sources",
         "statusTitle": "Search Source Status",
         "statusDesc": "Control whether this plugin's search results can enter root search results",
         "empty": "This plugin has no registered search sources",
         "providerDesc": "{mode} · source {source}",
-        "issueDesc": "{count} registration issue(s)",
+        "issueCount": "{count} registration issue | {count} registration issues",
         "consentRequired": "Consent required"
       },
       "blockedTitle": "Plugin Blocked",
@@ -3510,7 +3515,7 @@
         "medium": "Medium",
         "high": "High"
       },
-      "categoryDesc": "{count} permission(s)",
+      "categoryDesc": "{count} permission | {count} permissions",
       "categories": {
         "fs": "File System",
         "clipboard": "Clipboard",
@@ -3742,7 +3747,9 @@
       },
       "details": {
         "title": "Storage File Details",
-        "description": "{files} files, {directories} directories"
+        "description": "{files}, {directories}",
+        "fileCount": "{count} file | {count} files",
+        "directoryCount": "{count} directory | {count} directories"
       },
       "confirm": {
         "clearTitle": "Clear Storage",
@@ -3767,7 +3774,9 @@
       },
       "files": {
         "title": "Plugin Files",
-        "summary": "{files} file(s), {directories} folder(s)",
+        "summary": "{files}, {directories}",
+        "fileCount": "{count} file | {count} files",
+        "folderCount": "{count} folder | {count} folders",
         "empty": "No plugin files found",
         "name": "Name",
         "size": "Size",
@@ -4394,7 +4403,7 @@
     "searchPlaceholder": "Type to search...",
     "searchClear": "Clear search",
     "searchedOnDevice": "{count} found",
-    "appsOnDevice": "{count} apps",
+    "appsOnDevice": "{count} app | {count} apps",
     "filteredOnDevice": "{count} filtered",
     "usageUnavailable": "No usage data; sorted by name",
     "emptyFiltered": "No matching applications",
@@ -4424,7 +4433,7 @@
     "usageLastLaunched": "Last launched",
     "usageHourTitle": "Time of day",
     "usageHourDesc": "Launches per hour, drawn relative to the busiest hour",
-    "usageHourTooltip": "{hour}:00 · {count} launches",
+    "usageHourTooltip": "{hour}:00 · {count} launch | {hour}:00 · {count} launches",
     "usageTransitionTitle": "Came from",
     "usageTransitionDesc": "Applications you were in right before launching this one",
     "usageTrendTitle": "Last 30 days",
@@ -4470,7 +4479,7 @@
     "aliasPlaceholder": "Type a keyword and press Enter",
     "aliasAdd": "Add",
     "aliasRemove": "Remove keyword {alias}",
-    "aliasCount": "{count} keywords configured",
+    "aliasCount": "{count} keyword configured | {count} keywords configured",
     "aliasNone": "No keywords yet",
     "aliasManage": "Manage",
     "aliasDone": "Done",
@@ -4783,9 +4792,9 @@
     "clear_history_item_failed": "Failed to clear history record",
     "clear_all_history_failed": "Failed to clear all history",
     "just_now": "Just now",
-    "minutes_ago": "{count} minutes ago",
-    "hours_ago": "{count} hours ago",
-    "days_ago": "{count} days ago",
+    "minutes_ago": "{count} minute ago | {count} minutes ago",
+    "hours_ago": "{count} hour ago | {count} hours ago",
+    "days_ago": "{count} day ago | {count} days ago",
     "module_unknown": "Unknown Module",
     "status_label": "Status",
     "view_logs": "View logs"
@@ -4906,7 +4915,7 @@
       "scanFailedTitle": "Could not scan this machine's MCP configuration",
       "scanFailedDesc": "The agents' configuration files could not be read, so the list may be incomplete.",
       "retry": "Retry",
-      "unreadableTitle": "{count} configuration files could not be read",
+      "unreadableTitle": "{count} configuration file could not be read | {count} configuration files could not be read",
       "unreadableDesc": "Servers declared there are not listed: {paths}",
       "emptyTitle": "No MCP servers on this machine yet",
       "emptyDesc": "Servers that Claude, Codex and other agents configure appear here. You can also add one by hand.",
@@ -4958,7 +4967,7 @@
       "probeAction": "Probe",
       "probeIdle": "Not probed yet. Probing starts this server alone and lists its tools.",
       "probeRunning": "Probing…",
-      "probeOk": "Reachable · {count} tools",
+      "probeOk": "Reachable · {count} tool | Reachable · {count} tools",
       "probeFailed": "Probe failed: {reason}",
       "probeIdleDeclared": "Not probed yet. Probing starts this server alone for a moment, lists its tools and stops it. Nothing is added to Tuff or kept.",
       "probeSecretTitle": "Probe {name} with its credentials?",
@@ -4976,7 +4985,7 @@
       "deleteFailed": "Could not delete: {reason}",
       "createTitle": "Add MCP server",
       "editTitle": "Edit {name}",
-      "storedSecretsNote": "{count} saved values ({names}). They are not shown here; saving with this field empty deletes them.",
+      "storedSecretsNote": "{count} saved value ({names}). It is not shown here; saving with this field empty deletes it. | {count} saved values ({names}). They are not shown here; saving with this field empty deletes them.",
       "hostDesc": "Other AI clients on this machine can call Tuff's tools over a local address. This is an opt-in Beta capability and is off by default; every call still asks you first.",
       "readOnlyNote": "An agent's own configuration declares this server. Tuff only reads it and never changes that file; the switch affects Tuff alone."
     },
@@ -5030,7 +5039,7 @@
       "dirsLinkedEmpty": "No directories added yet.",
       "dirsDetected": "Detected",
       "dirsDetectedEmpty": "No agent skill directories were found on this machine.",
-      "dirCount": "{count} skills",
+      "dirCount": "{count} skill | {count} skills",
       "dirRemove": "Remove",
       "dirRemoveLabel": "Remove {path}",
       "dirAdd": "Choose directory…",
@@ -5076,7 +5085,7 @@
         "enableTitle": "Let other AIs call Tuff",
         "enableDesc": "Binds a loopback address only; a client still needs the token below.",
         "startingDesc": "Switched on, but the port is not bound yet.",
-        "runningDesc": "Listening, with {count} tools published.",
+        "runningDesc": "Listening, with {count} tool published. | Listening, with {count} tools published.",
         "errorDesc": "Could not start: {reason}",
         "running": "Running",
         "stopped": "Off",
@@ -5499,7 +5508,7 @@
       "failedFileReasonGeneric": "Indexing failed for this file",
       "failedFileErrorCode": "Error code",
       "errorButton": "View error details",
-      "errorButtonWithCount": "View error details ({count} errors)",
+      "errorButtonWithCount": "View error details ({count} error) | View error details ({count} errors)",
       "rebuildTitle": "Rebuild File Index",
       "rebuildDesc": "Clear the file search index and rescan files; app display names are not refreshed",
       "rebuilding": "Rebuilding...",
@@ -5515,9 +5524,11 @@
       "estimatedStabilizing": "Estimating remaining time",
       "estimatedStalled": "Waiting for new indexing progress",
       "estimatedSeconds": "Expected to finish in {seconds} seconds",
-      "estimatedMinutes": "Expected to finish in {minutes} minutes",
-      "estimatedHours": "Expected to finish in {hours} hours",
-      "estimatedHoursMinutes": "Expected to finish in {hours} hours {minutes} minutes",
+      "estimatedMinutes": "Expected to finish in {minutes} minute | Expected to finish in {minutes} minutes",
+      "estimatedHours": "Expected to finish in {hours} hour | Expected to finish in {hours} hours",
+      "estimatedHoursMinutes": "Expected to finish in {hours} {minutes}",
+      "estimatedHourCount": "{count} hour | {count} hours",
+      "estimatedMinuteCount": "{count} minute | {count} minutes",
       "warningAlert": "⚠️ Rebuilding the file index will have the following effects:",
       "warningSearch": "• Search functionality may be temporarily impacted",
       "warningPerformance": "• The system might slow down during indexing",
@@ -5588,7 +5599,9 @@
       "sourceDiagnosticsGroupDesc": "Inspect unified health for App, File, Everything, and other indexed sources",
       "sourceDiagnosticsSummaryTitle": "Source Health Summary",
       "sourceDiagnosticsChecking": "Reading unified search source status",
-      "sourceDiagnosticsSummary": "{total} sources, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention} need attention",
+      "sourceDiagnosticsSummary": "{total}, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention}",
+      "sourceDiagnosticsSources": "{count} source | {count} sources",
+      "sourceDiagnosticsAttention": "{count} needs attention | {count} need attention",
       "sourceDiagnosticsLoadFailed": "Failed to load search source diagnostics",
       "sourceDiagnosticDetailTitle": "Search Source Details",
       "sourceDiagnosticOverview": "Overview",
@@ -5624,7 +5637,9 @@
       "providerConfigSourceUnknown": "unknown",
       "browserBookmarksTitle": "Browser Bookmarks Official Runtime",
       "browserBookmarksLoading": "Reading Browser Bookmarks runtime state",
-      "browserBookmarksDesc": "{status} · {items} items · {roots} watch roots · {evidence} evidence entries · {reason}",
+      "browserBookmarksDesc": "{status} · {items} · {roots} · {evidence} · {reason}",
+      "browserBookmarksRoots": "{count} watch root | {count} watch roots",
+      "browserBookmarksEvidence": "{count} evidence entry | {count} evidence entries",
       "browserBookmarksConsentRequired": "Consent required",
       "browserBookmarksConsentGranted": "Consent granted",
       "browserBookmarksConsentAction": "Allow and rebuild",
@@ -5634,7 +5649,7 @@
       "browserBookmarksWatchRoots": "Watch roots: {roots}",
       "browserBookmarksProviderMissing": "Browser Bookmarks official provider was not found",
       "browserBookmarksSourceMissing": "Browser Bookmarks indexed source was not found",
-      "sourceItems": "{count} items",
+      "sourceItems": "{count} item | {count} items",
       "sourceWatch": "Watch: {state}",
       "sourceReconcile": "Reconcile: {state}",
       "sourceTask": {
@@ -5839,7 +5854,7 @@
       "appDiagnosticStageHit": "Target hit",
       "appDiagnosticStageMiss": "Target missed",
       "appDiagnosticStageNotRun": "Not run",
-      "appDiagnosticStageMatches": "{count} matches",
+      "appDiagnosticStageMatches": "{count} match | {count} matches",
       "appDiagnosticStageDetailTitle": "{stage} match details",
       "appDiagnosticNotFound": "Target not found ({status}): {reason}",
       "appDiagnosticTargetRequired": "Enter an app path, bundleId, name, or search query first",
@@ -6029,7 +6044,7 @@
       "diagnosticsTitle": "Backend Diagnostics",
       "diagnosticsEmpty": "No diagnostic stages recorded",
       "diagnosticsHealthy": "All recorded backend stages are healthy",
-      "diagnosticsFailed": "{count} backend stage(s) need attention",
+      "diagnosticsFailed": "{count} backend stage needs attention | {count} backend stages need attention",
       "diagnosticSdkLoad": "SDK load",
       "diagnosticSdkQuery": "SDK query",
       "diagnosticCliDetect": "CLI detect",
@@ -6055,7 +6070,7 @@
       "testDuration": "Duration",
       "testSampleTitle": "First Result",
       "testing": "Testing...",
-      "testSuccess": "Test successful! Found {count} results in {duration}ms",
+      "testSuccess": "Test successful! Found {count} result in {duration}ms | Test successful! Found {count} results in {duration}ms",
       "testFailed": "Test failed",
       "installTitle": "Installation Required",
       "installDesc": "Install Everything manually first, then install or select es.exe if the CLI is missing",
@@ -6284,7 +6299,7 @@
       "cliDetectedTitle": "Local CLI Detected",
       "cliDetectedDesc": "Supported local CLI AI tools (such as OMP, Claude Code, Codex, or Pi) are installed on this machine. Enable them to use local models with zero credentials.",
       "enableCliAction": "Enable All",
-      "clisBatchEnabledToast": "Enabled {count} local CLI channels successfully",
+      "clisBatchEnabledToast": "Enabled {count} local CLI channel successfully | Enabled {count} local CLI channels successfully",
       "capabilityProviderLabel": "Bound Channels",
       "capabilityPromptLabel": "Default Prompt",
       "capabilitySearchLabel": "Search capabilities",
@@ -6300,7 +6315,7 @@
       "capabilityDisabledLabel": "Available Channels",
       "capabilityChannelEnabled": "Enabled",
       "capabilityChannelDisabled": "Disabled",
-      "capabilityModelCount": "{count} models",
+      "capabilityModelCount": "{count} model | {count} models",
       "capabilityFooterHint": "Drag to reorder model priority",
       "capabilitySaveIdle": "Current config is saved",
       "capabilitySavePending": "Capability config has unsaved changes",
@@ -6459,9 +6474,9 @@
       "promptDeleteConfirm": "This will permanently delete the selected prompt. Continue?",
       "promptDeleteSuccess": "Prompt deleted",
       "promptDeleteFailed": "Failed to delete prompt",
-      "promptImportSuccess": "{count} prompts imported",
+      "promptImportSuccess": "{count} prompt imported | {count} prompts imported",
       "promptImportFailed": "Failed to import prompts",
-      "promptExportSuccess": "Exported {count} prompts",
+      "promptExportSuccess": "Exported {count} prompt | Exported {count} prompts",
       "promptExportEmpty": "No custom prompts to export",
       "promptEmptyStateTitle": "Select or create a prompt",
       "promptEmptyStateDesc": "Choose a template from the list or start from scratch.",
@@ -7776,11 +7791,11 @@
           "network": "Network error. Check your internet connection."
         },
         "modelsFetchSuccessTitle": "Models Fetched",
-        "modelsFetchSuccessDesc": "Fetched {count} available models",
+        "modelsFetchSuccessDesc": "Fetched {count} available model | Fetched {count} available models",
         "modelsFetchFailed": "Failed to fetch models",
         "modelsFetchEmpty": "No models were returned. Check that the local service is reachable and has models installed.",
         "modelsFetchFailedToast": "Failed to fetch models: {message}",
-        "modelsFetchedToast": "Fetched {count} models",
+        "modelsFetchedToast": "Fetched {count} model | Fetched {count} models",
         "confirm": "OK"
       },
       "model": {
@@ -7820,7 +7835,7 @@
         "binding": {
           "title": "Model settings",
           "description": "Alias, context and output limits, reasoning and image input per model",
-          "summaryCount": "{count} model(s) customized",
+          "summaryCount": "{count} model customized | {count} models customized",
           "edit": "Configure",
           "dialogDesc": "These values are what requests actually use. Leave a field empty when you don't know it.",
           "noModels": "Add a model first, then configure it here.",
@@ -8022,7 +8037,7 @@
       "contextPruned": "Budget pruned",
       "contextTombstoned": "Removed after deletion",
       "contextReasonMemoryTombstoned": "Deleted memory removed before AI invocation",
-      "contextTombstoneNotice": "{count} deleted memory source(s) were removed after context preparation.",
+      "contextTombstoneNotice": "{count} deleted memory source was removed after context preparation. | {count} deleted memory sources were removed after context preparation.",
       "contextIncludedSources": "Included sources",
       "contextExcludedSources": "Excluded sources",
       "contextCitation": "Citation",
@@ -8075,7 +8090,7 @@
       "badgeBuiltin": "Built-in",
       "workflowEnabled": "Enabled",
       "workflowDisabled": "Disabled",
-      "stepsCount": "{count} steps",
+      "stepsCount": "{count} step | {count} steps",
       "emptyWorkflowList": "No workflows yet. Create one to get started.",
       "toolbarDescription": "v1 is scoped to saved workflows, the MCP tool bridge, and lightweight desktop context.",
       "saveAsCopy": "Save as Copy",
@@ -8108,7 +8123,7 @@
       "metadataJsonTitle": "Metadata JSON",
       "metadataDescription": "Advanced metadata such as MCP profile, category, and template markers can live here.",
       "stepEditorTitle": "Step Editor",
-      "stepEditorDescription": "{count} steps. Supports `model / prompt / tool / agent`.",
+      "stepEditorDescription": "{count} step. Supports `model / prompt / tool / agent`. | {count} steps. Supports `model / prompt / tool / agent`.",
       "addPromptStep": "Add Prompt",
       "addModelStep": "Add Use Model",
       "addToolStep": "Add Tool",
@@ -8168,7 +8183,7 @@
       "currentRunStepsTitle": "Current Run Steps",
       "currentRunStepsDescription": "Inspect each step status and output directly.",
       "modelLatency": "Latency {latency}",
-      "modelTokens": "{count} tokens",
+      "modelTokens": "{count} token | {count} tokens",
       "modelTrace": "trace",
       "stepLatency": "Latency {latency}",
       "stepTokens": "{tokens} tokens",
@@ -8533,8 +8548,8 @@
       "cold-start": "You might need"
     },
     "usage": {
-      "launchCount": "Launched {count} times in total",
-      "useCount": "Used this item {count} times in total"
+      "launchCount": "Launched {count} time in total | Launched {count} times in total",
+      "useCount": "Used this item {count} time in total | Used this item {count} times in total"
     },
     "evidence": {
       "opened": "Used {count}× in total",

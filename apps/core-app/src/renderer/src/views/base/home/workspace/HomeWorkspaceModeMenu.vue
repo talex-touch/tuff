@@ -529,11 +529,17 @@ watch(open, (isOpen) => {
               <span class="HomeWorkspaceModeMenu-Name">{{ profile.name }}</span>
               <span class="HomeWorkspaceModeMenu-Hint">
                 {{
-                  t('home.workspace.profile.summary', {
-                    runtime: profile.runtimeProvider,
-                    tools: profile.allowedToolIds.length,
-                    approval: t(`home.workspace.profile.approval.${profile.permissionPolicy.mode}`)
-                  })
+                  t(
+                    'home.workspace.profile.summary',
+                    {
+                      runtime: profile.runtimeProvider,
+                      tools: profile.allowedToolIds.length,
+                      approval: t(
+                        `home.workspace.profile.approval.${profile.permissionPolicy.mode}`
+                      )
+                    },
+                    profile.allowedToolIds.length
+                  )
                 }}
               </span>
             </span>

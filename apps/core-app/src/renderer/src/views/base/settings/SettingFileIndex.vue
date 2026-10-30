@@ -265,9 +265,11 @@ const browserBookmarksDescription = computed(() => {
 
   return t('settings.settingFileIndex.browserBookmarksDesc', {
     status: t(resolveIndexingSourceStatusKey(source.health.status)),
-    items: source.health.itemCount,
-    roots: source.roots.length,
-    evidence: source.evidence?.length ?? 0,
+    items: t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }),
+    roots: t('settings.settingFileIndex.browserBookmarksRoots', { count: source.roots.length }),
+    evidence: t('settings.settingFileIndex.browserBookmarksEvidence', {
+      count: source.evidence?.length ?? 0
+    }),
     reason: source.health.reason || '-'
   })
 })
@@ -1156,11 +1158,13 @@ const sourceDiagnosticsSummaryText = computed(() => {
   if (!summary) return t('settings.settingFileIndex.sourceDiagnosticsChecking')
 
   return t('settings.settingFileIndex.sourceDiagnosticsSummary', {
-    total: summary.total,
+    total: t('settings.settingFileIndex.sourceDiagnosticsSources', { count: summary.total }),
     ready: summary.ready,
     degraded: summary.degraded,
     unavailable: summary.unavailable,
-    attention: sourceDiagnosticsAttentionCount.value
+    attention: t('settings.settingFileIndex.sourceDiagnosticsAttention', {
+      count: sourceDiagnosticsAttentionCount.value
+    })
   })
 })
 

@@ -48,10 +48,13 @@ const hasSearchProviders = computed(
 const summaryText = computed(() => {
   if (loading.value) return t('plugin.permissions.searchProviders.loading')
 
+  // Each count is worded on its own, so the sources and the issues each take their own plural.
   return t('plugin.permissions.searchProviders.summary', {
-    total: pluginProviders.value.length,
+    total: t('plugin.permissions.searchProviders.sourceCount', {
+      count: pluginProviders.value.length
+    }),
     enabled: pluginProviders.value.filter((provider) => provider.enabled).length,
-    issues: pluginIssues.value.length
+    issues: t('plugin.permissions.searchProviders.issueCount', { count: pluginIssues.value.length })
   })
 })
 
@@ -171,7 +174,7 @@ onMounted(() => {
       v-if="pluginIssues.length > 0"
       :title="t('settings.settingFileIndex.providerConfigIssues')"
       :description="
-        t('plugin.permissions.searchProviders.issueDesc', { count: pluginIssues.length })
+        t('plugin.permissions.searchProviders.issueCount', { count: pluginIssues.length })
       "
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt-filled"

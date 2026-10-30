@@ -81,10 +81,28 @@ function lookupLoadedMessage(bundle: MessageMap | undefined, key: string): strin
 
 /** `{placeholders}` the way vue-i18n writes them, so both paths read the same. */
 function fillLoadedMessage(template: string, params?: Record<string, unknown>): string {
-  if (!params) return template
-  return template.replace(/\{(\w+)\}/g, (match, name) =>
-    params[name] === undefined ? match : String(params[name])
-  )
+  const form = selectLoadedPluralForm(template, params)
+  // A literal (`{'|'}`, `{'@'}`) is its text; a placeholder is its param, or stays as written.
+  return form.replace(/\{'([^']*)'\}|\{(\w+)\}/g, (match, literal, name) => {
+    if (literal !== undefined) return literal
+    return params?.[name] === undefined ? match : String(params[name])
+  })
+}
+
+/**
+ * The form of a plural message ("{count} file | {count} files") that the composer would pick: by a
+ * numeric `count` or `n` under its default rule, or as for a count of 1 when there is neither. A
+ * pipe inside braces (`{'|'}`) is text, not a separator.
+ */
+function selectLoadedPluralForm(template: string, params?: Record<string, unknown>): string {
+  const forms = template.split(/\|(?![^{]*\})/)
+  if (forms.length < 2) return template
+  const count =
+    typeof params?.count === 'number' ? params.count : typeof params?.n === 'number' ? params.n : 1
+  const choice = Math.abs(count)
+  const index =
+    forms.length === 2 ? (choice ? (choice > 1 ? 1 : 0) : 1) : choice ? Math.min(choice, 2) : 0
+  return forms[Math.min(index, forms.length - 1)].trim()
 }
 
 /**

@@ -480,8 +480,12 @@ watch(
           <p class="PluginStorageDetails-Desc">
             {{
               t('plugin.storage.details.description', {
-                files: storageStats.fileCount || 0,
-                directories: storageStats.dirCount || 0
+                files: t('plugin.storage.details.fileCount', {
+                  count: storageStats.fileCount || 0
+                }),
+                directories: t('plugin.storage.details.directoryCount', {
+                  count: storageStats.dirCount || 0
+                })
               })
             }}
           </p>

@@ -529,6 +529,14 @@ const clearButtons = computed<DialogButton[]>(() => [
   }
 ])
 
+/**
+ * A counted phrase: the number formatted for reading, the plural form chosen by the number itself,
+ * since the formatted text is a string vue-i18n can't count.
+ */
+function countPhrase(key: string, count: number): string {
+  return t(key, { count: numberFormatter.value.format(count) }, count)
+}
+
 function heatmapCellLabel(cell: HeatmapCell): string {
   const date = formatDateKey(cell.date)
   if (cell.beforeTracking) return t('voiceInsights.heatmap.beforeTracking', { date })
@@ -537,8 +545,8 @@ function heatmapCellLabel(cell: HeatmapCell): string {
   }
   return t('voiceInsights.heatmap.daySummary', {
     date,
-    characters: numberFormatter.value.format(cell.characters),
-    sessions: numberFormatter.value.format(cell.sessions),
+    characters: countPhrase('voiceInsights.heatmap.characterCount', cell.characters),
+    sessions: countPhrase('voiceInsights.heatmap.sessionCount', cell.sessions),
     duration: formatDuration(cell.durationMs)
   })
 }
@@ -547,9 +555,7 @@ function buildShareText(value: VoiceInsights): string {
   const averageRate =
     value.averageCharactersPerMinute === null
       ? t('voiceInsights.share.unavailable')
-      : t('voiceInsights.share.rateValue', {
-          count: numberFormatter.value.format(value.averageCharactersPerMinute)
-        })
+      : countPhrase('voiceInsights.share.rateValue', value.averageCharactersPerMinute)
 
   return [
     t('voiceInsights.share.title'),
@@ -561,12 +567,8 @@ function buildShareText(value: VoiceInsights): string {
     t('voiceInsights.share.rate', { rate: averageRate }),
     t('voiceInsights.share.duration', { duration: formatDuration(value.totalDurationMs) }),
     t('voiceInsights.share.activeDays', { count: numberFormatter.value.format(value.activeDays) }),
-    t('voiceInsights.share.currentStreak', {
-      count: numberFormatter.value.format(value.currentStreak)
-    }),
-    t('voiceInsights.share.longestStreak', {
-      count: numberFormatter.value.format(value.longestStreak)
-    }),
+    countPhrase('voiceInsights.share.currentStreak', value.currentStreak),
+    countPhrase('voiceInsights.share.longestStreak', value.longestStreak),
     t('voiceInsights.share.sessions', { count: numberFormatter.value.format(value.sessionCount) }),
     t('voiceInsights.share.polishedSessions', {
       count: numberFormatter.value.format(value.polishedSessionCount)
@@ -1111,11 +1113,15 @@ onBeforeUnmount(() => {
           </div>
           <p v-if="insights" class="VoiceInsights-WeeksStreak">
             {{
-              t('voiceInsights.weeks.streak', {
-                current: numberFormatter.format(insights.currentStreak),
-                longest: numberFormatter.format(insights.longestStreak),
-                active: numberFormatter.format(insights.activeDays)
-              })
+              t(
+                'voiceInsights.weeks.streak',
+                {
+                  current: numberFormatter.format(insights.currentStreak),
+                  longest: numberFormatter.format(insights.longestStreak),
+                  active: numberFormatter.format(insights.activeDays)
+                },
+                insights.activeDays
+              )
             }}
           </p>
         </header>
@@ -1147,9 +1153,9 @@ onBeforeUnmount(() => {
             <p v-if="insights" class="VoiceInsights-StreakLine">
               {{
                 t('voiceInsights.streak.summary', {
-                  current: numberFormatter.format(insights.currentStreak),
+                  current: countPhrase('voiceInsights.streak.current', insights.currentStreak),
                   longest: numberFormatter.format(insights.longestStreak),
-                  active: numberFormatter.format(insights.activeDays)
+                  active: countPhrase('voiceInsights.streak.active', insights.activeDays)
                 })
               }}
             </p>
