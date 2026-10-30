@@ -51,7 +51,7 @@ catalog:
   '@iconify-json/cib': ^1.2.3
   '@iconify-json/logos': ^1.2.11
   '@langchain/anthropic': ^0.3.34
-  '@langchain/core': ^0.3.80
+  '@langchain/core': ^1.2.20
   '@langchain/langgraph': ^0.4.9
   '@langchain/openai': ^0.4.9
   '@nuxtjs/mdc': ^0.22.2
