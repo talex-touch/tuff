@@ -1,0 +1,143 @@
+---
+title: TouchSurface 触摸表面
+description: 让任意表面在鼠标划过或手指触摸时，像一滴液态玻璃一样流动
+category: Effects
+status: beta
+since: 0.9.2
+tags: [touch, hover, liquid, surface, spring]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`TxTouchSurface` 是铺着触摸效果的表面。鼠标划过或手指按下时，它抬起、朝指针倾斜、顺着指针移动的方向拉长，指针离开后以弹簧弹回。默认就是 `TxBaseSurface`，自己不认的属性都交给表面。
+:::TuffDemoWrapper{demo="TouchSurfaceBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTouchSurface :radius="32" class="card">
+      Base
+    </TxTouchSurface>
+
+    <TxTouchSurface mode="glass" :radius="32" class="card">
+      Base · glass
+    </TxTouchSurface>
+
+    <TxTouchSurface surface="glass" :width="176" :height="64" :border-radius="32">
+      Glass
+    </TxTouchSurface>
+  </template>
+---
+:::
+
+### 选择表面
+`surface` 决定效果铺在哪种表面上：`'base'`（默认）是 `TxBaseSurface`，`'glass'` 是 `TxGlassSurface`。其余属性都是表面自己的，材质、圆角和玻璃引擎的写法与直接用表面时完全一样。
+
+```vue
+<template>
+  <!-- 磨砂卡片 -->
+  <TxTouchSurface mode="blur" :radius="18" class="card" />
+
+  <!-- 玻璃的默认样子：扭曲，classic 引擎 -->
+  <TxTouchSurface surface="glass" :width="210" :height="150" :border-radius="75" />
+
+  <!-- 物理建模的透镜 -->
+  <TxTouchSurface surface="glass" engine="lens" :width="210" :height="150" :border-radius="75" />
+</template>
+```
+
+`surface` 也可以传自己的组件，前提是它的根元素就是表面：效果驱动的是这个根元素。
+
+### 用在自己的元素上
+`useLiquidTouch` 是同一套效果，可用于任意元素或组件实例，传 ref 或 getter 均可，返回 `{ hovered, pressed }`。
+
+```vue
+<script setup lang="ts">
+import { useLiquidTouch } from '@talex-touch/tuffex'
+import { ref } from 'vue'
+
+const card = ref<HTMLElement | null>(null)
+const { pressed } = useLiquidTouch(card, { lean: 0.15, pressGrow: 0.08 })
+</script>
+
+<template>
+  <div ref="card" class="card" :class="{ held: pressed }">
+    Hold me
+  </div>
+</template>
+```
+
+### 最佳实践
+
+- 用在本来就该被触摸的表面上，如卡片、按钮、标签和磁贴；不会被点的静态面板不要加。
+- 表面会移动几个像素、放大几个百分点，周围要留出空间；父级设了 `overflow: hidden` 会把它裁掉。
+- 装着文字的表面把 `maxLean` 和 `maxStretch` 保持得小一些：内容会跟着表面一起变形。
+- 手指开始滚动页面时，表面会松手。需要手指在上面滑动的表面（如把手、触控板），给它设 `touch-action: none`（或 `pan-x` / `pan-y`）。
+- 触屏没有悬停，手指只有按下：手指落下时表面抬起，手指抬起或页面开始滚动时落回。
+- 参与期间它会写入 `translate` 与 `scale` 属性，所以你自己的 `transform` 不受影响，但自己写的 `translate`、`scale` 会在表面静止前被覆盖。
+- 暂时不能按的表面传 `disabled`，不要卸载效果。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `surface` | `'base' \| 'glass' \| Component` | `'base'` | 效果铺在哪种表面上：`TxBaseSurface`、`TxGlassSurface`，或根元素就是表面的自定义组件。 |
+| `disabled` | `boolean` | `false` | 关闭效果；正被按住的表面松手并弹回。 |
+| `lean` | `number` | `0.1` | 指针在边缘时，朝指针倾斜多远，按自身一半尺寸的比例。 |
+| `maxLean` | `number` | `12` | 倾斜的最大距离，px。 |
+| `hoverLift` | `number` | `0.3` | 鼠标或触控笔悬停时的抬起程度，0 到 1；按下或手指按住时完全抬起（1）。 |
+| `pressGrow` | `number` | `0.06` | 完全抬起时放大多少，按自身尺寸的比例。 |
+| `stretch` | `number` | `0.0001` | 指针在某个轴上每 px/s 的速度，使该轴拉长多少，按该轴尺寸的比例。 |
+| `maxStretch` | `number` | `0.2` | 单个轴最多拉长多少，按自身尺寸的比例。 |
+| `swell` | `number` | `0.016` | 抬起程度变化时，宽度按每单位速度膨胀多少。 |
+| `stiffness` | `number` | `150` | 抬起、倾斜与拉长的弹簧刚度。 |
+| `damping` | `number` | `19` | 弹簧阻尼；越低晃得越久，越高越快落定。 |
+
+其余属性与默认插槽都交给表面。
+
+### useLiquidTouch 选项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|--------|------|---------|-------------|
+| `disabled` | `MaybeRefOrGetter<boolean>` | `false` | 关闭效果。 |
+| `lean` | `MaybeRefOrGetter<number>` | `0.1` | 朝指针倾斜多远，按自身一半尺寸的比例。 |
+| `maxLean` | `MaybeRefOrGetter<number>` | `12` | 倾斜的最大距离，px。 |
+| `hoverLift` | `MaybeRefOrGetter<number>` | `0.3` | 鼠标或触控笔悬停时的抬起程度。 |
+| `pressGrow` | `MaybeRefOrGetter<number>` | `0.06` | 完全抬起时放大多少。 |
+| `stretch` | `MaybeRefOrGetter<number>` | `0.0001` | 指针每 px/s 的速度使表面拉长多少，按尺寸的比例。 |
+| `maxStretch` | `MaybeRefOrGetter<number>` | `0.2` | 单个轴最多拉长多少。 |
+| `swell` | `MaybeRefOrGetter<number>` | `0.016` | 每单位抬起速度使宽度膨胀多少。 |
+| `stiffness` | `MaybeRefOrGetter<number>` | `150` | 弹簧刚度。 |
+| `damping` | `MaybeRefOrGetter<number>` | `19` | 弹簧阻尼。 |
+
+第一个参数是元素或组件实例，可以是 ref 或 getter。数值选项每一帧重新读取，能直接绑到滑块上调。返回 `{ hovered, pressed }`，都是只读的 `Ref<boolean>`：`hovered` 在鼠标或触控笔位于元素上时为 true（手指永远不会），`pressed` 在主键或手指按在元素上时为 true，之后指针移到哪里都不影响。`TxTouchSurface` 与 `useLiquidTouch` 都从 `@talex-touch/tuffex/touch-surface` 导出，根入口同步导出。
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 表面的内容。 |
+
+## 概述
+
+- 三件事同时发生，共用一根弹簧：表面抬起（悬停到 `hoverLift`，按下到 1）、朝指针倾斜（指针离中心的位置按半个尺寸折算，乘以 `lean`，以 `maxLean` 封顶）、顺着指针移动的方向拉长并在垂直方向变薄，体积保持不变。
+- 只有形状在变，写的是 `translate` 与 `scale`：表面保持布局给它的尺寸，玻璃表面也保留它的折射图。静止时什么都不写。
+- 玻璃透镜经 `--tx-glass-lift` 读取抬起程度，效果会设置它，阴影随之升降。
+- 鼠标只认主键，Ctrl 加点按忽略。按下之后在 `window` 上继续跟随，指针离开表面也照常，鼠标在没有按键的情况下移动则结束这次按下，免得松手丢失。
+- 手指落下时表面立即抬起、朝触点倾斜，手指抬起时松手。浏览器把手势当作滚动时会发出 `pointercancel`，表面同样松手。
+- 开启「减少动态效果」时，抬起不缓动，也不倾斜、不拉长。
+- 一切回到静止后，帧循环立即休眠。
+- 表面保留自己的支持范围：玻璃表面只在 Chromium 内核（Chrome、Edge、Electron）里折射，别处是磨砂玻璃，触摸效果两边一样。
+
+## 技术实现
+
+- 弹簧是 `@talex-touch/tuffex/utils` 的 `stepSpring`，由同一个 `requestAnimationFrame` 循环推进；指针速度是对其移动做的低通，鼠标的抖动不会被当成一次挥动。
+- 效果用的是 `translate` 与 `scale` 属性而不是 `transform`，自己带 `transform` 动画的表面不受影响。
+- 弹簧与 swell 同 `useLiquidDrag`，拖动的透镜与被触摸的表面手感就是同一种液体。
+- 源码：`packages/tuffex/packages/components/src/touch-surface/`。
+
+<TuffDocSourceLink />

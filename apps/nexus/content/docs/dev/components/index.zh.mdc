@@ -247,6 +247,7 @@ code: |
 ### 视觉效果
 
 - [GlassSurface 玻璃拟态](./glass-surface.zh.mdc)
+- [TouchSurface 触摸表面](./touch-surface.zh.mdc)
 - [GradientBorder 渐变边框](./gradient-border.zh.mdc)
 - [OutlineBorder 描边容器](./outline-border.zh.mdc)
 - [BorderBeam 流光边框](./border-beam.zh.mdc)

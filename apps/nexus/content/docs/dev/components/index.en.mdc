@@ -247,6 +247,7 @@ code: |
 ### Effects
 
 - [GlassSurface](./glass-surface.en.mdc)
+- [TouchSurface](./touch-surface.en.mdc)
 - [GradientBorder](./gradient-border.en.mdc)
 - [OutlineBorder](./outline-border.en.mdc)
 - [BorderBeam](./border-beam.en.mdc)

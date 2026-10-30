@@ -1,10 +1,10 @@
 ---
 title: "GlassSurface"
-description: "A glass container that refracts the content behind it."
+description: "A glass container that refracts the content behind it, with an optional physically modelled lens and liquid drag."
 category: Effects
 status: beta
 since: 0.3.4
-tags: [glass, blur, refraction]
+tags: [glass, blur, refraction, lens]
 syncStatus: reviewed
 verified: true
 ---
@@ -46,6 +46,62 @@ code: |
 ---
 :::
 
+### Liquid Lens
+The glass has two looks, picked by `engine`. The default, `classic`, bends what is behind it through a displacement ramp, which reads as distortion. `engine="lens"` switches to a physically modelled lens that refracts it: the rim (`bezel`) pulls the picture behind it inward by the glass's index of refraction, and the middle stays almost as it was. `zoom` magnifies the middle on its own, `dispersion` splits red, green and blue along the rim, and `rimSaturation` turns what shows through the edge vivid.
+
+:::TuffDemoWrapper{demo="GlassSurfaceLensDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlassSurface
+      engine="lens"
+      :width="220"
+      :height="140"
+      :border-radius="70"
+      :bezel="22"
+      :thickness="40"
+      :zoom="1.1"
+      :rim-saturation="4"
+    />
+    <TxSlider v-model="bezel" :min="2" :max="40" />
+  </template>
+---
+:::
+
+### Liquid Drag
+`useLiquidDrag` makes the lens behave like a drop of liquid glass: it lifts under the pointer, stretches along the way it is dragged, and springs back when it stops. Position follows the pointer exactly and only the shape lags; the whole thing is `transform`, so the lens keeps its layout size and its refraction map. It works on either engine. For glass that should answer a hovering mouse or a finger rather than a drag, use [TouchSurface](./touch-surface.en.mdc) with `surface="glass"`.
+
+:::TuffDemoWrapper{demo="GlassSurfaceLiquidDragDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { useLiquidDrag } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const stage = ref(null)
+  const lens = ref(null)
+
+  useLiquidDrag(lens, { bounds: stage, restHeight: 0.8, pressGrow: 0.25 })
+  </script>
+
+  <template>
+    <div ref="stage" class="stage">
+      <TxGlassSurface
+        ref="lens"
+        engine="lens"
+        :width="210"
+        :height="150"
+        :border-radius="75"
+        :bezel="25"
+        :thickness="50"
+        :zoom="1.13"
+        :rim-saturation="9"
+      />
+    </div>
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Use it only where artwork, images, or gradients benefit from refraction; use `TxBaseSurface` or `TxCard` for regular cards.
@@ -53,6 +109,10 @@ code: |
 - Tune `blur`, `backgroundOpacity`, and `saturation` against the real background so text behind stays readable.
 - Reserve large `distortionScale` values and wide channel offsets for hero or preview surfaces, not dense forms.
 - Put important controls in the default slot.
+- Use `useLiquidDrag`, on either engine, when the rim should flow like liquid as it is dragged, and `TxTouchSurface` when the glass should answer a hover or a touch; keep still cards and panels on the default engine or `TxBaseSurface`.
+- The lens refracts only in Chromium engines (Chrome, Edge, Electron); Safari and Firefox show frosted glass, so do not make anything readable only through the refraction.
+- A `zoom` above 1 resamples the middle, which softens small text inside it; keep `zoom` at 1 for a control that holds text and leave the effect to `bezel` and `thickness`.
+- Each lens is a backdrop filter that is recomputed with the page behind it, so put only as many on screen as you need.
 
 ## API Reference
 
@@ -72,7 +132,11 @@ rows:
   - name: borderRadius
     type: number
     default: 20
-    description: Outer radius in px, also used by the displacement map.
+    description: Outer radius in px, also used by the displacement map; the lens caps it at half the short side.
+  - name: engine
+    type: "'classic' | 'lens'"
+    default: "'classic'"
+    description: Rendering engine. `classic` is the displacement-ramp glass and reads this table's props; `lens` refracts through a modelled convex bezel and reads the next table's. Both share `width`, `height`, `borderRadius`, `backgroundOpacity`, and `saturation`.
   - name: borderWidth
     type: number
     default: 0.07
@@ -96,11 +160,11 @@ rows:
   - name: backgroundOpacity
     type: number
     default: 0
-    description: Background alpha on the SVG-filter path.
+    description: Background alpha on the SVG-filter path; under `lens` it is the opacity of the background veil, and at least 0.22 when the lens falls back to frosted glass.
   - name: saturation
     type: number
     default: 1
-    description: Saturation on the SVG-filter path.
+    description: Saturation on the SVG-filter path; defaults to 1.5 under `lens`.
   - name: distortionScale
     type: number
     default: -180
@@ -132,24 +196,101 @@ rows:
 ---
 ::
 
+### Lens Props (`engine="lens"`)
+
+::TuffPropsTable
+---
+rows:
+  - name: bezel
+    type: number
+    default: "auto: 12% of the short side, 4 to 10px"
+    description: Width of the refracting rim in px, at most half the short side.
+  - name: thickness
+    type: number
+    default: "auto: 20% of the short side, 8 to 24px"
+    description: Depth of the glass in px; a thicker lens carries what is behind it further.
+  - name: ior
+    type: number
+    default: 1.5
+    description: Index of refraction, 1 to 3; the same slope bends harder as it rises.
+  - name: refraction
+    type: number
+    default: 1
+    description: Scales how far the rim carries the content, 0 and up.
+  - name: zoom
+    type: number
+    default: 1
+    description: Magnification of the middle, 1 and up; it runs as a displacement pass of its own, so the middle is resampled above 1.
+  - name: profile
+    type: "'squircle' | 'circle'"
+    default: "'squircle'"
+    description: Cross-section of the rim. `squircle` is a dome with a flat top and a steep edge, `circle` is rounder.
+  - name: rimLight
+    type: number
+    default: 1
+    description: Strength of the highlight along the edge, 0 and up.
+  - name: rimSaturation
+    type: number
+    default: 1
+    description: Saturation of what shows through the edge; above 1 it turns vivid.
+  - name: dispersion
+    type: number
+    default: 0
+    description: How far red, green and blue part along the rim, 0 to 0.5.
+  - name: frost
+    type: number
+    default: 0
+    description: Frosting of the backdrop as a blur radius in px.
+---
+::
+
 ### Slots
 
 | Slot | Props | Description |
 |------|-------|-------------|
 | `default` | - | Panel content, centered in `.tx-glass-surface__content` above the filter layer. |
 
+### useLiquidDrag Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `bounds` | `MaybeRefOrGetter<HTMLElement \| ComponentPublicInstance \| null \| undefined>` | — | What the lens may not leave; without it the lens goes wherever the pointer does. |
+| `disabled` | `MaybeRefOrGetter<boolean>` | `false` | Pauses dragging without unmounting. |
+| `ignore` | `string` | — | Selector of the elements inside the lens that do not start a drag, such as buttons. |
+| `stiffness` | `MaybeRefOrGetter<number>` | `150` | Spring stiffness of the lift and the stretch. |
+| `damping` | `MaybeRefOrGetter<number>` | `19` | Spring damping; lower rings for longer, higher settles at once. |
+| `stretch` | `MaybeRefOrGetter<number>` | `0.00018` | Stretch along an axis per px/s of speed on it, as a share of that axis's size. |
+| `maxStretch` | `MaybeRefOrGetter<number>` | `0.3` | The most the lens stretches along one axis, as a share of its size. |
+| `restHeight` | `MaybeRefOrGetter<number>` | `1` | Height at rest, as a share of the layout height. |
+| `pressGrow` | `MaybeRefOrGetter<number>` | `0.1` | How much taller a press makes the lens, as a share of its rest height. |
+| `swell` | `MaybeRefOrGetter<number>` | `0.016` | How far the width swells per unit of speed while the lens lifts or settles. |
+
+The first argument is the lens's element or component instance, as a ref or a getter. The numeric options are read again on every frame, so they can be bound straight to sliders. It returns `{ dragging, position, reset }`: `dragging` is a read-only `Ref<boolean>`, `position()` gives the lens's offset from where layout puts it in px, and `reset()` puts it back. The component and `useLiquidDrag` are both exported from `@talex-touch/tuffex/glass-surface`, and from the package root.
+
 ## Overview
 
+- `engine` defaults to `classic`, so `TxBaseSurface`, `TxRadioGroup`, `TxSlider`, and other internal users are unaffected. The next three bullets describe `classic`.
 - The rendering path follows support: SVG displacement refraction with `backdrop-filter: url()`, else a `blur()` frosted backdrop, else a translucent background with a border.
 - Safari, Firefox, SSR, and environments without `CSS.supports` skip refraction; the fallbacks keep size, radius, and readability but drop RGB refraction.
 - The displacement map is drawn as a bitmap at the measured aspect ratio, at most 256px on its long side, and stretched to fill; it is redrawn when the size or an optical prop changes. Where the SVG filter path is not taken or no 2D canvas is available, the map stays an SVG.
 - The generated SVG is decorative, non-interactive, and sits below the content layer.
-- Under high contrast (triggers in [Theming](./theming.en.mdc)) it neither refracts nor blurs, and paints the opaque overlay background instead.
+- Under high contrast (triggers in [Theming](./theming.en.mdc)) it neither refracts nor blurs, and paints the opaque overlay background instead; `lens` also swaps its shading for an outline.
+- `lens` refracts through `backdrop-filter: url()` as well, so it refracts only in Chromium engines. In Safari, Firefox, SSR, and the first frame before the lens is measured it is frosted glass: a blur of `frost` or 12px, whichever is larger, under a tint of at least 0.22; shape, radius, shadows, and drag carry on.
+- `feDisplacementMap` does not interpolate between pixels, so on a 1× screen large bright detail under the rim, such as big white type, shows stepped edges; at 2× and above it renders smoothly, and on 1× a `frost` of about 1px smooths them.
+- The lens's refraction maps are drawn as bitmaps at the measured size, once per shape and cached; changing several props in one frame redraws once. `bezel` and `thickness` follow the short side when unset, so a small control gets a thin rim and a large pill a deep one.
+- At `zoom` 1 the middle is as sharp as the page and the blur is blended in only where the rim bends; above 1 the middle is resampled and the whole face softens a little.
+- The lens's shadows run on two CSS variables, `--tx-glass-lift` (0 at rest, 1 held down) and `--tx-glass-unit` (scales them down for a lens smaller than 150px); light comes from the top left and the cast falls to the bottom right. `useLiquidDrag` writes the first.
+- `useLiquidDrag` takes over the pointer on press: it sets pointer capture on the element and also listens for `pointermove`, `pointerup`, and `pointercancel` on `window`, so the drag follows the pointer out of the lens and even out of the window. The element gets `touch-action: none` and `user-select: none` and a grab cursor, all restored on unmount or when the element changes. Under reduced motion the lens lifts without easing and neither stretches nor springs.
 
 ## Technologies
 
 - Three `feDisplacementMap` passes shift the red, green, and blue channels separately and recombine them into a chromatic refraction.
 - The map is a bitmap, not a full-size SVG, because Chromium rasterizes an `feImage` on the CPU at its drawn size for every frame and sends it with the compositor frame; a full-size map cost a large panel over 100ms a frame.
+- `lens` treats the rim as a rise of convex glass with the cross-section `H(t) = (1 − (1 − t)⁴)^(1/4)` (`squircle`). Snell's law at the surface, the index `ior`, and the glass `thickness` give a displacement at every point, written into the red and green channels of the map and handed to `feDisplacementMap`; above 0 `dispersion` becomes three passes, with red and blue a little either side of green. The edge highlight is a second bitmap, and a `rimSaturation` above 1 adds one more `saturate` over that ring alone.
+- The magnification of the middle is a displacement pass of its own: a map has 8 bits of precision, and folding the magnification and the rim's bend into one leaves terraces across the magnified face.
+- The filter uses `filterUnits="userSpaceOnUse"` and explicit pixel sizes: in a 0×0 SVG a percentage subregion collapses to nothing and the whole filter stops working.
+- Redraws triggered by several props in one frame merge into one; the displacement map, the magnification map, and the rim highlight are each cached by shape, so changing only the highlight strength redraws only the highlight.
+- The refraction profile and the spring feel are numerically based on the Liquid Glass of glisse (https://glisse.kelvinzhang.com, MIT).
 - Source: `packages/tuffex/packages/components/src/glass-surface/`.
 
 <TuffDocSourceLink />

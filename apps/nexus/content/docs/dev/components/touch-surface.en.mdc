@@ -1,0 +1,143 @@
+---
+title: TouchSurface
+description: Any surface that answers a hovering mouse or a finger like a drop of liquid glass.
+category: Effects
+status: beta
+since: 0.9.2
+tags: [touch, hover, liquid, surface, spring]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+`TxTouchSurface` is a surface with a touch effect on it. Under a hovering mouse or a finger it lifts, leans toward the pointer, stretches along the way the pointer moves, and springs back when the pointer goes. It is `TxBaseSurface` unless you say otherwise, and every attribute it does not own goes to the surface.
+:::TuffDemoWrapper{demo="TouchSurfaceBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTouchSurface :radius="32" class="card">
+      Base
+    </TxTouchSurface>
+
+    <TxTouchSurface mode="glass" :radius="32" class="card">
+      Base · glass
+    </TxTouchSurface>
+
+    <TxTouchSurface surface="glass" :width="176" :height="64" :border-radius="32">
+      Glass
+    </TxTouchSurface>
+  </template>
+---
+:::
+
+### Choosing the Surface
+`surface` picks what the effect is laid on: `'base'` (the default) is `TxBaseSurface`, `'glass'` is `TxGlassSurface`. The rest of the attributes are the surface's own, so the material, the radius and the glass engine are set exactly as they are on the surface itself.
+
+```vue
+<template>
+  <!-- A frosted card -->
+  <TxTouchSurface mode="blur" :radius="18" class="card" />
+
+  <!-- The default look of the glass: distortion, on the classic engine -->
+  <TxTouchSurface surface="glass" :width="210" :height="150" :border-radius="75" />
+
+  <!-- The modelled lens -->
+  <TxTouchSurface surface="glass" engine="lens" :width="210" :height="150" :border-radius="75" />
+</template>
+```
+
+`surface` also takes a component of your own, as long as its root element is the surface: the effect drives that root.
+
+### Your Own Element
+`useLiquidTouch` is the same effect for any element or component instance, as a ref or a getter. It returns `{ hovered, pressed }`.
+
+```vue
+<script setup lang="ts">
+import { useLiquidTouch } from '@talex-touch/tuffex'
+import { ref } from 'vue'
+
+const card = ref<HTMLElement | null>(null)
+const { pressed } = useLiquidTouch(card, { lean: 0.15, pressGrow: 0.08 })
+</script>
+
+<template>
+  <div ref="card" class="card" :class="{ held: pressed }">
+    Hold me
+  </div>
+</template>
+```
+
+### Best Practices
+
+- Use it on surfaces meant to be touched, such as cards, buttons, chips, and tiles; leave still panels alone.
+- The surface moves a few pixels and grows a few percent, so leave room around it. A parent with `overflow: hidden` crops it.
+- Keep `maxLean` and `maxStretch` small on surfaces that hold text: the content deforms with the surface.
+- A finger that starts to scroll the page lets go of the surface. For a surface the finger should slide on, such as a handle or a pad, set `touch-action: none` (or `pan-x` / `pan-y`) on it.
+- A touch screen has no hover, so a finger only presses: the surface lifts when the finger goes down and settles when it lifts or the page starts to scroll.
+- It writes the `translate` and `scale` properties while it is engaged, so a `transform` of your own is left alone, but your own `translate` or `scale` is overridden until the surface is at rest.
+- Pass `disabled` for a surface that cannot be pressed right now instead of unmounting the effect.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `surface` | `'base' \| 'glass' \| Component` | `'base'` | What the effect is laid on: `TxBaseSurface`, `TxGlassSurface`, or a component of your own whose root is the surface. |
+| `disabled` | `boolean` | `false` | Turns the effect off; a held surface lets go and springs back. |
+| `lean` | `number` | `0.1` | How far it leans toward the pointer, as a share of half its size, with the pointer at its edge. |
+| `maxLean` | `number` | `12` | The most it leans, px. |
+| `hoverLift` | `number` | `0.3` | Lift under a hovering mouse or pen, 0 to 1; a press or a finger lifts it fully (1). |
+| `pressGrow` | `number` | `0.06` | How much larger a full lift makes it, as a share of its size. |
+| `stretch` | `number` | `0.0001` | Stretch along an axis per px/s of pointer speed on it, as a share of the size on that axis. |
+| `maxStretch` | `number` | `0.2` | The most it stretches along one axis, as a share of its size. |
+| `swell` | `number` | `0.016` | How far the width swells per unit of speed while the lift changes. |
+| `stiffness` | `number` | `150` | Spring stiffness of the lift, the lean, and the stretch. |
+| `damping` | `number` | `19` | Spring damping; lower rings for longer, higher settles at once. |
+
+Every other attribute, and the default slot, go to the surface.
+
+### useLiquidTouch Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `disabled` | `MaybeRefOrGetter<boolean>` | `false` | Turns the effect off. |
+| `lean` | `MaybeRefOrGetter<number>` | `0.1` | Lean toward the pointer, as a share of half its size. |
+| `maxLean` | `MaybeRefOrGetter<number>` | `12` | The most it leans, px. |
+| `hoverLift` | `MaybeRefOrGetter<number>` | `0.3` | Lift under a hovering mouse or pen. |
+| `pressGrow` | `MaybeRefOrGetter<number>` | `0.06` | How much larger a full lift makes it. |
+| `stretch` | `MaybeRefOrGetter<number>` | `0.0001` | Stretch per px/s of pointer speed, as a share of the size. |
+| `maxStretch` | `MaybeRefOrGetter<number>` | `0.2` | The most it stretches along one axis. |
+| `swell` | `MaybeRefOrGetter<number>` | `0.016` | Width swell per unit of lift speed. |
+| `stiffness` | `MaybeRefOrGetter<number>` | `150` | Spring stiffness. |
+| `damping` | `MaybeRefOrGetter<number>` | `19` | Spring damping. |
+
+The first argument is the element or component instance, as a ref or a getter. The numeric options are read again on every frame, so they can be bound straight to sliders. It returns `{ hovered, pressed }`, two read-only `Ref<boolean>`: `hovered` is true while a mouse or pen is over the element (never for a finger), and `pressed` while the primary button or a finger is down on it, wherever the pointer has gone since. `TxTouchSurface` and `useLiquidTouch` are both exported from `@talex-touch/tuffex/touch-surface`, and from the package root.
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | The surface's content. |
+
+## Overview
+
+- Three things happen at once, all on one spring: the surface lifts (hover to `hoverLift`, a press to 1), leans toward the pointer (the pointer's place from the middle, in half-sizes, times `lean`, capped by `maxLean`), and stretches along the way the pointer moves, thinner across it, so its volume holds.
+- Only the shape changes, as `translate` and `scale`: the surface keeps the size layout gave it, and a glass surface keeps its refraction map. At rest nothing is written at all.
+- A glass lens reads the lift through `--tx-glass-lift`, which the effect sets, so its shadows rise and fall with it.
+- A mouse presses with the primary button only, and a control-click is ignored. A press is followed from `window`, so it carries on when the pointer leaves the surface, and a mouse that moves with no button down ends it, in case the release was lost.
+- A finger lifts the surface at once, leans it toward the touch, and lets go when the finger does. If the browser takes the gesture for a scroll, it sends `pointercancel` and the surface lets go too.
+- Under reduced motion the lift applies without easing and nothing leans or stretches.
+- The frame loop sleeps as soon as everything is at rest.
+- The surface keeps its own support limits: a glass surface refracts only in Chromium engines (Chrome, Edge, Electron) and is frosted glass elsewhere, and the touch effect is the same either way.
+
+## Technologies
+
+- The spring is `stepSpring` from `@talex-touch/tuffex/utils`, stepped from one `requestAnimationFrame` loop; the pointer's speed is a low-pass of its movement, so a mouse's jitter does not read as a swipe.
+- The effect uses the `translate` and `scale` properties, not `transform`, so a surface with its own `transform` animation keeps it.
+- The spring and the swell are those of `useLiquidDrag`, so a dragged lens and a touched surface feel like one liquid.
+- Source: `packages/tuffex/packages/components/src/touch-surface/`.
+
+<TuffDocSourceLink />
