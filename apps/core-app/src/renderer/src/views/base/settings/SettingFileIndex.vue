@@ -1210,7 +1210,7 @@ function getSourceProgressTone(source: IndexedSourceDiagnostics): string {
 }
 
 function formatSourceRecovery(source: IndexedSourceDiagnostics): string | null {
-  const chip = resolveIndexingSourceRecoveryChip(source, locale.value)
+  const chip = resolveIndexingSourceRecoveryChip(source, locale.value, t)
   return chip ? t(chip.labelKey, chip.values) : null
 }
 
@@ -1914,7 +1914,12 @@ async function triggerRebuild() {
           </div>
           <div class="source-diagnostics-row source-diagnostics-row--dialog">
             <span
-              v-for="gate in resolveIndexingSourceRunGateChips(selectedSourceDiagnostic, 3, locale)"
+              v-for="gate in resolveIndexingSourceRunGateChips(
+                selectedSourceDiagnostic,
+                3,
+                locale,
+                t
+              )"
               :key="gate.id"
               class="source-diagnostic-chip source-history-chip"
               :class="`source-diagnostic-task-chip--${gate.tone}`"
@@ -1938,7 +1943,8 @@ async function triggerRebuild() {
               v-for="task in resolveIndexingSourceRecentTaskChips(
                 selectedSourceDiagnostic,
                 3,
-                locale
+                locale,
+                t
               )"
               :key="task.id"
               class="source-diagnostic-chip source-history-chip source-recent-task-chip"

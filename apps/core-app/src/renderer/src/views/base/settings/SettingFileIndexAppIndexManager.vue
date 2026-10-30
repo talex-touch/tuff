@@ -543,15 +543,23 @@ onMounted(() => {
               <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
             </div>
             <div class="app-index-entry-grid">
-              <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
-              <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
-              <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
-              <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
-              <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
-              <span>launchTarget</span><strong>{{ formatOptional(entry.launchTarget) }}</strong>
-              <span>launchArgs</span><strong>{{ formatOptional(entry.launchArgs) }}</strong>
-              <span>workingDirectory</span
-              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldDisplayName') }}</span
+              ><strong>{{ formatOptional(entry.displayName) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldOrigin') }}</span
+              ><strong>{{ getEntryOriginLabel(entry) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldBundleId') }}</span
+              ><strong>{{ formatOptional(entry.bundleId) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldIdentityKind') }}</span
+              ><strong>{{ formatOptional(entry.identityKind) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchKind') }}</span
+              ><strong>{{ entry.launchKind }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchTarget') }}</span
+              ><strong>{{ formatOptional(entry.launchTarget) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchArgs') }}</span
+              ><strong>{{ formatOptional(entry.launchArgs) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldWorkingDirectory') }}</span
+              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldDisplayPath') }}</span
               ><strong>{{ formatOptional(entry.displayPath) }}</strong>
             </div>
             <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
