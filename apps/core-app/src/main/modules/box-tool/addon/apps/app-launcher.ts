@@ -3,6 +3,10 @@ import { launchWithAppLaunchAdapter, type AppLaunchOutcome } from './app-launch-
 import { notificationModule } from '../../../notification'
 import { t } from '../../../../utils/i18n-helper'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import {
+  AppLaunchFailureCode,
+  describeAppLaunchFailure
+} from '../../../../../shared/app-launch-failure'
 
 const appLauncherLog = getLogger('app-launcher')
 
@@ -64,7 +68,10 @@ function notifyLaunchFailure(request: AppLaunchRequest, error: string): void {
   const name = getAppDisplayName(request)
   notificationModule.showInternalSystemNotification({
     title: t('notifications.appLaunchFailedTitle'),
-    message: t('notifications.appLaunchFailedBody', { name, error }),
+    message: t('notifications.appLaunchFailedBody', {
+      name,
+      error: describeAppLaunchFailure(error, t)
+    }),
     level: 'error',
     system: { silent: false }
   })
@@ -73,8 +80,8 @@ function notifyLaunchFailure(request: AppLaunchRequest, error: string): void {
 export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOutcome> {
   try {
     if (request.launchKind === 'protocol' && !isAllowedProtocolLaunch(request.launchTarget)) {
-      const error = `Protocol launch is not allowed: ${request.launchTarget}`
-      appLauncherLog.warn(error)
+      appLauncherLog.warn(`Protocol launch is not allowed: ${request.launchTarget}`)
+      const error = AppLaunchFailureCode.ProtocolNotAllowed
       notifyLaunchFailure(request, error)
       return { status: 'failed', error }
     }

@@ -4,6 +4,12 @@ import { shell } from 'electron'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
+import {
+  AppLaunchFailureCode,
+  appLaunchExitCodeFailure,
+  appLaunchExitSignalFailure,
+  appLaunchSpawnFailure
+} from '../../../../../shared/app-launch-failure'
 import type { AppLaunchKind } from './app-types'
 
 const appLaunchAdapterLog = getLogger('app-launcher')
@@ -11,6 +17,13 @@ const EARLY_EXIT_OBSERVATION_MS = 2500
 const WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS = new Set(['.exe', '.com'])
 const WINDOWS_BATCH_EXTENSIONS = new Set(['.cmd', '.bat'])
 const WINDOWS_POWERSHELL_EXTENSIONS = new Set(['.ps1'])
+// What spawnSafe throws for a command it refuses to run.
+const SPAWN_GUARD_FAILURES = new Set([
+  'COMMAND_EMPTY',
+  'COMMAND_NULL_BYTE',
+  'COMMAND_NEWLINE',
+  'ARG_NULL_BYTE'
+])
 
 export interface AppLaunchPlan {
   path: string
@@ -22,6 +35,7 @@ export interface AppLaunchPlan {
 
 export interface AppLaunchOutcome {
   status: 'success' | 'failed' | 'handedOff'
+  /** An `AppLaunchFailureCode`-style code, or the system's own text; see `describeAppLaunchFailure`. */
   error?: string
 }
 
@@ -31,6 +45,15 @@ export interface AppLaunchAdapter {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** A process that could not be started, as a launch failure code; the full error goes to the log. */
+function toSpawnFailure(error: unknown): string {
+  appLaunchAdapterLog.warn('App process failed to start', { error })
+  const message = toErrorMessage(error)
+  if (SPAWN_GUARD_FAILURES.has(message)) return AppLaunchFailureCode.CommandInvalid
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return typeof code === 'string' && code ? appLaunchSpawnFailure(code) : message
 }
 
 function getWindowsExtension(target: string): string {
@@ -107,7 +130,7 @@ function observeEarlySpawnFailure(child: ChildProcess): Promise<AppLaunchOutcome
     }
 
     const handleError = (error: unknown) => {
-      finish({ status: 'failed', error: toErrorMessage(error) })
+      finish({ status: 'failed', error: toSpawnFailure(error) })
     }
 
     const handleExit = (code: unknown, signal: unknown) => {
@@ -116,15 +139,14 @@ function observeEarlySpawnFailure(child: ChildProcess): Promise<AppLaunchOutcome
         return
       }
       if ((code === null || code === undefined) && signal) {
-        finish({ status: 'failed', error: `process exited early with signal ${String(signal)}` })
+        finish({ status: 'failed', error: appLaunchExitSignalFailure(String(signal)) })
         return
       }
       if (code === null || code === undefined) {
         finish({ status: 'handedOff' })
         return
       }
-      const suffix = signal ? `, signal ${String(signal)}` : ''
-      finish({ status: 'failed', error: `process exited early with code ${String(code)}${suffix}` })
+      finish({ status: 'failed', error: appLaunchExitCodeFailure(String(code)) })
     }
 
     eventSource.once('error', handleError)
@@ -147,12 +169,17 @@ async function launchSpawnCommand(
   args: string[],
   options?: { cwd?: string; observeEarlyExit?: boolean }
 ): Promise<AppLaunchOutcome> {
-  const child = spawnSafe(command, args, {
-    cwd: options?.cwd,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true
-  })
+  let child: ChildProcess
+  try {
+    child = spawnSafe(command, args, {
+      cwd: options?.cwd,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    })
+  } catch (error) {
+    return { status: 'failed', error: toSpawnFailure(error) }
+  }
   const outcome =
     options?.observeEarlyExit === false
       ? Promise.resolve<AppLaunchOutcome>({ status: 'handedOff' })
@@ -176,7 +203,7 @@ async function launchWindowsShortcut(plan: AppLaunchPlan): Promise<AppLaunchOutc
       return (
         lastShellOutcome || {
           status: 'failed',
-          error: 'shell shortcut launch failed'
+          error: AppLaunchFailureCode.ShortcutFailed
         }
       )
     }
@@ -247,7 +274,7 @@ async function launchNonWindowsApp(plan: AppLaunchPlan): Promise<AppLaunchOutcom
     case 'uwp':
       return {
         status: 'failed',
-        error: 'UWP app launch is only supported on Windows'
+        error: AppLaunchFailureCode.UwpUnsupported
       }
     case 'protocol':
       appLaunchAdapterLog.info(`Launching protocol app: ${plan.launchTarget}`)
@@ -271,7 +298,7 @@ const unsupportedAppLaunchAdapter: AppLaunchAdapter = {
   async launch() {
     return {
       status: 'failed',
-      error: 'App launch is not supported on this platform'
+      error: AppLaunchFailureCode.PlatformUnsupported
     }
   }
 }
