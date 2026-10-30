@@ -7846,7 +7846,7 @@
       "approvalThreshold": "Approval Threshold",
       "autoApproveReadOnly": "Auto-approve read-only tools",
       "toolSourcesTitle": "Tool Sources",
-      "toolSourcesDescription": "builtin handles lightweight desktop, clipboard, and browser entries; deep browser and cloud services use MCP.",
+      "toolSourcesDescription": "Built-in tools handle lightweight desktop, clipboard, and browser entries; deep browser and cloud services use MCP.",
       "triggersTitle": "Triggers",
       "addManualTrigger": "Manual trigger",
       "addClipboardBatchTrigger": "Clipboard batch",
@@ -7880,7 +7880,7 @@
       "startedAt": "Started At",
       "completedAt": "Completed At",
       "approvalPanelTitle": "Approval Panel",
-      "approvalPanelDescription": "high / critical tool calls pause here until they are resumed.",
+      "approvalPanelDescription": "High and critical risk tool calls pause here until they are resumed.",
       "emptyApprovals": "No pending tool approvals.",
       "reject": "Reject",
       "approveAndResume": "Approve and Resume",
@@ -7917,6 +7917,7 @@
       "reviewMetaTokens": "Tokens",
       "reviewMetaRisk": "Risk",
       "reviewMetaFailure": "Failure",
+      "reviewClipboardUnavailable": "Clipboard write is not available",
       "currentRunStepsTitle": "Current Run Steps",
       "currentRunStepsDescription": "Inspect each step status and output directly.",
       "modelLatency": "Latency {latency}",
@@ -7954,6 +7955,14 @@
           "desktopRecentFiles": "Recent Files",
           "browserRecentUrls": "Recent URLs",
           "sessionMemory": "Current Session Memory"
+        },
+        "stepName": {
+          "agent": "Agent Step {index}",
+          "model": "Use Model {index}",
+          "generic": "Step {index}"
+        },
+        "inputSource": {
+          "text": "Input text"
         }
       },
       "continueOnError": "Continue on step failure",
@@ -8008,6 +8017,8 @@
       "validationAgentStepRequired": "Agent steps require agentId",
       "validationAgentRequired": "Step {index} requires an agent id",
       "validationInputJson": "Step {index} input must be valid JSON",
+      "validationInvalidJson": "not valid JSON",
+      "validationExpectedArray": "must be a JSON array",
       "successCount": "Succeeded Steps",
       "failedCount": "Failed Steps",
       "fieldSteps": "steps",
@@ -8015,7 +8026,29 @@
       "fieldInput": "input",
       "validationFieldReason": "{field}: {reason}",
       "validationFieldReasonAtStep": "Step {index} {field}: {reason}",
-      "notRunCount": "Not Run Steps"
+      "jsonFieldTriggerConfig": "Trigger config JSON",
+      "jsonFieldContextConfig": "Context source config JSON",
+      "notRunCount": "Not Run Steps",
+      "stepKind": {
+        "prompt": "Prompt",
+        "model": "Model",
+        "tool": "Tool",
+        "agent": "Agent"
+      },
+      "riskLevel": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "toolSourceOption": {
+        "builtin": "Built-in",
+        "mcp": "MCP"
+      },
+      "triggerType": {
+        "manual": "Manual trigger",
+        "clipboardBatch": "Clipboard batch"
+      }
     },
     "info": {
       "configurationPanel": "Configuration panel"

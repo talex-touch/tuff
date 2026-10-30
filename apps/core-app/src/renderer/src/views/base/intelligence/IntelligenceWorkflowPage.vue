@@ -91,22 +91,32 @@ function stepErrorText(error: string): string {
   return usageLimitRecovery(error)?.title ?? error
 }
 
-const runStatusText = computed(() => {
-  switch (currentRun.value?.status) {
+/** Covers run and step statuses; a status this page does not know is shown as it came. */
+function runStatusLabel(status?: string): string {
+  switch (status) {
+    case 'pending':
+      return t('intelligence.workflow.statusPending')
+    case 'running':
+      return t('intelligence.workflow.statusRunning')
+    case 'waiting_approval':
+      return t('intelligence.workflow.statusWaitingApproval')
     case 'completed':
       return t('intelligence.workflow.statusCompleted')
     case 'failed':
       return t('intelligence.workflow.statusFailed')
-    case 'waiting_approval':
-      return t('intelligence.workflow.statusWaitingApproval')
-    case 'running':
-      return t('intelligence.workflow.statusRunning')
     case 'cancelled':
       return t('intelligence.workflow.statusCancelled')
-    default:
+    case 'skipped':
+      return t('intelligence.workflow.statusSkipped')
+    case undefined:
+    case '':
       return t('intelligence.workflow.statusNotRun')
+    default:
+      return status
   }
-})
+}
+
+const runStatusText = computed(() => runStatusLabel(currentRun.value?.status))
 
 const runStatusClass = computed(() => {
   switch (currentRun.value?.status) {
@@ -183,10 +193,32 @@ function formatLatency(value?: number): string {
 }
 
 function kindLabel(kind: WorkflowStepKind): string {
-  if (kind === 'tool') return 'Tool'
-  if (kind === 'prompt') return 'Prompt'
-  if (kind === 'model') return 'Model'
-  return 'Agent'
+  if (kind === 'tool') return t('intelligence.workflow.stepKind.tool')
+  if (kind === 'prompt') return t('intelligence.workflow.stepKind.prompt')
+  if (kind === 'model') return t('intelligence.workflow.stepKind.model')
+  return t('intelligence.workflow.stepKind.agent')
+}
+
+/** Approval thresholds, approval tickets and review items share the tool risk scale. */
+function riskLevelLabel(level?: string): string {
+  switch (level) {
+    case 'low':
+      return t('intelligence.workflow.riskLevel.low')
+    case 'medium':
+      return t('intelligence.workflow.riskLevel.medium')
+    case 'high':
+      return t('intelligence.workflow.riskLevel.high')
+    case 'critical':
+      return t('intelligence.workflow.riskLevel.critical')
+    default:
+      return level ?? ''
+  }
+}
+
+function toolSourceLabel(source: 'builtin' | 'mcp'): string {
+  return source === 'mcp'
+    ? t('intelligence.workflow.toolSourceOption.mcp')
+    : t('intelligence.workflow.toolSourceOption.builtin')
 }
 
 function displayStepKind(kind?: string): string {
@@ -231,7 +263,9 @@ function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status' | 'er
 }
 
 function reviewMetaChips(item: WorkflowReviewQueueItem) {
-  return resolveReviewQueueMetaChips(item)
+  return resolveReviewQueueMetaChips(item).map((chip) =>
+    chip.labelKey === 'reviewMetaRisk' ? { ...chip, value: riskLevelLabel(chip.value) } : chip
+  )
 }
 
 function workflowStatusText(enabled: boolean): string {
@@ -403,7 +437,9 @@ onMounted(async () => {
           <div>
             <h2>
               {{ t('intelligence.workflow.libraryTitle') }}
-              <span class="mini-badge mini-badge--ghost">Beta</span>
+              <span class="mini-badge mini-badge--ghost">{{
+                t('settings.platformTags.beta')
+              }}</span>
             </h2>
             <p>{{ t('intelligence.workflow.libraryDescription') }}</p>
           </div>
@@ -519,10 +555,10 @@ onMounted(async () => {
               <label class="field">
                 <span class="field-label">{{ t('intelligence.workflow.approvalThreshold') }}</span>
                 <select v-model="workflowDraft.approvalThreshold">
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                  <option value="critical">critical</option>
+                  <option value="low">{{ riskLevelLabel('low') }}</option>
+                  <option value="medium">{{ riskLevelLabel('medium') }}</option>
+                  <option value="high">{{ riskLevelLabel('high') }}</option>
+                  <option value="critical">{{ riskLevelLabel('critical') }}</option>
                 </select>
               </label>
 
@@ -544,7 +580,7 @@ onMounted(async () => {
                     type="checkbox"
                     @change="handleToolSourceToggle('builtin', $event)"
                   />
-                  <span>builtin</span>
+                  <span>{{ toolSourceLabel('builtin') }}</span>
                 </label>
                 <label class="pill-toggle">
                   <input
@@ -552,7 +588,7 @@ onMounted(async () => {
                     type="checkbox"
                     @change="handleToolSourceToggle('mcp', $event)"
                   />
-                  <span>mcp</span>
+                  <span>{{ toolSourceLabel('mcp') }}</span>
                 </label>
               </div>
             </div>
@@ -580,8 +616,12 @@ onMounted(async () => {
                     <label class="field">
                       <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                       <select v-model="trigger.type">
-                        <option value="manual">manual</option>
-                        <option value="clipboard.batch">clipboard.batch</option>
+                        <option value="manual">
+                          {{ t('intelligence.workflow.triggerType.manual') }}
+                        </option>
+                        <option value="clipboard.batch">
+                          {{ t('intelligence.workflow.triggerType.clipboardBatch') }}
+                        </option>
                       </select>
                     </label>
                     <label class="field">
@@ -714,10 +754,10 @@ onMounted(async () => {
                   <label class="field">
                     <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                     <select v-model="step.kind">
-                      <option value="prompt">prompt</option>
-                      <option value="model">model</option>
-                      <option value="tool">tool</option>
-                      <option value="agent">agent</option>
+                      <option value="prompt">{{ kindLabel('prompt') }}</option>
+                      <option value="model">{{ kindLabel('model') }}</option>
+                      <option value="tool">{{ kindLabel('tool') }}</option>
+                      <option value="agent">{{ kindLabel('agent') }}</option>
                     </select>
                   </label>
 
@@ -753,8 +793,8 @@ onMounted(async () => {
                   <label class="field">
                     <span class="field-label">{{ t('intelligence.workflow.toolSource') }}</span>
                     <select v-model="step.toolSource">
-                      <option value="builtin">builtin</option>
-                      <option value="mcp">mcp</option>
+                      <option value="builtin">{{ toolSourceLabel('builtin') }}</option>
+                      <option value="mcp">{{ toolSourceLabel('mcp') }}</option>
                     </select>
                   </label>
                 </div>
@@ -868,7 +908,9 @@ onMounted(async () => {
           <article v-for="ticket in pendingApprovals" :key="ticket.id" class="small-card">
             <div class="approval-title">
               <span>{{ ticket.toolId }}</span>
-              <span class="mini-badge mini-badge--ghost">{{ ticket.riskLevel }}</span>
+              <span class="mini-badge mini-badge--ghost">{{
+                riskLevelLabel(ticket.riskLevel)
+              }}</span>
             </div>
             <div class="approval-reason">
               {{ ticket.reason }}
@@ -893,7 +935,7 @@ onMounted(async () => {
             <article v-for="(step, index) in currentRun.steps" :key="step.id" class="small-card">
               <div class="runtime-kv">
                 <span>{{ step.name }}</span>
-                <span class="mini-badge">{{ step.status }}</span>
+                <span class="mini-badge">{{ runStatusLabel(step.status) }}</span>
               </div>
               <div class="small-card__meta">
                 {{ displayStepKind(step.kind) }}
@@ -1085,7 +1127,7 @@ onMounted(async () => {
           >
             <div class="history-item__row">
               <span>{{ run.workflowName || run.workflowId }}</span>
-              <span class="mini-badge">{{ run.status }}</span>
+              <span class="mini-badge">{{ runStatusLabel(run.status) }}</span>
             </div>
             <div class="history-item__meta">
               <span>{{ formatDate(run.startedAt) }}</span>

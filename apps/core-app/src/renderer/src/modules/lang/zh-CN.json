@@ -7846,7 +7846,7 @@
       "approvalThreshold": "审批阈值",
       "autoApproveReadOnly": "只读工具自动批准",
       "toolSourcesTitle": "工具源",
-      "toolSourcesDescription": "builtin 负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。",
+      "toolSourcesDescription": "内置工具负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。",
       "triggersTitle": "触发器",
       "addManualTrigger": "手动触发",
       "addClipboardBatchTrigger": "剪贴板批处理",
@@ -7880,7 +7880,7 @@
       "startedAt": "开始时间",
       "completedAt": "结束时间",
       "approvalPanelTitle": "审批面板",
-      "approvalPanelDescription": "high / critical 工具调用会在这里暂停并等待恢复。",
+      "approvalPanelDescription": "高 / 严重风险的工具调用会在这里暂停并等待恢复。",
       "emptyApprovals": "当前没有待审批工具。",
       "reject": "拒绝",
       "approveAndResume": "批准并恢复",
@@ -7917,6 +7917,7 @@
       "reviewMetaTokens": "Tokens",
       "reviewMetaRisk": "风险",
       "reviewMetaFailure": "失败原因",
+      "reviewClipboardUnavailable": "剪贴板写入不可用",
       "currentRunStepsTitle": "当前运行步骤",
       "currentRunStepsDescription": "直接查看每个 step 的状态和输出。",
       "modelLatency": "耗时 {latency}",
@@ -7954,6 +7955,14 @@
           "desktopRecentFiles": "最近文件",
           "browserRecentUrls": "最近 URL",
           "sessionMemory": "当前会话记忆"
+        },
+        "stepName": {
+          "agent": "Agent 步骤 {index}",
+          "model": "Use Model {index}",
+          "generic": "步骤 {index}"
+        },
+        "inputSource": {
+          "text": "输入文本"
         }
       },
       "continueOnError": "步骤失败后继续执行",
@@ -8008,6 +8017,8 @@
       "validationAgentStepRequired": "Agent 步骤必须选择 agentId",
       "validationAgentRequired": "第 {index} 步缺少 agent id",
       "validationInputJson": "第 {index} 步输入必须是合法 JSON",
+      "validationInvalidJson": "不是有效的 JSON",
+      "validationExpectedArray": "必须是 JSON 数组",
       "successCount": "成功步骤数",
       "failedCount": "失败步骤数",
       "fieldSteps": "步骤列表",
@@ -8015,7 +8026,29 @@
       "fieldInput": "输入 JSON",
       "validationFieldReason": "{field}：{reason}",
       "validationFieldReasonAtStep": "第 {index} 步 {field}：{reason}",
-      "notRunCount": "未执行步骤数"
+      "jsonFieldTriggerConfig": "触发器配置 JSON",
+      "jsonFieldContextConfig": "上下文源配置 JSON",
+      "notRunCount": "未执行步骤数",
+      "stepKind": {
+        "prompt": "Prompt",
+        "model": "Model",
+        "tool": "Tool",
+        "agent": "Agent"
+      },
+      "riskLevel": {
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "critical": "严重"
+      },
+      "toolSourceOption": {
+        "builtin": "内置",
+        "mcp": "MCP"
+      },
+      "triggerType": {
+        "manual": "手动触发",
+        "clipboardBatch": "剪贴板批处理"
+      }
     },
     "info": {
       "configurationPanel": "配置面板"
