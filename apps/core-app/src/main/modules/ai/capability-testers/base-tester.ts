@@ -3,6 +3,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
+import { t } from '../../../utils/i18n-helper'
 
 export interface CapabilityTestPayload {
   providerId?: string
@@ -40,43 +41,51 @@ function analyzeStability(params: {
   let score = params.success ? 100 : 0
 
   if (!params.success) {
-    signals.push('调用失败')
+    signals.push(t('intelligence.capabilityTest.signal.failed'))
     return {
       status: 'unstable',
       score,
-      summary: '测试调用未成功，当前渠道或模型不可作为稳定路径。',
+      summary: t('intelligence.capabilityTest.summary.failed'),
       signals
     }
   }
 
   if (params.latency > 15_000) {
     score -= 35
-    signals.push(`耗时较高（${params.latency}ms）`)
+    signals.push(t('intelligence.capabilityTest.signal.latencyHigh', { latency: params.latency }))
   } else if (params.latency > 8_000) {
     score -= 18
-    signals.push(`耗时偏高（${params.latency}ms）`)
+    signals.push(
+      t('intelligence.capabilityTest.signal.latencyElevated', { latency: params.latency })
+    )
   } else {
-    signals.push(`耗时正常（${params.latency}ms）`)
+    signals.push(t('intelligence.capabilityTest.signal.latencyNormal', { latency: params.latency }))
   }
 
   if (typeof params.tokensPerSecond === 'number') {
     if (params.tokensPerSecond < 5) {
       score -= 22
-      signals.push(`Token 速度偏低（${params.tokensPerSecond}/s）`)
+      signals.push(
+        t('intelligence.capabilityTest.signal.tokenSpeedLow', { speed: params.tokensPerSecond })
+      )
     } else if (params.tokensPerSecond < 15) {
       score -= 10
-      signals.push(`Token 速度一般（${params.tokensPerSecond}/s）`)
+      signals.push(
+        t('intelligence.capabilityTest.signal.tokenSpeedFair', { speed: params.tokensPerSecond })
+      )
     } else {
-      signals.push(`Token 速度良好（${params.tokensPerSecond}/s）`)
+      signals.push(
+        t('intelligence.capabilityTest.signal.tokenSpeedGood', { speed: params.tokensPerSecond })
+      )
     }
   } else {
     score -= 6
-    signals.push('未返回可计算的 token 速度')
+    signals.push(t('intelligence.capabilityTest.signal.tokenSpeedMissing'))
   }
 
   if (!params.textPreview?.trim()) {
     score -= 18
-    signals.push('响应内容为空或不可展示')
+    signals.push(t('intelligence.capabilityTest.signal.emptyResponse'))
   }
 
   const normalizedScore = Math.max(0, Math.min(100, score))
@@ -84,7 +93,7 @@ function analyzeStability(params: {
     return {
       status: 'stable',
       score: normalizedScore,
-      summary: '本次测试响应稳定，耗时和输出质量符合预期。',
+      summary: t('intelligence.capabilityTest.summary.stable'),
       signals
     }
   }
@@ -93,7 +102,7 @@ function analyzeStability(params: {
     return {
       status: 'slow',
       score: normalizedScore,
-      summary: '本次测试可用，但延迟或 token 速度存在优化空间。',
+      summary: t('intelligence.capabilityTest.summary.slow'),
       signals
     }
   }
@@ -101,7 +110,7 @@ function analyzeStability(params: {
   return {
     status: 'unstable',
     score: normalizedScore,
-    summary: '本次测试表现不稳定，建议检查渠道网络、模型配置或限流状态。',
+    summary: t('intelligence.capabilityTest.summary.unstable'),
     signals
   }
 }

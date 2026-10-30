@@ -48,6 +48,11 @@ const hasMetrics = computed(() => {
 const stabilityClass = computed(() => {
   return `test-result__stability--${props.result.stability?.status || 'unknown'}`
 })
+
+// The status is a code. Main words the summary and signals in the interface language itself.
+const stabilityStatusLabel = computed(() =>
+  t(`intelligence.capabilityTest.status.${props.result.stability?.status || 'unknown'}`)
+)
 </script>
 
 <template>
@@ -130,7 +135,7 @@ const stabilityClass = computed(() => {
       </div>
       <div class="test-result__stability" :class="stabilityClass">
         <div class="test-result__stability-head">
-          <span class="test-result__stability-status">{{ result.stability.status }}</span>
+          <span class="test-result__stability-status">{{ stabilityStatusLabel }}</span>
           <span
             v-if="typeof result.stability.score === 'number'"
             class="test-result__stability-score"

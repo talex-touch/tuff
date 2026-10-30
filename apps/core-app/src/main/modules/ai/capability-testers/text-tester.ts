@@ -5,6 +5,7 @@ import type {
   IntelligenceRewritePayload
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 export class TextRewriteTester extends BaseCapabilityTester<IntelligenceRewritePayload, string> {
@@ -26,13 +27,13 @@ export class TextRewriteTester extends BaseCapabilityTester<IntelligenceRewriteP
     const preview = result.result.length > 300 ? `${result.result.slice(0, 300)}...` : result.result
 
     return this.buildTestResult(result, {
-      message: '文本改写测试成功',
+      message: t('intelligence.capabilityTest.message.textRewrite'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要改写的文本'
+    return t('intelligence.capabilityTest.hint.textRewrite')
   }
 
   requiresUserInput(): boolean {
@@ -62,13 +63,16 @@ export class GrammarCheckTester extends BaseCapabilityTester<
     const correctedText = result.result?.correctedText || ''
 
     return this.buildTestResult(result, {
-      message: `语法检查完成，发现 ${issueCount} 个问题，评分 ${result.result?.score ?? 0}`,
+      message: t('intelligence.capabilityTest.message.grammarCheck', {
+        count: issueCount,
+        score: result.result?.score ?? 0
+      }),
       textPreview: correctedText
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要检查语法、拼写或风格的文本'
+    return t('intelligence.capabilityTest.hint.grammarCheck')
   }
 
   requiresUserInput(): boolean {

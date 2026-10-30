@@ -143,6 +143,24 @@ const canTest = computed(() => {
   return localApiKey.value.trim().length > 0 || Boolean(props.modelValue.hasCredential)
 })
 
+/**
+ * Connection test failures by the code main sends with them. Main's message is English; it is
+ * shown only for a code this list doesn't know.
+ */
+const TEST_FAILURE_KEYS: Record<string, string> = {
+  PROVIDER_DISABLED: 'intelligence.config.api.testFailure.disabled',
+  PROVIDER_API_KEY_REQUIRED: 'intelligence.config.api.apiKeyRequired',
+  PROVIDER_MODEL_NOT_CONFIGURED: 'intelligence.config.api.testFailure.modelNotConfigured',
+  PROVIDER_TIMEOUT: 'intelligence.config.api.testFailure.timeout',
+  PROVIDER_UNAUTHORIZED: 'intelligence.config.api.testFailure.unauthorized',
+  PROVIDER_FORBIDDEN: 'intelligence.config.api.testFailure.forbidden',
+  PROVIDER_ENDPOINT_NOT_FOUND: 'intelligence.config.api.testFailure.endpointNotFound',
+  PROVIDER_RATE_LIMITED: 'intelligence.config.api.testFailure.rateLimited',
+  PROVIDER_SERVICE_ERROR: 'intelligence.config.api.testFailure.serviceError',
+  PROVIDER_NETWORK_ERROR: 'intelligence.config.api.testFailure.network',
+  PROVIDER_CONNECTION_FAILED: 'intelligence.config.api.connectionFailed'
+}
+
 function resolveTestFailureMessage(result?: { code?: string; message?: string }): string {
   if (result?.code === 'NETWORK_COOLDOWN_ACTIVE') {
     const retryAfterSeconds = Number(result.message?.match(/^NETWORK_COOLDOWN_ACTIVE:(\d+)$/)?.[1])
@@ -151,6 +169,8 @@ function resolveTestFailureMessage(result?: { code?: string; message?: string })
     }
     return t('intelligence.config.api.networkRecovering')
   }
+  const key = result?.code ? TEST_FAILURE_KEYS[result.code] : undefined
+  if (key) return t(key)
   return result?.message || t('intelligence.config.api.connectionFailed')
 }
 

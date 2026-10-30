@@ -171,9 +171,24 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 /**
+ * The plural form of a catalog message, chosen by vue-i18n's default rule so that main reads it the
+ * way the renderer does: "1 task | {count} tasks", or "no tasks | 1 task | {count} tasks".
+ * Without a numeric `count` the message is used as written.
+ */
+function selectPluralForm(value: string, count: unknown): string {
+  if (typeof count !== 'number' || !value.includes('|')) return value
+  const forms = value.split('|').map((form) => form.trim())
+  const choice = Math.abs(count)
+  const index =
+    forms.length === 2 ? (choice ? (choice > 1 ? 1 : 0) : 1) : choice ? Math.min(choice, 2) : 0
+  return forms[Math.min(index, forms.length - 1)]
+}
+
+/**
  * Translate a key with optional parameters
  * @param key - Translation key (e.g., 'downloadErrors.network_error')
- * @param params - Optional parameters for interpolation
+ * @param params - Optional parameters for interpolation. A numeric `count` also picks the
+ *   plural form of a message that has them.
  * @returns Translated string
  */
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
@@ -190,14 +205,16 @@ export function t(key: TranslationKey, params?: Record<string, string | number>)
     return key
   }
 
+  const form = selectPluralForm(value, params?.count)
+
   // Replace parameters
   if (params) {
-    return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
+    return form.replace(/\{(\w+)\}/g, (match, paramKey) => {
       return params[paramKey] !== undefined ? String(params[paramKey]) : match
     })
   }
 
-  return value
+  return form
 }
 
 /**

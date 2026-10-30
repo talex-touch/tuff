@@ -12,6 +12,7 @@ import type {
   IntelligenceInvokeResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 const DEFAULT_JAVASCRIPT_SAMPLE = `function add(a, b) {
@@ -45,13 +46,13 @@ export class CodeGenerateTester extends BaseCapabilityTester<
     const preview = code.length > 300 ? `${code.slice(0, 300)}...` : code
 
     return this.buildTestResult(result, {
-      message: '代码生成测试成功',
+      message: t('intelligence.capabilityTest.message.codeGenerate'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请描述要生成的代码功能，例如：写一个排序函数'
+    return t('intelligence.capabilityTest.hint.codeGenerate')
   }
 
   requiresUserInput(): boolean {
@@ -79,13 +80,15 @@ export class CodeExplainTester extends BaseCapabilityTester<
     const preview = summary.length > 300 ? `${summary.slice(0, 300)}...` : summary
 
     return this.buildTestResult(result, {
-      message: `代码解释完成，提炼 ${result.result?.keyPoints?.length || 0} 个要点`,
+      message: t('intelligence.capabilityTest.message.codeExplain', {
+        count: result.result?.keyPoints?.length || 0
+      }),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要解释的代码'
+    return t('intelligence.capabilityTest.hint.codeExplain')
   }
 
   requiresUserInput(): boolean {
@@ -112,13 +115,13 @@ export class CodeReviewTester extends BaseCapabilityTester<
     const issueCount = result.result?.issues?.length || 0
 
     return this.buildTestResult(result, {
-      message: `代码审查完成，发现 ${issueCount} 个问题`,
+      message: t('intelligence.capabilityTest.message.codeReview', { count: issueCount }),
       textPreview: summary
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要审查的代码'
+    return t('intelligence.capabilityTest.hint.codeReview')
   }
 
   requiresUserInput(): boolean {
@@ -148,13 +151,15 @@ export class CodeRefactorTester extends BaseCapabilityTester<
     const preview = code.length > 300 ? `${code.slice(0, 300)}...` : code
 
     return this.buildTestResult(result, {
-      message: `代码重构完成，包含 ${result.result?.changes?.length || 0} 项变更`,
+      message: t('intelligence.capabilityTest.message.codeRefactor', {
+        count: result.result?.changes?.length || 0
+      }),
       textPreview: preview || result.result?.explanation || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要重构的代码'
+    return t('intelligence.capabilityTest.hint.codeRefactor')
   }
 
   requiresUserInput(): boolean {
@@ -187,13 +192,13 @@ console.log(average([]))`,
     const diagnosis = result.result?.diagnosis || result.result?.rootCause || ''
 
     return this.buildTestResult(result, {
-      message: '代码调试分析完成',
+      message: t('intelligence.capabilityTest.message.codeDebug'),
       textPreview: diagnosis || result.result?.explanation || result.result?.fixedCode || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要调试的代码，可附带报错信息'
+    return t('intelligence.capabilityTest.hint.codeDebug')
   }
 
   requiresUserInput(): boolean {

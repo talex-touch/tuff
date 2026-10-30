@@ -3144,6 +3144,7 @@ export class TuffIntelligenceSDK {
         return {
           success: false,
           message: 'Provider is disabled',
+          code: 'PROVIDER_DISABLED',
           timestamp
         }
       }
@@ -3152,6 +3153,7 @@ export class TuffIntelligenceSDK {
         return {
           success: false,
           message: 'API key is required',
+          code: 'PROVIDER_API_KEY_REQUIRED',
           timestamp
         }
       }
@@ -3227,8 +3229,10 @@ export class TuffIntelligenceSDK {
       }
     } catch (error) {
       const latency = Date.now() - startTime
+      // The renderer words a failure from its code. The message stays English, for logs and for
+      // callers that show it as is.
       let message = 'Connection failed'
-      let code: string | undefined
+      let code = 'PROVIDER_CONNECTION_FAILED'
 
       if (error instanceof Error) {
         // Parse common error messages
@@ -3237,28 +3241,35 @@ export class TuffIntelligenceSDK {
           code = 'NETWORK_COOLDOWN_ACTIVE'
         } else if (error.message.includes('timeout')) {
           message = 'Request timeout - check your network connection'
+          code = 'PROVIDER_TIMEOUT'
         } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
           message = 'Invalid API key'
+          code = 'PROVIDER_UNAUTHORIZED'
         } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
           message = 'Access forbidden - check your API key permissions'
+          code = 'PROVIDER_FORBIDDEN'
         } else if (error.message.includes('404')) {
           message = 'API endpoint not found - check your base URL'
+          code = 'PROVIDER_ENDPOINT_NOT_FOUND'
         } else if (error.message.includes('429')) {
           message = 'Rate limit exceeded'
+          code = 'PROVIDER_RATE_LIMITED'
         } else if (
           error.message.includes('500') ||
           error.message.includes('502') ||
           error.message.includes('503')
         ) {
           message = 'Provider service error - try again later'
+          code = 'PROVIDER_SERVICE_ERROR'
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
           message = 'Network error - check your internet connection'
+          code = 'PROVIDER_NETWORK_ERROR'
         }
       }
 
       return {
         success: false,
-        ...(code ? { code } : {}),
+        code,
         message,
         latency,
         timestamp

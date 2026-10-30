@@ -8,6 +8,7 @@ import type {
   IntelligenceTTSResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 const SAMPLE_WAV_BASE64 =
@@ -30,19 +31,24 @@ export class TtsCapabilityTester extends BaseCapabilityTester<
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceTTSResult>) {
+    const unknown = t('intelligence.capabilityTest.preview.unknown')
     const duration =
-      typeof result.result?.duration === 'number' ? `${result.result.duration}s` : 'unknown'
-    const sampleRate =
-      typeof result.result?.sampleRate === 'number' ? `, ${result.result.sampleRate}Hz` : ''
+      typeof result.result?.duration === 'number' ? `${result.result.duration}s` : unknown
+    const sampleRate = result.result?.sampleRate
 
     return this.buildTestResult(result, {
-      message: `语音合成完成，格式 ${result.result?.format || 'unknown'}`,
-      textPreview: `duration: ${duration}${sampleRate}`
+      message: t('intelligence.capabilityTest.message.tts', {
+        format: result.result?.format || unknown
+      }),
+      textPreview:
+        typeof sampleRate === 'number'
+          ? t('intelligence.capabilityTest.preview.ttsAudio', { duration, sampleRate })
+          : t('intelligence.capabilityTest.preview.ttsDuration', { duration })
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要合成为语音的文本'
+    return t('intelligence.capabilityTest.hint.tts')
   }
 
   requiresUserInput(): boolean {
@@ -67,16 +73,19 @@ export class SttCapabilityTester extends BaseCapabilityTester<
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceSTTResult>) {
     const text = result.result?.text || ''
     const confidence = result.result?.confidence
-    const confidenceLabel = typeof confidence === 'number' ? confidence.toFixed(2) : '未知'
+    const confidenceLabel =
+      typeof confidence === 'number'
+        ? confidence.toFixed(2)
+        : t('intelligence.capabilityTest.preview.unknown')
 
     return this.buildTestResult(result, {
-      message: `语音识别完成，置信度 ${confidenceLabel}`,
+      message: t('intelligence.capabilityTest.message.stt', { confidence: confidenceLabel }),
       textPreview: text
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置短音频样本进行语音识别测试'
+    return t('intelligence.capabilityTest.hint.stt')
   }
 
   requiresUserInput(): boolean {
@@ -102,20 +111,22 @@ export class AsrCapabilityTester extends BaseCapabilityTester<never, never> {
     const textPreview = text.trim()
     return {
       success: true,
-      message: textPreview ? '实时语音识别完成' : '实时语音识别完成，未检测到语音内容',
+      message: textPreview
+        ? t('intelligence.capabilityTest.message.asr')
+        : t('intelligence.capabilityTest.message.asrNoSpeech'),
       latency,
       stability: {
         status: textPreview ? ('stable' as const) : ('unknown' as const),
         summary: textPreview
-          ? '已通过实际麦克风捕获和实时 ASR 通道完成识别。'
-          : '通道已完成实际麦克风捕获，但本次没有可展示的语音文本。'
+          ? t('intelligence.capabilityTest.summary.asrRecognized')
+          : t('intelligence.capabilityTest.summary.asrNoSpeech')
       },
       ...(textPreview ? { textPreview } : {})
     }
   }
 
   getDefaultInputHint(): string {
-    return '测试会打开麦克风并通过当前实时 ASR 能力绑定完成一次识别'
+    return t('intelligence.capabilityTest.hint.asr')
   }
 
   requiresUserInput(): boolean {
@@ -144,13 +155,16 @@ export class AudioTranscribeTester extends BaseCapabilityTester<
     const segmentCount = result.result?.segments?.length || 0
 
     return this.buildTestResult(result, {
-      message: `音频转录完成，${segmentCount} 个片段，时长 ${result.result?.duration ?? 0}s`,
+      message: t('intelligence.capabilityTest.message.audioTranscribe', {
+        count: segmentCount,
+        duration: result.result?.duration ?? 0
+      }),
       textPreview: result.result?.text || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置短音频样本进行转录测试'
+    return t('intelligence.capabilityTest.hint.audioTranscribe')
   }
 
   requiresUserInput(): boolean {
