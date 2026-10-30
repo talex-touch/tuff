@@ -63,6 +63,7 @@ import {
 import { isSqliteBusyError } from '../../../db/sqlite-retry'
 import { operationalErrorService } from '../../observability'
 import { enterPerfContext } from '../../../utils/perf-context'
+import { PublicFailure } from '../../../../shared/public-failure'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
 import { ReconcileEngine } from './indexing-reconcile-engine'
 import { ReconcileScheduler as DefaultReconcileScheduler } from './indexing-reconcile-scheduler'
@@ -1802,7 +1803,7 @@ function reportIndexedSourceResetFailure(
           : 'INDEXED_SOURCE_DATABASE_BUSY'
         : 'INDEXED_SOURCE_RESET_FAILED',
     retryable: busy || writerDrainTimeout,
-    publicMessage: writerDrainTimeout ? 'The index writer is busy. Please retry.' : undefined,
+    publicMessage: writerDrainTimeout ? PublicFailure.IndexWriterBusy : undefined,
     userImpact: 'blocked',
     context: { sourceId, reason }
   })

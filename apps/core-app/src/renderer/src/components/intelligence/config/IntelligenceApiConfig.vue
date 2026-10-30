@@ -21,6 +21,7 @@ import {
   ProviderChannelType
 } from '~/modules/intelligence/provider-channel-type'
 import { snapshotIntelligenceProviderConfig } from '~/modules/intelligence/provider-config-snapshot'
+import { describeFailure } from '~/utils/failure-text'
 import { replaceDiscoveredModelIds } from '@talex-touch/utils/intelligence/model-binding'
 
 const props = defineProps<{
@@ -444,8 +445,7 @@ async function handleTest() {
       )
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : t('intelligence.config.api.connectionFailed')
+    const message = describeFailure(error, t, t('intelligence.config.api.connectionFailed'))
     testError.value = message
     showConnectionDialog(
       t('intelligence.config.api.testFailedTitle'),

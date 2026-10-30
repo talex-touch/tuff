@@ -188,7 +188,8 @@ export async function probeDeclaredServer(
   const target = probeTarget(profile, `probe.${deps.newProbeId?.() ?? randomUUID()}`)
   if (!target) return { ok: false, error: `${server} has no command or address to start` }
   const outcome = await probeProfile(deps.runner, target, false)
+  // The page asked about this one server, so its failure comes back alone, code first.
   return 'failure' in outcome
-    ? { ok: false, error: `${server}: ${scrub(outcome.failure, credentialValues(profile))}` }
+    ? { ok: false, error: scrub(outcome.failure, credentialValues(profile)) }
     : { ok: true, toolCount: outcome.toolCount }
 }

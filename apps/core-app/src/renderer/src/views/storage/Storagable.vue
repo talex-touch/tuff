@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { describeFailure } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 import PrivacyDataSection from './PrivacyDataSection.vue'
 
@@ -228,9 +229,10 @@ async function runCleanup(action: CleanupAction): Promise<void> {
       }
       if (!result.success) {
         // Main's error is a raw diagnostic (the joined rebuild errors), so it rides along as the
-        // description under a headline in the user's language.
-        const detail = typeof result.error === 'string' && result.error ? result.error : undefined
-        toast.error(t('settingStorage.usage.cleanup.failed'), { description: detail })
+        // description under a headline in the user's language; main's public sentence, when it is
+        // all there is, reads in that language too.
+        const detail = typeof result.error === 'string' ? describeFailure(result.error, t, '') : ''
+        toast.error(t('settingStorage.usage.cleanup.failed'), { description: detail || undefined })
         return
       }
       toast.success(formatCleanupDone(action.label, result))
@@ -471,7 +473,7 @@ async function loadSummary(): Promise<void> {
     })
     report.value = res as StorageUsageReport
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
+    errorMessage.value = describeFailure(error, t, t('common.failures.operationFailed'))
   } finally {
     summaryLoading.value = false
   }

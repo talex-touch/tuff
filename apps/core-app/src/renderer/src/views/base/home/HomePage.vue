@@ -51,6 +51,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
@@ -917,10 +918,8 @@ function workspaceErrorText(failure: AgentWorkspaceError): string {
 /** A workspace call the reader made failed: say what Main said, in their language. */
 function reportWorkspaceError(failure: AgentWorkspaceError, action: string): void {
   homeLog.warn(`Workspace ${action} rejected`, failure.detail)
-  toast.error(
-    workspaceErrorText(failure),
-    failure.code === 'unknown' && failure.detail ? { description: failure.detail } : undefined
-  )
+  const description = failure.code === 'unknown' ? describeFailure(failure.detail, t, '') : ''
+  toast.error(workspaceErrorText(failure), description ? { description } : undefined)
 }
 
 function reportSubmitError(error: unknown): void {

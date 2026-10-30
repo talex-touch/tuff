@@ -1807,7 +1807,7 @@ async function triggerRebuild() {
               }}
             </span>
             <span
-              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic, locale)"
+              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic, locale, t)"
               :key="task.id"
               class="source-diagnostic-chip source-diagnostic-task-chip"
               :class="`source-diagnostic-task-chip--${task.tone}`"

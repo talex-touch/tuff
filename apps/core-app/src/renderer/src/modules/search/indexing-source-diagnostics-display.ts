@@ -25,6 +25,7 @@ import {
 // Both helpers are alias-free and framework-free for the same reason.
 import { formatResetTime } from '../../components/intelligence/audit/audit-format'
 import { usageLimitLabelKey } from '../../components/intelligence/audit/usage-limit-labels'
+import { describePublicFailure } from '../../../../shared/public-failure'
 
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
 
@@ -673,9 +674,16 @@ function resolveRecentTaskSummary(
   return parts.join(' / ')
 }
 
+/** A task's stored failure; main's public sentence reads in the interface language when it can. */
+function taskErrorText(error: string | undefined, translate?: IndexingSourceTranslate): string {
+  if (!error) return ''
+  return translate ? describePublicFailure(error, translate) : error
+}
+
 export function resolveIndexingSourceTaskChips(
   source: IndexedSourceDiagnostics,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceTaskChip[] {
   const chips: IndexingSourceTaskChip[] = []
 
@@ -693,7 +701,7 @@ export function resolveIndexingSourceTaskChips(
         records: source.lastScan.records,
         indexedRecords: source.lastScan.indexedRecords,
         phase: source.lastScan.phase ?? '-',
-        error: source.lastScan.error ?? ''
+        error: taskErrorText(source.lastScan.error, translate)
       }
     })
   }
@@ -714,7 +722,7 @@ export function resolveIndexingSourceTaskChips(
         deltas: source.lastWatch.deltas,
         applied: source.lastWatch.appliedDeltas,
         failed,
-        error: source.lastWatch.error ?? ''
+        error: taskErrorText(source.lastWatch.error, translate)
       }
     })
   }
@@ -737,7 +745,7 @@ export function resolveIndexingSourceTaskChips(
         errors: source.lastReconcile.errors,
         reason: source.lastReconcile.reason ?? '',
         rootCount: source.lastReconcile.rootCount ?? 0,
-        error: source.lastReconcile.error ?? ''
+        error: taskErrorText(source.lastReconcile.error, translate)
       }
     })
   }
@@ -755,7 +763,7 @@ export function resolveIndexingSourceTaskChips(
         reason: source.lastReset.reason,
         clearedSearchIndexRows: source.lastReset.clearedSearchIndexRows ?? 0,
         scanProgressRows: source.lastReset.scanProgressRows ?? 0,
-        error: source.lastReset.error ?? ''
+        error: taskErrorText(source.lastReset.error, translate)
       }
     })
   }

@@ -4975,6 +4975,7 @@
       "errorConfirmation": "Moving {name}'s credentials needs your confirmation first.",
       "errorSourceMissing": "The agent's configuration no longer declares {name}.",
       "errorInvalid": "The stored copy of {name} cannot run until it is added again.",
+      "errorNotImported": "Tuff no longer holds a copy of {name}. The list has been refreshed.",
       "enableFailed": "Could not switch on {name}: {reason}",
       "disableFailed": "Could not switch off {name}: {reason}",
       "secretTitle": "Move {name}'s credentials?",
@@ -5007,6 +5008,9 @@
       "probeReasonReauth": "It needs re-authentication (OAuth, or a token on the command line), so it cannot start from the credentials in its configuration.",
       "probeReasonSourceChanged": "Its configuration file changed after the scan. It has been scanned again; try once more.",
       "probeReasonSourceMissing": "The agent's configuration no longer declares it.",
+      "probeReasonNotImported": "Tuff no longer holds a copy of it. Rescan to update the list.",
+      "probeReasonUnavailable": "It did not start, or it closed before answering.",
+      "probeReasonToolsFailed": "It started, but could not list its tools.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete {name}?",
@@ -5015,6 +5019,16 @@
       "deleteFailed": "Could not delete: {reason}",
       "createTitle": "Add MCP server",
       "editTitle": "Edit {name}",
+      "saveReasons": {
+        "fieldMissing": "Fill in the name, and the command or URL.",
+        "fieldTooLong": "An entry is too long. Each one can be at most 512 characters.",
+        "urlInvalid": "The URL must be a full address that starts with http:// or https://.",
+        "envNameInvalid": "Environment variable names can use only letters, digits and underscores, and cannot start with a digit.",
+        "headerNameInvalid": "A header name contains characters that are not allowed.",
+        "secureStore": "The secure store is unavailable, so this server's credentials cannot be stored.",
+        "credentialNotStored": "A credential could not be saved to the secure store.",
+        "notImported": "Tuff no longer holds a copy of this server."
+      },
       "storedSecretsNote": "{count} saved value ({names}). It is not shown here; saving with this field empty deletes it. | {count} saved values ({names}). They are not shown here; saving with this field empty deletes them.",
       "hostDesc": "Other AI clients on this machine can call Tuff's tools over a local address. This is an opt-in Beta capability and is off by default; every call still asks you first.",
       "readOnlyNote": "An agent's own configuration declares this server. Tuff only reads it and never changes that file; the switch affects Tuff alone."
@@ -5047,6 +5061,10 @@
       "switchLabel": "Use {name} in Tuff",
       "toggleFailed": "Couldn't switch {name}: {reason}",
       "toggleFailedUnknown": "Unknown error",
+      "failures": {
+        "configNotSaved": "The change couldn't be saved.",
+        "dirInvalid": "It can't be found, or it isn't a directory."
+      },
       "enableTitle": "Use in Tuff",
       "stateEnabled": "Tuff's conversations can use this skill.",
       "stateDisabled": "Off. Tuff's conversations will not use it.",
@@ -5145,7 +5163,16 @@
         },
         "configTitle": "Client configuration",
         "configDesc": "Paste this whole block into the configuration of an MCP-capable AI client.",
-        "configCopied": "Configuration copied"
+        "configCopied": "Configuration copied",
+        "failures": {
+          "secureStoreUnavailable": "The secure store is unavailable, so the access token cannot be stored.",
+          "tokenNotStored": "The access token could not be saved to the secure store.",
+          "settingsNotSaved": "The change could not be saved, so the setting was left as it was.",
+          "unknownTool": "This tool is no longer available.",
+          "portInUse": "Another app is already using this port. Choose a different one.",
+          "portNotPermitted": "Tuff is not allowed to use this port. Choose a different one.",
+          "startNotSaved": "{reason} (Switching it off could not be saved either, so Tuff will try again the next time it opens.)"
+        }
       },
       "dialog": {
         "name": "Name",
@@ -7346,7 +7373,13 @@
     "asideLandmark": "Sidebar",
     "clearSearch": "Clear search",
     "noItems": "Nothing here yet",
-    "toggleGroup": "Toggle group"
+    "toggleGroup": "Toggle group",
+    "failures": {
+      "operationFailed": "The operation couldn't be completed. Try again.",
+      "databaseBusy": "The database is busy. Try again in a moment.",
+      "indexWriterBusy": "The search index is busy saving changes. Try again in a moment.",
+      "timedOut": "The request timed out. Try again."
+    }
   },
   "form": {
     "field": "Field",

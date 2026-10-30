@@ -20,6 +20,7 @@ import {
 } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../../db/schema'
+import { createMcpFailure } from '../intelligence-mcp-failure'
 
 /**
  * Probing a server Tuff does not hold, through the channel the settings page calls and the wiring the
@@ -312,12 +313,12 @@ describe('probing a server Tuff does not hold', () => {
     const { scan, rows } = await scanRows()
     const probe = probeChannel()
     harness.tools = async () => {
-      throw new Error('MCP server is unavailable.')
+      throw createMcpFailure('server-unavailable', 'MCP server is unavailable.')
     }
 
     await expect(probe(requestFor(scan.scanId, rowNamed(rows, 'pencil')))).resolves.toEqual({
       ok: false,
-      error: 'pencil: MCP server is unavailable.'
+      error: 'MCP_SERVER_UNAVAILABLE: MCP server is unavailable.'
     })
     expect(harness.calls.map((entry) => entry.call)).toEqual(['register', 'list', 'unregister'])
     expect(harness.registered.size).toBe(0)
@@ -410,7 +411,7 @@ describe('probing a server Tuff does not hold', () => {
     expect(quoted).toEqual([`spawn failed with CONTEXT7_API_KEY=${CONTEXT7_KEY}`])
     expect(result).toEqual({
       ok: false,
-      error: `context7: spawn failed with CONTEXT7_API_KEY=${MCP_SECRET_MASK}`
+      error: `spawn failed with CONTEXT7_API_KEY=${MCP_SECRET_MASK}`
     })
     expect(output).toContain('console-capture-control')
     expect(output).not.toContain(CONTEXT7_KEY)

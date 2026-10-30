@@ -1,4 +1,5 @@
 import { isTransportFailureError } from '@talex-touch/utils/network'
+import { describeFailure, unwrapTransportFailure } from '~/utils/failure-text'
 
 const HTTP_STATUS_PATTERN = /^(?:NETWORK_HTTP_STATUS|STORE_HTTP_STATUS|HTTP_ERROR)_(\d{3})/
 const NETWORK_TIMEOUT_PREFIX = 'NETWORK_TIMEOUT'
@@ -6,8 +7,6 @@ const ACTIVE_UI_PREFIX = 'PLUGIN_HAS_ACTIVE_UI:'
 const REMOVE_OLD_PREFIX = 'Failed to remove old plugin:'
 const ENTRY_FILES_PREFIX = 'Missing required webcontent entry files after install:'
 const TRUST_PREFIX = 'PLUGIN_TRUST_'
-// What the renderer transport puts in front of a failure it relays; the failure itself follows.
-const TRANSPORT_WRAPPER = /^\[TuffTransport\] Failed to send "[^"]*": /
 
 /**
  * The reason, under `store.installation.reasons`, for each failure the install chain reports by
@@ -91,10 +90,6 @@ function resolveSdkBlockedReason(message: string, t: StoreTranslate): string | n
   }
 
   return null
-}
-
-function unwrapTransportFailure(errorMessage: string | null | undefined): string {
-  return (errorMessage?.trim() ?? '').replace(TRANSPORT_WRAPPER, '').trim()
 }
 
 /**
@@ -182,6 +177,7 @@ export function resolveStoreInstallFailureReason(
     return t('store.installation.reasons.networkUnavailable')
   }
 
-  // Text from the system or a library is the only diagnosis the user has, so it is shown as it is.
-  return normalized
+  // The channel's failures and main's public sentences read in the interface language; text from
+  // the system or a library is the only diagnosis the user has, so it is shown as it is.
+  return describeFailure(normalized, t, t('store.installation.reasons.installFailed'))
 }

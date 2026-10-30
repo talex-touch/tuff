@@ -4975,6 +4975,7 @@
       "errorConfirmation": "迁移「{name}」的敏感值需要先确认。",
       "errorSourceMissing": "代理的配置里已经没有「{name}」。",
       "errorInvalid": "「{name}」保存的副本无法运行，需要重新接入。",
+      "errorNotImported": "Tuff 中已没有「{name}」的副本，列表已刷新。",
       "enableFailed": "没能启用「{name}」：{reason}",
       "disableFailed": "没能停用「{name}」：{reason}",
       "secretTitle": "迁移「{name}」的敏感值？",
@@ -5007,6 +5008,9 @@
       "probeReasonReauth": "它需要重新授权（如 OAuth 或命令行里的令牌），无法直接用配置里的凭据启动。",
       "probeReasonSourceChanged": "配置文件在扫描后被改过，已重新扫描，请再试一次。",
       "probeReasonSourceMissing": "代理的配置里已经没有它。",
+      "probeReasonNotImported": "Tuff 中已没有它的副本，请重新扫描以更新列表。",
+      "probeReasonUnavailable": "它没能启动，或者在响应前就关闭了。",
+      "probeReasonToolsFailed": "它启动了，但没能列出工具。",
       "edit": "编辑",
       "delete": "删除",
       "deleteTitle": "删除「{name}」？",
@@ -5015,6 +5019,16 @@
       "deleteFailed": "没能删除：{reason}",
       "createTitle": "添加 MCP 服务器",
       "editTitle": "编辑「{name}」",
+      "saveReasons": {
+        "fieldMissing": "请填写名称，以及命令或地址。",
+        "fieldTooLong": "有一项内容过长，每项最多 512 个字符。",
+        "urlInvalid": "地址必须是以 http:// 或 https:// 开头的完整网址。",
+        "envNameInvalid": "环境变量名只能包含字母、数字和下划线，且不能以数字开头。",
+        "headerNameInvalid": "有请求头名称包含不允许的字符。",
+        "secureStore": "系统安全存储不可用，无法保存这台服务器的敏感值。",
+        "credentialNotStored": "有一项敏感值没能保存到系统安全存储。",
+        "notImported": "Tuff 中已没有这台服务器的副本。"
+      },
       "storedSecretsNote": "已保存 {count} 个值（{names}）。这里不显示原值；保存时留空会删除它们。",
       "hostDesc": "本机的其他 AI 客户端可以通过本地地址调用 Tuff 的工具。这是 Beta 可选能力，默认关闭；每次调用仍要你确认。",
       "readOnlyNote": "这台服务器由代理自己的配置声明。Tuff 只读取，不会修改那个文件；开关只影响 Tuff。"
@@ -5047,6 +5061,10 @@
       "switchLabel": "在 Tuff 中启用 {name}",
       "toggleFailed": "没能切换「{name}」：{reason}",
       "toggleFailedUnknown": "未知错误",
+      "failures": {
+        "configNotSaved": "更改没能保存。",
+        "dirInvalid": "找不到这个目录，或者它不是目录。"
+      },
       "enableTitle": "在 Tuff 中启用",
       "stateEnabled": "Tuff 的会话可以使用这个技能。",
       "stateDisabled": "未启用，Tuff 的会话不会使用它。",
@@ -5145,7 +5163,16 @@
         },
         "configTitle": "客户端配置",
         "configDesc": "整段复制到支持 MCP 的 AI 客户端配置里即可。",
-        "configCopied": "配置已复制"
+        "configCopied": "配置已复制",
+        "failures": {
+          "secureStoreUnavailable": "系统安全存储不可用，无法保存访问令牌。",
+          "tokenNotStored": "访问令牌没能保存到系统安全存储。",
+          "settingsNotSaved": "更改没能保存，设置保持原样。",
+          "unknownTool": "这个工具已不可用。",
+          "portInUse": "这个端口已被其他应用占用，请换一个端口。",
+          "portNotPermitted": "Tuff 无权使用这个端口，请换一个端口。",
+          "startNotSaved": "{reason}（关闭状态也没能保存，下次打开 Tuff 时会再试一次）"
+        }
       },
       "dialog": {
         "name": "名称",
@@ -7346,7 +7373,13 @@
     "asideLandmark": "侧边栏",
     "clearSearch": "清除搜索",
     "noItems": "暂无内容",
-    "toggleGroup": "展开或收起分组"
+    "toggleGroup": "展开或收起分组",
+    "failures": {
+      "operationFailed": "操作没能完成，请重试。",
+      "databaseBusy": "数据库正忙，请稍后重试。",
+      "indexWriterBusy": "搜索索引正在写入，请稍后重试。",
+      "timedOut": "请求超时，请重试。"
+    }
   },
   "form": {
     "field": "字段",

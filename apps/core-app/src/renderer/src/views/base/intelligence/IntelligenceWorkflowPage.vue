@@ -20,6 +20,7 @@ import {
   type WorkflowReviewQueueFilter,
   type WorkflowReviewQueueItem
 } from '~/modules/hooks/useWorkflowEditor'
+import { describeFailure } from '~/utils/failure-text'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -284,10 +285,12 @@ function stepSummaryKey(step: { id?: string; workflowStepId?: string }, index: n
 
 function resolveValidationMessage(error: unknown): string {
   if (!(error instanceof WorkflowValidationError)) {
-    return error instanceof Error ? error.message : String(error)
+    return describeFailure(error, t, t('common.failures.operationFailed'))
   }
   return error.reason
 }
+
+const executionErrorText = computed(() => describeFailure(executionError.value, t, ''))
 
 async function handleSave(): Promise<void> {
   try {
@@ -873,8 +876,8 @@ onMounted(async () => {
             <span>{{ t('intelligence.workflow.completedAt') }}</span>
             <strong>{{ formatDate(currentRun?.completedAt) }}</strong>
           </div>
-          <div v-if="executionError" class="runtime-error">
-            {{ executionError }}
+          <div v-if="executionErrorText" class="runtime-error">
+            {{ executionErrorText }}
           </div>
           <div
             v-if="runUsageLimit"

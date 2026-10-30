@@ -35,6 +35,11 @@ import { McpHostEvents } from '@talex-touch/utils/transport/sdk/domains/mcp-host
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { app } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import {
+  McpHostFailureCode,
+  mcpHostListenFailure,
+  mcpHostUnsavedStartFailure
+} from '../../../shared/mcp-host-failure'
 import { createLogger } from '../../utils/logger'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import {
@@ -276,13 +281,16 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         this.lastError = undefined
         return handle
       } catch (error) {
-        this.lastError = error instanceof Error ? error.message : String(error)
-        mcpHostLog.warn('MCP host listener failed to start', { error: this.lastError })
+        // A code the page words for a port it cannot have; anything else is the system's text.
+        this.lastError = mcpHostListenFailure(error)
+        mcpHostLog.warn('MCP host listener failed to start', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         this.settings = { ...this.settings, enabled: false }
         // Awaited, because a save that does not land leaves `enabled: true` on
         // disk and the next launch retries the bind that just failed.
         if (!(await this.persist())) {
-          this.lastError = `${this.lastError} (and the switch could not be saved either)`
+          this.lastError = mcpHostUnsavedStartFailure(this.lastError)
         }
         return null
       } finally {
@@ -341,7 +349,9 @@ export class McpHostModule extends BaseModule<TalexEvents> {
   private async ensureToken(): Promise<void> {
     const root = this.secureStoreRoot()
     if (!isSecureStoreAvailable(root)) {
-      throw new Error('Secure storage is unavailable, so the access token cannot be stored')
+      throw new Error(
+        `${McpHostFailureCode.SecureStoreUnavailable}: the access token cannot be stored`
+      )
     }
     this.token = mintMcpHostToken()
     const stored = await setSecureStoreValue(
@@ -352,7 +362,9 @@ export class McpHostModule extends BaseModule<TalexEvents> {
     )
     if (!stored) {
       this.token = ''
-      throw new Error('Failed to store the access token in secure storage')
+      throw new Error(
+        `${McpHostFailureCode.TokenNotStored}: failed to store the access token in secure storage`
+      )
     }
   }
 
@@ -428,14 +440,18 @@ export class McpHostModule extends BaseModule<TalexEvents> {
           this.settings.enabled = true
           if (!(await this.persist())) {
             this.settings = previous
-            throw new Error('Tuff could not save the switch, so the server was left off')
+            throw new Error(
+              `${McpHostFailureCode.SettingsNotSaved}: the switch was not saved, so the server was left off`
+            )
           }
           await this.startListener()
         } else {
           this.settings.enabled = false
           if (!(await this.persist())) {
             this.settings = previous
-            throw new Error('Tuff could not save the switch, so the server was left on')
+            throw new Error(
+              `${McpHostFailureCode.SettingsNotSaved}: the switch was not saved, so the server was left on`
+            )
           }
           await this.stopListener()
         }
@@ -450,13 +466,15 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         await this.ensureLoaded()
         const toolset = this.ensureToolset()
         if (!toolset.specs.some((spec) => spec.name === payload.name)) {
-          throw new Error(`Unknown MCP host tool: ${payload.name}`)
+          throw new Error(`${McpHostFailureCode.UnknownTool}: ${payload.name}`)
         }
         const previous = { ...this.settings }
         this.settings.tools = { ...this.settings.tools, [payload.name]: payload.enabled === true }
         if (!(await this.persist())) {
           this.settings = previous
-          throw new Error(`Tuff could not save the switch for ${payload.name}`)
+          throw new Error(
+            `${McpHostFailureCode.SettingsNotSaved}: the switch for ${payload.name} was not saved`
+          )
         }
         return this.getState()
       }) as never),
@@ -477,7 +495,9 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         if (!(await this.persist())) {
           this.settings = previous
           if (this.isEnabled()) await this.startListener()
-          throw new Error('Tuff could not save the port, so the previous one was kept')
+          throw new Error(
+            `${McpHostFailureCode.SettingsNotSaved}: the port was not saved, so the previous one was kept`
+          )
         }
         if (this.isEnabled()) await this.startListener()
         return this.getState()

@@ -38,8 +38,8 @@ import InsightsNotice from '~/components/settings/insights/InsightsNotice.vue'
 import { agentBrand, agentCountsFrom } from '~/components/settings/resources/agent-registry'
 import ResourceAgentBar from '~/components/settings/resources/ResourceAgentBar.vue'
 import ResourceRow from '~/components/settings/resources/ResourceRow.vue'
+import { describeFailure } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { errorMessage } from './setting-ai-import-shared'
 import {
   declaredProbeRequestFor,
   emptyManualDraft,
@@ -207,10 +207,12 @@ function failureText(row: McpServerRow, error: unknown, action: 'enable' | 'disa
       return t('settings.mcpPage.errorSourceMissing', { name })
     case 'invalid':
       return t('settings.mcpPage.errorInvalid', { name })
+    case 'not-imported':
+      return t('settings.mcpPage.errorNotImported', { name })
     default:
       return t(
         action === 'disable' ? 'settings.mcpPage.disableFailed' : 'settings.mcpPage.enableFailed',
-        { name, reason: errorMessage(error, t('settings.skillsMcp.toggleFailed')) }
+        { name, reason: describeFailure(error, t, t('settings.skillsMcp.toggleFailed')) }
       )
   }
 }
@@ -365,8 +367,40 @@ function probeFailureText(error: string | undefined): string {
       return t('settings.mcpPage.probeReasonSourceChanged')
     case 'source-missing':
       return t('settings.mcpPage.probeReasonSourceMissing')
+    case 'invalid':
+      return t('settings.mcpPage.blockedInvalid')
+    case 'not-imported':
+      return t('settings.mcpPage.probeReasonNotImported')
+    case 'unavailable':
+      return t('settings.mcpPage.probeReasonUnavailable')
+    case 'tools-failed':
+      return t('settings.mcpPage.probeReasonToolsFailed')
     default:
-      return error || t('settings.skillsMcp.mcp.probeUnknownError')
+      return describeFailure(error, t, t('settings.skillsMcp.mcp.probeUnknownError'))
+  }
+}
+
+/** Why the hand-entered server was not saved: what main refused in the form, or what failed. */
+function saveFailureText(error: unknown): string {
+  switch (mcpFailureKind(error)) {
+    case 'field-missing':
+      return t('settings.mcpPage.saveReasons.fieldMissing')
+    case 'field-too-long':
+      return t('settings.mcpPage.saveReasons.fieldTooLong')
+    case 'url-invalid':
+      return t('settings.mcpPage.saveReasons.urlInvalid')
+    case 'env-name-invalid':
+      return t('settings.mcpPage.saveReasons.envNameInvalid')
+    case 'header-name-invalid':
+      return t('settings.mcpPage.saveReasons.headerNameInvalid')
+    case 'secure-store':
+      return t('settings.mcpPage.saveReasons.secureStore')
+    case 'credential-not-stored':
+      return t('settings.mcpPage.saveReasons.credentialNotStored')
+    case 'not-imported':
+      return t('settings.mcpPage.saveReasons.notImported')
+    default:
+      return describeFailure(error, t, '')
   }
 }
 
@@ -440,13 +474,13 @@ async function probeRow(row: McpServerRow): Promise<void> {
       row.key,
       result.ok
         ? { status: 'ok', toolCount: result.toolCount ?? 0 }
-        : { status: 'failed', error: result.error || t('settings.skillsMcp.mcp.probeUnknownError') }
+        : { status: 'failed', error: probeFailureText(result.error) }
     )
   } catch (error) {
     log.error('MCP probe failed', error)
     probes.set(row.key, {
       status: 'failed',
-      error: errorMessage(error, t('settings.skillsMcp.mcp.probeUnavailable'))
+      error: describeFailure(error, t, t('settings.skillsMcp.mcp.probeUnavailable'))
     })
   } finally {
     probesInFlight.delete(row.key)
@@ -499,7 +533,7 @@ async function startEdit(row: McpServerRow): Promise<void> {
     drawerView.value = { mode: 'edit', key: row.key }
   } catch (error) {
     log.error('Failed to read the manual MCP server for editing', error)
-    toast.error(errorMessage(error, t('settings.skillsMcp.loadFailedDesc')))
+    toast.error(describeFailure(error, t, t('settings.skillsMcp.loadFailedDesc')))
   } finally {
     editLoading.value = false
   }
@@ -527,7 +561,9 @@ async function saveDraft(): Promise<void> {
     else drawerVisible.value = false
   } catch (error) {
     log.error('Failed to save the manual MCP server', error)
-    toast.error(errorMessage(error, t('settings.skillsMcp.dialog.saveFailed')))
+    toast.error(t('settings.skillsMcp.dialog.saveFailed'), {
+      description: saveFailureText(error) || undefined
+    })
   } finally {
     saving.value = false
   }
@@ -553,7 +589,7 @@ async function deleteRow(row: McpServerRow): Promise<void> {
     log.error('Failed to delete the MCP server', error)
     toast.error(
       t('settings.mcpPage.deleteFailed', {
-        reason: errorMessage(error, t('settings.skillsMcp.dialog.deleteFailed'))
+        reason: describeFailure(error, t, t('settings.skillsMcp.dialog.deleteFailed'))
       })
     )
   }
