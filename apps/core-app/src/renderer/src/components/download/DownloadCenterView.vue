@@ -10,6 +10,7 @@ import { toast } from 'vue-sonner'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { debounce } from '~/utils/performance'
+import { createRendererLogger } from '~/utils/renderer-log'
 import DownloadHistoryView from './DownloadHistoryView.vue'
 import ErrorLogViewer from './ErrorLogViewer.vue'
 import TaskDetailsDialog from './TaskDetailsDialog.vue'
@@ -18,6 +19,7 @@ import VirtualTaskList from './VirtualTaskList.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const downloadCenterLog = createRendererLogger('DownloadCenter')
 
 const {
   downloadTasks,
@@ -165,8 +167,8 @@ async function pauseTask(taskId: string) {
     await pauseTaskHook(taskId)
     toast.success(t('download.task_paused'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.pause_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to pause download task', err)
+    toast.error(t('download.pause_failed'))
   }
 }
 
@@ -205,8 +207,8 @@ async function cancelTask(taskId: string) {
         await cancelTaskHook(taskId)
         toast.success(t('download.task_cancelled'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.cancel_failed')}: ${message}`)
+        downloadCenterLog.warn('Failed to cancel download task', err)
+        toast.error(t('download.cancel_failed'))
       }
     }
   )
@@ -217,8 +219,8 @@ async function retryTask(taskId: string) {
     await retryTaskHook(taskId)
     toast.success(t('download.task_retrying'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.retry_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to retry download task', err)
+    toast.error(t('download.retry_failed'))
   }
 }
 
@@ -231,8 +233,8 @@ async function removeTask(taskId: string) {
         await removeTaskHook(taskId)
         toast.success(t('download.task_removed'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.remove_failed')}: ${message}`)
+        downloadCenterLog.warn('Failed to remove download task', err)
+        toast.error(t('download.remove_failed'))
       }
     }
   )
@@ -243,8 +245,8 @@ async function openFile(taskId: string) {
     await openFileHook(taskId)
     toast.success(t('download.file_opened'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.open_file_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to open downloaded file', err)
+    toast.error(t('download.open_file_failed'))
   }
 }
 
@@ -252,8 +254,8 @@ async function showInFolder(taskId: string) {
   try {
     await showInFolderHook(taskId)
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.show_folder_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to show downloaded file in folder', err)
+    toast.error(t('download.show_folder_failed'))
   }
 }
 
@@ -266,8 +268,8 @@ async function deleteTask(taskId: string) {
         await deleteFileHook(taskId)
         toast.success(t('download.file_deleted'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.delete_failed')}: ${message}`)
+        downloadCenterLog.warn('Failed to delete downloaded file', err)
+        toast.error(t('download.delete_failed'))
       }
     }
   )
@@ -286,8 +288,8 @@ async function pauseAllTasks() {
     await pauseAllTasksHook()
     toast.success(t('download.all_tasks_paused'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.pause_all_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to pause all download tasks', err)
+    toast.error(t('download.pause_all_failed'))
   }
 }
 
@@ -296,8 +298,8 @@ async function resumeAllTasks() {
     await resumeAllTasksHook()
     toast.success(t('download.all_tasks_resumed'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.resume_all_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to resume all download tasks', err)
+    toast.error(t('download.resume_all_failed'))
   }
 }
 
@@ -310,8 +312,8 @@ async function clearHistory() {
         await clearHistoryHook()
         toast.success(t('download.history_cleared'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.clear_history_failed')}: ${message}`)
+        downloadCenterLog.warn('Failed to clear download history', err)
+        toast.error(t('download.clear_history_failed'))
       }
     }
   )
@@ -322,8 +324,8 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
     await updateTaskPriorityHook(taskId, newPriority)
     toast.success(t('download.priority_updated'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.priority_update_failed')}: ${message}`)
+    downloadCenterLog.warn('Failed to update download task priority', err)
+    toast.error(t('download.priority_update_failed'))
   }
 }
 </script>

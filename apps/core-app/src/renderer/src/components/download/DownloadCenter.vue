@@ -3,9 +3,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
+import { createRendererLogger } from '~/utils/renderer-log'
 import DownloadTaskItem from './DownloadTask.vue'
 
 const { t } = useI18n()
+const downloadCenterLog = createRendererLogger('DownloadCenter')
 
 const {
   downloadTasks,
@@ -27,8 +29,8 @@ async function pauseTask(taskId: string) {
     await pauseTaskHook(taskId)
     toast.success(t('download.messages.paused'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.messages.pauseFailed')}: ${message}`)
+    downloadCenterLog.warn('Failed to pause download task', err)
+    toast.error(t('download.messages.pauseFailed'))
   }
 }
 
@@ -37,8 +39,8 @@ async function cancelTask(taskId: string) {
     await cancelTaskHook(taskId)
     toast.success(t('download.messages.cancelled'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.messages.cancelFailed')}: ${message}`)
+    downloadCenterLog.warn('Failed to cancel download task', err)
+    toast.error(t('download.messages.cancelFailed'))
   }
 }
 
@@ -47,8 +49,8 @@ async function retryTask(taskId: string) {
     await resumeTaskHook(taskId)
     toast.success(t('download.messages.retrying'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.messages.retryFailed')}: ${message}`)
+    downloadCenterLog.warn('Failed to retry download task', err)
+    toast.error(t('download.messages.retryFailed'))
   }
 }
 

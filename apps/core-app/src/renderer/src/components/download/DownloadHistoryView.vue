@@ -10,9 +10,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
+import { createRendererLogger } from '~/utils/renderer-log'
 import HistoryCard from './HistoryCard.vue'
 
 const { t } = useI18n()
+const downloadHistoryLog = createRendererLogger('DownloadHistory')
 
 const { getHistory, clearHistory, clearHistoryItem, openFile, showInFolder } = useDownloadCenter()
 
@@ -31,8 +33,8 @@ async function loadHistory() {
     const history = await getHistory()
     historyList.value = history
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.load_history_failed')}: ${message}`)
+    downloadHistoryLog.warn('Failed to load download history', err)
+    toast.error(t('download.load_history_failed'))
   } finally {
     loading.value = false
   }
@@ -108,8 +110,8 @@ async function handleOpenFile(historyId: string) {
     await openFile(item.taskId)
     toast.success(t('download.file_opened'))
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.open_file_failed')}: ${message}`)
+    downloadHistoryLog.warn('Failed to open downloaded file', err)
+    toast.error(t('download.open_file_failed'))
   }
 }
 
@@ -120,8 +122,8 @@ async function handleShowInFolder(historyId: string) {
 
     await showInFolder(item.taskId)
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.show_folder_failed')}: ${message}`)
+    downloadHistoryLog.warn('Failed to show downloaded file in folder', err)
+    toast.error(t('download.show_folder_failed'))
   }
 }
 
@@ -165,8 +167,8 @@ async function handleClearHistoryItem(historyId: string) {
 
         toast.success(t('download.history_item_cleared'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
+        downloadHistoryLog.warn('Failed to clear download history item', err)
+        toast.error(t('download.clear_history_item_failed'))
       }
     }
   )
@@ -182,8 +184,8 @@ async function handleClearAllHistory() {
         historyList.value = []
         toast.success(t('download.all_history_cleared'))
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
+        downloadHistoryLog.warn('Failed to clear download history', err)
+        toast.error(t('download.clear_all_history_failed'))
       }
     }
   )
