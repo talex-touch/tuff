@@ -149,7 +149,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     const payload: PreviewCardPayload = {
       ...abilityPayload,
       ...(query.explicitCommand
-        ? { badges: ['Calculator', ...(abilityPayload.badges ?? [])] }
+        ? { badges: [t('previewCard.common.calculator'), ...(abilityPayload.badges ?? [])] }
         : {}),
       meta: {
         ...abilityPayload.meta,
