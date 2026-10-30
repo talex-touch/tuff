@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
+import enUS from '~/modules/lang/en-US.json'
+import zhCN from '~/modules/lang/zh-CN.json'
 import { SETTING_CATEGORIES } from '~/modules/settings/categories'
 import Storagable from './Storagable.vue'
 
@@ -100,6 +103,13 @@ describe('Privacy & Data settings placement', () => {
   it('mounts one page-owned PrivacyDataSection directly in the storage page container', async () => {
     const wrapper = mount(Storagable, {
       global: {
+        plugins: [
+          createI18n({
+            legacy: false,
+            locale: 'zh-CN',
+            messages: { 'zh-CN': zhCN, 'en-US': enUS }
+          })
+        ],
         stubs: {
           ...commonStubs,
           PrivacyDataSection: {
