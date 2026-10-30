@@ -3,25 +3,30 @@ import type { TuffItem } from '@talex-touch/utils'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
-import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { decodeText, readPreviewBytes, type TextEncodingSelection } from './text-encoding'
 import { splitHighlightedText } from './text-highlight'
 
 const props = defineProps<{
   item: TuffItem
   searchQuery?: string
   resourceUrl: string
+  encoding?: TextEncodingSelection
 }>()
 
-const { t } = useI18n()
+const emit = defineEmits<{
+  (event: 'encodingDetected', encoding: Exclude<TextEncodingSelection, 'auto'>): void
+}>()
+
+const { t, locale } = useI18n()
 const transport = isElectronRenderer() ? useTuffTransport() : null
 const textPreviewLog = createRendererLogger('TextPreview')
 const textContent = ref('')
 const loading = ref(false)
 const error = ref('')
 const contentRef = ref<HTMLElement | null>(null)
+const rawBytes = ref<Uint8Array | null>(null)
 
 // 200 KB
 const MAX_PREVIEW_SIZE = 200 * 1024
@@ -98,18 +103,13 @@ async function loadContent() {
   textContent.value = ''
   loading.value = true
   try {
-    const resourceUrl = props.resourceUrl
-    if (isElectronRenderer() && transport) {
-      textContent.value = await transport.send(AppEvents.system.readFile, {
-        source: resourceUrl,
-        timeoutMs: READ_TIMEOUT_MS
-      })
-    } else {
-      textContent.value = await networkClient.readText(resourceUrl)
-    }
-    if (textContent.value.length === 0) {
-      error.value = t('textPreview.error.emptyFile')
-    }
+    rawBytes.value = await readPreviewBytes(
+      transport,
+      props.resourceUrl,
+      MAX_PREVIEW_SIZE,
+      READ_TIMEOUT_MS
+    )
+    redecodeContent()
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
     const code =
@@ -132,6 +132,20 @@ async function loadContent() {
     loading.value = false
   }
 }
+
+function redecodeContent(): void {
+  if (!rawBytes.value) return
+  try {
+    const decoded = decodeText(rawBytes.value, props.encoding ?? 'auto', locale?.value ?? '')
+    textContent.value = decoded.text
+    emit('encodingDetected', decoded.detectedEncoding)
+    error.value = textContent.value.length === 0 ? t('textPreview.error.emptyFile') : ''
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('textPreview.error.loadFailed')
+  }
+}
+
+watch(() => props.encoding, redecodeContent)
 
 onMounted(loadContent)
 </script>
