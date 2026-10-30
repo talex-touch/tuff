@@ -4114,7 +4114,8 @@
         "clipboardImage": "Clipboard image context",
         "unavailable": "No usable context was captured",
         "imagePreview": "Clipboard image loaded for this explicit action only.",
-        "withIssue": "{preview} · Capture note: {issue}"
+        "withIssue": "{preview} · Capture note: {issue}",
+        "issueOnly": "Capture note: {issue}"
       },
       "actions": {
         "quickReview": {
@@ -4193,6 +4194,12 @@
         "success": "{action} · Succeeded",
         "error": "{action} · Failed",
         "copyResult": "Copy result"
+      },
+      "issues": {
+        "empty": "No selected text was found.",
+        "unsupported": "Can't read the selected text here. On Linux, install xdotool.",
+        "failed": "Selected-text capture failed. Check desktop automation permissions, then retry.",
+        "disabled": "Allow Accessibility access to read the selected text."
       }
     },
     "intelligence": {
@@ -8273,6 +8280,31 @@
       "triggerType": {
         "manual": "Manual trigger",
         "clipboardBatch": "Clipboard batch"
+      },
+      "templates": {
+        "organizeRecentClipboard": {
+          "name": "Organize Recent Clipboard",
+          "description": "Reads your recent clipboard history, groups it by topic and produces a tidy result you can copy.",
+          "stepName": "Organize Recent Clipboard",
+          "stepDescription": "Reads recent clipboard content, groups it by topic or task, and writes a short summary and a tidy result ready to copy again."
+        },
+        "meetingSummary": {
+          "name": "Meeting Notes / Summary",
+          "description": "Turns a meeting transcript or related text into a summary, decisions and action items.",
+          "stepName": "Write Meeting Notes",
+          "stepDescription": "Writes structured meeting notes from the meeting text in recent clipboard, the foreground app and session memory."
+        },
+        "batchTextProcessing": {
+          "name": "Batch Text Processing",
+          "description": "Cleans up, rewrites, summarizes or suggests translations for several pieces of text one at a time, and keeps each result.",
+          "stepName": "Process Text in Batch",
+          "stepDescription": "Finds the pieces of text in recent clipboard and session context, and writes each one's result or why it failed."
+        },
+        "input": {
+          "manual": "Manual Input",
+          "meetingText": "Meeting Text",
+          "batchItems": "Batch Items"
+        }
       }
     },
     "info": {

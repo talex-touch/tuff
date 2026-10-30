@@ -4114,7 +4114,8 @@
         "clipboardImage": "剪贴板图片上下文",
         "unavailable": "未获取到可用上下文",
         "imagePreview": "已读取剪贴板图片，仅在本次显式操作中使用。",
-        "withIssue": "{preview} · 捕获提示：{issue}"
+        "withIssue": "{preview} · 捕获提示：{issue}",
+        "issueOnly": "捕获提示：{issue}"
       },
       "actions": {
         "quickReview": {
@@ -4193,6 +4194,12 @@
         "success": "{action} · 执行成功",
         "error": "{action} · 执行失败",
         "copyResult": "复制结果"
+      },
+      "issues": {
+        "empty": "没有读到选中的文本。",
+        "unsupported": "这里读不到选中文本，Linux 需要先安装 xdotool。",
+        "failed": "抓取选中文本失败。请检查桌面自动化权限后重试。",
+        "disabled": "读取选中文本需要辅助功能权限，请在系统设置中允许。"
       }
     },
     "intelligence": {
@@ -8273,6 +8280,31 @@
       "triggerType": {
         "manual": "手动触发",
         "clipboardBatch": "剪贴板批处理"
+      },
+      "templates": {
+        "organizeRecentClipboard": {
+          "name": "整理近期剪贴板",
+          "description": "读取最近剪贴板历史，按主题分组并生成可复制的整理结果。",
+          "stepName": "整理近期剪贴板",
+          "stepDescription": "读取最近的剪贴板内容，按主题或任务分组，输出简明摘要和一个适合再次复制的整理结果。"
+        },
+        "meetingSummary": {
+          "name": "会议纪要 / 摘要",
+          "description": "整理会议转写稿或会议相关文本，生成摘要、决议和行动项。",
+          "stepName": "生成会议纪要",
+          "stepDescription": "根据近期剪贴板、前台应用和会话记忆中的会议文本生成结构化会议纪要。"
+        },
+        "batchTextProcessing": {
+          "name": "文本批处理",
+          "description": "按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。",
+          "stepName": "批量处理文本",
+          "stepDescription": "从近期剪贴板和会话上下文中识别多段文本，逐条输出处理结果与失败原因。"
+        },
+        "input": {
+          "manual": "手动输入",
+          "meetingText": "会议文本",
+          "batchItems": "批处理条目"
+        }
       }
     },
     "info": {
