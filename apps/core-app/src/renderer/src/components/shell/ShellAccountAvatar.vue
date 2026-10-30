@@ -63,6 +63,20 @@ const accountLabel = computed(() =>
     : t('accountMenu.signedOut')
 )
 const profiles = computed(() => connection.state.value?.profiles ?? [])
+/**
+ * The profiles worth listing: one whose Chrome is not running reads 「等待 Chrome」 and offers
+ * nothing to pick, so it stays out of the menu until Chrome opens. Pairing, an unsupported
+ * platform and an empty connection are the manage view's to explain.
+ */
+const liveProfiles = computed(() =>
+  profiles.value.filter((profile) => profile.status !== 'offline')
+)
+const chromeLoadFailed = computed(
+  () => !connection.state.value && !connection.loading.value && Boolean(connection.loadError.value)
+)
+const showChromeProfiles = computed(
+  () => liveProfiles.value.length > 0 || chromeLoadFailed.value || Boolean(actionError.value)
+)
 const chromeSummary = computed(() => {
   const active = connection.activeProfile.value
   if (active) return `${active.label} · ${t(browserProfileStatus(active).label)}`
@@ -321,9 +335,6 @@ onBeforeUnmount(() => {
               </div>
             </template>
             <template v-else>
-              <p class="m-0 px-1.5 text-xs leading-normal text-[var(--tx-text-color-secondary)]">
-                {{ t('accountMenu.signedOutHint') }}
-              </p>
               <div class="flex flex-wrap gap-1">
                 <TxButton
                   variant="flat"
@@ -345,78 +356,53 @@ onBeforeUnmount(() => {
                 </TxButton>
               </div>
             </template>
-            <p class="m-0 px-1.5 text-[11px] leading-normal text-[var(--tx-text-color-secondary)]">
-              {{ t('accountMenu.identityNote') }}
-            </p>
           </section>
 
           <section
             class="flex flex-col gap-2 border-t border-[var(--tx-border-color-light)] pt-3"
-            :aria-labelledby="chromeHeadingId"
+            :aria-labelledby="showChromeProfiles ? chromeHeadingId : undefined"
+            :aria-label="showChromeProfiles ? undefined : t('accountMenu.chromeProfiles')"
           >
-            <h3
-              :id="chromeHeadingId"
-              class="m-0 px-1.5 text-xs font-medium text-[var(--tx-text-color-secondary)]"
-            >
-              {{ t('accountMenu.chromeProfiles') }}
-            </h3>
-            <p
-              v-if="actionError"
-              role="alert"
-              class="m-0 break-words px-1.5 text-xs text-[var(--tx-color-danger)]"
-            >
-              {{ actionError }}
-            </p>
-            <div
-              v-if="!connection.state.value && connection.loading.value"
-              class="flex flex-col gap-1.5 px-1.5"
-              aria-busy="true"
-              :aria-label="t('browserConnection.loading')"
-            >
-              <TxSkeleton width="100%" :height="32" :radius="8" />
-              <TxSkeleton width="100%" :height="32" :radius="8" />
-            </div>
-            <div
-              v-else-if="!connection.state.value"
-              role="alert"
-              class="flex flex-col items-start gap-1.5 px-1.5"
-            >
-              <p class="m-0 text-xs leading-normal text-[var(--tx-text-color-secondary)]">
-                {{ t('browserConnection.loadFailed') }}
-                {{ connection.describeError(connection.loadError.value) }}
-              </p>
-              <TxButton
-                variant="ghost"
-                size="sm"
-                icon="i-ri-refresh-line"
-                @click="connection.load()"
+            <template v-if="showChromeProfiles">
+              <h3
+                :id="chromeHeadingId"
+                class="m-0 px-1.5 text-xs font-medium text-[var(--tx-text-color-secondary)]"
               >
-                {{ t('browserConnection.retry') }}
-              </TxButton>
-            </div>
-            <template v-else>
+                {{ t('accountMenu.chromeProfiles') }}
+              </h3>
               <p
-                v-if="!profiles.length"
-                class="m-0 px-1.5 text-xs leading-normal text-[var(--tx-text-color-secondary)]"
+                v-if="actionError"
+                role="alert"
+                class="m-0 break-words px-1.5 text-xs text-[var(--tx-color-danger)]"
               >
-                {{
-                  t(
-                    !connection.state.value.installation.supported
-                      ? 'browserConnection.connector.unsupported'
-                      : connection.state.value.pairing
-                        ? 'accountMenu.chromePairing'
-                        : 'accountMenu.chromeEmpty'
-                  )
-                }}
+                {{ actionError }}
               </p>
               <div
-                v-else
+                v-if="chromeLoadFailed"
+                role="alert"
+                class="flex flex-col items-start gap-1.5 px-1.5"
+              >
+                <p class="m-0 text-xs leading-normal text-[var(--tx-text-color-secondary)]">
+                  {{ t('browserConnection.loadFailed') }}
+                  {{ connection.describeError(connection.loadError.value) }}
+                </p>
+                <TxButton
+                  variant="ghost"
+                  size="sm"
+                  icon="i-ri-refresh-line"
+                  @click="connection.load()"
+                >
+                  {{ t('browserConnection.retry') }}
+                </TxButton>
+              </div>
+              <div
+                v-else-if="connection.state.value && liveProfiles.length"
                 class="flex flex-col gap-0.5"
                 role="group"
                 :aria-label="t('accountMenu.chromeProfiles')"
               >
                 <TxButton
-                  v-for="profile in profiles"
+                  v-for="profile in liveProfiles"
                   :key="profile.id"
                   variant="ghost"
                   size="md"
