@@ -32,7 +32,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | [Concepts](./index.en.mdc) | Installation, design rules, concepts manual, helpers | 27 | Documentation only |
 | [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 22 | Compositions of existing entries |
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 98 | `@talex-touch/tuffex/base` |
-| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 40 | `@talex-touch/tuffex/pro` |
+| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 41 | `@talex-touch/tuffex/pro` |
 | [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
@@ -247,6 +247,7 @@ code: |
 ### Effects
 
 - [GlassSurface](./glass-surface.en.mdc)
+- [TouchSurface](./touch-surface.en.mdc)
 - [GradientBorder](./gradient-border.en.mdc)
 - [OutlineBorder](./outline-border.en.mdc)
 - [BorderBeam](./border-beam.en.mdc)

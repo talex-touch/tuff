@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.9.2",
-  "totalComponents": 189,
+  "totalComponents": 190,
   "versions": [
     {
       "version": "0.9.2",
@@ -1340,6 +1340,11 @@
       "slug": "tooltip",
       "since": "0.3.4",
       "suite": "base"
+    },
+    "touch-surface": {
+      "slug": "touch-surface",
+      "since": "0.9.2",
+      "suite": "pro"
     },
     "transfer": {
       "slug": "transfer",

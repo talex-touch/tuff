@@ -228,6 +228,7 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     "Effects": [
         "glass-surface",
+        "touch-surface",
         "gradient-border",
         "outline-border",
         "border-beam",

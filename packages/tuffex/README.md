@@ -91,7 +91,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **189**.
+Current source-of-truth export modules: **190**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -120,7 +120,7 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 - `Interaction (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `Animated controls (3)`: `motion-control`, `motion-form`, `motion-metric`
 - `Visualization (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
-- `Effects (25)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
+- `Effects (26)`: `glass-surface`, `touch-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
 - `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
