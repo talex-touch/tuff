@@ -5282,6 +5282,94 @@
       },
       "messages": {
         "loadFailed": "加载平台能力失败"
+      },
+      "items": {
+        "permissionCenter": {
+          "name": "权限中心",
+          "description": "插件权限申请、授权与审计"
+        },
+        "storage": {
+          "name": "存储",
+          "description": "配置与持久化存储能力"
+        },
+        "downloadCenter": {
+          "name": "下载中心",
+          "description": "统一下载任务管理与通知"
+        },
+        "tempFile": {
+          "name": "临时文件",
+          "description": "临时文件创建与清理"
+        },
+        "flowTransfer": {
+          "name": "Flow 流转",
+          "description": "插件间数据流转能力",
+          "handlerRequired": "Flow 流转要求目标插件注册接收处理器。",
+          "unhandledRejected": "没有注册 Flow 处理器的目标会被拒绝，不会被当作已送达。"
+        },
+        "divisionBox": {
+          "name": "DivisionBox",
+          "description": "插件浮动窗口与 UI 容器"
+        },
+        "intelligenceAgents": {
+          "name": "智能体",
+          "description": "智能体任务执行与工具调用"
+        },
+        "tuffCli": {
+          "name": "Tuff CLI",
+          "description": "CLI 工具联动能力（Beta）",
+          "notFound": "没有在 PATH 或常见安装位置中找到 tuff 命令行工具。"
+        },
+        "activeApp": {
+          "name": "当前应用",
+          "description": "当前前台应用与窗口上下文读取能力",
+          "automationReason": "读取前台应用依赖 macOS 的自动化权限。",
+          "automationLimit": "需要对 System Events 的自动化权限，权限退避期间可能返回空结果。",
+          "powershellReason": "读取前台应用依赖 PowerShell 和 Win32 前台窗口 API。",
+          "powershellLimit": "需要 PowerShell 可用，并能读取前台进程的元数据。",
+          "xdotoolReason": "在 Linux 上读取前台应用依赖桌面自动化工具。",
+          "xdotoolLimit": "需要 xdotool 和兼容的桌面会话。"
+        },
+        "selectionCapture": {
+          "name": "选中文本抓取",
+          "description": "活动应用选中文本抓取能力",
+          "accessibilityRequired": "抓取选中文本需要 macOS 的辅助功能权限。",
+          "disabled": "当前运行环境已停用选中文本抓取。",
+          "simulatedCopyReason": "抓取选中文本依赖当前应用接受模拟的 Ctrl+C。",
+          "simulatedCopyLimit": "选中文本通过模拟 Ctrl+C 和剪贴板时序获取。",
+          "xdotoolReason": "抓取选中文本依赖 xdotool 桌面自动化和剪贴板时序。",
+          "xdotoolLimit": "需要 xdotool，且获得焦点的应用接受 Ctrl+C。"
+        },
+        "autoPaste": {
+          "name": "自动粘贴",
+          "description": "向当前焦点应用回写剪贴板内容",
+          "simulatedPasteReason": "自动粘贴依赖对焦点窗口的键盘自动化。",
+          "simulatedPasteLimit": "目标应用必须保持焦点，并接受模拟的粘贴快捷键。"
+        },
+        "nativeShare": {
+          "name": "系统分享",
+          "description": "仅 macOS 提供原生系统分享能力",
+          "mailOnly": "此平台不提供原生系统分享，仍可通过邮件分享。",
+          "unavailable": "当前平台不提供原生分享。"
+        },
+        "terminal": {
+          "name": "终端命令运行时",
+          "description": "命令进程执行能力（非 PTY 终端）",
+          "noPty": "只以子进程方式运行命令，不提供 PTY 仿真和终端状态同步。"
+        },
+        "permissionDeepLink": {
+          "name": "权限设置跳转",
+          "description": "系统权限设置检查与跳转能力",
+          "desktopEnvReason": "权限设置跳转依赖当前的 Linux 桌面环境。",
+          "desktopEnvLimit": "不同桌面环境提供的设置启动方式不同。"
+        },
+        "everythingSearch": {
+          "name": "Everything 搜索",
+          "description": "Windows Everything 文件搜索后端能力"
+        }
+      },
+      "issues": {
+        "platformUnsupported": "当前平台（{platform}）不支持。",
+        "xdotoolMissing": "Linux 桌面自动化需要安装 xdotool，并能在 PATH 中找到它。"
       }
     },
     "settingAISDK": {

@@ -5282,6 +5282,94 @@
       },
       "messages": {
         "loadFailed": "Failed to load platform capabilities"
+      },
+      "items": {
+        "permissionCenter": {
+          "name": "Permission Center",
+          "description": "Plugin permission requests, grants and auditing"
+        },
+        "storage": {
+          "name": "Storage",
+          "description": "Configuration and persistent storage"
+        },
+        "downloadCenter": {
+          "name": "Download Center",
+          "description": "Download tasks and their notifications, in one place"
+        },
+        "tempFile": {
+          "name": "TempFile",
+          "description": "Creating and cleaning up temporary files"
+        },
+        "flowTransfer": {
+          "name": "Flow Transfer",
+          "description": "Passing data between plugins",
+          "handlerRequired": "Flow Transfer requires the target plugin to register a delivery handler.",
+          "unhandledRejected": "Targets without a registered Flow handler are rejected instead of treated as delivered."
+        },
+        "divisionBox": {
+          "name": "DivisionBox",
+          "description": "Floating windows and UI containers for plugins"
+        },
+        "intelligenceAgents": {
+          "name": "Intelligence Agents",
+          "description": "Running agent tasks and their tool calls"
+        },
+        "tuffCli": {
+          "name": "Tuff CLI",
+          "description": "Working with the Tuff command-line tool (Beta)",
+          "notFound": "The tuff command-line tool wasn't found in PATH or in its usual install locations."
+        },
+        "activeApp": {
+          "name": "Active App",
+          "description": "Reads the foreground app and its window context",
+          "automationReason": "Reading the foreground app depends on macOS Automation permission.",
+          "automationLimit": "Requires Automation permission for System Events, and may return nothing while permission requests are backing off.",
+          "powershellReason": "Reading the foreground app depends on PowerShell and the Win32 foreground-window APIs.",
+          "powershellLimit": "Requires PowerShell and access to the foreground process's metadata.",
+          "xdotoolReason": "Reading the foreground app on Linux depends on desktop automation tools.",
+          "xdotoolLimit": "Requires xdotool and a compatible desktop session."
+        },
+        "selectionCapture": {
+          "name": "Selection Capture",
+          "description": "Captures the text selected in the active app",
+          "accessibilityRequired": "Selection capture requires macOS Accessibility permission.",
+          "disabled": "Selection capture is turned off in the current runtime.",
+          "simulatedCopyReason": "Selection capture depends on the active app accepting a simulated Ctrl+C.",
+          "simulatedCopyLimit": "Selected text is captured with a simulated Ctrl+C and depends on clipboard timing.",
+          "xdotoolReason": "Selection capture depends on xdotool desktop automation and clipboard timing.",
+          "xdotoolLimit": "Requires xdotool and a focused app that accepts Ctrl+C."
+        },
+        "autoPaste": {
+          "name": "Auto Paste",
+          "description": "Pastes clipboard content into the focused app",
+          "simulatedPasteReason": "Auto paste depends on keyboard automation in the focused window.",
+          "simulatedPasteLimit": "The target app must keep focus and accept the simulated paste shortcut."
+        },
+        "nativeShare": {
+          "name": "Native Share",
+          "description": "Native system sharing, on macOS only",
+          "mailOnly": "Native system sharing isn't available on this platform. Sharing by email still works.",
+          "unavailable": "Native sharing isn't available on this platform."
+        },
+        "terminal": {
+          "name": "Terminal Command Runtime",
+          "description": "Runs commands as child processes, not in a PTY terminal",
+          "noPty": "Runs commands as child processes only. PTY emulation and terminal state sync aren't provided."
+        },
+        "permissionDeepLink": {
+          "name": "Permission Deep-Link",
+          "description": "Checks system permission settings and opens them",
+          "desktopEnvReason": "Permission deep-links depend on the current Linux desktop environment.",
+          "desktopEnvLimit": "Which settings launchers exist varies between desktop environments."
+        },
+        "everythingSearch": {
+          "name": "Everything Search",
+          "description": "Windows file search backend powered by Everything"
+        }
+      },
+      "issues": {
+        "platformUnsupported": "Not supported on this platform ({platform}).",
+        "xdotoolMissing": "Linux desktop automation requires xdotool to be installed and available in PATH."
       }
     },
     "settingAISDK": {
