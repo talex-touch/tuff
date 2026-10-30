@@ -271,6 +271,7 @@ vi.mock('../../utils/logger', () => ({
 beforeEach(() => {
   vi.mocked(getMainConfig).mockReturnValue({
     betaFeatures: { omniPanel: true },
+    dev: { advancedSettings: true },
     localAiCli: { enabled: true }
   } as never)
   shortcutState.effective = null
@@ -376,6 +377,7 @@ describe('omniPanel Beta runtime gates', () => {
   it('stops and restarts the native hold hook as the effective key and feature gate change', async () => {
     const config = {
       betaFeatures: { omniPanel: true },
+      dev: { advancedSettings: true },
       omniPanel: { enableShortcut: true, enableMouseLongPress: false }
     }
     vi.mocked(getMainConfig).mockReturnValue(config as never)

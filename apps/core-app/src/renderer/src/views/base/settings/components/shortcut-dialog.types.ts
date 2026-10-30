@@ -1,23 +1,19 @@
-import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 
 export type SaveState = 'saving' | 'success' | 'error'
-export type CopyState = 'success' | 'error'
 
-export type ShortcutRowBase = {
-  shortcut: ShortcutWithStatus
+/** One shortcut as the manager lists it: everything the row shows, nothing it has to look up. */
+export interface ShortcutRow {
+  id: string
   label: string
-  desc: string
-  sourceLabel: string
-  statusText: string | null
-  spotlightHint: string | null
-  saveState?: SaveState
-  saveText: string
-  isEnabled: boolean
-  inputMode: 'keyboard' | 'trigger'
+  /** The stored accelerator; the recorder prints it the way the platform writes keys. */
+  accelerator: string
+  /** A mouse trigger has no key to record, only a description of the gesture. */
+  isTrigger: boolean
   triggerLabel: string
-}
-
-export type ShortcutRowView = ShortcutRowBase & {
-  copyIcon: string
-  copyState?: CopyState
+  isEnabled: boolean
+  /** The save in flight or just finished, else the registration state. */
+  status: { text: string; tone: StatusTone }
+  /** What to do about a state the status alone cannot fix (a permission, a system key). */
+  hint: string | null
 }

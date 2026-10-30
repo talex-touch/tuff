@@ -111,7 +111,7 @@ const stubs = {
   ShortcutDialog: {
     props: ['rows'],
     template:
-      '<ul><li v-for="row in rows" :key="row.shortcut.id" :data-id="row.shortcut.id">{{ row.statusText }}</li></ul>'
+      '<ul><li v-for="row in rows" :key="row.id" :data-id="row.id">{{ row.status.text }}</li></ul>'
   }
 }
 
@@ -168,10 +168,19 @@ async function openLiveDialog() {
       stubs: {
         ...stubs,
         ShortcutDialog: false,
-        FlipDialog: {
+        TxModal: {
           props: ['modelValue'],
-          setup: () => ({ close: () => {} }),
-          template: '<section v-if="modelValue"><slot :close="close" /></section>'
+          template: '<section v-if="modelValue"><slot /><slot name="footer" /></section>'
+        },
+        // One row per shortcut, each column through the dialog's own cell slot.
+        TxDataTable: {
+          props: ['columns', 'data'],
+          template:
+            '<div><div v-for="row in data" :key="row.id" class="ShortcutDialog-Row"><div v-for="column in columns" :key="column.key"><slot :name="`cell-${column.key}`" :row="row" /></div></div></div>'
+        },
+        TxStatusBadge: {
+          props: ['text', 'status'],
+          template: '<span :data-tone="status">{{ text }}</span>'
         },
         FlatKeyInput: {
           props: ['modelValue'],
@@ -179,9 +188,8 @@ async function openLiveDialog() {
           template:
             '<input class="shortcut-key" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
         },
-        TxTooltip: { template: '<div><slot /></div>' },
-        TxSpinner: { template: '<span />' },
-        TxSkeleton: { template: '<span />' },
+        TxCopyButton: { template: '<button type="button" />' },
+        TxTag: { props: ['label'], template: '<span>{{ label }}</span>' },
         TxSearchInput: { template: '<input />' }
       }
     }
@@ -228,7 +236,7 @@ describe('SettingTools shortcut status', () => {
     const texts = await statusTexts()
 
     expect(texts['core.box.toggle']).toBe('settingTools.shortcutStatus.conflictSystem')
-    expect(texts['screenshot.tool.start']).toBe('')
+    expect(texts['screenshot.tool.start']).toBe('settingTools.shortcutsDialog.statusActive')
   })
 
   it('says a shortcut whose owner is not running waits for it, rather than blaming the system', async () => {
@@ -266,7 +274,9 @@ describe('SettingTools Beta feature access', () => {
     { screenshot: 'true', voiceDictation: 1, voiceQuickEdit: null, omniPanel: [] }
   ])('hides legacy enabled shortcut records without valid Beta opt-ins (%j)', async (flags) => {
     state.appSetting.betaFeatures = flags as typeof state.appSetting.betaFeatures
-    expect(await statusTexts()).toEqual({ 'core.box.toggle': '' })
+    expect(await statusTexts()).toEqual({
+      'core.box.toggle': 'settingTools.shortcutsDialog.statusActive'
+    })
   })
 
   it.each([
@@ -305,14 +315,18 @@ describe('SettingTools Beta feature access', () => {
       expect(control.attributes('disabled')).toBeDefined()
       save.resolve(true)
       await flushPromises()
-      expect(wrapper.get(`li[data-id="${id}"]`).text()).toBe('')
+      expect(wrapper.get(`li[data-id="${id}"]`).text()).toBe(
+        'settingTools.shortcutsDialog.saveSuccess'
+      )
       expect(control.attributes('aria-checked')).toBe('true')
       const stored = structuredClone(state.shortcuts.find((shortcut) => shortcut.id === id))
       await control.trigger('click')
       await flushPromises()
       expect(wrapper.find(`li[data-id="${id}"]`).exists()).toBe(false)
       expect(state.shortcuts.find((shortcut) => shortcut.id === id)).toEqual(stored)
-      expect(wrapper.get('li[data-id="core.box.toggle"]').text()).toBe('')
+      expect(wrapper.get('li[data-id="core.box.toggle"]').text()).toBe(
+        'settingTools.shortcutsDialog.statusActive'
+      )
     }
   )
 
@@ -362,7 +376,9 @@ describe('SettingTools Beta feature access', () => {
   it('hides local AI shortcuts unless the local AI feature is enabled', async () => {
     state.appSetting.localAiCli.enabled = false
     state.shortcuts.push(mainShortcut('local-ai-cli.quick-open', 'Alt+L', { state: 'active' }))
-    expect(await statusTexts()).toEqual({ 'core.box.toggle': '' })
+    expect(await statusTexts()).toEqual({
+      'core.box.toggle': 'settingTools.shortcutsDialog.statusActive'
+    })
   })
 })
 
