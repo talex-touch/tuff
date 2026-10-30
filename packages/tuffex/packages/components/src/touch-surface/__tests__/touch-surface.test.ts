@@ -1,6 +1,6 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, markRaw, nextTick } from 'vue'
+import { createApp, defineComponent, h, markRaw, nextTick } from 'vue'
 import { TouchSurface, TxTouchSurface, useLiquidTouch } from '../index'
 
 const FRAME_MS = 1000 / 60
@@ -58,10 +58,11 @@ describe('txTouchSurface', () => {
   })
 
   it('is exported with its composable, and installs under its name', () => {
-    expect(TxTouchSurface.name).toBe('TxTouchSurface')
+    const app = createApp({ render: () => null })
+    app.use(TouchSurface)
+    expect(app.component('TxTouchSurface')).toBe(TxTouchSurface)
     expect(TouchSurface).toBe(TxTouchSurface)
     expect(typeof useLiquidTouch).toBe('function')
-    expect((TouchSurface as { install?: unknown }).install).toBeTypeOf('function')
   })
 
   it('is a base surface by default, and hands it every attribute it does not own', () => {

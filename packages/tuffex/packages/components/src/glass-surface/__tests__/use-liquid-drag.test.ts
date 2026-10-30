@@ -40,7 +40,7 @@ function mountLens(options: LiquidDragOptions = {}) {
     setup() {
       const el = ref<HTMLElement | null>(null)
       const bounds = ref<HTMLElement | null>(stage)
-      const drag = useLiquidDrag(el, { bounds, ...options })
+      useLiquidDrag(el, { bounds, ...options })
       return () => h('div', { ref: el, class: 'lens' }, [h('button', { class: 'close' }, 'x')])
     },
   })
