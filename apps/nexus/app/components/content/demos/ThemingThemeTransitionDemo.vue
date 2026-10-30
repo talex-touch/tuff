@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TxSelectModelValue, TxSelectOption } from '@talex-touch/tuffex/select'
 import type { ThemeTransitionVariant } from '~/utils/theme-transition'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,40 +9,74 @@ const { locale } = useI18n()
 const { color, toggleDark } = useTheme()
 
 const currentVariant = ref<ThemeTransitionVariant>('circle-blur')
-const lastCoords = ref<{ x: number, y: number } | null>(null)
+const lastOrigin = ref<{ x: number, y: number } | null>(null)
 
 const isDark = computed(() => color.value === 'dark')
 
-const variantOptions = computed(() => {
-  if (locale.value === 'zh') {
-    return [
-      { value: 'circle-blur', label: '柔和光晕圆 (circle-blur, 默认)' },
-      { value: 'circle', label: '硬边圆形 (circle)' },
-      { value: 'polygon', label: '斜切光刃 (polygon)' },
-      { value: 'polygon-gradient', label: '渐变光刃 (polygon-gradient)' },
-      { value: 'wipe', label: '平推扫光 (wipe)' },
-      { value: 'fade', label: '平滑淡出 (fade)' },
-      { value: 'circle-blur-top-left', label: '左上角光晕 (circle-blur-top-left)' },
+const copy = computed(() => locale.value === 'zh'
+  ? {
+      preset: '动效预设',
+      theme: '当前主题：',
+      origin: '触发坐标：',
+      dark: '深色',
+      light: '浅色',
+      toLight: '切换到浅色模式',
+      toDark: '切换到深色模式',
+      hint: '点击按钮或舞台任意位置，新主题会从点击处展开',
+    }
+  : {
+      preset: 'Preset',
+      theme: 'Theme: ',
+      origin: 'Origin: ',
+      dark: 'Dark',
+      light: 'Light',
+      toLight: 'Switch to light',
+      toDark: 'Switch to dark',
+      hint: 'Click the button or anywhere on the stage; the new theme opens from where you clicked',
+    })
+
+const variantOptions = computed<TxSelectOption[]>(() => locale.value === 'zh'
+  ? [
+      { value: 'circle-blur', label: '柔和光晕圆', description: 'circle-blur · 默认' },
+      { value: 'circle', label: '硬边圆形', description: 'circle' },
+      { value: 'polygon', label: '斜切光刃', description: 'polygon' },
+      { value: 'polygon-gradient', label: '渐变光刃', description: 'polygon-gradient' },
+      { value: 'wipe', label: '平推扫光', description: 'wipe' },
+      { value: 'fade', label: '平滑淡出', description: 'fade' },
+      { value: 'circle-blur-top-left', label: '左上角光晕', description: 'circle-blur-top-left' },
     ]
+  : [
+      { value: 'circle-blur', label: 'Circle blur', description: 'circle-blur · default' },
+      { value: 'circle', label: 'Circle', description: 'circle' },
+      { value: 'polygon', label: 'Polygon slash', description: 'polygon' },
+      { value: 'polygon-gradient', label: 'Gradient slash', description: 'polygon-gradient' },
+      { value: 'wipe', label: 'Wipe', description: 'wipe' },
+      { value: 'fade', label: 'Fade', description: 'fade' },
+      { value: 'circle-blur-top-left', label: 'Circle blur from top left', description: 'circle-blur-top-left' },
+    ])
+
+function selectVariant(value: TxSelectModelValue) {
+  const match = variantOptions.value.find(option => option.value === value)
+  if (match)
+    currentVariant.value = match.value as ThemeTransitionVariant
+}
+
+/**
+ * A keyboard press on the button arrives as a click at 0,0, which would open the new theme from the
+ * corner of the viewport. Start it from the middle of the button instead.
+ */
+function resolveOrigin(event: MouseEvent) {
+  if (event.detail === 0 && event.currentTarget instanceof HTMLElement) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
   }
-  return [
-    { value: 'circle-blur', label: 'Circle Blur (default)' },
-    { value: 'circle', label: 'Circle Sharp' },
-    { value: 'polygon', label: 'Polygon Slash' },
-    { value: 'polygon-gradient', label: 'Polygon Gradient' },
-    { value: 'wipe', label: 'Wipe' },
-    { value: 'fade', label: 'Fade' },
-    { value: 'circle-blur-top-left', label: 'Circle Blur Top-Left' },
-  ]
-})
+  return { x: event.clientX, y: event.clientY }
+}
 
 function triggerSwitch(event: MouseEvent) {
-  lastCoords.value = {
-    x: Math.round(event.clientX),
-    y: Math.round(event.clientY),
-  }
-  const nextMode = isDark.value ? 'light' : 'dark'
-  toggleDark(nextMode, event, {
+  const origin = resolveOrigin(event)
+  lastOrigin.value = { x: Math.round(origin.x), y: Math.round(origin.y) }
+  toggleDark(isDark.value ? 'light' : 'dark', { clientX: origin.x, clientY: origin.y }, {
     variant: currentVariant.value,
   })
 }
@@ -50,67 +85,40 @@ function triggerSwitch(event: MouseEvent) {
 <template>
   <div class="theme-transition-demo not-prose">
     <div class="theme-transition-demo__controls">
-      <label class="theme-transition-demo__field">
-        <span class="theme-transition-demo__label">
-          {{ locale === 'zh' ? '动效预设' : 'Preset' }}
-        </span>
-        <select
-          v-model="currentVariant"
+      <div class="theme-transition-demo__field">
+        <span class="theme-transition-demo__label">{{ copy.preset }}</span>
+        <TxSelect
           class="theme-transition-demo__select"
-        >
-          <option
-            v-for="opt in variantOptions"
-            :key="opt.value"
-            :value="opt.value"
-          >
-            {{ opt.label }}
-          </option>
-        </select>
-      </label>
+          :model-value="currentVariant"
+          :options="variantOptions"
+          :aria-label="copy.preset"
+          @update:model-value="selectVariant"
+        />
+      </div>
 
       <div class="theme-transition-demo__info">
-        <span class="theme-transition-demo__tag">
-          {{ locale === 'zh' ? '当前主题:' : 'Current:' }}
-          <b>{{ color.value }}</b>
-        </span>
-        <span v-if="lastCoords" class="theme-transition-demo__tag theme-transition-demo__tag--coords">
-          {{ locale === 'zh' ? '触发坐标:' : 'Origin:' }}
-          <b>{{ lastCoords.x }}px, {{ lastCoords.y }}px</b>
-        </span>
+        <TxTag size="sm" variant="plain" :label="`${copy.theme}${isDark ? copy.dark : copy.light}`" />
+        <TxTag
+          v-if="lastOrigin"
+          class="theme-transition-demo__origin"
+          size="sm"
+          variant="plain"
+          :label="`${copy.origin}${lastOrigin.x}, ${lastOrigin.y}`"
+        />
       </div>
     </div>
 
-    <div
-      class="theme-transition-demo__stage"
-      @click="triggerSwitch"
-    >
-      <div class="theme-transition-demo__interactive">
-        <button
-          type="button"
-          class="theme-transition-demo__btn"
-          @click.stop="triggerSwitch"
-        >
-          <span
-            class="theme-transition-demo__icon"
-            :class="isDark ? 'i-carbon-moon' : 'i-carbon-sun'"
-          />
-          <span>
-            {{
-              locale === 'zh'
-                ? (isDark ? '切换到浅色模式' : '切换到深色模式')
-                : (isDark ? 'Switch to Light' : 'Switch to Dark')
-            }}
-          </span>
-        </button>
-
-        <p class="theme-transition-demo__hint">
-          {{
-            locale === 'zh'
-              ? '点击按钮或舞台任意位置，即可体验以鼠标点击坐标为扩散原点的 View Transition'
-              : 'Click the button or anywhere in the stage to trigger a View Transition from the click origin'
-          }}
-        </p>
-      </div>
+    <div class="theme-transition-demo__stage" @click="triggerSwitch">
+      <TxButton
+        variant="primary"
+        :icon="isDark ? 'i-carbon-sun' : 'i-carbon-moon'"
+        @click.stop="triggerSwitch"
+      >
+        {{ isDark ? copy.toLight : copy.toDark }}
+      </TxButton>
+      <p class="theme-transition-demo__hint">
+        {{ copy.hint }}
+      </p>
     </div>
   </div>
 </template>
@@ -131,119 +139,63 @@ function triggerSwitch(event: MouseEvent) {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--tx-surface-muted, rgba(148, 163, 184, 0.08));
-  border: 1px solid var(--tx-border-subtle, rgba(148, 163, 184, 0.16));
+  background: var(--tx-fill-color-light);
+  border: 1px solid var(--tx-border-color-lighter);
 }
 
 .theme-transition-demo__field {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
 }
 
 .theme-transition-demo__label {
+  flex: none;
   font-weight: 500;
-  color: var(--tx-text-secondary, #64748b);
+  color: var(--tx-text-color-secondary);
 }
 
 .theme-transition-demo__select {
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  background: var(--tx-surface, #ffffff);
-  color: var(--tx-text, #0f172a);
-  border: 1px solid var(--tx-border, rgba(148, 163, 184, 0.3));
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-}
-
-.theme-transition-demo__select:focus {
-  border-color: var(--tx-color-primary, #7c5cff);
+  width: 200px;
 }
 
 .theme-transition-demo__info {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
 }
 
-.theme-transition-demo__tag {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--tx-surface-elevated, rgba(148, 163, 184, 0.12));
-  color: var(--tx-text-secondary, #475569);
-}
-
-.theme-transition-demo__tag--coords {
-  font-family: monospace;
+.theme-transition-demo__origin {
+  font-variant-numeric: tabular-nums;
 }
 
 .theme-transition-demo__stage {
-  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   min-height: 180px;
   padding: 32px 20px;
   border-radius: 16px;
-  border: 1px dashed var(--tx-border, rgba(148, 163, 184, 0.3));
-  background: var(--tx-surface, rgba(148, 163, 184, 0.03));
+  border: 1px dashed var(--tx-border-color);
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease;
   user-select: none;
 }
 
 .theme-transition-demo__stage:hover {
-  border-color: var(--tx-color-primary, #7c5cff);
-  background: var(--tx-surface-hover, rgba(124, 92, 255, 0.04));
-}
-
-.theme-transition-demo__interactive {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  pointer-events: auto;
-}
-
-.theme-transition-demo__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  background: var(--tx-color-primary, #7c5cff);
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 92, 255, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.theme-transition-demo__btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(124, 92, 255, 0.35);
-}
-
-.theme-transition-demo__btn:active {
-  transform: translateY(0);
-}
-
-.theme-transition-demo__icon {
-  font-size: 18px;
+  border-color: var(--tx-color-primary);
 }
 
 .theme-transition-demo__hint {
   margin: 0;
-  font-size: 12px;
-  color: var(--tx-text-muted, #94a3b8);
-  text-align: center;
   max-width: 420px;
+  font-size: 12px;
   line-height: 1.5;
+  text-align: center;
+  color: var(--tx-text-color-secondary);
 }
 </style>
