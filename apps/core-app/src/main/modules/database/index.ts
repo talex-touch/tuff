@@ -24,6 +24,7 @@ import { setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
+  isSqliteBusyError,
   isSqliteCorruptionError,
   isSqliteStorageFullError,
   setSqliteRetryExhaustedListener
@@ -87,6 +88,17 @@ const AUX_COPY_TABLES = [
   'voice_polish_telemetry',
   'voice_recognition_records'
 ] as const
+
+/**
+ * Why the schema could not be brought up to date, in the interface language. The error itself
+ * stays in the log the dialog points to: drizzle's message quotes the whole statement it ran.
+ */
+function describeMigrationFailure(error: unknown): string {
+  if (isSqliteStorageFullError(error)) return t('nativeDialogs.database.migrationFailure.diskFull')
+  if (isSqliteCorruptionError(error)) return t('nativeDialogs.database.migrationFailure.damaged')
+  if (isSqliteBusyError(error)) return t('nativeDialogs.database.migrationFailure.inUse')
+  return t('nativeDialogs.database.migrationFailure.failed')
+}
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
@@ -1595,11 +1607,11 @@ export class DatabaseModule extends BaseModule {
       // is either a real migration failure or a failed fixup. Both leave the schema unusable.
       dbLog.error('Migration failed', { error })
 
-      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
-      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+      const errorInstance =
+        error instanceof Error ? error : new Error(String(error ?? 'Unknown error'))
       await this.showDatabaseErrorDialog(
         errorInstance,
-        `${t('nativeDialogs.database.migrationFailed', { error: errorMessage })}\n\n${t('nativeDialogs.database.checkLogs', { path: path.join(resolveRuntimeRootPath(app), 'logs') })}`
+        `${describeMigrationFailure(error)}\n\n${t('nativeDialogs.database.checkLogs', { path: path.join(resolveRuntimeRootPath(app), 'logs') })}`
       )
 
       process.exit(1)

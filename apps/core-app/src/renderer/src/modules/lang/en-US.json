@@ -3943,7 +3943,7 @@
           "resizeHint": "Drag the bottom-right corner to customize",
           "mockLabel": "Mock payload",
           "mockPlaceholder": "Enter JSON payload",
-          "mockError": "Failed to parse JSON: {error}",
+          "mockError": "Not valid JSON",
           "statusNotSelected": "Not selected",
           "statusInvalidPayload": "Invalid payload",
           "statusLoading": "Loading",
@@ -3951,7 +3951,7 @@
           "statusReady": "Loaded",
           "statusError": "Error",
           "statusPending": "Not ready",
-          "hintMockInvalid": "Failed to parse mock payload: {error}",
+          "hintMockInvalid": "The mock payload isn't valid JSON, so the preview renders without it",
           "hintMockEmpty": "Mock payload is enabled, but the content is empty",
           "hintMockActive": "Rendering with mock payload",
           "hintReadyEmpty": "Tip: if the widget is loaded but empty, it usually needs payload or runtime data.",
@@ -7583,7 +7583,14 @@
       "queuePausedTitle": "OCR Paused After Repeated Failures",
       "queuePausedBody": "The OCR queue is paused until {until}. Reason: {reason}. {hint}",
       "queuePausedConfigHint": "Check the OCR provider and model settings; OCR resumes on its own.",
-      "queuePausedNetworkHint": "Check your network or the OCR service; OCR resumes on its own later."
+      "queuePausedNetworkHint": "Check your network or the OCR service; OCR resumes on its own later.",
+      "queuePausedReasons": {
+        "noProvider": "No OCR provider is available",
+        "providerNotLoaded": "The OCR provider couldn't be loaded",
+        "systemOcrUnavailable": "System OCR isn't available",
+        "serviceUnreachable": "The OCR service couldn't be reached",
+        "jobDataInvalid": "An OCR job's data was missing or damaged"
+      }
     }
   },
   "assistant": {
@@ -8941,6 +8948,8 @@
     },
     "errors": {
       "failed": "Share failed",
+      "systemFailed": "The system reported an error.",
+      "automationDenied": "Tuff isn't allowed to control the app it shares through. Allow it in System Settings › Privacy & Security › Automation.",
       "noContent": "No content to share",
       "cancelled": "Share cancelled",
       "targetUnsupported": "This share target cannot handle the current content",
@@ -8969,6 +8978,12 @@
       "migrationsFolderExists": "Migrations folder exists: {exists}",
       "folderContents": "Folder contents: {contents}",
       "migrationFailed": "Database migration failed:\n{error}",
+      "migrationFailure": {
+        "diskFull": "There isn't enough disk space to update the database. Free up some space, then open Tuff again.",
+        "damaged": "The database file is damaged, so it can't be updated.",
+        "inUse": "Another program is using the database. Close it, then open Tuff again.",
+        "failed": "The database couldn't be updated for this version of Tuff."
+      },
       "checkLogs": "Check the log files for more information.\nLog location: {path}"
     },
     "rendererMissing": {

@@ -128,6 +128,33 @@ const getRetryDelaySeconds = (lastError: string | null | undefined): number => {
   return typeof delay === 'number' ? delay : RETRY_DELAYS.default
 }
 
+const MAX_ATTEMPTS_REASON_PREFIX = 'Max attempts reached: '
+
+// The failures this service names itself, as the pause notice words them. The names stay as they
+// are because the retry delays and the stored jobs key on them.
+const QUEUE_PAUSE_REASON_KEYS: Record<string, string> = {
+  'No enabled providers available': 'noProvider',
+  'Provider factory missing': 'providerNotLoaded',
+  'Native OCR module unavailable': 'systemOcrUnavailable',
+  'OCR provider network failure': 'serviceUnreachable',
+  'Missing job metadata': 'jobDataInvalid',
+  'Invalid job metadata JSON': 'jobDataInvalid'
+}
+
+/**
+ * Why the queue paused, in the interface language. A provider's or the system's own error text is
+ * shown as it is, less a closing full stop - the notice puts its own after the reason.
+ */
+function describeQueuePauseReason(reason: string): string {
+  const failure = reason.startsWith(MAX_ATTEMPTS_REASON_PREFIX)
+    ? reason.slice(MAX_ATTEMPTS_REASON_PREFIX.length)
+    : reason
+  const key = QUEUE_PAUSE_REASON_KEYS[failure]
+  return key
+    ? t(`notifications.ocr.queuePausedReasons.${key}`)
+    : reason.trim().replace(/[.。]$/, '')
+}
+
 function dataUrlToHash(dataUrl: string): string {
   return createHash('sha256').update(dataUrl).digest('hex')
 }
@@ -981,7 +1008,12 @@ class OcrService {
 
     // 检查是否已达到最大重试次数
     if (currentAttempts >= MAX_ATTEMPTS) {
-      await this.failJob(job.id, `Max attempts reached: ${reason}`, undefined, currentAttempts)
+      await this.failJob(
+        job.id,
+        `${MAX_ATTEMPTS_REASON_PREFIX}${reason}`,
+        undefined,
+        currentAttempts
+      )
       return
     }
 
@@ -1293,7 +1325,7 @@ class OcrService {
       title: t('notifications.ocr.queuePausedTitle'),
       message: t('notifications.ocr.queuePausedBody', {
         until: new Date(disabledUntil).toLocaleString(getLocale()),
-        reason,
+        reason: describeQueuePauseReason(reason),
         hint: userHint
       }),
       level: 'warning',

@@ -3943,7 +3943,7 @@
           "resizeHint": "拖拽右下角可自定义",
           "mockLabel": "模拟载荷",
           "mockPlaceholder": "输入 JSON 载荷",
-          "mockError": "JSON 解析失败：{error}",
+          "mockError": "不是有效的 JSON",
           "statusNotSelected": "未选择",
           "statusInvalidPayload": "载荷无效",
           "statusLoading": "加载中",
@@ -3951,7 +3951,7 @@
           "statusReady": "已加载",
           "statusError": "异常",
           "statusPending": "暂未就绪",
-          "hintMockInvalid": "模拟载荷解析失败：{error}",
+          "hintMockInvalid": "模拟载荷不是有效的 JSON，预览不会使用它",
           "hintMockEmpty": "已开启模拟载荷，但内容为空",
           "hintMockActive": "使用模拟载荷渲染",
           "hintReadyEmpty": "提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。",
@@ -7583,7 +7583,14 @@
       "queuePausedTitle": "OCR 多次失败已自动暂停",
       "queuePausedBody": "OCR 队列已自动关闭至 {until}。原因：{reason}。{hint}",
       "queuePausedConfigHint": "请检查 OCR 提供者与模型配置后，等待自动恢复。",
-      "queuePausedNetworkHint": "请检查网络或 OCR 服务可用性，稍后会自动恢复。"
+      "queuePausedNetworkHint": "请检查网络或 OCR 服务可用性，稍后会自动恢复。",
+      "queuePausedReasons": {
+        "noProvider": "没有可用的 OCR 提供者",
+        "providerNotLoaded": "无法加载 OCR 提供者",
+        "systemOcrUnavailable": "系统 OCR 不可用",
+        "serviceUnreachable": "无法连接 OCR 服务",
+        "jobDataInvalid": "OCR 任务的数据缺失或已损坏"
+      }
     }
   },
   "assistant": {
@@ -8941,6 +8948,8 @@
     },
     "errors": {
       "failed": "分享失败",
+      "systemFailed": "系统返回了错误。",
+      "automationDenied": "Tuff 没有控制分享所用应用的权限，请在「系统设置 › 隐私与安全性 › 自动化」中允许。",
       "noContent": "没有可分享的内容",
       "cancelled": "已取消分享",
       "targetUnsupported": "这个分享目标无法处理当前内容",
@@ -8969,6 +8978,12 @@
       "migrationsFolderExists": "迁移文件夹存在：{exists}",
       "folderContents": "文件夹内容：{contents}",
       "migrationFailed": "数据库迁移失败：\n{error}",
+      "migrationFailure": {
+        "diskFull": "磁盘空间不足，无法更新数据库。请腾出一些空间后重新打开 Tuff。",
+        "damaged": "数据库文件已损坏，无法更新。",
+        "inUse": "数据库正被其他程序占用。请关闭该程序后重新打开 Tuff。",
+        "failed": "无法为当前版本的 Tuff 更新数据库。"
+      },
       "checkLogs": "更多信息请查看日志文件。\n日志位置：{path}"
     },
     "rendererMissing": {

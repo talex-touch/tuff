@@ -888,11 +888,7 @@ function handleClose(): void {
                           v-if="currentMockPayloadEnabled && mockPayloadError"
                           class="PluginFeature-PreviewMockError"
                         >
-                          {{
-                            t('plugin.features.widget.preview.mockError', {
-                              error: mockPayloadError
-                            })
-                          }}
+                          {{ t('plugin.features.widget.preview.mockError') }}
                         </div>
                       </div>
                       <div

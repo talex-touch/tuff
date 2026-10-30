@@ -19,7 +19,31 @@ import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { t } from '../../utils/i18n-helper'
+import { flowBusShareLog } from './logger'
 import { shareNotificationService } from './share-notification'
+
+// osascript ends its error with AppleScript's number in parentheses. -1743 is macOS refusing to let
+// Tuff send Apple events to the app it shares through, until the user allows it under Automation.
+const APPLESCRIPT_NOT_AUTHORIZED = /\(-1743\)\s*$/
+
+/**
+ * A failed share, as the notification words it.
+ *
+ * A failed command's message quotes the command, and an AppleScript command holds what was being
+ * shared - a subject, a body, file paths. So no error text reaches the notification, and the log
+ * drops the command and keeps what it printed.
+ */
+function describeShareFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const command = (error as { cmd?: unknown } | null)?.cmd
+  const quoted = typeof command === 'string' ? `Command failed: ${command}` : null
+  flowBusShareLog.warn('Share failed', {
+    error: quoted && message.startsWith(quoted) ? message.slice(quoted.length).trim() : message
+  })
+  return APPLESCRIPT_NOT_AUTHORIZED.test(message)
+    ? t('nativeShare.errors.automationDenied')
+    : t('nativeShare.errors.systemFailed')
+}
 
 async function runAppleScript(script: string): Promise<void> {
   await execFileSafe('osascript', ['-e', script])
@@ -188,10 +212,7 @@ export class NativeShareService {
         result = await this.shareLinux(normalizedOptions)
       }
     } catch (error) {
-      result = {
-        success: false,
-        error: error instanceof Error ? error.message : t('nativeShare.errors.failed')
-      }
+      result = { success: false, error: describeShareFailure(error) }
     }
 
     // Show notification for share result

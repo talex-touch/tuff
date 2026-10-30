@@ -353,7 +353,7 @@ const previewWidgetStatus = computed(() => {
 const previewWidgetHint = computed(() => {
   if (!previewWidgetId.value) return ''
   if (previewPayloadInvalid.value) {
-    return t('plugin.features.widget.preview.hintMockInvalid', { error: mockPayloadError.value })
+    return t('plugin.features.widget.preview.hintMockInvalid')
   }
   if (mockPayloadEnabled.value && !previewPayloadActive.value) {
     return t('plugin.features.widget.preview.hintMockEmpty')
