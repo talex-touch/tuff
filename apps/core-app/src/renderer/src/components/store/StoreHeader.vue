@@ -1,5 +1,5 @@
 <script setup lang="ts" name="StoreHeader">
-import type { StoreProviderResultMeta } from '@talex-touch/utils/store'
+import type { StoreProviderResultMeta, StoreProviderType } from '@talex-touch/utils/store'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
 import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
@@ -67,6 +67,21 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
   const translated = t(category.tag)
   return translated === category.tag ? category.tag : translated
 }
+
+function resolveProviderTypeLabel(type: StoreProviderType): string {
+  switch (type) {
+    case 'tpexApi':
+      return t('store.sourceEditor.providerTypes.tpexApi')
+    case 'nexusStore':
+      return t('store.sourceEditor.providerTypes.nexusStore')
+    case 'repository':
+      return t('store.sourceEditor.providerTypes.repository')
+    case 'npmPackage':
+      return t('store.sourceEditor.providerTypes.npmPackage')
+    default:
+      return type
+  }
+}
 </script>
 
 <template>
@@ -96,7 +111,7 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       >
         <div flex items-center gap-2 text-xs>
           <span op-60 whitespace-nowrap text="[var(--tx-text-color-regular)]">
-            {{ sourcesCount }} {{ t('store.sources') }}
+            {{ t('store.sourceCount', { count: sourcesCount }) }}
           </span>
           <TxButton
             v-if="providerStats"
@@ -190,8 +205,12 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
               :class="{ 'is-error': !provider.success }"
             >
               <div class="provider-header">
-                <span class="provider-name">{{ provider.providerName }}</span>
-                <span class="provider-type">{{ provider.providerType }}</span>
+                <span class="provider-name">{{
+                  provider.providerName || t('store.providerUnknown')
+                }}</span>
+                <span class="provider-type">{{
+                  resolveProviderTypeLabel(provider.providerType)
+                }}</span>
               </div>
               <div class="provider-status-row">
                 <span v-if="provider.success" class="status-badge success">
@@ -202,7 +221,9 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
                   <i class="i-ri-close-line" />
                   {{ t('store.statusFailed') }}
                 </span>
-                <span class="item-count">{{ provider.itemCount }} {{ t('store.plugins') }}</span>
+                <span class="item-count">{{
+                  t('store.pluginCount', { count: provider.itemCount })
+                }}</span>
               </div>
               <div v-if="!provider.success && provider.error" class="error-message">
                 <code>{{ provider.error }}</code>

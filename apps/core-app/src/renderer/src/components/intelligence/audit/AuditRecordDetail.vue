@@ -89,7 +89,7 @@ function formatExplainItem(item: ContextPackageLogExplainItem): string {
   const reason = reasonKey ? t(reasonKey) : item.reason
   const parts = [`${item.sourceType}:${item.sourceId}`, reason]
   if (typeof item.tokenEstimate === 'number') {
-    parts.push(`${item.tokenEstimate} ${t('intelligence.audit.contextTokens')}`)
+    parts.push(t('intelligence.audit.contextTokenCount', { count: item.tokenEstimate }))
   }
   return parts.filter(Boolean).join(' · ')
 }
@@ -254,7 +254,7 @@ function checkpointLine(checkpoint: ContextCheckpointSafeSummary): string {
               {{ summary.tokenEstimate }} / {{ summary.tokenBudget }}
               {{ t('intelligence.audit.contextTokens') }}
             </span>
-            <span>{{ summary.itemCount }} {{ t('intelligence.audit.contextItems') }}</span>
+            <span>{{ t('intelligence.audit.contextItems', { count: summary.itemCount }) }}</span>
           </p>
           <p class="AuditRecordDetail-Line is-secondary">
             <span>{{ sourcesLine(summary) }}</span>

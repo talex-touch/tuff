@@ -412,7 +412,7 @@ watch(
             {{ t('intelligence.config.model.noModels') }}
           </span>
           <span v-else class="text-[var(--tx-text-color-primary)]">
-            {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
+            {{ t('intelligence.config.model.modelsCount', { count: localModels.length }) }}
           </span></span
         >
         <TxButton variant="flat">

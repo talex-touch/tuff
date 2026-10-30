@@ -243,7 +243,7 @@ function handleToggleCliEnabled() {
           :title="t('intelligence.config.model.models')"
           :description="
             nexusModels.length > 0
-              ? `${nexusModels.length} ${t('intelligence.config.model.modelsCount')}`
+              ? t('intelligence.config.model.modelsCount', { count: nexusModels.length })
               : t('intelligence.config.model.noModels')
           "
           default-icon="i-carbon-model"

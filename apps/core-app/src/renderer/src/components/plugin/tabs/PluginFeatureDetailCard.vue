@@ -918,7 +918,7 @@ function handleClose(): void {
                           }"
                         >
                           <div class="PluginFeature-PreviewIssueTitle">
-                            {{ issue.code || issue.source || 'Widget' }}
+                            {{ issue.code || issue.source || t('plugin.features.widget.tab') }}
                           </div>
                           <div class="PluginFeature-PreviewIssueMessage">
                             {{ resolveIssueMessage(issue.message || '') }}

@@ -203,7 +203,9 @@ onMounted(() => {
           <i class="i-carbon-time" />
           {{ t('download.history_title') }}
         </h3>
-        <span class="history-count">{{ filteredHistory.length }} {{ t('download.items') }}</span>
+        <span class="history-count">{{
+          t('download.items', { count: filteredHistory.length })
+        }}</span>
       </div>
       <div class="header-right">
         <TxButton v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">

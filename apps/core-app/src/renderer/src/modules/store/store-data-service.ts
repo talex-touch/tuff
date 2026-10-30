@@ -70,7 +70,8 @@ export async function fetchStoreCatalog(options: FetchOptions): Promise<StoreCat
         result.reason instanceof Error ? result.reason.message : 'STORE_PROVIDER_FAILED'
       stats.push({
         providerId: 'unknown',
-        providerName: 'Unknown',
+        // Named where it is shown, in the interface language.
+        providerName: '',
         providerType: 'nexusStore',
         success: false,
         error: reason,

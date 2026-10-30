@@ -704,7 +704,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
                   />
                 </div>
                 <span class="ThemeStyle-SliderValue">
-                  {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
+                  {{ t('themeStyle.intervalMinutes', { count: folderIntervalMinutes }) }}
                 </span>
               </div>
             </TuffBlockSlot>
