@@ -127,28 +127,6 @@
       "expires": "2026-11-09"
     },
     {
-      "id": "GHSA-p6vx-979v-rg4c",
-      "module": "seroval",
-      "severity": "critical",
-      "versions": [
-        "1.5.5"
-      ],
-      "reason": "Upstream transitive dependency advisory for seroval; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-11-09"
-    },
-    {
-      "id": "GHSA-jp82-f5mq-hwhp",
-      "module": "seroval",
-      "severity": "high",
-      "versions": [
-        "1.5.5"
-      ],
-      "reason": "Upstream transitive dependency advisory for seroval; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-11-09"
-    },
-    {
       "id": "GHSA-68fv-2mgg-jv7q",
       "module": "source-map-js",
       "severity": "high",

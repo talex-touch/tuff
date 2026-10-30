@@ -207,6 +207,7 @@ overrides:
   rollup@^4.0.0: 4.62.2
   semver@^7.0.0: 7.8.5
   serialize-javascript: 7.0.7
+  seroval: 1.6.11
   shell-quote: 1.12.0
   simple-git: 3.36.0
   socket.io-parser@^4.0.0: 4.2.7
