@@ -5,7 +5,17 @@
  */
 
 import type { FlowPayloadType, FlowTarget, FlowTargetInfo } from '@talex-touch/utils'
+import { t } from '../../utils/i18n-helper'
 import { flowBusTargetLog } from './logger'
+
+/**
+ * A target's words in the language the app shows now, read whenever the target is. Main's own
+ * targets pass one, so a language switch reaches the Flow page and plugins alike; a plugin's target
+ * keeps the words its manifest gives.
+ */
+export type FlowTargetWording = () => Pick<FlowTarget, 'name' | 'description'> & {
+  pluginName?: string
+}
 
 /**
  * Internal target entry with plugin metadata
@@ -18,6 +28,7 @@ interface TargetEntry {
   isEnabled: boolean
   hasFlowHandler: boolean
   isNativeShare?: boolean
+  wording?: FlowTargetWording
   usageCount: number
   lastUsed?: number
 }
@@ -65,6 +76,7 @@ export class FlowTargetRegistry {
       isEnabled?: boolean
       hasFlowHandler?: boolean
       isNativeShare?: boolean
+      wording?: FlowTargetWording
     }
   ): boolean {
     const fullId = this.getFullTargetId(pluginId, target.id)
@@ -100,6 +112,7 @@ export class FlowTargetRegistry {
       isEnabled: options?.isEnabled ?? true,
       hasFlowHandler: options?.hasFlowHandler ?? false,
       isNativeShare: options?.isNativeShare ?? false,
+      wording: options?.wording,
       usageCount: 0
     }
 
@@ -282,16 +295,18 @@ export class FlowTargetRegistry {
    * Converts internal entry to public FlowTargetInfo
    */
   private entryToInfo(fullId: string, entry: TargetEntry): FlowTargetInfo {
+    const wording = entry.wording?.()
     return {
       ...entry.target,
+      ...(wording && { name: wording.name, description: wording.description }),
       fullId,
       pluginId: entry.pluginId,
-      pluginName: entry.pluginName,
+      pluginName: wording?.pluginName ?? entry.pluginName,
       pluginIcon: entry.pluginIcon,
       isEnabled: entry.isEnabled,
       hasFlowHandler: entry.hasFlowHandler,
       isNativeShare: entry.isNativeShare,
-      adaptationHint: entry.hasFlowHandler ? undefined : '该插件尚未适配 Flow Transfer',
+      adaptationHint: entry.hasFlowHandler ? undefined : t('flow.targetNotAdapted'),
       usageCount: entry.usageCount,
       lastUsed: entry.lastUsed
     }

@@ -23,9 +23,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/quick-ops/index.ts",
-      "ceiling": 2467,
+      "ceiling": 2389,
       "issue": "#339",
-      "note": "~2,999 when #339 was filed; developer-preview extraction lowered this to 2,467."
+      "note": "~2,999 when #339 was filed; developer-preview extraction lowered this to 2,467. 2026-10-29: Flow target names and descriptions moved to the language catalogs, 2,467 -> 2,389."
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",

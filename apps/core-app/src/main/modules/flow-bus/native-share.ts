@@ -91,54 +91,84 @@ export class NativeShareService {
     if (process.platform === 'darwin') {
       targets.push({
         id: 'system-share',
-        name: 'System Share',
-        description: 'Share via native macOS share target chooser',
+        ...this.describeTarget('system-share'),
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:share-line'
       })
 
       targets.push({
         id: 'airdrop',
-        name: 'AirDrop',
-        description: 'Send to nearby devices via AirDrop',
+        ...this.describeTarget('airdrop'),
         supportedTypes: ['files', 'image'],
         icon: 'ri:wireless-charging-line'
       })
 
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Send via email',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:mail-line'
       })
 
       targets.push({
         id: 'messages',
-        name: 'Messages',
-        description: 'Send via iMessage',
+        ...this.describeTarget('messages'),
         supportedTypes: ['text'],
         icon: 'ri:message-3-line'
       })
     } else if (process.platform === 'win32') {
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Share via the default mail client',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
     } else {
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Share via the default mail client',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
     }
 
     return targets
+  }
+
+  /**
+   * A target's name and description in the language the app shows now. The Flow registry asks
+   * again each time it lists the target, so a language switch reaches the Flow page and plugins.
+   */
+  describeTarget(targetId: string): Pick<FlowTarget, 'name' | 'description'> {
+    switch (targetId) {
+      case 'system-share':
+        return {
+          name: t('nativeShare.targets.systemShare'),
+          description: t('nativeShare.targetDescriptions.systemShare')
+        }
+      case 'airdrop':
+        return {
+          name: t('nativeShare.targets.airdrop'),
+          description: t('nativeShare.targetDescriptions.airdrop')
+        }
+      case 'mail':
+        // macOS can attach files through the Mail app; elsewhere mail is a text-only mailto: link.
+        return {
+          name: t('nativeShare.targets.mail'),
+          description: t(
+            process.platform === 'darwin'
+              ? 'nativeShare.targetDescriptions.mail'
+              : 'nativeShare.targetDescriptions.mailClient'
+          )
+        }
+      case 'messages':
+        return {
+          name: t('nativeShare.targets.messages'),
+          description: t('nativeShare.targetDescriptions.messages')
+        }
+      default:
+        return { name: targetId }
+    }
   }
 
   /**

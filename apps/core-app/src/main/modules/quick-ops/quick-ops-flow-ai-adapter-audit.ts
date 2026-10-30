@@ -146,7 +146,7 @@ function extractStringConstValue(source: string, constName: string): string | nu
 
 function extractTargetConstNames(source: string): string[] {
   const match = source.match(
-    /const QUICK_OPS_ALL_FLOW_TARGETS:\s*FlowTarget\[\]\s*=\s*\[([\s\S]*?)\n\]/
+    /const QUICK_OPS_ALL_FLOW_TARGETS:\s*QuickOpsFlowTargetDefinition\[\]\s*=\s*\[([\s\S]*?)\n\]/
   )
   if (!match?.[1]) return []
 
@@ -169,7 +169,9 @@ function extractRequireConfirmTargets(source: string): string[] {
   return extractTargetConstNames(source)
     .filter((targetConstName) => {
       const targetDeclaration = source.match(
-        new RegExp(`const\\s+${targetConstName}:\\s*FlowTarget\\s*=\\s*\\{([\\s\\S]*?)\\n\\}`)
+        new RegExp(
+          `const\\s+${targetConstName}:\\s*QuickOpsFlowTargetDefinition\\s*=\\s*\\{([\\s\\S]*?)\\n\\}`
+        )
       )
       return targetDeclaration?.[1]?.includes('requireConfirm: true') === true
     })

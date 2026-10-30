@@ -8151,6 +8151,7 @@
     "searchTargets": "搜索目标…",
     "noTargets": "没有可用的目标",
     "requiresConfirmation": "需要确认",
+    "targetNotAdapted": "该插件暂不支持流转",
     "consentTitle": "确认流转",
     "consentDesc": "允许 {source} 将内容发送到 {target}？",
     "executionConfirmationTitle": "确认本次执行",
@@ -8544,6 +8545,7 @@
   },
   "nativeShare": {
     "pickerPrompt": "选择 macOS 分享目标",
+    "sectionTitle": "分享",
     "targets": {
       "systemShare": "系统分享",
       "airdrop": "AirDrop",
@@ -8563,6 +8565,13 @@
       "mailAttachmentsUnsupported": "此平台上的邮件目标不支持附件",
       "messagesMacOnly": "「信息」仅在 macOS 上可用",
       "noShareSheet": "{platform} 没有可供 Tuff 使用的系统分享面板，只能使用邮件目标。"
+    },
+    "targetDescriptions": {
+      "systemShare": "在列表中选择分享方式",
+      "airdrop": "用 AirDrop 发送到附近的设备",
+      "mail": "通过邮件发送",
+      "mailClient": "用默认邮件客户端发送",
+      "messages": "用「信息」发送"
     }
   },
   "nativeDialogs": {
@@ -8672,6 +8681,184 @@
         "red": "红色屏幕测试",
         "green": "绿色屏幕测试",
         "blue": "蓝色屏幕测试"
+      }
+    },
+    "flowTargets": {
+      "capabilities": {
+        "name": "能力摘要",
+        "description": "列出 QuickOps 在本机可用的功能"
+      },
+      "sessions": {
+        "name": "运行中的会话",
+        "description": "查看正在运行的 QuickOps 会话"
+      },
+      "stop-all-sessions": {
+        "name": "停止所有会话",
+        "description": "停止所有正在运行的 QuickOps 会话"
+      },
+      "system-info": {
+        "name": "系统信息",
+        "description": "汇总本机的系统信息，不联网"
+      },
+      "tuff-diagnostics": {
+        "name": "Tuff 诊断摘要",
+        "description": "汇总 Tuff 的运行状态并隐去敏感信息，不读取日志"
+      },
+      "disk-space": {
+        "name": "磁盘空间",
+        "description": "查看本机磁盘的可用和已用空间"
+      },
+      "directory-usage": {
+        "name": "文件夹占用",
+        "description": "查看常用文件夹占用的空间"
+      },
+      "network-status": {
+        "name": "网络状态",
+        "description": "查看本机的网络连接状态，不联网"
+      },
+      "battery-status": {
+        "name": "电池状态",
+        "description": "查看电量和充电状态（需系统支持）"
+      },
+      "system-proxy": {
+        "name": "系统代理",
+        "description": "查看系统代理设置，隐去其中的凭据"
+      },
+      "public-ip": {
+        "name": "公网 IP",
+        "description": "联网查询本机的公网 IP 地址"
+      },
+      "query-local-ip": {
+        "name": "本机 IP",
+        "description": "列出本机的网络地址，不联网"
+      },
+      "port-status": {
+        "name": "端口状态",
+        "description": "检查本机 TCP 端口是否被占用，以及占用它的进程"
+      },
+      "dns-query": {
+        "name": "DNS 查询",
+        "description": "通过系统解析器查询域名的 DNS 记录"
+      },
+      "file-hash": {
+        "name": "文件哈希",
+        "description": "计算文件的 MD5、SHA-1 和 SHA-256 哈希值"
+      },
+      "file-base64": {
+        "name": "文件转 Base64",
+        "description": "把文件编码为 Base64，受 QuickOps 大小上限限制"
+      },
+      "recent-download": {
+        "name": "最近下载",
+        "description": "找出「下载」中最新的文件，不打开也不移动"
+      },
+      "common-directory": {
+        "name": "常用文件夹路径",
+        "description": "获取常用文件夹的路径，不打开它"
+      },
+      "path-format": {
+        "name": "路径格式",
+        "description": "把路径转换成可复制的多种格式，不访问文件"
+      },
+      "temp-text-file": {
+        "name": "新建临时文本",
+        "description": "在 QuickOps 临时目录中新建文本文件"
+      },
+      "temp-directory": {
+        "name": "新建临时目录",
+        "description": "在 QuickOps 临时目录中新建文件夹"
+      },
+      "keep-awake": {
+        "name": "保持唤醒",
+        "description": "让屏幕保持常亮，替换当前的保持唤醒会话"
+      },
+      "stop-keep-awake": {
+        "name": "停止保持唤醒",
+        "description": "结束当前的保持唤醒会话"
+      },
+      "system-awake": {
+        "name": "系统唤醒",
+        "description": "阻止系统休眠，替换当前的系统唤醒会话"
+      },
+      "stop-system-awake": {
+        "name": "停止系统唤醒",
+        "description": "结束当前的系统唤醒会话"
+      },
+      "start-timer": {
+        "name": "启动计时器",
+        "description": "启动计时器，替换正在运行的计时器"
+      },
+      "pause-timer": {
+        "name": "暂停计时器",
+        "description": "暂停正在运行的计时器"
+      },
+      "resume-timer": {
+        "name": "继续计时器",
+        "description": "继续已暂停的计时器"
+      },
+      "stop-timer": {
+        "name": "停止计时器",
+        "description": "停止当前的计时器"
+      },
+      "start-pomodoro": {
+        "name": "启动番茄钟",
+        "description": "启动番茄钟，替换正在运行的番茄钟"
+      },
+      "pause-pomodoro": {
+        "name": "暂停番茄钟",
+        "description": "暂停正在运行的番茄钟"
+      },
+      "resume-pomodoro": {
+        "name": "继续番茄钟",
+        "description": "继续已暂停的番茄钟"
+      },
+      "stop-pomodoro": {
+        "name": "停止番茄钟",
+        "description": "停止当前的番茄钟"
+      },
+      "clean-screen": {
+        "name": "清屏模式",
+        "description": "用纯色铺满屏幕，便于清洁或测试，替换当前的清屏遮罩"
+      },
+      "stop-clean-screen": {
+        "name": "退出清屏模式",
+        "description": "关闭当前的清屏遮罩"
+      },
+      "start-stopwatch": {
+        "name": "启动秒表",
+        "description": "启动秒表，替换正在运行的秒表"
+      },
+      "pause-stopwatch": {
+        "name": "暂停秒表",
+        "description": "暂停正在运行的秒表"
+      },
+      "resume-stopwatch": {
+        "name": "继续秒表",
+        "description": "继续已暂停的秒表"
+      },
+      "lap-stopwatch": {
+        "name": "记录秒表分段",
+        "description": "为正在运行的秒表记录一个分段"
+      },
+      "reset-stopwatch": {
+        "name": "重置秒表",
+        "description": "停止并清除当前的秒表"
+      },
+      "show-notification": {
+        "name": "发送通知",
+        "description": "用收到的文字显示一条系统通知"
+      },
+      "copy-to-clipboard": {
+        "name": "写入剪贴板",
+        "description": "把收到的文字复制到剪贴板"
+      },
+      "format-text": {
+        "name": "格式化文本",
+        "description": "在本机格式化文本并返回结果"
+      },
+      "open-folder": {
+        "name": "打开文件夹",
+        "description": "打开一个常用文件夹"
       }
     }
   }

@@ -8151,6 +8151,7 @@
     "searchTargets": "Search targets…",
     "noTargets": "No targets available",
     "requiresConfirmation": "Requires confirmation",
+    "targetNotAdapted": "This plugin can't receive transfers yet",
     "consentTitle": "Confirm transfer",
     "consentDesc": "Allow {source} to send content to {target}?",
     "executionConfirmationTitle": "Confirm this action",
@@ -8544,6 +8545,7 @@
   },
   "nativeShare": {
     "pickerPrompt": "Choose a macOS share target",
+    "sectionTitle": "Share",
     "targets": {
       "systemShare": "System Share",
       "airdrop": "AirDrop",
@@ -8563,6 +8565,13 @@
       "mailAttachmentsUnsupported": "The Mail target does not support file attachments on this platform",
       "messagesMacOnly": "Messages is only available on macOS",
       "noShareSheet": "{platform} does not provide a system share sheet to Tuff; only the Mail target is available."
+    },
+    "targetDescriptions": {
+      "systemShare": "Choose how to share from a list",
+      "airdrop": "Send to nearby devices with AirDrop",
+      "mail": "Send by email",
+      "mailClient": "Send with the default mail client",
+      "messages": "Send with Messages"
     }
   },
   "nativeDialogs": {
@@ -8672,6 +8681,184 @@
         "red": "Red screen test",
         "green": "Green screen test",
         "blue": "Blue screen test"
+      }
+    },
+    "flowTargets": {
+      "capabilities": {
+        "name": "Capabilities",
+        "description": "Lists what QuickOps can do on this device"
+      },
+      "sessions": {
+        "name": "Active Sessions",
+        "description": "Shows the QuickOps sessions running now"
+      },
+      "stop-all-sessions": {
+        "name": "Stop All Sessions",
+        "description": "Stops every running QuickOps session"
+      },
+      "system-info": {
+        "name": "System Info",
+        "description": "Summarizes this device's system without going online"
+      },
+      "tuff-diagnostics": {
+        "name": "Tuff Diagnostics",
+        "description": "Summarizes Tuff's state with sensitive values hidden, without reading logs"
+      },
+      "disk-space": {
+        "name": "Disk Space",
+        "description": "Shows free and used space on local disks"
+      },
+      "directory-usage": {
+        "name": "Folder Usage",
+        "description": "Shows how much space common folders take up"
+      },
+      "network-status": {
+        "name": "Network Status",
+        "description": "Shows the network connection without going online"
+      },
+      "battery-status": {
+        "name": "Battery Status",
+        "description": "Shows battery level and charging state, where the system reports them"
+      },
+      "system-proxy": {
+        "name": "System Proxy",
+        "description": "Shows the system proxy settings with credentials hidden"
+      },
+      "public-ip": {
+        "name": "Public IP",
+        "description": "Looks up this device's public IP address online"
+      },
+      "query-local-ip": {
+        "name": "Local IP",
+        "description": "Lists this device's network addresses without going online"
+      },
+      "port-status": {
+        "name": "Port Status",
+        "description": "Checks whether a local TCP port is in use, and by which process"
+      },
+      "dns-query": {
+        "name": "DNS Lookup",
+        "description": "Looks up a hostname's DNS records through the system resolver"
+      },
+      "file-hash": {
+        "name": "File Hash",
+        "description": "Computes a file's MD5, SHA-1 and SHA-256 hashes"
+      },
+      "file-base64": {
+        "name": "File to Base64",
+        "description": "Encodes a file as Base64, up to the QuickOps size limit"
+      },
+      "recent-download": {
+        "name": "Latest Download",
+        "description": "Finds the newest file in Downloads without opening or moving it"
+      },
+      "common-directory": {
+        "name": "Common Folder Path",
+        "description": "Gives the path of a common folder without opening it"
+      },
+      "path-format": {
+        "name": "Path Formats",
+        "description": "Converts a path into formats ready to copy, without touching files"
+      },
+      "temp-text-file": {
+        "name": "New Temporary Text File",
+        "description": "Creates a text file in the QuickOps temporary folder"
+      },
+      "temp-directory": {
+        "name": "New Temporary Folder",
+        "description": "Creates a folder in the QuickOps temporary folder"
+      },
+      "keep-awake": {
+        "name": "Keep Display Awake",
+        "description": "Keeps the display on, replacing any running keep-awake session"
+      },
+      "stop-keep-awake": {
+        "name": "Stop Keeping Display Awake",
+        "description": "Ends the current keep-display-awake session"
+      },
+      "system-awake": {
+        "name": "Keep System Awake",
+        "description": "Keeps the system from sleeping, replacing any running session"
+      },
+      "stop-system-awake": {
+        "name": "Stop Keeping System Awake",
+        "description": "Ends the current keep-system-awake session"
+      },
+      "start-timer": {
+        "name": "Start Timer",
+        "description": "Starts a timer, replacing any running one"
+      },
+      "pause-timer": {
+        "name": "Pause Timer",
+        "description": "Pauses the running timer"
+      },
+      "resume-timer": {
+        "name": "Resume Timer",
+        "description": "Resumes the paused timer"
+      },
+      "stop-timer": {
+        "name": "Stop Timer",
+        "description": "Stops the current timer"
+      },
+      "start-pomodoro": {
+        "name": "Start Pomodoro",
+        "description": "Starts a Pomodoro session, replacing any running one"
+      },
+      "pause-pomodoro": {
+        "name": "Pause Pomodoro",
+        "description": "Pauses the running Pomodoro session"
+      },
+      "resume-pomodoro": {
+        "name": "Resume Pomodoro",
+        "description": "Resumes the paused Pomodoro session"
+      },
+      "stop-pomodoro": {
+        "name": "Stop Pomodoro",
+        "description": "Stops the current Pomodoro session"
+      },
+      "clean-screen": {
+        "name": "Clean Screen",
+        "description": "Fills the screen with a solid color for cleaning or testing, replacing any open overlay"
+      },
+      "stop-clean-screen": {
+        "name": "Exit Clean Screen",
+        "description": "Closes the current clean-screen overlay"
+      },
+      "start-stopwatch": {
+        "name": "Start Stopwatch",
+        "description": "Starts a stopwatch, replacing any running one"
+      },
+      "pause-stopwatch": {
+        "name": "Pause Stopwatch",
+        "description": "Pauses the running stopwatch"
+      },
+      "resume-stopwatch": {
+        "name": "Resume Stopwatch",
+        "description": "Resumes the paused stopwatch"
+      },
+      "lap-stopwatch": {
+        "name": "Record Lap",
+        "description": "Records a lap on the running stopwatch"
+      },
+      "reset-stopwatch": {
+        "name": "Reset Stopwatch",
+        "description": "Stops and clears the current stopwatch"
+      },
+      "show-notification": {
+        "name": "Show Notification",
+        "description": "Shows a system notification with the text it receives"
+      },
+      "copy-to-clipboard": {
+        "name": "Copy to Clipboard",
+        "description": "Copies the text it receives to the clipboard"
+      },
+      "format-text": {
+        "name": "Format Text",
+        "description": "Formats text locally and returns the result"
+      },
+      "open-folder": {
+        "name": "Open Folder",
+        "description": "Opens a common folder"
       }
     }
   }

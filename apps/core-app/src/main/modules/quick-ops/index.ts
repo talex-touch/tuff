@@ -251,10 +251,15 @@ const QUICK_OPS_AUDIT_MAX_ENTRIES = 100
 const QUICK_OPS_AUDIT_DEFAULT_LIMIT = 20
 const QUICK_OPS_AUDIT_MAX_LIMIT = 100
 
-const QUICK_OPS_CAPABILITIES_FLOW_TARGET: FlowTarget = {
+/**
+ * A QuickOps Flow target without its words. Its name and description live in the catalogs under
+ * `quickOps.flowTargets.<id>` and are read each time the registry lists the target, so they follow
+ * the app's language (`wordQuickOpsFlowTarget`).
+ */
+type QuickOpsFlowTargetDefinition = Omit<FlowTarget, 'name' | 'description'>
+
+const QUICK_OPS_CAPABILITIES_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_CAPABILITIES_FLOW_TARGET_ID,
-  name: 'QuickOps Capabilities',
-  description: 'Returns a read-only QuickOps capability summary for Flow callers.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:tools-line',
   actionId: QUICK_OPS_CAPABILITIES_FLOW_TARGET_FULL_ID,
@@ -263,10 +268,8 @@ const QUICK_OPS_CAPABILITIES_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_SESSIONS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_SESSIONS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_SESSIONS_FLOW_TARGET_ID,
-  name: 'QuickOps Sessions',
-  description: 'Returns a read-only snapshot of active QuickOps sessions.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:pulse-line',
   actionId: QUICK_OPS_SESSIONS_FLOW_TARGET_FULL_ID,
@@ -275,10 +278,8 @@ const QUICK_OPS_SESSIONS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET_ID,
-  name: 'QuickOps Stop All Sessions',
-  description: 'Stops all active QuickOps runtime sessions through the shared provider.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:stop-circle-line',
   actionId: QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET_FULL_ID,
@@ -288,10 +289,8 @@ const QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_SYSTEM_INFO_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_SYSTEM_INFO_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_SYSTEM_INFO_FLOW_TARGET_ID,
-  name: 'QuickOps System Info',
-  description: 'Returns a read-only local system summary without external requests.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:computer-line',
   actionId: QUICK_OPS_SYSTEM_INFO_FLOW_TARGET_FULL_ID,
@@ -300,10 +299,8 @@ const QUICK_OPS_SYSTEM_INFO_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET_ID,
-  name: 'QuickOps Tuff Diagnostics',
-  description: 'Returns a redacted local Tuff diagnostics summary without reading logs.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:stethoscope-line',
   actionId: QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET_FULL_ID,
@@ -312,10 +309,8 @@ const QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_DISK_SPACE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_DISK_SPACE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_DISK_SPACE_FLOW_TARGET_ID,
-  name: 'QuickOps Disk Space',
-  description: 'Returns a read-only local disk space summary for known safe roots.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:hard-drive-line',
   actionId: QUICK_OPS_DISK_SPACE_FLOW_TARGET_FULL_ID,
@@ -324,10 +319,8 @@ const QUICK_OPS_DISK_SPACE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_DIRECTORY_USAGE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_DIRECTORY_USAGE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_DIRECTORY_USAGE_FLOW_TARGET_ID,
-  name: 'QuickOps Directory Usage',
-  description: 'Returns a bounded read-only directory usage summary for known safe roots.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:folder-chart-line',
   actionId: QUICK_OPS_DIRECTORY_USAGE_FLOW_TARGET_FULL_ID,
@@ -336,10 +329,8 @@ const QUICK_OPS_DIRECTORY_USAGE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_NETWORK_STATUS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_NETWORK_STATUS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_NETWORK_STATUS_FLOW_TARGET_ID,
-  name: 'QuickOps Network Status',
-  description: 'Returns a read-only local network status summary without external requests.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:router-line',
   actionId: QUICK_OPS_NETWORK_STATUS_FLOW_TARGET_FULL_ID,
@@ -348,10 +339,8 @@ const QUICK_OPS_NETWORK_STATUS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_BATTERY_STATUS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_BATTERY_STATUS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_BATTERY_STATUS_FLOW_TARGET_ID,
-  name: 'QuickOps Battery Status',
-  description: 'Returns a read-only local battery status summary when the platform supports it.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:battery-charge-line',
   actionId: QUICK_OPS_BATTERY_STATUS_FLOW_TARGET_FULL_ID,
@@ -360,10 +349,8 @@ const QUICK_OPS_BATTERY_STATUS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_SYSTEM_PROXY_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_SYSTEM_PROXY_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_SYSTEM_PROXY_FLOW_TARGET_ID,
-  name: 'QuickOps System Proxy',
-  description: 'Returns a read-only local proxy summary with redacted proxy credentials.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:exchange-line',
   actionId: QUICK_OPS_SYSTEM_PROXY_FLOW_TARGET_FULL_ID,
@@ -372,10 +359,8 @@ const QUICK_OPS_SYSTEM_PROXY_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PUBLIC_IP_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PUBLIC_IP_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PUBLIC_IP_FLOW_TARGET_ID,
-  name: 'QuickOps Public IP',
-  description: 'Returns an opt-in read-only public IP lookup result.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:global-line',
   actionId: QUICK_OPS_PUBLIC_IP_FLOW_TARGET_FULL_ID,
@@ -385,10 +370,8 @@ const QUICK_OPS_PUBLIC_IP_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_QUERY_LOCAL_IP_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_QUERY_LOCAL_IP_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_QUERY_LOCAL_IP_FLOW_TARGET_ID,
-  name: 'QuickOps Query Local IP',
-  description: 'Returns non-internal local network addresses without external requests.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:global-line',
   actionId: QUICK_OPS_QUERY_LOCAL_IP_FLOW_TARGET_FULL_ID,
@@ -397,10 +380,8 @@ const QUICK_OPS_QUERY_LOCAL_IP_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PORT_STATUS_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PORT_STATUS_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PORT_STATUS_FLOW_TARGET_ID,
-  name: 'QuickOps Port Status',
-  description: 'Returns read-only local TCP port availability and optional process attribution.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:server-line',
   actionId: QUICK_OPS_PORT_STATUS_FLOW_TARGET_FULL_ID,
@@ -409,10 +390,8 @@ const QUICK_OPS_PORT_STATUS_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_DNS_QUERY_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_DNS_QUERY_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_DNS_QUERY_FLOW_TARGET_ID,
-  name: 'QuickOps DNS Query',
-  description: 'Returns read-only DNS records for a hostname through the local resolver.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:global-line',
   actionId: QUICK_OPS_DNS_QUERY_FLOW_TARGET_FULL_ID,
@@ -421,10 +400,8 @@ const QUICK_OPS_DNS_QUERY_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_FILE_HASH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_FILE_HASH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_FILE_HASH_FLOW_TARGET_ID,
-  name: 'QuickOps File Hash',
-  description: 'Computes read-only MD5, SHA1 and SHA256 hashes for one local file.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:file-shield-line',
   actionId: QUICK_OPS_FILE_HASH_FLOW_TARGET_FULL_ID,
@@ -433,10 +410,8 @@ const QUICK_OPS_FILE_HASH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_FILE_BASE64_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_FILE_BASE64_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_FILE_BASE64_FLOW_TARGET_ID,
-  name: 'QuickOps File Base64',
-  description: 'Encodes one local file as Base64 within the existing QuickOps size limit.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:file-code-line',
   actionId: QUICK_OPS_FILE_BASE64_FLOW_TARGET_FULL_ID,
@@ -445,10 +420,8 @@ const QUICK_OPS_FILE_BASE64_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_RECENT_DOWNLOAD_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_RECENT_DOWNLOAD_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_RECENT_DOWNLOAD_FLOW_TARGET_ID,
-  name: 'QuickOps Recent Download',
-  description: 'Returns the latest regular file from Downloads without opening or moving it.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:download-line',
   actionId: QUICK_OPS_RECENT_DOWNLOAD_FLOW_TARGET_FULL_ID,
@@ -457,10 +430,8 @@ const QUICK_OPS_RECENT_DOWNLOAD_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_COMMON_DIRECTORY_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_COMMON_DIRECTORY_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_COMMON_DIRECTORY_FLOW_TARGET_ID,
-  name: 'QuickOps Common Directory',
-  description: 'Resolves a supported local common folder path without opening it.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:folder-line',
   actionId: QUICK_OPS_COMMON_DIRECTORY_FLOW_TARGET_FULL_ID,
@@ -469,10 +440,8 @@ const QUICK_OPS_COMMON_DIRECTORY_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PATH_FORMAT_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PATH_FORMAT_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PATH_FORMAT_FLOW_TARGET_ID,
-  name: 'QuickOps Path Format',
-  description: 'Returns copy-only path formats without touching the filesystem.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:route-line',
   actionId: QUICK_OPS_PATH_FORMAT_FLOW_TARGET_FULL_ID,
@@ -481,10 +450,8 @@ const QUICK_OPS_PATH_FORMAT_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET_ID,
-  name: 'QuickOps Temp Text File',
-  description: 'Creates a bounded scratch text file under the QuickOps temp workspace.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:file-text-line',
   actionId: QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET_FULL_ID,
@@ -494,10 +461,8 @@ const QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET_ID,
-  name: 'QuickOps Temp Directory',
-  description: 'Creates a sanitized directory under the QuickOps temp workspace.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:folder-add-line',
   actionId: QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET_FULL_ID,
@@ -507,10 +472,8 @@ const QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_KEEP_AWAKE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_KEEP_AWAKE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_KEEP_AWAKE_FLOW_TARGET_ID,
-  name: 'QuickOps Stop Keep Awake',
-  description: 'Stops the current QuickOps display keep-awake session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:moon-clear-line',
   actionId: QUICK_OPS_STOP_KEEP_AWAKE_FLOW_TARGET_FULL_ID,
@@ -519,10 +482,8 @@ const QUICK_OPS_STOP_KEEP_AWAKE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET_ID,
-  name: 'QuickOps Stop System Awake',
-  description: 'Stops the current QuickOps system-awake session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:shut-down-line',
   actionId: QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET_FULL_ID,
@@ -531,10 +492,8 @@ const QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_KEEP_AWAKE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_KEEP_AWAKE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_KEEP_AWAKE_FLOW_TARGET_ID,
-  name: 'QuickOps Keep Awake',
-  description: 'Starts or replaces the QuickOps display keep-awake session.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:sun-line',
   actionId: QUICK_OPS_KEEP_AWAKE_FLOW_TARGET_FULL_ID,
@@ -544,10 +503,8 @@ const QUICK_OPS_KEEP_AWAKE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET_ID,
-  name: 'QuickOps System Awake',
-  description: 'Starts or replaces the QuickOps system-awake session.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:cup-line',
   actionId: QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET_FULL_ID,
@@ -557,10 +514,8 @@ const QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_START_TIMER_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_START_TIMER_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_START_TIMER_FLOW_TARGET_ID,
-  name: 'QuickOps Start Timer',
-  description: 'Starts or replaces the QuickOps timer with a bounded local duration.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:timer-line',
   actionId: QUICK_OPS_START_TIMER_FLOW_TARGET_FULL_ID,
@@ -570,10 +525,8 @@ const QUICK_OPS_START_TIMER_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PAUSE_TIMER_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PAUSE_TIMER_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PAUSE_TIMER_FLOW_TARGET_ID,
-  name: 'QuickOps Pause Timer',
-  description: 'Pauses the current QuickOps timer session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:pause-circle-line',
   actionId: QUICK_OPS_PAUSE_TIMER_FLOW_TARGET_FULL_ID,
@@ -582,10 +535,8 @@ const QUICK_OPS_PAUSE_TIMER_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_RESUME_TIMER_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_RESUME_TIMER_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_RESUME_TIMER_FLOW_TARGET_ID,
-  name: 'QuickOps Resume Timer',
-  description: 'Resumes the current paused QuickOps timer session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:play-circle-line',
   actionId: QUICK_OPS_RESUME_TIMER_FLOW_TARGET_FULL_ID,
@@ -594,10 +545,8 @@ const QUICK_OPS_RESUME_TIMER_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_TIMER_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_TIMER_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_TIMER_FLOW_TARGET_ID,
-  name: 'QuickOps Stop Timer',
-  description: 'Stops the current QuickOps timer session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:stop-circle-line',
   actionId: QUICK_OPS_STOP_TIMER_FLOW_TARGET_FULL_ID,
@@ -606,10 +555,8 @@ const QUICK_OPS_STOP_TIMER_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_START_POMODORO_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_START_POMODORO_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_START_POMODORO_FLOW_TARGET_ID,
-  name: 'QuickOps Start Pomodoro',
-  description: 'Starts or replaces the QuickOps Pomodoro session with local parameters.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:timer-flash-line',
   actionId: QUICK_OPS_START_POMODORO_FLOW_TARGET_FULL_ID,
@@ -619,10 +566,8 @@ const QUICK_OPS_START_POMODORO_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PAUSE_POMODORO_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PAUSE_POMODORO_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PAUSE_POMODORO_FLOW_TARGET_ID,
-  name: 'QuickOps Pause Pomodoro',
-  description: 'Pauses the current QuickOps Pomodoro session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:pause-circle-line',
   actionId: QUICK_OPS_PAUSE_POMODORO_FLOW_TARGET_FULL_ID,
@@ -631,10 +576,8 @@ const QUICK_OPS_PAUSE_POMODORO_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_RESUME_POMODORO_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_RESUME_POMODORO_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_RESUME_POMODORO_FLOW_TARGET_ID,
-  name: 'QuickOps Resume Pomodoro',
-  description: 'Resumes the current paused QuickOps Pomodoro session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:play-circle-line',
   actionId: QUICK_OPS_RESUME_POMODORO_FLOW_TARGET_FULL_ID,
@@ -643,10 +586,8 @@ const QUICK_OPS_RESUME_POMODORO_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_POMODORO_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_POMODORO_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_POMODORO_FLOW_TARGET_ID,
-  name: 'QuickOps Stop Pomodoro',
-  description: 'Stops the current QuickOps Pomodoro session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:stop-circle-line',
   actionId: QUICK_OPS_STOP_POMODORO_FLOW_TARGET_FULL_ID,
@@ -655,10 +596,8 @@ const QUICK_OPS_STOP_POMODORO_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_CLEAN_SCREEN_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_CLEAN_SCREEN_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_CLEAN_SCREEN_FLOW_TARGET_ID,
-  name: 'QuickOps Clean Screen',
-  description: 'Starts or replaces the QuickOps local screen-clean overlay.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:fullscreen-line',
   actionId: QUICK_OPS_CLEAN_SCREEN_FLOW_TARGET_FULL_ID,
@@ -668,10 +607,8 @@ const QUICK_OPS_CLEAN_SCREEN_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_STOP_CLEAN_SCREEN_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_STOP_CLEAN_SCREEN_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_STOP_CLEAN_SCREEN_FLOW_TARGET_ID,
-  name: 'QuickOps Stop Clean Screen',
-  description: 'Stops the current QuickOps screen-clean overlay if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:close-circle-line',
   actionId: QUICK_OPS_STOP_CLEAN_SCREEN_FLOW_TARGET_FULL_ID,
@@ -680,10 +617,8 @@ const QUICK_OPS_STOP_CLEAN_SCREEN_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_START_STOPWATCH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_START_STOPWATCH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_START_STOPWATCH_FLOW_TARGET_ID,
-  name: 'QuickOps Start Stopwatch',
-  description: 'Starts or replaces the QuickOps local stopwatch session.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:timer-line',
   actionId: QUICK_OPS_START_STOPWATCH_FLOW_TARGET_FULL_ID,
@@ -693,10 +628,8 @@ const QUICK_OPS_START_STOPWATCH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_PAUSE_STOPWATCH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_PAUSE_STOPWATCH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_PAUSE_STOPWATCH_FLOW_TARGET_ID,
-  name: 'QuickOps Pause Stopwatch',
-  description: 'Pauses the current QuickOps stopwatch session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:pause-circle-line',
   actionId: QUICK_OPS_PAUSE_STOPWATCH_FLOW_TARGET_FULL_ID,
@@ -705,10 +638,8 @@ const QUICK_OPS_PAUSE_STOPWATCH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_RESUME_STOPWATCH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_RESUME_STOPWATCH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_RESUME_STOPWATCH_FLOW_TARGET_ID,
-  name: 'QuickOps Resume Stopwatch',
-  description: 'Resumes the current paused QuickOps stopwatch session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:play-circle-line',
   actionId: QUICK_OPS_RESUME_STOPWATCH_FLOW_TARGET_FULL_ID,
@@ -717,10 +648,8 @@ const QUICK_OPS_RESUME_STOPWATCH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_LAP_STOPWATCH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_LAP_STOPWATCH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_LAP_STOPWATCH_FLOW_TARGET_ID,
-  name: 'QuickOps Lap Stopwatch',
-  description: 'Records a lap for the current QuickOps stopwatch session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:flag-line',
   actionId: QUICK_OPS_LAP_STOPWATCH_FLOW_TARGET_FULL_ID,
@@ -729,10 +658,8 @@ const QUICK_OPS_LAP_STOPWATCH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_RESET_STOPWATCH_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_RESET_STOPWATCH_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_RESET_STOPWATCH_FLOW_TARGET_ID,
-  name: 'QuickOps Reset Stopwatch',
-  description: 'Stops and clears the current QuickOps stopwatch session if one is running.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:stop-circle-line',
   actionId: QUICK_OPS_RESET_STOPWATCH_FLOW_TARGET_FULL_ID,
@@ -741,10 +668,8 @@ const QUICK_OPS_RESET_STOPWATCH_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_SHOW_NOTIFICATION_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_SHOW_NOTIFICATION_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_SHOW_NOTIFICATION_FLOW_TARGET_ID,
-  name: 'QuickOps Show Notification',
-  description: 'Shows a bounded local system notification through QuickOps.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:notification-3-line',
   actionId: QUICK_OPS_SHOW_NOTIFICATION_FLOW_TARGET_FULL_ID,
@@ -754,10 +679,8 @@ const QUICK_OPS_SHOW_NOTIFICATION_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_COPY_TO_CLIPBOARD_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_COPY_TO_CLIPBOARD_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_COPY_TO_CLIPBOARD_FLOW_TARGET_ID,
-  name: 'QuickOps Copy To Clipboard',
-  description: 'Copies bounded text to the local clipboard through QuickOps.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:clipboard-line',
   actionId: QUICK_OPS_COPY_TO_CLIPBOARD_FLOW_TARGET_FULL_ID,
@@ -767,10 +690,8 @@ const QUICK_OPS_COPY_TO_CLIPBOARD_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_FORMAT_TEXT_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_FORMAT_TEXT_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_FORMAT_TEXT_FLOW_TARGET_ID,
-  name: 'QuickOps Format Text',
-  description: 'Formats bounded text locally and returns the transformed value.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:text',
   actionId: QUICK_OPS_FORMAT_TEXT_FLOW_TARGET_FULL_ID,
@@ -779,10 +700,8 @@ const QUICK_OPS_FORMAT_TEXT_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_OPEN_FOLDER_FLOW_TARGET: FlowTarget = {
+const QUICK_OPS_OPEN_FOLDER_FLOW_TARGET: QuickOpsFlowTargetDefinition = {
   id: QUICK_OPS_OPEN_FOLDER_FLOW_TARGET_ID,
-  name: 'QuickOps Open Folder',
-  description: 'Opens a supported local common folder through QuickOps.',
   supportedTypes: ['json', 'text'],
   icon: 'ri:folder-open-line',
   actionId: QUICK_OPS_OPEN_FOLDER_FLOW_TARGET_FULL_ID,
@@ -792,7 +711,7 @@ const QUICK_OPS_OPEN_FOLDER_FLOW_TARGET: FlowTarget = {
   }
 }
 
-const QUICK_OPS_ALL_FLOW_TARGETS: FlowTarget[] = [
+const QUICK_OPS_ALL_FLOW_TARGETS: QuickOpsFlowTargetDefinition[] = [
   QUICK_OPS_CAPABILITIES_FLOW_TARGET,
   QUICK_OPS_SESSIONS_FLOW_TARGET,
   QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET,
@@ -838,6 +757,14 @@ const QUICK_OPS_ALL_FLOW_TARGETS: FlowTarget[] = [
   QUICK_OPS_FORMAT_TEXT_FLOW_TARGET,
   QUICK_OPS_OPEN_FOLDER_FLOW_TARGET
 ]
+
+/** A QuickOps target's name and description, in the language the app shows now. */
+function wordQuickOpsFlowTarget(targetId: string): Pick<FlowTarget, 'name' | 'description'> {
+  return {
+    name: t(`quickOps.flowTargets.${targetId}.name`),
+    description: t(`quickOps.flowTargets.${targetId}.description`)
+  }
+}
 
 export class QuickOpsModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('QuickOps')
@@ -956,12 +883,14 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
   private registerFlowTarget(): void {
     this.disposeFlowTarget()
 
-    for (const target of QUICK_OPS_ALL_FLOW_TARGETS) {
+    for (const definition of QUICK_OPS_ALL_FLOW_TARGETS) {
+      const target: FlowTarget = { ...definition, ...wordQuickOpsFlowTarget(definition.id) }
       const registered = flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID, target, {
         pluginName: 'QuickOps',
         pluginIcon: 'ri:tools-line',
         isEnabled: true,
-        hasFlowHandler: true
+        hasFlowHandler: true,
+        wording: () => wordQuickOpsFlowTarget(definition.id)
       })
       if (registered) {
         this.flowTargetIds.push(`${QUICK_OPS_FLOW_PLUGIN_ID}.${target.id}`)
