@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { t } from '../../../../utils/i18n-helper'
 
 const {
   transportOn,
@@ -775,8 +776,8 @@ describe('everything-provider fallback chain', () => {
         }>
       } | null
 
-      expect(item?.render?.basic?.title).toBe('Windows file search is not ready')
-      expect(item?.render?.basic?.description).toContain('Everything')
+      expect(item?.render?.basic?.title).toBe(t('coreBox.everythingNotice.title'))
+      expect(item?.render?.basic?.description).toBe(t('coreBox.everythingNotice.disabled'))
       expect(item?.actions).toEqual([
         expect.objectContaining({
           id: 'open-everything-settings',

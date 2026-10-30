@@ -43,6 +43,7 @@ import {
 } from './app-recommendation-source'
 import {
   BUILTIN_CLIPBOARD_URL_SOURCE_ID,
+  builtinClipboardUrlTitle,
   createSnapshotRecommendationSource,
   pluginRecommendationSourceId,
   type PluginRecommendSnapshot
@@ -3003,7 +3004,7 @@ export class RecommendationEngine {
     // re-requested while the signal holds), so the snapshot is replaced, not merely added to.
     const card: PluginRecommendCandidate = {
       id: `clipboard-url-open:${url}`,
-      title: '打开 URL',
+      title: builtinClipboardUrlTitle(),
       subtitle: url.length > 60 ? `${url.substring(0, 57)}...` : url,
       icon: { type: 'class', value: 'i-ri-links-line' },
       priority: 95,

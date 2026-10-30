@@ -4332,7 +4332,16 @@
         "newlyAdded": "New file",
         "yesterday": "Yesterday",
         "appContext": "App context"
-      }
+      },
+      "openClipboardUrl": "Open Link"
+    },
+    "everythingNotice": {
+      "title": "Windows file search isn't ready",
+      "subtitle": "Everything is missing, not running or turned off",
+      "disabled": "Turned off in Tuff settings. Turn it on to search files",
+      "notReady": "The backend isn't ready. Open settings to see why",
+      "openSettings": "Open Everything Settings",
+      "openSettingsDesc": "Check the Everything backend, diagnostics and install guidance"
     }
   },
   "appConfigure": {
@@ -5843,6 +5852,9 @@
       "healthHealthy": "Healthy",
       "healthDegraded": "Not ready",
       "healthUnsupported": "Unsupported",
+      "healthReasonDisabled": "Everything search is turned off in Tuff, so Windows file search is unavailable. Turn it on to get search results back.",
+      "healthReasonNotReady": "The Everything backend isn't ready, so Windows file search is unavailable.",
+      "healthReasonUnsupported": "Everything search is only available on Windows.",
       "installDiagnosisTitle": "Installation Diagnosis",
       "installDiagnosisDesc": "Checks local Everything app, process, service, and CLI availability before suggesting an action.",
       "probeEverythingInstalled": "Everything app",
@@ -5873,6 +5885,15 @@
         "check-manually": "Check Everything and CLI installation manually",
         "unsupported": "Everything integration is Windows-only"
       },
+      "installReason": {
+        "unknown": "Everything's installation hasn't been checked yet.",
+        "unsupported": "Everything is only available on Windows.",
+        "disabled": "Everything search is turned off in Tuff settings.",
+        "missing-everything": "Everything wasn't found in its default locations, and no running process or service was detected.",
+        "not-running": "Everything seems to be installed, but neither the app nor its service is running.",
+        "missing-cli": "Everything is running, but es.exe wasn't found on PATH or in the default install folders.",
+        "backend-failed": "Everything is running and es.exe was found, but the search backend couldn't start."
+      },
       "fallbackChainTitle": "Fallback Chain",
       "fallbackChainDesc": "Initialization order for Everything backends; it does not imply a usable search fallback",
       "performanceTitle": "Runtime Performance",
@@ -5892,7 +5913,7 @@
       "cliPathSelectFailed": "Failed to select Everything CLI",
       "cliPathSaved": "Everything CLI path saved",
       "cliPathCleared": "Everything CLI path cleared",
-      "cliPathSaveFailed": "Failed to save Everything CLI path: {error}",
+      "cliPathSaveFailed": "Couldn't save the Everything CLI path",
       "configuredCliPath": "Configured",
       "activeCliPath": "Active",
       "diagnosticsTitle": "Backend Diagnostics",
@@ -5911,7 +5932,7 @@
       "disable": "Disable",
       "enabledSuccess": "Everything search enabled",
       "disabledSuccess": "Everything search disabled",
-      "toggleFailed": "Failed to toggle Everything: {error}",
+      "toggleFailed": "Couldn't turn Everything search on or off. Try again in a moment.",
       "testTitle": "Test Search",
       "testDesc": "Verify Everything functionality",
       "testNow": "Test Now",
@@ -5925,7 +5946,7 @@
       "testSampleTitle": "First Result",
       "testing": "Testing...",
       "testSuccess": "Test successful! Found {count} results in {duration}ms",
-      "testFailed": "Test failed: {error}",
+      "testFailed": "Test failed",
       "installTitle": "Installation Required",
       "installDesc": "Install Everything manually first, then install or select es.exe if the CLI is missing",
       "downloadEverything": "Download Everything",
@@ -5947,8 +5968,8 @@
       "installStarted": "Everything install tasks were added to Download Center",
       "installCompleted": "Everything is installed and verified",
       "installUnsupported": "Everything one-click install is only supported on Windows",
-      "installStartFailed": "Failed to start Everything install: {error}",
-      "installFailed": "Everything install failed: {error}",
+      "installStartFailed": "Couldn't start installing Everything. Try again in a moment.",
+      "installFailed": "Everything installation failed. Open Install and Repair to see why.",
       "installAdvancedShow": "Advanced Settings",
       "installAdvancedHide": "Hide Advanced Settings",
       "installAdvancedTitle": "Advanced Settings",
@@ -5981,6 +6002,16 @@
         "completed": "Completed",
         "failed": "Failed",
         "unsupported": "Unsupported"
+      },
+      "installMessage": {
+        "queued": "Queued the Everything installer downloads.",
+        "downloading": "Downloading the Everything packages.",
+        "verifying": "Verifying the Everything package checksums.",
+        "extracting": "Extracting Everything, the SDK DLL and es.exe.",
+        "configuring-path": "Configuring the Everything CLI path.",
+        "probing": "Checking es.exe and refreshing the search backend.",
+        "completed": "Everything is installed and ready.",
+        "failed": "Everything installation failed. The cause is shown below."
       },
       "viewDiagnostics": "View Diagnostics",
       "errorTitle": "Error Details",
@@ -6848,7 +6879,8 @@
       "conversion": "{from} → {to}",
       "qrValueLabel": "SVG Data URL",
       "qrAlt": "QR Code",
-      "poweredBy": "Powered by {brand}"
+      "poweredBy": "Powered by {brand}",
+      "calculator": "Calculator"
     },
     "basic": {
       "subtitle": "Quick math",

@@ -4332,7 +4332,16 @@
         "newlyAdded": "新文件",
         "yesterday": "昨日此时",
         "appContext": "应用场景"
-      }
+      },
+      "openClipboardUrl": "打开链接"
+    },
+    "everythingNotice": {
+      "title": "Windows 文件搜索未就绪",
+      "subtitle": "Everything 未安装、未运行或已关闭",
+      "disabled": "已在 Tuff 设置中关闭，启用后即可搜索文件",
+      "notReady": "后端尚未就绪，打开设置查看原因",
+      "openSettings": "打开 Everything 设置",
+      "openSettingsDesc": "查看 Everything 后端、诊断与安装指引"
     }
   },
   "appConfigure": {
@@ -5843,6 +5852,9 @@
       "healthHealthy": "正常",
       "healthDegraded": "未就绪",
       "healthUnsupported": "不支持",
+      "healthReasonDisabled": "Everything 搜索已在 Tuff 中关闭，Windows 文件搜索暂不可用。启用后即可恢复搜索结果。",
+      "healthReasonNotReady": "Everything 后端尚未就绪，Windows 文件搜索暂不可用。",
+      "healthReasonUnsupported": "Everything 搜索仅在 Windows 上可用。",
       "installDiagnosisTitle": "安装诊断",
       "installDiagnosisDesc": "先检查本机 Everything 程序、进程、服务与 CLI 可用性，再给出操作建议。",
       "probeEverythingInstalled": "Everything 程序",
@@ -5873,6 +5885,15 @@
         "check-manually": "手动检查 Everything 与 CLI 安装",
         "unsupported": "Everything 集成仅支持 Windows"
       },
+      "installReason": {
+        "unknown": "尚未检查 Everything 的安装情况。",
+        "unsupported": "Everything 仅在 Windows 上可用。",
+        "disabled": "已在 Tuff 设置中关闭 Everything 搜索。",
+        "missing-everything": "默认位置中没有找到 Everything，也没有检测到正在运行的进程或服务。",
+        "not-running": "Everything 似乎已安装，但程序和服务都没有运行。",
+        "missing-cli": "Everything 正在运行，但在 PATH 和默认安装目录中都没有找到 es.exe。",
+        "backend-failed": "Everything 正在运行且已找到 es.exe，但搜索后端没能启动。"
+      },
       "fallbackChainTitle": "后端降级链路",
       "fallbackChainDesc": "Everything 后端初始化时按此顺序尝试，不代表存在可用的搜索回退",
       "performanceTitle": "运行时性能",
@@ -5892,7 +5913,7 @@
       "cliPathSelectFailed": "选择 Everything CLI 失败",
       "cliPathSaved": "Everything CLI 路径已保存",
       "cliPathCleared": "Everything CLI 路径已清除",
-      "cliPathSaveFailed": "保存 Everything CLI 路径失败：{error}",
+      "cliPathSaveFailed": "保存 Everything CLI 路径失败",
       "configuredCliPath": "已配置",
       "activeCliPath": "当前生效",
       "diagnosticsTitle": "后端诊断",
@@ -5911,7 +5932,7 @@
       "disable": "禁用",
       "enabledSuccess": "Everything 搜索已启用",
       "disabledSuccess": "Everything 搜索已禁用",
-      "toggleFailed": "切换 Everything 失败：{error}",
+      "toggleFailed": "切换 Everything 搜索失败，请稍后重试",
       "testTitle": "测试搜索",
       "testDesc": "验证 Everything 功能是否正常",
       "testNow": "立即测试",
@@ -5925,7 +5946,7 @@
       "testSampleTitle": "首条结果",
       "testing": "测试中...",
       "testSuccess": "测试成功！在 {duration}ms 内找到 {count} 个结果",
-      "testFailed": "测试失败：{error}",
+      "testFailed": "测试失败",
       "installTitle": "需要安装",
       "installDesc": "先手动安装 Everything；若缺少 CLI，再安装或选择 es.exe",
       "downloadEverything": "下载 Everything",
@@ -5947,8 +5968,8 @@
       "installStarted": "Everything 安装任务已加入下载中心",
       "installCompleted": "Everything 已安装并完成检测",
       "installUnsupported": "Everything 一键安装仅支持 Windows",
-      "installStartFailed": "启动 Everything 安装失败：{error}",
-      "installFailed": "Everything 安装失败：{error}",
+      "installStartFailed": "启动 Everything 安装失败，请稍后重试",
+      "installFailed": "Everything 安装失败，可在「安装与修复」中查看原因",
       "installAdvancedShow": "高级设置",
       "installAdvancedHide": "收起高级设置",
       "installAdvancedTitle": "高级设置",
@@ -5981,6 +6002,16 @@
         "completed": "已完成",
         "failed": "失败",
         "unsupported": "不支持"
+      },
+      "installMessage": {
+        "queued": "已排队下载 Everything 安装包。",
+        "downloading": "正在下载 Everything 安装包。",
+        "verifying": "正在校验 Everything 安装包。",
+        "extracting": "正在解压 Everything、SDK DLL 与 es.exe。",
+        "configuring-path": "正在配置 Everything CLI 路径。",
+        "probing": "正在检查 es.exe 并刷新搜索后端。",
+        "completed": "Everything 已安装并就绪。",
+        "failed": "Everything 安装失败，原因见下方。"
       },
       "viewDiagnostics": "查看诊断",
       "errorTitle": "错误详情",
@@ -6848,7 +6879,8 @@
       "conversion": "{from} → {to}",
       "qrValueLabel": "SVG 数据 URL",
       "qrAlt": "二维码",
-      "poweredBy": "由 {brand} 提供支持"
+      "poweredBy": "由 {brand} 提供支持",
+      "calculator": "计算器"
     },
     "basic": {
       "subtitle": "快速算式",
