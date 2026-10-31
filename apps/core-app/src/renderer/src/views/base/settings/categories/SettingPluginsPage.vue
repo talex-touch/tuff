@@ -1,10 +1,15 @@
 <script lang="ts" name="SettingPluginsPage" setup>
+import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import PluginNavTree from '~/components/plugin/PluginNavTree.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import {
+  SETTINGS_PANEL_QUERY,
+  SHORTCUTS_SETTINGS_PANEL
+} from '../../../../../../shared/app-destinations'
 import SettingTools from '../SettingTools.vue'
 
 /**
@@ -12,7 +17,26 @@ import SettingTools from '../SettingTools.vue'
  * the application index and the plugin tree that `App.vue` used to pass through `#plugins`.
  */
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
+const tools = ref<InstanceType<typeof SettingTools> | null>(null)
+
+/**
+ * `?panel=shortcuts` is CoreBox's 「快捷键」 result: open the manager and drop the query, so a
+ * reload or a later visit to this page does not open it again. The same query reaches this page
+ * under `/setting/plugins` and inside the Browser workspace's settings tab.
+ */
+watch(
+  () => route.query[SETTINGS_PANEL_QUERY],
+  async (panel) => {
+    if (panel !== SHORTCUTS_SETTINGS_PANEL) return
+    await nextTick()
+    tools.value?.openShortcuts()
+    const { [SETTINGS_PANEL_QUERY]: _opened, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -21,7 +45,7 @@ const router = useRouter()
       Both halves of the tools UI: the standard block plus the advanced one inherited from the
       dissolved `advanced` category. `SettingTools` renders them mutually exclusively.
     -->
-    <SettingTools />
+    <SettingTools ref="tools" />
     <SettingTools advanced-only />
 
     <!-- The Applications category now has its own sidebar entry; this page keeps the store link. -->
