@@ -21,6 +21,7 @@ import { toast } from 'vue-sonner'
 import type { OmniPanelDesktopContextCapsule } from '../../../../../shared/events/omni-panel'
 import { useAccessibilitySupport } from '../../../modules/platform/accessibility-support'
 import { createRendererLogger } from '../../../utils/renderer-log'
+import { appSetting } from '../../../modules/storage/app-storage'
 
 interface OpenDraft {
   prompt: string
@@ -44,6 +45,7 @@ const { t } = useI18n()
 const sdk = createLocalAiCliSdk(useTuffTransport())
 const log = createRendererLogger('LocalAiCliPanel')
 const screenReaderMode = useAccessibilitySupport()
+const terminalFontFamily = computed(() => appSetting.localAiCli?.terminalFontFamily || undefined)
 
 const visible = ref(false)
 const status = ref<LocalAiCliStatus | null>(null)
@@ -765,6 +767,7 @@ defineExpose({ open, reset, newTask })
         v-show="activeView === 'terminal' || !output"
         ref="terminalView"
         class="LocalAiCliPanel__terminal"
+        :font-family="terminalFontFamily"
         :read-only="!terminalSessionId"
         :auto-focus="true"
         :screen-reader-mode="screenReaderMode"
