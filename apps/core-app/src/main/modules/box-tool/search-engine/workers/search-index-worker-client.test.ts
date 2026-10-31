@@ -443,6 +443,125 @@ describe('SearchIndexWorkerClient init gate', () => {
     }
   )
 
+  it('waits out idle retirement before running a maintenance slice on the fresh worker', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const init = client.init('/tmp/search-index.db')
+    const retiringWorker = workerMock.workers.at(-1)!
+    retiringWorker.emit('message', { type: 'done', taskId: taskIdOf(retiringWorker.messages[0]) })
+    await init
+
+    const termination = deferred<number>()
+    vi.spyOn(retiringWorker, 'terminate').mockReturnValue(termination.promise)
+    await vi.advanceTimersByTimeAsync(FILE_WORKER_IDLE_SHUTDOWN_MS)
+
+    const operation = client.runIndexMaintenanceSlice('file-provider', 64)
+    let settled = false
+    void operation.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(settled).toBe(false)
+    expect(workerMock.workers).toHaveLength(1)
+    expect(retiringWorker.messages.map(messageTypeOf)).toEqual(['init', 'shutdown'])
+
+    termination.resolve(0)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(workerMock.workers).toHaveLength(2)
+    const replacementWorker = workerMock.workers.at(-1)!
+    expect(replacementWorker.messages).toHaveLength(1)
+    expect(replacementWorker.messages[0]).toMatchObject({
+      type: 'init',
+      dbPath: '/tmp/search-index.db'
+    })
+    replacementWorker.emit('message', {
+      type: 'done',
+      taskId: taskIdOf(replacementWorker.messages[0])
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(replacementWorker.messages.map(messageTypeOf)).toEqual([
+      'init',
+      'runIndexMaintenanceSlice'
+    ])
+    expect(replacementWorker.messages[1]).toMatchObject({
+      type: 'runIndexMaintenanceSlice',
+      sourceId: 'file-provider',
+      limit: 64
+    })
+    const slice = { processed: 1, done: true, deferred: false, notifications: [] }
+    replacementWorker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(replacementWorker.messages[1]),
+      result: slice
+    })
+
+    await expect(operation).resolves.toEqual(slice)
+    expect(retiringWorker.messages.map(messageTypeOf)).toEqual(['init', 'shutdown'])
+  })
+
+  it('bounds the wait for unsettled idle retirement before rejecting a maintenance slice', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const init = client.init('/tmp/search-index.db')
+    const retiringWorker = workerMock.workers.at(-1)!
+    retiringWorker.emit('message', { type: 'done', taskId: taskIdOf(retiringWorker.messages[0]) })
+    await init
+
+    const termination = deferred<number>()
+    vi.spyOn(retiringWorker, 'terminate').mockReturnValue(termination.promise)
+    await vi.advanceTimersByTimeAsync(FILE_WORKER_IDLE_SHUTDOWN_MS)
+
+    const operation = client.runIndexMaintenanceSlice('file-provider', 64)
+    let settled = false
+    void operation.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    await expect(operation).rejects.toThrow('SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:pending')
+    expect(workerMock.workers).toHaveLength(1)
+    expect(retiringWorker.messages.map(messageTypeOf)).toEqual(['init', 'shutdown'])
+  })
+
+  it('releases a maintenance caller aborted while idle retirement is still pending', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const init = client.init('/tmp/search-index.db')
+    const retiringWorker = workerMock.workers.at(-1)!
+    retiringWorker.emit('message', { type: 'done', taskId: taskIdOf(retiringWorker.messages[0]) })
+    await init
+
+    const termination = deferred<number>()
+    vi.spyOn(retiringWorker, 'terminate').mockReturnValue(termination.promise)
+    await vi.advanceTimersByTimeAsync(FILE_WORKER_IDLE_SHUTDOWN_MS)
+
+    const controller = new AbortController()
+    const reason = new Error('maintenance cancelled while waiting for idle retirement')
+    const operation = client.runIndexMaintenanceSlice('file-provider', 64, controller.signal)
+    const rejection = expect(operation).rejects.toBe(reason)
+    controller.abort(reason)
+
+    await rejection
+    expect(workerMock.workers).toHaveLength(1)
+    expect(retiringWorker.messages.map(messageTypeOf)).toEqual(['init', 'shutdown'])
+  })
+
   it('waits for deferred idle retirement before reinitializing, then retries the write', async () => {
     vi.useFakeTimers()
     const client = new SearchIndexWorkerClient()
