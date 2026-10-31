@@ -7,6 +7,8 @@ import type {
 } from '~/modules/conversation/workspace-activity'
 import { computed } from 'vue'
 import { INTERRUPTED_TOOL_CALL_ERROR } from '~/modules/conversation/chain-steps'
+import { describeToolCallError } from '~/modules/conversation/tool-call-error'
+import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import { useI18n } from 'vue-i18n'
 import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
@@ -29,9 +31,26 @@ const props = defineProps<{
 defineEmits<{ (event: 'locate', messageIndex: number): void }>()
 
 const { t } = useI18n()
+const { describeTurnFailure } = useTurnFailureWording()
 
 function toolErrorText(error: string): string {
-  return error === INTERRUPTED_TOOL_CALL_ERROR ? t('home.toolInterrupted') : error
+  return error === INTERRUPTED_TOOL_CALL_ERROR
+    ? t('home.toolInterrupted')
+    : describeToolCallError(error, t)
+}
+
+/** Main stores a reply the reader or the app stopped as failed; the row says it stopped. */
+function turnState(turn: ActivityTurn): string {
+  return turn.status === 'failed' && isStoppedTurn(turn.error) ? 'stopped' : turn.status
+}
+
+/**
+ * The reply's model, and for a failed reply what ended it — the conversation's own words for the
+ * failure, left out when all they would add is that it failed.
+ */
+function turnDetail(turn: ActivityTurn): string {
+  const failure = turnState(turn) === 'failed' ? describeTurnFailure(turn.error) : null
+  return [turn.model, failure].filter(Boolean).join(' · ')
 }
 
 const TOOL_ICON: Record<ActivityTool['status'], string> = {
@@ -102,12 +121,9 @@ const hasPending = computed(() => props.gateway.length > 0 || Boolean(props.run)
           />
           <span class="HomePreviewActivity-Text">
             <span class="HomePreview-Name">{{
-              t(`home.workspace.activity.turn.${turn.status}`)
+              t(`home.workspace.activity.turn.${turnState(turn)}`)
             }}</span>
-            <span v-if="turn.model || turn.errorCode" class="HomePreview-Detail">
-              {{ turn.model }}<template v-if="turn.model && turn.errorCode"> · </template
-              >{{ turn.errorCode }}
-            </span>
+            <span v-if="turnDetail(turn)" class="HomePreview-Detail">{{ turnDetail(turn) }}</span>
           </span>
         </button>
         <ul v-if="turn.tools.length" class="HomePreviewActivity-Tools">

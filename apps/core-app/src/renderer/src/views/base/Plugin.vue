@@ -43,6 +43,8 @@ function matchesPluginSearch(plugin: ITouchPlugin, query: string): boolean {
   if (!normalizedQuery) return true
 
   const candidates = [
+    // The list shows the display name when the manifest has one; the id still finds it too.
+    plugin.displayName,
     plugin.name,
     plugin.desc,
     describePluginLoadError(plugin, t, locale.value)?.title,

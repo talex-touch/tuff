@@ -574,9 +574,9 @@ describe('useWorkflowEditor', () => {
       tone: 'success',
       labelKey: 'reviewHintClipboardReplaced'
     })
-    expect(resolveReviewQueueActionHint({ status: 'failed', error: 'Clipboard denied' })).toEqual({
+    expect(resolveReviewQueueActionHint({ status: 'failed' })).toEqual({
       tone: 'warning',
-      labelKey: 'reviewHintFailedWithError'
+      labelKey: 'reviewHintFailed'
     })
   })
 

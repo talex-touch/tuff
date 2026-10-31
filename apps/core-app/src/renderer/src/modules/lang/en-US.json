@@ -2355,7 +2355,8 @@
         "turn": {
           "streaming": "Replying",
           "complete": "Reply finished",
-          "failed": "Reply failed"
+          "failed": "Reply failed",
+          "stopped": "Reply stopped"
         }
       },
       "context": {
@@ -2533,7 +2534,9 @@
       "generated": "Model-authored widget",
       "sandboxed": "Sandboxed",
       "loading": "Starting the widget…",
-      "failed": "This widget could not start."
+      "failed": "This widget could not start.",
+      "timedOut": "It took too long to start.",
+      "blocked": "The sandbox blocked something it tried to load or run ({directive})."
     },
     "modelName": "Tuff Auto",
     "titleGen": {
@@ -2614,6 +2617,21 @@
     },
     "toolPayload": "Payload",
     "toolInterrupted": "This call never returned; the turn ended.",
+    "toolErrors": {
+      "notFound": "This tool isn't available.",
+      "inputInvalid": "The tool was called with input it can't use.",
+      "approvalDenied": "The request to run this tool was denied.",
+      "aborted": "The tool call was cancelled.",
+      "timedOut": "The tool took too long and was stopped.",
+      "resourceNotFound": "The file or item the tool needed wasn't found.",
+      "resourceExists": "The file or item the tool tried to create already exists.",
+      "accessDenied": "The tool wasn't allowed to access what it needed.",
+      "serviceUnavailable": "A service the tool needs couldn't be reached.",
+      "mcpServerUnavailable": "The MCP server isn't available.",
+      "mcpToolFailed": "The MCP tool failed.",
+      "failed": "The tool failed.",
+      "budgetExceeded": "This call went over this reply's limit of {count} tool call. | This call went over this reply's limit of {count} tool calls."
+    },
     "formSubmit": "Submit",
     "formReset": "Reset",
     "formRequired": "This field is required",
@@ -8345,6 +8363,7 @@
       "result": "Result",
       "task_success": "Task executed successfully",
       "task_failed": "Task execution failed",
+      "agent_unavailable": "This agent is no longer available.",
       "task_queued": "Task queued",
       "task_running": "Task running",
       "task_completed": "Task completed",
@@ -8447,7 +8466,6 @@
       "reviewHintCopied": "Copied: the content is in the clipboard; you can still replace clipboard or dismiss this output.",
       "reviewHintClipboardReplaced": "Replaced: clipboard content was updated; dismiss this output when done.",
       "reviewHintFailed": "Action failed: retry copy, retry replace, or clear the failure to restore pending state.",
-      "reviewHintFailedWithError": "Action failed: {error}. Retry copy, retry replace, or clear the failure to restore pending state.",
       "reviewMetaSource": "Source",
       "reviewMetaCapability": "Capability",
       "reviewMetaProvider": "Provider",

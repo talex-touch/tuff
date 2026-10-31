@@ -1,5 +1,6 @@
 import type { AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { ConversationError } from './conversation-error-display'
 import type { ConversationMessage, ConversationMessageStatus } from './useHomeConversation'
 
 /**
@@ -30,7 +31,8 @@ export interface ActivityTurn {
   status: ConversationMessageStatus
   provider?: string
   model?: string
-  errorCode?: string
+  /** Why a failed reply ended, as main stored it on the message. */
+  error?: ConversationError
   tools: ActivityTool[]
 }
 
@@ -92,7 +94,7 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
       status: message.status,
       provider: message.meta?.provider,
       model: message.meta?.model,
-      errorCode: message.error?.code,
+      error: message.error,
       tools: [...byCall.values()]
     })
   }

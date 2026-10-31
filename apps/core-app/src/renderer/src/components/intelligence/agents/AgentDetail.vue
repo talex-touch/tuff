@@ -45,6 +45,11 @@ const taskStep = ref('')
 const STATUS_POLL_INTERVAL_MS = 1500
 /** This page's own complaint when main answers without a task id; the log keeps it. */
 const MISSING_TASK_ID = 'Missing task id from execute response'
+/**
+ * Main's refusal of a task for an agent its registry no longer has (`agent-manager.ts`), naming the
+ * agent in English: it went away after this page listed it.
+ */
+const AGENT_NOT_FOUND = /^Agent .+ not found$/
 let taskStatusPollTimer: ReturnType<typeof setInterval> | null = null
 
 /**
@@ -67,6 +72,7 @@ const taskError = computed(() => {
   if (!failure) return ''
   if (failure.kind === 'cancelled') return t('intelligence.agents.task_cancelled')
   const described = failure.error ? describeFailure(failure.error, t, '') : ''
+  if (AGENT_NOT_FOUND.test(described)) return t('intelligence.agents.agent_unavailable')
   return described ? describeAiRunFailure(described, t) : t('intelligence.agents.task_failed')
 })
 

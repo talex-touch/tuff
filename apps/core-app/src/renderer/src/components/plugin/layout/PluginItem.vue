@@ -69,7 +69,7 @@ const pluginIconStyle = {
         </template>
         <div class="plugin-issues-panel">
           <div class="plugin-issues-title">{{ t('plugin.issues.title') }}</div>
-          <TxScroll native no-padding class="issues-list h-60">
+          <TxScroll native no-padding class="issues-list">
             <div
               v-for="({ issue, display }, index) in describedIssues"
               :key="index"
@@ -217,6 +217,13 @@ const pluginIconStyle = {
   font-size: 12px;
   font-weight: 600;
   color: var(--tx-text-color-primary);
+}
+
+// TxScroll is as tall as its parent, which here grows with the list, so a height on it is
+// overridden and a long list ran past the screen. The scroller itself stops at 240px instead:
+// a short list keeps its own height, a long one scrolls.
+.issues-list :deep(.tx-scroll__native) {
+  max-height: 240px;
 }
 
 @keyframes rotate {

@@ -103,6 +103,15 @@ function stepErrorText(error: string): string {
 }
 
 /**
+ * The error code a step's summary can carry, beside its call's provider, model and trace, when the
+ * step has no recorded failure. The intelligence layer's table words it; a code the table doesn't
+ * name reads as a failed AI request.
+ */
+function stepSummaryErrorText(code: string): string {
+  return resolveIntelligenceErrorRecovery({ errorCode: code }, t, locale.value).title
+}
+
+/**
  * Why the run on screen did not finish, for its summary and the toast: the run's own failure, else
  * its first failed step's. A run main failed before any step ran has only the former, and nothing
  * else on the page says why.
@@ -277,15 +286,12 @@ function reviewReplaceButtonText(item: { id: string; status: string }): string {
     : t('intelligence.workflow.replaceClipboard')
 }
 
-function reviewActionHint(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>) {
+function reviewActionHint(item: Pick<WorkflowReviewQueueItem, 'status'>) {
   return resolveReviewQueueActionHint(item)
 }
 
-function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>): string {
-  const hint = reviewActionHint(item)
-  return t(`intelligence.workflow.${hint.labelKey}`, {
-    error: item.error ? reviewFailureText(item.error) : ''
-  })
+function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status'>): string {
+  return t(`intelligence.workflow.${reviewActionHint(item).labelKey}`)
 }
 
 function reviewMetaChips(item: WorkflowReviewQueueItem) {
@@ -1068,7 +1074,11 @@ onMounted(async () => {
                 v-else-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode"
                 class="runtime-error"
               >
-                {{ currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode }}
+                {{
+                  stepSummaryErrorText(
+                    currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode ?? ''
+                  )
+                }}
               </div>
             </article>
           </div>

@@ -637,13 +637,14 @@ export function filterReviewQueueItems(
   return items.filter((item) => item.status === filter)
 }
 
+/** A failed item's card shows its failure above the hint, so the hint doesn't repeat it. */
 export function resolveReviewQueueActionHint(
-  item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>
+  item: Pick<WorkflowReviewQueueItem, 'status'>
 ): WorkflowReviewQueueActionHint {
   if (item.status === 'failed') {
     return {
       tone: 'warning',
-      labelKey: item.error ? 'reviewHintFailedWithError' : 'reviewHintFailed'
+      labelKey: 'reviewHintFailed'
     }
   }
 

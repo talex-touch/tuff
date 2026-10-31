@@ -669,8 +669,15 @@ export class ConversationWorkspaceService {
     const messages: WorkspaceHostMessage[] = conversation.messages.map((message) => ({
       ...message,
       ...(Array.isArray(message.meta?.parts) ? { parts: message.meta.parts } : {}),
+      // As the runner sent it live (`wireMessage`): a reload that dropped the detail would leave a
+      // failure main caught with no words but its code.
       ...(typeof message.meta?.errorCode === 'string'
-        ? { error: { code: message.meta.errorCode, detail: '' } }
+        ? {
+            error: {
+              code: message.meta.errorCode,
+              detail: typeof message.meta.errorDetail === 'string' ? message.meta.errorDetail : ''
+            }
+          }
         : {}),
       attachments: links
         .filter((link) => link.messageId === message.id)

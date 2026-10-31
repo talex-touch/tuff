@@ -2355,7 +2355,8 @@
         "turn": {
           "streaming": "回复中",
           "complete": "回复完成",
-          "failed": "回复失败"
+          "failed": "回复失败",
+          "stopped": "回复已停止"
         }
       },
       "context": {
@@ -2533,7 +2534,9 @@
       "generated": "模型生成的组件",
       "sandboxed": "沙箱运行",
       "loading": "正在启动组件…",
-      "failed": "这个组件没能运行起来。"
+      "failed": "这个组件没能运行起来。",
+      "timedOut": "启动超时。",
+      "blocked": "沙箱拦截了它要加载或运行的内容（{directive}）。"
     },
     "modelName": "Tuff 智能",
     "titleGen": {
@@ -2614,6 +2617,21 @@
     },
     "toolPayload": "参数",
     "toolInterrupted": "该调用未返回，回合已结束",
+    "toolErrors": {
+      "notFound": "该工具不可用",
+      "inputInvalid": "调用该工具的输入无效",
+      "approvalDenied": "运行该工具的请求被拒绝",
+      "aborted": "工具调用已取消",
+      "timedOut": "工具运行超时，已停止",
+      "resourceNotFound": "未找到工具所需的文件或项目",
+      "resourceExists": "工具要创建的文件或项目已存在",
+      "accessDenied": "工具无权访问所需的内容",
+      "serviceUnavailable": "无法连接工具所需的服务",
+      "mcpServerUnavailable": "MCP 服务器不可用",
+      "mcpToolFailed": "MCP 工具运行失败",
+      "failed": "工具运行失败",
+      "budgetExceeded": "该调用超出了本次回复 {count} 次工具调用的上限"
+    },
     "formSubmit": "提交",
     "formReset": "重置",
     "formRequired": "该字段必填",
@@ -8345,6 +8363,7 @@
       "result": "执行结果",
       "task_success": "任务执行成功",
       "task_failed": "任务执行失败",
+      "agent_unavailable": "该智能体已不可用",
       "task_queued": "任务已加入队列",
       "task_running": "任务执行中",
       "task_completed": "任务已完成",
@@ -8447,7 +8466,6 @@
       "reviewHintCopied": "已复制：内容已写入剪贴板，可继续替换剪贴板或忽略该输出。",
       "reviewHintClipboardReplaced": "已替换：剪贴板内容已更新，可忽略该输出完成处理。",
       "reviewHintFailed": "操作失败：可重试复制、重试替换，或清除失败恢复为待处理。",
-      "reviewHintFailedWithError": "操作失败：{error}。可重试复制、重试替换，或清除失败恢复为待处理。",
       "reviewMetaSource": "来源",
       "reviewMetaCapability": "能力",
       "reviewMetaProvider": "提供商",
