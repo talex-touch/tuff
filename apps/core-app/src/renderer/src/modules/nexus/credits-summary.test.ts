@@ -117,21 +117,21 @@ describe('useCreditsSummary', () => {
       route: () => {
         throw new Error('request timeout')
       },
-      error: 'Credits 信息获取失败。'
+      error: '积分信息获取失败。'
     },
     {
       name: 'a transport failure',
       route: () => {
         throw new Error('net::ERR_CONNECTION_CLOSED')
       },
-      error: 'Credits 信息获取失败。'
+      error: '积分信息获取失败。'
     },
     {
       name: 'an active network cooldown',
       route: () => {
         throw new Error('Network guard cooldown active for key "credits"')
       },
-      error: 'Credits 信息获取失败。'
+      error: '积分信息获取失败。'
     },
     {
       name: 'an expired session',
@@ -146,7 +146,7 @@ describe('useCreditsSummary', () => {
     {
       name: 'a gateway failure',
       route: () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway'),
-      error: 'Credits 信息获取失败：502 Bad Gateway'
+      error: '积分信息获取失败：502 Bad Gateway'
     },
     {
       name: 'an unreachable endpoint',
@@ -186,7 +186,7 @@ describe('useCreditsSummary', () => {
     await credits.refresh()
 
     await vi.waitFor(() => expect(credits.summary.value).toBeNull())
-    expect(credits.error.value).toBe('Credits 信息获取失败：502 Bad Gateway')
+    expect(credits.error.value).toBe('积分信息获取失败：502 Bad Gateway')
   })
 
   it('clears the balance and the error when the account signs out', async () => {

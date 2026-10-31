@@ -40,10 +40,10 @@ const statusDescription = computed(() => {
     return credits.error.value
   }
   if (credits.loading.value && !credits.summary.value) {
-    return t('creditsSummary.loading', '正在获取 credits 信息。')
+    return t('creditsSummary.loading', '正在获取积分信息。')
   }
   if (!credits.summary.value) {
-    return t('creditsSummary.empty', '暂无 credits 信息。')
+    return t('creditsSummary.empty', '暂无积分信息。')
   }
   return t('creditsSummary.month', {
     month: credits.summary.value.month || '-'
@@ -171,7 +171,7 @@ onUnmounted(() => {
 
     <TuffBlockSlot
       v-else-if="credits.error.value"
-      :title="t('creditsSummary.errorTitle', 'Credits 信息不可用')"
+      :title="t('creditsSummary.errorTitle', '积分信息不可用')"
       :description="credits.error.value"
       default-icon="i-carbon-warning"
       active-icon="i-carbon-warning"
