@@ -25,5 +25,10 @@ export type {
   TerminalProps,
   TerminalSize,
 } from './src/types'
+export {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  NERD_FONT_FALLBACK_STACK,
+  resolveTerminalFontFamily,
+} from './src/font-fallback'
 export type TxTerminalInstance = InstanceType<typeof TxTerminal>
 export default Terminal

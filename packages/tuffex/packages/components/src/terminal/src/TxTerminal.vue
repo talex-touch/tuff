@@ -6,6 +6,7 @@ import type { TerminalData, TerminalEmits, TerminalInstance, TerminalProps, Term
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onThemeChange } from '../../stat-card/src/theme-change'
 import { TERMINAL_DEFAULT_LABELS } from './types'
+import { DEFAULT_TERMINAL_FONT_FAMILY, resolveTerminalFontFamily } from './font-fallback'
 
 defineOptions({ name: 'TxTerminal' })
 
@@ -14,7 +15,7 @@ const props = withDefaults(defineProps<TerminalProps>(), {
   autoFocus: false,
   autoScroll: true,
   fontSize: 13,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
   screenReaderMode: true,
 })
 const emit = defineEmits<TerminalEmits>()
@@ -376,7 +377,7 @@ watch(() => props.screenReaderMode, (value) => {
 watch(() => [props.cols, props.rows, props.fontSize, props.fontFamily], () => {
   if (terminal) {
     terminal.options.fontSize = props.fontSize
-    terminal.options.fontFamily = props.fontFamily
+    terminal.options.fontFamily = resolveTerminalFontFamily(props.fontFamily)
     scheduleFit()
   }
 })
@@ -498,7 +499,7 @@ onMounted(async () => {
       cols: dimension(props.cols) ?? 80,
       rows: dimension(props.rows) ?? 24,
       fontSize: props.fontSize,
-      fontFamily: props.fontFamily,
+      fontFamily: resolveTerminalFontFamily(props.fontFamily),
       theme,
       disableStdin: props.readOnly,
       cursorBlink: !props.readOnly,
