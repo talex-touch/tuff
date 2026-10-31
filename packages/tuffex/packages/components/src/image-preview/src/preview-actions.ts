@@ -20,7 +20,9 @@ const EXTENSIONS: Record<string, string> = {
   'image/bmp': 'bmp',
 }
 
-function parse(url: string): URL | null {
+function parse(url: string | undefined): URL | null {
+  if (!url)
+    return null
   try {
     return new URL(url, typeof document !== 'undefined' ? document.baseURI : undefined)
   }

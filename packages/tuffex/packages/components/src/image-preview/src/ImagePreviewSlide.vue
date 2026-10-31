@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
+import type { ImagePreviewSlotProps } from './types'
 import type { DrawnSlide } from './use-preview-slides'
 import { BrokenImageIcon } from '../../../../utils/broken-image-icon'
+import ImagePreviewContent from './ImagePreviewContent.vue'
 
 // Internal: one page of TxImagePreview, as use-preview-slides draws it. Its picture sits in a
 // frame, the window of it shown; a thumbnail's pixels stand in until the picture loads, and the
@@ -15,6 +17,10 @@ defineProps<{
   failedText: string
   /** Hands the picture's element over as it comes and goes (see use-preview-pictures). */
   bind: (el: unknown) => void
+}>()
+
+defineSlots<{
+  default?: (props: ImagePreviewSlotProps) => any
 }>()
 
 const emit = defineEmits<{
@@ -46,7 +52,19 @@ const emit = defineEmits<{
           draggable="false"
           :style="slide.picture"
         >
+        <div
+          v-if="$slots.default || slide.item.type === 'custom'"
+          class="tx-image-preview__custom is-loaded"
+          :style="slide.picture"
+        >
+          <ImagePreviewContent :item="slide.item">
+            <template v-if="$slots.default" #default>
+              <slot :item="slide.item" :index="slide.index" :scale="slide.view.k" :turns="slide.turns" :view="slide.view" :stage="slide.stage" />
+            </template>
+          </ImagePreviewContent>
+        </div>
         <img
+          v-else
           :ref="bind"
           class="tx-image-preview__image"
           :class="{ 'is-loaded': slide.loaded }"
@@ -92,7 +110,8 @@ const emit = defineEmits<{
 }
 
 .tx-image-preview__image,
-.tx-image-preview__stand-in {
+.tx-image-preview__stand-in,
+.tx-image-preview__custom {
   position: absolute;
   top: 0;
   left: 0;
@@ -103,6 +122,10 @@ const emit = defineEmits<{
 
 .tx-image-preview__stand-in {
   object-fit: cover;
+}
+
+.tx-image-preview__custom {
+  cursor: zoom-in;
 }
 
 .tx-image-preview__image {
@@ -121,11 +144,13 @@ const emit = defineEmits<{
   will-change: transform;
 }
 
-.tx-image-preview.is-zoomed .tx-image-preview__image {
+.tx-image-preview.is-zoomed .tx-image-preview__image,
+.tx-image-preview.is-zoomed .tx-image-preview__custom {
   cursor: grab;
 }
 
-.tx-image-preview.is-grabbing .tx-image-preview__image {
+.tx-image-preview.is-grabbing .tx-image-preview__image,
+.tx-image-preview.is-grabbing .tx-image-preview__custom {
   cursor: grabbing;
 }
 

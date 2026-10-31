@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import type { ImagePreviewEmits, ImagePreviewIndicator, ImagePreviewItem, ImagePreviewProps } from './types'
+import type { ImagePreviewEmits, ImagePreviewIndicator, ImagePreviewItem, ImagePreviewMinimapSlotProps, ImagePreviewProps, ImagePreviewSlotProps, ImagePreviewThumbnailSlotProps } from './types'
 import type { PreviewSize, PreviewView } from './zoom'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
@@ -83,13 +83,20 @@ const props = withDefaults(defineProps<ImagePreviewProps>(), {
 
 const emit = defineEmits<ImagePreviewEmits>()
 
+const slots = defineSlots<{
+  default?: (props: ImagePreviewSlotProps) => any
+  item?: (props: ImagePreviewSlotProps) => any
+  thumbnail?: (props: ImagePreviewThumbnailSlotProps) => any
+  minimap?: (props: ImagePreviewMinimapSlotProps) => any
+}>()
+
 const open = defineModel<boolean>('open', { default: false })
 const index = defineModel<number>('index', { default: 0 })
 
 const reduced = useReducedMotion()
 
 const items = computed<ImagePreviewItem[]>(() =>
-  (props.images ?? []).map(source => (typeof source === 'string' ? { url: source } : source)),
+  (props.items ?? props.images ?? []).map(source => (typeof source === 'string' ? { url: source } : source)),
 )
 const count = computed(() => items.value.length)
 
@@ -135,6 +142,7 @@ const { stageSize, fitBox, overlayPoint } = usePreviewStage({ overlay: overlayRe
 
 const pictures = usePreviewPictures({
   items: () => items.value,
+  custom: () => !!(slots.item || slots.default),
   current,
   hostFailed: () => props.failed,
   fitBox: () => fitBox.value,
@@ -236,7 +244,7 @@ const gestures = usePreviewGestures({
   box: () => fitBox.value,
   image: () => {
     const item = currentItem.value
-    return item && !isFailed(item.url) ? sizes.value.get(item.url) ?? null : null
+    return item ? pictures.readySize(item) : null
   },
   maxScale: () => (Number.isFinite(props.maxScale) && props.maxScale > 0 ? props.maxScale : 4),
   active: () => rendered.value && !closing.value && !menuOpen.value,
@@ -380,7 +388,9 @@ function stepFromStrip(direction: 1 | -1): void {
 // -- The minimap in the corner, ImagePreviewMinimap's: the whole picture while it is zoomed in.
 
 interface MinimapPicture {
-  src: string
+  src?: string
+  item: ImagePreviewItem
+  index: number
   size: PreviewSize
   turns: number
   view: PreviewView
@@ -390,11 +400,11 @@ interface MinimapPicture {
 /** The current picture while it is zoomed in, at rest on its page and turned square. */
 const minimapPicture = computed<MinimapPicture | null>(() => {
   const item = currentItem.value
-  const size = item && !isFailed(item.url) ? sizes.value.get(item.url) : undefined
+  const size = item ? pictures.readySize(item) : null
   const view = gestures.view.value
   if (!props.minimap || !item || !size || !view || !gestures.zoomed.value || gestures.track.value !== 0 || gestures.angle.value !== gestures.turns.value * 90)
     return null
-  return { src: item.url, size, turns: gestures.turns.value, view, stage: stageSize.value }
+  return { src: item.thumbnail || item.url, item, index: current.value, size, turns: gestures.turns.value, view, stage: stageSize.value }
 })
 // Springing back to the whole picture, it fades as the spring sets off, following the view meanwhile.
 const minimapWanted = computed(() => chromeWanted.value && minimapPicture.value !== null && !gestures.fitting.value)
@@ -582,7 +592,12 @@ defineExpose({
           :bind="bindImage"
           @load="onImageLoad"
           @error="onImageError($event, slide.index)"
-        />
+        >
+          <template v-if="$slots.item || $slots.default" #default="scope">
+            <slot v-if="$slots.item" name="item" v-bind="scope" />
+            <slot v-else v-bind="scope" />
+          </template>
+        </ImagePreviewSlide>
       </div>
 
       <div class="tx-image-preview__bar tx-image-preview__chrome">
@@ -621,7 +636,11 @@ defineExpose({
         :material="controlMaterial"
         @show="showAt"
         @step="stepFromStrip"
-      />
+      >
+        <template v-if="$slots.thumbnail" #thumbnail="scope">
+          <slot name="thumbnail" v-bind="scope" />
+        </template>
+      </ImagePreviewStrip>
 
       <ImagePreviewToolbar
         ref="toolbarRef"
@@ -655,7 +674,13 @@ defineExpose({
         @look="gestures.lookAt"
         @drag="minimapDragging = $event"
         @wheel="onMinimapWheel"
-      />
+      >
+        <template v-if="$slots.minimap || $slots.item || $slots.default" #minimap="scope">
+          <slot v-if="$slots.minimap" name="minimap" v-bind="scope" />
+          <slot v-else-if="$slots.item" name="item" v-bind="scope" :scale="1" />
+          <slot v-else v-bind="scope" :scale="1" />
+        </template>
+      </ImagePreviewMinimap>
 
       <button
         v-if="count > 1"

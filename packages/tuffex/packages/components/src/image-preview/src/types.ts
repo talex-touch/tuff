@@ -1,7 +1,8 @@
+import type { Component } from 'vue'
+import type { PreviewSize, PreviewView } from './zoom'
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 
-export interface ImagePreviewItem {
-  url: string
+interface ImagePreviewItemBase {
   /** Shown in the top bar, and the picture's alt text when `alt` is absent. */
   name?: string
   alt?: string
@@ -13,10 +14,40 @@ export interface ImagePreviewItem {
   height?: number
   /** A smaller copy, for the strip of thumbnails along the bottom. */
   thumbnail?: string
+  /** Component rendered for custom content; receives `item` and `payload` props. */
+  component?: Component
+  payload?: unknown
+  /** Trusted HTML/SVG only; sanitize untrusted markup before passing it to the preview. */
+  raw?: string
+  /** Trusted SVG markup, rendered without fetching an external image. */
+  svg?: string
 }
 
-/** A URL, or an item with a name and a size. */
+/** Image URLs remain required unless the item explicitly renders custom content. */
+export type ImagePreviewItem = ImagePreviewItemBase & (
+  | { type?: 'image', url: string }
+  | { type: 'custom', url?: string }
+)
+
+/** A URL, an image descriptor, or custom content. */
 export type ImagePreviewSource = string | ImagePreviewItem
+
+export interface ImagePreviewSlotProps {
+  item: ImagePreviewItem
+  index: number
+  scale: number
+  turns: number
+  view: PreviewView
+  stage: PreviewSize
+}
+
+export interface ImagePreviewThumbnailSlotProps {
+  item: ImagePreviewItem
+  index: number
+  current: boolean
+}
+
+export type ImagePreviewMinimapSlotProps = Omit<ImagePreviewSlotProps, 'scale'>
 
 /** A box in viewport pixels, with the corner radius the picture shows there. */
 export interface ImagePreviewOriginRect {
@@ -55,6 +86,8 @@ export interface ImagePreviewActionEvent {
 
 export interface ImagePreviewProps {
   images?: readonly ImagePreviewSource[]
+  /** Image or custom content items. Takes precedence over `images` when supplied. */
+  items?: readonly ImagePreviewSource[]
   /** The largest zoom, against a picture's own pixels, so 1 is 100%; never less than the whole picture's fit. @default 4 */
   maxScale?: number
   /** URLs the host has already seen fail, a thumbnail's say: drawn as the placeholder, not requested again. */
