@@ -20,6 +20,7 @@ import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { withPermission } from '../permission/channel-guard'
 import { ptySessionCore, watchPtyOwner } from './pty-session-core'
+import { scanTerminalFonts } from './terminal-font-service'
 
 const terminalLog = createLogger('Terminal')
 const SCOPE = 'terminal'
@@ -132,6 +133,12 @@ export class TerminalModule extends BaseModule {
     register(TerminalEvents.session.resize, (payload, context) => this.resize(payload, context))
     register(TerminalEvents.session.close, (payload, context) => this.close(payload, context))
     register(TerminalEvents.session.ack, (payload, context) => this.acknowledge(payload, context))
+    this.disposers.push(
+      transport.on(TerminalEvents.fonts.list, async () => {
+        const fonts = await scanTerminalFonts()
+        return { fonts }
+      })
+    )
   }
 
   private send<T>(context: HandlerContext, event: TuffEvent<T, void>, payload: T): void {

@@ -1,5 +1,8 @@
 import type {
-  TerminalCreateRequest, TerminalDataPayload, TerminalExitPayload,
+  TerminalCreateRequest,
+  TerminalDataPayload,
+  TerminalExitPayload,
+  TerminalFontInfo,
 } from '../../events/terminal'
 import type { ITuffTransport } from '../../types'
 import { TerminalEvents } from '../../events/terminal'
@@ -34,6 +37,7 @@ export interface TerminalSdk {
     request: TerminalCreateRequest,
     handlers?: TerminalSessionHandlers,
   ) => Promise<TerminalSessionHandle>
+  listFonts: () => Promise<TerminalFontInfo[]>
 }
 
 type EarlyEvent = { type: 'data', payload: TerminalDataPayload }
@@ -208,6 +212,10 @@ export function createTerminalSdk(transport: ITuffTransport): TerminalSdk {
         }
       }
       return promise
+    },
+    async listFonts(): Promise<TerminalFontInfo[]> {
+      const response = await transport.request(TerminalEvents.fonts.list)
+      return response?.fonts ?? []
     },
   }
 }
