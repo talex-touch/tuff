@@ -17,7 +17,7 @@ import {
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
 import { isMainWindow, useUpdateSdk } from '@talex-touch/utils/renderer'
-import { h, readonly, ref, shallowRef } from 'vue'
+import { computed, h, readonly, ref, shallowRef } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
@@ -65,6 +65,16 @@ let updateListenerInitialized = false
 const updateRuntimeLog = createRendererLogger('useUpdateRuntime')
 const lifecycleSnapshotState = shallowRef<UpdateLifecycleSnapshot | null>(null)
 const lifecycleSnapshot = readonly(lifecycleSnapshotState)
+
+const restartingForUpdateInternal = ref(false)
+export const isRestartingForUpdate = computed(() => {
+  const phase = lifecycleSnapshotState.value?.phase
+  return (
+    restartingForUpdateInternal.value ||
+    phase === 'install-scheduled' ||
+    phase === 'handoff-started'
+  )
+})
 
 function acceptUpdateLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): UpdateLifecycleSnapshot {
   const current = lifecycleSnapshotState.value
@@ -569,6 +579,7 @@ export function useUpdateRuntime() {
   }
 
   async function installDownloadedUpdate(taskId?: string): Promise<boolean> {
+    restartingForUpdateInternal.value = true
     try {
       const response = await sendRequest(
         'update:install',
@@ -579,6 +590,7 @@ export function useUpdateRuntime() {
         acceptUpdateLifecycleSnapshot(response.snapshot)
       }
       if (!response.success) {
+        restartingForUpdateInternal.value = false
         updateRuntimeLog.error('Install was refused or failed', {
           errorCode: response.errorCode,
           error: response.error
@@ -589,6 +601,7 @@ export function useUpdateRuntime() {
       toast.success(t('settings.settingUpdate.messages.installStarted'))
       return true
     } catch (installError) {
+      restartingForUpdateInternal.value = false
       if (
         installError instanceof UpdateRequestTimeoutError &&
         installError.channel === 'update:install'
@@ -772,6 +785,7 @@ export function useUpdateRuntime() {
     checkApplicationUpgrade,
     handleDownloadUpdate,
     installDownloadedUpdate,
+    isRestartingForUpdate,
     handleIgnoreVersion,
     getUpdateSettings,
     updateSettings,

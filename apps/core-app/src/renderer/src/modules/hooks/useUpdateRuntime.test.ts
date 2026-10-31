@@ -254,6 +254,7 @@ describe('useUpdateRuntime', () => {
       'settings.settingUpdate.messages.installPendingConfirmation'
     )
     expect(logger.warn).toHaveBeenCalled()
+    expect(runtime.isRestartingForUpdate.value).toBe(false)
   })
 
   it('主进程确认接管安装后才返回成功', async () => {
@@ -268,6 +269,7 @@ describe('useUpdateRuntime', () => {
     expect(result).toBe(true)
     expect(updateSdk.install).toHaveBeenCalledWith({ taskId: 'task-2' })
     expect(toast.success).toHaveBeenCalledWith('settings.settingUpdate.messages.installStarted')
+    expect(runtime.isRestartingForUpdate.value).toBe(true)
   })
 
   it('auto download 模式收到 available 时只同步状态而不弹阻塞对话框', async () => {
