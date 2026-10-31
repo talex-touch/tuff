@@ -10,11 +10,13 @@ import {
   DEFAULT_APP_LOCALE,
   DOMAIN_LEXICON_DOMAINS,
   isAppLocale,
+  isI18nMessage,
   isLocalizedText,
   officialDomainLexiconRegistry,
   resolveLocalizedText,
   ScopedDomainLexiconRegistry as ScopedDomainLexiconRegistryImpl
 } from '@talex-touch/utils/i18n'
+import { pluginLanguageManager } from './plugin-language-manager'
 import { LOCALIZATION_FACADE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
@@ -84,7 +86,7 @@ export function registerPluginLocalizationChannels(
       resolveSupportedPlugin(context, options.resolvePlugin)
       return resolveHostLocale()
     }),
-    registerProtected(PluginEvents.i18n.resolveText, i18nPermission, (payload, context) => {
+    registerProtected(PluginEvents.i18n.resolveText, i18nPermission, async (payload, context) => {
       resolveSupportedPlugin(context, options.resolvePlugin)
       const locale = resolveLocale(payload?.locale, resolveHostLocale)
       return resolveLocalizedTextValue(payload?.value, locale)
@@ -167,13 +169,16 @@ function resolveLocale(locale: unknown, resolveHostLocale: () => AppLocale): App
   return locale
 }
 
-function resolveLocalizedTextValue(value: unknown, locale: AppLocale): string {
+async function resolveLocalizedTextValue(value: unknown, locale: AppLocale): Promise<string> {
   if (typeof value !== 'string' && !isLocalizedText(value)) {
     throw createLocalizationError(
       'Localized text must be a string or LocalizedText value',
       PLUGIN_LOCALIZATION_ERROR_CODES.invalidRequest,
       'unknown'
     )
+  }
+  if (typeof value === 'string' && isI18nMessage(value)) {
+    return pluginLanguageManager.resolveMessage(value, locale)
   }
   return resolveLocalizedText(value as LocalizedTextValue, locale)
 }

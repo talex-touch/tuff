@@ -1,8 +1,11 @@
+import path from 'node:path'
+import fse from 'fs-extra'
 import type {
   HandlerContext,
   ITuffTransportMain,
   TuffEvent
 } from '@talex-touch/utils/transport/main'
+import { pluginLanguageManager } from './plugin-language-manager'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { SdkApi } from '@talex-touch/utils/plugin'
 import {
@@ -130,6 +133,36 @@ describe('registerPluginLocalizationChannels', () => {
       })
     ).resolves.toBe('English')
   })
+  it('resolves $i18n: formatted messages and automatically converts language', async () => {
+    const { invoke } = registerChannels()
+    const pluginDir = path.join('/tmp', `plugin-i18n-channel-test-${Date.now()}`)
+    const langDir = path.join(pluginDir, 'languages')
+    await fse.ensureDir(langDir)
+    await fse.writeJSON(path.join(langDir, 'zh-CN.json'), { welcome: '欢迎使用' })
+    await fse.writeJSON(path.join(langDir, 'en-US.json'), { welcome: 'Welcome' })
+
+    pluginLanguageManager.register('plugin-b', pluginDir)
+
+    // 1. Resolve for default zh-CN
+    await expect(
+      invoke(PluginEvents.i18n.resolveText, {
+        value: '$i18n:plugin.plugin-b.welcome',
+        _sdkapi: SdkApi.V260713
+      })
+    ).resolves.toBe('欢迎使用')
+
+    // 2. Resolve for explicit en-US
+    await expect(
+      invoke(PluginEvents.i18n.resolveText, {
+        value: '$i18n:plugin.plugin-b.welcome',
+        locale: 'en-US',
+        _sdkapi: SdkApi.V260713
+      })
+    ).resolves.toBe('Welcome')
+
+    await fse.remove(pluginDir)
+  })
+
 
   it('uses the verified context identity for lexicon register, resolve, and search', async () => {
     const { invoke, registry } = registerChannels()

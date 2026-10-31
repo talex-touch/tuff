@@ -76,7 +76,8 @@ import {
 } from './plugin-data-disposition-production'
 import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { getLocale, t } from '../../utils/i18n-helper'
+import { getLocale, onLocaleChange, t } from '../../utils/i18n-helper'
+import { pluginLanguageManager } from './plugin-language-manager'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -2123,6 +2124,9 @@ export class PluginModule extends BaseModule {
     this.pluginManager = pluginRuntime.pluginManager
     this.installQueue = pluginRuntime.installQueue
     this.healthMonitor = pluginRuntime.healthMonitor
+    onLocaleChange((locale) => {
+      pluginLanguageManager.onLocaleChanged(locale)
+    })
 
     this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
       resolvePlugin: (pluginName) => {
