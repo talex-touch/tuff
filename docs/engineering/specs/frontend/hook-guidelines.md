@@ -14,27 +14,24 @@ This project uses Vue composables, not React hooks. New shared stateful frontend
 
 Use `use*` names and keep the returned API explicit.
 
-Example: `apps/core-app/src/renderer/src/views/base/settings/components/useShortcutCopy.ts`
+Example: `apps/core-app/src/renderer/src/views/base/settings/useUpdateDownloadProgress.ts`
 
 ```ts
-export const useShortcutCopy = (messages: ShortcutCopyMessages) => {
-  const copyStateMap = reactive(new Map<string, CopyState>())
-  const copyTimers = new Map<string, number>()
+export function useUpdateDownloadProgress(
+  snapshot: MaybeRefOrGetter<UpdateLifecycleSnapshot | null>
+) {
+  const downloadSdk = useDownloadSdk()
+  const progress = shallowRef<DownloadProgress | null>(null)
 
-  const resetCopyState = (): void => {
-    copyStateMap.clear()
-    for (const timer of copyTimers.values()) {
-      window.clearTimeout(timer)
+  const disposers = [downloadSdk.onTaskProgress(acceptPush), downloadSdk.onTaskUpdated(acceptPush)]
+
+  onScopeDispose(() => {
+    for (const dispose of disposers) {
+      dispose()
     }
-    copyTimers.clear()
-  }
+  })
 
-  return {
-    copyShortcutId,
-    getCopyState,
-    getCopyIcon,
-    resetCopyState
-  }
+  return { progress: readonly(progress) }
 }
 ```
 
@@ -201,7 +198,7 @@ If initialization can fail, keep cleanup valid and avoid leaving partial listene
 
 ## Naming Conventions
 
-- `use*` for composables with state or lifecycle: `useShortcutCopy`, `useDocEngagementTracker`.
+- `use*` for composables with state or lifecycle: `useUpdateDownloadProgress`, `useDocEngagementTracker`.
 - `create*Sdk` for SDK factory helpers.
 - `resolve*`, `format*`, `summarize*`, `normalize*` for pure helpers.
 - `handle*` for event handlers that mutate local component state.
