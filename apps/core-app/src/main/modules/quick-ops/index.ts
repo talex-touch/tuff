@@ -94,7 +94,13 @@ import {
   resolveFileHashPath,
   resolveFilePathTarget
 } from './quick-ops-runtime-host'
-import { formatDuration, getSessionDisplayDurationMs } from './quick-ops-session-manager'
+import {
+  formatDuration,
+  formatInterfaceDuration,
+  formatQuickOpsSessionSnapshots,
+  getQuickOpsSessionTitle,
+  getSessionDisplayDurationMs
+} from './quick-ops-session-manager'
 
 const QUICK_OPS_FLOW_PLUGIN_ID = 'quickops'
 const QUICK_OPS_CAPABILITIES_FLOW_TARGET_ID = 'capabilities'
@@ -1823,8 +1829,11 @@ async function createQuickOpsPortStatusResponse(
   }
 
   const probe = await probeLocalTcpPort(port)
+  // A probe that failed for another reason than the port being taken (`EACCES` on a privileged
+  // port, say) says nothing about who holds it.
+  const probeFailed = probe.degradedReason === 'port-probe-failed'
   return {
-    state: probe.available ? 'available' : 'occupied',
+    state: probe.available ? 'available' : probeFailed ? 'degraded' : 'occupied',
     available: probe.available,
     port: probe.port,
     host: probe.host,
@@ -1843,7 +1852,7 @@ async function createQuickOpsDnsQueryResponse(
     return {
       state: 'degraded',
       degradedReason: 'dns-query-invalid-hostname',
-      message: '请输入有效域名'
+      message: t('quickOps.errors.invalidHostname')
     }
   }
 
@@ -1873,7 +1882,7 @@ async function createQuickOpsFileHashResponse(
     return {
       state: 'degraded',
       degradedReason: 'file-hash-missing-file',
-      message: '未找到要计算 Hash 的文件'
+      message: t('quickOps.errors.fileHashMissingFile')
     }
   }
 
@@ -1910,7 +1919,7 @@ async function createQuickOpsFileBase64Response(
     return {
       state: 'degraded',
       degradedReason: 'file-base64-missing-file',
-      message: '未找到要编码的文件'
+      message: t('quickOps.errors.fileBase64MissingFile')
     }
   }
 
@@ -1979,7 +1988,7 @@ function createQuickOpsPathFormatResponse(
     return {
       state: 'degraded',
       degradedReason: 'file-path-missing-file',
-      message: '未找到要复制路径的文件'
+      message: t('quickOps.errors.filePathMissingFile')
     }
   }
 
@@ -2072,32 +2081,21 @@ function createQuickOpsSessionSnapshot(session: QuickOpsSession): QuickOpsSessio
   return {
     id: session.id,
     kind: session.kind,
-    title: session.title,
+    title: getQuickOpsSessionTitle(session),
     state: session.pausedAt ? 'paused' : 'running',
     startedAt: session.startedAt,
     durationMs: session.durationMs,
     displayDurationMs,
-    displayDurationText: formatDuration(displayDurationMs),
+    displayDurationText: formatInterfaceDuration(displayDurationMs),
     expiresAt: session.expiresAt,
     pausedAt: session.pausedAt,
     screenMode: session.screenMode,
     windowCount: session.windows?.length,
     lapCount: session.kind === 'stopwatch' ? laps.length : undefined,
     lastLapMs,
-    lastLapText: typeof lastLapMs === 'number' ? formatDuration(lastLapMs) : undefined,
+    lastLapText: typeof lastLapMs === 'number' ? formatInterfaceDuration(lastLapMs) : undefined,
     pomodoro: session.pomodoro
   }
-}
-
-function formatQuickOpsSessionSnapshots(sessions: QuickOpsSessionSnapshot[]): string {
-  if (sessions.length === 0) return 'QuickOps sessions: idle'
-
-  return sessions
-    .map((session) => {
-      const status = session.state === 'paused' ? 'paused' : 'running'
-      return `${session.title} (${session.kind}) ${status}: ${session.displayDurationText}`
-    })
-    .join('\n')
 }
 
 function resolveFlowDurationMs(session: FlowSession): number | undefined {

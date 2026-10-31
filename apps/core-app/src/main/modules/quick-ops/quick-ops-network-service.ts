@@ -24,6 +24,7 @@ import {
 import { createServer, isIP } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
+import { t } from '../../utils/i18n-helper'
 import type { QuickOpsDegradedResult, QuickOpsPublicIpInfo } from './quick-ops-runtime-types'
 
 const execFileAsync = promisify(execFile)
@@ -101,7 +102,7 @@ export async function lookupPublicIp(
   if (typeof fetchImpl !== 'function') {
     return {
       degradedReason: 'public-ip-fetch-unavailable',
-      message: '当前运行时不支持 fetch'
+      message: t('quickOps.errors.publicIpFetchUnavailable')
     }
   }
 
@@ -119,7 +120,7 @@ export async function lookupPublicIp(
     if (!response.ok) {
       return {
         degradedReason: 'public-ip-request-failed',
-        message: `外部服务返回 HTTP ${response.status}`
+        message: t('quickOps.errors.publicIpHttpError', { status: response.status })
       }
     }
 
@@ -128,7 +129,7 @@ export async function lookupPublicIp(
     if (!isValidIpAddress(address)) {
       return {
         degradedReason: 'public-ip-invalid-response',
-        message: '外部服务返回了不可识别的 IP 地址'
+        message: t('quickOps.errors.publicIpInvalidResponse')
       }
     }
 
@@ -139,7 +140,7 @@ export async function lookupPublicIp(
   } catch {
     return {
       degradedReason: 'public-ip-request-failed',
-      message: '无法连接公网 IP 查询服务'
+      message: t('quickOps.errors.publicIpRequestFailed')
     }
   } finally {
     clearTimeout(timeout)
@@ -242,7 +243,7 @@ export async function createDnsQueryInfo(
   if (!normalizedHostname) {
     return {
       degradedReason: 'dns-query-invalid-hostname',
-      message: '请输入有效域名'
+      message: t('quickOps.errors.invalidHostname')
     }
   }
 
@@ -275,7 +276,7 @@ export async function createDnsQueryInfo(
   if (records.length === 0) {
     return {
       degradedReason: 'dns-query-no-records',
-      message: `未解析到 ${getDnsRecordTypes(deep).join(' / ')} 记录`
+      message: t('quickOps.errors.dnsNoRecords', { types: getDnsRecordTypes(deep).join(' / ') })
     }
   }
 

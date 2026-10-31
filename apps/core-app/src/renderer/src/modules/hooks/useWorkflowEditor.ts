@@ -668,6 +668,7 @@ export function resolveReviewQueueActionHint(
   }
 }
 
+/** A failed item's card shows its failure on its own line, so no chip repeats it. */
 export function resolveReviewQueueMetaChips(
   item: Pick<
     WorkflowReviewQueueItem,
@@ -682,8 +683,6 @@ export function resolveReviewQueueMetaChips(
     | 'latency'
     | 'totalTokens'
     | 'riskLevel'
-    | 'status'
-    | 'error'
   >
 ): WorkflowReviewQueueMetaChip[] {
   const chips: WorkflowReviewQueueMetaChip[] = [
@@ -742,15 +741,6 @@ export function resolveReviewQueueMetaChips(
     value: item.riskLevel,
     tone: item.riskLevel === 'medium' ? 'warning' : 'default'
   })
-
-  if (item.status === 'failed' && item.error) {
-    chips.push({
-      labelKey: 'reviewMetaFailure',
-      fallback: 'Failure',
-      value: item.error,
-      tone: 'warning'
-    })
-  }
 
   return chips
 }

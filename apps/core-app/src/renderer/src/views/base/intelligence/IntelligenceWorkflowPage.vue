@@ -296,11 +296,7 @@ function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status'>): st
 
 function reviewMetaChips(item: WorkflowReviewQueueItem) {
   return resolveReviewQueueMetaChips(item).map((chip) =>
-    chip.labelKey === 'reviewMetaRisk'
-      ? { ...chip, value: riskLevelLabel(chip.value) }
-      : chip.labelKey === 'reviewMetaFailure'
-        ? { ...chip, value: reviewFailureText(chip.value) }
-        : chip
+    chip.labelKey === 'reviewMetaRisk' ? { ...chip, value: riskLevelLabel(chip.value) } : chip
   )
 }
 

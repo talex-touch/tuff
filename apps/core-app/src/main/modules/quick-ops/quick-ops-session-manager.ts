@@ -1,5 +1,8 @@
 import type { BrowserWindow as ElectronBrowserWindow, Rectangle } from 'electron'
-import type { NotificationRequest } from '@talex-touch/utils/transport/events/types'
+import type {
+  NotificationRequest,
+  QuickOpsSessionSnapshot
+} from '@talex-touch/utils/transport/events/types'
 import { BrowserWindow, powerSaveBlocker, screen } from 'electron'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { buildWindowWebPreferences } from '../../core/window-security-profile'
@@ -32,7 +35,6 @@ export interface QuickOpsPomodoroState {
 export interface QuickOpsSession {
   id: string
   kind: QuickOpsSessionKind
-  title: string
   startedAt: number
   durationMs: number
   expiresAt?: number
@@ -85,7 +87,7 @@ export class QuickOpsSessionManager {
   startKeepAwake(durationMs = DEFAULT_KEEP_AWAKE_DURATION_MS): QuickOpsSession {
     this.stop('keep-awake', 'replace')
     const blockerId = powerSaveBlocker.start('prevent-display-sleep')
-    const session = this.createSession('keep-awake', '保持唤醒', durationMs, blockerId)
+    const session = this.createSession('keep-awake', durationMs, blockerId)
     this.sessions.set('keep-awake', session)
     this.emitSessionChange()
     return session
@@ -94,7 +96,7 @@ export class QuickOpsSessionManager {
   startSystemAwake(durationMs = DEFAULT_SYSTEM_AWAKE_DURATION_MS): QuickOpsSession {
     this.stop('system-awake', 'replace')
     const blockerId = powerSaveBlocker.start('prevent-app-suspension')
-    const session = this.createSession('system-awake', '防止系统睡眠', durationMs, blockerId)
+    const session = this.createSession('system-awake', durationMs, blockerId)
     this.sessions.set('system-awake', session)
     this.emitSessionChange()
     return session
@@ -118,7 +120,7 @@ export class QuickOpsSessionManager {
 
   startTimer(durationMs = DEFAULT_TIMER_DURATION_MS): QuickOpsSession {
     this.stop('timer', 'replace')
-    const session = this.createSession('timer', '计时器', durationMs)
+    const session = this.createSession('timer', durationMs)
     this.sessions.set('timer', session)
     this.emitSessionChange()
     return session
@@ -167,12 +169,7 @@ export class QuickOpsSessionManager {
   ): QuickOpsSession {
     this.stop('pomodoro', 'replace')
     const blockerId = powerSaveBlocker.start('prevent-display-sleep')
-    const session = this.createSession(
-      'pomodoro',
-      mode === 'cycle' ? '番茄钟专注' : '番茄钟',
-      durationMs,
-      blockerId
-    )
+    const session = this.createSession('pomodoro', durationMs, blockerId)
     session.pomodoro = {
       mode,
       phase: 'focus',
@@ -208,7 +205,7 @@ export class QuickOpsSessionManager {
     this.stop('screen-clean', 'replace')
     const displays = screen.getAllDisplays()
     const targets = displays.length > 0 ? displays : [screen.getPrimaryDisplay()]
-    const session = this.createSession('screen-clean', '清洁屏幕', durationMs)
+    const session = this.createSession('screen-clean', durationMs)
     session.screenMode = screenMode
     session.windows = targets.map((display) =>
       this.createWindow(display.bounds, session, (window) => {
@@ -230,7 +227,7 @@ export class QuickOpsSessionManager {
 
   startStopwatch(): QuickOpsSession {
     this.stop('stopwatch', 'replace')
-    const session = this.createSession('stopwatch', '秒表', 0)
+    const session = this.createSession('stopwatch', 0)
     if (session.timeout) {
       clearTimeout(session.timeout)
     }
@@ -430,7 +427,6 @@ export class QuickOpsSessionManager {
 
   private createSession(
     kind: QuickOpsSessionKind,
-    title: string,
     durationMs: number,
     blockerId?: number
   ): QuickOpsSession {
@@ -439,7 +435,6 @@ export class QuickOpsSessionManager {
     const session: QuickOpsSession = {
       id: `quick-ops:${kind}:${startedAt}`,
       kind,
-      title,
       startedAt,
       durationMs: Math.max(1_000, durationMs),
       expiresAt,
@@ -627,7 +622,6 @@ export class QuickOpsSessionManager {
 
     const now = Date.now()
     const safeDurationMs = Math.max(1_000, durationMs)
-    session.title = phase === 'break' ? '番茄钟休息' : '番茄钟专注'
     session.startedAt = now
     session.durationMs = safeDurationMs
     session.expiresAt = now + safeDurationMs
@@ -656,6 +650,33 @@ export class QuickOpsSessionManager {
     })
     this.emitSessionChange()
   }
+}
+
+const SESSION_TITLE_KEYS: Readonly<Record<QuickOpsSessionKind, string>> = {
+  'keep-awake': 'quickOps.sessionTitles.keepAwake',
+  'system-awake': 'quickOps.sessionTitles.systemAwake',
+  timer: 'quickOps.sessionTitles.timer',
+  pomodoro: 'quickOps.sessionTitles.pomodoro',
+  'screen-clean': 'quickOps.sessionTitles.screenClean',
+  stopwatch: 'quickOps.sessionTitles.stopwatch'
+}
+
+/**
+ * A session's name in the interface language. It is worked out each time a session is listed, so
+ * one started before a language switch reads in the new language; a Pomodoro cycle names the
+ * phase it is in.
+ */
+export function getQuickOpsSessionTitle(
+  session: Pick<QuickOpsSession, 'kind' | 'pomodoro'>
+): string {
+  if (session.kind === 'pomodoro' && session.pomodoro?.mode === 'cycle') {
+    return t(
+      session.pomodoro.phase === 'break'
+        ? 'quickOps.sessionTitles.pomodoroBreak'
+        : 'quickOps.sessionTitles.pomodoroFocus'
+    )
+  }
+  return t(SESSION_TITLE_KEYS[session.kind])
 }
 
 function getPomodoroBreakDurationMs(state: QuickOpsPomodoroState): number {
@@ -721,7 +742,7 @@ export function createScreenCleanOverlayUrl(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>QuickOps Screen Clean</title>
+    <title>${escapeHtml(t('quickOps.screenClean.windowTitle'))}</title>
     <style>
       html,
       body {
@@ -848,10 +869,10 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * In the interface language, for what the user reads: notifications and the screen-clean hint.
- * Session titles and the text returned to Flow senders keep using `formatDuration` below.
+ * In the interface language, for what the user reads: notifications, the screen-clean hint and
+ * the session list. The text returned to Flow senders keeps using `formatDuration` below.
  */
-function formatInterfaceDuration(durationMs: number): string {
+export function formatInterfaceDuration(durationMs: number): string {
   return formatDurationSeconds(durationMs / 1000)
 }
 
@@ -868,6 +889,17 @@ export function formatDuration(durationMs: number): string {
     return `${minutes}分钟${seconds > 0 ? `${seconds}秒` : ''}`
   }
   return `${seconds}秒`
+}
+
+export function formatQuickOpsSessionSnapshots(sessions: QuickOpsSessionSnapshot[]): string {
+  if (sessions.length === 0) return 'QuickOps sessions: idle'
+
+  return sessions
+    .map((session) => {
+      const status = session.state === 'paused' ? 'paused' : 'running'
+      return `${session.title} (${session.kind}) ${status}: ${session.displayDurationText}`
+    })
+    .join('\n')
 }
 
 export function getSessionDisplayDurationMs(session: QuickOpsSession): number {

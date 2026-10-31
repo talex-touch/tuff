@@ -29,13 +29,17 @@ const STABLE_TOOL_ERROR_KEYS: Readonly<Record<string, string>> = {
 
 /**
  * A call that never answered: one still open when the turn ended, as main's
- * `workspace-message-assembler.ts` stores it, or one the Pi run stopped while it was waiting for its
- * result (`main/modules/ai/pi-agent-runtime-worker.ts`).
+ * `workspace-message-assembler.ts` stores it; one the Pi run stopped while it was waiting for its
+ * result (`main/modules/ai/pi-agent-runtime-worker.ts`); and one the run was stopped before it
+ * started, which `@earendil-works/pi-agent-core`'s agent loop answers in its place.
  */
 const INTERRUPTED: ReadonlySet<string> = new Set([
   'TOOL_EXECUTION_INTERRUPTED',
-  'Tool request aborted'
+  'Tool request aborted',
+  'Operation aborted'
 ])
+// `pi-agent-runtime-worker.ts`: a call that reached its run after the run was over.
+const RUN_ENDED = /^Run \S+ is not active$/
 // `pi-agent-runtime-worker.ts`: a call past the reply's tool-call budget.
 const BUDGET_EXCEEDED = /^Execution budget exceeded: maxToolCalls=(\d+)$/
 
@@ -48,6 +52,6 @@ export function describeToolCallError(error: string, t: ToolErrorTranslate): str
     const count = Number(budget)
     return t('home.toolErrors.budgetExceeded', { count }, count)
   }
-  if (INTERRUPTED.has(text)) return t('home.toolInterrupted')
+  if (INTERRUPTED.has(text) || RUN_ENDED.test(text)) return t('home.toolInterrupted')
   return error
 }

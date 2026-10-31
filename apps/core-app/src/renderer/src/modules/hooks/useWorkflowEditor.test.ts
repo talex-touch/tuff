@@ -595,9 +595,7 @@ describe('useWorkflowEditor', () => {
         traceId: 'trace-1',
         latency: 980.4,
         totalTokens: 42,
-        riskLevel: 'medium',
-        status: 'failed',
-        error: 'Clipboard permission denied'
+        riskLevel: 'medium'
       })
     ).toEqual([
       {
@@ -634,12 +632,6 @@ describe('useWorkflowEditor', () => {
         labelKey: 'reviewMetaRisk',
         fallback: 'Risk',
         value: 'medium',
-        tone: 'warning'
-      },
-      {
-        labelKey: 'reviewMetaFailure',
-        fallback: 'Failure',
-        value: 'Clipboard permission denied',
         tone: 'warning'
       }
     ])

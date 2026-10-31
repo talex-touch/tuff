@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promi
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app } from 'electron'
+import { t } from '../../utils/i18n-helper'
 import type {
   QuickOpsCommonDirectoryId,
   QuickOpsCommonDirectoryInfo,
@@ -29,44 +30,46 @@ function matchesKeyword(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword))
 }
 
+// `titleKey` names the folder in the interface language when it is resolved; `subtitle` keeps the
+// English name the folder goes by on disk.
 const COMMON_DIRECTORY_DEFINITIONS: Array<{
   id: QuickOpsCommonDirectoryId
-  title: string
+  titleKey: string
   subtitle: string
   appPathName: Parameters<typeof app.getPath>[0]
   aliases: string[]
 }> = [
   {
     id: 'desktop',
-    title: '桌面',
+    titleKey: 'quickOps.directories.desktop',
     subtitle: 'Desktop',
     appPathName: 'desktop',
     aliases: ['desktop', '桌面']
   },
   {
     id: 'downloads',
-    title: '下载',
+    titleKey: 'quickOps.directories.downloads',
     subtitle: 'Downloads',
     appPathName: 'downloads',
     aliases: ['downloads', 'download', '下载']
   },
   {
     id: 'documents',
-    title: '文档',
+    titleKey: 'quickOps.directories.documents',
     subtitle: 'Documents',
     appPathName: 'documents',
     aliases: ['documents', 'document', '文档']
   },
   {
     id: 'app-data',
-    title: '应用数据',
+    titleKey: 'quickOps.directories.appData',
     subtitle: 'User Data',
     appPathName: 'userData',
     aliases: ['app data', 'user data', 'userdata', '应用数据', '用户数据']
   },
   {
     id: 'logs',
-    title: '日志',
+    titleKey: 'quickOps.directories.logs',
     subtitle: 'Logs',
     appPathName: 'logs',
     aliases: ['logs', 'log', '日志']
@@ -119,7 +122,7 @@ export function resolveCommonDirectory(text: string): QuickOpsCommonDirectoryInf
 
   return {
     id: directory.id,
-    title: directory.title,
+    title: t(directory.titleKey),
     subtitle: directory.subtitle,
     path: app.getPath(directory.appPathName)
   }
@@ -153,7 +156,7 @@ export async function findRecentDownloadFile(): Promise<
     if (!latest) {
       return {
         degradedReason: 'recent-download-empty',
-        message: 'Downloads 目录没有可打开的普通文件'
+        message: t('quickOps.errors.recentDownloadEmpty')
       }
     }
 
@@ -167,8 +170,8 @@ export async function findRecentDownloadFile(): Promise<
           : 'recent-download-read-failed',
       message:
         code === 'EACCES' || code === 'EPERM'
-          ? '没有权限读取 Downloads 目录'
-          : '无法读取 Downloads 目录'
+          ? t('quickOps.errors.recentDownloadPermissionDenied')
+          : t('quickOps.errors.recentDownloadReadFailed')
     }
   }
 }
@@ -180,7 +183,7 @@ export async function prepareRecentDownloadMove(
   if (!normalizedTargetDirectory || !path.isAbsolute(normalizedTargetDirectory)) {
     return {
       degradedReason: 'recent-download-move-invalid-target',
-      message: '目标目录必须是绝对路径'
+      message: t('quickOps.errors.moveTargetNotAbsolute')
     }
   }
 
@@ -192,7 +195,7 @@ export async function prepareRecentDownloadMove(
     if (!directoryInfo.isDirectory()) {
       return {
         degradedReason: 'recent-download-move-target-not-directory',
-        message: '目标路径不是目录'
+        message: t('quickOps.errors.moveTargetNotDirectory')
       }
     }
 
@@ -201,13 +204,13 @@ export async function prepareRecentDownloadMove(
       await stat(targetPath)
       return {
         degradedReason: 'recent-download-move-target-exists',
-        message: '目标目录中已存在同名文件'
+        message: t('quickOps.errors.moveTargetExists')
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         return {
           degradedReason: 'recent-download-move-target-check-failed',
-          message: '无法检查目标路径'
+          message: t('quickOps.errors.moveTargetCheckFailed')
         }
       }
     }
@@ -228,10 +231,10 @@ export async function prepareRecentDownloadMove(
             : 'recent-download-move-target-read-failed',
       message:
         code === 'ENOENT'
-          ? '目标目录不存在'
+          ? t('quickOps.errors.moveTargetMissing')
           : code === 'EACCES' || code === 'EPERM'
-            ? '没有权限读取目标目录'
-            : '无法读取目标目录'
+            ? t('quickOps.errors.moveTargetPermissionDenied')
+            : t('quickOps.errors.moveTargetReadFailed')
     }
   }
 }
@@ -243,14 +246,14 @@ export async function moveRecentDownloadFile(
   if (!sourcePath || !targetPath || !path.isAbsolute(sourcePath) || !path.isAbsolute(targetPath)) {
     return {
       degradedReason: 'recent-download-move-invalid-path',
-      message: '移动路径无效'
+      message: t('quickOps.errors.moveInvalidPath')
     }
   }
 
   if (!isPathInsideDirectory(sourcePath, app.getPath('downloads'))) {
     return {
       degradedReason: 'recent-download-move-source-outside-downloads',
-      message: '源文件不在 Downloads 目录内'
+      message: t('quickOps.errors.moveSourceOutsideDownloads')
     }
   }
 
@@ -259,7 +262,7 @@ export async function moveRecentDownloadFile(
     if (!sourceInfo.isFile()) {
       return {
         degradedReason: 'recent-download-move-source-not-file',
-        message: '源路径不是普通文件'
+        message: t('quickOps.errors.moveSourceNotFile')
       }
     }
 
@@ -268,7 +271,7 @@ export async function moveRecentDownloadFile(
     if (!targetDirectoryInfo.isDirectory()) {
       return {
         degradedReason: 'recent-download-move-target-not-directory',
-        message: '目标路径不是目录'
+        message: t('quickOps.errors.moveTargetNotDirectory')
       }
     }
 
@@ -276,13 +279,13 @@ export async function moveRecentDownloadFile(
       await stat(targetPath)
       return {
         degradedReason: 'recent-download-move-target-exists',
-        message: '目标目录中已存在同名文件'
+        message: t('quickOps.errors.moveTargetExists')
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         return {
           degradedReason: 'recent-download-move-target-check-failed',
-          message: '无法检查目标路径'
+          message: t('quickOps.errors.moveTargetCheckFailed')
         }
       }
     }
@@ -303,10 +306,10 @@ export async function moveRecentDownloadFile(
             : 'recent-download-move-failed',
       message:
         code === 'ENOENT'
-          ? '源文件不存在'
+          ? t('quickOps.errors.moveSourceMissing')
           : code === 'EACCES' || code === 'EPERM'
-            ? '没有权限移动文件'
-            : '移动文件失败'
+            ? t('quickOps.errors.movePermissionDenied')
+            : t('quickOps.errors.moveFailed')
     }
   }
 }
@@ -356,7 +359,7 @@ export async function computeFileHashes(filePath: string): Promise<
     if (!info.isFile()) {
       return {
         degradedReason: 'file-hash-not-file',
-        message: '目标不是普通文件'
+        message: t('quickOps.errors.notFile')
       }
     }
 
@@ -380,10 +383,10 @@ export async function computeFileHashes(filePath: string): Promise<
             : 'file-hash-read-failed',
       message:
         code === 'ENOENT'
-          ? '文件不存在'
+          ? t('quickOps.errors.fileMissing')
           : code === 'EACCES' || code === 'EPERM'
-            ? '没有权限读取文件'
-            : '读取文件失败'
+            ? t('quickOps.errors.fileReadPermissionDenied')
+            : t('quickOps.errors.fileReadFailed')
     }
   }
 }
@@ -428,14 +431,14 @@ export async function encodeFileBase64(filePath: string): Promise<
     if (!info.isFile()) {
       return {
         degradedReason: 'file-base64-not-file',
-        message: '目标不是普通文件'
+        message: t('quickOps.errors.notFile')
       }
     }
 
     if (info.size > FILE_BASE64_MAX_BYTES) {
       return {
         degradedReason: 'file-base64-too-large',
-        message: `文件超过 ${formatFileSize(FILE_BASE64_MAX_BYTES)} 上限`
+        message: t('quickOps.errors.fileTooLarge', { limit: formatFileSize(FILE_BASE64_MAX_BYTES) })
       }
     }
 
@@ -457,10 +460,10 @@ export async function encodeFileBase64(filePath: string): Promise<
             : 'file-base64-read-failed',
       message:
         code === 'ENOENT'
-          ? '文件不存在'
+          ? t('quickOps.errors.fileMissing')
           : code === 'EACCES' || code === 'EPERM'
-            ? '没有权限读取文件'
-            : '读取文件失败'
+            ? t('quickOps.errors.fileReadPermissionDenied')
+            : t('quickOps.errors.fileReadFailed')
     }
   }
 }
@@ -504,14 +507,14 @@ export async function decodeFileBase64ToTempFile(input: string): Promise<
   if (!normalized) {
     return {
       degradedReason: 'file-base64-decode-missing-input',
-      message: '未找到要解码的 Base64 内容'
+      message: t('quickOps.errors.base64MissingInput')
     }
   }
 
   if (!isValidBase64Payload(normalized)) {
     return {
       degradedReason: 'file-base64-decode-invalid-input',
-      message: 'Base64 内容格式无效'
+      message: t('quickOps.errors.base64InvalidInput')
     }
   }
 
@@ -522,14 +525,16 @@ export async function decodeFileBase64ToTempFile(input: string): Promise<
   ) {
     return {
       degradedReason: 'file-base64-decode-invalid-input',
-      message: 'Base64 内容格式无效'
+      message: t('quickOps.errors.base64InvalidInput')
     }
   }
 
   if (buffer.length > FILE_BASE64_MAX_BYTES) {
     return {
       degradedReason: 'file-base64-decode-too-large',
-      message: `解码后文件超过 ${formatFileSize(FILE_BASE64_MAX_BYTES)} 上限`
+      message: t('quickOps.errors.base64DecodedTooLarge', {
+        limit: formatFileSize(FILE_BASE64_MAX_BYTES)
+      })
     }
   }
 
@@ -553,7 +558,10 @@ export async function decodeFileBase64ToTempFile(input: string): Promise<
         code === 'EACCES' || code === 'EPERM'
           ? 'file-base64-decode-permission-denied'
           : 'file-base64-decode-write-failed',
-      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '写入临时文件失败'
+      message:
+        code === 'EACCES' || code === 'EPERM'
+          ? t('quickOps.errors.tempWritePermissionDenied')
+          : t('quickOps.errors.tempWriteFailed')
     }
   }
 }
@@ -570,7 +578,9 @@ export async function createTempTextFile(input: string): Promise<
   if (size > TEMP_TEXT_FILE_MAX_BYTES) {
     return {
       degradedReason: 'temp-text-file-too-large',
-      message: `临时文本超过 ${formatFileSize(TEMP_TEXT_FILE_MAX_BYTES)} 上限`
+      message: t('quickOps.errors.tempTextTooLarge', {
+        limit: formatFileSize(TEMP_TEXT_FILE_MAX_BYTES)
+      })
     }
   }
 
@@ -590,7 +600,10 @@ export async function createTempTextFile(input: string): Promise<
         code === 'EACCES' || code === 'EPERM'
           ? 'temp-text-file-permission-denied'
           : 'temp-text-file-write-failed',
-      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '写入临时文件失败'
+      message:
+        code === 'EACCES' || code === 'EPERM'
+          ? t('quickOps.errors.tempWritePermissionDenied')
+          : t('quickOps.errors.tempWriteFailed')
     }
   }
 }
@@ -618,7 +631,10 @@ export async function createTempDirectory(input: string): Promise<
         code === 'EACCES' || code === 'EPERM'
           ? 'temp-directory-permission-denied'
           : 'temp-directory-create-failed',
-      message: code === 'EACCES' || code === 'EPERM' ? '没有权限创建临时目录' : '创建临时目录失败'
+      message:
+        code === 'EACCES' || code === 'EPERM'
+          ? t('quickOps.errors.tempDirectoryPermissionDenied')
+          : t('quickOps.errors.tempDirectoryCreateFailed')
     }
   }
 }
