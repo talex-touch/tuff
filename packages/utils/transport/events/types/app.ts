@@ -230,6 +230,18 @@ export interface ReadFileRequest {
    * Optional read timeout in milliseconds.
    */
   timeoutMs?: number
+
+  /**
+   * `base64` returns the raw bytes base64-encoded instead of UTF-8 text, so the caller can decode
+   * them in whatever encoding the file is in. Replies cross IPC as JSON, which has no binary type.
+   * @default 'utf-8'
+   */
+  encoding?: 'utf-8' | 'base64'
+
+  /**
+   * With `encoding: 'base64'`, reads at most this many bytes from the start of the file.
+   */
+  maxBytes?: number
 }
 
 /**
