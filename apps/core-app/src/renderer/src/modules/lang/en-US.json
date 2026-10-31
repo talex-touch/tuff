@@ -2414,7 +2414,11 @@
         "WORKSPACE_RUN_NOT_PENDING": "That run is no longer waiting for approval.",
         "WORKSPACE_STALE_TURN": "That reply has already moved on.",
         "WORKSPACE_TURN_INTERRUPTED": "The reply stopped before it finished (the app closed or the run ended).",
-        "WORKSPACE_VOICE_UNAVAILABLE": "This recording is no longer available, so it was not sent"
+        "WORKSPACE_VOICE_UNAVAILABLE": "This recording is no longer available, so it was not sent",
+        "WORKSPACE_PROVIDER_UNAVAILABLE": "The chosen model or provider isn't available. Pick another one.",
+        "WORKSPACE_INPUT_INVALID": "Not sent: the message looks like it contains a password, key or token, or it's too long to check.",
+        "WORKSPACE_ATTACHMENT_INVALID": "An attachment is too large or not supported, or there are too many.",
+        "WORKSPACE_ATTACHMENT_UNSAFE": "An attachment in this conversation was changed on disk and can't be used."
       }
     },
     "greeting": "What shall we do today?",
@@ -2624,6 +2628,7 @@
       "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
       "empty": "The model returned nothing",
       "generic": "This reply failed",
+      "stopped": "This reply was stopped",
       "codeLabel": "Error code",
       "noDetail": "No further details were provided. Retry, then share this code if the failure continues."
     },

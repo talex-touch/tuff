@@ -66,10 +66,10 @@ export function formatUsageLimitResetTime(resetsAt: number, locale: string): str
 
 /**
  * How main records a run that did not finish: `<CODE>: <sentence>` (`AI_RUN_FAILED: AI run
- * failed.`), the same for agent tasks and workflow steps. The usage limit's code has its own branch
- * below.
+ * failed.`), the same for agent tasks and workflow steps; a Home turn may carry the code alone. The
+ * usage limit's code has its own branch below.
  */
-const AI_RUN_FAILURE = /^(AI_RUN_[A-Z_]+):/
+const AI_RUN_FAILURE = /^(AI_RUN_[A-Z_]+)(?::|$)/
 const AI_RUN_FAILURE_KEYS: Record<string, string> = {
   AI_RUN_FAILED: 'failed',
   AI_RUN_CANCELLED: 'cancelled',
@@ -79,9 +79,14 @@ const AI_RUN_FAILURE_KEYS: Record<string, string> = {
   AI_RUN_PRIVACY_DELETION_FENCED: 'beingDeleted'
 }
 
+/** The `intelligence.runFailures` key for a run's recorded failure; null for any other text. */
+export function aiRunFailureKey(text: string): string | null {
+  return AI_RUN_FAILURE_KEYS[AI_RUN_FAILURE.exec(text.trim())?.[1] ?? ''] ?? null
+}
+
 /** A run's recorded failure in the interface language; any other text is returned as it is. */
 export function describeAiRunFailure(text: string, t: (key: string) => string): string {
-  const key = AI_RUN_FAILURE_KEYS[AI_RUN_FAILURE.exec(text.trim())?.[1] ?? '']
+  const key = aiRunFailureKey(text)
   return key ? t(`intelligence.runFailures.${key}`) : text
 }
 

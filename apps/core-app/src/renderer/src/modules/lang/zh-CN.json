@@ -2414,7 +2414,11 @@
         "WORKSPACE_RUN_NOT_PENDING": "该运行已不在等待审批。",
         "WORKSPACE_STALE_TURN": "该回复已经结束。",
         "WORKSPACE_TURN_INTERRUPTED": "回复在完成前已中断（应用关闭或运行结束）。",
-        "WORKSPACE_VOICE_UNAVAILABLE": "这段录音已失效，没能发出去"
+        "WORKSPACE_VOICE_UNAVAILABLE": "这段录音已失效，没能发出去",
+        "WORKSPACE_PROVIDER_UNAVAILABLE": "所选的模型或提供商不可用，请换一个。",
+        "WORKSPACE_INPUT_INVALID": "未发送：消息里似乎有密码、密钥或令牌，或内容太长无法检查。",
+        "WORKSPACE_ATTACHMENT_INVALID": "附件过大、格式不受支持或数量过多。",
+        "WORKSPACE_ATTACHMENT_UNSAFE": "此会话中的附件已在磁盘上被改动，无法使用。"
       }
     },
     "greeting": "今天想做点什么？",
@@ -2624,6 +2628,7 @@
       "agentToolsSync": "无法连接工具网关，智能体工具保持关闭",
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了",
+      "stopped": "这轮回复已停止",
       "codeLabel": "错误代码",
       "noDetail": "没有更多错误细节，请重试；如果持续失败，请提供此错误代码。"
     },

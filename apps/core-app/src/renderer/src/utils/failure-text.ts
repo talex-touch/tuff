@@ -3,16 +3,17 @@ import { describePublicFailure } from '../../../shared/public-failure'
 /**
  * A failure as a page shows it, once it has crossed the renderer transport.
  *
- * The transport rethrows a failed call as `[TuffTransport] Failed to send "<event>": <failure>` and
- * drops whatever code the failure carried. The preface names the channel for the log; a page that
- * knows a failure by its code has to look past it, and a page that shows the failure must not show
- * it at all.
+ * The transport rethrows a failed call as `[TuffTransport] Failed to send "<event>": <failure>`, a
+ * stream that could not start as `… Failed to start stream "<event>": <failure>`, and drops
+ * whatever code the failure carried. The preface names the channel for the log; a page that knows a
+ * failure by its code has to look past it, and a page that shows the failure must not show it at
+ * all.
  */
 
 type FailureTranslate = (key: string, params?: Record<string, unknown>) => string
 
 // What the renderer transport puts in front of a failure it relays; the failure itself follows.
-const TRANSPORT_PREFACE = /^\[TuffTransport\] Failed to send "[^"]*": /
+const TRANSPORT_PREFACE = /^\[TuffTransport\] Failed to (?:send|start stream) "[^"]*": /
 // The channel's own failures (`modules/channel/channel-core.ts`). Their codes do not survive the
 // transport, so they are known by their text: no answer in time, a request that could not be sent,
 // and an error reply that came without a message.
