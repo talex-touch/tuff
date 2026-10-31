@@ -184,6 +184,8 @@ const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
+/** Ceiling on a raw-bytes (`encoding: 'base64'`) read: the largest preview, code and markdown. */
+const READ_FILE_BASE64_MAX_BYTES = 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
 const PLUGIN_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000
@@ -2603,6 +2605,27 @@ export class CommonChannelModule extends BaseModule {
 
     if (!resolvedPath) {
       throw new Error('Unsupported file source')
+    }
+
+    // Raw bytes for a renderer that decodes them itself (the preview pane's encoding picker). The
+    // reply crosses IPC as JSON, so the bytes travel base64-encoded, and only the head is read: a
+    // preview never needs the rest of a large file. Not cached: the text cache holds decoded UTF-8,
+    // which is exactly what this caller cannot use.
+    if (payload?.encoding === 'base64') {
+      const maxBytes =
+        typeof payload.maxBytes === 'number' && Number.isFinite(payload.maxBytes)
+          ? Math.max(0, Math.trunc(payload.maxBytes))
+          : READ_FILE_BASE64_MAX_BYTES
+      try {
+        const bytes = await getNetworkService().readLocalFileHead(
+          resolvedSource,
+          Math.min(maxBytes, READ_FILE_BASE64_MAX_BYTES)
+        )
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+      } catch (error) {
+        if (allowMissing && isFileMissingError(error)) return ''
+        throw error
+      }
     }
 
     // Preview grants are short-lived bearer capabilities. Never let the

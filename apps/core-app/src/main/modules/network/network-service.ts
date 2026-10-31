@@ -652,15 +652,7 @@ export class NetworkService {
       return response.data
     }
 
-    const localPath = resolveLocalFilePath(source)
-    if (!localPath) {
-      throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
-    }
-
-    const previewGrantAuthorized = isTfilePreviewGrantAuthorized(source, localPath)
-    if (!isAllowedLocalFilePath(localPath, this.allowedRoots) && !previewGrantAuthorized) {
-      throw new Error('NETWORK_FILE_FORBIDDEN')
-    }
+    const localPath = this.resolveReadableLocalPath(source)
 
     try {
       const encoding = (options.encoding || 'utf-8') as BufferEncoding
@@ -703,14 +695,7 @@ export class NetworkService {
       return response.data
     }
 
-    const localPath = resolveLocalFilePath(source)
-    if (!localPath) {
-      throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
-    }
-
-    if (!isAllowedLocalFilePath(localPath, this.allowedRoots)) {
-      throw new Error('NETWORK_FILE_FORBIDDEN')
-    }
+    const localPath = this.resolveReadableLocalPath(source)
 
     try {
       const timeoutMs =
@@ -735,6 +720,40 @@ export class NetworkService {
       }
       throw error
     }
+  }
+
+  /**
+   * The first `maxBytes` of a local file, without reading the rest: a preview of a multi-gigabyte
+   * log needs its head, not the whole file in memory. Same authority as `readText` and
+   * `readBinary`.
+   */
+  async readLocalFileHead(source: string, maxBytes: number): Promise<Uint8Array> {
+    const localPath = this.resolveReadableLocalPath(source)
+    const limit = Math.max(0, Math.floor(maxBytes))
+    const handle = await fs.open(localPath, 'r')
+    try {
+      const buffer = Buffer.alloc(limit)
+      const { bytesRead } = await handle.read(buffer, 0, limit, 0)
+      return buffer.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+  }
+
+  /**
+   * A local source's path once it may be read: inside an allowed root, or carrying the short-lived
+   * tfile grant a CoreBox preview reads through, which is what lets it show a file elsewhere.
+   */
+  private resolveReadableLocalPath(source: string): string {
+    const localPath = resolveLocalFilePath(source)
+    if (!localPath) {
+      throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
+    }
+    const previewGrantAuthorized = isTfilePreviewGrantAuthorized(source, localPath)
+    if (!isAllowedLocalFilePath(localPath, this.allowedRoots) && !previewGrantAuthorized) {
+      throw new Error('NETWORK_FILE_FORBIDDEN')
+    }
+    return localPath
   }
 
   async request<T = unknown>(options: NetworkRequestOptions): Promise<NetworkResponse<T>> {
