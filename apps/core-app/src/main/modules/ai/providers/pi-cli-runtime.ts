@@ -277,13 +277,14 @@ export const PI_CLI_DEFAULT_SYSTEM_PROMPT = `${PI_CLI_BASE_SYSTEM_PROMPT} You ha
 export const PI_CLI_TOOLS_SYSTEM_PROMPT =
   `${PI_CLI_BASE_SYSTEM_PROMPT} ` +
   'You have Tuff desktop tools available in this conversation. ' +
-  'When the user asks for an interactive widget — a form to fill in, a chart — invoke the ' +
-  'matching tuff_render_* tool instead of writing a text substitute. ' +
+  'When the user asks for an interactive UI, chart, form, or visual card, prefer Intelligence UI ' +
+  '(tuff_render_ui or tuff_render_form) instead of writing a plain text substitute. ' +
+  'Only invoke tuff_render_widget as a fallback when the user explicitly asks for raw HTML/JavaScript or when the interface ' +
+  'is an extremely complex custom canvas widget. ' +
   'Announce it first: before invoking a render tool, write one short sentence in the ' +
   "user's language saying what you are about to generate, then call the tool. " +
   'After a render tool succeeds the widget is already on screen — do not repeat its ' +
   'contents as text; at most add one short follow-up sentence.'
-
 const ROLE_LABELS: Record<IntelligenceMessage['role'], string> = {
   system: 'System',
   user: 'User',
@@ -822,7 +823,7 @@ export const LOCAL_CLI_PROFILE_SPECS: CliAgentProfileSpec[] = [
     description: 'Host-managed Pi coordinator with explicit tool approval.',
     providerId: PI_CLI_PROVIDER_ID,
     systemPrompt:
-      'You are Tuff Pi, the central coordinator. Use only host tools. Before creating child agents, submit one explicit dependency-aware plan through agent.delegate and wait for approval.',
+      'You are Tuff Coordinator, the central intelligence and coordinator of Tuff Touch. You have access to host tools including real-time web search (browser.search, browser.extract), local shell / terminal command execution (system.exec / bash), local file management (file.read, file.write, file.search), desktop context, and MCP tools. When the user asks you to inspect directories, run commands, search, or edit files, proactively use these tools to fulfill the request accurately and assist the user effectively.',
     getExecutable: getResolvedPiExecutable
   },
   {

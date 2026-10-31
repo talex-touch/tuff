@@ -14,6 +14,7 @@ import { isAbsolute, resolve } from 'node:path'
 import {
   CHART_RESULT_PREFIX,
   FORM_RESULT_PREFIX,
+  UI_RESULT_PREFIX,
   WIDGET_RESULT_PREFIX,
   WIDGET_SOURCE_MAX_CHARS
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
@@ -472,6 +473,24 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         return failure
           ? projectedToolFailure(failure)
           : { output: `Opened ${path}`, isError: false }
+      }
+    },
+    {
+      name: 'tuff_render_ui',
+      // Declarative OpenUI/Intelligence UI component tree, touches nothing on the machine.
+      risk: 'read',
+      summarize: (args) => {
+        const title = readStringArg(args, 'title').trim()
+        return title ? `Render Intelligence UI "${title}"` : 'Render an interactive UI component'
+      },
+      execute: async (args) => {
+        const spec = typeof args.spec === 'string' ? args.spec.trim() : ''
+        if (!spec) return toolFailure('TOOL_INPUT_INVALID')
+        const title = readStringArg(args, 'title').trim()
+        return {
+          output: `${UI_RESULT_PREFIX}${JSON.stringify({ title: title || undefined, spec })}`,
+          isError: false
+        }
       }
     },
     {

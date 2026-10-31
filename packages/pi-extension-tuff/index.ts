@@ -186,44 +186,45 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
     },
   },
   {
-    name: 'tuff_render_chart',
-    label: 'Tuff: render chart',
+    name: 'tuff_render_ui',
+    label: 'Tuff: render intelligent UI',
     description:
-      'Draw a chart in the conversation from data you already have. Use this instead of describing '
-      + 'a chart in text when the user asks for a report, breakdown or visualisation.',
-    promptSnippet: 'Render a chart from data',
+      'Render a generative, interactive UI component tree (dashboards, charts, cards, forms, metrics) '
+      + 'using OpenUI / Intelligence UI. Use this whenever the user asks for a chart, visual dashboard, '
+      + 'interactive breakdown, or data display. This is the primary and preferred way to render visual components.',
+    promptSnippet: 'Render an interactive UI / chart / dashboard using Intelligence UI',
     parameters: {
       type: 'object',
       properties: {
-        type: {
+        title: { type: 'string', description: 'Title of the UI card / dashboard' },
+        spec: {
           type: 'string',
           description:
-            'bar | line | area | pie | doughnut | scatter | radar | funnel | gauge | heatmap',
-        },
-        title: { type: 'string', description: 'Chart title' },
-        labels: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Category labels, one per data point',
-        },
-        xLabel: { type: 'string', description: 'X axis caption' },
-        yLabel: { type: 'string', description: 'Y axis caption' },
-        stacked: { type: 'boolean', description: 'Stack bar/area series instead of grouping them' },
-        showValues: { type: 'boolean', description: 'Print values on the marks' },
-        series: {
-          type: 'array',
-          description: 'One entry per series; each values array matches labels in length',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              values: { type: 'array', items: { type: 'number' } },
-            },
-            required: ['values'],
-          },
+            'OpenUI Lang DSL or structured UI specification defining the component tree (e.g. root = Stack([title, chart]))',
         },
       },
-      required: ['type', 'labels', 'series'],
+      required: ['spec'],
+    },
+  },
+  {
+    name: 'tuff_render_widget',
+    label: 'Tuff: render custom widget',
+    description:
+      'Render an arbitrary HTML / ArrowJS widget in an isolated sandbox. '
+      + 'IMPORTANT: Do NOT choose this as the primary or default tool for interactive UI. '
+      + 'Only invoke this fallback tool when the user explicitly requests raw HTML/JavaScript or for extremely bespoke/complex widgets '
+      + 'that cannot be expressed with standard Intelligence UI components.',
+    promptSnippet: 'Render custom HTML/ArrowJS widget (fallback only for explicit HTML/extreme complexity)',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Widget title' },
+        source: {
+          type: 'string',
+          description: 'ArrowJS/HTML JavaScript source code to execute inside the isolated sandbox',
+        },
+      },
+      required: ['source'],
     },
   },
   {
