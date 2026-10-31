@@ -411,12 +411,15 @@ function issueWords(issue: PluginIssueLike, t: Translate, locale: string): Issue
         advice: t('plugin.issues.advice.widgetFileTypes')
       }
     case 'WIDGET_INVALID_DEPENDENCY': {
-      if (typeof meta.module !== 'string' || !meta.module) return null
+      const advice = t('plugin.issues.advice.widgetPackages', {
+        packages: joinList(WIDGET_ALLOWED_PACKAGES, locale)
+      })
+      // A widget failure carries the code without the module the issue named.
+      if (typeof meta.module !== 'string' || !meta.module)
+        return { title: t('plugin.issues.widget.compileFailed'), advice }
       return {
         title: t('plugin.issues.widget.invalidDependency', { module: meta.module }),
-        advice: t('plugin.issues.advice.widgetPackages', {
-          packages: joinList(WIDGET_ALLOWED_PACKAGES, locale)
-        })
+        advice
       }
     }
     case 'WIDGET_COMPILE_SKIPPED':

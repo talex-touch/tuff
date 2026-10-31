@@ -7,12 +7,18 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { IPluginFeature, IPluginManager, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type {
+  IPluginFeature,
+  IPluginManager,
+  ITouchPlugin,
+  PluginIssue
+} from '@talex-touch/utils/plugin'
 import type { FeatureSearchToken } from '@talex-touch/utils/search'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type {
   PluginEntityActionId,
   PluginEntityFeature,
+  PluginEntityProblem,
   PluginEntitySnapshot,
   PluginEntityState
 } from '../../../../shared/plugin-entity'
@@ -98,11 +104,31 @@ export function resolvePluginEntityState(plugin: ITouchPlugin): PluginEntityStat
   }
 }
 
-function resolveProblem(plugin: ITouchPlugin): string | undefined {
-  const loadError = plugin.loadError?.message?.trim()
-  if (loadError) return loadError
+/**
+ * The load error, or the first error issue. A load error is a copy of one of the plugin's issues
+ * without the details its words need, so the issue it copies is sent while the plugin still has it.
+ */
+function resolveProblem(plugin: ITouchPlugin): PluginEntityProblem | undefined {
+  const loadError = plugin.loadError
+  if (loadError?.message?.trim()) {
+    const issue = loadError.code
+      ? plugin.issues?.find((candidate) => candidate.code === loadError.code)
+      : undefined
+    return toProblem(issue ?? { type: 'error', code: loadError.code, message: loadError.message })
+  }
   const issue = plugin.issues?.find((candidate) => candidate.type === 'error')
-  return issue?.message?.trim() || undefined
+  return issue?.message?.trim() ? toProblem(issue) : undefined
+}
+
+function toProblem(issue: PluginIssue): PluginEntityProblem {
+  const problem: PluginEntityProblem = { type: issue.type, message: issue.message.trim() }
+  if (issue.code) problem.code = issue.code
+  if (issue.source) problem.source = issue.source
+  if (issue.suggestion) problem.suggestion = issue.suggestion
+  if (issue.meta && typeof issue.meta === 'object' && !Array.isArray(issue.meta)) {
+    problem.meta = issue.meta
+  }
+  return problem
 }
 
 /**

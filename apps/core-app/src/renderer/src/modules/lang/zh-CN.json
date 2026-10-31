@@ -7230,10 +7230,9 @@
     }
   },
   "widgetFrame": {
-    "compileFailed": "Widget 编译失败",
     "loading": "Widget 加载中",
-    "rendererMissing": "Widget renderer 缺失",
-    "rendererUnregistered": "Widget renderer 未注册",
+    "rendererMissing": "Widget 渲染器缺失",
+    "rendererUnregistered": "Widget 渲染器未注册",
     "missingRendererId": "缺少 rendererId",
     "renderFailed": "Widget 渲染失败"
   },

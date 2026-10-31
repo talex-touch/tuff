@@ -21,6 +21,7 @@ import {
   guardWidgetDomNavigation,
   runWidgetHostAction
 } from '~/modules/plugin/widget-sandbox-policy'
+import { describePluginIssue } from '~/modules/plugin/plugin-issue-display'
 import { getWidgetFailure, getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -46,7 +47,7 @@ const emits = defineEmits<{
   (e: 'render-error', error: Error): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const renderError = ref<Error | null>(null)
 const widgetFrameLog = createRendererLogger('WidgetFrame')
 const rendererState = ref<'loading' | 'ready' | 'missing'>('loading')
@@ -100,7 +101,14 @@ const canRenderShadow = computed(() => useShadowHost.value && Boolean(renderer.v
 const renderModeLabel = computed(() => (useShadowHost.value ? 'shadow' : 'light'))
 const widgetFailure = computed(() => getWidgetFailure(props.rendererId))
 const emptyStateText = computed(() => {
-  if (widgetFailure.value) return t('widgetFrame.compileFailed')
+  const failure = widgetFailure.value
+  if (failure) {
+    return describePluginIssue(
+      { type: 'error', code: failure.code, message: failure.message },
+      t,
+      locale.value
+    ).title
+  }
   if (rendererState.value === 'loading') return t('widgetFrame.loading')
   if (!props.rendererId) return t('widgetFrame.rendererMissing')
   return t('widgetFrame.rendererUnregistered')

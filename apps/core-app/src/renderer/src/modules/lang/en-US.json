@@ -7230,7 +7230,6 @@
     }
   },
   "widgetFrame": {
-    "compileFailed": "Widget compile failed",
     "loading": "Loading widget",
     "rendererMissing": "Widget renderer missing",
     "rendererUnregistered": "Widget renderer not registered",
