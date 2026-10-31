@@ -454,7 +454,8 @@ export class ConversationWorkspaceRunner {
     const project = turn.input.projectId ? await getProject(turn.input.projectId) : null
     if (turn.input.projectId && (!project || project.archived))
       throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
-    const root = await realpath(project?.rootPath ?? app.getPath('userData'))
+    const defaultRoot = project?.rootPath ?? process.env.HOME ?? app.getPath('userData')
+    const root = await realpath(defaultRoot)
     if (!(await stat(root)).isDirectory()) throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
     const history = conversation.messages
       .filter((message) => message.status === 'complete' && message.id !== turn.user.id)
@@ -463,16 +464,7 @@ export class ConversationWorkspaceRunner {
         text: message.content,
         createdAt: message.createdAt
       }))
-    const allowedToolIds = profile.allowedToolIds.filter((id) => {
-      if (project) return true
-      const tool = toolRegistry.getTool(id)
-      return (
-        tool &&
-        !(tool.permissions ?? []).some((permission) =>
-          ['file:read', 'file:write', 'file:delete', 'system:exec'].includes(String(permission))
-        )
-      )
-    })
+    const allowedToolIds = [...profile.allowedToolIds]
     const modelAttachments = await this.service.getModelAttachments(turn.input)
     const prepared = await this.prepareContext(
       slot,

@@ -1,3 +1,5 @@
+import type { ToolExecutionContext } from '../tool-registry'
+import { exec } from 'node:child_process'
 import type { AgentPermission } from '@talex-touch/utils'
 import type { ClipboardWriteRequest } from '@talex-touch/utils/transport/events/types'
 import { network } from '@talex-touch/utils/network'
@@ -167,14 +169,15 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
     {
       id: 'browser.search',
       name: 'Search The Web',
-      description: 'Construct a search URL and optionally open it in the browser.',
+      description:
+        'Search the web for real-time information, news, documentation, or websites. Returns relevant search results with titles, URLs, and snippets.',
       category: 'browser',
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search query' },
-          provider: { type: 'string', description: 'Search provider, defaults to Google' },
-          open: { type: 'boolean', description: 'Whether to open the search URL immediately' }
+          query: { type: 'string', description: 'Search query keyword or question' },
+          provider: { type: 'string', description: 'Search provider (google or bing), defaults to google' },
+          open: { type: 'boolean', description: 'Whether to open the search URL in user browser immediately' }
         },
         required: ['query']
       },
@@ -201,7 +204,33 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
         })
         opened = decision.allowed
       }
-      return { provider, query, url, opened }
+      let results: Array<{ title: string; url: string; snippet: string }> = []
+      try {
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+        const html = await network.readText(ddgUrl)
+        const blocks = html.match(/<div[^>]+class="[^"]*result__body[^"]*"[\s\S]*?<\/div>\s*<\/div>/gi) ?? []
+        for (const block of blocks.slice(0, 6)) {
+          const titleMatch =
+            block.match(/<h2[^>]*>[\s\S]*?<a[^>]*class="[^"]*result__url[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ??
+            block.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ??
+            block.match(/<h2[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i)
+          const snippetMatch = block.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+          const rawHref = block.match(/href="([^"]+)"/i)?.[1]
+          let resultUrl = rawHref ?? ''
+          if (resultUrl.includes('uddg=')) {
+            const match = resultUrl.match(/[?&]uddg=([^&]+)/)
+            if (match?.[1]) resultUrl = decodeURIComponent(match[1])
+          }
+          const title = stripHtml(titleMatch?.[1] ?? '').trim()
+          const snippet = stripHtml(snippetMatch?.[1] ?? '').trim()
+          if (title || snippet) {
+            results.push({ title: title || query, url: resultUrl, snippet })
+          }
+        }
+      } catch {
+        // Fallback gracefully to returning search URL
+      }
+      return { provider, query, url, opened, results }
     }
   )
 
@@ -231,5 +260,104 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
         content: text
       }
     }
+  )
+
+  const execHandler = async (input: unknown, ctx?: ToolExecutionContext) => {
+    const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : null
+    const rawCommand = record && typeof record.command === 'string' ? record.command : ''
+    const rawCwd = record && typeof record.cwd === 'string' ? record.cwd : undefined
+    const rawTimeout =
+      record && typeof record.timeoutMs === 'number' && Number.isFinite(record.timeoutMs)
+        ? record.timeoutMs
+        : 30000
+
+    const cmd = rawCommand.trim()
+    if (!cmd) throw new Error('Command is required')
+    const effectiveCwd = rawCwd || ctx?.workingDirectory || process.env.HOME || process.cwd()
+
+    return await new Promise<{
+      command: string
+      cwd: string
+      stdout: string
+      stderr: string
+      exitCode: number
+    }>((resolve) => {
+      const child = exec(
+        cmd,
+        {
+          cwd: effectiveCwd,
+          timeout: Math.min(Math.max(1000, rawTimeout), 120000),
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env }
+        },
+        (error, stdout, stderr) => {
+          const stdoutStr = String(stdout || '')
+          const stderrStr = String(stderr || '')
+          let exitCode = 0
+          if (error) {
+            exitCode = 1
+            if ('code' in error && typeof error.code === 'number') {
+              exitCode = error.code
+            }
+          }
+          resolve({
+            command: cmd,
+            cwd: effectiveCwd,
+            stdout: stdoutStr,
+            stderr: stderrStr,
+            exitCode
+          })
+        }
+      )
+      if (ctx?.signal) {
+        ctx.signal.addEventListener('abort', () => {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // ignore
+          }
+        }, { once: true })
+      }
+    })
+  }
+
+  toolRegistry.registerTool(
+    {
+      id: 'system.exec',
+      name: 'Execute Shell Command',
+      description:
+        'Execute a local shell / terminal command (e.g. pwd, ls, git, cat, npm) in the workspace directory. Returns stdout, stderr, and exit code.',
+      category: 'system',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: 'The shell command to execute' },
+          cwd: { type: 'string', description: 'Optional working directory. Defaults to current workspace directory' },
+          timeoutMs: { type: 'number', description: 'Timeout in milliseconds (defaults to 30000)' }
+        },
+        required: ['command']
+      },
+      permissions: ['system:exec' as AgentPermission]
+    },
+    execHandler
+  )
+
+  toolRegistry.registerTool(
+    {
+      id: 'bash',
+      name: 'Bash Command',
+      description: 'Execute a bash command in the terminal. Alias for system.exec.',
+      category: 'system',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: 'The bash command to execute' },
+          cwd: { type: 'string', description: 'Optional working directory' }
+        },
+        required: ['command']
+      },
+      permissions: ['system:exec' as AgentPermission]
+    },
+    execHandler
   )
 }

@@ -43,6 +43,7 @@ export class WorkspaceMessageAssembler {
   private reasoningStartedAt: number | undefined
   private committed = { contentLength: 0, partsLength: 0, textLength: 0 }
   private readonly startedAt = Date.now()
+  private firstTokenAt: number | undefined
   private content = ''
   private meta: Record<string, unknown>
   private status: StoredConversationMessage['status'] = 'streaming'
@@ -68,8 +69,16 @@ export class WorkspaceMessageAssembler {
     return this.content
   }
 
+  private markFirstToken(): void {
+    if (!this.firstTokenAt) {
+      this.firstTokenAt = Date.now()
+      this.meta.ttftMs = this.firstTokenAt - this.startedAt
+    }
+  }
+
   delta(delta: string): void {
     if (!delta) return
+    this.markFirstToken()
     this.providerActivity = true
     this.content += delta
     if (this.parts) {
@@ -158,6 +167,12 @@ export class WorkspaceMessageAssembler {
     }
     this.providerActivity = true
     switch (event.kind) {
+      case 'reasoning-delta':
+        this.markFirstToken()
+        break
+      case 'tool-start':
+        this.markFirstToken()
+        break
       case 'reasoning-start': {
         if (this.openReasoning && !this.openReasoning.done) return
         this.reasoningStartedAt = Date.now()

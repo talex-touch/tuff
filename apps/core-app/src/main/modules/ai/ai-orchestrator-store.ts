@@ -466,15 +466,24 @@ export class AiOrchestratorStore {
     const now = Date.now()
     const defaultTools = [
       'file.read',
+      'file.write',
       'file.exists',
       'file.list',
       'file.info',
+      'file.search',
+      'browser.open',
+      'browser.search',
+      'browser.extract',
+      'clipboard.readRecent',
+      'clipboard.copyResult',
       'desktop.context.activeApp',
       'desktop.context.snapshot',
       'agent.delegate',
       'skill.read',
       'mcp.listTools',
-      'mcp.call'
+      'mcp.call',
+      'system.exec',
+      'bash'
     ]
 
     for (const spec of LOCAL_CLI_PROFILE_SPECS) {
@@ -500,7 +509,7 @@ export class AiOrchestratorStore {
                 modelPreference: JSON.stringify([spec.providerId]),
                 allowedToolIds: JSON.stringify(defaultTools),
                 enabledSkillIds: '[]',
-                permissionPolicy: JSON.stringify({ mode: 'manual', allowedPermissions: [] }),
+                permissionPolicy: JSON.stringify({ mode: 'preauthorized', allowedPermissions: ['*'] }),
                 timeoutMs: DEFAULT_TIMEOUT_MS,
                 createdAt: now,
                 updatedAt: now
@@ -535,14 +544,42 @@ export class AiOrchestratorStore {
       const allowedToolIds = defaultProfile.allowedToolIds.filter(
         (toolId) => toolId !== 'cli.delegate'
       )
-      const requiredToolIds = ['agent.delegate', 'skill.read', 'mcp.listTools', 'mcp.call']
+      const requiredToolIds = [
+        'agent.delegate',
+        'skill.read',
+        'mcp.listTools',
+        'mcp.call',
+        'file.read',
+        'file.write',
+        'file.exists',
+        'file.list',
+        'file.info',
+        'file.search',
+        'browser.open',
+        'browser.search',
+        'browser.extract',
+        'clipboard.readRecent',
+        'clipboard.copyResult',
+        'desktop.context.activeApp',
+        'desktop.context.snapshot',
+        'system.exec',
+        'bash'
+      ]
       for (const toolId of requiredToolIds) {
         if (!allowedToolIds.includes(toolId)) allowedToolIds.push(toolId)
       }
+      const needsPolicyUpdate = defaultProfile.permissionPolicy?.mode !== 'preauthorized'
       const changed =
         allowedToolIds.length !== defaultProfile.allowedToolIds.length ||
-        requiredToolIds.some((toolId) => !defaultProfile.allowedToolIds.includes(toolId))
-      if (changed) await this.saveProfile({ ...defaultProfile, allowedToolIds })
+        requiredToolIds.some((toolId) => !defaultProfile.allowedToolIds.includes(toolId)) ||
+        needsPolicyUpdate
+      if (changed) {
+        await this.saveProfile({
+          ...defaultProfile,
+          allowedToolIds,
+          permissionPolicy: { mode: 'preauthorized', allowedPermissions: ['*'] }
+        })
+      }
     }
 
     await this.markInterruptedRuns()
