@@ -57,7 +57,21 @@ let restoreFocusOnClose = false
 const selectedProfile = computed(() =>
   props.profiles.find((profile) => profile.id === props.profileId)
 )
+const coordinatorProfile = computed(() =>
+  props.profiles.find((profile) => profile.id === 'default-pi' || profile.id === 'tuff-pi' || profile.name.includes('Coordinator'))
+)
+const coordinatorId = computed(() => coordinatorProfile.value?.id ?? 'default-pi')
+const cliProfiles = computed(() =>
+  props.profiles.filter((profile) => profile.enabled && profile.id !== coordinatorId.value)
+)
 const enabledProfiles = computed(() => props.profiles.filter((profile) => profile.enabled))
+
+const isCoordinatorSelected = computed(() => {
+  if (props.mode === 'agent') {
+    return props.profileId === coordinatorId.value || !props.profileId
+  }
+  return true
+})
 
 /** The profile the conversation names is gone or switched off: Main will refuse to run it. */
 const profileUnavailable = computed(
@@ -74,13 +88,16 @@ const profileUnavailable = computed(
 const showSkeleton = computed(() => props.profilesLoading && props.profiles.length === 0)
 
 const chipLabel = computed(() => {
-  if (props.mode === 'chat') return t('home.workspace.mode.chat')
-  return selectedProfile.value?.name ?? t('home.workspace.mode.agent')
+  if (props.mode === 'agent') {
+    if (isCoordinatorSelected.value) {
+      return coordinatorProfile.value?.name ?? t('home.workspace.mode.coordinator')
+    }
+    return selectedProfile.value?.name ?? t('home.workspace.mode.agent')
+  }
+  return coordinatorProfile.value?.name ?? t('home.workspace.mode.coordinator')
 })
 
-const chipIcon = computed(() => (props.mode === 'agent' ? 'i-ri-robot-2-line' : 'i-ri-chat-3-line'))
-
-/** A pick that changes the execution authority waits while Main is mid-turn on a thread. */
+const chipIcon = computed(() => 'i-ri-robot-2-line')
 function isBlocked(target: { mode: ConversationWorkspaceMode; profileId?: string }): boolean {
   if (!props.locked) return false
   if (target.mode !== props.mode) return true
@@ -92,12 +109,14 @@ function close(): void {
   open.value = false
 }
 
-function chooseChat(): void {
-  if (isBlocked({ mode: 'chat' })) return
-  if (props.mode !== 'chat') emit('select-chat')
+function chooseCoordinator(): void {
+  const coordinatorId = coordinatorProfile.value?.id ?? 'default-pi'
+  if (isBlocked({ mode: 'agent', profileId: coordinatorId })) return
+  if (props.mode !== 'agent' || props.profileId !== coordinatorId) {
+    emit('select-agent', coordinatorId)
+  }
   close()
 }
-
 function chooseProfile(profile: AiAgentProfile): void {
   if (!profile.enabled || isBlocked({ mode: 'agent', profileId: profile.id })) return
   if (props.mode !== 'agent' || props.profileId !== profile.id) emit('select-agent', profile.id)
@@ -158,8 +177,10 @@ let landPlateNext = true
 /** The current choice's row; the manage view has none. */
 const currentPlateKey = computed(() => {
   if (view.value !== 'main') return null
-  if (props.mode === 'chat') return 'chat'
-  return props.profileId ? `profile:${props.profileId}` : null
+  if (props.mode === 'agent' && props.profileId && props.profileId !== coordinatorId.value) {
+    return `profile:${props.profileId}`
+  }
+  return 'coordinator'
 })
 
 function plateRow(key: string | null): HTMLElement | null {
@@ -395,25 +416,26 @@ watch(open, (isOpen) => {
         aria-hidden="true"
       />
       <template v-if="view === 'main'">
+        <!-- Tuff 调度器 (内置核心调度器) -->
         <div
           class="HomeWorkspaceModeMenu-Group"
           role="group"
-          :aria-label="t('home.workspace.mode.menu')"
+          :aria-label="t('home.workspace.mode.coordinator')"
           :aria-busy="profilesLoading || undefined"
         >
           <button
             class="HomeWorkspaceModeMenu-Row"
             type="button"
             role="menuitemradio"
-            data-plate-key="chat"
-            :aria-checked="mode === 'chat'"
-            :aria-disabled="isBlocked({ mode: 'chat' }) || undefined"
-            @click="chooseChat"
+            data-plate-key="coordinator"
+            :aria-checked="isCoordinatorSelected"
+            :aria-disabled="isBlocked({ mode: 'agent', profileId: coordinatorId }) || undefined"
+            @click="chooseCoordinator"
           >
-            <span class="i-ri-chat-3-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
-            <span class="HomeWorkspaceModeMenu-Name">{{ t('home.workspace.mode.chat') }}</span>
+            <span class="i-ri-robot-2-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
+            <span class="HomeWorkspaceModeMenu-Name">{{ coordinatorProfile?.name ?? t('home.workspace.mode.coordinator') }}</span>
             <span
-              v-if="mode === 'chat'"
+              v-if="isCoordinatorSelected"
               class="i-ri-check-line HomeWorkspaceModeMenu-Check"
               aria-hidden="true"
             />
@@ -423,10 +445,18 @@ watch(open, (isOpen) => {
             <span class="i-ri-robot-2-line HomeWorkspaceModeMenu-Icon" />
             <TxSkeleton class="HomeWorkspaceModeMenu-SkeletonBar" :height="10" :radius="5" />
           </div>
+        </div>
 
-          <template v-else>
+        <!-- 外部扫描 CLI 调度器列表 -->
+        <template v-if="cliProfiles.length > 0">
+          <div class="HomeWorkspaceModeMenu-Divider" role="separator" />
+          <div
+            class="HomeWorkspaceModeMenu-Group"
+            role="group"
+            :aria-label="t('home.workspace.mode.cliSection')"
+          >
             <button
-              v-for="profile in enabledProfiles"
+              v-for="profile in cliProfiles"
               :key="profile.id"
               class="HomeWorkspaceModeMenu-Row"
               type="button"
@@ -436,7 +466,7 @@ watch(open, (isOpen) => {
               :aria-disabled="isBlocked({ mode: 'agent', profileId: profile.id }) || undefined"
               @click="chooseProfile(profile)"
             >
-              <span class="i-ri-robot-2-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
+              <span class="i-ri-terminal-box-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
               <span class="HomeWorkspaceModeMenu-Name">{{ profile.name }}</span>
               <span
                 v-if="mode === 'agent' && profile.id === profileId"
@@ -444,8 +474,8 @@ watch(open, (isOpen) => {
                 aria-hidden="true"
               />
             </button>
-          </template>
-        </div>
+          </div>
+        </template>
 
         <div
           v-if="profilesError && profiles.length === 0"

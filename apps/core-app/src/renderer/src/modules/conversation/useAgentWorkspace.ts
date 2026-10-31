@@ -182,9 +182,9 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
   const resuming = ref(false)
   const runDecision = ref<'approve' | 'reject' | null>(null)
 
-  /** A blank Home's mode and profile before Main holds the thread. */
-  const draftMode = ref<ConversationWorkspaceMode>('chat')
-  const draftProfileId = ref<string | undefined>(undefined)
+  /** A blank Home's mode and profile before Main holds the thread: defaults to Tuff Coordinator. */
+  const draftMode = ref<ConversationWorkspaceMode>('agent')
+  const draftProfileId = ref<string | undefined>('default-pi')
 
   /**
    * Stream frame bookkeeping. A turn's frames apply in `seq` order and only while it is the turn
