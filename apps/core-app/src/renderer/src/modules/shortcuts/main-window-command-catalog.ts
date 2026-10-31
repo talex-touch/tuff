@@ -28,6 +28,7 @@ export type MainWindowCommandId =
   | 'toggle-sidebar'
   | 'open-palette'
   | 'toggle-panel'
+  | 'toggle-terminal'
   | 'focus-composer'
   | 'send'
   | 'stop'
@@ -145,6 +146,13 @@ export const MAIN_WINDOW_COMMAND_CATALOG: readonly MainWindowCommandDescriptor[]
     icon: 'i-ri-layout-right-line',
     group: 'view',
     chord: { code: 'KeyB', shift: true }
+  },
+  {
+    id: 'toggle-terminal',
+    labelKey: 'shortcuts.commands.toggleTerminal',
+    icon: 'i-ri-terminal-box-line',
+    group: 'view',
+    chord: { code: 'KeyJ' }
   },
   {
     id: PALETTE_COMMAND_ID,

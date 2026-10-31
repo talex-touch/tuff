@@ -8,6 +8,7 @@ import { isBetaFeatureEnabled } from '../../../shared/beta-features'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { PALETTE_COMMAND_ID } from '~/modules/shortcuts/main-window-command-catalog'
 import {
@@ -33,6 +34,7 @@ export function useMainWindowCommands() {
   const router = useRouter()
   const { enterConversation, enterPickedProjectConversation } = useConversationEntry()
   const { toggle: toggleSidebar } = useShellSidebar()
+  const { toggleTerminal } = useShellTerminal()
   const transport = useTuffTransport()
 
   const handlers: MainWindowCommandHandler[] = [
@@ -83,6 +85,7 @@ export function useMainWindowCommands() {
       }
     },
     { id: 'toggle-sidebar', run: toggleSidebar },
+    { id: 'toggle-terminal', run: toggleTerminal },
     { id: PALETTE_COMMAND_ID, run: toggleMainWindowPalette }
   ]
 

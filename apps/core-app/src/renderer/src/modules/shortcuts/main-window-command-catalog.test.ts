@@ -62,4 +62,39 @@ describe('Open CoreBox in the main window', () => {
     expect(oldKey.defaultPrevented).toBe(false)
     expect(openSettings).toHaveBeenCalledTimes(1)
   })
+
+  it('has toggle-terminal in the catalog bound to KeyJ with group view', () => {
+    const command = MAIN_WINDOW_COMMAND_CATALOG.find((candidate) => candidate.id === 'toggle-terminal')
+
+    expect(command).toBeDefined()
+    expect(command?.chord).toEqual({ code: 'KeyJ' })
+    expect(command?.group).toBe('view')
+    expect(command?.icon).toBe('i-ri-terminal-box-line')
+    expect(mainWindowCommandChordLabel('toggle-terminal', true)).toBe('⌘J')
+    expect(mainWindowCommandChordLabel('toggle-terminal', false)).toBe('Ctrl+J')
+  })
+
+  it.each([
+    ['macOS', true, { metaKey: true }],
+    ['Windows and Linux', false, { ctrlKey: true }]
+  ])('fires toggle-terminal on Command+J / Ctrl+J on %s', (_, isMac, modifier) => {
+    const toggleTerminal = vi.fn()
+    disposers.push(
+      registerMainWindowCommandHandlers([
+        { id: 'toggle-terminal', run: toggleTerminal }
+      ]),
+      installMainWindowShortcutCapture({ isMac: () => isMac })
+    )
+
+    const chordEvent = new KeyboardEvent('keydown', {
+      key: 'j',
+      code: 'KeyJ',
+      cancelable: true,
+      ...modifier
+    })
+    window.dispatchEvent(chordEvent)
+
+    expect(toggleTerminal).toHaveBeenCalledTimes(1)
+    expect(chordEvent.defaultPrevented).toBe(true)
+  })
 })
