@@ -15,8 +15,8 @@ const SAFE_FLOW_ACTIONS = [
   {
     id: 'stop-all-sessions',
     targetId: 'quickops.stop-all-sessions',
-    title: '停止所有 QuickOps 会话',
-    subtitle: '通过 CoreApp QuickOps runtime 停止当前所有本地会话',
+    title: ['停止所有 QuickOps 会话', 'Stop All QuickOps Sessions'],
+    subtitle: ['停止正在运行的所有 QuickOps 会话', 'Stops every running QuickOps session'],
     patterns: [
       /\bstop\s+all\s+(?:quick\s*ops?\s+)?sessions?\b/i,
       /停止.*(?:所有|全部).*(?:quickops|快捷工具|会话)/i,
@@ -25,22 +25,22 @@ const SAFE_FLOW_ACTIONS = [
   {
     id: 'stop-system-awake',
     targetId: 'quickops.stop-system-awake',
-    title: '停止系统唤醒',
-    subtitle: '停止当前 system-awake 会话',
+    title: ['停止系统唤醒', 'Stop Keeping System Awake'],
+    subtitle: ['结束当前的系统唤醒会话', 'Ends the current keep-system-awake session'],
     patterns: [/\bstop\s+system\s+awake\b/i, /停止.*(?:系统唤醒|系统防休眠)/],
   },
   {
     id: 'stop-keep-awake',
     targetId: 'quickops.stop-keep-awake',
-    title: '停止保持唤醒',
-    subtitle: '停止当前 keep-awake 会话',
+    title: ['停止保持唤醒', 'Stop Keeping Display Awake'],
+    subtitle: ['结束当前的保持唤醒会话', 'Ends the current keep-display-awake session'],
     patterns: [/\bstop\s+keep\s+awake\b/i, /停止.*(?:保持唤醒|屏幕常亮|防休眠)/],
   },
   {
     id: 'stop-clean-screen',
     targetId: 'quickops.stop-clean-screen',
-    title: '退出清屏模式',
-    subtitle: '关闭当前 clean-screen overlay',
+    title: ['退出清屏模式', 'Exit Clean Screen'],
+    subtitle: ['关闭当前的清屏遮罩', 'Closes the current clean-screen overlay'],
     patterns: [
       /\bstop\s+(?:clean\s+screen|screen\s+clean)\b/i,
       /(?:停止|退出|关闭).*(?:清屏|屏幕清洁)/,
@@ -49,57 +49,57 @@ const SAFE_FLOW_ACTIONS = [
   {
     id: 'pause-timer',
     targetId: 'quickops.pause-timer',
-    title: '暂停计时器',
-    subtitle: '暂停当前 QuickOps timer 会话',
+    title: ['暂停计时器', 'Pause Timer'],
+    subtitle: ['暂停正在运行的计时器', 'Pauses the running timer'],
     patterns: [/\bpause\s+timer\b/i, /\btimer\s+pause\b/i, /暂停.*计时器/],
   },
   {
     id: 'resume-timer',
     targetId: 'quickops.resume-timer',
-    title: '继续计时器',
-    subtitle: '恢复当前暂停的 QuickOps timer 会话',
+    title: ['继续计时器', 'Resume Timer'],
+    subtitle: ['继续已暂停的计时器', 'Resumes the paused timer'],
     patterns: [/\b(?:resume|continue)\s+timer\b/i, /\btimer\s+resume\b/i, /(?:继续|恢复).*计时器/],
   },
   {
     id: 'stop-timer',
     targetId: 'quickops.stop-timer',
-    title: '停止计时器',
-    subtitle: '停止当前 QuickOps timer 会话',
+    title: ['停止计时器', 'Stop Timer'],
+    subtitle: ['停止当前的计时器', 'Stops the current timer'],
     patterns: [/\bstop\s+timer\b/i, /\btimer\s+stop\b/i, /停止.*计时器/],
   },
   {
     id: 'pause-pomodoro',
     targetId: 'quickops.pause-pomodoro',
-    title: '暂停番茄钟',
-    subtitle: '暂停当前 QuickOps Pomodoro 会话',
+    title: ['暂停番茄钟', 'Pause Pomodoro'],
+    subtitle: ['暂停正在运行的番茄钟', 'Pauses the running Pomodoro session'],
     patterns: [/\bpause\s+pomodoro\b/i, /\bpomodoro\s+pause\b/i, /暂停.*番茄钟/],
   },
   {
     id: 'resume-pomodoro',
     targetId: 'quickops.resume-pomodoro',
-    title: '继续番茄钟',
-    subtitle: '恢复当前暂停的 QuickOps Pomodoro 会话',
+    title: ['继续番茄钟', 'Resume Pomodoro'],
+    subtitle: ['继续已暂停的番茄钟', 'Resumes the paused Pomodoro session'],
     patterns: [/\b(?:resume|continue)\s+pomodoro\b/i, /\bpomodoro\s+resume\b/i, /(?:继续|恢复).*番茄钟/],
   },
   {
     id: 'stop-pomodoro',
     targetId: 'quickops.stop-pomodoro',
-    title: '停止番茄钟',
-    subtitle: '停止当前 QuickOps Pomodoro 会话',
+    title: ['停止番茄钟', 'Stop Pomodoro'],
+    subtitle: ['停止当前的番茄钟', 'Stops the current Pomodoro session'],
     patterns: [/\bstop\s+pomodoro\b/i, /\bpomodoro\s+stop\b/i, /停止.*番茄钟/],
   },
   {
     id: 'pause-stopwatch',
     targetId: 'quickops.pause-stopwatch',
-    title: '暂停秒表',
-    subtitle: '暂停当前 QuickOps stopwatch 会话',
+    title: ['暂停秒表', 'Pause Stopwatch'],
+    subtitle: ['暂停正在运行的秒表', 'Pauses the running stopwatch'],
     patterns: [/\bpause\s+stopwatch\b/i, /\bstopwatch\s+pause\b/i, /暂停.*秒表/],
   },
   {
     id: 'resume-stopwatch',
     targetId: 'quickops.resume-stopwatch',
-    title: '继续秒表',
-    subtitle: '恢复当前暂停的 QuickOps stopwatch 会话',
+    title: ['继续秒表', 'Resume Stopwatch'],
+    subtitle: ['继续已暂停的秒表', 'Resumes the paused stopwatch'],
     patterns: [
       /\b(?:resume|continue)\s+stopwatch\b/i,
       /\bstopwatch\s+resume\b/i,
@@ -109,15 +109,15 @@ const SAFE_FLOW_ACTIONS = [
   {
     id: 'lap-stopwatch',
     targetId: 'quickops.lap-stopwatch',
-    title: '记录秒表分段',
-    subtitle: '为当前 QuickOps stopwatch 记录 lap',
+    title: ['记录秒表分段', 'Record Lap'],
+    subtitle: ['为正在运行的秒表记录一个分段', 'Records a lap on the running stopwatch'],
     patterns: [/\blap\s+stopwatch\b/i, /\bstopwatch\s+lap\b/i, /(?:记录|新增).*分段/],
   },
   {
     id: 'reset-stopwatch',
     targetId: 'quickops.reset-stopwatch',
-    title: '重置秒表',
-    subtitle: '停止并清除当前 QuickOps stopwatch 会话',
+    title: ['重置秒表', 'Reset Stopwatch'],
+    subtitle: ['停止并清除当前的秒表', 'Stops and clears the current stopwatch'],
     patterns: [
       /\b(?:reset|stop)\s+stopwatch\b/i,
       /\bstopwatch\s+(?:reset|stop)\b/i,
@@ -130,67 +130,67 @@ const CONFIRMATION_FLOW_ACTIONS = [
   {
     id: 'keep-awake',
     targetId: 'quickops.keep-awake',
-    title: '保持唤醒需要确认',
+    title: ['保持唤醒需要确认', 'Keep Display Awake Needs Confirmation'],
     patterns: [/\bkeep\s+awake\b/i, /(?:保持唤醒|屏幕常亮|防休眠)/],
   },
   {
     id: 'system-awake',
     targetId: 'quickops.system-awake',
-    title: '系统唤醒需要确认',
+    title: ['系统唤醒需要确认', 'Keep System Awake Needs Confirmation'],
     patterns: [/\bsystem\s+awake\b/i, /(?:系统唤醒|系统防休眠)/],
   },
   {
     id: 'start-timer',
     targetId: 'quickops.start-timer',
-    title: '启动计时器需要确认',
+    title: ['启动计时器需要确认', 'Starting a Timer Needs Confirmation'],
     patterns: [/\bstart\s+timer\b/i, /\btimer\s+start\b/i, /(?:开始|启动).*计时器/],
   },
   {
     id: 'start-pomodoro',
     targetId: 'quickops.start-pomodoro',
-    title: '启动番茄钟需要确认',
+    title: ['启动番茄钟需要确认', 'Starting a Pomodoro Needs Confirmation'],
     patterns: [/\bstart\s+pomodoro\b/i, /\bpomodoro\s+start\b/i, /(?:开始|启动).*番茄钟/],
   },
   {
     id: 'clean-screen',
     targetId: 'quickops.clean-screen',
-    title: '清屏模式需要确认',
+    title: ['清屏模式需要确认', 'Clean Screen Needs Confirmation'],
     patterns: [/\b(?:start\s+)?clean\s+screen\b/i, /(?:开始|启动|进入).*清屏/],
   },
   {
     id: 'start-stopwatch',
     targetId: 'quickops.start-stopwatch',
-    title: '启动秒表需要确认',
+    title: ['启动秒表需要确认', 'Starting a Stopwatch Needs Confirmation'],
     patterns: [/\bstart\s+stopwatch\b/i, /\bstopwatch\s+start\b/i, /(?:开始|启动).*秒表/],
   },
   {
     id: 'copy-to-clipboard',
     targetId: 'quickops.copy-to-clipboard',
-    title: '写入剪贴板需要确认',
+    title: ['写入剪贴板需要确认', 'Copying to the Clipboard Needs Confirmation'],
     patterns: [/\bcopy\s+to\s+clipboard\b/i, /写入.*剪贴板/],
   },
   {
     id: 'show-notification',
     targetId: 'quickops.show-notification',
-    title: '发送通知需要确认',
+    title: ['发送通知需要确认', 'Showing a Notification Needs Confirmation'],
     patterns: [/\bshow\s+notification\b/i, /发送.*通知/],
   },
   {
     id: 'open-folder',
     targetId: 'quickops.open-folder',
-    title: '打开文件夹需要确认',
+    title: ['打开文件夹需要确认', 'Opening a Folder Needs Confirmation'],
     patterns: [/\bopen\s+folder\b/i, /打开.*(?:文件夹|目录)/],
   },
   {
     id: 'temp-text-file',
     targetId: 'quickops.temp-text-file',
-    title: '创建临时文本需要确认',
+    title: ['创建临时文本需要确认', 'Creating a Temporary Text File Needs Confirmation'],
     patterns: [/\btemp\s+text\s+file\b/i, /创建.*临时.*文本/],
   },
   {
     id: 'temp-directory',
     targetId: 'quickops.temp-directory',
-    title: '创建临时目录需要确认',
+    title: ['创建临时目录需要确认', 'Creating a Temporary Folder Needs Confirmation'],
     patterns: [/\btemp\s+directory\b/i, /创建.*临时.*(?:目录|文件夹)/],
   },
 ]
@@ -199,8 +199,8 @@ const HIGH_RISK_FLOW_ACTIONS = [
   {
     id: 'kill-port',
     targetId: 'quickops.port-kill',
-    title: '高风险端口释放已阻断',
-    subtitle: '端口 kill 仍保持 copy-only / policy-gated；插件不会直接执行高风险动作',
+    title: ['高风险端口释放已阻断', 'High-Risk Port Release Blocked'],
+    subtitle: ['为安全起见，插件不会直接结束占用端口的进程', 'For safety, the plugin won\'t end the process on a port itself'],
     reason: 'high-risk-blocked',
     patterns: [
       /\b(?:kill|terminate|release)\s+port\s+\d+\b/i,
@@ -209,6 +209,160 @@ const HIGH_RISK_FLOW_ACTIONS = [
     ],
   },
 ]
+
+function locale() {
+  try {
+    return plugin.getLocale() === 'en-US' ? 'en' : 'zh'
+  }
+  catch {
+    return 'zh'
+  }
+}
+
+function t(zh, en) {
+  return locale() === 'en' ? en : zh
+}
+
+// The English noun takes its plural after any count but one.
+function englishCount(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+// `zhUnit` carries the Chinese measure word (`个位置`).
+function countText(count, zhUnit, singular, plural) {
+  return t(`${count} ${zhUnit}`, englishCount(count, singular, plural))
+}
+
+// The ids the host gives for a capability that is off or a tool that came back empty. For these the
+// host's own `message`, when it sends one, is raw detail (a system error, an error code) rather than a
+// sentence, so it follows this text instead of replacing it.
+const REASON_TEXT = {
+  'quickops-disabled': ['QuickOps 已关闭', 'QuickOps is turned off'],
+  'stateful-tools-disabled-by-policy': ['已按策略关闭会改变状态的工具', 'Tools that change state are turned off by policy'],
+  'network-tools-disabled-by-policy': ['已按策略关闭网络工具', 'Network tools are turned off by policy'],
+  'file-tools-disabled-by-policy': ['已按策略关闭文件工具', 'File tools are turned off by policy'],
+  'system-tools-disabled-by-policy': ['已按策略关闭系统工具', 'System tools are turned off by policy'],
+  'developer-tools-disabled-by-policy': ['已按策略关闭开发者工具', 'Developer tools are turned off by policy'],
+  'high-risk-tools-disabled-by-policy': ['已按策略关闭高风险工具', 'High-risk tools are turned off by policy'],
+  'public-ip-disabled': ['公网 IP 查询未开启', 'Public IP lookup is off'],
+  'copy-only-command': ['只提供可复制的命令', 'Only offers a command to copy'],
+  'unsupported-platform': ['当前系统不支持', 'Not supported on this system'],
+  'not-developer-command': ['没有识别出开发者命令', 'That isn\'t a developer command'],
+  'no-preview-result': ['没有可预览的结果', 'Nothing to preview'],
+  'invalid-port': ['请输入 1 到 65535 之间的端口号', 'Enter a port number from 1 to 65535'],
+  'port-probe-failed': ['无法检查这个端口', 'Couldn\'t check this port'],
+  'missing-text': ['请输入要格式化的文本', 'Enter the text to format'],
+  'local-ip-unavailable': ['没有找到本机 IP 地址', 'No local IP address found'],
+  'system-proxy-probe-failed': ['无法读取系统代理设置', 'Couldn\'t read the system proxy settings'],
+}
+
+// An id this plugin doesn't name is shown as it came: it is the only diagnosis there is.
+function describeReason(reason) {
+  const text = REASON_TEXT[reason]
+  return text ? t(...text) : normalizeText(reason)
+}
+
+const PLATFORM_NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
+
+function describePlatform(platform) {
+  return PLATFORM_NAMES[platform] || normalizeText(platform) || t('未知系统', 'Unknown system')
+}
+
+const CAPABILITY_STATUS_TEXT = {
+  supported: ['可用', 'Available'],
+  disabled: ['已停用', 'Disabled'],
+  degraded: ['受限', 'Limited'],
+}
+
+const RISK_LEVEL_TEXT = {
+  safe: ['安全', 'Safe'],
+  stateful: ['会改变状态', 'Changes state'],
+  confirm: ['需要确认', 'Needs confirmation'],
+  danger: ['高风险', 'High risk'],
+}
+
+const POMODORO_LOOP_TEXT = {
+  'supported': ['可用', 'Available'],
+  'unsupported': ['不支持', 'Not supported'],
+  'unknown-host-capability': ['未知', 'Unknown'],
+}
+
+const PROXY_STATUS_TEXT = {
+  'detected': ['检测到代理', 'Proxy detected'],
+  'not-detected': ['未检测到代理', 'No proxy detected'],
+  'degraded': ['无法读取代理设置', 'Couldn\'t read proxy settings'],
+}
+
+const PROXY_SOURCE_TEXT = {
+  'macos-system': ['macOS 系统设置', 'macOS settings'],
+  'windows-system': ['Windows 系统设置', 'Windows settings'],
+  'linux-gsettings': ['GNOME 设置', 'GNOME settings'],
+}
+
+const PROXY_SETTING_TEXT = {
+  'Auto Discovery': ['自动发现代理', 'Auto Proxy Discovery'],
+  'GNOME Proxy Mode': ['代理模式', 'Proxy Mode'],
+  'PAC': ['自动代理配置（PAC）', 'Automatic Proxy Configuration (PAC)'],
+  'ProxyServer': ['代理服务器', 'Proxy Server'],
+  'AutoConfigURL': ['自动配置脚本', 'Auto-Config Script'],
+  'ProxyOverride': ['不使用代理的地址', 'Bypass List'],
+}
+
+// The status as the system reports it: `pmset` on macOS, `Win32_Battery` on Windows, sysfs on Linux.
+const BATTERY_STATUS_TEXT = {
+  'charging': ['正在充电', 'Charging'],
+  'discharging': ['正在使用电池', 'On battery'],
+  'charged': ['已充满', 'Fully charged'],
+  'full': ['已充满', 'Fully charged'],
+  'fully charged': ['已充满', 'Fully charged'],
+  'finishing charge': ['即将充满', 'Finishing charge'],
+  'ac attached': ['已接通电源', 'On power'],
+  'ac': ['已接通电源', 'On power'],
+  'not charging': ['未在充电', 'Not charging'],
+  'low': ['电量低', 'Low'],
+  'critical': ['电量严重不足', 'Critically low'],
+  'charging and high': ['正在充电', 'Charging'],
+  'charging and low': ['正在充电，电量低', 'Charging, low'],
+  'charging and critical': ['正在充电，电量严重不足', 'Charging, critically low'],
+  'partially charged': ['已部分充电', 'Partially charged'],
+}
+
+const SESSION_STATE_TEXT = {
+  running: ['运行中', 'Running'],
+  paused: ['已暂停', 'Paused'],
+}
+
+const AUDIT_DECISION_TEXT = {
+  delivered: ['已送达', 'Delivered'],
+  blocked: ['已拦截', 'Blocked'],
+  degraded: ['受限', 'Limited'],
+}
+
+const PATH_FORMAT_TEXT = {
+  shell: ['Shell', 'Shell'],
+  fileUrl: ['文件 URL', 'File URL'],
+  windows: ['Windows', 'Windows'],
+  wsl: ['WSL', 'WSL'],
+}
+
+const FORMAT_MODE_TEXT = {
+  upper: ['大写', 'UPPERCASE'],
+  lower: ['小写', 'lowercase'],
+  camel: ['驼峰命名', 'camelCase'],
+  snake: ['蛇形命名', 'snake_case'],
+  kebab: ['短横线命名', 'kebab-case'],
+}
+
+function describeWord(words, value) {
+  const text = words[value]
+  if (text)
+    return t(...text)
+  return value && value !== 'unknown' ? String(value) : t('未知', 'Unknown')
+}
+
+function describeEnabled(enabled) {
+  return enabled ? t('已开启', 'On') : t('已关闭', 'Off')
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -316,20 +470,26 @@ function formatDuration(seconds) {
   const minutes = Math.floor((totalSeconds % 3600) / 60)
 
   if (days > 0)
-    return `${days}d ${hours}h`
+    return t(`${days} 天 ${hours} 小时`, `${days}d ${hours}h`)
   if (hours > 0)
-    return `${hours}h ${minutes}m`
-  return `${minutes}m`
+    return t(`${hours} 小时 ${minutes} 分钟`, `${hours}h ${minutes}m`)
+  return t(`${minutes} 分钟`, `${minutes}m`)
 }
 
 function formatDurationMs(ms) {
   return formatDuration((Number(ms) || 0) / 1000)
 }
 
-function formatCountMap(counts) {
+function formatCounts(counts, words) {
   return Object.entries(counts)
-    .map(([key, count]) => `${key}:${count}`)
+    .map(([key, count]) => `${describeWord(words, key)} ${count}`)
     .join(' · ')
+}
+
+function formatReasonCounts(counts) {
+  return Object.entries(counts)
+    .map(([reason, count]) => t(`${describeReason(reason)}（${count}）`, `${describeReason(reason)} (${count})`))
+    .join(t('；', '; '))
 }
 
 function countBy(entries, field) {
@@ -445,8 +605,10 @@ function buildDeveloperPreviewItem(featureId, query, response) {
     return buildInfoItem({
       featureId,
       id: `developer-preview-${response?.state || 'empty'}`,
-      title: response?.state === 'blocked' ? 'QuickOps 开发者工具已禁用' : 'QuickOps 开发者预览不可用',
-      subtitle: response?.reason || 'no-preview-result',
+      title: response?.state === 'blocked'
+        ? t('QuickOps 开发者工具已关闭', 'QuickOps Developer Tools Are Turned Off')
+        : t('QuickOps 开发者预览不可用', 'QuickOps Developer Preview Unavailable'),
+      subtitle: describeReason(response?.reason || 'no-preview-result'),
       meta: {
         mode: 'developer-preview',
         state: response?.state || 'empty',
@@ -496,14 +658,14 @@ function buildDeveloperPreviewItem(featureId, query, response) {
     actions.push({
       id: DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID,
       type: 'plugin',
-      label: '保存 SVG 到临时目录',
+      label: t('保存 SVG 到临时文件夹', 'Save SVG to Temporary Folder'),
       icon: { type: 'class', value: 'i-ri-save-line' },
       payload: { developerPreviewPayload: payload },
     })
     actions.push({
       id: DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID,
       type: 'plugin',
-      label: '保存 PNG 到临时目录',
+      label: t('保存 PNG 到临时文件夹', 'Save PNG to Temporary Folder'),
       icon: { type: 'class', value: 'i-ri-image-line' },
       payload: { developerPreviewPayload: payload },
     })
@@ -523,8 +685,8 @@ async function buildDeveloperPreviewItems(featureId, query, api) {
       buildInfoItem({
         featureId,
         id: 'developer-preview-unsupported',
-        title: 'QuickOps 开发者预览暂不可用',
-        subtitle: 'host facade 未暴露 developerPreview；插件不会 fallback 到私有 PreviewProvider',
+        title: t('QuickOps 开发者预览不可用', 'QuickOps Developer Preview Unavailable'),
+        subtitle: t('当前版本的 Tuff 不提供开发者预览，更新后再试', 'This version of Tuff doesn\'t provide developer preview; update Tuff and try again'),
         meta: { mode: 'developer-preview', state: 'unsupported' },
       }),
     ]
@@ -613,8 +775,8 @@ function buildFlowActionItem(featureId, action, query) {
 
   return new TuffItemBuilder(`${featureId}-flow-${action.id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(action.title)
-    .setSubtitle(action.subtitle)
+    .setTitle(t(...action.title))
+    .setSubtitle(t(...action.subtitle))
     .setIcon(ICON)
     .setMeta({
       pluginName: PLUGIN_NAME,
@@ -635,10 +797,12 @@ function buildFlowActionItem(featureId, action, query) {
         runtimeDispatchBridge: true,
       },
     })
-    .createAndAddAction(FLOW_ACTION_ID, 'plugin', '执行', payload)
+    .createAndAddAction(FLOW_ACTION_ID, 'plugin', t('执行', 'Run'), payload)
     .build()
 }
 
+// The one-time `confirmationToken` these actions need is handed out by Tuff's own confirmation UI; the
+// plugin can neither mint one nor go around it, so all it shows is that the action waits for the user.
 function buildConfirmationRequiredItems(featureId, action, query) {
   const visualContract = buildFlowVisualContract(action)
   const flowAdapterTrace = buildFlowAdapterTrace(
@@ -652,8 +816,8 @@ function buildConfirmationRequiredItems(featureId, action, query) {
     buildInfoItem({
       featureId,
       id: `confirmation-required-${action.id}`,
-      title: action.title,
-      subtitle: `${action.targetId} 需要 App UI 发放 confirmationToken；插件不会自行生成或绕过确认`,
+      title: t(...action.title),
+      subtitle: t('这项操作需要在 Tuff 里确认后才会执行，插件不会替你确认', 'This runs only after you confirm it in Tuff; the plugin never confirms for you'),
       meta: {
         mode: 'confirmation-required',
         flowTargetId: action.targetId,
@@ -675,8 +839,8 @@ function buildHighRiskBlockedItems(featureId, action, query) {
     buildInfoItem({
       featureId,
       id: `high-risk-blocked-${action.id}`,
-      title: action.title,
-      subtitle: action.subtitle,
+      title: t(...action.title),
+      subtitle: t(...action.subtitle),
       meta: {
         mode: 'high-risk-blocked',
         flowTargetId: action.targetId,
@@ -765,31 +929,32 @@ function buildCapabilityItems(featureId, response) {
   const entries = Array.isArray(response?.entries) ? response.entries : []
   const statusCounts = countBy(entries, 'status')
   const riskCounts = countBy(entries, 'riskLevel')
-  const enabledText = response?.enabled === false ? 'disabled' : 'enabled'
-  const platform = response?.platform || 'unknown'
+  const noEntries = t('暂无能力条目', 'No capabilities')
   const items = [
     buildInfoItem({
       featureId,
       id: 'capability-summary',
-      title: 'QuickOps 能力摘要',
-      subtitle: `${platform} · ${enabledText} · ${formatCountMap(statusCounts) || 'no entries'}`,
+      title: t('QuickOps 能力摘要', 'QuickOps Capabilities'),
+      subtitle: `${describePlatform(response?.platform)} · ${describeEnabled(response?.enabled !== false)} · ${formatCounts(statusCounts, CAPABILITY_STATUS_TEXT) || noEntries}`,
       meta: { mode: 'capabilities', count: entries.length },
     }),
     buildInfoItem({
       featureId,
       id: 'risk-summary',
-      title: 'QuickOps 风险分布',
-      subtitle: formatCountMap(riskCounts) || '暂无能力条目',
+      title: t('QuickOps 风险分布', 'QuickOps Risk Levels'),
+      subtitle: formatCounts(riskCounts, RISK_LEVEL_TEXT) || noEntries,
       meta: { mode: 'capabilities', count: entries.length },
     }),
   ]
 
   for (const entry of entries.slice(0, 8)) {
+    // A supported capability's reason names the probe it reads (`macos-pmset`): nothing the user acts on.
+    const reason = entry.reason && entry.status !== 'supported' ? ` · ${describeReason(entry.reason)}` : ''
     items.push(buildInfoItem({
       featureId,
       id: `capability-${entry.id}`,
       title: entry.label || entry.id,
-      subtitle: `${entry.status} · ${entry.riskLevel}${entry.reason ? ` · ${entry.reason}` : ''}`,
+      subtitle: `${describeWord(CAPABILITY_STATUS_TEXT, entry.status)} · ${describeWord(RISK_LEVEL_TEXT, entry.riskLevel)}${reason}`,
       meta: {
         mode: 'capabilities',
         capabilityId: entry.id,
@@ -832,14 +997,13 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
   const entries = Array.isArray(capabilityResponse?.entries) ? capabilityResponse.entries : []
   const disabledEntries = entries.filter(entry => entry?.status === 'disabled')
   const disabledReasons = countBy(disabledEntries, 'reason')
-  const platform = capabilityResponse?.platform || diagnostics?.platform || 'unknown'
-  const enabledText = capabilityResponse?.enabled === false ? 'disabled' : 'enabled'
+  const platform = describePlatform(capabilityResponse?.platform || diagnostics?.platform)
   const items = [
     buildInfoItem({
       featureId,
       id: 'settings-summary',
-      title: 'QuickOps 设置入口',
-      subtitle: `${platform} · ${enabledText} · official plugin surface`,
+      title: t('QuickOps 设置', 'QuickOps Settings'),
+      subtitle: `${platform} · ${describeEnabled(capabilityResponse?.enabled !== false)}`,
       meta: {
         mode: 'settings',
         writable: false,
@@ -850,10 +1014,10 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
     buildInfoItem({
       featureId,
       id: 'settings-policy',
-      title: 'QuickOps 本地策略摘要',
+      title: t('QuickOps 策略', 'QuickOps Policy'),
       subtitle: disabledEntries.length
-        ? `${disabledEntries.length} disabled · ${formatCountMap(disabledReasons)}`
-        : '当前 capability 摘要未报告禁用策略',
+        ? `${countText(disabledEntries.length, '项已停用', 'feature off', 'features off')} · ${formatReasonCounts(disabledReasons)}`
+        : t('没有停用的功能', 'No features are turned off'),
       meta: {
         mode: 'settings',
         disabledCount: disabledEntries.length,
@@ -872,13 +1036,13 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
     items.push(buildInfoItem({
       featureId,
       id: 'settings-defaults',
-      title: 'QuickOps 默认参数摘要',
+      title: t('QuickOps 默认值', 'QuickOps Defaults'),
       subtitle: [
-        `keepAwake ${formatDurationMs(diagnostics.defaultKeepAwakeDurationMs)}`,
-        `timer ${formatDurationMs(diagnostics.defaultTimerDurationMs)}`,
-        `pomodoro ${formatDurationMs(diagnostics.defaultPomodoroFocusMs)}/${formatDurationMs(diagnostics.defaultPomodoroBreakMs)}`,
-        `pomodoroLoop ${pomodoroAdvancedLoopState}`,
-        `screenClean ${formatDurationMs(diagnostics.defaultScreenCleanDurationMs)}`,
+        `${t('保持唤醒', 'Keep awake')} ${formatDurationMs(diagnostics.defaultKeepAwakeDurationMs)}`,
+        `${t('计时器', 'Timer')} ${formatDurationMs(diagnostics.defaultTimerDurationMs)}`,
+        `${t('番茄钟', 'Pomodoro')} ${formatDurationMs(diagnostics.defaultPomodoroFocusMs)}/${formatDurationMs(diagnostics.defaultPomodoroBreakMs)}`,
+        `${t('番茄钟循环', 'Pomodoro cycles')} ${describeWord(POMODORO_LOOP_TEXT, pomodoroAdvancedLoopState)}`,
+        `${t('清屏', 'Clean screen')} ${formatDurationMs(diagnostics.defaultScreenCleanDurationMs)}`,
       ].join(' · '),
       meta: {
         mode: 'settings',
@@ -903,8 +1067,8 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
   items.push(buildInfoItem({
     featureId,
     id: 'settings-boundary',
-    title: 'QuickOps 设置写入仍受 host policy 控制',
-    subtitle: '插件当前只展示策略/默认值摘要；可写设置需要官方插件白名单 host capability，不能走私有 IPC',
+    title: t('QuickOps 设置在这里只读', 'QuickOps Settings Are Read-Only Here'),
+    subtitle: t('这里只显示当前的策略和默认值', 'This shows the current policy and defaults'),
     meta: {
       mode: 'settings',
       state: 'read-only',
@@ -920,20 +1084,25 @@ function buildUnsupportedToolItems(featureId, mode, methodName) {
     buildInfoItem({
       featureId,
       id: `${mode}-unsupported`,
-      title: 'QuickOps 插件入口暂不可用',
-      subtitle: `迁移期 host facade 未暴露 ${methodName}；该能力不会 fallback 到私有 IPC`,
+      title: t('这项 QuickOps 功能不可用', 'This QuickOps Feature Is Unavailable'),
+      subtitle: t('当前版本的 Tuff 不提供这项功能，更新后再试', 'This version of Tuff doesn\'t provide this feature; update Tuff and try again'),
       meta: { mode, methodName, state: 'unsupported' },
     }),
   ]
 }
 
 function buildDegradedItems(featureId, mode, title, response) {
+  const reason = REASON_TEXT[response?.degradedReason]
+  const detail = normalizeText(response?.message || response?.errorCode)
+  const subtitle = reason
+    ? [t(...reason), detail].filter(Boolean).join(' · ')
+    : detail || describeReason(response?.degradedReason) || t('暂时无法完成，请稍后再试', 'Couldn\'t complete this right now; try again later')
   return [
     buildInfoItem({
       featureId,
       id: `${mode}-degraded`,
       title,
-      subtitle: truncateText(response?.message || response?.degradedReason || '当前平台返回 degraded'),
+      subtitle: truncateText(subtitle),
       meta: {
         mode,
         state: 'degraded',
@@ -946,21 +1115,24 @@ function buildDegradedItems(featureId, mode, title, response) {
 function buildSystemInfoItems(featureId, response) {
   const info = response?.systemInfo
   if (!info)
-    return buildDegradedItems(featureId, 'system-info', 'QuickOps 系统信息不可用', response)
+    return buildDegradedItems(featureId, 'system-info', t('QuickOps 系统信息不可用', 'QuickOps System Info Unavailable'), response)
 
   return [
     buildInfoItem({
       featureId,
       id: 'system-info-summary',
-      title: 'QuickOps 系统信息',
-      subtitle: `${info.osType} ${info.osRelease} · ${info.platform}/${info.arch} · ${formatBytes(info.totalMemoryBytes)} RAM`,
+      title: t('QuickOps 系统信息', 'QuickOps System Info'),
+      subtitle: `${info.osType} ${info.osRelease} · ${info.platform}/${info.arch} · ${t(`内存 ${formatBytes(info.totalMemoryBytes)}`, `${formatBytes(info.totalMemoryBytes)} memory`)}`,
       meta: { mode: 'system-info', platform: info.platform, arch: info.arch },
     }),
     buildInfoItem({
       featureId,
       id: 'system-info-runtime',
-      title: 'CPU / Memory / Uptime',
-      subtitle: `${info.cpuModel || 'Unknown CPU'} · ${info.cpuCount} cores · ${formatBytes(info.freeMemoryBytes)} free · uptime ${formatDuration(info.uptimeSeconds)}`,
+      title: t('处理器、内存与运行时间', 'CPU, Memory and Uptime'),
+      subtitle: t(
+        `${info.cpuModel || '未知处理器'} · ${info.cpuCount} 核 · 可用 ${formatBytes(info.freeMemoryBytes)} · 已运行 ${formatDuration(info.uptimeSeconds)}`,
+        `${info.cpuModel || 'Unknown CPU'} · ${englishCount(info.cpuCount, 'core')} · ${formatBytes(info.freeMemoryBytes)} free · up ${formatDuration(info.uptimeSeconds)}`,
+      ),
       meta: { mode: 'system-info', cpuCount: info.cpuCount },
     }),
   ]
@@ -969,21 +1141,27 @@ function buildSystemInfoItems(featureId, response) {
 function buildDiagnosticsItems(featureId, response) {
   const diagnostics = response?.diagnostics
   if (!diagnostics)
-    return buildDegradedItems(featureId, 'diagnostics', 'QuickOps 诊断摘要不可用', response)
+    return buildDegradedItems(featureId, 'diagnostics', t('Tuff 诊断摘要不可用', 'Tuff Diagnostics Unavailable'), response)
 
   return [
     buildInfoItem({
       featureId,
       id: 'diagnostics-summary',
-      title: 'QuickOps 脱敏诊断摘要',
-      subtitle: `${diagnostics.appVersion} · ${diagnostics.platform}/${diagnostics.arch} · QuickOps ${diagnostics.quickOpsEnabled ? 'enabled' : 'disabled'}`,
+      title: t('Tuff 诊断摘要', 'Tuff Diagnostics'),
+      subtitle: `Tuff ${diagnostics.appVersion} · ${diagnostics.platform}/${diagnostics.arch} · QuickOps ${describeEnabled(diagnostics.quickOpsEnabled)}`,
       meta: { mode: 'diagnostics', schemaVersion: diagnostics.schemaVersion },
     }),
     buildInfoItem({
       featureId,
       id: 'diagnostics-runtime',
-      title: 'Runtime / Network',
-      subtitle: `Node ${diagnostics.nodeVersion} · Electron ${diagnostics.electronVersion} · local:${diagnostics.localAddressCount} · dns:${diagnostics.dnsServerCount} · proxy:${diagnostics.proxyStatus}`,
+      title: t('运行环境与网络', 'Runtime and Network'),
+      subtitle: [
+        `Node ${diagnostics.nodeVersion}`,
+        `Electron ${diagnostics.electronVersion}`,
+        countText(diagnostics.localAddressCount, '个本机地址', 'local address', 'local addresses'),
+        countText(diagnostics.dnsServerCount, '个 DNS 服务器', 'DNS server'),
+        describeWord(PROXY_STATUS_TEXT, diagnostics.proxyStatus),
+      ].join(' · '),
       meta: { mode: 'diagnostics', proxyStatus: diagnostics.proxyStatus },
     }),
   ]
@@ -991,7 +1169,7 @@ function buildDiagnosticsItems(featureId, response) {
 
 function buildDiskSpaceItems(featureId, response) {
   if (response?.state !== 'ready') {
-    return buildDegradedItems(featureId, 'disk-space', 'QuickOps 磁盘空间不可用', response)
+    return buildDegradedItems(featureId, 'disk-space', t('QuickOps 磁盘空间不可用', 'QuickOps Disk Space Unavailable'), response)
   }
 
   const entries = Array.isArray(response?.diskSpace?.entries) ? response.diskSpace.entries : []
@@ -999,8 +1177,8 @@ function buildDiskSpaceItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: 'disk-space-summary',
-      title: 'QuickOps 磁盘空间',
-      subtitle: entries.length ? `${entries.length} 个安全根 · ${truncateText(response.text)}` : '没有可展示的磁盘条目',
+      title: t('QuickOps 磁盘空间', 'QuickOps Disk Space'),
+      subtitle: entries.length ? countText(entries.length, '个位置', 'location') : t('没有可显示的磁盘', 'No disks to show'),
       meta: { mode: 'disk-space', count: entries.length },
     }),
   ]
@@ -1008,9 +1186,10 @@ function buildDiskSpaceItems(featureId, response) {
   for (const entry of entries.slice(0, 6)) {
     items.push(buildInfoItem({
       featureId,
-      id: `disk-${entry.label}`,
-      title: `${entry.label} · ${entry.usedPercent}% used`,
-      subtitle: `${formatBytes(entry.freeBytes)} free / ${formatBytes(entry.totalBytes)} total · ${entry.path}`,
+      // The label follows the interface language; the path keeps the id the same across a switch.
+      id: `disk-${entry.path || entry.label}`,
+      title: `${entry.label} · ${t(`已用 ${entry.usedPercent}%`, `${entry.usedPercent}% used`)}`,
+      subtitle: `${t(`可用 ${formatBytes(entry.freeBytes)}，共 ${formatBytes(entry.totalBytes)}`, `${formatBytes(entry.freeBytes)} free of ${formatBytes(entry.totalBytes)}`)} · ${entry.path}`,
       meta: {
         mode: 'disk-space',
         label: entry.label,
@@ -1025,7 +1204,7 @@ function buildDiskSpaceItems(featureId, response) {
 function buildDirectoryUsageItems(featureId, response, deep) {
   const mode = deep ? 'directory-usage-deep' : 'directory-usage'
   if (response?.state !== 'ready') {
-    return buildDegradedItems(featureId, mode, 'QuickOps 目录占用不可用', response)
+    return buildDegradedItems(featureId, mode, t('QuickOps 文件夹占用不可用', 'QuickOps Folder Usage Unavailable'), response)
   }
 
   const entries = Array.isArray(response?.directoryUsage?.entries)
@@ -1035,8 +1214,10 @@ function buildDirectoryUsageItems(featureId, response, deep) {
     buildInfoItem({
       featureId,
       id: `${mode}-summary`,
-      title: deep ? 'QuickOps 深度目录占用' : 'QuickOps 目录占用',
-      subtitle: `${entries.length} 个关键目录 · depth:${response?.directoryUsage?.scanDepth ?? 0}`,
+      title: deep
+        ? t('QuickOps 文件夹占用（含子文件夹）', 'QuickOps Folder Usage (Including Subfolders)')
+        : t('QuickOps 文件夹占用', 'QuickOps Folder Usage'),
+      subtitle: countText(entries.length, '个文件夹', 'folder'),
       meta: { mode, count: entries.length },
     }),
   ]
@@ -1045,9 +1226,13 @@ function buildDirectoryUsageItems(featureId, response, deep) {
     const size = deep ? entry.totalFileBytes : entry.directFileBytes
     items.push(buildInfoItem({
       featureId,
-      id: `${mode}-${entry.label}`,
+      id: `${mode}-${entry.path || entry.label}`,
       title: `${entry.label} · ${formatBytes(size)}`,
-      subtitle: `files:${entry.fileCount} · dirs:${entry.directoryCount} · scanned:${entry.scannedEntryCount}${entry.truncated ? ' · truncated' : ''}`,
+      subtitle: [
+        countText(entry.fileCount, '个文件', 'file'),
+        countText(entry.directoryCount, '个文件夹', 'folder'),
+        ...(entry.truncated ? [t('只扫描了一部分', 'Partly scanned')] : []),
+      ].join(' · '),
       meta: {
         mode,
         label: entry.label,
@@ -1062,7 +1247,7 @@ function buildDirectoryUsageItems(featureId, response, deep) {
 function buildNetworkStatusItems(featureId, response) {
   const info = response?.networkStatus
   if (!info)
-    return buildDegradedItems(featureId, 'network-status', 'QuickOps 网络状态不可用', response)
+    return buildDegradedItems(featureId, 'network-status', t('QuickOps 网络状态不可用', 'QuickOps Network Status Unavailable'), response)
 
   const addresses = Array.isArray(info.addresses) ? info.addresses : []
   const dnsServers = Array.isArray(info.dnsServers) ? info.dnsServers : []
@@ -1071,8 +1256,12 @@ function buildNetworkStatusItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: 'network-status-summary',
-      title: 'QuickOps 网络状态',
-      subtitle: `local:${addresses.length} · dns:${dnsServers.length} · proxy:${info.proxyStatus}`,
+      title: t('QuickOps 网络状态', 'QuickOps Network Status'),
+      subtitle: [
+        countText(addresses.length, '个本机地址', 'local address', 'local addresses'),
+        countText(dnsServers.length, '个 DNS 服务器', 'DNS server'),
+        describeWord(PROXY_STATUS_TEXT, info.proxyStatus),
+      ].join(' · '),
       meta: {
         mode: 'network-status',
         addressCount: addresses.length,
@@ -1096,7 +1285,7 @@ function buildNetworkStatusItems(featureId, response) {
     items.push(buildInfoItem({
       featureId,
       id: 'network-dns',
-      title: 'DNS Servers',
+      title: t('DNS 服务器', 'DNS Servers'),
       subtitle: dnsServers.slice(0, 5).join(' · '),
       meta: { mode: 'network-status', dnsServerCount: dnsServers.length },
     }))
@@ -1106,7 +1295,7 @@ function buildNetworkStatusItems(featureId, response) {
     items.push(buildInfoItem({
       featureId,
       id: 'network-proxy',
-      title: 'Proxy Environment',
+      title: t('代理环境变量', 'Proxy Environment Variables'),
       subtitle: proxies.slice(0, 4).map(proxy => `${proxy.source}:${proxy.value}`).join(' · '),
       meta: { mode: 'network-status', proxyCount: proxies.length },
     }))
@@ -1118,9 +1307,8 @@ function buildNetworkStatusItems(featureId, response) {
 function buildLocalIpItems(featureId, response) {
   const addresses = Array.isArray(response?.addresses) ? response.addresses : []
   if (addresses.length === 0) {
-    return buildDegradedItems(featureId, 'local-ip', 'QuickOps 本机 IP 不可用', {
+    return buildDegradedItems(featureId, 'local-ip', t('QuickOps 本机 IP 不可用', 'QuickOps Local IP Unavailable'), {
       degradedReason: response?.degradedReason || 'local-ip-unavailable',
-      message: response?.text,
     })
   }
 
@@ -1136,16 +1324,17 @@ function buildLocalIpItems(featureId, response) {
 
 function buildBatteryStatusItems(featureId, response) {
   if (response?.state !== 'ready') {
-    return buildDegradedItems(featureId, 'battery-status', 'QuickOps 电池状态不可用', response)
+    return buildDegradedItems(featureId, 'battery-status', t('QuickOps 电池状态不可用', 'QuickOps Battery Status Unavailable'), response)
   }
 
   const info = response?.batteryStatus
+  const level = typeof info?.levelPercent === 'number' ? `${info.levelPercent}%` : t('电量未知', 'Level unknown')
   return [
     buildInfoItem({
       featureId,
       id: 'battery-status-summary',
-      title: 'QuickOps 电池状态',
-      subtitle: `${info?.levelPercent ?? 'unknown'}% · ${info?.status || 'unknown'} · charging:${info?.charging ?? 'unknown'}`,
+      title: t('QuickOps 电池状态', 'QuickOps Battery Status'),
+      subtitle: `${level} · ${describeBatteryStatus(info)}`,
       meta: {
         mode: 'battery-status',
         levelPercent: info?.levelPercent,
@@ -1156,10 +1345,32 @@ function buildBatteryStatusItems(featureId, response) {
   ]
 }
 
+// A status the table doesn't know (`Undefined`, `Unknown (12)`) falls back to whether it is charging.
+function describeBatteryStatus(info) {
+  const text = BATTERY_STATUS_TEXT[normalizeText(info?.status).toLowerCase()]
+  if (text)
+    return t(...text)
+  if (info?.charging === true)
+    return t('正在充电', 'Charging')
+  if (info?.charging === false)
+    return t('未在充电', 'Not charging')
+  return t('状态未知', 'Unknown status')
+}
+
+function describeProxyValue(value) {
+  if (value === 'enabled')
+    return t('已开启', 'On')
+  if (value === 'manual')
+    return t('手动', 'Manual')
+  if (value === 'auto')
+    return t('自动', 'Automatic')
+  return value
+}
+
 function buildSystemProxyItems(featureId, response) {
   const info = response?.systemProxy
   if (!info || response?.state === 'degraded') {
-    return buildDegradedItems(featureId, 'system-proxy', 'QuickOps 系统代理不可用', response)
+    return buildDegradedItems(featureId, 'system-proxy', t('QuickOps 系统代理不可用', 'QuickOps System Proxy Unavailable'), response)
   }
 
   const environment = Array.isArray(info.environment) ? info.environment : []
@@ -1168,18 +1379,25 @@ function buildSystemProxyItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: 'system-proxy-summary',
-      title: 'QuickOps 系统代理',
-      subtitle: `${info.platform} · ${info.status} · env:${environment.length} · system:${system.length}`,
+      title: t('QuickOps 系统代理', 'QuickOps System Proxy'),
+      subtitle: [
+        describePlatform(info.platform),
+        describeWord(PROXY_STATUS_TEXT, info.status),
+        countText(environment.length, '个环境变量', 'environment variable'),
+        countText(system.length, '项系统设置', 'system setting'),
+      ].join(' · '),
       meta: { mode: 'system-proxy', status: info.status },
     }),
   ]
 
   for (const proxy of [...environment, ...system].slice(0, 6)) {
+    // An environment entry is named by its variable (`HTTPS_PROXY`), which stays as it is.
+    const source = describeWord(PROXY_SOURCE_TEXT, proxy.source)
     items.push(buildInfoItem({
       featureId,
       id: `system-proxy-${proxy.source}-${proxy.name || proxy.value}`,
-      title: proxy.name ? `${proxy.source} · ${proxy.name}` : proxy.source,
-      subtitle: proxy.value,
+      title: proxy.name ? `${source} · ${describeWord(PROXY_SETTING_TEXT, proxy.name)}` : source,
+      subtitle: describeProxyValue(proxy.value),
       meta: { mode: 'system-proxy', source: proxy.source },
     }))
   }
@@ -1189,15 +1407,15 @@ function buildSystemProxyItems(featureId, response) {
 
 function buildPortStatusItems(featureId, response) {
   if (!response || response.state === 'degraded') {
-    return buildDegradedItems(featureId, 'port-status', 'QuickOps 端口状态不可用', response)
+    return buildDegradedItems(featureId, 'port-status', t('QuickOps 端口状态不可用', 'QuickOps Port Status Unavailable'), response)
   }
 
   const title = response.available
-    ? `端口 ${response.port} 可用`
-    : `端口 ${response.port} 被占用`
+    ? t(`端口 ${response.port} 可用`, `Port ${response.port} Is Free`)
+    : t(`端口 ${response.port} 被占用`, `Port ${response.port} Is in Use`)
   const subtitle = response.process
-    ? `${response.host || '127.0.0.1'} · pid:${response.process.pid} · ${response.process.name || response.process.command || response.process.source}`
-    : `${response.host || '127.0.0.1'} · ${response.available ? 'available' : 'occupied'}`
+    ? `${response.host || '127.0.0.1'} · PID ${response.process.pid} · ${response.process.name || response.process.command || response.process.source}`
+    : `${response.host || '127.0.0.1'} · ${response.available ? t('空闲', 'Free') : t('被占用', 'In use')}`
   const items = [
     buildInfoItem({
       featureId,
@@ -1217,7 +1435,7 @@ function buildPortStatusItems(featureId, response) {
     items.push(buildInfoItem({
       featureId,
       id: `port-status-release-${response.port}`,
-      title: '端口释放命令预览',
+      title: t('释放端口的命令', 'Command to Free the Port'),
       subtitle: response.releaseCommand,
       meta: {
         mode: 'port-status',
@@ -1232,7 +1450,7 @@ function buildPortStatusItems(featureId, response) {
 
 function buildDnsQueryItems(featureId, response) {
   if (!response || response.state !== 'resolved') {
-    return buildDegradedItems(featureId, 'dns-query', 'QuickOps DNS 查询不可用', response)
+    return buildDegradedItems(featureId, 'dns-query', t('QuickOps DNS 查询不可用', 'QuickOps DNS Lookup Unavailable'), response)
   }
 
   const info = response.dnsQuery
@@ -1240,8 +1458,8 @@ function buildDnsQueryItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: `dns-query-${info.hostname}`,
-      title: `DNS 查询 ${info.hostname}`,
-      subtitle: `${info.records.length} records${info.failedTypes.length ? ` · failed:${info.failedTypes.join('/')}` : ''}`,
+      title: t(`DNS 查询 · ${info.hostname}`, `DNS Lookup · ${info.hostname}`),
+      subtitle: `${countText(info.records.length, '条记录', 'record')}${info.failedTypes.length ? ` · ${t('查询失败：', 'Failed: ')}${info.failedTypes.join('/')}` : ''}`,
       meta: {
         mode: 'dns-query',
         hostname: info.hostname,
@@ -1265,14 +1483,14 @@ function buildDnsQueryItems(featureId, response) {
 
 function buildFileHashItems(featureId, response) {
   if (!response || response.state !== 'hashed') {
-    return buildDegradedItems(featureId, 'file-hash', 'QuickOps 文件 Hash 不可用', response)
+    return buildDegradedItems(featureId, 'file-hash', t('QuickOps 文件哈希不可用', 'QuickOps File Hash Unavailable'), response)
   }
 
   return [
     buildInfoItem({
       featureId,
       id: `file-hash-${response.path}`,
-      title: `文件 Hash · ${response.fileName}`,
+      title: t(`文件哈希 · ${response.fileName}`, `File Hash · ${response.fileName}`),
       subtitle: `${formatBytes(response.size)} · SHA256 ${response.hashes.sha256}`,
       meta: {
         mode: 'file-hash',
@@ -1292,14 +1510,14 @@ function buildFileHashItems(featureId, response) {
 
 function buildFileBase64Items(featureId, response) {
   if (!response || response.state !== 'encoded') {
-    return buildDegradedItems(featureId, 'file-base64', 'QuickOps 文件 Base64 不可用', response)
+    return buildDegradedItems(featureId, 'file-base64', t('QuickOps 文件 Base64 不可用', 'QuickOps File Base64 Unavailable'), response)
   }
 
   return [
     buildInfoItem({
       featureId,
       id: `file-base64-${response.path}`,
-      title: `文件 Base64 · ${response.fileName}`,
+      title: t(`文件 Base64 · ${response.fileName}`, `File Base64 · ${response.fileName}`),
       subtitle: `${formatBytes(response.size)} · ${truncateText(response.base64, 80)}`,
       meta: {
         mode: 'file-base64',
@@ -1313,14 +1531,14 @@ function buildFileBase64Items(featureId, response) {
 
 function buildRecentDownloadItems(featureId, response) {
   if (!response || response.state !== 'found') {
-    return buildDegradedItems(featureId, 'recent-download', 'QuickOps 最近下载不可用', response)
+    return buildDegradedItems(featureId, 'recent-download', t('QuickOps 最近下载不可用', 'QuickOps Latest Download Unavailable'), response)
   }
 
   return [
     buildInfoItem({
       featureId,
       id: `recent-download-${response.path}`,
-      title: `最近下载 · ${response.fileName}`,
+      title: t(`最近下载 · ${response.fileName}`, `Latest Download · ${response.fileName}`),
       subtitle: `${formatBytes(response.size)} · ${response.path}`,
       meta: {
         mode: 'recent-download',
@@ -1334,14 +1552,15 @@ function buildRecentDownloadItems(featureId, response) {
 function buildCommonDirectoryItems(featureId, response) {
   const info = response?.commonDirectory
   if (!info) {
-    return buildDegradedItems(featureId, 'common-directory', 'QuickOps 常用目录不可用', response)
+    return buildDegradedItems(featureId, 'common-directory', t('QuickOps 常用目录不可用', 'QuickOps Common Folder Unavailable'), response)
   }
 
   return [
     buildInfoItem({
       featureId,
       id: `common-directory-${info.id}`,
-      title: `${info.title} · ${info.subtitle}`,
+      // `title` is the folder in the interface language; `subtitle`, its name on disk, shows in the path.
+      title: info.title || info.subtitle,
       subtitle: info.path,
       meta: {
         mode: 'common-directory',
@@ -1354,7 +1573,7 @@ function buildCommonDirectoryItems(featureId, response) {
 
 function buildPathFormatItems(featureId, response) {
   if (!response || response.state !== 'formatted') {
-    return buildDegradedItems(featureId, 'path-format', 'QuickOps 路径格式不可用', response)
+    return buildDegradedItems(featureId, 'path-format', t('QuickOps 路径格式不可用', 'QuickOps Path Formats Unavailable'), response)
   }
 
   const formats = response.formats || {}
@@ -1362,7 +1581,7 @@ function buildPathFormatItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: `path-format-${response.path}`,
-      title: `路径格式 · ${response.fileName}`,
+      title: t(`路径格式 · ${response.fileName}`, `Path Formats · ${response.fileName}`),
       subtitle: formats.raw || response.path,
       meta: { mode: 'path-format', path: response.path },
     }),
@@ -1374,7 +1593,7 @@ function buildPathFormatItems(featureId, response) {
     items.push(buildInfoItem({
       featureId,
       id: `path-format-${key}-${response.path}`,
-      title: key,
+      title: t(...PATH_FORMAT_TEXT[key]),
       subtitle: formats[key],
       meta: { mode: 'path-format', path: response.path, format: key },
     }))
@@ -1385,14 +1604,14 @@ function buildPathFormatItems(featureId, response) {
 
 function buildFormatTextItems(featureId, response) {
   if (!response || response.state !== 'formatted') {
-    return buildDegradedItems(featureId, 'format-text', 'QuickOps 文本格式化不可用', response)
+    return buildDegradedItems(featureId, 'format-text', t('QuickOps 文本格式化不可用', 'QuickOps Text Formatting Unavailable'), response)
   }
 
   return [
     buildInfoItem({
       featureId,
       id: `format-text-${response.mode}`,
-      title: `文本格式化 · ${response.mode}`,
+      title: `${t('文本格式化', 'Formatted Text')} · ${describeWord(FORMAT_MODE_TEXT, response.mode)}`,
       subtitle: truncateText(response.text),
       meta: {
         mode: 'format-text',
@@ -1498,14 +1717,29 @@ async function buildReadOnlyToolItems(featureId, mode, api, query) {
   return builder(await api[methodName](request))
 }
 
+// A stopwatch counts up; the other kinds with a duration count down to it.
+function describeSessionTime(session) {
+  const duration = normalizeText(session.displayDurationText)
+  if (!duration)
+    return ''
+  if (session.kind === 'stopwatch')
+    return t(`已计时 ${duration}`, `${duration} elapsed`)
+  return Number(session.durationMs) > 0 ? t(`剩余 ${duration}`, `${duration} left`) : ''
+}
+
 function buildSessionItems(featureId, response) {
   const sessions = Array.isArray(response?.sessions) ? response.sessions : []
+  const count = Number(response?.count) || sessions.length
   const items = [
     buildInfoItem({
       featureId,
       id: 'sessions-summary',
-      title: response?.state === 'running' ? 'QuickOps 正在运行' : 'QuickOps 空闲',
-      subtitle: response?.text || `运行会话 ${response?.count || 0} 个`,
+      title: response?.state === 'running'
+        ? t('QuickOps 正在运行', 'QuickOps Is Running')
+        : t('QuickOps 空闲', 'QuickOps Is Idle'),
+      subtitle: count
+        ? t(`${count} 个会话进行中`, `${count} active ${count === 1 ? 'session' : 'sessions'}`)
+        : t('没有进行中的会话', 'No active sessions'),
       meta: { mode: 'sessions', count: sessions.length },
     }),
   ]
@@ -1515,7 +1749,7 @@ function buildSessionItems(featureId, response) {
       featureId,
       id: `session-${session.id}`,
       title: session.title || session.kind,
-      subtitle: `${session.kind} · ${session.state} · ${session.displayDurationText || ''}`,
+      subtitle: [describeWord(SESSION_STATE_TEXT, session.state), describeSessionTime(session)].filter(Boolean).join(' · '),
       meta: {
         mode: 'sessions',
         sessionId: session.id,
@@ -1534,8 +1768,12 @@ function buildAuditItems(featureId, response) {
     buildInfoItem({
       featureId,
       id: 'audit-summary',
-      title: entries.length ? 'QuickOps 最近 Flow 审计' : 'QuickOps 暂无审计记录',
-      subtitle: `count:${response?.count || 0} · limit:${response?.limit || 0}`,
+      title: entries.length
+        ? t('QuickOps 最近的 Flow 审计', 'Recent QuickOps Flow Audit')
+        : t('QuickOps 暂无审计记录', 'No QuickOps Audit Records'),
+      subtitle: entries.length
+        ? t(`最近 ${entries.length} 条记录`, `Latest ${englishCount(entries.length, 'record')}`)
+        : t('还没有经过 QuickOps 的 Flow 动作', 'No Flow actions have gone through QuickOps yet'),
       meta: { mode: 'audit', count: entries.length },
     }),
   ]
@@ -1545,8 +1783,12 @@ function buildAuditItems(featureId, response) {
     items.push(buildInfoItem({
       featureId,
       id: `audit-${entry.id}`,
-      title: `${entry.targetId} · ${entry.decision}`,
-      subtitle: `${entry.requiresConfirmation ? 'confirm' : 'read-only'}${entry.reason ? ` · ${entry.reason}` : ''}${payloadKeys ? ` · keys:${payloadKeys}` : ''}`,
+      title: `${entry.targetId} · ${describeWord(AUDIT_DECISION_TEXT, entry.decision)}`,
+      subtitle: [
+        entry.requiresConfirmation ? t('需要确认', 'Needs confirmation') : t('无需确认', 'No confirmation needed'),
+        entry.reason ? describeReason(entry.reason) : '',
+        payloadKeys ? t(`字段：${payloadKeys}`, `Fields: ${payloadKeys}`) : '',
+      ].filter(Boolean).join(' · '),
       meta: {
         mode: 'audit',
         auditId: entry.id,
@@ -1580,8 +1822,8 @@ async function buildResultItems(featureId, query, api = quickOps) {
       buildInfoItem({
         featureId,
         id: 'unavailable',
-        title: 'QuickOps SDK 不可用',
-        subtitle: '当前为迁移期只读壳；目标是把 QuickOps 业务 runtime 抽到官方插件，CoreApp 只留必要 host capability 与安全门禁',
+        title: t('QuickOps 不可用', 'QuickOps Unavailable'),
+        subtitle: t('当前版本的 Tuff 没有向插件提供 QuickOps，更新后再试', 'This version of Tuff doesn\'t provide QuickOps to plugins; update Tuff and try again'),
         meta: { mode: 'unavailable' },
       }),
     ]
@@ -1652,8 +1894,8 @@ const pluginLifecycle = {
           buildInfoItem({
             featureId,
             id: 'error',
-            title: 'QuickOps 加载失败',
-            subtitle: '宿主能力暂不可用',
+            title: t('QuickOps 加载失败', 'QuickOps Failed to Load'),
+            subtitle: t('Tuff 暂时无法提供这项功能，请稍后再试', 'Tuff can\'t provide this right now; try again later'),
             meta: { mode: 'error' },
           }),
         ]))
