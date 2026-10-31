@@ -32,8 +32,9 @@ interface PreviewIssue {
   code?: string
   source?: string
   type?: string
-  message?: string
-  suggestion?: string
+  title: string
+  advice: string
+  detail: string
 }
 
 interface PreviewSizeOption {
@@ -90,7 +91,6 @@ const props = defineProps<{
   devDisconnectSuggestion: string
   canReconnect: boolean
   reconnectLoading: boolean
-  resolveIssueMessage: (message: string) => string
 }>()
 
 const emit = defineEmits<{
@@ -899,7 +899,9 @@ function handleClose(): void {
                           v-if="previewWidgetRenderError"
                           class="PluginFeature-PreviewIssue is-error"
                         >
-                          <div class="PluginFeature-PreviewIssueTitle">RENDER_ERROR</div>
+                          <div class="PluginFeature-PreviewIssueTitle">
+                            {{ t('widgetFrame.renderFailed') }}
+                          </div>
                           <div class="PluginFeature-PreviewIssueMessage">
                             {{ previewWidgetRenderError }}
                           </div>
@@ -914,13 +916,13 @@ function handleClose(): void {
                           }"
                         >
                           <div class="PluginFeature-PreviewIssueTitle">
-                            {{ issue.code || issue.source || t('plugin.features.widget.tab') }}
+                            {{ issue.title }}
                           </div>
-                          <div class="PluginFeature-PreviewIssueMessage">
-                            {{ resolveIssueMessage(issue.message || '') }}
+                          <div v-if="issue.advice" class="PluginFeature-PreviewIssueHint">
+                            {{ issue.advice }}
                           </div>
-                          <div v-if="issue.suggestion" class="PluginFeature-PreviewIssueHint">
-                            {{ resolveIssueMessage(issue.suggestion) }}
+                          <div v-if="issue.detail" class="PluginFeature-PreviewIssueMessage">
+                            {{ issue.detail }}
                           </div>
                         </div>
                       </div>
@@ -1439,15 +1441,17 @@ pre {
 }
 
 .PluginFeature-PreviewIssueMessage {
-  font-size: 12px;
+  font-family: monospace;
+  font-size: 11px;
   color: var(--tx-text-color-secondary);
-  margin-top: 2px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .PluginFeature-PreviewIssueHint {
   font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  margin-top: 4px;
+  color: var(--tx-text-color-regular);
+  margin-top: 2px;
 }
 
 .PluginFeature-PreviewFrameHost {

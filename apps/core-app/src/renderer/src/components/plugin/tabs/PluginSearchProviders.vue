@@ -17,7 +17,7 @@ import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { resolvePermissionDisplayName } from '~/modules/permission/permission-request-card'
+import { describeSearchProviderIssue } from '~/modules/plugin/plugin-issue-display'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -92,65 +92,18 @@ function formatProviderDescription(provider: SearchProviderRuntimeConfig): strin
   return source ? t('plugin.permissions.searchProviders.providerDesc', { mode, source }) : mode
 }
 
-function joinList(items: string[]): string {
-  try {
-    return new Intl.ListFormat(locale.value, { style: 'long', type: 'conjunction' }).format(items)
-  } catch {
-    return items.join(', ')
-  }
-}
-
-function stringList(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : []
-}
-
 /**
- * The sentence for one registration issue, built from the fields Main reports with it. Main's
- * `message` is the plugin developer's English; it is shown only for an issue this window has no
- * words for, or one that arrived without the fields its sentence needs.
+ * Main's `message` is the plugin developer's English; it is shown only for an issue this window has
+ * no words for, or one that arrived without the fields its sentence needs.
  */
-function issueSentence(issue: SearchProviderRegistryIssue): string | null {
-  const meta = issue.meta ?? {}
-  const provider = issue.providerId || issue.pluginName || ''
-  const words = 'plugin.permissions.searchProviders.issues'
-
-  switch (issue.code) {
-    case 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE':
-    case 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE': {
-      const features = stringList(meta.featureIds)
-      if (features.length === 0) return null
-      const key =
-        issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE' ? 'derived' : 'uncovered'
-      return t(`${words}.${key}`, { features: joinList(features) })
-    }
-    case 'SEARCH_PROVIDER_INVALID':
-      return typeof meta.index === 'number'
-        ? t(`${words}.invalidEntry`, { position: meta.index + 1 })
-        : t(`${words}.invalidList`)
-    case 'SEARCH_PROVIDER_POLICY_BLOCKED': {
-      const reasons = stringList(meta.issues).map((reason) => wordFor('blockReasons', reason))
-      if (!provider || reasons.length === 0) return null
-      return t(`${words}.blocked`, { provider, reasons: joinList(reasons) })
-    }
-    case 'SEARCH_PROVIDER_PERMISSION_MISSING': {
-      const permissions = stringList(meta.missingPermissionIds).map((id) =>
-        resolvePermissionDisplayName(id, t)
-      )
-      if (!provider || permissions.length === 0) return null
-      return t(`${words}.permissionMissing`, { provider, permissions: joinList(permissions) })
-    }
-    case 'SEARCH_PROVIDER_ID_COLLISION':
-      return provider ? t(`${words}.idCollision`, { provider }) : null
-    default:
-      return null
-  }
-}
-
 function formatIssue(issue: SearchProviderRegistryIssue): string {
   return (
-    issueSentence(issue) ??
+    describeSearchProviderIssue(
+      issue,
+      issue.providerId || issue.pluginName || '',
+      t,
+      locale.value
+    ) ??
     t('settings.settingFileIndex.providerConfigIssue', {
       provider: issue.providerId || issue.pluginName || issue.source || issue.code,
       code: issue.code,

@@ -13,10 +13,11 @@ import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { describePluginLoadError } from '~/modules/plugin/plugin-issue-display'
 import { createRendererLogger } from '~/utils/renderer-log'
 import PluginNew from './plugin/PluginNew.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appSdk = useAppSdk()
 const { ensureStartupInfo } = useStartupInfo()
 const pluginViewLog = createRendererLogger('PluginView')
@@ -44,6 +45,7 @@ function matchesPluginSearch(plugin: ITouchPlugin, query: string): boolean {
   const candidates = [
     plugin.name,
     plugin.desc,
+    describePluginLoadError(plugin, t, locale.value)?.title,
     plugin.loadError?.message,
     plugin.loadState === 'loading' ? t('plugin.summary.loading') : '',
     plugin.loadState === 'load_failed' ? t('plugin.summary.loadFailed') : ''

@@ -3441,7 +3441,7 @@
     }
   },
   "plugin": {
-    "devServerDisconnected": "Dev Server 已断开连接",
+    "devServerDisconnected": "开发服务器已断开连接",
     "customPreviewSize": "自定义 {width}×{height}",
     "widgetPreview": "Widget 预览",
     "widgetReloadFailed": "Widget 重新加载失败",
@@ -3595,13 +3595,19 @@
           "idCollision": "{provider} 已被忽略：已有搜索源使用了这个 id"
         },
         "blockReasons": {
-          "missing-owner": "未声明归属",
-          "missing-permission-scope": "未声明权限范围",
+          "missing-owner": "来源必须声明归属",
+          "missing-permission-scope": "来源必须声明权限范围",
           "third-party-push-requires-root-results": "第三方推送源必须声明 root-results 权限范围",
           "third-party-push-requires-explicit-consent": "第三方推送源必须先征得用户同意",
           "third-party-indexed-requires-explicit-consent": "第三方索引源必须要求用户同意",
           "high-privacy-requires-explicit-consent": "需要用户同意的来源不能默认开启",
-          "browser-data-requires-official-plugin": "只有官方插件可以读取浏览器数据"
+          "browser-data-requires-official-plugin": "只有官方插件可以读取浏览器数据",
+          "high-privacy-requires-explicit-enable": "默认开启的高隐私来源必须要求用户同意",
+          "browser-data-requires-high-privacy": "浏览器数据来源必须标记为高隐私",
+          "external-fast-requires-external-tool-permission": "external-fast 来源必须声明 external-tool 权限范围",
+          "external-fast-cannot-be-third-party": "第三方插件不能使用 external-fast 存储",
+          "persistent-source-must-be-clearable": "存入索引的来源必须可以清除",
+          "watch-capability-requires-reconcile": "声明 watch 能力的来源也必须声明 reconcile"
         }
       },
       "blockedTitle": "插件已阻断",
@@ -3887,9 +3893,114 @@
     },
     "issues": {
       "title": "插件加载问题",
-      "source": "来源",
+      "source": "来源：{source}",
       "categoryMissingTitle": "插件「{name}」缺少分类字段 category，已拒绝启动",
-      "categoryMissingDesc": "请在 manifest.json 补充 \"category\": \"utilities\"（sdkapi >= 260114 必填）。"
+      "categoryMissingDesc": "请在 manifest.json 补充 \"category\": \"utilities\"（sdkapi >= 260114 必填）。",
+      "unknownError": "插件报告了一个错误",
+      "unknownWarning": "插件报告了一个警告",
+      "manifest": {
+        "nameMismatch": "插件目录名与 manifest.json 中的名称不一致",
+        "versionMissing": "manifest.json 未声明 version，已按 0.0.0 处理",
+        "storageSyncInvalid": "manifest.json 中的 storageSync 声明无效",
+        "categoryMissing": "manifest.json 缺少 category",
+        "unknownPermissions": "manifest.json 列出了 Tuff 不认识的权限：{ids}",
+        "permissionsNotGranted": "插件必需的部分权限尚未授予",
+        "webcontentMissing": "插件自带的页面文件缺失",
+        "invalidJson": "无法读取 manifest.json，或其内容不是有效的 JSON",
+        "duplicateName": "另一个插件目录已在使用此插件的名称",
+        "metadataInvalid": "插件元数据未通过校验",
+        "iconFailed": "插件图标加载失败"
+      },
+      "sdkapi": {
+        "missing": "manifest.json 未声明 sdkapi",
+        "invalid": "sdkapi {declared} 不是有效的版本号",
+        "outdated": "sdkapi {declared} 低于 Tuff 支持的最低版本 {minimum}",
+        "unsupported": "sdkapi {declared} 不是 Tuff 支持的版本",
+        "incompatible": "插件的 sdkapi 与当前版本的 Tuff 不兼容"
+      },
+      "feature": {
+        "omniTransferIgnored": "功能声明了 omniTransfer，但它需要 sdkapi {required} 及以上，此声明已被忽略",
+        "platformExcluded": "清单将该功能标为不支持当前平台，因此未添加",
+        "interactionConflict": "功能同时声明了 push 和 webcontent 交互，两者不能同时使用，因此未添加",
+        "interactionConflictWarn": "功能同时声明了 push 和 webcontent 交互，两者不能同时使用；sdkapi {strict} 起将拒绝这种写法",
+        "invalidCommands": "功能的 commands 缺失或不是列表",
+        "addFailed": "功能未能添加，可能重复或格式有误",
+        "iconFailed": "功能图标加载失败",
+        "invalidViewPath": "功能的 interaction 路径无效"
+      },
+      "dev": {
+        "sourceFallback": "无法从开发服务器获取清单，本次先使用插件的本地文件",
+        "manifestFailed": "无法从开发服务器获取清单",
+        "addressInvalid": "dev.address 不是有效的 URL",
+        "modeActive": "插件正以开发模式运行",
+        "viewNotAllowed": "开发页面需要未打包的应用和本机回环地址"
+      },
+      "indexedSources": {
+        "invalidList": "manifest.json 中的 indexedSources 不是列表",
+        "invalidEntry": "manifest.json 中第 {position} 个索引源缺少 id",
+        "incompleteEntry": "manifest.json 中的索引源 {source} 缺少 template 或 kind"
+      },
+      "widget": {
+        "pathMissing": "Widget 缺少 interaction 路径",
+        "devAddressMissing": "已开启 dev.source，但缺少 dev.address",
+        "pathInvalid": "Widget 路径无效，或不在 widgets 目录中",
+        "notFound": "Widget 源文件不存在",
+        "readFailed": "无法读取 Widget 源码",
+        "remotePathInvalid": "该 Widget 路径不适用于开发源模式",
+        "remoteFetchFailed": "无法从开发服务器获取 Widget 源码",
+        "unsupportedType": "Widget 不支持此文件类型",
+        "invalidDependency": "Widget 引入了 {module}，Widget 中不能使用该模块",
+        "compileSkipped": "Widget 未编译",
+        "compileFailed": "Widget 编译失败",
+        "compilerUnavailable": "此版本没有可用的 Widget 编译器",
+        "compilerServiceUnavailable": "Widget 编译服务不可用",
+        "sourceMissing": "Widget 源码缺失",
+        "sourceMissingPrecompiled": "Widget 源码缺失，已改用随包附带的预编译产物",
+        "registerFailed": "Widget 注册失败",
+        "runtimeRegisterFailed": "Widget 代码加载时出错",
+        "precompiledMissing": "Widget 的预编译产物缺失，或不在插件包中",
+        "precompiledStale": "Widget 的预编译产物已过期",
+        "precompiledMismatch": "Widget 的预编译产物与清单不一致",
+        "runtimeCompileDisabled": "此处不能在运行时编译 Widget，需要预编译产物",
+        "unusedFiles": "widgets 目录中有文件未被任何功能使用",
+        "scanFailed": "无法读取 widgets 目录"
+      },
+      "runtime": {
+        "hook": "插件在 {hook} 中出错",
+        "view": "插件加载页面时出错",
+        "widget": "插件注册 Widget 时出错",
+        "activation": "插件运行时无法启动",
+        "crash": "插件运行时意外退出",
+        "stop": "无法停止插件运行时",
+        "cleanup": "插件停止后未能清理其资源",
+        "autoDisabled": "插件一分钟内出错过多，已自动停用",
+        "drift": "插件的运行时文件与清单不一致",
+        "loaderFailed": "无法创建插件加载器"
+      },
+      "advice": {
+        "renameToMatch": "修改目录名或清单中的 name 字段，使两者一致。",
+        "storageSync": "在 storageSync.files 下列出确切的 JSON 文件路径，或删除 storageSync。",
+        "updateSdkapi": "将 manifest.json 中的 sdkapi 更新为 {current}，然后重新发布插件。",
+        "checkPermissionIds": "对照插件文档中的权限列表检查这些 ID。",
+        "grantPermissions": "可在插件的「权限」页授予。",
+        "declarePermissions": "将缺少的权限加入 manifest.json 的 permissions.required。",
+        "declareSearchProviders": "在 manifest.json 中声明 searchProviders，mode 设为 push，权限范围设为 root-results。",
+        "coverPushFeatures": "为每个推送功能声明带有其 featureId 的搜索源，或去掉不应进入根结果的功能上的 push。",
+        "restorePackage": "恢复插件安装包，或重新安装插件。",
+        "reinstall": "请重新安装插件。",
+        "rebuild": "请重新构建插件，或重新安装。",
+        "checkDevServer": "确认开发服务器正在 dev.address 上运行。",
+        "checkDevServerManifest": "确认开发服务器正在 dev.address 上运行，并且可以访问 manifest.json。",
+        "fixDevAddress": "将 dev.address 设为完整的 URL，例如 http://127.0.0.1:5173。",
+        "useLoopback": "应用和插件都处于开发模式时，请使用 localhost、127.0.0.1 或 [::1]。",
+        "uniqueName": "删除重复的插件，或为其中一个改名。",
+        "fixInteractionPath": "将 manifest.json 中的 interaction.path 设为有效的页面或路由。",
+        "checkWidgetPath": "检查 Widget 的 interaction.path 及其源文件。",
+        "checkWidgetSource": "检查 Widget 源码的语法及其引入的模块。",
+        "removeUnusedWidgets": "删除这些文件，或在功能的 interaction.path 中引用它们。",
+        "widgetPackages": "Widget 只能引入以下包：{packages}。",
+        "widgetFileTypes": "请使用 .vue、.tsx、.jsx、.ts、.js 或 .cjs 文件。"
+      }
     },
     "overview": {
       "environment": "环境支持",
@@ -3958,7 +4069,7 @@
       "devDisconnectedTitle": "开发服务器已断开",
       "devDisconnectedReason": "原因：{reason}",
       "widget": {
-        "tab": "组件",
+        "tab": "Widget",
         "title": "Widget",
         "widgetId": "Widget ID",
         "path": "Widget 路径",

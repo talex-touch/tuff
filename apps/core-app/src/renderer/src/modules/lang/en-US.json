@@ -3441,7 +3441,7 @@
     }
   },
   "plugin": {
-    "devServerDisconnected": "Dev Server disconnected",
+    "devServerDisconnected": "Dev server disconnected",
     "customPreviewSize": "Custom {width}×{height}",
     "widgetPreview": "Widget preview",
     "widgetReloadFailed": "Widget reload failed",
@@ -3595,13 +3595,19 @@
           "idCollision": "{provider} was ignored: another search source already uses this id"
         },
         "blockReasons": {
-          "missing-owner": "no owner declared",
-          "missing-permission-scope": "no permission scope declared",
+          "missing-owner": "sources must declare an owner",
+          "missing-permission-scope": "sources must declare a permission scope",
           "third-party-push-requires-root-results": "third-party push sources must declare the root-results scope",
           "third-party-push-requires-explicit-consent": "third-party push sources must ask for consent first",
           "third-party-indexed-requires-explicit-consent": "third-party indexed sources must require consent",
           "high-privacy-requires-explicit-consent": "sources that need consent cannot be on by default",
-          "browser-data-requires-official-plugin": "only official plugins can read browser data"
+          "browser-data-requires-official-plugin": "only official plugins can read browser data",
+          "high-privacy-requires-explicit-enable": "high-privacy sources that are on by default must require consent",
+          "browser-data-requires-high-privacy": "browser data sources must be marked high privacy",
+          "external-fast-requires-external-tool-permission": "external-fast sources must declare the external-tool scope",
+          "external-fast-cannot-be-third-party": "third-party plugins cannot use external-fast storage",
+          "persistent-source-must-be-clearable": "sources kept in the index must be clearable",
+          "watch-capability-requires-reconcile": "sources with the watch capability must also declare reconcile"
         }
       },
       "blockedTitle": "Plugin Blocked",
@@ -3887,9 +3893,114 @@
     },
     "issues": {
       "title": "Plugin Load Issues",
-      "source": "Source",
+      "source": "Source: {source}",
       "categoryMissingTitle": "Plugin \"{name}\" has no category field and was not started",
-      "categoryMissingDesc": "Add \"category\": \"utilities\" to manifest.json (required from sdkapi 260114)."
+      "categoryMissingDesc": "Add \"category\": \"utilities\" to manifest.json (required from sdkapi 260114).",
+      "unknownError": "The plugin reported an error",
+      "unknownWarning": "The plugin reported a warning",
+      "manifest": {
+        "nameMismatch": "The plugin's folder name doesn't match the name in manifest.json",
+        "versionMissing": "manifest.json has no version, so 0.0.0 is used",
+        "storageSyncInvalid": "The storageSync declaration in manifest.json isn't valid",
+        "categoryMissing": "manifest.json has no category",
+        "unknownPermissions": "manifest.json lists permissions Tuff doesn't know: {ids}",
+        "permissionsNotGranted": "Some permissions the plugin requires haven't been granted",
+        "webcontentMissing": "The plugin's bundled page files are missing",
+        "invalidJson": "manifest.json couldn't be read, or isn't valid JSON",
+        "duplicateName": "Another plugin folder already uses this plugin's name",
+        "metadataInvalid": "The plugin's metadata didn't pass validation",
+        "iconFailed": "The plugin's icon couldn't be loaded"
+      },
+      "sdkapi": {
+        "missing": "manifest.json doesn't declare sdkapi",
+        "invalid": "sdkapi {declared} isn't a valid version",
+        "outdated": "sdkapi {declared} is older than {minimum}, the oldest version Tuff supports",
+        "unsupported": "sdkapi {declared} isn't a version Tuff supports",
+        "incompatible": "The plugin's sdkapi isn't compatible with this version of Tuff"
+      },
+      "feature": {
+        "omniTransferIgnored": "A feature declares omniTransfer, which needs sdkapi {required} or later, so the declaration is ignored",
+        "platformExcluded": "The manifest marks a feature as unavailable on this platform, so it wasn't added",
+        "interactionConflict": "A feature declares both push and a webcontent interaction, which can't be combined, so it wasn't added",
+        "interactionConflictWarn": "A feature declares both push and a webcontent interaction, which can't be combined; sdkapi {strict} and later will reject it",
+        "invalidCommands": "A feature's commands are missing or aren't a list",
+        "addFailed": "A feature couldn't be added; it may be a duplicate or malformed",
+        "iconFailed": "A feature's icon couldn't be loaded",
+        "invalidViewPath": "A feature's interaction path isn't valid"
+      },
+      "dev": {
+        "sourceFallback": "The dev server's manifest couldn't be fetched, so the plugin's local files are used for now",
+        "manifestFailed": "The dev server's manifest couldn't be fetched",
+        "addressInvalid": "dev.address isn't a valid URL",
+        "modeActive": "The plugin is running in development mode",
+        "viewNotAllowed": "Development pages need an unpackaged app and a loopback address"
+      },
+      "indexedSources": {
+        "invalidList": "indexedSources in manifest.json is not a list",
+        "invalidEntry": "Indexed source {position} in manifest.json is missing its id",
+        "incompleteEntry": "Indexed source {source} in manifest.json is missing its template or kind"
+      },
+      "widget": {
+        "pathMissing": "The widget's interaction path is missing",
+        "devAddressMissing": "dev.source is on, but dev.address is missing",
+        "pathInvalid": "The widget path is invalid or outside the widgets folder",
+        "notFound": "The widget's source file doesn't exist",
+        "readFailed": "The widget's source couldn't be read",
+        "remotePathInvalid": "The widget path isn't valid in dev source mode",
+        "remoteFetchFailed": "The widget's source couldn't be fetched from the dev server",
+        "unsupportedType": "Widgets can't be written in this file type",
+        "invalidDependency": "The widget imports {module}, which widgets can't use",
+        "compileSkipped": "The widget wasn't compiled",
+        "compileFailed": "The widget couldn't be compiled",
+        "compilerUnavailable": "The widget compiler isn't available in this build",
+        "compilerServiceUnavailable": "The widget compiler service isn't available",
+        "sourceMissing": "The widget's source is missing",
+        "sourceMissingPrecompiled": "The widget's source is missing, so its bundled precompiled output is used",
+        "registerFailed": "The widget couldn't be registered",
+        "runtimeRegisterFailed": "The widget's code failed when it was loaded",
+        "precompiledMissing": "The widget's precompiled output is missing or outside the plugin package",
+        "precompiledStale": "The widget's precompiled output is out of date",
+        "precompiledMismatch": "The widget's precompiled output doesn't match the manifest",
+        "runtimeCompileDisabled": "Widgets can't be compiled at runtime here, so this one needs precompiled output",
+        "unusedFiles": "Some files in the widgets folder aren't used by any feature",
+        "scanFailed": "The widgets folder couldn't be read"
+      },
+      "runtime": {
+        "hook": "The plugin failed in {hook}",
+        "view": "The plugin failed while loading a page",
+        "widget": "The plugin failed while registering a widget",
+        "activation": "The plugin's runtime couldn't start",
+        "crash": "The plugin's runtime stopped unexpectedly",
+        "stop": "The plugin's runtime couldn't be stopped",
+        "cleanup": "The plugin's resources couldn't be cleaned up after it stopped",
+        "autoDisabled": "The plugin was turned off after too many errors in a minute",
+        "drift": "The plugin's runtime files don't match its manifest",
+        "loaderFailed": "The plugin loader couldn't be created"
+      },
+      "advice": {
+        "renameToMatch": "Rename the folder or the manifest's name field so the two match.",
+        "storageSync": "List exact JSON file paths under storageSync.files, or remove storageSync.",
+        "updateSdkapi": "Update sdkapi in manifest.json to {current} and republish the plugin.",
+        "checkPermissionIds": "Check these IDs against the permission list in the plugin docs.",
+        "grantPermissions": "Grant them on the plugin's Permissions tab.",
+        "declarePermissions": "Add the missing permissions to permissions.required in manifest.json.",
+        "declareSearchProviders": "Declare searchProviders in manifest.json, with mode push and the root-results scope.",
+        "coverPushFeatures": "Give each push feature a search source with its featureId, or remove push from features that shouldn't reach root results.",
+        "restorePackage": "Restore the plugin's package, or reinstall the plugin.",
+        "reinstall": "Reinstall the plugin.",
+        "rebuild": "Rebuild the plugin, or reinstall it.",
+        "checkDevServer": "Make sure the dev server is running at dev.address.",
+        "checkDevServerManifest": "Make sure the dev server is running at dev.address and serves manifest.json.",
+        "fixDevAddress": "Set dev.address to a full URL, such as http://127.0.0.1:5173.",
+        "useLoopback": "Use localhost, 127.0.0.1 or [::1] while the app and the plugin are in development mode.",
+        "uniqueName": "Remove the duplicate plugin, or rename one of the two.",
+        "fixInteractionPath": "Set interaction.path in manifest.json to a valid page or route.",
+        "checkWidgetPath": "Check the widget's interaction.path and its source file.",
+        "checkWidgetSource": "Check the widget's source for syntax errors and the modules it imports.",
+        "removeUnusedWidgets": "Remove these files, or reference them from a feature's interaction.path.",
+        "widgetPackages": "Widgets can import only these packages: {packages}.",
+        "widgetFileTypes": "Use a .vue, .tsx, .jsx, .ts, .js or .cjs file."
+      }
     },
     "overview": {
       "environment": "Environment Support",

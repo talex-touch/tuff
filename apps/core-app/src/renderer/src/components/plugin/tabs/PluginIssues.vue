@@ -1,17 +1,21 @@
 <script lang="ts" name="PluginIssues" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { resolveI18nMessage } from '@talex-touch/utils/i18n'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { describePluginIssue } from '~/modules/plugin/plugin-issue-display'
 
-defineProps<{
+const props = defineProps<{
   plugin: ITouchPlugin
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
-function resolveIssueMessage(message: string): string {
-  return resolveI18nMessage(message)
-}
+const describedIssues = computed(() =>
+  (props.plugin.issues ?? []).map((issue) => ({
+    issue,
+    display: describePluginIssue(issue, t, locale.value)
+  }))
+)
 </script>
 
 <template>
@@ -21,7 +25,7 @@ function resolveIssueMessage(message: string): string {
     </h2>
     <div class="issues-list">
       <div
-        v-for="(issue, index) in plugin.issues"
+        v-for="({ issue, display }, index) in describedIssues"
         :key="index"
         class="issue-item flex items-start p-3 mb-3 last:mb-0 rounded-lg border"
         :class="{
@@ -38,10 +42,19 @@ function resolveIssueMessage(message: string): string {
         />
         <div class="ml-3 min-w-0 flex-1">
           <p class="font-bold text-sm text-gray-900 dark:text-gray-100">
-            {{ t('plugin.issues.source') }}: {{ issue.source }}
+            {{ display.title }}
           </p>
-          <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-            {{ resolveIssueMessage(issue.message) }}
+          <p v-if="display.advice" class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            {{ display.advice }}
+          </p>
+          <p v-if="issue.source" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('plugin.issues.source', { source: issue.source }) }}
+          </p>
+          <p
+            v-if="display.detail"
+            class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400 break-words"
+          >
+            {{ display.detail }}
           </p>
           <pre
             v-if="issue.meta"
