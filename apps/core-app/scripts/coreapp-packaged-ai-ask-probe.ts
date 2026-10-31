@@ -737,6 +737,7 @@ function getCommonBlockedSignals(): string[] {
   return [
     'Widget 加载失败',
     '插件 widget 初始化失败',
+    '插件 Widget 初始化失败',
     'Widget interaction failed',
     'WIDGET_RUNTIME_COMPILE_DISABLED',
     'WIDGET_PRECOMPILED_MISSING',
