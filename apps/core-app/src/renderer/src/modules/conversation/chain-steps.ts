@@ -67,6 +67,11 @@ export interface SegmentLabels {
   thinking?: string
   /** Alert text for a call the turn ended without ever answering. */
   interrupted?: string
+  /**
+   * Alert text for a call that failed, from the error it stored. The error persists with the thread
+   * as the agent read it, so it is worded when the card renders.
+   */
+  toolError?: (error: string) => string
 }
 
 function toReasoningStep(
@@ -93,26 +98,31 @@ function toReasoningStep(
  * A call still pending or running once the turn has settled never came back —
  * the card renders straight from `status`, so left alone it would spin for the
  * life of the thread. One the turn already marked interrupted carries
- * `INTERRUPTED_TOOL_CALL_ERROR`, which the label words for the reader.
+ * `INTERRUPTED_TOOL_CALL_ERROR`, which the label words for the reader, and a
+ * failed call's stored error is worded by `toolError`.
  *
  * The original part is returned whenever nothing needs correcting: callers
  * write back to it (a submitted form marks itself on the part so the answer
- * persists with the thread), and a copy would swallow that write. Only the
- * interrupted case allocates, and a form can never be in it — a form part is
- * only ever rendered once its call is `done`.
+ * persists with the thread), and a copy would swallow that write. Only an
+ * interrupted or failed call allocates, and a form can never be one — a form
+ * part is only ever rendered once its call is `done`.
  */
 function settledToolPart(
   part: AiToolCallPart,
   streaming: boolean,
-  interruptedLabel?: string
+  labels: SegmentLabels
 ): AiToolCallPart {
   if (part.status === 'error' && part.error === INTERRUPTED_TOOL_CALL_ERROR) {
-    return interruptedLabel ? { ...part, error: interruptedLabel } : part
+    return labels.interrupted ? { ...part, error: labels.interrupted } : part
+  }
+  if (part.status === 'error' && part.error && labels.toolError) {
+    const error = labels.toolError(part.error)
+    return error === part.error ? part : { ...part, error }
   }
   if (streaming || part.status === 'done' || part.status === 'error') return part
   // The card renders `error` as its alert text; without a fallback an
   // interrupted call would show an empty red block.
-  return { ...part, status: 'error', error: part.error ?? interruptedLabel }
+  return { ...part, status: 'error', error: part.error ?? labels.interrupted }
 }
 
 /**
@@ -148,7 +158,7 @@ export function toMessageSegments(
       segments.push({
         kind: 'tool',
         id: part.id,
-        part: settledToolPart(part, streaming, labels.interrupted)
+        part: settledToolPart(part, streaming, labels)
       })
       continue
     }

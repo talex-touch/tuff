@@ -274,7 +274,163 @@
   },
   "settingStorage": {
     "title": "Storage",
-    "description": "View app storage details"
+    "description": "View app storage details",
+    "usage": {
+      "title": "Storage usage",
+      "totalFull": "Total usage",
+      "totalModules": "Folder total",
+      "databaseContent": "Database contents",
+      "calculating": "Calculating",
+      "unknown": "Unknown",
+      "basedOnTableStats": "From table statistics",
+      "modulesTitle": "By module and folder",
+      "fileCount": "{count} file | {count} files",
+      "dirCount": "{count} folder | {count} folders",
+      "pluginsTitle": "Plugins (config/plugins)",
+      "pluginsEmpty": "No plugin config folders or no data yet.",
+      "pluginsCollapsed": "Showing the top {limit} plugins; {count} more hidden.",
+      "databaseTitle": "Database usage",
+      "tableStatsLoading": "Collecting table statistics…",
+      "databaseFile": "Database file",
+      "databaseTotal": "Database total",
+      "dbstatUnavailable": "This SQLite build has no dbstat, so per-table sizes show as unknown.",
+      "logicalOnly": "Database contents are logical sizes and are not counted in the folder total.",
+      "tableUsageLoading": "Loading table usage…",
+      "tableUsageNotLoaded": "Table usage not loaded",
+      "rowCount": "{count} row | {count} rows",
+      "processing": "Working…",
+      "tableName": "Table: {name}",
+      "cachesTitle": "Caches",
+      "entryCount": "{count} entry | {count} entries",
+      "ttl": "TTL {value}",
+      "ttlNone": "No TTL",
+      "cleanupNoteTitle": "About cleanup",
+      "cleanupNote": "Some cleanups affect indexes, statistics and history. Afterwards, rescan when prompted or wait for the background rebuild.",
+      "locationsTitle": "Locations",
+      "dataDir": "Data folder",
+      "dataDirDesc": "Where indexes, the database and plugin config are kept.",
+      "tempDir": "Temporary folder",
+      "tempDirDesc": "Download chunk cache, cleared automatically when a task finishes.",
+      "continue": "Continue",
+      "scope": {
+        "disk": "Disk",
+        "mixed": "Mixed",
+        "memory": "Memory"
+      },
+      "categories": {
+        "fileIndex": "File index",
+        "searchIndex": "Search index",
+        "clipboard": "Clipboard",
+        "ocr": "OCR",
+        "embedding": "Embeddings",
+        "usage": "Usage statistics",
+        "recommendation": "Recommendations and pins",
+        "plugin": "Plugin data",
+        "config": "System config",
+        "downloads": "Downloads",
+        "intelligence": "Intelligence and quotas",
+        "analytics": "Analytics and reporting",
+        "telemetry": "Telemetry",
+        "updates": "Update history",
+        "voice": "Voice",
+        "projects": "Projects",
+        "conversations": "Conversations",
+        "localAiCli": "Local agents"
+      },
+      "modules": {
+        "plugins": "Plugin config",
+        "config": "App config",
+        "database": "Database",
+        "logs": "Logs",
+        "temp": "Temporary files",
+        "other": "Other"
+      },
+      "caches": {
+        "clipboardMemory": "Clipboard memory cache",
+        "storageLru": "Config LRU cache",
+        "storagePlugins": "Plugin config cache",
+        "updateCache": "Update check cache",
+        "aiQuota": "AI quota cache"
+      },
+      "tables": {
+        "files": "File index: files",
+        "file_extensions": "File index: extensions",
+        "file_index_progress": "File index: progress",
+        "scan_progress": "File index: scan progress",
+        "file_fts": "File index: FTS",
+        "search_index": "Search index: FTS",
+        "keyword_mappings": "Search: keyword mappings",
+        "search_keyword_postings": "Search: keyword postings",
+        "search_index_meta": "Search: document locations",
+        "search_index_maintenance_progress": "Search: maintenance progress",
+        "search_index_pending_commits": "Search: pending commits",
+        "search_index_file_maintenance": "File index: maintenance candidates",
+        "query_completions": "Search: completions",
+        "clipboard_history": "Clipboard: history",
+        "clipboard_history_meta": "Clipboard: metadata",
+        "ocr_jobs": "OCR: jobs",
+        "ocr_results": "OCR: results",
+        "embeddings": "Embeddings: content",
+        "contextual_embeddings": "Embeddings: context",
+        "usage_logs": "Usage log: entries",
+        "usage_summary": "Usage log: summary",
+        "item_usage_stats": "Usage log: per-item stats",
+        "item_time_stats": "Usage log: time stats",
+        "usage_execute_events": "Usage log: execution events",
+        "recommendation_cache": "Recommendations: cache",
+        "pinned_items": "Recommendations: pinned items",
+        "plugin_data": "Plugins: data",
+        "config": "System config table",
+        "download_tasks": "Downloads: tasks",
+        "download_chunks": "Downloads: chunks",
+        "download_history": "Downloads: history",
+        "intelligence_audit_logs": "Intelligence: audit logs",
+        "intelligence_quotas": "Intelligence: quotas",
+        "intelligence_usage_stats": "Intelligence: usage",
+        "analytics_snapshots": "Analytics: snapshots",
+        "plugin_analytics": "Analytics: plugin stats",
+        "analytics_report_queue": "Analytics: report queue",
+        "telemetry_upload_stats": "Telemetry: upload stats",
+        "voice_insights_state": "Voice: insights summary",
+        "voice_insight_days": "Voice: daily insights",
+        "voice_insight_captures": "Voice: insight dedup keys",
+        "voice_polish_telemetry": "Voice: polish telemetry",
+        "voice_recognition_records": "Voice: recognition records",
+        "projects": "Projects: folder metadata",
+        "conversations": "Conversations: sessions",
+        "conversation_messages": "Conversations: messages",
+        "conversation_sync_state": "Conversations: sync state",
+        "local_ai_cli_sessions": "Local agents: session pointers",
+        "app_update_records": "Updates: records"
+      },
+      "actions": {
+        "fileIndexClear": "Clear index",
+        "fileIndexClearTitle": "Clear file index",
+        "fileIndexClearMessage": "This deletes the file index and search index data, and you may need to rescan. Continue?",
+        "fileIndexRebuild": "Clear and rebuild search index",
+        "fileIndexRebuildTitle": "Rebuild app and file search index",
+        "fileIndexRebuildMessage": "This clears the app and file search index and starts a rebuild, which may take a while. Continue?",
+        "fileIndexRebuildNote": "The app and file index rebuilds in the background",
+        "downloadsOld": "Clear older than {days} days",
+        "downloadsOldTitle": "Clear download history",
+        "downloadsOldMessage": "This deletes download tasks and chunk data older than {days} days. Continue?",
+        "downloadsAll": "Clear all",
+        "downloadsAllTitle": "Clear all download history",
+        "downloadsAllMessage": "This deletes all download history and chunk data. Continue?",
+        "updatesAll": "Clear history",
+        "updatesAllTitle": "Clear update history",
+        "updatesAllMessage": "This deletes all update history. Continue?"
+      },
+      "cleanup": {
+        "done": "{action}: done",
+        "doneRemoved": "{action}: removed {count} item | {action}: removed {count} items",
+        "doneFreed": "{action}: freed {bytes}",
+        "doneRemovedFreed": "{action}: removed {count} item, freed {bytes} | {action}: removed {count} items, freed {bytes}",
+        "invalidResponse": "Cleanup failed: unexpected response",
+        "failed": "Cleanup failed. Try again.",
+        "failedLater": "Cleanup failed. Try again later."
+      }
+    }
   },
   "settingPerformance": {
     "description": "Inspect Tuff’s own CPU, memory, processes and threads.",
@@ -408,7 +564,7 @@
       "semantic": "Semantic retrieval lane"
     },
     "nativeRuntimes": "Native runtimes",
-    "tokioBudget": "Each Tokio runtime has {workerThreads} worker threads.",
+    "tokioBudget": "Each Tokio runtime has {workerThreads} worker thread. | Each Tokio runtime has {workerThreads} worker threads.",
     "budgetSources": {
       "host-budget": "Tuff limit",
       "environment": "From TOKIO_WORKER_THREADS"
@@ -441,7 +597,7 @@
     "treeError": "Deep sampling failed. The previous result is retained; click Deep sample to retry.",
     "treeCapturedAt": "Deep sample: {time} · Collection {collectMs} ms",
     "totalThreads": "Known thread total: {count}",
-    "unknownThreadCounts": "Another {count} processes have no thread count and are excluded from the total.",
+    "unknownThreadCounts": "One more process has no thread count and is excluded from the total. | Another {count} processes have no thread count and are excluded from the total.",
     "command": "Command",
     "threadCount": "Threads",
     "rss": "Resident memory (RSS)",
@@ -461,7 +617,7 @@
       "providers": "Remote processing disclosure"
     },
     "summary": {
-      "itemCount": "{count} items",
+      "itemCount": "{count} item | {count} items",
       "byteCount": "{size}",
       "lastCleanup": "Last cleanup: {value}",
       "neverCleaned": "No cleanup recorded"
@@ -531,7 +687,7 @@
       "outcomeUnknown": "The operation outcome could not be confirmed. Reload this page and review current data before retrying."
     },
     "secret": {
-      "backupAvailable": "{count} portable credential entries are available.",
+      "backupAvailable": "{count} portable credential entry is available. | {count} portable credential entries are available.",
       "backupUnavailable": "Encrypted credential backup is unavailable.",
       "backupOpen": "Back up credentials",
       "backupDescription": "Choose a strong password for the separate authenticated backup file.",
@@ -926,7 +1082,7 @@
       "installing": "Installing...",
       "progress": "{percent}% downloaded ({size})",
       "moreTitle": "More models",
-      "expandHint": "{count} more bundles, for when a specific engine or size matters.",
+      "expandHint": "{count} more bundle, for when a specific engine or size matters. | {count} more bundles, for when a specific engine or size matters.",
       "collapseHint": "Showing only the recommended and installed models.",
       "expand": "Show {count}",
       "collapse": "Show less",
@@ -960,7 +1116,7 @@
     "messages": {
       "loadFailed": "Could not load local agent status",
       "saveFailed": "Could not save local agent settings",
-      "locateFailed": "The selected executable did not pass the provider version check"
+      "locateFailed": "Could not use the selected executable"
     }
   },
   "localAiCliPanel": {
@@ -988,6 +1144,8 @@
     "viewTerminal": "Terminal (TTY)",
     "running": "The local agent is working…",
     "failed": "Task failed ({code})",
+    "failedWithReason": "Task failed: {reason}",
+    "failedNoReason": "Task failed",
     "cancelled": "Task cancelled",
     "deny": "Deny",
     "allowOnce": "Allow once",
@@ -1016,6 +1174,23 @@
       "clipboard": "Clipboard text",
       "activeApp": "Active app",
       "activeWindow": "Active window"
+    },
+    "failures": {
+      "betaUnavailable": "Local agents aren't available on this system.",
+      "featureDisabled": "Local agents are turned off in Settings.",
+      "providerDisabled": "This agent is turned off in Settings.",
+      "providerUnavailable": "The agent's program wasn't found.",
+      "providerVersionUnsupported": "This version of the agent isn't supported.",
+      "writeApprovalUnavailable": "This agent can't ask before changing files, so it can't run with write access.",
+      "resumeUnsupported": "This agent can't continue an earlier session.",
+      "sessionBusy": "This session is being used by another task.",
+      "sessionMissing": "This session no longer exists.",
+      "sessionConflict": "This session no longer matches what Tuff recorded, so it can't be continued.",
+      "workspaceInvalid": "The project folder is missing or has moved.",
+      "processStartFailed": "The agent's program couldn't be started.",
+      "protocolInvalid": "The agent's reply couldn't be read.",
+      "processExited": "The agent's program quit before it finished.",
+      "statusFailed": "Couldn't read the local agents' status."
     }
   },
   "permission": {
@@ -1226,6 +1401,7 @@
     "subscriptionFailed": "Failed to load subscription",
     "teamFailed": "Failed to load team",
     "loadFailed": "Failed to load account data",
+    "loadFailedReason": "Failed to load account data: {reason}",
     "actions": "Profile actions",
     "manage": "Manage",
     "editProfile": "Edit profile",
@@ -1308,7 +1484,7 @@
     "rotationMode": "Rotation Mode",
     "randomRotation": "Random",
     "sequentialRotation": "Sequential",
-    "minutes": "min",
+    "intervalMinutes": "{count} min",
     "blur": "Window Blur",
     "blurDesc": "Blur intensity of the home background.",
     "opacity": "Window Opacity",
@@ -1504,7 +1680,7 @@
     "saveToChromeUnavailable": "Connect and select a Chrome profile to add http/https pages to Chrome bookmarks",
     "syncCookiesFromChrome": "Sync sign-in cookies from Chrome ({profile})",
     "syncCookiesUnavailable": "Connect and select a Chrome profile to sync sign-in cookies for this website",
-    "syncCookiesSuccess": "Imported {count} cookie(s) for {domain} from Chrome. Refreshing page...",
+    "syncCookiesSuccess": "Imported {count} cookie for {domain} from Chrome. Refreshing page... | Imported {count} cookies for {domain} from Chrome. Refreshing page...",
     "syncCookiesEmpty": "No valid cookies found for {domain} in Chrome",
     "syncCookiesFailed": "Failed to sync cookies: {error}",
     "cookies": {
@@ -1541,8 +1717,23 @@
     "recentEmpty": "Pages you visit will appear here. Open a website to start exploring.",
     "bookmarksEmpty": "No bookmarks yet. Use the star beside the address bar to save a page.",
     "loading": "Loading page",
-    "actionFailed": "The browser action could not be completed.",
+    "actionFailedWithReason": "The browser action could not be completed. {reason}",
     "pageFailed": "This page could not be loaded",
+    "errors": {
+      "disposed": "The built-in browser has shut down.",
+      "tabNotFound": "This tab has already been closed.",
+      "tabLimit": "You've reached the tab limit. Close some tabs first.",
+      "inputInvalid": "The address is too long or contains characters that aren't allowed.",
+      "urlBlocked": "Only http or https addresses without a user name or password can be opened.",
+      "bookmarkInvalid": "Only http and https pages can be bookmarked.",
+      "bookmarkLimit": "You've reached the bookmark limit. Remove some bookmarks first.",
+      "persistFailed": "Couldn't save your tabs, history and bookmarks.",
+      "loadFailed": "Check the address and your network connection, then retry.",
+      "rendererGone": "The page's process ended unexpectedly. Reload to restore it.",
+      "popupFailed": "Couldn't open the new tab this page asked for.",
+      "commandFailed": "Couldn't complete that keyboard shortcut.",
+      "unknown": "Error code: {code}"
+    },
     "retry": "Retry",
     "egoIndicator": "Ego browser agent ready"
   },
@@ -1606,7 +1797,7 @@
       "lastSeen": "Last online {time}",
       "neverSynced": "Not synced yet",
       "lastSynced": "Last synced {time}",
-      "pending": "{count} change(s) waiting to be written to Chrome",
+      "pending": "{count} change waiting to be written to Chrome | {count} changes waiting to be written to Chrome",
       "revokeTitle": "Revoke {name}",
       "revokeConfirm": "After revoking, “{name}” must be paired again and changes not yet written to Chrome stop syncing. Bookmarks and tabs already in Chrome are not affected.",
       "revokeAction": "Revoke",
@@ -1677,7 +1868,7 @@
     "chooseProfile": "Choose the Chrome profile to manage in Tuff.",
     "noProfile": "No Chrome profile is connected yet.",
     "connectHint": "Click your avatar in the top-right corner and use “Manage Chrome connection” to install the connector and pair.",
-    "conflictHint": "{count} bookmark change(s) conflict. Resolve them in “Manage Chrome connection” from the avatar menu.",
+    "conflictHint": "{count} bookmark change conflicts. Resolve it in “Manage Chrome connection” from the avatar menu. | {count} bookmark changes conflict. Resolve them in “Manage Chrome connection” from the avatar menu.",
     "bookmarks": "Bookmarks",
     "cookies": {
       "title": "Sign-ins & Cookies",
@@ -1692,7 +1883,7 @@
       "passwordLabel": "Confirmation password (optional)",
       "passwordPlaceholder": "Enter password to confirm importing sensitive credentials",
       "importAction": "Batch import sign-ins",
-      "importSuccess": "Successfully imported {count} cookie(s) for: {domains}",
+      "importSuccess": "Successfully imported {count} cookie for: {domains} | Successfully imported {count} cookies for: {domains}",
       "importEmpty": "No valid cookies found for the selected domains in Chrome",
       "importFailed": "Import failed: {error}",
       "tip": "After importing, opening these websites in Tuff tabs will immediately reflect your signed-in state.",
@@ -1710,7 +1901,7 @@
     "notSynced": "Chrome bookmarks haven't synced to Tuff yet.",
     "folderEmpty": "This folder is empty.",
     "openFolder": "Open folder {title}",
-    "itemCount": "{count} item(s)",
+    "itemCount": "{count} item | {count} items",
     "notOpenableUrl": "Can't open in Tuff: {url}",
     "notOpenable": "Only http/https pages can be opened in Tuff.",
     "openCopyInTuff": "Open a copy in Tuff: {title} (uses Tuff's own website sign-ins)",
@@ -1731,8 +1922,8 @@
     "closeChromeTab": "Close {title} in Chrome",
     "removeTitle": "Delete from Chrome",
     "removeMessage": "“{title}” will be deleted from the Chrome profile “{profile}”.",
-    "removeFolderMessage": "“{title}” still contains {count} item(s). Deleting removes the folder and everything in it from the Chrome profile “{profile}”.",
-    "removeRecursiveConfirm": "I confirm deleting the {count} item(s) inside too",
+    "removeFolderMessage": "“{title}” still contains {count} item. Deleting removes the folder and everything in it from the Chrome profile “{profile}”. | “{title}” still contains {count} items. Deleting removes the folder and everything in it from the Chrome profile “{profile}”.",
+    "removeRecursiveConfirm": "I confirm deleting the {count} item inside too | I confirm deleting the {count} items inside too",
     "removeAction": "Delete",
     "navigateTitle": "Open a new address in Chrome",
     "newTabTitle": "New tab in Chrome",
@@ -1816,8 +2007,8 @@
       "adoptSessionsHint": "Find the sessions local agents left in this project's folder and add them to the sidebar to continue",
       "discoverSessions": "Discover Local Sessions",
       "discoveringSessions": "Discovering Sessions…",
-      "discoveryComplete": "Adopted {count} local session(s).",
-      "discoveryPartial": "Adopted {count} session(s), but some provider archives could not be fully scanned.",
+      "discoveryComplete": "Adopted {count} local session. | Adopted {count} local sessions.",
+      "discoveryPartial": "Adopted {count} session, but some provider archives could not be fully scanned. | Adopted {count} sessions, but some provider archives could not be fully scanned.",
       "discoveryEmpty": "No new local sessions were found for this project.",
       "discoveryFailed": "Local sessions could not be discovered.",
       "rename": "Rename",
@@ -1879,7 +2070,9 @@
       "minutesSeconds": "{minutes} min {seconds} s"
     },
     "streak": {
-      "summary": "{current} days running · longest {longest} · {active} days with anything said"
+      "summary": "{current} · longest {longest} · {active}",
+      "current": "{count} day running | {count} days running",
+      "active": "{count} day with anything said | {count} days with anything said"
     },
     "heatmap": {
       "title": "The past year",
@@ -1891,7 +2084,9 @@
       "scrollLabel": "Scrollable voice activity calendar; use horizontal scrolling to review all 365 days",
       "beforeTracking": "{date}: statistics were not recording yet",
       "noActivity": "{date}: no recorded voice activity",
-      "daySummary": "{date}: {characters} characters across {sessions} successful captures, {duration}"
+      "daySummary": "{date}: {characters} across {sessions}, {duration}",
+      "characterCount": "{count} character | {count} characters",
+      "sessionCount": "{count} successful capture | {count} successful captures"
     },
     "empty": {
       "title": "Your voice history starts here",
@@ -1907,14 +2102,14 @@
       "copied": "Voice input statistics copied",
       "copyFailed": "Could not copy the aggregate summary",
       "unavailable": "not available yet",
-      "rateValue": "{count} characters/minute",
+      "rateValue": "{count} character/minute | {count} characters/minute",
       "characters": "Dictated characters: {count}",
       "saved": "Estimated time saved: {duration}",
       "rate": "Average dictation rate: {rate}",
       "duration": "Total dictation time: {duration}",
       "activeDays": "Active days in the last 365 local days: {count}",
-      "currentStreak": "Current streak in the last 365 local days: {count} days",
-      "longestStreak": "Longest streak in the last 365 local days: {count} days",
+      "currentStreak": "Current streak in the last 365 local days: {count} day | Current streak in the last 365 local days: {count} days",
+      "longestStreak": "Longest streak in the last 365 local days: {count} day | Longest streak in the last 365 local days: {count} days",
       "sessions": "Successful captures: {count}",
       "polishedSessions": "Polished captures: {count}",
       "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
@@ -2000,7 +2195,7 @@
     "weeks": {
       "title": "The last 12 weeks",
       "note": "Taller means more said that week, against your busiest one.",
-      "streak": "{current}-day streak · longest {longest} · {active} active days"
+      "streak": "{current}-day streak · longest {longest} · {active} active day | {current}-day streak · longest {longest} · {active} active days"
     }
   },
   "home": {
@@ -2014,13 +2209,13 @@
         "unknown": "unknown",
         "exists": "exists",
         "absent": "absent",
-        "bytes": "{count} bytes",
+        "bytes": "{count} byte | {count} bytes",
         "before": "Before",
         "after": "After",
         "diff": "Changes in {path}",
         "undo": "Undo",
         "confirmUndo": "Confirm undo",
-        "rolledBack": "Restored {count} path(s).",
+        "rolledBack": "Restored {count} path. | Restored {count} paths.",
         "rollbackRequestFailed": "No confirmation of the undo result. Refresh the change record before retrying.",
         "line": {
           "context": "unchanged",
@@ -2087,7 +2282,7 @@
         "unavailable": "The profile this conversation uses is switched off or gone. Choose another one.",
         "manage": "Manage agents",
         "required": "Choose an enabled agent profile before sending in Agent mode.",
-        "summary": "{runtime} · {tools} tools · {approval}",
+        "summary": "{runtime} · {tools} tool · {approval} | {runtime} · {tools} tools · {approval}",
         "approval": {
           "manual": "asks before running",
           "preauthorized": "pre-authorized"
@@ -2110,7 +2305,7 @@
         "down": "Move down",
         "remove": "Remove from queue",
         "rowLabel": "Queued {position}: {text}",
-        "attachments": "{count} image(s)",
+        "attachments": "{count} image | {count} images",
         "expand": "Show {count} more",
         "collapse": "Show less",
         "full": "The queue is full ({max}). Your message stayed in the composer.",
@@ -2160,7 +2355,8 @@
         "turn": {
           "streaming": "Replying",
           "complete": "Reply finished",
-          "failed": "Reply failed"
+          "failed": "Reply failed",
+          "stopped": "Reply stopped"
         }
       },
       "context": {
@@ -2185,7 +2381,7 @@
         "outputNotEnforced": "not sent; the CLI applies its own cap",
         "limitsSource": "Capability limits from the model binding, not how much is in use.",
         "unknown": "Unknown",
-        "tokens": "{count} tokens",
+        "tokens": "{count} token | {count} tokens",
         "compactions": "Compactions",
         "compactionStart": "Compaction started",
         "compactionEnd": "Compaction finished",
@@ -2219,7 +2415,11 @@
         "WORKSPACE_RUN_NOT_PENDING": "That run is no longer waiting for approval.",
         "WORKSPACE_STALE_TURN": "That reply has already moved on.",
         "WORKSPACE_TURN_INTERRUPTED": "The reply stopped before it finished (the app closed or the run ended).",
-        "WORKSPACE_VOICE_UNAVAILABLE": "This recording is no longer available, so it was not sent"
+        "WORKSPACE_VOICE_UNAVAILABLE": "This recording is no longer available, so it was not sent",
+        "WORKSPACE_PROVIDER_UNAVAILABLE": "The chosen model or provider isn't available. Pick another one.",
+        "WORKSPACE_INPUT_INVALID": "Not sent: the message looks like it contains a password, key or token, or it's too long to check.",
+        "WORKSPACE_ATTACHMENT_INVALID": "An attachment is too large or not supported, or there are too many.",
+        "WORKSPACE_ATTACHMENT_UNSAFE": "An attachment in this conversation was changed on disk and can't be used."
       }
     },
     "greeting": "What shall we do today?",
@@ -2334,7 +2534,9 @@
       "generated": "Model-authored widget",
       "sandboxed": "Sandboxed",
       "loading": "Starting the widget…",
-      "failed": "This widget could not start."
+      "failed": "This widget could not start.",
+      "timedOut": "It took too long to start.",
+      "blocked": "The sandbox blocked something it tried to load or run ({directive})."
     },
     "modelName": "Tuff Auto",
     "titleGen": {
@@ -2415,6 +2617,21 @@
     },
     "toolPayload": "Payload",
     "toolInterrupted": "This call never returned; the turn ended.",
+    "toolErrors": {
+      "notFound": "This tool isn't available.",
+      "inputInvalid": "The tool was called with input it can't use.",
+      "approvalDenied": "The request to run this tool was denied.",
+      "aborted": "The tool call was cancelled.",
+      "timedOut": "The tool took too long and was stopped.",
+      "resourceNotFound": "The file or item the tool needed wasn't found.",
+      "resourceExists": "The file or item the tool tried to create already exists.",
+      "accessDenied": "The tool wasn't allowed to access what it needed.",
+      "serviceUnavailable": "A service the tool needs couldn't be reached.",
+      "mcpServerUnavailable": "The MCP server isn't available.",
+      "mcpToolFailed": "The MCP tool failed.",
+      "failed": "The tool failed.",
+      "budgetExceeded": "This call went over this reply's limit of {count} tool call. | This call went over this reply's limit of {count} tool calls."
+    },
     "formSubmit": "Submit",
     "formReset": "Reset",
     "formRequired": "This field is required",
@@ -2429,6 +2646,7 @@
       "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
       "empty": "The model returned nothing",
       "generic": "This reply failed",
+      "stopped": "This reply was stopped",
       "codeLabel": "Error code",
       "noDetail": "No further details were provided. Retry, then share this code if the failure continues."
     },
@@ -2710,7 +2928,7 @@
       "unpriced": "No price found"
     },
     "zeroCost": {
-      "title": "{calls} to {models} aren't in the estimated cost",
+      "title": "{calls} to {models} isn't in the estimated cost | {calls} to {models} aren't in the estimated cost",
       "modelCount": "{count} model | {count} models",
       "callCount": "{count} call | {count} calls",
       "description": "They're free, run on this machine, are billed in Nexus credits, or have no price found. Cost limits don't cover them either.",
@@ -2903,7 +3121,7 @@
     "searchPlaceholder": "Search plugins",
     "unnamedItem": "Unnamed plugin",
     "noDescription": "No description yet",
-    "sources": "sources",
+    "sourceCount": "{count} source | {count} sources",
     "loading": "Loading official plugins...",
     "refresh": "Refresh",
     "install": "Install",
@@ -2939,7 +3157,7 @@
       "namePlaceholder": "Source name",
       "urlPlaceholder": "Source url",
       "outdatedSection": "Outdated sources",
-      "outdatedHiddenHint": "{count} outdated source(s) are hidden. Enable Advanced Settings to view.",
+      "outdatedHiddenHint": "{count} outdated source is hidden. Enable Advanced Settings to view. | {count} outdated sources are hidden. Enable Advanced Settings to view.",
       "readonlyBadge": "readonly",
       "outdatedBadge": "outdated",
       "providerTypes": {
@@ -3015,14 +3233,14 @@
       "contentRefresh": "Refresh",
       "contentLoading": "Loading shared content...",
       "contentEmpty": "No public content packages yet",
-      "contentInstalls": "{count} installs",
+      "contentInstalls": "{count} install | {count} installs",
       "contentUpdatedAt": "Updated {date}",
       "contentUnknownDate": "Unknown date",
       "contentInstall": "Install Content",
       "contentInstalling": "Installing...",
       "contentInstallPluginFirst": "Install Plugin First",
       "contentInstallSuccessTitle": "Content Installed",
-      "contentInstallSuccessMessage": "Imported \"{title}\" with {count} new snippets.",
+      "contentInstallSuccessMessage": "Imported \"{title}\" with {count} new snippet. | Imported \"{title}\" with {count} new snippets.",
       "contentInstallFailedTitle": "Content Install Failed",
       "contentErrors": {
         "packageIdRequired": "Content package ID is missing.",
@@ -3093,7 +3311,37 @@
         "sdkapiBlocked": "This plugin's sdkapi is not compatible with the current Tuff version.",
         "sdkapiMissing": "This plugin is missing the required sdkapi declaration.",
         "sdkapiInvalid": "This plugin declares an invalid sdkapi format.",
-        "sdkapiOutdated": "This plugin's sdkapi {declared} is below the minimum supported version {minimum}."
+        "sdkapiOutdated": "This plugin's sdkapi {declared} is below the minimum supported version {minimum}.",
+        "networkCooldown": "Requests to the plugin source are paused after repeated failures. Try again in a moment.",
+        "networkUnavailable": "Couldn't reach the plugin source. Check your network and try again.",
+        "sourceInvalid": "This install source isn't a plugin address Tuff recognizes.",
+        "sourceFileMissing": "The plugin file doesn't exist.",
+        "pluginNotFound": "The plugin store has no plugin by this name.",
+        "versionUnavailable": "No downloadable package was found for this version.",
+        "downloadUrlInvalid": "The download address isn't valid.",
+        "downloadRedirectFailed": "The download server redirected to an address that can't be followed.",
+        "downloadEmpty": "The downloaded file is empty.",
+        "packageUnreadable": "The plugin package couldn't be opened. It may be damaged.",
+        "manifestMissing": "The plugin package has no manifest.json.",
+        "manifestInvalid": "The plugin's manifest.json isn't valid.",
+        "nameInvalid": "The plugin's name can't be used as a folder name.",
+        "alreadyInstalled": "This plugin is already installed.",
+        "replaceFailed": "The installed version couldn't be removed, so it wasn't replaced.",
+        "entryFilesMissing": "The package is missing files the plugin needs to run.",
+        "uninstallPending": "An earlier uninstall is still cleaning up. Try again when it finishes.",
+        "notReady": "The plugin system is still starting. Try again in a moment.",
+        "declined": "The installation was cancelled.",
+        "activeUi": "It's in use right now ({ui}). Close it and try again.",
+        "trustMetadataInvalid": "The store didn't provide valid verification details for this package.",
+        "trustPackageMismatch": "The downloaded package doesn't match the one the store published. Try again.",
+        "trustNotApproved": "The store hasn't cleared this version for installation.",
+        "trustReviewPending": "This version is still under review in the store.",
+        "trustUnverified": "The package's signature couldn't be verified, so it wasn't installed."
+      },
+      "activeUi": {
+        "coreBox": "CoreBox",
+        "windows": "{count} separate window | {count} separate windows",
+        "coreBoxAndWindows": "CoreBox and {count} separate window | CoreBox and {count} separate windows"
       }
     },
     "upgradeDialog": {
@@ -3112,7 +3360,7 @@
       "subtitle": "Try adjusting your search or browse different categories"
     },
     "updates": {
-      "available": "{count} plugin update(s) available",
+      "available": "{count} plugin update available | {count} plugin updates available",
       "viewAll": "View updates",
       "checking": "Checking for updates...",
       "noUpdates": "All plugins are up to date",
@@ -3122,7 +3370,8 @@
     "clickToViewErrors": "Click to view error details",
     "statusSuccess": "Success",
     "statusFailed": "Failed",
-    "plugins": "plugins",
+    "pluginCount": "{count} plugin | {count} plugins",
+    "providerUnknown": "Unknown source",
     "noProviderData": "No provider data available",
     "publisher": {
       "tab": "Publisher",
@@ -3176,9 +3425,28 @@
         "versionCreated": "Created version v{version}",
         "versionStatusChanged": "Version v{version} status changed",
         "versionReedited": "Version v{version} was re-edited and re-submitted"
+      },
+      "failures": {
+        "load": "Couldn't load your plugins",
+        "timeline": "Couldn't load the timeline",
+        "preview": "Couldn't read the package",
+        "submit": "Couldn't submit",
+        "status": "Couldn't change the review status",
+        "deleteVersion": "Couldn't delete the version",
+        "withReason": "{action}: {reason}",
+        "signInRequired": "Sign in to Nexus first."
       }
     },
-    "official": "Official"
+    "official": "Official",
+    "sourceFailures": {
+      "failed": "Couldn't read this source.",
+      "unsupported": "This kind of source isn't supported.",
+      "addressInvalid": "This source's address isn't valid.",
+      "unreadable": "The source answered with data Tuff couldn't read.",
+      "legacyManifest": "This source uses an old catalog format that's no longer supported.",
+      "packageUrlMissing": "A plugin in this source has no download address.",
+      "unreachable": "Couldn't reach this source. Check your network and try again."
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -3191,7 +3459,7 @@
     }
   },
   "plugin": {
-    "devServerDisconnected": "Dev Server disconnected",
+    "devServerDisconnected": "Dev server disconnected",
     "customPreviewSize": "Custom {width}×{height}",
     "widgetPreview": "Widget preview",
     "widgetReloadFailed": "Widget reload failed",
@@ -3251,10 +3519,10 @@
       "version": "v{version}"
     },
     "navTree": {
-      "groupCount": "{count} plugins in this category",
+      "groupCount": "{count} plugin in this category | {count} plugins in this category",
       "badges": {
-        "error": "{count} error(s): {message}",
-        "warning": "{count} warning(s): {message}"
+        "error": "{count} error: {message} | {count} errors: {message}",
+        "warning": "{count} warning: {message} | {count} warnings: {message}"
       }
     },
     "status": {
@@ -3294,8 +3562,8 @@
       "empty": "This plugin has no declared permissions",
       "statusTitle": "Permission Status",
       "statusGranted": "All required permissions granted",
-      "statusMissing": "Missing {count} required permission(s)",
-      "statusDeprecated": "{count} historical grants were disabled",
+      "statusMissing": "Missing {count} required permission | Missing {count} required permissions",
+      "statusDeprecated": "{count} historical grant was disabled | {count} historical grants were disabled",
       "required": "Required Permissions",
       "optional": "Optional Permissions",
       "granted": "Granted",
@@ -3317,13 +3585,48 @@
       "searchProviders": {
         "title": "Search Sources",
         "loading": "Reading plugin search sources",
-        "summary": "This plugin registers {total} search source(s), {enabled} enabled, {issues} registration issue(s)",
+        "summary": "This plugin registers {total}, {enabled} enabled, {issues}",
+        "sourceCount": "{count} search source | {count} search sources",
         "statusTitle": "Search Source Status",
         "statusDesc": "Control whether this plugin's search results can enter root search results",
         "empty": "This plugin has no registered search sources",
         "providerDesc": "{mode} · source {source}",
-        "issueDesc": "{count} registration issue(s)",
-        "consentRequired": "Consent required"
+        "issueCount": "{count} registration issue | {count} registration issues",
+        "consentRequired": "Consent required",
+        "modes": {
+          "push": "Pushes results",
+          "pull": "Answers searches",
+          "indexed": "Searches an index"
+        },
+        "owners": {
+          "core": "Built-in",
+          "official-plugin": "Official plugin",
+          "third-party-plugin": "Third-party plugin"
+        },
+        "issues": {
+          "derived": "No search sources declared, so they were derived from its push features: {features}",
+          "uncovered": "Push features without a search source of their own reach root results unchecked: {features}",
+          "invalidList": "searchProviders in manifest.json is not a list",
+          "invalidEntry": "Search source {position} in manifest.json is missing its id, mode or permission scopes",
+          "blocked": "{provider} was blocked: {reasons}",
+          "permissionMissing": "{provider} needs permissions the manifest does not declare: {permissions}",
+          "idCollision": "{provider} was ignored: another search source already uses this id"
+        },
+        "blockReasons": {
+          "missing-owner": "sources must declare an owner",
+          "missing-permission-scope": "sources must declare a permission scope",
+          "third-party-push-requires-root-results": "third-party push sources must declare the root-results scope",
+          "third-party-push-requires-explicit-consent": "third-party push sources must ask for consent first",
+          "third-party-indexed-requires-explicit-consent": "third-party indexed sources must require consent",
+          "high-privacy-requires-explicit-consent": "sources that need consent cannot be on by default",
+          "browser-data-requires-official-plugin": "only official plugins can read browser data",
+          "high-privacy-requires-explicit-enable": "high-privacy sources that are on by default must require consent",
+          "browser-data-requires-high-privacy": "browser data sources must be marked high privacy",
+          "external-fast-requires-external-tool-permission": "external-fast sources must declare the external-tool scope",
+          "external-fast-cannot-be-third-party": "third-party plugins cannot use external-fast storage",
+          "persistent-source-must-be-clearable": "sources kept in the index must be clearable",
+          "watch-capability-requires-reconcile": "sources with the watch capability must also declare reconcile"
+        }
       },
       "blockedTitle": "Plugin Blocked",
       "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
@@ -3338,7 +3641,7 @@
         "medium": "Medium",
         "high": "High"
       },
-      "categoryDesc": "{count} permission(s)",
+      "categoryDesc": "{count} permission | {count} permissions",
       "categories": {
         "fs": "File System",
         "clipboard": "Clipboard",
@@ -3570,7 +3873,9 @@
       },
       "details": {
         "title": "Storage File Details",
-        "description": "{files} files, {directories} directories"
+        "description": "{files}, {directories}",
+        "fileCount": "{count} file | {count} files",
+        "directoryCount": "{count} directory | {count} directories"
       },
       "confirm": {
         "clearTitle": "Clear Storage",
@@ -3595,7 +3900,9 @@
       },
       "files": {
         "title": "Plugin Files",
-        "summary": "{files} file(s), {directories} folder(s)",
+        "summary": "{files}, {directories}",
+        "fileCount": "{count} file | {count} files",
+        "folderCount": "{count} folder | {count} folders",
         "empty": "No plugin files found",
         "name": "Name",
         "size": "Size",
@@ -3604,9 +3911,114 @@
     },
     "issues": {
       "title": "Plugin Load Issues",
-      "source": "Source",
+      "source": "Source: {source}",
       "categoryMissingTitle": "Plugin \"{name}\" has no category field and was not started",
-      "categoryMissingDesc": "Add \"category\": \"utilities\" to manifest.json (required from sdkapi 260114)."
+      "categoryMissingDesc": "Add \"category\": \"utilities\" to manifest.json (required from sdkapi 260114).",
+      "unknownError": "The plugin reported an error",
+      "unknownWarning": "The plugin reported a warning",
+      "manifest": {
+        "nameMismatch": "The plugin's folder name doesn't match the name in manifest.json",
+        "versionMissing": "manifest.json has no version, so 0.0.0 is used",
+        "storageSyncInvalid": "The storageSync declaration in manifest.json isn't valid",
+        "categoryMissing": "manifest.json has no category",
+        "unknownPermissions": "manifest.json lists permissions Tuff doesn't know: {ids}",
+        "permissionsNotGranted": "Some permissions the plugin requires haven't been granted",
+        "webcontentMissing": "The plugin's bundled page files are missing",
+        "invalidJson": "manifest.json couldn't be read, or isn't valid JSON",
+        "duplicateName": "Another plugin folder already uses this plugin's name",
+        "metadataInvalid": "The plugin's metadata didn't pass validation",
+        "iconFailed": "The plugin's icon couldn't be loaded"
+      },
+      "sdkapi": {
+        "missing": "manifest.json doesn't declare sdkapi",
+        "invalid": "sdkapi {declared} isn't a valid version",
+        "outdated": "sdkapi {declared} is older than {minimum}, the oldest version Tuff supports",
+        "unsupported": "sdkapi {declared} isn't a version Tuff supports",
+        "incompatible": "The plugin's sdkapi isn't compatible with this version of Tuff"
+      },
+      "feature": {
+        "omniTransferIgnored": "A feature declares omniTransfer, which needs sdkapi {required} or later, so the declaration is ignored",
+        "platformExcluded": "The manifest marks a feature as unavailable on this platform, so it wasn't added",
+        "interactionConflict": "A feature declares both push and a webcontent interaction, which can't be combined, so it wasn't added",
+        "interactionConflictWarn": "A feature declares both push and a webcontent interaction, which can't be combined; sdkapi {strict} and later will reject it",
+        "invalidCommands": "A feature's commands are missing or aren't a list",
+        "addFailed": "A feature couldn't be added; it may be a duplicate or malformed",
+        "iconFailed": "A feature's icon couldn't be loaded",
+        "invalidViewPath": "A feature's interaction path isn't valid"
+      },
+      "dev": {
+        "sourceFallback": "The dev server's manifest couldn't be fetched, so the plugin's local files are used for now",
+        "manifestFailed": "The dev server's manifest couldn't be fetched",
+        "addressInvalid": "dev.address isn't a valid URL",
+        "modeActive": "The plugin is running in development mode",
+        "viewNotAllowed": "Development pages need an unpackaged app and a loopback address"
+      },
+      "indexedSources": {
+        "invalidList": "indexedSources in manifest.json is not a list",
+        "invalidEntry": "Indexed source {position} in manifest.json is missing its id",
+        "incompleteEntry": "Indexed source {source} in manifest.json is missing its template or kind"
+      },
+      "widget": {
+        "pathMissing": "The widget's interaction path is missing",
+        "devAddressMissing": "dev.source is on, but dev.address is missing",
+        "pathInvalid": "The widget path is invalid or outside the widgets folder",
+        "notFound": "The widget's source file doesn't exist",
+        "readFailed": "The widget's source couldn't be read",
+        "remotePathInvalid": "The widget path isn't valid in dev source mode",
+        "remoteFetchFailed": "The widget's source couldn't be fetched from the dev server",
+        "unsupportedType": "Widgets can't be written in this file type",
+        "invalidDependency": "The widget imports {module}, which widgets can't use",
+        "compileSkipped": "The widget wasn't compiled",
+        "compileFailed": "The widget couldn't be compiled",
+        "compilerUnavailable": "The widget compiler isn't available in this build",
+        "compilerServiceUnavailable": "The widget compiler service isn't available",
+        "sourceMissing": "The widget's source is missing",
+        "sourceMissingPrecompiled": "The widget's source is missing, so its bundled precompiled output is used",
+        "registerFailed": "The widget couldn't be registered",
+        "runtimeRegisterFailed": "The widget's code failed when it was loaded",
+        "precompiledMissing": "The widget's precompiled output is missing or outside the plugin package",
+        "precompiledStale": "The widget's precompiled output is out of date",
+        "precompiledMismatch": "The widget's precompiled output doesn't match the manifest",
+        "runtimeCompileDisabled": "Widgets can't be compiled at runtime here, so this one needs precompiled output",
+        "unusedFiles": "Some files in the widgets folder aren't used by any feature",
+        "scanFailed": "The widgets folder couldn't be read"
+      },
+      "runtime": {
+        "hook": "The plugin failed in {hook}",
+        "view": "The plugin failed while loading a page",
+        "widget": "The plugin failed while registering a widget",
+        "activation": "The plugin's runtime couldn't start",
+        "crash": "The plugin's runtime stopped unexpectedly",
+        "stop": "The plugin's runtime couldn't be stopped",
+        "cleanup": "The plugin's resources couldn't be cleaned up after it stopped",
+        "autoDisabled": "The plugin was turned off after too many errors in a minute",
+        "drift": "The plugin's runtime files don't match its manifest",
+        "loaderFailed": "The plugin loader couldn't be created"
+      },
+      "advice": {
+        "renameToMatch": "Rename the folder or the manifest's name field so the two match.",
+        "storageSync": "List exact JSON file paths under storageSync.files, or remove storageSync.",
+        "updateSdkapi": "Update sdkapi in manifest.json to {current} and republish the plugin.",
+        "checkPermissionIds": "Check these IDs against the permission list in the plugin docs.",
+        "grantPermissions": "Grant them on the plugin's Permissions tab.",
+        "declarePermissions": "Add the missing permissions to permissions.required in manifest.json.",
+        "declareSearchProviders": "Declare searchProviders in manifest.json, with mode push and the root-results scope.",
+        "coverPushFeatures": "Give each push feature a search source with its featureId, or remove push from features that shouldn't reach root results.",
+        "restorePackage": "Restore the plugin's package, or reinstall the plugin.",
+        "reinstall": "Reinstall the plugin.",
+        "rebuild": "Rebuild the plugin, or reinstall it.",
+        "checkDevServer": "Make sure the dev server is running at dev.address.",
+        "checkDevServerManifest": "Make sure the dev server is running at dev.address and serves manifest.json.",
+        "fixDevAddress": "Set dev.address to a full URL, such as http://127.0.0.1:5173.",
+        "useLoopback": "Use localhost, 127.0.0.1 or [::1] while the app and the plugin are in development mode.",
+        "uniqueName": "Remove the duplicate plugin, or rename one of the two.",
+        "fixInteractionPath": "Set interaction.path in manifest.json to a valid page or route.",
+        "checkWidgetPath": "Check the widget's interaction.path and its source file.",
+        "checkWidgetSource": "Check the widget's source for syntax errors and the modules it imports.",
+        "removeUnusedWidgets": "Remove these files, or reference them from a feature's interaction.path.",
+        "widgetPackages": "Widgets can import only these packages: {packages}.",
+        "widgetFileTypes": "Use a .vue, .tsx, .jsx, .ts, .js or .cjs file."
+      }
     },
     "overview": {
       "environment": "Environment Support",
@@ -3732,7 +4144,7 @@
           "resizeHint": "Drag the bottom-right corner to customize",
           "mockLabel": "Mock payload",
           "mockPlaceholder": "Enter JSON payload",
-          "mockError": "Failed to parse JSON: {error}",
+          "mockError": "Not valid JSON",
           "statusNotSelected": "Not selected",
           "statusInvalidPayload": "Invalid payload",
           "statusLoading": "Loading",
@@ -3740,7 +4152,7 @@
           "statusReady": "Loaded",
           "statusError": "Error",
           "statusPending": "Not ready",
-          "hintMockInvalid": "Failed to parse mock payload: {error}",
+          "hintMockInvalid": "The mock payload isn't valid JSON, so the preview renders without it",
           "hintMockEmpty": "Mock payload is enabled, but the content is empty",
           "hintMockActive": "Rendering with mock payload",
           "hintReadyEmpty": "Tip: if the widget is loaded but empty, it usually needs payload or runtime data.",
@@ -3957,7 +4369,8 @@
         "clipboardImage": "Clipboard image context",
         "unavailable": "No usable context was captured",
         "imagePreview": "Clipboard image loaded for this explicit action only.",
-        "withIssue": "{preview} · Capture note: {issue}"
+        "withIssue": "{preview} · Capture note: {issue}",
+        "issueOnly": "Capture note: {issue}"
       },
       "actions": {
         "quickReview": {
@@ -4036,6 +4449,12 @@
         "success": "{action} · Succeeded",
         "error": "{action} · Failed",
         "copyResult": "Copy result"
+      },
+      "issues": {
+        "empty": "No selected text was found.",
+        "unsupported": "Can't read the selected text here. On Linux, install xdotool.",
+        "failed": "Selected-text capture failed. Check desktop automation permissions, then retry.",
+        "disabled": "Allow Accessibility access to read the selected text."
       }
     },
     "intelligence": {
@@ -4175,7 +4594,16 @@
         "newlyAdded": "New file",
         "yesterday": "Yesterday",
         "appContext": "App context"
-      }
+      },
+      "openClipboardUrl": "Open Link"
+    },
+    "everythingNotice": {
+      "title": "Windows file search isn't ready",
+      "subtitle": "Everything is missing, not running or turned off",
+      "disabled": "Turned off in Tuff settings. Turn it on to search files",
+      "notReady": "The backend isn't ready. Open settings to see why",
+      "openSettings": "Open Everything Settings",
+      "openSettingsDesc": "Check the Everything backend, diagnostics and install guidance"
     }
   },
   "appConfigure": {
@@ -4206,7 +4634,7 @@
     "searchPlaceholder": "Type to search...",
     "searchClear": "Clear search",
     "searchedOnDevice": "{count} found",
-    "appsOnDevice": "{count} apps",
+    "appsOnDevice": "{count} app | {count} apps",
     "filteredOnDevice": "{count} filtered",
     "usageUnavailable": "No usage data; sorted by name",
     "emptyFiltered": "No matching applications",
@@ -4236,7 +4664,7 @@
     "usageLastLaunched": "Last launched",
     "usageHourTitle": "Time of day",
     "usageHourDesc": "Launches per hour, drawn relative to the busiest hour",
-    "usageHourTooltip": "{hour}:00 · {count} launches",
+    "usageHourTooltip": "{hour}:00 · {count} launch | {hour}:00 · {count} launches",
     "usageTransitionTitle": "Came from",
     "usageTransitionDesc": "Applications you were in right before launching this one",
     "usageTrendTitle": "Last 30 days",
@@ -4282,7 +4710,7 @@
     "aliasPlaceholder": "Type a keyword and press Enter",
     "aliasAdd": "Add",
     "aliasRemove": "Remove keyword {alias}",
-    "aliasCount": "{count} keywords configured",
+    "aliasCount": "{count} keyword configured | {count} keywords configured",
     "aliasNone": "No keywords yet",
     "aliasManage": "Manage",
     "aliasDone": "Done",
@@ -4571,7 +4999,7 @@
     },
     "history": "History",
     "history_title": "Download History",
-    "items": "items",
+    "items": "{count} item | {count} items",
     "clear_all_history": "Clear All",
     "search_history_placeholder": "Search history...",
     "filter_by_module": "Filter by module",
@@ -4595,9 +5023,9 @@
     "clear_history_item_failed": "Failed to clear history record",
     "clear_all_history_failed": "Failed to clear all history",
     "just_now": "Just now",
-    "minutes_ago": "{count} minutes ago",
-    "hours_ago": "{count} hours ago",
-    "days_ago": "{count} days ago",
+    "minutes_ago": "{count} minute ago | {count} minutes ago",
+    "hours_ago": "{count} hour ago | {count} hours ago",
+    "days_ago": "{count} day ago | {count} days ago",
     "module_unknown": "Unknown Module",
     "status_label": "Status",
     "view_logs": "View logs"
@@ -4685,7 +5113,8 @@
     "restart_later": "Restart Later",
     "no_release_notes": "No release notes available",
     "download_started": "Update download started",
-    "download_failed_with_reason": "Download failed: {reason}",
+    "download_start_failed": "Couldn't start downloading the update. Try again in a moment.",
+    "download_unavailable": "This version is no longer available. Check for updates again.",
     "request_timed_out": "The request timed out",
     "remind_later_success": "We'll remind you again in {hours} hours.",
     "remind_later_failed": "Failed to set a reminder. Please try again later.",
@@ -4717,7 +5146,7 @@
       "scanFailedTitle": "Could not scan this machine's MCP configuration",
       "scanFailedDesc": "The agents' configuration files could not be read, so the list may be incomplete.",
       "retry": "Retry",
-      "unreadableTitle": "{count} configuration files could not be read",
+      "unreadableTitle": "{count} configuration file could not be read | {count} configuration files could not be read",
       "unreadableDesc": "Servers declared there are not listed: {paths}",
       "emptyTitle": "No MCP servers on this machine yet",
       "emptyDesc": "Servers that Claude, Codex and other agents configure appear here. You can also add one by hand.",
@@ -4747,6 +5176,7 @@
       "errorConfirmation": "Moving {name}'s credentials needs your confirmation first.",
       "errorSourceMissing": "The agent's configuration no longer declares {name}.",
       "errorInvalid": "The stored copy of {name} cannot run until it is added again.",
+      "errorNotImported": "Tuff no longer holds a copy of {name}. The list has been refreshed.",
       "enableFailed": "Could not switch on {name}: {reason}",
       "disableFailed": "Could not switch off {name}: {reason}",
       "secretTitle": "Move {name}'s credentials?",
@@ -4769,7 +5199,7 @@
       "probeAction": "Probe",
       "probeIdle": "Not probed yet. Probing starts this server alone and lists its tools.",
       "probeRunning": "Probing…",
-      "probeOk": "Reachable · {count} tools",
+      "probeOk": "Reachable · {count} tool | Reachable · {count} tools",
       "probeFailed": "Probe failed: {reason}",
       "probeIdleDeclared": "Not probed yet. Probing starts this server alone for a moment, lists its tools and stops it. Nothing is added to Tuff or kept.",
       "probeSecretTitle": "Probe {name} with its credentials?",
@@ -4779,6 +5209,9 @@
       "probeReasonReauth": "It needs re-authentication (OAuth, or a token on the command line), so it cannot start from the credentials in its configuration.",
       "probeReasonSourceChanged": "Its configuration file changed after the scan. It has been scanned again; try once more.",
       "probeReasonSourceMissing": "The agent's configuration no longer declares it.",
+      "probeReasonNotImported": "Tuff no longer holds a copy of it. Rescan to update the list.",
+      "probeReasonUnavailable": "It did not start, or it closed before answering.",
+      "probeReasonToolsFailed": "It started, but could not list its tools.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete {name}?",
@@ -4787,7 +5220,17 @@
       "deleteFailed": "Could not delete: {reason}",
       "createTitle": "Add MCP server",
       "editTitle": "Edit {name}",
-      "storedSecretsNote": "{count} saved values ({names}). They are not shown here; saving with this field empty deletes them.",
+      "saveReasons": {
+        "fieldMissing": "Fill in the name, and the command or URL.",
+        "fieldTooLong": "An entry is too long. Each one can be at most 512 characters.",
+        "urlInvalid": "The URL must be a full address that starts with http:// or https://.",
+        "envNameInvalid": "Environment variable names can use only letters, digits and underscores, and cannot start with a digit.",
+        "headerNameInvalid": "A header name contains characters that are not allowed.",
+        "secureStore": "The secure store is unavailable, so this server's credentials cannot be stored.",
+        "credentialNotStored": "A credential could not be saved to the secure store.",
+        "notImported": "Tuff no longer holds a copy of this server."
+      },
+      "storedSecretsNote": "{count} saved value ({names}). It is not shown here; saving with this field empty deletes it. | {count} saved values ({names}). They are not shown here; saving with this field empty deletes them.",
       "hostDesc": "Other AI clients on this machine can call Tuff's tools over a local address. This is an opt-in Beta capability and is off by default; every call still asks you first.",
       "readOnlyNote": "An agent's own configuration declares this server. Tuff only reads it and never changes that file; the switch affects Tuff alone."
     },
@@ -4819,6 +5262,10 @@
       "switchLabel": "Use {name} in Tuff",
       "toggleFailed": "Couldn't switch {name}: {reason}",
       "toggleFailedUnknown": "Unknown error",
+      "failures": {
+        "configNotSaved": "The change couldn't be saved.",
+        "dirInvalid": "It can't be found, or it isn't a directory."
+      },
       "enableTitle": "Use in Tuff",
       "stateEnabled": "Tuff's conversations can use this skill.",
       "stateDisabled": "Off. Tuff's conversations will not use it.",
@@ -4841,7 +5288,7 @@
       "dirsLinkedEmpty": "No directories added yet.",
       "dirsDetected": "Detected",
       "dirsDetectedEmpty": "No agent skill directories were found on this machine.",
-      "dirCount": "{count} skills",
+      "dirCount": "{count} skill | {count} skills",
       "dirRemove": "Remove",
       "dirRemoveLabel": "Remove {path}",
       "dirAdd": "Choose directory…",
@@ -4887,7 +5334,7 @@
         "enableTitle": "Let other AIs call Tuff",
         "enableDesc": "Binds a loopback address only; a client still needs the token below.",
         "startingDesc": "Switched on, but the port is not bound yet.",
-        "runningDesc": "Listening, with {count} tools published.",
+        "runningDesc": "Listening, with {count} tool published. | Listening, with {count} tools published.",
         "errorDesc": "Could not start: {reason}",
         "running": "Running",
         "stopped": "Off",
@@ -4917,7 +5364,16 @@
         },
         "configTitle": "Client configuration",
         "configDesc": "Paste this whole block into the configuration of an MCP-capable AI client.",
-        "configCopied": "Configuration copied"
+        "configCopied": "Configuration copied",
+        "failures": {
+          "secureStoreUnavailable": "The secure store is unavailable, so the access token cannot be stored.",
+          "tokenNotStored": "The access token could not be saved to the secure store.",
+          "settingsNotSaved": "The change could not be saved, so the setting was left as it was.",
+          "unknownTool": "This tool is no longer available.",
+          "portInUse": "Another app is already using this port. Choose a different one.",
+          "portNotPermitted": "Tuff is not allowed to use this port. Choose a different one.",
+          "startNotSaved": "{reason} (Switching it off could not be saved either, so Tuff will try again the next time it opens.)"
+        }
       },
       "dialog": {
         "name": "Name",
@@ -5115,6 +5571,94 @@
       },
       "messages": {
         "loadFailed": "Failed to load platform capabilities"
+      },
+      "items": {
+        "permissionCenter": {
+          "name": "Permission Center",
+          "description": "Plugin permission requests, grants and auditing"
+        },
+        "storage": {
+          "name": "Storage",
+          "description": "Configuration and persistent storage"
+        },
+        "downloadCenter": {
+          "name": "Download Center",
+          "description": "Download tasks and their notifications, in one place"
+        },
+        "tempFile": {
+          "name": "TempFile",
+          "description": "Creating and cleaning up temporary files"
+        },
+        "flowTransfer": {
+          "name": "Flow Transfer",
+          "description": "Passing data between plugins",
+          "handlerRequired": "Flow Transfer requires the target plugin to register a delivery handler.",
+          "unhandledRejected": "Targets without a registered Flow handler are rejected instead of treated as delivered."
+        },
+        "divisionBox": {
+          "name": "DivisionBox",
+          "description": "Floating windows and UI containers for plugins"
+        },
+        "intelligenceAgents": {
+          "name": "Intelligence Agents",
+          "description": "Running agent tasks and their tool calls"
+        },
+        "tuffCli": {
+          "name": "Tuff CLI",
+          "description": "Working with the Tuff command-line tool (Beta)",
+          "notFound": "The tuff command-line tool wasn't found in PATH or in its usual install locations."
+        },
+        "activeApp": {
+          "name": "Active App",
+          "description": "Reads the foreground app and its window context",
+          "automationReason": "Reading the foreground app depends on macOS Automation permission.",
+          "automationLimit": "Requires Automation permission for System Events, and may return nothing while permission requests are backing off.",
+          "powershellReason": "Reading the foreground app depends on PowerShell and the Win32 foreground-window APIs.",
+          "powershellLimit": "Requires PowerShell and access to the foreground process's metadata.",
+          "xdotoolReason": "Reading the foreground app on Linux depends on desktop automation tools.",
+          "xdotoolLimit": "Requires xdotool and a compatible desktop session."
+        },
+        "selectionCapture": {
+          "name": "Selection Capture",
+          "description": "Captures the text selected in the active app",
+          "accessibilityRequired": "Selection capture requires macOS Accessibility permission.",
+          "disabled": "Selection capture is turned off in the current runtime.",
+          "simulatedCopyReason": "Selection capture depends on the active app accepting a simulated Ctrl+C.",
+          "simulatedCopyLimit": "Selected text is captured with a simulated Ctrl+C and depends on clipboard timing.",
+          "xdotoolReason": "Selection capture depends on xdotool desktop automation and clipboard timing.",
+          "xdotoolLimit": "Requires xdotool and a focused app that accepts Ctrl+C."
+        },
+        "autoPaste": {
+          "name": "Auto Paste",
+          "description": "Pastes clipboard content into the focused app",
+          "simulatedPasteReason": "Auto paste depends on keyboard automation in the focused window.",
+          "simulatedPasteLimit": "The target app must keep focus and accept the simulated paste shortcut."
+        },
+        "nativeShare": {
+          "name": "Native Share",
+          "description": "Native system sharing, on macOS only",
+          "mailOnly": "Native system sharing isn't available on this platform. Sharing by email still works.",
+          "unavailable": "Native sharing isn't available on this platform."
+        },
+        "terminal": {
+          "name": "Terminal Command Runtime",
+          "description": "Runs commands as child processes, not in a PTY terminal",
+          "noPty": "Runs commands as child processes only. PTY emulation and terminal state sync aren't provided."
+        },
+        "permissionDeepLink": {
+          "name": "Permission Deep-Link",
+          "description": "Checks system permission settings and opens them",
+          "desktopEnvReason": "Permission deep-links depend on the current Linux desktop environment.",
+          "desktopEnvLimit": "Which settings launchers exist varies between desktop environments."
+        },
+        "everythingSearch": {
+          "name": "Everything Search",
+          "description": "Windows file search backend powered by Everything"
+        }
+      },
+      "issues": {
+        "platformUnsupported": "Not supported on this platform ({platform}).",
+        "xdotoolMissing": "Linux desktop automation requires xdotool to be installed and available in PATH."
       }
     },
     "settingAISDK": {
@@ -5222,7 +5766,7 @@
       "failedFileReasonGeneric": "Indexing failed for this file",
       "failedFileErrorCode": "Error code",
       "errorButton": "View error details",
-      "errorButtonWithCount": "View error details ({count} errors)",
+      "errorButtonWithCount": "View error details ({count} error) | View error details ({count} errors)",
       "rebuildTitle": "Rebuild File Index",
       "rebuildDesc": "Clear the file search index and rescan files; app display names are not refreshed",
       "rebuilding": "Rebuilding...",
@@ -5238,9 +5782,11 @@
       "estimatedStabilizing": "Estimating remaining time",
       "estimatedStalled": "Waiting for new indexing progress",
       "estimatedSeconds": "Expected to finish in {seconds} seconds",
-      "estimatedMinutes": "Expected to finish in {minutes} minutes",
-      "estimatedHours": "Expected to finish in {hours} hours",
-      "estimatedHoursMinutes": "Expected to finish in {hours} hours {minutes} minutes",
+      "estimatedMinutes": "Expected to finish in {minutes} minute | Expected to finish in {minutes} minutes",
+      "estimatedHours": "Expected to finish in {hours} hour | Expected to finish in {hours} hours",
+      "estimatedHoursMinutes": "Expected to finish in {hours} {minutes}",
+      "estimatedHourCount": "{count} hour | {count} hours",
+      "estimatedMinuteCount": "{count} minute | {count} minutes",
       "warningAlert": "⚠️ Rebuilding the file index will have the following effects:",
       "warningSearch": "• Search functionality may be temporarily impacted",
       "warningPerformance": "• The system might slow down during indexing",
@@ -5268,7 +5814,7 @@
       "viewFailedFiles": "View failed files",
       "failedFilesDialogTitle": "Failed Files",
       "noFailedFiles": "No failed files",
-      "failedFilesCount": "files",
+      "failedFilesCount": "{count} file | {count} files",
       "copyAll": "Copy All",
       "skippedFiles": "Skipped",
       "completedFiles": "Content Indexed",
@@ -5311,7 +5857,9 @@
       "sourceDiagnosticsGroupDesc": "Inspect unified health for App, File, Everything, and other indexed sources",
       "sourceDiagnosticsSummaryTitle": "Source Health Summary",
       "sourceDiagnosticsChecking": "Reading unified search source status",
-      "sourceDiagnosticsSummary": "{total} sources, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention} need attention",
+      "sourceDiagnosticsSummary": "{total}, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention}",
+      "sourceDiagnosticsSources": "{count} source | {count} sources",
+      "sourceDiagnosticsAttention": "{count} needs attention | {count} need attention",
       "sourceDiagnosticsLoadFailed": "Failed to load search source diagnostics",
       "sourceDiagnosticDetailTitle": "Search Source Details",
       "sourceDiagnosticOverview": "Overview",
@@ -5347,7 +5895,9 @@
       "providerConfigSourceUnknown": "unknown",
       "browserBookmarksTitle": "Browser Bookmarks Official Runtime",
       "browserBookmarksLoading": "Reading Browser Bookmarks runtime state",
-      "browserBookmarksDesc": "{status} · {items} items · {roots} watch roots · {evidence} evidence entries · {reason}",
+      "browserBookmarksDesc": "{status} · {items} · {roots} · {evidence} · {reason}",
+      "browserBookmarksRoots": "{count} watch root | {count} watch roots",
+      "browserBookmarksEvidence": "{count} evidence entry | {count} evidence entries",
       "browserBookmarksConsentRequired": "Consent required",
       "browserBookmarksConsentGranted": "Consent granted",
       "browserBookmarksConsentAction": "Allow and rebuild",
@@ -5357,7 +5907,7 @@
       "browserBookmarksWatchRoots": "Watch roots: {roots}",
       "browserBookmarksProviderMissing": "Browser Bookmarks official provider was not found",
       "browserBookmarksSourceMissing": "Browser Bookmarks indexed source was not found",
-      "sourceItems": "{count} items",
+      "sourceItems": "{count} item | {count} items",
       "sourceWatch": "Watch: {state}",
       "sourceReconcile": "Reconcile: {state}",
       "sourceTask": {
@@ -5369,6 +5919,12 @@
         "reconcileFailed": "Reconcile errors: {errors} · {reason} · {jobId}",
         "resetDone": "Reset index {clearedSearchIndexRows} · progress {scanProgressRows} · {reason} · {jobId}",
         "resetFailed": "Reset failed: {error} · {reason} · {jobId}"
+      },
+      "sourceTaskKind": {
+        "scan": "Scan",
+        "watch": "Watch",
+        "reconcile": "Reconcile",
+        "reset": "Reset"
       },
       "sourceRecentTasks": "Recent",
       "sourceRecentTask": {
@@ -5392,6 +5948,23 @@
           "failed": "Reset failed · {summary} · {jobId}",
           "skipped": "Reset skipped · {summary} · {jobId}"
         }
+      },
+      "sourceRecentTaskSummary": {
+        "indexed": "indexed {indexed}/{records}",
+        "batches": "batches {batches}",
+        "phase": "phase {phase}",
+        "delta": "delta {applied}/{deltas}",
+        "action": "action {action}",
+        "skipped": "skipped {skipped}",
+        "clearIndex": "clear index {cleared}",
+        "indexRows": "index rows {rows}",
+        "progress": "progress {cleared}",
+        "progressRows": "progress rows {rows}",
+        "duration": "duration {ms}ms",
+        "trigger": "trigger {trigger}",
+        "reason": "reason {reason}",
+        "attempt": "attempt {attempt}",
+        "code": "code {code}"
       },
       "sourceRunGateTitle": "Scheduler",
       "sourceRunGate": {
@@ -5451,6 +6024,11 @@
         "reset": "Reset index · {reason}",
         "inspect-contract": "Inspect source contract · {reason}",
         "inspect-source": "Inspect source state · {reason} · {blockedReason}"
+      },
+      "sourceRecoveryWait": {
+        "retryAfter": "retry after {time}",
+        "alreadyRunning": "already running",
+        "debounced": "debounced"
       },
       "sourceStatus": {
         "ready": "Ready",
@@ -5534,7 +6112,7 @@
       "appDiagnosticStageHit": "Target hit",
       "appDiagnosticStageMiss": "Target missed",
       "appDiagnosticStageNotRun": "Not run",
-      "appDiagnosticStageMatches": "{count} matches",
+      "appDiagnosticStageMatches": "{count} match | {count} matches",
       "appDiagnosticStageDetailTitle": "{stage} match details",
       "appDiagnosticNotFound": "Target not found ({status}): {reason}",
       "appDiagnosticTargetRequired": "Enter an app path, bundleId, name, or search query first",
@@ -5590,6 +6168,17 @@
       "appIndexManagerLaunchFailed": "Failed to launch application",
       "appIndexManagerReindexSuccess": "App entry reindexed",
       "appIndexManagerReindexFailed": "Failed to reindex app entry",
+      "appIndexManagerReasons": {
+        "dbNotReady": "The app index isn't ready yet. Try again in a moment.",
+        "searchIndexNotReady": "The search index isn't ready yet. Try again in a moment.",
+        "notFound": "This app isn't in the app index.",
+        "notUserManaged": "Only apps you added yourself can be removed.",
+        "invalidPath": "Tuff doesn't recognize this path as an app.",
+        "notApp": "This isn't an app.",
+        "unstable": "This app couldn't be found, or it's still being installed or updated. Check the path and try again.",
+        "processing": "Tuff is already indexing this app. Try again in a moment.",
+        "scanFailed": "Tuff couldn't read this app's details."
+      },
       "appIndexManagerCopyJson": "Copy Diagnostic JSON",
       "appIndexManagerDiagnosticMissing": "Run diagnostics first",
       "appIndexManagerDiagnosticCopied": "Diagnostic JSON copied",
@@ -5613,6 +6202,15 @@
       "appIndexManagerFilterDiagnostic": "Diagnostic",
       "appIndexManagerFilterAttention": "Needs attention",
       "appIndexManagerClearFilters": "Clear filters",
+      "appIndexManagerFieldDisplayName": "Display name",
+      "appIndexManagerFieldOrigin": "Origin",
+      "appIndexManagerFieldBundleId": "Bundle ID",
+      "appIndexManagerFieldIdentityKind": "Identity kind",
+      "appIndexManagerFieldLaunchKind": "Launch kind",
+      "appIndexManagerFieldLaunchTarget": "Launch target",
+      "appIndexManagerFieldLaunchArgs": "Launch arguments",
+      "appIndexManagerFieldWorkingDirectory": "Working directory",
+      "appIndexManagerFieldDisplayPath": "Display path",
       "unitMinutes": "min",
       "unitHours": "hr",
       "unitSeconds": "sec",
@@ -5648,6 +6246,9 @@
       "healthHealthy": "Healthy",
       "healthDegraded": "Not ready",
       "healthUnsupported": "Unsupported",
+      "healthReasonDisabled": "Everything search is turned off in Tuff, so Windows file search is unavailable. Turn it on to get search results back.",
+      "healthReasonNotReady": "The Everything backend isn't ready, so Windows file search is unavailable.",
+      "healthReasonUnsupported": "Everything search is only available on Windows.",
       "installDiagnosisTitle": "Installation Diagnosis",
       "installDiagnosisDesc": "Checks local Everything app, process, service, and CLI availability before suggesting an action.",
       "probeEverythingInstalled": "Everything app",
@@ -5678,6 +6279,15 @@
         "check-manually": "Check Everything and CLI installation manually",
         "unsupported": "Everything integration is Windows-only"
       },
+      "installReason": {
+        "unknown": "Everything's installation hasn't been checked yet.",
+        "unsupported": "Everything is only available on Windows.",
+        "disabled": "Everything search is turned off in Tuff settings.",
+        "missing-everything": "Everything wasn't found in its default locations, and no running process or service was detected.",
+        "not-running": "Everything seems to be installed, but neither the app nor its service is running.",
+        "missing-cli": "Everything is running, but es.exe wasn't found on PATH or in the default install folders.",
+        "backend-failed": "Everything is running and es.exe was found, but the search backend couldn't start."
+      },
       "fallbackChainTitle": "Fallback Chain",
       "fallbackChainDesc": "Initialization order for Everything backends; it does not imply a usable search fallback",
       "performanceTitle": "Runtime Performance",
@@ -5697,13 +6307,13 @@
       "cliPathSelectFailed": "Failed to select Everything CLI",
       "cliPathSaved": "Everything CLI path saved",
       "cliPathCleared": "Everything CLI path cleared",
-      "cliPathSaveFailed": "Failed to save Everything CLI path: {error}",
+      "cliPathSaveFailed": "Couldn't save the Everything CLI path",
       "configuredCliPath": "Configured",
       "activeCliPath": "Active",
       "diagnosticsTitle": "Backend Diagnostics",
       "diagnosticsEmpty": "No diagnostic stages recorded",
       "diagnosticsHealthy": "All recorded backend stages are healthy",
-      "diagnosticsFailed": "{count} backend stage(s) need attention",
+      "diagnosticsFailed": "{count} backend stage needs attention | {count} backend stages need attention",
       "diagnosticSdkLoad": "SDK load",
       "diagnosticSdkQuery": "SDK query",
       "diagnosticCliDetect": "CLI detect",
@@ -5716,7 +6326,7 @@
       "disable": "Disable",
       "enabledSuccess": "Everything search enabled",
       "disabledSuccess": "Everything search disabled",
-      "toggleFailed": "Failed to toggle Everything: {error}",
+      "toggleFailed": "Couldn't turn Everything search on or off. Try again in a moment.",
       "testTitle": "Test Search",
       "testDesc": "Verify Everything functionality",
       "testNow": "Test Now",
@@ -5729,8 +6339,8 @@
       "testDuration": "Duration",
       "testSampleTitle": "First Result",
       "testing": "Testing...",
-      "testSuccess": "Test successful! Found {count} results in {duration}ms",
-      "testFailed": "Test failed: {error}",
+      "testSuccess": "Test successful! Found {count} result in {duration}ms | Test successful! Found {count} results in {duration}ms",
+      "testFailed": "Test failed",
       "installTitle": "Installation Required",
       "installDesc": "Install Everything manually first, then install or select es.exe if the CLI is missing",
       "downloadEverything": "Download Everything",
@@ -5752,8 +6362,8 @@
       "installStarted": "Everything install tasks were added to Download Center",
       "installCompleted": "Everything is installed and verified",
       "installUnsupported": "Everything one-click install is only supported on Windows",
-      "installStartFailed": "Failed to start Everything install: {error}",
-      "installFailed": "Everything install failed: {error}",
+      "installStartFailed": "Couldn't start installing Everything. Try again in a moment.",
+      "installFailed": "Everything installation failed. Open Install and Repair to see why.",
       "installAdvancedShow": "Advanced Settings",
       "installAdvancedHide": "Hide Advanced Settings",
       "installAdvancedTitle": "Advanced Settings",
@@ -5786,6 +6396,16 @@
         "completed": "Completed",
         "failed": "Failed",
         "unsupported": "Unsupported"
+      },
+      "installMessage": {
+        "queued": "Queued the Everything installer downloads.",
+        "downloading": "Downloading the Everything packages.",
+        "verifying": "Verifying the Everything package checksums.",
+        "extracting": "Extracting Everything, the SDK DLL and es.exe.",
+        "configuring-path": "Configuring the Everything CLI path.",
+        "probing": "Checking es.exe and refreshing the search backend.",
+        "completed": "Everything is installed and ready.",
+        "failed": "Everything installation failed. The cause is shown below."
       },
       "viewDiagnostics": "View Diagnostics",
       "errorTitle": "Error Details",
@@ -5948,7 +6568,7 @@
       "cliDetectedTitle": "Local CLI Detected",
       "cliDetectedDesc": "Supported local CLI AI tools (such as OMP, Claude Code, Codex, or Pi) are installed on this machine. Enable them to use local models with zero credentials.",
       "enableCliAction": "Enable All",
-      "clisBatchEnabledToast": "Enabled {count} local CLI channels successfully",
+      "clisBatchEnabledToast": "Enabled {count} local CLI channel successfully | Enabled {count} local CLI channels successfully",
       "capabilityProviderLabel": "Bound Channels",
       "capabilityPromptLabel": "Default Prompt",
       "capabilitySearchLabel": "Search capabilities",
@@ -5964,7 +6584,7 @@
       "capabilityDisabledLabel": "Available Channels",
       "capabilityChannelEnabled": "Enabled",
       "capabilityChannelDisabled": "Disabled",
-      "capabilityModelCount": "{count} models",
+      "capabilityModelCount": "{count} model | {count} models",
       "capabilityFooterHint": "Drag to reorder model priority",
       "capabilitySaveIdle": "Current config is saved",
       "capabilitySavePending": "Capability config has unsaved changes",
@@ -6123,9 +6743,9 @@
       "promptDeleteConfirm": "This will permanently delete the selected prompt. Continue?",
       "promptDeleteSuccess": "Prompt deleted",
       "promptDeleteFailed": "Failed to delete prompt",
-      "promptImportSuccess": "{count} prompts imported",
+      "promptImportSuccess": "{count} prompt imported | {count} prompts imported",
       "promptImportFailed": "Failed to import prompts",
-      "promptExportSuccess": "Exported {count} prompts",
+      "promptExportSuccess": "Exported {count} prompt | Exported {count} prompts",
       "promptExportEmpty": "No custom prompts to export",
       "promptEmptyStateTitle": "Select or create a prompt",
       "promptEmptyStateDesc": "Choose a template from the list or start from scratch.",
@@ -6416,8 +7036,10 @@
         "manualCheckFailedWithReason": "Update check failed: {reason}",
         "manualCheckFailed": "Failed to start update check",
         "installStarted": "Restarting to apply update",
+        "restartingHint": "Saving state and restarting, the new version will open shortly...",
         "installPendingConfirmation": "Install request sent. Waiting for system handoff confirmation.",
         "installFailedWithReason": "Failed to start update install: {reason}",
+        "installFailed": "Failed to start update install. Try again in a moment.",
         "macSilentUpdateNotWritable": "Tuff cannot replace the current app without a password prompt. Move or reinstall Tuff in an Applications location managed by your user, then retry.",
         "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
@@ -6626,7 +7248,6 @@
     }
   },
   "widgetFrame": {
-    "compileFailed": "Widget compile failed",
     "loading": "Loading widget",
     "rendererMissing": "Widget renderer missing",
     "rendererUnregistered": "Widget renderer not registered",
@@ -6651,7 +7272,8 @@
       "conversion": "{from} → {to}",
       "qrValueLabel": "SVG Data URL",
       "qrAlt": "QR Code",
-      "poweredBy": "Powered by {brand}"
+      "poweredBy": "Powered by {brand}",
+      "calculator": "Calculator"
     },
     "basic": {
       "subtitle": "Quick math",
@@ -6939,9 +7561,6 @@
     "success": "Success",
     "warning": "Warning",
     "info": "Info",
-    "seconds": "s",
-    "minutes": "min",
-    "hours": "hr",
     "import": "Import",
     "comingSoon": "Coming Soon",
     "clearShortcut": "Clear shortcut",
@@ -6954,7 +7573,15 @@
     "asideLandmark": "Sidebar",
     "clearSearch": "Clear search",
     "noItems": "Nothing here yet",
-    "toggleGroup": "Toggle group"
+    "toggleGroup": "Toggle group",
+    "failures": {
+      "operationFailed": "The operation couldn't be completed. Try again.",
+      "databaseBusy": "The database is busy. Try again in a moment.",
+      "indexWriterBusy": "The search index is busy saving changes. Try again in a moment.",
+      "timedOut": "The request timed out. Try again.",
+      "coolingDown": "The last request failed moments ago. Try again in a few seconds.",
+      "httpStatus": "The server returned an error (HTTP {status})."
+    }
   },
   "form": {
     "field": "Field",
@@ -7039,7 +7666,7 @@
     "screenshotDelay3": "Capture in 3 Seconds",
     "screenshotDelay5": "Capture in 5 Seconds",
     "downloadCenter": "Download Center",
-    "downloadCenterWithCount": "Download Center ({count} tasks)",
+    "downloadCenterWithCount": "Download Center (1 task) | Download Center ({count} tasks)",
     "clipboardHistory": "Clipboard History",
     "terminal": "Terminal",
     "settings": "Settings",
@@ -7072,6 +7699,18 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "App Launch Failed",
     "appLaunchFailedBody": "Failed to launch {name}\n{error}",
+    "appLaunchFailure": {
+      "protocolNotAllowed": "Tuff only opens Steam game links as apps.",
+      "uwpUnsupported": "Microsoft Store apps can only be opened on Windows.",
+      "platformUnsupported": "Opening apps isn't supported on this system.",
+      "shortcutFailed": "The shortcut couldn't be opened.",
+      "commandInvalid": "The app's launch command isn't valid.",
+      "exitedWithCode": "The app quit as soon as it started (exit code {code}).",
+      "exitedWithSignal": "The app was stopped as soon as it started ({signal}).",
+      "fileNotFound": "The app's file or its working folder couldn't be found.",
+      "notPermitted": "Tuff isn't allowed to run this app's file.",
+      "startFailed": "The app couldn't be started ({code})."
+    },
     "coreBoxShortcutUnavailableTitle": "No Shortcut Opens CoreBox",
     "coreBoxShortcutRefusedBody": "The default shortcut {shortcut} couldn't be registered, so no shortcut opens CoreBox right now. Pick another in Settings → Plugins & Tools → Shortcuts.",
     "coreBoxShortcutConflictBody": "The default shortcut {shortcut} is assigned to another shortcut, so no shortcut opens CoreBox right now. Pick another in Settings → Plugins & Tools → Shortcuts.",
@@ -7084,7 +7723,7 @@
     "pluginInstallExistsBody": "Plugin {name} already exists. Opened details for you.",
     "pluginInstallFailedTitle": "Plugin Install Failed",
     "pluginInstallFailedBody": "Failed to add {name}.",
-    "pluginInstallFailedBodyWithReason": "Failed to add {name}: {error}.",
+    "pluginInstallFailedBodyWithReason": "Failed to add {name}: {error}",
     "pluginInstallUnknown": "Plugin",
     "clipboardTextEmpty": "Clipboard text is empty.",
     "clipboardImageBody": "Image content is ready to use.",
@@ -7112,7 +7751,82 @@
     "syncDeviceUnknown": "Unknown device",
     "defaultTitle": "Notification",
     "dialogIconPlaceholder": "Tip",
-    "pluginIconAlt": "Plugin"
+    "pluginIconAlt": "Plugin",
+    "share": {
+      "completeTitle": "Share Complete",
+      "completeBody": "Shared via {target}",
+      "copiedTitle": "Copied to Clipboard",
+      "copiedBody": "Content has been copied to your clipboard",
+      "fileRevealedTitle": "File Revealed",
+      "filesRevealedBody": "{count} files revealed in the file manager",
+      "fileRevealedBody": "File revealed in the file manager",
+      "failedTitle": "Share Failed",
+      "failedBody": "Unable to share: {error}",
+      "airdropReadyTitle": "AirDrop Ready",
+      "airdropReadyBody": "Select a device to send your files",
+      "mailReadyTitle": "Mail Opened",
+      "mailReadyBody": "Complete your email in the Mail app",
+      "messagesReadyTitle": "Messages Opened",
+      "messagesReadyBody": "Content copied - paste in Messages to send"
+    },
+    "voice": {
+      "captureUnavailableTitle": "Voice Input Unavailable",
+      "captureUnavailableBody": "This installation is missing its recording component. Update or reinstall Tuff, then try again.",
+      "gestureFailedTitle": "Voice Shortcut Failed",
+      "gestureFailedBody": "Check the microphone permission and the voice service settings.",
+      "quickEditNoSelectionTitle": "Quick Edit: Select Some Text First",
+      "quickEditNoSelectionBody": "Select text in any app, then press the shortcut again.",
+      "selectionUnsupportedBody": "This system cannot read selected text.",
+      "selectionDisabledBody": "Reading selected text is turned off.",
+      "selectionFailedBody": "Could not read the selected text. Try again.",
+      "quickEditListeningTitle": "Listening for Your Edit…",
+      "quickEditListeningBody": "Press the shortcut again when you're done ({count} selected).",
+      "dictationListeningTitle": "Dictating…",
+      "dictationListeningBody": "Press the shortcut again to stop and type.",
+      "noSpeechTitle": "No Speech Detected",
+      "noSpeechBody": "Move closer to the microphone and try again.",
+      "dictationCopiedTitle": "Dictation Copied",
+      "pasteManuallyBody": "Paste it manually.",
+      "dictationNotDeliveredTitle": "Dictation Not Typed",
+      "targetUnavailableBody": "Could not tell which app to type into. Try again.",
+      "targetChangedBody": "The active app changed. Try again.",
+      "dictationRetryBody": "Try again.",
+      "quickEditCancelledTitle": "Quick Edit Cancelled",
+      "selectionUnchangedBody": "The selected text is unchanged.",
+      "quickEditNotAppliedTitle": "Quick Edit Not Applied",
+      "quickEditNotHeardBody": "The edit was not heard clearly. The selected text is unchanged.",
+      "quickEditCopiedTitle": "Quick Edit Result Copied",
+      "quickEditNotDeliveredTitle": "Quick Edit Not Typed",
+      "quickEditTargetChangedBody": "The active app changed. The selected text is unchanged.",
+      "selectionUnchangedRetryBody": "The selected text is unchanged. Try again."
+    },
+    "quickOps": {
+      "timerFinishedTitle": "QuickOps Timer Finished",
+      "timerFinishedBody": "Your {duration} timer has finished.",
+      "pomodoroFinishedTitle": "QuickOps Pomodoro Finished",
+      "pomodoroFinishedBody": "Your {duration} focus session has finished.",
+      "pomodoroCycleFinishedTitle": "QuickOps Pomodoro Cycle Finished",
+      "pomodoroCycleFinishedBody": "Focus rounds completed: {cycles} × {duration}.",
+      "pomodoroFocusFinishedTitle": "QuickOps Focus Finished",
+      "pomodoroFocusFinishedBody": "{focus} of focus done. Time for a {breakDuration} break.",
+      "pomodoroFocusFinishedLongBreakBody": "{focus} of focus done. Time for a {breakDuration} long break.",
+      "pomodoroBreakFinishedTitle": "QuickOps Break Finished",
+      "pomodoroBreakFinishedBody": "{duration} break is over. Starting focus round {cycle}.",
+      "flowFallbackBody": "QuickOps notification"
+    },
+    "ocr": {
+      "queuePausedTitle": "OCR Paused After Repeated Failures",
+      "queuePausedBody": "The OCR queue is paused until {until}. Reason: {reason}. {hint}",
+      "queuePausedConfigHint": "Check the OCR provider and model settings; OCR resumes on its own.",
+      "queuePausedNetworkHint": "Check your network or the OCR service; OCR resumes on its own later.",
+      "queuePausedReasons": {
+        "noProvider": "No OCR provider is available",
+        "providerNotLoaded": "The OCR provider couldn't be loaded",
+        "systemOcrUnavailable": "System OCR isn't available",
+        "serviceUnreachable": "The OCR service couldn't be reached",
+        "jobDataInvalid": "An OCR job's data was missing or damaged"
+      }
+    }
   },
   "assistant": {
     "voicePanel": {
@@ -7205,10 +7919,6 @@
     }
   },
   "timeUnits": {
-    "seconds": "s",
-    "minutes": "min",
-    "hours": "hr",
-    "days": "d",
     "justNow": "Just now",
     "minutesAgo": "{count} minutes ago",
     "hoursAgo": "{count} hours ago",
@@ -7364,12 +8074,23 @@
         "connectionFailed": "Connection failed",
         "networkRecovering": "Network connection is recovering. Test connection again to probe the provider.",
         "networkRecoveringWithRetry": "Network connection is recovering. Retry in {seconds}s, or test connection again to probe the provider.",
+        "testFailure": {
+          "disabled": "The provider is turned off. Turn it on, then test again.",
+          "modelNotConfigured": "No model is set up. Fetch or add a model first.",
+          "timeout": "The request timed out. Check your network connection.",
+          "unauthorized": "The API key is invalid.",
+          "forbidden": "Access was denied. Check the API key's permissions.",
+          "endpointNotFound": "The API endpoint wasn't found. Check the Base URL.",
+          "rateLimited": "Too many requests. The provider is rate limiting them.",
+          "serviceError": "The provider's service had an error. Try again later.",
+          "network": "Network error. Check your internet connection."
+        },
         "modelsFetchSuccessTitle": "Models Fetched",
-        "modelsFetchSuccessDesc": "Fetched {count} available models",
+        "modelsFetchSuccessDesc": "Fetched {count} available model | Fetched {count} available models",
         "modelsFetchFailed": "Failed to fetch models",
         "modelsFetchEmpty": "No models were returned. Check that the local service is reachable and has models installed.",
         "modelsFetchFailedToast": "Failed to fetch models: {message}",
-        "modelsFetchedToast": "Fetched {count} models",
+        "modelsFetchedToast": "Fetched {count} model | Fetched {count} models",
         "confirm": "OK"
       },
       "model": {
@@ -7377,7 +8098,7 @@
         "description": "Manage available models and default model",
         "models": "Available Models",
         "noModels": "No models",
-        "modelsCount": "models",
+        "modelsCount": "{count} model | {count} models",
         "manageModels": "Manage Models",
         "editModels": "Edit",
         "addModel": "Add Model",
@@ -7409,7 +8130,7 @@
         "binding": {
           "title": "Model settings",
           "description": "Alias, context and output limits, reasoning and image input per model",
-          "summaryCount": "{count} model(s) customized",
+          "summaryCount": "{count} model customized | {count} models customized",
           "edit": "Configure",
           "dialogDesc": "These values are what requests actually use. Leave a field empty when you don't know it.",
           "noModels": "Add a model first, then configure it here.",
@@ -7597,8 +8318,9 @@
       "contextPackage": "Context package",
       "contextPackageEmpty": "No context package logs for this trace",
       "contextLoadFailed": "Failed to load context package logs",
-      "contextItems": "items",
+      "contextItems": "{count} item | {count} items",
       "contextTokens": "tokens",
+      "contextTokenCount": "{count} token | {count} tokens",
       "contextSources": "Sources",
       "contextNoSources": "No sources",
       "contextRetrieval": "Retrieval",
@@ -7610,7 +8332,7 @@
       "contextPruned": "Budget pruned",
       "contextTombstoned": "Removed after deletion",
       "contextReasonMemoryTombstoned": "Deleted memory removed before AI invocation",
-      "contextTombstoneNotice": "{count} deleted memory source(s) were removed after context preparation.",
+      "contextTombstoneNotice": "{count} deleted memory source was removed after context preparation. | {count} deleted memory sources were removed after context preparation.",
       "contextIncludedSources": "Included sources",
       "contextExcludedSources": "Excluded sources",
       "contextCitation": "Citation",
@@ -7641,6 +8363,7 @@
       "result": "Result",
       "task_success": "Task executed successfully",
       "task_failed": "Task execution failed",
+      "agent_unavailable": "This agent is no longer available.",
       "task_queued": "Task queued",
       "task_running": "Task running",
       "task_completed": "Task completed",
@@ -7663,7 +8386,7 @@
       "badgeBuiltin": "Built-in",
       "workflowEnabled": "Enabled",
       "workflowDisabled": "Disabled",
-      "stepsCount": "{count} steps",
+      "stepsCount": "{count} step | {count} steps",
       "emptyWorkflowList": "No workflows yet. Create one to get started.",
       "toolbarDescription": "v1 is scoped to saved workflows, the MCP tool bridge, and lightweight desktop context.",
       "saveAsCopy": "Save as Copy",
@@ -7681,7 +8404,7 @@
       "approvalThreshold": "Approval Threshold",
       "autoApproveReadOnly": "Auto-approve read-only tools",
       "toolSourcesTitle": "Tool Sources",
-      "toolSourcesDescription": "builtin handles lightweight desktop, clipboard, and browser entries; deep browser and cloud services use MCP.",
+      "toolSourcesDescription": "Built-in tools handle lightweight desktop, clipboard, and browser entries; deep browser and cloud services use MCP.",
       "triggersTitle": "Triggers",
       "addManualTrigger": "Manual trigger",
       "addClipboardBatchTrigger": "Clipboard batch",
@@ -7696,7 +8419,7 @@
       "metadataJsonTitle": "Metadata JSON",
       "metadataDescription": "Advanced metadata such as MCP profile, category, and template markers can live here.",
       "stepEditorTitle": "Step Editor",
-      "stepEditorDescription": "{count} steps. Supports `model / prompt / tool / agent`.",
+      "stepEditorDescription": "{count} step. Supports `model / prompt / tool / agent`. | {count} steps. Supports `model / prompt / tool / agent`.",
       "addPromptStep": "Add Prompt",
       "addModelStep": "Add Use Model",
       "addToolStep": "Add Tool",
@@ -7715,7 +8438,7 @@
       "startedAt": "Started At",
       "completedAt": "Completed At",
       "approvalPanelTitle": "Approval Panel",
-      "approvalPanelDescription": "high / critical tool calls pause here until they are resumed.",
+      "approvalPanelDescription": "High and critical risk tool calls pause here until they are resumed.",
       "emptyApprovals": "No pending tool approvals.",
       "reject": "Reject",
       "approveAndResume": "Approve and Resume",
@@ -7743,7 +8466,6 @@
       "reviewHintCopied": "Copied: the content is in the clipboard; you can still replace clipboard or dismiss this output.",
       "reviewHintClipboardReplaced": "Replaced: clipboard content was updated; dismiss this output when done.",
       "reviewHintFailed": "Action failed: retry copy, retry replace, or clear the failure to restore pending state.",
-      "reviewHintFailedWithError": "Action failed: {error}. Retry copy, retry replace, or clear the failure to restore pending state.",
       "reviewMetaSource": "Source",
       "reviewMetaCapability": "Capability",
       "reviewMetaProvider": "Provider",
@@ -7751,11 +8473,11 @@
       "reviewMetaLatency": "Latency",
       "reviewMetaTokens": "Tokens",
       "reviewMetaRisk": "Risk",
-      "reviewMetaFailure": "Failure",
+      "reviewClipboardUnavailable": "Clipboard write is not available",
       "currentRunStepsTitle": "Current Run Steps",
       "currentRunStepsDescription": "Inspect each step status and output directly.",
       "modelLatency": "Latency {latency}",
-      "modelTokens": "{count} tokens",
+      "modelTokens": "{count} token | {count} tokens",
       "modelTrace": "trace",
       "stepLatency": "Latency {latency}",
       "stepTokens": "{tokens} tokens",
@@ -7767,14 +8489,17 @@
       "toastDeleted": "Workflow deleted",
       "toastWaitingApproval": "Workflow paused for tool approval",
       "toastRunCompleted": "Workflow run completed",
+      "toastRunCancelled": "Workflow run cancelled",
       "toastNoResumableRun": "There is no run to resume",
       "toastStillWaitingApproval": "Tools are still waiting for approval",
       "toastResumed": "Workflow resumed",
       "toastToolApproved": "Tool call approved",
       "toastToolRejected": "Tool call rejected",
       "toastReviewCopied": "Review result copied",
+      "toastReviewCopyFailed": "Couldn't copy the review result",
       "toastReviewReplaceConfirm": "Click again to confirm clipboard replacement",
       "toastReviewClipboardReplaced": "Clipboard replaced",
+      "toastReviewReplaceFailed": "Couldn't replace the clipboard",
       "toastReviewDismissed": "Review item dismissed",
       "toastReviewReset": "Review item restored to pending",
       "defaults": {
@@ -7789,6 +8514,14 @@
           "desktopRecentFiles": "Recent Files",
           "browserRecentUrls": "Recent URLs",
           "sessionMemory": "Current Session Memory"
+        },
+        "stepName": {
+          "agent": "Agent Step {index}",
+          "model": "Use Model {index}",
+          "generic": "Step {index}"
+        },
+        "inputSource": {
+          "text": "Input text"
         }
       },
       "continueOnError": "Continue on step failure",
@@ -7843,6 +8576,8 @@
       "validationAgentStepRequired": "Agent steps require agentId",
       "validationAgentRequired": "Step {index} requires an agent id",
       "validationInputJson": "Step {index} input must be valid JSON",
+      "validationInvalidJson": "not valid JSON",
+      "validationExpectedArray": "must be a JSON array",
       "successCount": "Succeeded Steps",
       "failedCount": "Failed Steps",
       "fieldSteps": "steps",
@@ -7850,10 +8585,186 @@
       "fieldInput": "input",
       "validationFieldReason": "{field}: {reason}",
       "validationFieldReasonAtStep": "Step {index} {field}: {reason}",
-      "notRunCount": "Not Run Steps"
+      "jsonFieldTriggerConfig": "Trigger config JSON",
+      "jsonFieldContextConfig": "Context source config JSON",
+      "notRunCount": "Not Run Steps",
+      "stepKind": {
+        "prompt": "Prompt",
+        "model": "Model",
+        "tool": "Tool",
+        "agent": "Agent"
+      },
+      "riskLevel": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "toolSourceOption": {
+        "builtin": "Built-in",
+        "mcp": "MCP"
+      },
+      "triggerType": {
+        "manual": "Manual trigger",
+        "clipboardBatch": "Clipboard batch"
+      },
+      "templates": {
+        "organizeRecentClipboard": {
+          "name": "Organize Recent Clipboard",
+          "description": "Reads your recent clipboard history, groups it by topic and produces a tidy result you can copy.",
+          "stepName": "Organize Recent Clipboard",
+          "stepDescription": "Reads recent clipboard content, groups it by topic or task, and writes a short summary and a tidy result ready to copy again."
+        },
+        "meetingSummary": {
+          "name": "Meeting Notes / Summary",
+          "description": "Turns a meeting transcript or related text into a summary, decisions and action items.",
+          "stepName": "Write Meeting Notes",
+          "stepDescription": "Writes structured meeting notes from the meeting text in recent clipboard, the foreground app and session memory."
+        },
+        "batchTextProcessing": {
+          "name": "Batch Text Processing",
+          "description": "Cleans up, rewrites, summarizes or suggests translations for several pieces of text one at a time, and keeps each result.",
+          "stepName": "Process Text in Batch",
+          "stepDescription": "Finds the pieces of text in recent clipboard and session context, and writes each one's result or why it failed."
+        },
+        "input": {
+          "manual": "Manual Input",
+          "meetingText": "Meeting Text",
+          "batchItems": "Batch Items"
+        }
+      }
     },
     "info": {
       "configurationPanel": "Configuration panel"
+    },
+    "capabilityTest": {
+      "status": {
+        "stable": "Stable",
+        "slow": "Slow",
+        "unstable": "Unstable",
+        "unknown": "Unknown"
+      },
+      "summary": {
+        "failed": "The test call failed, so this channel or model can't be relied on.",
+        "stable": "The test responded steadily, with the expected speed and output.",
+        "slow": "The test worked, but its latency or token speed could be better.",
+        "unstable": "The test was unstable. Check the channel's network, the model settings or rate limits.",
+        "asrRecognized": "Speech captured by the microphone was recognized through the realtime ASR channel.",
+        "asrNoSpeech": "The channel captured audio from the microphone, but there is no speech text to show."
+      },
+      "signal": {
+        "failed": "Call failed",
+        "latencyHigh": "High latency ({latency} ms)",
+        "latencyElevated": "Somewhat high latency ({latency} ms)",
+        "latencyNormal": "Normal latency ({latency} ms)",
+        "tokenSpeedLow": "Low token speed ({speed}/s)",
+        "tokenSpeedFair": "Fair token speed ({speed}/s)",
+        "tokenSpeedGood": "Good token speed ({speed}/s)",
+        "tokenSpeedMissing": "No token speed could be calculated",
+        "emptyResponse": "The response was empty or can't be shown"
+      },
+      "message": {
+        "chat": "Chat test passed",
+        "translate": "Translation test passed",
+        "summarize": "Summary generated",
+        "textRewrite": "Rewrite test passed",
+        "grammarCheck": "Grammar check finished with 1 issue, score {score} | Grammar check finished with {count} issues, score {score}",
+        "textClassify": "Classification finished with 1 category | Classification finished with {count} categories",
+        "embedding": "Embedding test passed",
+        "codeGenerate": "Code generation test passed",
+        "codeExplain": "Code explained in 1 key point | Code explained in {count} key points",
+        "codeReview": "Code review finished with 1 issue | Code review finished with {count} issues",
+        "codeRefactor": "Refactoring finished with 1 change | Refactoring finished with {count} changes",
+        "codeDebug": "Debugging analysis finished",
+        "intentDetect": "Intent: {intent} (confidence {confidence}%)",
+        "sentimentAnalyze": "Sentiment: {sentiment} (score {score})",
+        "keywordsExtract": "Extracted 1 keyword | Extracted {count} keywords",
+        "contentExtract": "Extraction finished with 1 entity | Extraction finished with {count} entities",
+        "vision": "OCR test passed",
+        "imageCaption": "Image caption test passed",
+        "imageAnalyze": "Image analysis finished. Objects: {objects}, main colors: {colors}",
+        "imageTranslate": "Image translation finished. Output: {mimeType}",
+        "imageGenerate": "Image generation finished with 1 image | Image generation finished with {count} images",
+        "imageEdit": "Image edit test passed",
+        "ragQuery": "RAG query finished with 1 source, confidence {confidence} | RAG query finished with {count} sources, confidence {confidence}",
+        "semanticSearch": "Semantic search finished with 1 result | Semantic search finished with {count} results",
+        "rerank": "Reranking finished with 1 result | Reranking finished with {count} results",
+        "tts": "Speech synthesis finished. Format: {format}",
+        "stt": "Speech recognition finished. Confidence: {confidence}",
+        "asr": "Realtime speech recognition finished",
+        "asrNoSpeech": "Realtime speech recognition finished, but no speech was detected",
+        "audioTranscribe": "Transcription finished with 1 segment, {duration}s long | Transcription finished with {count} segments, {duration}s long",
+        "workflowExecute": "Workflow status: {status}. Steps completed: {completed}/{total}",
+        "agentRun": "Agent run finished. Reasoning steps: {steps}, tool calls: {toolCalls}"
+      },
+      "preview": {
+        "unknown": "unknown",
+        "noKeywords": "No keywords",
+        "keywords": "Keywords: {keywords}",
+        "tags": "Tags: {tags}",
+        "embedding": "Dimensions: {dimensions}, first 5 values: [{values}...]",
+        "base64Image": "Returned a base64-encoded image",
+        "editedImage": "Returned the edited image",
+        "rerankRow": "{id}: rank {rank} → {score}%",
+        "ttsAudio": "Duration {duration}, sample rate {sampleRate} Hz",
+        "ttsDuration": "Duration {duration}"
+      },
+      "hint": {
+        "chat": "Enter a test message, for example: Hello",
+        "translate": "Enter text to translate, for example: Hello World",
+        "summarize": "Enter a long text to summarize",
+        "textRewrite": "Enter text to rewrite",
+        "grammarCheck": "Enter text to check for grammar, spelling or style",
+        "textClassify": "Enter text to classify",
+        "embedding": "Enter text to turn into a vector",
+        "codeGenerate": "Describe the code to generate, for example: write a sort function",
+        "codeExplain": "Enter code to explain",
+        "codeReview": "Enter code to review",
+        "codeRefactor": "Enter code to refactor",
+        "codeDebug": "Enter code to debug. You can include the error message.",
+        "intentDetect": "Enter text to detect the intent of, for example: open the calculator",
+        "sentimentAnalyze": "Enter text to analyze the sentiment of",
+        "keywordsExtract": "Enter text to extract keywords from",
+        "contentExtract": "Enter text to extract dates, people, organizations or contact details from",
+        "vision": "Tests with a built-in sample image",
+        "imageCaption": "Captions a built-in sample image",
+        "imageAnalyze": "Analyzes the content of a built-in sample image",
+        "imageTranslate": "Translates a built-in image that contains text, end to end",
+        "imageGenerate": "Describe the image to generate",
+        "imageEdit": "Enter an image editing instruction",
+        "ragQuery": "Enter a question to answer from the built-in sample documents",
+        "semanticSearch": "Enter a semantic search query",
+        "rerank": "Enter a query to rerank documents by",
+        "tts": "Enter text to turn into speech",
+        "stt": "Recognizes speech in a short built-in audio sample",
+        "asr": "The test opens the microphone and runs one recognition through the current realtime ASR binding",
+        "audioTranscribe": "Transcribes a short built-in audio sample",
+        "workflowExecute": "Enter a goal for an inline workflow to handle",
+        "agentRun": "Enter a task for the agent to carry out"
+      },
+      "asrFailed": {
+        "generic": "The realtime speech recognition test failed ({code}).",
+        "genericWithHint": "The realtime speech recognition test failed ({code}). Check the microphone permission, channel credentials and model settings.",
+        "notConfigured": "The realtime speech recognition test failed. Save a Bailian channel and model binding for audio.asr first.",
+        "providerUnavailable": "The realtime speech recognition test failed. The saved ASR channel isn't available. Check the channel type, ASR protocol and model binding.",
+        "modelNotFound": "The realtime speech recognition test failed. The bound model isn't a Bailian realtime ASR model. Choose a realtime model.",
+        "modelUnsupported": "The realtime speech recognition test failed. The current model doesn't support realtime ASR. Choose a realtime model.",
+        "network": "The realtime speech recognition test failed. Couldn't connect to Bailian. Check the network, Base URL and workspace."
+      },
+      "sentiment": {
+        "positive": "positive",
+        "negative": "negative",
+        "neutral": "neutral",
+        "mixed": "mixed"
+      }
+    },
+    "runFailures": {
+      "failed": "The AI run failed.",
+      "cancelled": "The AI run was cancelled.",
+      "interrupted": "The AI run was interrupted before it finished.",
+      "inputUnavailable": "The run's input is no longer available.",
+      "authorityChanged": "The agent's settings or permissions changed since this run started.",
+      "beingDeleted": "This run is being deleted."
     }
   },
   "flow": {
@@ -7861,6 +8772,7 @@
     "searchTargets": "Search targets…",
     "noTargets": "No targets available",
     "requiresConfirmation": "Requires confirmation",
+    "targetNotAdapted": "This plugin can't receive transfers yet",
     "consentTitle": "Confirm transfer",
     "consentDesc": "Allow {source} to send content to {target}?",
     "executionConfirmationTitle": "Confirm this action",
@@ -7941,8 +8853,8 @@
       "cold-start": "You might need"
     },
     "usage": {
-      "launchCount": "Launched {count} times in total",
-      "useCount": "Used this item {count} times in total"
+      "launchCount": "Launched {count} time in total | Launched {count} times in total",
+      "useCount": "Used this item {count} time in total | Used this item {count} times in total"
     },
     "evidence": {
       "opened": "Used {count}× in total",
@@ -8005,6 +8917,16 @@
       "coreBoxSearchDesc": "Return to launcher and continue actions",
       "copy": "Copy Text",
       "copyDesc": "Write current text back to clipboard",
+      "aiTranslate": "AI Translate",
+      "aiTranslateDesc": "Preview the translation before copying it or replacing the clipboard",
+      "aiSummarize": "AI Summary",
+      "aiSummarizeDesc": "Sum up the selected text in key points",
+      "aiRewrite": "AI Rewrite",
+      "aiRewriteDesc": "Reword it to read more clearly and naturally",
+      "aiExplain": "AI Explain",
+      "aiExplainDesc": "Explain the selected text or code",
+      "aiReview": "AI Review",
+      "aiReviewDesc": "Preview review suggestions for the selected code",
       "searchPlaceholder": "Search OmniPanel features",
       "loading": "Loading features...",
       "empty": "No available features",
@@ -8018,14 +8940,18 @@
       "selectionHint": {
         "ready": "Selection ready",
         "empty": "Select text, then choose an action.",
-        "unsupported": "Selected-text capture is not supported here. Paste text or use clipboard input.",
+        "unsupported": "Can't read the selected text here. On Linux, install xdotool.",
         "failed": "Selected-text capture failed. Check desktop automation permissions, then retry.",
-        "disabled": "Selected-text capture is disabled. Enable OmniPanel capture or paste text manually."
+        "disabled": "Allow Accessibility access to read the selected text."
       },
       "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
+      "coreboxTransferFailed": "Couldn't pass the text to CoreBox. Try again in a moment.",
       "toggleFailed": "Failed to update feature status.",
       "reorderFailed": "Failed to reorder features.",
       "featureUnavailable": "This feature is currently unavailable. Check plugin status.",
+      "pluginNotLoaded": "Its plugin isn't loaded",
+      "featureMissing": "This feature no longer exists",
+      "featureNotRunnable": "This feature can't run from OmniPanel",
       "ready": "Ready",
       "aiRunning": "Generating result...",
       "aiStatusRunning": "Running",
@@ -8183,7 +9109,18 @@
       }
     },
     "previewCopied": "Result copied",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "imageTranslatePin": {
+      "windowTitle": "Image Translation",
+      "copyImage": "Copy Translated Image",
+      "copyTranslation": "Copy Translation",
+      "copySource": "Copy Source Text",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "resetZoom": "Reset Zoom",
+      "opacity": "Opacity",
+      "close": "Close"
+    }
   },
   "shortcuts": {
     "palette": "Command palette",
@@ -8240,5 +9177,417 @@
     "minimize": "Minimize",
     "zoom": "Zoom",
     "bringAllToFront": "Bring All to Front"
+  },
+  "nativeShare": {
+    "pickerPrompt": "Choose a macOS share target",
+    "sectionTitle": "Share",
+    "targets": {
+      "systemShare": "System Share",
+      "airdrop": "AirDrop",
+      "mail": "Mail",
+      "messages": "Messages",
+      "clipboard": "Clipboard",
+      "finder": "Finder",
+      "explorer": "File Explorer",
+      "browser": "Browser"
+    },
+    "errors": {
+      "failed": "Share failed",
+      "systemFailed": "The system reported an error.",
+      "automationDenied": "Tuff isn't allowed to control the app it shares through. Allow it in System Settings › Privacy & Security › Automation.",
+      "noContent": "No content to share",
+      "cancelled": "Share cancelled",
+      "targetUnsupported": "This share target cannot handle the current content",
+      "mailRefused": "Mail link refused: {reason}",
+      "mailAttachmentsUnsupported": "The Mail target does not support file attachments on this platform",
+      "messagesMacOnly": "Messages is only available on macOS",
+      "noShareSheet": "{platform} does not provide a system share sheet to Tuff; only the Mail target is available."
+    },
+    "targetDescriptions": {
+      "systemShare": "Choose how to share from a list",
+      "airdrop": "Send to nearby devices with AirDrop",
+      "mail": "Send by email",
+      "mailClient": "Send with the default mail client",
+      "messages": "Send with Messages"
+    }
+  },
+  "nativeDialogs": {
+    "ok": "OK",
+    "database": {
+      "title": "Database Initialization Failed",
+      "message": "Database migration failed. The app cannot start.",
+      "migrationsFolderMissing": "Migrations folder not found:\n{path}",
+      "checkInstallation": "Please check that the app is installed completely.",
+      "debugInformation": "Debug information:",
+      "journalMissing": "Migration journal file not found:\n{path}",
+      "migrationsFolderExists": "Migrations folder exists: {exists}",
+      "folderContents": "Folder contents: {contents}",
+      "migrationFailed": "Database migration failed:\n{error}",
+      "migrationFailure": {
+        "diskFull": "There isn't enough disk space to update the database. Free up some space, then open Tuff again.",
+        "damaged": "The database file is damaged, so it can't be updated.",
+        "inUse": "Another program is using the database. Close it, then open Tuff again.",
+        "failed": "The database couldn't be updated for this version of Tuff."
+      },
+      "checkLogs": "Check the log files for more information.\nLog location: {path}"
+    },
+    "rendererMissing": {
+      "title": "File Not Found",
+      "message": "A file the app needs is missing.",
+      "damaged": "The application files appear to be incomplete or damaged.",
+      "reinstall": "Reinstalling usually fixes this.",
+      "attachLog": "If you are reporting the problem, please attach the log file.",
+      "openLogFolder": "Open Log Folder"
+    },
+    "unsupportedFile": {
+      "title": "Unsupported File Type",
+      "body": "No plugin is registered to handle \".{extension}\" files. Install a compatible plugin from the Plugin Store."
+    },
+    "unsupportedInput": {
+      "title": "Unsupported Input",
+      "body": "Folder input is not supported by plugin services."
+    },
+    "pluginInstallRisk": {
+      "title": "Plugin Installation Risk Confirmation",
+      "message": "This plugin comes from an unofficial source",
+      "detail": "Source type: {sourceType}\nSource ID: {sourceId}\nPlease confirm you trust this source before continuing.",
+      "continue": "Continue Installation",
+      "githubDescription": "This plugin will be downloaded from a custom GitHub repository, which carries potential risk.",
+      "npmDescription": "This plugin will be downloaded from a third-party npm package, which carries potential risk.",
+      "rejected": "The risk confirmation was declined"
+    },
+    "workspaceScript": {
+      "selectTitle": "Select Workspace",
+      "selectButton": "Select",
+      "runTitle": "Run Workspace Script",
+      "runMessage": "Run \"{script}\"?",
+      "runDetail": "Workspace: {workspace}\nThe package script is project-owned code and may perform arbitrary actions.",
+      "run": "Run"
+    },
+    "hosts": {
+      "title": "Confirm Hosts Update",
+      "removeMessage": "Remove {hostname}?",
+      "updateMessage": "Update {hostname}?",
+      "removeDetail": "This removes the managed hostname from the system Hosts file.",
+      "updateDetail": "Addresses: {addresses}",
+      "apply": "Apply"
+    },
+    "systemAction": {
+      "detail": "This takes effect immediately. Make sure you have saved your work.",
+      "restart": {
+        "title": "Confirm Restart",
+        "message": "Restart this computer now?",
+        "messageAgain": "Confirm once more to restart this computer.",
+        "confirm": "Restart"
+      },
+      "shutdown": {
+        "title": "Confirm Shutdown",
+        "message": "Shut down this computer now?",
+        "messageAgain": "Confirm once more to shut down this computer.",
+        "confirm": "Shut Down"
+      }
+    },
+    "files": {
+      "saveFile": "Save File",
+      "locateCli": "Locate {name}",
+      "exportPluginData": "Export Plugin Data",
+      "privacyExportFilter": "Talex Touch Privacy Export",
+      "exportPluginCredentials": "Export Encrypted Plugin Credentials",
+      "secretBackupFilter": "Talex Touch Secret Backup",
+      "exportPrivacyData": "Export Privacy Data",
+      "exportCredentials": "Export Encrypted Credentials",
+      "restoreCredentials": "Restore Encrypted Credentials",
+      "saveScreenshot": "Save Screenshot",
+      "screenshotName": "Screenshot-{time}",
+      "pngFilter": "PNG Image",
+      "selectAudio": "Select Audio File",
+      "transcribe": "Transcribe",
+      "audioFilter": "Audio"
+    }
+  },
+  "clipboardActions": {
+    "automationPermissionDenied": "Auto-paste failed: allow Tuff to control System Events in System Settings > Privacy & Security > Automation.",
+    "accessibilityPermissionDenied": "Auto-paste failed: allow Tuff in System Settings > Privacy & Security > Accessibility.",
+    "autoPasteFailed": "Copied to the clipboard, but auto-paste failed. Make sure the target app is still in front, or press Cmd/Ctrl+V.",
+    "databaseUnavailable": "Clipboard history is not ready yet. Try again shortly.",
+    "itemNotFound": "This clipboard history item was not found.",
+    "voiceTextEmpty": "There is no voice text to paste.",
+    "voiceClipboardNotRestored": "Voice text was pasted, but the previous clipboard could not be restored.",
+    "notificationTitle": "Auto-Paste Failed"
+  },
+  "quickOps": {
+    "screenClean": {
+      "hint": "QuickOps {mode} · Exits in {duration} · Hold Esc to exit",
+      "windowTitle": "QuickOps Clean Screen",
+      "modes": {
+        "white": "White screen for cleaning",
+        "black": "Black screen for cleaning",
+        "red": "Red screen test",
+        "green": "Green screen test",
+        "blue": "Blue screen test"
+      }
+    },
+    "sessionTitles": {
+      "keepAwake": "Keep Display Awake",
+      "systemAwake": "Keep System Awake",
+      "timer": "Timer",
+      "pomodoro": "Pomodoro",
+      "pomodoroFocus": "Pomodoro Focus",
+      "pomodoroBreak": "Pomodoro Break",
+      "screenClean": "Clean Screen",
+      "stopwatch": "Stopwatch"
+    },
+    "capabilities": {
+      "keepAwake": "Keep Display Awake",
+      "systemAwake": "Keep System Awake",
+      "timers": "Timer, Stopwatch and Pomodoro",
+      "screenOverlay": "Clean Screen and Solid Colors",
+      "localNetwork": "Local Network Lookups",
+      "publicIp": "Public IP Lookup (Opt-In)",
+      "systemProxy": "System Proxy Settings",
+      "fileInfo": "File Hashes, Base64 and Paths",
+      "tempFiles": "Create Temporary Files",
+      "moveRecentDownload": "Move Latest Download",
+      "diagnostics": "Diagnostics and System Info",
+      "storage": "Disk Space and Folder Usage",
+      "battery": "Battery Status",
+      "developerPreview": "Developer Preview Tools",
+      "portKill": "End Process Using a Port"
+    },
+    "directories": {
+      "home": "Home",
+      "desktop": "Desktop",
+      "downloads": "Downloads",
+      "documents": "Documents",
+      "appData": "App Data",
+      "tuffData": "Tuff Data",
+      "logs": "Logs"
+    },
+    "errors": {
+      "invalidHostname": "Enter a valid domain name",
+      "fileHashMissingFile": "Couldn't find a file to hash",
+      "fileBase64MissingFile": "Couldn't find a file to encode",
+      "filePathMissingFile": "Couldn't find a file to copy the path of",
+      "recentDownloadEmpty": "There's no file in Downloads to open",
+      "recentDownloadPermissionDenied": "No permission to read Downloads",
+      "recentDownloadReadFailed": "Couldn't read Downloads",
+      "moveTargetNotAbsolute": "The destination folder must be an absolute path",
+      "moveTargetNotDirectory": "The destination isn't a folder",
+      "moveTargetExists": "The destination folder already has a file with this name",
+      "moveTargetCheckFailed": "Couldn't check the destination",
+      "moveTargetMissing": "The destination folder doesn't exist",
+      "moveTargetPermissionDenied": "No permission to read the destination folder",
+      "moveTargetReadFailed": "Couldn't read the destination folder",
+      "moveInvalidPath": "The source or destination path is invalid",
+      "moveSourceOutsideDownloads": "The file isn't in Downloads",
+      "moveSourceNotFile": "The source isn't a file",
+      "moveSourceMissing": "The source file doesn't exist",
+      "movePermissionDenied": "No permission to move the file",
+      "moveFailed": "Couldn't move the file",
+      "notFile": "The target isn't a file",
+      "fileMissing": "The file doesn't exist",
+      "fileReadPermissionDenied": "No permission to read the file",
+      "fileReadFailed": "Couldn't read the file",
+      "fileTooLarge": "The file is over the {limit} limit",
+      "base64MissingInput": "There's no Base64 content to decode",
+      "base64InvalidInput": "The Base64 content isn't valid",
+      "base64DecodedTooLarge": "The decoded file is over the {limit} limit",
+      "tempWritePermissionDenied": "No permission to write the temporary file",
+      "tempWriteFailed": "Couldn't write the temporary file",
+      "tempTextTooLarge": "The text is over the {limit} limit",
+      "tempDirectoryPermissionDenied": "No permission to create the temporary folder",
+      "tempDirectoryCreateFailed": "Couldn't create the temporary folder",
+      "diskSpaceReadFailed": "Couldn't read disk space",
+      "directoryMissing": "The folder doesn't exist",
+      "directoryPermissionDenied": "No permission to read the folder",
+      "directoryUsageReadFailed": "Couldn't read folder usage",
+      "batteryUnsupported": "Battery status isn't available on this system",
+      "batteryReadFailed": "Couldn't read battery status",
+      "publicIpFetchUnavailable": "Online lookups aren't available here",
+      "publicIpHttpError": "The lookup service returned an error (HTTP {status})",
+      "publicIpInvalidResponse": "The lookup service returned an unrecognized IP address",
+      "publicIpRequestFailed": "Couldn't reach the public IP lookup service",
+      "dnsNoRecords": "No {types} records found",
+      "qrPngRenderFailed": "Couldn't create the QR code image",
+      "previewSaveFailed": "Couldn't save the preview file"
+    },
+    "flowTargets": {
+      "capabilities": {
+        "name": "Capabilities",
+        "description": "Lists what QuickOps can do on this device"
+      },
+      "sessions": {
+        "name": "Active Sessions",
+        "description": "Shows the QuickOps sessions running now"
+      },
+      "stop-all-sessions": {
+        "name": "Stop All Sessions",
+        "description": "Stops every running QuickOps session"
+      },
+      "system-info": {
+        "name": "System Info",
+        "description": "Summarizes this device's system without going online"
+      },
+      "tuff-diagnostics": {
+        "name": "Tuff Diagnostics",
+        "description": "Summarizes Tuff's state with sensitive values hidden, without reading logs"
+      },
+      "disk-space": {
+        "name": "Disk Space",
+        "description": "Shows free and used space on local disks"
+      },
+      "directory-usage": {
+        "name": "Folder Usage",
+        "description": "Shows how much space common folders take up"
+      },
+      "network-status": {
+        "name": "Network Status",
+        "description": "Shows the network connection without going online"
+      },
+      "battery-status": {
+        "name": "Battery Status",
+        "description": "Shows battery level and charging state, where the system reports them"
+      },
+      "system-proxy": {
+        "name": "System Proxy",
+        "description": "Shows the system proxy settings with credentials hidden"
+      },
+      "public-ip": {
+        "name": "Public IP",
+        "description": "Looks up this device's public IP address online"
+      },
+      "query-local-ip": {
+        "name": "Local IP",
+        "description": "Lists this device's network addresses without going online"
+      },
+      "port-status": {
+        "name": "Port Status",
+        "description": "Checks whether a local TCP port is in use, and by which process"
+      },
+      "dns-query": {
+        "name": "DNS Lookup",
+        "description": "Looks up a hostname's DNS records through the system resolver"
+      },
+      "file-hash": {
+        "name": "File Hash",
+        "description": "Computes a file's MD5, SHA-1 and SHA-256 hashes"
+      },
+      "file-base64": {
+        "name": "File to Base64",
+        "description": "Encodes a file as Base64, up to the QuickOps size limit"
+      },
+      "recent-download": {
+        "name": "Latest Download",
+        "description": "Finds the newest file in Downloads without opening or moving it"
+      },
+      "common-directory": {
+        "name": "Common Folder Path",
+        "description": "Gives the path of a common folder without opening it"
+      },
+      "path-format": {
+        "name": "Path Formats",
+        "description": "Converts a path into formats ready to copy, without touching files"
+      },
+      "temp-text-file": {
+        "name": "New Temporary Text File",
+        "description": "Creates a text file in the QuickOps temporary folder"
+      },
+      "temp-directory": {
+        "name": "New Temporary Folder",
+        "description": "Creates a folder in the QuickOps temporary folder"
+      },
+      "keep-awake": {
+        "name": "Keep Display Awake",
+        "description": "Keeps the display on, replacing any running keep-awake session"
+      },
+      "stop-keep-awake": {
+        "name": "Stop Keeping Display Awake",
+        "description": "Ends the current keep-display-awake session"
+      },
+      "system-awake": {
+        "name": "Keep System Awake",
+        "description": "Keeps the system from sleeping, replacing any running session"
+      },
+      "stop-system-awake": {
+        "name": "Stop Keeping System Awake",
+        "description": "Ends the current keep-system-awake session"
+      },
+      "start-timer": {
+        "name": "Start Timer",
+        "description": "Starts a timer, replacing any running one"
+      },
+      "pause-timer": {
+        "name": "Pause Timer",
+        "description": "Pauses the running timer"
+      },
+      "resume-timer": {
+        "name": "Resume Timer",
+        "description": "Resumes the paused timer"
+      },
+      "stop-timer": {
+        "name": "Stop Timer",
+        "description": "Stops the current timer"
+      },
+      "start-pomodoro": {
+        "name": "Start Pomodoro",
+        "description": "Starts a Pomodoro session, replacing any running one"
+      },
+      "pause-pomodoro": {
+        "name": "Pause Pomodoro",
+        "description": "Pauses the running Pomodoro session"
+      },
+      "resume-pomodoro": {
+        "name": "Resume Pomodoro",
+        "description": "Resumes the paused Pomodoro session"
+      },
+      "stop-pomodoro": {
+        "name": "Stop Pomodoro",
+        "description": "Stops the current Pomodoro session"
+      },
+      "clean-screen": {
+        "name": "Clean Screen",
+        "description": "Fills the screen with a solid color for cleaning or testing, replacing any open overlay"
+      },
+      "stop-clean-screen": {
+        "name": "Exit Clean Screen",
+        "description": "Closes the current clean-screen overlay"
+      },
+      "start-stopwatch": {
+        "name": "Start Stopwatch",
+        "description": "Starts a stopwatch, replacing any running one"
+      },
+      "pause-stopwatch": {
+        "name": "Pause Stopwatch",
+        "description": "Pauses the running stopwatch"
+      },
+      "resume-stopwatch": {
+        "name": "Resume Stopwatch",
+        "description": "Resumes the paused stopwatch"
+      },
+      "lap-stopwatch": {
+        "name": "Record Lap",
+        "description": "Records a lap on the running stopwatch"
+      },
+      "reset-stopwatch": {
+        "name": "Reset Stopwatch",
+        "description": "Stops and clears the current stopwatch"
+      },
+      "show-notification": {
+        "name": "Show Notification",
+        "description": "Shows a system notification with the text it receives"
+      },
+      "copy-to-clipboard": {
+        "name": "Copy to Clipboard",
+        "description": "Copies the text it receives to the clipboard"
+      },
+      "format-text": {
+        "name": "Format Text",
+        "description": "Formats text locally and returns the result"
+      },
+      "open-folder": {
+        "name": "Open Folder",
+        "description": "Opens a common folder"
+      }
+    }
   }
 }

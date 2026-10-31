@@ -6,8 +6,8 @@
  */
 
 import type { FlowPayloadType, NativeShareResult } from '@talex-touch/utils'
-import { FlowTransferKeys, i18nMsg } from '@talex-touch/utils/i18n'
 import { Notification } from 'electron'
+import { t } from '../../utils/i18n-helper'
 
 /**
  * Share notification configuration
@@ -31,39 +31,57 @@ export const defaultShareNotificationConfig: ShareNotificationConfig = {
 }
 
 /**
- * Share notification messages with i18n support
- * Uses $i18n:key format for frontend resolution
+ * Share notification messages, worded when shown.
+ *
+ * They were `$i18n:` markers, which only the renderer resolves: handed to the OS as they were,
+ * a title read `✓ $i18n:flowTransfer.shareComplete`. The language can change at runtime, so
+ * nothing is translated ahead of the notification.
  */
 const MESSAGES = {
   shareComplete: {
-    title: i18nMsg(FlowTransferKeys.SHARE_COMPLETE),
-    body: (target: string) => `Content shared via ${target}` // Dynamic, keep as-is
+    title: () => t('notifications.share.completeTitle'),
+    body: (target: string) => t('notifications.share.completeBody', { target })
   },
   clipboardCopy: {
-    title: i18nMsg(FlowTransferKeys.COPIED_TO_CLIPBOARD),
-    body: 'Content has been copied to your clipboard'
+    title: () => t('notifications.share.copiedTitle'),
+    body: () => t('notifications.share.copiedBody')
   },
   fileRevealed: {
-    title: i18nMsg(FlowTransferKeys.FILE_REVEALED),
+    title: () => t('notifications.share.fileRevealedTitle'),
     body: (count: number) =>
-      count > 1 ? `${count} files revealed in file manager` : 'File revealed in file manager'
+      count > 1
+        ? t('notifications.share.filesRevealedBody', { count })
+        : t('notifications.share.fileRevealedBody')
   },
   shareError: {
-    title: i18nMsg(FlowTransferKeys.SHARE_FAILED),
-    body: (error: string) => `Unable to share: ${error}`
+    title: () => t('notifications.share.failedTitle'),
+    body: (error: string) => t('notifications.share.failedBody', { error })
   },
   airdropReady: {
-    title: i18nMsg(FlowTransferKeys.AIRDROP_READY),
-    body: 'Select a device to send your files'
+    title: () => t('notifications.share.airdropReadyTitle'),
+    body: () => t('notifications.share.airdropReadyBody')
   },
   mailReady: {
-    title: i18nMsg(FlowTransferKeys.MAIL_READY),
-    body: 'Complete your email in the Mail app'
+    title: () => t('notifications.share.mailReadyTitle'),
+    body: () => t('notifications.share.mailReadyBody')
   },
   messagesReady: {
-    title: i18nMsg(FlowTransferKeys.MESSAGES_READY),
-    body: 'Content copied - paste in Messages to send'
+    title: () => t('notifications.share.messagesReadyTitle'),
+    body: () => t('notifications.share.messagesReadyBody')
   }
+}
+
+/** The name a share target goes by in a notification; an unknown target is shown as given. */
+const TARGET_NAME_KEYS: Record<string, string> = {
+  system: 'nativeShare.targets.systemShare',
+  'system-share': 'nativeShare.targets.systemShare',
+  airdrop: 'nativeShare.targets.airdrop',
+  mail: 'nativeShare.targets.mail',
+  messages: 'nativeShare.targets.messages',
+  clipboard: 'nativeShare.targets.clipboard',
+  finder: 'nativeShare.targets.finder',
+  explorer: 'nativeShare.targets.explorer',
+  browser: 'nativeShare.targets.browser'
 }
 
 /**
@@ -98,7 +116,7 @@ export class ShareNotificationService {
    */
   showShareResult(result: NativeShareResult, _payloadType?: FlowPayloadType): void {
     if (!result.success) {
-      this.showError(result.error ?? 'Unknown error')
+      this.showError(result.error ?? t('common.unknownError'))
       return
     }
 
@@ -134,7 +152,7 @@ export class ShareNotificationService {
     if (!this.config.shareComplete) return
 
     const notification = new Notification({
-      title: `✓ ${MESSAGES.shareComplete.title}`,
+      title: `✓ ${MESSAGES.shareComplete.title()}`,
       body: MESSAGES.shareComplete.body(this.formatTargetName(target)),
       silent: true,
       urgency: 'low',
@@ -151,8 +169,8 @@ export class ShareNotificationService {
     if (!this.config.clipboardCopy) return
 
     const notification = new Notification({
-      title: `📋 ${MESSAGES.clipboardCopy.title}`,
-      body: MESSAGES.clipboardCopy.body,
+      title: `📋 ${MESSAGES.clipboardCopy.title()}`,
+      body: MESSAGES.clipboardCopy.body(),
       silent: true,
       urgency: 'low',
       timeoutType: 'default'
@@ -168,7 +186,7 @@ export class ShareNotificationService {
     if (!this.config.shareComplete) return
 
     const notification = new Notification({
-      title: `📂 ${MESSAGES.fileRevealed.title}`,
+      title: `📂 ${MESSAGES.fileRevealed.title()}`,
       body: MESSAGES.fileRevealed.body(count),
       silent: true,
       urgency: 'low',
@@ -185,8 +203,8 @@ export class ShareNotificationService {
     if (!this.config.shareComplete) return
 
     const notification = new Notification({
-      title: `📡 ${MESSAGES.airdropReady.title}`,
-      body: MESSAGES.airdropReady.body,
+      title: `📡 ${MESSAGES.airdropReady.title()}`,
+      body: MESSAGES.airdropReady.body(),
       silent: true,
       urgency: 'low',
       timeoutType: 'default'
@@ -202,8 +220,8 @@ export class ShareNotificationService {
     if (!this.config.shareComplete) return
 
     const notification = new Notification({
-      title: `✉️ ${MESSAGES.mailReady.title}`,
-      body: MESSAGES.mailReady.body,
+      title: `✉️ ${MESSAGES.mailReady.title()}`,
+      body: MESSAGES.mailReady.body(),
       silent: true,
       urgency: 'low',
       timeoutType: 'default'
@@ -219,8 +237,8 @@ export class ShareNotificationService {
     if (!this.config.shareComplete) return
 
     const notification = new Notification({
-      title: `💬 ${MESSAGES.messagesReady.title}`,
-      body: MESSAGES.messagesReady.body,
+      title: `💬 ${MESSAGES.messagesReady.title()}`,
+      body: MESSAGES.messagesReady.body(),
       silent: true,
       urgency: 'low',
       timeoutType: 'default'
@@ -236,7 +254,7 @@ export class ShareNotificationService {
     if (!this.config.shareError) return
 
     const notification = new Notification({
-      title: `❌ ${MESSAGES.shareError.title}`,
+      title: `❌ ${MESSAGES.shareError.title()}`,
       body: MESSAGES.shareError.body(error),
       silent: false,
       urgency: 'normal',
@@ -250,17 +268,8 @@ export class ShareNotificationService {
    * Format target name for display
    */
   private formatTargetName(target: string): string {
-    const names: Record<string, string> = {
-      'system-share': 'System Share',
-      airdrop: 'AirDrop',
-      mail: 'Mail',
-      messages: 'Messages',
-      clipboard: 'Clipboard',
-      finder: 'Finder',
-      explorer: 'Explorer',
-      browser: 'Browser'
-    }
-    return names[target] ?? target
+    const key = TARGET_NAME_KEYS[target]
+    return key ? t(key) : target
   }
 }
 

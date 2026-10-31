@@ -404,7 +404,7 @@ async function inspectTarget(target: DevToolsTarget): Promise<CoreBoxProbeDom> {
       hasErrorNotice: text.includes('Error') || text.includes('请求失败') || text.includes('失败'),
       hasPermissionText: text.includes('intelligence.basic') || text.includes('权限'),
       hasModelUnsupportedText: text.includes('NEXUS_STREAM_UNSUPPORTED') || text.includes('不支持该能力'),
-      hasProviderUnavailableText: text.includes('provider unavailable') || text.includes('Provider unavailable') || text.includes('Provider 不可用') || text.includes('服务不可用'),
+      hasProviderUnavailableText: text.includes('provider unavailable') || text.includes('Provider unavailable') || text.includes('Provider 不可用') || text.includes('提供商不可用') || text.includes('服务不可用'),
       hasLoggedOutText: text.includes('未登录') || text.includes('需要登录') || text.includes('sign in') || text.includes('logged out'),
       hasQuotaText: text.includes('quota') || text.includes('credits') || text.includes('积分') || text.includes('配额'),
       buttons,
@@ -737,6 +737,7 @@ function getCommonBlockedSignals(): string[] {
   return [
     'Widget 加载失败',
     '插件 widget 初始化失败',
+    '插件 Widget 初始化失败',
     'Widget interaction failed',
     'WIDGET_RUNTIME_COMPILE_DISABLED',
     'WIDGET_PRECOMPILED_MISSING',
@@ -960,6 +961,7 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           'provider unavailable',
           'Provider unavailable',
           'Provider 不可用',
+          '提供商不可用',
           '服务不可用',
           'provider disabled',
           '供应商不可用',
@@ -976,6 +978,7 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
             'provider unavailable',
             'Provider unavailable',
             'Provider 不可用',
+            '提供商不可用',
             '服务不可用',
             'provider disabled',
             '供应商不可用'

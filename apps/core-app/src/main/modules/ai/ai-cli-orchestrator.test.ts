@@ -93,6 +93,10 @@ vi.mock('../../utils/logger', () => ({
   })
 }))
 
+// `../database` words its failure dialog through main's translator, which logs through the logger
+// above as it loads; nothing here reads that wording.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
+
 vi.mock('./agents', () => ({
   agentManager: { getAgent: orchestratorMocks.getAgent },
   toolRegistry: {

@@ -292,7 +292,9 @@ export async function forDialogMention(
 export async function forApplyMention(
   title: string,
   message: string,
-  btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }]
+  btns: BottomDialogBtn[] = [
+    { content: useI18nText().t('common.confirm'), type: 'info', onClick: async () => true, time: 0 }
+  ]
 ): Promise<void> {
   const root = document.createElement('div')
   const dialogId = generateDialogId('bottom-dialog')

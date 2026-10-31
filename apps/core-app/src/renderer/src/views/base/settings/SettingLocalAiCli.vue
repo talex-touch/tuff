@@ -15,6 +15,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
@@ -57,9 +58,12 @@ function providerDescription(provider: LocalAiCliProviderStatus): string {
       )
     : ''
   if (!provider.installed) {
-    const unavailable = provider.issueCode
-      ? t('settingLocalAiCli.providerUnavailableWithReason', { reason: provider.issueCode })
-      : t('settingLocalAiCli.providerUnavailable')
+    // A detailed status says why a CLI is missing only as PROVIDER_UNAVAILABLE: looked for and not
+    // found, which is what the plain sentence says.
+    const unavailable =
+      provider.issueCode && provider.issueCode !== 'PROVIDER_UNAVAILABLE'
+        ? t('settingLocalAiCli.providerUnavailableWithReason', { reason: provider.issueCode })
+        : t('settingLocalAiCli.providerUnavailable')
     return [overrideNote, unavailable].filter(Boolean).join(' · ')
   }
   return [overrideNote, provider.version, provider.executablePath, capabilityLabel(provider)]
@@ -155,11 +159,17 @@ async function refreshStatus(options: { refresh?: boolean } = {}): Promise<void>
 async function locateProvider(provider: LocalAiCliProviderId): Promise<void> {
   locatingProvider.value = provider
   try {
+    // A pick that fails the version check is saved all the same and comes back as
+    // `settingsOverrideRejected`, which the provider's description reads. A picker closed
+    // without a pick is no failure.
     await sdk.locate({ provider })
     await refreshStatus()
   } catch (error) {
+    if (failureMessage(error).includes('LOCAL_AI_CLI_LOCATE_CANCELLED')) return
     log.error('Failed to locate local AI CLI executable', error)
-    toast.error(t('settingLocalAiCli.messages.locateFailed'))
+    toast.error(t('settingLocalAiCli.messages.locateFailed'), {
+      description: describeFailure(error, t, '') || undefined
+    })
   } finally {
     locatingProvider.value = null
   }

@@ -44,6 +44,7 @@ import {
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { createHash } from 'node:crypto'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
@@ -360,25 +361,24 @@ function formatAsrCapabilityTestFailure(error: unknown): {
   const messageCode = rawMessage.match(/^(?:VOICE|BAILIAN|DOUBAO)_[A-Z0-9_]+$/)?.[0] || ''
   const normalized = normalizeIntelligenceError(error, { capabilityId: 'audio.asr' })
   const code = rawCode || messageCode || normalized.code || 'UNKNOWN'
-  let message = `实时语音识别测试失败（${code}）`
+  let message = t('intelligence.capabilityTest.asrFailed.generic', { code })
 
   if (code === USAGE_LIMIT_REACHED_CODE) {
     // The limit the user set in Audit, in the shape every refusal takes for the app's own renderer,
     // so the test result names it and its reset time in the interface language.
     message = toApiFailure(code, error, { host: true }).error
   } else if (code === 'VOICE_ASR_NOT_CONFIGURED') {
-    message = '实时语音识别测试失败：请先保存 audio.asr 的百炼渠道和模型绑定。'
+    message = t('intelligence.capabilityTest.asrFailed.notConfigured')
   } else if (code === 'VOICE_ASR_PROVIDER_UNAVAILABLE') {
-    message =
-      '实时语音识别测试失败：已保存的 ASR 渠道当前不可用，请检查渠道类型、ASR 协议和模型绑定。'
+    message = t('intelligence.capabilityTest.asrFailed.providerUnavailable')
   } else if (/MODEL_NOT_FOUND|MODELNOTFOUND/i.test(code)) {
-    message = '实时语音识别测试失败：当前绑定模型不是百炼实时 ASR 模型，请选择实时模型。'
+    message = t('intelligence.capabilityTest.asrFailed.modelNotFound')
   } else if (normalized.code === 'MODEL_UNSUPPORTED') {
-    message = '实时语音识别测试失败：当前模型不支持实时 ASR，请选择实时模型。'
+    message = t('intelligence.capabilityTest.asrFailed.modelUnsupported')
   } else if (normalized.code === 'NETWORK_FAILURE') {
-    message = '实时语音识别测试失败：百炼连接失败，请检查网络、Base URL 和业务空间。'
+    message = t('intelligence.capabilityTest.asrFailed.network')
   } else if (rawMessage) {
-    message = `${message}。请检查麦克风权限、渠道凭据和模型配置。`
+    message = t('intelligence.capabilityTest.asrFailed.genericWithHint', { code })
   }
 
   return { success: false, message, timestamp: Date.now() }

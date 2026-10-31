@@ -25,9 +25,12 @@ function propertyValues(source: string, property: 'icon' | 'pluginIcon'): string
   )
 }
 
-/** The body of each `const …: FlowTarget = {` declaration, up to the `}` closing it at column 0. */
+/**
+ * The body of each `const …: QuickOpsFlowTargetDefinition = {` declaration, up to the `}` closing
+ * it at column 0.
+ */
 function flowTargetDeclarations(source: string): string[] {
-  return [...source.matchAll(/^const \w+: FlowTarget = \{$([\s\S]*?)^\}$/gm)].map(
+  return [...source.matchAll(/^const \w+: QuickOpsFlowTargetDefinition = \{$([\s\S]*?)^\}$/gm)].map(
     (match) => match[1]!
   )
 }
@@ -41,7 +44,7 @@ function availableTargetsMethod(source: string): string {
 
 /**
  * The icons the built-in Flow targets declare, as written: the targets' own, from the QuickOps
- * `FlowTarget` declarations and the native share targets, and the `pluginIcon` each group
+ * target declarations and the native share targets, and the `pluginIcon` each group
  * registers under. Kept apart so that each extraction has its own positive control.
  */
 function declaredIcons(): { targets: string[]; pluginIcons: string[] } {

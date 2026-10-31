@@ -346,7 +346,7 @@ describe('app launcher', () => {
       )
     ).resolves.toEqual({
       status: 'failed',
-      error: 'UWP app launch is only supported on Windows'
+      error: 'APP_LAUNCH_UWP_UNSUPPORTED'
     })
 
     expect(spawnSafeMock).not.toHaveBeenCalled()

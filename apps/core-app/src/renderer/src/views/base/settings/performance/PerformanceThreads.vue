@@ -68,7 +68,15 @@ const budget = computed(() => props.report.nativeRuntimes)
     <TxCard background="refraction" :padding="16">
       <div class="flex flex-col gap-2">
         <h3 class="font-semibold">{{ t('settingPerformance.nativeRuntimes') }}</h3>
-        <p>{{ t('settingPerformance.tokioBudget', { workerThreads: budget.workerThreads }) }}</p>
+        <p>
+          {{
+            t(
+              'settingPerformance.tokioBudget',
+              { workerThreads: budget.workerThreads },
+              budget.workerThreads
+            )
+          }}
+        </p>
         <div>
           <TxTag>{{ t(`settingPerformance.budgetSources.${budget.source}`) }}</TxTag>
         </div>

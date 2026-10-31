@@ -10,6 +10,7 @@ import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
+import { describePluginIssue } from '~/modules/plugin/plugin-issue-display'
 
 type PluginCategoryId = string
 
@@ -19,7 +20,7 @@ interface PluginCategoryGroup {
   plugins: ITouchPlugin[]
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const route = useRoute()
 
@@ -157,13 +158,13 @@ function getIssueTitle(plugin: ITouchPlugin): string | undefined {
   const issues = plugin.issues ?? []
   const errors = issues.filter((issue) => issue.type === 'error')
   if (errors.length > 0) {
-    const first = errors[0]?.message ? shortenTooltip(errors[0].message) : ''
+    const first = shortenTooltip(describePluginIssue(errors[0], t, locale.value).title)
     return t('plugin.navTree.badges.error', { count: errors.length, message: first })
   }
 
   const warnings = issues.filter((issue) => issue.type === 'warning')
   if (warnings.length > 0) {
-    const first = warnings[0]?.message ? shortenTooltip(warnings[0].message) : ''
+    const first = shortenTooltip(describePluginIssue(warnings[0], t, locale.value).title)
     return t('plugin.navTree.badges.warning', { count: warnings.length, message: first })
   }
 

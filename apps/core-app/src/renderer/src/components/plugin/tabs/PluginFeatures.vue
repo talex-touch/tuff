@@ -10,6 +10,7 @@ import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
+import { describePluginIssue } from '~/modules/plugin/plugin-issue-display'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { devLog } from '~/utils/dev-log'
@@ -54,7 +55,7 @@ const totalCommands = computed(() =>
   features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
 )
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const pluginFeaturesLog = createRendererLogger('PluginFeatures')
 const uiPreference = useUiPreference()
 const isPluginDev = computed(() => Boolean(props.plugin?.dev?.enable))
@@ -70,7 +71,7 @@ const devDisconnectIssue = computed(() =>
 const devDisconnectMessage = computed(() => {
   const issue = devDisconnectIssue.value
   if (issue?.message) return resolveI18nMessage(issue.message)
-  return t('plugin.devServerDisconnected', 'Dev Server 已断开连接')
+  return t('plugin.devServerDisconnected', '开发服务器已断开连接')
 })
 const devDisconnectSuggestion = computed(() => {
   const suggestion = devDisconnectIssue.value?.suggestion
@@ -296,12 +297,20 @@ const previewWidgetIssues = computed(() => {
   const feature = resolveWidgetFeature(widgetId)
   const source = feature ? `feature:${feature.id}` : null
   const issues = props.plugin?.issues ?? []
-  return issues.filter((issue) => {
-    if (issue.code === 'DEV_SERVER_DISCONNECTED') return true
-    if (source && issue.source === source) return true
-    if (issue.code?.startsWith('WIDGET_') && (!issue.source || issue.source === source)) return true
-    return false
-  })
+  return issues
+    .filter((issue) => {
+      if (issue.code === 'DEV_SERVER_DISCONNECTED') return true
+      if (source && issue.source === source) return true
+      if (issue.code?.startsWith('WIDGET_') && (!issue.source || issue.source === source))
+        return true
+      return false
+    })
+    .map((issue) => ({
+      code: issue.code,
+      source: issue.source,
+      type: issue.type,
+      ...describePluginIssue(issue, t, locale.value)
+    }))
 })
 
 const previewWidgetItem = computed<TuffItem | null>(() => {
@@ -353,7 +362,7 @@ const previewWidgetStatus = computed(() => {
 const previewWidgetHint = computed(() => {
   if (!previewWidgetId.value) return ''
   if (previewPayloadInvalid.value) {
-    return t('plugin.features.widget.preview.hintMockInvalid', { error: mockPayloadError.value })
+    return t('plugin.features.widget.preview.hintMockInvalid')
   }
   if (mockPayloadEnabled.value && !previewPayloadActive.value) {
     return t('plugin.features.widget.preview.hintMockEmpty')
@@ -720,10 +729,6 @@ async function revealWidgetFile(pathValue?: string | null): Promise<void> {
   }
 }
 
-function resolveIssueMessage(message: string): string {
-  return resolveI18nMessage(message)
-}
-
 async function handleReconnect(): Promise<void> {
   if (!props.plugin?.name || !canReconnect.value || reconnectLoading.value) return
   reconnectLoading.value = true
@@ -855,7 +860,6 @@ function handlePreviewRenderError(error: Error): void {
           :dev-disconnect-suggestion="devDisconnectSuggestion"
           :can-reconnect="canReconnect"
           :reconnect-loading="reconnectLoading"
-          :resolve-issue-message="resolveIssueMessage"
           @close="close"
           @copy="copyToClipboard"
           @reveal="revealWidgetFile"

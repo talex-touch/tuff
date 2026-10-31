@@ -5,7 +5,23 @@ import type {
   PromptWorkflowExecution
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
+
+/** A run status in the words the workflow pages use for it. */
+const WORKFLOW_STATUS_KEYS: Record<PromptWorkflowExecution['status'], string> = {
+  pending: 'intelligence.workflow.statusPending',
+  running: 'intelligence.workflow.statusRunning',
+  completed: 'intelligence.workflow.statusCompleted',
+  failed: 'intelligence.workflow.statusFailed',
+  cancelled: 'intelligence.workflow.statusCancelled'
+}
+
+function workflowStatusLabel(status: PromptWorkflowExecution['status'] | undefined): string {
+  const key = status ? WORKFLOW_STATUS_KEYS[status] : undefined
+  if (key) return t(key)
+  return status || t('intelligence.capabilityTest.preview.unknown')
+}
 
 export class WorkflowExecuteTester extends BaseCapabilityTester<unknown, PromptWorkflowExecution> {
   readonly capabilityType = 'workflow-execute'
@@ -51,13 +67,17 @@ export class WorkflowExecuteTester extends BaseCapabilityTester<unknown, PromptW
     const completedSteps = steps.filter((step) => step.status === 'completed').length
 
     return this.buildTestResult(result, {
-      message: `workflow.execute ${result.result?.status || 'unknown'}，${completedSteps}/${steps.length} steps completed`,
+      message: t('intelligence.capabilityTest.message.workflowExecute', {
+        status: workflowStatusLabel(result.result?.status),
+        completed: completedSteps,
+        total: steps.length
+      }),
       textPreview: JSON.stringify(result.result?.outputs || {}, null, 2)
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要交给内联工作流处理的目标'
+    return t('intelligence.capabilityTest.hint.workflowExecute')
   }
 
   requiresUserInput(): boolean {
@@ -96,13 +116,16 @@ export class AgentRunTester extends BaseCapabilityTester<
     const stepCount = result.result?.steps?.length || 0
 
     return this.buildTestResult(result, {
-      message: `Agent 运行完成，${stepCount} 个推理步骤，${toolCallCount} 次工具调用`,
+      message: t('intelligence.capabilityTest.message.agentRun', {
+        steps: stepCount,
+        toolCalls: toolCallCount
+      }),
       textPreview: result.result?.result || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要交给 Agent 执行的任务'
+    return t('intelligence.capabilityTest.hint.agentRun')
   }
 
   requiresUserInput(): boolean {

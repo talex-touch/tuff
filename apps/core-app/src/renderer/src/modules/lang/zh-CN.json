@@ -274,7 +274,163 @@
   },
   "settingStorage": {
     "title": "存储",
-    "description": "查看应用存储详情"
+    "description": "查看应用存储详情",
+    "usage": {
+      "title": "存储占用",
+      "totalFull": "总占用",
+      "totalModules": "目录合计",
+      "databaseContent": "数据库内容",
+      "calculating": "计算中",
+      "unknown": "未知",
+      "basedOnTableStats": "基于表级统计",
+      "modulesTitle": "模块/目录占用",
+      "fileCount": "{count} 个文件",
+      "dirCount": "{count} 个目录",
+      "pluginsTitle": "插件占用（config/plugins）",
+      "pluginsEmpty": "暂无插件配置目录或无数据。",
+      "pluginsCollapsed": "仅展示前 {limit} 个插件；其余 {count} 个已折叠。",
+      "databaseTitle": "数据库占用",
+      "tableStatsLoading": "表级统计中…",
+      "databaseFile": "数据库文件",
+      "databaseTotal": "数据库合计",
+      "dbstatUnavailable": "当前 SQLite 未启用 dbstat，表级占用显示为未知。",
+      "logicalOnly": "数据库内容为逻辑占用，未计入目录合计。",
+      "tableUsageLoading": "表级占用加载中…",
+      "tableUsageNotLoaded": "表级占用未加载",
+      "rowCount": "{count} 行",
+      "processing": "处理中…",
+      "tableName": "表名：{name}",
+      "cachesTitle": "缓存占用",
+      "entryCount": "{count} 条",
+      "ttl": "TTL {value}",
+      "ttlNone": "TTL 无",
+      "cleanupNoteTitle": "清理说明",
+      "cleanupNote": "部分清理会影响索引、统计与历史数据；执行后请根据提示重新扫描或等待后台重建。",
+      "locationsTitle": "位置",
+      "dataDir": "数据目录",
+      "dataDirDesc": "索引、数据库与插件配置的存放位置。",
+      "tempDir": "临时目录",
+      "tempDirDesc": "下载切片缓存，任务完成后自动回收。",
+      "continue": "继续",
+      "scope": {
+        "disk": "磁盘",
+        "mixed": "混合",
+        "memory": "内存"
+      },
+      "categories": {
+        "fileIndex": "文件索引",
+        "searchIndex": "搜索索引",
+        "clipboard": "剪贴板",
+        "ocr": "OCR",
+        "embedding": "向量/嵌入",
+        "usage": "使用统计",
+        "recommendation": "推荐/固定",
+        "plugin": "插件数据",
+        "config": "系统配置",
+        "downloads": "下载任务",
+        "intelligence": "智能/配额",
+        "analytics": "分析/上报",
+        "telemetry": "遥测",
+        "updates": "更新记录",
+        "voice": "语音",
+        "projects": "项目",
+        "conversations": "对话",
+        "localAiCli": "本机代理"
+      },
+      "modules": {
+        "plugins": "插件配置",
+        "config": "应用配置",
+        "database": "数据库",
+        "logs": "日志",
+        "temp": "临时文件",
+        "other": "其他"
+      },
+      "caches": {
+        "clipboardMemory": "剪贴板内存缓存",
+        "storageLru": "配置 LRU 缓存",
+        "storagePlugins": "插件配置缓存",
+        "updateCache": "更新检查缓存",
+        "aiQuota": "智能配额缓存"
+      },
+      "tables": {
+        "files": "文件索引-文件",
+        "file_extensions": "文件索引-扩展",
+        "file_index_progress": "文件索引-进度",
+        "scan_progress": "文件索引-扫描进度",
+        "file_fts": "文件索引-FTS",
+        "search_index": "搜索索引-FTS",
+        "keyword_mappings": "搜索-关键字映射",
+        "search_keyword_postings": "搜索-关键词倒排",
+        "search_index_meta": "搜索-文档定位",
+        "search_index_maintenance_progress": "搜索-维护进度",
+        "search_index_pending_commits": "搜索-待发布提交",
+        "search_index_file_maintenance": "文件索引-维护候选",
+        "query_completions": "搜索-补全",
+        "clipboard_history": "剪贴板-历史",
+        "clipboard_history_meta": "剪贴板-元数据",
+        "ocr_jobs": "OCR-任务",
+        "ocr_results": "OCR-结果",
+        "embeddings": "向量-内容",
+        "contextual_embeddings": "向量-上下文",
+        "usage_logs": "使用日志-明细",
+        "usage_summary": "使用日志-汇总",
+        "item_usage_stats": "使用日志-项目统计",
+        "item_time_stats": "使用日志-时间统计",
+        "usage_execute_events": "使用日志-执行事件",
+        "recommendation_cache": "推荐-缓存",
+        "pinned_items": "推荐-固定项",
+        "plugin_data": "插件-数据",
+        "config": "系统配置表",
+        "download_tasks": "下载-任务",
+        "download_chunks": "下载-分片",
+        "download_history": "下载-历史",
+        "intelligence_audit_logs": "智能-审计日志",
+        "intelligence_quotas": "智能-配额",
+        "intelligence_usage_stats": "智能-用量",
+        "analytics_snapshots": "分析-快照",
+        "plugin_analytics": "分析-插件统计",
+        "analytics_report_queue": "分析-上报队列",
+        "telemetry_upload_stats": "遥测-上传统计",
+        "voice_insights_state": "语音-洞察汇总",
+        "voice_insight_days": "语音-洞察日统计",
+        "voice_insight_captures": "语音-洞察去重标识",
+        "voice_polish_telemetry": "语音-润色遥测",
+        "voice_recognition_records": "语音-识别记录",
+        "projects": "项目-目录元数据",
+        "conversations": "对话-会话",
+        "conversation_messages": "对话-消息",
+        "conversation_sync_state": "对话-同步状态",
+        "local_ai_cli_sessions": "本机代理-会话指针",
+        "app_update_records": "更新-记录"
+      },
+      "actions": {
+        "fileIndexClear": "清理索引",
+        "fileIndexClearTitle": "清理文件索引",
+        "fileIndexClearMessage": "将删除文件索引与搜索索引数据，可能需要重新扫描，是否继续？",
+        "fileIndexRebuild": "清理并重建搜索索引",
+        "fileIndexRebuildTitle": "重建应用与文件搜索索引",
+        "fileIndexRebuildMessage": "将清理应用与文件搜索索引并触发重建，过程可能较久，是否继续？",
+        "fileIndexRebuildNote": "应用与文件索引会在后台重建",
+        "downloadsOld": "清理 {days} 天前",
+        "downloadsOldTitle": "清理下载记录",
+        "downloadsOldMessage": "将删除 {days} 天前的下载任务与分片数据，是否继续？",
+        "downloadsAll": "全部清空",
+        "downloadsAllTitle": "清空下载记录",
+        "downloadsAllMessage": "将删除全部下载记录与分片数据，是否继续？",
+        "updatesAll": "清空记录",
+        "updatesAllTitle": "清空更新记录",
+        "updatesAllMessage": "将删除全部更新记录，是否继续？"
+      },
+      "cleanup": {
+        "done": "{action}完成",
+        "doneRemoved": "{action}完成（删除 {count} 项）",
+        "doneFreed": "{action}完成（释放 {bytes}）",
+        "doneRemovedFreed": "{action}完成（删除 {count} 项，释放 {bytes}）",
+        "invalidResponse": "清理失败：返回数据异常",
+        "failed": "清理失败，请重试",
+        "failedLater": "清理失败，请稍后重试"
+      }
+    }
   },
   "settingPerformance": {
     "description": "查看 Tuff 自身的 CPU、内存、进程与线程占用。",
@@ -408,7 +564,7 @@
       "semantic": "语义检索通道"
     },
     "nativeRuntimes": "原生运行时",
-    "tokioBudget": "Tokio 运行时每个 {workerThreads} 个工作线程。",
+    "tokioBudget": "每个 Tokio 运行时有 {workerThreads} 个工作线程。",
     "budgetSources": {
       "host-budget": "Tuff 上限",
       "environment": "来自 TOKIO_WORKER_THREADS"
@@ -654,8 +810,8 @@
     "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
     "autoContext": "自动上下文",
     "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
-    "homeRecommendations": "主页推荐",
-    "homeRecommendationsDesc": "在主页空白对话中展示问候开场白与「为你准备」建议卡片。默认关闭，开启后可体验个性化推荐（Beta）。",
+    "homeRecommendations": "首页推荐",
+    "homeRecommendationsDesc": "在首页空白对话中展示问候开场白与「为你准备」建议卡片。默认关闭，开启后可体验个性化推荐（Beta）。",
     "homeAiOpening": "AI 开场白",
     "homeAiOpeningDesc": "进入空白对话时，由模型根据最近的对话和项目名写一句开场白。每次都会走输入框选择的模型、消耗对应额度；关闭时显示本地模板，不发请求。",
     "groupTitle": "实用工具",
@@ -759,9 +915,9 @@
     "recommendationSemanticLocalVector": "本地语义向量推荐",
     "recommendationSemanticLocalVectorDesc": "在本机用上下文特征生成轻量语义分，不调用 AI 服务。",
     "recommendationSemanticAiRerank": "AI 推荐重排",
-    "recommendationSemanticAiRerankDesc": "开启后可用已配置的 AI Provider 对少量候选重排；失败或超时会自动退回本地排序。",
+    "recommendationSemanticAiRerankDesc": "开启后可用已配置的 AI 提供商对少量候选重排；失败或超时会自动退回本地排序。",
     "recommendationSemanticAiEmbedding": "AI 向量增强",
-    "recommendationSemanticAiEmbeddingDesc": "开启后可用 embedding 能力增强少量候选的语义相似度；默认关闭。",
+    "recommendationSemanticAiEmbeddingDesc": "开启后可用向量能力增强少量候选的语义相似度；默认关闭。",
     "recommendationContextTime": "推荐分析：时间",
     "recommendationContextTimeDesc": "根据小时、工作日和时间段调整推荐。",
     "recommendationContextForegroundApp": "推荐分析：前台应用",
@@ -960,7 +1116,7 @@
     "messages": {
       "loadFailed": "无法读取本机代理状态",
       "saveFailed": "无法保存本机代理设置",
-      "locateFailed": "所选程序未通过代理版本校验"
+      "locateFailed": "无法使用所选程序"
     }
   },
   "localAiCliPanel": {
@@ -988,6 +1144,8 @@
     "viewTerminal": "终端 (TTY)",
     "running": "本机代理正在处理…",
     "failed": "任务失败（{code}）",
+    "failedWithReason": "任务失败：{reason}",
+    "failedNoReason": "任务失败",
     "cancelled": "任务已取消",
     "deny": "拒绝",
     "allowOnce": "仅允许一次",
@@ -1016,6 +1174,23 @@
       "clipboard": "剪贴板文本",
       "activeApp": "当前应用",
       "activeWindow": "当前窗口"
+    },
+    "failures": {
+      "betaUnavailable": "当前系统暂不支持本机代理。",
+      "featureDisabled": "本机代理已在设置中关闭。",
+      "providerDisabled": "这个代理已在设置中关闭。",
+      "providerUnavailable": "未找到这个代理的程序。",
+      "providerVersionUnsupported": "不支持这个版本的代理程序。",
+      "writeApprovalUnavailable": "这个代理无法在修改文件前征求同意，不能以写入权限运行。",
+      "resumeUnsupported": "这个代理无法继续之前的会话。",
+      "sessionBusy": "这个会话正被另一个任务使用。",
+      "sessionMissing": "这个会话已不存在。",
+      "sessionConflict": "这个会话与 Tuff 记录的不一致，无法继续。",
+      "workspaceInvalid": "项目文件夹不存在或已被移动。",
+      "processStartFailed": "无法启动代理程序。",
+      "protocolInvalid": "无法识别代理返回的内容。",
+      "processExited": "代理程序在完成前退出了。",
+      "statusFailed": "无法读取本机代理的状态。"
     }
   },
   "permission": {
@@ -1171,10 +1346,10 @@
   },
   "creditsSummary": {
     "title": "AI 积分",
-    "description": "查看 Nexus AI credits 的个人剩余、已用和额度。",
+    "description": "查看 Nexus AI 积分的个人剩余、已用和额度。",
     "notice": "Nexus 官方能力按能力自身的计价单位扣费：文本按 1K tokens、图片按张、语音转写按「音频秒」与「转写单位（transcript unit）」两个基准计费，结算时取较高者（长静音偏音频秒，密集语音偏转写单位）。调用前会先占用一笔预留额度，结算后自动退回多占部分。",
-    "loading": "正在获取 credits 信息。",
-    "empty": "暂无 credits 信息。",
+    "loading": "正在获取积分信息。",
+    "empty": "暂无积分信息。",
     "month": "计费月份：{month}",
     "refresh": "刷新",
     "openDashboard": "打开 Nexus",
@@ -1183,11 +1358,11 @@
     "personalQuota": "个人总额",
     "teamRemaining": "团队池剩余",
     "loginTitle": "需要登录",
-    "errorTitle": "Credits 信息不可用",
+    "errorTitle": "积分信息不可用",
     "errorSessionExpired": "登录状态已失效，请重新登录后刷新。",
     "errorSignInRequired": "登录后才能获取 AI 积分信息。",
-    "errorHttp": "Credits 信息获取失败：{status} {statusText}",
-    "errorFetch": "Credits 信息获取失败。",
+    "errorHttp": "积分信息获取失败：{status} {statusText}",
+    "errorFetch": "积分信息获取失败。",
     "retry": "重试",
     "billingNoticeTitle": "计费提示"
   },
@@ -1226,6 +1401,7 @@
     "subscriptionFailed": "订阅信息获取失败",
     "teamFailed": "团队信息获取失败",
     "loadFailed": "加载账户信息失败",
+    "loadFailedReason": "加载账户信息失败：{reason}",
     "actions": "账户操作",
     "manage": "管理",
     "editProfile": "编辑资料",
@@ -1308,7 +1484,7 @@
     "rotationMode": "轮播模式",
     "randomRotation": "随机",
     "sequentialRotation": "顺序",
-    "minutes": "分钟",
+    "intervalMinutes": "{count} 分钟",
     "blur": "窗口模糊",
     "blurDesc": "主页背景的模糊强度。",
     "opacity": "窗口透明度",
@@ -1541,8 +1717,23 @@
     "recentEmpty": "浏览过的网页会显示在这里。打开一个网站，开始探索。",
     "bookmarksEmpty": "还没有收藏。浏览网页时，点击地址栏旁的星标即可收藏。",
     "loading": "正在加载网页",
-    "actionFailed": "浏览器操作未完成。",
+    "actionFailedWithReason": "浏览器操作未完成。{reason}",
     "pageFailed": "网页未能加载",
+    "errors": {
+      "disposed": "内置浏览器已关闭。",
+      "tabNotFound": "这个标签页已经关闭。",
+      "tabLimit": "标签页已达上限，请先关闭一些标签页。",
+      "inputInvalid": "网址过长，或含有不支持的字符。",
+      "urlBlocked": "只能打开不含用户名和密码的 http 或 https 网址。",
+      "bookmarkInvalid": "只能收藏 http 或 https 网页。",
+      "bookmarkLimit": "收藏已达上限，请先移除一些收藏。",
+      "persistFailed": "没能保存标签页、浏览记录和收藏。",
+      "loadFailed": "请检查网址和网络连接后重试。",
+      "rendererGone": "网页进程意外退出，重新加载即可恢复。",
+      "popupFailed": "没能打开这个网页请求的新标签页。",
+      "commandFailed": "没能完成这个快捷键操作。",
+      "unknown": "错误代码：{code}"
+    },
     "retry": "重试",
     "egoIndicator": "Ego 智能代操作助手就绪"
   },
@@ -1817,7 +2008,7 @@
       "discoverSessions": "发现本机会话",
       "discoveringSessions": "正在发现会话…",
       "discoveryComplete": "已接管 {count} 个本机会话。",
-      "discoveryPartial": "已接管 {count} 个会话，但部分 Provider 存档未能完整扫描。",
+      "discoveryPartial": "已接管 {count} 个会话，但部分本机代理的存档未能完整扫描。",
       "discoveryEmpty": "此项目没有新的本机会话。",
       "discoveryFailed": "无法发现本机会话。",
       "rename": "重命名",
@@ -1830,7 +2021,7 @@
       "projectActions": "项目操作",
       "sessionActions": "会话操作",
       "untitledSession": "本机代理会话",
-      "sessionMissing": "Provider 原会话已缺失。请忘记此指针，或先在 Provider 中恢复会话。",
+      "sessionMissing": "本机代理的原会话已缺失。请忘记此指针，或先在该代理中恢复会话。",
       "sessionArchived": "请先取消归档此项目，再续接其本机代理会话。",
       "sessionConflict": "此会话存在分支冲突，无法安全续接。",
       "sessionBusy": "此原生会话正在运行。",
@@ -1879,7 +2070,9 @@
       "minutesSeconds": "{minutes} 分 {seconds} 秒"
     },
     "streak": {
-      "summary": "连着说了 {current} 天 · 最长连过 {longest} 天 · 一共 {active} 天开过口"
+      "summary": "{current} · 最长连过 {longest} 天 · {active}",
+      "current": "连着说了 {count} 天",
+      "active": "一共 {count} 天开过口"
     },
     "heatmap": {
       "title": "过去一年",
@@ -1891,7 +2084,9 @@
       "scrollLabel": "可横向滚动的语音活动日历，滚动查看全部 365 天",
       "beforeTracking": "{date}：当时尚未开始记录统计",
       "noActivity": "{date}：没有记录到语音活动",
-      "daySummary": "{date}：{sessions} 次成功输入，共 {characters} 字，时长 {duration}"
+      "daySummary": "{date}：{sessions}，共 {characters}，时长 {duration}",
+      "characterCount": "{count} 字",
+      "sessionCount": "{count} 次成功输入"
     },
     "empty": {
       "title": "从下一次语音输入开始",
@@ -2075,18 +2270,18 @@
         "menu": "会话模式",
         "chat": "对话",
         "agent": "Agent",
-        "chatDesc": "使用你的 Provider 或 CLI 回答，与之前一致。",
-        "agentDesc": "用 Agent profile 及其允许的工具执行任务。",
+        "chatDesc": "使用你的提供商或 CLI 回答，与之前一致。",
+        "agentDesc": "用智能体及其允许的工具执行任务。",
         "branchHint": "切换后在新分支里继续",
         "branchLocked": "回复结束后才能切换"
       },
       "profile": {
-        "loadFailed": "无法读取 Agent profile。",
-        "none": "还没有任何 Agent profile，Agent 模式无可运行的配置。",
-        "noneEnabled": "所有 Agent profile 均已关闭，在「管理智能体」里开启一个即可使用 Agent 模式。",
-        "unavailable": "此会话使用的 profile 已关闭或不存在，请另选一个。",
+        "loadFailed": "无法读取智能体。",
+        "none": "还没有任何智能体，Agent 模式无可运行的配置。",
+        "noneEnabled": "所有智能体均已关闭，在「管理智能体」里开启一个即可使用 Agent 模式。",
+        "unavailable": "此会话使用的智能体已关闭或不存在，请另选一个。",
         "manage": "管理智能体",
-        "required": "Agent 模式下发送前，请先选择一个已开启的 profile。",
+        "required": "Agent 模式下发送前，请先选择一个已开启的智能体。",
         "summary": "{runtime} · {tools} 个工具 · {approval}",
         "approval": {
           "manual": "运行前询问",
@@ -2160,7 +2355,8 @@
         "turn": {
           "streaming": "回复中",
           "complete": "回复完成",
-          "failed": "回复失败"
+          "failed": "回复失败",
+          "stopped": "回复已停止"
         }
       },
       "context": {
@@ -2170,15 +2366,15 @@
         "sources": "包含",
         "preparedAt": "准备时间",
         "packageUnknown": "未知：Main 尚未报告此会话的上下文包。",
-        "packageSource": "由 Tuff 在请求前组装并估算，并非 Provider 计数。",
+        "packageSource": "由 Tuff 在请求前组装并估算，并非提供商计数。",
         "currentInputPackageSource": "由 Tuff 准备并估算的本轮输入包。历史、系统规则和 Pi 原生上下文仍由各自执行器持有；此数值不代表模型全部上下文占用。",
-        "usage": "上一次请求（Provider 报告）",
+        "usage": "上一次请求（提供商报告）",
         "input": "输入",
         "output": "输出",
         "occupancy": "请求大小",
         "reportedBy": "报告方",
-        "usageUnknown": "未知：Provider 未报告上一次回复的用量。",
-        "usageSource": "仅为 Provider 对上一次请求的报告，并非剩余上下文。",
+        "usageUnknown": "未知：提供商未报告上一次回复的用量。",
+        "usageSource": "仅为提供商对上一次请求的报告，并非剩余上下文。",
         "limits": "模型限制",
         "window": "上下文窗口",
         "maxOutput": "最大输出",
@@ -2196,7 +2392,7 @@
         "source": {
           "catalog": "目录",
           "user": "你设置的",
-          "provider": "来自 Provider",
+          "provider": "来自提供商",
           "current_input": "本条消息",
           "recent_turn": "最近回合",
           "summary": "摘要",
@@ -2210,7 +2406,7 @@
         "WORKSPACE_BUSY": "正在回复中，请在结束后重试。",
         "WORKSPACE_QUEUE_HELD": "队列已暂停，请先继续。",
         "WORKSPACE_NOT_FOUND": "无法打开此会话。",
-        "WORKSPACE_PROFILE_UNAVAILABLE": "该 Agent profile 已关闭或不存在。",
+        "WORKSPACE_PROFILE_UNAVAILABLE": "该智能体已关闭或不存在。",
         "WORKSPACE_PROJECT_UNAVAILABLE": "此会话绑定的项目已不可用。",
         "WORKSPACE_MODE_REQUIRES_FORK": "此会话已有历史，切换模式需要新建分支。",
         "WORKSPACE_FORK_BUSY": "请先结束或停止当前回复再分支。",
@@ -2219,7 +2415,11 @@
         "WORKSPACE_RUN_NOT_PENDING": "该运行已不在等待审批。",
         "WORKSPACE_STALE_TURN": "该回复已经结束。",
         "WORKSPACE_TURN_INTERRUPTED": "回复在完成前已中断（应用关闭或运行结束）。",
-        "WORKSPACE_VOICE_UNAVAILABLE": "这段录音已失效，没能发出去"
+        "WORKSPACE_VOICE_UNAVAILABLE": "这段录音已失效，没能发出去",
+        "WORKSPACE_PROVIDER_UNAVAILABLE": "所选的模型或提供商不可用，请换一个。",
+        "WORKSPACE_INPUT_INVALID": "未发送：消息里似乎有密码、密钥或令牌，或内容太长无法检查。",
+        "WORKSPACE_ATTACHMENT_INVALID": "附件过大、格式不受支持或数量过多。",
+        "WORKSPACE_ATTACHMENT_UNSAFE": "此会话中的附件已在磁盘上被改动，无法使用。"
       }
     },
     "greeting": "今天想做点什么？",
@@ -2334,7 +2534,9 @@
       "generated": "模型生成的组件",
       "sandboxed": "沙箱运行",
       "loading": "正在启动组件…",
-      "failed": "这个组件没能运行起来。"
+      "failed": "这个组件没能运行起来。",
+      "timedOut": "启动超时。",
+      "blocked": "沙箱拦截了它要加载或运行的内容（{directive}）。"
     },
     "modelName": "Tuff 智能",
     "titleGen": {
@@ -2415,6 +2617,21 @@
     },
     "toolPayload": "参数",
     "toolInterrupted": "该调用未返回，回合已结束",
+    "toolErrors": {
+      "notFound": "该工具不可用",
+      "inputInvalid": "调用该工具的输入无效",
+      "approvalDenied": "运行该工具的请求被拒绝",
+      "aborted": "工具调用已取消",
+      "timedOut": "工具运行超时，已停止",
+      "resourceNotFound": "未找到工具所需的文件或项目",
+      "resourceExists": "工具要创建的文件或项目已存在",
+      "accessDenied": "工具无权访问所需的内容",
+      "serviceUnavailable": "无法连接工具所需的服务",
+      "mcpServerUnavailable": "MCP 服务器不可用",
+      "mcpToolFailed": "MCP 工具运行失败",
+      "failed": "工具运行失败",
+      "budgetExceeded": "该调用超出了本次回复 {count} 次工具调用的上限"
+    },
     "formSubmit": "提交",
     "formReset": "重置",
     "formRequired": "该字段必填",
@@ -2429,6 +2646,7 @@
       "agentToolsSync": "无法连接工具网关，智能体工具保持关闭",
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了",
+      "stopped": "这轮回复已停止",
       "codeLabel": "错误代码",
       "noDetail": "没有更多错误细节，请重试；如果持续失败，请提供此错误代码。"
     },
@@ -2747,7 +2965,7 @@
         "costUsdPerMonth": "每月估算费用"
       },
       "drawerTitle": "用量上限",
-      "drawerIntro": "上限只在这台设备上生效，不随同步。留空表示不限。任一项用完后，所有 AI 调用都会被拒绝，包括 Home、CoreBox、插件，以及后台的文件索引、OCR 和推荐，直到本地时间的次日或次月重置。",
+      "drawerIntro": "上限只在这台设备上生效，不随同步。留空表示不限。任一项用完后，所有 AI 调用都会被拒绝，包括首页、CoreBox、插件，以及后台的文件索引、OCR 和推荐，直到本地时间的次日或次月重置。",
       "day": "每日",
       "month": "每月",
       "requests": "请求数",
@@ -2817,7 +3035,7 @@
         "pricing": "定价",
         "priceValue": "输入 {input} / 输出 {output}（每 1M Token）",
         "trace": "Trace ID",
-        "promptHash": "Prompt 哈希",
+        "promptHash": "提示词哈希",
         "metadata": "元数据",
         "noMetadata": "无",
         "contextLoading": "正在读取上下文…"
@@ -2864,8 +3082,8 @@
       "claudeCli": "Claude Code（本机 CLI）"
     },
     "callers": {
-      "homeConversation": "Home 对话",
-      "homeOpening": "Home 开场白",
+      "homeConversation": "首页对话",
+      "homeOpening": "首页开场白",
       "conversationTitle": "会话标题",
       "coreboxContextAction": "CoreBox 上下文动作",
       "clipboardOcr": "剪贴板 OCR",
@@ -2903,7 +3121,7 @@
     "searchPlaceholder": "搜索插件...",
     "unnamedItem": "未命名插件",
     "noDescription": "暂无描述",
-    "sources": "来源",
+    "sourceCount": "{count} 个来源",
     "loading": "正在加载官方插件...",
     "refresh": "刷新",
     "install": "安装",
@@ -2920,7 +3138,7 @@
     "lastUpdated": "上次更新 {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "检测到本机已安装 Tuff CLI，当前可体验 Beta 预览能力。",
-    "cliBetaTitle": "Beta Feature",
+    "cliBetaTitle": "Beta 功能",
     "cliBetaDesc": "CLI 市场入口已开放 Beta 预览，部分能力仍在持续完善。",
     "cliBetaTag": "Beta 预览",
     "docsGroupTitle": "平台能力文档",
@@ -3093,7 +3311,37 @@
         "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
         "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
         "sdkapiInvalid": "该插件声明的 sdkapi 格式无效。",
-        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。"
+        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。",
+        "networkCooldown": "插件源多次请求失败，已暂停访问，请稍后再试。",
+        "networkUnavailable": "无法连接插件源，请检查网络后重试。",
+        "sourceInvalid": "无法识别这个安装来源。",
+        "sourceFileMissing": "插件文件不存在。",
+        "pluginNotFound": "插件市场里找不到这个插件。",
+        "versionUnavailable": "这个版本没有可下载的安装包。",
+        "downloadUrlInvalid": "下载地址无效。",
+        "downloadRedirectFailed": "下载服务器的跳转无法继续。",
+        "downloadEmpty": "下载到的文件是空的。",
+        "packageUnreadable": "无法打开插件包，文件可能已损坏。",
+        "manifestMissing": "插件包里缺少 manifest.json。",
+        "manifestInvalid": "插件的 manifest.json 无效。",
+        "nameInvalid": "插件名称不能用作文件夹名。",
+        "alreadyInstalled": "这个插件已经安装了。",
+        "replaceFailed": "无法移除已安装的版本，没有完成替换。",
+        "entryFilesMissing": "安装包缺少插件运行所需的文件。",
+        "uninstallPending": "之前的卸载还在清理，完成后再试。",
+        "notReady": "插件系统还在启动，请稍后再试。",
+        "declined": "已取消安装。",
+        "activeUi": "插件正在使用中（{ui}），请关闭后再试。",
+        "trustMetadataInvalid": "插件市场没有提供这个安装包的有效校验信息。",
+        "trustPackageMismatch": "下载的安装包与插件市场发布的不一致，请重试。",
+        "trustNotApproved": "插件市场未允许安装这个版本。",
+        "trustReviewPending": "这个版本仍在插件市场审核中。",
+        "trustUnverified": "安装包的签名未通过校验，已停止安装。"
+      },
+      "activeUi": {
+        "coreBox": "CoreBox",
+        "windows": "{count} 个独立窗口",
+        "coreBoxAndWindows": "CoreBox 和 {count} 个独立窗口"
       }
     },
     "upgradeDialog": {
@@ -3122,7 +3370,8 @@
     "clickToViewErrors": "点击查看错误详情",
     "statusSuccess": "成功",
     "statusFailed": "失败",
-    "plugins": "个插件",
+    "pluginCount": "{count} 个插件",
+    "providerUnknown": "未知来源",
     "noProviderData": "暂无数据源信息",
     "publisher": {
       "tab": "发布管理",
@@ -3176,9 +3425,28 @@
         "versionCreated": "创建版本 v{version}",
         "versionStatusChanged": "版本 v{version} 状态变更",
         "versionReedited": "版本 v{version} 已重新编辑并提交审核"
+      },
+      "failures": {
+        "load": "未能读取你的插件",
+        "timeline": "未能读取时间线",
+        "preview": "未能解析插件包",
+        "submit": "未能提交",
+        "status": "未能更改审核状态",
+        "deleteVersion": "未能删除版本",
+        "withReason": "{action}：{reason}",
+        "signInRequired": "请先登录 Nexus。"
       }
     },
-    "official": "官方"
+    "official": "官方",
+    "sourceFailures": {
+      "failed": "未能读取这个来源。",
+      "unsupported": "不支持这种类型的来源。",
+      "addressInvalid": "来源地址无效。",
+      "unreadable": "来源返回的数据无法识别。",
+      "legacyManifest": "这个来源使用的旧版目录格式已不再支持。",
+      "packageUrlMissing": "这个来源里有插件缺少下载地址。",
+      "unreachable": "无法连接这个来源，请检查网络后重试。"
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -3191,7 +3459,7 @@
     }
   },
   "plugin": {
-    "devServerDisconnected": "Dev Server 已断开连接",
+    "devServerDisconnected": "开发服务器已断开连接",
     "customPreviewSize": "自定义 {width}×{height}",
     "widgetPreview": "Widget 预览",
     "widgetReloadFailed": "Widget 重新加载失败",
@@ -3272,7 +3540,7 @@
     },
     "notifications": {
       "widgetLoadFailedTitle": "Widget 加载失败",
-      "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
+      "widgetLoadFailedMessage": "插件 Widget 初始化失败，请检查插件版本、路径和运行日志。"
     },
     "view": {
       "loading": "插件加载中...",
@@ -3317,13 +3585,48 @@
       "searchProviders": {
         "title": "搜索源",
         "loading": "正在读取插件搜索源",
-        "summary": "此插件注册 {total} 个搜索源，{enabled} 个已启用，{issues} 个注册问题",
+        "summary": "此插件注册 {total}，{enabled} 个已启用，{issues}",
+        "sourceCount": "{count} 个搜索源",
         "statusTitle": "搜索源状态",
         "statusDesc": "控制此插件的搜索结果是否进入根搜索结果",
         "empty": "此插件未注册搜索源",
         "providerDesc": "{mode} · 源 {source}",
-        "issueDesc": "{count} 个注册问题",
-        "consentRequired": "需授权"
+        "issueCount": "{count} 个注册问题",
+        "consentRequired": "需授权",
+        "modes": {
+          "push": "推送结果",
+          "pull": "响应搜索",
+          "indexed": "检索索引"
+        },
+        "owners": {
+          "core": "内置",
+          "official-plugin": "官方插件",
+          "third-party-plugin": "第三方插件"
+        },
+        "issues": {
+          "derived": "未声明搜索源，已按推送功能自动生成：{features}",
+          "uncovered": "没有自己搜索源的推送功能会不经准入进入根结果：{features}",
+          "invalidList": "manifest.json 中的 searchProviders 不是列表",
+          "invalidEntry": "manifest.json 中第 {position} 个搜索源缺少 id、模式或权限范围",
+          "blocked": "{provider} 已被拦截：{reasons}",
+          "permissionMissing": "{provider} 需要清单未声明的权限：{permissions}",
+          "idCollision": "{provider} 已被忽略：已有搜索源使用了这个 id"
+        },
+        "blockReasons": {
+          "missing-owner": "来源必须声明归属",
+          "missing-permission-scope": "来源必须声明权限范围",
+          "third-party-push-requires-root-results": "第三方推送源必须声明 root-results 权限范围",
+          "third-party-push-requires-explicit-consent": "第三方推送源必须先征得用户同意",
+          "third-party-indexed-requires-explicit-consent": "第三方索引源必须要求用户同意",
+          "high-privacy-requires-explicit-consent": "需要用户同意的来源不能默认开启",
+          "browser-data-requires-official-plugin": "只有官方插件可以读取浏览器数据",
+          "high-privacy-requires-explicit-enable": "默认开启的高隐私来源必须要求用户同意",
+          "browser-data-requires-high-privacy": "浏览器数据来源必须标记为高隐私",
+          "external-fast-requires-external-tool-permission": "external-fast 来源必须声明 external-tool 权限范围",
+          "external-fast-cannot-be-third-party": "第三方插件不能使用 external-fast 存储",
+          "persistent-source-must-be-clearable": "存入索引的来源必须可以清除",
+          "watch-capability-requires-reconcile": "声明 watch 能力的来源也必须声明 reconcile"
+        }
       },
       "blockedTitle": "插件已阻断",
       "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
@@ -3344,7 +3647,7 @@
         "clipboard": "剪贴板",
         "network": "网络",
         "system": "系统",
-        "intelligence": "Intelligence 能力",
+        "intelligence": "智能",
         "storage": "存储",
         "window": "窗口",
         "search": "搜索",
@@ -3432,12 +3735,12 @@
         },
         "intelligence": {
           "basic": {
-            "name": "基础 Intelligence",
-            "desc": "使用基础 Intelligence 能力"
+            "name": "基础智能",
+            "desc": "使用基础智能能力"
           },
           "admin": {
-            "name": "Intelligence 管理",
-            "desc": "管理高风险 Intelligence 能力"
+            "name": "智能管理",
+            "desc": "管理高风险智能能力"
           },
           "agents": {
             "name": "智能体",
@@ -3570,7 +3873,9 @@
       },
       "details": {
         "title": "存储文件详情",
-        "description": "{files} 个文件，{directories} 个目录"
+        "description": "{files}，{directories}",
+        "fileCount": "{count} 个文件",
+        "directoryCount": "{count} 个目录"
       },
       "confirm": {
         "clearTitle": "清空存储",
@@ -3595,7 +3900,9 @@
       },
       "files": {
         "title": "插件文件",
-        "summary": "{files} 个文件，{directories} 个目录",
+        "summary": "{files}，{directories}",
+        "fileCount": "{count} 个文件",
+        "folderCount": "{count} 个目录",
         "empty": "未发现插件文件",
         "name": "名称",
         "size": "大小",
@@ -3604,9 +3911,114 @@
     },
     "issues": {
       "title": "插件加载问题",
-      "source": "来源",
+      "source": "来源：{source}",
       "categoryMissingTitle": "插件「{name}」缺少分类字段 category，已拒绝启动",
-      "categoryMissingDesc": "请在 manifest.json 补充 \"category\": \"utilities\"（sdkapi >= 260114 必填）。"
+      "categoryMissingDesc": "请在 manifest.json 补充 \"category\": \"utilities\"（sdkapi >= 260114 必填）。",
+      "unknownError": "插件报告了一个错误",
+      "unknownWarning": "插件报告了一个警告",
+      "manifest": {
+        "nameMismatch": "插件目录名与 manifest.json 中的名称不一致",
+        "versionMissing": "manifest.json 未声明 version，已按 0.0.0 处理",
+        "storageSyncInvalid": "manifest.json 中的 storageSync 声明无效",
+        "categoryMissing": "manifest.json 缺少 category",
+        "unknownPermissions": "manifest.json 列出了 Tuff 不认识的权限：{ids}",
+        "permissionsNotGranted": "插件必需的部分权限尚未授予",
+        "webcontentMissing": "插件自带的页面文件缺失",
+        "invalidJson": "无法读取 manifest.json，或其内容不是有效的 JSON",
+        "duplicateName": "另一个插件目录已在使用此插件的名称",
+        "metadataInvalid": "插件元数据未通过校验",
+        "iconFailed": "插件图标加载失败"
+      },
+      "sdkapi": {
+        "missing": "manifest.json 未声明 sdkapi",
+        "invalid": "sdkapi {declared} 不是有效的版本号",
+        "outdated": "sdkapi {declared} 低于 Tuff 支持的最低版本 {minimum}",
+        "unsupported": "sdkapi {declared} 不是 Tuff 支持的版本",
+        "incompatible": "插件的 sdkapi 与当前版本的 Tuff 不兼容"
+      },
+      "feature": {
+        "omniTransferIgnored": "功能声明了 omniTransfer，但它需要 sdkapi {required} 及以上，此声明已被忽略",
+        "platformExcluded": "清单将该功能标为不支持当前平台，因此未添加",
+        "interactionConflict": "功能同时声明了 push 和 webcontent 交互，两者不能同时使用，因此未添加",
+        "interactionConflictWarn": "功能同时声明了 push 和 webcontent 交互，两者不能同时使用；sdkapi {strict} 起将拒绝这种写法",
+        "invalidCommands": "功能的 commands 缺失或不是列表",
+        "addFailed": "功能未能添加，可能重复或格式有误",
+        "iconFailed": "功能图标加载失败",
+        "invalidViewPath": "功能的 interaction 路径无效"
+      },
+      "dev": {
+        "sourceFallback": "无法从开发服务器获取清单，本次先使用插件的本地文件",
+        "manifestFailed": "无法从开发服务器获取清单",
+        "addressInvalid": "dev.address 不是有效的 URL",
+        "modeActive": "插件正以开发模式运行",
+        "viewNotAllowed": "开发页面需要未打包的应用和本机回环地址"
+      },
+      "indexedSources": {
+        "invalidList": "manifest.json 中的 indexedSources 不是列表",
+        "invalidEntry": "manifest.json 中第 {position} 个索引源缺少 id",
+        "incompleteEntry": "manifest.json 中的索引源 {source} 缺少 template 或 kind"
+      },
+      "widget": {
+        "pathMissing": "Widget 缺少 interaction 路径",
+        "devAddressMissing": "已开启 dev.source，但缺少 dev.address",
+        "pathInvalid": "Widget 路径无效，或不在 widgets 目录中",
+        "notFound": "Widget 源文件不存在",
+        "readFailed": "无法读取 Widget 源码",
+        "remotePathInvalid": "该 Widget 路径不适用于开发源模式",
+        "remoteFetchFailed": "无法从开发服务器获取 Widget 源码",
+        "unsupportedType": "Widget 不支持此文件类型",
+        "invalidDependency": "Widget 引入了 {module}，Widget 中不能使用该模块",
+        "compileSkipped": "Widget 未编译",
+        "compileFailed": "Widget 编译失败",
+        "compilerUnavailable": "此版本没有可用的 Widget 编译器",
+        "compilerServiceUnavailable": "Widget 编译服务不可用",
+        "sourceMissing": "Widget 源码缺失",
+        "sourceMissingPrecompiled": "Widget 源码缺失，已改用随包附带的预编译产物",
+        "registerFailed": "Widget 注册失败",
+        "runtimeRegisterFailed": "Widget 代码加载时出错",
+        "precompiledMissing": "Widget 的预编译产物缺失，或不在插件包中",
+        "precompiledStale": "Widget 的预编译产物已过期",
+        "precompiledMismatch": "Widget 的预编译产物与清单不一致",
+        "runtimeCompileDisabled": "此处不能在运行时编译 Widget，需要预编译产物",
+        "unusedFiles": "widgets 目录中有文件未被任何功能使用",
+        "scanFailed": "无法读取 widgets 目录"
+      },
+      "runtime": {
+        "hook": "插件在 {hook} 中出错",
+        "view": "插件加载页面时出错",
+        "widget": "插件注册 Widget 时出错",
+        "activation": "插件运行时无法启动",
+        "crash": "插件运行时意外退出",
+        "stop": "无法停止插件运行时",
+        "cleanup": "插件停止后未能清理其资源",
+        "autoDisabled": "插件一分钟内出错过多，已自动停用",
+        "drift": "插件的运行时文件与清单不一致",
+        "loaderFailed": "无法创建插件加载器"
+      },
+      "advice": {
+        "renameToMatch": "修改目录名或清单中的 name 字段，使两者一致。",
+        "storageSync": "在 storageSync.files 下列出确切的 JSON 文件路径，或删除 storageSync。",
+        "updateSdkapi": "将 manifest.json 中的 sdkapi 更新为 {current}，然后重新发布插件。",
+        "checkPermissionIds": "对照插件文档中的权限列表检查这些 ID。",
+        "grantPermissions": "可在插件的「权限」页授予。",
+        "declarePermissions": "将缺少的权限加入 manifest.json 的 permissions.required。",
+        "declareSearchProviders": "在 manifest.json 中声明 searchProviders，mode 设为 push，权限范围设为 root-results。",
+        "coverPushFeatures": "为每个推送功能声明带有其 featureId 的搜索源，或去掉不应进入根结果的功能上的 push。",
+        "restorePackage": "恢复插件安装包，或重新安装插件。",
+        "reinstall": "请重新安装插件。",
+        "rebuild": "请重新构建插件，或重新安装。",
+        "checkDevServer": "确认开发服务器正在 dev.address 上运行。",
+        "checkDevServerManifest": "确认开发服务器正在 dev.address 上运行，并且可以访问 manifest.json。",
+        "fixDevAddress": "将 dev.address 设为完整的 URL，例如 http://127.0.0.1:5173。",
+        "useLoopback": "应用和插件都处于开发模式时，请使用 localhost、127.0.0.1 或 [::1]。",
+        "uniqueName": "删除重复的插件，或为其中一个改名。",
+        "fixInteractionPath": "将 manifest.json 中的 interaction.path 设为有效的页面或路由。",
+        "checkWidgetPath": "检查 Widget 的 interaction.path 及其源文件。",
+        "checkWidgetSource": "检查 Widget 源码的语法及其引入的模块。",
+        "removeUnusedWidgets": "删除这些文件，或在功能的 interaction.path 中引用它们。",
+        "widgetPackages": "Widget 只能引入以下包：{packages}。",
+        "widgetFileTypes": "请使用 .vue、.tsx、.jsx、.ts、.js 或 .cjs 文件。"
+      }
     },
     "overview": {
       "environment": "环境支持",
@@ -3675,7 +4087,7 @@
       "devDisconnectedTitle": "开发服务器已断开",
       "devDisconnectedReason": "原因：{reason}",
       "widget": {
-        "tab": "组件",
+        "tab": "Widget",
         "title": "Widget",
         "widgetId": "Widget ID",
         "path": "Widget 路径",
@@ -3701,28 +4113,28 @@
         "sourceFile": "源文件路径",
         "pluginPath": "插件目录",
         "tempPath": "临时目录",
-        "devHint": "开发模式下可以直接创建或更新 widget 源码。",
+        "devHint": "开发模式下可以直接创建或更新 Widget 源码。",
         "pathInput": "文件路径",
         "pathPlaceholder": "例如：answer-card.vue 或 folder/answer-card",
         "sourceInput": "源码内容",
-        "dragHint": "拖拽 widget 文件到此处，或粘贴/编辑代码",
-        "sourcePlaceholder": "粘贴 widget 源码（Vue SFC / TSX / JS）",
+        "dragHint": "拖拽 Widget 文件到此处，或粘贴/编辑代码",
+        "sourcePlaceholder": "粘贴 Widget 源码（Vue SFC / TSX / JS）",
         "extensionsHint": "保存后将写入插件的 widgets/ 目录",
         "save": "保存 Widget",
         "devOnly": "仅在插件开发模式启用时可编辑",
         "missingPath": "未设置",
         "invalidFileType": "仅支持 .vue/.tsx/.jsx/.ts/.js 文件",
-        "pathRequired": "请填写 widget 路径",
-        "sourceRequired": "请填写 widget 源码",
+        "pathRequired": "请填写 Widget 路径",
+        "sourceRequired": "请填写 Widget 源码",
         "invalidExtension": "不支持的文件扩展名",
         "saveSuccess": "Widget 已保存",
-        "saveFailed": "保存 widget 失败",
+        "saveFailed": "保存 Widget 失败",
         "savedButManifestFailed": "源码已保存，但 manifest 更新失败",
         "preview": {
           "title": "Widget 预览",
-          "description": "预览当前 widget 输出",
+          "description": "预览当前 Widget 输出",
           "selectLabel": "选择预览",
-          "selectPlaceholder": "选择 widget",
+          "selectPlaceholder": "选择 Widget",
           "statusLabel": "状态",
           "reloadCurrent": "重新加载当前",
           "reloadAll": "重新加载全部",
@@ -3732,7 +4144,7 @@
           "resizeHint": "拖拽右下角可自定义",
           "mockLabel": "模拟载荷",
           "mockPlaceholder": "输入 JSON 载荷",
-          "mockError": "JSON 解析失败：{error}",
+          "mockError": "不是有效的 JSON",
           "statusNotSelected": "未选择",
           "statusInvalidPayload": "载荷无效",
           "statusLoading": "加载中",
@@ -3740,7 +4152,7 @@
           "statusReady": "已加载",
           "statusError": "异常",
           "statusPending": "暂未就绪",
-          "hintMockInvalid": "模拟载荷解析失败：{error}",
+          "hintMockInvalid": "模拟载荷不是有效的 JSON，预览不会使用它",
           "hintMockEmpty": "已开启模拟载荷，但内容为空",
           "hintMockActive": "使用模拟载荷渲染",
           "hintReadyEmpty": "提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。",
@@ -3892,7 +4304,7 @@
       "manifestJson": "manifest.json",
       "manifestJsonDesc": "查看插件清单 JSON 全文",
       "viewManifestJson": "查看全文",
-      "devOnlyTag": "Dev Only",
+      "devOnlyTag": "仅开发模式",
       "manifestJsonEmpty": "未读取到 manifest.json 内容",
       "devSettings": "开发设置",
       "devSettingsDesc": "配置插件开发相关选项",
@@ -3957,7 +4369,8 @@
         "clipboardImage": "剪贴板图片上下文",
         "unavailable": "未获取到可用上下文",
         "imagePreview": "已读取剪贴板图片，仅在本次显式操作中使用。",
-        "withIssue": "{preview} · 捕获提示：{issue}"
+        "withIssue": "{preview} · 捕获提示：{issue}",
+        "issueOnly": "捕获提示：{issue}"
       },
       "actions": {
         "quickReview": {
@@ -4016,7 +4429,7 @@
         "explainImage": "图片解释已生成"
       },
       "errors": {
-        "emptyResult": "能力返回了空结果，请重试或切换 Provider。",
+        "emptyResult": "能力返回了空结果，请重试或切换提供商。",
         "emptyContext": "没有捕获到选中文本，剪贴板中也没有图片。",
         "textRequired": "该动作需要选中文本。",
         "imageRequired": "该动作需要剪贴板图片。",
@@ -4027,7 +4440,7 @@
         "actionUnavailable": "当前动作不可用。"
       },
       "unavailable": {
-        "capability": "能力 {capability} 没有可用 Provider",
+        "capability": "能力 {capability} 没有可用的提供商",
         "plugin": "插件 {plugin} 未安装、未启用或当前不可用",
         "detail": "不可用：{reason}",
         "unknown": "未知原因"
@@ -4036,6 +4449,12 @@
         "success": "{action} · 执行成功",
         "error": "{action} · 执行失败",
         "copyResult": "复制结果"
+      },
+      "issues": {
+        "empty": "没有读到选中的文本。",
+        "unsupported": "这里读不到选中文本，Linux 需要先安装 xdotool。",
+        "failed": "抓取选中文本失败。请检查桌面自动化权限后重试。",
+        "disabled": "读取选中文本需要辅助功能权限，请在系统设置中允许。"
       }
     },
     "intelligence": {
@@ -4045,22 +4464,22 @@
       "error": "获取 AI 回答失败",
       "unknown": "AI 状态未知",
       "genericError": "暂时无法获取回答，请稍后再试。",
-      "pendingHint": "CoreBox 会保持打开，等待 Provider 返回结果。",
+      "pendingHint": "CoreBox 会保持打开，等待提供商返回结果。",
       "readyHint": "复制前先确认回答、元数据和 trace。",
       "errorHint": "根据下方恢复原因处理后再重试该请求。",
-      "unknownHint": "暂未收到 Provider 状态。",
-      "usage": "令牌消耗：总计 {total}，提示 {prompt}，回答 {completion}",
+      "unknownHint": "暂未收到提供商状态。",
+      "usage": "Token 消耗：总计 {total}，输入 {prompt}，输出 {completion}",
       "model": "模型：{model}",
       "copy": "复制回答",
       "copySuccess": "回答已复制",
       "copyFailed": "复制失败",
       "copyFailedInline": "复制回答失败，请检查剪贴板权限后重试。",
       "openUsageLimitsFailed": "没能打开审计页，请稍后再试。",
-      "metaProvider": "Provider",
+      "metaProvider": "提供商",
       "metaLatency": "耗时",
       "metaTrace": "Trace",
       "metaInput": "输入",
-      "metaPending": "Provider 元数据待返回",
+      "metaPending": "提供商元数据待返回",
       "thinking": "AI 正在思考…",
       "hotkey": "唤起 Talex AI",
       "suggestionTitle": "没有找到想要的结果？",
@@ -4089,9 +4508,9 @@
       "system": "系统"
     },
     "resultSignalReasons": {
-      "providerTimeout": "Provider 超时",
-      "providerUnavailable": "Provider 不可用",
-      "providerDisabled": "Provider 已禁用",
+      "providerTimeout": "提供商超时",
+      "providerUnavailable": "提供商不可用",
+      "providerDisabled": "提供商已禁用",
       "authRequired": "需要登录",
       "quotaExceeded": "额度不足",
       "quotaCheckUnavailable": "配额校验暂不可用",
@@ -4102,8 +4521,8 @@
       "rateLimited": "请求过快",
       "unsupportedPlatform": "平台不支持",
       "permissionDenied": "权限被拒绝",
-      "credentialsMissing": "Provider 凭证缺失",
-      "invalidCredentials": "Provider 凭证无效",
+      "credentialsMissing": "提供商凭证缺失",
+      "invalidCredentials": "提供商凭证无效",
       "secureStoreUnavailable": "安全存储不可用",
       "secureStoreDegraded": "安全存储降级",
       "capabilityUnsupported": "能力不支持",
@@ -4111,17 +4530,17 @@
       "indexWarming": "索引预热中"
     },
     "resultSignalActions": {
-      "retryProvider": "重试该 Provider，或切换到其他可用 Provider。",
-      "checkProvider": "先打开 Provider 设置并检查健康状态，再重试。",
-      "enableProvider": "启用该 Provider，或选择其他来源。",
-      "checkCredentials": "打开 Provider 设置并修复凭证后再重试。",
-      "repairSecureStore": "先检查安全存储健康状态，再重试 Provider 动作。",
-      "switchCapability": "切换到支持该能力的 Provider 或模型。",
+      "retryProvider": "重试该提供商，或切换到其他可用的提供商。",
+      "checkProvider": "先打开提供商设置并检查健康状态，再重试。",
+      "enableProvider": "启用该提供商，或选择其他来源。",
+      "checkCredentials": "打开提供商设置并修复凭证后再重试。",
+      "repairSecureStore": "先检查安全存储健康状态，再重试提供商操作。",
+      "switchCapability": "切换到支持该能力的提供商或模型。",
       "signIn": "先登录 Nexus，再重新执行该动作。",
       "checkQuota": "先检查积分或额度，再重试。",
-      "inspectQuota": "检查 Intelligence 配额存储与配置后再重试。",
+      "inspectQuota": "检查智能配额存储与配置后再重试。",
       "openUsageLimits": "这是你在「审计」里设置的上限：到 设置 › 智能 › 审计 调整，或等它重置。",
-      "retryNetwork": "检查网络或 Provider endpoint 后再重试。",
+      "retryNetwork": "检查网络或提供商的 API 端点后再重试。",
       "fixRequest": "检查请求输入与参数后再重试。",
       "retryLater": "等待限流恢复后再重试。",
       "unsupportedPlatform": "请在支持该能力的平台上使用。",
@@ -4175,7 +4594,16 @@
         "newlyAdded": "新文件",
         "yesterday": "昨日此时",
         "appContext": "应用场景"
-      }
+      },
+      "openClipboardUrl": "打开链接"
+    },
+    "everythingNotice": {
+      "title": "Windows 文件搜索未就绪",
+      "subtitle": "Everything 未安装、未运行或已关闭",
+      "disabled": "已在 Tuff 设置中关闭，启用后即可搜索文件",
+      "notReady": "后端尚未就绪，打开设置查看原因",
+      "openSettings": "打开 Everything 设置",
+      "openSettingsDesc": "查看 Everything 后端、诊断与安装指引"
     }
   },
   "appConfigure": {
@@ -4363,7 +4791,7 @@
     "intelligencePrompts": "智能提示词",
     "intelligenceAudit": "智能审计",
     "intelligenceMemory": "智能记忆",
-    "intelligenceAgents": "智能代理",
+    "intelligenceAgents": "智能体",
     "intelligenceWorkflows": "智能工作流",
     "metaOverlay": "元信息",
     "storePublisher": "发布管理"
@@ -4571,7 +4999,7 @@
     },
     "history": "历史记录",
     "history_title": "下载历史",
-    "items": "项",
+    "items": "{count} 项",
     "clear_all_history": "清空全部",
     "search_history_placeholder": "搜索历史记录...",
     "filter_by_module": "按模块筛选",
@@ -4685,7 +5113,8 @@
     "restart_later": "稍后重启",
     "no_release_notes": "暂无更新说明",
     "download_started": "已开始下载更新",
-    "download_failed_with_reason": "下载失败：{reason}",
+    "download_start_failed": "没能开始下载更新，请稍后重试",
+    "download_unavailable": "这个版本已不可用，请重新检查更新",
     "request_timed_out": "请求超时",
     "remind_later_success": "已为您延后提醒，{hours}小时后再次提示",
     "remind_later_failed": "设置稍后提醒失败，请稍后重试",
@@ -4747,6 +5176,7 @@
       "errorConfirmation": "迁移「{name}」的敏感值需要先确认。",
       "errorSourceMissing": "代理的配置里已经没有「{name}」。",
       "errorInvalid": "「{name}」保存的副本无法运行，需要重新接入。",
+      "errorNotImported": "Tuff 中已没有「{name}」的副本，列表已刷新。",
       "enableFailed": "没能启用「{name}」：{reason}",
       "disableFailed": "没能停用「{name}」：{reason}",
       "secretTitle": "迁移「{name}」的敏感值？",
@@ -4779,6 +5209,9 @@
       "probeReasonReauth": "它需要重新授权（如 OAuth 或命令行里的令牌），无法直接用配置里的凭据启动。",
       "probeReasonSourceChanged": "配置文件在扫描后被改过，已重新扫描，请再试一次。",
       "probeReasonSourceMissing": "代理的配置里已经没有它。",
+      "probeReasonNotImported": "Tuff 中已没有它的副本，请重新扫描以更新列表。",
+      "probeReasonUnavailable": "它没能启动，或者在响应前就关闭了。",
+      "probeReasonToolsFailed": "它启动了，但没能列出工具。",
       "edit": "编辑",
       "delete": "删除",
       "deleteTitle": "删除「{name}」？",
@@ -4787,6 +5220,16 @@
       "deleteFailed": "没能删除：{reason}",
       "createTitle": "添加 MCP 服务器",
       "editTitle": "编辑「{name}」",
+      "saveReasons": {
+        "fieldMissing": "请填写名称，以及命令或地址。",
+        "fieldTooLong": "有一项内容过长，每项最多 512 个字符。",
+        "urlInvalid": "地址必须是以 http:// 或 https:// 开头的完整网址。",
+        "envNameInvalid": "环境变量名只能包含字母、数字和下划线，且不能以数字开头。",
+        "headerNameInvalid": "有请求头名称包含不允许的字符。",
+        "secureStore": "系统安全存储不可用，无法保存这台服务器的敏感值。",
+        "credentialNotStored": "有一项敏感值没能保存到系统安全存储。",
+        "notImported": "Tuff 中已没有这台服务器的副本。"
+      },
       "storedSecretsNote": "已保存 {count} 个值（{names}）。这里不显示原值；保存时留空会删除它们。",
       "hostDesc": "本机的其他 AI 客户端可以通过本地地址调用 Tuff 的工具。这是 Beta 可选能力，默认关闭；每次调用仍要你确认。",
       "readOnlyNote": "这台服务器由代理自己的配置声明。Tuff 只读取，不会修改那个文件；开关只影响 Tuff。"
@@ -4819,6 +5262,10 @@
       "switchLabel": "在 Tuff 中启用 {name}",
       "toggleFailed": "没能切换「{name}」：{reason}",
       "toggleFailedUnknown": "未知错误",
+      "failures": {
+        "configNotSaved": "更改没能保存。",
+        "dirInvalid": "找不到这个目录，或者它不是目录。"
+      },
       "enableTitle": "在 Tuff 中启用",
       "stateEnabled": "Tuff 的会话可以使用这个技能。",
       "stateDisabled": "未启用，Tuff 的会话不会使用它。",
@@ -4917,7 +5364,16 @@
         },
         "configTitle": "客户端配置",
         "configDesc": "整段复制到支持 MCP 的 AI 客户端配置里即可。",
-        "configCopied": "配置已复制"
+        "configCopied": "配置已复制",
+        "failures": {
+          "secureStoreUnavailable": "系统安全存储不可用，无法保存访问令牌。",
+          "tokenNotStored": "访问令牌没能保存到系统安全存储。",
+          "settingsNotSaved": "更改没能保存，设置保持原样。",
+          "unknownTool": "这个工具已不可用。",
+          "portInUse": "这个端口已被其他应用占用，请换一个端口。",
+          "portNotPermitted": "Tuff 无权使用这个端口，请换一个端口。",
+          "startNotSaved": "{reason}（关闭状态也没能保存，下次打开 Tuff 时会再试一次）"
+        }
       },
       "dialog": {
         "name": "名称",
@@ -5115,6 +5571,94 @@
       },
       "messages": {
         "loadFailed": "加载平台能力失败"
+      },
+      "items": {
+        "permissionCenter": {
+          "name": "权限中心",
+          "description": "插件权限申请、授权与审计"
+        },
+        "storage": {
+          "name": "存储",
+          "description": "配置与持久化存储能力"
+        },
+        "downloadCenter": {
+          "name": "下载中心",
+          "description": "统一下载任务管理与通知"
+        },
+        "tempFile": {
+          "name": "临时文件",
+          "description": "临时文件创建与清理"
+        },
+        "flowTransfer": {
+          "name": "Flow 流转",
+          "description": "插件间数据流转能力",
+          "handlerRequired": "Flow 流转要求目标插件注册接收处理器。",
+          "unhandledRejected": "没有注册 Flow 处理器的目标会被拒绝，不会被当作已送达。"
+        },
+        "divisionBox": {
+          "name": "DivisionBox",
+          "description": "插件浮动窗口与 UI 容器"
+        },
+        "intelligenceAgents": {
+          "name": "智能体",
+          "description": "智能体任务执行与工具调用"
+        },
+        "tuffCli": {
+          "name": "Tuff CLI",
+          "description": "CLI 工具联动能力（Beta）",
+          "notFound": "没有在 PATH 或常见安装位置中找到 tuff 命令行工具。"
+        },
+        "activeApp": {
+          "name": "当前应用",
+          "description": "当前前台应用与窗口上下文读取能力",
+          "automationReason": "读取前台应用依赖 macOS 的自动化权限。",
+          "automationLimit": "需要对 System Events 的自动化权限，权限退避期间可能返回空结果。",
+          "powershellReason": "读取前台应用依赖 PowerShell 和 Win32 前台窗口 API。",
+          "powershellLimit": "需要 PowerShell 可用，并能读取前台进程的元数据。",
+          "xdotoolReason": "在 Linux 上读取前台应用依赖桌面自动化工具。",
+          "xdotoolLimit": "需要 xdotool 和兼容的桌面会话。"
+        },
+        "selectionCapture": {
+          "name": "选中文本抓取",
+          "description": "活动应用选中文本抓取能力",
+          "accessibilityRequired": "抓取选中文本需要 macOS 的辅助功能权限。",
+          "disabled": "当前运行环境已停用选中文本抓取。",
+          "simulatedCopyReason": "抓取选中文本依赖当前应用接受模拟的 Ctrl+C。",
+          "simulatedCopyLimit": "选中文本通过模拟 Ctrl+C 和剪贴板时序获取。",
+          "xdotoolReason": "抓取选中文本依赖 xdotool 桌面自动化和剪贴板时序。",
+          "xdotoolLimit": "需要 xdotool，且获得焦点的应用接受 Ctrl+C。"
+        },
+        "autoPaste": {
+          "name": "自动粘贴",
+          "description": "向当前焦点应用回写剪贴板内容",
+          "simulatedPasteReason": "自动粘贴依赖对焦点窗口的键盘自动化。",
+          "simulatedPasteLimit": "目标应用必须保持焦点，并接受模拟的粘贴快捷键。"
+        },
+        "nativeShare": {
+          "name": "系统分享",
+          "description": "仅 macOS 提供原生系统分享能力",
+          "mailOnly": "此平台不提供原生系统分享，仍可通过邮件分享。",
+          "unavailable": "当前平台不提供原生分享。"
+        },
+        "terminal": {
+          "name": "终端命令运行时",
+          "description": "命令进程执行能力（非 PTY 终端）",
+          "noPty": "只以子进程方式运行命令，不提供 PTY 仿真和终端状态同步。"
+        },
+        "permissionDeepLink": {
+          "name": "权限设置跳转",
+          "description": "系统权限设置检查与跳转能力",
+          "desktopEnvReason": "权限设置跳转依赖当前的 Linux 桌面环境。",
+          "desktopEnvLimit": "不同桌面环境提供的设置启动方式不同。"
+        },
+        "everythingSearch": {
+          "name": "Everything 搜索",
+          "description": "Windows Everything 文件搜索后端能力"
+        }
+      },
+      "issues": {
+        "platformUnsupported": "当前平台（{platform}）不支持。",
+        "xdotoolMissing": "Linux 桌面自动化需要安装 xdotool，并能在 PATH 中找到它。"
       }
     },
     "settingAISDK": {
@@ -5162,10 +5706,10 @@
       "requestsPerMinuteDesc": "每分钟允许的最大请求数",
       "requestsPerDay": "每天请求数",
       "requestsPerDayDesc": "每天允许的最大请求数",
-      "tokensPerMinute": "每分钟令牌数",
-      "tokensPerMinuteDesc": "每分钟允许的最大令牌数",
-      "tokensPerDay": "每天令牌数",
-      "tokensPerDayDesc": "每天允许的最大令牌数",
+      "tokensPerMinute": "每分钟 Token 数",
+      "tokensPerMinuteDesc": "每分钟允许的最大 Token 数",
+      "tokensPerDay": "每天 Token 数",
+      "tokensPerDayDesc": "每天允许的最大 Token 数",
       "unlimited": "无限制",
       "globalSettings": "全局设置",
       "enableAudit": "启用审计日志",
@@ -5240,7 +5784,9 @@
       "estimatedSeconds": "预计 {seconds} 秒后完成",
       "estimatedMinutes": "预计 {minutes} 分钟后完成",
       "estimatedHours": "预计 {hours} 小时后完成",
-      "estimatedHoursMinutes": "预计 {hours} 小时 {minutes} 分钟后完成",
+      "estimatedHoursMinutes": "预计 {hours} {minutes}后完成",
+      "estimatedHourCount": "{count} 小时",
+      "estimatedMinuteCount": "{count} 分钟",
       "warningAlert": "⚠️ 重建文件索引会产生以下影响：",
       "warningSearch": "• 会暂时影响文件搜索功能",
       "warningPerformance": "• 索引过程中系统可能会变慢",
@@ -5268,7 +5814,7 @@
       "viewFailedFiles": "查看失败文件列表",
       "failedFilesDialogTitle": "索引失败文件",
       "noFailedFiles": "没有失败的文件",
-      "failedFilesCount": "个文件",
+      "failedFilesCount": "{count} 个文件",
       "copyAll": "复制全部",
       "skippedFiles": "已跳过文件",
       "completedFiles": "已完成内容索引",
@@ -5311,7 +5857,9 @@
       "sourceDiagnosticsGroupDesc": "统一查看 App、File、Everything 等索引源的健康状态",
       "sourceDiagnosticsSummaryTitle": "源健康总览",
       "sourceDiagnosticsChecking": "正在读取统一搜索源状态",
-      "sourceDiagnosticsSummary": "共 {total} 个源，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention} 个需处理",
+      "sourceDiagnosticsSummary": "{total}，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention}",
+      "sourceDiagnosticsSources": "共 {count} 个源",
+      "sourceDiagnosticsAttention": "{count} 个需处理",
       "sourceDiagnosticsLoadFailed": "读取搜索源诊断失败",
       "sourceDiagnosticDetailTitle": "搜索源详情",
       "sourceDiagnosticOverview": "概览",
@@ -5347,7 +5895,9 @@
       "providerConfigSourceUnknown": "未知状态",
       "browserBookmarksTitle": "Browser Bookmarks 官方运行时",
       "browserBookmarksLoading": "正在读取 Browser Bookmarks 运行时状态",
-      "browserBookmarksDesc": "{status} · {items} 项 · {roots} 个监听根 · {evidence} 条证据 · {reason}",
+      "browserBookmarksDesc": "{status} · {items} · {roots} · {evidence} · {reason}",
+      "browserBookmarksRoots": "{count} 个监听根",
+      "browserBookmarksEvidence": "{count} 条证据",
       "browserBookmarksConsentRequired": "需要授权",
       "browserBookmarksConsentGranted": "已授权",
       "browserBookmarksConsentAction": "授权并重建",
@@ -5355,7 +5905,7 @@
       "browserBookmarksRebuildAction": "重建",
       "browserBookmarksClearAction": "清空",
       "browserBookmarksWatchRoots": "监听根：{roots}",
-      "browserBookmarksProviderMissing": "未找到 Browser Bookmarks 官方 provider",
+      "browserBookmarksProviderMissing": "未找到 Browser Bookmarks 官方搜索源",
       "browserBookmarksSourceMissing": "未找到 Browser Bookmarks 索引源",
       "sourceItems": "{count} 项",
       "sourceWatch": "监听：{state}",
@@ -5365,10 +5915,16 @@
         "scanFailed": "扫描失败：{error} · 阶段 {phase} · {jobId}",
         "watchDone": "监听 {action} {applied}/{deltas} · {jobId}",
         "watchFailed": "监听失败 {failed}/{deltas} · {jobId}",
-        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
+        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · 根 {rootCount} · {jobId}",
         "reconcileFailed": "补漏错误：{errors} · {reason} · {jobId}",
         "resetDone": "重置索引 {clearedSearchIndexRows} · 进度 {scanProgressRows} · {reason} · {jobId}",
         "resetFailed": "重置失败：{error} · {reason} · {jobId}"
+      },
+      "sourceTaskKind": {
+        "scan": "扫描",
+        "watch": "监听",
+        "reconcile": "补漏",
+        "reset": "重置"
       },
       "sourceRecentTasks": "最近",
       "sourceRecentTask": {
@@ -5393,12 +5949,29 @@
           "skipped": "重置跳过 · {summary} · {jobId}"
         }
       },
+      "sourceRecentTaskSummary": {
+        "indexed": "写入 {indexed}/{records}",
+        "batches": "批次 {batches}",
+        "phase": "阶段 {phase}",
+        "delta": "增量 {applied}/{deltas}",
+        "action": "动作 {action}",
+        "skipped": "跳过 {skipped}",
+        "clearIndex": "清空索引 {cleared}",
+        "indexRows": "索引行 {rows}",
+        "progress": "清空进度 {cleared}",
+        "progressRows": "进度行 {rows}",
+        "duration": "耗时 {ms}ms",
+        "trigger": "触发 {trigger}",
+        "reason": "原因 {reason}",
+        "attempt": "第 {attempt} 次尝试",
+        "code": "错误码 {code}"
+      },
       "sourceRunGateTitle": "调度",
       "sourceRunGate": {
-        "running": "{kind} 运行中，自 {runningSince} · 阻挡 {blockedCount} 次",
-        "already-running": "{kind} 被运行中任务阻挡 · {blockedCount} 次 · {lastBlockedAt}",
-        "debounced": "{kind} 防抖至 {nextAllowedAt} · {blockedCount} 次",
-        "idle": "{kind} 空闲 · 上次完成 {lastCompletedAt}"
+        "running": "{kind}运行中，自 {runningSince} · 阻挡 {blockedCount} 次",
+        "already-running": "{kind}被运行中任务阻挡 · {blockedCount} 次 · {lastBlockedAt}",
+        "debounced": "{kind}防抖至 {nextAllowedAt} · {blockedCount} 次",
+        "idle": "{kind}空闲 · 上次完成 {lastCompletedAt}"
       },
       "sourceAdmissionIssues": "准入",
       "sourceAdmissionIssue": {
@@ -5411,7 +5984,7 @@
         "persistent-source-must-be-clearable": "持久索引源必须支持清理",
         "watch-capability-requires-reconcile": "监听源必须支持补漏"
       },
-      "sourceLifecycleIssues": "合同",
+      "sourceLifecycleIssues": "契约",
       "sourceLifecycleIssue": {
         "missing-scan-handler": "缺少扫描入口",
         "open-capability-missing-handler": "声明了打开能力但缺少入口",
@@ -5426,16 +5999,16 @@
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
         "scanProgress": "{label} · {status} · 根 {completed}/{total} · 失败 {failed} · 待授权 {pendingPermissionRoots} · 最近 {lastScannedAt}",
-        "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
-        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · reset {resetSearchIndexRows}/{resetScanProgressRows} · orphan {orphanedKeywordsRemoved}",
+        "indexFlush": "{label} · {status} · 待写入 {pending} · 写入中 {inflight} · 条目 {entries} · {duration} · {reason}",
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · 需重建 {needsRebuild} · 重置 {resetSearchIndexRows}/{resetScanProgressRows} · 清理孤立关键词 {orphanedKeywordsRemoved}",
         "embeddingPause": "语义索引已暂停 · AI 用量上限「{limit}」已用完 · {resumesAt} 后恢复"
       },
       "sourceProgress": "进度",
       "sourceProgressChip": {
-        "unknown": "{stage} · {percent}% · {current}/{total} · 暂无 ETA",
+        "unknown": "{stage} · {percent}% · {current}/{total} · 暂无预计完成时间",
         "idle": "{stage} · 空闲 · {percent}% · {current}/{total}",
-        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · ETA {eta}",
-        "stabilizing": "{stage} · 稳定采样 · {percent}% · {current}/{total} · samples {samples}",
+        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · 预计完成 {eta}",
+        "stabilizing": "{stage} · 稳定采样 · {percent}% · {current}/{total} · 样本 {samples}",
         "estimated": "{stage} · 剩余 {remaining} · {percent}% · {current}/{total} · {speed}/s · {basis}",
         "stalled": "{stage} · 停滞 · {percent}% · {current}/{total} · {reason}",
         "complete": "{stage} · 完成 · {current}/{total}",
@@ -5445,12 +6018,17 @@
       "sourceRecoveryChip": {
         "wait": "等待运行时恢复 · {taskKind} · {waitDetail} · {reason}",
         "grant-permission": "需要授权 · {reason}",
-        "enable-provider": "需要启用 Provider · {reason}",
+        "enable-provider": "需要启用搜索源 · {reason}",
         "scan": "建议扫描 · {reason}",
         "reconcile": "建议补漏 · {reason}",
         "reset": "建议重置 · {reason}",
-        "inspect-contract": "检查 Source 合同 · {reason}",
-        "inspect-source": "检查 Source 状态 · {reason} · {blockedReason}"
+        "inspect-contract": "检查源合同 · {reason}",
+        "inspect-source": "检查源状态 · {reason} · {blockedReason}"
+      },
+      "sourceRecoveryWait": {
+        "retryAfter": "{time} 后重试",
+        "alreadyRunning": "被运行中任务阻挡",
+        "debounced": "防抖中"
       },
       "sourceStatus": {
         "ready": "就绪",
@@ -5476,7 +6054,7 @@
       "sourceDetail": {
         "lastError": "最近错误：{error}",
         "admissionIssue": "准入问题：{issue}",
-        "lifecycleIssue": "合同问题：{issue}",
+        "lifecycleIssue": "契约问题：{issue}",
         "reason": "原因：{reason}",
         "lastIndexedAt": "最近索引：{time}",
         "roots": "监听根：{roots}",
@@ -5590,6 +6168,17 @@
       "appIndexManagerLaunchFailed": "启动应用失败",
       "appIndexManagerReindexSuccess": "应用条目已重建",
       "appIndexManagerReindexFailed": "应用条目重建失败",
+      "appIndexManagerReasons": {
+        "dbNotReady": "应用索引还没准备好，请稍后再试。",
+        "searchIndexNotReady": "搜索索引还没准备好，请稍后再试。",
+        "notFound": "应用索引里没有这个应用。",
+        "notUserManaged": "只能移除你自己添加的应用。",
+        "invalidPath": "无法把这个路径识别为应用。",
+        "notApp": "所选项目不是应用。",
+        "unstable": "找不到这个应用，或者它还在安装或更新中。请检查路径后再试。",
+        "processing": "这个应用正在建立索引，请稍后再试。",
+        "scanFailed": "无法读取这个应用的信息。"
+      },
       "appIndexManagerCopyJson": "复制诊断 JSON",
       "appIndexManagerDiagnosticMissing": "请先运行诊断",
       "appIndexManagerDiagnosticCopied": "诊断 JSON 已复制",
@@ -5613,6 +6202,15 @@
       "appIndexManagerFilterDiagnostic": "诊断",
       "appIndexManagerFilterAttention": "需要处理",
       "appIndexManagerClearFilters": "清空筛选",
+      "appIndexManagerFieldDisplayName": "显示名称",
+      "appIndexManagerFieldOrigin": "添加方式",
+      "appIndexManagerFieldBundleId": "Bundle ID",
+      "appIndexManagerFieldIdentityKind": "身份类型",
+      "appIndexManagerFieldLaunchKind": "启动方式",
+      "appIndexManagerFieldLaunchTarget": "启动目标",
+      "appIndexManagerFieldLaunchArgs": "启动参数",
+      "appIndexManagerFieldWorkingDirectory": "工作目录",
+      "appIndexManagerFieldDisplayPath": "显示路径",
       "unitMinutes": "分钟",
       "unitHours": "小时",
       "unitSeconds": "秒",
@@ -5648,6 +6246,9 @@
       "healthHealthy": "正常",
       "healthDegraded": "未就绪",
       "healthUnsupported": "不支持",
+      "healthReasonDisabled": "Everything 搜索已在 Tuff 中关闭，Windows 文件搜索暂不可用。启用后即可恢复搜索结果。",
+      "healthReasonNotReady": "Everything 后端尚未就绪，Windows 文件搜索暂不可用。",
+      "healthReasonUnsupported": "Everything 搜索仅在 Windows 上可用。",
       "installDiagnosisTitle": "安装诊断",
       "installDiagnosisDesc": "先检查本机 Everything 程序、进程、服务与 CLI 可用性，再给出操作建议。",
       "probeEverythingInstalled": "Everything 程序",
@@ -5678,6 +6279,15 @@
         "check-manually": "手动检查 Everything 与 CLI 安装",
         "unsupported": "Everything 集成仅支持 Windows"
       },
+      "installReason": {
+        "unknown": "尚未检查 Everything 的安装情况。",
+        "unsupported": "Everything 仅在 Windows 上可用。",
+        "disabled": "已在 Tuff 设置中关闭 Everything 搜索。",
+        "missing-everything": "默认位置中没有找到 Everything，也没有检测到正在运行的进程或服务。",
+        "not-running": "Everything 似乎已安装，但程序和服务都没有运行。",
+        "missing-cli": "Everything 正在运行，但在 PATH 和默认安装目录中都没有找到 es.exe。",
+        "backend-failed": "Everything 正在运行且已找到 es.exe，但搜索后端没能启动。"
+      },
       "fallbackChainTitle": "后端降级链路",
       "fallbackChainDesc": "Everything 后端初始化时按此顺序尝试，不代表存在可用的搜索回退",
       "performanceTitle": "运行时性能",
@@ -5697,7 +6307,7 @@
       "cliPathSelectFailed": "选择 Everything CLI 失败",
       "cliPathSaved": "Everything CLI 路径已保存",
       "cliPathCleared": "Everything CLI 路径已清除",
-      "cliPathSaveFailed": "保存 Everything CLI 路径失败：{error}",
+      "cliPathSaveFailed": "保存 Everything CLI 路径失败",
       "configuredCliPath": "已配置",
       "activeCliPath": "当前生效",
       "diagnosticsTitle": "后端诊断",
@@ -5716,7 +6326,7 @@
       "disable": "禁用",
       "enabledSuccess": "Everything 搜索已启用",
       "disabledSuccess": "Everything 搜索已禁用",
-      "toggleFailed": "切换 Everything 失败：{error}",
+      "toggleFailed": "切换 Everything 搜索失败，请稍后重试",
       "testTitle": "测试搜索",
       "testDesc": "验证 Everything 功能是否正常",
       "testNow": "立即测试",
@@ -5730,7 +6340,7 @@
       "testSampleTitle": "首条结果",
       "testing": "测试中...",
       "testSuccess": "测试成功！在 {duration}ms 内找到 {count} 个结果",
-      "testFailed": "测试失败：{error}",
+      "testFailed": "测试失败",
       "installTitle": "需要安装",
       "installDesc": "先手动安装 Everything；若缺少 CLI，再安装或选择 es.exe",
       "downloadEverything": "下载 Everything",
@@ -5752,8 +6362,8 @@
       "installStarted": "Everything 安装任务已加入下载中心",
       "installCompleted": "Everything 已安装并完成检测",
       "installUnsupported": "Everything 一键安装仅支持 Windows",
-      "installStartFailed": "启动 Everything 安装失败：{error}",
-      "installFailed": "Everything 安装失败：{error}",
+      "installStartFailed": "启动 Everything 安装失败，请稍后重试",
+      "installFailed": "Everything 安装失败，可在「安装与修复」中查看原因",
       "installAdvancedShow": "高级设置",
       "installAdvancedHide": "收起高级设置",
       "installAdvancedTitle": "高级设置",
@@ -5786,6 +6396,16 @@
         "completed": "已完成",
         "failed": "失败",
         "unsupported": "不支持"
+      },
+      "installMessage": {
+        "queued": "已排队下载 Everything 安装包。",
+        "downloading": "正在下载 Everything 安装包。",
+        "verifying": "正在校验 Everything 安装包。",
+        "extracting": "正在解压 Everything、SDK DLL 与 es.exe。",
+        "configuring-path": "正在配置 Everything CLI 路径。",
+        "probing": "正在检查 es.exe 并刷新搜索后端。",
+        "completed": "Everything 已安装并就绪。",
+        "failed": "Everything 安装失败，原因见下方。"
       },
       "viewDiagnostics": "查看诊断",
       "errorTitle": "错误详情",
@@ -6041,7 +6661,7 @@
       "timeout": "超时时间",
       "rateLimit": "速率限制",
       "requestsPerMinute": "每分钟请求",
-      "tokensPerMinute": "每分钟令牌",
+      "tokensPerMinute": "每分钟 Token",
       "unlimited": "无限制",
       "addCustomProvider": "添加自定义提供商",
       "providerType": "提供商类型",
@@ -6053,7 +6673,7 @@
       "providerNamePlaceholder": "例如：我的自定义 AI",
       "channelPageTitle": "渠道配置商",
       "channelPageDesc": "配置AI提供商的设置和参数",
-      "capabilityPageDesc": "为 OCR、Embedding 等能力绑定渠道与模型，支持一键测试。",
+      "capabilityPageDesc": "为 OCR、向量等能力绑定渠道与模型，支持一键测试。",
       "connectionTestFailed": "连接测试失败",
       "capabilityTestFailed": "能力测试失败",
       "autoSavePending": "待保存...",
@@ -6135,16 +6755,16 @@
       "providerStat": "渠道 {count} 个",
       "capabilityStat": "能力 {count} 个",
       "localSkills": {
-        "title": "本地 Skills Provider",
-        "desc": "识别 Codex、Claude Code、Pi、Oh My Pi、OpenCode 与受信任 skills，作为内部能力来源管理。",
+        "title": "本地技能来源",
+        "desc": "识别 Codex、Claude Code、Pi、Oh My Pi、OpenCode 与受信任的技能，作为内部能力来源管理。",
         "toolsTitle": "本地 AI 工具",
-        "providersTitle": "内部 Skills Provider",
+        "providersTitle": "内部技能来源",
         "configTitle": "配置与项目说明",
         "refresh": "刷新",
         "loading": "正在扫描本地环境...",
         "noTools": "未发现受支持的 AI CLI",
-        "noSkills": "未发现可用 skills",
-        "noReadySkills": "已安装 skills 均需审批后使用",
+        "noSkills": "未发现可用技能",
+        "noReadySkills": "已安装的技能均需审批后使用",
         "configSummary": "已识别 {count} 个配置或说明入口，敏感字段仅记录键名。",
         "gateTitle": "权限门控",
         "gateSummary": "可直接使用 {ready} 个，需审批 {approval} 个，未安装 {unavailable} 个，已关联 {scenes} 个场景提示。",
@@ -6153,7 +6773,7 @@
           "approval_required": "需审批",
           "unavailable": "未安装"
         },
-        "gatedHint": "已安装的 {count} 个高风险 provider 默认仅展示，执行需审批。",
+        "gatedHint": "已安装的 {count} 个高风险来源默认仅展示，执行需审批。",
         "refreshFailed": "刷新本地 AI 环境失败",
         "importPreview": "扫描可导入配置",
         "importTitle": "CLI 配置导入",
@@ -6166,8 +6786,8 @@
         "importSyncMissing": "同步缺失项",
         "importApply": "导入 {count} 项",
         "importSensitiveKeys": "包含 {count} 个敏感值，迁入安全存储前需要再次确认",
-        "importSensitiveKeysIgnored": "包含 {count} 个 provider/auth 敏感值，这些值不会被导入",
-        "importEmpty": "未发现可导入的 skills、MCP、agents、commands、rules 或配置。",
+        "importSensitiveKeysIgnored": "包含 {count} 个提供商或认证相关的敏感值，这些值不会被导入",
+        "importEmpty": "未发现可导入的技能、MCP、智能体、命令、规则或配置。",
         "importSuccess": "导入完成：新增或更新 {imported} 项，未变化 {unchanged} 项，移除 {removed} 项。",
         "importSecretMigrationConfirm": "确认将所选项目中的 {count} 组敏感值迁入 Tuff 安全存储？值不会进入 renderer、Pi、日志或 trace。",
         "importReauthRequired": "{count} 个已导入项目需要先在 Tuff 中完成认证，Pi 才能使用。",
@@ -6213,10 +6833,10 @@
         },
         "capabilities": {
           "title": "能力配置商",
-          "desc": "为 OCR、Embedding 等能力绑定渠道与模型，支持一键测试。",
+          "desc": "为 OCR、向量等能力绑定渠道与模型，支持一键测试。",
           "cta": "进入能力面板",
           "manageTitle": "配置能力",
-          "manageDesc": "为 OCR、Embedding 等能力绑定渠道与模型",
+          "manageDesc": "为 OCR、向量等能力绑定渠道与模型",
           "manageButton": "进入配置",
           "auditTitle": "能力审计",
           "auditDesc": "查看能力调用记录和性能指标",
@@ -6416,8 +7036,10 @@
         "manualCheckFailedWithReason": "检测失败：{reason}",
         "manualCheckFailed": "手动检测更新失败",
         "installStarted": "正在重启并应用更新",
+        "restartingHint": "正在保存应用状态，即将启动新版本...",
         "installPendingConfirmation": "安装请求已发送，正在等待系统接管确认",
         "installFailedWithReason": "启动更新失败：{reason}",
+        "installFailed": "启动更新失败，请稍后重试",
         "macSilentUpdateNotWritable": "Tuff 无法在不弹出密码框的情况下替换当前应用。请将 Tuff 移动或重新安装到当前用户可管理的 Applications 位置后重试。",
         "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
@@ -6509,8 +7131,8 @@
       "hideDockDesc": "关闭主窗口后不显示 Dock 图标",
       "startSilent": "静默启动",
       "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
-      "omniAutoMountFeature": "安装后自动装载 OmniPanel Feature",
-      "omniAutoMountFeatureDesc": "启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。",
+      "omniAutoMountFeature": "安装后自动装载 OmniPanel 功能",
+      "omniAutoMountFeatureDesc": "启用后，插件安装成功会自动把首个可执行功能加入 OmniPanel。",
       "hideNoisySystemApps": "过滤系统噪音应用",
       "hideNoisySystemAppsDesc": "隐藏 Simulator / 系统 Helper/Agent 等不常用辅助应用（仅隐藏结果，不删除索引）",
       "runAsAdmin": "使用管理员权限运行",
@@ -6626,10 +7248,9 @@
     }
   },
   "widgetFrame": {
-    "compileFailed": "Widget 编译失败",
     "loading": "Widget 加载中",
-    "rendererMissing": "Widget renderer 缺失",
-    "rendererUnregistered": "Widget renderer 未注册",
+    "rendererMissing": "Widget 渲染器缺失",
+    "rendererUnregistered": "Widget 渲染器未注册",
     "missingRendererId": "缺少 rendererId",
     "renderFailed": "Widget 渲染失败"
   },
@@ -6651,7 +7272,8 @@
       "conversion": "{from} → {to}",
       "qrValueLabel": "SVG 数据 URL",
       "qrAlt": "二维码",
-      "poweredBy": "由 {brand} 提供支持"
+      "poweredBy": "由 {brand} 提供支持",
+      "calculator": "计算器"
     },
     "basic": {
       "subtitle": "快速算式",
@@ -6939,9 +7561,6 @@
     "success": "成功",
     "warning": "警告",
     "info": "信息",
-    "seconds": "秒",
-    "minutes": "分钟",
-    "hours": "小时",
     "import": "导入",
     "comingSoon": "即将推出",
     "clearShortcut": "清除快捷键",
@@ -6954,7 +7573,15 @@
     "asideLandmark": "侧边栏",
     "clearSearch": "清除搜索",
     "noItems": "暂无内容",
-    "toggleGroup": "展开或收起分组"
+    "toggleGroup": "展开或收起分组",
+    "failures": {
+      "operationFailed": "操作没能完成，请重试。",
+      "databaseBusy": "数据库正忙，请稍后重试。",
+      "indexWriterBusy": "搜索索引正在写入，请稍后重试。",
+      "timedOut": "请求超时，请重试。",
+      "coolingDown": "刚才的请求失败了，请过几秒再试。",
+      "httpStatus": "服务器返回了错误（HTTP {status}）。"
+    }
   },
   "form": {
     "field": "字段",
@@ -7072,6 +7699,18 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "应用启动失败",
     "appLaunchFailedBody": "未能启动 {name}\n{error}",
+    "appLaunchFailure": {
+      "protocolNotAllowed": "Tuff 只能把 Steam 游戏链接作为应用打开。",
+      "uwpUnsupported": "Microsoft Store 应用只能在 Windows 上打开。",
+      "platformUnsupported": "当前系统不支持打开应用。",
+      "shortcutFailed": "无法打开这个快捷方式。",
+      "commandInvalid": "应用的启动命令无效。",
+      "exitedWithCode": "应用启动后立即退出了（退出码 {code}）。",
+      "exitedWithSignal": "应用启动后立即被终止了（{signal}）。",
+      "fileNotFound": "找不到应用文件或它的工作目录。",
+      "notPermitted": "Tuff 没有权限运行这个应用文件。",
+      "startFailed": "无法启动应用（{code}）。"
+    },
     "coreBoxShortcutUnavailableTitle": "CoreBox 暂无可用快捷键",
     "coreBoxShortcutRefusedBody": "默认快捷键 {shortcut} 无法注册，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
     "coreBoxShortcutConflictBody": "默认快捷键 {shortcut} 已设给另一个快捷键，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
@@ -7112,7 +7751,82 @@
     "syncDeviceUnknown": "未知设备",
     "defaultTitle": "通知",
     "dialogIconPlaceholder": "提示",
-    "pluginIconAlt": "插件"
+    "pluginIconAlt": "插件",
+    "share": {
+      "completeTitle": "分享完成",
+      "completeBody": "已通过「{target}」分享",
+      "copiedTitle": "已复制到剪贴板",
+      "copiedBody": "内容已复制到剪贴板",
+      "fileRevealedTitle": "文件已显示",
+      "filesRevealedBody": "已在文件管理器中显示 {count} 个文件",
+      "fileRevealedBody": "已在文件管理器中显示文件",
+      "failedTitle": "分享失败",
+      "failedBody": "无法分享：{error}",
+      "airdropReadyTitle": "AirDrop 已就绪",
+      "airdropReadyBody": "选择要发送到的设备",
+      "mailReadyTitle": "邮件已打开",
+      "mailReadyBody": "请在「邮件」中写完并发送",
+      "messagesReadyTitle": "信息已打开",
+      "messagesReadyBody": "内容已复制，请在「信息」中粘贴后发送"
+    },
+    "voice": {
+      "captureUnavailableTitle": "语音输入不可用",
+      "captureUnavailableBody": "本机应用缺少录音组件，请更新或重新安装后再试",
+      "gestureFailedTitle": "语音手势失败",
+      "gestureFailedBody": "请检查麦克风权限与语音服务配置",
+      "quickEditNoSelectionTitle": "划词改口：先选中一段文字",
+      "quickEditNoSelectionBody": "在任意应用里选中文字，再按一次快捷键",
+      "selectionUnsupportedBody": "当前系统无法读取选中的文字",
+      "selectionDisabledBody": "读取选中文字的功能已关闭",
+      "selectionFailedBody": "未能读取选中的文字，请重试",
+      "quickEditListeningTitle": "正在改口…",
+      "quickEditListeningBody": "选中 {count} 字，说完再按一次快捷键",
+      "dictationListeningTitle": "正在听写…",
+      "dictationListeningBody": "再次按下快捷键停止并键入",
+      "noSpeechTitle": "没有识别到语音",
+      "noSpeechBody": "请靠近麦克风再试一次",
+      "dictationCopiedTitle": "听写已复制",
+      "pasteManuallyBody": "请手动粘贴",
+      "dictationNotDeliveredTitle": "听写未写入",
+      "targetUnavailableBody": "没有找到要写入的应用，请重试",
+      "targetChangedBody": "当前应用目标已变化，请重试",
+      "dictationRetryBody": "请重试",
+      "quickEditCancelledTitle": "已取消改口",
+      "selectionUnchangedBody": "选中文字保持原样",
+      "quickEditNotAppliedTitle": "改口未应用",
+      "quickEditNotHeardBody": "没听清改写要求，选中文字保持原样",
+      "quickEditCopiedTitle": "改口结果已复制",
+      "quickEditNotDeliveredTitle": "改口未写入",
+      "quickEditTargetChangedBody": "当前应用已切换，选中文字保持原样",
+      "selectionUnchangedRetryBody": "选中文字保持原样，请重试"
+    },
+    "quickOps": {
+      "timerFinishedTitle": "QuickOps 计时结束",
+      "timerFinishedBody": "{duration}计时已结束",
+      "pomodoroFinishedTitle": "QuickOps 番茄钟结束",
+      "pomodoroFinishedBody": "{duration}专注已结束",
+      "pomodoroCycleFinishedTitle": "QuickOps 番茄钟循环结束",
+      "pomodoroCycleFinishedBody": "已完成{cycles}轮{duration}专注",
+      "pomodoroFocusFinishedTitle": "QuickOps 番茄钟专注结束",
+      "pomodoroFocusFinishedBody": "{focus}专注已结束，进入{breakDuration}休息",
+      "pomodoroFocusFinishedLongBreakBody": "{focus}专注已结束，进入{breakDuration}长休息",
+      "pomodoroBreakFinishedTitle": "QuickOps 番茄钟休息结束",
+      "pomodoroBreakFinishedBody": "{duration}休息已结束，开始第{cycle}轮专注",
+      "flowFallbackBody": "QuickOps 通知"
+    },
+    "ocr": {
+      "queuePausedTitle": "OCR 多次失败已自动暂停",
+      "queuePausedBody": "OCR 队列已自动关闭至 {until}。原因：{reason}。{hint}",
+      "queuePausedConfigHint": "请检查 OCR 提供者与模型配置后，等待自动恢复。",
+      "queuePausedNetworkHint": "请检查网络或 OCR 服务可用性，稍后会自动恢复。",
+      "queuePausedReasons": {
+        "noProvider": "没有可用的 OCR 提供者",
+        "providerNotLoaded": "无法加载 OCR 提供者",
+        "systemOcrUnavailable": "系统 OCR 不可用",
+        "serviceUnreachable": "无法连接 OCR 服务",
+        "jobDataInvalid": "OCR 任务的数据缺失或已损坏"
+      }
+    }
   },
   "assistant": {
     "voicePanel": {
@@ -7138,7 +7852,7 @@
       "serviceBusy": "服务繁忙，请稍后重试",
       "voicePreparing": "正在准备麦克风...",
       "stopAndTranscribe": "停止并转写",
-      "voiceTranscribing": "正在通过 AI Provider 转写...",
+      "voiceTranscribing": "正在通过 AI 提供商转写...",
       "voiceTranscribingShort": "转写中…",
       "voiceRecognitionNotConfigured": "尚未配置语音识别",
       "voiceRecognitionUnavailable": "语音识别不可用",
@@ -7205,10 +7919,6 @@
     }
   },
   "timeUnits": {
-    "seconds": "秒",
-    "minutes": "分钟",
-    "hours": "小时",
-    "days": "天",
     "justNow": "刚刚",
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
@@ -7227,23 +7937,23 @@
       "authTitle": "需要登录",
       "authDetail": "登录 Tuff Nexus 后再重试这次 AI 请求。",
       "quotaTitle": "AI 额度不可用",
-      "quotaDetail": "检查 Nexus credits 或团队配额后再重试。",
+      "quotaDetail": "检查 Nexus 积分或团队配额后再重试。",
       "usageLimitTitle": "已达到 AI 用量上限",
       "usageLimitDetail": "已达到你在「审计」里设置的 AI 用量上限，{time} 重置。",
       "usageLimitDetailNoTime": "已达到你在「审计」里设置的 AI 用量上限，可以在「审计」里调整。",
       "openUsageLimits": "打开审计",
       "quotaVerificationTitle": "AI 配额校验暂不可用",
-      "quotaVerificationDetail": "请稍后重试；若持续失败，请检查 Intelligence 配额存储与配置。",
-      "providerTitle": "AI Provider 不可用",
-      "providerDetail": "检查 Provider 健康状态、凭证，或切换到其他模型。",
-      "credentialsTitle": "Provider 凭证需要处理",
-      "credentialsDetail": "打开 Provider 设置，检查凭证状态后再重试这次 AI 请求。",
+      "quotaVerificationDetail": "请稍后重试；若持续失败，请检查智能配额存储与配置。",
+      "providerTitle": "AI 提供商不可用",
+      "providerDetail": "检查提供商健康状态、凭证，或切换到其他模型。",
+      "credentialsTitle": "提供商凭证需要处理",
+      "credentialsDetail": "打开提供商设置，检查凭证状态后再重试这次 AI 请求。",
       "permissionTitle": "需要权限",
       "permissionDetail": "授予所需权限后再重试该动作。",
       "modelTitle": "模型不支持当前请求",
       "modelDetail": "切换到支持该能力的模型后再重试。",
       "networkTitle": "网络请求失败",
-      "networkDetail": "检查网络连接或 Provider endpoint 后再重试。",
+      "networkDetail": "检查网络连接或提供商的 API 端点后再重试。",
       "unknownTitle": "AI 请求失败"
     },
     "providers": "AI 提供商",
@@ -7296,7 +8006,7 @@
     "timeout": "超时时间",
     "rateLimit": "速率限制",
     "requestsPerMinute": "每分钟请求数",
-    "tokensPerMinute": "每分钟令牌数",
+    "tokensPerMinute": "每分钟 Token 数",
     "unlimited": "无限制",
     "addCustomProvider": "添加自定义提供商",
     "providerType": "提供商类型",
@@ -7364,6 +8074,17 @@
         "connectionFailed": "连接失败",
         "networkRecovering": "网络连接正在恢复。可再次点击测试连接探测提供商。",
         "networkRecoveringWithRetry": "网络连接正在恢复。请在 {seconds} 秒后重试，或再次点击测试连接探测提供商。",
+        "testFailure": {
+          "disabled": "提供商已停用，请先启用再测试",
+          "modelNotConfigured": "还没有配置模型，请先获取或添加模型",
+          "timeout": "请求超时，请检查网络连接",
+          "unauthorized": "API 密钥无效",
+          "forbidden": "访问被拒绝，请检查 API 密钥的权限",
+          "endpointNotFound": "找不到 API 地址，请检查基础 URL",
+          "rateLimited": "请求过于频繁，已被提供商限流",
+          "serviceError": "提供商服务出错，请稍后重试",
+          "network": "网络错误，请检查网络连接"
+        },
         "modelsFetchSuccessTitle": "模型获取成功",
         "modelsFetchSuccessDesc": "已获取 {count} 个可用模型",
         "modelsFetchFailed": "获取模型失败",
@@ -7377,7 +8098,7 @@
         "description": "管理可用模型和默认模型",
         "models": "可用模型",
         "noModels": "暂无模型",
-        "modelsCount": "个模型",
+        "modelsCount": "{count} 个模型",
         "manageModels": "管理模型",
         "editModels": "编辑",
         "addModel": "添加模型",
@@ -7420,7 +8141,7 @@
           "contextWindow": "上下文窗口",
           "contextWindowHint": "估算输入超过此值的请求会在发送前被拒绝。",
           "maxTokens": "输出上限",
-          "maxTokensHint": "限制单次回复可用的 token（含推理）。",
+          "maxTokensHint": "限制单次回复可用的 Token（含推理）。",
           "unknownPlaceholder": "未知",
           "unknown": "未知",
           "notEnforced": "由 CLI 自行限制",
@@ -7473,14 +8194,14 @@
       },
       "rateLimit": {
         "title": "速率限制",
-        "description": "设置请求和令牌限制",
+        "description": "设置请求和 Token 限制",
         "requestsPerMinute": "每分钟请求数",
-        "tokensPerMinute": "每分钟令牌数",
+        "tokensPerMinute": "每分钟 Token 数",
         "unlimitedPlaceholder": "留空表示无限制",
         "requestsUnit": "请求/分钟",
-        "tokensUnit": "令牌/分钟",
+        "tokensUnit": "Token/分钟",
         "requestsPerMinuteHint": "每分钟最大请求数",
-        "tokensPerMinuteHint": "每分钟最大令牌数",
+        "tokensPerMinuteHint": "每分钟最大 Token 数",
         "invalidValue": "值必须是正数",
         "infoMessage": "留空字段表示无速率限制"
       }
@@ -7597,8 +8318,9 @@
       "contextPackage": "上下文包",
       "contextPackageEmpty": "当前 trace 暂无上下文包记录",
       "contextLoadFailed": "加载上下文包失败",
-      "contextItems": "项",
+      "contextItems": "{count} 项",
       "contextTokens": "tokens",
+      "contextTokenCount": "{count} tokens",
       "contextSources": "来源",
       "contextNoSources": "无来源",
       "contextRetrieval": "检索",
@@ -7641,6 +8363,7 @@
       "result": "执行结果",
       "task_success": "任务执行成功",
       "task_failed": "任务执行失败",
+      "agent_unavailable": "该智能体已不可用",
       "task_queued": "任务已加入队列",
       "task_running": "任务执行中",
       "task_completed": "任务已完成",
@@ -7681,7 +8404,7 @@
       "approvalThreshold": "审批阈值",
       "autoApproveReadOnly": "只读工具自动批准",
       "toolSourcesTitle": "工具源",
-      "toolSourcesDescription": "builtin 负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。",
+      "toolSourcesDescription": "内置工具负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。",
       "triggersTitle": "触发器",
       "addManualTrigger": "手动触发",
       "addClipboardBatchTrigger": "剪贴板批处理",
@@ -7693,16 +8416,16 @@
       "configJson": "配置 JSON",
       "contextSourcesTitle": "桌面上下文源",
       "contextSourcesDescription": "默认启用轻量上下文，不做静默截图或全量桌面代理。",
-      "metadataJsonTitle": "Metadata JSON",
+      "metadataJsonTitle": "元数据 JSON",
       "metadataDescription": "MCP profile、分类、模板标记等高级信息可以放这里。",
       "stepEditorTitle": "步骤编辑器",
       "stepEditorDescription": "{count} 个步骤，支持 `model / prompt / tool / agent`。",
-      "addPromptStep": "新增 Prompt",
+      "addPromptStep": "新增提示词",
       "addModelStep": "新增 Use Model",
       "addToolStep": "新增 Tool",
       "addAgentStep": "新增 Agent",
-      "instructionPrompt": "说明 / Prompt",
-      "promptPlaceholder": "输入该步骤的 Prompt",
+      "instructionPrompt": "说明 / 提示词",
+      "promptPlaceholder": "输入该步骤的提示词",
       "modelPlaceholder": "输入模型调用说明，能力、输入引用与输出合同会一起保存",
       "instructionPlaceholder": "输入该步骤的执行说明",
       "inputJsonShort": "输入 JSON",
@@ -7715,11 +8438,11 @@
       "startedAt": "开始时间",
       "completedAt": "结束时间",
       "approvalPanelTitle": "审批面板",
-      "approvalPanelDescription": "high / critical 工具调用会在这里暂停并等待恢复。",
+      "approvalPanelDescription": "高 / 严重风险的工具调用会在这里暂停并等待恢复。",
       "emptyApprovals": "当前没有待审批工具。",
       "reject": "拒绝",
       "approveAndResume": "批准并恢复",
-      "reviewQueueTitle": "Review Queue",
+      "reviewQueueTitle": "审阅队列",
       "reviewQueueDescription": "AI 输出先进入审阅队列，只有确认后才复制或替换剪贴板。",
       "reviewSummaryPending": "待处理",
       "reviewSummaryCopied": "已复制",
@@ -7743,15 +8466,14 @@
       "reviewHintCopied": "已复制：内容已写入剪贴板，可继续替换剪贴板或忽略该输出。",
       "reviewHintClipboardReplaced": "已替换：剪贴板内容已更新，可忽略该输出完成处理。",
       "reviewHintFailed": "操作失败：可重试复制、重试替换，或清除失败恢复为待处理。",
-      "reviewHintFailedWithError": "操作失败：{error}。可重试复制、重试替换，或清除失败恢复为待处理。",
       "reviewMetaSource": "来源",
       "reviewMetaCapability": "能力",
-      "reviewMetaProvider": "Provider",
+      "reviewMetaProvider": "提供商",
       "reviewMetaTrace": "Trace",
       "reviewMetaLatency": "耗时",
       "reviewMetaTokens": "Tokens",
       "reviewMetaRisk": "风险",
-      "reviewMetaFailure": "失败原因",
+      "reviewClipboardUnavailable": "剪贴板写入不可用",
       "currentRunStepsTitle": "当前运行步骤",
       "currentRunStepsDescription": "直接查看每个 step 的状态和输出。",
       "modelLatency": "耗时 {latency}",
@@ -7767,14 +8489,17 @@
       "toastDeleted": "工作流已删除",
       "toastWaitingApproval": "工作流已暂停，等待工具审批",
       "toastRunCompleted": "工作流执行完成",
+      "toastRunCancelled": "工作流运行已取消",
       "toastNoResumableRun": "当前没有可恢复的运行",
       "toastStillWaitingApproval": "仍有工具等待审批",
       "toastResumed": "工作流已恢复",
       "toastToolApproved": "已批准工具调用",
       "toastToolRejected": "已拒绝工具调用",
       "toastReviewCopied": "已复制审阅结果",
+      "toastReviewCopyFailed": "未能复制审阅结果",
       "toastReviewReplaceConfirm": "再次点击确认替换剪贴板",
       "toastReviewClipboardReplaced": "剪贴板已替换",
+      "toastReviewReplaceFailed": "未能替换剪贴板",
       "toastReviewDismissed": "已忽略审阅项",
       "toastReviewReset": "审阅项已恢复为待处理",
       "defaults": {
@@ -7789,6 +8514,14 @@
           "desktopRecentFiles": "最近文件",
           "browserRecentUrls": "最近 URL",
           "sessionMemory": "当前会话记忆"
+        },
+        "stepName": {
+          "agent": "Agent 步骤 {index}",
+          "model": "Use Model {index}",
+          "generic": "步骤 {index}"
+        },
+        "inputSource": {
+          "text": "输入文本"
         }
       },
       "continueOnError": "步骤失败后继续执行",
@@ -7808,7 +8541,7 @@
       "typeChat": "对话",
       "inputJson": "步骤输入（JSON）",
       "toolId": "Tool ID",
-      "toolSource": "Tool Source",
+      "toolSource": "工具源",
       "inputPlaceholder": "{'{'}\"query\":\"请描述任务\"{'}'}",
       "resultTitle": "执行结果",
       "resultDescription": "展示整体状态、步骤输出与错误信息。",
@@ -7843,6 +8576,8 @@
       "validationAgentStepRequired": "Agent 步骤必须选择 agentId",
       "validationAgentRequired": "第 {index} 步缺少 agent id",
       "validationInputJson": "第 {index} 步输入必须是合法 JSON",
+      "validationInvalidJson": "不是有效的 JSON",
+      "validationExpectedArray": "必须是 JSON 数组",
       "successCount": "成功步骤数",
       "failedCount": "失败步骤数",
       "fieldSteps": "步骤列表",
@@ -7850,10 +8585,186 @@
       "fieldInput": "输入 JSON",
       "validationFieldReason": "{field}：{reason}",
       "validationFieldReasonAtStep": "第 {index} 步 {field}：{reason}",
-      "notRunCount": "未执行步骤数"
+      "jsonFieldTriggerConfig": "触发器配置 JSON",
+      "jsonFieldContextConfig": "上下文源配置 JSON",
+      "notRunCount": "未执行步骤数",
+      "stepKind": {
+        "prompt": "Prompt",
+        "model": "Model",
+        "tool": "Tool",
+        "agent": "Agent"
+      },
+      "riskLevel": {
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "critical": "严重"
+      },
+      "toolSourceOption": {
+        "builtin": "内置",
+        "mcp": "MCP"
+      },
+      "triggerType": {
+        "manual": "手动触发",
+        "clipboardBatch": "剪贴板批处理"
+      },
+      "templates": {
+        "organizeRecentClipboard": {
+          "name": "整理近期剪贴板",
+          "description": "读取最近剪贴板历史，按主题分组并生成可复制的整理结果。",
+          "stepName": "整理近期剪贴板",
+          "stepDescription": "读取最近的剪贴板内容，按主题或任务分组，输出简明摘要和一个适合再次复制的整理结果。"
+        },
+        "meetingSummary": {
+          "name": "会议纪要 / 摘要",
+          "description": "整理会议转写稿或会议相关文本，生成摘要、决议和行动项。",
+          "stepName": "生成会议纪要",
+          "stepDescription": "根据近期剪贴板、前台应用和会话记忆中的会议文本生成结构化会议纪要。"
+        },
+        "batchTextProcessing": {
+          "name": "文本批处理",
+          "description": "按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。",
+          "stepName": "批量处理文本",
+          "stepDescription": "从近期剪贴板和会话上下文中识别多段文本，逐条输出处理结果与失败原因。"
+        },
+        "input": {
+          "manual": "手动输入",
+          "meetingText": "会议文本",
+          "batchItems": "批处理条目"
+        }
+      }
     },
     "info": {
       "configurationPanel": "配置面板"
+    },
+    "capabilityTest": {
+      "status": {
+        "stable": "稳定",
+        "slow": "偏慢",
+        "unstable": "不稳定",
+        "unknown": "未知"
+      },
+      "summary": {
+        "failed": "测试调用未成功，当前渠道或模型不可作为稳定路径。",
+        "stable": "本次测试响应稳定，耗时和输出质量符合预期。",
+        "slow": "本次测试可用，但延迟或 Token 速度存在优化空间。",
+        "unstable": "本次测试表现不稳定，建议检查渠道网络、模型配置或限流状态。",
+        "asrRecognized": "已通过实际麦克风捕获和实时 ASR 通道完成识别。",
+        "asrNoSpeech": "通道已完成实际麦克风捕获，但本次没有可展示的语音文本。"
+      },
+      "signal": {
+        "failed": "调用失败",
+        "latencyHigh": "耗时较高（{latency}ms）",
+        "latencyElevated": "耗时偏高（{latency}ms）",
+        "latencyNormal": "耗时正常（{latency}ms）",
+        "tokenSpeedLow": "Token 速度偏低（{speed}/s）",
+        "tokenSpeedFair": "Token 速度一般（{speed}/s）",
+        "tokenSpeedGood": "Token 速度良好（{speed}/s）",
+        "tokenSpeedMissing": "未返回可计算的 Token 速度",
+        "emptyResponse": "响应内容为空或不可展示"
+      },
+      "message": {
+        "chat": "对话测试成功",
+        "translate": "翻译测试成功",
+        "summarize": "摘要生成成功",
+        "textRewrite": "文本改写测试成功",
+        "grammarCheck": "语法检查完成，发现 {count} 个问题，评分 {score}",
+        "textClassify": "文本分类完成，返回 {count} 个分类",
+        "embedding": "向量测试成功",
+        "codeGenerate": "代码生成测试成功",
+        "codeExplain": "代码解释完成，提炼 {count} 个要点",
+        "codeReview": "代码审查完成，发现 {count} 个问题",
+        "codeRefactor": "代码重构完成，包含 {count} 项变更",
+        "codeDebug": "代码调试分析完成",
+        "intentDetect": "意图识别：{intent}（置信度 {confidence}%）",
+        "sentimentAnalyze": "情感分析：{sentiment}（得分 {score}）",
+        "keywordsExtract": "提取了 {count} 个关键词",
+        "contentExtract": "内容抽取完成，识别 {count} 个实体",
+        "vision": "OCR 测试成功",
+        "imageCaption": "图片描述测试成功",
+        "imageAnalyze": "图片分析完成，识别 {objects} 个对象和 {colors} 个主色",
+        "imageTranslate": "图片翻译完成，输出 {mimeType}",
+        "imageGenerate": "图片生成完成，返回 {count} 张图片",
+        "imageEdit": "图片编辑测试成功",
+        "ragQuery": "RAG 查询完成，引用 {count} 个来源，置信度 {confidence}",
+        "semanticSearch": "语义搜索完成，返回 {count} 条结果",
+        "rerank": "文档重排序完成，返回 {count} 条结果",
+        "tts": "语音合成完成，格式 {format}",
+        "stt": "语音识别完成，置信度 {confidence}",
+        "asr": "实时语音识别完成",
+        "asrNoSpeech": "实时语音识别完成，未检测到语音内容",
+        "audioTranscribe": "音频转录完成，{count} 个片段，时长 {duration}s",
+        "workflowExecute": "工作流状态：{status}，已完成步骤 {completed}/{total}",
+        "agentRun": "Agent 运行完成，{steps} 个推理步骤，{toolCalls} 次工具调用"
+      },
+      "preview": {
+        "unknown": "未知",
+        "noKeywords": "无关键词",
+        "keywords": "关键词：{keywords}",
+        "tags": "标签：{tags}",
+        "embedding": "向量维度：{dimensions}，前 5 个值：[{values}...]",
+        "base64Image": "返回了 base64 编码的图片",
+        "editedImage": "返回了编辑后的图片",
+        "rerankRow": "{id}：原排名 {rank} → {score}%",
+        "ttsAudio": "时长 {duration}，采样率 {sampleRate} Hz",
+        "ttsDuration": "时长 {duration}"
+      },
+      "hint": {
+        "chat": "请输入测试消息，例如：你好",
+        "translate": "请输入要翻译的文本，例如：Hello World",
+        "summarize": "请输入要摘要的长文本",
+        "textRewrite": "请输入要改写的文本",
+        "grammarCheck": "请输入要检查语法、拼写或风格的文本",
+        "textClassify": "请输入要分类的文本",
+        "embedding": "请输入要生成向量的文本",
+        "codeGenerate": "请描述要生成的代码功能，例如：写一个排序函数",
+        "codeExplain": "请输入要解释的代码",
+        "codeReview": "请输入要审查的代码",
+        "codeRefactor": "请输入要重构的代码",
+        "codeDebug": "请输入要调试的代码，可附带报错信息",
+        "intentDetect": "请输入要识别意图的文本，例如：打开计算器",
+        "sentimentAnalyze": "请输入要分析情感的文本",
+        "keywordsExtract": "请输入要提取关键词的文本",
+        "contentExtract": "请输入要抽取日期、人物、组织或联系方式的文本",
+        "vision": "使用内置示例图片进行测试",
+        "imageCaption": "使用内置示例图片生成描述",
+        "imageAnalyze": "使用内置示例图片进行内容分析",
+        "imageTranslate": "使用内置含文字图片进行端到端翻译测试",
+        "imageGenerate": "请输入要生成的图片描述",
+        "imageEdit": "请输入图片编辑指令",
+        "ragQuery": "请输入要基于内置示例文档回答的问题",
+        "semanticSearch": "请输入语义搜索查询",
+        "rerank": "请输入用于文档重排序的查询",
+        "tts": "请输入要合成为语音的文本",
+        "stt": "使用内置短音频样本进行语音识别测试",
+        "asr": "测试会打开麦克风并通过当前实时 ASR 能力绑定完成一次识别",
+        "audioTranscribe": "使用内置短音频样本进行转录测试",
+        "workflowExecute": "请输入要交给内联工作流处理的目标",
+        "agentRun": "请输入要交给 Agent 执行的任务"
+      },
+      "asrFailed": {
+        "generic": "实时语音识别测试失败（{code}）",
+        "genericWithHint": "实时语音识别测试失败（{code}）。请检查麦克风权限、渠道凭据和模型配置。",
+        "notConfigured": "实时语音识别测试失败：请先保存 audio.asr 的百炼渠道和模型绑定。",
+        "providerUnavailable": "实时语音识别测试失败：已保存的 ASR 渠道当前不可用，请检查渠道类型、ASR 协议和模型绑定。",
+        "modelNotFound": "实时语音识别测试失败：当前绑定模型不是百炼实时 ASR 模型，请选择实时模型。",
+        "modelUnsupported": "实时语音识别测试失败：当前模型不支持实时 ASR，请选择实时模型。",
+        "network": "实时语音识别测试失败：百炼连接失败，请检查网络、基础 URL 和业务空间。"
+      },
+      "sentiment": {
+        "positive": "积极",
+        "negative": "消极",
+        "neutral": "中性",
+        "mixed": "混合"
+      }
+    },
+    "runFailures": {
+      "failed": "AI 运行失败。",
+      "cancelled": "AI 运行已取消。",
+      "interrupted": "AI 运行在完成前被中断。",
+      "inputUnavailable": "这次运行的输入已不可用。",
+      "authorityChanged": "这次运行开始后，代理的设置或权限已变更。",
+      "beingDeleted": "这次运行正在被删除。"
     }
   },
   "flow": {
@@ -7861,6 +8772,7 @@
     "searchTargets": "搜索目标…",
     "noTargets": "没有可用的目标",
     "requiresConfirmation": "需要确认",
+    "targetNotAdapted": "该插件暂不支持流转",
     "consentTitle": "确认流转",
     "consentDesc": "允许 {source} 将内容发送到 {target}？",
     "executionConfirmationTitle": "确认本次执行",
@@ -8005,34 +8917,48 @@
       "coreBoxSearchDesc": "回到启动器继续执行动作",
       "copy": "复制文本",
       "copyDesc": "把当前文本写回剪贴板",
-      "searchPlaceholder": "搜索 OmniPanel Feature",
-      "loading": "正在加载 Feature...",
-      "empty": "当前没有可用 Feature",
-      "loadFailed": "加载 OmniPanel Feature 失败，请稍后重试。",
+      "aiTranslate": "AI 翻译",
+      "aiTranslateDesc": "预览译文后再复制或替换剪贴板",
+      "aiSummarize": "AI 摘要",
+      "aiSummarizeDesc": "生成选中文本的要点摘要",
+      "aiRewrite": "AI 改写",
+      "aiRewriteDesc": "改写为更清晰自然的表达",
+      "aiExplain": "AI 解释",
+      "aiExplainDesc": "解释选中文本或代码片段",
+      "aiReview": "AI 审阅",
+      "aiReviewDesc": "预览对选中代码的审阅建议",
+      "searchPlaceholder": "搜索 OmniPanel 功能",
+      "loading": "正在加载功能...",
+      "empty": "当前没有可用功能",
+      "loadFailed": "加载 OmniPanel 功能失败，请稍后重试。",
       "executeFailed": "执行失败，请稍后重试。",
       "selectionCount": "已选中 {count} 字符",
       "selectionPreview": "已选中 {preview}",
       "selectionUnavailable": "当前平台不支持自动抓取选中文本。",
       "selectionCaptureFailed": "抓取选中文本失败，请检查权限或桌面自动化环境。",
-      "selectionRequired": "该 Feature 需要选中文本后才能执行。",
+      "selectionRequired": "该功能需要选中文本后才能执行。",
       "selectionHint": {
         "ready": "选区已就绪",
         "empty": "先选中文本，再选择一个动作。",
-        "unsupported": "这里不支持抓取选中文本，请粘贴文本或使用剪贴板输入。",
+        "unsupported": "这里读不到选中文本，Linux 需要先安装 xdotool。",
         "failed": "抓取选中文本失败。请检查桌面自动化权限后重试。",
-        "disabled": "选中文本抓取已关闭。请启用 OmniPanel 抓取，或手动粘贴文本。"
+        "disabled": "读取选中文本需要辅助功能权限，请在系统设置中允许。"
       },
       "coreboxUnavailable": "CoreBox 当前不可用，请稍后重试。",
-      "toggleFailed": "更新 Feature 状态失败。",
-      "reorderFailed": "Feature 排序更新失败。",
-      "featureUnavailable": "该 Feature 当前不可用，请检查插件状态。",
+      "coreboxTransferFailed": "没能把文本交给 CoreBox，请稍后重试。",
+      "toggleFailed": "更新功能状态失败。",
+      "reorderFailed": "功能排序更新失败。",
+      "featureUnavailable": "该功能当前不可用，请检查插件状态。",
+      "pluginNotLoaded": "所属插件未加载",
+      "featureMissing": "这个功能已不存在",
+      "featureNotRunnable": "这个功能无法从全景面板运行",
       "ready": "可执行",
       "aiRunning": "正在生成结果...",
       "aiStatusRunning": "生成中",
       "aiStatusReady": "可使用",
       "aiStatusFailed": "失败",
       "aiStatusConfirming": "待确认",
-      "aiStatusRunningDetail": "Provider 响应期间会保留当前选区上下文。",
+      "aiStatusRunningDetail": "提供商响应期间会保留当前选区上下文。",
       "aiStatusReadyDetail": "复制或替换剪贴板前，请先确认结果与元数据。",
       "aiStatusFailedDetail": "先查看恢复原因，再重试这个写作动作。",
       "aiStatusConfirmingDetail": "确认后才会用该 AI 结果替换剪贴板。",
@@ -8048,7 +8974,7 @@
       "openUsageLimitsFailed": "没能打开审计页，请稍后再试。",
       "aiNoTrace": "暂无 trace",
       "aiMetaCapability": "能力",
-      "aiMetaProvider": "Provider",
+      "aiMetaProvider": "提供商",
       "aiMetaModel": "模型",
       "aiMetaTrace": "Trace",
       "aiMetaLatency": "耗时"
@@ -8183,7 +9109,18 @@
       }
     },
     "previewCopied": "结果已复制",
-    "copyFailed": "复制失败"
+    "copyFailed": "复制失败",
+    "imageTranslatePin": {
+      "windowTitle": "图片翻译",
+      "copyImage": "复制翻译后的图片",
+      "copyTranslation": "复制译文",
+      "copySource": "复制原文",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "resetZoom": "重置缩放",
+      "opacity": "不透明度",
+      "close": "关闭"
+    }
   },
   "shortcuts": {
     "palette": "快捷命令",
@@ -8240,5 +9177,417 @@
     "minimize": "最小化",
     "zoom": "缩放",
     "bringAllToFront": "全部置于顶层"
+  },
+  "nativeShare": {
+    "pickerPrompt": "选择 macOS 分享目标",
+    "sectionTitle": "分享",
+    "targets": {
+      "systemShare": "系统分享",
+      "airdrop": "AirDrop",
+      "mail": "邮件",
+      "messages": "信息",
+      "clipboard": "剪贴板",
+      "finder": "Finder",
+      "explorer": "资源管理器",
+      "browser": "浏览器"
+    },
+    "errors": {
+      "failed": "分享失败",
+      "systemFailed": "系统返回了错误。",
+      "automationDenied": "Tuff 没有控制分享所用应用的权限，请在「系统设置 › 隐私与安全性 › 自动化」中允许。",
+      "noContent": "没有可分享的内容",
+      "cancelled": "已取消分享",
+      "targetUnsupported": "这个分享目标无法处理当前内容",
+      "mailRefused": "邮件链接被拒绝：{reason}",
+      "mailAttachmentsUnsupported": "此平台上的邮件目标不支持附件",
+      "messagesMacOnly": "「信息」仅在 macOS 上可用",
+      "noShareSheet": "{platform} 没有可供 Tuff 使用的系统分享面板，只能使用邮件目标。"
+    },
+    "targetDescriptions": {
+      "systemShare": "在列表中选择分享方式",
+      "airdrop": "用 AirDrop 发送到附近的设备",
+      "mail": "通过邮件发送",
+      "mailClient": "用默认邮件客户端发送",
+      "messages": "用「信息」发送"
+    }
+  },
+  "nativeDialogs": {
+    "ok": "确定",
+    "database": {
+      "title": "数据库初始化失败",
+      "message": "数据库迁移失败，应用无法启动",
+      "migrationsFolderMissing": "找不到迁移文件夹：\n{path}",
+      "checkInstallation": "请检查应用是否完整安装。",
+      "debugInformation": "调试信息：",
+      "journalMissing": "找不到迁移日志文件：\n{path}",
+      "migrationsFolderExists": "迁移文件夹存在：{exists}",
+      "folderContents": "文件夹内容：{contents}",
+      "migrationFailed": "数据库迁移失败：\n{error}",
+      "migrationFailure": {
+        "diskFull": "磁盘空间不足，无法更新数据库。请腾出一些空间后重新打开 Tuff。",
+        "damaged": "数据库文件已损坏，无法更新。",
+        "inUse": "数据库正被其他程序占用。请关闭该程序后重新打开 Tuff。",
+        "failed": "无法为当前版本的 Tuff 更新数据库。"
+      },
+      "checkLogs": "更多信息请查看日志文件。\n日志位置：{path}"
+    },
+    "rendererMissing": {
+      "title": "找不到文件",
+      "message": "缺少应用运行所需的文件。",
+      "damaged": "应用文件可能不完整或已损坏。",
+      "reinstall": "重新安装通常可以解决这个问题。",
+      "attachLog": "如需反馈问题，请附上日志文件。",
+      "openLogFolder": "打开日志文件夹"
+    },
+    "unsupportedFile": {
+      "title": "不支持的文件类型",
+      "body": "没有插件可以处理「.{extension}」文件。请从插件市场安装兼容的插件。"
+    },
+    "unsupportedInput": {
+      "title": "不支持的输入",
+      "body": "插件服务不支持文件夹输入。"
+    },
+    "pluginInstallRisk": {
+      "title": "插件安装风险确认",
+      "message": "检测到来自非官方来源的插件",
+      "detail": "来源类型：{sourceType}\n来源 ID：{sourceId}\n继续之前，请确认你信任这个来源。",
+      "continue": "继续安装",
+      "githubDescription": "即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。",
+      "npmDescription": "即将下载来自第三方 NPM 包的插件，存在潜在风险。",
+      "rejected": "风险确认被用户拒绝"
+    },
+    "workspaceScript": {
+      "selectTitle": "选择工作区",
+      "selectButton": "选择",
+      "runTitle": "运行工作区脚本",
+      "runMessage": "运行「{script}」？",
+      "runDetail": "工作区：{workspace}\n这个 package 脚本是项目自带的代码，可能执行任意操作。",
+      "run": "运行"
+    },
+    "hosts": {
+      "title": "确认修改 Hosts",
+      "removeMessage": "移除 {hostname}？",
+      "updateMessage": "更新 {hostname}？",
+      "removeDetail": "这会从系统 Hosts 文件中移除这条受管理的主机名。",
+      "updateDetail": "地址：{addresses}",
+      "apply": "应用"
+    },
+    "systemAction": {
+      "detail": "该操作会立即影响系统状态，请确认你已保存当前工作内容。",
+      "restart": {
+        "title": "确认重启",
+        "message": "确定要执行重启吗？",
+        "messageAgain": "请再次确认执行重启",
+        "confirm": "重启"
+      },
+      "shutdown": {
+        "title": "确认关机",
+        "message": "确定要执行关机吗？",
+        "messageAgain": "请再次确认执行关机",
+        "confirm": "关机"
+      }
+    },
+    "files": {
+      "saveFile": "保存文件",
+      "locateCli": "定位 {name}",
+      "exportPluginData": "导出插件数据",
+      "privacyExportFilter": "Talex Touch 隐私导出",
+      "exportPluginCredentials": "导出加密的插件凭据",
+      "secretBackupFilter": "Talex Touch 密钥备份",
+      "exportPrivacyData": "导出隐私数据",
+      "exportCredentials": "导出加密凭据",
+      "restoreCredentials": "恢复加密凭据",
+      "saveScreenshot": "保存截图",
+      "screenshotName": "截图-{time}",
+      "pngFilter": "PNG 图片",
+      "selectAudio": "选择音频文件",
+      "transcribe": "转写",
+      "audioFilter": "音频"
+    }
+  },
+  "clipboardActions": {
+    "automationPermissionDenied": "自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。",
+    "accessibilityPermissionDenied": "自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 辅助功能”中允许 Tuff。",
+    "autoPasteFailed": "已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。",
+    "databaseUnavailable": "剪贴板历史还没有准备好，请稍后再试。",
+    "itemNotFound": "找不到这条剪贴板记录。",
+    "voiceTextEmpty": "没有可粘贴的语音文字。",
+    "voiceClipboardNotRestored": "语音文字已粘贴，但未能恢复之前的剪贴板内容。",
+    "notificationTitle": "自动粘贴失败"
+  },
+  "quickOps": {
+    "screenClean": {
+      "hint": "QuickOps {mode} · {duration}后自动退出 · 长按 Esc 退出",
+      "windowTitle": "QuickOps 清洁屏幕",
+      "modes": {
+        "white": "白底清洁屏幕",
+        "black": "黑底清洁屏幕",
+        "red": "红色屏幕测试",
+        "green": "绿色屏幕测试",
+        "blue": "蓝色屏幕测试"
+      }
+    },
+    "sessionTitles": {
+      "keepAwake": "保持唤醒",
+      "systemAwake": "防止系统睡眠",
+      "timer": "计时器",
+      "pomodoro": "番茄钟",
+      "pomodoroFocus": "番茄钟专注",
+      "pomodoroBreak": "番茄钟休息",
+      "screenClean": "清洁屏幕",
+      "stopwatch": "秒表"
+    },
+    "capabilities": {
+      "keepAwake": "保持显示器唤醒",
+      "systemAwake": "防止系统睡眠",
+      "timers": "计时器、秒表和番茄钟",
+      "screenOverlay": "清洁屏幕和纯色屏幕",
+      "localNetwork": "本机网络查询",
+      "publicIp": "公网 IP 查询（需开启）",
+      "systemProxy": "系统代理设置",
+      "fileInfo": "文件哈希、Base64 和路径",
+      "tempFiles": "新建临时文件",
+      "moveRecentDownload": "移动最近下载的文件",
+      "diagnostics": "诊断摘要和系统信息",
+      "storage": "磁盘空间和文件夹占用",
+      "battery": "电池状态",
+      "developerPreview": "开发者预览工具",
+      "portKill": "结束占用端口的进程"
+    },
+    "directories": {
+      "home": "主目录",
+      "desktop": "桌面",
+      "downloads": "下载",
+      "documents": "文档",
+      "appData": "应用数据",
+      "tuffData": "Tuff 数据",
+      "logs": "日志"
+    },
+    "errors": {
+      "invalidHostname": "请输入有效域名",
+      "fileHashMissingFile": "未找到要计算哈希的文件",
+      "fileBase64MissingFile": "未找到要编码的文件",
+      "filePathMissingFile": "未找到要复制路径的文件",
+      "recentDownloadEmpty": "「下载」文件夹里没有可打开的文件",
+      "recentDownloadPermissionDenied": "没有权限读取「下载」文件夹",
+      "recentDownloadReadFailed": "无法读取「下载」文件夹",
+      "moveTargetNotAbsolute": "目标目录必须是绝对路径",
+      "moveTargetNotDirectory": "目标路径不是目录",
+      "moveTargetExists": "目标目录中已存在同名文件",
+      "moveTargetCheckFailed": "无法检查目标路径",
+      "moveTargetMissing": "目标目录不存在",
+      "moveTargetPermissionDenied": "没有权限读取目标目录",
+      "moveTargetReadFailed": "无法读取目标目录",
+      "moveInvalidPath": "移动路径无效",
+      "moveSourceOutsideDownloads": "源文件不在「下载」文件夹中",
+      "moveSourceNotFile": "源路径不是普通文件",
+      "moveSourceMissing": "源文件不存在",
+      "movePermissionDenied": "没有权限移动文件",
+      "moveFailed": "移动文件失败",
+      "notFile": "目标不是普通文件",
+      "fileMissing": "文件不存在",
+      "fileReadPermissionDenied": "没有权限读取文件",
+      "fileReadFailed": "读取文件失败",
+      "fileTooLarge": "文件超过 {limit} 上限",
+      "base64MissingInput": "未找到要解码的 Base64 内容",
+      "base64InvalidInput": "Base64 内容格式无效",
+      "base64DecodedTooLarge": "解码后文件超过 {limit} 上限",
+      "tempWritePermissionDenied": "没有权限写入临时文件",
+      "tempWriteFailed": "写入临时文件失败",
+      "tempTextTooLarge": "临时文本超过 {limit} 上限",
+      "tempDirectoryPermissionDenied": "没有权限创建临时目录",
+      "tempDirectoryCreateFailed": "创建临时目录失败",
+      "diskSpaceReadFailed": "读取磁盘空间失败",
+      "directoryMissing": "目录不存在",
+      "directoryPermissionDenied": "没有权限读取目录",
+      "directoryUsageReadFailed": "读取目录占用失败",
+      "batteryUnsupported": "这个系统暂不支持读取电池状态",
+      "batteryReadFailed": "读取电池状态失败",
+      "publicIpFetchUnavailable": "当前环境不支持联网查询",
+      "publicIpHttpError": "外部服务返回了错误（HTTP {status}）",
+      "publicIpInvalidResponse": "外部服务返回了不可识别的 IP 地址",
+      "publicIpRequestFailed": "无法连接公网 IP 查询服务",
+      "dnsNoRecords": "未解析到 {types} 记录",
+      "qrPngRenderFailed": "无法生成二维码图片",
+      "previewSaveFailed": "保存预览文件失败"
+    },
+    "flowTargets": {
+      "capabilities": {
+        "name": "能力摘要",
+        "description": "列出 QuickOps 在本机可用的功能"
+      },
+      "sessions": {
+        "name": "运行中的会话",
+        "description": "查看正在运行的 QuickOps 会话"
+      },
+      "stop-all-sessions": {
+        "name": "停止所有会话",
+        "description": "停止所有正在运行的 QuickOps 会话"
+      },
+      "system-info": {
+        "name": "系统信息",
+        "description": "汇总本机的系统信息，不联网"
+      },
+      "tuff-diagnostics": {
+        "name": "Tuff 诊断摘要",
+        "description": "汇总 Tuff 的运行状态并隐去敏感信息，不读取日志"
+      },
+      "disk-space": {
+        "name": "磁盘空间",
+        "description": "查看本机磁盘的可用和已用空间"
+      },
+      "directory-usage": {
+        "name": "文件夹占用",
+        "description": "查看常用文件夹占用的空间"
+      },
+      "network-status": {
+        "name": "网络状态",
+        "description": "查看本机的网络连接状态，不联网"
+      },
+      "battery-status": {
+        "name": "电池状态",
+        "description": "查看电量和充电状态（需系统支持）"
+      },
+      "system-proxy": {
+        "name": "系统代理",
+        "description": "查看系统代理设置，隐去其中的凭据"
+      },
+      "public-ip": {
+        "name": "公网 IP",
+        "description": "联网查询本机的公网 IP 地址"
+      },
+      "query-local-ip": {
+        "name": "本机 IP",
+        "description": "列出本机的网络地址，不联网"
+      },
+      "port-status": {
+        "name": "端口状态",
+        "description": "检查本机 TCP 端口是否被占用，以及占用它的进程"
+      },
+      "dns-query": {
+        "name": "DNS 查询",
+        "description": "通过系统解析器查询域名的 DNS 记录"
+      },
+      "file-hash": {
+        "name": "文件哈希",
+        "description": "计算文件的 MD5、SHA-1 和 SHA-256 哈希值"
+      },
+      "file-base64": {
+        "name": "文件转 Base64",
+        "description": "把文件编码为 Base64，受 QuickOps 大小上限限制"
+      },
+      "recent-download": {
+        "name": "最近下载",
+        "description": "找出「下载」中最新的文件，不打开也不移动"
+      },
+      "common-directory": {
+        "name": "常用文件夹路径",
+        "description": "获取常用文件夹的路径，不打开它"
+      },
+      "path-format": {
+        "name": "路径格式",
+        "description": "把路径转换成可复制的多种格式，不访问文件"
+      },
+      "temp-text-file": {
+        "name": "新建临时文本",
+        "description": "在 QuickOps 临时目录中新建文本文件"
+      },
+      "temp-directory": {
+        "name": "新建临时目录",
+        "description": "在 QuickOps 临时目录中新建文件夹"
+      },
+      "keep-awake": {
+        "name": "保持唤醒",
+        "description": "让屏幕保持常亮，替换当前的保持唤醒会话"
+      },
+      "stop-keep-awake": {
+        "name": "停止保持唤醒",
+        "description": "结束当前的保持唤醒会话"
+      },
+      "system-awake": {
+        "name": "系统唤醒",
+        "description": "阻止系统休眠，替换当前的系统唤醒会话"
+      },
+      "stop-system-awake": {
+        "name": "停止系统唤醒",
+        "description": "结束当前的系统唤醒会话"
+      },
+      "start-timer": {
+        "name": "启动计时器",
+        "description": "启动计时器，替换正在运行的计时器"
+      },
+      "pause-timer": {
+        "name": "暂停计时器",
+        "description": "暂停正在运行的计时器"
+      },
+      "resume-timer": {
+        "name": "继续计时器",
+        "description": "继续已暂停的计时器"
+      },
+      "stop-timer": {
+        "name": "停止计时器",
+        "description": "停止当前的计时器"
+      },
+      "start-pomodoro": {
+        "name": "启动番茄钟",
+        "description": "启动番茄钟，替换正在运行的番茄钟"
+      },
+      "pause-pomodoro": {
+        "name": "暂停番茄钟",
+        "description": "暂停正在运行的番茄钟"
+      },
+      "resume-pomodoro": {
+        "name": "继续番茄钟",
+        "description": "继续已暂停的番茄钟"
+      },
+      "stop-pomodoro": {
+        "name": "停止番茄钟",
+        "description": "停止当前的番茄钟"
+      },
+      "clean-screen": {
+        "name": "清屏模式",
+        "description": "用纯色铺满屏幕，便于清洁或测试，替换当前的清屏遮罩"
+      },
+      "stop-clean-screen": {
+        "name": "退出清屏模式",
+        "description": "关闭当前的清屏遮罩"
+      },
+      "start-stopwatch": {
+        "name": "启动秒表",
+        "description": "启动秒表，替换正在运行的秒表"
+      },
+      "pause-stopwatch": {
+        "name": "暂停秒表",
+        "description": "暂停正在运行的秒表"
+      },
+      "resume-stopwatch": {
+        "name": "继续秒表",
+        "description": "继续已暂停的秒表"
+      },
+      "lap-stopwatch": {
+        "name": "记录秒表分段",
+        "description": "为正在运行的秒表记录一个分段"
+      },
+      "reset-stopwatch": {
+        "name": "重置秒表",
+        "description": "停止并清除当前的秒表"
+      },
+      "show-notification": {
+        "name": "发送通知",
+        "description": "用收到的文字显示一条系统通知"
+      },
+      "copy-to-clipboard": {
+        "name": "写入剪贴板",
+        "description": "把收到的文字复制到剪贴板"
+      },
+      "format-text": {
+        "name": "格式化文本",
+        "description": "在本机格式化文本并返回结果"
+      },
+      "open-folder": {
+        "name": "打开文件夹",
+        "description": "打开一个常用文件夹"
+      }
+    }
   }
 }

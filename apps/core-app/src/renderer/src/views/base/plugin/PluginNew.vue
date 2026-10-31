@@ -22,6 +22,7 @@ import BlockTemplate from '~/components/base/template/BlockTemplate.vue'
 import BrickTemplate from '~/components/base/template/BrickTemplate.vue'
 import FormTemplate from '~/components/base/template/FormTemplate.vue'
 import LineTemplate from '~/components/base/template/LineTemplate.vue'
+import { resolveStoreInstallFailureReason } from '~/composables/store/store-install-error-utils'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip, popperMention } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -312,13 +313,17 @@ async function installPluginFromSource(): Promise<void> {
       ])
     } else {
       installState.status = 'error'
-      installState.message = result?.message || t('plugin.new.install.errorMessage')
+      installState.message = result?.message
+        ? resolveStoreInstallFailureReason(result.message, t)
+        : t('plugin.new.install.errorMessage')
     }
   } catch (error: unknown) {
     pluginNewLog.error('Failed to install plugin:', error)
     installState.status = 'error'
     installState.message =
-      error instanceof Error ? error.message : t('plugin.new.install.unexpectedError')
+      error instanceof Error
+        ? resolveStoreInstallFailureReason(error.message, t)
+        : t('plugin.new.install.unexpectedError')
   } finally {
     installState.installing = false
   }

@@ -26,6 +26,7 @@ import {
   ocrJobs,
   ocrResults
 } from '../../db/schema'
+import { getLocale, t } from '../../utils/i18n-helper'
 import {
   INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   ensureIntelligenceConfigLoaded,
@@ -125,6 +126,33 @@ const getRetryDelaySeconds = (lastError: string | null | undefined): number => {
   if (!lastError) return RETRY_DELAYS.default
   const delay = RETRY_DELAYS[lastError]
   return typeof delay === 'number' ? delay : RETRY_DELAYS.default
+}
+
+const MAX_ATTEMPTS_REASON_PREFIX = 'Max attempts reached: '
+
+// The failures this service names itself, as the pause notice words them. The names stay as they
+// are because the retry delays and the stored jobs key on them.
+const QUEUE_PAUSE_REASON_KEYS: Record<string, string> = {
+  'No enabled providers available': 'noProvider',
+  'Provider factory missing': 'providerNotLoaded',
+  'Native OCR module unavailable': 'systemOcrUnavailable',
+  'OCR provider network failure': 'serviceUnreachable',
+  'Missing job metadata': 'jobDataInvalid',
+  'Invalid job metadata JSON': 'jobDataInvalid'
+}
+
+/**
+ * Why the queue paused, in the interface language. A provider's or the system's own error text is
+ * shown as it is, less a closing full stop - the notice puts its own after the reason.
+ */
+function describeQueuePauseReason(reason: string): string {
+  const failure = reason.startsWith(MAX_ATTEMPTS_REASON_PREFIX)
+    ? reason.slice(MAX_ATTEMPTS_REASON_PREFIX.length)
+    : reason
+  const key = QUEUE_PAUSE_REASON_KEYS[failure]
+  return key
+    ? t(`notifications.ocr.queuePausedReasons.${key}`)
+    : reason.trim().replace(/[.。]$/, '')
 }
 
 function dataUrlToHash(dataUrl: string): string {
@@ -980,7 +1008,12 @@ class OcrService {
 
     // 检查是否已达到最大重试次数
     if (currentAttempts >= MAX_ATTEMPTS) {
-      await this.failJob(job.id, `Max attempts reached: ${reason}`, undefined, currentAttempts)
+      await this.failJob(
+        job.id,
+        `${MAX_ATTEMPTS_REASON_PREFIX}${reason}`,
+        undefined,
+        currentAttempts
+      )
       return
     }
 
@@ -1282,14 +1315,19 @@ class OcrService {
       failureWindowCount: this.recentFailureTimestamps.length
     })
 
-    const disabledUntilText = new Date(disabledUntil).toLocaleString()
-    const userHint = this.isLikelyConfigError(reason)
-      ? '请检查 OCR 提供者与模型配置后，等待自动恢复。'
-      : '请检查网络或 OCR 服务可用性，稍后会自动恢复。'
+    const userHint = t(
+      this.isLikelyConfigError(reason)
+        ? 'notifications.ocr.queuePausedConfigHint'
+        : 'notifications.ocr.queuePausedNetworkHint'
+    )
 
     notificationModule.pushInboxEntry({
-      title: 'OCR 多次失败已自动暂停',
-      message: `OCR 队列已自动关闭至 ${disabledUntilText}。原因: ${reason}。${userHint}`,
+      title: t('notifications.ocr.queuePausedTitle'),
+      message: t('notifications.ocr.queuePausedBody', {
+        until: new Date(disabledUntil).toLocaleString(getLocale()),
+        reason: describeQueuePauseReason(reason),
+        hint: userHint
+      }),
       level: 'warning',
       dedupeKey: 'ocr-queue-auto-disabled',
       payload: {

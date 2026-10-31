@@ -24,14 +24,13 @@ describe('omni-panel selection recovery', () => {
       resolveOmniPanelSelectionRecovery({
         hasSelection: false,
         selectedText: '',
-        issueCode: 'unsupported',
-        issueMessage: 'Wayland session'
+        issueCode: 'unsupported'
       })
     ).toEqual({
       tone: 'warning',
       labelKey: 'corebox.omniPanel.selectionHint.unsupported',
-      fallback: 'Selected-text capture is not supported here. Paste text or use clipboard input.',
-      detail: 'Wayland session'
+      fallback: "Can't read the selected text here. On Linux, install xdotool.",
+      detail: null
     })
   })
 

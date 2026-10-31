@@ -139,7 +139,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { deviceIdleService } from '../../service/device-idle-service'
-import { t as translate } from '../../utils/i18n-helper'
+import { getLocale, t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
@@ -1251,17 +1251,13 @@ export class TouchPlugin implements ITouchPlugin {
         }))
       })
     ) as Record<string, PluginRuntimeSnapshotValue>
-    let locale = 'en-US'
-    try {
-      const resolvedLocale = app.getLocale()
-      if (/^[A-Z0-9-]{2,64}$/i.test(resolvedLocale)) locale = resolvedLocale
-    } catch {
-      // A frozen fallback keeps locale lookup child-local when Electron locale is unavailable.
-    }
     return Object.freeze({
       platform: process.platform,
       arch: process.arch,
-      locale,
+      // The interface language, the answer `plugin-localization-channels.ts` gives, rather than
+      // the OS's: a plugin's text sits beside Tuff's, and the OS can name a locale (`en-GB`) Tuff
+      // doesn't ship. Like the rest of the snapshot it holds for the activation.
+      locale: getLocale(),
       manifest: Object.freeze(manifest)
     })
   }

@@ -4,6 +4,7 @@ import type {
   OperationalErrorInput,
   OperationalErrorReport
 } from '@talex-touch/utils'
+import { PublicFailure } from '../../../shared/public-failure'
 import { createLogger } from '../../utils/logger'
 
 const operationalErrorLog = createLogger('OperationalError')
@@ -319,8 +320,8 @@ function resolvePublicMessage(input: string | undefined, sqliteBusy: boolean): s
   ) {
     return input.trim()
   }
-  if (sqliteBusy) return 'Database is busy. Please retry.'
-  return 'The operation failed. Please retry.'
+  if (sqliteBusy) return PublicFailure.DatabaseBusy
+  return PublicFailure.OperationFailed
 }
 
 export const operationalErrorService = new OperationalErrorService()

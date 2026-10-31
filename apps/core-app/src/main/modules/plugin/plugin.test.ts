@@ -960,7 +960,7 @@ describe('touchPlugin.triggerFeature', () => {
     expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith({
       id: 'plugin-widget-load-failed:test-plugin:test-feature',
       title: 'Widget 加载失败',
-      message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+      message: '插件 Widget 初始化失败，请检查插件版本、路径和运行日志。',
       level: 'error',
       dedupeKey: 'plugin-widget-load-failed:test-plugin:test-feature',
       meta: {
@@ -1134,7 +1134,7 @@ describe('touchPlugin.triggerFeature', () => {
       expect.objectContaining({
         id: 'plugin-widget-load-failed:test-plugin:test-feature',
         title: 'Widget 加载失败',
-        message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+        message: '插件 Widget 初始化失败，请检查插件版本、路径和运行日志。',
         level: 'error'
       })
     )

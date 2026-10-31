@@ -615,9 +615,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       },
       actions: [
         {
+          // No label: the action panel names an unlabeled `execute` action in the interface
+          // language. Plugin rows show their labels as written, so a host-written 'Execute' was
+          // shown in English on every feature.
           id: 'trigger-feature',
           type: 'execute',
-          label: 'Execute',
           primary: true,
           payload: {
             pluginName: plugin.name,

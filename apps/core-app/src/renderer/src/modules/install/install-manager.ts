@@ -7,6 +7,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createNotificationSdk } from '@talex-touch/utils/transport/sdk/domains/notification'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { computed, reactive } from 'vue'
+import { resolveStoreInstallFailureReason } from '~/composables/store/store-install-error-utils'
 import { useI18nText } from '~/modules/lang'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import {
@@ -79,7 +80,7 @@ async function notifyTerminalTask(event: PluginInstallProgressEvent): Promise<vo
   const t = getTranslator()
   const transport = useTuffTransport()
   const notificationSdk = createNotificationSdk(transport)
-  const name = event.pluginName || event.pluginId || 'Plugin'
+  const name = event.pluginName || event.pluginId || t('notifications.pluginInstallUnknown')
   const isSuccess = event.stage === 'completed'
   const title = isSuccess
     ? t('store.installation.successTitle')
@@ -88,7 +89,7 @@ async function notifyTerminalTask(event: PluginInstallProgressEvent): Promise<vo
     ? t('store.installation.successMessage', { name })
     : t('store.installation.failureMessage', {
         name,
-        reason: event.error || event.message || 'INSTALL_FAILED'
+        reason: resolveStoreInstallFailureReason(event.error || event.message, t)
       })
 
   try {
@@ -141,7 +142,11 @@ async function sendDecision(response: PluginInstallConfirmResponse): Promise<voi
 
 async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void> {
   const t = getTranslator()
-  const name = request.pluginName || request.pluginId || request.source || 'plugin'
+  const name =
+    request.pluginName ||
+    request.pluginId ||
+    request.source ||
+    t('notifications.pluginInstallUnknown')
   const confirmKind = request.kind || 'source'
 
   let decisionMade = false

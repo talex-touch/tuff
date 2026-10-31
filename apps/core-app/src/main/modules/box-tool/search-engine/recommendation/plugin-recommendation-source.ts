@@ -4,6 +4,7 @@ import type {
   PluginRecommendCandidate
 } from '@talex-touch/utils/core-box'
 import type { TuffItem, TuffRender } from '@talex-touch/utils'
+import { t } from '../../../../utils/i18n-helper'
 
 type TuffBasicIcon = NonNullable<NonNullable<TuffRender['basic']>['icon']>
 
@@ -15,6 +16,15 @@ const DEFAULT_PLUGIN_RECOMMEND_ICON: TuffBasicIcon = {
   value: 'i-ri-lightbulb-line'
 }
 const SUPPORTED_RECOMMEND_ICON_TYPES = new Set(['emoji', 'url', 'file', 'class', 'builtin'])
+
+/**
+ * Title of the host's clipboard-URL card, in the interface language at the moment it is built.
+ * The card is rebuilt from its snapshot while the clipboard signal holds, so the title is read
+ * there too rather than frozen into the candidate.
+ */
+export function builtinClipboardUrlTitle(): string {
+  return t('coreBox.recommendation.openClipboardUrl')
+}
 
 /** Source id a plugin's recommendation provider registers under, derived from its provider id. */
 export function pluginRecommendationSourceId(providerId: string): string {
@@ -80,7 +90,7 @@ export function buildPluginRecommendItem(
     render: {
       mode: 'default',
       basic: {
-        title: candidate.title,
+        title: isBuiltinUrl ? builtinClipboardUrlTitle() : candidate.title,
         subtitle: candidate.subtitle,
         icon: normalizePluginRecommendIcon(candidate.icon)
       }
@@ -102,9 +112,10 @@ export function buildPluginRecommendItem(
         ]
       : [
           {
+            // No label: the plugin did not write one, and the action panel names an unlabeled
+            // `execute` action in the interface language. A host-written 'Execute' was shown as is.
             id: candidate.action,
             type: 'execute',
-            label: 'Execute',
             shortcut: 'Enter'
           }
         ],

@@ -461,7 +461,7 @@ describe('mcp server admin: probe', () => {
 
     await expect(harness.admin.probe(item.id, 'four')).resolves.toEqual({
       ok: false,
-      error: 'MCP server four is not part of import-item'
+      error: 'MCP_SERVER_NOT_IMPORTED: MCP server four is not part of import-item'
     })
     expect(harness.registered.size).toBe(0)
   })
@@ -494,11 +494,11 @@ describe('mcp server admin: probe', () => {
 
     await expect(harness.admin.probe(item.id)).resolves.toEqual({
       ok: false,
-      error: 'Docs: disabled until its credentials are re-entered'
+      error: 'Docs: MCP_SERVER_REAUTH_REQUIRED: disabled until its credentials are re-entered'
     })
     await expect(harness.admin.probe(item.id, 'one')).resolves.toEqual({
       ok: false,
-      error: 'Docs: disabled until its credentials are re-entered'
+      error: 'MCP_SERVER_REAUTH_REQUIRED: disabled until its credentials are re-entered'
     })
     expect(harness.registered.size).toBe(0)
   })
@@ -508,7 +508,7 @@ describe('mcp server admin: probe', () => {
 
     await expect(harness.admin.probe('missing')).resolves.toEqual({
       ok: false,
-      error: 'MCP server missing is not configured'
+      error: 'MCP_SERVER_NOT_IMPORTED: MCP server missing is not configured'
     })
   })
 
@@ -527,7 +527,7 @@ describe('mcp server admin: probe', () => {
 
     await expect(harness.admin.probe(item.id)).resolves.toEqual({
       ok: false,
-      error: 'This entry defines no MCP server'
+      error: 'MCP_SERVER_INVALID: this entry defines no MCP server'
     })
   })
 })

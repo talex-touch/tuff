@@ -7,6 +7,7 @@ import type {
   SkillStorageKind
 } from '@talex-touch/utils/transport/sdk/domains/skill-local'
 import type { AiAgentId } from '@talex-touch/utils/types/ai-orchestrator'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 
 /**
  * The skills page's rules, kept out of the components so they can be tested as rules: how the
@@ -367,7 +368,6 @@ export function builtinSaveErrorText(error: unknown, t: Translate): string {
     error && typeof error === 'object'
       ? (error as { details?: { reason?: string; version?: number } }).details
       : undefined
-  const message = error instanceof Error ? error.message : String(error || '')
   const version = details?.version ?? '-'
 
   switch (details?.reason) {
@@ -387,6 +387,25 @@ export function builtinSaveErrorText(error: unknown, t: Translate): string {
     case 'rejected':
       return t('settings.intelligence.capabilitySaveErrorRejected', { version })
     default:
-      return message || t('settings.intelligence.capabilitySaveErrorUnknown')
+      return describeFailure(error, t, t('settings.intelligence.capabilitySaveErrorUnknown'))
   }
+}
+
+// What main's local skill channels refuse with (`skill-local-runtime.ts`, `skill-local-sources.ts`).
+const LOCAL_SKILL_FAILURE_KEYS: ReadonlyArray<[string, string]> = [
+  ['LOCAL_SKILL_CONFIG_PERSIST_FAILED', 'configNotSaved'],
+  ['LOCAL_SKILL_DIR_INVALID', 'dirInvalid']
+]
+
+/**
+ * Why a switch or a directory change failed: a refusal main explains with a code, in words, and
+ * anything else as it came. `fallback` stands in for a failure with no message.
+ */
+export function localSkillFailureText(error: unknown, t: Translate, fallback: string): string {
+  const message = failureMessage(error)
+  for (const [code, key] of LOCAL_SKILL_FAILURE_KEYS) {
+    if (message === code || message.startsWith(`${code}:`))
+      return t(`settings.skillsPage.failures.${key}`)
+  }
+  return describeFailure(error, t, fallback)
 }

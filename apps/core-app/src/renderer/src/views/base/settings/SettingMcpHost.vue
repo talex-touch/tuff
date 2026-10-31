@@ -22,8 +22,12 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import SettingChip from '~/components/settings/SettingChip.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { errorMessage } from './setting-ai-import-shared'
+import {
+  describeMcpHostFailure,
+  isMcpHostFailureCode
+} from '../../../../../shared/mcp-host-failure'
 
 const { t } = useI18n()
 const mcpHostSdk = useMcpHostSdk()
@@ -71,7 +75,10 @@ const hostTools = computed(() => (mcpHost.value?.enabled ? (mcpHost.value.tools 
 const hostStatusDescription = computed(() => {
   const state = mcpHost.value
   if (!state) return t('settings.skillsMcp.host.loading')
-  if (state.lastError) return t('settings.skillsMcp.host.errorDesc', { reason: state.lastError })
+  if (state.lastError)
+    return t('settings.skillsMcp.host.errorDesc', {
+      reason: describeMcpHostFailure(state.lastError, t)
+    })
   if (!state.enabled) return t('settings.skillsMcp.host.enableDesc')
   if (!state.running) return t('settings.skillsMcp.host.startingDesc')
   return t('settings.skillsMcp.host.runningDesc', { count: enabledHostToolCount.value })
@@ -154,7 +161,12 @@ async function runHostCommand(
     mcpHost.value = await command()
   } catch (error) {
     mcpHostLog.error('Local MCP server command failed', error)
-    toast.error(errorMessage(error, t(failureKey)))
+    const failure = failureMessage(error)
+    toast.error(t(failureKey), {
+      description: isMcpHostFailureCode(failure)
+        ? describeMcpHostFailure(failure, t)
+        : describeFailure(error, t, '') || undefined
+    })
   } finally {
     hostBusy.value = false
   }

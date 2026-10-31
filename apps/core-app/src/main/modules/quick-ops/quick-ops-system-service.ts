@@ -12,6 +12,7 @@ import { cpus, freemem, homedir, loadavg, release, totalmem, type, uptime } from
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { app } from 'electron'
+import { t } from '../../utils/i18n-helper'
 import { formatDuration } from './quick-ops-session-manager'
 import { createNetworkStatusInfo } from './quick-ops-network-service'
 import type {
@@ -125,8 +126,8 @@ export async function createDiskSpaceInfo(): Promise<
     }
 > {
   const targets = [
-    { label: 'Home', path: homedir() },
-    { label: 'Tuff Data', path: app.getPath('userData') }
+    { label: t('quickOps.directories.home'), path: homedir() },
+    { label: t('quickOps.directories.tuffData'), path: app.getPath('userData') }
   ].filter((target) => target.path)
 
   try {
@@ -153,7 +154,7 @@ export async function createDiskSpaceInfo(): Promise<
   } catch {
     return {
       degradedReason: 'disk-space-read-failed',
-      message: '读取文件系统容量失败'
+      message: t('quickOps.errors.diskSpaceReadFailed')
     }
   }
 }
@@ -206,10 +207,10 @@ export async function createDirectoryUsageInfo(
             : 'directory-usage-read-failed',
       message:
         code === 'ENOENT'
-          ? '目录不存在'
+          ? t('quickOps.errors.directoryMissing')
           : code === 'EACCES' || code === 'EPERM'
-            ? '没有权限读取目录'
-            : '读取目录占用失败',
+            ? t('quickOps.errors.directoryPermissionDenied')
+            : t('quickOps.errors.directoryUsageReadFailed'),
       path: typeof failedPath === 'string' ? failedPath : undefined
     }
   }
@@ -240,11 +241,11 @@ export function formatDirectoryUsageInfo(info: QuickOpsDirectoryUsageInfo): stri
 
 function getDefaultDirectoryUsageTargets(): QuickOpsDirectoryUsageTarget[] {
   return [
-    { label: 'Desktop', path: getSafeAppPath('desktop') },
-    { label: 'Downloads', path: getSafeAppPath('downloads') },
-    { label: 'Documents', path: getSafeAppPath('documents') },
-    { label: 'Tuff Data', path: getSafeAppPath('userData') },
-    { label: 'Logs', path: getSafeAppPath('logs') }
+    { label: t('quickOps.directories.desktop'), path: getSafeAppPath('desktop') },
+    { label: t('quickOps.directories.downloads'), path: getSafeAppPath('downloads') },
+    { label: t('quickOps.directories.documents'), path: getSafeAppPath('documents') },
+    { label: t('quickOps.directories.tuffData'), path: getSafeAppPath('userData') },
+    { label: t('quickOps.directories.logs'), path: getSafeAppPath('logs') }
   ].filter((target) => target.path)
 }
 
@@ -409,12 +410,12 @@ export async function createBatteryStatusInfo(): Promise<
     if (process.platform === 'linux') return await createLinuxBatteryStatusInfo()
     return {
       degradedReason: 'battery-status-unsupported-platform',
-      message: '当前平台暂不支持电池状态读取'
+      message: t('quickOps.errors.batteryUnsupported')
     }
   } catch {
     return {
       degradedReason: 'battery-status-read-failed',
-      message: '读取电池状态失败'
+      message: t('quickOps.errors.batteryReadFailed')
     }
   }
 }

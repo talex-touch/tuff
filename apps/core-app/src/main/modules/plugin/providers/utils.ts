@@ -11,6 +11,7 @@ import path from 'node:path'
 import { finished, pipeline } from 'node:stream/promises'
 import fse from 'fs-extra'
 import { NetworkTimeoutError, isTimeoutLikeError } from '@talex-touch/utils/network'
+import { t } from '../../../utils/i18n-helper'
 import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
 
@@ -211,7 +212,7 @@ export async function downloadToTempFile(
   const stat = await fse.stat(filePath).catch(() => null)
   if (!stat || stat.size === 0) {
     await fse.remove(filePath).catch(() => {})
-    throw new Error('Downloaded file is empty or was not created')
+    throw new Error('PLUGIN_DOWNLOAD_EMPTY')
   }
 
   // Verify file size matches expected if Content-Length was provided
@@ -249,7 +250,7 @@ export async function ensureRiskAccepted(
   })
 
   if (!accepted) {
-    const error = new Error('风险确认被用户拒绝')
+    const error = new Error(t('nativeDialogs.pluginInstallRisk.rejected'))
     error.name = 'PluginRiskRejectedError'
     throw error
   }

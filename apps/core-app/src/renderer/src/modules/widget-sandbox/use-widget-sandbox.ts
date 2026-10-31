@@ -16,10 +16,20 @@ const READY_TIMEOUT_MS = 4000
 
 export type WidgetSandboxStatus = 'loading' | 'ready' | 'failed'
 
+/**
+ * Why a widget failed. What its code threw is shown to the user verbatim (empty when it threw
+ * nothing it could say); a request the sandbox policy stopped and a widget that never reported back
+ * are the host's to word.
+ */
+export type WidgetSandboxFailure =
+  | { reason: 'threw'; message: string }
+  | { reason: 'blocked'; directive: string }
+  | { reason: 'timedOut' }
+
 export interface UseWidgetSandboxReturn {
   status: Readonly<Ref<WidgetSandboxStatus>>
-  /** Present only when `status` is `failed`; shown to the user verbatim. */
-  error: Readonly<Ref<string>>
+  /** Present only when `status` is `failed`. */
+  failure: Readonly<Ref<WidgetSandboxFailure | null>>
   height: Readonly<Ref<number>>
   srcdoc: Readonly<Ref<string>>
 }
@@ -42,7 +52,7 @@ export function useWidgetSandbox(
   frame: Ref<HTMLIFrameElement | null>
 ): UseWidgetSandboxReturn {
   const status = ref<WidgetSandboxStatus>('loading')
-  const error = ref('')
+  const failure = ref<WidgetSandboxFailure | null>(null)
   const height = ref(MIN_HEIGHT)
   const srcdoc = ref('')
   let readyTimer: ReturnType<typeof setTimeout> | null = null
@@ -53,10 +63,10 @@ export function useWidgetSandbox(
     readyTimer = null
   }
 
-  function fail(message: string): void {
+  function fail(reason: WidgetSandboxFailure): void {
     clearReadyTimer()
     status.value = 'failed'
-    error.value = message
+    failure.value = reason
   }
 
   function onMessage(event: MessageEvent): void {
@@ -74,8 +84,9 @@ export function useWidgetSandbox(
       return
     }
     if (type === WIDGET_SANDBOX_MESSAGE.error) {
-      const message = (data as { message?: unknown }).message
-      fail(typeof message === 'string' ? message : 'unknown error')
+      const { message, directive } = data as { message?: unknown; directive?: unknown }
+      if (typeof directive === 'string') fail({ reason: 'blocked', directive })
+      else fail({ reason: 'threw', message: typeof message === 'string' ? message : '' })
       return
     }
     if (type === WIDGET_SANDBOX_MESSAGE.height) {
@@ -90,7 +101,7 @@ export function useWidgetSandbox(
     (value) => {
       clearReadyTimer()
       status.value = 'loading'
-      error.value = ''
+      failure.value = null
       height.value = MIN_HEIGHT
       srcdoc.value = buildWidgetSandboxDocument({
         source: value,
@@ -100,7 +111,7 @@ export function useWidgetSandbox(
       // working; after this it is treated as broken so the reader sees the
       // tool's own output instead of an empty box forever.
       readyTimer = setTimeout(() => {
-        if (status.value === 'loading') fail('widget did not start')
+        if (status.value === 'loading') fail({ reason: 'timedOut' })
       }, READY_TIMEOUT_MS)
     },
     { immediate: true }
@@ -115,7 +126,7 @@ export function useWidgetSandbox(
 
   return {
     status: readonly(status),
-    error: readonly(error),
+    failure: readonly(failure),
     height: readonly(height),
     srcdoc: readonly(srcdoc)
   }

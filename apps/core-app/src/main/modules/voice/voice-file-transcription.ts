@@ -2,6 +2,7 @@ import { constants } from 'node:fs'
 import { lstat, open } from 'node:fs/promises'
 import { basename, extname } from 'node:path'
 import { dialog } from 'electron'
+import { t } from '../../utils/i18n-helper'
 
 const MAX_VOICE_FILE_BYTES = 25 * 1024 * 1024
 
@@ -37,10 +38,15 @@ function assertNotAborted(signal?: AbortSignal): void {
 export async function selectVoiceFile(signal?: AbortSignal): Promise<SelectedVoiceFile | null> {
   assertNotAborted(signal)
   const selection = await dialog.showOpenDialog({
-    title: 'Select audio file',
-    buttonLabel: 'Transcribe',
+    title: t('nativeDialogs.files.selectAudio'),
+    buttonLabel: t('nativeDialogs.files.transcribe'),
     properties: ['openFile', 'noResolveAliases'],
-    filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'ogg', 'opus', 'flac', 'm4a', 'webm'] }]
+    filters: [
+      {
+        name: t('nativeDialogs.files.audioFilter'),
+        extensions: ['wav', 'mp3', 'ogg', 'opus', 'flac', 'm4a', 'webm']
+      }
+    ]
   })
   assertNotAborted(signal)
   if (selection.canceled || selection.filePaths.length !== 1) return null

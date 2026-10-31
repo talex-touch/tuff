@@ -67,20 +67,27 @@ const callCount = computed(() =>
   props.models.reduce((sum, model) => sum + Math.max(0, model.requestCount), 0)
 )
 
-/** Two counts in one sentence, each worded on its own so neither borrows the other's plural. */
+/**
+ * Two counts in one sentence, each worded on its own so neither borrows the other's plural. The
+ * verb agrees with the calls.
+ */
 const title = computed(() =>
-  t('intelligenceAudit.zeroCost.title', {
-    models: t(
-      'intelligenceAudit.zeroCost.modelCount',
-      { count: formatInteger(props.models.length, locale.value) },
-      props.models.length
-    ),
-    calls: t(
-      'intelligenceAudit.zeroCost.callCount',
-      { count: formatInteger(callCount.value, locale.value) },
-      callCount.value
-    )
-  })
+  t(
+    'intelligenceAudit.zeroCost.title',
+    {
+      models: t(
+        'intelligenceAudit.zeroCost.modelCount',
+        { count: formatInteger(props.models.length, locale.value) },
+        props.models.length
+      ),
+      calls: t(
+        'intelligenceAudit.zeroCost.callCount',
+        { count: formatInteger(callCount.value, locale.value) },
+        callCount.value
+      )
+    },
+    callCount.value
+  )
 )
 
 /** The inline line names the models in reading order; the list below it has the rest. */

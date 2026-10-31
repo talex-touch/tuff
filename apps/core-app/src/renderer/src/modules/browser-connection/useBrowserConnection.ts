@@ -11,6 +11,7 @@ import { createBrowserConnectionSdk } from '@talex-touch/utils/transport/sdk/dom
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { describeFailure } from '~/utils/failure-text'
 
 /**
  * One renderer-wide view of Main's Chrome connection state.
@@ -219,12 +220,16 @@ export function useBrowserConnection() {
   onMounted(attach)
   onBeforeUnmount(detach)
 
-  /** Main reports machine codes (`BROWSER_*`); anything else is Chrome's own text and shown as is. */
+  /**
+   * Main reports machine codes (`BROWSER_*`). A failure of the channel itself reads in the interface
+   * language; anything else is Chrome's or the system's own text, shown without the transport's
+   * preface.
+   */
   function describeError(raw: string | null | undefined): string {
     if (!raw) return ''
     // Transport rejections may wrap Main's message ("…: Error: BROWSER_X"), so the code is searched.
     const code = /\bBROWSER_[A-Z_]+\b/.exec(raw)?.[0]
-    if (!code) return raw
+    if (!code) return describeFailure(raw, t, raw)
     const key = `browserConnection.errors.${code}`
     return te(key) ? t(key) : t('browserConnection.errors.unknown', { code })
   }

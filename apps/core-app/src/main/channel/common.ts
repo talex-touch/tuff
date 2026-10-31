@@ -149,6 +149,7 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
+import { localizePlatformCapability } from '../modules/platform/capability-text'
 import { activeAppService } from '../modules/system/active-app'
 import { wallpaperAdapter } from '../modules/system/wallpaper-adapter'
 import { getAppDestinationNavigationService } from '../modules/app-destination/app-destination-navigation'
@@ -192,17 +193,18 @@ const execFileAsync = promisify(execFile)
  * LaunchServices leaves a rejected promise rather than a handler that never settles.
  */
 const OPEN_WITH_TIMEOUT_MS = 10_000
+// English, like the registry's; `localizePlatformCapability` words them when the list is built.
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
-  description: 'CLI 工具联动能力（Beta）',
+  description: 'Working with the Tuff command-line tool (Beta)',
   scope: 'plugin',
   status: 'beta'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
   name: 'Active App',
-  description: '当前前台应用与窗口上下文读取能力',
+  description: 'Reads the foreground app and its window context',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -210,7 +212,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
 const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
   id: 'platform.selection-capture',
   name: 'Selection Capture',
-  description: '活动应用选中文本抓取能力',
+  description: 'Captures the text selected in the active app',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -218,7 +220,7 @@ const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
 const AUTO_PASTE_CAPABILITY: PlatformCapability = {
   id: 'platform.auto-paste',
   name: 'Auto Paste',
-  description: '向当前焦点应用回写剪贴板内容',
+  description: 'Pastes clipboard content into the focused app',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -226,21 +228,21 @@ const AUTO_PASTE_CAPABILITY: PlatformCapability = {
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: '仅 macOS 提供原生系统分享能力',
+  description: 'Native system sharing, on macOS only',
   scope: 'system',
   status: 'beta'
 }
 const TERMINAL_CAPABILITY: PlatformCapability = {
   id: 'platform.terminal',
   name: 'Terminal Command Runtime',
-  description: '命令进程执行能力（非 PTY 终端）',
+  description: 'Runs commands as child processes, not in a PTY terminal',
   scope: 'system',
   status: 'beta'
 }
 const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
   id: 'platform.permission-deep-link',
   name: 'Permission Deep-Link',
-  description: '系统权限设置检查与跳转能力',
+  description: 'Checks system permission settings and opens them',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -248,7 +250,7 @@ const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
 const EVERYTHING_SEARCH_CAPABILITY: PlatformCapability = {
   id: 'platform.everything-search',
   name: 'Everything Search',
-  description: 'Windows Everything 文件搜索后端能力',
+  description: 'Windows file search backend powered by Everything',
   scope: 'system',
   status: 'beta'
 }
@@ -709,17 +711,14 @@ async function listPlatformCapabilities(
     applyCapabilityRuntimePatch(TERMINAL_CAPABILITY, {
       supportLevel: 'best_effort',
       issueCode: 'NO_PTY',
-      reason:
-        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.',
-      limitations: [
-        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
-      ]
+      reason: t('settings.settingPlatformCapabilities.items.terminal.noPty'),
+      limitations: [t('settings.settingPlatformCapabilities.items.terminal.noPty')]
     })
   )
   appendDynamicCapability(
     applyCapabilityRuntimePatch(TUFF_CLI_CAPABILITY, await getTuffCliCapabilityPatch())
   )
-  return capabilities
+  return capabilities.map(localizePlatformCapability)
 }
 
 function isLocale(value: string): value is Locale {
@@ -2536,7 +2535,7 @@ export class CommonChannelModule extends BaseModule {
         if (!win) return { filePath: undefined }
 
         const result = await dialog.showSaveDialog(win, {
-          title: payload?.title ?? 'Save File',
+          title: payload?.title ?? t('nativeDialogs.files.saveFile'),
           defaultPath: payload?.defaultPath,
           filters: payload?.filters
         })

@@ -6,6 +6,7 @@ import type {
   McpServerRow
 } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
 import type { AiAgentId, AiImportApplyRequest } from '@talex-touch/utils/types/ai-orchestrator'
+import { failureMessage } from '~/utils/failure-text'
 
 /**
  * The MCP page's rules, kept out of the component so they can be tested as rules: what a row's
@@ -246,12 +247,14 @@ export interface McpProbeState {
 /* ─── failures ─── */
 
 /**
- * Why an import, a switch or a probe failed, as the page words it. The import channel answers with
- * bare codes (`ai-import-error-projection.ts` in main); the switch channel throws messages that start
- * with `MCP_SERVER_*:` (`resource-inventory/mcp-inventory.ts`), and the probe of a server Tuff does
- * not hold answers with an `error` that starts the same way, with the import's codes
+ * Why an import, a switch, a probe or a save failed, as the page words it. The import channel
+ * answers with bare codes (`ai-import-error-projection.ts` in main); the switch channel throws
+ * messages that start with `MCP_SERVER_*:` (`resource-inventory/mcp-inventory.ts`), the hand-entered
+ * server's save does the same (`mcp-server-admin.ts`), and a probe answers with an `error` that starts
+ * the same way, with the import's codes or the registry's stable ones
  * (`resource-inventory/mcp-declared-probe.ts`). Anything else is `unknown`, and the page shows the
- * message it got.
+ * message it got. A thrown message is read past the transport's preface, which is put in front of
+ * every failure a call relays.
  */
 export type McpFailureKind =
   | 'confirmation'
@@ -261,6 +264,14 @@ export type McpFailureKind =
   | 'source-missing'
   | 'invalid'
   | 'not-imported'
+  | 'unavailable'
+  | 'tools-failed'
+  | 'field-missing'
+  | 'field-too-long'
+  | 'url-invalid'
+  | 'env-name-invalid'
+  | 'header-name-invalid'
+  | 'credential-not-stored'
   | 'unknown'
 
 const FAILURE_CODES: ReadonlyArray<[string, McpFailureKind]> = [
@@ -268,9 +279,18 @@ const FAILURE_CODES: ReadonlyArray<[string, McpFailureKind]> = [
   ['MCP_SERVER_REAUTH_REQUIRED', 'reauth'],
   ['AI_IMPORT_SOURCE_CHANGED', 'source-changed'],
   ['AI_IMPORT_SECURE_STORE_UNAVAILABLE', 'secure-store'],
+  ['MCP_SERVER_SECURE_STORE_UNAVAILABLE', 'secure-store'],
   ['MCP_SERVER_SOURCE_MISSING', 'source-missing'],
   ['MCP_SERVER_INVALID', 'invalid'],
-  ['MCP_SERVER_NOT_IMPORTED', 'not-imported']
+  ['MCP_SERVER_NOT_IMPORTED', 'not-imported'],
+  ['MCP_SERVER_UNAVAILABLE', 'unavailable'],
+  ['MCP_TOOL_FAILED', 'tools-failed'],
+  ['MCP_SERVER_FIELD_MISSING', 'field-missing'],
+  ['MCP_SERVER_FIELD_TOO_LONG', 'field-too-long'],
+  ['MCP_SERVER_URL_INVALID', 'url-invalid'],
+  ['MCP_SERVER_ENV_NAME_INVALID', 'env-name-invalid'],
+  ['MCP_SERVER_HEADER_NAME_INVALID', 'header-name-invalid'],
+  ['MCP_SERVER_CREDENTIAL_NOT_STORED', 'credential-not-stored']
 ]
 
 export function mcpFailureKind(error: unknown): McpFailureKind {
@@ -278,7 +298,7 @@ export function mcpFailureKind(error: unknown): McpFailureKind {
     error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: string }).code
       : ''
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const message = failureMessage(error)
   for (const [prefix, kind] of FAILURE_CODES) {
     if (code === prefix || message === prefix || message.startsWith(`${prefix}:`)) return kind
   }

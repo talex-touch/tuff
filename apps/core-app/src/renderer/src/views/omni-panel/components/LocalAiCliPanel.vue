@@ -260,7 +260,14 @@ function handleChunk(chunk: LocalAiCliTaskChunk): void {
 }
 function stableTaskErrorCode(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : String(error)
+  // Main refuses to start a task with `LOCAL_AI_CLI_<code>`, and fails one it started with the
+  // bare code; either is found inside the transport's wrapping.
   for (const code of [
+    'BETA_UNAVAILABLE',
+    'FEATURE_DISABLED',
+    'PROVIDER_DISABLED',
+    'PROVIDER_UNAVAILABLE',
+    'WRITE_APPROVAL_UNAVAILABLE',
     'NATIVE_SESSION_BUSY',
     'NATIVE_SESSION_MISSING',
     'NATIVE_SESSION_CONFLICT',
@@ -271,6 +278,37 @@ function stableTaskErrorCode(error: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/** The words for each code a failed task can end with here; any other code is shown as it came. */
+const FAILURE_KEYS: Record<string, string> = {
+  BETA_UNAVAILABLE: 'betaUnavailable',
+  FEATURE_DISABLED: 'featureDisabled',
+  PROVIDER_DISABLED: 'providerDisabled',
+  PROVIDER_UNAVAILABLE: 'providerUnavailable',
+  PROVIDER_VERSION_UNSUPPORTED: 'providerVersionUnsupported',
+  WRITE_APPROVAL_UNAVAILABLE: 'writeApprovalUnavailable',
+  PROVIDER_RESUME_UNSUPPORTED: 'resumeUnsupported',
+  NATIVE_SESSION_BUSY: 'sessionBusy',
+  NATIVE_SESSION_MISSING: 'sessionMissing',
+  NATIVE_SESSION_CONFLICT: 'sessionConflict',
+  WORKSPACE_INVALID: 'workspaceInvalid',
+  PROCESS_START_FAILED: 'processStartFailed',
+  PROTOCOL_INVALID: 'protocolInvalid',
+  PROCESS_EXITED: 'processExited',
+  LOCAL_AI_CLI_STATUS_FAILED: 'statusFailed'
+}
+
+/**
+ * A task that ended without a code, as when the CLI stopped with nothing to show, says only that.
+ */
+const failureText = computed(() => {
+  const code = errorCode.value
+  if (!code) return t('localAiCliPanel.failedNoReason')
+  const key = FAILURE_KEYS[code]
+  return key
+    ? t('localAiCliPanel.failedWithReason', { reason: t(`localAiCliPanel.failures.${key}`) })
+    : t('localAiCliPanel.failed', { code })
+})
 
 async function run(): Promise<void> {
   if (!canRun.value || !provider.value) return
@@ -590,7 +628,11 @@ defineExpose({ open, reset, newTask })
     </header>
 
     <div v-if="!status?.enabled || providerChoices.length === 0" class="LocalAiCliPanel__empty">
-      <p>{{ t('localAiCliPanel.disabled') }}</p>
+      <!-- A status never read says nothing about whether the feature is on. -->
+      <p v-if="!status && errorCode === 'LOCAL_AI_CLI_STATUS_FAILED'">
+        {{ t('localAiCliPanel.failures.statusFailed') }}
+      </p>
+      <p v-else>{{ t('localAiCliPanel.disabled') }}</p>
       <TxButton size="sm" @click="openSettings">{{ t('localAiCliPanel.openSettings') }}</TxButton>
     </div>
 
@@ -693,7 +735,7 @@ defineExpose({ open, reset, newTask })
           :class="{ 'is-active': activeView === 'gui' }"
           @click="activeView = 'gui'"
         >
-          <span class="i-carbon-chat" /> {{ t('localAiCliPanel.viewGui') || '界面 (GUI)' }}
+          <span class="i-carbon-chat" /> {{ t('localAiCliPanel.viewGui') }}
         </button>
         <button
           type="button"
@@ -701,7 +743,7 @@ defineExpose({ open, reset, newTask })
           :class="{ 'is-active': activeView === 'terminal' }"
           @click="switchToTerminal"
         >
-          <span class="i-carbon-terminal" /> {{ t('localAiCliPanel.viewTerminal') || '终端 (TTY)' }}
+          <span class="i-carbon-terminal" /> {{ t('localAiCliPanel.viewTerminal') }}
         </button>
       </div>
 
@@ -711,7 +753,7 @@ defineExpose({ open, reset, newTask })
         :class="`is-${phase}`"
       >
         <p v-if="phase === 'running' && !output">{{ t('localAiCliPanel.running') }}</p>
-        <p v-else-if="phase === 'failed'">{{ t('localAiCliPanel.failed', { code: errorCode }) }}</p>
+        <p v-else-if="phase === 'failed'">{{ failureText }}</p>
         <p v-else-if="phase === 'cancelled'">{{ t('localAiCliPanel.cancelled') }}</p>
         <TxMarkdownView v-if="output" :content="output" theme="auto" />
       </div>

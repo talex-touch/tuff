@@ -1438,7 +1438,7 @@ export class AiCliOrchestrator {
     await this.withRunWriteLease(runId, async () => {
       await aiOrchestratorStore.updateOrchestratorRun(runId, {
         status: 'cancelled',
-        error: 'Cancelled by user',
+        error: AI_RUN_CANCELLED,
         metadata: projectPersistedRunMetadata(run.metadata),
         completedAt: now,
         updatedAt: now

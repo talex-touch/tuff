@@ -91,7 +91,7 @@ async function loadCookies(): Promise<void> {
     cookies.value = items || []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    error.value = msg
+    error.value = connection.describeError(msg)
   } finally {
     fetching.value = false
   }
@@ -111,7 +111,7 @@ async function syncNow(): Promise<void> {
     emit('sync-success', res?.importedCount ?? 0, props.domain)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    error.value = msg
+    error.value = connection.describeError(msg)
   } finally {
     syncing.value = false
   }

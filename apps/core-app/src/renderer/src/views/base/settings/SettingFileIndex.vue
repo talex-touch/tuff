@@ -265,9 +265,11 @@ const browserBookmarksDescription = computed(() => {
 
   return t('settings.settingFileIndex.browserBookmarksDesc', {
     status: t(resolveIndexingSourceStatusKey(source.health.status)),
-    items: source.health.itemCount,
-    roots: source.roots.length,
-    evidence: source.evidence?.length ?? 0,
+    items: t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }),
+    roots: t('settings.settingFileIndex.browserBookmarksRoots', { count: source.roots.length }),
+    evidence: t('settings.settingFileIndex.browserBookmarksEvidence', {
+      count: source.evidence?.length ?? 0
+    }),
     reason: source.health.reason || '-'
   })
 })
@@ -1156,11 +1158,13 @@ const sourceDiagnosticsSummaryText = computed(() => {
   if (!summary) return t('settings.settingFileIndex.sourceDiagnosticsChecking')
 
   return t('settings.settingFileIndex.sourceDiagnosticsSummary', {
-    total: summary.total,
+    total: t('settings.settingFileIndex.sourceDiagnosticsSources', { count: summary.total }),
     ready: summary.ready,
     degraded: summary.degraded,
     unavailable: summary.unavailable,
-    attention: sourceDiagnosticsAttentionCount.value
+    attention: t('settings.settingFileIndex.sourceDiagnosticsAttention', {
+      count: sourceDiagnosticsAttentionCount.value
+    })
   })
 })
 
@@ -1210,7 +1214,7 @@ function getSourceProgressTone(source: IndexedSourceDiagnostics): string {
 }
 
 function formatSourceRecovery(source: IndexedSourceDiagnostics): string | null {
-  const chip = resolveIndexingSourceRecoveryChip(source, locale.value)
+  const chip = resolveIndexingSourceRecoveryChip(source, locale.value, t)
   return chip ? t(chip.labelKey, chip.values) : null
 }
 
@@ -1803,7 +1807,7 @@ async function triggerRebuild() {
               }}
             </span>
             <span
-              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic, locale)"
+              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic, locale, t)"
               :key="task.id"
               class="source-diagnostic-chip source-diagnostic-task-chip"
               :class="`source-diagnostic-task-chip--${task.tone}`"
@@ -1914,7 +1918,12 @@ async function triggerRebuild() {
           </div>
           <div class="source-diagnostics-row source-diagnostics-row--dialog">
             <span
-              v-for="gate in resolveIndexingSourceRunGateChips(selectedSourceDiagnostic, 3, locale)"
+              v-for="gate in resolveIndexingSourceRunGateChips(
+                selectedSourceDiagnostic,
+                3,
+                locale,
+                t
+              )"
               :key="gate.id"
               class="source-diagnostic-chip source-history-chip"
               :class="`source-diagnostic-task-chip--${gate.tone}`"
@@ -1938,7 +1947,8 @@ async function triggerRebuild() {
               v-for="task in resolveIndexingSourceRecentTaskChips(
                 selectedSourceDiagnostic,
                 3,
-                locale
+                locale,
+                t
               )"
               :key="task.id"
               class="source-diagnostic-chip source-history-chip source-recent-task-chip"

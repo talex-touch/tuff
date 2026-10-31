@@ -40,6 +40,7 @@ import BrowserSettingsTab from './BrowserSettingsTab.vue'
 import ChromeBookmarkDialog from './ChromeBookmarkDialog.vue'
 import ChromeLibraryPanel from './ChromeLibraryPanel.vue'
 import ChromeCookieDialog from './ChromeCookieDialog.vue'
+import { describeBrowserError } from './browser-errors'
 import type { BrowserTabMenuAction } from './tab-actions'
 import { runBrowserTabAction } from './tab-actions'
 
@@ -845,7 +846,7 @@ onBeforeUnmount(() => {
           <TxIconButton
             icon="i-ri-close-line"
             size="xs"
-            :label="t('browser.closeTab', { title: tab.title || t('browser.newTab') })"
+            :label="t('browser.closeTab', { title: tabTitle(tab) })"
             @click="command(() => sdk.closeTab(tab.id))"
           />
           <span
@@ -1005,7 +1006,9 @@ onBeforeUnmount(() => {
       role="alert"
       class="flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-5 py-3 text-sm"
     >
-      <span class="min-w-0 flex-1 break-words">{{ t('browser.actionFailed') }} {{ error }}</span>
+      <span class="min-w-0 flex-1 break-words">{{
+        t('browser.actionFailedWithReason', { reason: describeBrowserError(error, t) })
+      }}</span>
       <TxButton size="sm" variant="ghost" @click="retry">{{ t('browser.retry') }}</TxButton>
     </div>
 
@@ -1268,7 +1271,7 @@ onBeforeUnmount(() => {
         <span class="i-ri-error-warning-line inline-flex h-8 w-8" aria-hidden="true" />
         <h1 class="m-0 text-xl font-semibold">{{ t('browser.pageFailed') }}</h1>
         <p class="m-0 max-w-lg break-words text-sm text-[var(--tx-text-color-regular)]">
-          {{ activeTab.error }}
+          {{ describeBrowserError(activeTab.error, t) }}
         </p>
         <TxButton icon="i-ri-refresh-line" @click="runActive('reload')">{{
           t('browser.retry')

@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { describeFailure } from '~/utils/failure-text'
 import IntelligenceModelBindingEditor from './IntelligenceModelBindingEditor.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
@@ -367,8 +368,7 @@ async function handleFetchModels() {
       toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : t('intelligence.config.api.modelsFetchFailed')
+    const message = describeFailure(error, t, t('intelligence.config.api.modelsFetchFailed'))
     modelsError.value = message
     toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
   } finally {
@@ -412,7 +412,7 @@ watch(
             {{ t('intelligence.config.model.noModels') }}
           </span>
           <span v-else class="text-[var(--tx-text-color-primary)]">
-            {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
+            {{ t('intelligence.config.model.modelsCount', { count: localModels.length }) }}
           </span></span
         >
         <TxButton variant="flat">

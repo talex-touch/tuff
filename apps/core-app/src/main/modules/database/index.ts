@@ -18,11 +18,13 @@ import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
+import { t } from '../../utils/i18n-helper'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
+  isSqliteBusyError,
   isSqliteCorruptionError,
   isSqliteStorageFullError,
   setSqliteRetryExhaustedListener
@@ -86,6 +88,17 @@ const AUX_COPY_TABLES = [
   'voice_polish_telemetry',
   'voice_recognition_records'
 ] as const
+
+/**
+ * Why the schema could not be brought up to date, in the interface language. The error itself
+ * stays in the log the dialog points to: drizzle's message quotes the whole statement it ran.
+ */
+function describeMigrationFailure(error: unknown): string {
+  if (isSqliteStorageFullError(error)) return t('nativeDialogs.database.migrationFailure.diskFull')
+  if (isSqliteCorruptionError(error)) return t('nativeDialogs.database.migrationFailure.damaged')
+  if (isSqliteBusyError(error)) return t('nativeDialogs.database.migrationFailure.inUse')
+  return t('nativeDialogs.database.migrationFailure.failed')
+}
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
@@ -191,10 +204,10 @@ export class DatabaseModule extends BaseModule {
 
     await dialog.showMessageBox(window || undefined, {
       type: 'error',
-      title: 'Database Initialization Failed',
-      message: 'Database migration failed, application cannot start',
-      detail: details || error.message || 'Unknown error',
-      buttons: ['OK'],
+      title: t('nativeDialogs.database.title'),
+      message: t('nativeDialogs.database.message'),
+      detail: details || error.message || t('common.unknownError'),
+      buttons: [t('nativeDialogs.ok')],
       defaultId: 0,
       noLink: true
     })
@@ -1509,7 +1522,7 @@ export class DatabaseModule extends BaseModule {
           : [])
       ]
 
-      const detail = `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
+      const detail = `${t('nativeDialogs.database.migrationsFolderMissing', { path: migrationsFolderResolved })}\n\n${t('nativeDialogs.database.checkInstallation')}\n\n${t('nativeDialogs.database.debugInformation')}\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
 
       await this.showDatabaseErrorDialog(error, detail)
       throw error
@@ -1524,7 +1537,7 @@ export class DatabaseModule extends BaseModule {
         ? fse.readdirSync(migrationsFolderResolved).join(', ')
         : 'N/A'
 
-      const detail = `Migration journal file not found:\n${metaJournalPath}\n\nMigrations folder exists: ${fse.existsSync(migrationsFolderResolved)}\nFolder contents: ${folderContents}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Migrations folder: ${migrationsFolderResolved}`
+      const detail = `${t('nativeDialogs.database.journalMissing', { path: metaJournalPath })}\n\n${t('nativeDialogs.database.migrationsFolderExists', { exists: t(fse.existsSync(migrationsFolderResolved) ? 'common.yes' : 'common.no') })}\n${t('nativeDialogs.database.folderContents', { contents: folderContents })}\n\n${t('nativeDialogs.database.checkInstallation')}\n\n${t('nativeDialogs.database.debugInformation')}\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Migrations folder: ${migrationsFolderResolved}`
 
       await this.showDatabaseErrorDialog(error, detail)
       throw error
@@ -1594,11 +1607,11 @@ export class DatabaseModule extends BaseModule {
       // is either a real migration failure or a failed fixup. Both leave the schema unusable.
       dbLog.error('Migration failed', { error })
 
-      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
-      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+      const errorInstance =
+        error instanceof Error ? error : new Error(String(error ?? 'Unknown error'))
       await this.showDatabaseErrorDialog(
         errorInstance,
-        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${path.join(resolveRuntimeRootPath(app), 'logs')}`
+        `${describeMigrationFailure(error)}\n\n${t('nativeDialogs.database.checkLogs', { path: path.join(resolveRuntimeRootPath(app), 'logs') })}`
       )
 
       process.exit(1)

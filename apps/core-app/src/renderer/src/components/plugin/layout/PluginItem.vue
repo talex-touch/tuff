@@ -1,13 +1,13 @@
 <script lang="ts" name="PluginItem" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
+import { describePluginIssue, describePluginLoadError } from '~/modules/plugin/plugin-issue-display'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -15,8 +15,14 @@ const props = defineProps<{
   isTarget?: boolean
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
+const describedIssues = computed(() =>
+  (props.plugin.issues ?? []).map((issue) => ({
+    issue,
+    display: describePluginIssue(issue, t, locale.value)
+  }))
+)
 const pluginDisplayName = computed(() => props.plugin.displayName || props.plugin.name)
 const pluginSummary = computed(() => {
   if (props.plugin.loadState === 'loading') {
@@ -24,10 +30,13 @@ const pluginSummary = computed(() => {
   }
 
   if (props.plugin.loadState === 'load_failed') {
-    return props.plugin.loadError?.message || t('plugin.summary.loadFailed')
+    return (
+      describePluginLoadError(props.plugin, t, locale.value)?.title ||
+      t('plugin.summary.loadFailed')
+    )
   }
 
-  return props.plugin.desc || props.plugin.loadError?.message || ''
+  return props.plugin.desc || describePluginLoadError(props.plugin, t, locale.value)?.title || ''
 })
 
 const shouldPreservePluginIconColor = computed(() => {
@@ -53,43 +62,49 @@ const pluginIconStyle = {
     class="plugin-item my-4 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-[height] duration-250 ease-in-out fake-background"
     :class="{ shrink, target: isTarget, dev: plugin.dev?.enable }"
   >
-    <TxPopover v-if="hasIssues" placement="top-start" :width="300" trigger="hover">
-      <template #reference>
-        <i
-          class="i-ri-error-warning-line issue-badge absolute top-1.5 right-1.5 text-red-500/80 text-xl z-10 cursor-help"
-        />
-      </template>
-      <div class="plugin-issues-panel">
-        <div class="plugin-issues-title">{{ t('plugin.issues.title') }}</div>
-        <TxScroll native no-padding class="issues-list h-60">
-          <div
-            v-for="(issue, index) in plugin.issues"
-            :key="index"
-            class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
-            :class="{
-              'bg-red-500/10': issue.type === 'error',
-              'bg-yellow-500/10': issue.type === 'warning'
-            }"
-          >
-            <i
-              class="flex-shrink-0 mt-0.5"
+    <div v-if="hasIssues" class="issue-badge">
+      <TxPopover placement="top-start" :width="300" trigger="hover">
+        <template #reference>
+          <i class="i-ri-error-warning-line block text-red-500/80 text-xl cursor-help" />
+        </template>
+        <div class="plugin-issues-panel">
+          <div class="plugin-issues-title">{{ t('plugin.issues.title') }}</div>
+          <TxScroll native no-padding class="issues-list">
+            <div
+              v-for="({ issue, display }, index) in describedIssues"
+              :key="index"
+              class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
               :class="{
-                'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-                'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
+                'bg-red-500/10': issue.type === 'error',
+                'bg-yellow-500/10': issue.type === 'warning'
               }"
-            />
-            <div class="ml-2 text-xs">
-              <p class="font-bold">
-                {{ issue.source }}
-              </p>
-              <p class="mt-0.5 text-gray-600 dark:text-gray-300">
-                {{ resolveI18nMessage(issue.message) }}
-              </p>
+            >
+              <i
+                class="flex-shrink-0 mt-0.5"
+                :class="{
+                  'i-ri-close-circle-fill text-red-500': issue.type === 'error',
+                  'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
+                }"
+              />
+              <div class="ml-2 min-w-0 text-xs">
+                <p class="font-bold">
+                  {{ display.title }}
+                </p>
+                <p v-if="issue.source" class="mt-0.5 text-gray-500 dark:text-gray-400">
+                  {{ t('plugin.issues.source', { source: issue.source }) }}
+                </p>
+                <p
+                  v-if="display.detail"
+                  class="mt-0.5 font-mono break-words text-gray-600 dark:text-gray-300"
+                >
+                  {{ display.detail }}
+                </p>
+              </div>
             </div>
-          </div>
-        </TxScroll>
-      </div>
-    </TxPopover>
+          </TxScroll>
+        </div>
+      </TxPopover>
+    </div>
 
     <TuffIcon
       class="PluginItem-Icon flex-shrink-0"
@@ -182,6 +197,16 @@ const pluginIconStyle = {
   z-index: 1;
 }
 
+// Positioned on a wrapper rather than on the icon: the popover puts its
+// reference in a relative box, and the global `.fake-background > *` rule
+// lifts every child of the item to `relative; z-index: 1`.
+.issue-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+}
+
 .plugin-issues-panel {
   display: flex;
   flex-direction: column;
@@ -192,6 +217,13 @@ const pluginIconStyle = {
   font-size: 12px;
   font-weight: 600;
   color: var(--tx-text-color-primary);
+}
+
+// TxScroll is as tall as its parent, which here grows with the list, so a height on it is
+// overridden and a long list ran past the screen. The scroller itself stops at 240px instead:
+// a short list keeps its own height, a long one scrolls.
+.issues-list :deep(.tx-scroll__native) {
+  max-height: 240px;
 }
 
 @keyframes rotate {

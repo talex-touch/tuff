@@ -4,6 +4,9 @@ const dialog = vi.hoisted(() => ({ showOpenDialog: vi.fn() }))
 const fs = vi.hoisted(() => ({ lstat: vi.fn(), open: vi.fn() }))
 
 vi.mock('electron', () => ({ dialog }))
+// Dialog wording goes through main's translator, which reads Electron's `app` on import; this
+// suite does not assert the wording.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
 vi.mock('node:fs', () => ({ constants: { O_RDONLY: 0, O_NOFOLLOW: 0 } }))
 vi.mock('node:fs/promises', () => fs)
 

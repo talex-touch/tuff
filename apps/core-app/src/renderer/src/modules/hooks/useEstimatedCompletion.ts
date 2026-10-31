@@ -33,9 +33,10 @@ export function useEstimatedCompletionText(
       return t('settings.settingFileIndex.estimatedSeconds', { seconds })
     }
 
+    // The count is passed again as the plural choice: the placeholders aren't named `count`.
     const minutes = Math.ceil(seconds / 60)
     if (minutes < 60) {
-      return t('settings.settingFileIndex.estimatedMinutes', { minutes })
+      return t('settings.settingFileIndex.estimatedMinutes', { minutes }, minutes)
     }
 
     const hours = Math.floor(minutes / 60)
@@ -43,11 +44,11 @@ export function useEstimatedCompletionText(
 
     if (remainingMinutes) {
       return t('settings.settingFileIndex.estimatedHoursMinutes', {
-        hours,
-        minutes: remainingMinutes
+        hours: t('settings.settingFileIndex.estimatedHourCount', { count: hours }),
+        minutes: t('settings.settingFileIndex.estimatedMinuteCount', { count: remainingMinutes })
       })
     }
 
-    return t('settings.settingFileIndex.estimatedHours', { hours })
+    return t('settings.settingFileIndex.estimatedHours', { hours }, hours)
   })
 }

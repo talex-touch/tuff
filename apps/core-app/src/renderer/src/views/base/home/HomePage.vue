@@ -51,6 +51,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
@@ -58,6 +59,7 @@ import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
+import { describeToolCallError } from '~/modules/conversation/tool-call-error'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
 import {
@@ -73,8 +75,8 @@ import {
   generateConversationTitle,
   shouldGenerateTitle
 } from '~/modules/conversation/conversation-title'
+import type { ConversationError } from '~/modules/conversation/conversation-error-display'
 import {
-  CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
   CONVERSATION_ERROR_USAGE_LIMIT_REACHED
 } from '~/modules/conversation/conversation-error-display'
@@ -98,6 +100,7 @@ import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
+import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
@@ -106,6 +109,7 @@ import {
   resolveIntelligenceErrorRecovery,
   USAGE_LIMITS_ROUTE
 } from '~/modules/intelligence/ai-error-recovery'
+import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolvedTheme } from '~/modules/storage/theme-style'
@@ -733,7 +737,8 @@ function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speak
 function segmentsOf(message: ConversationMessage): MessageSegment[] {
   return toMessageSegments(message.parts, message.status === 'streaming', {
     thinking: t('home.thinking'),
-    interrupted: t('home.toolInterrupted')
+    interrupted: t('home.toolInterrupted'),
+    toolError: (error) => describeToolCallError(error, t)
   })
 }
 
@@ -917,10 +922,8 @@ function workspaceErrorText(failure: AgentWorkspaceError): string {
 /** A workspace call the reader made failed: say what Main said, in their language. */
 function reportWorkspaceError(failure: AgentWorkspaceError, action: string): void {
   homeLog.warn(`Workspace ${action} rejected`, failure.detail)
-  toast.error(
-    workspaceErrorText(failure),
-    failure.code === 'unknown' && failure.detail ? { description: failure.detail } : undefined
-  )
+  const description = failure.code === 'unknown' ? describeFailure(failure.detail, t, '') : ''
+  toast.error(workspaceErrorText(failure), description ? { description } : undefined)
 }
 
 function reportSubmitError(error: unknown): void {
@@ -1306,12 +1309,17 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   dictation.cancel()
 }
 
-function resolveErrorTitle(code: string | undefined): string {
-  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE) return t('home.error.noProvider')
-  if (code === CONVERSATION_ERROR_EMPTY_RESPONSE) return t('home.error.empty')
-  if (code === 'WORKSPACE_TURN_INTERRUPTED')
-    return t('home.workspace.error.WORKSPACE_TURN_INTERRUPTED')
-  return t('home.error.generic')
+const { classifyTurnFailure, resolveErrorTitle } = useTurnFailureWording()
+
+/**
+ * What to do about a failure the intelligence layer named. Not for a provider's own text, passed on
+ * as thrown or named `UNKNOWN`: it can say "quota" about the provider's plan, where the advice is
+ * about Nexus credits.
+ */
+function resolveErrorAdvice(error: ConversationError | undefined): string {
+  if (!error || !isIntelligenceErrorCode(error.code) || error.code === 'UNKNOWN') return ''
+  const recovery = classifyTurnFailure(error)
+  return recovery && recovery.code !== 'provider' ? recovery.detail : ''
 }
 
 function resolveErrorReportCode(error: { code?: string } | undefined): string {
@@ -1347,10 +1355,14 @@ function openUsageLimits(): void {
 /**
  * Retrying a missing provider reruns the same failure forever, so that one case swaps the retry for
  * a way out. `/setting/intelligence/channels` is where a provider is actually enabled — the
- * intelligence settings page only cross-links to it.
+ * intelligence settings page only cross-links to it. Its credentials are fixed there too.
  */
-function isProviderUnavailable(code: string | undefined): boolean {
-  return code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
+function isProviderUnavailable(error: ConversationError | undefined): boolean {
+  const code = error?.code
+  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE || code === 'WORKSPACE_PROVIDER_UNAVAILABLE')
+    return true
+  const kind = classifyTurnFailure(error)?.code
+  return kind === 'provider' || kind === 'credentials'
 }
 
 function openProviderSettings(): void {
@@ -2369,18 +2381,23 @@ onBeforeUnmount(() => disposeCommands?.())
                         <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
                         <div class="HomePage-ErrorBody">
                           <p class="HomePage-ErrorTitle">
-                            {{ resolveErrorTitle(message.error?.code) }}
+                            {{ resolveErrorTitle(message.error) }}
+                          </p>
+                          <p v-if="resolveErrorAdvice(message.error)" class="HomePage-ErrorDetail">
+                            {{ resolveErrorAdvice(message.error) }}
                           </p>
                           <p class="HomePage-ErrorReport" data-testid="home-error-report">
                             <span
                               >{{ t('home.error.codeLabel') }}:
                               {{ resolveErrorReportCode(message.error) }}</span
                             >
-                            <span>{{ resolveErrorReportDetail(message.error) }}</span>
+                            <span v-if="!isStoppedTurn(message.error)">{{
+                              resolveErrorReportDetail(message.error)
+                            }}</span>
                           </p>
                         </div>
                         <button
-                          v-if="isProviderUnavailable(message.error?.code)"
+                          v-if="isProviderUnavailable(message.error)"
                           class="HomePage-RetryBtn"
                           type="button"
                           @click="openProviderSettings"

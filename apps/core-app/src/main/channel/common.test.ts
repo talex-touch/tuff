@@ -734,9 +734,9 @@ describe('CommonChannelModule private helpers', () => {
       expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
         'unsupported'
       )
-      expect(
-        capabilities.find((item) => item.id === 'platform.terminal')?.limitations?.[0]
-      ).toContain('PTY')
+      expect(capabilities.find((item) => item.id === 'platform.terminal')?.limitations?.[0]).toBe(
+        'settings.settingPlatformCapabilities.items.terminal.noPty'
+      )
       expect(activeAppGetActiveAppMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {

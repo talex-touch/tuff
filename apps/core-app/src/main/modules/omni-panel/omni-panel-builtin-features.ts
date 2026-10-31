@@ -2,7 +2,12 @@ import type {
   OmniPanelFeatureExecuteErrorCode,
   OmniPanelFeatureIconPayload
 } from '../../../shared/events/omni-panel'
+import { i18nMsg } from '@talex-touch/utils/i18n'
 
+/**
+ * What each failure code means, for logs and for callers that read the response. The panel words a
+ * failure by its code in the language it shows (`describeOmniPanelExecuteError`), not with these.
+ */
 export const OMNI_PANEL_EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> = {
   INVALID_PAYLOAD: 'Invalid execute payload',
   INVALID_FEATURE: 'Invalid feature id',
@@ -18,67 +23,71 @@ export const OMNI_PANEL_EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteEr
   INTERNAL_ERROR: 'Internal error'
 }
 
+/**
+ * Titles and subtitles are `$i18n:` markers: only the OmniPanel window reads the feature list, and
+ * it resolves them in the language it shows.
+ */
 export const OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS = [
   {
     id: 'builtin.translate',
-    title: '快速翻译',
-    subtitle: '将选中文本发送到翻译页面',
+    title: i18nMsg('corebox.omniPanel.translate'),
+    subtitle: i18nMsg('corebox.omniPanel.translateDesc'),
     icon: { type: 'class', value: 'i-ri-translate-2' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.ai.translate',
-    title: 'AI 翻译',
-    subtitle: '预览译文后再复制或替换剪贴板',
+    title: i18nMsg('corebox.omniPanel.aiTranslate'),
+    subtitle: i18nMsg('corebox.omniPanel.aiTranslateDesc'),
     icon: { type: 'class', value: 'i-ri-translate' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.ai.summarize',
-    title: 'AI 摘要',
-    subtitle: '生成选中文本的要点摘要',
+    title: i18nMsg('corebox.omniPanel.aiSummarize'),
+    subtitle: i18nMsg('corebox.omniPanel.aiSummarizeDesc'),
     icon: { type: 'class', value: 'i-ri-file-list-3-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.ai.rewrite',
-    title: 'AI 改写',
-    subtitle: '改写为更清晰自然的表达',
+    title: i18nMsg('corebox.omniPanel.aiRewrite'),
+    subtitle: i18nMsg('corebox.omniPanel.aiRewriteDesc'),
     icon: { type: 'class', value: 'i-ri-edit-2-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.ai.explain',
-    title: 'AI 解释',
-    subtitle: '解释选中文本或代码片段',
+    title: i18nMsg('corebox.omniPanel.aiExplain'),
+    subtitle: i18nMsg('corebox.omniPanel.aiExplainDesc'),
     icon: { type: 'class', value: 'i-ri-question-answer-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.ai.review',
-    title: 'AI Review',
-    subtitle: '预览代码 Review 建议',
+    title: i18nMsg('corebox.omniPanel.aiReview'),
+    subtitle: i18nMsg('corebox.omniPanel.aiReviewDesc'),
     icon: { type: 'class', value: 'i-ri-git-pull-request-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.search',
-    title: '网页搜索',
-    subtitle: '用浏览器搜索选中文本',
+    title: i18nMsg('corebox.omniPanel.search'),
+    subtitle: i18nMsg('corebox.omniPanel.searchDesc'),
     icon: { type: 'class', value: 'i-ri-search-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   },
   {
     id: 'builtin.corebox-search',
-    title: '在 CoreBox 中搜索',
-    subtitle: '回到启动器继续执行动作',
+    title: i18nMsg('corebox.omniPanel.coreBoxSearch'),
+    subtitle: i18nMsg('corebox.omniPanel.coreBoxSearchDesc'),
     icon: { type: 'class', value: 'i-ri-command-line' } as OmniPanelFeatureIconPayload,
     target: 'corebox' as const
   },
   {
     id: 'builtin.copy',
-    title: '复制文本',
-    subtitle: '把当前文本写回剪贴板',
+    title: i18nMsg('corebox.omniPanel.copy'),
+    subtitle: i18nMsg('corebox.omniPanel.copyDesc'),
     icon: { type: 'class', value: 'i-ri-file-copy-line' } as OmniPanelFeatureIconPayload,
     target: 'system' as const
   }

@@ -38,7 +38,8 @@ function message(path: string, params: Record<string, string | number> = {}): st
       catalogue
     )
   if (typeof template !== 'string') throw new Error(`locale is missing ${path}`)
-  return template.replace(/\{(\w+)\}/g, (_match, name: string) => String(params[name]))
+  // Read through the instance the rows use, so a plural message gives the form for the count.
+  return i18n.global.t(path, params)
 }
 
 const i18n = createI18n({

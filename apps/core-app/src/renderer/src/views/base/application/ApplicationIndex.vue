@@ -20,12 +20,14 @@ import { toast } from 'vue-sonner'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import { APPLICATION_ROUTE_ENTRY_PARAM } from '../../../../../shared/app-surface-routes'
 import { acceleratorLabel } from '../../../../../shared/accelerator-label'
+import { describeAppLaunchFailure } from '../../../../../shared/app-launch-failure'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import AppDetail from './AppDetail.vue'
 import AppIndexLaunchZoneDrawer from './AppIndexLaunchZoneDrawer.vue'
 import AppList from './AppList.vue'
 import type { AppListItem } from './AppList.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { describeAppIndexFailure } from '../settings/app-index-failure-reason'
 
 /**
  * Every indexed application, not the search engine's top hits.
@@ -371,7 +373,9 @@ async function handleUpdateAliases(
       aliases: nextAliases
     })
     if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerUpdateFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerUpdateFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     if (selectedPath.value === entry.path) aliases.value = nextAliases
@@ -468,7 +472,9 @@ async function runDiagnostic(target: string, options: { silent?: boolean } = {})
     if (result.success) {
       toast.success(t('settings.settingFileIndex.appIndexManagerDiagnoseSuccess'))
     } else {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerDiagnoseFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerDiagnoseFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
     }
   } catch (error) {
     log.error('Failed to diagnose app index entry', error)
@@ -494,7 +500,11 @@ async function handleLaunch(entry: AppIndexManagedEntry): Promise<void> {
       entryPoint: 'settings-app-detail'
     })
     if (!result.success) {
-      toast.error(result.error || t('settings.settingFileIndex.appIndexManagerLaunchFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerLaunchFailed'), {
+        description: result.error
+          ? describeAppLaunchFailure(result.error, t)
+          : describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     // The launch just moved the counters this panel shows.
@@ -512,7 +522,9 @@ async function handleSetEnabled(entry: AppIndexManagedEntry, enabled: boolean): 
   try {
     const result = await settingsSdk.appIndex.setEntryEnabled({ path: entry.path, enabled })
     if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerUpdateFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerUpdateFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     toast.success(
@@ -535,9 +547,9 @@ async function handleRescan(entry: AppIndexManagedEntry): Promise<void> {
   try {
     const result = await settingsSdk.appIndex.reindex({ target: entry.path, mode: 'scan' })
     if (!result.success) {
-      toast.error(
-        result.reason || result.error || t('settings.settingFileIndex.appIndexManagerReindexFailed')
-      )
+      toast.error(t('settings.settingFileIndex.appIndexManagerReindexFailed'), {
+        description: describeAppIndexFailure(result.reason || result.error, t)
+      })
       return
     }
     toast.success(t('settings.settingFileIndex.appIndexManagerReindexSuccess'))
@@ -556,7 +568,9 @@ async function handleRemove(entry: AppIndexManagedEntry): Promise<void> {
   try {
     const result = await settingsSdk.appIndex.removeEntry({ path: entry.path })
     if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerRemoveFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerRemoveFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     const next = { ...diagnostics.value }

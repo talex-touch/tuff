@@ -12,6 +12,7 @@ import {
 } from 'unocss'
 import { APP_DESTINATION_ICON_CLASSES } from './src/shared/app-destinations'
 import { BUILTIN_FLOW_TARGET_ICON_CLASSES } from './src/shared/flow-target-icons'
+import { OMNI_PANEL_BUILTIN_ICON_CLASSES } from './src/shared/omni-panel-builtin-icons'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
 import { AGENT_ICON_CLASSES } from './src/renderer/src/components/settings/resources/agent-icons'
@@ -82,6 +83,9 @@ const HOME_PUSH_ICONS_MODULE = fileURLToPath(
 const FLOW_TARGET_ICONS_MODULE = fileURLToPath(
   new URL('./src/shared/flow-target-icons.ts', import.meta.url)
 )
+const OMNI_PANEL_BUILTIN_ICONS_MODULE = fileURLToPath(
+  new URL('./src/shared/omni-panel-builtin-icons.ts', import.meta.url)
+)
 const AGENT_ICONS_MODULE = fileURLToPath(
   new URL('./src/renderer/src/components/settings/resources/agent-icons.ts', import.meta.url)
 )
@@ -97,6 +101,7 @@ export default defineConfig({
     MAIN_WINDOW_COMMAND_CATALOG_MODULE,
     HOME_PUSH_ICONS_MODULE,
     FLOW_TARGET_ICONS_MODULE,
+    OMNI_PANEL_BUILTIN_ICONS_MODULE,
     AGENT_ICONS_MODULE
   ],
   safelist: [
@@ -130,6 +135,11 @@ export default defineConfig({
     // `i-ri-<name>`. A literal list, since main's modules cannot be evaluated here; its test reads
     // main's sources so a target added there cannot ship an invisible glyph.
     ...BUILTIN_FLOW_TARGET_ICON_CLASSES,
+    // OmniPanel's built-in features (`src/shared/omni-panel-builtin-icons.ts`). Main declares their
+    // icons as classes in a `.ts` module and the panel's tiles draw them as given, so one that no
+    // template happens to name draws an empty box. A literal list for the same reason as the Flow
+    // targets'; its test reads main's definitions.
+    ...OMNI_PANEL_BUILTIN_ICON_CLASSES,
     // Agent brand marks on the skills and MCP pages
     // (`renderer/src/components/settings/resources/agent-icons.ts`): the agent bar, each row's
     // icon strip and the drawer draw them from inventory data, so no template names a class.

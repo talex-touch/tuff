@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
@@ -23,14 +24,17 @@ function createDialogRiskPrompt(): RiskPromptHandler {
     const window = BrowserWindow.getFocusedWindow()
     const dialogOptions: MessageBoxOptions = {
       type: 'warning',
-      buttons: ['Continue Installation', 'Cancel'],
+      buttons: [t('nativeDialogs.pluginInstallRisk.continue'), t('common.cancel')],
       defaultId: 1,
       cancelId: 1,
-      title: 'Plugin Installation Risk Confirmation',
-      message: 'Detected plugin from unofficial source',
+      title: t('nativeDialogs.pluginInstallRisk.title'),
+      message: t('nativeDialogs.pluginInstallRisk.message'),
       detail:
         input.description ??
-        `Source Type: ${input.sourceType}\nSource ID: ${input.sourceId}\nPlease confirm you trust this source before continuing.`,
+        t('nativeDialogs.pluginInstallRisk.detail', {
+          sourceType: input.sourceType,
+          sourceId: input.sourceId
+        }),
       noLink: true
     }
     const { response } = window
@@ -45,6 +49,13 @@ function isRemoteSource(source: string): boolean {
   return /^https?:\/\//i.test(source)
 }
 
+/** The install failure code for each `ResolverStatus` a package read can fail with, by name. */
+const RESOLVER_FAILURE_CODES: Record<string, string> = {
+  UNCOMPRESS_ERROR: 'PLUGIN_PACKAGE_UNREADABLE',
+  MANIFEST_NOT_FOUND: 'PLUGIN_MANIFEST_NOT_FOUND',
+  INVALID_MANIFEST: 'PLUGIN_MANIFEST_INVALID'
+}
+
 /**
  * Resolves and validates plugin manifest.
  *
@@ -56,14 +67,18 @@ async function runResolver(
   whole: boolean,
   options?: ResolverOptions
 ): Promise<{ manifest?: IManifest } & { code: string }> {
-  const { PluginResolver } = await import('./plugin-resolver')
+  const { PluginResolver, ResolverStatus } = await import('./plugin-resolver')
   return new Promise((resolve, reject) => {
     const resolver = new PluginResolver(filePath)
     resolver
       .resolve(
         ({ event, type }) => {
           if (type === 'error') {
-            reject(new Error(String(event.msg)))
+            // A failed read reports a `ResolverStatus` number, which says nothing to whoever reads
+            // the failure; an install step reports its own message, which is passed on as it is.
+            const status = typeof event.msg === 'number' ? ResolverStatus[event.msg] : undefined
+            const message = status ? RESOLVER_FAILURE_CODES[status] : undefined
+            reject(new Error(message ?? String(event.msg)))
             return
           }
           if (event.msg && typeof event.msg === 'object') {
@@ -74,7 +89,7 @@ async function runResolver(
             resolve({ code: typeof event.msg === 'string' ? event.msg : 'success' })
             return
           }
-          reject(new Error('Invalid manifest payload'))
+          reject(new Error('PLUGIN_MANIFEST_INVALID'))
         },
         whole,
         options

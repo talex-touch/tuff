@@ -5,7 +5,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { everythingProvider } from '../box-tool/addon/files/everything-provider'
-import { getXdotoolUnavailableReason, isXdotoolAvailable } from '../system/linux-desktop-tools'
+import { isXdotoolAvailable } from '../system/linux-desktop-tools'
+import { t } from '../../utils/i18n-helper'
 
 const execFileAsync = promisify(execFile)
 const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
@@ -75,6 +76,23 @@ function withLimitations(
   }
 }
 
+/*
+ * Reasons and limitations are read from the renderer catalogs when a patch is built, so the
+ * capability list a page asks for next is in the interface language. Issue codes stay as they are.
+ */
+
+function unsupportedOnPlatform(): PlatformCapabilityRuntimePatch {
+  const reason = t('settings.settingPlatformCapabilities.issues.platformUnsupported', {
+    platform: process.platform
+  })
+  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
+}
+
+function xdotoolMissing(): PlatformCapabilityRuntimePatch {
+  const reason = t('settings.settingPlatformCapabilities.issues.xdotoolMissing')
+  return withLimitations('unsupported', reason, 'XDTOOL_MISSING', [reason])
+}
+
 export function applyCapabilityRuntimePatch(
   capability: PlatformCapability,
   patch?: PlatformCapabilityRuntimePatch | null
@@ -101,20 +119,18 @@ export async function getActiveAppCapabilityPatch(): Promise<PlatformCapabilityR
   if (process.platform === 'darwin') {
     return withLimitations(
       'best_effort',
-      'Foreground application inspection depends on macOS Automation permission.',
+      t('settings.settingPlatformCapabilities.items.activeApp.automationReason'),
       'AUTOMATION_PERMISSION',
-      [
-        'Requires Automation permission for System Events and may return empty during permission backoff.'
-      ]
+      [t('settings.settingPlatformCapabilities.items.activeApp.automationLimit')]
     )
   }
 
   if (process.platform === 'win32') {
     return withLimitations(
       'best_effort',
-      'Foreground application inspection depends on PowerShell and Win32 foreground-window APIs.',
+      t('settings.settingPlatformCapabilities.items.activeApp.powershellReason'),
       'POWERSHELL_FOREGROUND_WINDOW',
-      ['Requires PowerShell availability and access to foreground process metadata.']
+      [t('settings.settingPlatformCapabilities.items.activeApp.powershellLimit')]
     )
   }
 
@@ -123,18 +139,16 @@ export async function getActiveAppCapabilityPatch(): Promise<PlatformCapabilityR
     if (available) {
       return withLimitations(
         'best_effort',
-        'Linux foreground app inspection depends on desktop automation tooling.',
+        t('settings.settingPlatformCapabilities.items.activeApp.xdotoolReason'),
         'XDTOOL_DEPENDENCY',
-        ['Requires xdotool and a compatible desktop session.']
+        [t('settings.settingPlatformCapabilities.items.activeApp.xdotoolLimit')]
       )
     }
 
-    const reason = getXdotoolUnavailableReason()
-    return withLimitations('unsupported', reason, 'XDTOOL_MISSING', [reason])
+    return xdotoolMissing()
   }
 
-  const reason = `Foreground application inspection is unsupported on platform: ${process.platform}`
-  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
+  return unsupportedOnPlatform()
 }
 
 export async function getSelectionCaptureCapabilityPatch(options?: {
@@ -143,8 +157,8 @@ export async function getSelectionCaptureCapabilityPatch(options?: {
   if (options?.enabled === false) {
     const reason =
       process.platform === 'darwin'
-        ? 'Selection capture requires macOS Accessibility permission.'
-        : 'Selection capture is disabled in the current runtime.'
+        ? t('settings.settingPlatformCapabilities.items.selectionCapture.accessibilityRequired')
+        : t('settings.settingPlatformCapabilities.items.selectionCapture.disabled')
     return withLimitations('unsupported', reason, 'DISABLED', [reason])
   }
 
@@ -155,37 +169,34 @@ export async function getSelectionCaptureCapabilityPatch(options?: {
   if (process.platform === 'win32') {
     return withLimitations(
       'best_effort',
-      'Selection capture depends on the active app accepting simulated Ctrl+C.',
+      t('settings.settingPlatformCapabilities.items.selectionCapture.simulatedCopyReason'),
       'SIMULATED_COPY',
-      ['Selected text is captured through simulated Ctrl+C and clipboard timing.']
+      [t('settings.settingPlatformCapabilities.items.selectionCapture.simulatedCopyLimit')]
     )
   }
 
   if (process.platform === 'linux') {
     const available = await isXdotoolAvailable()
     if (!available) {
-      const reason = getXdotoolUnavailableReason()
-      return withLimitations('unsupported', reason, 'XDTOOL_MISSING', [reason])
+      return xdotoolMissing()
     }
 
     return withLimitations(
       'best_effort',
-      'Selection capture depends on xdotool desktop automation and clipboard timing.',
+      t('settings.settingPlatformCapabilities.items.selectionCapture.xdotoolReason'),
       'SIMULATED_COPY',
-      ['Requires xdotool and a focused app that accepts Ctrl+C.']
+      [t('settings.settingPlatformCapabilities.items.selectionCapture.xdotoolLimit')]
     )
   }
 
-  const reason = `Selection capture is unsupported on platform: ${process.platform}`
-  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
+  return unsupportedOnPlatform()
 }
 
 export async function getAutoPasteCapabilityPatch(): Promise<PlatformCapabilityRuntimePatch> {
   if (process.platform === 'linux') {
     const available = await isXdotoolAvailable()
     if (!available) {
-      const reason = getXdotoolUnavailableReason()
-      return withLimitations('unsupported', reason, 'XDTOOL_MISSING', [reason])
+      return xdotoolMissing()
     }
   }
 
@@ -196,14 +207,13 @@ export async function getAutoPasteCapabilityPatch(): Promise<PlatformCapabilityR
   ) {
     return withLimitations(
       'best_effort',
-      'Auto paste depends on focused-window keyboard automation.',
+      t('settings.settingPlatformCapabilities.items.autoPaste.simulatedPasteReason'),
       'SIMULATED_PASTE',
-      ['The target app must keep focus and accept the simulated paste shortcut.']
+      [t('settings.settingPlatformCapabilities.items.autoPaste.simulatedPasteLimit')]
     )
   }
 
-  const reason = `Auto paste is unsupported on platform: ${process.platform}`
-  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
+  return unsupportedOnPlatform()
 }
 
 export function getNativeShareCapabilityPatch(): PlatformCapabilityRuntimePatch {
@@ -213,8 +223,8 @@ export function getNativeShareCapabilityPatch(): PlatformCapabilityRuntimePatch 
 
   const reason =
     process.platform === 'win32' || process.platform === 'linux'
-      ? 'Native system share is unavailable on this platform; explicit mail target remains available.'
-      : 'Native share is unavailable on the current platform.'
+      ? t('settings.settingPlatformCapabilities.items.nativeShare.mailOnly')
+      : t('settings.settingPlatformCapabilities.items.nativeShare.unavailable')
   return withLimitations('unsupported', reason, 'MAIL_ONLY', [reason])
 }
 
@@ -226,21 +236,20 @@ export function getPermissionDeepLinkCapabilityPatch(): PlatformCapabilityRuntim
   if (process.platform === 'linux') {
     return withLimitations(
       'best_effort',
-      'Permission deep-links depend on the current Linux desktop environment.',
+      t('settings.settingPlatformCapabilities.items.permissionDeepLink.desktopEnvReason'),
       'DESKTOP_ENV',
-      ['Launcher availability varies across desktop environments.']
+      [t('settings.settingPlatformCapabilities.items.permissionDeepLink.desktopEnvLimit')]
     )
   }
 
-  const reason = `Permission deep-link is unsupported on platform: ${process.platform}`
-  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
+  return unsupportedOnPlatform()
 }
 
 function getEverythingCapabilityPatchFromStatus(
   status: EverythingStatusResponse
 ): PlatformCapabilityRuntimePatch {
   if (process.platform !== 'win32') {
-    const reason = 'Everything file search is only available on Windows.'
+    const reason = t('settings.settingEverything.healthReasonUnsupported')
     return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
   }
 
@@ -248,10 +257,11 @@ function getEverythingCapabilityPatchFromStatus(
     return withLimitations('supported')
   }
 
-  const reason =
-    status.healthReason ||
-    status.error ||
-    'Windows file search is unavailable because the Everything backend is not ready.'
+  // Worded from the state, as the Everything settings page words it. Main's health reason is the
+  // raw backend error when the backend failed; the settings page lists it under its error details.
+  const reason = status.enabled
+    ? t('settings.settingEverything.healthReasonNotReady')
+    : t('settings.settingEverything.healthReasonDisabled')
   return withLimitations('unsupported', reason, status.errorCode || 'EVERYTHING_UNAVAILABLE', [
     reason
   ])
@@ -293,6 +303,6 @@ export async function getTuffCliCapabilityPatch(): Promise<PlatformCapabilityRun
     return withLimitations('supported')
   }
 
-  const reason = 'CLI binary `tuff` was not detected in PATH or known install locations.'
+  const reason = t('settings.settingPlatformCapabilities.items.tuffCli.notFound')
   return withLimitations('unsupported', reason, 'CLI_NOT_FOUND', [reason])
 }

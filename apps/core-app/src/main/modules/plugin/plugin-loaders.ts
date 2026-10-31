@@ -528,6 +528,7 @@ abstract class BasePluginLoader {
         type: 'warning',
         message: 'Icon loading failed',
         source: 'icon',
+        code: 'PLUGIN_ICON_LOAD_FAILED',
         timestamp: Date.now()
       })
     }
@@ -614,6 +615,7 @@ abstract class BasePluginLoader {
             type: 'warning',
             message: `Feature '${feature.name}' could not be added. It might be a duplicate or have an invalid format.`,
             source: `feature:${feature.id}`,
+            code: 'FEATURE_ADD_FAILED',
             meta: { feature },
             timestamp: Date.now()
           })
@@ -632,6 +634,7 @@ abstract class BasePluginLoader {
             type: 'warning',
             message: `Icon for feature '${pluginFeature.name}' failed to load`,
             source: `feature:${pluginFeature.id}`,
+            code: 'FEATURE_ICON_LOAD_FAILED',
             timestamp: Date.now()
           })
         }

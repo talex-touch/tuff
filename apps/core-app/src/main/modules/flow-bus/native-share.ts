@@ -18,7 +18,32 @@ import path from 'node:path'
 import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
+import { t } from '../../utils/i18n-helper'
+import { flowBusShareLog } from './logger'
 import { shareNotificationService } from './share-notification'
+
+// osascript ends its error with AppleScript's number in parentheses. -1743 is macOS refusing to let
+// Tuff send Apple events to the app it shares through, until the user allows it under Automation.
+const APPLESCRIPT_NOT_AUTHORIZED = /\(-1743\)\s*$/
+
+/**
+ * A failed share, as the notification words it.
+ *
+ * A failed command's message quotes the command, and an AppleScript command holds what was being
+ * shared - a subject, a body, file paths. So no error text reaches the notification, and the log
+ * drops the command and keeps what it printed.
+ */
+function describeShareFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const command = (error as { cmd?: unknown } | null)?.cmd
+  const quoted = typeof command === 'string' ? `Command failed: ${command}` : null
+  flowBusShareLog.warn('Share failed', {
+    error: quoted && message.startsWith(quoted) ? message.slice(quoted.length).trim() : message
+  })
+  return APPLESCRIPT_NOT_AUTHORIZED.test(message)
+    ? t('nativeShare.errors.automationDenied')
+    : t('nativeShare.errors.systemFailed')
+}
 
 async function runAppleScript(script: string): Promise<void> {
   await execFileSafe('osascript', ['-e', script])
@@ -90,54 +115,84 @@ export class NativeShareService {
     if (process.platform === 'darwin') {
       targets.push({
         id: 'system-share',
-        name: 'System Share',
-        description: 'Share via native macOS share target chooser',
+        ...this.describeTarget('system-share'),
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:share-line'
       })
 
       targets.push({
         id: 'airdrop',
-        name: 'AirDrop',
-        description: 'Send to nearby devices via AirDrop',
+        ...this.describeTarget('airdrop'),
         supportedTypes: ['files', 'image'],
         icon: 'ri:wireless-charging-line'
       })
 
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Send via email',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:mail-line'
       })
 
       targets.push({
         id: 'messages',
-        name: 'Messages',
-        description: 'Send via iMessage',
+        ...this.describeTarget('messages'),
         supportedTypes: ['text'],
         icon: 'ri:message-3-line'
       })
     } else if (process.platform === 'win32') {
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Share via the default mail client',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
     } else {
       targets.push({
         id: 'mail',
-        name: 'Mail',
-        description: 'Share via the default mail client',
+        ...this.describeTarget('mail'),
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
     }
 
     return targets
+  }
+
+  /**
+   * A target's name and description in the language the app shows now. The Flow registry asks
+   * again each time it lists the target, so a language switch reaches the Flow page and plugins.
+   */
+  describeTarget(targetId: string): Pick<FlowTarget, 'name' | 'description'> {
+    switch (targetId) {
+      case 'system-share':
+        return {
+          name: t('nativeShare.targets.systemShare'),
+          description: t('nativeShare.targetDescriptions.systemShare')
+        }
+      case 'airdrop':
+        return {
+          name: t('nativeShare.targets.airdrop'),
+          description: t('nativeShare.targetDescriptions.airdrop')
+        }
+      case 'mail':
+        // macOS can attach files through the Mail app; elsewhere mail is a text-only mailto: link.
+        return {
+          name: t('nativeShare.targets.mail'),
+          description: t(
+            process.platform === 'darwin'
+              ? 'nativeShare.targetDescriptions.mail'
+              : 'nativeShare.targetDescriptions.mailClient'
+          )
+        }
+      case 'messages':
+        return {
+          name: t('nativeShare.targets.messages'),
+          description: t('nativeShare.targetDescriptions.messages')
+        }
+      default:
+        return { name: targetId }
+    }
   }
 
   /**
@@ -157,10 +212,7 @@ export class NativeShareService {
         result = await this.shareLinux(normalizedOptions)
       }
     } catch (error) {
-      result = {
-        success: false,
-        error: error instanceof Error ? error.message : 'Share failed'
-      }
+      result = { success: false, error: describeShareFailure(error) }
     }
 
     // Show notification for share result
@@ -193,18 +245,20 @@ export class NativeShareService {
       return await this.shareMacSystem(options)
     }
 
-    return { success: false, error: 'No content to share' }
+    return { success: false, error: t('nativeShare.errors.noContent') }
   }
 
   private async shareMacSystem(options: NativeShareOptions): Promise<NativeShareResult> {
+    // The picker answers with the label it showed, so the labels are both what the user reads and
+    // how the choice is matched back to a target.
     const availableTargets: Array<{ label: string; target: NativeShareTarget }> = []
     if (options.files?.length) {
-      availableTargets.push({ label: 'AirDrop', target: 'airdrop' })
-      availableTargets.push({ label: 'Mail', target: 'mail' })
+      availableTargets.push({ label: t('nativeShare.targets.airdrop'), target: 'airdrop' })
+      availableTargets.push({ label: t('nativeShare.targets.mail'), target: 'mail' })
     }
     if (options.text || options.url) {
-      availableTargets.push({ label: 'Mail', target: 'mail' })
-      availableTargets.push({ label: 'Messages', target: 'messages' })
+      availableTargets.push({ label: t('nativeShare.targets.mail'), target: 'mail' })
+      availableTargets.push({ label: t('nativeShare.targets.messages'), target: 'messages' })
     }
 
     const dedupedTargets = availableTargets.filter(
@@ -213,16 +267,19 @@ export class NativeShareService {
     )
 
     if (dedupedTargets.length === 0) {
-      return { success: false, error: 'No content to share' }
+      return { success: false, error: t('nativeShare.errors.noContent') }
     }
 
     if (dedupedTargets.length === 1) {
       return await this.shareMacTarget(dedupedTargets[0].target, options)
     }
 
-    const choices = dedupedTargets.map((item) => `"${item.label}"`).join(', ')
+    const choices = dedupedTargets
+      .map((item) => `"${escapeAppleScriptString(item.label)}"`)
+      .join(', ')
+    const prompt = escapeAppleScriptString(t('nativeShare.pickerPrompt'))
     const selected = await runAppleScriptWithOutput(`
-set shareChoice to choose from list {${choices}} with prompt "Choose a macOS share target" without multiple selections allowed
+set shareChoice to choose from list {${choices}} with prompt "${prompt}" without multiple selections allowed
 if shareChoice is false then
   return ""
 end if
@@ -231,7 +288,7 @@ return item 1 of shareChoice
 
     const choice = dedupedTargets.find((item) => item.label === selected)
     if (!choice) {
-      return { success: false, error: 'Share cancelled' }
+      return { success: false, error: t('nativeShare.errors.cancelled') }
     }
 
     return await this.shareMacTarget(choice.target, options)
@@ -251,7 +308,7 @@ return item 1 of shareChoice
     if (target === 'messages' && shareBody) {
       return await this.shareMessages(shareBody)
     }
-    return { success: false, error: `Target ${target} cannot handle current payload` }
+    return { success: false, error: t('nativeShare.errors.targetUnsupported') }
   }
 
   /**
@@ -314,15 +371,15 @@ return item 1 of shareChoice
           opener: shell.openExternal
         })
         if (!decision.allowed) {
-          return { success: false, error: `Mail link refused: ${decision.reason}` }
+          return {
+            success: false,
+            error: t('nativeShare.errors.mailRefused', { reason: decision.reason })
+          }
         }
       }
     } else {
       if (files?.length) {
-        return {
-          success: false,
-          error: 'Mail target does not support file attachments on this platform'
-        }
+        return { success: false, error: t('nativeShare.errors.mailAttachmentsUnsupported') }
       }
       const subject = encodeURIComponent(title || '')
       const body = encodeURIComponent(normalizedBody)
@@ -330,7 +387,10 @@ return item 1 of shareChoice
         opener: shell.openExternal
       })
       if (!decision.allowed) {
-        return { success: false, error: `Mail link refused: ${decision.reason}` }
+        return {
+          success: false,
+          error: t('nativeShare.errors.mailRefused', { reason: decision.reason })
+        }
       }
     }
 
@@ -342,7 +402,7 @@ return item 1 of shareChoice
    */
   private async shareMessages(text: string): Promise<NativeShareResult> {
     if (process.platform !== 'darwin') {
-      return { success: false, error: 'Messages only available on macOS' }
+      return { success: false, error: t('nativeShare.errors.messagesMacOnly') }
     }
 
     const script = `
@@ -371,8 +431,7 @@ return item 1 of shareChoice
 
     return {
       success: false,
-      error:
-        'Windows does not provide a system share sheet in core-app; only the explicit mail target is available.'
+      error: t('nativeShare.errors.noShareSheet', { platform: 'Windows' })
     }
   }
 
@@ -388,8 +447,7 @@ return item 1 of shareChoice
 
     return {
       success: false,
-      error:
-        'Linux does not provide a system share sheet in core-app; only the explicit mail target is available.'
+      error: t('nativeShare.errors.noShareSheet', { platform: 'Linux' })
     }
   }
 

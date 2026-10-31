@@ -11,6 +11,7 @@ import { toast } from 'vue-sonner'
 import { onBeforeUnmount, onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
+import { describePluginSdkBlock } from '~/modules/plugin/plugin-issue-display'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -29,7 +30,7 @@ const props = defineProps<{
 }>()
 
 const plugin = toRef(props, 'plugin')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { startupInfo } = useStartupInfo()
 const appSdk = useAppSdk()
 const pluginDetailsLog = createRendererLogger('PluginDetails')
@@ -79,7 +80,9 @@ const manifestJsonText = computed(() =>
 )
 const sdkBlockedState = computed(() => resolvePluginSdkBlockedState(plugin.value))
 const sdkBlocked = computed(() => sdkBlockedState.value.blocked)
-const blockedMessage = computed(() => sdkBlockedState.value.message)
+const blockedMessage = computed(() =>
+  sdkBlocked.value ? describePluginSdkBlock(plugin.value, t, locale.value) : ''
+)
 const shortcutsLoading = ref(false)
 const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)

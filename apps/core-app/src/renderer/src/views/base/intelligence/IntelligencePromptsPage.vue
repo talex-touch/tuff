@@ -20,6 +20,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
+import { describeFailure } from '~/utils/failure-text'
 
 type FilterMode = 'all' | 'builtin' | 'custom'
 
@@ -112,8 +113,7 @@ async function handlePromptTest(options: {
   } catch (error) {
     promptTestResult.value = {
       success: false,
-      message:
-        error instanceof Error ? error.message : t('settings.intelligence.capabilityTestFailed'),
+      message: describeFailure(error, t, t('settings.intelligence.capabilityTestFailed')),
       timestamp: Date.now()
     }
   } finally {

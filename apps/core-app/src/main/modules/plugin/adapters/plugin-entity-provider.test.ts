@@ -235,7 +235,7 @@ describe('installed plugin provider', () => {
     const failed = result.find((item) => item.id.endsWith(':failed'))!
     expect(readPluginEntitySnapshot(failed)).toMatchObject({
       state: 'failed',
-      problem: 'Broken manifest',
+      problem: { type: 'error', message: 'Broken manifest' },
       primaryAction: actions.reload
     })
     expect(failed.meta?.keepCoreBoxOpen).toBe(true)

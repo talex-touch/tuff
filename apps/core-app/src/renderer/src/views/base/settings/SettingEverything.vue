@@ -24,6 +24,9 @@ import {
 } from '../../../../../shared/events/everything'
 import {
   getEverythingDiagnosticStages,
+  resolveEverythingHealthReasonKey,
+  resolveEverythingInstallMessageKey,
+  resolveEverythingInstallReasonKey,
   resolveEverythingStatusColor,
   resolveEverythingStatusTextKey,
   shouldShowEverythingInstallGuide,
@@ -172,13 +175,9 @@ async function toggleEverything() {
         : t('settings.settingEverything.disabledSuccess')
     )
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
+    // The reason is English and goes to the log; the toast says it in the interface language.
     settingEverythingLog.error('Failed to toggle', error)
-    toast.error(
-      t('settings.settingEverything.toggleFailed', {
-        error: message
-      })
-    )
+    toast.error(t('settings.settingEverything.toggleFailed'))
   }
 }
 
@@ -210,20 +209,16 @@ async function testSearch() {
         })
       )
     } else {
-      toast.error(
-        t('settings.settingEverything.testFailed', {
-          error: result.error || 'Unknown error'
-        })
-      )
+      // The dialog shows main's reason under the result; the toast only says the test failed.
+      settingEverythingLog.warn('Test search failed', {
+        errorCode: result.errorCode,
+        error: result.error
+      })
+      toast.error(t('settings.settingEverything.testFailed'))
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
     settingEverythingLog.error('Test search failed', error)
-    toast.error(
-      t('settings.settingEverything.testFailed', {
-        error: message
-      })
-    )
+    toast.error(t('settings.settingEverything.testFailed'))
   } finally {
     isTesting.value = false
   }
@@ -242,13 +237,8 @@ async function saveCliPath(path: string | null) {
         : t('settings.settingEverything.cliPathCleared')
     )
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
     settingEverythingLog.error('Failed to save Everything CLI path', error)
-    toast.error(
-      t('settings.settingEverything.cliPathSaveFailed', {
-        error: message
-      })
-    )
+    toast.error(t('settings.settingEverything.cliPathSaveFailed'))
   } finally {
     isSavingCliPath.value = false
   }
@@ -317,16 +307,23 @@ async function startEverythingInstall(): Promise<void> {
     everythingInstallStatus.value = result.status
 
     if (!result.success || result.status.phase === 'unsupported') {
-      toast.error(result.status.error || t('settings.settingEverything.installUnsupported'))
+      settingEverythingLog.warn('Everything install did not start', {
+        phase: result.status.phase,
+        error: result.status.error
+      })
+      toast.error(
+        result.status.phase === 'unsupported'
+          ? t('settings.settingEverything.installUnsupported')
+          : t('settings.settingEverything.installStartFailed')
+      )
       return
     }
 
     toast.success(t('settings.settingEverything.installStarted'))
     ensureInstallStatusPolling()
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
     settingEverythingLog.error('Failed to start Everything install', error)
-    toast.error(t('settings.settingEverything.installStartFailed', { error: message }))
+    toast.error(t('settings.settingEverything.installStartFailed'))
   } finally {
     isStartingInstall.value = false
   }
@@ -338,11 +335,8 @@ async function refreshInstallAndStatusAfterTerminalPhase() {
     toast.success(t('settings.settingEverything.installCompleted'))
     await checkStatus(true)
   } else if (phase === 'failed') {
-    toast.error(
-      t('settings.settingEverything.installFailed', {
-        error: everythingInstallStatus.value?.error || '-'
-      })
-    )
+    // Main logged the reason, and the install dialog shows it under the progress bar.
+    toast.error(t('settings.settingEverything.installFailed'))
   }
 }
 
@@ -446,6 +440,11 @@ const healthText = computed(() => {
   return mapHealthLabel(everythingStatus.value.health)
 })
 
+const healthReasonText = computed(() => {
+  const key = resolveEverythingHealthReasonKey(everythingStatus.value)
+  return key ? t(key) : ''
+})
+
 const backendSummaryText = computed(() => {
   if (!everythingStatus.value) return '-'
   return `${backendText.value} / ${healthText.value}`
@@ -468,7 +467,8 @@ const installationActionText = computed(() => {
 })
 
 const installationDescription = computed(() => {
-  return installationStatus.value?.reason || t('settings.settingEverything.installDiagnosisDesc')
+  const key = resolveEverythingInstallReasonKey(installationStatus.value?.state)
+  return t(key ?? 'settings.settingEverything.installDiagnosisDesc')
 })
 
 const showDownloadEverythingAction = computed(() => {
@@ -529,9 +529,8 @@ const installPrimaryButtonText = computed(() => {
 })
 
 const installStatusMessage = computed(() => {
-  return (
-    everythingInstallStatus.value?.message || t('settings.settingEverything.installOneClickDesc')
-  )
+  const key = resolveEverythingInstallMessageKey(everythingInstallStatus.value?.phase)
+  return t(key ?? 'settings.settingEverything.installOneClickDesc')
 })
 
 const installTaskIdText = computed(() => {
@@ -549,12 +548,10 @@ const installAssets = computed(() => {
   return everythingInstallStatus.value?.assets ?? []
 })
 
+// Main's last backend error is not a description: it is raw and English, and the dialog lists it
+// under the error details already.
 const diagnosticsDialogDescription = computed(() => {
-  return (
-    everythingStatus.value?.healthReason ||
-    everythingStatus.value?.lastBackendError ||
-    diagnosticSummary.value
-  )
+  return healthReasonText.value || diagnosticSummary.value
 })
 
 const lastCheckedText = computed(() => {
@@ -960,9 +957,7 @@ watch(
         >
           <TuffBlockSlot
             :title="t('settings.settingEverything.backendSummaryTitle')"
-            :description="
-              everythingStatus.healthReason || t('settings.settingEverything.backendSummaryDesc')
-            "
+            :description="healthReasonText || t('settings.settingEverything.backendSummaryDesc')"
             default-icon="i-carbon-data-view"
             active-icon="i-carbon-data-view"
           >
@@ -978,9 +973,7 @@ watch(
 
           <TuffBlockSlot
             :title="t('settings.settingEverything.healthTitle')"
-            :description="
-              everythingStatus.healthReason || t('settings.settingEverything.healthDesc')
-            "
+            :description="healthReasonText || t('settings.settingEverything.healthDesc')"
             default-icon="i-carbon-pulse"
             active-icon="i-carbon-pulse"
           >

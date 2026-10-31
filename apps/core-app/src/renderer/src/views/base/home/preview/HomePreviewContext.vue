@@ -35,7 +35,7 @@ const timeFormat = computed(
 )
 
 const tokens = (value: number): string =>
-  t('home.workspace.context.tokens', { count: numberFormat.value.format(value) })
+  t('home.workspace.context.tokens', { count: numberFormat.value.format(value) }, value)
 
 /** Reported usage only: absent fields stay absent rather than becoming zeros. */
 const usage = computed(() => {

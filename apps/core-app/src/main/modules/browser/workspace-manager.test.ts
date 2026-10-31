@@ -823,7 +823,7 @@ describe('internal workspace tabs (tuff://)', () => {
     expect(manager.getState().tabs).toHaveLength(2)
     const storeTab = manager.getState().tabs[1]!
     expect(storeTab.url).toBe('tuff://store')
-    expect(storeTab.title).toBe('插件')
+    expect(storeTab.title).toBe('')
     expect(owner.attached.size).toBe(0)
     expect(guests.length).toBe(0)
 
@@ -831,7 +831,7 @@ describe('internal workspace tabs (tuff://)', () => {
     expect(manager.getState().tabs).toHaveLength(3)
     const settingsTab = manager.getState().tabs[2]!
     expect(settingsTab.url).toBe('tuff://settings')
-    expect(settingsTab.title).toBe('设置')
+    expect(settingsTab.title).toBe('')
     expect(owner.attached.size).toBe(0)
     expect(guests.length).toBe(0)
 

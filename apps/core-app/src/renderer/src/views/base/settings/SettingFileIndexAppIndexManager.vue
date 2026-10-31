@@ -16,6 +16,7 @@ import { toast } from 'vue-sonner'
 import SettingChip from '~/components/settings/SettingChip.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { describeAppIndexFailure } from './app-index-failure-reason'
 import {
   type AppIndexEntryDiagnosticFilter,
   type AppIndexEntrySourceFilter,
@@ -198,7 +199,9 @@ async function diagnosePath(target: string, options: { silent?: boolean } = {}):
       if (result.success) {
         toast.success(t('settings.settingFileIndex.appIndexManagerDiagnoseSuccess'))
       } else {
-        toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerDiagnoseFailed'))
+        toast.error(t('settings.settingFileIndex.appIndexManagerDiagnoseFailed'), {
+          description: describeAppIndexFailure(result.reason, t)
+        })
       }
     }
   } catch (error) {
@@ -218,9 +221,9 @@ async function reindexPath(target: string, mode: AppIndexReindexRequest['mode'])
       await diagnosePath(result.path || target, { silent: true })
       await loadEntries()
     } else {
-      toast.error(
-        result.reason || result.error || t('settings.settingFileIndex.appIndexManagerReindexFailed')
-      )
+      toast.error(t('settings.settingFileIndex.appIndexManagerReindexFailed'), {
+        description: describeAppIndexFailure(result.reason || result.error, t)
+      })
     }
   } catch (error) {
     log.error('Failed to reindex managed app index entry', error)
@@ -241,7 +244,9 @@ async function addPath(rawPath: string): Promise<void> {
   try {
     const result = await settingsSdk.appIndex.addPath({ path: target })
     if (!result.success || !result.path) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerAddFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerAddFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
 
@@ -288,7 +293,9 @@ async function setEnabled(entry: AppIndexManagedEntry, enabled: boolean): Promis
   try {
     const result = await settingsSdk.appIndex.setEntryEnabled({ path: entry.path, enabled })
     if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerUpdateFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerUpdateFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     toast.success(
@@ -311,7 +318,9 @@ async function removeEntry(entry: AppIndexManagedEntry): Promise<void> {
   try {
     const result = await settingsSdk.appIndex.removeEntry({ path: entry.path })
     if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appIndexManagerRemoveFailed'))
+      toast.error(t('settings.settingFileIndex.appIndexManagerRemoveFailed'), {
+        description: describeAppIndexFailure(result.reason, t)
+      })
       return
     }
     const nextDiagnostics = { ...diagnosticMap.value }
@@ -543,15 +552,23 @@ onMounted(() => {
               <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
             </div>
             <div class="app-index-entry-grid">
-              <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
-              <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
-              <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
-              <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
-              <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
-              <span>launchTarget</span><strong>{{ formatOptional(entry.launchTarget) }}</strong>
-              <span>launchArgs</span><strong>{{ formatOptional(entry.launchArgs) }}</strong>
-              <span>workingDirectory</span
-              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldDisplayName') }}</span
+              ><strong>{{ formatOptional(entry.displayName) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldOrigin') }}</span
+              ><strong>{{ getEntryOriginLabel(entry) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldBundleId') }}</span
+              ><strong>{{ formatOptional(entry.bundleId) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldIdentityKind') }}</span
+              ><strong>{{ formatOptional(entry.identityKind) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchKind') }}</span
+              ><strong>{{ entry.launchKind }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchTarget') }}</span
+              ><strong>{{ formatOptional(entry.launchTarget) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldLaunchArgs') }}</span
+              ><strong>{{ formatOptional(entry.launchArgs) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldWorkingDirectory') }}</span
+              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong>
+              <span>{{ t('settings.settingFileIndex.appIndexManagerFieldDisplayPath') }}</span
               ><strong>{{ formatOptional(entry.displayPath) }}</strong>
             </div>
             <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
