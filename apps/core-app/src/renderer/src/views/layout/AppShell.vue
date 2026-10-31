@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
 import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
+import ShellTerminalPanel from '~/components/shell/ShellTerminalPanel.vue'
 import { useMainWindowCommands } from '~/composables/useMainWindowCommands'
 import { useKeepAliveHmrPrune } from '~/modules/layout/useKeepAliveHmrPrune'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -40,6 +42,7 @@ const routeTransitionName = computed(() => {
 const { wallpaperActive, wallpaperStyle } = useWallpaper()
 const { platform, isMac } = useRendererPlatform()
 const { width: sidebarWidth, isDragging: isResizingSidebar } = useShellSidebar()
+const { terminalOpen, terminalMounted, isResizingTerminal } = useShellTerminal()
 const touchBlur = computed(
   () => isRefractionWindow.value || isFilterWindow.value || wallpaperActive.value
 )
@@ -186,7 +189,8 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
         coloring,
         contrast,
         'touch-blur': touchBlur,
-        'is-resizing': isResizingSidebar
+        'is-resizing': isResizingSidebar,
+        'is-resizing-terminal': isResizingTerminal
       }
     ]"
     :style="wrapperStyle"
@@ -222,6 +226,7 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
           </transition>
         </router-view>
       </div>
+      <ShellTerminalPanel v-if="terminalMounted" v-show="terminalOpen" />
     </main>
 
     <ShellWindowControls v-if="!isMac" />
@@ -358,6 +363,11 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
     .ShellChromeBar {
       -webkit-app-region: no-drag;
     }
+  }
+
+  &.is-resizing-terminal {
+    user-select: none;
+    cursor: row-resize;
   }
 }
 

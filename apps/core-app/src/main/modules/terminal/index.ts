@@ -152,10 +152,17 @@ export class TerminalModule extends BaseModule {
     if (!payload || typeof payload !== 'object') throw new Error('TERMINAL_COMMAND_INVALID')
     const recipient = { ...context, ...(context.plugin ? { plugin: { ...context.plugin } } : {}) }
     const flowControl = payload.flowControl === true
+    const defaultShell =
+      process.platform === 'win32'
+        ? process.env.COMSPEC || 'powershell.exe'
+        : process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+    const command = (payload.command && payload.command.trim()) || defaultShell
+    const defaultArgs = process.platform !== 'win32' ? ['-l'] : []
+    const args = payload.args ?? (payload.command ? [] : defaultArgs)
     const session = await this.core.create({
       owner,
-      command: payload.command,
-      args: payload.args,
+      command,
+      args,
       cwd: payload.cwd,
       cols: payload.cols,
       rows: payload.rows,

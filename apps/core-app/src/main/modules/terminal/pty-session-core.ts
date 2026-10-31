@@ -4,6 +4,7 @@ import type * as NodePty from 'node-pty'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import {
   findCommandInSearchRoots,
@@ -52,7 +53,7 @@ interface PtyCreationRecord extends PtyCreationReservation {
 
 export interface PtySessionCreateOptions {
   owner: PtySessionOwner
-  command: string
+  command?: string
   args?: string[]
   cwd?: string
   /** Base child environment; the shared core prepends the executable directory exactly once. */
@@ -100,7 +101,6 @@ interface PtySessionCoreOptions {
   loadPty?: () => Promise<Pick<typeof NodePty, 'spawn'>>
   resolveExecutable?: (command: string, cwd: string) => Promise<string>
 }
-
 async function resolveExecutable(command: string, cwd: string): Promise<string> {
   const executable = isAbsolute(command)
     ? command
@@ -260,7 +260,12 @@ export class PtySessionCore {
     const watcher = creation?.watcher ?? watchPtyOwner(owner.sender, options.signal)
     let session: PtySession | undefined
     try {
-      if (typeof command !== 'string' || !command.trim() || command.includes('\0')) {
+      const fallbackShell =
+        process.platform === 'win32'
+          ? process.env.COMSPEC || 'powershell.exe'
+          : process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+      const effectiveCommand = (command && command.trim()) || fallbackShell
+      if (typeof effectiveCommand !== 'string' || !effectiveCommand.trim() || effectiveCommand.includes('\0')) {
         throw new Error('TERMINAL_COMMAND_INVALID')
       }
       if (
@@ -272,7 +277,7 @@ export class PtySessionCore {
       if (options.cwd !== undefined && (typeof options.cwd !== 'string' || !options.cwd)) {
         throw new Error('TERMINAL_CWD_INVALID')
       }
-      const cwd = options.cwd ?? process.cwd()
+      const cwd = options.cwd ?? homedir() ?? process.cwd()
       try {
         if (!(await stat(cwd)).isDirectory()) throw new Error('Not a directory')
       } catch {
@@ -281,7 +286,7 @@ export class PtySessionCore {
       this.assertLiveOwner(owner, watcher.signal)
       const cols = terminalSize(options.cols, 100)
       const rows = terminalSize(options.rows, 30)
-      const executable = await this.resolveExecutable(command, cwd)
+      const executable = await this.resolveExecutable(effectiveCommand, cwd)
       this.assertLiveOwner(owner, watcher.signal)
       const pty = await this.loadPty()
       this.assertLiveOwner(owner, watcher.signal)

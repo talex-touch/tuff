@@ -1,7 +1,7 @@
 import { defineEvent } from '../event/builder'
 
 export interface TerminalCreateRequest {
-  command: string
+  command?: string
   args?: string[]
   cwd?: string
   cols?: number
