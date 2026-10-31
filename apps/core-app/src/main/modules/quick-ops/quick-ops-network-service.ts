@@ -341,7 +341,8 @@ export async function createSystemProxyInfo(): Promise<QuickOpsSystemProxyInfo> 
       environment,
       system: [],
       degradedReason: 'system-proxy-probe-failed',
-      degradedMessage: error instanceof Error ? error.message : 'Unable to read system proxy'
+      // The reason already says the proxy couldn't be read; only the error's own text adds to it.
+      degradedMessage: error instanceof Error ? error.message : undefined
     }
   }
 }
