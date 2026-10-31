@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useVModel } from '@vueuse/core'
 import { TxInput } from '@talex-touch/tuffex/input'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { acceleratorLabel } from '../../../../../shared/accelerator-label'
 
 const props = withDefaults(
   defineProps<{
@@ -25,7 +27,16 @@ const emits = defineEmits<{
 const { t } = useI18n()
 
 const model = useVModel(props, 'modelValue', emits)
-const { isMac } = useRendererPlatform()
+const { isMac, platform } = useRendererPlatform()
+
+/**
+ * What the field shows: `⌘⇧A` on macOS, `Ctrl+Shift+A` elsewhere, as every other shortcut label in
+ * the app reads. The model stays the stored accelerator (`CommandOrControl+Shift+A`), which shown
+ * verbatim was unreadable. The field is read-only, so this label is never edited back into it.
+ */
+const displayValue = computed(() =>
+  model.value ? acceleratorLabel(model.value, platform.value) : ''
+)
 
 const MODIFIER_ONLY_KEYS = new Set(['Meta', 'Alt', 'Control', 'Shift'])
 
@@ -214,7 +225,8 @@ function clearBinding(): void {
 <template>
   <div class="FlatKeyInput">
     <TxInput
-      v-model="model"
+      :model-value="displayValue"
+      readonly
       class="FlatKeyInput-Field"
       :class="{ 'is-clearable': clearable }"
       tabindex="0"
@@ -290,11 +302,11 @@ function clearBinding(): void {
   height: 36px;
 }
 
+/* The UI font, not a monospace one: the label is ⌘⇧A, and monospace faces draw those symbols at
+   half the size of the letter beside them. */
 .FlatKeyInput-Field :deep(input) {
   text-align: center;
-  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
   font-size: 13px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  cursor: pointer;
 }
 </style>

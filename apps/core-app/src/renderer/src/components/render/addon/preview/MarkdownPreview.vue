@@ -1,32 +1,37 @@
 <script setup lang="ts" name="MarkdownPreview">
 import type { TuffItem } from '@talex-touch/utils'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
-import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { decodeText, readPreviewBytes, type TextEncodingSelection } from './text-encoding'
 
 const props = defineProps<{
   item: TuffItem
   searchQuery?: string
   resourceUrl: string
+  encoding?: TextEncodingSelection
 }>()
 
-const { t } = useI18n()
+const emit = defineEmits<{
+  (event: 'encodingDetected', encoding: Exclude<TextEncodingSelection, 'auto'>): void
+}>()
+
+const { t, locale } = useI18n()
 const transport = isElectronRenderer() ? useTuffTransport() : null
 const markdownPreviewLog = createRendererLogger('MarkdownPreview')
 const content = ref('')
 const loading = ref(false)
 const error = ref('')
+const rawBytes = ref<Uint8Array | null>(null)
 
 // 1 MB limit for markdown preview
 const MAX_MD_SIZE = 1 * 1024 * 1024
 const READ_TIMEOUT_MS = 3000
 
-onMounted(async () => {
+async function loadContent(): Promise<void> {
   const filePath = props.item.meta?.file?.path
   if (!filePath) {
     error.value = t('textPreview.error.noFile')
@@ -45,18 +50,13 @@ onMounted(async () => {
 
   loading.value = true
   try {
-    const resourceUrl = props.resourceUrl
-    if (isElectronRenderer() && transport) {
-      content.value = await transport.send(AppEvents.system.readFile, {
-        source: resourceUrl,
-        timeoutMs: READ_TIMEOUT_MS
-      })
-    } else {
-      content.value = await networkClient.readText(resourceUrl)
-    }
-    if (content.value.length === 0) {
-      error.value = t('textPreview.error.emptyFile')
-    }
+    rawBytes.value = await readPreviewBytes(
+      transport,
+      props.resourceUrl,
+      MAX_MD_SIZE,
+      READ_TIMEOUT_MS
+    )
+    redecodeContent()
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
     const code =
@@ -80,7 +80,23 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+function redecodeContent(): void {
+  if (!rawBytes.value) return
+  try {
+    const decoded = decodeText(rawBytes.value, props.encoding ?? 'auto', locale?.value ?? '')
+    content.value = decoded.text
+    emit('encodingDetected', decoded.detectedEncoding)
+    error.value = content.value.length === 0 ? t('textPreview.error.emptyFile') : ''
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('textPreview.error.loadFailed')
+  }
+}
+
+watch(() => props.encoding, redecodeContent)
+
+onMounted(loadContent)
 </script>
 
 <template>

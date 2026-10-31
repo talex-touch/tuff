@@ -8,7 +8,15 @@ export type BetaShortcutFeature = 'screenshot' | 'voiceDictation' | 'voiceQuickE
 
 type BetaFeatureSettings = {
   betaFeatures?: Partial<AppSetting['betaFeatures']>
+  dev?: { advancedSettings?: unknown } | null
 }
+
+/**
+ * Features that live only while Advanced Settings is on, on top of their own opt-in. OmniPanel
+ * hooks the mouse and reads the selection in every app, so turning Advanced Settings off has to
+ * switch it off too: hiding its switch alone left a panel running that settings no longer showed.
+ */
+const ADVANCED_ONLY_FEATURES: ReadonlySet<BetaFeature> = new Set<BetaFeature>(['omniPanel'])
 
 export const BETA_FEATURE_SHORTCUTS = {
   screenshot: 'screenshot.tool.start',
@@ -29,6 +37,7 @@ export function isBetaFeatureEnabled(
   settings: BetaFeatureSettings | null | undefined,
   feature: BetaFeature
 ): boolean {
+  if (ADVANCED_ONLY_FEATURES.has(feature) && settings?.dev?.advancedSettings !== true) return false
   const enabled = settings?.betaFeatures?.[feature]
   return typeof enabled === 'boolean' ? enabled : appSettingOriginData.betaFeatures[feature]
 }
