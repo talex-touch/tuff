@@ -1,23 +1,13 @@
-<script lang="ts">
-/**
- * The one delete waiting for its confirming click, sidebar-wide. Every open folder and the Chats
- * section render their own copy of this component, so arming a row disarms whichever copy held the
- * previous one through this hand-off; the pointer and focus rules alone would let two stay armed.
- */
-let disarmActiveDelete: (() => void) | null = null
-</script>
-
 <script setup lang="ts">
 import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { onBeforeUnmount, ref } from 'vue'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
-
-/** How long an armed delete waits for its second click before it turns back into the trash can. */
-const DELETE_CONFIRM_WINDOW_MS = 3000
 
 const props = withDefaults(
   defineProps<{
@@ -37,16 +27,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { isConversationLoading } = useConversationLoading()
+const openConversationMenuRef = ref<string | null>(null)
 const openSessionMenuRef = ref<string | null>(null)
-/** The conversation whose trash can has turned into 「确认？」, if any. */
-const armedId = ref<string | null>(null)
-let disarmTimer: number | null = null
-
+const pendingDeleteConversation = ref<ConversationRecord | null>(null)
 function sessionDisabledReason(session: LocalAiCliSessionSummary): string | undefined {
   if (session.state === 'missing') return t('shell.projects.sessionMissing')
   if (session.state === 'conflict') return t('shell.projects.sessionConflict')
   if (props.dispatchDisabled) return t('shell.projects.sessionArchived')
   return undefined
+}
+
+function setConversationMenu(id: string, open: boolean): void {
+  openConversationMenuRef.value = open ? id : null
 }
 
 function setSessionMenu(sessionRef: string, open: boolean): void {
@@ -57,64 +49,19 @@ function conversationTitle(conversation: ConversationRecord): string {
   return conversation.title || t('shell.history.untitled')
 }
 
-function deleteLabel(conversation: ConversationRecord): string {
-  return armedId.value === conversation.id
-    ? t('shell.history.deleteConfirmLabel', { title: conversationTitle(conversation) })
-    : t('shell.history.delete')
+function requestDelete(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  pendingDeleteConversation.value = conversation
 }
 
-function disarm(): void {
-  if (disarmTimer !== null) {
-    window.clearTimeout(disarmTimer)
-    disarmTimer = null
+function onConfirmDelete(): boolean {
+  if (pendingDeleteConversation.value) {
+    emit('removeConversation', pendingDeleteConversation.value.id)
+    pendingDeleteConversation.value = null
   }
-  armedId.value = null
-  if (disarmActiveDelete === disarm) disarmActiveDelete = null
+  return true
 }
 
-function arm(id: string): void {
-  if (disarmActiveDelete !== null && disarmActiveDelete !== disarm) disarmActiveDelete()
-  disarm()
-  armedId.value = id
-  disarmActiveDelete = disarm
-  disarmTimer = window.setTimeout(disarm, DELETE_CONFIRM_WINDOW_MS)
-}
-
-/**
- * The first press arms, the second deletes. Enter and Space arrive here as clicks, from the native
- * button, so the keyboard takes the same two steps.
- */
-function onDelete(id: string): void {
-  if (armedId.value !== id) {
-    arm(id)
-    return
-  }
-  disarm()
-  emit('removeConversation', id)
-}
-
-/** Pointer leaving the row, or focus leaving the button, gives the trash can back. */
-function release(id: string): void {
-  if (armedId.value === id) disarm()
-}
-
-/**
- * Escape backs out of an armed delete, and is only claimed when there is one to back out of. A held
- * Enter repeats the button's click, which would arm and delete in one press; only a fresh press may
- * take the second step.
- */
-function onDeleteKeydown(event: KeyboardEvent, id: string): void {
-  if (event.key === 'Enter' && event.repeat) {
-    event.preventDefault()
-    return
-  }
-  if (event.key !== 'Escape' || armedId.value !== id) return
-  event.preventDefault()
-  event.stopPropagation()
-  disarm()
-}
-
-onBeforeUnmount(disarm)
 </script>
 
 <template>
@@ -124,10 +71,18 @@ onBeforeUnmount(disarm)
       class="ShellProjectRows-Row"
       :class="{
         active: row.conversation.id === activeId,
-        'is-loading': isConversationLoading(row.conversation.id)
+        'is-loading': isConversationLoading(row.conversation.id),
+        'is-menu-open': openConversationMenuRef === row.conversation.id
       }"
-      @mouseleave="release(row.conversation.id)"
     >
+      <div
+        v-if="isConversationLoading(row.conversation.id)"
+        class="ShellProjectRows-LoadingIndicator"
+        :title="t('shell.history.loading')"
+        :aria-label="t('shell.history.loading')"
+      >
+        <TxSpinner :size="13" class="ShellProjectRows-Spinner ShellProjectRows-TxSpinner" />
+      </div>
       <button
         class="ShellProjectRows-Open"
         type="button"
@@ -137,33 +92,32 @@ onBeforeUnmount(disarm)
       >
         {{ conversationTitle(row.conversation) }}
       </button>
-      <div
-        v-if="isConversationLoading(row.conversation.id)"
-        class="ShellProjectRows-LoadingIndicator"
-        :title="t('shell.history.loading')"
-        :aria-label="t('shell.history.loading')"
+      <TxDropdownMenu
+        :model-value="openConversationMenuRef === row.conversation.id"
+        placement="bottom-end"
+        @update:model-value="setConversationMenu(row.conversation.id, $event)"
       >
-        <span class="ShellProjectRows-Spinner" aria-hidden="true" />
-      </div>
-      <!-- One button in both states, so focus stays put when the icon turns into 「确认？」. -->
-      <button
-        class="ShellProjectRows-Action ShellProjectRows-Delete"
-        :class="{ 'is-armed': armedId === row.conversation.id }"
-        type="button"
-        :title="deleteLabel(row.conversation)"
-        :aria-label="deleteLabel(row.conversation)"
-        @click.stop="onDelete(row.conversation.id)"
-        @blur="release(row.conversation.id)"
-        @keydown="onDeleteKeydown($event, row.conversation.id)"
-      >
-        <span v-if="armedId === row.conversation.id" class="ShellProjectRows-Confirm">
-          {{ t('shell.history.deleteConfirm') }}
-        </span>
-        <span v-else class="i-ri-delete-bin-6-line" aria-hidden="true" />
-      </button>
+        <template #trigger>
+          <button
+            class="ShellProjectRows-Action"
+            type="button"
+            :aria-label="t('shell.projects.sessionActions')"
+          >
+            <span class="i-ri-more-2-fill" />
+          </button>
+        </template>
+        <TxDropdownItem danger @select="requestDelete(row.conversation)">
+          <span class="i-ri-delete-bin-line mr-1.5" />
+          {{ t('shell.history.delete') }}
+        </TxDropdownItem>
+      </TxDropdownMenu>
     </div>
 
-    <div v-else class="ShellProjectRows-Row ShellProjectRows-Row--session">
+    <div
+      v-else
+      class="ShellProjectRows-Row ShellProjectRows-Row--session"
+      :class="{ 'is-menu-open': openSessionMenuRef === row.session.sessionRef }"
+    >
       <button
         class="ShellProjectRows-Open ShellProjectRows-Session"
         type="button"
@@ -200,6 +154,22 @@ onBeforeUnmount(disarm)
       </TxDropdownMenu>
     </div>
   </template>
+
+  <TxBottomDialog
+    v-if="pendingDeleteConversation"
+    :title="t('shell.history.deleteConfirmTitle')"
+    :message="t('shell.history.deleteConfirmLabel', { title: conversationTitle(pendingDeleteConversation) })"
+    :close-label="t('common.close')"
+    :btns="[
+      { content: t('common.cancel'), type: 'info', onClick: () => true },
+      {
+        content: t('shell.history.delete'),
+        type: 'error',
+        onClick: onConfirmDelete
+      }
+    ]"
+    :close="() => { pendingDeleteConversation = null }"
+  />
 </template>
 
 <style scoped lang="scss">
@@ -285,6 +255,9 @@ onBeforeUnmount(disarm)
   .active & {
     color: var(--shell-primary);
     font-weight: 500;
+  }
+  .is-loading & {
+    padding-left: 5px;
   }
 }
 
@@ -372,12 +345,17 @@ onBeforeUnmount(disarm)
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  margin-right: -2px;
   color: var(--shell-primary);
   pointer-events: none;
   z-index: 3;
+}
+
+.ShellProjectRows-TxSpinner {
+  color: var(--shell-primary);
 }
 
 .ShellProjectRows-Spinner {

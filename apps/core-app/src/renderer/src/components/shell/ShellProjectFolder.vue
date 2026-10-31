@@ -195,6 +195,36 @@ function onRenameKeydown(event: KeyboardEvent): void {
     emit('cancelRename')
   }
 }
+
+function onFolderEnter(el: Element): void {
+  const node = el as HTMLElement
+  node.style.height = '0px'
+  node.style.opacity = '0'
+  void node.offsetHeight
+  node.style.height = `${node.scrollHeight}px`
+  node.style.opacity = '1'
+}
+
+function onFolderAfterEnter(el: Element): void {
+  const node = el as HTMLElement
+  node.style.height = ''
+  node.style.opacity = ''
+}
+
+function onFolderLeave(el: Element): void {
+  const node = el as HTMLElement
+  node.style.height = `${node.scrollHeight}px`
+  node.style.opacity = '1'
+  void node.offsetHeight
+  node.style.height = '0px'
+  node.style.opacity = '0'
+}
+
+function onFolderAfterLeave(el: Element): void {
+  const node = el as HTMLElement
+  node.style.height = ''
+  node.style.opacity = ''
+}
 </script>
 
 <template>
@@ -234,8 +264,8 @@ function onRenameKeydown(event: KeyboardEvent): void {
             :class="expanded ? 'i-ri-folder-open-line' : 'i-ri-folder-line'"
           />
           <span
-            class="ShellProjectFolder-Chevron"
-            :class="expanded ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-right-s-line'"
+            class="ShellProjectFolder-Chevron i-ri-arrow-right-s-line"
+            :class="{ 'is-expanded': expanded }"
           />
         </span>
       </button>
@@ -418,21 +448,29 @@ function onRenameKeydown(event: KeyboardEvent): void {
     </div>
 
     <!-- Archived: its rows or nothing — an empty box would still take a gap in the column. -->
-    <div v-if="archived ? rows.length > 0 : expanded" class="ShellProjectFolder-Children">
-      <ShellProjectRows
-        v-if="rows.length"
-        :rows="rows"
-        :active-id="activeId"
-        :dispatch-disabled="archived"
-        @open-conversation="emit('openConversation', $event)"
-        @remove-conversation="emit('removeConversation', $event)"
-        @continue-session="emit('continueSession', $event)"
-        @forget-session="emit('forgetSession', $event)"
-      />
-      <p v-else class="ShellProjectFolder-Empty">
-        {{ t('shell.projects.empty') }}
-      </p>
-    </div>
+    <Transition
+      name="folder-expand"
+      @enter="onFolderEnter"
+      @after-enter="onFolderAfterEnter"
+      @leave="onFolderLeave"
+      @after-leave="onFolderAfterLeave"
+    >
+      <div v-if="archived ? rows.length > 0 : expanded" class="ShellProjectFolder-Children">
+        <ShellProjectRows
+          v-if="rows.length"
+          :rows="rows"
+          :active-id="activeId"
+          :dispatch-disabled="archived"
+          @open-conversation="emit('openConversation', $event)"
+          @remove-conversation="emit('removeConversation', $event)"
+          @continue-session="emit('continueSession', $event)"
+          @forget-session="emit('forgetSession', $event)"
+        />
+        <p v-else class="ShellProjectFolder-Empty">
+          {{ t('shell.projects.empty') }}
+        </p>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -519,6 +557,11 @@ function onRenameKeydown(event: KeyboardEvent): void {
  */
 .ShellProjectFolder-Chevron {
   visibility: hidden;
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+
+  &.is-expanded {
+    transform: rotate(90deg);
+  }
 }
 
 .ShellProjectFolder:not(.is-archived) > .ShellProjectFolder-Row:hover,
@@ -620,6 +663,10 @@ function onRenameKeydown(event: KeyboardEvent): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
+  transition:
+    height 0.26s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.22s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .ShellProjectFolder-Empty {
