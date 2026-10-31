@@ -65,6 +65,7 @@ export interface ConversationTurnMeta {
   completionTokens?: number
   totalTokens?: number
   latencyMs?: number
+  ttftMs?: number
   /** How many times the provider compacted its context while producing this turn. */
   compactions?: number
   /**
@@ -315,6 +316,13 @@ export function useHomeConversation(
     const payload: IntelligenceChatPayload = { messages: toProviderMessages() }
     const invokeOptions = resolveInvokeOptions()
     const startedAt = Date.now()
+    let firstTokenAt: number | null = null
+    const markFirstToken = (): void => {
+      if (!firstTokenAt) {
+        firstTokenAt = Date.now()
+        recordMeta({ ttftMs: firstTokenAt - startedAt })
+      }
+    }
     streaming.value = true
 
     /**
@@ -624,6 +632,7 @@ export function useHomeConversation(
       },
       onDelta: (delta, event) => {
         if (settled || !delta) return
+        markFirstToken()
         hasProviderActivity = true
         assistant.content += delta
         // Only messages that carry structured parts maintain the parallel
@@ -648,6 +657,7 @@ export function useHomeConversation(
           handlePartEvent(partEvent)
           return
         }
+        markFirstToken()
         hasProviderActivity = true
         // The first structured event upgrades the message to parts mode; the
         // text accumulated so far becomes the leading text part.
