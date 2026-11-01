@@ -87,6 +87,13 @@ const orchestratorMocks = vi.hoisted(() => {
   }
 })
 
+vi.mock('electron', () => ({
+  app: { isReady: vi.fn(() => true), getPath: vi.fn(() => '/tmp/tuff-orchestrator-test') },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+  utilityProcess: { fork: vi.fn() }
+}))
+
 vi.mock('../../utils/logger', () => ({
   createLogger: () => ({
     child: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() })

@@ -82,6 +82,8 @@ vi.mock('electron', () => ({
     isReady: vi.fn(() => true),
     getPath: vi.fn(() => '/tmp/tuff-pi-runtime-test')
   },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
   utilityProcess: { fork: hostMocks.fork }
 }))
 

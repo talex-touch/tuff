@@ -5,7 +5,12 @@ import { WorkspaceMessageAssembler } from './workspace-message-assembler'
 
 // Keep the real runtime sanitizer. Only its unused Electron/tool/network host boundaries are
 // isolated, using the neighboring runtime-host test convention; no module registry escapes a file.
-vi.mock('electron', () => ({ app: {}, utilityProcess: {} }))
+vi.mock('electron', () => ({
+  app: {},
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+  utilityProcess: {}
+}))
 vi.mock('../ai/agents', () => ({ agentManager: {}, toolRegistry: {} }))
 vi.mock('../ai/intelligence-sdk', () => ({ tuffIntelligence: {} }))
 vi.mock('../ai/intelligence-mcp-registry', () => ({ intelligenceMcpRegistry: {} }))

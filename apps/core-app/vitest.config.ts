@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -12,6 +12,7 @@ const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 
 export default defineConfig({
   test: {
+    exclude: [...configDefaults.exclude, 'scripts/search-index-stress/**'],
     poolOptions: {
       forks: {
         /**
