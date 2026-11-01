@@ -1,14 +1,7 @@
 <script lang="ts" name="HomePage" setup>
-import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
+import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
-import type {
-  FormFieldValue,
-  FormSpec,
-  WidgetSpec
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
-import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type {
   ConversationMessage,
   ConversationTurnMeta
@@ -43,21 +36,7 @@ import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
 import { usePreferredReducedMotion } from '@vueuse/core'
-import {
-  CHART_RESULT_PREFIX,
-  FORM_RESULT_PREFIX,
-  WIDGET_RESULT_PREFIX
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  shallowRef,
-  watch
-} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { describeFailure } from '~/utils/failure-text'
@@ -66,9 +45,6 @@ import { useRoute, useRouter } from 'vue-router'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
-import { toMessageSegments } from '~/modules/conversation/chain-steps'
-import { describeToolCallError } from '~/modules/conversation/tool-call-error'
-import { rollThinkingVerb } from '~/modules/conversation/thinking-words'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
 import {
@@ -148,6 +124,7 @@ import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
 import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
 import { homeLog } from './composables/home-log'
 import { useReadAloud } from './composables/useReadAloud'
+import { useMessageParts } from './composables/useMessageParts'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -707,142 +684,29 @@ const intelligenceSdk = useIntelligenceSdk()
 
 const { toggleSpeak, speakStateOf } = useReadAloud()
 
-/**
- * One verb per turn, held by message id: the header must not reshuffle on every
- * streaming delta (a re-render happens tens of times a second), but a new turn
- * should read differently from the last one.
- */
-const thinkingVerbs = new Map<string, string>()
-
-function thinkingVerbFor(message: ConversationMessage): string {
-  const existing = thinkingVerbs.get(message.id)
-  if (existing) return existing
-  // A host that stubs `useI18n` (tests) can leave `locale` absent; the verb list
-  // then falls back to the source language rather than throwing mid-render.
-  const verb = rollThinkingVerb(locale?.value ?? 'zh')
-  thinkingVerbs.set(message.id, verb)
-  return verb
-}
-
-/**
- * The message body, in the order the provider streamed it: each thinking span
- * its own block, each tool call its own card. Derived per render rather than
- * cached — `parts` grows in place on every delta.
- */
-function segmentsOf(message: ConversationMessage): MessageSegment[] {
-  return toMessageSegments(message.parts, message.status === 'streaming', {
-    thinking: t('home.thinkingVerb', { verb: thinkingVerbFor(message) }),
-    thinkingFor: (time) => t('home.thinkingFor', { time }),
-    interrupted: t('home.toolInterrupted'),
-    toolError: (error) => describeToolCallError(error, t)
-  })
-}
-
-/**
- * Tool results carrying a chart spec render as a chart in the card's result
- * slot; everything else falls through to the card's own text rendering.
- */
-function chartSpecOf(tool: AiToolCallPart): ToolChartSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(CHART_RESULT_PREFIX)) return null
-  try {
-    return JSON.parse(output.slice(CHART_RESULT_PREFIX.length)) as ToolChartSpec
-  } catch {
-    return null
-  }
-}
-
-function formSpecOf(tool: AiToolCallPart): FormSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(FORM_RESULT_PREFIX)) return null
-  try {
-    return JSON.parse(output.slice(FORM_RESULT_PREFIX.length)) as FormSpec
-  } catch {
-    return null
-  }
-}
-
-/**
- * A model-authored widget. No parse of the payload's *code* is attempted here —
- * only the envelope — because nothing this side could check would make running
- * it safer. The sandbox is what makes it safe.
- */
-function widgetSpecOf(tool: AiToolCallPart): WidgetSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(WIDGET_RESULT_PREFIX)) return null
-  try {
-    const spec = JSON.parse(output.slice(WIDGET_RESULT_PREFIX.length)) as WidgetSpec
-    return typeof spec?.source === 'string' && spec.source ? spec : null
-  } catch {
-    return null
-  }
-}
-
-/** Ids of forms already answered this session — locks their cards. */
-const submittedForms = reactive(new Set<string>())
-
-/**
- * Half-typed form input, keyed by tool call id. The stream virtualizes rows
- * out of the DOM once they scroll far enough away, and a card component's own
- * state unmounts with it — this is what hands the draft back on remount.
- * Plain Map on purpose: it is only read when a card mounts.
- */
-const formDrafts = new Map<string, Record<string, FormFieldValue>>()
-
-/**
- * A form submission continues the conversation as a plain user message: the
- * model reads it like any other turn, so the loop needs no second channel.
- * Main marks the answered call in the same write, so a reloaded thread does not
- * re-offer a spent form; the local lock covers the moment until it lands.
- */
-function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
-  submittedForms.add(tool.id)
-  formDrafts.delete(tool.id)
-  const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
-  draft.value = ''
-  void workspace
-    .submit(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`, undefined, {
-      answersToolCallId: tool.id
-    })
-    .catch((error: unknown) => {
-      submittedForms.delete(tool.id)
-      reportSubmitError(error)
-    })
-}
-
-/**
- * The raw payload affordance is for builders: dev builds only, and even
- * there just a whisper of a toggle per widget. It opens a dialog with the
- * call rendered as highlighted JSON — the code block brings its own copy
- * button, so inspection and grabbing the payload are one gesture each.
- */
-const showToolPayload = import.meta.env.DEV
-const payloadFor = ref<AiToolCallPart | null>(null)
-
-const payloadJson = computed(() => {
-  const input = payloadFor.value?.input
-  if (!input) return ''
-  try {
-    // Normalized pretty-print; the accumulator may hand over compact JSON.
-    return JSON.stringify(JSON.parse(input), null, 2)
-  } catch {
-    return input
-  }
+const {
+  thinkingVerbFor,
+  segmentsOf,
+  chartSpecOf,
+  formSpecOf,
+  widgetSpecOf,
+  submittedForms,
+  formDrafts,
+  submitForm,
+  showToolPayload,
+  payloadFor,
+  payloadJson,
+  chainOpen,
+  toolOpen,
+  toolCallLabels,
+  markdownLabels
+} = useMessageParts({
+  submit: (text, attachments, options) => workspace.submit(text, attachments, options),
+  clearDraft: () => {
+    draft.value = ''
+  },
+  onSubmitError: reportSubmitError
 })
-
-/**
- * The reader's manual open/collapse, keyed per thinking block. Held here rather
- * than in the chain component because streaming re-renders can recreate that
- * instance — state kept there dies mid-turn, which read as "clicking does
- * nothing". Keyed by segment rather than by message now that one turn can
- * carry several blocks.
- */
-const chainOpen = reactive(new Map<string, boolean>())
-/**
- * Manual open/collapse for tool cards, keyed per segment id.
- * Held here so streaming re-renders never wipe the reader's open state.
- */
-const toolOpen = reactive(new Map<string, boolean>())
 
 /** Grows the composer with its content up to a cap, then scrolls — the usual chat affordance. */
 function autoGrow(): void {
@@ -1655,42 +1519,6 @@ watch(
   },
   { immediate: true }
 )
-
-/**
- * Remote images in a reply are held back until the reader asks for them: an
- * image fetches with no click, so an unreviewed `src` reports their IP to
- * whoever wrote the markdown — which, for a reply built from pages the model
- * just read, is not the model. TuffEx carries no i18n, so the wording comes
- * from here.
- */
-const toolCallLabels = computed(() => ({
-  retryLabel: t('home.retry'),
-  pendingLabel: t('home.toolCall.pending'),
-  runningLabel: t('home.toolCall.running'),
-  doneLabel: t('home.toolCall.done'),
-  errorLabel: t('home.toolCall.error'),
-  inputLabel: t('home.toolCall.input'),
-  emptyResultLabel: t('home.toolCall.emptyResult'),
-  linesToggleFormatter: (hiddenCount: number, expanded: boolean) =>
-    expanded ? t('home.toolCall.linesLess') : t('home.toolCall.linesMore', { count: hiddenCount })
-}))
-
-const markdownLabels = computed(() => ({
-  blockedImageText: t('home.image.blocked'),
-  loadImageOnceText: t('home.image.loadOnce'),
-  allowSessionImagesText: t('home.image.allowSession'),
-  copyTableText: t('home.table.copyTable'),
-  copiedTableText: t('home.table.copiedTable'),
-  codePreviewText: t('home.code.preview'),
-  codeSourceText: t('home.code.source'),
-  codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
-  copyCodeText: t('home.copy'),
-  copiedCodeText: t('home.copied'),
-  diagramZoomLabel: t('home.diagram.zoom'),
-  diagramPreviewLabel: t('home.diagram.preview'),
-  diagramCloseLabel: t('home.diagram.close'),
-  diagramErrorText: t('home.diagram.failed')
-}))
 
 /**
  * Consent is per conversation. Carrying it into the next thread would widen it
