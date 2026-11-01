@@ -36,6 +36,12 @@ import {
   type UpsertFileRecord
 } from './file-index-persistence-repository'
 import {
+  readFileSubtreeBound,
+  readFileSubtreePage,
+  type FileSubtreeBound,
+  type FileSubtreePageRow
+} from './file-subtree-reads'
+import {
   IndexMaintenanceDeferredError,
   indexMaintenanceContext,
   type IndexMaintenanceNotification,
@@ -1288,6 +1294,44 @@ export class SearchIndexService {
       mtime: fileTimestampFromSeconds(row.mtime),
       ctime: fileTimestampFromSeconds(row.ctime)
     }))
+  }
+
+  /**
+   * The bound and page strategy of one watched subtree's missing-file sweep, read by the read
+   * worker (`file-subtree-reads.ts`). Its main-thread predecessor ordered and sorted every file row
+   * of the scope: 6.7s of blocked event loop on a cold 6.4GB index for a home-directory scope.
+   */
+  async readFileSubtreeBound(scope: string, signal?: AbortSignal): Promise<FileSubtreeBound> {
+    signal?.throwIfAborted()
+    await this.ensureInitialized()
+    signal?.throwIfAborted()
+    return await readFileSubtreeBound(
+      <T>(query: SQL, abort?: AbortSignal) => this.readAll<T>(query, abort),
+      scope,
+      signal
+    )
+  }
+
+  async readFileSubtreePage(
+    scope: string,
+    small: boolean,
+    afterId: number,
+    throughId: number,
+    limit: number,
+    signal?: AbortSignal
+  ): Promise<FileSubtreePageRow[]> {
+    signal?.throwIfAborted()
+    await this.ensureInitialized()
+    signal?.throwIfAborted()
+    return await readFileSubtreePage(
+      <T>(query: SQL, abort?: AbortSignal) => this.readAll<T>(query, abort),
+      scope,
+      small,
+      afterId,
+      throughId,
+      limit,
+      signal
+    )
   }
 
   /**
