@@ -23,7 +23,6 @@ import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
-import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
 import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
@@ -48,10 +47,7 @@ import {
   SCROLL_TWEEN_MS,
   useSendChoreography
 } from '~/composables/useSendChoreography'
-import {
-  createWorkingConversationTitle,
-  deriveRestoredTitle
-} from '~/modules/conversation/conversation-title'
+import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import {
@@ -98,6 +94,7 @@ import { useComposerDictation } from './composer/useComposerDictation'
 import { voiceGlowDriveLevel, voiceGlowLobes, voiceGlowResponse } from './composer/voice-glow'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
+import HomeMessageRail from './HomeMessageRail.vue'
 import HomeTopBar from './HomeTopBar.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
 import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
@@ -106,6 +103,8 @@ import { homeLog } from './composables/home-log'
 import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
+import { useLeavingHead } from './composables/useLeavingHead'
+import { useConversationRestore } from './composables/useConversationRestore'
 import { usePassageSelection } from './composables/usePassageSelection'
 import { useConversationTitle } from './composables/useConversationTitle'
 import { useThinkingTicker } from './composables/useThinkingTicker'
@@ -723,34 +722,7 @@ function bubbleMaxWidth(): number {
   return (lane?.getBoundingClientRect().width ?? 0) * 0.78
 }
 
-/** The greeting as it stood before the stage flips to a conversation; `null` when there is none. */
-interface LeavingHead {
-  el: HTMLElement
-  rect: DOMRect
-}
-
-/** Read before the reactive flip: once the thread is non-empty, the ref no longer points at it. */
-function measureLeavingHead(): LeavingHead | null {
-  const el = headRef.value
-  return el ? { el, rect: el.getBoundingClientRect() } : null
-}
-
-/**
- * The leaving greeting must neither ride the new layout (it would teleport to the column top) nor
- * keep occupying it (it would shove the stream down, then snap it up when the fade ends): pin it
- * where it stood, out of flow. Both ways off the blank stage need it — a first send and opening a
- * stored thread.
- */
-function pinLeavingHead(head: LeavingHead | null): void {
-  if (!head?.el.isConnected || prefersReducedMotion()) return
-  const host = head.el.parentElement?.getBoundingClientRect()
-  if (!host) return
-  head.el.style.position = 'absolute'
-  head.el.style.top = `${Math.round(head.rect.top - host.top)}px`
-  head.el.style.left = `${Math.round(head.rect.left - host.left)}px`
-  // Only the measured offsets are inline; the layer rides the shared scale.
-  head.el.classList.add('is-leaving')
-}
+const { measureLeavingHead, pinLeavingHead } = useLeavingHead(headRef)
 
 /**
  * Only images reach the model; a file in the tray never had bytes on this surface. Said once the
@@ -1239,129 +1211,38 @@ const currentProject = computed(() =>
   projectId.value ? (projectStore.projects.find((p) => p.id === projectId.value) ?? null) : null
 )
 
-watch(
+const { resetBlankConversation } = useConversationRestore({
+  browserLanding: () => props.browserLanding,
+  isHomeRoute,
+  conversationId,
   projectId,
-  (id) => {
-    if (props.browserLanding) return
-    projectStore.setActiveProjectId(id)
-  },
-  { immediate: true }
-)
-
-/**
- * Consent is per conversation. Carrying it into the next thread would widen it
- * without asking, and the reader has no way to notice that it happened.
- */
-watch(conversationId, () => resetRemoteImagePolicy())
-
-/**
- * A dictation belongs to the thread it started in: switching threads abandons it where it stands,
- * without writing the draft back. (A first send never trips this — it waits for dictation to end.)
- */
-watch(conversationId, (next, previous) => {
-  dictation.cancel({ restore: false })
-  // So does its clip: it belongs to the draft of the thread it was recorded in — except across
-  // the id a first send mints, and takes back when it fails (`ownMintedId`).
-  if (ownMintedId !== null && (next === ownMintedId || previous === ownMintedId)) {
-    if (next === null) ownMintedId = null
-    return
-  }
-  dictation.dismissClip()
-})
-
-/**
- * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
- * anything else, so a slower earlier load used to land after a faster later one and leave the URL
- * naming one thread while the view showed another (#826).
- */
-const restoreSequence = createLatestOnly()
-
-async function resetBlankConversation(nextProjectId: string | null): Promise<void> {
-  invalidatePageSubmission()
-  conversationId.value = null
-  projectId.value = nextProjectId
-  const composerEl = composerRef.value
-  const first = composerEl?.getBoundingClientRect()
-  conversation.reset()
-  generatedTitle.value = null
-  await nextTick()
-  if (!props.browserLanding) inputRef.value?.focus()
-  if (composerEl && first && !prefersReducedMotion()) {
-    const dy = first.top - composerEl.getBoundingClientRect().top
-    if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
-  }
-}
-
-/**
- * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
- *
- * Watching the param rather than loading once on mount is what makes the sidebar work: navigating
- * between two stored conversations reuses this component instance, so mount never fires again.
- */
-watch(
-  () => [route.path, route.params.id] as const,
-  async ([path, id]) => {
-    if (props.browserLanding || (path !== '/home' && !path.startsWith('/home/c/'))) return
-    const target = typeof id === 'string' ? id : null
-    // Claimed before any await, so a plain /home navigation also invalidates a restore in flight -
-    // otherwise it would land on top of the blank thread reset() just produced.
-    const isCurrentRestore = restoreSequence.claim()
-    if (!target) {
-      await resetBlankConversation(projectStore.consumePendingProjectId())
+  generatedTitle,
+  workspace,
+  history,
+  projectStore,
+  composer: () => composerRef.value,
+  stream: () => streamRef.value,
+  focusInput: () => inputRef.value?.focus(),
+  resetConversation: () => conversation.reset(),
+  invalidateSubmission: invalidatePageSubmission,
+  invalidateChoreography: () => choreography.invalidate(),
+  playComposerFlip: (deltaY) => choreography.playComposerFlip(deltaY),
+  measureLeavingHead,
+  pinLeavingHead,
+  // A dictation belongs to the thread it started in: switching threads abandons it where it
+  // stands, without writing the draft back. (A first send never trips this — it waits for
+  // dictation to end.)
+  onThreadChange: (next, previous) => {
+    dictation.cancel({ restore: false })
+    // So does its clip: it belongs to the draft of the thread it was recorded in — except across
+    // the id a first send mints, and takes back when it fails (`ownMintedId`).
+    if (ownMintedId !== null && (next === ownMintedId || previous === ownMintedId)) {
+      if (next === null) ownMintedId = null
       return
     }
-    if (target === conversationId.value) return
-    invalidatePageSubmission()
-
-    // The record (title, project) and Main's workspace state are read together, so the thread is
-    // on screen in the same update that switches to it.
-    const [restored] = await Promise.all([history.load(target), workspace.prefetch(target)])
-    // A newer navigation started while this load was in flight; it owns the view now.
-    if (!isCurrentRestore()) return
-    if (!restored) return
-    // Opening a thread from the blank home docks the composer — the same
-    // journey as a first send, so it gets the same measured spring instead
-    // of teleporting. Thread-to-thread hops measure ~0 and stay still.
-    const composerEl = composerRef.value
-    const first = composerEl?.getBoundingClientRect()
-    const head = measureLeavingHead()
-    // A send still in the air lands before its thread is swapped out, rather than flying on to a row
-    // that is leaving. Not before the same-thread return above: a first send's own navigation to its
-    // new id passes through here and must leave its lift alone.
-    choreography.invalidate()
-    // The workspace mirror follows the id: Main's history replaces the stage in the next flush.
-    conversationId.value = target
-    projectId.value = restored.projectId
-    // A stored title that differs from the opening message is a real one; the working-title
-    // persist writes the opening message back, and treating that as custom would block
-    // generation forever.
-    generatedTitle.value = deriveRestoredTitle(
-      restored.title,
-      restored.messages.find((message) => message.role === 'user')?.content
-    )
-    // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
-    // reuses this instance — landing at the latest message needs an explicit call. The greeting
-    // leaves the flow first, so the scroll lands against the stream's final height.
-    await nextTick()
-    pinLeavingHead(head)
-    streamRef.value?.scrollToBottom()
-    if (composerEl && first && !prefersReducedMotion()) {
-      const dy = first.top - composerEl.getBoundingClientRect().top
-      if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  () => projectStore.pendingProjectId,
-  async (pendingProjectId) => {
-    if (props.browserLanding || !isHomeRoute.value) return
-    if (pendingProjectId === undefined || typeof route.params.id === 'string') return
-    restoreSequence.claim()
-    await resetBlankConversation(projectStore.consumePendingProjectId())
+    dictation.dismissClip()
   }
-)
+})
 
 // ============================================================================
 // Home push: the opening line and the card under the composer
@@ -1564,6 +1445,11 @@ useHomeCommands({
           curve="bezier"
           :z-index="4"
           class="HomePage-BottomBlur"
+        />
+        <HomeMessageRail
+          v-if="!isEmpty && !panelOpen"
+          :items="messages"
+          @navigate="streamRef?.scrollToIndex($event)"
         />
         <div class="HomePage-Center">
           <Transition name="home-head">
@@ -2739,6 +2625,7 @@ useHomeCommands({
   }
 
   :deep(.tx-conversation-stream__pill) {
+    z-index: 10;
     bottom: calc(var(--home-composer-height, 112px) + 32px);
   }
 }
