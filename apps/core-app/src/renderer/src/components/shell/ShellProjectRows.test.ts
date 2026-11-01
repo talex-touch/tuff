@@ -30,7 +30,7 @@ interface DialogButtonStub {
 vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
   TxDropdownMenu: defineComponent({
     name: 'TxDropdownMenu',
-    props: ['modelValue'],
+    props: { modelValue: { type: Boolean, default: false } },
     emits: ['update:modelValue'],
     setup(_props, { slots }) {
       return () => h('div', { class: 'tx-dropdown' }, [slots.trigger?.(), slots.default?.()])
@@ -120,9 +120,7 @@ function actionButton(wrapper: VueWrapper, id: string) {
 }
 
 function findDropdownItem(wrapper: VueWrapper, text: string) {
-  return wrapper
-    .findAll('.tx-dropdown-item')
-    .find((item) => item.text().includes(text))
+  return wrapper.findAll('.tx-dropdown-item').find((item) => item.text().includes(text))
 }
 
 function findDialogBtn(wrapper: VueWrapper, type: string) {

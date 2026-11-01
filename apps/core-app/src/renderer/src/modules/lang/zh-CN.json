@@ -1967,6 +1967,7 @@
       "delete": "删除对话",
       "deleteConfirm": "确认？",
       "deleteConfirmLabel": "确认删除「{title}」？",
+      "deleteConfirmTitle": "删除对话",
       "loading": "生成中…"
     },
     "projects": {

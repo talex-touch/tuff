@@ -5,11 +5,55 @@ import { WorkspaceMessageAssembler } from './workspace-message-assembler'
 
 // Keep the real runtime sanitizer. Only its unused Electron/tool/network host boundaries are
 // isolated, using the neighboring runtime-host test convention; no module registry escapes a file.
+vi.mock('../sentry/sentry-service', () => {
+  const service = {
+    isTelemetryEnabled: vi.fn(() => false),
+    isEnabled: vi.fn(() => false),
+    queueNexusTelemetry: vi.fn()
+  }
+  return {
+    SentryServiceModule: class {},
+    getSentryService: vi.fn(() => service),
+    setSentryServiceInstance: vi.fn()
+  }
+})
+
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  setUser: vi.fn(),
+  withScope: vi.fn(),
+  getCurrentScope: vi.fn(() => ({ setTag: vi.fn(), setContext: vi.fn(), setUser: vi.fn() })),
+  flush: vi.fn(async () => true)
+}))
+
+vi.mock('@electron-toolkit/utils', () => ({
+  is: { dev: false, windows: false, macOS: false, linux: false }
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
+}))
+
 vi.mock('electron', () => ({
-  app: {},
+  app: {
+    commandLine: {
+      appendSwitch: vi.fn(),
+      hasSwitch: vi.fn(() => false),
+      getSwitchValue: vi.fn(() => '')
+    }
+  },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
   MessageChannelMain: vi.fn(),
+  powerMonitor: { on: vi.fn(), off: vi.fn(), getSystemIdleTime: vi.fn(() => 0) },
   utilityProcess: {}
 }))
 vi.mock('../ai/agents', () => ({ agentManager: {}, toolRegistry: {} }))

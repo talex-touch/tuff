@@ -52,7 +52,8 @@ const hostMocks = vi.hoisted(() => {
 })
 
 const intelligenceMocks = vi.hoisted(() => ({
-  invoke: vi.fn()
+  invoke: vi.fn(),
+  stream: vi.fn()
 }))
 
 const toolMocks = vi.hoisted(() => ({
@@ -77,14 +78,57 @@ const NESTED_JSON_CREDENTIAL = JSON.stringify({
 })
 const DEEPLY_NESTED_JSON_CREDENTIAL = JSON.stringify({ nested: NESTED_JSON_CREDENTIAL })
 
+vi.mock('../sentry/sentry-service', () => {
+  const service = {
+    isTelemetryEnabled: vi.fn(() => false),
+    isEnabled: vi.fn(() => false),
+    queueNexusTelemetry: vi.fn()
+  }
+  return {
+    SentryServiceModule: class {},
+    getSentryService: vi.fn(() => service),
+    setSentryServiceInstance: vi.fn()
+  }
+})
+
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  setUser: vi.fn(),
+  withScope: vi.fn(),
+  getCurrentScope: vi.fn(() => ({ setTag: vi.fn(), setContext: vi.fn(), setUser: vi.fn() })),
+  flush: vi.fn(async () => true)
+}))
+
+vi.mock('@electron-toolkit/utils', () => ({
+  is: { dev: false, windows: false, macOS: false, linux: false }
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: {
     isReady: vi.fn(() => true),
-    getPath: vi.fn(() => '/tmp/tuff-pi-runtime-test')
+    getPath: vi.fn(() => '/tmp/tuff-pi-runtime-test'),
+    commandLine: {
+      appendSwitch: vi.fn(),
+      hasSwitch: vi.fn(() => false),
+      getSwitchValue: vi.fn(() => '')
+    }
   },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
   MessageChannelMain: vi.fn(),
+  powerMonitor: { on: vi.fn(), off: vi.fn(), getSystemIdleTime: vi.fn(() => 0) },
   utilityProcess: { fork: hostMocks.fork }
 }))
 
@@ -94,7 +138,9 @@ vi.mock('node:fs', () => ({
 }))
 
 vi.mock('../../utils/logger', () => ({
+  formatDuration: (ms: number) => `${ms}ms`,
   createLogger: () => ({
+    ...runtimeLoggerMocks,
     child: () => runtimeLoggerMocks
   })
 }))
@@ -424,6 +470,10 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION
     })
 
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+      yield { type: 'delta', delta: 'model answer' }
+    })
     hostMocks.emit('message', {
       type: 'model.request',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -439,7 +489,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
     await settleAsyncWork()
 
-    expect(intelligenceMocks.invoke).toHaveBeenCalledWith(
+    expect(intelligenceMocks.stream).toHaveBeenCalledWith(
       'text.chat',
       expect.objectContaining({ messages: expect.any(Array) }),
       expect.objectContaining({
