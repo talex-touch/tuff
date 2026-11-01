@@ -45,12 +45,15 @@ const selectedCandidateIds = reactive(new Set<string>())
 const selectedProviderIds = reactive<Record<string, string[]>>({})
 const secretConfirm = shallowRef<SecretConfirmRequest | null>(null)
 
+// The apply step rejects missing, invalid or blocked candidates, so they are not offered.
 const modelCandidates = computed<AiConfigImportCandidate[]>(() => {
   const candidates = scan.value?.candidates ?? []
   return candidates.filter(
     (candidate): candidate is AiConfigImportCandidate =>
       candidate.kind === 'config' &&
       candidate.state !== 'source-missing' &&
+      candidate.state !== 'invalid' &&
+      candidate.blockingIssues.length === 0 &&
       (candidate.modelProviders?.length ?? 0) > 0
   )
 })
@@ -185,19 +188,24 @@ function closeSecretConfirm(): void {
   settleSecretConfirm(false)
 }
 
-async function refreshScan(force = false): Promise<void> {
+// 'keep' restores the user's choices, even an empty one. 'select-all' is for opening the drawer.
+// 'clear' is for a scan after the source changed, which asks the user to choose again.
+type ScanSelection = 'keep' | 'select-all' | 'clear'
+
+async function refreshScan(force = false, selection: ScanSelection = 'keep'): Promise<void> {
   if (loading.value || (applying.value && !force)) return
   loading.value = true
   try {
     const next = await aiClient.orchestratorPreviewImport({ providerIds: LOCAL_CLI_PROVIDERS })
-    // A rescan keeps the choices that still exist; only a scan with no prior choice selects all.
     const previousCandidateIds = [...selectedCandidateIds]
     const previousProviderIds = { ...selectedProviderIds }
     scan.value = next
-    if (previousCandidateIds.length > 0) {
-      restoreSelection(previousCandidateIds, previousProviderIds)
-    } else {
+    if (selection === 'select-all') {
       selectAll()
+    } else if (selection === 'clear') {
+      resetSelection()
+    } else {
+      restoreSelection(previousCandidateIds, previousProviderIds)
     }
   } catch (error) {
     log.error('Failed to scan local CLI model configuration', error)
@@ -211,7 +219,7 @@ async function refreshScan(force = false): Promise<void> {
 
 async function openImport(): Promise<void> {
   drawerVisible.value = true
-  await refreshScan()
+  await refreshScan(false, 'select-all')
 }
 
 function importRequest(): AiImportApplyRequest | null {
@@ -265,7 +273,7 @@ async function applyImport(): Promise<void> {
         }
         if (code === 'AI_IMPORT_SOURCE_CHANGED') {
           toast.error(t('settingLocalAiCli.import.sourceChanged'))
-          await refreshScan(true)
+          await refreshScan(true, 'clear')
           return
         }
         log.error('Failed to import local CLI model configuration', error)
