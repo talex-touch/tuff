@@ -2521,7 +2521,10 @@
       "sourceFile": "Local file",
       "sourceSearch": "Search hit",
       "sourceMcp": "MCP",
-      "sourceWeb": "Web"
+      "sourceWeb": "Web",
+      "code": "Preview",
+      "codeEmpty": "Choose Preview on an HTML code block in the conversation to open it here.",
+      "closeCode": "Close preview: {title}"
     },
     "table": {
       "copyTable": "Copy CSV",

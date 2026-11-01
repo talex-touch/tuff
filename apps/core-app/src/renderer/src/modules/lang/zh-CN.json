@@ -2521,7 +2521,10 @@
       "sourceFile": "本地文件",
       "sourceSearch": "搜索命中",
       "sourceMcp": "MCP",
-      "sourceWeb": "网页"
+      "sourceWeb": "网页",
+      "code": "预览",
+      "codeEmpty": "在对话里的 HTML 代码块上点「预览」，它会在这里打开。",
+      "closeCode": "关闭预览：{title}"
     },
     "table": {
       "copyTable": "复制为 CSV",

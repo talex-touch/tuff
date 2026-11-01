@@ -3,6 +3,7 @@ import type {
   WorkspaceContextProjection,
   WorkspacePendingRun
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { CodePreviewTab } from '~/modules/conversation/useCodePreviewTabs'
 import type {
   ConversationMessage,
   ConversationTurnMeta
@@ -13,12 +14,13 @@ import type {
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
 import { useConversationReview } from '~/modules/conversation/useConversationReview'
 import HomePreviewActivity from './preview/HomePreviewActivity.vue'
 import HomePreviewArtifacts from './preview/HomePreviewArtifacts.vue'
+import HomePreviewCode from './preview/HomePreviewCode.vue'
 import HomePreviewContext from './preview/HomePreviewContext.vue'
 import HomePreviewEmpty from './preview/HomePreviewEmpty.vue'
 import HomePreviewReview from './preview/HomePreviewReview.vue'
@@ -51,9 +53,15 @@ const props = defineProps<{
   gateway: ActivityGatewayApproval[]
   pendingRun?: WorkspacePendingRun
   loading: boolean
+  codeTabs: CodePreviewTab[]
+  activeCodeTabId: string | null
 }>()
 
-const emit = defineEmits<{ (event: 'locate', messageIndex: number): void }>()
+const emit = defineEmits<{
+  (event: 'locate', messageIndex: number): void
+  (event: 'select-code-tab', id: string): void
+  (event: 'close-code-tab', id: string): void
+}>()
 
 const { t } = useI18n()
 
@@ -65,7 +73,7 @@ const { t } = useI18n()
 const index = computed(() => buildPreviewIndex(props.messages))
 
 /** Stable identity: the count lives in the `name` slot, never in the tab value. */
-const active = ref('outputs')
+const active = defineModel<string>('tab', { default: 'outputs' })
 
 const counts = computed(() => ({
   outputs: index.value.artifacts.length + index.value.widgets.length,
@@ -117,6 +125,19 @@ function locate(messageIndex: number): void {
           <HomePreviewArtifacts v-if="index.artifacts.length" :items="index.artifacts" />
           <HomePreviewWidgets v-if="index.widgets.length" :items="index.widgets" @locate="locate" />
         </div>
+      </TxTabItem>
+
+      <TxTabItem name="preview">
+        <template #name>
+          {{ t('home.preview.code') }}
+          <span v-if="codeTabs.length" class="HomeSidePanel-Count">{{ codeTabs.length }}</span>
+        </template>
+        <HomePreviewCode
+          :tabs="codeTabs"
+          :active-id="activeCodeTabId"
+          @select="emit('select-code-tab', $event)"
+          @close="emit('close-code-tab', $event)"
+        />
       </TxTabItem>
 
       <TxTabItem name="sources">

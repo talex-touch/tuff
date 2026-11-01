@@ -27,6 +27,7 @@ import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
+import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
@@ -82,6 +83,7 @@ import {
 } from '~/modules/conversation/conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
+import { useCodePreviewTabs } from '~/modules/conversation/useCodePreviewTabs'
 import {
   createConversationId,
   useConversationHistory
@@ -267,6 +269,7 @@ const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
+const panelTab = ref('outputs')
 const { setConversationLoading } = useConversationLoading()
 
 /**
@@ -1578,6 +1581,20 @@ const toolCallLabels = computed(() => ({
   inputLabel: t('home.toolCall.input')
 }))
 
+const {
+  tabs: codeTabs,
+  activeId: activeCodeTabId,
+  open: openCodeTab,
+  select: selectCodeTab,
+  close: closeCodeTab
+} = useCodePreviewTabs(conversationId)
+
+function showCodePreview(preview: StreamMarkdownCodePreview): void {
+  openCodeTab(preview)
+  panelTab.value = 'preview'
+  panelOpen.value = true
+}
+
 const markdownLabels = computed(() => ({
   blockedImageText: t('home.image.blocked'),
   loadImageOnceText: t('home.image.loadOnce'),
@@ -2323,6 +2340,8 @@ onBeforeUnmount(() => disposeCommands?.())
                           :content="segment.text"
                           :streaming="segment.streaming"
                           v-bind="markdownLabels"
+                          :inline-code-preview="false"
+                          @code-preview="showCodePreview"
                         />
 
                         <!-- Widgets embed as themselves — a form is a form, not
@@ -2395,6 +2414,8 @@ onBeforeUnmount(() => disposeCommands?.())
                         v-bind="markdownLabels"
                         :content="message.content"
                         :streaming="message.status === 'streaming'"
+                        :inline-code-preview="false"
+                        @code-preview="showCodePreview"
                       />
 
                       <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. The send
@@ -2874,6 +2895,7 @@ onBeforeUnmount(() => disposeCommands?.())
       <Transition name="home-panel">
         <div v-if="panelOpen" class="HomePage-PanelSlot">
           <HomeSidePanel
+            v-model:tab="panelTab"
             :messages="messages"
             :conversation-id="conversationId"
             :context="workspace.state.value?.context"
@@ -2883,7 +2905,11 @@ onBeforeUnmount(() => disposeCommands?.())
             :gateway="gatewayApprovals"
             :pending-run="workspace.state.value?.pendingRun"
             :loading="workspace.loading.value"
+            :code-tabs="codeTabs"
+            :active-code-tab-id="activeCodeTabId"
             @locate="streamRef?.scrollToIndex($event)"
+            @select-code-tab="selectCodeTab"
+            @close-code-tab="closeCodeTab"
           />
         </div>
       </Transition>

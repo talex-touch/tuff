@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { StreamBlock, StreamMarkdownBlockRenderer, StreamMarkdownProps } from './types'
+import type {
+  StreamBlock,
+  StreamMarkdownBlockRenderer,
+  StreamMarkdownCodePreview,
+  StreamMarkdownProps,
+} from './types'
 import { Marked } from 'marked'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
@@ -34,7 +39,10 @@ const props = withDefaults(defineProps<StreamMarkdownProps>(), {
   allowSessionImagesText: 'Allow for this conversation',
   copyTableText: 'Copy CSV',
   copiedTableText: 'Copied',
+  inlineCodePreview: true,
 })
+
+const emit = defineEmits<{ 'code-preview': [preview: StreamMarkdownCodePreview] }>()
 
 // Per-component parser, same reasoning as TxMarkdownView: mutating the global
 // `marked` singleton would reconfigure every other consumer app-wide.
@@ -224,6 +232,8 @@ const builtInCopy = computed(() => new Map<StreamMarkdownBlockRenderer, Record<s
     frameLabelFormatter: props.codeFrameLabelFormatter,
     copyLabel: props.copyCodeText,
     copiedLabel: props.copiedCodeText,
+    inlinePreview: props.inlineCodePreview,
+    onPreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview),
   }],
   [TxMermaidBlock, {
     zoomLabel: props.diagramZoomLabel,

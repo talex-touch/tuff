@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StreamMarkdownCodePreview } from './types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import TxCopyButton from '../../button/src/copy-button.vue'
 import { highlightToHtml } from './shiki-runtime'
@@ -15,6 +16,8 @@ const props = withDefaults(
     theme?: 'light' | 'dark'
     /** Offers a rendered view for markup languages once the fence settles. */
     previewable?: boolean
+    /** False hands the settled preview to the host through `preview` instead of rendering it below the header. */
+    inlinePreview?: boolean
     previewLabel?: string
     codeLabel?: string
     /** Builds the preview frame's accessible name from the fence language. @default (lang) => `${lang} preview` */
@@ -29,6 +32,7 @@ const props = withDefaults(
     streaming: false,
     theme: 'light',
     previewable: true,
+    inlinePreview: true,
     previewLabel: 'Preview',
     codeLabel: 'Code',
     frameLabelFormatter: (lang: string) => `${lang} preview`,
@@ -36,6 +40,8 @@ const props = withDefaults(
     copiedLabel: 'Copied',
   },
 )
+
+const emit = defineEmits<{ preview: [preview: StreamMarkdownCodePreview] }>()
 
 /**
  * Shiki output for the current (code, theme); null renders the escaped
@@ -133,6 +139,14 @@ const previewDocument = computed(() =>
     ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center">${props.code}</body>`
     : props.code
 )
+
+function togglePreview(): void {
+  if (!props.inlinePreview) {
+    emit('preview', { lang: props.lang, code: props.code, srcdoc: previewDocument.value })
+    return
+  }
+  showPreview.value = !showPreview.value
+}
 </script>
 
 <template>
@@ -144,8 +158,8 @@ const previewDocument = computed(() =>
           v-if="canPreview"
           type="button"
           class="tx-code-block__toggle"
-          :aria-pressed="showPreview"
-          @click="showPreview = !showPreview"
+          :aria-pressed="inlinePreview ? showPreview : undefined"
+          @click="togglePreview"
         >
           {{ showPreview ? codeLabel : previewLabel }}
         </button>
