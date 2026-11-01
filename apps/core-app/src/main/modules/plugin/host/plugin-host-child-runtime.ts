@@ -1337,7 +1337,6 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const recommendationWeights = (${createRecommendationWeightModel.toString()})()
 
   const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
-  const isTranslationPrelude = snapshot.manifest.name === 'touch-translation'
   const hasFeatureFacade =
     hasDeclaredCapability('feature.items.push') ||
     hasDeclaredCapability('feature.items.update') ||
@@ -1346,55 +1345,45 @@ const CONTEXT_BOOTSTRAP = String.raw`
     hasDeclaredCapability('feature.items.list')
   const hasWidgetItemFacade = hasDeclaredCapability('feature.items.widget.push')
   const hasStorageFacade =
-    !isTranslationPrelude &&
-    (hasDeclaredCapability('storage.file.read') ||
-      hasDeclaredCapability('storage.file.write') ||
-      hasDeclaredCapability('storage.file.remove') ||
-      hasDeclaredCapability('storage.file.list'))
+    hasDeclaredCapability('storage.file.read') ||
+    hasDeclaredCapability('storage.file.write') ||
+    hasDeclaredCapability('storage.file.remove') ||
+    hasDeclaredCapability('storage.file.list')
   const hasFeaturesFacade =
-    !isTranslationPrelude &&
-    (hasDeclaredCapability('feature.registry.add') ||
-      hasDeclaredCapability('feature.registry.remove') ||
-      hasDeclaredCapability('feature.registry.list'))
+    hasDeclaredCapability('feature.registry.add') ||
+    hasDeclaredCapability('feature.registry.remove') ||
+    hasDeclaredCapability('feature.registry.list')
   const hasSecretFacade =
-    !isTranslationPrelude &&
-    (hasDeclaredCapability('secret.get') ||
-      hasDeclaredCapability('secret.set') ||
-      hasDeclaredCapability('secret.delete'))
+    hasDeclaredCapability('secret.get') ||
+    hasDeclaredCapability('secret.set') ||
+    hasDeclaredCapability('secret.delete')
   const hasClipboardFacade =
     hasDeclaredCapability('clipboard.read') ||
     hasDeclaredCapability('clipboard.write') ||
     hasDeclaredCapability('clipboard.copy-and-paste')
-  const hasHttpFacade = !isTranslationPrelude && hasDeclaredCapability('http.request')
-  const hasFilesystemFacade =
-    !isTranslationPrelude && hasDeclaredCapability('filesystem.write')
-  const hasPermissionFacade =
-    !isTranslationPrelude && hasDeclaredCapability('permission.check')
-  const hasChannelFacade = !isTranslationPrelude && hasDeclaredCapability('channel.invoke')
-  const hasQuickOpsFacade = !isTranslationPrelude && hasDeclaredCapability('quick-ops.invoke')
-  const hasFlowFacade = !isTranslationPrelude && hasDeclaredCapability('flow.invoke')
-  const hasVoiceInvokeFacade = !isTranslationPrelude && hasDeclaredCapability('voice.invoke')
-  const hasVoiceStreamFacade = !isTranslationPrelude && hasDeclaredCapability('voice.stream')
+  const hasHttpFacade = hasDeclaredCapability('http.request')
+  const hasFilesystemFacade = hasDeclaredCapability('filesystem.write')
+  const hasPermissionFacade = hasDeclaredCapability('permission.check')
+  const hasChannelFacade = hasDeclaredCapability('channel.invoke')
+  const hasQuickOpsFacade = hasDeclaredCapability('quick-ops.invoke')
+  const hasFlowFacade = hasDeclaredCapability('flow.invoke')
+  const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
+  const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
   const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
-  const hasTranslationFacade =
-    isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
-  const hasBasicIntelligenceFacade =
-    !isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
-  const hasIntelligenceContextInvokeFacade =
-    !isTranslationPrelude && hasDeclaredCapability('intelligence.context.invoke')
-  const hasIntelligenceContextStreamFacade =
-    !isTranslationPrelude && hasDeclaredCapability('intelligence.stream')
+  const hasTranslationFacade = hasDeclaredCapability('intelligence.invoke')
+  const hasBasicIntelligenceFacade = hasDeclaredCapability('intelligence.invoke')
+  const hasIntelligenceContextInvokeFacade = hasDeclaredCapability('intelligence.context.invoke')
+  const hasIntelligenceContextStreamFacade = hasDeclaredCapability('intelligence.stream')
   const hasIntelligenceFacade =
     hasBasicIntelligenceFacade ||
     hasIntelligenceContextInvokeFacade ||
     hasIntelligenceContextStreamFacade
-  const hasSnipasteFacade =
-    !isTranslationPrelude && hasDeclaredCapability('process.spawn')
+  const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
     (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('workspaceScripts'))} ||
       snapshot.manifest.sdkapi >= 261011) &&
     hasDeclaredCapability('process.workspace-scripts')
-  const hasSystemFacade = !isTranslationPrelude && hasDeclaredCapability('system.invoke')
+  const hasSystemFacade = hasDeclaredCapability('system.invoke')
   const hasBrowserDataFacade =
     (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserData'))} ||
       snapshot.manifest.sdkapi >= 261011) &&
@@ -1432,7 +1421,6 @@ const CONTEXT_BOOTSTRAP = String.raw`
       snapshot.manifest.sdkapi >= 261011) &&
     hasDeclaredCapability('media.image-tools')
   const hidesRawHostCapabilities =
-    isTranslationPrelude ||
     hasDeclaredCapability('system.hosts') ||
     hasDeclaredCapability('filesystem.vscode-projects') ||
     hasDeclaredCapability('orchestration.orca') ||
@@ -2651,11 +2639,49 @@ const CONTEXT_BOOTSTRAP = String.raw`
     objectFreeze(recommendFacade)
   }
 
+  // plugin.getLocale() stays the activation snapshot; this is the live language and its changes.
+  const hasLanguageFacade =
+    hasDeclaredCapability('language.get') || hasDeclaredCapability('language.subscribe')
+  const languageFacade = hasLanguageFacade ? objectCreate(null) : null
+  if (languageFacade) {
+    if (hasDeclaredCapability('language.get')) {
+      defineFacadeMethod(languageFacade, 'getLanguage', () =>
+        invokeCapability('language.get', null)
+      )
+    }
+    if (hasDeclaredCapability('language.subscribe')) {
+      defineFacadeMethod(languageFacade, 'onLanguageChange', (handler) =>
+        mapCapabilityResult(
+          invokeCapability('language.subscribe', { onChange: handler }),
+          (resource) => {
+            if (
+              !resource ||
+              typeof resource !== 'object' ||
+              resource.kind !== 'subscription' ||
+              typeof resource.dispose !== 'function'
+            ) {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            const dispose = resource.dispose
+            return objectFreeze(() => thenPromise(resolvePromise(), () => dispose()))
+          }
+        )
+      )
+    }
+    objectFreeze(languageFacade)
+  }
+
   const pluginFacade = objectCreate(null)
   defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
   if (recommendFacade) {
     objectDefineProperty(pluginFacade, 'recommend', {
       value: recommendFacade,
+      enumerable: true
+    })
+  }
+  if (languageFacade) {
+    objectDefineProperty(pluginFacade, 'language', {
+      value: languageFacade,
       enumerable: true
     })
   }
@@ -2847,7 +2873,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(clipboardFacade)
 
-  const openUrlFacade = !isTranslationPrelude && hasDeclaredCapability('open-url')
+  const openUrlFacade = hasDeclaredCapability('open-url')
     ? objectFreeze((url) =>
         mapCapabilityResult(
           invokeCapability('open-url', { url: stringConstructor(url) }),

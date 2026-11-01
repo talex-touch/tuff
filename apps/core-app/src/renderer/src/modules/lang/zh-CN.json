@@ -3442,6 +3442,10 @@
           "agents": {
             "name": "智能体",
             "desc": "调用智能体系统"
+          },
+          "context": {
+            "name": "Intelligence 上下文",
+            "desc": "在 Context 会话中调用 Intelligence，会使用对话历史、已保存的记忆与检索到的上下文"
           }
         },
         "voice": {
