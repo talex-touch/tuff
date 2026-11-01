@@ -108,8 +108,10 @@ function allModelProviderIds(candidate: AiConfigImportCandidate): string[] {
   return (candidate.modelProviders ?? []).map((provider) => provider.id)
 }
 
+// A selected candidate always has an entry; an unselected one has none and must show no provider,
+// so ticking one provider does not select the candidate with every other provider too.
 function modelProviderIds(candidate: AiConfigImportCandidate): string[] {
-  return selectedProviderIds[candidate.id] ?? allModelProviderIds(candidate)
+  return selectedProviderIds[candidate.id] ?? []
 }
 
 function isCandidateSelected(candidate: AiConfigImportCandidate): boolean {
