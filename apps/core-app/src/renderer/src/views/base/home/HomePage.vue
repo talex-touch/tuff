@@ -54,10 +54,7 @@ import {
 } from '~/composables/useSendChoreography'
 import {
   createWorkingConversationTitle,
-  deriveRestoredTitle,
-  findTitleExchange,
-  generateConversationTitle,
-  shouldGenerateTitle
+  deriveRestoredTitle
 } from '~/modules/conversation/conversation-title'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
@@ -115,6 +112,7 @@ import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
 import { usePassageSelection } from './composables/usePassageSelection'
+import { useConversationTitle } from './composables/useConversationTitle'
 import { useThinkingTicker } from './composables/useThinkingTicker'
 import { type OpeningHold, useHomeOpening } from './composables/useHomeOpening'
 import { useTurnError } from './composables/useTurnError'
@@ -502,28 +500,6 @@ onMounted(() => {
     )
   }
 })
-
-/**
- * The opening message is the working title until the model summarises one (#969).
- *
- * Generation is once per conversation, after the first settled turn, and every failure keeps the
- * working title silently — the label is never worth an error surface. `generatedTitle` also carries
- * a stored custom title across restore, so the top bar agrees with the sidebar after a reload.
- */
-const generatedTitle = ref<string | null>(null)
-/**
- * Which conversation has a title call in flight — an id, not a boolean. This component instance is
- * reused across thread switches, so a flat flag set by conversation A would make conversation B's
- * settled turn skip its own generation window.
- */
-let titleInFlightFor: string | null = null
-const titleSequence = createLatestOnly()
-const titleFailedFor = new Set<string>()
-
-const firstUserContent = computed(
-  () => messages.value.find((message) => message.role === 'user')?.content
-)
-const conversationTitle = computed(() => generatedTitle.value ?? firstUserContent.value)
 
 /**
  * Auto Context has no composer control any more: it and the old tools pill read as the same
@@ -1252,6 +1228,14 @@ const composerClearance = computed(() =>
 // ============================================================================
 
 const history = useConversationHistory()
+
+const { generatedTitle, conversationTitle } = useConversationTitle({
+  messages,
+  conversationId,
+  busy: () => workspace.busy.value,
+  history,
+  sdk: intelligenceSdk
+})
 const projectStore = useProjectStore()
 
 const currentProject = computed(() =>
@@ -1415,75 +1399,6 @@ const {
   autoGrow,
   submit
 })
-
-/**
- * Fire-and-forget: Main created the conversation with its working title, so the thread is durable
- * before the summary call even starts, and a rename upgrades the label when the call lands. A rename
- * carries no messages, so however late it lands it cannot shrink the history Main holds. Claimed
- * against `titleSequence` so switching threads mid-call drops the result instead of stamping it onto
- * the wrong conversation.
- */
-function maybeGenerateTitle(): void {
-  // The first reply to the user — never the Home opening a thread can start with, which would
-  // title the conversation after the greeting instead of what was asked.
-  const firstAssistant = findTitleExchange(messages.value).firstAssistantContent
-  const idAtStart = conversationId.value
-  if (!idAtStart) return
-  if (
-    !shouldGenerateTitle({
-      generatedTitle: generatedTitle.value,
-      inFlight: titleInFlightFor === idAtStart,
-      firstUserContent: firstUserContent.value,
-      firstAssistantContent: firstAssistant,
-      failed: titleFailedFor.has(idAtStart)
-    })
-  ) {
-    return
-  }
-  const isCurrent = titleSequence.claim()
-  titleInFlightFor = idAtStart
-  void (async () => {
-    try {
-      const title = await generateConversationTitle(
-        intelligenceSdk,
-        firstUserContent.value ?? '',
-        firstAssistant ?? '',
-        {
-          prompt: t('home.titleGen.prompt'),
-          userLabel: t('home.titleGen.userLabel'),
-          assistantLabel: t('home.titleGen.assistantLabel')
-        }
-      )
-      if (!title) {
-        titleFailedFor.add(idAtStart)
-        return
-      }
-      if (!isCurrent() || conversationId.value !== idAtStart) return
-      generatedTitle.value = title
-      await history.rename(idAtStart, title)
-    } catch (error) {
-      titleFailedFor.add(idAtStart)
-      // The working title is already on screen and stored; a label upgrade may fail silently.
-      homeLog.warn('Conversation title generation failed', String(error))
-    } finally {
-      if (titleInFlightFor === idAtStart) titleInFlightFor = null
-    }
-  })()
-}
-
-/**
- * Once Main settles a turn the title may be generated. Main persisted the turn itself — this page
- * never writes the thread back, so a stale window can no longer overwrite what Main recorded.
- */
-watch(
-  () => workspace.busy.value,
-  (busy, wasBusy) => {
-    if (busy || !wasBusy || !conversationId.value) return
-    maybeGenerateTitle()
-    // The sidebar's order and timestamps follow the turn that just ended.
-    void history.refresh()
-  }
-)
 
 // ============================================================================
 // Workspace: mode, profile, branches, approvals
