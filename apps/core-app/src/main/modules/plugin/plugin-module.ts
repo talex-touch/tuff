@@ -76,7 +76,7 @@ import {
 } from './plugin-data-disposition-production'
 import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { getLocale, onLocaleChange } from '../../utils/i18n-helper'
+import { getLocale, onLocaleChange, t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -2422,6 +2422,7 @@ export class PluginModule extends BaseModule {
         )
     })
     const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
+      translate: t,
       showMessageBox: async (options) => {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
