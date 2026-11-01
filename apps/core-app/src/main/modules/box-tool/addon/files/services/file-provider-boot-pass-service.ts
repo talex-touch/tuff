@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import {
   IndexedSourceScanReasons,
@@ -14,7 +17,13 @@ import { appTaskGate } from '../../../../../service/app-task-gate'
 import { searchIndexWriter } from '../../../search-engine/search-index-writer'
 import { chunkArray } from '../constants'
 import type { FileIndexedSourceRuntimeMutationDelegate } from '../file-provider-index-contracts'
+import { findLinkedWorktreeHolding } from '../file-traversal-policy'
 import { shouldBootstrapFileReindex } from './file-provider-bootstrap-reindex'
+import {
+  FileProviderHotCatchupService,
+  HOT_CATCHUP_KNOWN_FOLDER_NAMES,
+  HOT_CATCHUP_RETRY_DELAYS_MS
+} from './file-provider-hot-catchup-service'
 import {
   FILE_KEYWORD_BACKFILL_VERSION,
   FileProviderKeywordBackfillService
@@ -45,7 +54,7 @@ export interface FileProviderBootPassServiceDeps {
   getRuntimeMutationDelegate: () => FileIndexedSourceRuntimeMutationDelegate
   /** Lazy: tests swap the maintenance service after construction. */
   getMaintenance: () => FileProviderMaintenanceService
-  getWatchRootCount: () => number
+  getWatchPaths: () => readonly string[]
   countIndexedRows: (reason: string) => Promise<number>
   mapRecord: (row: FileRecord) => IndexedSourceRecord
   emitRecordBatch: (batch: IndexedSourceRecordBatch) => Promise<void>
@@ -61,6 +70,11 @@ export interface FileProviderBootPassServiceDeps {
 export class FileProviderBootPassService {
   /** Once-per-boot guard for the split-topology bootstrap reindex net. */
   private bootstrapReindexChecked = false
+  /** Once-per-boot guard for the hot-directory catch-up; its repeats are counted separately. */
+  private hotCatchupStarted = false
+  private hotCatchup: FileProviderHotCatchupService | null = null
+  private hotCatchupPasses = 0
+  private hotCatchupRetryTimer: NodeJS.Timeout | null = null
   /** Once-per-boot guard for the NFC path repair pass. */
   private pathNormalizationScheduled = false
   /** Set after the repair's first attempt, successful or not. */
@@ -146,6 +160,10 @@ export class FileProviderBootPassService {
       clearTimeout(this.keywordBackfillTimer)
       this.keywordBackfillTimer = null
     }
+    if (this.hotCatchupRetryTimer) {
+      clearTimeout(this.hotCatchupRetryTimer)
+      this.hotCatchupRetryTimer = null
+    }
   }
 
   getReconciliationDeferralReason(): string | null {
@@ -177,7 +195,7 @@ export class FileProviderBootPassService {
       if (splitEnabled) {
         indexedCount = await this.deps.countIndexedRows('bootstrap.emptiness-check')
       }
-      const watchRootCount = this.deps.getWatchRootCount()
+      const watchRootCount = this.deps.getWatchPaths().length
       const decision = shouldBootstrapFileReindex({
         splitEnabled,
         indexedCount,
@@ -205,6 +223,80 @@ export class FileProviderBootPassService {
       // progress" style failures here mean the normal path took over.
       this.deps.logWarn('Search index bootstrap reindex failed', error)
     }
+  }
+
+  /**
+   * Catches the folders most likely to have changed while the app was down up to date before the
+   * whole-home reconcile gets to them, so a screenshot taken meanwhile is searchable seconds after
+   * launch. Planned once per boot; bounded in scopes and time and run on the router's hot lane, so
+   * it neither stalls startup nor waits behind queued resume work. A scope the pass could not
+   * finish (a whole-source reconcile holding the run gate, or maintenance busy past the scope's
+   * time budget) is repeated after 1 and again after 5 minutes, then left to the broad scan.
+   * Contained: a failure here must never reject the startup chain.
+   */
+  async maybeRunHotCatchup(): Promise<void> {
+    if (this.deps.isShuttingDown() || this.hotCatchupStarted || !this.deps.isRuntimeReady()) return
+    try {
+      const delegate = this.deps.getRuntimeMutationDelegate()
+      const withLane = delegate.withHotSubtreeLane?.bind(delegate)
+      if (!withLane) return
+      this.hotCatchupStarted = true
+      this.hotCatchup = new FileProviderHotCatchupService({
+        isShuttingDown: () => this.deps.isShuttingDown(),
+        getWatchPaths: () => this.deps.getWatchPaths(),
+        getHomeDirectory: () => os.homedir(),
+        getKnownFolders: () =>
+          HOT_CATCHUP_KNOWN_FOLDER_NAMES.map((name) => path.join(os.homedir(), name)),
+        readRecentFiles: async (sinceMs, limit) => {
+          const rows =
+            (await this.deps.getDbUtils()?.getRecentlyCreatedFiles(new Date(sinceMs), limit)) ?? []
+          return rows.map((row) => ({ path: row.path, createdAtMs: row.ctime.getTime() }))
+        },
+        readDirectoryMtimeMs: async (directoryPath) => {
+          try {
+            const stats = await fs.lstat(directoryPath)
+            return stats.isDirectory() ? stats.mtimeMs : null
+          } catch {
+            return null
+          }
+        },
+        isAdmitted: async (directoryPath) =>
+          !this.deps.getMaintenance().isStaleExcludedIndexPath(directoryPath) &&
+          (await findLinkedWorktreeHolding(directoryPath, this.deps.getWatchPaths())) === null,
+        withLane,
+        logInfo: (message, meta) => this.deps.logInfo(message, meta),
+        logDebug: (message, meta) => this.deps.logDebug(message, meta)
+      })
+    } catch (error) {
+      this.deps.logWarn('Hot-directory catch-up failed', error)
+      return
+    }
+    await this.runHotCatchupPass(undefined)
+  }
+
+  /** Never rejects. `retryScopes` is the `unfinished` list of the pass before; none plans afresh. */
+  private async runHotCatchupPass(retryScopes: readonly string[] | undefined): Promise<void> {
+    const catchup = this.hotCatchup
+    if (!catchup) return
+    this.hotCatchupPasses += 1
+    try {
+      const outcome = await catchup.run(retryScopes)
+      this.scheduleHotCatchupRetry(outcome.stoppedBy === 'shutdown' ? [] : outcome.unfinished)
+    } catch (error) {
+      this.deps.logWarn('Hot-directory catch-up failed', error)
+      // A pass that threw has no verdict on its scopes (or never planned any): same input again.
+      this.scheduleHotCatchupRetry(retryScopes)
+    }
+  }
+
+  private scheduleHotCatchupRetry(scopes: readonly string[] | undefined): void {
+    const delay = HOT_CATCHUP_RETRY_DELAYS_MS[this.hotCatchupPasses - 1]
+    if (delay === undefined || scopes?.length === 0 || this.deps.isShuttingDown()) return
+    this.hotCatchupRetryTimer = setTimeout(() => {
+      this.hotCatchupRetryTimer = null
+      if (!this.deps.isShuttingDown()) void this.runHotCatchupPass(scopes)
+    }, delay)
+    this.hotCatchupRetryTimer.unref?.()
   }
 
   /**

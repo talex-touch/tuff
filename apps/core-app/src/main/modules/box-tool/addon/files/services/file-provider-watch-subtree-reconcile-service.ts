@@ -11,10 +11,8 @@ import {
   type FileScanOptions
 } from '@talex-touch/utils/common/file-scan-constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
-import { and, desc, eq, gt, gte, lt, lte, or } from 'drizzle-orm'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { DbUtils } from '../../../../../db/utils'
 import type { FileScanRunStats } from '../workers/file-scan-worker-client'
 import type { ScannedFileInfo } from '../types'
 import type { FileIndexRunOptions } from '../file-provider-index-contracts'
@@ -22,12 +20,18 @@ import type { FileProviderReconciliationDbRecord } from './file-provider-reconci
 import type { FileProviderIncrementalChangeEntry } from './file-provider-incremental-write-service'
 import { FileWatchSubtreeService } from './file-watch-subtree-service'
 import { findLinkedWorktreeHolding } from '../file-traversal-policy'
-import { files as filesSchema, fileTypeIs } from '../../../../../db/schema'
+import type { files as filesSchema } from '../../../../../db/schema'
 import type { IndexedWriteDeleteExecutorResult } from '../../../search-engine/indexing-write-delete-executor-service'
+import { isTransientSubtreeReadError } from '../../../search-engine/file-subtree-reads'
+import type { SearchIndexService } from '../../../search-engine/search-index-service'
 
 export interface FileProviderWatchSubtreeReconcileDeps {
   sourceId: string
-  getDbUtils: () => DbUtils | null
+  /** Reads the sweep's bound and pages through the read worker; null while the index is unavailable. */
+  getSearchIndex: () => Pick<
+    SearchIndexService,
+    'readFileSubtreeBound' | 'readFileSubtreePage'
+  > | null
   getWatchPaths: () => readonly string[]
   isShuttingDown: () => boolean
   ensureFileSystemWatchers: () => Promise<void>
@@ -108,6 +112,7 @@ export class FileProviderWatchSubtreeReconcileService {
         onRecordBatch: request.onRecordBatch,
         maintenanceDeadlineAt
       }
+      let small = false
       const service = new FileWatchSubtreeService<
         ScannedFileInfo,
         FileProviderReconciliationDbRecord
@@ -126,42 +131,24 @@ export class FileProviderWatchSubtreeReconcileService {
           this.deps.persistSubtreeRecords(records, { ...options, signal }),
         getHighWaterMark: async (scope, signal) => {
           signal?.throwIfAborted()
-          const dbUtils = this.deps.getDbUtils()
-          if (!dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-          const rows = await dbUtils
-            .getFileIndexReadDb()
-            .select({ id: filesSchema.id })
-            .from(filesSchema)
-            .where(and(fileTypeIs('file'), this.scopeCondition(scope)))
-            .orderBy(desc(filesSchema.id))
-            .limit(1)
-          return rows[0]?.id ?? 0
+          const searchIndex = this.deps.getSearchIndex()
+          if (!searchIndex) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+          const bound = await searchIndex.readFileSubtreeBound(scope, signal)
+          small = bound.small
+          return bound.highWaterMark
         },
         readPage: async (scope, afterId, throughId, limit, signal) => {
           signal?.throwIfAborted()
-          const dbUtils = this.deps.getDbUtils()
-          if (!dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-          return await dbUtils
-            .getFileIndexReadDb()
-            .select({
-              id: filesSchema.id,
-              path: filesSchema.path,
-              mtime: filesSchema.mtime,
-              ctime: filesSchema.ctime,
-              size: filesSchema.size,
-              lastIndexedAt: filesSchema.lastIndexedAt
-            })
-            .from(filesSchema)
-            .where(
-              and(
-                fileTypeIs('file'),
-                this.scopeCondition(scope),
-                gt(filesSchema.id, afterId),
-                lte(filesSchema.id, throughId)
-              )
-            )
-            .orderBy(filesSchema.id)
-            .limit(limit)
+          const searchIndex = this.deps.getSearchIndex()
+          if (!searchIndex) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+          return await searchIndex.readFileSubtreePage(
+            scope,
+            small,
+            afterId,
+            throughId,
+            limit,
+            signal
+          )
         },
         deleteRecords: async (records, signal) => {
           const result = await this.deps.deleteReconciledRecords(records, { ...options, signal })
@@ -171,7 +158,8 @@ export class FileProviderWatchSubtreeReconcileService {
         loadCursor: (scope) => this.deps.getMissingCursor(scope),
         saveCursor: (scope, cursor) => this.deps.saveMissingCursor(scope, cursor),
         finishMissingSweep: (scope) => this.deps.finishMissingScope(scope),
-        canContinue: () => this.deps.canContinue(options)
+        canContinue: () => this.deps.canContinue(options),
+        isTransientReadFailure: isTransientSubtreeReadError
       })
       const result = await service.execute(root.path, { signal: request.signal, batchSize: 64 })
       added += result.added
@@ -222,29 +210,6 @@ export class FileProviderWatchSubtreeReconcileService {
         reason: 'file-provider-watch-event'
       }
     ]
-  }
-
-  /**
-   * Scope match as an index range, not `LIKE 'scope/%'`.
-   *
-   * `LIKE` cannot use `files_path_unique`, so with `type = 'file'` in the same WHERE the planner
-   * walked `idx_files_type` and fetched every file row to test the pattern: 2.2s cold on a 5 GB
-   * dev index (2026-10-08, `files` rows average 19 KB because of `content`). The two queries
-   * above also spell `type` through `fileTypeIs` so that index is not the only candidate left.
-   * `path >= prefix AND path < prefixUpperBound` is BINARY (case-sensitive): scopes come from
-   * the watcher's physical paths (`fs.realpath` on macOS), which is the same spelling the
-   * scanner stores, so nothing is lost versus `LIKE`'s ASCII case folding.
-   */
-  private scopeCondition(scope: string) {
-    const normalized = path.normalize(scope)
-    const prefix = normalized.endsWith(path.sep) ? normalized : `${normalized}${path.sep}`
-    const upperBound = `${prefix.slice(0, -1)}${String.fromCharCode(
-      prefix.charCodeAt(prefix.length - 1) + 1
-    )}`
-    return or(
-      eq(filesSchema.path, normalized),
-      and(gte(filesSchema.path, prefix), lt(filesSchema.path, upperBound))
-    )
   }
 
   private async *scanSubtree(
