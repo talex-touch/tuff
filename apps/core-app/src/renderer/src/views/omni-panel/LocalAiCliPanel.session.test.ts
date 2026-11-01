@@ -302,7 +302,8 @@ describe('localAiCliPanel native session continuation', () => {
         prompt: 'first prompt',
         access: 'answer-only',
         context: [],
-        projectId: 'p1'
+        projectId: 'p1',
+        persistent: true
       }
     ])
 
@@ -337,7 +338,8 @@ describe('localAiCliPanel native session continuation', () => {
       access: 'answer-only',
       context: [],
       projectId: 'p1',
-      sessionRef: 'ref-9'
+      sessionRef: 'ref-9',
+      persistent: true
     })
     expect(streamState.requests[1]?.sessionRef).toBe('ref-9')
     expect(JSON.stringify(streamState.requests)).not.toContain('native-raw')
@@ -356,14 +358,17 @@ describe('localAiCliPanel native session continuation', () => {
     await findButton(wrapper, 'localAiCliPanel.continueInTerminal').trigger('click')
     await flushPromises()
 
-    const createCall = transportSendMock.mock.calls.find(
-      ([event]) => event === LocalAiCliEvents.terminal.create
-    )
-    expect(createCall?.[1]).toMatchObject({
+    wrapper.findComponent({ name: 'TxTerminal' }).vm.$emit('data', 'next\r')
+    await flushPromises()
+
+    expect(streamState.requests[1]).toEqual({
       provider: 'pi',
+      prompt: 'next',
       access: 'answer-only',
+      context: [],
       projectId: 'p1',
-      sessionRef: 'ref-9'
+      sessionRef: 'ref-9',
+      persistent: true
     })
   })
 
@@ -396,7 +401,8 @@ describe('localAiCliPanel native session continuation', () => {
       prompt: 'second',
       access: 'answer-only',
       context: [],
-      projectId: 'p1'
+      projectId: 'p1',
+      persistent: true
     })
     expect(streamState.requests[1]?.sessionRef).toBeUndefined()
   })
@@ -427,7 +433,8 @@ describe('localAiCliPanel native session continuation', () => {
       prompt: 'second project',
       access: 'answer-only',
       context: [],
-      projectId: 'p2'
+      projectId: 'p2',
+      persistent: false
     })
     expect(streamState.requests[1]?.sessionRef).toBeUndefined()
 
@@ -443,7 +450,8 @@ describe('localAiCliPanel native session continuation', () => {
       provider: 'pi',
       prompt: 'after reset',
       access: 'answer-only',
-      context: []
+      context: [],
+      persistent: true
     })
     expect(streamState.requests[2]?.projectId).toBeUndefined()
     expect(streamState.requests[2]?.sessionRef).toBeUndefined()
@@ -476,23 +484,27 @@ describe('localAiCliPanel agent named by the project menu', () => {
         prompt: 'look around',
         access: 'answer-only',
         context: [],
-        projectId: 'p1'
+        projectId: 'p1',
+        persistent: false
       }
     ])
   })
 })
 
 describe('localAiCliPanel terminal lifecycle', () => {
-  async function readyPanel(): Promise<VueWrapper> {
+  async function readyPanel(provider: LocalAiCliProviderId = 'pi'): Promise<VueWrapper> {
+    if (provider !== 'pi') {
+      statusState.current = localAiStatus([providerStatus('pi'), providerStatus(provider)])
+    }
     const wrapper = await mountPanel()
-    await panelApi(wrapper).open({ prompt: '', projectId: 'p1', provider: 'pi' })
+    await panelApi(wrapper).open({ prompt: '', projectId: 'p1', provider })
     await startTask(wrapper, 'go')
     await finishTask('ref-9')
     return wrapper
   }
 
   it('displays complete early output and fast exit without resurrecting input', async () => {
-    const wrapper = await readyPanel()
+    const wrapper = await readyPanel('codex')
     const output = '\u001B[32m你好\u001B[0m' + 'x'.repeat(80_000)
     transportSendMock.mockImplementation(async (event: unknown, payload: unknown) => {
       if (event === LocalAiCliEvents.terminal.create) {
@@ -512,11 +524,15 @@ describe('localAiCliPanel terminal lifecycle', () => {
     emitTerminal(LocalAiCliEvents.terminal.data, { sessionId: 'fast', data: 'late' })
     await flushPromises()
     expect(wrapper.find('[data-terminal-output]').text()).not.toContain('late')
-    expect(findButton(wrapper, 'localAiCliPanel.continueInTerminal').exists()).toBe(true)
+    // The exited terminal stays open with its exit line, so the affordance is not offered on top of it.
+    expect(wrapper.find('[data-terminal-output]').exists()).toBe(true)
+    expect(wrapper.findAll('button').map((item) => item.text())).not.toContain(
+      'localAiCliPanel.continueInTerminal'
+    )
   })
 
   it('cancels an unacknowledged creation on reset without reviving or closing it again after a late result', async () => {
-    const wrapper = await readyPanel()
+    const wrapper = await readyPanel('codex')
     let complete!: (result: { sessionId: string }) => void
     let creationToken: string | undefined
     const pending = new Promise<{ sessionId: string }>((resolve) => {
@@ -559,10 +575,10 @@ describe('localAiCliPanel terminal lifecycle', () => {
   })
 
   it('isolates replacement output and removes subscriptions on unmount', async () => {
-    const wrapper = await readyPanel()
+    const wrapper = await readyPanel('codex')
     await findButton(wrapper, 'localAiCliPanel.continueInTerminal').trigger('click')
     await flushPromises()
-    await panelApi(wrapper).open({ prompt: '', projectId: 'p2', provider: 'pi' })
+    await panelApi(wrapper).open({ prompt: '', projectId: 'p2', provider: 'codex' })
     await startTask(wrapper, 'new project')
     await finishTask('ref-10')
     transportSendMock.mockImplementation(async (event: unknown, payload: unknown) => {
