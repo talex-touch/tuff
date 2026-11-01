@@ -678,6 +678,38 @@ code: |
 ---
 :::
 
+### onItemAction result
+
+`onItemAction` may return nothing, or an object. Three fields tell the host how the action went:
+
+| Field     | Type      | Description                                                                                                                 |
+| --------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `message` | `string`  | A one-line outcome. Once the action returns, the host shows it as a system notification; without it, nothing is shown.      |
+| `success` | `boolean` | `false` means the action was not done: it does not count as a use, and `message` is shown as a failure hint.                |
+| `status`  | `string`  | `blocked`, `error`, `failed`, `cancelled` and `canceled` are equivalent to `success: false`; the host reads no other value. |
+
+A boolean `success` decides on its own: `success: true` means the action was done whatever `status` says, and `status` is read only when `success` is missing.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async onItemAction(item) {
+    const copyAction = item.actions.find(a => a.type === 'copy')
+    if (!copyAction?.payload) {
+      return { success: false, message: 'Nothing to copy' }
+    }
+    clipboard.writeText(copyAction.payload)
+    return { success: true, message: 'Copied' }
+  }
+---
+:::
+
+The hint goes through a system notification because CoreBox has usually already closed before the action runs, so there is no window left to show it in. A success notification is silent and titled with the plugin name; a failure notification plays the alert sound and is titled with the plugin name followed by "action failed". At most one notification is shown per action, and none without a `message`.
+
+- `message` is treated as untrusted text: control and invisible characters are not shown, line breaks and runs of whitespace fold into a single space, and anything past 200 characters is cut.
+- To show the plugin's own localized text, return the string that `context.utils.i18n.resolveText()` gives for the current language (requires the `i18n.read` permission). A `$i18n:` message made with `i18n.createMessage()` also works, but the host only resolves its own message keys in the interface language, for example `flowTransfer.copiedToClipboard`; a key the host does not have shows nothing. See [Localization](./i18n.en.mdc).
+- An error thrown by the action is only logged, never shown.
+
 ---
 
 ## Technical Notes
