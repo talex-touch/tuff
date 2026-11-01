@@ -108,8 +108,9 @@ vi.mock('./creditPricingStore', async () => {
   }
 })
 
-vi.mock('@langchain/openai', () => ({
-  ChatOpenAI: class {
+vi.mock('@langchain/openai', () => {
+  // The adapters build Chat Completions models; both names are the same double.
+  class MockChatOpenAI {
     constructor(config: unknown) {
       langchainMocks.constructorArgs(config)
     }
@@ -117,8 +118,9 @@ vi.mock('@langchain/openai', () => ({
     invoke(messages: unknown) {
       return langchainMocks.invoke(messages)
     }
-  },
-}))
+  }
+  return { ChatOpenAI: MockChatOpenAI, ChatOpenAICompletions: MockChatOpenAI }
+})
 
 function h3Event(path = '/test/intelligence-invoke') {
   return {
