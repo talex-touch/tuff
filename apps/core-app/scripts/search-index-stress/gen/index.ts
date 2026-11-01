@@ -1,0 +1,5 @@
+export { describePlan, type ClassDistinct, type PlanDescription, type ValueCount } from './describe'
+export { materializeCorpus, resolveInsideRoot } from './materialize'
+export { materializePayload } from './payload'
+export { PROFILE_COUNTS, generatePlan } from './plan'
+export { validatePlan } from './validate'

@@ -17,6 +17,8 @@ export const STARTUP_BENCHMARK_USER_DATA_DIR_ENV = 'TUFF_STARTUP_BENCHMARK_USER_
 export const STARTUP_BENCHMARK_DIAG_PATH_ENV = 'TUFF_STARTUP_BENCHMARK_DIAG_PATH'
 /** `TUFF_PACKAGED_ACCEPTANCE_ISOLATED`: skip the single-instance lock for an isolated profile. */
 export const PACKAGED_ACCEPTANCE_ISOLATED_ENV = 'TUFF_PACKAGED_ACCEPTANCE_ISOLATED'
+/** `TUFF_DISABLE_AUTO_DEVTOOLS`: a measured launch must not carry the detached DevTools a dev build opens. */
+export const DISABLE_AUTO_DEVTOOLS_ENV = 'TUFF_DISABLE_AUTO_DEVTOOLS'
 
 function readTrimmedEnv(name: string): string | undefined {
   const value = getEnv(name)?.trim()
@@ -40,6 +42,13 @@ export function isIsolatedAcceptanceMode(): boolean {
   return (
     getBooleanEnv(PACKAGED_ACCEPTANCE_ISOLATED_ENV) &&
     resolveStartupBenchmarkUserDataDir() !== undefined
+  )
+}
+
+/** Needs an isolated profile too, so a variable left in a developer's shell never changes their own dev launch. */
+export function isAutoDevtoolsDisabled(): boolean {
+  return (
+    getBooleanEnv(DISABLE_AUTO_DEVTOOLS_ENV) && resolveStartupBenchmarkUserDataDir() !== undefined
   )
 }
 

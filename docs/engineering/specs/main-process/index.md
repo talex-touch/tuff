@@ -87,14 +87,16 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   count; native file results under the file-index directory rule (pool 150 → 50,
   iCloud Drive exception); linked worktrees below a root kept out of scan, watch,
   subtree reconcile and native results, and evicted by the cleanup sweep;
-  enrichment-resume cooldown/cursor and read-failure skip classes.
+  enrichment-resume cooldown/cursor, failed text vectors kept in the retry lane, and
+  read-failure skip classes.
 - [background-task-timeout-contracts.md](background-task-timeout-contracts.md) —
   main-thread liveness: streaming requests default to a fetch-through-EOF
   deadline, caller-owned idle streams opt in explicitly, caller cancellation is
   source-provenanced and cooldown-neutral, protocol completion/cancellation use
   controlled lifecycle methods, native OCR isolated in a one-shot utility process
   with parent-owned deadlines and post-callback child exit; macOS translation uses a persistent
-  Swift helper with readiness-gated runtime routing and bounded request lifetimes; PollingService defaults,
+  Swift helper with readiness-gated runtime routing and bounded request lifetimes; the local
+  embedding helper's priority job queue and in-process asset digest cache; PollingService defaults,
   outbox round budgets, child-process backoff, bounded interactive `waitForIdle()`,
   and `[Perf:EventLoop]` diagnosis.
 - [search-charset-and-identity-contracts.md](search-charset-and-identity-contracts.md)

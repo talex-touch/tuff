@@ -27,6 +27,7 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../../core/eventbus/touch-event'
+import { isAutoDevtoolsDisabled } from '../../../core/acceptance-mode'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
@@ -455,12 +456,12 @@ export class WindowManager {
       if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
         const url = path.join(__dirname, '..', 'renderer', 'index.html')
         await window.loadFile(url, {
-          devtools: this.touchApp.version === TalexTouch.AppVersion.DEV
+          devtools: this.touchApp.version === TalexTouch.AppVersion.DEV && !isAutoDevtoolsDisabled()
         })
       } else {
         const url = process.env.ELECTRON_RENDERER_URL as string
         await window.loadURL(url)
-        window.openDevTools({ mode: 'detach' })
+        if (!isAutoDevtoolsDisabled()) window.openDevTools({ mode: 'detach' })
       }
 
       if (!coreBoxManager.showCoreBox) window.window.hide()

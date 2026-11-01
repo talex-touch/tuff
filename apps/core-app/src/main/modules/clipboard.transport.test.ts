@@ -1,6 +1,6 @@
 import type * as NodeFs from 'node:fs'
 import { clipboard } from 'electron'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import type {
   ClipboardActionResult,
@@ -449,7 +449,13 @@ vi.mock('../core/eventbus/touch-event', () => ({
 
 import { ClipboardModule } from './clipboard'
 import { tempFileService } from '../service/temp-file.service'
+import { perfMonitor } from '../utils/perf-monitor'
 import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
+import { withClipboardCaptureSuppressed } from './clipboard/clipboard-capture-suppression'
+import {
+  CLIPBOARD_DEFER_GRACE_MS,
+  CLIPBOARD_DEFER_MAX_ROUNDS
+} from './clipboard/clipboard-deferred-capture'
 
 type ClipboardModuleTestHandle = {
   transport: {
@@ -764,9 +770,11 @@ describe('ClipboardModule startup tasks', () => {
       source: 'background-poll',
       bypassCooldown: false
     })
+    // A baseline is dated when it is asked for, which is what a deferral replays it by.
     expect(checkClipboard).toHaveBeenNthCalledWith(2, {
       source: 'corebox-show-baseline',
-      bypassCooldown: true
+      bypassCooldown: true,
+      signal: { at: expect.any(Number), isChange: false }
     })
   })
 })
@@ -1138,6 +1146,483 @@ describe('ClipboardModule bounds the app-task wait on the search path', () => {
 
     // A slightly stale clipboard beats hanging the search.
     expect(module.capturePipeline.process).not.toHaveBeenCalled()
+  })
+})
+
+describe('ClipboardModule retries a change signal held back by a transient gate', () => {
+  interface RetryHandle {
+    clipboardHelper: unknown
+    db: unknown
+    capturePipeline: { process: ReturnType<typeof vi.fn> }
+    clipboardService: {
+      isNativeActive: ReturnType<typeof vi.fn>
+      getNativeChangeCount: ReturnType<typeof vi.fn>
+      stop: ReturnType<typeof vi.fn>
+      reset: ReturnType<typeof vi.fn>
+    }
+    lastCaptureChangeToken: number | null
+    checkClipboard: (options: {
+      bypassCooldown?: boolean
+      source: string
+      deferRound?: number
+      signal?: { at: number; isChange: boolean }
+    }) => Promise<void>
+    runClipboardMonitor: (options?: {
+      bypassCooldown?: boolean
+      source?: string
+      deferRound?: number
+      signal?: { at: number; isChange: boolean }
+    }) => Promise<void>
+    destroy: () => void
+  }
+
+  const LAG_WINDOW_MS = 8_000
+  const APP_TASK_RETRY_MS = 3_000
+  const nativeWatch = { source: 'native-watch', bypassCooldown: true }
+  const baseline = { source: 'corebox-show-baseline', bypassCooldown: true }
+
+  function createModule(): RetryHandle {
+    const module = new ClipboardModule() as unknown as RetryHandle
+    module.clipboardHelper = { bootstrap: vi.fn() }
+    module.db = {}
+    module.capturePipeline = { process: vi.fn(async () => undefined) }
+    module.clipboardService = {
+      isNativeActive: vi.fn(() => true),
+      // One change nobody has captured yet: the signal the gate holds back.
+      getNativeChangeCount: vi.fn(() => 1),
+      stop: vi.fn(),
+      reset: vi.fn()
+    } as unknown as RetryHandle['clipboardService']
+    return module
+  }
+
+  function reportSevereLag(at = Date.now()): void {
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockReturnValue({
+      lagMs: 2_300,
+      severity: 'error',
+      at
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockReset()
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockReturnValue(null)
+  })
+
+  it('captures a change signal dropped under severe lag once the lag window closes', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    reportSevereLag()
+
+    await module.checkClipboard(nativeWatch)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_DEFER_GRACE_MS)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('native-watch', {
+      observedAt: signalledAt
+    })
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('dates the replay by when the change was signalled, however often it was deferred', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    let lagging = true
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockImplementation(() =>
+      lagging ? { lagMs: 2_300, severity: 'error', at: Date.now() } : null
+    )
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    lagging = false
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('native-watch', {
+      observedAt: signalledAt
+    })
+    expect(Date.now() - signalledAt).toBe(2 * (LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS))
+  })
+
+  it('dates the replay by the latest change signal when a burst was dropped', async () => {
+    const module = createModule()
+    reportSevereLag()
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const latestSignalAt = Date.now()
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('native-watch', {
+      observedAt: latestSignalAt
+    })
+  })
+
+  it('waits no longer than the lag window for a snapshot stamped in the future', async () => {
+    const module = createModule()
+    // The snapshot is wall-clock, so a clock stepped back leaves it ahead of now.
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockReturnValueOnce({
+      lagMs: 2_300,
+      severity: 'error',
+      at: Date.now() + 60_000
+    })
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('ties the retry to the end of the lag window, not to when the signal arrived', async () => {
+    const module = createModule()
+    reportSevereLag()
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS - 5_000 + CLIPBOARD_DEFER_GRACE_MS - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('captures once for a burst of dropped signals', async () => {
+    const module = createModule()
+    reportSevereLag()
+
+    for (let signal = 0; signal < 5; signal += 1) {
+      await module.checkClipboard(nativeWatch)
+      await vi.advanceTimersByTimeAsync(500)
+    }
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not capture again when something else already took the change', async () => {
+    const module = createModule()
+    reportSevereLag()
+    await module.checkClipboard(nativeWatch)
+
+    module.lastCaptureChangeToken = 1
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+  })
+
+  it('defers again while severe lag recurs, then lets the capture through at the cap', async () => {
+    const module = createModule()
+    vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockImplementation(() => ({
+      lagMs: 2_300,
+      severity: 'error',
+      at: Date.now()
+    }))
+
+    await module.checkClipboard(nativeWatch)
+    for (let round = 1; round < CLIPBOARD_DEFER_MAX_ROUNDS; round += 1) {
+      await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+      expect(module.capturePipeline.process).not.toHaveBeenCalled()
+    }
+
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a parked retry on the same deferral count', async () => {
+    const module = createModule()
+    const checkClipboard = vi.fn(async (_options: unknown): Promise<void> => undefined)
+    module.checkClipboard = checkClipboard
+    let releaseFirst: () => void = () => {}
+    checkClipboard.mockImplementationOnce(
+      async () =>
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+    )
+
+    const first = module.runClipboardMonitor({ source: 'native-watch', bypassCooldown: true })
+    await vi.advanceTimersByTimeAsync(0)
+    const retry = module.runClipboardMonitor({ ...nativeWatch, deferRound: 2 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(checkClipboard).toHaveBeenCalledTimes(1)
+
+    releaseFirst()
+    await first
+    await retry
+
+    expect(checkClipboard).toHaveBeenNthCalledWith(2, expect.objectContaining({ deferRound: 2 }))
+  })
+
+  it('cancels the pending retry when the module is destroyed', async () => {
+    const module = createModule()
+    const idleTimers = vi.getTimerCount()
+    reportSevereLag()
+
+    await module.checkClipboard(nativeWatch)
+    expect(vi.getTimerCount()).toBe(idleTimers + 1)
+
+    module.destroy()
+    expect(vi.getTimerCount()).toBe(idleTimers)
+
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+  })
+
+  it('leaves polls to their next tick', async () => {
+    const module = createModule()
+    module.clipboardService.isNativeActive.mockReturnValue(false)
+    const idleTimers = vi.getTimerCount()
+    reportSevereLag()
+
+    await module.checkClipboard({ source: 'background-poll' })
+    await module.checkClipboard({ source: 'visible-poll' })
+    expect(vi.getTimerCount()).toBe(idleTimers)
+
+    await vi.advanceTimersByTimeAsync(LAG_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+  })
+
+  it('retries a change signal the app-task gate held back once the gate clears', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+
+    await module.checkClipboard(nativeWatch)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
+    await vi.advanceTimersByTimeAsync(APP_TASK_RETRY_MS - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('native-watch', {
+      observedAt: signalledAt
+    })
+  })
+
+  it('lets a change signal through a gate that never clears once the cap is used up', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(APP_TASK_RETRY_MS * CLIPBOARD_DEFER_MAX_ROUNDS - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('native-watch', {
+      observedAt: signalledAt
+    })
+  })
+
+  it('retries a CoreBox baseline that gave up waiting for app tasks', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+
+    await module.checkClipboard(baseline)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
+    await vi.advanceTimersByTimeAsync(APP_TASK_RETRY_MS)
+
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('corebox-show-baseline', {
+      observedAt: signalledAt
+    })
+  })
+
+  it('captures a CoreBox baseline retried at the cap although the gate is still active', async () => {
+    const module = createModule()
+    const idleTimers = vi.getTimerCount()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+
+    await module.checkClipboard({ ...baseline, deferRound: CLIPBOARD_DEFER_MAX_ROUNDS })
+
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(idleTimers)
+  })
+
+  it('lets a CoreBox baseline through a gate that never clears once the cap is used up', async () => {
+    const module = createModule()
+    const signalledAt = Date.now()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+
+    await module.checkClipboard(baseline)
+    await vi.advanceTimersByTimeAsync(APP_TASK_RETRY_MS * CLIPBOARD_DEFER_MAX_ROUNDS - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('corebox-show-baseline', {
+      observedAt: signalledAt
+    })
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('captures at the cap a change signal that a CoreBox baseline merged into', async () => {
+    const module = createModule()
+    const changedAt = Date.now()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+
+    await module.checkClipboard(nativeWatch)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await module.checkClipboard(baseline)
+
+    // The slot now replays as the baseline, which is the source that used to be dropped at the cap.
+    await vi.advanceTimersByTimeAsync(APP_TASK_RETRY_MS * CLIPBOARD_DEFER_MAX_ROUNDS - 1_000 - 1)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+    expect(module.capturePipeline.process).toHaveBeenCalledWith('corebox-show-baseline', {
+      observedAt: changedAt
+    })
+  })
+
+  it('arms nothing when the module is destroyed while a baseline waits for the app-task gate', async () => {
+    const module = createModule()
+    const idleTimers = vi.getTimerCount()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockImplementation(async () => {
+      module.destroy()
+      return false
+    })
+
+    await module.checkClipboard(baseline)
+
+    expect(vi.getTimerCount()).toBe(idleTimers)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
+  })
+
+  describe('while the app is writing the clipboard itself', () => {
+    const gated = {
+      lag: () => reportSevereLag(),
+      appTask: () => {
+        clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+        clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+      }
+    }
+
+    it.each([
+      ['a change signal under severe lag', nativeWatch, gated.lag],
+      ['a change signal held back by the app-task gate', nativeWatch, gated.appTask],
+      ['a CoreBox baseline that gave up waiting for app tasks', baseline, gated.appTask]
+    ])('drops %s instead of deferring it', async (_name, request, holdBack) => {
+      const idleTimers = vi.getTimerCount()
+      holdBack()
+
+      // The same signal with nothing suppressed does arm a retry.
+      const control = createModule()
+      await control.checkClipboard(request)
+      expect(vi.getTimerCount()).toBe(idleTimers + 1)
+      control.destroy()
+
+      const module = createModule()
+      await withClipboardCaptureSuppressed(async () => {
+        await module.checkClipboard(request)
+      })
+      expect(vi.getTimerCount()).toBe(idleTimers)
+
+      clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
+      vi.mocked(perfMonitor.getRecentEventLoopLagSnapshot).mockReturnValue(null)
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(module.capturePipeline.process).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when requests park behind a running check', () => {
+    function parkBehindFirst() {
+      const module = createModule()
+      const checkClipboard = vi.fn(async (_options: unknown): Promise<void> => undefined)
+      module.checkClipboard = checkClipboard
+      let releaseFirst: () => void = () => {}
+      checkClipboard.mockImplementationOnce(
+        async () =>
+          await new Promise<void>((resolve) => {
+            releaseFirst = resolve
+          })
+      )
+      return { module, checkClipboard, release: () => releaseFirst() }
+    }
+
+    it('dates a parked change signal by when it arrived, not by when it runs', async () => {
+      const { module, checkClipboard, release } = parkBehindFirst()
+      const firstAt = Date.now()
+      const first = module.runClipboardMonitor(nativeWatch)
+      await vi.advanceTimersByTimeAsync(4_000)
+      const parkedAt = Date.now()
+      const parked = module.runClipboardMonitor(nativeWatch)
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      release()
+      await first
+      await parked
+
+      expect(checkClipboard).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ signal: { at: firstAt, isChange: true } })
+      )
+      expect(checkClipboard).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ signal: { at: parkedAt, isChange: true } })
+      )
+    })
+
+    it('merges parked requests into the latest change signal and the highest round', async () => {
+      const { module, checkClipboard, release } = parkBehindFirst()
+      const first = module.runClipboardMonitor(nativeWatch)
+      await vi.advanceTimersByTimeAsync(0)
+      const retry = module.runClipboardMonitor({
+        ...nativeWatch,
+        deferRound: 2,
+        signal: { at: Date.now() - 20_000, isChange: true }
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      const freshAt = Date.now()
+      const fresh = module.runClipboardMonitor(nativeWatch)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      release()
+      await first
+      await retry
+      await fresh
+
+      expect(checkClipboard).toHaveBeenCalledTimes(2)
+      expect(checkClipboard).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ deferRound: 2, signal: { at: freshAt, isChange: true } })
+      )
+    })
   })
 })
 

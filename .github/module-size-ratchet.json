@@ -35,9 +35,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
-      "ceiling": 2842,
+      "ceiling": 2790,
       "issue": "#343",
-      "note": "~3,604 when #343 was filed. +694 since — the largest growth of the four files here. 2026-09-27: progress stream moved to its own service, 3,735 -> 3,630. 2026-10-06: idle cleanup evidence, durable work and commit replay moved into file-provider-maintenance-service; formatted source measured 3,551 code lines. 2026-10-20: boot passes, search items, scan streams, files-row writes and the log sink moved into services, 3,551 -> 2,851. 2026-10-21: capacity mode wired in, with scan admission moved into file-provider-maintenance-service, 2,848 -> 2,842."
+      "note": "~3,604 when #343 was filed. +694 since — the largest growth of the four files here. 2026-09-27: progress stream moved to its own service, 3,735 -> 3,630. 2026-10-06: idle cleanup evidence, durable work and commit replay moved into file-provider-maintenance-service; formatted source measured 3,551 code lines. 2026-10-20: boot passes, search items, scan streams, files-row writes and the log sink moved into services, 3,551 -> 2,851. 2026-10-21: capacity mode wired in, with scan admission moved into file-provider-maintenance-service, 2,848 -> 2,842. 2026-10-31: subtree persistence moved into file-provider-subtree-persist-service, 2,842 -> 2,790."
     }
   ]
 }

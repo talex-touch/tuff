@@ -606,10 +606,6 @@ describe('SearchEngineCore facade contracts', () => {
     state.recommend.mockResolvedValue({ containerLayout: undefined, duration: 0, items: [] })
     state.togglePin.mockResolvedValue(true)
     core.init({ app: { channel: {} } } as never)
-    // File-commit invalidation is throttled with a per-instance timestamp, and these tests share
-    // one engine. Without this reset the first file commit of a test would be silently swallowed
-    // by whichever test ran before it.
-    ;(core as unknown as { lastFileCommitInvalidationAt: number }).lastFileCommitInvalidationAt = 0
   })
 
   afterEach(async () => {
@@ -1971,6 +1967,138 @@ describe('SearchEngineCore facade contracts', () => {
     }
 
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The throttle above used to keep only its leading edge: a file committed inside the window of
+   * the previous invalidation was dropped, so a screenshot saved 10s after one stayed out of the
+   * empty-query grid until some later commit happened to land past the 60s mark.
+   */
+  describe('trailing ranking invalidation for file commits', () => {
+    const FILE_INVALIDATION_WINDOW_MS = 60_000
+
+    function openStream(): { emit: ReturnType<typeof vi.fn>; close: () => void } {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+      return { emit, close: () => abort.abort() }
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('answers a file commit held inside the window with one invalidation when it closes', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(10_000)
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(FILE_INVALIDATION_WINDOW_MS - 10_000 - 1)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(2)
+    })
+
+    it('tells open CoreBox streams to refresh the grid when the trailing invalidation runs', async () => {
+      const stream = openStream()
+
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(10_000)
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      // The held commit was reported plainly: the grid had not been invalidated for it yet.
+      expect(stream.emit).toHaveBeenCalledTimes(2)
+      expect(stream.emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recommendationsInvalidated: false })
+      )
+
+      await vi.advanceTimersByTimeAsync(
+        FILE_INVALIDATION_WINDOW_MS - 10_000 - INDEX_COMMIT_NOTIFY_WINDOW_MS
+      )
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      expect(stream.emit).toHaveBeenCalledTimes(3)
+      expect(stream.emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recommendationsInvalidated: true, providerIds: [] })
+      )
+
+      stream.close()
+    })
+
+    it('folds every commit held inside one window into a single trailing invalidation', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      for (let index = 0; index < 100; index += 1) {
+        searchIndexCommitHub.markCommitted(['file-provider'])
+        await vi.advanceTimersByTimeAsync(100)
+      }
+      await vi.advanceTimersByTimeAsync(10 * FILE_INVALIDATION_WINDOW_MS)
+
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(2)
+    })
+
+    it('schedules no trailing invalidation when the window held nothing', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(10 * FILE_INVALIDATION_WINDOW_MS)
+
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps a continuous commit stream to one invalidation per window', async () => {
+      for (let second = 0; second < 300; second += 1) {
+        searchIndexCommitHub.markCommitted(['file-provider'])
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+
+      // The leading run, then one trailing run as each of the next five windows closes.
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(6)
+    })
+
+    it('still invalidates an app commit at once while a file window is open', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      searchIndexCommitHub.markCommitted(['app-provider'])
+
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps pacing the next window after a trailing invalidation fails', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      state.invalidateRecommendationCache.mockImplementationOnce(() => {
+        throw new Error('ranking cache unavailable')
+      })
+
+      // A throw escaping the timer callback would reject this advance.
+      await vi.advanceTimersByTimeAsync(FILE_INVALIDATION_WINDOW_MS)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(2)
+
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(FILE_INVALIDATION_WINDOW_MS)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(3)
+    })
+
+    it('drops a held trailing invalidation when the facade is destroyed', async () => {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      searchIndexCommitHub.markCommitted(['file-provider'])
+
+      const destroy = core.destroy()
+      await vi.advanceTimersByTimeAsync(2 * FILE_INVALIDATION_WINDOW_MS)
+      await destroy
+
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('notifies open CoreBox streams about hydrated app-icon presentation without mutating the index', async () => {

@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { resolveLocalEmbeddingAssets } from './local-embedding-assets'
+import { cachedFileSha256 } from './local-embedding-digest'
 
 /** Exact EmbeddingGemma 2 GGUF identity used by the verified llama.cpp runtime. */
 export const LOCAL_EMBEDDING_MODEL = {
@@ -101,12 +100,7 @@ export async function verifyLocalEmbeddingModel(
       `EmbeddingGemma 2 model size mismatch: expected ${LOCAL_EMBEDDING_MODEL.bytes} bytes`
     )
   }
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(location.file, { highWaterMark: 8 << 20 })) {
-    hash.update(chunk)
-  }
-  const digest = hash.digest('hex')
-  if (digest !== LOCAL_EMBEDDING_MODEL.sha256) {
+  if ((await cachedFileSha256(location.file)) !== LOCAL_EMBEDDING_MODEL.sha256) {
     throw new Error(
       `EmbeddingGemma 2 model checksum mismatch for ${LOCAL_EMBEDDING_MODEL.revision}`
     )
@@ -123,11 +117,7 @@ export async function verifyLocalEmbeddingMediaModel(
       `EmbeddingGemma 2 media model size mismatch: expected ${LOCAL_EMBEDDING_MEDIA_MODEL.bytes} bytes`
     )
   }
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(file, { highWaterMark: 8 << 20 })) {
-    hash.update(chunk)
-  }
-  if (hash.digest('hex') !== LOCAL_EMBEDDING_MEDIA_MODEL.sha256) {
+  if ((await cachedFileSha256(file)) !== LOCAL_EMBEDDING_MEDIA_MODEL.sha256) {
     throw new Error(
       `EmbeddingGemma 2 media model checksum mismatch for ${LOCAL_EMBEDDING_MEDIA_MODEL.revision}`
     )

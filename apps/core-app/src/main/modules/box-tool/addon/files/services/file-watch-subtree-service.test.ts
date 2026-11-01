@@ -830,3 +830,97 @@ describe('bounded durable subtree missing sweeps', () => {
     ])
   })
 })
+
+describe('subtree sweeps over an unavailable index reader', () => {
+  const unavailable = Object.assign(new Error('SEARCH_INDEX_READ_WORKER_UNAVAILABLE:closed'), {
+    code: 'SEARCH_INDEX_READ_WORKER_UNAVAILABLE'
+  })
+  const isTransient = (error: unknown): boolean => error === unavailable
+
+  it('still brings the folder up to date and leaves only the sweep when the bound cannot be read', async () => {
+    const harness = createHarness([{ path: '/workspace/subtree/old.txt', content: 'old' }])
+    harness.disk.set('/workspace/subtree/new.png', {
+      path: '/workspace/subtree/new.png',
+      content: 'new'
+    })
+    harness.deps.getHighWaterMark = vi.fn(async () => {
+      throw unavailable
+    })
+    harness.deps.isTransientReadFailure = isTransient
+
+    const result = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2
+    })
+
+    expect(result).toMatchObject({ added: 1, deleted: 0, deferred: true })
+    expect(harness.snapshot()).toEqual(['/workspace/subtree/new.png', '/workspace/subtree/old.txt'])
+    // No bound, so no durable sweep was opened and no page was read.
+    expect(harness.sweeps.size).toBe(0)
+    expect(harness.deps.readPage).not.toHaveBeenCalled()
+  })
+
+  it('defers the rest of the sweep when a page read finds the reader unavailable', async () => {
+    const harness = createHarness([
+      { path: '/workspace/subtree/a.txt', content: 'a' },
+      { path: '/workspace/subtree/b.txt', content: 'b' }
+    ])
+    harness.disk.clear()
+    harness.deps.readPage = vi.fn(async () => {
+      throw unavailable
+    })
+    harness.deps.isTransientReadFailure = isTransient
+
+    const result = await new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+      batchSize: 2
+    })
+
+    expect(result).toMatchObject({ deleted: 0, deferred: true })
+    expect(harness.deps.deleteRecords).not.toHaveBeenCalled()
+    // The sweep was opened before the read, so the next pass resumes it rather than starting over.
+    expect(harness.sweeps.has('/workspace/subtree')).toBe(true)
+    expect(harness.snapshot()).toEqual(['/workspace/subtree/a.txt', '/workspace/subtree/b.txt'])
+  })
+
+  it('fails the run on a read failure the predicate does not call transient', async () => {
+    const harness = createHarness([{ path: '/workspace/subtree/a.txt', content: 'a' }])
+    const failure = new Error('malformed database image')
+    harness.deps.getHighWaterMark = vi.fn(async () => {
+      throw failure
+    })
+    harness.deps.isTransientReadFailure = isTransient
+
+    await expect(
+      new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree')
+    ).rejects.toBe(failure)
+    expect(harness.deps.scan).not.toHaveBeenCalled()
+  })
+
+  it('fails the run on every read failure when no predicate is given', async () => {
+    const harness = createHarness([{ path: '/workspace/subtree/a.txt', content: 'a' }])
+    harness.deps.getHighWaterMark = vi.fn(async () => {
+      throw unavailable
+    })
+
+    await expect(
+      new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree')
+    ).rejects.toBe(unavailable)
+    expect(harness.deps.scan).not.toHaveBeenCalled()
+  })
+
+  it('does not defer a failure that arrives after the run was aborted', async () => {
+    const harness = createHarness([{ path: '/workspace/subtree/a.txt', content: 'a' }])
+    const controller = new AbortController()
+    harness.deps.getHighWaterMark = vi.fn(async () => {
+      controller.abort()
+      throw unavailable
+    })
+    harness.deps.isTransientReadFailure = isTransient
+
+    await expect(
+      new FileWatchSubtreeService(harness.deps).execute('/workspace/subtree', {
+        signal: controller.signal
+      })
+    ).rejects.toBe(unavailable)
+    expect(harness.deps.scan).not.toHaveBeenCalled()
+  })
+})

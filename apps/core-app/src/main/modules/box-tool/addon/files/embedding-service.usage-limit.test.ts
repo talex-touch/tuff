@@ -188,6 +188,40 @@ describe('EmbeddingService under the global usage limit', () => {
     expect(generate).toHaveBeenCalledTimes(2)
   })
 
+  it('asks again once a minute while embedding is not available, and keeps a positive answer', async () => {
+    const service = await createService()
+    generate
+      .mockRejectedValueOnce(new Error('model inference failed'))
+      .mockResolvedValueOnce({ ...vector(), result: [0, 0, 0] })
+      .mockResolvedValue(vector())
+
+    await expect(service.isAvailable()).resolves.toBe(false)
+    vi.setSystemTime(NOW + 59_999)
+    await expect(service.isAvailable()).resolves.toBe(false)
+    await expect(service.indexFiles(files(2))).resolves.toEqual({
+      indexed: 0,
+      skipped: 2,
+      failed: 0
+    })
+    expect(generate).toHaveBeenCalledTimes(1)
+
+    // The window is over: asked again, and an unusable vector is still "not available".
+    vi.setSystemTime(NOW + 60_000)
+    await expect(service.isAvailable()).resolves.toBe(false)
+    expect(generate).toHaveBeenCalledTimes(2)
+    // Each answer starts a new window.
+    vi.setSystemTime(NOW + 119_999)
+    await expect(service.isAvailable()).resolves.toBe(false)
+    expect(generate).toHaveBeenCalledTimes(2)
+
+    vi.setSystemTime(NOW + 120_000)
+    await expect(service.isAvailable()).resolves.toBe(true)
+    expect(generate).toHaveBeenCalledTimes(3)
+    vi.setSystemTime(NOW + 24 * 60 * 60_000)
+    await expect(service.isAvailable()).resolves.toBe(true)
+    expect(generate).toHaveBeenCalledTimes(3)
+  })
+
   it('resumes as soon as the limits change, not at the reset time', async () => {
     const service = await createService()
     // The availability probe is refused: paused until the reset, nothing sent for the files.
@@ -229,7 +263,8 @@ describe('EmbeddingService under the global usage limit', () => {
     await expect(service.indexFiles(files(2))).resolves.toEqual({
       indexed: 1,
       skipped: 0,
-      failed: 1
+      failed: 1,
+      retryFileIds: ['1']
     })
     expect(service.getUsageLimitPause()).toBeNull()
     expect(generate).toHaveBeenCalledTimes(3)

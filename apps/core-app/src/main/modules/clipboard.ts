@@ -102,6 +102,16 @@ import {
   resolveClipboardTargetPollingIntervalMs,
   type ClipboardPollingSettings
 } from './clipboard/clipboard-polling-policy'
+import { isClipboardCaptureSuppressed } from './clipboard/clipboard-capture-suppression'
+import {
+  CLIPBOARD_DEFER_GRACE_MS,
+  ClipboardDeferredCapture,
+  createDeferralSignal,
+  isDeferrableClipboardSource,
+  mergeDeferralSignals,
+  type ClipboardDeferralSignal,
+  type ClipboardDeferredRetry
+} from './clipboard/clipboard-deferred-capture'
 import { registerClipboardHostService } from './clipboard/clipboard-host-service'
 import type { ClipboardHostService } from './clipboard/clipboard-host-service'
 import {
@@ -121,16 +131,22 @@ const CLIPBOARD_LAG_ADAPT_ERROR_MS = 1000
 const CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS = 5000
 /** Upper bound on how long a CoreBox-show capture waits for app tasks to drain. */
 const CLIPBOARD_APP_TASK_WAIT_MS = 200
+/** How long a change signal dropped by the app-task gate waits before it looks at the gate again. */
+const CLIPBOARD_APP_TASK_RETRY_MS = 3000
 const pollingService = PollingService.getInstance()
 
 interface ClipboardMonitorOptions {
   bypassCooldown?: boolean
   source?: ClipboardCaptureSource
+  deferRound?: number
+  signal?: ClipboardDeferralSignal
 }
 
 interface ClipboardCheckOptions {
   bypassCooldown?: boolean
   source: ClipboardCaptureSource
+  deferRound?: number
+  signal?: ClipboardDeferralSignal
 }
 
 function isOnBatteryPowerSafe(): boolean {
@@ -345,6 +361,9 @@ export class ClipboardModule extends BaseModule {
   private powerListenersSetup = false
   private lastImagePersistAt = 0
   private lastLagSkipLogAt = 0
+  private readonly deferredCapture = new ClipboardDeferredCapture((retry) => {
+    this.runDeferredCapture(retry)
+  })
   private coreBoxBaselineCaptureQueued = false
   private readonly handlePowerStateChanged = (): void => {
     if (this.coreBoxVisible) return
@@ -916,9 +935,16 @@ export class ClipboardModule extends BaseModule {
       current?.source === 'corebox-show-baseline' || next?.source === 'corebox-show-baseline'
         ? 'corebox-show-baseline'
         : (next?.source ?? current?.source)
+    const deferRound = Math.max(current?.deferRound ?? 0, next?.deferRound ?? 0)
+    const signal =
+      current?.signal && next?.signal
+        ? mergeDeferralSignals(current.signal, next.signal)
+        : (current?.signal ?? next?.signal)
     return {
       source,
-      bypassCooldown: Boolean(current?.bypassCooldown || next?.bypassCooldown)
+      bypassCooldown: Boolean(current?.bypassCooldown || next?.bypassCooldown),
+      deferRound: deferRound > 0 ? deferRound : undefined,
+      signal
     }
   }
 
@@ -977,14 +1003,20 @@ export class ClipboardModule extends BaseModule {
     pollingService.start()
   }
 
-  private async runClipboardMonitor(options?: ClipboardMonitorOptions): Promise<void> {
-    const source = options?.source
+  private async runClipboardMonitor(requested?: ClipboardMonitorOptions): Promise<void> {
+    const source = requested?.source
     if (
       this.clipboardService.isNativeActive() &&
       (source === 'visible-poll' || source === 'background-poll')
     ) {
       return
     }
+    // A change signal is dated when it arrives: a check already running parks it, and a gate may
+    // defer it, so the time it finally runs is not the time it happened.
+    const options =
+      source !== undefined && isDeferrableClipboardSource(source) && !requested?.signal
+        ? { ...requested, signal: createDeferralSignal(source) }
+        : requested
 
     if (this.clipboardCheckInFlight) {
       this.clipboardCheckPending = true
@@ -1006,7 +1038,12 @@ export class ClipboardModule extends BaseModule {
         const source =
           currentOptions?.source ?? (this.coreBoxVisible ? 'visible-poll' : 'background-poll')
         try {
-          await this.checkClipboard({ bypassCooldown, source })
+          await this.checkClipboard({
+            bypassCooldown,
+            source,
+            deferRound: currentOptions?.deferRound,
+            signal: currentOptions?.signal
+          })
         } catch (error) {
           clipboardLog.warn('Clipboard check failed', { error })
         }
@@ -1027,6 +1064,17 @@ export class ClipboardModule extends BaseModule {
     })
   }
 
+  private runDeferredCapture({ source, round, signal }: ClipboardDeferredRetry): void {
+    if (this.isDestroyed) return
+    if (
+      this.clipboardService.isNativeActive() &&
+      this.lastCaptureChangeToken === this.clipboardService.getNativeChangeCount()
+    ) {
+      return
+    }
+    void this.runClipboardMonitor({ source, bypassCooldown: true, deferRound: round, signal })
+  }
+
   private async checkClipboard(options: ClipboardCheckOptions): Promise<void> {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
@@ -1042,22 +1090,55 @@ export class ClipboardModule extends BaseModule {
     if (this.shouldSkipUnchangedCapture(options.source)) {
       return
     }
+    // With the native watcher live a poll never reaches the gates below, so a
+    // change signal or baseline they hold back has no next tick: it is retried
+    // once the gate should have cleared (see ClipboardDeferredCapture).
+    const deferRound = options.deferRound ?? 0
+    const signal = options.signal ?? createDeferralSignal(options.source)
+    // A clipboard change the app wrote itself (selection capture, auto paste) is dropped by the
+    // capture. A replay would run after the suppression window closed and record it (#769), so
+    // while one is open the gates drop the signal as they always did.
+    const canDefer = (): boolean =>
+      isDeferrableClipboardSource(options.source) && !isClipboardCaptureSuppressed()
     if (appTaskGate.isActive()) {
       if (options.source !== 'corebox-show-baseline') {
-        return
-      }
-      // Bounded, because this is the one source that reaches here from the
-      // search path: every executeSearch awaits a clipboard refresh before it
-      // even builds the query, and waitForIdle() with no argument waits
-      // indefinitely. A long app-index scan would hold the search there for as
-      // long as it ran. Falling through to the same skip the other sources take
-      // costs a slightly stale clipboard; hanging costs the whole search.
-      const becameIdle = await appTaskGate.waitForIdle(CLIPBOARD_APP_TASK_WAIT_MS)
-      if (!becameIdle) {
-        return
-      }
-      if (this.isDestroyed || !this.clipboardHelper || !this.db) {
-        return
+        if (
+          !canDefer() ||
+          this.deferredCapture.defer(
+            options.source,
+            deferRound,
+            CLIPBOARD_APP_TASK_RETRY_MS,
+            signal
+          )
+        ) {
+          return
+        }
+      } else {
+        // Bounded, because this is the one source that reaches here from the
+        // search path: every executeSearch awaits a clipboard refresh before it
+        // even builds the query, and waitForIdle() with no argument waits
+        // indefinitely. A long app-index scan would hold the search there for as
+        // long as it ran. Falling through to the same skip the other sources take
+        // costs a slightly stale clipboard; hanging costs the whole search.
+        const becameIdle = await appTaskGate.waitForIdle(CLIPBOARD_APP_TASK_WAIT_MS)
+        if (this.isDestroyed || !this.clipboardHelper || !this.db) {
+          return
+        }
+        // Once the deferral cap is used up the baseline goes through like a change signal does:
+        // a native-watch retry that a baseline merged into is a baseline from then on, and
+        // dropping it here would lose the copy for as long as the scan lasts.
+        if (
+          !becameIdle &&
+          (!canDefer() ||
+            this.deferredCapture.defer(
+              options.source,
+              deferRound,
+              CLIPBOARD_APP_TASK_RETRY_MS,
+              signal
+            ))
+        ) {
+          return
+        }
       }
     }
     const now = Date.now()
@@ -1067,21 +1148,43 @@ export class ClipboardModule extends BaseModule {
       lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_ERROR_MS &&
       now - lagSnapshot.at <= CLIPBOARD_LAG_ADAPT_WINDOW_MS
     ) {
-      if (now - this.lastLagSkipLogAt >= CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS) {
-        this.lastLagSkipLogAt = now
-        clipboardLog.warn('Clipboard check skipped due to recent severe event loop lag', {
-          meta: {
-            lagMs: lagSnapshot.lagMs,
-            lagAgeMs: now - lagSnapshot.at
-          }
-        })
+      const deferrable = canDefer()
+      const deferred =
+        deferrable &&
+        this.deferredCapture.defer(
+          options.source,
+          deferRound,
+          // The snapshot is wall-clock; a clock stepped back would stretch this far past the window.
+          Math.min(
+            Math.max(
+              0,
+              lagSnapshot.at + CLIPBOARD_LAG_ADAPT_WINDOW_MS - now + CLIPBOARD_DEFER_GRACE_MS
+            ),
+            CLIPBOARD_LAG_ADAPT_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS
+          ),
+          signal
+        )
+      if (deferred || !deferrable) {
+        if (now - this.lastLagSkipLogAt >= CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS) {
+          this.lastLagSkipLogAt = now
+          clipboardLog.warn('Clipboard check skipped due to recent severe event loop lag', {
+            meta: {
+              lagMs: lagSnapshot.lagMs,
+              lagAgeMs: now - lagSnapshot.at,
+              deferred
+            }
+          })
+        }
+        return
       }
-      return
+      clipboardLog.warn('Clipboard check proceeding despite severe event loop lag', {
+        meta: { lagMs: lagSnapshot.lagMs, deferRound }
+      })
     }
     if (!options.bypassCooldown && now < this.clipboardCheckCooldownUntil) {
       return
     }
-    await this.checkClipboardInternal(options.source)
+    await this.checkClipboardInternal(options.source, deferRound > 0 ? signal.at : undefined)
   }
 
   /**
@@ -1117,7 +1220,11 @@ export class ClipboardModule extends BaseModule {
     return this.electronReader
   }
 
-  private async checkClipboardInternal(source: ClipboardCaptureSource): Promise<void> {
+  /** `signalAt` is set for a deferred capture: the capture is dated by when the change was noticed. */
+  private async checkClipboardInternal(
+    source: ClipboardCaptureSource,
+    signalAt?: number
+  ): Promise<void> {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
@@ -1130,7 +1237,9 @@ export class ClipboardModule extends BaseModule {
     // Single reader: capture always reads via Electron's clipboard API. The native
     // watcher is only a change signal (see ClipboardService), so there is no second
     // reader that could disagree with Electron on edge cases.
-    await this.capturePipeline.process(source)
+    await (signalAt === undefined
+      ? this.capturePipeline.process(source)
+      : this.capturePipeline.process(source, { observedAt: signalAt }))
 
     this.lastCaptureChangeToken = tokenAtStart
   }
@@ -1510,6 +1619,7 @@ export class ClipboardModule extends BaseModule {
     this.clipboardHostServiceDisposer?.()
     this.clipboardHostServiceDisposer = null
     this.isDestroyed = true
+    this.deferredCapture.cancel()
     pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     pollingService.unregister(CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID)
     this.stopNativeClipboardWatcher()
