@@ -52,7 +52,7 @@
     "@nuxtjs/mdc": "^0.22.2",
     "@panva/hkdf": "1.2.1",
     "@sentry/nuxt": "catalog:",
-    "@sidebase/nuxt-auth": "^0.9.4",
+    "@sidebase/nuxt-auth": "^1.4.0",
     "@talex-touch/tuff-business": "workspace:*",
     "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",
