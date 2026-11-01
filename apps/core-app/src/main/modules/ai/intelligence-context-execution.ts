@@ -110,7 +110,6 @@ function canUseRequestedOwner(
   actor: IntelligenceContextActor
 ): boolean {
   if (actor.type === 'host') return true
-  if (actor.id !== 'plugin:touch-intelligence') return false
 
   const owner = request.context.owner ?? 'corebox'
   const entrypoint = request.options?.metadata?.contextEntrypoint

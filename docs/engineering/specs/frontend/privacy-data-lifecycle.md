@@ -359,10 +359,7 @@ resolveProviderCredential(provider): string | undefined
 saveProviderCredentialConfig({ provider, credential }): Promise<ProviderStoredConfig>
 deleteProviderCredentialConfig({ providerId }): Promise<{ deleted: boolean }>
 
-migrateTranslationProviderCredentials(dependencies): Promise<{
-  config: Record<string, unknown>
-  migrated: number
-}>
+migrateLegacyProviderCredentials(options): Promise<PendingLegacyCredentials> // touch-translation plugin
 
 secret.setMany(entries): Promise<PluginStorageSecretMutationResponse>
 redactProviderConfigDocument(value): Record<string, unknown>
@@ -462,8 +459,8 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 - Migration and save/delete operations are single-flight/serialized. Durable config writes use the current storage revision. A stale writer cannot overwrite a newer Provider document; replacement/deletion restores the prior secure value when metadata persistence fails. Any failed compensation clears cached credentials because persisted secure/config state is no longer provable.
 - Generic Storage IPC projects Intelligence config through `redactProviderConfigDocument()` and rejects any incoming Provider object with an own `apiKey` field. Renderer state never uses `apiKey` as a persisted availability flag.
 - The Provider settings credential field is local transient state. Blur submits the typed main action; success immediately clears the input and updates only `authRef`/`hasCredential`. Explicitly editing the field to empty means `clear`; an untouched empty field means preserve.
-- Official Translation legacy migration runs in the main Plugin Storage handler. A non-blank secure value is authoritative and is never overwritten by its legacy mirror; remaining fixed legacy fields are written atomically before saving sanitized `providers_config`. Config failure restores prior Secret values. Concurrent reads share one migration Promise, and restart retries are idempotent.
-- If Translation migration cannot commit but compensation succeeds, the legacy file remains unchanged. `getFile` still returns a sanitized projection, while authorized `secret.get` may resolve a legacy field main-side as a temporary compatibility fallback. Rollback failure marks that activation fatal: Secret fallback and further migration stay fail-closed until a new activation/restart. No legacy credential is returned through ordinary Plugin Storage.
+- Official Translation legacy migration is owned by the `touch-translation` plugin, not by Plugin Storage: the host keeps no plugin-name rule for `providers_config` or Secret keys, and `touch-translation` gets the same storage and Secret API as any other plugin. When the plugin loads `providers_config` it writes the fixed legacy plaintext fields to the vault with one `secret.setMany` batch first and rewrites the sanitized file only afterwards. A non-blank secure value is authoritative and is never overwritten by its legacy mirror. Nothing is rolled back: a vault write is never undone, so a failed file rewrite leaves vault and legacy file agreeing and the next load finishes the cleanup. Duplicate runs converge, and restart retries are idempotent.
+- If the vault cannot take the credentials (a read or the batch fails), the legacy file stays unchanged and the plugin keeps the values as an in-memory runtime fallback only; the vault wins as soon as it holds a value. Every `providers_config` save re-attaches those still-pending fields, so saving other settings cannot destroy the only copy, and a successful user save, clear or reset of a field drops its pending value. Until the vault is available the plugin's own storage may therefore still hold legacy plaintext; the host neither sanitizes that projection nor fails the activation closed.
 - New multi-field Plugin Secret changes use typed `set-secret-batch`; main validates authoritative activation identity, permission, count, exact keys, duplicate keys, and every value before one secure-store mutation.
 - `PORTABLE_SECRET_CATALOG_V1` contains only fixed product-approved credentials. Nexus/session/account tokens, sync keys, machine seeds, device identity, dynamic custom Provider keys, unknown Plugin Secrets, and caller-selected secure-store names are non-portable.
 - `docs/engineering/sensitive-data-inventory.json` is the executable source for sensitive owners, physical storage, writers/readers, export, deletion, retention, renderer exposure, portability, migration status, and evidence. Any affected code change updates the inventory and passes `corepack pnpm privacy:inventory:verify`.
@@ -482,14 +479,14 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 | Fresh install without credentials                                | No secure mutation and no ordinary config rewrite                                           |
 | Valid legacy Provider/Translation credentials                    | One atomic secure write, then sanitized durable config, then runtime availability           |
 | Secure-store batch fails                                         | Legacy ordinary file/row remains byte-usable; stable local failure only                     |
-| Sanitized config persistence fails                               | Restore previous secure values and retain legacy config                                     |
-| Provider/Translation rollback fails                              | Stable rollback code; clear/block runtime credential use for the current process/activation |
+| Sanitized config persistence fails                               | Provider: restore previous secure values and retain legacy config. Translation: keep the new vault values and the legacy file; the next load finishes the cleanup |
+| Provider rollback fails                                          | Stable rollback code; clear/block runtime credential use for the current process/activation |
 | Existing non-blank Translation Secret conflicts with legacy      | Keep secure value authoritative; sanitize legacy mirror without overwriting it              |
-| Two concurrent startup reads or mutations                        | One migration or serialized revision-aware mutation; no partial state                       |
+| Two concurrent startup reads or mutations                        | Provider: one migration or serialized revision-aware mutation, no partial state. Translation: duplicate runs converge because the vault is written first and stays authoritative |
 | Restart after completed migration                                | No repeat write; hydrate main runtime credential from secure store                          |
 | Renderer Storage payload owns `apiKey`                           | Reject before cache/persistence; return no credential in projection/error                   |
 | Provider replacement or deletion metadata write fails            | Restore previous credential and report action failure                                       |
-| Translation migration is deferred                                | Sanitize `getFile`; authorized Secret SDK may use main-side legacy fallback                 |
+| Translation migration is deferred                                | Plugin keeps the legacy fields in memory and on disk (saves re-attach them) until the vault takes them |
 | Catalog request names Nexus/session/sync/machine/custom identity | Reject as forbidden/non-portable                                                            |
 | Inventory entry/evidence/lifecycle field missing                 | Verifier exits non-zero                                                                     |
 | Smoke fixture touches real account/network/native user data      | Fail the harness before lifecycle action                                                    |
@@ -505,12 +502,12 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 - Good: one physical `app.asar` hash passes Tool confirmation, fixed failures, and a three-launch real Provider lifecycle; the generated profile is removed and audit/usage/canary checks reconcile.
 - Base: a fresh install has disabled Providers and no secure entries; initialization performs no writes.
 - Base: all runnable packaged gates pass but MCP is not explicitly enabled; retain the evidence and report the overall task as partial/blocked.
-- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, republish a credential cache after rollback failure, overwrite a non-blank secure Translation Secret from legacy config, expose a secure-store key to renderer, add login/sync/machine material to the portable catalog, or combine passing reports from different `app.asar` hashes.
+- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, republish a credential cache after rollback failure, overwrite a non-blank secure Translation Secret from legacy config, delete a vault value because a file rewrite failed, give Plugin Storage a plugin-name rule for Translation credentials, expose a secure-store key to renderer, add login/sync/machine material to the portable catalog, or combine passing reports from different `app.asar` hashes.
 
 ### 6. Tests Required
 
 - Provider tests cover fresh, legacy, secure failure, config failure plus rollback, rollback-failure cache clearing, restart idempotency, concurrent initialization, replacement, deletion, strict save DTO validation, renderer/config redaction, and sensitive canaries in errors/results.
-- Translation tests cover fixed-field extraction, secure-value authority, one batch, secure failure, config failure plus rollback, activation-fatal rollback failure, restart, sanitized projection, main-side legacy fallback, duplicate batch denial, and renderer Secret-SDK-only loading.
+- Translation plugin tests cover fixed-field extraction, secure-value authority, one batch before the file rewrite, vault read and batch failure leaving the legacy file untouched with a pending runtime fallback, a failed file rewrite finishing on the next load, restart idempotency, whitespace preservation, blank and non-string field dropping, pending fields re-attached on save and dropped by a user save, clear or reset, and renderer Secret-SDK-only loading. Plugin Storage tests cover that `touch-translation` gets the same file and Secret-key rules as any other plugin, plus duplicate batch denial.
 - Storage/SDK tests cover typed provider save/delete, typed Plugin Secret batch, ordinary `apiKey` rejection, redacted get/getVersioned, runtime injection, and no raw Privacy/uninstall event duplicates.
 - Packaged runner tests cover missing first search observation recovery, request/session/revision identity changes, consecutive candidate/readiness samples, single activation, exact save/relaunch/delete checks, scan-limit failure, cross-chunk canary matching, and aggregate audit/usage equality. A final verifier asserts the shared version/hash, cleanup state, empty failure arrays, and every required lifecycle boolean rather than trusting exit code or top-level `ok` alone.
 - Inventory verification and scoped lint/typecheck/tests are mandatory. Production Electron smoke is an evidence level above mocked service tests; a smoke blocked by environment must be reported as blocked, never silently counted as passed.
@@ -534,8 +531,9 @@ await intelligenceSdk.saveProviderConfig({
 })
 
 await secret.setMany(fixedCredentialEntries)
-// Main migration/save owns atomic secure mutation, sanitized persistence, rollback,
+// Main Provider migration/save owns atomic secure mutation, sanitized persistence, rollback,
 // and fail-closed cache/activation state when compensation cannot be proved.
+// The Translation plugin writes the vault first and sanitizes its own file only afterwards.
 ```
 
 For packaged evidence, checking three unrelated top-level booleans is also wrong:

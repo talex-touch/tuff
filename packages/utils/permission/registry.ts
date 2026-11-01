@@ -156,6 +156,14 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.intelligence.agents.desc',
     icon: 'Users',
   },
+  {
+    id: 'intelligence.context',
+    category: PermissionCategory.INTELLIGENCE,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: 'permission.intelligence.context.name',
+    descKey: 'permission.intelligence.context.desc',
+    icon: 'MessagesSquare',
+  },
 
   // Voice permissions
   {
@@ -365,6 +373,7 @@ export const PermissionIds = {
   INTELLIGENCE_BASIC: 'intelligence.basic',
   INTELLIGENCE_ADMIN: 'intelligence.admin',
   INTELLIGENCE_AGENTS: 'intelligence.agents',
+  INTELLIGENCE_CONTEXT: 'intelligence.context',
 
   // Storage
   STORAGE_PLUGIN: 'storage.plugin',

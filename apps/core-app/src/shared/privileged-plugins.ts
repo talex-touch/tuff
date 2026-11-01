@@ -1,8 +1,8 @@
 /**
  * Which plugin may hold which privileged host capability (#535).
  *
- * These capabilities — intelligence context, browser open and data, system actions, window manager
- * and presets, workspace scripts — are not authorized by the manifest permission registry. They are
+ * These capabilities — browser open and data, system actions, window manager and presets,
+ * workspace scripts — are not authorized by the manifest permission registry. They are
  * authorized by comparing the activation's plugin name against a literal, in twelve files and
  * twenty-nine places, with no shared constant between them.
  *
@@ -17,8 +17,6 @@
  */
 
 export const PRIVILEGED_PLUGIN_CAPABILITIES = {
-  /** Reads and streams the intelligence context package. */
-  intelligenceContext: ['touch-intelligence'],
   /** Opens URLs in a chosen browser. */
   browserOpen: ['touch-browser-open'],
   /** Scans browser profile data, and owns the bookmarks indexed source. */
@@ -53,17 +51,24 @@ export const PRIVILEGED_PLUGIN_CAPABILITIES = {
   aiSessions: ['touch-ai-sessions'],
   /** Converts only lifecycle-approved image inputs through the bounded host renderer. */
   imageTools: ['touch-image'],
-  /** Reaches the intelligence providers for translation requests. */
-  translation: ['touch-translation'],
   /** Publishes snippet packs to Nexus, signed with the signed-in account's credential. */
   snippetsCloudPublish: ['touch-snippets']
 } as const satisfies Record<string, readonly string[]>
 
 export type PrivilegedPluginCapability = keyof typeof PRIVILEGED_PLUGIN_CAPABILITIES
 
-/** Every plugin name that holds at least one privileged capability. */
+/**
+ * Bundled plugins that hold no host capability. Their names stay reserved because plugin secrets
+ * (`plugin.<name>.*`) and the Context owner policy are keyed by name, not by manifest permission.
+ */
+const RESERVED_NAME_ONLY_PLUGIN_NAMES = ['touch-intelligence', 'touch-translation'] as const
+
+/** Every plugin name the host reserves for its bundled runtime. */
 export const PRIVILEGED_PLUGIN_NAMES: readonly string[] = Object.freeze([
-  ...new Set(Object.values(PRIVILEGED_PLUGIN_CAPABILITIES).flat())
+  ...new Set([
+    ...Object.values(PRIVILEGED_PLUGIN_CAPABILITIES).flat(),
+    ...RESERVED_NAME_ONLY_PLUGIN_NAMES
+  ])
 ])
 
 /** Holders of either system-action tier, for the gate that admits both before splitting them. */

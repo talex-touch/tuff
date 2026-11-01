@@ -1,5 +1,6 @@
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import type { TranslationProvider } from '../types/translation'
+import type { PendingLegacyCredentials } from '../utils/provider-credential-migration'
 import {
   applyProviderPresentation,
   getEnabledProviderIds,
@@ -16,9 +17,11 @@ import { GoogleTranslateProvider } from '../providers/google-translate'
 import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence-translate'
+import { migrateLegacyProviderCredentials } from '../utils/provider-credential-migration'
 
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
+let pendingLegacyCredentials: PendingLegacyCredentials = {}
 
 export const PROVIDER_SECRET_FIELDS: Record<string, string[]> = {
   deepl: ['apiKey'],
@@ -64,6 +67,20 @@ export function useTranslationProvider() {
   const storage = usePluginStorage()
   const secret = usePluginSecret()
 
+  // The vault wins; a legacy plaintext value only stands in while its migration is still pending.
+  const readProviderSecret = async (providerId: string, field: string): Promise<string | null> => {
+    const legacy = pendingLegacyCredentials[providerId]?.[field] ?? null
+    try {
+      return (await secret.get(getProviderSecretKey(providerId, field))) || legacy
+    }
+    catch (error) {
+      if (legacy) {
+        return legacy
+      }
+      throw error
+    }
+  }
+
   const mergeProviderSecrets = async (
     providerId: string,
     config: Record<string, any>,
@@ -71,7 +88,7 @@ export function useTranslationProvider() {
     const next = { ...config }
     const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
     for (const field of secretFields) {
-      const stored = await secret.get(getProviderSecretKey(providerId, field))
+      const stored = await readProviderSecret(providerId, field)
       if (stored) {
         next[field] = stored
       }
@@ -80,16 +97,20 @@ export function useTranslationProvider() {
   }
 
   const saveProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<boolean> => {
-    const entries = (PROVIDER_SECRET_FIELDS[providerId] || [])
-      .filter(field => field in config)
-      .map((field) => {
-        const value = typeof config[field] === 'string' ? config[field] : ''
-        return { key: getProviderSecretKey(providerId, field), value: value.trim() ? value : null }
-      })
+    const fields = (PROVIDER_SECRET_FIELDS[providerId] || []).filter(field => field in config)
+    const entries = fields.map((field) => {
+      const value = typeof config[field] === 'string' ? config[field] : ''
+      return { key: getProviderSecretKey(providerId, field), value: value.trim() ? value : null }
+    })
     if (entries.length === 0) {
       return true
     }
     const result = await secret.setMany(entries)
+    if (result.success) {
+      for (const field of fields) {
+        delete pendingLegacyCredentials[providerId]?.[field]
+      }
+    }
     return result.success
   }
 
@@ -98,6 +119,9 @@ export function useTranslationProvider() {
       fields.map(field => ({ key: getProviderSecretKey(providerId, field), value: null })),
     )
     const result = await secret.setMany(entries)
+    if (result.success) {
+      pendingLegacyCredentials = {}
+    }
     return result.success
   }
 
@@ -148,6 +172,10 @@ export function useTranslationProvider() {
         config: stripProviderSecrets(id, provider.config || {}),
       }
     })
+    // Legacy plaintext the vault never took stays on disk, so saving other settings cannot destroy the only copy.
+    for (const [id, credentials] of Object.entries(pendingLegacyCredentials)) {
+      config[id] = { enabled: false, ...config[id], config: { ...config[id]?.config, ...credentials } }
+    }
     // 兼容新版本：使用 setFile 代替 setItem
     await storage.setFile('providers_config', config)
   }
@@ -158,6 +186,13 @@ export function useTranslationProvider() {
       // 兼容新版本：使用 getFile 代替 getItem
       const saved = await storage.getFile('providers_config')
       if (saved && typeof saved === 'object' && saved !== null) {
+        pendingLegacyCredentials = await migrateLegacyProviderCredentials({
+          saved,
+          fields: PROVIDER_SECRET_FIELDS,
+          secretKey: getProviderSecretKey,
+          vault: secret,
+          persistConfig: sanitized => storage.setFile('providers_config', sanitized),
+        })
         const config = saved as Record<string, { enabled?: boolean, config?: Record<string, any> }>
         const enabledIds = getEnabledProviderIds(config) as string[]
         await Promise.all(

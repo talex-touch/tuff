@@ -76,8 +76,7 @@ import {
 } from './plugin-data-disposition-production'
 import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { getLocale, onLocaleChange, t } from '../../utils/i18n-helper'
-import { pluginLanguageManager } from './plugin-language-manager'
+import { getLocale, onLocaleChange } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -90,6 +89,7 @@ import { getPermissionModule } from '../permission'
 import { voiceService } from '../voice/voice-service'
 import {
   clearPluginLocalizationEntries,
+  getHostLocale,
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
@@ -121,6 +121,7 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createPluginLanguageCapabilities } from './host/plugin-host-language-capabilities'
 import { createPluginRecommendationCapabilities } from './host/plugin-host-recommend-capabilities'
 import { getPluginRecommendationApi } from '../box-tool/search-engine/recommendation/plugin-recommendation-api'
 import { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview } from '../quick-ops'
@@ -2124,9 +2125,6 @@ export class PluginModule extends BaseModule {
     this.pluginManager = pluginRuntime.pluginManager
     this.installQueue = pluginRuntime.installQueue
     this.healthMonitor = pluginRuntime.healthMonitor
-    onLocaleChange((locale) => {
-      pluginLanguageManager.onLocaleChanged(locale)
-    })
 
     this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
       resolvePlugin: (pluginName) => {
@@ -2282,12 +2280,19 @@ export class PluginModule extends BaseModule {
           getPluginRecommendationApi()?.unregisterPluginProvider(pluginName, providerId) ?? false
       }
     })
+    const languageCapabilities = createPluginLanguageCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) => this.runtimeService?.resolveHostGeneration(activation),
+      resolveSdkApi: (pluginName) =>
+        (pluginModule.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined)
+          ?.sdkapi,
+      service: { getLanguage: getHostLocale, onLanguageChange: onLocaleChange }
+    })
     const intelligenceHostService = createPluginIntelligenceHostService()
-    const createTranslationCapability = (activation: PluginActivationIdentity) =>
+    const createIntelligenceCapability = (activation: PluginActivationIdentity) =>
       createPluginIntelligenceCapabilities({
         activation,
-        invokeCapabilities: Object.freeze(['text.translate', 'vision.ocr']),
-        providerModelCapabilities: Object.freeze(['text.translate']),
         resolveCurrentActivation: (pluginName) =>
           ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
         resolveHostGeneration: (activation) =>
@@ -2417,7 +2422,6 @@ export class PluginModule extends BaseModule {
         )
     })
     const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
-      translate: (key) => t(key),
       showMessageBox: async (options) => {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
@@ -2650,8 +2654,8 @@ export class PluginModule extends BaseModule {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return null
         const selection = dialog.showOpenDialog(parentWindow, {
-          title: t('nativeDialogs.workspaceScript.selectTitle'),
-          buttonLabel: t('nativeDialogs.workspaceScript.selectButton'),
+          title: 'Select Workspace',
+          buttonLabel: 'Select',
           properties: ['openDirectory', 'noResolveAliases']
         })
         void selection.catch(() => undefined)
@@ -2687,10 +2691,10 @@ export class PluginModule extends BaseModule {
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
         const result = await dialog.showMessageBox(parentWindow, {
           type: 'warning',
-          title: t('nativeDialogs.workspaceScript.runTitle'),
-          message: t('nativeDialogs.workspaceScript.runMessage', { script: input.scriptName }),
-          detail: t('nativeDialogs.workspaceScript.runDetail', { workspace: input.workspaceName }),
-          buttons: [t('common.cancel'), t('nativeDialogs.workspaceScript.run')],
+          title: 'Run Workspace Script',
+          message: `Run "${input.scriptName}"?`,
+          detail: `Workspace: ${input.workspaceName}\nThe package script is project-owned code and may perform arbitrary actions.`,
+          buttons: ['Cancel', 'Run'],
           defaultId: 0,
           cancelId: 0,
           noLink: true,
@@ -2737,18 +2741,16 @@ export class PluginModule extends BaseModule {
         if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
         const result = await dialog.showMessageBox(parentWindow, {
           type: 'warning',
-          title: t('nativeDialogs.hosts.title'),
+          title: 'Confirm Hosts Update',
           message:
             request.operation === 'remove'
-              ? t('nativeDialogs.hosts.removeMessage', { hostname: request.hostname })
-              : t('nativeDialogs.hosts.updateMessage', { hostname: request.hostname }),
+              ? `Remove ${request.hostname}?`
+              : `Update ${request.hostname}?`,
           detail:
             request.operation === 'remove'
-              ? t('nativeDialogs.hosts.removeDetail')
-              : t('nativeDialogs.hosts.updateDetail', {
-                  addresses: request.addresses?.join(', ') ?? ''
-                }),
-          buttons: [t('common.cancel'), t('nativeDialogs.hosts.apply')],
+              ? 'This removes the managed hostname from the system Hosts file.'
+              : `Addresses: ${request.addresses?.join(', ') ?? ''}`,
+          buttons: ['Cancel', 'Apply'],
           defaultId: 0,
           cancelId: 0,
           noLink: true,
@@ -3134,7 +3136,8 @@ export class PluginModule extends BaseModule {
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
         ...voiceCapabilities.definitions,
-        ...recommendationCapabilities.definitions
+        ...recommendationCapabilities.definitions,
+        ...languageCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,
@@ -3147,7 +3150,7 @@ export class PluginModule extends BaseModule {
       systemAction: (activation) => createSystemActionCapability(activation),
       browserOpen: (activation) => createBrowserOpenCapability(activation),
       browserData: (activation) => createBrowserDataCapability(activation),
-      translation: (activation) => createTranslationCapability(activation),
+      intelligence: (activation) => createIntelligenceCapability(activation),
       intelligenceContext: (activation) => createIntelligenceContextCapability(activation),
       windowManager: (activation) => createWindowManagerCapability(activation),
       windowPreset: (activation) => createWindowPresetCapability(activation),

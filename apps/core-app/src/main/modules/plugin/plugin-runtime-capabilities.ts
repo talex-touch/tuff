@@ -3,7 +3,6 @@ import type { PluginAiSessionsCapabilities } from './host/plugin-ai-sessions-cap
 import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
 import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
 import type { PluginHostCapabilityDefinition } from './host/plugin-host-capabilities'
-import type { PluginHostCapability } from './host/plugin-host-wire'
 import type { PluginHostsCapabilities } from './host/plugin-hosts-capabilities'
 import type { PluginImageToolsCapabilities } from './host/plugin-image-tools-capabilities'
 import type { PluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
@@ -27,7 +26,7 @@ export interface TouchPluginRuntimeCapabilities {
   systemAction: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
   browserOpen: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
   browserData: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
-  translation: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
+  intelligence: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
   intelligenceContext:
     | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
     | null
@@ -53,7 +52,7 @@ export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabil
     systemAction: null,
     browserOpen: null,
     browserData: null,
-    translation: null,
+    intelligence: null,
     intelligenceContext: null,
     windowManager: null,
     windowPreset: null,
@@ -64,40 +63,6 @@ export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabil
     aiSessions: null,
     imageTools: null
   }
-}
-
-const TRANSLATION_RUNTIME_CAPABILITIES = Object.freeze([
-  'feature.items.push',
-  'feature.items.widget.push',
-  'feature.items.clear',
-  'clipboard.write',
-  'intelligence.invoke'
-] as const satisfies readonly PluginHostCapability[])
-
-const INTELLIGENCE_RUNTIME_CAPABILITIES = Object.freeze([
-  'permission.check',
-  'feature.registry.add',
-  'feature.registry.remove',
-  'feature.registry.list',
-  'feature.items.push',
-  'feature.items.widget.push',
-  'feature.items.clear',
-  'storage.file.read',
-  'storage.file.write',
-  'storage.file.list',
-  'clipboard.write',
-  'clipboard.copy-and-paste',
-  'intelligence.context.invoke',
-  'intelligence.stream'
-] as const satisfies readonly PluginHostCapability[])
-
-export function resolvePluginRuntimeCapabilityAllowlist(
-  pluginName: string
-): readonly PluginHostCapability[] | undefined {
-  if (pluginName === 'touch-translation') return TRANSLATION_RUNTIME_CAPABILITIES
-  if (isPrivilegedPluginFor('intelligenceContext', pluginName))
-    return INTELLIGENCE_RUNTIME_CAPABILITIES
-  return undefined
 }
 
 type ClassicUtilityCapabilityName =

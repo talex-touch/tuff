@@ -808,7 +808,7 @@ describe('IntelligenceContextExecutionService', () => {
     expect(stream).not.toHaveBeenCalled()
   })
 
-  it('honors the trusted CoreBox entrypoint and rejects the retired Assistant one and owner spoofing', async () => {
+  it('honors the CoreBox entrypoint for any plugin actor and rejects the retired Assistant one and a missing entrypoint', async () => {
     const { IntelligenceContextExecutionService } = await import('./intelligence-context-execution')
     const contextPackage = createPackage()
     const prepared = createPrepared(contextPackage)
@@ -854,13 +854,26 @@ describe('IntelligenceContextExecutionService', () => {
       expect.objectContaining({ owner: 'corebox', explicitScope: 'light' })
     )
 
+    const withoutEntrypoint: IntelligenceContextExecutionRequest = { ...request, options: {} }
     await expect(
       service.invoke(retired, { id: 'plugin:touch-intelligence', type: 'plugin' })
     ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
     await expect(
-      service.invoke(request, { id: 'plugin:untrusted', type: 'plugin' })
+      service.invoke(withoutEntrypoint, { id: 'plugin:other-plugin', type: 'plugin' })
     ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
     expect(prepareTurn).toHaveBeenCalledTimes(1)
+
+    // The intelligence.context permission admits a caller, not its name; the actor id only scopes
+    // the session it gets.
+    await expect(
+      service.invoke(request, { id: 'plugin:other-plugin', type: 'plugin' })
+    ).resolves.toMatchObject({ invocation: { result: 'CoreBox answer' } })
+    expect(prepareTurn).toHaveBeenCalledTimes(2)
+    expect(prepareTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ contextActorId: 'plugin:other-plugin' })
+      })
+    )
   })
 
   it('assembles provider messages only after final memory revalidation', async () => {

@@ -34,29 +34,32 @@ code: |
 
 **2. 权限分类**
 
-| 类别         | 权限 ID               | 风险等级 | 说明                              |
-| ------------ | --------------------- | -------- | --------------------------------- |
-| **文件系统** | `fs.read`             | 中       | 读取用户文件                      |
-|              | `fs.write`            | 高       | 写入/修改文件                     |
-|              | `fs.execute`          | 高       | 执行文件或脚本                    |
-| **剪贴板**   | `clipboard.read`      | 中       | 读取剪贴板内容                    |
-|              | `clipboard.write`     | 低       | 写入剪贴板内容                    |
-| **网络**     | `network.local`       | 低       | 访问本地网络                      |
-|              | `network.internet`    | 中       | 访问互联网                        |
-|              | `network.download`    | 中       | 下载文件到本地                    |
-| **系统**     | `system.shell`        | 高       | 执行系统命令                      |
-|              | `system.notification` | 低       | 发送系统通知                      |
-|              | `system.tray`         | 中       | 操作系统托盘                      |
-| **智能**     | `intelligence.basic`  | 低       | 基础智能能力                      |
-|              | `intelligence.admin`  | 高       | 管理级智能能力                    |
-|              | `intelligence.agents` | 高       | 智能体系统                        |
-| **存储**     | `storage.plugin`      | 低       | 插件私有存储（自动授予）          |
-|              | `storage.shared`      | 中       | 跨插件共享存储                    |
-|              | `storage.sqlite`      | 中       | 访问插件本地 SQLite 数据库        |
-| **窗口**     | `window.create`       | 低       | 创建窗口（自动授予）              |
-|              | `window.capture`      | 高       | 屏幕截图                          |
-| **账户**     | `account.read`        | 中       | 读取账户资料、套餐与用量          |
-| **搜索**     | `search.root-results` | 高       | 向 CoreBox 根结果推送或更新搜索项 |
+| 类别         | 权限 ID                | 风险等级 | 说明                              |
+| ------------ | ---------------------- | -------- | --------------------------------- |
+| **文件系统** | `fs.read`              | 中       | 读取用户文件                      |
+|              | `fs.write`             | 高       | 写入/修改文件                     |
+|              | `fs.execute`           | 高       | 执行文件或脚本                    |
+| **剪贴板**   | `clipboard.read`       | 中       | 读取剪贴板内容                    |
+|              | `clipboard.write`      | 低       | 写入剪贴板内容                    |
+| **网络**     | `network.local`        | 低       | 访问本地网络                      |
+|              | `network.internet`     | 中       | 访问互联网                        |
+|              | `network.download`     | 中       | 下载文件到本地                    |
+| **系统**     | `system.shell`         | 高       | 执行系统命令                      |
+|              | `system.notification`  | 低       | 发送系统通知                      |
+|              | `system.tray`          | 中       | 操作系统托盘                      |
+| **智能**     | `intelligence.basic`   | 低       | 基础智能能力                      |
+|              | `intelligence.context` | 中       | 带历史与记忆的上下文会话          |
+|              | `intelligence.admin`   | 高       | 管理级智能能力                    |
+|              | `intelligence.agents`  | 高       | 智能体系统                        |
+| **存储**     | `storage.plugin`       | 低       | 插件私有存储（自动授予）          |
+|              | `storage.shared`       | 中       | 跨插件共享存储                    |
+|              | `storage.sqlite`       | 中       | 访问插件本地 SQLite 数据库        |
+| **窗口**     | `window.create`        | 低       | 创建窗口（自动授予）              |
+|              | `window.capture`       | 高       | 屏幕截图                          |
+| **账户**     | `account.read`         | 中       | 读取账户资料、套餐与用量          |
+| **搜索**     | `search.root-results`  | 高       | 向 CoreBox 根结果推送或更新搜索项 |
+
+`intelligence.context` 管控上下文会话。`contextInvoke()` / `contextStream()`（以及 Prelude 里的 `intelligence.contextInvoke()` / `intelligence.contextStream()`）会让宿主先拼好对话历史、已保存的记忆与检索到的上下文再调用模型，所以 `intelligence.basic` 并不包含它。只有插件确实需要这些时才在 `manifest.json` 里声明；只做单次模型调用的插件继续用 `intelligence.basic`。
 
 `search.root-results` 是 Search Provider 的根结果写入权限。任何插件只要通过 push feature 或 `boxItems.push()` / `plugin.feature.pushItems()` 把内容写入 CoreBox 根结果，都必须在 `manifest.json` 中声明并获得授权；删除或清理自己插件已有结果不需要该权限，以免权限状态异常时留下 stale items。
 

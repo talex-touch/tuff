@@ -403,7 +403,7 @@ describe('IntelligenceModule plugin channel permission boundary', () => {
     expect(intelligenceSdkMocks.invoke).not.toHaveBeenCalled()
   })
 
-  it('routes every one of the 14 plugin-facing Intelligence events through intelligence.basic', async () => {
+  it('routes the 14 plugin-facing Intelligence events through intelligence.basic, and Context execute/stream through intelligence.context', async () => {
     permissionMocks.checkPermission.mockReturnValue({ allowed: false, reason: 'denied' })
     const { invokeHandlers, on, onStream, streamHandlers } = createRegistrarHarness()
     const plugin = trustedPluginContext()
@@ -436,9 +436,17 @@ describe('IntelligenceModule plugin channel permission boundary', () => {
     for (const eventName of eventNames) {
       expect(registrationNames.filter((registered) => registered === eventName)).toHaveLength(1)
     }
+    const contextGated = new Set([
+      intelligenceContextEvents.execute.toEventName(),
+      intelligenceContextEvents.stream.toEventName()
+    ])
     expect(permissionMocks.checkPermission).toHaveBeenCalledTimes(14)
     expect(permissionMocks.checkPermission.mock.calls).toEqual(
-      Array.from({ length: 14 }, () => ['permission-test-plugin', 'intelligence.basic', SDK_API])
+      eventNames.map((eventName) => [
+        'permission-test-plugin',
+        contextGated.has(eventName) ? 'intelligence.context' : 'intelligence.basic',
+        SDK_API
+      ])
     )
   })
 

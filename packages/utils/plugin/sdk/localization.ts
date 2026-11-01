@@ -1,29 +1,18 @@
 import type {
-  AppLocale,
   DomainLexiconMatch,
   DomainLexiconSearchOptions,
-  LocalizedTextValue,
   PluginDomainLexiconEntryInput,
   PluginLexiconRegisterOptions,
   PluginLexiconRegisterResult,
   PluginLexiconResolveOptions,
   ResolvedDomainLexiconEntry,
 } from "../../i18n";
-import { createI18nMessage } from "../../i18n";
-import type { ITuffTransport } from "../../transport";
 import { createPluginTuffTransport } from "../../transport";
 import { PluginEvents } from "../../transport/events";
 import { ensureRendererChannel } from "./channel";
+import type { LanguageSDK, LanguageTransport } from "./language";
+import { createLanguageSDK } from "./language";
 import { tryGetPluginSdkApi } from "./plugin-info";
-
-export interface PluginI18nSDK {
-  getLocale: () => Promise<AppLocale>;
-  createMessage: (key: string, params?: Record<string, unknown>) => string;
-  resolveText: (
-    value: LocalizedTextValue,
-    locale?: AppLocale,
-  ) => Promise<string>;
-}
 
 export interface PluginLexiconSDK {
   resolve: (
@@ -41,39 +30,16 @@ export interface PluginLexiconSDK {
 }
 
 export interface PluginLocalizationSDK {
-  i18n: PluginI18nSDK;
+  language: LanguageSDK;
   lexicon: PluginLexiconSDK;
 }
 
-export type PluginLocalizationTransport = Pick<ITuffTransport, "send">;
+export type PluginLocalizationTransport = LanguageTransport;
 
 export function createPluginLocalizationSDK(
   transport: PluginLocalizationTransport,
   sdkapi?: number,
 ): PluginLocalizationSDK {
-  const i18n: PluginI18nSDK = {
-    getLocale: () =>
-      transport.send(PluginEvents.i18n.getLocale, withSdkApi({}, sdkapi)),
-    createMessage: (key, params) => {
-      const normalizedKey = key.trim();
-      if (!normalizedKey) {
-        throw new Error("[Plugin Localization SDK] Message key is required");
-      }
-      return createI18nMessage(normalizedKey, params);
-    },
-    resolveText: (value, locale) =>
-      transport.send(
-        PluginEvents.i18n.resolveText,
-        withSdkApi(
-          {
-            value,
-            ...(locale ? { locale } : {}),
-          },
-          sdkapi,
-        ),
-      ),
-  };
-
   const lexicon: PluginLexiconSDK = {
     resolve: (id, options) =>
       transport.send(
@@ -110,7 +76,7 @@ export function createPluginLocalizationSDK(
       ),
   };
 
-  return { i18n, lexicon };
+  return { language: createLanguageSDK(transport, sdkapi), lexicon };
 }
 
 export function usePluginLocalization(): PluginLocalizationSDK {
@@ -119,10 +85,6 @@ export function usePluginLocalization(): PluginLocalizationSDK {
   );
   const transport = createPluginTuffTransport(channel);
   return createPluginLocalizationSDK(transport, tryGetPluginSdkApi());
-}
-
-export function usePluginI18n(): PluginI18nSDK {
-  return usePluginLocalization().i18n;
 }
 
 export function usePluginLexicon(): PluginLexiconSDK {

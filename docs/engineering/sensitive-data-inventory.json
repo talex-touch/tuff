@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-10-17",
+  "updatedAt": "2026-10-31",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -105,19 +105,23 @@
     {
       "id": "translation-provider-credentials",
       "classification": "credential",
-      "owner": "PluginStorageTransport/touch-translation",
-      "storageLocations": ["secure-store.json: plugin.touch-translation.providers.*"],
-      "writers": ["plugin:storage:set-secret-batch", "main-side providers_config migration"],
+      "owner": "touch-translation plugin over the PluginStorageTransport Secret API",
+      "storageLocations": [
+        "secure-store.json: plugin.touch-translation.providers.*",
+        "plugin file providers_config: legacy plaintext mirror until the plugin migrates it, sanitized afterwards"
+      ],
+      "writers": ["plugin:storage:set-secret-batch", "touch-translation providers_config migration on load"],
       "readers": ["Plugin Secret SDK"],
       "exportPolicy": "encrypted-portable-allowlist for fixed official Translation secret fields",
       "deletionPolicy": "Plugin Secret batch clear, plugin uninstall disposition, or app-data reset",
       "retentionPolicy": "until explicit replacement, clear, plugin uninstall, or app-data reset",
-      "rendererExposure": "Secret SDK runtime value only; providers_config projection is sanitized",
+      "rendererExposure": "Secret SDK runtime value only; providers_config is sanitized once migrated and keeps a legacy value only while the secure store cannot take it",
       "portable": true,
-      "migrationStatus": "transactional-main-owned-with-legacy-runtime-fallback",
+      "migrationStatus": "plugin-owned-vault-first-with-legacy-runtime-fallback",
       "evidence": [
-        "apps/core-app/src/main/modules/plugin/services/translation-provider-credential-migration.test.ts#test=atomically migrates legacy fields and persists only sanitized config",
-        "plugins/touch-translation/translation-provider-secret.test.ts#test=loads main-migrated provider credentials only through the Secret SDK"
+        "plugins/touch-translation/src/utils/provider-credential-migration.ts#symbol=migrateLegacyProviderCredentials",
+        "plugins/touch-translation/provider-credential-migration.test.ts#test=atomically migrates legacy fields and persists only sanitized config",
+        "plugins/touch-translation/translation-provider-secret.test.ts#test=keeps legacy credentials usable and on disk while the vault is unavailable"
       ]
     },
     {

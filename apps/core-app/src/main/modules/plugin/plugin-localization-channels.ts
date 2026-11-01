@@ -10,20 +10,18 @@ import {
   DEFAULT_APP_LOCALE,
   DOMAIN_LEXICON_DOMAINS,
   isAppLocale,
-  isI18nMessage,
   isLocalizedText,
   officialDomainLexiconRegistry,
   resolveLocalizedText,
   ScopedDomainLexiconRegistry as ScopedDomainLexiconRegistryImpl
 } from '@talex-touch/utils/i18n'
-import { pluginLanguageManager } from './plugin-language-manager'
 import { LOCALIZATION_FACADE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import type { HandlerContext, StreamContext } from '@talex-touch/utils/transport/main'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
-import { getLocale } from '../../utils/i18n-helper'
-import { createProtectedRegister } from '../permission/channel-guard'
+import { getLocale, onLocaleChange } from '../../utils/i18n-helper'
+import { createProtectedRegister, withPermission } from '../permission/channel-guard'
 
 export const PLUGIN_LOCALIZATION_ERROR_CODES = {
   permissionUnavailable: 'PLUGIN_I18N_PERMISSION_UNAVAILABLE',
@@ -42,6 +40,7 @@ export interface PluginLocalizationRuntime {
 export interface RegisterPluginLocalizationChannelsOptions {
   resolvePlugin: (pluginId: string) => PluginLocalizationRuntime | undefined
   getLocale?: () => AppLocale
+  onLocaleChange?: (listener: (locale: AppLocale) => void) => () => void
   lexiconRegistry?: ScopedDomainLexiconRegistry
 }
 
@@ -68,6 +67,9 @@ export function registerPluginLocalizationChannels(
     deniedCode: PLUGIN_LOCALIZATION_ERROR_CODES.permissionDenied,
     sdkMismatchCode: 'SDKAPI_MISMATCH'
   } as const
+  const checkLocaleRead = withPermission(i18nPermission, (_payload, context) => {
+    resolveSupportedPlugin(context, options.resolvePlugin)
+  })
   const lexiconReadPermission = {
     permissionId: 'lexicon.read',
     failClosedForPlugin: true,
@@ -86,7 +88,15 @@ export function registerPluginLocalizationChannels(
       resolveSupportedPlugin(context, options.resolvePlugin)
       return resolveHostLocale()
     }),
-    registerProtected(PluginEvents.i18n.resolveText, i18nPermission, async (payload, context) => {
+    transport.onStream(PluginEvents.i18n.localeChanged, (payload, context) =>
+      streamHostLocale(
+        context,
+        () => checkLocaleRead(payload, context as unknown as HandlerContext),
+        resolveHostLocale,
+        options.onLocaleChange ?? onLocaleChange
+      )
+    ),
+    registerProtected(PluginEvents.i18n.resolveText, i18nPermission, (payload, context) => {
       resolveSupportedPlugin(context, options.resolvePlugin)
       const locale = resolveLocale(payload?.locale, resolveHostLocale)
       return resolveLocalizedTextValue(payload?.value, locale)
@@ -121,9 +131,58 @@ export function registerPluginLocalizationChannels(
   ]
 }
 
-function getHostLocale(): AppLocale {
+export function getHostLocale(): AppLocale {
   const locale = getLocale()
   return isAppLocale(locale) ? locale : DEFAULT_APP_LOCALE
+}
+
+/**
+ * Streams the host locale to one plugin: the current one first, then every change. The `i18n.read`
+ * check runs again before each delivery, so a revoked plugin gets an error and no further language.
+ * The locale is read after the check rather than taken from the event, so a slow check can never
+ * deliver a stale value after a newer one.
+ */
+async function streamHostLocale(
+  context: StreamContext<AppLocale>,
+  check: () => unknown,
+  readLocale: () => AppLocale,
+  subscribe: (listener: (locale: AppLocale) => void) => () => void
+): Promise<void> {
+  if (context.signal.aborted) return
+
+  let closed = false
+  let sent: AppLocale | undefined
+  let unsubscribe = (): void => {}
+  const close = (): void => {
+    closed = true
+    unsubscribe()
+  }
+  const deliver = async (): Promise<void> => {
+    try {
+      await check()
+    } catch (error) {
+      close()
+      if (!context.isCancelled()) context.error(toStreamFailure(error))
+      return
+    }
+    const locale = readLocale()
+    if (closed || locale === sent) return
+    sent = locale
+    context.emit(locale)
+  }
+
+  unsubscribe = subscribe(() => void deliver().catch(close))
+  context.signal.addEventListener('abort', close, { once: true })
+  await deliver()
+}
+
+/** A refusal arrives as a plain object; a stream error has to be an Error that keeps its code. */
+function toStreamFailure(error: unknown): Error {
+  if (error instanceof Error) return error
+  const { message, code } = (error ?? {}) as { message?: unknown; code?: unknown }
+  return Object.assign(new Error(typeof message === 'string' ? message : String(error)), {
+    ...(typeof code === 'string' ? { code } : {})
+  })
 }
 
 function resolveSupportedPlugin(
@@ -169,16 +228,13 @@ function resolveLocale(locale: unknown, resolveHostLocale: () => AppLocale): App
   return locale
 }
 
-async function resolveLocalizedTextValue(value: unknown, locale: AppLocale): Promise<string> {
+function resolveLocalizedTextValue(value: unknown, locale: AppLocale): string {
   if (typeof value !== 'string' && !isLocalizedText(value)) {
     throw createLocalizationError(
       'Localized text must be a string or LocalizedText value',
       PLUGIN_LOCALIZATION_ERROR_CODES.invalidRequest,
       'unknown'
     )
-  }
-  if (typeof value === 'string' && isI18nMessage(value)) {
-    return pluginLanguageManager.resolveMessage(value, locale)
   }
   return resolveLocalizedText(value as LocalizedTextValue, locale)
 }

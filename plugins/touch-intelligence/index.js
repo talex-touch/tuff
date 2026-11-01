@@ -75,7 +75,7 @@ const CONTEXT_CONTINUATION_SOURCE_TYPES = new Set(['compression_snapshot', 'sess
 
 const AI_ERROR_MESSAGES = {
   NEXUS_AUTH_REQUIRED: '未登录，请先登录后重试；可在登录恢复后再次发送',
-  PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
+  PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic 与 intelligence.context',
   OCR_EMPTY: 'OCR 未识别到可用文字',
   PROVIDER_UNAVAILABLE: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
   QUOTA_EXHAUSTED: 'AI 配额不足，请稍后重试或调整用量',
@@ -96,7 +96,7 @@ const AI_ERROR_DETAILS = {
   },
   PERMISSION_DENIED: {
     reason: '插件未获准使用所需的 Intelligence 能力。',
-    recovery: '在插件权限中授予 intelligence.basic 后重试。',
+    recovery: '在插件权限中授予 intelligence.basic 与 intelligence.context 后重试。',
   },
   OCR_EMPTY: {
     reason: 'OCR 没有返回可用文字。',
@@ -857,6 +857,7 @@ function shouldFallbackFromStream(error) {
     || message.includes('permission')
     || message.includes('denied')
     || message.includes('intelligence.basic')
+    || message.includes('intelligence.context')
     || message.includes('未登录')
     || message.includes('需要登录')
   )
@@ -1471,7 +1472,12 @@ function normalizeInvokeError(error) {
     ) {
       code = 'NEXUS_AUTH_REQUIRED'
     }
-    else if (lower.includes('permission') || lower.includes('denied') || lower.includes('intelligence.basic')) {
+    else if (
+      lower.includes('permission')
+      || lower.includes('denied')
+      || lower.includes('intelligence.basic')
+      || lower.includes('intelligence.context')
+    ) {
       code = 'PERMISSION_DENIED'
     }
     // The host's own global usage limit, before every quota rule: the user set it, it is not
@@ -1562,6 +1568,10 @@ async function ensurePermission(permissionId) {
     logger?.warn?.('[touch-intelligence] permission check failed')
     return false
   }
+}
+
+async function ensureIntelligencePermissions() {
+  return (await ensurePermission('intelligence.basic')) && (await ensurePermission('intelligence.context'))
 }
 
 function buildIntelligenceMeta(details = {}) {
@@ -2640,7 +2650,7 @@ const pluginLifecycle = {
       if (!displayPrompt)
         return true
 
-      const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
+      const hasPermission = await ensureIntelligencePermissions()
       if (!hasPermission) {
         const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
         await pushWidgetState(resolvedFeatureId, {
@@ -3008,7 +3018,7 @@ const pluginLifecycle = {
           return
 
         await supersedeAllActiveRequests()
-        const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
+        const hasPermission = await ensureIntelligencePermissions()
         if (!hasPermission) {
           const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
           await pushWidgetState(featureId, {

@@ -1,19 +1,20 @@
 ---
 title: Plugin Localization SDK
-description: Permission-gated host locale, localized text, and scoped Domain Lexicon APIs for plugins
+description: Permission-gated app language, language-change subscription, localized text, and scoped Domain Lexicon APIs for plugins
 ---
 
 # Plugin Localization SDK
 
 ## Overview
 
-The Localization SDK is the supported plugin contract for reading the host locale, resolving localized values, creating transport-safe i18n messages, and using the host Domain Lexicon.
+The Localization SDK is the supported plugin contract for reading the app display language and following its changes, resolving localized values, creating transport-safe i18n messages, and using the host Domain Lexicon. `LanguageSDK` covers the language and localized text; `PluginLexiconSDK` covers the Domain Lexicon.
 
 It is available to plugins with `sdkapi >= 260713` through:
 
-- Main/runtime context: `context.utils.i18n` and `context.utils.lexicon`
-- Mirrored main/runtime context: `context.utils.plugin.i18n` and `context.utils.plugin.lexicon`
-- Plugin renderer: `usePluginI18n()` and `usePluginLexicon()` from `@talex-touch/utils/plugin/sdk`
+- Main/runtime context: `context.utils.language` and `context.utils.lexicon`
+- Mirrored main/runtime context: `context.utils.plugin.language` and `context.utils.plugin.lexicon`
+- Plugin renderer: `useLanguage()` and `usePluginLexicon()` from `@talex-touch/utils/plugin/sdk`
+- Prelude script: `plugin.language`, which offers `getLanguage()` and `onLanguageChange()` only (see Language changes below)
 
 The current host locales are `en-US` and `zh-CN`.
 
@@ -39,11 +40,11 @@ code: |
 ---
 :::
 
-| Permission         | Required by                    |
-| ------------------ | ------------------------------ |
-| `i18n.read`        | `getLocale()`, `resolveText()` |
-| `lexicon.read`     | `resolve()`, `search()`        |
-| `lexicon.register` | `register()`                   |
+| Permission         | Required by                                            |
+| ------------------ | ------------------------------------------------------ |
+| `i18n.read`        | `getLanguage()`, `onLanguageChange()`, `resolveText()` |
+| `lexicon.read`     | `resolve()`, `search()`                                |
+| `lexicon.register` | `register()`                                           |
 
 The host checks the SDK marker, manifest declaration, current grant, loaded plugin, and verified plugin identity. Missing state fails closed before locale or lexicon services run.
 
@@ -55,35 +56,34 @@ The host checks the SDK marker, manifest declaration, current grant, loaded plug
 ---
 code: |
   export default {
-  async onInit(context) {
-  const { i18n, lexicon } = context.utils
+    async onInit(context) {
+      const { language, lexicon } = context.utils
 
-        const locale = await i18n.getLocale()
-        const title = await i18n.resolveText(
-          {
-            default: 'Unit Converter',
-            locales: { 'zh-CN': '单位换算' }
-          },
-          locale
-        )
-        const message = i18n.createMessage('plugin.ready', { title })
+      const locale = await language.getLanguage()
+      const title = await language.resolveText(
+        {
+          default: 'Unit Converter',
+          locales: { 'zh-CN': '单位换算' }
+        },
+        locale
+      )
+      const message = language.createMessage('plugin.ready', { title })
 
-        const meter = await lexicon.resolve('unit.length.meter', {
-          locale,
-          domain: 'unit'
-        })
-        const matches = await lexicon.search('meter', {
-          locale,
-          domain: 'unit',
-          limit: 5
-        })
+      const meter = await lexicon.resolve('unit.length.meter', {
+        locale,
+        domain: 'unit'
+      })
+      const matches = await lexicon.search('meter', {
+        locale,
+        domain: 'unit',
+        limit: 5
+      })
 
-        context.utils.logger.info(
-          `${message}:${meter?.label ?? 'missing'}:${matches.length}`
-        )
-      }
-
-  ## }
+      context.utils.logger.info(
+        `${message}:${meter?.label ?? 'missing'}:${matches.length}`
+      )
+    }
+  }
 ---
 :::
 
@@ -93,36 +93,93 @@ code: |
 ---
 code: |
   import {
-  usePluginI18n,
-  usePluginLexicon
+    useLanguage,
+    usePluginLexicon
   } from '@talex-touch/utils/plugin/sdk'
 
-  const i18n = usePluginI18n()
+  const language = useLanguage()
   const lexicon = usePluginLexicon()
 
-  const locale = await i18n.getLocale()
-  const label = await i18n.resolveText({
-  default: 'Ready',
-  locales: { 'zh-CN': '就绪' }
+  const locale = await language.getLanguage()
+  const label = await language.resolveText({
+    default: 'Ready',
+    locales: { 'zh-CN': '就绪' }
   })
   const capabilities = await lexicon.search('ready', {
-  locale,
-  domain: 'capability'
+    locale,
+    domain: 'capability'
   })
 ---
 :::
 
 Renderer hooks require an active plugin renderer channel. Do not call them from a normal application renderer or before the plugin channel is ready.
 
+## Language changes
+
+`getLanguage()` reads the app display language once. A plugin that has to follow the language while it runs, for example to redraw a view or switch its own strings, subscribes with `onLanguageChange()`. It needs the same `i18n.read` permission and `sdkapi >= 260713`.
+
+| Where           | Read                            | Subscribe                                                                          |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| Plugin renderer | `useLanguage().getLanguage()`   | `useLanguage().onLanguageChange(handler)` returns `() => void`                     |
+| Prelude script  | `plugin.language.getLanguage()` | `plugin.language.onLanguageChange(handler)` returns `Promise<() => Promise<void>>` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useLanguage } from '@talex-touch/utils/plugin/sdk'
+
+  const language = useLanguage()
+  const current = await language.getLanguage()
+
+  // Called with the current language first, then after every change.
+  const stop = language.onLanguageChange((next) => {
+    document.documentElement.lang = next
+  })
+
+  // Later, when the view is torn down:
+  stop()
+---
+:::
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js (Prelude script)
+  let stopLanguage
+  let currentLanguage
+
+  module.exports = {
+    async onInit() {
+      // Resolves once the subscription is registered. The handler then runs
+      // with the current language, and again after every change.
+      stopLanguage = await plugin.language.onLanguageChange((language) => {
+        currentLanguage = language
+      })
+    },
+    async onDestroy() {
+      await stopLanguage?.()
+    }
+  }
+---
+:::
+
+- The handler receives the current language first, then each change, and never the same value twice in a row.
+- A Prelude gets `getLanguage()` and `onLanguageChange()` only. `resolveText()`, `createMessage()` and the Domain Lexicon are not available there.
+- `plugin.getLocale()` stays a snapshot: the app display language at the moment the Prelude activates. It never updates, so use `plugin.language.getLanguage()` for the live value.
+- Permission is checked on every call. A renderer subscription checks `i18n.read` again before every delivery and ends with an error once the permission is revoked or the plugin is no longer loaded.
+- A Prelude subscription is bound to the grant instead: revoking `i18n.read` while it is live stops the plugin runtime, as it does for any permission-bound host resource. Disabling or unloading the plugin releases the subscription.
+- The language is the app display language: the one picked in Settings, or the system language adopted when **Follow System Language** is on. A change of the operating system language while the app runs is not detected. It takes effect when the app restarts.
+
 ## API reference
 
-### I18n
+### Language
 
-| Method                        | Result                        | Notes                                                                                                |
-| ----------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `getLocale()`                 | `Promise<'en-US' \| 'zh-CN'>` | Reads the current host locale.                                                                       |
-| `resolveText(value, locale?)` | `Promise<string>`             | Resolves a string or `{ default, locales }` value. The host locale is used when `locale` is omitted. |
-| `createMessage(key, params?)` | `string`                      | Creates a `$i18n:` transport message without a host call.                                            |
+| Method                        | Result                                                          | Notes                                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `getLanguage()`               | `Promise<'en-US' \| 'zh-CN'>`                                   | Reads the current app display language.                                                                                 |
+| `onLanguageChange(handler)`   | Renderer: `() => void`. Prelude: `Promise<() => Promise<void>>` | Calls `handler` with the current language, then after each change. Returns a function that stops it.                    |
+| `resolveText(value, locale?)` | `Promise<string>`                                               | Resolves a string or `{ default, locales }` value. The app language is used when `locale` is omitted. Not in a Prelude. |
+| `createMessage(key, params?)` | `string`                                                        | Creates a `$i18n:` transport message without a host call. Not in a Prelude.                                             |
 
 ### Domain Lexicon
 
@@ -185,6 +242,8 @@ Common codes include:
 - `PLUGIN_LOCALIZATION_SDK_UNSUPPORTED`
 - `PLUGIN_LOCALIZATION_INVALID_REQUEST`
 - `PLUGIN_LOCALIZATION_PLUGIN_UNAVAILABLE`
+
+`onLanguageChange()` reports a refusal differently. In a plugin renderer it logs a warning and never calls back, so use `getLanguage()` when the refusal has to reach the plugin as a rejection. In a Prelude, `getLanguage()` and `onLanguageChange()` both reject with `PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED` when `i18n.read` is not granted or `sdkapi` is below `260713`, and with `PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE` when the permission state cannot be read.
 
 ## Do not use host internals as a plugin API
 

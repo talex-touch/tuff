@@ -69,7 +69,11 @@
     "intelligence": {
       "basic": { "name": "基础 Intelligence", "desc": "使用基础 Intelligence 能力" },
       "admin": { "name": "Intelligence 管理", "desc": "使用高风险 Intelligence 能力" },
-      "agents": { "name": "智能体", "desc": "调用智能体系统" }
+      "agents": { "name": "智能体", "desc": "调用智能体系统" },
+      "context": {
+        "name": "Intelligence 上下文",
+        "desc": "在 Context 会话中调用 Intelligence，会使用对话历史、已保存的记忆与检索到的上下文"
+      }
     },
     "storage": {
       "plugin": { "name": "插件存储", "desc": "使用插件私有存储空间" },

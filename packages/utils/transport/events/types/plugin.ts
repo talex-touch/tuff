@@ -127,6 +127,10 @@ export interface PluginI18nGetLocaleRequest {
   _sdkapi?: number;
 }
 
+export interface PluginI18nLocaleChangedRequest {
+  _sdkapi?: number;
+}
+
 export interface PluginI18nResolveTextRequest {
   value: LocalizedTextValue;
   locale?: AppLocale;
@@ -152,6 +156,7 @@ export interface PluginLexiconRegisterRequest {
 }
 
 export type PluginI18nGetLocaleResponse = AppLocale;
+export type PluginI18nLocaleChangedChunk = AppLocale;
 export type PluginI18nResolveTextResponse = string;
 export type PluginLexiconResolveResponse = ResolvedDomainLexiconEntry | null;
 export type PluginLexiconSearchResponse = DomainLexiconMatch[];

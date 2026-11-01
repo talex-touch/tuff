@@ -783,7 +783,7 @@ export default defineComponent({
               <dd>{{ errorRecovery }}</dd>
             </div>
           </dl>
-          <small v-if="isPermissionDenied">请到插件权限设置中允许 intelligence.basic 后重试。</small>
+          <small v-if="isPermissionDenied">请到插件权限设置中允许 intelligence.basic 与 intelligence.context 后重试。</small>
           <div class="AiChatbot__errorActions" role="group" aria-label="失败恢复操作">
             <button
               class="AiChatbot__errorAction AiChatbot__retryAction"

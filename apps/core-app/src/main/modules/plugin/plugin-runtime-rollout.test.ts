@@ -220,6 +220,7 @@ describe('plugin runtime production rollout gate', () => {
     expect(intelligencePermissions).toEqual(
       expect.arrayContaining([
         'intelligence.basic',
+        'intelligence.context',
         'search.root-results',
         'storage.plugin',
         'clipboard.write'

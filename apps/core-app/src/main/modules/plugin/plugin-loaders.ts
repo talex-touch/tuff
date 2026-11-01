@@ -52,7 +52,6 @@ import { setPluginStorageSyncPolicy } from './plugin-storage-sync'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
-import { pluginLanguageManager } from './plugin-language-manager'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -269,7 +268,6 @@ abstract class BasePluginLoader {
     this.touchPlugin = createPluginLoadShell(this.pluginName, this.pluginPath, {
       skipDataInit: true
     })
-    pluginLanguageManager.register(this.pluginName, this.pluginPath)
   }
 
   /**

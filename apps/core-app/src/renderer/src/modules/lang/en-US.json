@@ -3764,6 +3764,10 @@
           "agents": {
             "name": "Agents",
             "desc": "Invoke the agent system"
+          },
+          "context": {
+            "name": "Intelligence Context",
+            "desc": "Run Intelligence requests in Context sessions that use conversation history, saved memories and retrieved context"
           }
         },
         "voice": {

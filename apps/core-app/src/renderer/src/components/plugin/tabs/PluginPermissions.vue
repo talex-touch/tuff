@@ -260,6 +260,7 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
     'system.tray',
     'system.shortcut',
     'intelligence.basic',
+    'intelligence.context',
     'storage.shared',
     'account.read'
   ]
@@ -285,6 +286,7 @@ function getPermissionIcon(permissionId: string): string {
     'intelligence.basic': 'i-carbon-bot',
     'intelligence.admin': 'i-carbon-shield',
     'intelligence.agents': 'i-carbon-user-multiple',
+    'intelligence.context': 'i-carbon-chat',
     'storage.plugin': 'i-carbon-data-base',
     'storage.shared': 'i-carbon-share',
     'window.create': 'i-carbon-application',

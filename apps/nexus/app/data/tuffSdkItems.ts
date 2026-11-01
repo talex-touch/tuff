@@ -122,9 +122,9 @@ export const tuffSdkItems: TuffSdkItem[] = [
   },
   {
     id: "localization-sdk",
-    title: "Localization SDK",
-    description: "Host locale & scoped Domain Lexicon.",
-    tag: "usePluginI18n()",
+    title: "Language SDK",
+    description: "App language & scoped Domain Lexicon.",
+    tag: "useLanguage()",
     color: "#c084fc",
     icon: "i-carbon-language",
   },

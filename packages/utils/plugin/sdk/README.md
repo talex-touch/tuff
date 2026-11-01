@@ -178,7 +178,7 @@ Intelligence quota/usage control plane 同样属于宿主：插件 facade 不暴
 
 Daily/monthly usage aggregation treats the canonical caller id as opaque：`plugin:<id>`（including ids that themselves contain `:`）is persisted byte-for-byte, so plugin quota counters cannot disappear through delimiter parsing.
 
-`intelligence.basic` 只覆盖普通受治理的 AI 能力；高层自主执行 `invoke("agent.run")` / `invoke("workflow.execute")` 及对应 stream 必须额外声明并获授高风险 `intelligence.agents`。低层 `agentSession*`、`agentPlan/Execute/Reflect`、`agentTool*` 与持久化 `workflowList/Get/Save/Delete/Run/History/ReviewUpdate` 都属于宿主 control plane：插件 facade 不暴露，raw typed request/stream 在任何读取、修改、运行、订阅或 provider/tool 副作用前返回 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。高层 `intelligence.agent.run()` / `intelligence.workflow.execute()` 仍可用；普通 `text.chat` 和 host caller 不受影响。permission runtime 不可用或 grant 缺失时分别返回 `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE` / `INTELLIGENCE_AGENTS_PERMISSION_DENIED`。
+`intelligence.basic` 只覆盖普通受治理的 AI 能力；`contextInvoke()` / `contextStream()` 会带入对话历史、已保存的记忆与检索上下文，必须另行声明并获授 `intelligence.context`（`contextEvaluateMemory()` 仍归 `intelligence.basic`）；高层自主执行 `invoke("agent.run")` / `invoke("workflow.execute")` 及对应 stream 必须额外声明并获授高风险 `intelligence.agents`。低层 `agentSession*`、`agentPlan/Execute/Reflect`、`agentTool*` 与持久化 `workflowList/Get/Save/Delete/Run/History/ReviewUpdate` 都属于宿主 control plane：插件 facade 不暴露，raw typed request/stream 在任何读取、修改、运行、订阅或 provider/tool 副作用前返回 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。高层 `intelligence.agent.run()` / `intelligence.workflow.execute()` 仍可用；普通 `text.chat` 和 host caller 不受影响。permission runtime 不可用或 grant 缺失时分别返回 `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE` / `INTELLIGENCE_AGENTS_PERMISSION_DENIED`。
 
 Autonomous plugin execution retains the same actor identity after permission approval：generic `agent.run` / `workflow.execute` binds caller at the verified invoke/stream boundary, then propagates it through internal workflow model/context calls and DeepAgent config/adapter metadata. A nested `metadata.caller` cannot replace the transport-authenticated plugin caller；host-owned low-level session/workflow APIs preserve their existing host metadata semantics.
 
@@ -236,9 +236,9 @@ image.src = capture.tfileUrl
 
 plugin facade 只返回必填的 `tfileUrl` 与显示器、尺寸、耗时、大小、剪贴板状态 metadata；不接受 output selector，也不返回 native 临时文件原始 `path`、base64、`dataUrl`、Buffer 或 attachment。截图、OCR 文本和 AI payload 不得写入普通日志或同步数据。
 
-### 5. LocalizationSDK - 主机语言与领域词库
+### 5. LanguageSDK - 应用语言、文案与领域词库
 
-`sdkapi >= 260713` 的插件可通过 `context.utils.i18n` / `context.utils.lexicon`（以及 `context.utils.plugin.*` 镜像）读取主机语言、解析 localized text、创建 `$i18n:` transport message，并查询官方或本插件私有 Domain Lexicon。renderer 侧可从 `@talex-touch/utils/plugin/sdk` 导入 `usePluginI18n()` / `usePluginLexicon()`。
+`sdkapi >= 260713` 的插件可通过 `context.utils.language` / `context.utils.lexicon`（以及 `context.utils.plugin.*` 镜像）读取应用显示语言、订阅语言变化、解析 localized text、创建 `$i18n:` transport message，并查询官方或本插件私有 Domain Lexicon。renderer 侧可从 `@talex-touch/utils/plugin/sdk` 导入 `useLanguage()` / `usePluginLexicon()`；Prelude 脚本使用 `plugin.language`，只有 `getLanguage()` 与 `onLanguageChange()`。
 
 manifest 必须按使用面声明权限：
 
@@ -255,13 +255,13 @@ manifest 必须按使用面声明权限：
 ```typescript
 export default {
   async onInit(context) {
-    const { i18n, lexicon } = context.utils
-    const locale = await i18n.getLocale()
-    const title = await i18n.resolveText({
+    const { language, lexicon } = context.utils
+    const locale = await language.getLanguage()
+    const title = await language.resolveText({
       default: 'Unit Converter',
       locales: { 'zh-CN': '单位换算' },
     })
-    const transportMessage = i18n.createMessage('plugin.ready', { title })
+    const transportMessage = language.createMessage('plugin.ready', { title })
 
     const meter = await lexicon.resolve('unit.length.meter', { locale })
     const registration = await lexicon.register([
@@ -279,10 +279,39 @@ export default {
 }
 ```
 
-- `getLocale()` / `resolveText()` 需要 `i18n.read`；`resolve()` / `search()` 需要 `lexicon.read`；`register()` 需要 `lexicon.register`。权限运行时、声明、grant、verified plugin context 或 SDK marker 缺失时均 fail-closed。
+- `getLanguage()` / `onLanguageChange()` / `resolveText()` 需要 `i18n.read`；`resolve()` / `search()` 需要 `lexicon.read`；`register()` 需要 `lexicon.register`。权限运行时、声明、grant、verified plugin context 或 SDK marker 缺失时均 fail-closed。
 - `createMessage()` 是纯字符串构造，不读取主机状态；空 key 会被拒绝。
 - `register()` 只接受 plugin-local id。宿主把 `status.ready` 投影为 `plugin:<pluginId>:status.ready`，并写入 `source=plugin:<pluginId>`；插件不能覆盖 official id，也不能读取其他插件 overlay。
 - 每插件最多 100 entries、单批最多 50 entries / 256 KiB；批次先完整验证再原子提交。overlay 只驻留内存，插件 disable/unload 时清理，不写 SQLite、Catalog 或同步载荷。
+
+#### 语言变化
+
+`getLanguage()` 只读取一次应用显示语言；需要在运行期间跟随语言时，用 `onLanguageChange()` 订阅。同样需要 `i18n.read` 与 `sdkapi >= 260713`。
+
+```typescript
+// 插件 renderer
+import { useLanguage } from '@talex-touch/utils/plugin/sdk'
+
+const language = useLanguage()
+const current = await language.getLanguage()
+
+// 先以当前语言调用，之后每次变化再调用；连续两次不会收到相同的值。
+const stop = language.onLanguageChange((next) => {
+  document.documentElement.lang = next
+})
+stop()
+```
+
+```javascript
+// Prelude 脚本：plugin.language；onLanguageChange 返回 Promise<() => Promise<void>>
+const stop = await plugin.language.onLanguageChange((language) => {})
+await stop()
+```
+
+- renderer 订阅在每次投递前重新校验 `i18n.read`；Prelude 订阅与授权绑定，订阅存续期间撤销 `i18n.read` 会停止插件运行时。
+- Prelude 只有 `getLanguage()` 与 `onLanguageChange()`，没有 `resolveText()`、`createMessage()` 和 `lexicon`。
+- `plugin.getLocale()` 仍是 Prelude 激活时的应用显示语言快照，之后不再更新；需要实时值时用 `plugin.language.getLanguage()`。
+- 推送的是应用显示语言的变化；应用运行期间操作系统语言的变化不会被检测到，重启后才生效。
 
 ### 6. 键盘事件自动处理
 
@@ -455,8 +484,9 @@ export default {
 - `createBoxSDK(channel)` - 创建 Box SDK 实例
 - `createFeatureSDK(boxItems, channel)` - 创建 Feature SDK 实例
 - `createDivisionBoxSDK(channel)` - 创建 DivisionBox SDK 实例
-- `createPluginLocalizationSDK(transport, sdkapi)` - 创建 i18n / lexicon 组合 facade
-- `usePluginI18n()` / `usePluginLexicon()` - 在插件 renderer 中使用当前 channel 与 sdkapi
+- `createLanguageSDK(transport, sdkapi)` / `useLanguage()` - 读取应用语言、订阅变化、解析 localized text 与创建 i18n 消息
+- `createPluginLocalizationSDK(transport, sdkapi)` - 创建 language / lexicon 组合 facade
+- `usePluginLexicon()` - 在插件 renderer 中使用当前 channel 与 sdkapi
 
 ### IPC 通道
 
@@ -471,6 +501,7 @@ export default {
 - `core-box:input:set-visibility` - 设置输入框可见性（主进程 → 渲染进程）
 - `core-box:input:request-value` - 请求输入值（主进程 → 渲染进程）
 - `plugin:i18n:get-locale` / `plugin:i18n:resolve-text` - permission-gated host locale/localized text
+- `plugin:i18n:locale-changed` - permission-gated stream：先发当前语言，之后每次应用语言变化再发
 - `plugin:lexicon:resolve` / `plugin:lexicon:search` / `plugin:lexicon:register` - official + plugin-scoped Domain Lexicon
 
 > Breaking change（2026-02-27）：`core-box:input-change` 事件载荷统一为 `{ input, query, source }` 必填结构。

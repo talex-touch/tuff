@@ -265,79 +265,34 @@ describe('plugin privileged storage transport', () => {
     expect(proxyOwnKeys).not.toHaveBeenCalled()
   })
 
-  it('serializes Translation config writes behind the current activation migration', async () => {
-    const harness = createHarness('touch-translation')
-    harness.setPluginFile({
-      tencent: {
-        enabled: true,
-        config: {
-          region: 'ap-shanghai',
-          secretId: 'synthetic-legacy-id',
-          secretKey: 'synthetic-legacy-key'
-        }
-      }
-    })
-    let releaseSecureWrite: (() => void) | undefined
-    const secureWriteGate = new Promise<void>((resolve) => {
-      releaseSecureWrite = resolve
-    })
-    secureStoreMock.applySecureStoreBatch.mockImplementationOnce(async () => {
-      await secureWriteGate
-      return true
-    })
-    const getFile = harness.handler(PluginEvents.storage.getFile)
-    const setFile = harness.handler(PluginEvents.storage.setFile)
+  it.each(['alpha', 'touch-translation'])(
+    'applies the same storage rules to plugin %s',
+    async (pluginName) => {
+      const harness = createHarness(pluginName)
+      const stored = { google: { enabled: true, config: { target: 'zh-CN' } } }
+      harness.setPluginFile(stored)
 
-    const migration = getFile({ fileName: 'providers_config' }, { plugin: harness.trusted })
-    await vi.waitFor(() => expect(secureStoreMock.applySecureStoreBatch).toHaveBeenCalledTimes(1))
-    const write = setFile(
-      {
-        fileName: 'providers_config',
-        content: { google: { enabled: true, config: { target: 'zh-CN' } } }
-      },
-      { plugin: harness.trusted }
-    )
-    await Promise.resolve()
-    expect(harness.plugin.savePluginFile).not.toHaveBeenCalled()
-
-    releaseSecureWrite?.()
-    await expect(migration).resolves.toEqual({
-      tencent: { enabled: true, config: { region: 'ap-shanghai' } }
-    })
-    await expect(write).resolves.toEqual({ success: true })
-    expect(harness.plugin.savePluginFile).toHaveBeenCalledTimes(2)
-    expect(harness.plugin.savePluginFile).toHaveBeenNthCalledWith(2, 'providers_config', {
-      google: { enabled: true, config: { target: 'zh-CN' } }
-    })
-  })
-
-  it('keeps Secret fallback fail-closed for an activation after migration rollback fails', async () => {
-    const harness = createHarness('touch-translation')
-    harness.setPluginFile({
-      tencent: {
-        enabled: true,
-        config: {
-          secretId: 'synthetic-legacy-id',
-          secretKey: 'synthetic-legacy-key'
-        }
-      }
-    })
-    secureStoreMock.applySecureStoreBatch.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    harness.plugin.savePluginFile.mockReturnValueOnce({ success: false })
-    const getFile = harness.handler(PluginEvents.storage.getFile)
-    const getSecret = harness.handler(PluginEvents.storage.getSecret)
-
-    await expect(
-      getFile({ fileName: 'providers_config' }, { plugin: harness.trusted })
-    ).resolves.toEqual({ tencent: { enabled: true, config: {} } })
-    const secret = await getSecret(
-      { key: 'providers.tencent.secretKey' },
-      { plugin: harness.trusted }
-    )
-
-    expect(secret).toMatchObject({ success: false, code: 'PLUGIN_SECRET_UNAVAILABLE' })
-    expect(JSON.stringify(secret)).not.toContain('synthetic-legacy-key')
-  })
+      await expect(
+        harness.handler(PluginEvents.storage.getFile)(
+          { fileName: 'providers_config' },
+          { plugin: harness.trusted }
+        )
+      ).resolves.toEqual(stored)
+      await expect(
+        harness.handler(PluginEvents.storage.setSecret)(
+          { key: 'providers.custom.accessToken', value: 'synthetic' },
+          { plugin: harness.trusted }
+        )
+      ).resolves.toEqual({ success: true })
+      expect(secureStoreMock.setSecureStoreValue).toHaveBeenCalledWith(
+        '/tmp/tuff',
+        `plugin.${pluginName}.providers.custom.accessToken`,
+        'synthetic',
+        'plugin-secret',
+        expect.any(Function)
+      )
+    }
+  )
 
   it('requires authoritative identity and fail-closed permission for secret health', async () => {
     const harness = createHarness()

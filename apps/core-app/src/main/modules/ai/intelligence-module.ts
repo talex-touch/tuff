@@ -1564,7 +1564,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerProtectedSafe(
       intelligenceContextEvents.execute,
       'Execute intelligence context',
-      'intelligence.basic',
+      'intelligence.context',
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
         return intelligenceContextExecutionService.invoke(data, resolveContextActor(context))
@@ -1575,7 +1575,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerProtectedStream(
       intelligenceContextEvents.stream,
       'Stream intelligence context',
-      'intelligence.basic',
+      'intelligence.context',
       async (data, streamContext) => {
         ensureIntelligenceConfigLoaded()
         const actor = resolveContextActor(streamContext)
