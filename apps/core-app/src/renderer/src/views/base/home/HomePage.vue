@@ -11,7 +11,6 @@ import type {
   WorkspaceSubmitDisposition
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
-import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/opening'
 import type { MainWindowCommandHandler } from '~/modules/shortcuts/main-window-shortcuts'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
@@ -24,7 +23,7 @@ import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxMotionText } from '@talex-touch/tuffex/motion-text'
 import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
-import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
@@ -83,9 +82,7 @@ import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/wo
 import { isStoppedTurn } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
-import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
-import { useHomePush } from '~/modules/home-push/useHomePush'
 import { USAGE_LIMITS_ROUTE } from '~/modules/intelligence/ai-error-recovery'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -119,6 +116,7 @@ import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
 import { usePassageSelection } from './composables/usePassageSelection'
 import { useThinkingTicker } from './composables/useThinkingTicker'
+import { type OpeningHold, useHomeOpening } from './composables/useHomeOpening'
 import { useTurnError } from './composables/useTurnError'
 import {
   calculateTokenSpeed,
@@ -221,11 +219,7 @@ const projectId = ref<string | null>(null)
  * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
  * fade out with the words the reader saw rather than lose them a frame before it goes.
  */
-const openingHold = shallowRef<{
-  phase: HomeOpeningPhase
-  text: string
-  source: HomeOpeningSource | null
-} | null>(null)
+const openingHold = shallowRef<OpeningHold | null>(null)
 
 /**
  * The Main-owned workspace behind Home (A2, A5–A7): execution, history and pending inputs live in
@@ -1392,108 +1386,34 @@ watch(
 // Home push: the opening line and the card under the composer
 // ============================================================================
 
-/**
- * The blank conversation's personal-assistant push (`modules/home-push`): a model-written opening
- * under the greeting, and a card under the composer — the two-page guide, or 「为你准备」 once there
- * is history.
- *
- * Set up after the thread watchers above: its immediate watcher reads `conversationId` (declared any
- * earlier it would hit the TDZ), and by now the route watcher has claimed the blank conversation's
- * project, so the first entry is already the right one. Only plain `/home` counts — `/home/c/:id` is
- * empty too while its thread loads, and must not pay for an opening it is about to replace.
- */
-/** Whether Home personal-assistant recommendations are enabled (`appSetting.tools.homeRecommendations`, off by default, Beta). */
-const homeRecommendationsEnabled = computed(
-  () => !props.browserLanding && appSetting.tools?.homeRecommendations === true
-)
-
-const push = useHomePush({
-  active: () =>
-    homeRecommendationsEnabled.value &&
-    route.path === '/home' &&
-    isEmpty.value &&
-    conversationId.value === null,
-  projectId: () => projectId.value,
-  // The opening takes the route the chat turns take — a local CLI there answers in ten-odd seconds,
-  // so the template stands in meanwhile (`modules/home-push/opening.ts`).
-  routing: () => modelRouting.value,
-  // The pinned model resolves only once the model list has loaded (the mount-time load above), and
-  // `modelRouting` reads as auto until then: the first opening after a launch waits for it.
-  routingReady: () => ensureModelOptionsLoaded(),
-  // Off unless the user turned it on in settings: each model-written opening costs their quota.
-  aiOpening: () => appSetting.tools?.homeAiOpening === true,
-  composer: {
-    // The clipboard row: written and focused, never sent — the reader sees what would go out first.
-    prefill: async (text) => {
-      draft.value = text
-      await nextTick()
-      autoGrow()
-      inputRef.value?.focus()
-    },
-    // A starter task: the ordinary send, lift included. Focused first, so the lift leaves from a
-    // composer on screen and the keyboard stays where the conversation continues.
-    send: async (text) => {
-      draft.value = text
-      await nextTick()
-      autoGrow()
-      inputRef.value?.focus()
-      await submit()
-    },
-    // 「我自己说」
-    focus: () => inputRef.value?.focus()
-  }
-})
 const {
-  mode: pushMode,
-  steps: pushSteps,
-  step: pushStep,
-  selected: pushSelected,
-  loading: pushLoading,
-  loadingRows: pushLoadingRows,
-  labels: pushLabels,
-  choose: choosePush
-} = push
-
-const openingPhase = computed(() => openingHold.value?.phase ?? push.opening.phase.value)
-const openingText = computed(() => openingHold.value?.text ?? push.opening.text.value)
-/** Keys the text: the model's opening taking the template's place is a swap, not an edit. */
-const openingSource = computed(() =>
-  openingHold.value ? openingHold.value.source : push.opening.source.value
-)
-/**
- * A screen reader waits out the skeleton and the stream, then reads what shows once it is whole:
- * the template as it stands in, and the model's opening again if it takes the template's place.
- */
-const openingBusy = computed(
-  () => openingPhase.value === 'pending' || openingPhase.value === 'streaming'
-)
-
-/**
- * The card's skeleton, held back and held on (`useDeferredLoading`): local reads that land inside
- * its delay never show one. Until they land the card stays out of sight rather than show rows that
- * are not final yet — on a cold start that is the guide, about to become 「为你准备」. Its slot keeps
- * the room either way.
- */
-const pushSkeleton = useDeferredLoading(pushLoading)
-const pushSettling = computed(() => pushLoading.value && !pushSkeleton.value)
-
-/**
- * How many option rows the card's slot holds in the current mode: the guide's longest page, or a
- * full 「为你准备」. Paging the guide, the clipboard row arriving and rows replacing their skeleton
- * then never resize the slot — and the stage is centred on its whole height, so any of them would
- * otherwise move the composer. One- and two-column counts both, for `.HomePage-PushSlot`'s
- * container query to pick from.
- */
-const pushSlotStyle = computed(() => {
-  const options =
-    pushMode.value === 'feed'
-      ? HOME_FEED_MAX_ITEMS
-      : Math.max(0, ...pushSteps.value.map((step) => step.options.length))
-  return {
-    '--home-push-rows-1': options,
-    '--home-push-rows-2': Math.ceil(options / 2),
-    '--home-push-pager': pushSteps.value.length > 1 ? 1 : 0
-  }
+  push,
+  homeRecommendationsEnabled,
+  openingPhase,
+  openingText,
+  openingSource,
+  openingBusy,
+  pushSteps,
+  pushStep,
+  pushSelected,
+  pushLoadingRows,
+  pushLabels,
+  choosePush,
+  pushSkeleton,
+  pushSettling,
+  pushSlotStyle
+} = useHomeOpening({
+  openingHold,
+  browserLanding: () => props.browserLanding,
+  isEmpty,
+  conversationId,
+  projectId,
+  routing: () => modelRouting.value,
+  routingReady: () => ensureModelOptionsLoaded(),
+  draft,
+  input: inputRef,
+  autoGrow,
+  submit
 })
 
 /**
@@ -2130,7 +2050,10 @@ onBeforeUnmount(() => disposeCommands?.())
                           :label="thinkingTicker.activeVerb.value"
                         />
                         <span class="HomePage-ThinkingLabel">
-                          <TxTextMorph :text="thinkingTicker.activeLabel.value" :duration-ms="320" />
+                          <TxTextMorph
+                            :text="thinkingTicker.activeLabel.value"
+                            :duration-ms="320"
+                          />
                         </span>
                       </div>
 
@@ -2847,7 +2770,6 @@ onBeforeUnmount(() => disposeCommands?.())
     transparent 100%
   );
 }
-
 
 .HomePage-BottomBlur {
   position: absolute;
