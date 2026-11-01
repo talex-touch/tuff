@@ -1017,6 +1017,8 @@ export class LocalAiCliModule extends BaseModule {
         throw new Error('PROVIDER_RESUME_UNSUPPORTED')
       }
       handle = await this.getOrCreatePersistentPi(request, status, execution)
+      // A turn already streaming on this child owns the head; reading it now would report a false conflict.
+      if (handle.session.hasActiveTurn) throw new Error('NATIVE_SESSION_BUSY')
       this.clearPersistentPiIdle(handle)
       context.emit({ type: 'session', callId, provider: 'pi', sessionRef: handle.pointer.id })
 
