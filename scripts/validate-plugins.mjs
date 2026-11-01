@@ -42,6 +42,7 @@ const KNOWN_PERMISSION_IDS = new Set([
   'intelligence.basic',
   'intelligence.admin',
   'intelligence.agents',
+  'intelligence.context',
   'voice.dictation',
   'storage.plugin',
   'storage.shared',

@@ -49,38 +49,40 @@ function payload(
 }
 
 describe('plugin Prelude Intelligence facade', () => {
-  it('projects only the fixed translation facade for touch-translation', async () => {
-    const invokeCapability = vi.fn(async (_capability: string, request: unknown) => {
-      const value = request as { operation: string; capabilityId?: string }
-      if (value.operation === 'provider-models.list') {
-        return {
-          operation: value.operation,
-          capabilityId: 'text.translate',
-          providers: [
-            {
-              providerId: 'provider-public',
-              providerName: 'Public Provider',
-              providerType: 'host',
-              models: ['model-public'],
-              defaultModel: 'model-public',
-              capabilities: ['text.translate'],
-              available: true
-            }
-          ]
+  it.each(['some-ai-plugin', 'touch-translation'])(
+    'projects the fixed translation facade beside the generic one for %s',
+    async (pluginName) => {
+      const invokeCapability = vi.fn(async (_capability: string, request: unknown) => {
+        const value = request as { operation: string; capabilityId?: string }
+        if (value.operation === 'provider-models.list') {
+          return {
+            operation: value.operation,
+            capabilityId: 'text.translate',
+            providers: [
+              {
+                providerId: 'provider-public',
+                providerName: 'Public Provider',
+                providerType: 'host',
+                models: ['model-public'],
+                defaultModel: 'model-public',
+                capabilities: ['text.translate'],
+                available: true
+              }
+            ]
+          }
         }
-      }
-      return {
-        operation: 'capability.invoke',
-        result: value.capabilityId === 'vision.ocr' ? { text: 'recognized' } : 'translated',
-        providerId: 'provider-public',
-        modelId: 'model-public',
-        traceId: 'trace-public',
-        latency: 4
-      }
-    })
-    const runtime = loadPluginPrelude(
-      {
-        ...payload(`
+        return {
+          operation: 'capability.invoke',
+          result: value.capabilityId === 'vision.ocr' ? { text: 'recognized' } : 'translated',
+          providerId: 'provider-public',
+          modelId: 'model-public',
+          traceId: 'trace-public',
+          latency: 4
+        }
+      })
+      const runtime = loadPluginPrelude(
+        {
+          ...payload(`
           module.exports = {
             async onInit() {
               const translated = await plugin.translation.translate(
@@ -100,21 +102,8 @@ describe('plugin Prelude Intelligence facade', () => {
                 translated,
                 ocr,
                 providers,
-                intelligenceType: typeof intelligence,
                 pluginIntelligenceType: typeof plugin.intelligence,
-                hostCapabilitiesType: typeof hostCapabilities,
-                httpType: typeof http,
-                openUrlType: typeof openUrl,
-                secretType: typeof secret,
                 storageType: typeof plugin.storage,
-                touchChannelType: typeof touchChannel,
-                permissionType: typeof permission,
-                featuresType: typeof features,
-                filesystemType: typeof filesystem,
-                snipasteType: typeof plugin.snipaste,
-                systemType: typeof system,
-                quickOpsType: typeof quickOps,
-                flowType: typeof flow,
                 escaped,
                 processType: typeof process,
                 requireType: typeof require
@@ -122,60 +111,35 @@ describe('plugin Prelude Intelligence facade', () => {
             }
           }
         `),
-        snapshot: {
-          ...snapshot,
-          manifest: { name: 'touch-translation', activationGeneration: 1 }
+          snapshot: {
+            ...snapshot,
+            manifest: { name: pluginName, activationGeneration: 1 }
+          },
+          capabilityManifest: [
+            ...payload('').capabilityManifest,
+            { id: 'storage.file.read', callbackLifetime: 'transient' as const, callbackFields: [] }
+          ]
         },
-        capabilityManifest: [
-          ...payload('').capabilityManifest,
-          ...[
-            'storage.file.read',
-            'secret.get',
-            'http.request',
-            'open-url',
-            'channel.invoke',
-            'permission.check',
-            'feature.registry.list',
-            'filesystem.write',
-            'process.spawn',
-            'system.invoke',
-            'quick-ops.invoke',
-            'flow.invoke'
-          ].map((id) => ({ id, callbackLifetime: 'transient' as const, callbackFields: [] }))
-        ]
-      },
-      { invokeCapability }
-    )
+        { invokeCapability }
+      )
 
-    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toMatchObject({
-      keys: ['translate', 'ocr', 'listProviders'],
-      frozen: true,
-      nullPrototype: true,
-      translated: { result: 'translated' },
-      ocr: { result: { text: 'recognized' } },
-      providers: [{ providerId: 'provider-public' }],
-      intelligenceType: 'undefined',
-      pluginIntelligenceType: 'undefined',
-      hostCapabilitiesType: 'undefined',
-      httpType: 'undefined',
-      openUrlType: 'undefined',
-      secretType: 'undefined',
-      storageType: 'undefined',
-      touchChannelType: 'undefined',
-      permissionType: 'undefined',
-      featuresType: 'undefined',
-      filesystemType: 'undefined',
-      snipasteType: 'undefined',
-      systemType: 'undefined',
-      quickOpsType: 'undefined',
-      flowType: 'undefined',
-      escaped: true,
-      processType: 'undefined',
-      requireType: 'undefined'
-    })
-    expect(invokeCapability).toHaveBeenCalledTimes(3)
-    runtime.shutdown()
-  })
+      await expect(runtime.callLifecycle('onInit', []).promise).resolves.toMatchObject({
+        keys: ['translate', 'ocr', 'listProviders'],
+        frozen: true,
+        nullPrototype: true,
+        translated: { result: 'translated' },
+        ocr: { result: { text: 'recognized' } },
+        providers: [{ providerId: 'provider-public' }],
+        pluginIntelligenceType: 'object',
+        storageType: 'object',
+        escaped: true,
+        processType: 'undefined',
+        requireType: 'undefined'
+      })
+      expect(invokeCapability).toHaveBeenCalledTimes(3)
+      runtime.shutdown()
+    }
+  )
 
   it('omits the global and plugin facade when intelligence.invoke is undeclared', async () => {
     const invokeCapability = vi.fn()

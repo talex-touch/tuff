@@ -17,11 +17,12 @@
     "address": "http://127.0.0.1:5174/"
   },
   "permissions": {
-    "required": ["intelligence.basic", "search.root-results", "storage.plugin"],
+    "required": ["intelligence.basic", "intelligence.context", "search.root-results", "storage.plugin"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "intelligence.basic": "调用智能能力完成问答",
+    "intelligence.context": "在 Context 会话中携带对话历史与记忆完成连续问答",
     "clipboard.write": "复制 AI 回答或将回答替换到当前应用的选中文本",
     "search.root-results": "将智能问答入口与回答状态推送到 CoreBox 根搜索结果",
     "storage.plugin": "保存本地对话历史与自定义 AI 命令配置"

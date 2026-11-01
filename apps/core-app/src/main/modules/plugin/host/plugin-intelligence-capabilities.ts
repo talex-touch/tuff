@@ -391,25 +391,19 @@ function validatePromptVariables(value: unknown): Readonly<Record<string, string
 }
 
 function validateMetadata(
-  value: unknown,
-  translationProfile = false
+  value: unknown
 ): NonNullable<PluginIntelligenceInvokeOptions['metadata']> {
-  const record = exactRecord(
-    value,
-    translationProfile
-      ? ['entry', 'featureId', 'requestId', 'capabilityId', 'selectedProviderId', 'selectedModel']
-      : [
-          'entry',
-          'featureId',
-          'requestId',
-          'inputKinds',
-          'aiCommandId',
-          'aiCommandVersion',
-          'capabilityId',
-          'selectedProviderId',
-          'selectedModel'
-        ]
-  )
+  const record = exactRecord(value, [
+    'entry',
+    'featureId',
+    'requestId',
+    'inputKinds',
+    'aiCommandId',
+    'aiCommandVersion',
+    'capabilityId',
+    'selectedProviderId',
+    'selectedModel'
+  ])
   const entry = optionalString(record, 'entry', MAX_IDENTIFIER_BYTES)
   const featureId = optionalString(record, 'featureId', MAX_IDENTIFIER_BYTES)
   const requestId = optionalString(record, 'requestId', MAX_IDENTIFIER_BYTES)
@@ -444,17 +438,14 @@ function validateMetadata(
   })
 }
 
-function validateOptions(
-  value: unknown,
-  capabilityId: PluginIntelligenceCapabilityId,
-  translationProfile = false
-): PluginIntelligenceInvokeOptions {
-  const allowedKeys = translationProfile
-    ? capabilityId === 'text.translate'
-      ? ['preferredProviderId', 'modelPreference', 'metadata']
-      : ['metadata']
-    : ['preferredProviderId', 'modelPreference', 'promptTemplate', 'promptVariables', 'metadata']
-  const record = exactRecord(value, allowedKeys)
+function validateOptions(value: unknown): PluginIntelligenceInvokeOptions {
+  const record = exactRecord(value, [
+    'preferredProviderId',
+    'modelPreference',
+    'promptTemplate',
+    'promptVariables',
+    'metadata'
+  ])
   const preferredProviderId = optionalString(record, 'preferredProviderId', MAX_IDENTIFIER_BYTES)
   const modelPreference = Object.hasOwn(record, 'modelPreference')
     ? stringArray(record.modelPreference, 8, MAX_IDENTIFIER_BYTES)
@@ -463,9 +454,7 @@ function validateOptions(
   const promptVariables = Object.hasOwn(record, 'promptVariables')
     ? validatePromptVariables(record.promptVariables)
     : undefined
-  const metadata = Object.hasOwn(record, 'metadata')
-    ? validateMetadata(record.metadata, translationProfile)
-    : undefined
+  const metadata = Object.hasOwn(record, 'metadata') ? validateMetadata(record.metadata) : undefined
   return Object.freeze({
     ...(preferredProviderId === undefined ? {} : { preferredProviderId }),
     ...(modelPreference === undefined ? {} : { modelPreference }),
@@ -475,7 +464,7 @@ function validateOptions(
   })
 }
 
-function validateRequest(value: unknown, translationProfile = false): IntelligenceRequest {
+function validateRequest(value: unknown): IntelligenceRequest {
   const record = exactRecord(
     value,
     ['operation', 'capabilityId', 'payload', 'options'],
@@ -508,9 +497,7 @@ function validateRequest(value: unknown, translationProfile = false): Intelligen
       : capabilityId === 'text.translate'
         ? validateTranslatePayload(record.payload)
         : validateOcrPayload(record.payload)
-  const options = Object.hasOwn(record, 'options')
-    ? validateOptions(record.options, capabilityId, translationProfile)
-    : undefined
+  const options = Object.hasOwn(record, 'options') ? validateOptions(record.options) : undefined
   const metadata = options?.metadata
   if (metadata?.capabilityId !== undefined && metadata.capabilityId !== capabilityId) invalid()
   if (
@@ -761,9 +748,8 @@ export function createPluginIntelligenceCapabilities(
   ) {
     invalid()
   }
-  const translationProfile = boundActivation?.name === 'touch-translation'
   const validateCapabilityRequest = (value: unknown): IntelligenceRequest => {
-    const request = validateRequest(value, translationProfile)
+    const request = validateRequest(value)
     if (request.operation === 'provider-models.list') {
       if (!providerModelCapabilities.includes(request.capabilityId)) invalid()
     } else if (!invokeCapabilities.includes(request.capabilityId)) {
