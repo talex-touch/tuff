@@ -204,7 +204,21 @@ export function useMessageParts(options: MessagePartsOptions) {
     diagramZoomLabel: t('home.diagram.zoom'),
     diagramPreviewLabel: t('home.diagram.preview'),
     diagramCloseLabel: t('home.diagram.close'),
+    diagramDownloadLabel: t('home.diagram.download'),
+    diagramCopyFailedText: t('home.diagram.copyFailed'),
     diagramErrorText: t('home.diagram.failed')
+  }))
+
+  /**
+   * Code parts of a reply (`TxStreamElement`'s own, not the fences inside delegated markdown).
+   * A settled HTML or SVG block opens on its rendering: a page that was asked for is for
+   * looking at, and the toggle still brings the source back. Scripts stay off in the frame.
+   */
+  const codePartProps = computed(() => ({
+    autoPreview: true,
+    previewLabel: t('home.code.preview'),
+    codeLabel: t('home.code.source'),
+    codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang })
   }))
 
   return {
@@ -222,6 +236,7 @@ export function useMessageParts(options: MessagePartsOptions) {
     chainOpen,
     toolOpen,
     toolCallLabels,
-    markdownLabels
+    markdownLabels,
+    codePartProps
   }
 }

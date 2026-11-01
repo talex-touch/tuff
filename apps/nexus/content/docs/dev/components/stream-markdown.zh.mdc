@@ -69,6 +69,8 @@ code: |
 | `diagramPreviewLabel` | `string` | `'Diagram preview'` | 图表全屏预览及其中图表滚动区的可访问名称。 |
 | `diagramCloseLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
 | `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
+| `diagramDownloadLabel` | `string` | `'Download'` | 图表预览里「保存」操作的名称。 |
+| `diagramCopyFailedText` | `string` | `'Could not copy'` | 图表预览里复制源码失败时的提示。 |
 
 ### TxCodeBlock 属性
 
@@ -95,6 +97,8 @@ code: |
 | `errorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
 | `copyLabel` | `string` | `'Copy'` | 渲染失败后所显示源码的复制按钮文字。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `downloadLabel` | `string` | `'Download'` | 图表预览里「保存」操作的名称。 |
+| `copyFailedText` | `string` | `'Could not copy'` | 图表预览里复制源码失败时的提示。 |
 
 ## 概述
 

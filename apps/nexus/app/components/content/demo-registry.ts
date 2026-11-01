@@ -99,6 +99,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   CodeEditorToolbarDemo: () => import('./demos/CodeEditorToolbarDemo.vue'),
   CodeStreamDiffDemo: () => import('./demos/CodeStreamDiffDemo.vue'),
   CodeStreamLiveDemo: () => import('./demos/CodeStreamLiveDemo.vue'),
+  CodeStreamPreviewDemo: () => import('./demos/CodeStreamPreviewDemo.vue'),
   CodeStreamStaticDemo: () => import('./demos/CodeStreamStaticDemo.vue'),
   CodeStreamStreamingDemo: () => import('./demos/CodeStreamStreamingDemo.vue'),
   CollapseBasicDemo: () => import('./demos/CollapseBasicDemo.vue'),

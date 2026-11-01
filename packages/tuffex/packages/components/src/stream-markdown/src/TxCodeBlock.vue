@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import TxCopyButton from '../../button/src/copy-button.vue'
+import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
 import { highlightToHtml } from './shiki-runtime'
 
 defineOptions({ name: 'TxCodeBlock' })
@@ -101,6 +102,69 @@ watch(
 onBeforeUnmount(clearStreamTimer)
 
 // ---------------------------------------------------------------------------
+// Following the stream inside the capped body
+// ---------------------------------------------------------------------------
+
+/**
+ * With the body capped, a code fence that is still arriving would grow past the
+ * visible area and the reader would watch a frozen first screen while the model
+ * writes below it. Pin the body to its own bottom while the fence is open, and
+ * stop the moment the reader scrolls up — the same contract as the transcript.
+ */
+const bodyRef = ref<HTMLElement | null>(null)
+/** Set by a real scroll away from the bottom; cleared by a fresh fence. */
+const detached = ref(false)
+
+function atBodyBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= 4
+}
+
+function onBodyScroll(): void {
+  const el = bodyRef.value
+  if (el && !props.closed)
+    detached.value = !atBodyBottom(el)
+}
+
+/** The mask owns the scroll box now; ask it to re-measure whenever the body changes. */
+const maskRef = ref<{ refresh?: () => void } | null>(null)
+
+function syncFade(): void {
+  maskRef.value?.refresh?.()
+}
+
+function followStream(): void {
+  const el = bodyRef.value
+  if (!el || props.closed || detached.value)
+    return
+  el.scrollTop = el.scrollHeight
+  syncFade()
+}
+
+// A settled fence starts over at the top of the finished code, the way a reader
+// expects to re-read a file from its first line.
+watch(
+  () => props.closed,
+  (closed) => {
+    detached.value = false
+    const el = bodyRef.value
+    if (el && closed)
+      el.scrollTop = 0
+    void nextTick(syncFade)
+  },
+)
+
+watch(
+  [() => props.code, highlighted],
+  () => {
+    if (!props.closed)
+      followStream()
+    else
+      syncFade()
+  },
+  { flush: 'post' },
+)
+
+// ---------------------------------------------------------------------------
 // Preview
 // ---------------------------------------------------------------------------
 
@@ -169,9 +233,36 @@ const previewDocument = computed(() =>
       :srcdoc="previewDocument"
     />
     <!-- Shiki output is generated markup with the code text already escaped —
-         nothing user-controlled lands here unescaped. -->
-    <div v-else-if="highlighted" class="tx-code-block__body" v-html="highlighted" />
-    <pre v-else class="tx-code-block__body tx-code-block__plain"><code>{{ code }}</code></pre>
+         nothing user-controlled lands here unescaped. The mask is what makes the
+         capped body read as scrollable instead of as text that just stops: the
+         edge it can still scroll toward fades out. -->
+    <TxEdgeFadeMask
+      v-else-if="highlighted"
+      ref="maskRef"
+      class="tx-code-block__scroller"
+      axis="vertical"
+      :size="18"
+    >
+      <div
+        ref="bodyRef"
+        class="tx-code-block__body"
+        @scroll.passive="onBodyScroll"
+        v-html="highlighted"
+      />
+    </TxEdgeFadeMask>
+    <TxEdgeFadeMask
+      v-else
+      ref="maskRef"
+      class="tx-code-block__scroller"
+      axis="vertical"
+      :size="18"
+    >
+      <pre
+        ref="bodyRef"
+        class="tx-code-block__body tx-code-block__plain"
+        @scroll.passive="onBodyScroll"
+      ><code>{{ code }}</code></pre>
+    </TxEdgeFadeMask>
   </div>
 </template>
 
@@ -235,10 +326,23 @@ const previewDocument = computed(() =>
   .tx-code-block__body pre,
   pre.tx-code-block__plain {
     margin: 0;
-    padding: 0;
     border: none;
     border-radius: 0;
     background: transparent;
+  }
+
+  // The scroll box is the mask's viewport, so the cap goes on the mask and the
+  // body grows inside it: a 500-line file scrolls within the card instead of
+  // pushing the rest of the answer off screen, and the mask fades the edge that
+  // can still be scrolled toward.
+  .tx-code-block__scroller {
+    max-height: var(--tx-code-block-max-height, 360px);
+  }
+
+  .tx-code-block__body {
+    // Both renderings share the box: Shiki's body is a div holding a `pre`, the
+    // fallback's body *is* the `pre`.
+    display: block;
   }
 
   .tx-code-block__body pre,

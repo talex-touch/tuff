@@ -69,6 +69,8 @@ code: |
 | `diagramPreviewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen diagram preview and of the diagram's scrolling area in it. |
 | `diagramCloseLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
 | `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when a diagram fails to render. |
+| `diagramDownloadLabel` | `string` | `'Download'` | Name of the Save action in the diagram preview. |
+| `diagramCopyFailedText` | `string` | `'Could not copy'` | Said by the diagram preview when copying the source fails. |
 
 ### TxCodeBlock Props
 
@@ -95,6 +97,8 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 | `errorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when the diagram fails to render. |
 | `copyLabel` | `string` | `'Copy'` | Text of the copy button on the source shown after a failed render. |
 | `copiedLabel` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
+| `downloadLabel` | `string` | `'Download'` | Name of the Save action in the diagram preview. |
+| `copyFailedText` | `string` | `'Could not copy'` | Said by the diagram preview when copying the source fails. |
 
 ## Overview
 

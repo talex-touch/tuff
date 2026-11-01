@@ -230,6 +230,8 @@ const builtInCopy = computed(() => new Map<StreamMarkdownBlockRenderer, Record<s
     previewLabel: props.diagramPreviewLabel,
     closeLabel: props.diagramCloseLabel,
     errorText: props.diagramErrorText,
+    downloadLabel: props.diagramDownloadLabel,
+    copyFailedText: props.diagramCopyFailedText,
     copyLabel: props.copyCodeText,
     copiedLabel: props.copiedCodeText,
   }],
@@ -768,9 +770,10 @@ function isSuppressedFence(block: StreamBlock): boolean {
       }
     }
 
-    /* Hover reveals the copy button; the wrapper is the positioning context. */
+    /* Hover reveals the copy button; it owns a line of its own under the table
+       so it never lands on a cell, and the sticky header above never has to
+       fight it for the top layer. */
     .tx-stream-md__table-wrap {
-      position: relative;
       margin: 0 0 1em;
 
       &:hover .tx-stream-md__table-copy,
@@ -791,9 +794,9 @@ function isSuppressedFence(block: StreamBlock): boolean {
     }
 
     .tx-stream-md__table-copy {
-      position: absolute;
-      top: 6px;
-      right: 6px;
+      display: block;
+      width: fit-content;
+      margin: 4px 0 0 auto;
       padding: 3px 9px;
       border: 1px solid var(--tx-border-color-light, #e4e7ed);
       border-radius: 999px;
@@ -801,6 +804,8 @@ function isSuppressedFence(block: StreamBlock): boolean {
       color: inherit;
       font: inherit;
       font-size: 0.82em;
+      /* The line is always reserved for this pill, so it stays compact. */
+      line-height: 1.4;
       cursor: pointer;
       opacity: 0;
 
@@ -810,8 +815,16 @@ function isSuppressedFence(block: StreamBlock): boolean {
     }
 
     table {
+      /* The borrowed GitHub sheet turns a table into a scrolling block box; here
+         the wrapper scrolls, and a block-level table leaves its cells short of
+         the right edge — a blank strip under the copy button. */
+      display: table;
       width: 100%;
-      margin: 0 0 1em;
+      min-width: 0;
+      max-width: none;
+      /* The wrapper owns the block rhythm; a margin inside the scroll box would
+         just pad its own scrollable area. */
+      margin: 0;
       border-collapse: collapse;
       font-size: 0.95em;
 

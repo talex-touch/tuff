@@ -87,4 +87,6 @@ export interface StreamMarkdownProps {
   diagramPreviewLabel?: string
   diagramCloseLabel?: string
   diagramErrorText?: string
+  diagramDownloadLabel?: string
+  diagramCopyFailedText?: string
 }
