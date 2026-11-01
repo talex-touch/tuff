@@ -19,6 +19,7 @@ import {
   files as filesSchema
 } from '../../../../db/schema'
 import { scheduleDbWrite } from '../../../../db/db-write'
+import { encodeVectorBlob } from '../../../../db/embedding-vector-codec'
 import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import {
@@ -428,7 +429,7 @@ export class EmbeddingService {
             ),
           ...generated.map((result, index) =>
             writeDb.insert(embeddingsSchema).select(sql`
-          SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${JSON.stringify(result.vector)},
+          SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${encodeVectorBlob(result.vector)},
             ${result.model}, ${hashes[index]}, strftime('%s', 'now')
           FROM ${filesSchema} WHERE ${fileFence}
         `)
@@ -518,7 +519,7 @@ export class EmbeddingService {
               )
             ),
           writeDb.insert(embeddingsSchema).select(sql`
-            SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${JSON.stringify(generated.result)},
+            SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${encodeVectorBlob(generated.result)},
               ${generated.model}, NULL, strftime('%s', 'now')
             FROM ${filesSchema} WHERE ${fileFence}
           `),

@@ -10,6 +10,7 @@ import { lstat } from 'node:fs/promises'
 import { parentPort, workerData } from 'node:worker_threads'
 import { createClient, type Client } from '@libsql/client'
 import { serializeSearchIndexWorkerError } from './search-index-worker-error'
+import { readStoredVector } from '../../../../db/embedding-vector-codec'
 
 const databasePath =
   workerData &&
@@ -110,22 +111,13 @@ async function rankSemanticFiles(
     for (const row of result.rows) {
       if (Atomics.load(cancelled, 0)) return []
       cursor = Number(row.id)
-      if (typeof row.source_id !== 'string' || typeof row.embedding !== 'string') continue
-      let candidate: unknown
-      try {
-        candidate = JSON.parse(row.embedding)
-      } catch {
-        continue
-      }
-      if (!Array.isArray(candidate) || candidate.length !== vector.length) continue
+      if (typeof row.source_id !== 'string') continue
+      const candidate = readStoredVector(row.embedding, vector.length)
+      if (!candidate) continue
       let dot = 0
       let norm = 0
       for (let index = 0; index < vector.length; index++) {
-        const value = candidate[index]
-        if (typeof value !== 'number' || !Number.isFinite(value)) {
-          norm = NaN
-          break
-        }
+        const value = candidate[index]!
         dot += vector[index] * value
         norm += value * value
       }

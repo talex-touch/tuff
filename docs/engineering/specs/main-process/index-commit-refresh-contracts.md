@@ -994,17 +994,36 @@ enrichment recovery paused`), as do five consecutive iterations that admit nothi
   - Anything else → `failed`, counted. The batch's `done` message carries up to three samples, and
     `FileIndexWorkerBatchFailedError` adds them as `lastErrorSamples` to the `File index worker
 failed` warning.
-- **Output past the budget is truncated, not failed (2026-10-22).** The worker parses with
-  `maxOutputBytes: 200_000` (UTF-8 bytes of content and chunk text combined) and `maxChunks: 1024`.
-  Past either limit, or past the PDF page cap, the code and PDF parsers keep the leading text that
-  fits and set `FileParserResult.truncated`, as Elasticsearch's `indexed_chars` and Tika's write
-  limit do. The worker indexes that prefix and records `truncated` with `lastError: null`; content it
-  cuts at `MAX_CONTENT_LENGTH` is recorded the same way. `truncated` is terminal like `completed`:
-  flush confirms it, index stats count it as completed, and it is not counted in `failed` or
-  retried until a write marks the file pending again. The 1 MiB result budget stays as a backstop
-  (`result-too-large` → `failed`), which these limits keep out of reach. Code chunk overlap is at
-  most a quarter of the chunk and only covers lines the chunk was first to reach, so a line lands in
-  at most two chunks.
+- **A file too long to index is not indexed at all (2026-10-31, supersedes the 2026-10-22 prefix rule).**
+  The 10-22 rule indexed the leading 200,000 characters of a long file and recorded `truncated`. A
+  hit in the first part of a novel says little about the rest, while the body is stored in
+  `files.content`, the FTS `content` column and its page overhead, so on a measured 6.4 GB index a
+  few thousand long files held about 450 MB of body. `FILE_CONTENT_MAX_CHARS` (50,000, in
+  `addon/files/constants.ts`) now bounds it: a file whose extracted text is longer, or whose parser
+  stopped early (`FileParserResult.truncated`: output budget, chunk limit, PDF page cap), is recorded
+  `skipped` with `lastError: 'content-too-long'` and `fileUpdate: { content: null, embeddingStatus:
+  'none' }`. No prefix, chunk or vector is kept; the null update also removes what an earlier,
+  shorter version of the same file left behind, and the file stays findable by name and path. It is
+  terminal like every skip, not counted in `failed`, and not retried until a write marks the file
+  pending again. The worker parses with `maxOutputBytes = FILE_PARSE_OUTPUT_MAX_BYTES` (8 bytes per
+  allowed character: a 4-byte code point counted once in content and once in a chunk) and
+  `maxChunks: 1024`, so a file within the cap is never cut by the budget. The worker no longer emits
+  `truncated`; the status stays in the enum and in index stats for rows written before this rule.
+  The 1 MiB result budget stays as a backstop (`result-too-large` → `failed`). Code chunk overlap is
+  at most a quarter of the chunk and only covers lines the chunk was first to reach, so a line lands
+  in at most two chunks.
+- **Existing over-long bodies are cleared by a boot pass (2026-10-31).**
+  `FileProviderOverlongContentCleanupService` (config key
+  `file_provider_overlong_content_cleanup_version`) walks, in id pages of 50, every file whose
+  `files.content` is longer than the cap or whose progress is `truncated`. Per page it first
+  re-emits the records with `content: null` through the normal write path (the document hash covers
+  `content`, so the FTS column is replaced and the title still matches), and only then, in one
+  writer transaction, clears `files.content`, the file's embeddings and `content_chunks`, and sets
+  progress to `skipped` / `content-too-long`. The order matters: a failure between the two leaves
+  the page selected, so the next boot retries it, whereas the reverse would strand a stale FTS body
+  that nothing selects any more. It runs after the keyword backfill and before the embedding BLOB
+  pass (so no vector is converted just to be deleted), followed by the single `boot-check`
+  compaction that returns the freed pages to the disk.
 - **Samples stay in the local log.** A sample is a raw errno message with an absolute path in it. It
   goes to `fileProviderLog.warn` only: never into transport payloads, dashboards,
   `operationalErrorService.report` context, Sentry or Nexus
@@ -1022,7 +1041,8 @@ failed` warning.
 | One page's chunk fails                 | The round continues; `failedPages` in the completion log                         |
 | ENOENT, ENOTDIR, EPERM, EACCES reads   | `skipped`; `failed: 0`; no `failureSamples`                                      |
 | Four EISDIR reads                      | `failed: 4`; exactly three samples                                               |
-| Code or PDF output past the budget     | `truncated`; `failed: 0`; the leading chunks and content are indexed             |
+| Text over `FILE_CONTENT_MAX_CHARS`, or a parser cut at its budget | `skipped` / `content-too-long`; `failed: 0`; no content, chunks or vectors; the name still matches |
+| Text of exactly `FILE_CONTENT_MAX_CHARS`                          | `completed`; the whole body is indexed                                           |
 | A flush of only missing files          | No `applyBatch`, no commit                                                       |
 
 ### 5. Good / Base / Bad Cases

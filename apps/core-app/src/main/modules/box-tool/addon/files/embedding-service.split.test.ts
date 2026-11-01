@@ -19,6 +19,7 @@ import {
   type EmbeddingDbRouting,
   type FileEmbeddingGenerator
 } from './embedding-service'
+import { readStoredVector } from '../../../../db/embedding-vector-codec'
 import { SqliteFileIndexPersistenceRepository } from '../../search-engine/file-index-persistence-repository'
 import { getSearchIndexReadWorkerTestPath } from '../../search-engine/workers/search-index-read-worker.test-harness'
 import { hashFileContentChunk } from './services/file-content-match'
@@ -809,17 +810,20 @@ describe('EmbeddingService real image publication contracts', () => {
       logDebug: () => {}
     })
     await consumer.indexCommittedEntries([entry])
-    expect(
-      (await home.client.execute('SELECT source_id, source_type, embedding, model FROM embeddings'))
-        .rows
-    ).toEqual([
-      {
-        source_id: '1',
-        source_type: 'file',
-        embedding: '[1,0,0]',
-        model: LOCAL_EMBEDDING_MODEL_KEY
-      }
-    ])
+    const [stored] = (
+      await home.client.execute('SELECT source_id, source_type, embedding, model FROM embeddings')
+    ).rows
+    expect(stored).toBeDefined()
+    expect({
+      ...stored,
+      embedding: Array.from(readStoredVector(stored!.embedding, 3) ?? [])
+    }).toEqual({
+      source_id: '1',
+      source_type: 'file',
+      embedding: [1, 0, 0],
+      model: LOCAL_EMBEDDING_MODEL_KEY
+    })
+    expect(stored!.embedding).toBeInstanceOf(ArrayBuffer)
     expect((await primary.client.execute('SELECT source_id FROM embeddings')).rows).toEqual([])
     expect(
       (await home.client.execute('SELECT path, content, embedding_status FROM files WHERE id = 1'))
