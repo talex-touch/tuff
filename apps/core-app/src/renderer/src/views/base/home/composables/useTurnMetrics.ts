@@ -1,6 +1,5 @@
 import type { ComputedRef } from 'vue'
 import { computed, onScopeDispose, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { appSetting } from '~/modules/storage/app-storage'
 
@@ -47,24 +46,28 @@ export function metricLatencyTitle(message: ConversationMessage): string {
   return `耗时: ${latency}`
 }
 
+export function metricCacheLabel(
+  message: ConversationMessage,
+  t: (key: string, values: Record<string, unknown>) => string
+): string {
+  return t('home.workspace.activity.cache', {
+    tokens: formatTokenCount(message.meta?.cacheReadTokens ?? 0)
+  })
+}
+
+export function metricCacheTitle(
+  message: ConversationMessage,
+  t: (key: string, values: Record<string, unknown>) => string
+): string {
+  return t('home.workspace.activity.cacheTitle', { tokens: message.meta?.cacheReadTokens ?? 0 })
+}
+
 /**
  * A settled turn's footer — the actions and the run metrics. It shows itself for a few seconds when
  * a reply completes, then rests until hovered; and the metrics badges obey the settings switch.
  */
 export function useTurnMetrics(messages: ComputedRef<ConversationMessage[]>) {
-  const { t } = useI18n()
-
   const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
-
-  function metricCacheLabel(message: ConversationMessage): string {
-    return t('home.workspace.activity.cache', {
-      tokens: formatTokenCount(message.meta?.cacheReadTokens ?? 0)
-    })
-  }
-
-  function metricCacheTitle(message: ConversationMessage): string {
-    return t('home.workspace.activity.cacheTitle', { tokens: message.meta?.cacheReadTokens ?? 0 })
-  }
 
   const activeFooterMessageIds = ref<Set<string>>(new Set())
   const footerTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -107,8 +110,6 @@ export function useTurnMetrics(messages: ComputedRef<ConversationMessage[]>) {
 
   return {
     showTurnMetrics,
-    metricCacheLabel,
-    metricCacheTitle,
     isTurnFooterResting
   }
 }

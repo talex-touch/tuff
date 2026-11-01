@@ -14,9 +14,6 @@ import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxModal } from '@talex-touch/tuffex/modal'
-import { TxMotionText } from '@talex-touch/tuffex/motion-text'
-import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
@@ -52,7 +49,6 @@ import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
-import { isStoppedTurn } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
@@ -95,15 +91,11 @@ import { useHomeCommands } from './composables/useHomeCommands'
 import { useHomeOpening } from './composables/useHomeOpening'
 import { useHomeSubmit } from './composables/useHomeSubmit'
 import { useSendState } from './composables/useSendState'
-import { useTurnError } from './composables/useTurnError'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
-import {
-  calculateTokenSpeed,
-  formatMetricLatency,
-  metricLatencyTitle,
-  metricTokensTitle,
-  useTurnMetrics
-} from './composables/useTurnMetrics'
+import { useTurnMetrics } from './composables/useTurnMetrics'
+import HomeEmptyHead from './HomeEmptyHead.vue'
+import HomeTurnError from './HomeTurnError.vue'
+import HomeTurnFooter from './HomeTurnFooter.vue'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -142,8 +134,9 @@ const composerRef = computed(() => composerEl.value?.box ?? null)
 const draftGhostRef = computed(() => composerEl.value?.ghost ?? null)
 /** The FLIP animates this — the composer *and* the push card under it travel as one body. */
 const composerGroupRef = ref<HTMLElement | null>(null)
-/** Measured before a send so the leaving greeting can be pinned in place. */
-const headRef = ref<HTMLElement | null>(null)
+/** The greeting's root, which the page measures before a flip and pins where it stood. */
+const headEl = ref<InstanceType<typeof HomeEmptyHead> | null>(null)
+const headRef = computed(() => headEl.value?.el ?? null)
 /**
  * Host for the send-flight clone. The page root, not `document.body`: the
  * clone must sit under the shell/tuffex CSS-variable scope or it renders in
@@ -646,17 +639,6 @@ function reportSubmitError(error: unknown): void {
 }
 
 const {
-  resolveErrorTitle,
-  resolveErrorAdvice,
-  resolveErrorReportCode,
-  resolveErrorReportDetail,
-  resolveUsageLimitFailure,
-  openUsageLimits,
-  isProviderUnavailable,
-  openProviderSettings
-} = useTurnError()
-
-const {
   pendingAttachments,
   attachPreviewProps,
   attachOpenLabel,
@@ -941,8 +923,7 @@ const contextShare = computed(() => {
 const contextWindowText = computed(() =>
   formatWindow(modelLimits.value.contextWindow?.value ?? 128_000)
 )
-const { showTurnMetrics, metricCacheLabel, metricCacheTitle, isTurnFooterResting } =
-  useTurnMetrics(messages)
+const { showTurnMetrics, isTurnFooterResting } = useTurnMetrics(messages)
 
 // ============================================================================
 // Command layer
@@ -1008,40 +989,17 @@ useHomeCommands({
         />
         <div class="HomePage-Center">
           <Transition name="home-head">
-            <div v-if="isEmpty" ref="headRef" class="HomePage-Head">
-              <div class="HomePage-MarkHost">
-                <TxTuffLogoStroke class="HomePage-Mark" :size="67" mode="breathe" />
-              </div>
-              <TxMotionText
-                tag="h1"
-                class="HomePage-Greeting"
-                variant="txt-dia"
-                :text="t(browserLanding ? 'browser.greeting' : 'home.greeting')"
-              />
-              <!-- The assistant speaks first. Three lines tall whatever it holds — skeleton, a
-                   stream, or nothing — so the composer and the card below never move for it. -->
-              <div
-                v-if="homeRecommendationsEnabled"
-                class="HomePage-Opening"
-                role="status"
-                :aria-busy="openingBusy || undefined"
-              >
-                <template v-if="openingPhase === 'pending'">
-                  <span class="sr-only">{{ pushLabels.openingLoading }}</span>
-                  <div class="HomePage-OpeningSkeleton" aria-hidden="true">
-                    <TxSkeleton class="HomePage-OpeningBar" :height="10" :radius="5" />
-                    <TxSkeleton class="HomePage-OpeningBar is-short" :height="10" :radius="5" />
-                  </div>
-                </template>
-                <!-- The template stands in while a slow route writes; the model's opening
-                     replaces it whole, the old words fading out first. -->
-                <Transition v-else name="home-opening-swap" mode="out-in">
-                  <p v-if="openingText" :key="openingSource ?? ''" class="HomePage-OpeningText">
-                    {{ openingText }}
-                  </p>
-                </Transition>
-              </div>
-            </div>
+            <HomeEmptyHead
+              v-if="isEmpty"
+              ref="headEl"
+              :browser-landing="browserLanding"
+              :opening-enabled="homeRecommendationsEnabled"
+              :phase="openingPhase"
+              :text="openingText"
+              :source="openingSource"
+              :busy="openingBusy"
+              :loading-label="pushLabels.openingLoading"
+            />
           </Transition>
 
           <!-- Leave: the thread dissolves in place (absolute, out of layout)
@@ -1240,179 +1198,28 @@ useHomeCommands({
                         <span>{{ t('home.compacting') }}</span>
                       </p>
 
-                      <div
-                        v-if="
-                          message.status === 'failed' && resolveUsageLimitFailure(message.error)
-                        "
-                        class="HomePage-Error is-usage-limit"
-                        role="alert"
-                        data-testid="home-usage-limit-error"
-                      >
-                        <span class="i-ri-timer-line HomePage-ErrorIcon" />
-                        <div class="HomePage-ErrorBody">
-                          <p class="HomePage-ErrorTitle">
-                            {{ resolveUsageLimitFailure(message.error)?.title }}
-                          </p>
-                          <p class="HomePage-ErrorDetail">
-                            {{ resolveUsageLimitFailure(message.error)?.detail }}
-                          </p>
-                          <p class="HomePage-ErrorReport" data-testid="home-usage-limit-report">
-                            <span
-                              >{{ t('home.error.codeLabel') }}:
-                              {{ resolveErrorReportCode(message.error) }}</span
-                            >
-                          </p>
-                        </div>
-                        <button
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          data-testid="home-open-usage-limits"
-                          @click="openUsageLimits"
-                        >
-                          {{ resolveUsageLimitFailure(message.error)?.action?.label }}
-                        </button>
-                      </div>
-
-                      <div
-                        v-else-if="message.status === 'failed'"
-                        class="HomePage-Error"
-                        role="alert"
-                      >
-                        <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
-                        <div class="HomePage-ErrorBody">
-                          <p class="HomePage-ErrorTitle">
-                            {{ resolveErrorTitle(message.error) }}
-                          </p>
-                          <p v-if="resolveErrorAdvice(message.error)" class="HomePage-ErrorDetail">
-                            {{ resolveErrorAdvice(message.error) }}
-                          </p>
-                          <p class="HomePage-ErrorReport" data-testid="home-error-report">
-                            <span
-                              >{{ t('home.error.codeLabel') }}:
-                              {{ resolveErrorReportCode(message.error) }}</span
-                            >
-                            <span v-if="!isStoppedTurn(message.error)">{{
-                              resolveErrorReportDetail(message.error)
-                            }}</span>
-                          </p>
-                        </div>
-                        <button
-                          v-if="isProviderUnavailable(message.error)"
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          @click="openProviderSettings"
-                        >
-                          {{ t('home.configureProvider') }}
-                        </button>
-                        <button
-                          v-else-if="index === messages.length - 1"
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          @click="conversation.retry()"
-                        >
-                          {{ t('home.retry') }}
-                        </button>
-                      </div>
+                      <HomeTurnError
+                        v-if="message.status === 'failed'"
+                        :error="message.error"
+                        :retryable="index === messages.length - 1"
+                        @retry="conversation.retry()"
+                      />
 
                       <!-- Surfaces out of a blur once the answer settles; the last
                            reply keeps it on show, older ones reveal on hover. -->
-                      <div
+                      <HomeTurnFooter
                         v-if="message.status === 'complete'"
-                        class="HomePage-TurnFooter"
-                        :class="{ 'is-resting': isTurnFooterResting(message) }"
-                      >
-                        <div class="HomePage-TurnFooterRow">
-                          <TxMessageActions
-                            class="HomePage-MsgActions"
-                            :copy-text="message.content"
-                            :regenerable="index === messages.length - 1 && !isStreaming"
-                            :speakable="!!message.content"
-                            :speak-state="speakStateOf(message)"
-                            :copy-label="t('home.copy')"
-                            :copied-label="t('home.copied')"
-                            :regenerate-label="t('home.regenerate')"
-                            :speak-label="t('home.speak')"
-                            :stop-speak-label="t('home.speakStop')"
-                            @regenerate="conversation.retry()"
-                            @speak="toggleSpeak(message)"
-                          >
-                            <button
-                              v-if="canBranchFrom(message, index)"
-                              class="tx-message-actions__btn"
-                              type="button"
-                              :disabled="branching"
-                              :title="t('home.workspace.fork.fromHere')"
-                              :aria-label="t('home.workspace.fork.fromHere')"
-                              @click="branchTo({ messageId: message.id })"
-                            >
-                              <span class="i-ri-git-branch-line" aria-hidden="true" />
-                            </button>
-                          </TxMessageActions>
-
-                          <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
-                          <div
-                            v-if="
-                              showTurnMetrics &&
-                              (message.meta?.latencyMs ||
-                                message.meta?.model ||
-                                message.meta?.totalTokens)
-                            "
-                            class="HomePage-TurnMetrics"
-                          >
-                            <!-- 耗时 (Latency) -->
-                            <span
-                              v-if="message.meta?.latencyMs"
-                              class="HomePage-MetricTag"
-                              :title="metricLatencyTitle(message)"
-                            >
-                              <span class="i-ri-time-line" aria-hidden="true" />
-                              <span>{{ formatMetricLatency(message.meta.latencyMs) }}</span>
-                            </span>
-
-                            <!-- Tokens 与 速度 (Tokens & Speed) -->
-                            <span
-                              v-if="message.meta?.totalTokens"
-                              class="HomePage-MetricTag"
-                              :title="metricTokensTitle(message)"
-                            >
-                              <span class="i-ri-database-2-line" aria-hidden="true" />
-                              <span>{{ message.meta.totalTokens }} tokens</span>
-                              <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
-                                >({{ calculateTokenSpeed(message) }} t/s)</span
-                              >
-                            </span>
-
-                            <!-- 缓存读取 (Cache read) -->
-                            <span
-                              v-if="message.meta?.cacheReadTokens"
-                              class="HomePage-MetricTag"
-                              :title="metricCacheTitle(message)"
-                            >
-                              <span class="i-ri-stack-line" aria-hidden="true" />
-                              <span>{{ metricCacheLabel(message) }}</span>
-                            </span>
-
-                            <!-- 模型 (Model) -->
-                            <span
-                              v-if="message.meta?.model"
-                              class="HomePage-MetricTag is-model"
-                              :title="t('home.workspace.activity.metrics.model')"
-                            >
-                              <span class="i-ri-sparkling-line" aria-hidden="true" />
-                              <span>{{ message.meta.model }}</span>
-                            </span>
-
-                            <!-- 调度器 (Coordinator) -->
-                            <span
-                              class="HomePage-MetricTag"
-                              :title="t('home.workspace.activity.metrics.coordinator')"
-                            >
-                              <span class="i-ri-robot-2-line" aria-hidden="true" />
-                              <span>{{ message.meta?.coordinator || 'Tuff Coordinator' }}</span>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                        :message="message"
+                        :resting="isTurnFooterResting(message)"
+                        :regenerable="index === messages.length - 1 && !isStreaming"
+                        :speak-state="speakStateOf(message)"
+                        :branchable="canBranchFrom(message, index)"
+                        :branching="branching"
+                        :show-metrics="showTurnMetrics"
+                        @regenerate="conversation.retry()"
+                        @speak="toggleSpeak(message)"
+                        @branch="branchTo({ messageId: message.id })"
+                      />
                     </template>
                   </div>
                 </div>
@@ -1944,124 +1751,6 @@ useHomeCommands({
   opacity: 0;
 }
 
-.HomePage-Head {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
-  // The chat lane, like the composer under it: the opening wraps at this width. A centred flex item
-  // would otherwise shrink to its content, and the opening's content is one long line.
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-
-  /* Pinned out of flow by `submit`, which measures the offsets; the layer is
-     the scale's, so the greeting dissolves under the returning composer. */
-  &.is-leaving {
-    z-index: var(--home-z-leaving);
-  }
-}
-
-.HomePage-MarkHost {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 67px;
-  height: 67px;
-  transform: none;
-}
-
-.HomePage-Mark {
-  width: 67px;
-  height: 67px;
-}
-
-.HomePage-Greeting {
-  display: block;
-  margin: 0;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-display);
-  font-weight: 600;
-  // One display line, set tight for the same room.
-  line-height: 1.2;
-  text-align: center;
-}
-
-/**
- * The assistant's opening, under the greeting. Three lines tall whatever it holds — the skeleton, a
- * stream, the finished text or nothing — so text arriving never moves the composer or the card.
- *
- * 13px on a 20px line fits the longest opening the model may write (160 characters,
- * `sanitizeOpeningText`) in three lines of a full-width lane. A narrower lane clamps it with an
- * ellipsis rather than push the stage down; the whole text still joins the thread when sent.
- */
-.HomePage-Opening {
-  --home-opening-line: 20px;
-
-  width: 100%;
-  height: calc(3 * var(--home-opening-line));
-  color: var(--shell-text-regular);
-  font-size: var(--shell-fs-body);
-  line-height: var(--home-opening-line);
-  text-align: center;
-}
-
-.HomePage-OpeningText {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-/* Bars where the opening's first two lines will be — most openings run to two. */
-.HomePage-OpeningSkeleton {
-  // On the page background the skeleton's own default, the lightest fill, disappears.
-  --tx-skeleton-base-color: var(--shell-surface-2);
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* A line box each, its bar centred in it (TxSkeleton's root is a flex column). */
-.HomePage-OpeningBar {
-  justify-content: center;
-  width: 78%;
-  height: var(--home-opening-line);
-
-  &.is-short {
-    width: 52%;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* The words surface where the skeleton stood — streamed, replayed or the template alike. */
-  .HomePage-OpeningText {
-    animation: home-opening-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes home-opening-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* The template leaves before the model's opening surfaces where it stood. */
-  .HomePage-OpeningText.home-opening-swap-leave-active {
-    animation: home-opening-out 0.16s ease-in both;
-  }
-}
-
-@keyframes home-opening-out {
-  to {
-    opacity: 0;
-  }
-}
-
 /** The stream component owns the scroll; this box only claims the flex space. */
 .HomePage-Stream {
   flex: 1;
@@ -2360,42 +2049,6 @@ useHomeCommands({
   }
 }
 
-// The action row takes no space until the message is hovered: a resting thread then reads
-// as one block of text instead of text with a gap under every turn. `grid-template-rows:
-// 0fr → 1fr` animates to the row's *measured* height, so a footer that wraps onto two lines
-// still opens fully — a `max-height` guess would either clip it or leave a gap.
-.HomePage-TurnFooter {
-  display: grid;
-  grid-template-rows: 0fr;
-  width: 100%;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease;
-}
-
-// A turn that just finished stays open for a beat (`is-resting` is what the timer clears);
-// hovering or focusing the message opens it at any time.
-.HomePage-TurnFooter:not(.is-resting),
-.HomePage-Message:hover .HomePage-TurnFooter,
-.HomePage-TurnFooter:focus-within {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.HomePage-TurnFooterRow {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 4px;
-}
-
 .HomePage-MsgActions {
   margin-top: 0;
 }
@@ -2430,97 +2083,10 @@ useHomeCommands({
   padding-top: 6px;
 }
 
-.HomePage-TurnMetrics {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.HomePage-MetricTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-size: 11px;
-  font-family: var(--shell-font-mono, monospace);
-  line-height: 1.2;
-  user-select: none;
-  transition: color 0.15s ease;
-
-  &:hover {
-    color: var(--shell-text);
-  }
-
-  &.is-model {
-    color: var(--shell-text-muted);
-
-    &:hover {
-      color: var(--shell-text);
-    }
-  }
-}
-
-.HomePage-MetricSpeed {
-  color: var(--shell-primary);
-  font-weight: 500;
-  margin-left: 2px;
-}
-
-.HomePage-Error {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-danger-soft);
-  box-sizing: border-box;
-}
-
 .HomePage-ErrorIcon {
   flex: none;
   margin-top: 1px;
   color: var(--shell-danger);
-}
-
-.HomePage-ErrorBody {
-  flex: 1;
-  min-width: 0;
-}
-
-.HomePage-ErrorTitle {
-  margin: 0;
-  color: var(--shell-danger);
-  font-size: var(--shell-fs-body);
-  line-height: 1.5;
-}
-
-.HomePage-ErrorDetail {
-  margin: 4px 0 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.HomePage-ErrorReport {
-  display: grid;
-  gap: 2px;
-  margin: 6px 0 0;
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-body);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-
-  > span:first-child {
-    color: var(--shell-text-muted);
-    font-family: var(--shell-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-    font-size: var(--shell-fs-sm);
-  }
 }
 
 .HomePage-RetryBtn {
@@ -2538,28 +2104,6 @@ useHomeCommands({
   // The block itself is already `danger-soft`, so the hover has to go a step deeper to register.
   &:hover {
     background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
-  }
-}
-
-/*
- * A limit the user set is not a fault: the same block in the warning tone, whose button leads to
- * the limits instead of retrying a turn that would be refused again.
- */
-.HomePage-Error.is-usage-limit {
-  background: var(--shell-warning-soft);
-
-  .HomePage-ErrorIcon,
-  .HomePage-ErrorTitle {
-    color: var(--shell-warning);
-  }
-
-  .HomePage-RetryBtn {
-    border-color: var(--shell-warning-border, var(--shell-warning));
-    color: var(--shell-warning);
-
-    &:hover {
-      background: color-mix(in srgb, var(--shell-warning) 12%, transparent);
-    }
   }
 }
 

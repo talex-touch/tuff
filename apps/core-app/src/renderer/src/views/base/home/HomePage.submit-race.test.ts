@@ -485,9 +485,9 @@ describe('HomePage failed conversation report', () => {
     )
 
     const report = view.get('[data-testid="home-error-report"]')
-    const card = view.get('.HomePage-Error')
+    const card = view.get('.HomeTurnError')
     expect(card.attributes('role')).toBe('alert')
-    expect(card.get('.HomePage-ErrorTitle').text()).toBe(catalogText(enUS, 'home.error.generic'))
+    expect(card.get('.HomeTurnError-Title').text()).toBe(catalogText(enUS, 'home.error.generic'))
     expect(report.text()).toContain('PROVIDER_TIMEOUT')
     expect(report.text()).toContain(detail)
 
