@@ -13,10 +13,24 @@ import sharp from 'sharp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { localEmbeddingInstallManifestPath } from './local-embedding-assets'
 import * as models from './local-embedding-model'
+import { EMBEDDING_QUEUE_LIMITS, runWithEmbeddingPriority } from './local-embedding-queue'
 import {
   getLocalEmbeddingRuntime,
   setLocalEmbeddingRuntimeForTests
 } from './local-embedding-runtime'
+
+const hashedFiles = vi.hoisted(() => ({ paths: [] as string[] }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    createReadStream: ((file: unknown, options?: unknown) => {
+      hashedFiles.paths.push(String(file))
+      return actual.createReadStream(file as never, options as never)
+    }) as typeof actual.createReadStream
+  }
+})
 
 let directory: string | undefined
 
@@ -126,6 +140,9 @@ const fs = require('node:fs')
 const readline = require('node:readline')
 const launchRecord = process.env.TEST_HELPER_LAUNCH_RECORD
 if (launchRecord) fs.writeFileSync(launchRecord, process.argv[1])
+const trace = process.env.TEST_HELPER_LOG
+const note = text => { if (trace) fs.appendFileSync(trace, text + '\\n') }
+note('launch ' + process.pid)
 const textOnly = process.argv.includes('--text-only')
 const info = ${JSON.stringify({
     model: 'google/embeddinggemma-2',
@@ -137,8 +154,14 @@ const info = ${JSON.stringify({
 info.text_only = process.env.TEST_HELPER_WRONG_MODE === '1' ? !textOnly : textOnly
 const send = value => process.stdout.write(JSON.stringify(value) + '\\n')
 send({ ready: true, info })
-readline.createInterface({ input: process.stdin }).on('line', line => {
+readline.createInterface({ input: process.stdin }).on('line', async line => {
   const request = JSON.parse(line)
+  const label = request.op === 'image' ? 'image' : String(request.inputs[0])
+  note(request.op + ' ' + label)
+  const gate = process.env.TEST_HELPER_GATE
+  const held = label.startsWith('hold:') || (request.op === 'image' && process.env.TEST_HELPER_HOLD_IMAGE === '1')
+  while (gate && held && fs.existsSync(gate)) await new Promise(resolve => setTimeout(resolve, 5))
+  if (label.startsWith('crash:')) process.exit(3)
   try {
     const values = new Float32Array(info.dim)
     if (request.op === 'image') {
@@ -169,6 +192,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   vi.stubEnv('TEST_HELPER_LAUNCH_RECORD', launchRecord)
   const imageCapture = join(directory, 'helper-image.png')
   vi.stubEnv('TEST_IMAGE_CAPTURE', imageCapture)
+  const log = join(directory, 'helper.log')
+  const gate = join(directory, 'helper.gate')
+  vi.stubEnv('TEST_HELPER_LOG', log)
+  vi.stubEnv('TEST_HELPER_GATE', gate)
+  vi.stubEnv('TEST_HELPER_HOLD_IMAGE', '')
   vi.stubEnv('TUFF_LOCAL_EMBEDDING_HELPER', helper)
   vi.stubEnv(
     'TUFF_LOCAL_EMBEDDING_HELPER_SHA256',
@@ -179,7 +207,17 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   vi.stubEnv('TEST_REPLACE_IMAGE', '')
   vi.stubEnv('TEST_HELPER_WRONG_MODE', '')
   setLocalEmbeddingRuntimeForTests(null)
-  return { runtime: getLocalEmbeddingRuntime(), input, helper, script, launchRecord, imageCapture }
+  hashedFiles.paths.length = 0
+  return {
+    runtime: getLocalEmbeddingRuntime(),
+    input,
+    helper,
+    script,
+    launchRecord,
+    imageCapture,
+    log,
+    gate
+  }
 }
 
 async function installRuntime(media: boolean) {
@@ -583,5 +621,202 @@ describe('LocalEmbeddingRuntime installed asset discovery', () => {
       1,
       ...Array<number>(models.LOCAL_EMBEDDING_MODEL.dimension - 2).fill(0)
     ])
+  })
+})
+
+async function helperLog(log: string): Promise<string[]> {
+  return (await readFile(log, 'utf8').catch(() => '')).split('\n').filter(Boolean)
+}
+
+const textRequests = (lines: string[]) =>
+  lines.filter((line) => line.startsWith('text ')).map((line) => line.slice('text '.length))
+const launches = (lines: string[]) => lines.filter((line) => line.startsWith('launch '))
+const turns = () => new Promise<void>((resolve) => setTimeout(resolve, 50))
+
+async function eventually(check: () => Promise<boolean>, what: string): Promise<void> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    if (await check()) return
+    await new Promise<void>((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`Timed out waiting for ${what}`)
+}
+
+/** The helper answers `hold:` requests only after the gate file is removed. */
+async function startHeldJob({
+  runtime,
+  gate,
+  log
+}: Awaited<ReturnType<typeof makeRuntime>>): Promise<{
+  running: Promise<unknown>
+  release: () => Promise<void>
+}> {
+  await writeFile(gate, '')
+  const running = runtime.generate('hold:running')
+  await eventually(
+    async () => (await helperLog(log)).includes('text hold:running'),
+    'the helper to receive the held request'
+  )
+  return { running, release: () => rm(gate, { force: true }) }
+}
+
+describe('LocalEmbeddingRuntime job queue', () => {
+  it('queues a second request behind the running one instead of rejecting it as busy', async () => {
+    const fixture = await makeRuntime(false)
+    const { running, release } = await startHeldJob(fixture)
+    let settled = false
+    const queued = fixture.runtime.generate('queued')
+    void queued.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await turns()
+    expect(settled).toBe(false)
+    expect(textRequests(await helperLog(fixture.log))).toEqual(['hold:running'])
+
+    await release()
+    await running
+    expect((await queued).modelKey).toBe(models.LOCAL_EMBEDDING_MODEL_KEY)
+    expect(textRequests(await helperLog(fixture.log))).toEqual(['hold:running', 'queued'])
+    expect(launches(await helperLog(fixture.log))).toHaveLength(1)
+  })
+
+  it('serves interactive requests ahead of queued background ones, each class in arrival order', async () => {
+    const fixture = await makeRuntime(false)
+    const { runtime } = fixture
+    const { running, release } = await startHeldJob(fixture)
+    const jobs = [
+      runtime.generate('background-1'),
+      runtime.generate('background-2'),
+      runWithEmbeddingPriority('interactive', () => runtime.generate('interactive-1')),
+      runWithEmbeddingPriority('interactive', () => runtime.generate('interactive-2'))
+    ]
+    await release()
+    await Promise.all([running, ...jobs])
+    expect(textRequests(await helperLog(fixture.log))).toEqual([
+      'hold:running',
+      'interactive-1',
+      'interactive-2',
+      'background-1',
+      'background-2'
+    ])
+  })
+
+  it('removes an aborted waiter without touching the running job or the helper', async () => {
+    const fixture = await makeRuntime(false)
+    const { runtime } = fixture
+    const { running, release } = await startHeldJob(fixture)
+    const controller = new AbortController()
+    const aborted = runtime.generate('aborted', controller.signal)
+    const rejected = expect(aborted).rejects.toMatchObject({ name: 'AbortError' })
+    const survivor = runtime.generate('survivor')
+    controller.abort()
+    await rejected
+
+    await release()
+    await running
+    await survivor
+    expect(textRequests(await helperLog(fixture.log))).toEqual(['hold:running', 'survivor'])
+    expect(launches(await helperLog(fixture.log))).toHaveLength(1)
+  })
+
+  it('fails fast with a clear error when the background lane is full, while a query still queues', async () => {
+    const fixture = await makeRuntime(false)
+    const { runtime } = fixture
+    const { running, release } = await startHeldJob(fixture)
+    const controller = new AbortController()
+    const waiting = Array.from({ length: EMBEDDING_QUEUE_LIMITS.background }, (_, index) =>
+      runtime.generate(`background-${index}`, controller.signal).catch((error: unknown) => error)
+    )
+    await expect(runtime.generate('one too many')).rejects.toThrow(/background queue is full/)
+    const query = runWithEmbeddingPriority('interactive', () =>
+      runtime.generate('query', controller.signal)
+    ).catch((error: unknown) => error)
+
+    controller.abort()
+    const outcomes = await Promise.all([...waiting, query])
+    expect(outcomes.every((outcome) => (outcome as Error).name === 'AbortError')).toBe(true)
+    await release()
+    await running
+    expect(textRequests(await helperLog(fixture.log))).toEqual(['hold:running'])
+  })
+
+  it('lets a query wait for a running image embedding instead of aborting it', async () => {
+    const fixture = await makeRuntime(true)
+    const { runtime, input, gate, log } = fixture
+    vi.stubEnv('TEST_HELPER_HOLD_IMAGE', '1')
+    await writeFile(gate, '')
+    const image = runtime.generateImage(input)
+    await eventually(
+      async () => (await helperLog(log)).includes('image image'),
+      'the helper to receive the image request'
+    )
+    let settled = false
+    const query = runWithEmbeddingPriority('interactive', () => runtime.generate('query'))
+    void query.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await turns()
+    expect(settled).toBe(false)
+
+    await rm(gate)
+    expect((await image).vector[1]).toBe(1)
+    expect((await query).vector[0]).toBe(1)
+    expect(textRequests(await helperLog(log))).toEqual(['query'])
+    expect(launches(await helperLog(log))).toHaveLength(1)
+  })
+
+  it('rejects only the running job when the helper dies and runs queued work on a fresh helper', async () => {
+    const { runtime, log } = await makeRuntime(false)
+    const crashing = runtime.generate('crash:running')
+    const rejected = expect(crashing).rejects.toThrow(/helper exited/)
+    const behind = runtime.generate('behind')
+    await rejected
+    expect((await behind).vector[0]).toBe(1)
+    const started = launches(await helperLog(log))
+    expect(started).toHaveLength(2)
+    expect(new Set(started).size).toBe(2)
+  })
+
+  it('rejects queued requests when the runtime closes', async () => {
+    const fixture = await makeRuntime(false)
+    const { running, release } = await startHeldJob(fixture)
+    const queued = fixture.runtime.generate('queued')
+    const outcomes = Promise.all([
+      expect(queued).rejects.toThrow(/closed/),
+      expect(running).rejects.toThrow(/closed/)
+    ])
+    fixture.runtime.close()
+    await outcomes
+    await release()
+  })
+})
+
+describe('LocalEmbeddingRuntime asset verification cache', () => {
+  it('does not hash the helper again when it restarts', async () => {
+    const { runtime, helper, log } = await makeRuntime(false)
+    await expect(runtime.generate('crash:first')).rejects.toThrow(/helper exited/)
+    expect((await runtime.generate('second')).vector[0]).toBe(1)
+    expect(launches(await helperLog(log))).toHaveLength(2)
+    expect(hashedFiles.paths.filter((file) => file === helper)).toHaveLength(1)
+  })
+
+  it('refuses a helper that was replaced after it was first verified', async () => {
+    const { runtime, helper, script, log } = await makeRuntime(false)
+    await expect(runtime.generate('crash:first')).rejects.toThrow(/helper exited/)
+    await writeFile(helper, `${script}\n// swapped after verification\n`, { mode: 0o700 })
+    await expect(runtime.generate('second')).rejects.toThrow(
+      'Local EmbeddingGemma helper checksum mismatch'
+    )
+    expect(launches(await helperLog(log))).toHaveLength(1)
+    expect(hashedFiles.paths.filter((file) => file === helper)).toHaveLength(2)
   })
 })

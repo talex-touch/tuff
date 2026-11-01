@@ -25,6 +25,7 @@ import { hashFileContentChunk } from './services/file-content-match'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
 import { getLocalEmbeddingRuntime } from '../../../ai/local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from '../../../ai/local-embedding-model'
+import { currentEmbeddingPriority, EmbeddingJobQueue } from '../../../ai/local-embedding-queue'
 import { FileProviderEmbeddingIndexService } from './services/file-provider-embedding-index-service'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
@@ -368,7 +369,7 @@ describe('EmbeddingService physical chunk ownership', () => {
 
     expect(
       await service.indexFiles([{ fileId: '1', content: replacementContent, chunks: replacement }])
-    ).toEqual({ indexed: 0, skipped: 0, failed: 1 })
+    ).toEqual({ indexed: 0, skipped: 0, failed: 1, retryFileIds: ['1'] })
     expect(
       (
         await home.client.execute(
@@ -775,6 +776,7 @@ describe('EmbeddingService real image publication contracts', () => {
       split?: boolean
       execWrite?: EmbeddingDbRouting['execWrite']
       capacity?: () => Promise<boolean>
+      generate?: FileEmbeddingGenerator
     } = {}
   ): EmbeddingService {
     return createEmbeddingService(
@@ -795,7 +797,7 @@ describe('EmbeddingService real image publication contracts', () => {
               'write'
             ))
       },
-      async () => ({ vector: [1, 0, 0], model: LOCAL_EMBEDDING_MODEL_KEY })
+      options.generate ?? (async () => ({ vector: [1, 0, 0], model: LOCAL_EMBEDDING_MODEL_KEY }))
     )
   }
 
@@ -912,6 +914,99 @@ describe('EmbeddingService real image publication contracts', () => {
       { id: 1, content: null, embedding_status: 'pending' },
       { id: 2, content, embedding_status: 'completed' }
     ])
+  })
+
+  it('lets a semantic search queue behind a running image embedding instead of aborting it', async () => {
+    const home = await makeDb('search-beside-image')
+    const { input } = await prepareImage(home)
+    const slot = new EmbeddingJobQueue(() => new Error('cancelled'))
+    const imageRunning = Promise.withResolvers<void>()
+    const imageDone = Promise.withResolvers<void>()
+    const events: string[] = []
+    const queryPriorities: string[] = []
+    let imageSignal: AbortSignal | undefined
+    vi.mocked(tuffIntelligence.embedding.generateLocalImage).mockImplementation(
+      async (_image, options) => {
+        const release = await slot.acquire(currentEmbeddingPriority(), options?.signal)
+        try {
+          imageSignal = options?.signal
+          imageRunning.resolve()
+          // The real runtime terminates its helper when a running request is aborted.
+          await Promise.race([
+            imageDone.promise,
+            new Promise<never>((_, reject) =>
+              options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+                once: true
+              })
+            )
+          ])
+          events.push('image')
+          return {
+            result: [1, 0, 0],
+            model: LOCAL_EMBEDDING_MODEL_KEY,
+            provider: 'local',
+            traceId: 'image-beside-search',
+            latency: 0,
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+          }
+        } finally {
+          release()
+        }
+      }
+    )
+    const service = imageService(home, home, {
+      generate: async (_text, signal) => {
+        queryPriorities.push(currentEmbeddingPriority())
+        const release = await slot.acquire(currentEmbeddingPriority(), signal)
+        try {
+          events.push('query')
+          return { vector: [1, 0, 0], model: LOCAL_EMBEDDING_MODEL_KEY }
+        } finally {
+          release()
+        }
+      }
+    })
+    const indexing = service.indexFiles([input])
+    try {
+      await imageRunning.promise
+      let searched = false
+      const search = service.semanticSearch('猫').then(() => {
+        searched = true
+      })
+      await vi.waitFor(() => expect(queryPriorities).toHaveLength(1))
+      expect(imageSignal?.aborted).toBe(false)
+      expect(queryPriorities).toEqual(['interactive'])
+      await new Promise<void>((resolve) => setTimeout(resolve, 20))
+      expect(searched).toBe(false)
+
+      imageDone.resolve()
+      expect(await indexing).toEqual({ indexed: 1, skipped: 0, failed: 0 })
+      await search
+      expect(events).toEqual(['image', 'query'])
+      expect((await home.client.execute('SELECT source_id, model FROM embeddings')).rows).toEqual([
+        { source_id: '1', model: LOCAL_EMBEDDING_MODEL_KEY }
+      ])
+      expect(
+        (await home.client.execute('SELECT embedding_status FROM files WHERE id = 1')).rows
+      ).toEqual([{ embedding_status: 'completed' }])
+      expect((await service.semanticSearch('猫')).map((row) => row.sourceId)).toEqual(['1'])
+    } finally {
+      imageDone.resolve()
+      await indexing
+    }
+  })
+
+  it('does not report a failed image for the text retry lane', async () => {
+    const home = await makeDb('image-failure-not-retried')
+    const { input } = await prepareImage(home)
+    vi.mocked(tuffIntelligence.embedding.generateLocalImage).mockRejectedValue(
+      new Error('image encoder failed')
+    )
+    expect(await imageService(home).indexFiles([input])).toEqual({
+      indexed: 0,
+      skipped: 0,
+      failed: 1
+    })
   })
 
   it('does not read an image whose watch root was withdrawn before the flush consumer ran', async () => {
@@ -1070,5 +1165,115 @@ describe('EmbeddingService real image publication contracts', () => {
     ).toEqual([
       { embedding: '[0,1,0]', model: 'previous-image-space', content_hash: 'previous-image' }
     ])
+  })
+})
+
+describe('EmbeddingService failed text vectors', () => {
+  async function brokenTextFile(name: string) {
+    const home = await makeDb(name)
+    const content = CHUNKS[1]!.text
+    await home.client.execute({ sql: 'UPDATE files SET content = ? WHERE id = 1', args: [content] })
+    let broken = true
+    const service = createEmbeddingService(
+      {
+        isSplitEnabled: () => false,
+        getReadDb: () => home.db,
+        getDatabasePath: () => home.databasePath,
+        getPrimaryDb: () => home.db,
+        execWrite: async () => {
+          throw new Error('Unexpected worker write')
+        }
+      },
+      async (text) => {
+        if (broken && text === content) throw new Error('model inference failed')
+        return generateEmbedding(text)
+      }
+    )
+    const entry: IndexWorkerFileResult = {
+      type: 'file',
+      taskId: 'text-retry',
+      fileId: 1,
+      fileVersion: 2_000,
+      fileSize: 64,
+      progress: {
+        status: 'completed',
+        progress: 100,
+        processedBytes: 64,
+        totalBytes: 64,
+        lastError: null
+      },
+      fileUpdate: { content, embeddingStatus: 'pending' },
+      indexItem: {
+        itemId: '/lease.pdf',
+        providerId: 'files',
+        type: 'file',
+        path: '/lease.pdf',
+        name: 'lease.pdf',
+        extension: '.pdf',
+        content
+      }
+    }
+    return {
+      service,
+      entry,
+      input: { fileId: '1', content, fileVersion: 2_000, fileSize: 64 },
+      setBroken: (value: boolean) => {
+        broken = value
+      }
+    }
+  }
+  const FAILED = { indexed: 0, skipped: 0, failed: 1 }
+
+  it('reports a failed text file for the retry lane until its third failure, then lets it finish', async () => {
+    const { service, input } = await brokenTextFile('text-retry-cap')
+    expect(await service.indexFiles([input])).toEqual({ ...FAILED, retryFileIds: ['1'] })
+    expect(await service.indexFiles([input])).toEqual({ ...FAILED, retryFileIds: ['1'] })
+    expect(await service.indexFiles([input])).toEqual(FAILED)
+  })
+
+  it('forgets earlier failures once the file embeds', async () => {
+    const { service, input, setBroken } = await brokenTextFile('text-retry-reset')
+    await service.indexFiles([input])
+    await service.indexFiles([input])
+    setBroken(false)
+    expect(await service.indexFiles([input])).toEqual({ indexed: 1, skipped: 0, failed: 0 })
+    setBroken(true)
+    expect(await service.indexFiles([input])).toEqual({ ...FAILED, retryFileIds: ['1'] })
+  })
+
+  it('never evicts a tracked file, so a failing batch larger than the table still converges', async () => {
+    // One warning per failed attempt, twelve thousand of them.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { service, input } = await brokenTextFile('text-retry-overflow')
+    const tableSize = 4096
+    const ids = Array.from({ length: tableSize + 4 }, (_, index) => String(index + 1))
+    const attempts = new Map<string, number>()
+    const listedPerRound: number[] = []
+    let round = ids
+    for (let pass = 0; pass < 3; pass++) {
+      const result = await service.indexFiles(round.map((fileId) => ({ ...input, fileId })))
+      for (const fileId of round) attempts.set(fileId, (attempts.get(fileId) ?? 0) + 1)
+      round = result.retryFileIds ?? []
+      listedPerRound.push(round.length)
+    }
+    // The first 4,096 are tracked and listed until their third failure; the four that found the
+    // table full are given up on at once instead of swapping an earlier file out.
+    expect(listedPerRound).toEqual([tableSize, tableSize, 0])
+    expect(ids.slice(0, tableSize).every((fileId) => attempts.get(fileId) === 3)).toBe(true)
+    expect(ids.slice(tableSize).map((fileId) => attempts.get(fileId))).toEqual([1, 1, 1, 1])
+    // Everything tracked has finished, so a file that fails now is tracked again.
+    expect(await service.indexFiles([{ ...input, fileId: '9000' }])).toEqual({
+      ...FAILED,
+      retryFileIds: ['9000']
+    })
+  })
+
+  it('hands the flush consumer the numeric ids of the text files to retry', async () => {
+    const { service, entry } = await brokenTextFile('text-retry-consumer')
+    const consumer = new FileProviderEmbeddingIndexService({
+      getEmbeddingService: () => service,
+      logDebug: () => {}
+    })
+    expect(await consumer.indexCommittedEntries([entry])).toEqual({ retryFileIds: [1] })
   })
 })
