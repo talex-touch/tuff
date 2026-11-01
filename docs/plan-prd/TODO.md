@@ -41,6 +41,15 @@
 - **R8-F CatalogService MVP** 的 domain-lexicon 产品触发仍暂停；已获执行授权的 `09-13-voice-provider-cloud-pack` 是独立 scoped extension，代码与本地验证已完成，待 review/landing。AI/Assistant/OmniPanel polish、desktop fireworks 与 broad search-class refactors 继续按原顺序暂停。
 - **macOS 原生能力渠道化**先进入 AI topical backlog，不抢占当前 release/search blocker：评估机器本地能力的运行时发现、自动注入与平台降级，详细范围见 [`TODO-AI.md`](./TODO-AI.md#macos-原生能力渠道化候选)。
 
+## Search index storage follow-ups
+
+- [ ] **文件正文只存一份（方案 C，未开工，待单独设计）。** 2026-10-31 在一份 6.4 GB 的克隆索引库上用 `dbstat` 量到：同一份提取正文被存了三处——`files.content`（原文）、FTS `search_index` 的 `content` 列（自写入的 `toLowerCase()` 副本）以及它的 B-tree/docsize 页，加起来占库的一半以上。想让 `files.content` 不再存正文，需要同时改三件事，缺一不可：
+  - FTS 的 `content` 与 `files.content` 内容并不相同（一个已小写、一个是原文），不能直接改成 FTS 外部内容表（`content=`），否则要改分词与写入路径，召回结果会变；
+  - `embedding-service` 的写入栅栏（`files.content IS NULL` 且 `embedding_status = 'pending'`）、`search-index-service` 读取 `files.content` 的查询，以及 `file.search` 工具取片段的路径都要改成从别处取正文；
+  - 改完必须做一次存量迁移与 `VACUUM`，否则文件不会变小，而 `VACUUM` 需要约两倍活数据的空闲磁盘。
+  - 已经做掉的部分：超过 50,000 字符的文件整体不再做内容索引（`FILE_CONTENT_MAX_CHARS`，见 [search-hotpath-contracts](../engineering/specs/main-process/search-hotpath-contracts.md)），向量改存 float32 BLOB。方案 C 要在这两项落地并量过实际收益之后再决定值不值得做。
+  - `content_chunks`（语义命中后定位片段用，约 344 MB）不是纯冗余，不在本条范围内。
+
 ## Version-planned work
 
 - [ ] **2.5.1：文件搜索与文件动作融合。** P0 正文语义穿透已落地：目录结果与 `.app` 去重、⌘K 打开方式与 7 组文件动作、应用版本与真实创建时间摘要、权限/删除错误反馈；B9 文件名错字 n-gram；PDF/code 分段、页码/行号片段和受控 EmbeddingGemma 2 本地 runtime contract 已接入；P1 原生 Scanner 对比已在 20,000 文件下实测完成（19ms vs 285ms，7.5MB vs 114MB，支持取消）；P3 文件移动/复制/废纸篓已落地，支持单文件原子硬链接防同名覆盖与跨卷身份复核（46 项单测通过）；P4 显式源码正文检索 `file.search` 工具已落地（5 项单测通过）。仍待实施的是签名 helper 的 packaged release 验收；模型与运行边界见 [调研报告](../engineering/reports/file-search-integration-2.5.1-2026-10-11.md)。本条不改变前述全局执行顺序。
