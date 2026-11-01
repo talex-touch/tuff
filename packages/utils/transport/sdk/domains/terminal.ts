@@ -214,7 +214,7 @@ export function createTerminalSdk(transport: ITuffTransport): TerminalSdk {
       return promise
     },
     async listFonts(): Promise<TerminalFontInfo[]> {
-      const response = await transport.request(TerminalEvents.fonts.list)
+      const response = await transport.send(TerminalEvents.fonts.list)
       return response?.fonts ?? []
     },
   }
