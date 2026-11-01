@@ -315,7 +315,9 @@ const LIMITS = {
   // `.tx-glass-surface__svg--lens` alone. It slimmed before asking: the forced-colours rule for
   // the lens keeps only what the base rule does not already paint (2,461 -> 2,353 B). Actuals
   // plus minimal headroom, growth from here fails.
-  fullCssBytes: 872 * 1024,
+  // 872 -> 872.5 on 2026-10-31: measured 872.3 KiB after the image preview slots, the Mermaid
+  // reuse and the terminal font stack landed. Minimal headroom, growth from here fails.
+  fullCssBytes: 872.5 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -417,7 +419,9 @@ const pageStyleBudgets = [
     // 154.5 -> 156 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 26 that
     // moved (`glass-surface/style.css` 819 -> 2,353 B): 157,945 -> 159,479 B. Actuals plus
     // minimal headroom, growth from here fails.
-    limit: 156 * 1024,
+    // 156 -> 174 on 2026-10-31: measured 173.5 KiB after the image preview, Mermaid and terminal
+    // font changes landed. Minimal headroom, growth from here fails.
+    limit: 174 * 1024,
   },
 ]
 
