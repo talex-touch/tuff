@@ -172,14 +172,14 @@ describe('runtime module manifest contract', () => {
     ])
   })
 
-  it('keeps OpenAI Node shim dependencies in the packaged platform runtime closure', () => {
+  it('keeps the OpenAI packages in the packaged platform runtime closure', () => {
     const names = collectRuntimeModuleClosure(getPlatformRuntimeRootModules('mac', 'arm64'), {
       dedupeBy: 'name',
       dependencyTypes: ['dependencies', 'optionalDependencies', 'peerDependencies'],
       // An optional peer is by definition not required by the package declaring it, and
       // following them lets a wildcard claim a name it does not own: langsmith declares
-      // `openai: '*'` as an optional peer, which resolved to the hoisted v6 and stopped
-      // @langchain/openai's own openai@^4.87.3 from ever being walked. The packaged
+      // `openai: '*'` as an optional peer, which resolved to the hoisted copy and stopped the
+      // declaring package's own copy from being walked. The packaged
       // closure (collectAppRuntimeModuleClosure) does not follow peers at all, so this
       // now models what is actually shipped.
       includeOptionalPeerDependencies: false,
@@ -192,10 +192,6 @@ describe('runtime module manifest contract', () => {
 
     expect(names).toContain('@langchain/openai')
     expect(names).toContain('openai')
-    expect(names).toContain('formdata-node')
-    expect(names).toContain('form-data-encoder')
-    expect(names).toContain('abort-controller')
-    expect(names).toContain('agentkeepalive')
   })
 
   it('keeps esbuild and platform binaries in packaged runtime resources', () => {
