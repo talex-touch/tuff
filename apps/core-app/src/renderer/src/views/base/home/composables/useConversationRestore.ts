@@ -9,6 +9,7 @@ import { createLatestOnly } from '~/modules/conversation/latest-only'
 import type { UseAgentWorkspaceReturn } from '~/modules/conversation/useAgentWorkspace'
 import type { UseConversationHistoryReturn } from '~/modules/conversation/useConversationHistory'
 import type { LeavingHead } from './useLeavingHead'
+import type { UseSendStateReturn } from './useSendState'
 
 /** The slice of the project store the restore reads and writes. */
 export interface RestoreProjectStore {
@@ -33,7 +34,7 @@ export interface ConversationRestoreOptions {
   /** Empties the thread the page mirrors. */
   resetConversation: () => void
   /** A send in flight, a lift, an opening hold: all end when the thread underneath changes. */
-  invalidateSubmission: () => void
+  submitState: Pick<UseSendStateReturn, 'invalidatePageSubmission'>
   invalidateChoreography: () => void
   playComposerFlip: (deltaY: number) => void
   measureLeavingHead: () => LeavingHead | null
@@ -81,7 +82,7 @@ export function useConversationRestore(options: ConversationRestoreOptions) {
   const restoreSequence = createLatestOnly()
 
   async function resetBlankConversation(nextProjectId: string | null): Promise<void> {
-    options.invalidateSubmission()
+    options.submitState.invalidatePageSubmission()
     conversationId.value = null
     projectId.value = nextProjectId
     const composerEl = options.composer()
@@ -115,7 +116,7 @@ export function useConversationRestore(options: ConversationRestoreOptions) {
         return
       }
       if (target === conversationId.value) return
-      options.invalidateSubmission()
+      options.submitState.invalidatePageSubmission()
 
       // The record (title, project) and Main's workspace state are read together, so the thread is
       // on screen in the same update that switches to it.

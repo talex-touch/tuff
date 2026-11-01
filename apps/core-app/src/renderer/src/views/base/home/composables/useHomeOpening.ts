@@ -118,6 +118,13 @@ export function useHomeOpening(options: HomeOpeningOptions) {
     () => openingPhase.value === 'pending' || openingPhase.value === 'streaming'
   )
 
+  /** What the greeting shows right now, as one value, for a send to pin while the greeting leaves. */
+  const openingSnapshot = computed<OpeningHold>(() => ({
+    phase: openingPhase.value,
+    text: openingText.value,
+    source: openingSource.value
+  }))
+
   /**
    * The card's skeleton, held back and held on (`useDeferredLoading`): local reads that land inside
    * its delay never show one. Until they land the card stays out of sight rather than show rows that
@@ -153,6 +160,7 @@ export function useHomeOpening(options: HomeOpeningOptions) {
     openingText,
     openingSource,
     openingBusy,
+    openingSnapshot,
     pushSteps,
     pushStep,
     pushSelected,

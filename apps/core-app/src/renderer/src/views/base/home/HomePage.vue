@@ -1,12 +1,10 @@
 <script lang="ts" name="HomePage" setup>
-import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type {
   ConversationMessage,
   ConversationTurnMeta
 } from '~/modules/conversation/useHomeConversation'
-import type { WorkspaceSubmitDisposition } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
@@ -30,7 +28,7 @@ import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
 import { usePreferredReducedMotion } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { describeFailure } from '~/utils/failure-text'
@@ -39,21 +37,11 @@ import { useRoute, useRouter } from 'vue-router'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
-import { createLatestOnly } from '~/modules/conversation/latest-only'
-import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
-import {
-  FLIGHT_IMPACT_MS,
-  prefersReducedMotion,
-  SCROLL_TWEEN_MS,
-  useSendChoreography
-} from '~/composables/useSendChoreography'
+import { prefersReducedMotion, useSendChoreography } from '~/composables/useSendChoreography'
 import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
-import {
-  createConversationId,
-  useConversationHistory
-} from '~/modules/conversation/useConversationHistory'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import {
@@ -78,8 +66,7 @@ import { resolvedTheme } from '~/modules/storage/theme-style'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
-import type { DictationFailureNotice } from './composer/dictation-notice'
-import { classifyDictationFailure, showDictationNotice } from './composer/dictation-notice'
+import { showDictationNotice } from './composer/dictation-notice'
 import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
 import HomeContextMeter from './composer/HomeContextMeter.vue'
@@ -109,7 +96,9 @@ import { usePassageSelection } from './composables/usePassageSelection'
 import { useConversationTitle } from './composables/useConversationTitle'
 import { useThinkingTicker } from './composables/useThinkingTicker'
 import { useHomeCommands } from './composables/useHomeCommands'
-import { type OpeningHold, useHomeOpening } from './composables/useHomeOpening'
+import { useHomeOpening } from './composables/useHomeOpening'
+import { useHomeSubmit } from './composables/useHomeSubmit'
+import { useSendState } from './composables/useSendState'
 import { useTurnError } from './composables/useTurnError'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
 import {
@@ -172,12 +161,6 @@ const liftFillRef = ref<HTMLElement | null>(null)
 const liftTextRef = ref<HTMLElement | null>(null)
 /** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
 const draftGhostRef = ref<HTMLElement | null>(null)
-/**
- * The sent text is still on the composer (lifted, not yet clear of it): the empty field's
- * placeholder would read as a second text under it, so it waits.
- */
-const lifting = ref(false)
-
 const router = useRouter()
 const route = useRoute()
 
@@ -208,12 +191,6 @@ onMounted(() => {
  */
 const conversationId = ref<string | null>(null)
 const projectId = ref<string | null>(null)
-/**
- * The opening as the greeting shows it. `submit` pins it for the one flush between taking the lead
- * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
- * fade out with the words the reader saw rather than lose them a frame before it goes.
- */
-const openingHold = shallowRef<OpeningHold | null>(null)
 
 /**
  * The Main-owned workspace behind Home (A2, A5–A7): execution, history and pending inputs live in
@@ -312,10 +289,12 @@ const dictation = useComposerDictation({
 })
 
 /**
- * A send in flight to Main: the draft stays put until Main has it, and a second press in that window
- * must not send it twice.
+ * What a send leaves on the page while it is in the air: shared by the send path, the thread
+ * restore and the append watcher. The motion score is created further down, so it is read lazily.
  */
-const sending = ref(false)
+const submitState = useSendState({ choreography: () => choreography })
+const { sending, lifting, openingHold } = submitState
+
 watch(
   [
     () => (typeof route.params.id === 'string' ? route.params.id : conversationId.value),
@@ -329,7 +308,6 @@ watch(
   },
   { immediate: true }
 )
-const pageSubmissionSequence = createLatestOnly()
 
 // A plain send waits for dictation to finish; while it runs the send key means 「结束并发送」 (D10-d).
 // A running reply does not block it: Main takes the message as a pending input (A6).
@@ -356,12 +334,6 @@ const sendQueues = computed(
  * sits where the message it may become will land; on an untouched Home it waits above the composer.
  */
 const VOICE_DRAFT_ID = '__home-voice-draft__'
-/**
- * The id `submit` minted for a first send, until that send has settled. The conversation watcher
- * leaves the clip alone for it — minted, or taken back when the send failed — because the thread
- * on screen has not changed, and a failed voice send has just put its clip back.
- */
-let ownMintedId: string | null = null
 const VOICE_DRAFT_ROW: ConversationMessage = {
   id: VOICE_DRAFT_ID,
   role: 'user',
@@ -379,50 +351,6 @@ const voiceSendBlocked = computed(
     workspace.loading.value ||
     Boolean(workspace.loadError.value)
 )
-
-/** A send of the clip: its recording's id, and its transcript — what the model reads. */
-interface VoiceSend {
-  recordingId: string
-  text: string
-}
-
-/** What a failed voice send leaves on the clip: Main no longer has the recording, or nothing. */
-function voiceSendFailure(error: unknown): DictationFailureNotice | null {
-  const failure =
-    error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
-  return failure.code === 'WORKSPACE_VOICE_UNAVAILABLE'
-    ? { kind: 'failed', detail: 'VOICE_RECORDING_NOT_FOUND' }
-    : null
-}
-
-/**
- * 「发送语音」/「直接发送」: the clip goes out as a voice message. A clip with no words of its own
- * is recognized first — no adapter carries audio, so the transcript is what the model reads — and
- * one that still has none, or fails again, stays where it is and says why.
- */
-async function sendVoiceDraft(): Promise<void> {
-  const clip = dictation.clip.value
-  if (!clip || clip.busy || voiceSendBlocked.value) return
-  if (agentProfileMissing()) {
-    toast.error(t('home.workspace.profile.required'))
-    return
-  }
-  dictation.markClipSending(true)
-  let text: string
-  try {
-    text = await dictation.clipTranscript()
-  } catch (error) {
-    dictation.markClipSending(false, classifyDictationFailure(error) ?? { kind: 'failed' })
-    return
-  }
-  // Dismissed, or replaced by a new recording, while it was being recognized.
-  if (dictation.clip.value?.recording.id !== clip.recording.id) return
-  if (!text) {
-    dictation.markClipSending(false, { kind: 'empty', detail: 'VOICE_NOTHING_TO_SEND' })
-    return
-  }
-  await submit({ recordingId: clip.recording.id, text })
-}
 
 /** The send key's face (`composer/send-state.ts`), derived from state this page already owns. */
 const sendState = computed(() =>
@@ -443,7 +371,7 @@ watch(isStreaming, (streaming) => {
 })
 watch(isHomeRoute, (visible) => {
   if (!visible) {
-    invalidatePageSubmission()
+    submitState.invalidatePageSubmission()
     void dictation.stop()
   }
 })
@@ -614,22 +542,13 @@ const choreography = useSendChoreography({
 })
 const enteringMessages = choreography.enteringMessages
 
-/**
- * Set by `submit` just before it sends: an explicit hand-off, not an
- * inference. A user message can also arrive programmatically — a form
- * submission calls `conversation.send` directly — and guessing "user message
- * ⇒ the composer will choreograph it" left those permanently hidden.
- */
-let choreographedSend = false
-
 watch(
   () => messages.value.length,
   (length, previous) => {
     // Consumed before ANY early return: a claim that survived reduced motion
     // (or a non-streaming append) used to latch, hijack the next programmatic
     // batch, and strand its rows at opacity 0 with nothing left to reveal them.
-    const claimed = choreographedSend
-    choreographedSend = false
+    const claimed = submitState.consumeChoreographedSend()
     if (!isStreaming.value || prefersReducedMotion()) return
     const appended = messages.value.slice(previous ?? 0, length)
     choreography.markEntering(appended.map((message) => message.id))
@@ -724,16 +643,6 @@ function bubbleMaxWidth(): number {
 
 const { measureLeavingHead, pinLeavingHead } = useLeavingHead(headRef)
 
-/**
- * Only images reach the model; a file in the tray never had bytes on this surface. Said once the
- * send has landed, so the reader knows which part of the message stayed behind.
- */
-function warnUnsentAttachments(attachments: AiAttachment[] | undefined): void {
-  if (attachments?.some((attachment) => attachment.kind !== 'image')) {
-    toast.info(t('home.attachmentNotSent'))
-  }
-}
-
 function workspaceErrorText(failure: AgentWorkspaceError): string {
   return t(`home.workspace.error.${failure.code === 'unknown' ? 'unknown' : failure.code}`)
 }
@@ -749,385 +658,6 @@ function reportSubmitError(error: unknown): void {
   const failure =
     error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
   reportWorkspaceError(failure, 'submit')
-}
-
-/**
- * Agent mode runs on one of the orchestrator's own enabled profiles; without one Main would refuse
- * the turn, so the press stops here with the reason instead of sending.
- */
-function agentProfileMissing(): boolean {
-  const settings = workspace.settings.value
-  if (settings.mode !== 'agent') return false
-  // Built-in Tuff Coordinator is always available
-  if (!settings.profileId || settings.profileId === 'default-pi') return false
-  const profile = workspace.profiles.value.find((entry) => entry.id === settings.profileId)
-  return !profile?.enabled
-}
-
-function invalidatePageSubmission(): void {
-  pageSubmissionSequence.claim()
-  sending.value = false
-  choreographedSend = false
-  openingHold.value = null
-  lifting.value = false
-  choreography.invalidate()
-}
-
-/**
- * A send while Main is busy (or holds pending inputs) joins Main's queue. The draft stays in the
- * composer until Main has persisted it — a rejected input, the full queue included, is never shown
- * as queued and never lost (A6).
- */
-async function enqueueDraft(voice?: VoiceSend): Promise<void> {
-  if ((workspace.state.value?.queue.length ?? 0) >= WORKSPACE_QUEUE_LIMIT) {
-    toast.error(t('home.workspace.queue.full', { max: WORKSPACE_QUEUE_LIMIT }))
-    if (voice) dictation.markClipSending(false)
-    return
-  }
-  const isCurrentSend = pageSubmissionSequence.claim()
-  const idAtSend = conversationId.value
-  const pathAtSend = route.fullPath
-  const ownsPage = () =>
-    isCurrentSend() &&
-    isHomeRoute.value &&
-    conversationId.value === idAtSend &&
-    route.fullPath === pathAtSend
-  const text = voice?.text ?? draft.value
-  const attachments =
-    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
-  // A voice send takes the clip off the stream now and leaves the draft to the reader, minus the
-  // clip's own words once Main has the message.
-  const draftAtSend = draft.value
-  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
-  const clip = voice ? dictation.takeClip() : null
-  sending.value = true
-  try {
-    await workspace.submit(
-      text,
-      attachments,
-      voice ? { voiceRecordingId: voice.recordingId } : undefined
-    )
-  } catch (error) {
-    if (clip) {
-      dictation.restoreClip(clip)
-      dictation.markClipSending(false, voiceSendFailure(error))
-    }
-    if (ownsPage()) reportSubmitError(error)
-    return
-  } finally {
-    if (isCurrentSend()) sending.value = false
-  }
-  // A typed send moves the thread on; the clip it may have come from goes with it.
-  if (!voice) dictation.dismissClip()
-  if (!ownsPage()) return
-  if (voice) {
-    if (draft.value === draftAtSend) draft.value = draftAfterVoice
-    await nextTick()
-    if (ownsPage()) autoGrow()
-    return
-  }
-  // Typing on while Main answered is the reader's next draft, not this one.
-  if (draft.value === text) draft.value = ''
-  pendingAttachments.value = pendingAttachments.value.filter(
-    (attachment) => !attachments?.includes(attachment)
-  )
-  await nextTick()
-  if (!ownsPage()) return
-  collapseDraft(true)
-  warnUnsentAttachments(attachments)
-}
-
-async function submit(voice?: VoiceSend): Promise<void> {
-  if (props.browserLanding && voice) browserMode.value = 'ask'
-  if (voice ? voiceSendBlocked.value : !canSend.value) return
-  if (props.browserLanding && browserMode.value === 'browse' && !voice) {
-    if (!props.browserNavigate || browserNavigating.value) return
-    browserNavigating.value = true
-    try {
-      await props.browserNavigate(draft.value)
-    } catch {
-      // BrowserPage owns the visible transport error; the typed draft remains available for retry.
-    } finally {
-      browserNavigating.value = false
-    }
-    return
-  }
-  if (agentProfileMissing()) {
-    toast.error(t('home.workspace.profile.required'))
-    return
-  }
-  // Images reach a model only when its binding and adapter accept them; Main refuses the same
-  // send, so the draft stays put here instead of being lifted and handed back. A voice send
-  // carries no images: the tray stays for the next message.
-  const imageGate = modelScope.resolvedChoice.value?.binding.imageInput
-  if (
-    !voice &&
-    imageGate &&
-    !imageGate.accepted &&
-    pendingAttachments.value.some((item) => item.kind === 'image')
-  ) {
-    toast.error(t('home.workspace.imagesUnsupported'))
-    return
-  }
-  if (sendQueues.value) {
-    await enqueueDraft(voice)
-    return
-  }
-  const isCurrentSend = pageSubmissionSequence.claim()
-  const pathAtSend = route.fullPath
-  let idAtSend = conversationId.value
-  const ownsPage = () =>
-    isCurrentSend() &&
-    isHomeRoute.value &&
-    conversationId.value === idAtSend &&
-    (route.fullPath === pathAtSend || (idAtSend !== null && route.params.id === idAtSend))
-  // The send key launches with the press — a click, Enter and the shortcut all pass here — so its
-  // arrow leaves with the lifted message and the stop capsule grows as the reply starts.
-  toolbarRef.value?.launch()
-
-  const text = voice?.text ?? draft.value
-  const attachments =
-    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
-  // The lift carries the typed text off the composer as its own bubble. A send with attachments
-  // keeps the clone flight, which carries the whole row — the tray included — not the text alone.
-  // So does a voice send: what leaves is the clip, not the draft.
-  const input = inputRef.value
-  // The conversation's first message: its lift and the dock take their time (LIFT_SCORE).
-  const opening = isEmpty.value
-  // The Home opening above the composer becomes this thread's first message — a finished one only:
-  // one still being written is dropped here and never joins (`takeLead`). Taken before anything
-  // awaits, so no opening can start or land between the press and the append. The greeting keeps
-  // showing what it showed until it has left (`openingHold`).
-  let lead: string | undefined
-  if (opening && homeRecommendationsEnabled.value) {
-    openingHold.value = {
-      phase: openingPhase.value,
-      text: openingText.value,
-      source: openingSource.value
-    }
-    lead = push.takeLead() ?? undefined
-  }
-  const liftable =
-    !props.browserLanding && !voice && !attachments && !!input && !prefersReducedMotion()
-  let lift: SendLift | null = null
-  if (liftable && input) {
-    // A lift still in the air lands first — before this one lays its bubble over the draft.
-    choreography.invalidate()
-    // Read before the draft clears: the bubble is laid over the text where it sits.
-    lift = choreography.liftDraft({
-      text,
-      input,
-      bubbleMaxWidth: bubbleMaxWidth(),
-      draftGhost: draftGhostRef.value,
-      opening,
-      onClear: () => {
-        if (isCurrentSend()) lifting.value = false
-      }
-    })
-    lifting.value = lift !== null
-  }
-  // A voice send leaves the draft to the reader, minus the clip's own words, and takes the clip off
-  // the stream before an id is minted below — the conversation watcher dismisses any clip it sees.
-  const draftAtSend = draft.value
-  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
-  const clip = voice ? dictation.takeClip() : null
-  if (voice) {
-    draft.value = draftAfterVoice
-  } else {
-    draft.value = ''
-    // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
-    pendingAttachments.value = []
-  }
-  await nextTick()
-  if (!ownsPage()) return
-  if (voice) autoGrow()
-  else collapseDraft(lift !== null)
-
-  // Allocated here rather than at setup so an untouched home screen never claims an id; Main
-  // creates the conversation with it in the same call that takes the message.
-  const minted = conversationId.value === null
-  conversationId.value ??= createConversationId()
-  if (minted) ownMintedId = conversationId.value
-  idAtSend = conversationId.value
-
-  // Claim the incoming batch before it exists: the length watcher fires
-  // in the flush that applies Main's reply, so the flag must already be up.
-  choreographedSend = true
-
-  // FLIP: the composer travels from centre stage to the bottom dock. Measured
-  // around the reactive flip so the same node glides instead of teleporting.
-  const composerEl = composerRef.value
-  const first = composerEl?.getBoundingClientRect()
-  const head = measureLeavingHead()
-
-  sending.value = true
-  if (idAtSend) setConversationLoading(idAtSend, true)
-  let disposition: WorkspaceSubmitDisposition
-  try {
-    disposition = await workspace.submit(text, attachments, {
-      lead,
-      ...(voice ? { voiceRecordingId: voice.recordingId } : {})
-    })
-  } catch (error) {
-    // The clip comes back whatever the page did meanwhile: its recording is still Main's to keep.
-    if (clip) {
-      dictation.restoreClip(clip)
-      dictation.markClipSending(false, voiceSendFailure(error))
-    }
-    if (!ownsPage()) return
-    // Rejection belongs to this view only. A stale completion cannot restore its
-    // draft or release a minted id after the user chose another conversation.
-    choreographedSend = false
-    openingHold.value = null
-    lift?.cancel()
-    lifting.value = false
-    if (voice) {
-      if (draft.value === draftAfterVoice) draft.value = draftAtSend
-    } else {
-      if (!draft.value) draft.value = text
-      pendingAttachments.value = [...(attachments ?? []), ...pendingAttachments.value]
-    }
-    if (minted) {
-      if (idAtSend) setConversationLoading(idAtSend, false)
-      conversationId.value = null
-      idAtSend = null
-    }
-    await nextTick()
-    if (!ownsPage()) return
-    autoGrow()
-    reportSubmitError(error)
-    return
-  } finally {
-    if (isCurrentSend()) sending.value = false
-  }
-  // The thread is this id's now: from here on a change of id is a change of thread.
-  if (minted) ownMintedId = null
-  // A typed send moves the thread on; the clip it may have come from goes with it.
-  if (!voice) dictation.dismissClip()
-  if (minted) void history.refresh()
-  if (!ownsPage()) return
-  warnUnsentAttachments(attachments)
-  if (props.browserLanding) {
-    await router.push(`/home/c/${idAtSend}`)
-    await resetBlankConversation(null)
-    return
-  }
-  // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
-  if (route.params.id !== idAtSend) void router.replace(`/home/c/${idAtSend}`)
-
-  if (disposition !== 'started') {
-    // Main took it as a pending input after all (a turn began in between): it is a queue row now,
-    // not a bubble, so nothing flies.
-    choreographedSend = false
-    openingHold.value = null
-    lift?.cancel()
-    return
-  }
-
-  // Main's reply carried the thread with this message on it; the lead is its first row.
-  const firstRow = messages.value[0]
-  const leadId = lead && firstRow?.role === 'assistant' ? firstRow.id : undefined
-  // Sending from a scrolled-up position still lands you on your own message —
-  // the stream only auto-follows readers already at the bottom.
-  await nextTick()
-  if (!ownsPage()) return
-
-  // If nothing was appended the watcher never consumed the claim, and a latched claim would steal
-  // the next batch's entrance. Clearing after the flush is free in the normal path — the watcher
-  // already consumed it.
-  choreographedSend = false
-  // The greeting left in that flush, keeping the opening it showed; nothing is left to hold.
-  openingHold.value = null
-
-  pinLeavingHead(head)
-
-  if (composerEl && first && !prefersReducedMotion()) {
-    // The box docks as the bubble rises: the two part in opposite directions, together.
-    const deltaY = first.top - composerEl.getBoundingClientRect().top
-    if (Math.abs(deltaY) > 8) {
-      choreography.playComposerFlip(deltaY, opening && lift ? { opening: true } : undefined)
-    }
-  }
-
-  // The send choreography: space and strike as ONE gesture. The freshly
-  // appended rows are already in the layout (hidden by `--enter`), so the
-  // glide opens the room while the message is already on its way —
-  // iMessage's zero-latency press.
-  //
-  // A lift took the stage at the top of `submit`, landing any lift still in
-  // the air there. That landing resolved its impact, and the placeholder reveal
-  // chained to it was stamped during the awaits since: a second bump here would
-  // silence it and leave the earlier reply hidden until the entrance watchdog —
-  // and would land this send's own lift.
-  if (!liftable) choreography.invalidate()
-  const sentId = [...messages.value].reverse().find((message) => message.role === 'user')?.id
-  const placeholderId =
-    messages.value.at(-1)?.role === 'assistant' ? messages.value.at(-1)?.id : undefined
-
-  if (prefersReducedMotion()) {
-    // Only reachable when the preference flipped mid-send: put the lifted text down.
-    lift?.cancel()
-    streamRef.value?.scrollToBottom()
-    return
-  }
-
-  void streamRef.value?.tweenToBottom(SCROLL_TWEEN_MS)
-  // The opening the reader already read above the composer takes its place at the head of the
-  // thread as the greeting leaves, before the lifted message lands under it. The append watcher
-  // hid it with the rest of the claimed batch, and the send score below reveals only the message
-  // and the placeholder. No knock: nothing sits above the first row.
-  if (leadId) choreography.playEntrance(leadId, 0)
-  let flight: SendFlightHandle | null = null
-  if (lift) {
-    if (sentId) flight = lift.fly(sentId)
-    else lift.cancel()
-  } else {
-    // No lift (attachments, or one that could not be laid out): the clone flight carries the row,
-    // so a claimed row is never left hidden for the watchdog to find.
-    flight = sentId ? choreography.playSend(sentId, composerEl) : null
-  }
-  if (placeholderId) {
-    // No knock of its own: the thread was just struck, and a second hit this
-    // close would read as stutter rather than physics.
-    const reveal = (): void => choreography.playEntrance(placeholderId, 0)
-    if (flight) {
-      void flight.impact.then(() => choreography.scheduleForCurrentSend(reveal, 80))
-    } else {
-      choreography.scheduleForCurrentSend(reveal, FLIGHT_IMPACT_MS + 80)
-    }
-  }
-}
-
-/**
- * The send key, Enter and the send shortcut. While dictating they mean 「结束并发送」 (D10-d): the
- * session stops, and once its last words have landed in the draft they go out as an ordinary send.
- * A session that heard nothing still sends what the draft already held — the press asked for a
- * send; `submit` does nothing when the draft is empty too.
- */
-async function pressSend(): Promise<void> {
-  if (dictation.active.value) {
-    const outcome = await dictation.stop()
-    if (outcome === 'inserted' || outcome === 'empty') await submit()
-    return
-  }
-  await submit()
-}
-
-function handleKeydown(event: KeyboardEvent): void {
-  // `isComposing` keeps Enter from cutting an IME candidate selection short.
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
-  event.preventDefault()
-  void pressSend()
-}
-
-/**
- * Esc cancels a dictation and puts the draft back as it was before it started — from anywhere in
- * the composer: a click leaves focus on the microphone key, not in the field.
- */
-function handleComposerKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !dictation.active.value) return
-  event.preventDefault()
-  dictation.cancel()
 }
 
 const {
@@ -1224,22 +754,18 @@ const { resetBlankConversation } = useConversationRestore({
   stream: () => streamRef.value,
   focusInput: () => inputRef.value?.focus(),
   resetConversation: () => conversation.reset(),
-  invalidateSubmission: invalidatePageSubmission,
+  submitState,
   invalidateChoreography: () => choreography.invalidate(),
   playComposerFlip: (deltaY) => choreography.playComposerFlip(deltaY),
   measureLeavingHead,
   pinLeavingHead,
   // A dictation belongs to the thread it started in: switching threads abandons it where it
   // stands, without writing the draft back. (A first send never trips this — it waits for
-  // dictation to end.)
+  // dictation to end.) Its clip goes too — except across the id a first send mints, and takes
+  // back when it fails, where the thread on screen has not changed.
   onThreadChange: (next, previous) => {
     dictation.cancel({ restore: false })
-    // So does its clip: it belongs to the draft of the thread it was recorded in — except across
-    // the id a first send mints, and takes back when it fails (`ownMintedId`).
-    if (ownMintedId !== null && (next === ownMintedId || previous === ownMintedId)) {
-      if (next === null) ownMintedId = null
-      return
-    }
+    if (submitState.isOwnMintedChange(next, previous)) return
     dictation.dismissClip()
   }
 })
@@ -1263,6 +789,7 @@ const {
   choosePush,
   pushSkeleton,
   pushSettling,
+  openingSnapshot,
   pushSlotStyle
 } = useHomeOpening({
   openingHold,
@@ -1275,7 +802,50 @@ const {
   draft,
   input: inputRef,
   autoGrow,
-  submit
+  // Called only from a click, long after setup, so the send path below may be declared later.
+  submit: () => submit()
+})
+
+// ============================================================================
+// The send path
+// ============================================================================
+
+const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown } = useHomeSubmit({
+  submitState,
+  browserLanding: () => props.browserLanding,
+  browserNavigate: props.browserNavigate,
+  browserMode,
+  browserNavigating,
+  isHomeRoute,
+  isEmpty,
+  conversationId,
+  messages,
+  draft,
+  pendingAttachments,
+  canSend,
+  voiceSendBlocked,
+  sendQueues,
+  imageInputAccepted: () => modelScope.resolvedChoice.value?.binding.imageInput.accepted,
+  homeRecommendationsEnabled,
+  opening: openingSnapshot,
+  push,
+  workspace,
+  dictation,
+  history,
+  choreography,
+  stream: () => streamRef.value,
+  input: () => inputRef.value,
+  composer: () => composerRef.value,
+  draftGhost: () => draftGhostRef.value,
+  launchSendKey: () => toolbarRef.value?.launch(),
+  autoGrow,
+  collapseDraft,
+  bubbleMaxWidth,
+  measureLeavingHead,
+  pinLeavingHead,
+  resetBlankConversation,
+  setConversationLoading,
+  reportSubmitError
 })
 
 // ============================================================================
