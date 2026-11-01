@@ -122,7 +122,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
   ): Promise<string[]> {
     const options = { modelPreference: [model], ...(reasoningEffort ? { reasoningEffort } : {}) }
     const planned = withReasoningPlan(options, planProviderReasoning(options, config, model))
-    for await (const _chunk of new PiCliProvider(config).chatStream(
+    for await (const _chunk of new PiCliProvider(config, () => true).chatStream(
       { messages: [{ role: 'user', content: 'hi' }] },
       planned
     )) {
