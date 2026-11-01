@@ -184,7 +184,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     const rawBaseUrl = this.config.baseUrl || DEFAULT_BASE_URL
     const baseUrl = normalizeAnthropicBaseUrl(rawBaseUrl)
     // Main's plan for this provider, translated and nothing more. Without one the model is built
-    // exactly as before — including LangChain's default `thinking: { type: 'disabled' }`.
+    // with no `thinking` field, which LangChain 1.x leaves off the request.
     const thinking = toLangChainAnthropicThinkingFields(readReasoningPlan(params.options), {
       answerTokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       streaming: params.streaming === true
