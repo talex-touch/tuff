@@ -19,8 +19,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
-import type { SelectionActionItem, SelectionPayload } from '@talex-touch/tuffex/selection-actions'
-import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxMotionText } from '@talex-touch/tuffex/motion-text'
@@ -126,6 +125,7 @@ import { homeLog } from './composables/home-log'
 import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
+import { usePassageSelection } from './composables/usePassageSelection'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -721,95 +721,14 @@ function autoGrow(): void {
 // Highlighted transcript text
 // ---------------------------------------------------------------------------
 
-/**
- * A snapshot of what the reader highlighted inside the transcript. Scoped to the
- * scrolling column so a selection in the composer or the side panel never raises the bar,
- * and kept as a snapshot because focusing the bar collapses the live range.
- */
-const { selection: passageSelection, clear: clearPassageSelection } = useSelectionAnchor({
-  root: bodyRef,
-  ignore: () => [selectionBarRef.value],
-  minLength: 2
+const { passageSelection, passageActions, runPassageAction } = usePassageSelection({
+  body: bodyRef,
+  bar: selectionBarRef,
+  input: inputRef,
+  draft,
+  conversationId,
+  autoGrow
 })
-
-const passageActions = computed<SelectionActionItem[]>(() => [
-  { id: 'copy', label: t('home.copy') },
-  { id: 'quote', label: t('home.quote') }
-])
-
-/** Drops the live highlight as well as the snapshot: the bar is gone, the mark should go too. */
-function dismissPassage(): void {
-  clearPassageSelection()
-  window.getSelection()?.removeAllRanges()
-}
-
-/** Quotes the passage into the composer as a blockquote, leaving the caret after it. */
-function quotePassage(text: string): void {
-  const quoted = text
-    .trim()
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n')
-  const existing = draft.value.replace(/\s+$/, '')
-  draft.value = existing ? `${existing}\n\n${quoted}\n\n` : `${quoted}\n\n`
-  void nextTick(() => {
-    const input = inputRef.value
-    if (!input) return
-    input.focus()
-    input.selectionStart = input.value.length
-    input.selectionEnd = input.value.length
-    autoGrow()
-  })
-}
-
-async function runPassageAction(payload: {
-  id: string
-  selection: SelectionPayload
-}): Promise<void> {
-  if (payload.id === 'copy') {
-    try {
-      await navigator.clipboard.writeText(payload.selection.text)
-    } catch {
-      // A denied clipboard is not worth an error state in the transcript.
-    }
-  } else if (payload.id === 'quote') {
-    quotePassage(payload.selection.text)
-  }
-  dismissPassage()
-}
-
-/**
- * The bar is about one passage in one thread, so it must not outlive either:
- * a click anywhere outside the highlight retracts it, and switching
- * conversation retracts it outright. Without this it stayed pinned over the
- * new thread's messages, still holding a snapshot of text that is no longer
- * on screen.
- *
- * `pointerdown`, not `click`: pressing a message's own action button would
- * otherwise collapse the highlight first and the click would land on nothing.
- */
-function onDocumentPointerDown(event: PointerEvent): void {
-  if (!passageSelection.value) return
-  const target = event.target
-  if (!(target instanceof Node)) return
-  // A click inside the bar is the bar acting on the passage, and a new drag
-  // inside the transcript is the reader choosing a different one.
-  if (selectionBarRef.value?.contains(target)) return
-  if (bodyRef.value?.contains(target)) {
-    // A press inside the column only retracts when it did not start a new
-    // selection: pressing to select is how the next passage is chosen.
-    const selection = window.getSelection()
-    if (selection && !selection.isCollapsed && selection.toString().trim()) return
-    dismissPassage()
-    return
-  }
-  dismissPassage()
-}
-
-onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown, true))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointerDown, true))
-
-watch(conversationId, () => dismissPassage())
 
 /**
  * The field returns to one line once its draft is sent — eased rather than snapped when `animate`:
