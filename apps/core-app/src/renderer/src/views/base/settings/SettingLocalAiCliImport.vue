@@ -49,7 +49,9 @@ const modelCandidates = computed<AiConfigImportCandidate[]>(() => {
   const candidates = scan.value?.candidates ?? []
   return candidates.filter(
     (candidate): candidate is AiConfigImportCandidate =>
-      candidate.kind === 'config' && (candidate.modelProviders?.length ?? 0) > 0
+      candidate.kind === 'config' &&
+      candidate.state !== 'source-missing' &&
+      (candidate.modelProviders?.length ?? 0) > 0
   )
 })
 
@@ -128,6 +130,18 @@ function selectAll(): void {
   }
 }
 
+function restoreSelection(candidateIds: string[], providerIds: Record<string, string[]>): void {
+  resetSelection()
+  for (const candidate of modelCandidates.value) {
+    if (!candidateIds.includes(candidate.id)) continue
+    const available = allModelProviderIds(candidate)
+    const kept = (providerIds[candidate.id] ?? available).filter((id) => available.includes(id))
+    if (kept.length === 0) continue
+    selectedCandidateIds.add(candidate.id)
+    selectedProviderIds[candidate.id] = kept
+  }
+}
+
 function toggleCandidate(candidate: AiConfigImportCandidate, selected: boolean): void {
   if (selected) {
     selectedCandidateIds.add(candidate.id)
@@ -176,8 +190,15 @@ async function refreshScan(force = false): Promise<void> {
   loading.value = true
   try {
     const next = await aiClient.orchestratorPreviewImport({ providerIds: LOCAL_CLI_PROVIDERS })
+    // A rescan keeps the choices that still exist; only a scan with no prior choice selects all.
+    const previousCandidateIds = [...selectedCandidateIds]
+    const previousProviderIds = { ...selectedProviderIds }
     scan.value = next
-    selectAll()
+    if (previousCandidateIds.length > 0) {
+      restoreSelection(previousCandidateIds, previousProviderIds)
+    } else {
+      selectAll()
+    }
   } catch (error) {
     log.error('Failed to scan local CLI model configuration', error)
     scan.value = null
