@@ -446,6 +446,72 @@ describe('clipboard-capture-pipeline', () => {
     )
     expect(context.notifyTransportChange).toHaveBeenCalled()
   })
+
+  describe('a deferred capture is dated by when its change was signalled', () => {
+    async function capture(options?: { observedAt?: number }) {
+      const context = createPipeline()
+      mocks.readText.mockReturnValueOnce('previous').mockReturnValue('https://example.test')
+      const before = Date.now()
+      await context.pipeline.process('native-watch', options)
+      const after = Date.now()
+      const record = mocks.values.mock.calls.at(-1)?.[0]
+      const meta = context.metaPersistence.persistMetaEntriesSafely.mock.calls.at(-1)?.[1]
+      return {
+        context,
+        before,
+        after,
+        stamped: (record?.timestamp as Date | undefined)?.getTime(),
+        observedAt: meta?.observed_at as number | undefined
+      }
+    }
+
+    it('stamps the history row, the observed_at meta and the freshness base with the signal time', async () => {
+      const signalledAt = Date.now() - 20_000
+      const { context, before, stamped, observedAt } = await capture({ observedAt: signalledAt })
+
+      expect(stamped).toBe(signalledAt)
+      expect(observedAt).toBe(signalledAt)
+      expect(context.rememberFreshness).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 11 }),
+        expect.objectContaining({
+          eligible: true,
+          captureSource: 'native-watch',
+          observedAt: signalledAt,
+          freshnessBaseAt: signalledAt
+        })
+      )
+      // The scan itself ran now, and that is the clock the next scan measures its gap from.
+      expect(context.getState().lastSuccessfulScanAt).toBeGreaterThanOrEqual(before)
+    })
+
+    it('dates a capture by the scan when no signal time is given', async () => {
+      const { before, after, stamped, observedAt } = await capture()
+
+      expect(stamped).toBeGreaterThanOrEqual(before)
+      expect(stamped).toBeLessThanOrEqual(after)
+      expect(observedAt).toBeGreaterThanOrEqual(before)
+      expect(observedAt).toBeLessThanOrEqual(after)
+    })
+
+    it('never dates a capture later than the scan, whatever the signal time says', async () => {
+      const { context, after, stamped, observedAt } = await capture({
+        observedAt: Date.now() + 60_000
+      })
+
+      expect(stamped).toBeLessThanOrEqual(after)
+      expect(observedAt).toBeLessThanOrEqual(after)
+      expect(context.getState().lastSuccessfulScanAt).toBeLessThanOrEqual(after)
+    })
+
+    it('ignores a signal time that is not a finite number', async () => {
+      const { before, after, stamped, observedAt } = await capture({ observedAt: Number.NaN })
+
+      expect(stamped).toBeGreaterThanOrEqual(before)
+      expect(stamped).toBeLessThanOrEqual(after)
+      expect(observedAt).toBeGreaterThanOrEqual(before)
+      expect(observedAt).toBeLessThanOrEqual(after)
+    })
+  })
 })
 
 describe('capture is skipped while the app is writing the clipboard itself', () => {
