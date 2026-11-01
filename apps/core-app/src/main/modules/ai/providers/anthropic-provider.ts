@@ -169,6 +169,20 @@ async function toAnthropicImageSource(
   throw new Error('[AnthropicProvider] Invalid vision image source')
 }
 
+/**
+ * Models LangChain's Anthropic client runs on adaptive thinking alone; its own list, which it does not
+ * export. It sends no sampling knob to them and throws on any temperature but 1, so none is set here.
+ */
+const ADAPTIVE_ONLY_MODEL_PREFIXES = [
+  'claude-opus-4-7',
+  'claude-opus-4-8',
+  'claude-opus-5',
+  'claude-sonnet-5',
+  'claude-fable-5',
+  'claude-mythos-5',
+  'claude-mythos-preview'
+]
+
 export class AnthropicProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.ANTHROPIC
 
@@ -218,7 +232,9 @@ export class AnthropicProvider extends IntelligenceProvider {
     const modelConfig = {
       anthropicApiKey: this.config.apiKey,
       model: params.model,
-      temperature: thinking?.temperature ?? params.temperature ?? 0.7,
+      temperature: ADAPTIVE_ONLY_MODEL_PREFIXES.some((prefix) => params.model.startsWith(prefix))
+        ? undefined
+        : (thinking?.temperature ?? params.temperature ?? 0.7),
       maxTokens,
       streaming: params.streaming,
       timeout: params.options.timeout ?? this.config.timeout ?? 30_000,
