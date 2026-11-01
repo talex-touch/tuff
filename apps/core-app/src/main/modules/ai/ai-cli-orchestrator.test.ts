@@ -91,6 +91,7 @@ vi.mock('electron', () => ({
   app: { isReady: vi.fn(() => true), getPath: vi.fn(() => '/tmp/tuff-orchestrator-test') },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+  MessageChannelMain: vi.fn(),
   utilityProcess: { fork: vi.fn() }
 }))
 

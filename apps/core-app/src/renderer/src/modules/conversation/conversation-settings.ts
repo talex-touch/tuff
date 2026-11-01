@@ -26,6 +26,10 @@ export interface ConversationSettings {
    */
   recentModels?: ModelRef[]
   /**
+   * Optional here for the same reason as `reasoningEffort`: absent reads as shown.
+   */
+  showTurnMetrics?: boolean
+  /**
    * Optional here although the defaults carry it: the same shallow merge leaves it out of every
    * block written before it existed, and absent reads as `auto`.
    */

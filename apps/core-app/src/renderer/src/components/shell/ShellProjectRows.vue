@@ -74,14 +74,6 @@ function onConfirmDelete(): boolean {
         'is-menu-open': openConversationMenuRef === row.conversation.id
       }"
     >
-      <div
-        v-if="isConversationLoading(row.conversation.id)"
-        class="ShellProjectRows-LoadingIndicator"
-        :title="t('shell.history.loading')"
-        :aria-label="t('shell.history.loading')"
-      >
-        <TxSpinner :size="13" class="ShellProjectRows-Spinner ShellProjectRows-TxSpinner" />
-      </div>
       <button
         class="ShellProjectRows-Open"
         type="button"
@@ -89,7 +81,21 @@ function onConfirmDelete(): boolean {
         :aria-current="row.conversation.id === activeId ? 'page' : undefined"
         @click="emit('openConversation', row.conversation.id)"
       >
-        {{ conversationTitle(row.conversation) }}
+        <Transition name="shell-spinner-slide">
+          <span
+            v-if="isConversationLoading(row.conversation.id)"
+            class="ShellProjectRows-LoadingIndicator"
+            :title="t('shell.history.loading')"
+            :aria-label="t('shell.history.loading')"
+          >
+            <TxSpinner
+              :size="13"
+              :stroke-width="1.5"
+              class="ShellProjectRows-Spinner ShellProjectRows-TxSpinner"
+            />
+          </span>
+        </Transition>
+        <span class="ShellProjectRows-Title">{{ conversationTitle(row.conversation) }}</span>
       </button>
       <TxDropdownMenu
         :model-value="openConversationMenuRef === row.conversation.id"
@@ -202,7 +208,7 @@ function onConfirmDelete(): boolean {
     background: var(--shell-primary-soft);
   }
 
-  &.is-loading {
+  &.is-loading.active {
     border-color: color-mix(in srgb, var(--shell-primary) 32%, transparent);
     animation: shell-row-glow-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 
@@ -236,6 +242,8 @@ function onConfirmDelete(): boolean {
 }
 
 .ShellProjectRows-Open {
+  display: flex;
+  align-items: center;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -246,9 +254,7 @@ function onConfirmDelete(): boolean {
   color: var(--shell-text-regular);
   font-family: inherit;
   font-size: var(--shell-fs-body);
-  white-space: nowrap;
   text-align: left;
-  text-overflow: ellipsis;
   cursor: pointer;
   -webkit-app-region: no-drag;
 
@@ -261,9 +267,14 @@ function onConfirmDelete(): boolean {
     color: var(--shell-primary);
     font-weight: 500;
   }
-  .is-loading & {
-    padding-left: 5px;
-  }
+}
+
+.ShellProjectRows-Title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ShellProjectRows-Session {
@@ -346,32 +357,46 @@ function onConfirmDelete(): boolean {
 }
 
 .ShellProjectRows-LoadingIndicator {
-  display: flex;
+  display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
-  margin-left: 8px;
-  margin-right: -2px;
+  margin-right: 7px;
   color: var(--shell-primary);
   pointer-events: none;
-  z-index: 3;
+  vertical-align: middle;
 }
 
 .ShellProjectRows-TxSpinner {
   color: var(--shell-primary);
+  flex-shrink: 0;
 }
 
 .ShellProjectRows-Spinner {
-  display: inline-block;
-  box-sizing: border-box;
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid color-mix(in srgb, var(--shell-primary) 28%, transparent);
-  border-top-color: var(--shell-primary);
-  border-radius: 50%;
-  animation: shell-spinner-rotate 0.75s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-spinner-slide-enter-active,
+.shell-spinner-slide-leave-active {
+  transition:
+    width 0.24s cubic-bezier(0.2, 0, 0, 1),
+    margin-right 0.24s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.shell-spinner-slide-enter-from,
+.shell-spinner-slide-leave-to {
+  width: 0 !important;
+  margin-right: 0 !important;
+  opacity: 0;
+  transform: scale(0.5);
 }
 
 .ShellProjectRows-Row:has(.ShellProjectRows-Delete.is-armed) .ShellProjectRows-LoadingIndicator {
@@ -404,17 +429,9 @@ function onConfirmDelete(): boolean {
   }
 }
 
-@keyframes shell-spinner-rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 /** Reduced motion swaps icon and label outright; the fade that reveals the button stays. */
 @media (prefers-reduced-motion: reduce) {
-  .ShellProjectRows-Row.is-loading {
+  .ShellProjectRows-Row.is-loading.active {
     animation: none;
     border-color: var(--shell-primary-border);
     box-shadow: inset 0 0 0 1px var(--shell-primary-border);
@@ -424,9 +441,9 @@ function onConfirmDelete(): boolean {
     }
   }
 
-  .ShellProjectRows-Spinner {
-    animation: none;
-    border-top-color: var(--shell-primary);
+  .shell-spinner-slide-enter-active,
+  .shell-spinner-slide-leave-active {
+    transition: opacity 0.15s ease;
   }
 
   .ShellProjectRows-Delete {

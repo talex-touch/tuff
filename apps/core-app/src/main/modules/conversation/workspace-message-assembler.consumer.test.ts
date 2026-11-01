@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
   app: {},
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+  MessageChannelMain: vi.fn(),
   utilityProcess: {}
 }))
 vi.mock('../ai/agents', () => ({ agentManager: {}, toolRegistry: {} }))

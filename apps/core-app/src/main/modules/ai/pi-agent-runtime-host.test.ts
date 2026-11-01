@@ -84,6 +84,7 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+  MessageChannelMain: vi.fn(),
   utilityProcess: { fork: hostMocks.fork }
 }))
 
