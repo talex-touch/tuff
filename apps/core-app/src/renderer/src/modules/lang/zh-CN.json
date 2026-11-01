@@ -1964,6 +1964,21 @@
       "week": "近 7 天",
       "earlier": "更早",
       "untitled": "新对话",
+      "rename": "重命名",
+      "renamePlaceholder": "对话名称",
+      "renameFailed": "名称须包含 1–80 个字符。",
+      "copy": "复制会话",
+      "copied": "已复制到新会话「{title}」",
+      "copyFailed": "无法复制此会话。",
+      "copyBusy": "此会话正在生成，完成后再复制。",
+      "openFile": "打开会话文件",
+      "openFileFailed": "此会话没有可打开的本机会话文件。",
+      "info": "会话信息",
+      "infoTitle": "会话信息",
+      "infoId": "会话 ID",
+      "infoProject": "所属项目",
+      "infoCreated": "创建时间",
+      "infoUpdated": "最后更新",
       "delete": "删除对话",
       "deleteConfirm": "确认？",
       "deleteConfirmLabel": "确认删除「{title}」？",
@@ -2299,7 +2314,13 @@
         "collapse": "收起",
         "full": "队列已满（{max} 条），消息仍保留在输入框中。",
         "add": "加入队列",
-        "addHint": "正在回复中，此消息会进入队列，在当前回复结束后执行。"
+        "addHint": "正在回复中，此消息会进入队列，在当前回复结束后执行。",
+        "edit": "编辑",
+        "editTitle": "编辑排队消息",
+        "editPlaceholder": "输入排队消息内容…",
+        "addImage": "添加图片",
+        "updated": "排队消息已更新",
+        "updateFailed": "更新排队消息失败"
       },
       "run": {
         "title": "Agent 运行等待你批准",
@@ -2358,6 +2379,8 @@
         "contextUsageDetail": "上下文消息：{count} 条 · 上下文占用：{tokens} tokens · 字符数：{chars}",
         "ttft": "首字 {time}",
         "ttftTitle": "首字响应时间 (TTFT)：{time}",
+        "cache": "缓存 {tokens}",
+        "cacheTitle": "缓存读取：{tokens} tokens（提示缓存命中）",
         "metrics": {
           "latency": "耗时",
           "tokens": "Token 消耗与速度",
@@ -2506,6 +2529,7 @@
       "toolCalls": "工作过程",
       "sources": "引用",
       "artifactsCreated": "本次生成",
+      "artifactsReply": "回复中的内容",
       "artifactsUploaded": "你上传的",
       "chartsAndForms": "图表与表单",
       "outputsEmpty": "这次会话还没有生成或上传文件，也还没有出现网页、图表或表单。",
@@ -2532,7 +2556,6 @@
     },
     "image": {
       "blocked": "已拦截远程图片",
-      "artifactsReply": "回复中的内容",
       "loadOnce": "加载这张",
       "allowSession": "本次会话允许"
     },
@@ -2545,6 +2568,8 @@
       "zoom": "放大图表",
       "preview": "图表预览",
       "close": "关闭预览",
+      "download": "保存为 SVG",
+      "copyFailed": "复制失败",
       "failed": "图表渲染失败，已改为显示源码。"
     },
     "widget": {
@@ -2617,9 +2642,23 @@
     "stop": "停止生成",
     "retry": "重试",
     "thinking": "正在思考",
+    "thinkingFor": "思考了 {time}",
+    "thinkingVerb": "{verb}…",
+    "runStatus": {
+      "waiting": "等待模型响应",
+      "thinking": "正在思考",
+      "tool": "正在调用 {name}",
+      "writing": "正在撰写回答"
+    },
+    "contextMeter": {
+      "label": "上下文占用",
+      "value": "已占用 {percent}%，窗口 {window}"
+    },
     "compacting": "正在压缩上下文…",
     "copy": "复制",
     "copied": "已复制",
+    "selectionActions": "选中文字操作",
+    "quote": "引用",
     "regenerate": "重新生成",
     "chartEdit": "编辑数据",
     "chartDone": "完成",
@@ -2793,7 +2832,10 @@
       "running": "运行中",
       "done": "完成",
       "error": "失败",
-      "input": "输入"
+      "input": "输入",
+      "emptyResult": "无输出",
+      "linesMore": "还有 {count} 行",
+      "linesLess": "收起"
     }
   },
   "settingsNav": {

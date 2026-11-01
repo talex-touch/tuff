@@ -26,6 +26,7 @@ import { TxMotionText } from '@talex-touch/tuffex/motion-text'
 import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
+import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
@@ -117,6 +118,7 @@ import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
 import { usePassageSelection } from './composables/usePassageSelection'
+import { useThinkingTicker } from './composables/useThinkingTicker'
 import { useTurnError } from './composables/useTurnError'
 import {
   calculateTokenSpeed,
@@ -685,7 +687,6 @@ const intelligenceSdk = useIntelligenceSdk()
 const { toggleSpeak, speakStateOf } = useReadAloud()
 
 const {
-  thinkingVerbFor,
   segmentsOf,
   chartSpecOf,
   formSpecOf,
@@ -699,7 +700,8 @@ const {
   chainOpen,
   toolOpen,
   toolCallLabels,
-  markdownLabels
+  markdownLabels,
+  codePartProps
 } = useMessageParts({
   submit: (text, attachments, options) => workspace.submit(text, attachments, options),
   clearDraft: () => {
@@ -1724,6 +1726,17 @@ const runStartedAt = computed(() => streamingAssistant.value?.createdAt)
 /** The step the streaming assistant message is on, read off its parts. */
 const runStep = computed(() => deriveRunStep(streamingAssistant.value?.parts))
 
+const isThinkingActive = computed(() => {
+  if (!isStreaming.value) return false
+  const step = runStep.value
+  return step.kind === 'waiting' || (step.kind === 'thinking' && !step.title)
+})
+
+const thinkingTicker = useThinkingTicker({
+  active: isThinkingActive,
+  locale
+})
+
 function estimateTextTokens(text: string): number {
   if (!text) return 0
   let count = 0
@@ -1856,6 +1869,15 @@ onBeforeUnmount(() => disposeCommands?.())
           curve="bezier"
           :z-index="4"
           class="HomePage-TopBlur"
+        />
+        <TxGradualBlur
+          v-if="!isEmpty"
+          position="bottom"
+          height="96px"
+          :strength="2.5"
+          curve="bezier"
+          :z-index="4"
+          class="HomePage-BottomBlur"
         />
         <div class="HomePage-Center">
           <Transition name="home-head">
@@ -2014,6 +2036,7 @@ onBeforeUnmount(() => disposeCommands?.())
                           :copy-label="t('home.copy')"
                           :copied-label="t('home.copied')"
                           :markdown-props="markdownLabels"
+                          v-bind="codePartProps"
                         />
 
                         <!-- Widgets embed as themselves — a form is a form, not
@@ -2036,6 +2059,7 @@ onBeforeUnmount(() => disposeCommands?.())
                           />
                           <ToolFormCard
                             v-else-if="formSpecOf(segment.part)"
+                            v-bind="codePartProps"
                             :spec="formSpecOf(segment.part)!"
                             :submitted="
                               submittedForms.has(segment.part.id) || segment.part.submitted === true
@@ -2089,6 +2113,7 @@ onBeforeUnmount(() => disposeCommands?.())
                         :copy-label="t('home.copy')"
                         :copied-label="t('home.copied')"
                         :markdown-props="markdownLabels"
+                        v-bind="codePartProps"
                         :content="message.content"
                         :streaming="message.status === 'streaming'"
                       />
@@ -2102,11 +2127,11 @@ onBeforeUnmount(() => disposeCommands?.())
                           :size="64"
                           :display-size="28"
                           variant="gradient"
-                          :label="thinkingVerbFor(message)"
+                          :label="thinkingTicker.activeVerb.value"
                         />
-                        <span class="HomePage-ThinkingLabel">{{
-                          t('home.thinkingVerb', { verb: thinkingVerbFor(message) })
-                        }}</span>
+                        <span class="HomePage-ThinkingLabel">
+                          <TxTextMorph :text="thinkingTicker.activeLabel.value" :duration-ms="320" />
+                        </span>
                       </div>
 
                       <!-- The provider is squeezing its context mid-turn; a
@@ -2398,7 +2423,12 @@ onBeforeUnmount(() => disposeCommands?.())
                  (the dock is pulled down by the group's gap), inset by the corner radius so it rides
                  the straight edge. Both state what the page already knows. -->
             <div v-if="!isEmpty && (isStreaming || contextShare !== null)" class="HomePage-RunDock">
-              <HomeRunStatus v-if="isStreaming" :started-at="runStartedAt" :step="runStep" />
+              <HomeRunStatus
+                v-if="isStreaming"
+                :started-at="runStartedAt"
+                :step="runStep"
+                :verb="thinkingTicker.activeLabel.value"
+              />
               <HomeContextMeter
                 v-if="contextShare !== null || isStreaming"
                 class="HomePage-ContextMeter"
@@ -2660,6 +2690,7 @@ onBeforeUnmount(() => disposeCommands?.())
   --home-z-leaving: 0; // the stream and greeting dissolving on their way out
   --home-z-flight: 1; // the send flight's clone
   --home-z-topblur: 4; // gradual blur at the top of the conversation
+  --home-z-bottomblur: 4; // gradual blur at the bottom of the conversation
   --home-z-topbar: 6; // top bar above blur and messages
   --home-z-composer: 8; // composer and pending confirmation — above every message
   --home-z-lift: 9;
@@ -2817,6 +2848,22 @@ onBeforeUnmount(() => disposeCommands?.())
   );
 }
 
+
+.HomePage-BottomBlur {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 96px;
+  z-index: var(--home-z-bottomblur);
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--shell-bg) 80%, transparent) 0%,
+    color-mix(in srgb, var(--shell-bg) 35%, transparent) 40%,
+    transparent 100%
+  );
+}
 .HomePage-Center {
   display: flex;
   flex-direction: column;
@@ -3245,44 +3292,21 @@ onBeforeUnmount(() => disposeCommands?.())
 // looks like the start of a reply rather than a spinner bolted on beside it.
 .HomePage-Thinking {
   display: inline-flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  margin: 2px 0;
+  margin: 4px 0;
   color: var(--shell-text-muted);
 }
 
 .HomePage-ThinkingLabel {
+  display: inline-flex;
+  align-items: center;
   font-size: var(--shell-fs-md);
   font-style: italic;
   line-height: 1.4;
-
-  // A quiet shimmer over the words, matching the chain header's live state.
-  background: linear-gradient(
-    90deg,
-    var(--shell-text-muted) 35%,
-    var(--shell-text) 50%,
-    var(--shell-text-muted) 65%
-  );
-  background-clip: text;
-  background-size: 200% 100%;
-  color: transparent;
-  animation: HomePage-ThinkingShimmer 1.6s linear infinite;
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-    background: none;
-    color: var(--shell-text-muted);
-  }
-}
-
-@keyframes HomePage-ThinkingShimmer {
-  from {
-    background-position: 120% 0;
-  }
-
-  to {
-    background-position: -120% 0;
-  }
+  color: var(--shell-text-muted);
+  user-select: none;
+  white-space: nowrap;
 }
 
 .HomePage-Compacting {

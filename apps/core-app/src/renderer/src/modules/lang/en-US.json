@@ -1964,6 +1964,21 @@
       "week": "Previous 7 days",
       "earlier": "Earlier",
       "untitled": "New chat",
+      "rename": "Rename",
+      "renamePlaceholder": "Conversation name",
+      "renameFailed": "The name must be 1–80 characters.",
+      "copy": "Copy conversation",
+      "copied": "Copied into the new conversation “{title}”",
+      "copyFailed": "Could not copy this conversation.",
+      "copyBusy": "This conversation is still generating; copy it once it settles.",
+      "openFile": "Open conversation file",
+      "openFileFailed": "This conversation has no local session file to open.",
+      "info": "Conversation info",
+      "infoTitle": "Conversation info",
+      "infoId": "Conversation ID",
+      "infoProject": "Project",
+      "infoCreated": "Created",
+      "infoUpdated": "Last updated",
       "delete": "Delete conversation",
       "deleteConfirm": "Confirm Delete",
       "deleteConfirmTitle": "Delete Conversation",
@@ -2299,7 +2314,13 @@
         "collapse": "Show less",
         "full": "The queue is full ({max}). Your message stayed in the composer.",
         "add": "Add to queue",
-        "addHint": "A reply is running. This message waits in the queue and runs after it."
+        "addHint": "A reply is running. This message waits in the queue and runs after it.",
+        "edit": "Edit",
+        "editTitle": "Edit Queued Message",
+        "editPlaceholder": "Type queued message content…",
+        "addImage": "Add Image",
+        "updated": "Queued message updated",
+        "updateFailed": "Failed to update queued message"
       },
       "run": {
         "title": "An agent run is waiting for approval",
@@ -2358,6 +2379,8 @@
         "contextUsageDetail": "Context messages: {count} · Context occupancy: {tokens} tokens · Characters: {chars}",
         "ttft": "TTFT {time}",
         "ttftTitle": "Time to first token (TTFT): {time}",
+        "cache": "cache {tokens}",
+        "cacheTitle": "Cache read: {tokens} tokens (prompt cache hit)",
         "metrics": {
           "latency": "Latency",
           "tokens": "Tokens & speed",
@@ -2506,6 +2529,7 @@
       "toolCalls": "Work log",
       "sources": "Sources",
       "artifactsCreated": "Created here",
+      "artifactsReply": "In replies",
       "artifactsUploaded": "You uploaded",
       "chartsAndForms": "Charts and forms",
       "outputsEmpty": "Nothing has been created or uploaded in this conversation yet, and no page, chart or form has appeared.",
@@ -2532,7 +2556,6 @@
     },
     "image": {
       "blocked": "Remote image blocked",
-      "artifactsReply": "In replies",
       "loadOnce": "Load this image",
       "allowSession": "Allow for this conversation"
     },
@@ -2545,6 +2568,8 @@
       "zoom": "Zoom diagram",
       "preview": "Diagram preview",
       "close": "Close preview",
+      "download": "Save as SVG",
+      "copyFailed": "Could not copy",
       "failed": "Diagram failed to render — showing source."
     },
     "widget": {
@@ -2617,9 +2642,23 @@
     "stop": "Stop generating",
     "retry": "Retry",
     "thinking": "Thinking",
+    "thinkingFor": "Thinking for {time}",
+    "thinkingVerb": "{verb}…",
+    "runStatus": {
+      "waiting": "Waiting for the model",
+      "thinking": "Thinking",
+      "tool": "Running {name}",
+      "writing": "Writing the answer"
+    },
+    "contextMeter": {
+      "label": "Context usage",
+      "value": "{percent}% used of a {window} window"
+    },
     "compacting": "Compacting context…",
     "copy": "Copy",
     "copied": "Copied",
+    "selectionActions": "Selection actions",
+    "quote": "Quote",
     "regenerate": "Regenerate",
     "chartEdit": "Edit data",
     "chartDone": "Done",
@@ -2793,7 +2832,10 @@
       "running": "Running",
       "done": "Done",
       "error": "Failed",
-      "input": "Input"
+      "input": "Input",
+      "emptyResult": "No output",
+      "linesMore": "{count} more lines",
+      "linesLess": "Show less"
     }
   },
   "settingsNav": {
