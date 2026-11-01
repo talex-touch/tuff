@@ -77,8 +77,10 @@ function setJsonTab(messageId: string, tab: JsonTab): void {
 
 function getJsonToDisplay(turn: ActivityTurn): string {
   const tab = activeJsonTabs.value[turn.messageId] ?? 'request'
-  if (tab === 'request') return JSON.stringify(turn.request ?? turn.rawPayload?.request ?? turn.rawPayload, null, 2)
-  if (tab === 'response') return JSON.stringify(turn.response ?? turn.rawPayload?.response ?? turn.rawPayload, null, 2)
+  if (tab === 'request')
+    return JSON.stringify(turn.request ?? turn.rawPayload?.request ?? turn.rawPayload, null, 2)
+  if (tab === 'response')
+    return JSON.stringify(turn.response ?? turn.rawPayload?.response ?? turn.rawPayload, null, 2)
   return JSON.stringify(turn.rawPayload, null, 2)
 }
 
@@ -219,11 +221,18 @@ function contextBadgeTitle(turn: ActivityTurn): string {
 
           <!-- 调度器与模型元数据信息徽标 -->
           <div class="HomePreviewActivity-MetaBadges">
-            <span class="HomePreviewActivity-Badge" :title="t('home.workspace.activity.coordinator')">
+            <span
+              class="HomePreviewActivity-Badge"
+              :title="t('home.workspace.activity.coordinator')"
+            >
               <span class="i-ri-robot-2-line" aria-hidden="true" />
               <span>{{ turn.coordinator || 'Tuff Coordinator' }}</span>
             </span>
-            <span v-if="turn.model" class="HomePreviewActivity-Badge is-model" :title="t('home.panel.model')">
+            <span
+              v-if="turn.model"
+              class="HomePreviewActivity-Badge is-model"
+              :title="t('home.panel.model')"
+            >
               <span class="i-ri-sparkling-line" aria-hidden="true" />
               <span>{{ turn.model }}</span>
             </span>
@@ -242,12 +251,18 @@ function contextBadgeTitle(turn: ActivityTurn): string {
               :title="t('home.workspace.activity.ttftTitle', { time: formatLatency(turn.ttftMs) })"
             >
               <span class="i-ri-speed-line" aria-hidden="true" />
-              <span>{{ t('home.workspace.activity.ttft', { time: formatLatency(turn.ttftMs) }) }}</span>
+              <span>{{
+                t('home.workspace.activity.ttft', { time: formatLatency(turn.ttftMs) })
+              }}</span>
             </span>
 
             <!-- 上下文消息与占用规模 -->
             <span
-              v-if="turn.request?.contextMessages?.length || turn.request?.contextTokens || turn.tokens?.prompt"
+              v-if="
+                turn.request?.contextMessages?.length ||
+                turn.request?.contextTokens ||
+                turn.tokens?.prompt
+              "
               class="HomePreviewActivity-Badge is-context"
               :title="contextBadgeTitle(turn)"
             >
@@ -276,7 +291,9 @@ function contextBadgeTitle(turn: ActivityTurn): string {
                   <span v-if="tool.error" class="HomePreviewActivity-Error">{{
                     toolErrorText(tool.error)
                   }}</span>
-                  <span v-else-if="tool.summary" class="HomePreview-Detail">{{ tool.summary }}</span>
+                  <span v-else-if="tool.summary" class="HomePreview-Detail">{{
+                    tool.summary
+                  }}</span>
                 </span>
               </button>
             </li>
@@ -290,10 +307,18 @@ function contextBadgeTitle(turn: ActivityTurn): string {
               @click="toggleJson(turn.messageId)"
             >
               <span
-                :class="expandedJsonTurns.has(turn.messageId) ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-right-s-line'"
+                :class="
+                  expandedJsonTurns.has(turn.messageId)
+                    ? 'i-ri-arrow-down-s-line'
+                    : 'i-ri-arrow-right-s-line'
+                "
                 aria-hidden="true"
               />
-              <span>{{ expandedJsonTurns.has(turn.messageId) ? t('home.workspace.activity.hideJson') : t('home.workspace.activity.json') }}</span>
+              <span>{{
+                expandedJsonTurns.has(turn.messageId)
+                  ? t('home.workspace.activity.hideJson')
+                  : t('home.workspace.activity.json')
+              }}</span>
             </button>
             <button
               v-if="expandedJsonTurns.has(turn.messageId)"
@@ -302,10 +327,16 @@ function contextBadgeTitle(turn: ActivityTurn): string {
               @click="copyJson(turn)"
             >
               <span
-                :class="copiedJsonTurns.has(turn.messageId) ? 'i-ri-check-line' : 'i-ri-file-copy-line'"
+                :class="
+                  copiedJsonTurns.has(turn.messageId) ? 'i-ri-check-line' : 'i-ri-file-copy-line'
+                "
                 aria-hidden="true"
               />
-              <span>{{ copiedJsonTurns.has(turn.messageId) ? t('home.workspace.activity.copiedJson') : t('home.workspace.activity.copyJson') }}</span>
+              <span>{{
+                copiedJsonTurns.has(turn.messageId)
+                  ? t('home.workspace.activity.copiedJson')
+                  : t('home.workspace.activity.copyJson')
+              }}</span>
             </button>
           </div>
 
@@ -316,7 +347,9 @@ function contextBadgeTitle(turn: ActivityTurn): string {
               <button
                 type="button"
                 class="HomePreviewActivity-JsonTab"
-                :class="{ 'is-active': (activeJsonTabs[turn.messageId] ?? 'request') === 'request' }"
+                :class="{
+                  'is-active': (activeJsonTabs[turn.messageId] ?? 'request') === 'request'
+                }"
                 @click="setJsonTab(turn.messageId, 'request')"
               >
                 <span class="i-ri-upload-2-line" aria-hidden="true" />
@@ -341,7 +374,9 @@ function contextBadgeTitle(turn: ActivityTurn): string {
                 <span>{{ t('home.workspace.activity.allTab') }}</span>
               </button>
             </div>
-            <pre class="HomePreviewActivity-JsonCode"><code>{{ getJsonToDisplay(turn) }}</code></pre>
+            <pre
+              class="HomePreviewActivity-JsonCode"
+            ><code>{{ getJsonToDisplay(turn) }}</code></pre>
           </div>
         </div>
       </li>
@@ -400,7 +435,9 @@ function contextBadgeTitle(turn: ActivityTurn): string {
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-surface-1);
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 
   &:hover {
     border-color: var(--shell-border-hover, var(--shell-border));
@@ -607,7 +644,9 @@ function contextBadgeTitle(turn: ActivityTurn): string {
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 
   &:hover {
     background: var(--shell-surface-2);

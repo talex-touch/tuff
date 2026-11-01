@@ -2026,9 +2026,7 @@ const activityTurns = computed(() => buildActivityTurns(messages.value))
 /** The routed model's own limits from its effective binding; auto routing knows none. */
 const modelLimits = computed(() => toHomeModelLimits(modelScope.resolvedChoice.value?.binding))
 
-const showTurnMetrics = computed(
-  () => appSetting.conversation?.showTurnMetrics !== false
-)
+const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
 
 function formatMetricLatency(ms?: number): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms)) return ''
@@ -2088,7 +2086,11 @@ watch(
     if (!previous) return
     const prevMap = new Map(previous.split(';').map((s) => s.split(':') as [string, string]))
     for (const msg of messages.value) {
-      if (msg.role === 'assistant' && msg.status === 'complete' && prevMap.get(msg.id) !== 'complete') {
+      if (
+        msg.role === 'assistant' &&
+        msg.status === 'complete' &&
+        prevMap.get(msg.id) !== 'complete'
+      ) {
         revealTurnFooter(msg.id)
       }
     }
@@ -2526,7 +2528,12 @@ onBeforeUnmount(() => disposeCommands?.())
 
                         <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
                         <div
-                          v-if="showTurnMetrics && (message.meta?.latencyMs || message.meta?.model || message.meta?.totalTokens)"
+                          v-if="
+                            showTurnMetrics &&
+                            (message.meta?.latencyMs ||
+                              message.meta?.model ||
+                              message.meta?.totalTokens)
+                          "
                           class="HomePage-TurnMetrics"
                         >
                           <!-- 耗时 (Latency) -->
@@ -2547,10 +2554,9 @@ onBeforeUnmount(() => disposeCommands?.())
                           >
                             <span class="i-ri-database-2-line" aria-hidden="true" />
                             <span>{{ message.meta.totalTokens }} tokens</span>
-                            <span
-                              v-if="calculateTokenSpeed(message)"
-                              class="HomePage-MetricSpeed"
-                            >({{ calculateTokenSpeed(message) }} t/s)</span>
+                            <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
+                              >({{ calculateTokenSpeed(message) }} t/s)</span
+                            >
                           </span>
 
                           <!-- 模型 (Model) -->

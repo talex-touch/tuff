@@ -58,7 +58,12 @@ const selectedProfile = computed(() =>
   props.profiles.find((profile) => profile.id === props.profileId)
 )
 const coordinatorProfile = computed(() =>
-  props.profiles.find((profile) => profile.id === 'default-pi' || profile.id === 'tuff-pi' || profile.name.includes('Coordinator'))
+  props.profiles.find(
+    (profile) =>
+      profile.id === 'default-pi' ||
+      profile.id === 'tuff-pi' ||
+      profile.name.includes('Coordinator')
+  )
 )
 const coordinatorId = computed(() => coordinatorProfile.value?.id ?? 'default-pi')
 const cliProfiles = computed(() =>
@@ -433,7 +438,9 @@ watch(open, (isOpen) => {
             @click="chooseCoordinator"
           >
             <span class="i-ri-robot-2-line HomeWorkspaceModeMenu-Icon" aria-hidden="true" />
-            <span class="HomeWorkspaceModeMenu-Name">{{ coordinatorProfile?.name ?? t('home.workspace.mode.coordinator') }}</span>
+            <span class="HomeWorkspaceModeMenu-Name">{{
+              coordinatorProfile?.name ?? t('home.workspace.mode.coordinator')
+            }}</span>
             <span
               v-if="isCoordinatorSelected"
               class="i-ri-check-line HomeWorkspaceModeMenu-Check"

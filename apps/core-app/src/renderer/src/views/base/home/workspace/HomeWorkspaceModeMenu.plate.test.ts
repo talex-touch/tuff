@@ -227,7 +227,9 @@ describe('HomeWorkspaceModeMenu travelling plate', () => {
     const menu = await openMenu({ locked: true })
     expect(row(menu, 'profile:profile:cli:claude').getAttribute('aria-disabled')).toBe('true')
 
-    row(menu, 'profile:profile:cli:claude').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    row(menu, 'profile:profile:cli:claude').dispatchEvent(
+      new MouseEvent('mouseover', { bubbles: true })
+    )
     await settleDom()
     runTrip(menu)
     expect(plateTop(menu)).toBe(0)

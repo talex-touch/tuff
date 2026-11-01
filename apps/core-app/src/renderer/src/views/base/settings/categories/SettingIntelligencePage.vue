@@ -55,7 +55,10 @@ const showTurnMetrics = computed({
         :description="t('settingsConversation.showMetricsDesc')"
       >
         <template #trailing>
-          <TuffBlockSwitch v-model="showTurnMetrics" :title="t('settingsConversation.showMetricsTitle')" />
+          <TuffBlockSwitch
+            v-model="showTurnMetrics"
+            :title="t('settingsConversation.showMetricsTitle')"
+          />
         </template>
       </SettingRow>
     </TuffGroupBlock>

@@ -266,11 +266,7 @@ onMounted(() => {
       @update:model-value="setTerminalFontFamily"
     >
       <TxSelectItem value="">{{ t('settingLocalAiCli.terminalFontDefault') }}</TxSelectItem>
-      <TxSelectItem
-        v-for="font in availableFonts"
-        :key="font.family"
-        :value="font.family"
-      >
+      <TxSelectItem v-for="font in availableFonts" :key="font.family" :value="font.family">
         {{ font.label }}
       </TxSelectItem>
     </TuffBlockSelect>
