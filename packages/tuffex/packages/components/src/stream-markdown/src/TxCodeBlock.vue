@@ -123,10 +123,10 @@ const canPreview = computed(
 
 const showPreview = ref(false)
 
-// A fence that stops being previewable (language edited mid-stream) must not
-// leave the toggle stuck on a view that no longer exists.
-watch(canPreview, (allowed) => {
-  if (!allowed) showPreview.value = false
+// A fence that stops being previewable, or a host that hands previews to itself,
+// must not leave the toggle stuck on an inline view that no longer exists.
+watch([canPreview, () => props.inlinePreview], ([allowed, inline]) => {
+  if (!allowed || !inline) showPreview.value = false
 })
 
 /**
