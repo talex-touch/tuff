@@ -385,7 +385,6 @@ export async function verifyPiSessionFirstWrite(input: {
   for (const preambleEntry of run.slice(0, userIndex)) {
     if (preambleEntry.type !== 'message' || preambleEntry.message?.role !== 'system') conflict()
   }
-  const userEntry = run[userIndex]!
   let userMessages = 0
   let assistantMessages = 0
   for (const entry of run) {
