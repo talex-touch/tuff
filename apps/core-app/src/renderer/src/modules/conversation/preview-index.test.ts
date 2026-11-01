@@ -84,6 +84,89 @@ describe('buildPreviewIndex', () => {
     })
   })
 
+  describe('reply fences', () => {
+    function reply(text: string, id = 'a1'): ConversationMessage {
+      return {
+        id,
+        role: 'assistant',
+        content: text,
+        status: 'complete',
+        parts: [{ type: 'text', text }]
+      }
+    }
+
+    it('lists a settled html fence as a page, located at its message', () => {
+      const { artifacts } = buildPreviewIndex([
+        { id: 'u1', role: 'user', content: 'make a page', status: 'complete' },
+        reply('here:\n\n```html\n<!doctype html><title>Pelican</title><p>hi</p>\n```\n')
+      ])
+      expect(artifacts).toEqual([
+        {
+          id: 'a1:fence:0',
+          kind: 'page',
+          name: 'Pelican',
+          language: 'html',
+          messageIndex: 1
+        }
+      ])
+    })
+
+    it('names an untitled page and a diagram by what they are, numbering repeats', () => {
+      const { artifacts } = buildPreviewIndex([
+        reply(
+          '```html\n<p>a</p>\n```\n\n```html\n<p>b</p>\n```\n\n```mermaid\ngraph TD\n A-->B\n```\n'
+        )
+      ])
+      expect(artifacts.map((item) => [item.kind, item.name, item.language])).toEqual([
+        ['page', '', 'html'],
+        ['page', '', 'html'],
+        ['diagram', '', 'mermaid']
+      ])
+      expect(artifacts.map((item) => item.id)).toEqual(['a1:fence:0', 'a1:fence:1', 'a1:fence:2'])
+    })
+
+    it('lists svg fences as images', () => {
+      const { artifacts } = buildPreviewIndex([reply('```svg\n<svg viewBox="0 0 1 1"/>\n```\n')])
+      expect(artifacts.map((item) => [item.kind, item.language])).toEqual([['image', 'svg']])
+    })
+
+    it('ignores ordinary code, an unclosed fence, and fences inside a user message', () => {
+      const streaming: ConversationMessage = {
+        id: 'a2',
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+        parts: [{ type: 'text', text: '```html\n<p>half' }]
+      }
+      const { artifacts } = buildPreviewIndex([
+        reply('```ts\nconst a = 1\n```\n'),
+        streaming,
+        { id: 'u1', role: 'user', content: '```html\n<p>mine</p>\n```', status: 'complete' }
+      ])
+      expect(artifacts).toEqual([])
+    })
+
+    it('does not read a fence out of reasoning text', () => {
+      const { artifacts } = buildPreviewIndex([
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: '',
+          status: 'complete',
+          parts: [{ type: 'reasoning', text: '```html\n<p>draft</p>\n```' }]
+        }
+      ])
+      expect(artifacts).toEqual([])
+    })
+
+    it('reads a plain-string message that carries no parts', () => {
+      const { artifacts } = buildPreviewIndex([
+        { id: 'a1', role: 'assistant', content: '```html\n<h1>x</h1>\n```', status: 'complete' }
+      ])
+      expect(artifacts).toHaveLength(1)
+    })
+  })
+
   describe('widgets', () => {
     it('picks up charts and forms by their result prefix, with the spec title', () => {
       const { widgets } = index([

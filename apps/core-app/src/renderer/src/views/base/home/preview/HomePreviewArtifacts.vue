@@ -14,11 +14,34 @@ import { toast } from 'vue-sonner'
  */
 const props = defineProps<{ items: PreviewArtifact[] }>()
 
+defineEmits<{ (event: 'locate', messageIndex: number): void }>()
+
 const { t } = useI18n()
 const appSdk = useAppSdk()
 
+type FenceKind = 'page' | 'image' | 'diagram'
+type FenceArtifact = PreviewArtifact & { kind: FenceKind }
+
+function isFence(item: PreviewArtifact): item is FenceArtifact {
+  return item.kind === 'page' || item.kind === 'image' || item.kind === 'diagram'
+}
+
 const created = computed(() => props.items.filter((item) => item.kind === 'created'))
+const fences = computed(() => props.items.filter(isFence))
 const uploaded = computed(() => props.items.filter((item) => item.kind === 'uploaded'))
+
+/** Keyed by kind so a fourth fence kind is a type error here, not a silently wrong icon. */
+const FENCE_ICON: Record<FenceKind, string> = {
+  page: 'i-ri-window-line',
+  image: 'i-ri-image-2-line',
+  diagram: 'i-ri-flow-chart'
+}
+
+const FENCE_LABEL: Record<FenceKind, string> = {
+  page: 'home.preview.page',
+  image: 'home.preview.image',
+  diagram: 'home.preview.diagram'
+}
 
 async function open(item: PreviewArtifact): Promise<void> {
   if (!item.path) return
@@ -70,6 +93,27 @@ async function reveal(item: PreviewArtifact): Promise<void> {
           @click="reveal(item)"
         >
           <span class="i-ri-folder-open-line" />
+        </button>
+      </div>
+    </section>
+
+    <!-- The HTML, SVG and Mermaid blocks of replies. Not files: nothing to open or reveal, so a
+         click takes the reader back to the block in the transcript. -->
+    <section v-if="fences.length" class="HomePreviewArtifacts-Group">
+      <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsReply') }}</h3>
+      <div v-for="item in fences" :key="item.id" class="HomePreviewArtifacts-Row">
+        <button
+          class="HomePreviewArtifacts-Main"
+          type="button"
+          :title="t('home.preview.locate')"
+          @click="$emit('locate', item.messageIndex)"
+        >
+          <span :class="FENCE_ICON[item.kind]" class="HomePreviewArtifacts-Icon" />
+          <span class="HomePreviewArtifacts-Text">
+            <span class="HomePreview-Name">{{ item.name || t(FENCE_LABEL[item.kind]) }}</span>
+            <span class="HomePreview-Detail">{{ t(FENCE_LABEL[item.kind]) }}</span>
+          </span>
+          <span class="i-ri-corner-up-left-line HomePreviewArtifacts-Icon" aria-hidden="true" />
         </button>
       </div>
     </section>

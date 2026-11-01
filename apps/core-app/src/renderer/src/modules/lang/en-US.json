@@ -2508,7 +2508,10 @@
       "artifactsCreated": "Created here",
       "artifactsUploaded": "You uploaded",
       "chartsAndForms": "Charts and forms",
-      "outputsEmpty": "Nothing has been created or uploaded in this conversation yet, and no chart or form has appeared.",
+      "outputsEmpty": "Nothing has been created or uploaded in this conversation yet, and no page, chart or form has appeared.",
+      "page": "Page",
+      "image": "Vector image",
+      "diagram": "Diagram",
       "sourcesEmpty": "No file has been read, searched or fetched over MCP yet.",
       "chart": "Chart",
       "form": "Form",
@@ -2529,6 +2532,7 @@
     },
     "image": {
       "blocked": "Remote image blocked",
+      "artifactsReply": "In replies",
       "loadOnce": "Load this image",
       "allowSession": "Allow for this conversation"
     },

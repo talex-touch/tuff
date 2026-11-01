@@ -114,7 +114,11 @@ function locate(messageIndex: number): void {
           :text="t('home.preview.outputsEmpty')"
         />
         <div v-else class="HomeSidePanel-Outputs">
-          <HomePreviewArtifacts v-if="index.artifacts.length" :items="index.artifacts" />
+          <HomePreviewArtifacts
+            v-if="index.artifacts.length"
+            :items="index.artifacts"
+            @locate="locate"
+          />
           <HomePreviewWidgets v-if="index.widgets.length" :items="index.widgets" @locate="locate" />
         </div>
       </TxTabItem>
