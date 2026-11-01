@@ -7,7 +7,6 @@ import type {
 } from '~/modules/conversation/useHomeConversation'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
-import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxAiAssistantTurn } from '@talex-touch/intelligence-uikit'
 import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
@@ -24,9 +23,7 @@ import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
 import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
-import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
-import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -61,10 +58,8 @@ import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-us
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { USAGE_LIMITS_ROUTE } from '~/modules/intelligence/ai-error-recovery'
 import { appSetting } from '~/modules/storage/app-storage'
-import { resolvedTheme } from '~/modules/storage/theme-style'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
-import ComposerToolbar from './composer/ComposerToolbar.vue'
 import { showDictationNotice } from './composer/dictation-notice'
 import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
@@ -77,7 +72,7 @@ import {
   lastReportedTurn
 } from './composer/run-status'
 import { useComposerDictation } from './composer/useComposerDictation'
-import { voiceGlowDriveLevel, voiceGlowLobes, voiceGlowResponse } from './composer/voice-glow'
+import TuffAIComposer from './TuffAIComposer.vue'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeMessageRail from './HomeMessageRail.vue'
@@ -131,16 +126,20 @@ const browserNavigating = ref(false)
 const MAX_INPUT_HEIGHT = 200
 
 const draft = ref('')
-const inputRef = ref<HTMLTextAreaElement | null>(null)
 /** The scrolling transcript column: the subtree a text selection is scoped to. */
 const bodyRef = ref<HTMLElement | null>(null)
 /** The floating selection bar itself; focusing it must not read as a deselection. */
 const selectionBarRef = ref<HTMLElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
-const composerRef = ref<HTMLElement | null>(null)
-/** The tool row; `submit()` launches its send key at the press. */
-const toolbarRef = ref<InstanceType<typeof ComposerToolbar> | null>(null)
+/** The composer component; the page reads its box, field and draft ghost through it. */
+const composerEl = ref<InstanceType<typeof TuffAIComposer> | null>(null)
+/** The field the draft is typed in. */
+const inputRef = computed(() => composerEl.value?.input ?? null)
+/** The composer's own box: what the send choreography measures and the FLIP animates. */
+const composerRef = computed(() => composerEl.value?.box ?? null)
+/** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
+const draftGhostRef = computed(() => composerEl.value?.ghost ?? null)
 /** The FLIP animates this — the composer *and* the push card under it travel as one body. */
 const composerGroupRef = ref<HTMLElement | null>(null)
 /** Measured before a send so the leaving greeting can be pinned in place. */
@@ -160,8 +159,6 @@ const composerHeight = ref(0)
 const liftGhostRef = ref<HTMLElement | null>(null)
 const liftFillRef = ref<HTMLElement | null>(null)
 const liftTextRef = ref<HTMLElement | null>(null)
-/** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
-const draftGhostRef = ref<HTMLElement | null>(null)
 const router = useRouter()
 const route = useRoute()
 
@@ -396,35 +393,6 @@ const composerBeamActive = computed(
     !isStreaming.value &&
     !dictation.active.value
 )
-
-/**
- * The dictation glow's level, sampled by TxVoiceBeam once per frame: the newest of the session's
- * ~10 Hz level frames while it listens, silence otherwise. A getter, so the frames never re-render
- * the page; the glow's own attack and release smooth between them (`voice-glow.ts` sets both, and
- * maps the level onto the beam's range).
- */
-function dictationLevel(): number {
-  if (dictation.state.value !== 'listening') return 0
-  return voiceGlowDriveLevel(dictation.levels.value.at(-1) ?? 0)
-}
-
-/** The glow's envelope: quick enough to follow words, the beam's own calmer one under reduced motion. */
-const reducedMotion = usePreferredReducedMotion()
-const voiceGlowMotion = computed(() => voiceGlowResponse(reducedMotion.value === 'reduce'))
-
-/**
- * The glow's lobes, read off the composer's live rim (`--home-live-stops`) once the box is mounted.
- * Until then the beam keeps its own palette, which nothing shows: dictation starts in that box.
- */
-const voiceGlowColors = ref<string[]>([])
-onMounted(() => {
-  const composer = composerRef.value
-  if (composer) {
-    voiceGlowColors.value = voiceGlowLobes(
-      getComputedStyle(composer).getPropertyValue('--home-live-stops')
-    )
-  }
-})
 
 /**
  * Auto Context has no composer control any more: it and the old tools pill read as the same
@@ -854,7 +822,7 @@ const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown 
   input: () => inputRef.value,
   composer: () => composerRef.value,
   draftGhost: () => draftGhostRef.value,
-  launchSendKey: () => toolbarRef.value?.launch(),
+  launchSendKey: () => composerEl.value?.launch(),
   autoGrow,
   collapseDraft,
   bubbleMaxWidth,
@@ -1564,153 +1532,80 @@ useHomeCommands({
               />
             </div>
 
-            <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
-                 reads that edge's 24px radius off the element in its slot. -->
-            <TxBorderBeam
-              class="HomePage-ComposerBeam"
-              size="pulse-outside"
-              :active="composerBeamActive"
+            <!-- The composer: the box, its beam and glow, the tray, the field and the tool row.
+                 It owns the look; the page owns what a press does. -->
+            <TuffAIComposer
+              ref="composerEl"
+              v-model:draft="draft"
+              v-model:permission-mode="agentToolsMode"
+              :placeholder="t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')"
+              :attachments="pendingAttachments"
+              :attach-open-label="attachOpenLabel"
+              :attach-preview-props="attachPreviewProps"
+              :input-disabled="browserNavigating"
+              :dragover="isDragover"
+              :live="isStreaming"
+              :lifting="lifting"
+              :beam-active="composerBeamActive"
+              :dictation="dictation"
+              :model="composerModel"
+              :send-state="sendState"
+              :send-queues="sendQueues"
+              @input="autoGrow"
+              @input-keydown="handleKeydown"
+              @box-keydown="handleComposerKeydown"
+              @paste="onPaste"
+              @dragenter="onDragEnter"
+              @dragover="onDragOver"
+              @dragleave="onDragLeave"
+              @drop="onDrop"
+              @remove="removeAttachment"
+              @files="addFiles"
+              @send="pressSend"
+              @stop="conversation.stop()"
+              @mic="dictation.toggle()"
+              @reset-approvals="resetRememberedApprovals"
             >
-              <div
-                ref="composerRef"
-                class="HomePage-Composer"
-                :class="{
-                  'is-dragover': isDragover,
-                  'is-live': isStreaming,
-                  'is-lifting': lifting
-                }"
-                @dragenter="onDragEnter"
-                @dragover="onDragOver"
-                @dragleave="onDragLeave"
-                @drop="onDrop"
-                @keydown="handleComposerKeydown"
-              >
-                <!-- The dictation glow rides inside the box as an overlay rather than wrapping it:
-                     the beam's wrapper clips, and wrapping would cut the composer's own shadow and
-                     focus ring. 「正在识别」 gathers it into the travelling processing beam. -->
-                <TxVoiceBeam
-                  class="HomePage-VoiceGlow"
-                  v-bind="voiceGlowMotion"
-                  :active="dictation.active.value"
-                  :level="dictationLevel"
-                  :processing="dictation.state.value === 'finishing'"
-                  :theme="resolvedTheme"
-                  :colors="voiceGlowColors"
-                  :border-radius="24"
-                  :scale="1.2"
-                  aria-hidden="true"
-                >
-                  <div class="HomePage-VoiceGlowHost" />
-                </TxVoiceBeam>
-
-                <TxAttachmentTray
-                  v-if="pendingAttachments.length"
-                  class="HomePage-ComposerTray"
-                  :attachments="pendingAttachments"
-                  removable
-                  :remove-label="t('home.attachRemove')"
-                  :cancel-label="t('home.attachCancel')"
-                  :preview-title="t('home.attachPreview')"
-                  :previous-label="t('home.attachPrevious')"
-                  :next-label="t('home.attachNext')"
-                  :previous-text="t('home.attachPreviousText')"
-                  :next-text="t('home.attachNextText')"
-                  :close-label="t('common.close')"
-                  :zoom-in-label="t('home.attachViewer.zoomIn')"
-                  :zoom-out-label="t('home.attachViewer.zoomOut')"
-                  :reset-label="t('home.attachViewer.reset')"
-                  :failed-text="t('home.attachViewer.failed')"
-                  :open-label-formatter="attachOpenLabel"
-                  :preview-props="attachPreviewProps"
-                  @remove="removeAttachment"
+              <template #mode>
+                <template v-if="browserLanding">
+                  <TxButton
+                    size="sm"
+                    variant="flat"
+                    :type="browserMode === 'browse' ? 'primary' : 'text'"
+                    :aria-pressed="browserMode === 'browse'"
+                    :disabled="pendingAttachments.length > 0 || browserNavigating"
+                    icon="i-ri-global-line"
+                    @click="browserMode = 'browse'"
+                    >{{ t('browser.browse') }}</TxButton
+                  >
+                  <TxButton
+                    size="sm"
+                    variant="flat"
+                    :type="browserMode === 'ask' ? 'primary' : 'text'"
+                    :aria-pressed="browserMode === 'ask'"
+                    :disabled="browserNavigating"
+                    icon="i-ri-search-line"
+                    @click="browserMode = 'ask'"
+                    >{{ t('browser.ask') }}</TxButton
+                  >
+                </template>
+                <HomeWorkspaceModeMenu
+                  v-if="!browserLanding"
+                  :mode="workspace.settings.value.mode"
+                  :profile-id="workspace.settings.value.profileId"
+                  :profiles="workspace.profiles.value"
+                  :profiles-loading="workspace.profilesLoading.value"
+                  :profile-saving="workspace.profileSaving.value"
+                  :profiles-error="workspace.profilesError.value"
+                  :branch-on-change="hasHistory"
+                  :locked="workspace.busy.value || branching"
+                  @select-chat="selectMode('chat')"
+                  @select-agent="selectAgentProfile"
+                  @toggle-profile="workspace.setProfileEnabled"
+                  @load-profiles="workspace.loadProfiles()"
                 />
-
-                <!-- Read-only while dictating: the words land at the caret, and neither a keystroke
-                     nor an IME can move the range under them. -->
-                <textarea
-                  ref="inputRef"
-                  v-model="draft"
-                  class="HomePage-Input"
-                  rows="1"
-                  :aria-label="
-                    t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')
-                  "
-                  :placeholder="
-                    t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')
-                  "
-                  :readonly="dictation.active.value"
-                  :disabled="browserNavigating"
-                  @input="autoGrow"
-                  @keydown="handleKeydown"
-                  @paste="onPaste"
-                />
-
-                <!-- One family of 32px controls (`composer/`); the send key is an island that grows
-                     into 「■ 停止」 over the microphone's slot without moving a neighbour. -->
-                <ComposerToolbar
-                  ref="toolbarRef"
-                  v-model:permission-mode="agentToolsMode"
-                  :model="composerModel"
-                  :send-state="sendState"
-                  :send-queues="sendQueues"
-                  :mic-state="dictation.state.value"
-                  :mic-blocked="dictation.captureBlocked.value"
-                  :mic-elapsed-ms="dictation.elapsedMs.value"
-                  :mic-outcome="dictation.outcome.value"
-                  @files="addFiles"
-                  @send="pressSend"
-                  @stop="conversation.stop()"
-                  @mic="dictation.toggle()"
-                  @reset-approvals="resetRememberedApprovals"
-                >
-                  <template #mode>
-                    <template v-if="browserLanding">
-                      <TxButton
-                        size="sm"
-                        variant="flat"
-                        :type="browserMode === 'browse' ? 'primary' : 'text'"
-                        :aria-pressed="browserMode === 'browse'"
-                        :disabled="pendingAttachments.length > 0 || browserNavigating"
-                        icon="i-ri-global-line"
-                        @click="browserMode = 'browse'"
-                        >{{ t('browser.browse') }}</TxButton
-                      >
-                      <TxButton
-                        size="sm"
-                        variant="flat"
-                        :type="browserMode === 'ask' ? 'primary' : 'text'"
-                        :aria-pressed="browserMode === 'ask'"
-                        :disabled="browserNavigating"
-                        icon="i-ri-search-line"
-                        @click="browserMode = 'ask'"
-                        >{{ t('browser.ask') }}</TxButton
-                      >
-                    </template>
-                    <HomeWorkspaceModeMenu
-                      v-if="!browserLanding"
-                      :mode="workspace.settings.value.mode"
-                      :profile-id="workspace.settings.value.profileId"
-                      :profiles="workspace.profiles.value"
-                      :profiles-loading="workspace.profilesLoading.value"
-                      :profiles-error="workspace.profilesError.value"
-                      :profile-saving="workspace.profileSaving.value"
-                      :branch-on-change="hasHistory"
-                      :locked="workspace.busy.value || branching"
-                      @select-chat="selectMode('chat')"
-                      @select-agent="selectAgentProfile"
-                      @toggle-profile="workspace.setProfileEnabled"
-                      @load-profiles="workspace.loadProfiles()"
-                    />
-                  </template>
-                </ComposerToolbar>
-
-                <!-- A wrapped draft as it sat, fading out while the lifted bubble's own lines fade in
-                     (~140ms); empty otherwise. -->
-                <div class="HomePage-DraftGhost" aria-hidden="true">
-                  <div ref="draftGhostRef" class="HomePage-DraftGhostText" />
-                </div>
-              </div>
-            </TxBorderBeam>
+              </template>
+            </TuffAIComposer>
 
             <!-- The push card: the guide, or 「为你准备」. It enters once the composer has landed
                  and leaves with the greeting, pinned under the box and dissolving on its back as it
@@ -2705,170 +2600,6 @@ useHomeCommands({
       --home-group-gap: 0px;
     }
   }
-}
-
-/**
- * The beam is a wrapper, so it owns the lane: the beam draws on its own border box and the composer
- * fills it. Keeping `--home-chat-lane-width` here alone is what stops the `100%` inside that token
- * from resolving against a shrink-to-fit parent.
- */
-.HomePage-ComposerBeam {
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-  position: relative;
-  z-index: 2;
-}
-
-.HomePage-Composer {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  min-width: 0;
-  padding: 16px 16px 12px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-2xl);
-  background: var(--shell-bg);
-  /* Always on, even while the background above it is opaque and hides it:
-     gaining a backdrop layer mid-dock forces a compositor re-build that can
-     flash for a frame — cheaper to keep the layer and fade the paint. */
-  backdrop-filter: blur(20px) saturate(180%);
-  /* Layered: a tight contact shadow plus a soft ambient one reads as lift
-     without the smudge a single big blur gives. */
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
-    0 8px 24px var(--shell-shadow);
-  box-sizing: border-box;
-  --home-glow-on: 0;
-  transition:
-    border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    --home-glow-on 0.6s ease;
-
-  &:focus-within {
-    border-color: var(--shell-primary);
-    box-shadow:
-      0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
-      0 10px 30px var(--shell-shadow),
-      0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
-  }
-
-  /* The box itself stays plain while a response runs: the border carries no light. `is-live`
-     only sets the gate below, which the send key's stop ring (`composer/ComposerSendIsland.vue`)
-     reads to fade in and out with the run. */
-  &.is-live {
-    --home-glow-on: 1;
-  }
-
-  /**
-   * Floating form. The fill drops to translucent so the always-on backdrop
-   * blur has something to show — the swap rides the background transition,
-   * so the material change is a fade, not a cut. The shadow deepens because
-   * the box now has live content sliding underneath it rather than a flat
-   * page.
-   */
-  .HomePage.conversing & {
-    background: color-mix(in srgb, var(--shell-bg) 72%, transparent);
-    box-shadow: 0 6px 24px var(--shell-shadow);
-    pointer-events: auto;
-  }
-
-  /* Files hovering over the box: the border switches to an invitation. */
-  &.is-dragover {
-    border-style: dashed;
-    border-color: var(--shell-primary);
-  }
-}
-
-/**
- * The dictation glow (TuffEx `TxVoiceBeam`) as an overlay on the box: its wrapper clips to the
- * composer's 24px corners and sits under everything the box holds. The beam's own stylesheet makes
- * its wrapper `position: relative`; the child selector outranks that single attribute selector.
- */
-.HomePage-Composer > .HomePage-VoiceGlow {
-  position: absolute;
-  inset: -1px;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.HomePage-VoiceGlowHost {
-  width: 100%;
-  height: 100%;
-}
-
-/* The box's content paints above the glow's layers. */
-.HomePage-Composer > .HomePage-ComposerTray,
-.HomePage-Composer > .HomePage-Input,
-.HomePage-Composer > .ComposerToolbar {
-  position: relative;
-  z-index: 1;
-}
-
-.HomePage-Composer:hover :deep(.ComposerToolbar-Badges),
-.HomePage-Composer:focus-within :deep(.ComposerToolbar-Badges) {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-}
-
-.HomePage-Input {
-  width: 100%;
-  max-height: 200px;
-  border: none;
-  background: transparent;
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-md);
-  line-height: 1.5;
-  resize: none;
-  // The focus indicator is promoted to the whole composer via `:focus-within`, so it outlines
-  // what reads as the field instead of drawing a second ring inside the card.
-  outline: none;
-}
-
-textarea.HomePage-Input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-.HomePage-Input::placeholder {
-  color: var(--shell-text-muted);
-  // The way back in once a lifted send has cleared the box; the way out is instant (below).
-  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* The sent text is still lifting off the composer: an empty field's placeholder under it would read
-   as two texts at once. */
-.HomePage-Composer.is-lifting .HomePage-Input::placeholder {
-  color: transparent;
-  transition: none;
-}
-
-/**
- * A wrapped draft where it sat in the textarea (`fadeDraft`), fading out while the lifted bubble's
- * own lines fade in over it. Empty outside a send.
- */
-.HomePage-DraftGhost {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-/* Typeset like `.HomePage-Input`, and like a textarea wraps, so the first frame is the draft. */
-.HomePage-DraftGhostText {
-  position: absolute;
-  margin: 0;
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-md);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
 }
 
 /**

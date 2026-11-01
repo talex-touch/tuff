@@ -130,6 +130,7 @@ vi.mock('@talex-touch/tuffex/border-beam', () => ({ TxBorderBeam: Paint }))
 vi.mock('@talex-touch/tuffex/chain-of-thought', () => ({ TxChainOfThought: Paint }))
 vi.mock('@talex-touch/tuffex/choice-card', () => ({ TxChoiceCard: Paint }))
 vi.mock('@talex-touch/tuffex/message-actions', () => ({ TxMessageActions: Paint }))
+vi.mock('@talex-touch/tuffex/gradual-blur', () => ({ TxGradualBlur: Paint }))
 vi.mock('@talex-touch/tuffex/modal', () => ({ TxModal: Paint }))
 vi.mock('@talex-touch/tuffex/skeleton', async () => {
   // Mock factories run before static imports; this paint-only ref must come from the active Vue module.
@@ -469,7 +470,7 @@ function expectTarget(view: VueWrapper, target: string, text: string, attachment
     view.findAll('.HomePage-Message.user .HomePage-UserBubble').map((bubble) => bubble.text())
   ).toEqual([`${target} saved question`])
   expect(draft(view)).toBe(text)
-  expect(view.get('.HomePage-ComposerTray').text()).toBe(attachment)
+  expect(view.get('.TuffAIComposer-Tray').text()).toBe(attachment)
 }
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: translate }) }))
@@ -586,7 +587,7 @@ describe('HomePage submit owns the view in which it was pressed', () => {
     await flushPromises()
     expect(router.currentRoute.value.params.id).toBe('child')
     expect(draft(view)).toBe('')
-    expect(view.find('.HomePage-ComposerTray').exists()).toBe(false)
+    expect(view.find('.TuffAIComposer-Tray').exists()).toBe(false)
     expect(
       view.findAll('.HomePage-Message.user .HomePage-UserBubble').map((bubble) => bubble.text())
     ).toEqual(['child saved question'])
@@ -623,7 +624,7 @@ describe('HomePage submit owns the view in which it was pressed', () => {
       await flushPromises()
       expect(router.currentRoute.value.path).toBe(path)
       expect(draft(view)).toBe('original question')
-      expect(view.get('.HomePage-ComposerTray').text()).toBe('original.txt')
+      expect(view.get('.TuffAIComposer-Tray').text()).toBe('original.txt')
       await send(view, 'original question')
       const retried = main.pending[1]!.request
       expect(retried.text).toBe('original question')
