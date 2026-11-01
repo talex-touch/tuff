@@ -12,6 +12,7 @@ import type {
   FilePersistenceEntry
 } from '../../../search-engine/workers/search-index-worker-client'
 import { describe, expect, it, vi } from 'vitest'
+import type { FileProviderEmbeddingIndexOutcome } from './file-provider-embedding-index-service'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 import { FileProviderIndexFlushExecutorService } from './file-provider-index-flush-executor-service'
 
@@ -70,7 +71,9 @@ function createExecutor(options: {
   pending: Map<number, IndexWorkerFileResult>
   batchSize?: number
   checkContentCapacity?: () => Promise<boolean>
-  indexEmbeddings?: (entries: IndexWorkerFileResult[]) => Promise<void>
+  indexEmbeddings?: (
+    entries: IndexWorkerFileResult[]
+  ) => Promise<FileProviderEmbeddingIndexOutcome | void>
   buildPersistEntries?: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
   inflight?: Map<number, IndexWorkerFileResult>
   dbUtils?: unknown | null
@@ -576,4 +579,88 @@ describe('file flush image completion ownership', () => {
       }
     }
   )
+})
+
+describe('file flush text embedding retry ownership', () => {
+  async function openBatch(client: Client) {
+    const entries = [createResult(1), createResult(2)]
+    const { repository } = await createProgressRepository(client, entries)
+    const mapper = new IndexedWorkerPersistEntryMapperService()
+    return {
+      pending: new Map(entries.map((entry) => [entry.fileId, entry])),
+      buildPersistEntries: (records: IndexWorkerFileResult[]) =>
+        mapper.map(records) as FilePersistenceEntry[],
+      persistEntries: (records: FilePersistenceEntry[]) => repository.persistEntries(records)
+    }
+  }
+  const progress = (client: Client) =>
+    client.execute('SELECT file_id, status FROM file_index_progress ORDER BY file_id')
+
+  it('keeps a text file whose vectors failed pending for the retry lane and completes the rest', async () => {
+    const client = createClient({ url: ':memory:' })
+    try {
+      const { executor } = createExecutor({
+        ...(await openBatch(client)),
+        checkContentCapacity: async () => true,
+        indexEmbeddings: async () => ({ retryFileIds: [1] })
+      })
+
+      await expect(executor.execute()).resolves.toMatchObject({ status: 'flushed' })
+
+      expect((await progress(client)).rows).toEqual([
+        { file_id: 1, status: 'pending' },
+        { file_id: 2, status: 'completed' }
+      ])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('keeps that decision when the retained batch is replayed after the final capacity fence paused it', async () => {
+    const client = createClient({ url: ':memory:' })
+    try {
+      let paused = false
+      const indexEmbeddings = vi.fn(async () => {
+        paused = true
+        return { retryFileIds: [1] }
+      })
+      const { executor } = createExecutor({
+        ...(await openBatch(client)),
+        checkContentCapacity: async () => !paused,
+        indexEmbeddings
+      })
+
+      await expect(executor.execute()).rejects.toThrow('FILE_CONTENT_STORAGE_PAUSED')
+      paused = false
+      await expect(executor.execute()).resolves.toMatchObject({ status: 'flushed' })
+
+      expect(indexEmbeddings).toHaveBeenCalledTimes(1)
+      expect((await progress(client)).rows).toEqual([
+        { file_id: 1, status: 'pending' },
+        { file_id: 2, status: 'completed' }
+      ])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('completes every text file when the embedding step reports nothing to retry', async () => {
+    const client = createClient({ url: ':memory:' })
+    try {
+      const { executor } = createExecutor({
+        ...(await openBatch(client)),
+        checkContentCapacity: async () => true,
+        indexEmbeddings: async () => ({ retryFileIds: [] })
+      })
+
+      await expect(executor.execute()).resolves.toMatchObject({ status: 'flushed' })
+
+      expect((await progress(client)).rows).toEqual([
+        { file_id: 1, status: 'completed' },
+        { file_id: 2, status: 'completed' }
+      ])
+    } finally {
+      client.close()
+    }
+  })
 })

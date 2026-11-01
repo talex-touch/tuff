@@ -16,7 +16,8 @@ import {
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 import {
   FileProviderIndexFlushExecutorService,
-  type FileProviderIndexFlushExecutorResult
+  type FileProviderIndexFlushExecutorResult,
+  type FileProviderIndexFlushExecutorServiceDeps
 } from './file-provider-index-flush-executor-service'
 import {
   type FileProviderIndexFlushFailureDecision,
@@ -62,7 +63,7 @@ export interface FileProviderIndexRuntimeServiceDeps {
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
   publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
   /** Optional embeddings writer; see `FileProviderIndexFlushExecutorServiceDeps.indexEmbeddings`. */
-  indexEmbeddings?: (entries: IndexWorkerFileResult[]) => Promise<void>
+  indexEmbeddings?: FileProviderIndexFlushExecutorServiceDeps['indexEmbeddings']
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   now?: () => number

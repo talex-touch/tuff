@@ -1438,3 +1438,33 @@ describe('FileProviderEnrichmentResumeService legacy image recovery', () => {
     }
   )
 })
+
+describe('FileProviderEnrichmentResumeService text embedding retries', () => {
+  let database: ResumeDatabase | undefined
+
+  afterEach(async () => {
+    database?.client.close()
+    if (database) await rm(database.directory, { recursive: true, force: true })
+    database = undefined
+  })
+
+  it('retries a text file kept pending by a failed embedding but never enrols finished files still marked pending', async () => {
+    useCooldownClock()
+    database = await openResumeDatabase(3)
+    await database.client.batch(
+      [
+        "INSERT INTO file_index_progress (file_id, status, progress, updated_at) VALUES (1, 'pending', 100, 0), (2, 'completed', 100, 0), (3, 'completed', 100, 0)",
+        "UPDATE files SET embedding_status = 'pending' WHERE id IN (1, 2)"
+      ],
+      'write'
+    )
+    const harness = createDatabaseHarness(database, {
+      scheduleIndexing: (payload) => ({ accepted: payload.length, deferred: 0 })
+    })
+
+    harness.service.resume('text-embedding-retry')
+    await settleRounds()
+
+    expect(scheduledIds(harness.scheduleIndexing)).toEqual([[1]])
+  })
+})

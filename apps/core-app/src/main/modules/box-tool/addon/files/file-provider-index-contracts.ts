@@ -5,6 +5,7 @@ import type {
   IndexedSourceScanRequest,
   IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
+import type { HotSubtreeLane } from '../../search-engine/indexed-source-event-router'
 import type {
   ExpectedFileRecord,
   ExpectedMissingFileSearchRecord,
@@ -74,6 +75,8 @@ export interface FileIndexedSourceRuntimeMutationDelegate {
   publishContentCleared: (affectedItems: number) => Promise<void>
   drainSource: (sourceId: string, timeoutMs?: number) => Promise<void>
   scanSource: (reason: IndexedSourceScanRequest['reason']) => Promise<unknown>
+  /** One exclusive turn of the subtree-reconcile chain; absent where no event router runs. */
+  withHotSubtreeLane?: <T>(run: (lane: HotSubtreeLane) => Promise<T>) => Promise<T>
 }
 
 export interface FileIndexedSourceScanResult {
