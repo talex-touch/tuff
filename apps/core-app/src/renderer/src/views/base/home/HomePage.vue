@@ -59,11 +59,6 @@ import {
   generateConversationTitle,
   shouldGenerateTitle
 } from '~/modules/conversation/conversation-title'
-import type { ConversationError } from '~/modules/conversation/conversation-error-display'
-import {
-  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
-  CONVERSATION_ERROR_USAGE_LIMIT_REACHED
-} from '~/modules/conversation/conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import {
@@ -84,17 +79,13 @@ import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
-import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
+import { isStoppedTurn } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
-import {
-  resolveIntelligenceErrorRecovery,
-  USAGE_LIMITS_ROUTE
-} from '~/modules/intelligence/ai-error-recovery'
-import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+import { USAGE_LIMITS_ROUTE } from '~/modules/intelligence/ai-error-recovery'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolvedTheme } from '~/modules/storage/theme-style'
@@ -126,6 +117,14 @@ import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
 import { useHomeAttachments } from './composables/useHomeAttachments'
 import { usePassageSelection } from './composables/usePassageSelection'
+import { useTurnError } from './composables/useTurnError'
+import {
+  calculateTokenSpeed,
+  formatMetricLatency,
+  metricLatencyTitle,
+  metricTokensTitle,
+  useTurnMetrics
+} from './composables/useTurnMetrics'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -1190,65 +1189,16 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   dictation.cancel()
 }
 
-const { classifyTurnFailure, resolveErrorTitle } = useTurnFailureWording()
-
-/**
- * What to do about a failure the intelligence layer named. Not for a provider's own text, passed on
- * as thrown or named `UNKNOWN`: it can say "quota" about the provider's plan, where the advice is
- * about Nexus credits.
- */
-function resolveErrorAdvice(error: ConversationError | undefined): string {
-  if (!error || !isIntelligenceErrorCode(error.code) || error.code === 'UNKNOWN') return ''
-  const recovery = classifyTurnFailure(error)
-  return recovery && recovery.code !== 'provider' ? recovery.detail : ''
-}
-
-function resolveErrorReportCode(error: { code?: string } | undefined): string {
-  const code = error?.code?.trim()
-  return code || 'UNKNOWN_ERROR'
-}
-
-function resolveErrorReportDetail(error: { detail?: string } | undefined): string {
-  const detail = error?.detail?.trim()
-  return detail || t('home.error.noDetail')
-}
-
-/**
- * A turn the usage limit refused, read as the user's own limit rather than a fault: its own title,
- * the reset time in local words instead of main's English sentence, and the way to the limits in
- * place of a retry that would only be refused again until then.
- */
-function resolveUsageLimitFailure(
-  error: { code: string; detail: string } | undefined
-): ReturnType<typeof resolveIntelligenceErrorRecovery> | null {
-  if (error?.code !== CONVERSATION_ERROR_USAGE_LIMIT_REACHED) return null
-  return resolveIntelligenceErrorRecovery(
-    { errorCode: error.code, error: error.detail },
-    t,
-    locale.value
-  )
-}
-
-function openUsageLimits(): void {
-  void router.push(USAGE_LIMITS_ROUTE)
-}
-
-/**
- * Retrying a missing provider reruns the same failure forever, so that one case swaps the retry for
- * a way out. `/setting/intelligence/channels` is where a provider is actually enabled — the
- * intelligence settings page only cross-links to it. Its credentials are fixed there too.
- */
-function isProviderUnavailable(error: ConversationError | undefined): boolean {
-  const code = error?.code
-  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE || code === 'WORKSPACE_PROVIDER_UNAVAILABLE')
-    return true
-  const kind = classifyTurnFailure(error)?.code
-  return kind === 'provider' || kind === 'credentials'
-}
-
-function openProviderSettings(): void {
-  void router.push('/setting/intelligence/channels')
-}
+const {
+  resolveErrorTitle,
+  resolveErrorAdvice,
+  resolveErrorReportCode,
+  resolveErrorReportDetail,
+  resolveUsageLimitFailure,
+  openUsageLimits,
+  isProviderUnavailable,
+  openProviderSettings
+} = useTurnError()
 
 const {
   pendingAttachments,
@@ -1821,98 +1771,8 @@ const contextShare = computed(() => {
 const contextWindowText = computed(() =>
   formatWindow(modelLimits.value.contextWindow?.value ?? 128_000)
 )
-const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
-
-function formatMetricLatency(ms?: number): string {
-  if (ms === undefined || ms === null || !Number.isFinite(ms)) return ''
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
-function formatTokenCount(count: number): string {
-  if (count < 1000) return `${count}`
-  if (count < 10000) return `${(count / 1000).toFixed(1)}K`
-  if (count < 1000000) return `${Math.round(count / 1000)}K`
-  return `${(count / 1000000).toFixed(1)}M`
-}
-
-function calculateTokenSpeed(message: ConversationMessage): number | null {
-  const latency = message.meta?.latencyMs
-  if (!latency || latency < 200) return null
-  const tokens = message.meta?.completionTokens ?? message.meta?.totalTokens
-  if (!tokens || tokens <= 0) return null
-  const seconds = latency / 1000
-  return Math.round(tokens / seconds)
-}
-
-function metricTokensTitle(message: ConversationMessage): string {
-  const meta = message.meta
-  const prompt = meta?.promptTokens ?? 0
-  const completion = meta?.completionTokens ?? 0
-  const total = meta?.totalTokens ?? 0
-  return `输入: ${prompt} · 输出: ${completion} · 总计: ${total}`
-}
-
-function metricLatencyTitle(message: ConversationMessage): string {
-  const meta = message.meta
-  const latency = meta?.latencyMs ? formatMetricLatency(meta.latencyMs) : ''
-  const ttft = meta?.ttftMs ? formatMetricLatency(meta.ttftMs) : ''
-  if (ttft) {
-    return `总耗时: ${latency} · 首字响应 (TTFT): ${ttft}`
-  }
-  return `耗时: ${latency}`
-}
-
-function metricCacheLabel(message: ConversationMessage): string {
-  return t('home.workspace.activity.cache', {
-    tokens: formatTokenCount(message.meta?.cacheReadTokens ?? 0)
-  })
-}
-
-function metricCacheTitle(message: ConversationMessage): string {
-  return t('home.workspace.activity.cacheTitle', { tokens: message.meta?.cacheReadTokens ?? 0 })
-}
-
-const activeFooterMessageIds = ref<Set<string>>(new Set())
-const footerTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-function revealTurnFooter(messageId: string): void {
-  activeFooterMessageIds.value.add(messageId)
-  const existing = footerTimers.get(messageId)
-  if (existing) clearTimeout(existing)
-  const timer = setTimeout(() => {
-    activeFooterMessageIds.value.delete(messageId)
-    footerTimers.delete(messageId)
-  }, 4500)
-  footerTimers.set(messageId, timer)
-}
-
-function isTurnFooterResting(message: ConversationMessage): boolean {
-  if (activeFooterMessageIds.value.has(message.id)) return false
-  return true
-}
-
-watch(
-  () => messages.value.map((m) => `${m.id}:${m.status}`).join(';'),
-  (_current, previous) => {
-    if (!previous) return
-    const prevMap = new Map(previous.split(';').map((s) => s.split(':') as [string, string]))
-    for (const msg of messages.value) {
-      if (
-        msg.role === 'assistant' &&
-        msg.status === 'complete' &&
-        prevMap.get(msg.id) !== 'complete'
-      ) {
-        revealTurnFooter(msg.id)
-      }
-    }
-  }
-)
-
-onScopeDispose(() => {
-  for (const timer of footerTimers.values()) clearTimeout(timer)
-  footerTimers.clear()
-})
+const { showTurnMetrics, metricCacheLabel, metricCacheTitle, isTurnFooterResting } =
+  useTurnMetrics(messages)
 
 // ============================================================================
 // Command layer
