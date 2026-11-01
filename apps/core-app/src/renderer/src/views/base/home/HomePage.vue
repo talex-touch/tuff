@@ -8,7 +8,6 @@ import type {
 } from '~/modules/conversation/useHomeConversation'
 import type { WorkspaceSubmitDisposition } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
-import type { MainWindowCommandHandler } from '~/modules/shortcuts/main-window-shortcuts'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxButton } from '@talex-touch/tuffex/button'
@@ -78,7 +77,6 @@ import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { USAGE_LIMITS_ROUTE } from '~/modules/intelligence/ai-error-recovery'
-import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolvedTheme } from '~/modules/storage/theme-style'
 import { useProjectStore } from '~/stores/projects'
@@ -111,6 +109,7 @@ import { useHomeAttachments } from './composables/useHomeAttachments'
 import { usePassageSelection } from './composables/usePassageSelection'
 import { useConversationTitle } from './composables/useConversationTitle'
 import { useThinkingTicker } from './composables/useThinkingTicker'
+import { useHomeCommands } from './composables/useHomeCommands'
 import { type OpeningHold, useHomeOpening } from './composables/useHomeOpening'
 import { useTurnError } from './composables/useTurnError'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
@@ -1513,51 +1512,16 @@ const { showTurnMetrics, metricCacheLabel, metricCacheTitle, isTurnFooterResting
 // Command layer
 // ============================================================================
 
-/**
- * The composer's commands, registered while this page is alive.
- *
- * Their handlers are this component's state — the panel, the draft, the running turn — so they are
- * registered here rather than in the shell's list, which cannot reach any of it. Two consequences
- * worth stating: the rows disappear when the page unmounts, and every one of them is gated on the
- * Home route being visible, because the shell keeps this page alive while the user is in Settings
- * and an enabled-looking row that quietly toggles an off-screen panel is a lie.
- */
-const commandHandlers: MainWindowCommandHandler[] = [
-  {
-    id: 'toggle-panel',
-    enabled: () => isHomeRoute.value && !props.browserLanding,
-    run: () => {
-      panelOpen.value = !panelOpen.value
-    }
-  },
-  {
-    id: 'focus-composer',
-    enabled: () => isHomeRoute.value,
-    run: () => inputRef.value?.focus()
-  },
-  {
-    id: 'send',
-    enabled: () =>
-      isHomeRoute.value && (canSend.value || (dictation.active.value && !isStreaming.value)),
-    run: () => pressSend()
-  },
-  {
-    id: 'stop',
-    enabled: () => isHomeRoute.value && isStreaming.value,
-    run: () => conversation.stop()
-  }
-]
-
-let disposeCommands: (() => void) | undefined
-watch(
+useHomeCommands({
   isHomeRoute,
-  (visible) => {
-    disposeCommands?.()
-    disposeCommands = visible ? registerMainWindowCommandHandlers(commandHandlers) : undefined
-  },
-  { immediate: true }
-)
-onBeforeUnmount(() => disposeCommands?.())
+  browserLanding: () => props.browserLanding,
+  panelOpen,
+  focusComposer: () => inputRef.value?.focus(),
+  canSend: () => canSend.value || (dictation.active.value && !isStreaming.value),
+  send: pressSend,
+  isStreaming: () => isStreaming.value,
+  stop: () => conversation.stop()
+})
 </script>
 
 <template>
@@ -1595,7 +1559,7 @@ onBeforeUnmount(() => disposeCommands?.())
         <TxGradualBlur
           v-if="!isEmpty"
           position="bottom"
-          height="96px"
+          height="calc(var(--home-composer-height, 112px) + 96px)"
           :strength="2.5"
           curve="bezier"
           :z-index="4"
@@ -2578,13 +2542,14 @@ onBeforeUnmount(() => disposeCommands?.())
   bottom: 0;
   left: 0;
   right: 0;
-  height: 96px;
+  height: calc(var(--home-composer-height, 112px) + 96px);
   z-index: var(--home-z-bottomblur);
   pointer-events: none;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--shell-bg) 80%, transparent) 0%,
-    color-mix(in srgb, var(--shell-bg) 35%, transparent) 40%,
+    color-mix(in srgb, var(--shell-bg) 85%, transparent) 0%,
+    color-mix(in srgb, var(--shell-bg) 60%, transparent) 35%,
+    color-mix(in srgb, var(--shell-bg) 25%, transparent) 70%,
     transparent 100%
   );
 }
@@ -2769,7 +2734,7 @@ onBeforeUnmount(() => disposeCommands?.())
    * an actionable card. `:deep` is required because both controls live inside the stream.
    */
   :deep(.tx-conversation-stream__scroller) {
-    padding: 72px 0 calc(var(--home-composer-height, 112px) + 28px);
+    padding: 72px 0 calc(var(--home-composer-height, 112px) + 88px);
     box-sizing: border-box;
   }
 
