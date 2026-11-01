@@ -125,6 +125,7 @@ import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
 import { homeLog } from './composables/home-log'
 import { useReadAloud } from './composables/useReadAloud'
 import { useMessageParts } from './composables/useMessageParts'
+import { useHomeAttachments } from './composables/useHomeAttachments'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -1330,142 +1331,25 @@ function openProviderSettings(): void {
   void router.push('/setting/intelligence/channels')
 }
 
-// ============================================================================
-// Composer attachments (memory-only: never in the provider payload, never persisted)
-// ============================================================================
-
-const pendingAttachments = ref<AiAttachment[]>([])
-
-/**
- * Object URLs this surface created. Revoked wholesale on unmount rather than
- * per-message: the conversation is in-memory and keep-alive keeps this
- * component around, so the registry is bounded by the session, not leaked.
- */
-const objectUrls = new Set<string>()
-
-function toAttachment(file: File): AiAttachment {
-  if (file.type.startsWith('image/')) {
-    const url = URL.createObjectURL(file)
-    objectUrls.add(url)
-    return { kind: 'image', id: crypto.randomUUID(), url, name: file.name }
-  }
-  return {
-    kind: 'file',
-    id: crypto.randomUUID(),
-    name: file.name,
-    size: file.size,
-    mime: file.type
-  }
-}
-
-function addFiles(files: File[]): void {
-  // Allowed while a reply streams, like typing: only sending waits for the turn to end.
-  if (files.length === 0) return
-  if (props.browserLanding) browserMode.value = 'ask'
-  pendingAttachments.value = [...pendingAttachments.value, ...files.map(toAttachment)]
-}
-
-function removeAttachment(id: string): void {
-  const target = pendingAttachments.value.find((attachment) => attachment.id === id)
-  if (target?.kind === 'image' && objectUrls.delete(target.url)) URL.revokeObjectURL(target.url)
-  pendingAttachments.value = pendingAttachments.value.filter((attachment) => attachment.id !== id)
-}
-
-/**
- * The preview's own controls and announcements in the app's language. The tray names only the
- * buttons it has props for; everything else in the preview would stay at its English defaults.
- */
-const attachPreviewProps = computed(() => ({
-  zoomLabel: t('home.attachViewer.zoom'),
-  rotateLabel: t('home.attachViewer.rotate'),
-  copyLabel: t('home.attachViewer.copy'),
-  shareLabel: t('home.attachViewer.share'),
-  downloadLabel: t('home.attachViewer.download'),
-  menuLabel: t('home.attachViewer.menu'),
-  indicatorLabel: t('home.attachViewer.strip'),
-  copiedText: t('home.attachViewer.copied'),
-  linkCopiedText: t('home.attachViewer.linkCopied'),
-  copyFailedText: t('home.attachViewer.copyFailed'),
-  indicatorItemFormatter: (current: number, total: number, name?: string) =>
-    name
-      ? t('home.attachViewer.itemNamed', { name, current, total })
-      : t('home.attachViewer.item', { current, total }),
-  labelFormatter: (label: string, name: string) => t('home.attachViewer.named', { label, name }),
-  readoutLabelFormatter: (readout: string, label: string) =>
-    t('home.attachViewer.readout', { readout, label })
-}))
-
-function attachOpenLabel(name: string): string {
-  return t('home.attachViewer.named', { label: t('home.attachPreview'), name })
-}
-
-/** The files a paste carries — a copied picture arrives as one `image/png` file item. */
-function pastedFiles(event: ClipboardEvent): File[] {
-  const files: File[] = []
-  for (const item of Array.from(event.clipboardData?.items ?? [])) {
-    if (item.kind !== 'file') continue
-    const file = item.getAsFile()
-    if (file) files.push(file)
-  }
-  return files
-}
-
-function onPaste(event: ClipboardEvent): void {
-  const files = pastedFiles(event)
-  if (files.length === 0) return
-  // Keeps platform side text (a Finder-copied file pastes its name) out of the draft.
-  event.preventDefault()
-  addFiles(files)
-}
-
-/**
- * A picture pasted with the focus outside any field still lands in the composer: after a click on
- * the send button, on the thread or on nothing, ⌘V never reaches the textarea's own handler.
- * A paste into another field stays that field's; text pasted outside a field is dropped as before.
- */
-function onPagePaste(event: ClipboardEvent): void {
-  if (event.defaultPrevented || !isHomeRoute.value) return
-  const target = event.target instanceof Element ? event.target : null
-  if (target?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return
-  const files = pastedFiles(event)
-  if (files.length === 0) return
-  event.preventDefault()
-  addFiles(files)
-  inputRef.value?.focus()
-}
-
-window.addEventListener('paste', onPagePaste)
-onBeforeUnmount(() => window.removeEventListener('paste', onPagePaste))
-
-/** Enter/leave fire per descendant — only the pair count says "still inside". */
-const dragDepth = ref(0)
-const isDragover = computed(() => dragDepth.value > 0)
-
-function dragHasFiles(event: DragEvent): boolean {
-  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
-}
-
-function onDragEnter(event: DragEvent): void {
-  if (!dragHasFiles(event)) return
-  event.preventDefault()
-  dragDepth.value += 1
-}
-
-function onDragOver(event: DragEvent): void {
-  // Required — without it the browser refuses the drop.
-  if (isDragover.value) event.preventDefault()
-}
-
-function onDragLeave(): void {
-  dragDepth.value = Math.max(0, dragDepth.value - 1)
-}
-
-function onDrop(event: DragEvent): void {
-  if (!isDragover.value) return
-  event.preventDefault()
-  dragDepth.value = 0
-  addFiles(Array.from(event.dataTransfer?.files ?? []))
-}
+const {
+  pendingAttachments,
+  attachPreviewProps,
+  attachOpenLabel,
+  addFiles,
+  removeAttachment,
+  isDragover,
+  onPaste,
+  onDragEnter,
+  onDragOver,
+  onDragLeave,
+  onDrop
+} = useHomeAttachments({
+  isActive: () => isHomeRoute.value,
+  onAdd: () => {
+    if (props.browserLanding) browserMode.value = 'ask'
+  },
+  focusInput: () => inputRef.value?.focus()
+})
 
 /**
  * Feeds the measured composer stack height to the stream's bottom padding.
@@ -1490,8 +1374,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   composerObserver?.disconnect()
   composerObserver = null
-  for (const url of objectUrls) URL.revokeObjectURL(url)
-  objectUrls.clear()
   // Pending knocks and reveals would otherwise fire against whatever mounts next.
   choreography.cancel()
 })
@@ -1973,28 +1855,53 @@ const runStartedAt = computed(() => streamingAssistant.value?.createdAt)
 /** The step the streaming assistant message is on, read off its parts. */
 const runStep = computed(() => deriveRunStep(streamingAssistant.value?.parts))
 
+function estimateTextTokens(text: string): number {
+  if (!text) return 0
+  let count = 0
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code > 0x7f) count += 1
+    else count += 0.25
+  }
+  return Math.ceil(count)
+}
+
+function estimateTranscriptTokens(allMessages: readonly ConversationMessage[]): number {
+  let total = 0
+  for (const msg of allMessages) {
+    if (msg.content) total += estimateTextTokens(msg.content)
+    if (msg.parts) {
+      for (const part of msg.parts) {
+        if (part.type === 'text' && part.text) total += estimateTextTokens(part.text)
+        else if (part.type === 'reasoning' && part.text) total += estimateTextTokens(part.text)
+      }
+    }
+  }
+  return Math.max(1, total)
+}
+
 /**
- * Share of the routed model's window the last request occupied. `null` unless the provider reported
- * usage for it and the binding knows its window - neither is ever defaulted. The turn read is the
- * last one that reported usage, not the newest: the reply still streaming has none until its `end`,
- * so reading the newest would blank the meter for the whole run.
+ * Share of the routed model's window the request occupies.
+ * Uses the provider-reported usage if available; otherwise estimates from the transcript so the
+ * meter is present while answering (streaming) and on the first turn.
  */
 const contextShare = computed(() => {
   const turn = lastReportedTurn(messages.value) as ConversationTurnMeta | undefined
-  const occupancy = turn
+  let occupancy = turn
     ? contextOccupancyTokens({
         inputTokens: turn.promptTokens ?? 0,
         outputTokens: turn.completionTokens ?? 0,
         totalTokens: turn.totalTokens ?? 0
       })
     : 0
-  return contextPercent(
-    occupancy > 0 ? occupancy : undefined,
-    modelLimits.value.contextWindow?.value
-  )
+  if (occupancy <= 0) {
+    occupancy = estimateTranscriptTokens(messages.value)
+  }
+  return contextPercent(occupancy, modelLimits.value.contextWindow?.value ?? 128_000)
 })
-const contextWindowText = computed(() => formatWindow(modelLimits.value.contextWindow?.value ?? 0))
-
+const contextWindowText = computed(() =>
+  formatWindow(modelLimits.value.contextWindow?.value ?? 128_000)
+)
 const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
 
 function formatMetricLatency(ms?: number): string {
@@ -2714,9 +2621,9 @@ onBeforeUnmount(() => disposeCommands?.())
             <div v-if="!isEmpty && (isStreaming || contextShare !== null)" class="HomePage-RunDock">
               <HomeRunStatus v-if="isStreaming" :started-at="runStartedAt" :step="runStep" />
               <HomeContextMeter
-                v-if="contextShare !== null"
+                v-if="contextShare !== null || isStreaming"
                 class="HomePage-ContextMeter"
-                :percent="contextShare"
+                :percent="contextShare ?? 0"
                 :window-text="contextWindowText"
               />
             </div>
