@@ -4,6 +4,13 @@ import { parsePiStateResponse } from './pi-native-session'
 
 export type PiRpcRecord = Record<string, unknown>
 
+/** The longest a single RPC answer may take before the child is treated as stuck. */
+const RPC_TIMEOUT_MS = 30_000
+/** How long a child has to exit after SIGTERM before it is killed. */
+const CLOSE_GRACE_MS = 3_000
+/** How long close waits for a killed child to report its exit before it stops waiting. */
+const KILL_WAIT_MS = 2_000
+
 export interface PersistentPiRpcSessionOptions {
   executable: string
   cwd: string
@@ -87,6 +94,7 @@ export class PersistentPiRpcSession {
   private lineBuffer = ''
   private closed = false
   private closing = false
+  private closeTimer: ReturnType<typeof setTimeout> | undefined
 
   private constructor(child: ChildProcess, state: PersistentPiRpcState) {
     this.child = child
@@ -97,9 +105,12 @@ export class PersistentPiRpcSession {
 
     child.stdout?.setEncoding('utf8')
     child.stdout?.on('data', (chunk: string) => this.receive(chunk))
+    // Reporting an EPIPE here keeps it from surfacing as an unhandled error in the main process.
+    child.stdin?.on('error', (error) => this.fail(error))
     child.once('error', (error) => this.fail(error))
     child.once('close', () => {
       this.closed = true
+      clearTimeout(this.closeTimer)
       this.fail(new Error('PROCESS_EXITED'))
       this.resolveClosed()
     })
@@ -116,6 +127,8 @@ export class PersistentPiRpcSession {
       const responsePromise = session.waitFor(
         (record) => record.type === 'response' && record.command === 'get_state'
       )
+      // If the write throws, nothing awaits this waiter, so its rejection must not go unhandled.
+      responsePromise.catch(() => undefined)
       session.write({ id: 'tuff-state', type: 'get_state' })
       const response = await responsePromise
       const state = parsePiStateResponse(response)
@@ -159,7 +172,12 @@ export class PersistentPiRpcSession {
     const { promise, resolve, reject } = Promise.withResolvers<PiRpcRecord>()
     const waiter: RecordWaiter = { predicate, resolve, reject }
     this.waiters.add(waiter)
-    return promise.finally(() => this.waiters.delete(waiter))
+    // A child that stops answering is reported as exited, so the caller discards it.
+    const timer = setTimeout(() => reject(new Error('PROCESS_EXITED')), RPC_TIMEOUT_MS)
+    return promise.finally(() => {
+      clearTimeout(timer)
+      this.waiters.delete(waiter)
+    })
   }
 
   private fail(error: unknown): void {
@@ -173,11 +191,18 @@ export class PersistentPiRpcSession {
     this.child.stdin.write(`${JSON.stringify(value)}\n`)
   }
 
+  /** Whether a prompt is streaming; the module's idle timer leaves such a child alone. */
+  get hasActiveTurn(): boolean {
+    return this.activeTurn !== null
+  }
+
   async request(
     value: PiRpcRecord,
     predicate: (record: PiRpcRecord) => boolean
   ): Promise<PiRpcRecord> {
     const response = this.waitFor(predicate)
+    // If the write throws, nothing awaits this waiter, so its rejection must not go unhandled.
+    response.catch(() => undefined)
     this.write(value)
     return await response
   }
@@ -203,10 +228,17 @@ export class PersistentPiRpcSession {
   }
 
   async close(): Promise<void> {
-    if (!this.closing) {
+    if (!this.closing && !this.closed) {
       this.closing = true
-      this.child.kill()
+      this.child.kill('SIGTERM')
+      this.closeTimer = setTimeout(() => this.forceKill(), CLOSE_GRACE_MS)
     }
     await this.closedPromise
+  }
+
+  private forceKill(): void {
+    this.child.kill('SIGKILL')
+    // A child that still reports no exit after SIGKILL must not hold close() open.
+    this.closeTimer = setTimeout(this.resolveClosed, KILL_WAIT_MS)
   }
 }
