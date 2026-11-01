@@ -42,11 +42,6 @@ const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1
 type LangChainOpenAiModule = typeof import('@langchain/openai')
 let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
 
-/** `ChatOpenAI`'s own field type, which lags the API's level set (see `createChatModel`). */
-type OpenAiReasoningEffortField = NonNullable<
-  ConstructorParameters<LangChainOpenAiModule['ChatOpenAI']>[0]
->['reasoningEffort']
-
 async function getLangChainOpenAiModule(): Promise<LangChainOpenAiModule> {
   if (!langChainOpenAiModulePromise) {
     langChainOpenAiModulePromise = import('@langchain/openai')
@@ -728,29 +723,26 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     maxTokens?: number
     streaming?: boolean
   }): Promise<OpenAiChatModelLike> {
-    const { ChatOpenAI } = await getLangChainOpenAiModule()
+    const { ChatOpenAICompletions } = await getLangChainOpenAiModule()
     // Main's plan for this provider, translated and nothing more: without one — an auto turn, a
     // non-reasoning model — the model below is built exactly as it always was.
     const reasoning = toLangChainOpenAiReasoningFields(readReasoningPlan(params.options))
-    return new ChatOpenAI({
+    // Always the Chat Completions class: `ChatOpenAI` routes gpt-5.6* and codex model names to the
+    // Responses API. `n: 1` is what LangChain 0.4 sent by default; 1.x sends nothing, so it is set.
+    return new ChatOpenAICompletions({
       apiKey: this.resolveApiKey(),
       model: params.model,
       temperature: params.temperature,
       maxTokens: params.maxTokens,
+      n: 1,
       streaming: params.streaming,
       timeout: this.resolveRequestTimeout(params.options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
         fetch: createNetworkServiceFetch()
       },
-      ...(reasoning
-        ? {
-            // LangChain writes this into the body verbatim; only its bundled OpenAI types stop at
-            // `high`, so `minimal` / `xhigh` / `max` need the cast to get past them.
-            reasoningEffort: reasoning.reasoningEffort as OpenAiReasoningEffortField,
-            ...(reasoning.modelKwargs ? { modelKwargs: reasoning.modelKwargs } : {})
-          }
-        : {})
+      // Spread into the body verbatim, so `minimal` / `xhigh` / `max` pass the OpenAI types untouched.
+      ...(reasoning ? { modelKwargs: reasoning.modelKwargs } : {})
     })
   }
 

@@ -503,15 +503,23 @@ export function planReasoningEffortForSupport(
 // LangChain translation (core-app providers and the Nexus adapters run the same versions)
 // ============================================================================
 
-/** What a LangChain `ChatOpenAI` takes for a plan. */
+/**
+ * What a LangChain `ChatOpenAICompletions` takes for a plan. Both fields go into the Chat Completions
+ * body verbatim. `reasoning_effort` is spelled out in `modelKwargs` rather than given as `reasoning`:
+ * LangChain drops `reasoning` for model names it does not know as reasoning models, such as
+ * deepseek-v4-flash. The caller must pick the Chat Completions class, since `ChatOpenAI` sends
+ * gpt-5.6* and codex models to the Responses API.
+ */
 export interface LangChainOpenAiReasoningFields {
-  /**
-   * Sent verbatim as `reasoning_effort`. A plain level rather than the SDK's type: the OpenAI types
-   * LangChain 0.4 ships stop at `high`, while the API also takes `minimal`, `xhigh` and `max`.
-   */
-  reasoningEffort: IntelligenceReasoningLevel
-  /** DeepSeek V4 thinks only when told to; `modelKwargs` is spread into the request body. */
-  modelKwargs?: { thinking: { type: 'enabled' } }
+  modelKwargs: {
+    /**
+     * A plain level rather than the SDK's type: the OpenAI types LangChain 1.x ships stop at `high`,
+     * while the API also takes `minimal`, `xhigh` and `max`.
+     */
+    reasoning_effort: IntelligenceReasoningLevel
+    /** DeepSeek V4 thinks only when told to. */
+    thinking?: { type: 'enabled' }
+  }
 }
 
 /** `null` for no plan or nothing to send: the caller then builds exactly the model it always did. */
@@ -522,9 +530,9 @@ export function toLangChainOpenAiReasoningFields(
   if (!plan || !applied)
     return null
   if (plan.wire === 'openai-reasoning-effort')
-    return { reasoningEffort: applied }
+    return { modelKwargs: { reasoning_effort: applied } }
   if (plan.wire === 'deepseek-thinking')
-    return { reasoningEffort: applied, modelKwargs: { thinking: { type: 'enabled' } } }
+    return { modelKwargs: { reasoning_effort: applied, thinking: { type: 'enabled' } } }
   return null
 }
 

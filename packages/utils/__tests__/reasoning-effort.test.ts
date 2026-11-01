@@ -237,10 +237,11 @@ describe('toLangChainOpenAiReasoningFields', () => {
   })
 
   it('spells the OpenAI level and DeepSeek\'s switch', () => {
-    expect(toLangChainOpenAiReasoningFields(plan('max', openai('gpt-5.5')))).toEqual({ reasoningEffort: 'xhigh' })
+    expect(toLangChainOpenAiReasoningFields(plan('max', openai('gpt-5.5')))).toEqual({
+      modelKwargs: { reasoning_effort: 'xhigh' },
+    })
     expect(toLangChainOpenAiReasoningFields(plan('high', deepseek('deepseek-v4-flash')))).toEqual({
-      reasoningEffort: 'high',
-      modelKwargs: { thinking: { type: 'enabled' } },
+      modelKwargs: { reasoning_effort: 'high', thinking: { type: 'enabled' } },
     })
   })
 })

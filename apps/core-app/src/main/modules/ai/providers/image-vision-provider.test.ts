@@ -11,8 +11,9 @@ const networkMocks = vi.hoisted(() => ({
   fetch: vi.fn()
 }))
 
-vi.mock('@langchain/openai', () => ({
-  ChatOpenAI: class {
+vi.mock('@langchain/openai', () => {
+  // The compatible provider builds Chat Completions models, so both names are the same capture.
+  class MockChatOpenAI {
     constructor(config: unknown) {
       modelMocks.construct(config)
       return {
@@ -21,7 +22,8 @@ vi.mock('@langchain/openai', () => ({
       }
     }
   }
-}))
+  return { ChatOpenAI: MockChatOpenAI, ChatOpenAICompletions: MockChatOpenAI }
+})
 
 vi.mock('../../network', () => ({
   getNetworkService: () => networkMocks

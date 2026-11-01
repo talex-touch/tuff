@@ -14,8 +14,9 @@ const modelMocks = vi.hoisted(() => ({
   embedQuery: vi.fn()
 }))
 
-vi.mock('@langchain/openai', () => ({
-  ChatOpenAI: class {
+vi.mock('@langchain/openai', () => {
+  // The compatible provider builds Chat Completions models, so both names are the same capture.
+  class MockChatOpenAI {
     constructor(config: unknown) {
       modelMocks.chatConstruct(config)
       return {
@@ -23,8 +24,8 @@ vi.mock('@langchain/openai', () => ({
         stream: modelMocks.stream
       }
     }
-  },
-  OpenAIEmbeddings: class {
+  }
+  class MockOpenAIEmbeddings {
     constructor(config: unknown) {
       modelMocks.embeddingConstruct(config)
       return {
@@ -33,7 +34,12 @@ vi.mock('@langchain/openai', () => ({
       }
     }
   }
-}))
+  return {
+    ChatOpenAI: MockChatOpenAI,
+    ChatOpenAICompletions: MockChatOpenAI,
+    OpenAIEmbeddings: MockOpenAIEmbeddings
+  }
+})
 
 vi.mock('../../network', () => ({
   getNetworkService: () => networkMocks
