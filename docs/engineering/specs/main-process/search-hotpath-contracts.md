@@ -45,6 +45,10 @@ receives a SearchIndexReadExecutor owned by SearchEngineCore; FTS, exact/prefix,
 ngram/subsequence, counts and commit-visibility reads use that executor. Keep SQL
 construction and result semantics in SearchIndexService, not a second worker query
 implementation. Writer-side services retain their existing local connection.
+Maintenance reads that a cold index would turn into a blocked main thread use the
+same executor through typed `SearchIndexService` methods (file index stats,
+enrichment-resume pages, the scoped-reconcile bound and pages), never an ad-hoc
+`readAll` or the main-thread connection.
 
 The reader opens the same `getSearchDatabaseFilePath()` selected for the writer,
 requires an existing regular database and enables `PRAGMA query_only`. It never

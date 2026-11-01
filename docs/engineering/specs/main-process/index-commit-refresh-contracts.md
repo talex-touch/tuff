@@ -34,9 +34,11 @@ Path prefixes: `utils/` = `packages/utils/`, `main/` = `apps/core-app/src/main/`
 
 ### 1. Scope / Trigger
 
-- Changing `search-engine/search-index-commit-coalescer.ts`; `SearchEngineCore`'s
+- Changing `search-engine/search-index-commit-coalescer.ts` or
+  `search-engine/leading-trailing-throttle.ts`; `SearchEngineCore`'s
   `registerIndexCommitStream`, `emitIndexCommit`, `handleSearchIndexCommit`,
-  `invalidateAppRecommendationPresentation` or `destroy` (`search-engine/search-core.ts`);
+  `refreshRecommendationGrid`, `invalidateAppRecommendationPresentation` or `destroy`
+  (`search-engine/search-core.ts`);
   `CoreBoxSearchIndexCommitPayload` (`utils/transport/events/types/core-box.ts`); or anything that
   pushes to `CoreBoxEvents.search.indexCommitted` (registered in `main/modules/box-tool/core-box/ipc.ts`).
 - Cross-layer: main runs two clocks. The hub revision is cache correctness and moves on every commit;
@@ -80,18 +82,28 @@ export interface CoreBoxSearchIndexCommitPayload {
   bulk?: boolean // only on a notification flushed from a bulk window
 }
 
+// search-engine/leading-trailing-throttle.ts
+export class LeadingTrailingThrottle {
+  constructor(options: { intervalMs: number; onTrailing: () => void; onError?: (error: unknown) => void })
+  trigger(): boolean // true: the leading edge, act now; false: held for the trailing run
+  dispose(): void // clears the timer and what it held; later triggers return false
+}
+
 // search-engine/search-core.ts
 private readonly indexCommitStreams: Map<
   StreamContext<CoreBoxSearchIndexCommitPayload>,
   SearchIndexCommitCoalescer
 >
+private readonly fileCommitInvalidation: LeadingTrailingThrottle // FILE_COMMIT_INVALIDATION_INTERVAL_MS = 60_000
+private refreshRecommendationGrid(): void // drop the ranking cache, push { providerIds: [], recommendationsInvalidated: true }
 ```
 
 ### 3. Contracts
 
 - **Only the notification is paced.** `markCommitted` still increments the revision synchronously,
   and `handleSearchIndexCommit` still runs per commit: an app commit drops the recommendation cache, a
-  file commit at most once per `FILE_COMMIT_INVALIDATION_INTERVAL_MS` (60s). `cacheSearchResult`
+  file commit through `fileCommitInvalidation` (below), at most once per
+  `FILE_COMMIT_INVALIDATION_INTERVAL_MS` (60s). `cacheSearchResult`
   refuses a result whose revision the hub has passed, and a lookup against an older revision
   classifies as `revision-mismatch`. The coalescer sits after all of that, inside `emitIndexCommit`.
   Pacing the hub or `publishCommit` instead would serve cached results a commit made stale.
@@ -132,6 +144,24 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
   does not move.
 - A new payload field stays optional and additive, and `mergeIndexCommitPayloads` must say how it
   folds.
+- **A file commit the throttle holds back is answered, not dropped (2026-10-30).** The throttle used
+  to keep only its leading edge, so a file indexed 10s after an invalidation stayed out of the
+  empty-query grid until some later commit landed past the 60s mark. `LeadingTrailingThrottle`
+  lets the first commit of a window invalidate inline (`trigger()` is true, the payload carries
+  `recommendationsInvalidated: true`); a commit inside the window returns false (the payload says
+  `false`) and marks the window held. When a window closes with anything held,
+  `refreshRecommendationGrid()` runs once, however many commits it held, and the next window opens,
+  so a steady stream still costs one ranking recompute per 60s. A window that held nothing closes
+  quietly and the next file commit is a leading edge again.
+- **The trailing refresh is a real notification.** `refreshRecommendationGrid()` is the body of
+  `invalidateAppRecommendationPresentation()`: drop the ranking cache, then push
+  `{ revision: <current>, providerIds: [], sourceGenerations: {}, recommendationsInvalidated: true }`
+  through the per-stream coalescers. Dropping the cache alone would leave an open CoreBox on the
+  empty query showing the stale grid. App commits never go through the throttle.
+- **The throttle's timer is `unref`'d and owned by the engine.** `destroy()` disposes it first, so
+  no refresh runs against a half-torn-down engine; a throw from the trailing refresh is caught and
+  logged (`Trailing recommendation invalidation failed`), because the timer callback is where
+  nothing else would catch it.
 
 ### 4. Validation & Error Matrix
 
@@ -147,14 +177,23 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
 | Renderer closes the stream mid-window      | Pending notification dropped; coalescer disposed                                                                              |
 | `dispose()`                                | Timer cleared; later pushes ignored                                                                                           |
 | Any commit                                 | `searchIndexCommitHub.getRevision()` has moved before the push returns                                                        |
+| File commit 10s after an invalidation      | Held, not dropped: one `refreshRecommendationGrid()` at 60s, pushing `recommendationsInvalidated: true`                       |
+| Commits every 1s for 300s                  | 6 invalidations (t = 0, 60 … 300): one per window, the last of them a trailing run                                            |
+| Window closes with nothing held            | No trailing run; the next file commit is a leading edge again                                                                 |
+| Trailing refresh throws                    | `Trailing recommendation invalidation failed` is logged; the next window is still paced                                       |
+| `destroy()` with a commit held             | Throttle disposed first; no trailing refresh runs                                                                             |
 
 ### 5. Good / Base / Bad Cases
 
 - Good: a full scan committing every ~300ms yields one `bulk: true` notification per 3s per open
   CoreBox, and every commit still invalidates cached searches.
 - Base: saving one file yields one ordinary notification about 1s later, in the pre-coalescing shape.
+- Base: a screenshot saved 10s after the previous ranking invalidation reaches the empty-query grid when
+  that window closes, 50s later, and costs one recompute.
 - Bad: throttling `markCommitted`; a trailing debounce; one coalescer shared by every stream (closing
-  one stream drops another's notification); deriving `bulk` in the renderer from arrival rate.
+  one stream drops another's notification); deriving `bulk` in the renderer from arrival rate; a
+  file-commit invalidation throttle that keeps only its leading edge (a commit inside the window is
+  never answered).
 
 ### 6. Tests Required
 
@@ -170,6 +209,18 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
   the pending notification of a stream the renderer closed"; "coalesces a storm of file commits into
   one ranking invalidation". The recommendation-flag and icon-presentation cases advance
   `INDEX_COMMIT_NOTIFY_WINDOW_MS` before asserting.
+- `search-engine/leading-trailing-throttle.test.ts` (fake timers): the first trigger is the leading
+  edge and schedules nothing else; a trigger inside the window runs once at the window's end; a burst
+  folds into one run; the trailing run opens a window (300 triggers over 300s give 1 leading + 5
+  trailing); a quiet window makes the next trigger a leading edge; `dispose()` leaves
+  `vi.getTimerCount() === 0` and later triggers return false; the timer is `unref`'d; a throwing
+  callback reaches `onError` (or is swallowed) and the next window stays open.
+- `search-engine/search-core.contracts.test.ts`, "trailing ranking invalidation for file commits": a
+  commit held at 10s is answered at exactly 60s (not at 59.999s); the answer reaches open streams as
+  `recommendationsInvalidated: true, providerIds: []` after the coalescer window; 100 held commits give
+  one run; nothing is scheduled when the window held nothing; 300 commits at 1s give 6 invalidations;
+  an app commit still invalidates at once inside a file window; a throwing trailing refresh does not
+  escape the timer and the next window still runs; `destroy()` cancels a held run.
 
 ### 7. Wrong vs Correct
 
@@ -941,6 +992,31 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
   after that transaction. Without this guard, completed images return to the recovery queue and
   repeatedly occupy the head of a partially admitted page. Failed or unavailable image encoding
   remains durably pending, not falsely completed.
+- **A failed text vector keeps its file in the retry lane (2026-10-30).** A text file whose vectors
+  failed used to end `completed` with `embedding_status = 'pending'`, and nothing revisited it.
+  `EmbeddingService.indexFiles` now lists a text file whose own attempt `failed` in
+  `retryFileIds` (`paused` and `skipped` are not failures; images are never listed, their
+  transaction owns completion). `indexCommittedEntries` passes the ids to the flush as numbers, and
+  the flush's final confirmation leaves those rows at the `pending` its first persist wrote, so the
+  `pending` / `processing` retry lane re-reads them at the next resume. The list lives in the
+  flush's retained publication stage: a replay after a capacity pause neither re-embeds nor
+  completes them. A file gets three attempts per file version: the count is in memory (a success
+  clears it, a restart forgets it), the third failure is not listed, and the row then completes and
+  leaves the retry lane for good, so a deterministic failure is bounded and a restart does not buy
+  an exhausted file more. Environment errors (helper down, request timeout) count like any other
+  failure; attempts are at least one resume round apart (45 s cooldown), so a helper that stays
+  down for about 90 s exhausts all three. The count table holds 4,096 files and never evicts: a new
+  failing file that finds it full is treated as exhausted on its first failure, so a batch larger
+  than the table still converges within three rounds (evicting the oldest made every file restart
+  its count in turn and none finish). Exhausted rows join the legacy set of rows `completed` with
+  `embedding_status = 'pending'`; backfilling that set is a separate product decision. The set is
+  **not** enrolled: the retry lane selects on progress status alone and nothing migrates it, and a
+  text file that ends `skipped` or `paused` (embedding unavailable, usage-limit or capacity pause)
+  completes into it instead of entering the retry lane. A negative availability answer (the probe
+  threw, or returned an unusable vector) is remembered for 60 s rather than for the process, so
+  the first batch after the helper comes up probes again; the files batches skipped inside that
+  minute stay in the legacy set. Only a flush wired with `checkContentCapacity` (production) can
+  hold a row pending; without it the first persist already completes the row.
 - **Disable is a fenced cleanup.** The main process suppresses intake, stops resume timers, cancels queued enrichment and drains committed work. Inside one source mutation lease and one Writer admission, it clears `files.content`, file embeddings, `file_index_progress` and `search_index.content` without deleting file metadata. The SourceScoped writer then crosses the reader visibility barrier and publishes one file-source commit. Only after that succeeds does `saveMainConfigDurable` persist `false`; enabling likewise durably saves `true` before resume starts. Cleanup or durable-save failure leaves the prior setting in memory and on disk, and re-arms resume when that prior setting is enabled, so the UI cannot claim a transition succeeded.
 
 - **No self-excitation.** Each page runs inside `withMutationLease`: `scheduleIndexing(rows, label,
