@@ -20,7 +20,7 @@ const MONOSPACE_KEYWORDS = [
   'fira',
   'cascadia',
   'berkeley',
-  'symbols',
+  'symbols'
 ]
 
 let cachedFonts: TerminalFontInfo[] | null = null

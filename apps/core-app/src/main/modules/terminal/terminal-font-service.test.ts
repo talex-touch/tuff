@@ -16,7 +16,7 @@ describe('terminal font discovery service', () => {
 
   it('marks nerd fonts correctly', async () => {
     const fonts = await scanTerminalFonts()
-    const nerdFonts = fonts.filter(f => f.isNerdFont)
+    const nerdFonts = fonts.filter((f) => f.isNerdFont)
     for (const font of nerdFonts) {
       expect(font.label).toContain('[Nerd Font]')
     }

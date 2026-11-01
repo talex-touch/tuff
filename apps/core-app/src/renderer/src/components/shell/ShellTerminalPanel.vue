@@ -19,13 +19,8 @@ const { isMac } = useRendererPlatform()
 const transport = useTuffTransport()
 const sdk = createTerminalSdk(transport)
 const screenReaderMode = useAccessibilitySupport()
-const {
-  terminalOpen,
-  terminalHeight,
-  isResizingTerminal,
-  startResize,
-  closeTerminal
-} = useShellTerminal()
+const { terminalOpen, terminalHeight, isResizingTerminal, startResize, closeTerminal } =
+  useShellTerminal()
 
 const terminalView = ref<TerminalInstance | null>(null)
 const running = ref(false)
@@ -189,7 +184,9 @@ onBeforeUnmount(() => {
             'is-starting': starting,
             'is-stopped': !running && !starting
           }"
-          :title="starting ? t('terminal.start') : running ? t('terminal.running') : t('terminal.closed')"
+          :title="
+            starting ? t('terminal.start') : running ? t('terminal.running') : t('terminal.closed')
+          "
           aria-hidden="true"
         />
         <TxKbd v-if="shortcutLabel" class="ShellTerminalPanel-ShortcutBadge">
@@ -368,7 +365,9 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--shell-text-secondary);
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 
   &:hover {
     background: var(--shell-surface-2, rgba(0, 0, 0, 0.05));

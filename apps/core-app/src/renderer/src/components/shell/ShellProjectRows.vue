@@ -61,7 +61,6 @@ function onConfirmDelete(): boolean {
   }
   return true
 }
-
 </script>
 
 <template>
@@ -158,7 +157,9 @@ function onConfirmDelete(): boolean {
   <TxBottomDialog
     v-if="pendingDeleteConversation"
     :title="t('shell.history.deleteConfirmTitle')"
-    :message="t('shell.history.deleteConfirmLabel', { title: conversationTitle(pendingDeleteConversation) })"
+    :message="
+      t('shell.history.deleteConfirmLabel', { title: conversationTitle(pendingDeleteConversation) })
+    "
     :close-label="t('common.close')"
     :btns="[
       { content: t('common.cancel'), type: 'info', onClick: () => true },
@@ -168,7 +169,11 @@ function onConfirmDelete(): boolean {
         onClick: onConfirmDelete
       }
     ]"
-    :close="() => { pendingDeleteConversation = null }"
+    :close="
+      () => {
+        pendingDeleteConversation = null
+      }
+    "
   />
 </template>
 

@@ -3,6 +3,7 @@ import type {
   MainWindowCommandId
 } from './main-window-command-catalog'
 import { computed, ref, shallowRef } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { MAIN_WINDOW_COMMAND_CATALOG, PALETTE_COMMAND_ID } from './main-window-command-catalog'
 import { shortcutChordMatches } from './shortcut-chord'
@@ -114,7 +115,7 @@ let lastTypingTimestamp = 0
 
 export function isUserTyping(typingCooldownMs: number = DEFAULT_TYPING_COOLDOWN_MS): boolean {
   if (isImeComposing) return true
-  if (typeof document !== 'undefined' && isEditableElement(document.activeElement)) {
+  if (hasDocument() && isEditableElement(document.activeElement)) {
     if (Date.now() - lastTypingTimestamp < typingCooldownMs) {
       return true
     }
@@ -128,7 +129,6 @@ export function resetMainWindowShortcutsState(): void {
   isImeComposing = false
   lastTypingTimestamp = 0
 }
-
 
 /** Whether the platform's command key is down right now. */
 const commandKeyHeld = ref(false)
@@ -221,7 +221,7 @@ export function installMainWindowShortcutCapture(
   const onBeforeInput = (event: Event): void => {
     if (
       isEditableElement(event.target) ||
-      (typeof document !== 'undefined' && isEditableElement(document.activeElement))
+      (hasDocument() && isEditableElement(document.activeElement))
     ) {
       recordTyping()
     }
@@ -230,7 +230,7 @@ export function installMainWindowShortcutCapture(
   const onInput = (event: Event): void => {
     if (
       isEditableElement(event.target) ||
-      (typeof document !== 'undefined' && isEditableElement(document.activeElement))
+      (hasDocument() && isEditableElement(document.activeElement))
     ) {
       recordTyping()
     }
@@ -259,7 +259,7 @@ export function installMainWindowShortcutCapture(
     if (!MODIFIER_KEYS[event.key]) {
       if (
         isEditableElement(event.target) ||
-        (typeof document !== 'undefined' && isEditableElement(document.activeElement))
+        (hasDocument() && isEditableElement(document.activeElement))
       ) {
         recordTyping()
       }
@@ -291,7 +291,7 @@ export function installMainWindowShortcutCapture(
             !chordPressedDuringHold &&
             !mainWindowPaletteOpen.value &&
             !isUserTyping(typingCooldownMs) &&
-            typeof document !== 'undefined' &&
+            hasDocument() &&
             document.visibilityState !== 'hidden'
           ) {
             commandKeyHeld.value = true

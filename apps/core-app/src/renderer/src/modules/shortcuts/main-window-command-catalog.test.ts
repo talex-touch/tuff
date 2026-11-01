@@ -64,7 +64,9 @@ describe('Open CoreBox in the main window', () => {
   })
 
   it('has toggle-terminal in the catalog bound to KeyJ with group view', () => {
-    const command = MAIN_WINDOW_COMMAND_CATALOG.find((candidate) => candidate.id === 'toggle-terminal')
+    const command = MAIN_WINDOW_COMMAND_CATALOG.find(
+      (candidate) => candidate.id === 'toggle-terminal'
+    )
 
     expect(command).toBeDefined()
     expect(command?.chord).toEqual({ code: 'KeyJ' })
@@ -80,9 +82,7 @@ describe('Open CoreBox in the main window', () => {
   ])('fires toggle-terminal on Command+J / Ctrl+J on %s', (_, isMac, modifier) => {
     const toggleTerminal = vi.fn()
     disposers.push(
-      registerMainWindowCommandHandlers([
-        { id: 'toggle-terminal', run: toggleTerminal }
-      ]),
+      registerMainWindowCommandHandlers([{ id: 'toggle-terminal', run: toggleTerminal }]),
       installMainWindowShortcutCapture({ isMac: () => isMac })
     )
 

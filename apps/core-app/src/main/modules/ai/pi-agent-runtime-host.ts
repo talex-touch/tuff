@@ -742,7 +742,8 @@ export class PiAgentRuntimeHost {
     try {
       await context.workspace?.assertAuthority()
       let fullText = ''
-      let providerName = context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+      let providerName =
+        context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
       let modelName = context.workspace?.model
       let promptTokens = 0
       let completionTokens = 0

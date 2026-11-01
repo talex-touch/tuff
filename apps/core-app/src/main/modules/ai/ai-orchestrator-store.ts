@@ -509,7 +509,10 @@ export class AiOrchestratorStore {
                 modelPreference: JSON.stringify([spec.providerId]),
                 allowedToolIds: JSON.stringify(defaultTools),
                 enabledSkillIds: '[]',
-                permissionPolicy: JSON.stringify({ mode: 'preauthorized', allowedPermissions: ['*'] }),
+                permissionPolicy: JSON.stringify({
+                  mode: 'preauthorized',
+                  allowedPermissions: ['*']
+                }),
                 timeoutMs: DEFAULT_TIMEOUT_MS,
                 createdAt: now,
                 updatedAt: now

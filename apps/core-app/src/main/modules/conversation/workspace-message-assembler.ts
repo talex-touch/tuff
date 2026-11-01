@@ -167,12 +167,6 @@ export class WorkspaceMessageAssembler {
     }
     this.providerActivity = true
     switch (event.kind) {
-      case 'reasoning-delta':
-        this.markFirstToken()
-        break
-      case 'tool-start':
-        this.markFirstToken()
-        break
       case 'reasoning-start': {
         if (this.openReasoning && !this.openReasoning.done) return
         this.reasoningStartedAt = Date.now()
@@ -181,6 +175,7 @@ export class WorkspaceMessageAssembler {
         return
       }
       case 'reasoning-delta':
+        this.markFirstToken()
         if (this.openReasoning) this.openReasoning.text += event.delta
         return
       case 'reasoning-end':
@@ -196,6 +191,7 @@ export class WorkspaceMessageAssembler {
         this.reasoningStartedAt = undefined
         return
       case 'tool-start': {
+        this.markFirstToken()
         // A replayed start names the same call; it does not create another card or
         // downgrade a result already observed for that identity.
         if (this.tools.has(event.callId)) return

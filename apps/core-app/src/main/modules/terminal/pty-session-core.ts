@@ -265,7 +265,11 @@ export class PtySessionCore {
           ? process.env.COMSPEC || 'powershell.exe'
           : process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
       const effectiveCommand = (command && command.trim()) || fallbackShell
-      if (typeof effectiveCommand !== 'string' || !effectiveCommand.trim() || effectiveCommand.includes('\0')) {
+      if (
+        typeof effectiveCommand !== 'string' ||
+        !effectiveCommand.trim() ||
+        effectiveCommand.includes('\0')
+      ) {
         throw new Error('TERMINAL_COMMAND_INVALID')
       }
       if (

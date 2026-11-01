@@ -239,7 +239,6 @@ vi.mock('@talex-touch/tuffex/dialog', () => ({
   })
 }))
 
-
 vi.mock('~/modules/conversation/useConversationHistory', () => {
   historyHolder.conversations = ref<ConversationRecord[]>([])
   historyHolder.loading = ref(false)

@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_TERMINAL_HEIGHT,
-  MIN_TERMINAL_HEIGHT,
-  useShellTerminal
-} from './useShellTerminal'
+import { DEFAULT_TERMINAL_HEIGHT, MIN_TERMINAL_HEIGHT, useShellTerminal } from './useShellTerminal'
 
 class FakePointerEvent extends MouseEvent {
   pointerId: number

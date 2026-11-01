@@ -176,8 +176,14 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Search query keyword or question' },
-          provider: { type: 'string', description: 'Search provider (google or bing), defaults to google' },
-          open: { type: 'boolean', description: 'Whether to open the search URL in user browser immediately' }
+          provider: {
+            type: 'string',
+            description: 'Search provider (google or bing), defaults to google'
+          },
+          open: {
+            type: 'boolean',
+            description: 'Whether to open the search URL in user browser immediately'
+          }
         },
         required: ['query']
       },
@@ -208,13 +214,18 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
       try {
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
         const html = await network.readText(ddgUrl)
-        const blocks = html.match(/<div[^>]+class="[^"]*result__body[^"]*"[\s\S]*?<\/div>\s*<\/div>/gi) ?? []
+        const blocks =
+          html.match(/<div[^>]+class="[^"]*result__body[^"]*"[\s\S]*?<\/div>\s*<\/div>/gi) ?? []
         for (const block of blocks.slice(0, 6)) {
           const titleMatch =
-            block.match(/<h2[^>]*>[\s\S]*?<a[^>]*class="[^"]*result__url[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ??
+            block.match(
+              /<h2[^>]*>[\s\S]*?<a[^>]*class="[^"]*result__url[^"]*"[^>]*>([\s\S]*?)<\/a>/i
+            ) ??
             block.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ??
             block.match(/<h2[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i)
-          const snippetMatch = block.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+          const snippetMatch = block.match(
+            /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i
+          )
           const rawHref = block.match(/href="([^"]+)"/i)?.[1]
           let resultUrl = rawHref ?? ''
           if (resultUrl.includes('uddg=')) {
@@ -310,13 +321,17 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
         }
       )
       if (ctx?.signal) {
-        ctx.signal.addEventListener('abort', () => {
-          try {
-            child.kill('SIGKILL')
-          } catch {
-            // ignore
-          }
-        }, { once: true })
+        ctx.signal.addEventListener(
+          'abort',
+          () => {
+            try {
+              child.kill('SIGKILL')
+            } catch {
+              // ignore
+            }
+          },
+          { once: true }
+        )
       }
     })
   }
@@ -332,7 +347,10 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
         type: 'object',
         properties: {
           command: { type: 'string', description: 'The shell command to execute' },
-          cwd: { type: 'string', description: 'Optional working directory. Defaults to current workspace directory' },
+          cwd: {
+            type: 'string',
+            description: 'Optional working directory. Defaults to current workspace directory'
+          },
           timeoutMs: { type: 'number', description: 'Timeout in milliseconds (defaults to 30000)' }
         },
         required: ['command']

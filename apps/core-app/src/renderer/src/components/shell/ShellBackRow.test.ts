@@ -65,7 +65,11 @@ function unmountRow(): void {
 
 /** 捕获层就是真实宿主：⌘ 的按下/松开只有经过它才会传到这里。 */
 function installCapture(options?: Partial<MainWindowShortcutCaptureOptions>): void {
-  disposeCapture = installMainWindowShortcutCapture({ isMac: () => true, hintDelayMs: 0, ...options })
+  disposeCapture = installMainWindowShortcutCapture({
+    isMac: () => true,
+    hintDelayMs: 0,
+    ...options
+  })
 }
 
 /** 键盘走到捕获层的唯一入口：事件必须落在 window 上，才和真实宿主同路。 */
