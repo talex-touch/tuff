@@ -35,6 +35,7 @@ import {
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
 import { buildFeatureSearchTokens } from './feature-search-tokens'
+import { showItemActionHint } from './item-action-hint'
 
 const pluginFeaturesLog = getLogger('plugin-system')
 
@@ -50,6 +51,8 @@ function getErrorCode(error: unknown): string | undefined {
  * The official plugins return these as `{ success: false, status: 'blocked', reason }` shapes; the
  * adapter must treat them as failures rather than counting every non-throwing return. A result
  * without `success`/`status` (the older `void | { shouldActivate }` contract) is not a failure.
+ * A boolean `success` decides on its own; `status` is read only when `success` is missing, so
+ * `{ success: true, status: 'cancelled' }` (touch-intelligence's stop) is a finished action.
  */
 const ITEM_ACTION_FAILURE_STATUSES: Record<string, true> = {
   blocked: true,
@@ -62,7 +65,7 @@ const ITEM_ACTION_FAILURE_STATUSES: Record<string, true> = {
 function isItemActionFailure(result: unknown): boolean {
   if (!result || typeof result !== 'object') return false
   const record = result as { success?: unknown; status?: unknown }
-  if (record.success === false) return true
+  if (typeof record.success === 'boolean') return !record.success
   return typeof record.status === 'string' && ITEM_ACTION_FAILURE_STATUSES[record.status] === true
 }
 
@@ -333,9 +336,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           // decision is still a successful run. An adapter-visible refusal — a structured
           // `success: false` / `status: 'blocked' | 'error' | 'failed' | 'cancelled'` result — is a
           // failure and must not count. A thrown callback fell to the catch below and does not count.
-          if (!isItemActionFailure(result)) {
+          const failed = isItemActionFailure(result)
+          if (!failed) {
             this.recordFeatureAccepted(item, args)
           }
+          showItemActionHint(plugin, result, failed)
 
           if (result?.shouldActivate) {
             return result.activation || null

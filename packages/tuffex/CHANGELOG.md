@@ -1,5 +1,18 @@
 # TouchX UI 更新日志
 
+## [Unreleased]
+
+### 📦 组件变动 (Components)
+
+- **新增组件**: `touch-surface`
+- **更新组件**: `glass-surface`
+
+### ✨ 组件增强
+
+- `TxGlassSurface` 新增 `engine="lens"` 液态透镜引擎（折射），默认仍是 `classic`（扭曲），`TxBaseSurface`、`TxRadioGroup`、`TxSlider` 等内部使用者不变。透镜把边缘看成一圈凸起的玻璃，按斯涅尔定律与折射率算出每一点的位移：边缘一圈把背后的画面向内拉，中间几乎保持原样。新增属性 `bezel`（边缘宽度，默认随短边取 4–10px）、`thickness`（玻璃厚度，默认随短边取 8–24px）、`ior`（折射率，1–3，默认 1.5）、`refraction`（边缘强度倍率）、`zoom`（中间的放大倍率，单独走一道位移）、`profile`（`squircle` 或 `circle`）、`rimLight`（边缘高光）、`rimSaturation`（透过边缘的颜色饱和度，大于 1 发艳）、`dispersion`（红、绿、蓝分离，0–0.5）与 `frost`（背景磨砂半径）；`saturation` 在 `lens` 下默认 1.5。折射图按实测尺寸画成位图并按形状缓存，同一帧里改多个属性只重画一次；`zoom` 为 1 时中间与页面一样锐利。折射只在 Chromium 内核里发生：Safari、Firefox、SSR 与第一帧退为磨砂玻璃（模糊取 `frost` 与 12px 中较大者，着色不低于 0.22），形状、阴影与拖拽照常；高对比度下不折射，改画不透明底色加一圈轮廓。
+- 新增 `useLiquidDrag`，让透镜像一滴液态玻璃：按下时抬起，沿拖动方向拉长，停下后以弹簧弹回。位置严格跟随指针，只有形状滞后；整个过程只改 `transform`，透镜的布局尺寸与折射图不变。选项为 `bounds`、`disabled`、`ignore`、`stiffness`、`damping`、`stretch`、`maxStretch`、`restHeight`、`pressGrow` 与 `swell`，数值选项可以是 ref 或 getter，每一帧重新读取，能直接绑到滑块上调。按下时除了对元素设置指针捕获，还在 `window` 上监听 `pointermove`、`pointerup` 与 `pointercancel`，指针越出透镜也照样跟随；减少动态效果时只抬起、不缓动也不拉伸。新增导出 `useLiquidDrag`、`LiquidDragOptions` 与 `LiquidDragState`。
+- 新增 `TxTouchSurface` 与 `useLiquidTouch`，让任意表面在鼠标划过或手指按下时像一滴液态玻璃：抬起、朝指针倾斜、顺着指针移动的方向拉长（垂直方向变薄，体积不变），指针离开后以弹簧弹回。`surface` 选择效果铺在哪种表面上：`'base'`（默认，即 `TxBaseSurface`）、`'glass'`（`TxGlassSurface`），或根元素就是表面的自定义组件，其余属性与默认插槽原样交给表面。选项为 `disabled`、`lean`、`maxLean`、`hoverLift`、`pressGrow`、`stretch`、`maxStretch`、`swell`、`stiffness` 与 `damping`，数值选项可以是 ref 或 getter，每一帧重新读取。只写 `translate` 与 `scale` 属性，不碰元素自己的 `transform`，表面的布局尺寸与折射图不变，静止时什么都不写；玻璃透镜经 `--tx-glass-lift` 读取抬起程度。手指没有悬停，只有按下；手指开始滚动页面时浏览器发出 `pointercancel`，表面随之松手，需要在上面滑动的表面设 `touch-action: none`。鼠标只认主键，按下之后在 `window` 上继续跟随，没有按键的移动会结束这次按下。减少动态效果时只抬起、不缓动，也不倾斜、不拉长；一切静止后帧循环休眠。归入 Pro 套件，新增导出 `TxTouchSurface`、`useLiquidTouch`、`LiquidTouchOptions`、`LiquidTouchState`、`TouchSurfaceProps` 与 `TouchSurfaceBase`。
+
 ## [0.9.2] - 2026-10-27
 
 ### 📦 组件变动 (Components)

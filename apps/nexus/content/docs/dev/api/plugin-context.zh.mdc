@@ -678,6 +678,38 @@ code: |
 ---
 :::
 
+### onItemAction 的返回值
+
+`onItemAction` 可以什么都不返回，也可以返回一个对象。告诉宿主动作结果的字段有三个：
+
+| 字段      | 类型      | 说明                                                                                                   |
+| --------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `message` | `string`  | 一行结果提示。动作返回后，宿主用系统通知显示它；不返回则不提示。                                       |
+| `success` | `boolean` | `false` 表示动作没有完成：不计入一次使用，`message` 按失败提示显示。                                   |
+| `status`  | `string`  | `blocked`、`error`、`failed`、`cancelled`、`canceled` 与 `success: false` 等价；其他取值宿主不会读取。 |
+
+`success` 是布尔值时由它单独决定：`success: true` 表示动作已完成，不管 `status` 写什么；只有没有 `success` 时才会读取 `status`。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async onItemAction(item) {
+    const copyAction = item.actions.find(a => a.type === 'copy')
+    if (!copyAction?.payload) {
+      return { success: false, message: '没有可复制的内容' }
+    }
+    clipboard.writeText(copyAction.payload)
+    return { success: true, message: '已复制' }
+  }
+---
+:::
+
+提示走系统通知，是因为 CoreBox 通常在动作执行前就已经关闭，窗口里没有地方可以显示它。成功时通知静音，标题是插件名；失败时通知带提示音，标题是「插件名 操作失败」。同一次动作最多一条，没有 `message` 就不提示。
+
+- `message` 按不可信文本处理：控制字符与不可见字符不会显示，换行和连续空白折成一个空格，超过 200 个字符的部分会被截断。
+- 想显示插件自己的多语言文案，返回 `context.utils.i18n.resolveText()` 取到的当前语言字符串（需要 `i18n.read` 权限）。也可以返回 `i18n.createMessage()` 生成的 `$i18n:` 消息，但宿主只会按界面语言解析它自带的文案，比如 `flowTransfer.copiedToClipboard`；宿主没有的 key 不会显示任何内容。详见 [Localization](./i18n.zh.mdc)。
+- 动作抛出的错误只写入日志，不会提示。
+
 ---
 
 ## 技术原理

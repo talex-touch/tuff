@@ -41,6 +41,9 @@ vi.mock('../../../core/runtime-accessor', () => ({
   })
 }))
 vi.mock('../../../utils/i18n-helper', () => ({ t: (key: string) => key }))
+vi.mock('../../notification', () => ({
+  notificationModule: { showInternalSystemNotification: vi.fn() }
+}))
 vi.mock('../../app-destination/app-destination-navigation', () => ({
   getAppDestinationNavigationService: () => ({
     open: boundary.open,

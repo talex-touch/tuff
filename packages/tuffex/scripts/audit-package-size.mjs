@@ -308,7 +308,14 @@ const LIMITS = {
   // went 890,498 -> 890,988 B, exactly that growth. Checked for inlining: the new rules sit on
   // `.tx-image-preview__menu*` and `.tx-image-preview__readout` alone. Actuals plus minimal
   // headroom, growth from here fails.
-  fullCssBytes: 870.5 * 1024,
+  // 870.5 -> 872 on 2026-10-29 for TxGlassSurface's lens engine (`engine="lens"`): the refraction
+  // layer, the rim light and the lifted-press shading (`glass-surface/style.css` 819 -> 2,353 B).
+  // No other sheet moved, and the full entry went 891,385 -> 892,919 B, exactly that growth.
+  // Checked for inlining: the new rules sit on `.tx-glass-surface--lens` and
+  // `.tx-glass-surface__svg--lens` alone. It slimmed before asking: the forced-colours rule for
+  // the lens keeps only what the base rule does not already paint (2,461 -> 2,353 B). Actuals
+  // plus minimal headroom, growth from here fails.
+  fullCssBytes: 872 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -347,7 +354,15 @@ const LIMITS = {
 const pageStyleBudgets = [
   // TxButton alone reaches the anchor and surface stack, the icon, and the copy button's text
   // engine, so every page below starts from these 13 sheets.
-  { label: 'button', components: ['button'], limit: 58 * 1024 },
+  {
+    label: 'button',
+    components: ['button'],
+    // 58 -> 59 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 13 that
+    // moved (`glass-surface/style.css` 819 -> 2,353 B): 58,501 -> 60,035 B. Every page below
+    // reaches that sheet through the surface stack, so each one grows by the same 1,534 B.
+    // Actuals plus minimal headroom, growth from here fails.
+    limit: 59 * 1024,
+  },
   {
     label: 'form',
     components: ['form', 'input', 'select', 'checkbox', 'switch', 'button', 'modal'],
@@ -359,9 +374,19 @@ const pageStyleBudgets = [
     // limit; this measures 95,233 B. Actuals plus minimal headroom, growth from here fails.
     // 93.5 -> 94 the same day for the draft notice (`form/style.css` 7,202 -> 7,733 B), the
     // only sheet of the 21 that moved: 95,764 B.
-    limit: 94 * 1024,
+    // 94 -> 95.5 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 21 that
+    // moved (`glass-surface/style.css` 819 -> 2,353 B): 96,042 -> 97,576 B. Actuals plus minimal
+    // headroom, growth from here fails.
+    limit: 95.5 * 1024,
   },
-  { label: 'admin list', components: ['data-table', 'pagination', 'tabs', 'input', 'select', 'button', 'drawer'], limit: 135 * 1024 },
+  {
+    label: 'admin list',
+    components: ['data-table', 'pagination', 'tabs', 'input', 'select', 'button', 'drawer'],
+    // 135 -> 136.5 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 28 that
+    // moved (`glass-surface/style.css` 819 -> 2,353 B): 138,106 -> 139,640 B. Actuals plus
+    // minimal headroom, growth from here fails.
+    limit: 136.5 * 1024,
+  },
   {
     label: 'chat',
     components: ['chat', 'conversation-stream', 'stream-markdown', 'prompt-bar', 'attachment-tray', 'image-gallery', 'message-actions', 'thinking-orb', 'modal'],
@@ -389,7 +414,10 @@ const pageStyleBudgets = [
     // chunk and leaves the page (-13,758 B, 27 -> 26 sheets; the rest of its closure is already
     // here). Measured 157,774 B, gzip 24,073 B. Actuals plus minimal headroom, growth from here
     // fails.
-    limit: 154.5 * 1024,
+    // 154.5 -> 156 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 26 that
+    // moved (`glass-surface/style.css` 819 -> 2,353 B): 157,945 -> 159,479 B. Actuals plus
+    // minimal headroom, growth from here fails.
+    limit: 156 * 1024,
   },
 ]
 

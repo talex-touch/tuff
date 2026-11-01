@@ -352,6 +352,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/docs/dev/components/tool-chips': 'ai',
   '/docs/dev/components/tool-confirmation': 'ai',
   '/docs/dev/components/tooltip': 'base',
+  '/docs/dev/components/touch-surface': 'pro',
   '/docs/dev/components/transfer': 'base',
   '/docs/dev/components/transition': 'pro',
   '/docs/dev/components/tree': 'base',
