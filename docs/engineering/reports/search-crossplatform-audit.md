@@ -248,6 +248,10 @@
   - 现场现象：CoreBox 交互搜索（如 `a pet`）与后台文件索引/富化并发，主进程同时承受 Spotlight 654ms 子进程 I/O 物化、FTS 读 808ms、主线程同步 LibSQL 水合、以及 5.2s 慢写导致的 30s drain 超时，造成主进程事件循环卡顿。
   - 目标架构：将 Search Engine Core、文件 Provider（FileProvider、Spotlight、Everything 等）、FTS5 检索及候选数据水合整体移出 Electron 主进程，沉降至独立 Search Engine 子进程（或专用 Worker Thread）。
   - 边界收益：主进程彻底解耦所有搜索计算与 SQLite 连接，仅负责窗口呈现与 IPC 消息中继；搜索慢查询与底层 I/O 争用不再影响 CoreBox 前台响应与动画流畅度。
+- [ ] **R13 — 安装版真实 profile 的持续低能耗验收未完成**（2026-09-30 实测，源提交 `d28dc473d`）
+  - 补丁后另一 120 s 窗口仍为 CPU 116.171%、Energy Impact 4582.138；随后较安静窗口 3.564% / 85.559 不能抵消高负载，能耗问题未关闭。
+  - 验收需在安装版真实 profile 上做持续窗口复测；research 原始 JSON 未入库，结论以本条为准。
+
 ### 🟢 低危清理
 
 - [x] **C1 — 死依赖** ✅ 已修（2026-08-07）：`mathjs` 已从两处 manifest、Vite externalize 例外与 electron-builder 排除项一并移除（[#338](https://github.com/talex-touch/tuff/issues/338) / [PR #1088](https://github.com/talex-touch/tuff/pull/1088)）；`tesseract.js` 在依赖树里已不存在，其残留的 build-allowlist 条目随 [#347](https://github.com/talex-touch/tuff/issues/347) / [PR #1084](https://github.com/talex-touch/tuff/pull/1084) 一并清除。
