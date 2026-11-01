@@ -319,6 +319,36 @@ function stringArrayInitializer(relativePath, variableName) {
   return values
 }
 
+function secretKeyTable(relativePath, variableName) {
+  let keys
+  walk(sourceFile(relativePath), (node) => {
+    if (
+      !ts.isVariableDeclaration(node)
+      || !ts.isIdentifier(node.name)
+      || node.name.text !== variableName
+      || !node.initializer
+    ) {
+      return
+    }
+    const initializer = unwrapExpression(node.initializer)
+    if (!ts.isObjectLiteralExpression(initializer))
+      return
+    const collected = []
+    for (const property of initializer.properties) {
+      if (!ts.isPropertyAssignment(property) || !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)))
+        return
+      const fields = unwrapExpression(property.initializer)
+      if (!ts.isArrayLiteralExpression(fields) || !fields.elements.every(item => ts.isStringLiteral(item)))
+        return
+      for (const field of fields.elements)
+        collected.push(`providers.${property.name.text}.${field.text}`)
+    }
+    keys = collected
+    return false
+  })
+  return keys
+}
+
 function sameSet(actual, expected) {
   return (
     Array.isArray(actual)
@@ -440,16 +470,23 @@ if (!hasCall(storageModulePath, 'redactProviderConfigDocument')) {
   fail('ordinary Intelligence storage must structurally redact provider projections')
 }
 
-const translationStoragePath = 'apps/core-app/src/main/modules/plugin/services/plugin-storage-transport-service.ts'
-for (const call of [
-  'migrateTranslationProviderCredentials',
-  'isTranslationProviderConfigSafe',
-  'isTranslationProviderSecretKey',
-  'exactSecretEntries',
-  'applySecureStoreBatch',
-]) {
-  if (!hasCall(translationStoragePath, call))
-    fail(`Translation lifecycle call is missing: ${call}`)
+const pluginStoragePath = 'apps/core-app/src/main/modules/plugin/services/plugin-storage-transport-service.ts'
+for (const call of ['exactSecretEntries', 'applySecureStoreBatch']) {
+  if (!hasCall(pluginStoragePath, call))
+    fail(`Plugin Secret lifecycle call is missing: ${call}`)
+}
+
+const translationProviderPath = 'plugins/touch-translation/src/composables/useTranslationProvider.ts'
+const translationMigrationPath = 'plugins/touch-translation/src/utils/provider-credential-migration.ts'
+if (!hasCall(translationProviderPath, 'migrateLegacyProviderCredentials')) {
+  fail('Translation plugin must migrate legacy providers_config credentials when it loads the config')
+}
+for (const call of ['setMany', 'persistConfig']) {
+  if (!hasCall(translationMigrationPath, call))
+    fail(`Translation credential migration call is missing: ${call}`)
+}
+if (!sameSet(secretKeyTable(translationProviderPath, 'PROVIDER_SECRET_FIELDS'), TRANSLATION_SECRET_KEYS)) {
+  fail('Translation plugin credential fields must equal the approved fixed field set')
 }
 
 const secretSdkPath = 'packages/utils/plugin/sdk/secret.ts'
