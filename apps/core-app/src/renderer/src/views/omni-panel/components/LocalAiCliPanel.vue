@@ -479,7 +479,7 @@ async function runSharedPiPrompt(value: string): Promise<void> {
 }
 
 function handleSharedPiTerminalInput(data: string): void {
-  if (provider.value !== 'pi' || phase.value === 'running') return
+  if (provider.value !== 'pi') return
   for (const character of data) {
     if (character === '\u0003') {
       terminalInputBuffer = ''
@@ -487,6 +487,8 @@ function handleSharedPiTerminalInput(data: string): void {
       writeTerminalOutput('^C\r\n> ')
       return
     }
+    // While a turn runs, Ctrl+C is the only input that reaches it.
+    if (phase.value === 'running') continue
     if (character === '\r' || character === '\n') {
       const value = terminalInputBuffer
       terminalInputBuffer = ''
