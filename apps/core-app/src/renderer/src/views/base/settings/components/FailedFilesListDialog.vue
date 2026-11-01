@@ -114,9 +114,9 @@ function close() {
 
       <div v-else class="file-list-container">
         <div class="file-list-header">
-          <span class="file-count"
-            >{{ files.length }} {{ t('settings.settingFileIndex.failedFilesCount') }}</span
-          >
+          <span class="file-count">{{
+            t('settings.settingFileIndex.failedFilesCount', { count: files.length })
+          }}</span>
           <TxButton variant="flat" size="sm" @click="copyAll">
             <div class="i-carbon-copy text-12px mr-4px" />
             {{ t('settings.settingFileIndex.copyAll') }}

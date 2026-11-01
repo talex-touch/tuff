@@ -23,6 +23,8 @@ import type {
 import type { ManualImportedItemInput } from './ai-orchestrator-store'
 import type { IntelligenceMcpProfile } from './intelligence-mcp-registry'
 import { createHash, randomUUID } from 'node:crypto'
+import { readMcpFailureReason } from './intelligence-mcp-failure'
+import { formatStableToolError, projectToolError } from './tool-error-projection'
 
 const MAX_TEXT_LENGTH = 512
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -59,6 +61,9 @@ export interface McpProbeRunner {
  * the registry lists no tools for a disabled profile, and dropped again right after: a probe never
  * leaves a server process running behind a switch the user left off, or behind a server Tuff does
  * not hold at all.
+ *
+ * A failure the registry recognises comes back as its stable code (`MCP_SERVER_UNAVAILABLE: …`),
+ * which the settings page words; anything else as its own text.
  */
 export async function probeProfile(
   runner: McpProbeRunner,
@@ -69,7 +74,11 @@ export async function probeProfile(
   try {
     return { toolCount: (await runner.listServerTools(profile.id)).length }
   } catch (error) {
-    return { failure: messageOf(error) }
+    return {
+      failure: readMcpFailureReason(error)
+        ? formatStableToolError(projectToolError(error))
+        : messageOf(error)
+    }
   } finally {
     if (!running) await runner.unregisterProfile(profile.id).catch(() => undefined)
   }
@@ -103,8 +112,9 @@ function messageOf(error: unknown): string {
 
 function requireText(value: unknown, field: string): string {
   const text = typeof value === 'string' ? value.trim() : ''
-  if (!text) throw new Error(`MCP server ${field} is required`)
-  if (text.length > MAX_TEXT_LENGTH) throw new Error(`MCP server ${field} is too long`)
+  if (!text) throw new Error(`MCP_SERVER_FIELD_MISSING: MCP server ${field} is required`)
+  if (text.length > MAX_TEXT_LENGTH)
+    throw new Error(`MCP_SERVER_FIELD_TOO_LONG: MCP server ${field} is too long`)
   return text
 }
 
@@ -113,7 +123,8 @@ function normalizeArgs(args: unknown): string[] {
   if (!Array.isArray(args)) throw new Error('MCP server args must be a list of strings')
   return args.map((arg) => {
     if (typeof arg !== 'string') throw new Error('MCP server args must be a list of strings')
-    if (arg.length > MAX_TEXT_LENGTH) throw new Error('MCP server args are too long')
+    if (arg.length > MAX_TEXT_LENGTH)
+      throw new Error('MCP_SERVER_FIELD_TOO_LONG: MCP server args are too long')
     return arg
   })
 }
@@ -124,10 +135,10 @@ function normalizeUrl(value: unknown): string {
   try {
     parsed = new URL(raw)
   } catch {
-    throw new Error(`MCP server url ${raw} is not a valid URL`)
+    throw new Error(`MCP_SERVER_URL_INVALID: MCP server url ${raw} is not a valid URL`)
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-    throw new Error('MCP server url must use http or https')
+    throw new Error('MCP_SERVER_URL_INVALID: MCP server url must use http or https')
   return parsed.toString()
 }
 
@@ -141,9 +152,14 @@ function normalizeSecretEntries(
     throw new Error(`MCP server ${container} must be an object`)
   return Object.entries(record as Record<string, unknown>).map(([key, value]) => {
     const name = key.trim()
-    if (!namePattern.test(name)) throw new Error(`MCP server ${container} name ${key} is invalid`)
+    if (!namePattern.test(name))
+      throw new Error(
+        `${container === 'env' ? 'MCP_SERVER_ENV_NAME_INVALID' : 'MCP_SERVER_HEADER_NAME_INVALID'}: MCP server ${container} name ${key} is invalid`
+      )
     if (typeof value !== 'string' || value.length > MAX_TEXT_LENGTH)
-      throw new Error(`MCP server ${container} value for ${key} is invalid`)
+      throw new Error(
+        `MCP_SERVER_FIELD_TOO_LONG: MCP server ${container} value for ${key} is invalid`
+      )
     return [name, value] as [string, string]
   })
 }
@@ -159,7 +175,9 @@ export function createMcpServerAdmin(deps: McpServerAdminDeps): McpServerAdmin {
       const authRef = secret.authRef!
       const previousValue = await deps.secureStore.read(authRef)
       if (!(await deps.secureStore.write(authRef, value)))
-        throw new Error(`Failed to store the MCP server credential ${secret.keyPath}`)
+        throw new Error(
+          `MCP_SERVER_CREDENTIAL_NOT_STORED: Failed to store the MCP server credential ${secret.keyPath}`
+        )
       undo.push({ authRef, previousValue })
     }
     return undo
@@ -171,7 +189,7 @@ export function createMcpServerAdmin(deps: McpServerAdminDeps): McpServerAdmin {
       if (input.itemId) {
         const existing = await deps.getItem(input.itemId)
         if (!existing || existing.kind !== 'mcp')
-          throw new Error(`MCP server ${input.itemId} is not configured`)
+          throw new Error(`MCP_SERVER_NOT_IMPORTED: MCP server ${input.itemId} is not configured`)
       }
       const itemId = input.itemId ?? `manual:${deps.newItemId?.() ?? randomUUID()}`
 
@@ -195,7 +213,9 @@ export function createMcpServerAdmin(deps: McpServerAdminDeps): McpServerAdmin {
         return { keyPath, fingerprint: hash(value), authRef }
       })
       if (secrets.length > 0 && !deps.secureStore.isAvailable())
-        throw new Error('Secure storage is unavailable for MCP server credentials')
+        throw new Error(
+          'MCP_SERVER_SECURE_STORE_UNAVAILABLE: Secure storage is unavailable for MCP server credentials'
+        )
 
       const profile: IntelligenceMcpProfile = stdio
         ? {
@@ -267,31 +287,47 @@ export function createMcpServerAdmin(deps: McpServerAdminDeps): McpServerAdmin {
     probe: async (itemId, profileId) => {
       const item = await deps.getItem(itemId)
       if (!item || item.kind !== 'mcp')
-        return { ok: false, error: `MCP server ${itemId} is not configured` }
+        return {
+          ok: false,
+          error: `MCP_SERVER_NOT_IMPORTED: MCP server ${itemId} is not configured`
+        }
       const held = deps.mcpProfilesFromItem(item)
-      if (held.length === 0) return { ok: false, error: 'This entry defines no MCP server' }
+      if (held.length === 0)
+        return { ok: false, error: 'MCP_SERVER_INVALID: this entry defines no MCP server' }
       // A page that names one server gets that one alone: probing it must not start the neighbours
       // its configuration file happened to declare beside it.
       const profiles = profileId ? held.filter((profile) => profile.id === profileId) : held
       if (profiles.length === 0)
-        return { ok: false, error: `MCP server ${profileId} is not part of ${itemId}` }
+        return {
+          ok: false,
+          error: `MCP_SERVER_NOT_IMPORTED: MCP server ${profileId} is not part of ${itemId}`
+        }
 
-      const failures: string[] = []
+      const failures: Array<{ name: string; failure: string }> = []
       let toolCount = 0
       for (const profile of profiles) {
         // Credentials an imported copy cannot replay (OAuth, a token flag): starting it could only
         // fail, so it is reported without being started. A server merely switched off is probed.
         if (profile.metadata?.reauthRequired === true) {
-          failures.push(`${profile.name}: disabled until its credentials are re-entered`)
+          failures.push({
+            name: profile.name,
+            failure: 'MCP_SERVER_REAUTH_REQUIRED: disabled until its credentials are re-entered'
+          })
           continue
         }
         const outcome = await probeProfile(deps, profile, item.active && profile.enabled !== false)
-        if ('failure' in outcome) failures.push(`${profile.name}: ${outcome.failure}`)
+        if ('failure' in outcome) failures.push({ name: profile.name, failure: outcome.failure })
         else toolCount += outcome.toolCount
       }
-      return failures.length > 0
-        ? { ok: false, error: failures.join('; ') }
-        : { ok: true, toolCount }
+      if (failures.length === 0) return { ok: true, toolCount }
+      // The page names the server it probes, so its failure comes back alone, code first, for the
+      // page to word; a probe of the whole entry says which of its servers failed.
+      return {
+        ok: false,
+        error: profileId
+          ? failures[0]!.failure
+          : failures.map(({ name, failure }) => `${name}: ${failure}`).join('; ')
+      }
     }
   }
 }

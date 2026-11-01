@@ -21,6 +21,9 @@ import { createHash } from 'node:crypto'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
+  FILE_CONTENT_MAX_CHARS,
+  FILE_CONTENT_TOO_LONG_REASON,
+  FILE_PARSE_OUTPUT_MAX_BYTES,
   getContentSizeLimitMB,
   getTypeTagsForExtension,
   IMAGE_EMBEDDING_EXTENSIONS,
@@ -88,7 +91,7 @@ interface IndexProgressUpdate {
 
 interface IndexFileUpdate {
   content: string | null
-  embeddingStatus: 'pending' | 'completed'
+  embeddingStatus: 'none' | 'pending' | 'completed'
   embeddings?: FileParserEmbedding[]
   contentHash?: string | null
   chunks?: FileParserChunk[]
@@ -130,8 +133,6 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       : null
   }
 }
-
-const MAX_CONTENT_LENGTH = 200_000
 
 const queue: IndexRequest[] = []
 const cancelledTaskIds = new Set<string>()
@@ -312,7 +313,7 @@ async function handleIndexTask(
         extension,
         size: size ?? 0,
         maxBytes,
-        maxOutputBytes: 200_000,
+        maxOutputBytes: FILE_PARSE_OUTPUT_MAX_BYTES,
         maxChunks: 1024,
         signal: parseController.signal
       })
@@ -366,15 +367,27 @@ async function handleIndexTask(
 
     if (result.status === 'success') {
       const rawContent = result.content ?? ''
-      // A plain prefix that never splits a surrogate pair. The `truncated` status below records the
-      // cut, so no marker text is written into the content that gets indexed and matched.
-      let keptLength = Math.min(rawContent.length, MAX_CONTENT_LENGTH)
-      if (keptLength < rawContent.length && /[\uD800-\uDBFF]/.test(rawContent[keptLength - 1]!))
-        keptLength--
-      const trimmedContent = rawContent.slice(0, keptLength)
-      // Content a parser cut at its output budget, or cut here, is indexed as far as it goes and
-      // recorded as `truncated`: terminal like `completed`, never counted or retried as a failure.
-      const truncated = result.truncated === true || trimmedContent !== rawContent
+      // Over the cap, or cut by the parser's own budget (which a file within the cap cannot hit):
+      // not indexed at all, never a prefix. Null content also drops the chunks and vectors that an
+      // earlier, shorter version of the file left behind. Terminal like any other skip.
+      if (result.truncated === true || rawContent.length > FILE_CONTENT_MAX_CHARS) {
+        emitFileResult(version, {
+          type: 'file',
+          taskId: task.taskId,
+          fileId: file.id,
+          progress: {
+            status: 'skipped',
+            progress: 100,
+            processedBytes,
+            totalBytes,
+            lastError: FILE_CONTENT_TOO_LONG_REASON,
+            updatedAt: new Date().toISOString()
+          },
+          fileUpdate: { content: null, embeddingStatus: 'none' },
+          indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
+        })
+        continue
+      }
       const embeddingStatus =
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
       const contentHash = buildContentHash(rawContent)
@@ -385,7 +398,7 @@ async function handleIndexTask(
         fileVersion: version.mtime,
         fileSize: version.size,
         progress: {
-          status: truncated ? 'truncated' : 'completed',
+          status: 'completed',
           progress: 100,
           processedBytes,
           totalBytes,
@@ -393,13 +406,13 @@ async function handleIndexTask(
           updatedAt: new Date().toISOString()
         },
         fileUpdate: {
-          content: trimmedContent,
+          content: rawContent,
           embeddingStatus,
           embeddings: result.embeddings?.length ? result.embeddings : undefined,
           contentHash,
           chunks: result.chunks?.length ? result.chunks : undefined
         } satisfies IndexFileUpdate,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, trimmedContent)
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, rawContent)
       } satisfies IndexFileResultMessage
 
       if (

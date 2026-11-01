@@ -86,6 +86,7 @@ import { IndexMaintenanceRunner } from './index-maintenance-runner'
 import { SearchIndexService } from './search-index-service'
 import { searchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexCommitCoalescer } from './search-index-commit-coalescer'
+import { LeadingTrailingThrottle } from './leading-trailing-throttle'
 import {
   LegacySearchIndexWriter,
   SourceScopedIndexWriterRouter,
@@ -622,6 +623,11 @@ export class SearchEngineCore
    * invalidation rather than inventing an icon-only index mutation.
    */
   public invalidateAppRecommendationPresentation(): void {
+    this.refreshRecommendationGrid()
+  }
+
+  /** Drops the ranking cache and tells open CoreBox streams to re-read the empty-query grid. */
+  private refreshRecommendationGrid(): void {
     if (!this.recommendationEngine) return
 
     this.recommendationEngine.invalidateCache()
@@ -669,6 +675,20 @@ export class SearchEngineCore
   }
 
   /**
+   * Paces the ranking invalidation a file commit asks for. The first commit of a window
+   * invalidates inline; the ones inside it are held and answered by one refresh when it closes.
+   */
+  private readonly fileCommitInvalidation = new LeadingTrailingThrottle({
+    intervalMs: FILE_COMMIT_INVALIDATION_INTERVAL_MS,
+    onTrailing: () => {
+      this.refreshRecommendationGrid()
+    },
+    onError: (error) => {
+      searchEngineLog.warn('Trailing recommendation invalidation failed', { error })
+    }
+  })
+
+  /**
    * An index commit no longer clears the cache eagerly (#346).
    *
    * `classifySearchCacheLookup` already had a `revision-mismatch` outcome meaning "the entry was
@@ -686,9 +706,6 @@ export class SearchEngineCore
    * is that a superseded entry holds its slot until it is looked up, expires at the 5s TTL, or is
    * evicted by the existing LRU bound.
    */
-  /** Throttle state for {@link shouldInvalidateForFileCommit}. */
-  private lastFileCommitInvalidationAt = 0
-
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
     // No searchCache.clear() here. #1729/#1730 removed it deliberately: cacheSearchResult
     // already refuses a write whose revision the hub has moved past, so the clear was redundant --
@@ -700,7 +717,8 @@ export class SearchEngineCore
     // would otherwise stay invisible for that long. App commits are rare and deliberate, so they
     // invalidate outright. File commits fire continuously while an index builds, so they are
     // throttled: the freshness dimension already ignores everything but files born inside the
-    // novelty window, and this bounds how often we recompute regardless of commit rate.
+    // novelty window, and this bounds how often we recompute regardless of commit rate. A commit
+    // the throttle holds back is answered by one trailing refresh, not dropped.
     const recommendationsInvalidated = payload.providerIds.includes(APP_INDEXED_SOURCE_ID)
       ? true
       : this.shouldInvalidateForFileCommit(payload)
@@ -725,16 +743,14 @@ export class SearchEngineCore
    *
    * An index build emits a commit per batch; without this, a first scan of a large folder would
    * drop the ranking cache thousands of times and each drop restarts a full recompute. One per
-   * minute keeps a file the user just saved appearing promptly while making the storm impossible.
+   * minute makes the storm impossible. The first commit invalidates now (true); a commit inside the
+   * window returns false and is answered when the window closes, so a file saved just after an
+   * invalidation reaches the grid within a window instead of waiting for a later commit.
    */
   private shouldInvalidateForFileCommit(payload: CoreBoxSearchIndexCommitPayload): boolean {
     if (!payload.providerIds.some((id) => FILE_RECOMMENDATION_SOURCE_IDS.has(id))) return false
 
-    const now = Date.now()
-    if (now - this.lastFileCommitInvalidationAt < FILE_COMMIT_INVALIDATION_INTERVAL_MS) return false
-
-    this.lastFileCommitInvalidationAt = now
-    return true
+    return this.fileCommitInvalidation.trigger()
   }
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
@@ -2399,7 +2415,9 @@ export class SearchEngineCore
           affectedItems
         )
       },
-      scanSource: async (reason) => await indexingRuntime.scanSource(FILE_INDEXED_SOURCE_ID, reason)
+      scanSource: async (reason) =>
+        await indexingRuntime.scanSource(FILE_INDEXED_SOURCE_ID, reason),
+      withHotSubtreeLane: (run) => instance.indexedSourceEventRouter.withHotSubtreeLane(run)
     })
     fileProvider.setIndexedSourceRuntimeResetDelegate(
       async (request) =>
@@ -2665,6 +2683,7 @@ export class SearchEngineCore
 
   async destroy(): Promise<void> {
     this.destroying = true
+    this.fileCommitInvalidation.dispose()
     this.indexMaintenanceRunner.stop()
     try {
       const runtime = this.indexingRuntime

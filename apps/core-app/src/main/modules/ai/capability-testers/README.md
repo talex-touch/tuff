@@ -46,14 +46,16 @@ capabilityTesterRegistry.register('custom.capability', new CustomTester())
 1. 创建新的测试器类，继承 `BaseCapabilityTester<TPayload, TResult>`
 2. 复用已有 typed payload / result 类型，不新增宽泛 `any` 返回
 3. 使用 `buildTestResult()` 格式化 provider、model、latency、usage、稳定性字段
-4. 在 `registry.ts` 中注册，并从 `index.ts` 导出对应文件
-5. 更新 `registry-coverage.test.ts` 的稳定能力集守卫
+4. 结果文案和输入提示放进 renderer 语言包的 `intelligence.capabilityTest.*`，用主进程的 `t()` 读取，测试结果跟随界面语言
+5. 在 `registry.ts` 中注册，并从 `index.ts` 导出对应文件
+6. 更新 `registry-coverage.test.ts` 的稳定能力集守卫
 
 示例：
 
 ```typescript
 import type { IntelligenceInvokeResult } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 interface CustomPayload {
@@ -75,13 +77,13 @@ export class CustomCapabilityTester extends BaseCapabilityTester<CustomPayload, 
 
   formatTestResult(result: IntelligenceInvokeResult<CustomResult>) {
     return this.buildTestResult(result, {
-      message: '测试成功',
+      message: t('intelligence.capabilityTest.message.custom'),
       textPreview: result.result?.summary || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入测试内容'
+    return t('intelligence.capabilityTest.hint.custom')
   }
 
   requiresUserInput(): boolean {

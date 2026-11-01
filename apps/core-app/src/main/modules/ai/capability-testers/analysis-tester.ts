@@ -9,7 +9,24 @@ import type {
   IntelligenceSentimentAnalyzeResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
+
+const SENTIMENT_KEYS: Record<IntelligenceSentimentAnalyzeResult['sentiment'], string> = {
+  positive: 'intelligence.capabilityTest.sentiment.positive',
+  negative: 'intelligence.capabilityTest.sentiment.negative',
+  neutral: 'intelligence.capabilityTest.sentiment.neutral',
+  mixed: 'intelligence.capabilityTest.sentiment.mixed'
+}
+
+/**
+ * A sentiment in the interface's words. A value the type doesn't name is shown as the model
+ * gave it.
+ */
+function sentimentLabel(sentiment: IntelligenceSentimentAnalyzeResult['sentiment']): string {
+  const key: string | undefined = SENTIMENT_KEYS[sentiment]
+  return key ? t(key) : sentiment
+}
 
 export class IntentDetectTester extends BaseCapabilityTester {
   readonly capabilityType = 'intent-detect'
@@ -23,17 +40,20 @@ export class IntentDetectTester extends BaseCapabilityTester {
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceIntentDetectResult>) {
-    const intent = result.result?.intent || 'unknown'
+    const intent = result.result?.intent || t('intelligence.capabilityTest.preview.unknown')
     const confidence = result.result?.confidence || 0
 
     return this.buildTestResult(result, {
-      message: `意图识别: ${intent} (置信度: ${(confidence * 100).toFixed(1)}%)`,
+      message: t('intelligence.capabilityTest.message.intentDetect', {
+        intent,
+        confidence: (confidence * 100).toFixed(1)
+      }),
       textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要识别意图的文本，例如：打开计算器'
+    return t('intelligence.capabilityTest.hint.intentDetect')
   }
 
   requiresUserInput(): boolean {
@@ -57,13 +77,16 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
     const score = result.result?.score || 0
 
     return this.buildTestResult(result, {
-      message: `情感分析: ${sentiment} (得分: ${score.toFixed(2)})`,
+      message: t('intelligence.capabilityTest.message.sentimentAnalyze', {
+        sentiment: sentimentLabel(sentiment),
+        score: score.toFixed(2)
+      }),
       textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要分析情感的文本'
+    return t('intelligence.capabilityTest.hint.sentimentAnalyze')
   }
 
   requiresUserInput(): boolean {
@@ -89,13 +112,13 @@ export class KeywordsExtractTester extends BaseCapabilityTester {
     const keywordList = keywords.map((k) => k.term).join(', ')
 
     return this.buildTestResult(result, {
-      message: `提取了 ${keywords.length} 个关键词`,
-      textPreview: keywordList || '无关键词'
+      message: t('intelligence.capabilityTest.message.keywordsExtract', { count: keywords.length }),
+      textPreview: keywordList || t('intelligence.capabilityTest.preview.noKeywords')
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要提取关键词的文本'
+    return t('intelligence.capabilityTest.hint.keywordsExtract')
   }
 
   requiresUserInput(): boolean {
@@ -127,13 +150,13 @@ export class ContentExtractTester extends BaseCapabilityTester<
     const entityCount = Object.values(entities).reduce((count, items) => count + items.length, 0)
 
     return this.buildTestResult(result, {
-      message: `内容抽取完成，识别 ${entityCount} 个实体`,
+      message: t('intelligence.capabilityTest.message.contentExtract', { count: entityCount }),
       textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要抽取日期、人物、组织或联系方式的文本'
+    return t('intelligence.capabilityTest.hint.contentExtract')
   }
 
   requiresUserInput(): boolean {
@@ -165,13 +188,13 @@ export class TextClassifyTester extends BaseCapabilityTester<
       .join(', ')
 
     return this.buildTestResult(result, {
-      message: `文本分类完成，返回 ${predictions.length} 个分类`,
+      message: t('intelligence.capabilityTest.message.textClassify', { count: predictions.length }),
       textPreview: preview || result.result?.explanation || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要分类的文本'
+    return t('intelligence.capabilityTest.hint.textClassify')
   }
 
   requiresUserInput(): boolean {

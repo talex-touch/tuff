@@ -154,9 +154,10 @@ export const PLUGIN_FACING_EVENTS = [
   // Intelligence domain facade — 14
   ...PLUGIN_FACING_INTELLIGENCE_EVENTS,
 
-  // PluginEvents — 36
+  // PluginEvents — 37
   PluginEvents.communicate.index,
   PluginEvents.i18n.getLocale,
+  PluginEvents.i18n.localeChanged,
   PluginEvents.i18n.resolveText,
   PluginEvents.lexicon.register,
   PluginEvents.lexicon.resolve,

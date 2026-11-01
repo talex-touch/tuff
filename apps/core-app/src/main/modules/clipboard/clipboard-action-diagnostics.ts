@@ -1,13 +1,22 @@
 import type { ClipboardActionErrorCode } from '@talex-touch/utils/transport/events/types'
+import { t } from '../../utils/i18n-helper'
 
-export const MACOS_AUTOMATION_PERMISSION_MESSAGE =
-  '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。'
+/*
+ * Read when the failure happens, in the interface's language: these messages reach the CoreBox
+ * footer and the OS notification as they are written.
+ */
 
-export const MACOS_ACCESSIBILITY_PERMISSION_MESSAGE =
-  '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 辅助功能”中允许 Tuff。'
+export function macosAutomationPermissionMessage(): string {
+  return t('clipboardActions.automationPermissionDenied')
+}
 
-export const AUTO_PASTE_FAILED_MESSAGE =
-  '已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。'
+export function macosAccessibilityPermissionMessage(): string {
+  return t('clipboardActions.accessibilityPermissionDenied')
+}
+
+export function autoPasteFailedMessage(): string {
+  return t('clipboardActions.autoPasteFailed')
+}
 
 export interface ClipboardApplyDiagnosticsPayload {
   item?: {
@@ -99,7 +108,7 @@ export function normalizeClipboardActionError(
   if (isMacOsAccessibilityPermissionError(error)) {
     return {
       code: 'MACOS_ACCESSIBILITY_PERMISSION_DENIED',
-      message: MACOS_ACCESSIBILITY_PERMISSION_MESSAGE,
+      message: macosAccessibilityPermissionMessage(),
       originalError: error
     }
   }
@@ -107,7 +116,7 @@ export function normalizeClipboardActionError(
   if (isMacOsAutomationPermissionError(error)) {
     return {
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
-      message: MACOS_AUTOMATION_PERMISSION_MESSAGE,
+      message: macosAutomationPermissionMessage(),
       originalError: error
     }
   }
@@ -115,7 +124,7 @@ export function normalizeClipboardActionError(
   const message = error instanceof Error ? error.message : String(error || '')
   return {
     code: 'AUTO_PASTE_FAILED',
-    message: fallbackMessage || message || AUTO_PASTE_FAILED_MESSAGE,
+    message: fallbackMessage || message || autoPasteFailedMessage(),
     originalError: error
   }
 }

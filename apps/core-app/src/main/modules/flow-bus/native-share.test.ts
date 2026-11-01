@@ -33,6 +33,11 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('../../utils/i18n-helper', () => ({
+  t: (key: string, params?: Record<string, string | number>) =>
+    params ? `${key} ${JSON.stringify(params)}` : key
+}))
+
 vi.mock('./share-notification', () => ({
   shareNotificationService: {
     showShareResult: showShareResultMock
@@ -112,7 +117,7 @@ describe('native-share behavior', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('does not provide a system share sheet')
+      expect(result.error).toBe('nativeShare.errors.noShareSheet {"platform":"Windows"}')
       expect(openExternalMock).not.toHaveBeenCalled()
       expect(showShareResultMock).toHaveBeenCalledWith(result)
     })

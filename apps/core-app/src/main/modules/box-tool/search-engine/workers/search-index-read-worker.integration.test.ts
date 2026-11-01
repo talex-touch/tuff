@@ -1,4 +1,4 @@
-import { createClient, type Client } from '@libsql/client'
+import { createClient, type Client, type InValue } from '@libsql/client'
 import { sql } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { encodeVectorBlob } from '../../../../db/embedding-vector-codec'
 import { SearchIndexReadWorkerClient } from './search-index-read-worker-client'
 
 const defaultWorkerPath = fileURLToPath(
@@ -164,6 +165,40 @@ describeBuiltWorker('bundled search-index read worker', () => {
           expected.slice(0, 2)
         )
         await expect(reader.semanticSearch([1, 0, 0], model, 10)).resolves.toEqual(expected)
+      } finally {
+        await reader.close()
+      }
+    })
+  })
+
+  it('ranks BLOB and legacy JSON vectors together and skips a BLOB of the wrong size', async () => {
+    await withDatabase(async (databasePath, writer) => {
+      await createEmbeddings(writer)
+      const model = 'blob-contract/dim3'
+      await writer.batch(
+        [
+          ['json-best', '[1,0,0]', 'json-hash'],
+          ['blob-runner-up', encodeVectorBlob([0.8, 0.6, 0]), 'blob-runner-up-hash'],
+          ['blob-best', encodeVectorBlob([0, 1, 0]), 'blob-weak-hash'],
+          ['blob-best', encodeVectorBlob([0.9, 0.1, 0]), 'blob-winning-hash'],
+          ['blob-short', encodeVectorBlob([1, 0]), 'blob-short-hash'],
+          ['blob-nan', encodeVectorBlob([Number.NaN, 0, 0]), 'blob-nan-hash']
+        ].map(([sourceId, embedding, contentHash]) => ({
+          sql: 'INSERT INTO embeddings (source_id, source_type, embedding, model, content_hash) VALUES (?, ?, ?, ?, ?)',
+          args: [sourceId as string, 'file', embedding as InValue, model, contentHash as string]
+        })),
+        'write'
+      )
+      const reader = new SearchIndexReadWorkerClient(databasePath, { workerPath })
+      try {
+        const matches = await reader.semanticSearch([1, 0, 0], model, 10)
+
+        expect(matches.map((match) => [match.sourceId, match.contentHash])).toEqual([
+          ['json-best', 'json-hash'],
+          ['blob-best', 'blob-winning-hash'],
+          ['blob-runner-up', 'blob-runner-up-hash']
+        ])
+        expect(matches[1]!.score).toBeCloseTo(0.9 / Math.hypot(0.9, 0.1), 5)
       } finally {
         await reader.close()
       }

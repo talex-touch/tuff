@@ -1,7 +1,7 @@
 import { defineEvent } from '../event/builder'
 
 export interface TerminalCreateRequest {
-  command: string
+  command?: string
   args?: string[]
   cwd?: string
   cols?: number
@@ -52,6 +52,15 @@ export interface TerminalExitPayload {
   exitCode: number | null
   signal?: number
 }
+export interface TerminalFontInfo {
+  family: string
+  label: string
+  isNerdFont: boolean
+}
+
+export interface TerminalFontsResponse {
+  fonts: TerminalFontInfo[]
+}
 
 export const TerminalEvents = {
   session: {
@@ -69,5 +78,9 @@ export const TerminalEvents = {
       .define<TerminalAckRequest, void>(),
     exit: defineEvent('terminal').module('session').event('exit')
       .define<TerminalExitPayload, void>(),
+  },
+  fonts: {
+    list: defineEvent('terminal').module('fonts').event('list')
+      .define<void, TerminalFontsResponse>(),
   },
 } as const

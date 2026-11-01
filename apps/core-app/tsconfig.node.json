@@ -50,6 +50,7 @@
     "scripts/coreapp-packaged-login-recovery-probe*.ts",
     "scripts/coreapp-packaged-corebox-everything-probe*.ts",
     "scripts/search-split-*.ts",
+    "scripts/search-index-stress/**/*.ts",
     "scripts/quickops-evidence-*.ts",
     "scripts/windows-acceptance-*.ts",
     "src/main/**/*",

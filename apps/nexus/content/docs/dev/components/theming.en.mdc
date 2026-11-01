@@ -87,9 +87,9 @@ code: |
   </script>
 
   <template>
-    <button @click="toggle">
-      {{ isDark ? 'Light' : 'Dark' }}
-    </button>
+    <TxButton variant="primary" @click="toggle">
+      {{ isDark ? 'Switch to light' : 'Switch to dark' }}
+    </TxButton>
   </template>
 ---
 :::

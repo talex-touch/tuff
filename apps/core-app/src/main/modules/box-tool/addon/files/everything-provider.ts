@@ -52,6 +52,7 @@ import {
 import compressing from 'compressing'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
+import { t } from '../../../../utils/i18n-helper'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { downloadCenterModule } from '../../../download/download-center'
 import { appTaskGate } from '../../../../service/app-task-gate'
@@ -1116,9 +1117,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    const reason =
-      this.getHealthStatus().reason ||
-      'Windows file search is unavailable because the Everything dependency is missing.'
+    // The notice words the state in the interface language. Main's health reason is English, and
+    // for a backend that failed it is the raw error: it stays in the status payload, which the
+    // Everything settings page lists under its error details.
+    const description = this.isEnabled
+      ? t('coreBox.everythingNotice.notReady')
+      : t('coreBox.everythingNotice.disabled')
 
     return new TuffItemBuilder(
       `everything-provider:unavailable:${encodeURIComponent(searchText).slice(0, 64)}`,
@@ -1126,16 +1130,16 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.id
     )
       .setKind('notification')
-      .setTitle('Windows file search is not ready')
-      .setSubtitle('Everything dependency missing or disabled')
-      .setDescription(reason)
+      .setTitle(t('coreBox.everythingNotice.title'))
+      .setSubtitle(t('coreBox.everythingNotice.subtitle'))
+      .setDescription(description)
       .setAccessory('Everything')
       .setActions([
         {
           id: 'open-everything-settings',
           type: 'navigate',
-          label: 'Open Everything settings',
-          description: 'Check Everything backend, diagnostics, and install guidance.',
+          label: t('coreBox.everythingNotice.openSettings'),
+          description: t('coreBox.everythingNotice.openSettingsDesc'),
           icon: { type: 'class', value: 'i-ri-settings-3-line' },
           payload: {
             path: '/setting?section=everything',

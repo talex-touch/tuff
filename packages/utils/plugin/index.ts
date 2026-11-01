@@ -391,6 +391,29 @@ export interface IFeatureInteraction {
 }
 
 /**
+ * What a plugin's `onItemAction` may resolve with. Every field is optional, and `void` stays valid.
+ */
+export interface IItemActionResult {
+  /** Whether the action executed an external operation (e.g., opened browser) */
+  externalAction?: boolean
+  /** Whether the feature should be activated after this action */
+  shouldActivate?: boolean
+  /** Activation data if shouldActivate is true */
+  activation?: any
+  /** `false` marks the action as not done, and the host then does not count it as a use; `true` marks it as done whatever `status` says. */
+  success?: boolean
+  /** Read only when `success` is missing: `blocked`, `error`, `failed`, `cancelled` and `canceled` mark the action as not done, like `success: false`. */
+  status?: string
+  /**
+   * A one-line outcome the host shows the user as a system notification once the action returns:
+   * a success hint, or an error hint when the action is marked as not done. Plain text, or a
+   * `$i18n:` message from `context.utils.i18n.createMessage()`. Control characters are stripped, and
+   * text over 200 characters is cut. No `message`, no notification.
+   */
+  message?: string
+}
+
+/**
  * Lifecycle hooks for a feature's behavior within the launcher environment.
  * These hooks are triggered based on real user interaction and system events.
  */
@@ -461,19 +484,13 @@ export interface IFeatureLifeCycle {
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
    * @param context Optional execution context, including the selected action id.
-   * @returns Object indicating whether to activate the feature and any activation data
+   * @returns Object indicating whether to activate the feature, any activation data, and an
+   * optional `message` the host shows the user
    */
   onItemAction?: (
     item: any,
     context?: { actionId?: string },
-  ) => Promise<{
-    /** Whether the action executed an external operation (e.g., opened browser) */
-    externalAction?: boolean
-    /** Whether the feature should be activated after this action */
-    shouldActivate?: boolean
-    /** Activation data if shouldActivate is true */
-    activation?: any
-  } | void>
+  ) => Promise<IItemActionResult | void>
 
   /**
    * Called when plugin storage changes.
@@ -533,19 +550,13 @@ export interface ITargetFeatureLifeCycle {
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
    * @param context Optional execution context, including the selected action id.
-   * @returns Object indicating whether to activate the feature and any activation data
+   * @returns Object indicating whether to activate the feature, any activation data, and an
+   * optional `message` the host shows the user
    */
   onItemAction?: (
     item: any,
     context?: { actionId?: string },
-  ) => Promise<{
-    /** Whether the action executed an external operation (e.g., opened browser) */
-    externalAction?: boolean
-    /** Whether the feature should be activated after this action */
-    shouldActivate?: boolean
-    /** Activation data if shouldActivate is true */
-    activation?: any
-  } | void>
+  ) => Promise<IItemActionResult | void>
 }
 
 /**

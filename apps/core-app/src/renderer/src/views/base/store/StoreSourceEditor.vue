@@ -58,6 +58,11 @@ const providerTypeOptions = computed<{ label: string; value: StoreProviderType }
   { label: t('store.sourceEditor.providerTypes.npmPackage'), value: 'npmPackage' }
 ])
 
+/** A source's adapter as the type picker names it; a type without a name here stays as stored. */
+function providerTypeLabel(type: StoreProviderType): string {
+  return providerTypeOptions.value.find((option) => option.value === type)?.label ?? type
+}
+
 const newSource = reactive<{
   name: string
   url: string
@@ -217,7 +222,7 @@ watch(
 
                 <div class="Item-Container">
                   <div class="Item-Title">
-                    {{ item.name }}<span class="adapter">({{ item.type }})</span>
+                    {{ item.name }}<span class="adapter">({{ providerTypeLabel(item.type) }})</span>
                     <span v-if="item.readOnly" class="readonly-badge">
                       {{ t('store.sourceEditor.readonlyBadge') }}
                     </span>
@@ -268,7 +273,7 @@ watch(
                 <div class="handle disabled" />
                 <div class="Item-Container">
                   <div class="Item-Title">
-                    {{ item.name }}<span class="adapter">({{ item.type }})</span>
+                    {{ item.name }}<span class="adapter">({{ providerTypeLabel(item.type) }})</span>
                     <span v-if="item.readOnly" class="readonly-badge">
                       {{ t('store.sourceEditor.readonlyBadge') }}
                     </span>

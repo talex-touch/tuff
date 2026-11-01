@@ -9,6 +9,7 @@ import {
   isUsageLimitFailure,
   readUsageLimitResetsAt
 } from '~/modules/intelligence/ai-error-recovery'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 
 /**
  * What the composer's dictation has to tell the user, and how. The session reports a kind; the page
@@ -92,13 +93,12 @@ const CAPTURE_PLATFORM = /PLATFORM-NOT-SUPPORTED|UNSUPPORTED PLATFORM/
 const DETAIL_LIMIT = 160
 
 /**
- * The failure's own sentence, for the toast's description. First line only — a native module
- * failure appends a require stack — and capped, so a provider's paragraph cannot push the
- * headline out of the toast.
+ * The failure's own sentence, for the toast's description. Without the transport's preface, first
+ * line only — a native module failure appends a require stack — and capped, so a provider's
+ * paragraph cannot push the headline out of the toast.
  */
 function failureDetail(error: unknown): string | undefined {
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
-  const line = message.split('\n', 1)[0]?.trim() ?? ''
+  const line = failureMessage(error).split('\n', 1)[0]?.trim() ?? ''
   if (!line) return undefined
   return line.length > DETAIL_LIMIT ? `${line.slice(0, DETAIL_LIMIT - 1)}…` : line
 }
@@ -310,7 +310,9 @@ export function showDictationNotice(
     toast.warning(message, action ? { action } : undefined)
     return
   }
-  const options = { ...(action ? { action } : {}), ...(detail ? { description: detail } : {}) }
+  // A channel's or main's own failure reads in the interface language; any other text as it came.
+  const description = detail ? describeFailure(detail, context.t, '') : ''
+  const options = { ...(action ? { action } : {}), ...(description ? { description } : {}) }
   const show = copy.tone === 'error' ? toast.error : toast.warning
   show(context.t(copy.message), Object.keys(options).length ? options : undefined)
 }

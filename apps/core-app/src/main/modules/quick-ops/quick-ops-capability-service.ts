@@ -2,6 +2,7 @@ import type {
   QuickOpsCapabilityEntry,
   QuickOpsCapabilityInfo
 } from '@talex-touch/utils/transport/events/types'
+import { t } from '../../utils/i18n-helper'
 import type { QuickOpsResolvedSettings } from './quick-ops-runtime-types'
 
 const QUICK_OPS_STATEFUL_POLICY_REASON = 'stateful-tools-disabled-by-policy'
@@ -87,37 +88,37 @@ export function createQuickOpsCapabilityInfo(
   const entries: QuickOpsCapabilityEntry[] = [
     {
       id: 'quickops.state.keepAwake',
-      label: '显示器保持唤醒',
+      label: t('quickOps.capabilities.keepAwake'),
       riskLevel: 'stateful',
       ...statusForRisk('stateful', disabledReason)
     },
     {
       id: 'quickops.state.systemAwake',
-      label: '系统睡眠阻止',
+      label: t('quickOps.capabilities.systemAwake'),
       riskLevel: 'stateful',
       ...statusForRisk('stateful', disabledReason)
     },
     {
       id: 'quickops.state.timer',
-      label: '快速计时器 / 秒表 / 番茄钟',
+      label: t('quickOps.capabilities.timers'),
       riskLevel: 'stateful',
       ...statusForRisk('stateful', disabledReason)
     },
     {
       id: 'quickops.screen.overlay',
-      label: '清洁屏幕 / 纯色屏幕',
+      label: t('quickOps.capabilities.screenOverlay'),
       riskLevel: 'stateful',
       ...statusForRisk('stateful', disabledReason)
     },
     {
       id: 'quickops.network.local',
-      label: '本机网络只读查询',
+      label: t('quickOps.capabilities.localNetwork'),
       riskLevel: 'safe',
       ...statusForNetwork()
     },
     {
       id: 'quickops.network.publicIp',
-      label: '公网 IP opt-in 查询',
+      label: t('quickOps.capabilities.publicIp'),
       riskLevel: 'safe',
       status: !settings.enabled
         ? 'disabled'
@@ -136,7 +137,7 @@ export function createQuickOpsCapabilityInfo(
     },
     {
       id: 'quickops.network.systemProxy',
-      label: '系统代理只读摘要',
+      label: t('quickOps.capabilities.systemProxy'),
       riskLevel: 'safe',
       status: !settings.enabled
         ? 'disabled'
@@ -153,37 +154,37 @@ export function createQuickOpsCapabilityInfo(
     },
     {
       id: 'quickops.files.readOnly',
-      label: '文件 Hash / Base64 / 路径复制',
+      label: t('quickOps.capabilities.fileInfo'),
       riskLevel: 'safe',
       ...statusForFile('safe', disabledReason)
     },
     {
       id: 'quickops.files.writeTemp',
-      label: 'Tuff 临时文件写入',
+      label: t('quickOps.capabilities.tempFiles'),
       riskLevel: 'confirm',
       ...statusForFile('confirm', disabledReason)
     },
     {
       id: 'quickops.files.moveRecentDownload',
-      label: '最近下载文件移动',
+      label: t('quickOps.capabilities.moveRecentDownload'),
       riskLevel: 'confirm',
       ...statusForFile('confirm', disabledReason)
     },
     {
       id: 'quickops.system.diagnostics',
-      label: '脱敏诊断 / 系统信息',
+      label: t('quickOps.capabilities.diagnostics'),
       riskLevel: 'safe',
       ...statusForSystem()
     },
     {
       id: 'quickops.system.storage',
-      label: '磁盘空间 / 目录占用',
+      label: t('quickOps.capabilities.storage'),
       riskLevel: 'safe',
       ...statusForSystem()
     },
     {
       id: 'quickops.system.battery',
-      label: '电池状态',
+      label: t('quickOps.capabilities.battery'),
       riskLevel: 'safe',
       status: !settings.enabled
         ? 'disabled'
@@ -200,13 +201,13 @@ export function createQuickOpsCapabilityInfo(
     },
     {
       id: 'quickops.developer.preview',
-      label: 'PreviewSDK 开发者工具',
+      label: t('quickOps.capabilities.developerPreview'),
       riskLevel: 'safe',
       ...statusForDeveloper()
     },
     {
       id: 'quickops.network.portKill',
-      label: '真实端口进程终止',
+      label: t('quickOps.capabilities.portKill'),
       riskLevel: 'danger',
       ...(!settings.allowNetworkTools
         ? { status: 'disabled' as const, reason: QUICK_OPS_NETWORK_POLICY_REASON }

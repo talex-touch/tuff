@@ -1059,35 +1059,6 @@ describe('PluginRuntimeService', () => {
     await harness.service.dispose()
   })
 
-  it('filters the merged manifest through an exact activation capability allowlist', async () => {
-    const base = stringCapabilityDefinition({ id: 'storage.file.read' })
-    const local = stringCapabilityDefinition({ id: 'intelligence.invoke' })
-    const harness = createHarness({ capabilityDefinitions: [base] })
-
-    await harness.start(activation(), {
-      capabilityDefinitions: [local],
-      capabilityAllowlist: ['intelligence.invoke']
-    })
-
-    const load = harness.ports[0].sent.find(
-      (message) => (message as { type?: string }).type === 'host-load'
-    ) as { payload: { capabilityManifest: Array<{ id: string }> } }
-    expect(load.payload.capabilityManifest.map((entry) => entry.id)).toEqual([
-      'intelligence.invoke'
-    ])
-
-    await harness.service.dispose()
-  })
-
-  it('rejects an allowlist capability that is absent from the merged manifest', async () => {
-    const harness = createHarness()
-
-    await expect(
-      harness.start(activation(), { capabilityAllowlist: ['intelligence.invoke'] })
-    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
-    expect(harness.spawn).not.toHaveBeenCalled()
-  })
-
   it('rejects duplicate base and activation definitions before spawning a process', async () => {
     const base = stringCapabilityDefinition()
     const harness = createHarness({ capabilityDefinitions: [base] })

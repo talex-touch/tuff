@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
+import { describePluginIssue } from '~/modules/plugin/plugin-issue-display'
 import {
   isPluginEntityActionId,
   PLUGIN_ENTITY_ACTION_IDS,
@@ -54,10 +55,13 @@ interface PaneAction {
   primary: boolean
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const isMac = getCurrentRendererPlatformState().isMac
 
 const entity = computed(() => readPluginEntitySnapshot(props.item))
+const problem = computed(() =>
+  entity.value?.problem ? describePluginIssue(entity.value.problem, t, locale.value) : null
+)
 const headerIcon = computed(() => normalizeCoreBoxIcon(props.item.render?.basic?.icon))
 const headerIconStyle = computed(() => ({
   '--icon-color': resolveCoreBoxIconColor(props.item.render?.basic?.icon)
@@ -127,9 +131,11 @@ function featureTitle(name: string): string {
         <p v-if="entity.description" class="PluginEntityPanel-Description">
           {{ entity.description }}
         </p>
-        <p v-if="entity.problem" class="PluginEntityPanel-Problem" role="status">
-          {{ entity.problem }}
-        </p>
+        <div v-if="problem" class="PluginEntityPanel-Problem" role="status">
+          <p class="PluginEntityPanel-ProblemTitle">{{ problem.title }}</p>
+          <p v-if="problem.advice">{{ problem.advice }}</p>
+          <p v-if="problem.detail" class="PluginEntityPanel-ProblemDetail">{{ problem.detail }}</p>
+        </div>
 
         <div
           v-if="actions.length"
@@ -290,7 +296,9 @@ function featureTitle(name: string): string {
 }
 
 .PluginEntityPanel-Problem {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 10px;
   border-radius: 8px;
   background-color: var(--tx-color-danger-light-9);
@@ -298,6 +306,21 @@ function featureTitle(name: string): string {
   font-size: 12px;
   line-height: 18px;
   word-break: break-word;
+
+  p {
+    margin: 0;
+  }
+}
+
+.PluginEntityPanel-ProblemTitle {
+  font-weight: 600;
+}
+
+.PluginEntityPanel-ProblemDetail {
+  color: var(--tx-text-color-secondary);
+  font-family: var(--tx-font-family-mono, monospace);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .PluginEntityPanel-Actions {

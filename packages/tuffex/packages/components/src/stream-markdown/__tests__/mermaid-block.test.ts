@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import mermaid from 'mermaid'
 import TxMermaidBlock from '../src/TxMermaidBlock.vue'
 
@@ -17,11 +17,27 @@ vi.mock('../src/shiki-runtime', () => ({
 const renderMock = vi.mocked(mermaid.render)
 const initializeMock = vi.mocked(mermaid.initialize)
 
+afterEach(() => {
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
+
+enableAutoUnmount(afterEach)
+
 beforeEach(() => {
   renderMock.mockClear()
   initializeMock.mockClear()
-  renderMock.mockImplementation(async () => ({ svg: '<svg data-mock="diagram"></svg>' } as any))
-  document.body.innerHTML = ''
+  renderMock.mockImplementation(async () => ({ svg: '<svg data-mock="diagram"></svg>', diagramType: 'flowchart' }))
+  vi.spyOn(window, 'matchMedia').mockImplementation(query => ({
+    matches: query === '(prefers-reduced-motion: reduce)',
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }))
 })
 
 describe('txMermaidBlock', () => {
@@ -89,18 +105,38 @@ describe('txMermaidBlock', () => {
     expect(renderMock).toHaveBeenCalledTimes(2)
   })
 
-  it('opens the zoom overlay from the figure button and closes on Escape', async () => {
+  it.each(['Escape', 'close button'] as const)('opens the diagram in the shared preview and closes via %s', async (closeWith) => {
+    const svg = '<svg viewBox="0 0 200 100"><text>Rendered flowchart</text></svg>'
+    renderMock.mockResolvedValueOnce({ svg, diagramType: 'flowchart' })
     const wrapper = mount(TxMermaidBlock, {
-      props: { code: 'graph TD', closed: true },
+      props: {
+        code: 'graph TD; A-->B',
+        closed: true,
+        previewLabel: 'Expanded flowchart',
+        closeLabel: 'Dismiss flowchart',
+      },
+      attachTo: document.body,
     })
     await flushPromises()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
 
-    await wrapper.find('.tx-mermaid-block__figure').trigger('click')
-    expect(document.body.querySelector('.tx-mermaid-block__overlay')).not.toBeNull()
-
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    const figure = wrapper.find('.tx-mermaid-block__figure')
+    await figure.trigger('click')
     await flushPromises()
-    expect(document.body.querySelector('.tx-mermaid-block__overlay')).toBeNull()
+
+    const dialog = document.body.querySelector<HTMLElement>('.tx-image-preview[role="dialog"]')!
+    expect(dialog.getAttribute('aria-label')).toContain('Expanded flowchart')
+    expect(dialog.querySelector('.tx-image-preview__custom svg')?.outerHTML).toBe(svg)
+    expect(dialog.querySelector('.tx-image-preview__failed')).toBeNull()
+
+    if (closeWith === 'Escape')
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    else
+      dialog.querySelector<HTMLButtonElement>('button[aria-label="Dismiss flowchart"]')!.click()
+    await flushPromises()
+
+    expect(document.body.querySelector('.tx-image-preview[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(figure.element)
   })
 
   it('gives every diagram a distinct render id across instances', async () => {

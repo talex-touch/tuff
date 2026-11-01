@@ -39,9 +39,9 @@ function resolveWallpaperUrl(pathOrUrl: string): string {
   return toTfileUrl(pathOrUrl)
 }
 
-function toErrorMessage(error: unknown, unknownError = 'Unknown error'): string {
+function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
-  return typeof error === 'string' ? error : unknownError
+  return typeof error === 'string' ? error : 'Unknown error'
 }
 
 export function useWallpaper() {
@@ -134,10 +134,15 @@ export function useWallpaper() {
     try {
       const result = await transport.send(getDesktopEvent)
       if (result?.error) {
+        // Main's reason is English and goes to the log; the toast says it in the interface language.
         logDesktopWallpaperFailure(result.error, true)
-        if (!options?.silentError && lastDesktopErrorToast.value !== result.error) {
-          toast.error(result.error)
-          lastDesktopErrorToast.value = result.error
+        const message = t(
+          'themeStyle.desktopWallpaperUnavailable',
+          'Desktop wallpaper is unavailable on this system.'
+        )
+        if (!options?.silentError && lastDesktopErrorToast.value !== message) {
+          toast.error(message)
+          lastDesktopErrorToast.value = message
         }
       }
       const path = result?.path ?? ''
@@ -152,8 +157,11 @@ export function useWallpaper() {
       }
       return Boolean(path)
     } catch (error) {
-      const message = toErrorMessage(error, t('common.unknownError'))
-      logDesktopWallpaperFailure(message, false)
+      logDesktopWallpaperFailure(toErrorMessage(error), false)
+      const message = t(
+        'themeStyle.desktopWallpaperRefreshFailed',
+        'Failed to refresh desktop wallpaper.'
+      )
       if (!options?.silentError && lastDesktopErrorToast.value !== message) {
         toast.error(message)
         lastDesktopErrorToast.value = message

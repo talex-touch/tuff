@@ -21,6 +21,7 @@ import fse from 'fs-extra'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { getLocale, setLocale } from '../../utils/i18n-helper'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
 import { PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
@@ -960,7 +961,7 @@ describe('touchPlugin.triggerFeature', () => {
     expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith({
       id: 'plugin-widget-load-failed:test-plugin:test-feature',
       title: 'Widget 加载失败',
-      message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+      message: '插件 Widget 初始化失败，请检查插件版本、路径和运行日志。',
       level: 'error',
       dedupeKey: 'plugin-widget-load-failed:test-plugin:test-feature',
       meta: {
@@ -1134,7 +1135,7 @@ describe('touchPlugin.triggerFeature', () => {
       expect.objectContaining({
         id: 'plugin-widget-load-failed:test-plugin:test-feature',
         title: 'Widget 加载失败',
-        message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+        message: '插件 Widget 初始化失败，请检查插件版本、路径和运行日志。',
         level: 'error'
       })
     )
@@ -1854,12 +1855,12 @@ describe('touchPlugin.triggerFeature', () => {
 
     const featureUtil = plugin.getFeatureUtil()
 
-    expect(featureUtil.plugin.i18n).toBe(featureUtil.i18n)
+    expect(featureUtil.plugin.language).toBe(featureUtil.language)
     expect(featureUtil.plugin.lexicon).toBe(featureUtil.lexicon)
-    expect(featureUtil.i18n.createMessage('plugin.status', { count: 2 })).toBe(
+    expect(featureUtil.language.createMessage('plugin.status', { count: 2 })).toBe(
       '$i18n:plugin.status|{"count":2}'
     )
-    await expect(featureUtil.i18n.getLocale()).resolves.toBe('zh-CN')
+    await expect(featureUtil.language.getLanguage()).resolves.toBe('zh-CN')
 
     const [event, payload, context] = vi.mocked(transport.invoke).mock.calls[0]
     expect(event.toEventName()).toBe(PluginEvents.i18n.getLocale.toEventName())
@@ -2375,6 +2376,44 @@ describe('touchPlugin.enable', () => {
     expect(plugin.pluginLifecycle).not.toBeNull()
   })
 
+  it('snapshots the app display language for the Prelude, not the OS locale', async () => {
+    const previousLocale = getLocale()
+    // The electron mock above reports the OS locale as zh-CN.
+    setLocale('en-US')
+    try {
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'locale-snapshot-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      installCapability({ runtimeService: runtime as never })
+      const plugin = new TouchPlugin(
+        'empty-plugin',
+        { type: 'class', value: 'i-ri-test-tube-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        '/tmp/missing-empty-plugin',
+        {},
+        { skipDataInit: true }
+      )
+
+      await expect(plugin.enable()).resolves.toBe(true)
+
+      const startOptions = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(startOptions.snapshot.locale).toBe('en-US')
+    } finally {
+      setLocale(previousLocale)
+    }
+  })
+
   it('injects a batch-rename-only filesystem definition and approves lifecycle file inputs', async () => {
     const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-batch-rename-activation-'))
     try {
@@ -2545,61 +2584,16 @@ describe('touchPlugin.enable', () => {
     }
   })
 
-  it('injects intelligence.invoke only into the exact touch-translation activation', async () => {
-    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-translation-activation-'))
-    try {
-      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+  describe('intelligence host capabilities follow the declared permission, not the plugin name', () => {
+    const enableWith = async (
+      root: string,
+      name: string,
+      permissions: { required: string[]; optional?: string[] }
+    ): Promise<PluginRuntimeActivationOptions> => {
       const runtime = createRuntimeServiceMock()
-      TouchPlugin.setTransport({
-        broadcast: vi.fn(),
-        invoke: vi.fn().mockResolvedValue(undefined),
-        keyManager: {
-          requestKey: vi.fn(() => 'translation-key'),
-          revokeKey: vi.fn(() => true)
-        },
-        sendToPlugin: vi.fn().mockResolvedValue(undefined)
-      } as unknown as ITuffTransportMain)
       installCapability({ runtimeService: runtime as never })
-      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
-        definitions: Object.freeze([
-          { id: 'intelligence.invoke', permission: 'intelligence.basic' }
-        ])
-      }))
-      installCapability({ translation: factory as never })
-
-      const translation = new TouchPlugin(
-        'touch-translation',
-        { type: 'class', value: 'i-ri-translate-2' },
-        '1.0.0',
-        'desc',
-        '',
-        { enable: false, address: '' },
-        root,
-        {},
-        { skipDataInit: true }
-      )
-      translation.setPreludeContract({ main: 'index.js' })
-      await expect(translation.enable()).resolves.toBe(true)
-      const translationStart = vi.mocked(runtime.startActivation).mock
-        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
-      expect(translationStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
-        'intelligence.invoke'
-      ])
-      expect(translationStart.capabilityAllowlist).toEqual([
-        'feature.items.push',
-        'feature.items.widget.push',
-        'feature.items.clear',
-        'clipboard.write',
-        'intelligence.invoke'
-      ])
-      expect(factory).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'touch-translation', activationGeneration: 1 })
-      )
-
-      const otherRuntime = createRuntimeServiceMock()
-      installCapability({ runtimeService: otherRuntime as never })
-      const other = new TouchPlugin(
-        'other-plugin',
+      const plugin = new TouchPlugin(
+        name,
         { type: 'class', value: 'i-ri-plug-line' },
         '1.0.0',
         'desc',
@@ -2609,107 +2603,111 @@ describe('touchPlugin.enable', () => {
         {},
         { skipDataInit: true }
       )
-      other.setPreludeContract({ main: 'index.js' })
-      await expect(other.enable()).resolves.toBe(true)
-      const otherStart = vi.mocked(otherRuntime.startActivation).mock
+      plugin.declaredPermissions = { optional: [], reasons: {}, ...permissions }
+      plugin.setPreludeContract({ main: 'index.js' })
+      await expect(plugin.enable()).resolves.toBe(true)
+      return vi.mocked(runtime.startActivation).mock
         .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
-      expect(otherStart.capabilityDefinitions).toBeUndefined()
-      expect(factory).toHaveBeenCalledOnce()
-    } finally {
-      fse.removeSync(root)
     }
-  })
 
-  it('injects context invoke and stream only into the exact touch-intelligence activation', async () => {
-    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-intelligence-context-activation-'))
-    try {
-      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
-      const runtime = createRuntimeServiceMock()
-      TouchPlugin.setTransport({
-        broadcast: vi.fn(),
-        invoke: vi.fn().mockResolvedValue(undefined),
-        keyManager: {
-          requestKey: vi.fn(() => 'intelligence-context-key'),
-          revokeKey: vi.fn(() => true)
-        },
-        sendToPlugin: vi.fn().mockResolvedValue(undefined)
-      } as unknown as ITuffTransportMain)
-      installCapability({ runtimeService: runtime as never })
-      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
-        definitions: Object.freeze([
-          {
-            id: 'intelligence.context.invoke',
-            permission: 'intelligence.basic'
+    const withActivationRoot = async (run: (root: string) => Promise<void>): Promise<void> => {
+      const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-intelligence-activation-'))
+      try {
+        fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+        TouchPlugin.setTransport({
+          broadcast: vi.fn(),
+          invoke: vi.fn().mockResolvedValue(undefined),
+          keyManager: {
+            requestKey: vi.fn(() => 'intelligence-activation-key'),
+            revokeKey: vi.fn(() => true)
           },
+          sendToPlugin: vi.fn().mockResolvedValue(undefined)
+        } as unknown as ITuffTransportMain)
+        await run(root)
+      } finally {
+        fse.removeSync(root)
+      }
+    }
+
+    const installIntelligenceFactories = () => {
+      const intelligence = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
+        definitions: Object.freeze([
+          { id: 'intelligence.invoke', permission: 'intelligence.basic' }
+        ])
+      }))
+      const context = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
+        definitions: Object.freeze([
+          { id: 'intelligence.context.invoke', permission: 'intelligence.context' },
           {
             id: 'intelligence.stream',
-            permission: 'intelligence.basic',
+            permission: 'intelligence.context',
             callbackLifetime: 'resource',
             callbackFields: Object.freeze(['onEvent'])
           }
         ])
       }))
-      installCapability({ intelligenceContext: factory as never })
-
-      const intelligence = new TouchPlugin(
-        'touch-intelligence',
-        { type: 'class', value: 'i-ri-brain-line' },
-        '1.0.0',
-        'desc',
-        '',
-        { enable: false, address: '' },
-        root,
-        {},
-        { skipDataInit: true }
-      )
-      intelligence.setPreludeContract({ main: 'index.js' })
-      await expect(intelligence.enable()).resolves.toBe(true)
-      const intelligenceStart = vi.mocked(runtime.startActivation).mock
-        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
-      expect(intelligenceStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
-        'intelligence.context.invoke',
-        'intelligence.stream'
-      ])
-      expect(intelligenceStart.capabilityAllowlist).toEqual([
-        'permission.check',
-        'feature.registry.add',
-        'feature.registry.remove',
-        'feature.registry.list',
-        'feature.items.push',
-        'feature.items.widget.push',
-        'feature.items.clear',
-        'storage.file.read',
-        'storage.file.write',
-        'storage.file.list',
-        'clipboard.write',
-        'clipboard.copy-and-paste',
-        'intelligence.context.invoke',
-        'intelligence.stream'
-      ])
-      expect(factory).toHaveBeenCalledOnce()
-
-      const otherRuntime = createRuntimeServiceMock()
-      installCapability({ runtimeService: otherRuntime as never })
-      const other = new TouchPlugin(
-        'other-plugin',
-        { type: 'class', value: 'i-ri-plug-line' },
-        '1.0.0',
-        'desc',
-        '',
-        { enable: false, address: '' },
-        root,
-        {},
-        { skipDataInit: true }
-      )
-      other.setPreludeContract({ main: 'index.js' })
-      await expect(other.enable()).resolves.toBe(true)
-      const otherStart = vi.mocked(otherRuntime.startActivation).mock
-        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
-      expect(otherStart.capabilityDefinitions).toBeUndefined()
-      expect(factory).toHaveBeenCalledOnce()
-    } finally {
-      fse.removeSync(root)
+      installCapability({
+        intelligence: intelligence as never,
+        intelligenceContext: context as never
+      })
+      return { intelligence, context }
     }
+
+    const definitionIds = (options: PluginRuntimeActivationOptions) =>
+      options.capabilityDefinitions?.map((definition) => definition.id)
+
+    it('installs intelligence.invoke from intelligence.basic and the Context capabilities from intelligence.context', async () => {
+      await withActivationRoot(async (root) => {
+        const { intelligence, context } = installIntelligenceFactories()
+
+        const basic = await enableWith(root, 'basic-ai-plugin', {
+          required: ['intelligence.basic']
+        })
+        expect(definitionIds(basic)).toEqual(['intelligence.invoke'])
+        expect(intelligence).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'basic-ai-plugin', activationGeneration: 1 })
+        )
+        expect(context).not.toHaveBeenCalled()
+
+        const contextOnly = await enableWith(root, 'context-ai-plugin', {
+          required: ['intelligence.context']
+        })
+        expect(definitionIds(contextOnly)).toEqual([
+          'intelligence.context.invoke',
+          'intelligence.stream'
+        ])
+        expect(context).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'context-ai-plugin', activationGeneration: 1 })
+        )
+        expect(intelligence).toHaveBeenCalledTimes(1)
+
+        const optional = await enableWith(root, 'optional-ai-plugin', {
+          required: [],
+          optional: ['intelligence.basic', 'intelligence.context']
+        })
+        expect(definitionIds(optional)).toEqual([
+          'intelligence.invoke',
+          'intelligence.context.invoke',
+          'intelligence.stream'
+        ])
+        expect(intelligence).toHaveBeenCalledTimes(2)
+        expect(context).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    it.each(['touch-translation', 'touch-intelligence', 'other-plugin'])(
+      'installs nothing for %s when it declares neither intelligence.basic nor intelligence.context',
+      async (name) => {
+        await withActivationRoot(async (root) => {
+          const { intelligence, context } = installIntelligenceFactories()
+
+          const undeclared = await enableWith(root, name, { required: ['storage.plugin'] })
+          expect(undeclared.capabilityDefinitions).toBeUndefined()
+          expect(intelligence).not.toHaveBeenCalled()
+          expect(context).not.toHaveBeenCalled()
+        })
+      }
+    )
   })
 
   it.each(['touch-quick-actions', 'touch-system-actions'] as const)(

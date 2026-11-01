@@ -43,6 +43,7 @@ import {
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { clipboard, dialog } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import {
   getAppDestinationNavigationService,
@@ -597,7 +598,7 @@ export class LocalAiCliModule extends BaseModule {
     const definition = LOCAL_AI_CLI_PROVIDERS.find((candidate) => candidate.id === provider)
     if (!definition) throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
     const result = await dialog.showOpenDialog({
-      title: `Locate ${definition.label}`,
+      title: t('nativeDialogs.files.locateCli', { name: definition.label }),
       // An app bundle is a directory, never the CLI: open it like a folder rather than return it.
       // The pick is used as found, so a symlink must stay one: a mise shim resolved to its
       // target is mise itself, which no CLI's version check accepts.

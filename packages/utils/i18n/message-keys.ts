@@ -117,6 +117,8 @@ export const PermissionKeys = {
   INTELLIGENCE_ADMIN_DESC: 'permission.intelligence.admin.desc',
   INTELLIGENCE_AGENTS_NAME: 'permission.intelligence.agents.name',
   INTELLIGENCE_AGENTS_DESC: 'permission.intelligence.agents.desc',
+  INTELLIGENCE_CONTEXT_NAME: 'permission.intelligence.context.name',
+  INTELLIGENCE_CONTEXT_DESC: 'permission.intelligence.context.desc',
 
   // Voice permissions
   VOICE_DICTATION_NAME: 'permission.voice.dictation.name',

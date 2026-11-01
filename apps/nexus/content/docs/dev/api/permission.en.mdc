@@ -34,29 +34,32 @@ code: |
 
 **2. Permission Categories**
 
-| Category         | Permission ID         | Risk Level | Description                                  |
-| ---------------- | --------------------- | ---------- | -------------------------------------------- |
-| **Filesystem**   | `fs.read`             | Medium     | Read user files                              |
-|                  | `fs.write`            | High       | Write/modify files                           |
-|                  | `fs.execute`          | High       | Execute files or scripts                     |
-| **Clipboard**    | `clipboard.read`      | Medium     | Read clipboard content                       |
-|                  | `clipboard.write`     | Low        | Write to clipboard                           |
-| **Network**      | `network.local`       | Low        | Access local network                         |
-|                  | `network.internet`    | Medium     | Access internet                              |
-|                  | `network.download`    | Medium     | Download files                               |
-| **System**       | `system.shell`        | High       | Execute system commands                      |
-|                  | `system.notification` | Low        | Send system notifications                    |
-|                  | `system.tray`         | Medium     | Operate system tray                          |
-| **Intelligence** | `intelligence.basic`  | Low        | Basic intelligence capabilities              |
-|                  | `intelligence.admin`  | High       | Admin intelligence capabilities              |
-|                  | `intelligence.agents` | High       | Agent system                                 |
-| **Storage**      | `storage.plugin`      | Low        | Plugin private storage (auto-granted)        |
-|                  | `storage.shared`      | Medium     | Cross-plugin shared storage                  |
-|                  | `storage.sqlite`      | Medium     | Plugin local SQLite database access          |
-| **Window**       | `window.create`       | Low        | Create windows (auto-granted)                |
-|                  | `window.capture`      | High       | Screen capture                               |
-| **Account**      | `account.read`        | Medium     | Read the account's profile, plan and usage   |
-| **Search**       | `search.root-results` | High       | Push or update items in CoreBox root results |
+| Category         | Permission ID          | Risk Level | Description                                  |
+| ---------------- | ---------------------- | ---------- | -------------------------------------------- |
+| **Filesystem**   | `fs.read`              | Medium     | Read user files                              |
+|                  | `fs.write`             | High       | Write/modify files                           |
+|                  | `fs.execute`           | High       | Execute files or scripts                     |
+| **Clipboard**    | `clipboard.read`       | Medium     | Read clipboard content                       |
+|                  | `clipboard.write`      | Low        | Write to clipboard                           |
+| **Network**      | `network.local`        | Low        | Access local network                         |
+|                  | `network.internet`     | Medium     | Access internet                              |
+|                  | `network.download`     | Medium     | Download files                               |
+| **System**       | `system.shell`         | High       | Execute system commands                      |
+|                  | `system.notification`  | Low        | Send system notifications                    |
+|                  | `system.tray`          | Medium     | Operate system tray                          |
+| **Intelligence** | `intelligence.basic`   | Low        | Basic intelligence capabilities              |
+|                  | `intelligence.context` | Medium     | Context sessions with history and memories   |
+|                  | `intelligence.admin`   | High       | Admin intelligence capabilities              |
+|                  | `intelligence.agents`  | High       | Agent system                                 |
+| **Storage**      | `storage.plugin`       | Low        | Plugin private storage (auto-granted)        |
+|                  | `storage.shared`       | Medium     | Cross-plugin shared storage                  |
+|                  | `storage.sqlite`       | Medium     | Plugin local SQLite database access          |
+| **Window**       | `window.create`        | Low        | Create windows (auto-granted)                |
+|                  | `window.capture`       | High       | Screen capture                               |
+| **Account**      | `account.read`         | Medium     | Read the account's profile, plan and usage   |
+| **Search**       | `search.root-results`  | High       | Push or update items in CoreBox root results |
+
+`intelligence.context` gates Context sessions. `contextInvoke()` / `contextStream()` (and the Prelude's `intelligence.contextInvoke()` / `intelligence.contextStream()`) have the host assemble conversation history, saved memories and retrieved context before calling the model, so `intelligence.basic` does not include it. Declare it in `manifest.json` only when the plugin needs that; plugins that make one-shot model calls stay on `intelligence.basic`.
 
 `search.root-results` is the root-result write permission for Search Providers. Any plugin that uses push features or `boxItems.push()` / `plugin.feature.pushItems()` to write content into CoreBox root results must declare and be granted this permission in `manifest.json`; deleting or clearing the plugin's own existing items does not require it, so permission problems do not leave stale results behind.
 

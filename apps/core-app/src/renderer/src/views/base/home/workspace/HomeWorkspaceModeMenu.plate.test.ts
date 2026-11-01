@@ -56,7 +56,7 @@ function profile(id: string, name: string, enabled = true): AiAgentProfile {
 }
 
 const COORDINATOR = profile('tuff-pi', 'Tuff Pi Coordinator')
-
+const CLAUDE = profile('profile:cli:claude', 'Claude Code')
 // --- a frame clock the engine and the menu's own frame callbacks run on ---------------------------
 let frames = new Map<number, FrameRequestCallback>()
 let nextFrameId = 1
@@ -130,9 +130,9 @@ async function settleDom(): Promise<void> {
 async function openMenu(props: Record<string, unknown> = {}): Promise<VueWrapper> {
   wrapper = mount(HomeWorkspaceModeMenu, {
     props: {
-      mode: 'chat',
-      profileId: undefined,
-      profiles: [COORDINATOR],
+      mode: 'agent',
+      profileId: 'tuff-pi',
+      profiles: [COORDINATOR, CLAUDE],
       profilesLoading: false,
       profilesError: false,
       profileSaving: null,
@@ -174,9 +174,9 @@ function runTrip(menu: VueWrapper, limit = 90): number[] {
 
 describe('HomeWorkspaceModeMenu travelling plate', () => {
   it('lands on the current choice when the menu opens, without travelling there', async () => {
-    const menu = await openMenu({ mode: 'agent', profileId: 'tuff-pi' })
+    const menu = await openMenu({ mode: 'agent', profileId: 'profile:cli:claude' })
 
-    // Before a single frame runs: already on 「Tuff Pi Coordinator」, the second row, full height.
+    // Before a single frame runs: already on 「Claude Code」, the second row, full height.
     expect(plateTop(menu)).toBe(PITCH)
     expect(plate(menu).style.height).toBe(`${ROW}px`)
     expect(plate(menu).style.width).toBe(`${WIDTH}px`)
@@ -212,11 +212,10 @@ describe('HomeWorkspaceModeMenu travelling plate', () => {
     const menu = await openMenu()
     runTrip(menu)
 
-    // Focus leaving 「对话」 for the next row: focusout names where it goes, then focusin arrives.
-    const chat = row(menu, 'chat')
-    const coordinator = row(menu, 'profile:tuff-pi')
-    chat.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: coordinator }))
-    coordinator.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    const coordinator = row(menu, 'coordinator')
+    const claude = row(menu, 'profile:profile:cli:claude')
+    coordinator.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: claude }))
+    claude.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     await settleDom()
     const tops = runTrip(menu)
     expect(tops.at(-1)).toBe(PITCH)
@@ -226,9 +225,11 @@ describe('HomeWorkspaceModeMenu travelling plate', () => {
   it('never lands on a locked row', async () => {
     // Mid-turn, a pick that changes the mode is locked: the profile row is aria-disabled.
     const menu = await openMenu({ locked: true })
-    expect(row(menu, 'profile:tuff-pi').getAttribute('aria-disabled')).toBe('true')
+    expect(row(menu, 'profile:profile:cli:claude').getAttribute('aria-disabled')).toBe('true')
 
-    row(menu, 'profile:tuff-pi').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    row(menu, 'profile:profile:cli:claude').dispatchEvent(
+      new MouseEvent('mouseover', { bubbles: true })
+    )
     await settleDom()
     runTrip(menu)
     expect(plateTop(menu)).toBe(0)
@@ -271,16 +272,14 @@ describe('HomeWorkspaceModeMenu travelling plate', () => {
   })
 
   it('lands back on the current choice when the main list returns, and stays there', async () => {
-    const menu = await openMenu({ mode: 'agent', profileId: 'tuff-pi' })
+    const menu = await openMenu({ mode: 'agent', profileId: 'profile:cli:claude' })
     await menu.get('[data-plate-key="manage"]').trigger('click')
     await settleDom()
     expect(plateTop(menu)).toBe(0)
 
-    // The back row sits where 「对话」 will: going home is a landing on 「Tuff Pi Coordinator」, the
-    // second row, with focus there too — not a slide down to it, nor a pull back up to row one.
     await menu.get('[data-plate-key="back"]').trigger('click')
     await settleDom()
-    expect(document.activeElement).toBe(row(menu, 'profile:tuff-pi'))
+    expect(document.activeElement).toBe(row(menu, 'profile:profile:cli:claude'))
     expect(plateTop(menu)).toBe(PITCH)
     expect(runTrip(menu).every((top) => top === PITCH)).toBe(true)
   })

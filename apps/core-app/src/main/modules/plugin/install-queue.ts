@@ -142,7 +142,7 @@ export class PluginInstallQueue {
     if (response.decision === 'accept') {
       resolver.resolve(response)
     } else {
-      const reasonMessage = response.reason || 'User rejected installation'
+      const reasonMessage = response.reason || 'PLUGIN_INSTALL_DECLINED'
       resolver.reject(new Error(reasonMessage))
     }
   }
@@ -167,7 +167,12 @@ export class PluginInstallQueue {
         if (pluginName) {
           const activeUIStatus = await checkPluginActiveUI(pluginName)
           if (activeUIStatus.hasActiveUI) {
-            throw new Error(`PLUGIN_HAS_ACTIVE_UI:${activeUIStatus.description}`)
+            // Where it is open, as data: the renderer names those places in the user's language.
+            const where = {
+              coreBox: activeUIStatus.coreBox,
+              windows: activeUIStatus.divisionBoxSessions.length
+            }
+            throw new Error(`PLUGIN_HAS_ACTIVE_UI:${JSON.stringify(where)}`)
           }
         }
       }

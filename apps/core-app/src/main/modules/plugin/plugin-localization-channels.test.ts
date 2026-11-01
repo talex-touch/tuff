@@ -1,6 +1,7 @@
 import type {
   HandlerContext,
   ITuffTransportMain,
+  StreamContext,
   TuffEvent
 } from '@talex-touch/utils/transport/main'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
@@ -21,7 +22,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   checkPermission: vi.fn(),
   getPermissionModule: vi.fn(),
-  getPluginByName: vi.fn()
+  getPluginByName: vi.fn(),
+  onLocaleChange: vi.fn()
 }))
 
 vi.mock('../permission/permission-module-ref', () => ({
@@ -36,12 +38,17 @@ vi.mock('./plugin-module', () => ({
   }
 }))
 vi.mock('../../utils/i18n-helper', () => ({
-  getLocale: vi.fn(() => 'zh-CN')
+  getLocale: vi.fn(() => 'zh-CN'),
+  onLocaleChange: mocks.onLocaleChange
 }))
 
 import { registerPluginLocalizationChannels } from './plugin-localization-channels'
 
 type RegisteredHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
+type RegisteredStream = (
+  payload: unknown,
+  context: StreamContext<AppLocale>
+) => Promise<void> | void
 
 const pluginContext = {
   plugin: createTrustedTestPluginContext({
@@ -53,6 +60,7 @@ const pluginContext = {
 
 function createTransport() {
   const handlers = new Map<string, RegisteredHandler>()
+  const streams = new Map<string, RegisteredStream>()
   const transport = {
     on: vi.fn(
       <TReq, TRes>(
@@ -62,7 +70,11 @@ function createTransport() {
         handlers.set(event.toEventName(), handler as RegisteredHandler)
         return () => handlers.delete(event.toEventName())
       }
-    )
+    ),
+    onStream: vi.fn((event: { toEventName: () => string }, handler: RegisteredStream) => {
+      streams.set(event.toEventName(), handler)
+      return () => streams.delete(event.toEventName())
+    })
   } as unknown as ITuffTransportMain
 
   const invoke = async (
@@ -75,7 +87,52 @@ function createTransport() {
     return handler(payload, context)
   }
 
-  return { transport, invoke }
+  const openStream = (
+    event: { toEventName: () => string },
+    payload: unknown,
+    plugin = pluginContext.plugin,
+    cancelledBeforeStart = false
+  ) => {
+    const handler = streams.get(event.toEventName())
+    if (!handler) throw new Error(`No registered stream for ${event.toEventName()}`)
+    const abort = new AbortController()
+    if (cancelledBeforeStart) abort.abort()
+    const context = {
+      emit: vi.fn(),
+      error: vi.fn(),
+      end: vi.fn(),
+      isCancelled: () => abort.signal.aborted,
+      signal: abort.signal,
+      stopSignal: new AbortController().signal,
+      streamId: 'stream-1',
+      plugin
+    }
+    const started = handler(payload, context as unknown as StreamContext<AppLocale>)
+    return { context, started, cancel: () => abort.abort() }
+  }
+
+  return { transport, invoke, openStream }
+}
+
+function createLocaleHub(initial: AppLocale = 'zh-CN') {
+  let current = initial
+  const listeners = new Set<(locale: AppLocale) => void>()
+  return {
+    getLocale: () => current,
+    onLocaleChange: vi.fn((listener: (locale: AppLocale) => void) => {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    }),
+    change(locale: AppLocale) {
+      current = locale
+      for (const listener of [...listeners]) listener(locale)
+    },
+    listenerCount: () => listeners.size
+  }
+}
+
+async function settle() {
+  for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function createRegistry(): ScopedDomainLexiconRegistry {
@@ -86,6 +143,7 @@ function registerChannels(
   options: {
     registry?: ScopedDomainLexiconRegistry
     getLocale?: () => AppLocale
+    onLocaleChange?: (listener: (locale: AppLocale) => void) => () => void
     sdkapi?: number
   } = {}
 ) {
@@ -95,6 +153,7 @@ function registerChannels(
   registerPluginLocalizationChannels(channel.transport, {
     resolvePlugin: vi.fn(() => ({ sdkapi: options.sdkapi ?? SdkApi.V260713 })),
     getLocale,
+    onLocaleChange: options.onLocaleChange,
     lexiconRegistry: registry
   })
   return { ...channel, registry, getLocale }
@@ -415,5 +474,140 @@ describe('registerPluginLocalizationChannels', () => {
         _sdkapi: SdkApi.V260713
       })
     ).rejects.toThrow(/official/i)
+  })
+
+  describe('locale change stream', () => {
+    const request = { _sdkapi: SdkApi.V260713 }
+
+    function openLocaleStream(options: Parameters<typeof registerChannels>[0] = {}) {
+      const hub = createLocaleHub()
+      const channels = registerChannels({
+        getLocale: hub.getLocale,
+        onLocaleChange: hub.onLocaleChange,
+        ...options
+      })
+      const stream = channels.openStream(PluginEvents.i18n.localeChanged, request)
+      return { hub, ...channels, ...stream }
+    }
+
+    it('streams the current locale first, then each change, to the subscribed plugin', async () => {
+      const { hub, context } = openLocaleStream()
+      await settle()
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+
+      hub.change('en-US')
+      await settle()
+      hub.change('zh-CN')
+      await settle()
+
+      expect(context.emit.mock.calls).toEqual([['zh-CN'], ['en-US'], ['zh-CN']])
+      expect(context.error).not.toHaveBeenCalled()
+    })
+
+    it('delivers the locale in force after the permission check, never a stale event value', async () => {
+      const { hub, context } = openLocaleStream()
+      await settle()
+
+      hub.change('en-US')
+      hub.change('zh-CN')
+      await settle()
+
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+    })
+
+    it('stops listening to the host when the plugin cancels the stream', async () => {
+      const { hub, context, cancel } = openLocaleStream()
+      await settle()
+      expect(hub.listenerCount()).toBe(1)
+
+      cancel()
+      hub.change('en-US')
+      await settle()
+
+      expect(hub.listenerCount()).toBe(0)
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+    })
+
+    it('does not subscribe at all for a stream that was cancelled before it started', async () => {
+      const hub = createLocaleHub()
+      const { openStream } = registerChannels({
+        getLocale: hub.getLocale,
+        onLocaleChange: hub.onLocaleChange
+      })
+      const { context } = openStream(
+        PluginEvents.i18n.localeChanged,
+        request,
+        pluginContext.plugin,
+        true
+      )
+      await settle()
+
+      expect(hub.onLocaleChange).not.toHaveBeenCalled()
+      expect(context.emit).not.toHaveBeenCalled()
+      expect(context.error).not.toHaveBeenCalled()
+    })
+
+    it('refuses an unverified stream context and leaves no listener behind', async () => {
+      const hub = createLocaleHub()
+      const { openStream, getLocale } = registerChannels({
+        getLocale: hub.getLocale,
+        onLocaleChange: hub.onLocaleChange
+      })
+      const forged = { name: 'plugin-a', verified: true, uniqueKey: 'forged-key' }
+      const { context } = openStream(
+        PluginEvents.i18n.localeChanged,
+        request,
+        forged as unknown as HandlerContext['plugin']
+      )
+      await settle()
+
+      expect(context.error).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PLUGIN_I18N_PERMISSION_DENIED' })
+      )
+      expect(context.emit).not.toHaveBeenCalled()
+      expect(getLocale).not.toHaveBeenCalled()
+      expect(hub.listenerCount()).toBe(0)
+    })
+
+    it('ends the stream with the permission code when i18n.read is revoked mid-stream', async () => {
+      const { hub, context } = openLocaleStream()
+      await settle()
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+
+      mocks.checkPermission.mockReturnValue({ allowed: false, reason: 'revoked' })
+      hub.change('en-US')
+      await settle()
+
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+      expect(context.error).toHaveBeenCalledTimes(1)
+      expect(context.error).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PLUGIN_I18N_PERMISSION_DENIED' })
+      )
+      expect(hub.listenerCount()).toBe(0)
+    })
+
+    it('rejects a plugin below the localization SDK floor with its own code', async () => {
+      const { context, hub } = openLocaleStream({ sdkapi: SdkApi.V260626 })
+      await settle()
+
+      expect(context.error).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PLUGIN_LOCALIZATION_SDK_UNSUPPORTED' })
+      )
+      expect(context.emit).not.toHaveBeenCalled()
+      expect(hub.listenerCount()).toBe(0)
+    })
+
+    it('hooks the app locale-change signal when no override is supplied', async () => {
+      const unsubscribe = vi.fn()
+      mocks.onLocaleChange.mockReturnValue(unsubscribe)
+      const { openStream } = registerChannels()
+      const { context, cancel } = openStream(PluginEvents.i18n.localeChanged, request)
+      await settle()
+
+      expect(mocks.onLocaleChange).toHaveBeenCalledTimes(1)
+      expect(context.emit.mock.calls).toEqual([['zh-CN']])
+      cancel()
+      expect(unsubscribe).toHaveBeenCalledTimes(1)
+    })
   })
 })

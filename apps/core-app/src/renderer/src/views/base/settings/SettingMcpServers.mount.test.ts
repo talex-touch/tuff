@@ -647,7 +647,8 @@ describe('settingMcpServers: the drawer', () => {
     [
       'MCP_SERVER_SOURCE_MISSING: the configuration no longer declares github',
       'probeReasonSourceMissing'
-    ]
+    ],
+    ['MCP_SERVER_UNAVAILABLE: MCP server is unavailable.', 'probeReasonUnavailable']
   ])('says why a probe was refused, in the probe’s own words (%s)', async (error, reason) => {
     const wrapper = await mountList()
     sdk.probeDeclared.mockResolvedValueOnce({ ok: false, error })
@@ -662,11 +663,11 @@ describe('settingMcpServers: the drawer', () => {
     expect(wrapper.find('.tx-bottom-dialog').exists()).toBe(false)
   })
 
-  it('shows what the server answered when it did not come up', async () => {
+  it('shows what the system said when the server could not be started', async () => {
     const wrapper = await mountList()
     sdk.probeDeclared.mockResolvedValueOnce({
       ok: false,
-      error: 'context7: MCP server is unavailable.'
+      error: 'spawn npx ENOENT'
     })
     const detail = await openRow(wrapper, 'context7')
 
@@ -674,7 +675,7 @@ describe('settingMcpServers: the drawer', () => {
     await flushPromises()
 
     expect(wrapper.find('.McpDetail-Probe').text()).toBe(
-      'settings.mcpPage.probeFailed:{"reason":"context7: MCP server is unavailable."}'
+      'settings.mcpPage.probeFailed:{"reason":"spawn npx ENOENT"}'
     )
   })
 

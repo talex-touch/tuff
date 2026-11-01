@@ -90,7 +90,15 @@ type PendingClipboardItem = Omit<
 export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}
 
-  public async process(source: ClipboardCaptureSource): Promise<void> {
+  /**
+   * `options.observedAt` is given when a deferred capture runs: the change was noticed then, not
+   * now, so the freshness base, the `observed_at` meta and the history `timestamp` carry it. The
+   * scan itself is still dated by the clock.
+   */
+  public async process(
+    source: ClipboardCaptureSource,
+    options?: { observedAt?: number }
+  ): Promise<void> {
     // The app writes to the clipboard itself during selection capture. Those writes are not user
     // copies and must not reach the history (#769).
     if (isClipboardCaptureSuppressed()) {
@@ -107,18 +115,24 @@ export class ClipboardCapturePipeline {
     const dispose = enterPerfContext('Clipboard.check', { task: 'poll' })
     const startAt = performance.now()
     const phaseDurations: ClipboardPhaseDurations = {}
-    const observedAt = Date.now()
+    const scanStartedAt = Date.now()
+    const replayedAt =
+      typeof options?.observedAt === 'number' && Number.isFinite(options.observedAt)
+        ? Math.min(options.observedAt, scanStartedAt)
+        : undefined
+    const observedAt = replayedAt ?? scanStartedAt
     const previousScanAt = this.options.getLastSuccessfulScanAt()
     try {
       await this.captureAndPersist({
         helper,
         source,
         observedAt,
+        replayed: replayedAt !== undefined,
         previousScanAt,
         phaseDurations
       })
     } finally {
-      this.options.setLastSuccessfulScanAt(observedAt)
+      this.options.setLastSuccessfulScanAt(scanStartedAt)
       this.recordCompletionDiagnostics({
         startAt,
         phaseDurations
@@ -131,12 +145,15 @@ export class ClipboardCapturePipeline {
     helper,
     source,
     observedAt,
+    replayed,
     previousScanAt,
     phaseDurations
   }: {
     helper: ClipboardHelper
     source: ClipboardCaptureSource
     observedAt: number
+    /** `observedAt` is the time a deferred change was noticed, so the history row is stamped with it. */
+    replayed: boolean
     previousScanAt: number | null
     phaseDurations: ClipboardPhaseDurations
   }): Promise<void> {
@@ -314,7 +331,7 @@ export class ClipboardCapturePipeline {
     const record = {
       ...item,
       metadata: metadataPayload,
-      timestamp: new Date(),
+      timestamp: replayed ? new Date(observedAt) : new Date(),
       // 保留策略清理侧早就写着 `COALESCE(retention_protected, 0) = 0`，列和索引也都建好了，
       // 但在这之前没有任何代码写过它——密钥和普通文本一样会在 90 天后被清掉。
       retentionProtected: settings.protectSecrets && retentionClass === 'secret',

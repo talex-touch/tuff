@@ -5,6 +5,7 @@ import type {
 } from '@talex-touch/utils'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { captureOperationalException } from '../sentry/sentry-renderer'
+import { PublicFailure } from '../../../../shared/public-failure'
 
 const rendererOperationalLog = createRendererLogger('RendererOperationalError')
 const SAFE_IDENTIFIER = /^[a-zA-Z0-9_.:-]{1,96}$/
@@ -118,7 +119,7 @@ function resolvePublicMessage(value: unknown): string {
   ) {
     return value.trim()
   }
-  return 'The operation failed. Please retry.'
+  return PublicFailure.OperationFailed
 }
 
 function normalizeError(error: unknown): Error {

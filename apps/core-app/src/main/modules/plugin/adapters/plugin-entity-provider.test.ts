@@ -41,6 +41,9 @@ vi.mock('../../../core/runtime-accessor', () => ({
   })
 }))
 vi.mock('../../../utils/i18n-helper', () => ({ t: (key: string) => key }))
+vi.mock('../../notification', () => ({
+  notificationModule: { showInternalSystemNotification: vi.fn() }
+}))
 vi.mock('../../app-destination/app-destination-navigation', () => ({
   getAppDestinationNavigationService: () => ({
     open: boundary.open,
@@ -235,7 +238,7 @@ describe('installed plugin provider', () => {
     const failed = result.find((item) => item.id.endsWith(':failed'))!
     expect(readPluginEntitySnapshot(failed)).toMatchObject({
       state: 'failed',
-      problem: 'Broken manifest',
+      problem: { type: 'error', message: 'Broken manifest' },
       primaryAction: actions.reload
     })
     expect(failed.meta?.keepCoreBoxOpen).toBe(true)

@@ -6,9 +6,11 @@ import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { describeFailure } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 import PrivacyDataSection from './PrivacyDataSection.vue'
 
@@ -118,6 +120,7 @@ const cleaningKey = ref<string | null>(null)
 const transport = useTuffTransport()
 const downloadSdk = useDownloadSdk()
 const storagableLog = createRendererLogger('Storagable')
+const { t, te, locale } = useI18n()
 
 /**
  * Mounted inside `SettingsPage` when it backs the storage category, which already supplies the
@@ -152,34 +155,42 @@ function percentOf(value: number, total: number): number {
 
 function formatCount(value: number): string {
   if (!Number.isFinite(value)) return '0'
-  return Math.max(0, Math.floor(value)).toLocaleString()
+  return new Intl.NumberFormat(locale.value).format(Math.max(0, Math.floor(value)))
 }
 
 function formatCacheScope(scope: CacheUsage['scope']): string {
-  if (scope === 'disk') return '磁盘'
-  if (scope === 'mixed') return '混合'
-  return '内存'
+  if (scope === 'disk') return t('settingStorage.usage.scope.disk')
+  if (scope === 'mixed') return t('settingStorage.usage.scope.mixed')
+  return t('settingStorage.usage.scope.memory')
 }
 
 function formatTtl(ttlMs?: number | null): string {
-  if (!ttlMs || !Number.isFinite(ttlMs)) return '无'
+  if (!ttlMs || !Number.isFinite(ttlMs)) return t('settingStorage.usage.ttlNone')
   const seconds = Math.round(ttlMs / 1000)
-  if (seconds < 60) return `${seconds}s`
+  if (seconds < 60) return t('settingStorage.usage.ttl', { value: `${seconds}s` })
   const minutes = Math.round(seconds / 60)
-  return `${minutes}min`
+  return t('settingStorage.usage.ttl', { value: `${minutes}min` })
 }
 
-function formatCleanupResult(result: unknown): string {
-  if (!result || typeof result !== 'object') return ''
-  const data = result as { removedCount?: number; removedBytes?: number }
-  const parts: string[] = []
-  if (Number.isFinite(data.removedCount)) {
-    parts.push(`删除 ${formatCount(data.removedCount ?? 0)} 项`)
+/**
+ * The file-index cleanup reports only a count, downloads report a count and bytes, and updates
+ * report neither, so each combination is its own sentence rather than fragments joined together.
+ */
+function formatCleanupDone(label: string, result: StorageCleanupResult): string {
+  const count = result.removedCount ?? 0
+  const named = {
+    action: label,
+    count: formatCount(count),
+    bytes: formatBytesShort(result.removedBytes ?? 0)
   }
-  if (Number.isFinite(data.removedBytes)) {
-    parts.push(`释放 ${formatBytesShort(data.removedBytes ?? 0)}`)
+  const hasCount = Number.isFinite(result.removedCount)
+  const hasBytes = Number.isFinite(result.removedBytes)
+  if (hasCount && hasBytes) {
+    return t('settingStorage.usage.cleanup.doneRemovedFreed', named, count)
   }
-  return parts.length > 0 ? `（${parts.join('，')}）` : ''
+  if (hasCount) return t('settingStorage.usage.cleanup.doneRemoved', named, count)
+  if (hasBytes) return t('settingStorage.usage.cleanup.doneFreed', named)
+  return t('settingStorage.usage.cleanup.done', { action: label })
 }
 
 // Cleanup confirmation dialog
@@ -213,22 +224,21 @@ async function runCleanup(action: CleanupAction): Promise<void> {
         action.payload ?? {}
       )
       if (!result || typeof result !== 'object' || !('success' in result)) {
-        toast.error('清理失败：返回数据异常')
+        toast.error(t('settingStorage.usage.cleanup.invalidResponse'))
         return
       }
-      if (!(result as { success: boolean }).success) {
-        const cleanupErrorMessage =
-          typeof (result as { error?: unknown }).error === 'string'
-            ? (result as { error: string }).error
-            : '清理失败，请重试'
-        toast.error(cleanupErrorMessage)
+      if (!result.success) {
+        // Main's error is a raw diagnostic (the joined rebuild errors), so it rides along as the
+        // description under a headline in the user's language; main's public sentence, when it is
+        // all there is, reads in that language too.
+        const detail = typeof result.error === 'string' ? describeFailure(result.error, t, '') : ''
+        toast.error(t('settingStorage.usage.cleanup.failed'), { description: detail || undefined })
         return
       }
-      const detail = formatCleanupResult(result)
-      toast.success(`${action.label}完成${detail}`)
+      toast.success(formatCleanupDone(action.label, result))
       await loadAll()
     } catch {
-      toast.error('清理失败，请稍后重试')
+      toast.error(t('settingStorage.usage.cleanup.failedLater'))
     } finally {
       cleaningKey.value = null
     }
@@ -240,6 +250,9 @@ const modulesSorted = computed(() => {
   const items = report.value?.modules ?? []
   return items.slice().sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
 })
+
+/** How many plugins the list shows before folding the rest into a count. */
+const PLUGIN_LIST_LIMIT = 12
 
 const pluginsSorted = computed(() => {
   const items = report.value?.plugins ?? []
@@ -271,8 +284,8 @@ const databaseLogicalOnly = computed(() => {
 })
 
 const totalLabel = computed(() => {
-  if (report.value?.totalSource === 'full') return '总占用'
-  return '目录合计'
+  if (report.value?.totalSource === 'full') return t('settingStorage.usage.totalFull')
+  return t('settingStorage.usage.totalModules')
 })
 
 const totalDisplayBytes = computed(() => {
@@ -285,20 +298,24 @@ const totalDisplayBytes = computed(() => {
 const databaseGroups = computed<DatabaseCategoryGroup[]>(() => {
   const tables = report.value?.database?.tables ?? []
   const categoryLabels: Record<string, string> = {
-    'file-index': '文件索引',
-    'search-index': '搜索索引',
-    clipboard: '剪贴板',
-    ocr: 'OCR',
-    embedding: '向量/嵌入',
-    usage: '使用统计',
-    recommendation: '推荐/固定',
-    plugin: '插件数据',
-    config: '系统配置',
-    downloads: '下载任务',
-    intelligence: '智能/配额',
-    analytics: '分析/上报',
-    telemetry: '遥测',
-    updates: '更新记录'
+    'file-index': t('settingStorage.usage.categories.fileIndex'),
+    'search-index': t('settingStorage.usage.categories.searchIndex'),
+    clipboard: t('settingStorage.usage.categories.clipboard'),
+    ocr: t('settingStorage.usage.categories.ocr'),
+    embedding: t('settingStorage.usage.categories.embedding'),
+    usage: t('settingStorage.usage.categories.usage'),
+    recommendation: t('settingStorage.usage.categories.recommendation'),
+    plugin: t('settingStorage.usage.categories.plugin'),
+    config: t('settingStorage.usage.categories.config'),
+    downloads: t('settingStorage.usage.categories.downloads'),
+    intelligence: t('settingStorage.usage.categories.intelligence'),
+    analytics: t('settingStorage.usage.categories.analytics'),
+    telemetry: t('settingStorage.usage.categories.telemetry'),
+    updates: t('settingStorage.usage.categories.updates'),
+    voice: t('settingStorage.usage.categories.voice'),
+    projects: t('settingStorage.usage.categories.projects'),
+    conversations: t('settingStorage.usage.categories.conversations'),
+    'local-ai-cli': t('settingStorage.usage.categories.localAiCli')
   }
 
   const map = new Map<string, DatabaseTableUsage[]>()
@@ -318,12 +335,48 @@ const databaseGroups = computed<DatabaseCategoryGroup[]>(() => {
       bytes,
       rows,
       sizeKnown,
-      tables: items.slice().sort((a, b) => a.label.localeCompare(b.label))
+      tables: items
+        .map((item) => ({ ...item, label: tableLabel(item) }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale.value))
     })
   }
 
   return groups.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
 })
+
+/**
+ * Main labels tables, modules and caches in Chinese and keys them by id, so the page translates
+ * by id. Main's label stays the fallback for an id added there before it is added here.
+ */
+function tableLabel(table: DatabaseTableUsage): string {
+  const key = `settingStorage.usage.tables.${table.name}`
+  return te(key) ? t(key) : table.label
+}
+
+const moduleLabels = computed<Record<string, string>>(() => ({
+  plugins: t('settingStorage.usage.modules.plugins'),
+  config: t('settingStorage.usage.modules.config'),
+  database: t('settingStorage.usage.modules.database'),
+  logs: t('settingStorage.usage.modules.logs'),
+  temp: t('settingStorage.usage.modules.temp'),
+  other: t('settingStorage.usage.modules.other')
+}))
+
+const cacheLabels = computed<Record<string, string>>(() => ({
+  'clipboard.memory': t('settingStorage.usage.caches.clipboardMemory'),
+  'storage.lru': t('settingStorage.usage.caches.storageLru'),
+  'storage.plugins': t('settingStorage.usage.caches.storagePlugins'),
+  'update.cache': t('settingStorage.usage.caches.updateCache'),
+  'ai.quota': t('settingStorage.usage.caches.aiQuota')
+}))
+
+function moduleLabel(node: StorageUsageNode): string {
+  return moduleLabels.value[node.key] ?? node.label
+}
+
+function cacheLabel(cache: CacheUsage): string {
+  return cacheLabels.value[cache.key] ?? cache.label
+}
 
 const cacheList = computed(() => {
   const items = report.value?.caches ?? []
@@ -335,53 +388,57 @@ const databaseSizeKnown = computed(() => {
   return tables.every((table) => table.sizeKnown)
 })
 
+const DOWNLOAD_CLEANUP_DAYS = 30
+
 // Privacy-owned categories are managed exclusively through PrivacyDataSection's
 // typed preview/cleanup/delete flows. Keep only unrelated maintenance actions here.
-const databaseGroupActions: Record<string, CleanupAction[]> = {
+const databaseGroupActions = computed<Record<string, CleanupAction[]>>(() => ({
   'file-index': [
     {
       key: 'file-index-clear',
-      label: '清理索引',
+      label: t('settingStorage.usage.actions.fileIndexClear'),
       channel: 'storage:cleanup:file-index',
       payload: { clearSearchIndex: true },
       confirm: {
-        title: '清理文件索引',
-        message: '将删除文件索引与搜索索引数据，可能需要重新扫描，是否继续？',
+        title: t('settingStorage.usage.actions.fileIndexClearTitle'),
+        message: t('settingStorage.usage.actions.fileIndexClearMessage'),
         type: 'warning'
       }
     },
     {
       key: 'file-index-rebuild',
-      label: '清理并重建搜索索引',
+      label: t('settingStorage.usage.actions.fileIndexRebuild'),
       channel: 'storage:cleanup:file-index',
       payload: { clearSearchIndex: true, rebuild: true },
       confirm: {
-        title: '重建应用与文件搜索索引',
-        message: '将清理应用与文件搜索索引并触发重建，过程可能较久，是否继续？',
+        title: t('settingStorage.usage.actions.fileIndexRebuildTitle'),
+        message: t('settingStorage.usage.actions.fileIndexRebuildMessage'),
         type: 'warning'
       },
-      note: '应用与文件索引会在后台重建'
+      note: t('settingStorage.usage.actions.fileIndexRebuildNote')
     }
   ],
   downloads: [
     {
       key: 'downloads-30d',
-      label: '清理 30 天前',
+      label: t('settingStorage.usage.actions.downloadsOld', { days: DOWNLOAD_CLEANUP_DAYS }),
       channel: 'storage:cleanup:downloads',
-      payload: { beforeDays: 30 },
+      payload: { beforeDays: DOWNLOAD_CLEANUP_DAYS },
       confirm: {
-        title: '清理下载记录',
-        message: '将删除 30 天前的下载任务与分片数据，是否继续？',
+        title: t('settingStorage.usage.actions.downloadsOldTitle'),
+        message: t('settingStorage.usage.actions.downloadsOldMessage', {
+          days: DOWNLOAD_CLEANUP_DAYS
+        }),
         type: 'warning'
       }
     },
     {
       key: 'downloads-all',
-      label: '全部清空',
+      label: t('settingStorage.usage.actions.downloadsAll'),
       channel: 'storage:cleanup:downloads',
       confirm: {
-        title: '清空下载记录',
-        message: '将删除全部下载记录与分片数据，是否继续？',
+        title: t('settingStorage.usage.actions.downloadsAllTitle'),
+        message: t('settingStorage.usage.actions.downloadsAllMessage'),
         type: 'error'
       }
     }
@@ -389,16 +446,16 @@ const databaseGroupActions: Record<string, CleanupAction[]> = {
   updates: [
     {
       key: 'updates-all',
-      label: '清空记录',
+      label: t('settingStorage.usage.actions.updatesAll'),
       channel: 'storage:cleanup:updates',
       confirm: {
-        title: '清空更新记录',
-        message: '将删除全部更新记录，是否继续？',
+        title: t('settingStorage.usage.actions.updatesAllTitle'),
+        message: t('settingStorage.usage.actions.updatesAllMessage'),
         type: 'warning'
       }
     }
   ]
-}
+}))
 
 async function loadSummary(): Promise<void> {
   summaryLoading.value = true
@@ -416,7 +473,7 @@ async function loadSummary(): Promise<void> {
     })
     report.value = res as StorageUsageReport
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
+    errorMessage.value = describeFailure(error, t, t('common.failures.operationFailed'))
   } finally {
     summaryLoading.value = false
   }
@@ -516,10 +573,10 @@ onMounted(() => {
         <PrivacyDataSection />
 
         <div class="header">
-          <div class="title">存储占用</div>
+          <div class="title">{{ t('settingStorage.usage.title') }}</div>
           <div class="actions">
             <TxButton variant="bare" class="btn" :disabled="summaryLoading" @click="loadAll">
-              刷新
+              {{ t('common.refresh') }}
             </TxButton>
           </div>
         </div>
@@ -555,44 +612,56 @@ onMounted(() => {
               </div>
             </div>
             <div class="card">
-              <div class="label">插件配置</div>
+              <div class="label">{{ t('settingStorage.usage.modules.plugins') }}</div>
               <div class="value">
                 {{ formatBytesShort(pluginTotalBytes) }}
               </div>
               <div class="sub">config/plugins</div>
             </div>
             <div class="card">
-              <div class="label">数据库内容</div>
+              <div class="label">{{ t('settingStorage.usage.databaseContent') }}</div>
               <div class="value">
                 {{
                   !databaseTablesLoaded
-                    ? '计算中'
+                    ? t('settingStorage.usage.calculating')
                     : databaseSizeKnown
                       ? formatBytesShort(databaseLogicalBytes)
-                      : '未知'
+                      : t('settingStorage.usage.unknown')
                 }}
               </div>
-              <div class="sub">基于表级统计</div>
+              <div class="sub">{{ t('settingStorage.usage.basedOnTableStats') }}</div>
             </div>
           </div>
 
           <div class="section">
             <div class="section-head">
-              <div class="section-title">模块/目录占用</div>
+              <div class="section-title">{{ t('settingStorage.usage.modulesTitle') }}</div>
             </div>
             <div class="list">
               <div v-for="node in modulesSorted" :key="node.key" class="row">
                 <div class="row-head">
                   <div class="row-head-main">
                     <div class="name">
-                      {{ node.label }}
+                      {{ moduleLabel(node) }}
                     </div>
                     <div class="meta">
                       <span>{{ formatBytesShort(node.bytes) }}</span>
                       <span class="sep">·</span>
-                      <span>{{ node.fileCount }} files</span>
+                      <span>{{
+                        t(
+                          'settingStorage.usage.fileCount',
+                          { count: formatCount(node.fileCount) },
+                          node.fileCount
+                        )
+                      }}</span>
                       <span class="sep">·</span>
-                      <span>{{ node.dirCount }} dirs</span>
+                      <span>{{
+                        t(
+                          'settingStorage.usage.dirCount',
+                          { count: formatCount(node.dirCount) },
+                          node.dirCount
+                        )
+                      }}</span>
                     </div>
                   </div>
                 </div>
@@ -611,14 +680,14 @@ onMounted(() => {
 
           <div class="section">
             <div class="section-head">
-              <div class="section-title">插件占用（config/plugins）</div>
-              <div v-if="pluginsLoading" class="section-meta">加载中…</div>
+              <div class="section-title">{{ t('settingStorage.usage.pluginsTitle') }}</div>
+              <div v-if="pluginsLoading" class="section-meta">{{ t('common.loading') }}</div>
             </div>
             <div v-if="pluginsSorted.length === 0" class="muted">
-              {{ pluginsLoading ? '加载中…' : '暂无插件配置目录或无数据。' }}
+              {{ pluginsLoading ? t('common.loading') : t('settingStorage.usage.pluginsEmpty') }}
             </div>
             <div v-else class="list">
-              <div v-for="p in pluginsSorted.slice(0, 12)" :key="p.name" class="row">
+              <div v-for="p in pluginsSorted.slice(0, PLUGIN_LIST_LIMIT)" :key="p.name" class="row">
                 <div class="row-head">
                   <div class="name">
                     {{ p.name }}
@@ -626,9 +695,21 @@ onMounted(() => {
                   <div class="meta">
                     <span>{{ formatBytesShort(p.bytes) }}</span>
                     <span class="sep">·</span>
-                    <span>{{ p.fileCount }} files</span>
+                    <span>{{
+                      t(
+                        'settingStorage.usage.fileCount',
+                        { count: formatCount(p.fileCount) },
+                        p.fileCount
+                      )
+                    }}</span>
                     <span class="sep">·</span>
-                    <span>{{ p.dirCount }} dirs</span>
+                    <span>{{
+                      t(
+                        'settingStorage.usage.dirCount',
+                        { count: formatCount(p.dirCount) },
+                        p.dirCount
+                      )
+                    }}</span>
                   </div>
                 </div>
                 <div class="bar">
@@ -638,20 +719,27 @@ onMounted(() => {
                   />
                 </div>
               </div>
-              <div v-if="pluginsSorted.length > 12" class="muted">
-                仅展示前 12 个插件；其余 {{ pluginsSorted.length - 12 }} 个已折叠。
+              <div v-if="pluginsSorted.length > PLUGIN_LIST_LIMIT" class="muted">
+                {{
+                  t('settingStorage.usage.pluginsCollapsed', {
+                    limit: PLUGIN_LIST_LIMIT,
+                    count: pluginsSorted.length - PLUGIN_LIST_LIMIT
+                  })
+                }}
               </div>
             </div>
           </div>
 
           <div class="section">
             <div class="section-head">
-              <div class="section-title">数据库占用</div>
-              <div v-if="dbTablesLoading" class="section-meta">表级统计中…</div>
+              <div class="section-title">{{ t('settingStorage.usage.databaseTitle') }}</div>
+              <div v-if="dbTablesLoading" class="section-meta">
+                {{ t('settingStorage.usage.tableStatsLoading') }}
+              </div>
             </div>
             <div class="db-grid">
               <div class="card">
-                <div class="label">数据库文件</div>
+                <div class="label">{{ t('settingStorage.usage.databaseFile') }}</div>
                 <div class="value">
                   {{ formatBytesShort(report.database.bytes) }}
                 </div>
@@ -674,7 +762,7 @@ onMounted(() => {
                 <div class="sub">database.db-shm</div>
               </div>
               <div class="card">
-                <div class="label">数据库合计</div>
+                <div class="label">{{ t('settingStorage.usage.databaseTotal') }}</div>
                 <div class="value">
                   {{ formatBytesShort(databaseTotalBytes) }}
                 </div>
@@ -683,15 +771,19 @@ onMounted(() => {
             </div>
 
             <div v-if="databaseTablesLoaded && !databaseSizeKnown" class="muted db-note">
-              当前 SQLite 未启用 dbstat，表级占用显示为未知。
+              {{ t('settingStorage.usage.dbstatUnavailable') }}
             </div>
 
             <div v-if="databaseLogicalOnly" class="muted db-note">
-              数据库内容为逻辑占用，未计入目录合计。
+              {{ t('settingStorage.usage.logicalOnly') }}
             </div>
 
             <div v-if="!databaseTablesLoaded" class="muted db-note">
-              {{ dbTablesLoading ? '表级占用加载中…' : '表级占用未加载' }}
+              {{
+                dbTablesLoading
+                  ? t('settingStorage.usage.tableUsageLoading')
+                  : t('settingStorage.usage.tableUsageNotLoaded')
+              }}
             </div>
 
             <div v-else class="db-groups">
@@ -702,9 +794,19 @@ onMounted(() => {
                       {{ group.label }}
                     </div>
                     <div class="meta">
-                      <span>{{ group.sizeKnown ? formatBytesShort(group.bytes) : '未知' }}</span>
+                      <span>{{
+                        group.sizeKnown
+                          ? formatBytesShort(group.bytes)
+                          : t('settingStorage.usage.unknown')
+                      }}</span>
                       <span class="sep">·</span>
-                      <span>{{ formatCount(group.rows) }} rows</span>
+                      <span>{{
+                        t(
+                          'settingStorage.usage.rowCount',
+                          { count: formatCount(group.rows) },
+                          group.rows
+                        )
+                      }}</span>
                     </div>
                   </div>
                   <div class="row-actions">
@@ -717,7 +819,11 @@ onMounted(() => {
                       :disabled="isBusy"
                       @click="runCleanup(action)"
                     >
-                      {{ cleaningKey === action.key ? '处理中…' : action.label }}
+                      {{
+                        cleaningKey === action.key
+                          ? t('settingStorage.usage.processing')
+                          : action.label
+                      }}
                     </TxButton>
                   </div>
                 </div>
@@ -736,12 +842,24 @@ onMounted(() => {
                         {{ table.label }}
                       </div>
                       <div class="meta">
-                        <span>{{ table.sizeKnown ? formatBytesShort(table.bytes) : '未知' }}</span>
+                        <span>{{
+                          table.sizeKnown
+                            ? formatBytesShort(table.bytes)
+                            : t('settingStorage.usage.unknown')
+                        }}</span>
                         <span class="sep">·</span>
-                        <span>{{ formatCount(table.rows) }} rows</span>
+                        <span>{{
+                          t(
+                            'settingStorage.usage.rowCount',
+                            { count: formatCount(table.rows) },
+                            table.rows
+                          )
+                        }}</span>
                       </div>
                     </div>
-                    <div class="path">表名：{{ table.name }}</div>
+                    <div class="path">
+                      {{ t('settingStorage.usage.tableName', { name: table.name }) }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -750,22 +868,28 @@ onMounted(() => {
 
           <div class="section">
             <div class="section-head">
-              <div class="section-title">缓存占用</div>
+              <div class="section-title">{{ t('settingStorage.usage.cachesTitle') }}</div>
             </div>
             <div class="list">
               <div v-for="cache in cacheList" :key="cache.key" class="row">
                 <div class="row-head">
                   <div class="name">
-                    {{ cache.label }}
+                    {{ cacheLabel(cache) }}
                   </div>
                   <div class="meta">
                     <span>{{ formatBytesShort(cache.bytes) }}</span>
                     <span class="sep">·</span>
-                    <span>{{ formatCount(cache.entries) }} entries</span>
+                    <span>{{
+                      t(
+                        'settingStorage.usage.entryCount',
+                        { count: formatCount(cache.entries) },
+                        cache.entries
+                      )
+                    }}</span>
                     <span class="sep">·</span>
                     <span>{{ formatCacheScope(cache.scope) }}</span>
                     <span class="sep">·</span>
-                    <span>TTL {{ formatTtl(cache.ttlMs) }}</span>
+                    <span>{{ formatTtl(cache.ttlMs) }}</span>
                   </div>
                 </div>
                 <div v-if="cache.note" class="path">
@@ -777,10 +901,10 @@ onMounted(() => {
 
           <div v-if="Object.keys(databaseGroupActions).length > 0" class="section">
             <div class="section-head">
-              <div class="section-title">清理说明</div>
+              <div class="section-title">{{ t('settingStorage.usage.cleanupNoteTitle') }}</div>
             </div>
             <div class="muted">
-              部分清理会影响索引、统计与历史数据；执行后请根据提示重新扫描或等待后台重建。
+              {{ t('settingStorage.usage.cleanupNote') }}
             </div>
           </div>
         </template>
@@ -792,20 +916,20 @@ onMounted(() => {
         -->
         <div class="section">
           <div class="section-head">
-            <div class="section-title">位置</div>
+            <div class="section-title">{{ t('settingStorage.usage.locationsTitle') }}</div>
           </div>
           <div class="path-rows">
             <div class="path-row">
               <div class="path-text">
-                <div class="path-label">数据目录</div>
-                <div class="muted">索引、数据库与插件配置的存放位置。</div>
+                <div class="path-label">{{ t('settingStorage.usage.dataDir') }}</div>
+                <div class="muted">{{ t('settingStorage.usage.dataDirDesc') }}</div>
               </div>
               <code class="path-value">{{ report?.rootPath || '—' }}</code>
             </div>
             <div class="path-row">
               <div class="path-text">
-                <div class="path-label">临时目录</div>
-                <div class="muted">下载切片缓存，任务完成后自动回收。</div>
+                <div class="path-label">{{ t('settingStorage.usage.tempDir') }}</div>
+                <div class="muted">{{ t('settingStorage.usage.tempDirDesc') }}</div>
               </div>
               <code class="path-value">{{ tempDirPath || '—' }}</code>
             </div>
@@ -818,11 +942,11 @@ onMounted(() => {
       v-if="cleanupConfirmVisible"
       :title="cleanupConfirmTitle"
       :message="cleanupConfirmMessage"
-      close-label="关闭"
+      :close-label="t('common.close')"
       :btns="[
-        { content: '取消', type: 'info', onClick: () => true },
+        { content: t('common.cancel'), type: 'info', onClick: () => true },
         {
-          content: '继续',
+          content: t('settingStorage.usage.continue'),
           type: cleanupConfirmType === 'error' ? 'error' : 'warning',
           onClick: executeCleanupConfirm
         }

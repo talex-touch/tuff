@@ -9,11 +9,10 @@ let mermaidIdSeq = 0
 </script>
 
 <script setup lang="ts">
+import type { ImagePreviewItem } from '../../image-preview/src/types'
 import { hasDocument } from '@talex-touch/utils/env'
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { lockBodyScroll, unlockBodyScroll } from '../../../../utils/body-scroll-lock'
-import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
-import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import TxImagePreview from '../../image-preview/src/TxImagePreview.vue'
 import TxCodeBlock from './TxCodeBlock.vue'
 
 defineOptions({ name: 'TxMermaidBlock' })
@@ -57,17 +56,11 @@ const props = withDefaults(
 const svg = ref<string | null>(null)
 const failed = ref(false)
 const zoomOpen = ref(false)
-// The fullscreen preview joins the shared overlay stack instead of pinning a
-// literal above the seed, so later dialogs/drawers still stack above it.
-const zIndexAllocator = useZIndexAllocator()
-const overlayZIndex = ref(zIndexAllocator.get())
-const overlayRef = ref<HTMLElement | null>(null)
-const closeRef = ref<HTMLButtonElement | null>(null)
-// Focus moves into the preview, stays there, and goes back to the diagram once it closes.
-const focusReturn = createFocusReturn()
-// Whether the preview holds a page scroll lock. A close in the same tick as an unmount never
-// reaches the watcher below, so the unmount lets go of this one, and of no other overlay's.
-let holdsScrollLock = false
+const figureRef = ref<HTMLButtonElement | null>(null)
+const svgSize = ref({ width: 800, height: 600 })
+const previewItems = computed<ImagePreviewItem[]>(() => svg.value
+  ? [{ type: 'custom', svg: svg.value, ...svgSize.value }]
+  : [])
 let renderToken = 0
 
 /**
@@ -95,6 +88,16 @@ async function render(): Promise<void> {
     if (token !== renderToken)
       return
     svg.value = result.svg
+    const diagram = new DOMParser().parseFromString(result.svg, 'image/svg+xml').documentElement
+    const viewBox = diagram.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number)
+    const widthAttr = diagram.getAttribute('width') ?? ''
+    const heightAttr = diagram.getAttribute('height') ?? ''
+    const width = viewBox?.[2] || (widthAttr.endsWith('%') ? 0 : Number.parseFloat(widthAttr))
+    const height = viewBox?.[3] || (heightAttr.endsWith('%') ? 0 : Number.parseFloat(heightAttr))
+    svgSize.value = {
+      width: Number.isFinite(width) && width > 0 ? width : 800,
+      height: Number.isFinite(height) && height > 0 ? height : 600,
+    }
   }
   catch {
     if (token !== renderToken)
@@ -126,56 +129,8 @@ function openZoom(event: MouseEvent): void {
   zoomOpen.value = true
 }
 
-function closeZoom(): void {
-  zoomOpen.value = false
-}
-
-function handleKeydown(event: KeyboardEvent): void {
-  const root = overlayRef.value
-  if (event.defaultPrevented || !root || !isTopmostModalDialog(root))
-    return
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeZoom()
-  }
-  else if (event.key === 'Tab') {
-    // aria-modal promises the page behind is inert, so Tab stays inside.
-    trapTab(event, root)
-  }
-}
-
-function releaseScrollLock(): void {
-  if (!holdsScrollLock)
-    return
-  holdsScrollLock = false
-  unlockBodyScroll()
-}
-
-watch(zoomOpen, (open) => {
-  if (!hasDocument())
-    return
-  if (open) {
-    overlayZIndex.value = zIndexAllocator.next()
-    focusReturn.save()
-    // The page behind holds still: the wheel over the dim, or past the end of a tall diagram,
-    // would scroll it.
-    lockBodyScroll()
-    holdsScrollLock = true
-    document.addEventListener('keydown', handleKeydown)
-    void nextTick(() => closeRef.value?.focus({ preventScroll: true }))
-  }
-  else {
-    document.removeEventListener('keydown', handleKeydown)
-    releaseScrollLock()
-    focusReturn.restore()
-  }
-})
-
 onBeforeUnmount(() => {
-  if (hasDocument())
-    document.removeEventListener('keydown', handleKeydown)
-  releaseScrollLock()
-  focusReturn.restore()
+  renderToken += 1
 })
 </script>
 
@@ -185,6 +140,7 @@ onBeforeUnmount(() => {
          safe to inject; the raw fence text itself never lands in v-html. -->
     <button
       v-if="svg"
+      ref="figureRef"
       type="button"
       class="tx-mermaid-block__figure"
       :aria-label="zoomLabel"
@@ -212,35 +168,18 @@ onBeforeUnmount(() => {
       <pre class="tx-mermaid-block__draft"><code>{{ code }}</code></pre>
     </div>
 
-    <Teleport v-if="zoomOpen" to="body">
-      <div
-        ref="overlayRef"
-        class="tx-mermaid-block__overlay"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="previewLabel"
-        :style="{ zIndex: overlayZIndex }"
-        @click.self="closeZoom"
-      >
-        <button
-          ref="closeRef"
-          type="button"
-          class="tx-mermaid-block__close"
-          :aria-label="closeLabel"
-          @click="closeZoom"
-        >
-          ×
-        </button>
-        <!-- Focusable, so the keys scroll a diagram taller than the screen. -->
-        <div
-          class="tx-mermaid-block__zoomed"
-          role="region"
-          :aria-label="previewLabel"
-          tabindex="0"
-          v-html="svg"
-        />
-      </div>
-    </Teleport>
+    <TxImagePreview
+      v-model:open="zoomOpen"
+      :items="previewItems"
+      :origin="() => figureRef"
+      :label="previewLabel"
+      :close-label="closeLabel"
+      :actions="['rotate']"
+    >
+      <template #item="{ item }">
+        <div class="tx-mermaid-block__zoomed" :class="theme" v-html="item.svg" />
+      </template>
+    </TxImagePreview>
   </div>
 </template>
 
@@ -324,43 +263,22 @@ onBeforeUnmount(() => {
   }
 }
 
-.tx-mermaid-block__overlay {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 48px;
-  background: color-mix(in srgb, var(--tx-color-black, #000) 55%, transparent);
-  animation: tx-mermaid-fade 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
 .tx-mermaid-block__zoomed {
-  max-width: min(1200px, 92vw);
-  max-height: 88vh;
-  padding: 24px;
+  width: 100%;
+  height: 100%;
   border-radius: 12px;
   background: var(--tx-fill-color-blank, #fff);
-  overflow: auto;
+  overflow: hidden;
+
+  &.dark {
+    background: var(--tx-fill-color-darker, #1a1a1a);
+  }
 
   svg {
-    width: 100%;
-    height: auto;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
   }
-}
-
-.tx-mermaid-block__close {
-  position: absolute;
-  top: 18px;
-  right: 22px;
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-black, #000) 40%, transparent);
-  color: var(--tx-color-white, #fff);
-  font-size: 19px;
-  line-height: 1;
-  cursor: pointer;
 }
 
 @keyframes tx-mermaid-shimmer {
@@ -372,18 +290,8 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tx-mermaid-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .tx-mermaid-block .tx-mermaid-block__shimmer,
-  .tx-mermaid-block__overlay {
+  .tx-mermaid-block .tx-mermaid-block__shimmer {
     animation: none;
   }
 }

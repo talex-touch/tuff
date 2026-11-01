@@ -13,6 +13,7 @@ import type {
   IntelligenceVisionImageSource
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 const SAMPLE_IMAGE_BASE64 =
@@ -64,16 +65,18 @@ export class ImageCaptionTester extends BaseCapabilityTester<
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceImageCaptionResult>) {
     const caption = result.result?.caption || ''
-    const tags = result.result?.tags?.length ? `\n标签: ${result.result.tags.join(', ')}` : ''
+    const tags = result.result?.tags?.length
+      ? t('intelligence.capabilityTest.preview.tags', { tags: result.result.tags.join(', ') })
+      : ''
 
     return this.buildTestResult(result, {
-      message: '图片描述测试成功',
-      textPreview: caption + tags
+      message: t('intelligence.capabilityTest.message.imageCaption'),
+      textPreview: [caption, tags].filter(Boolean).join('\n')
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置示例图片生成描述'
+    return t('intelligence.capabilityTest.hint.imageCaption')
   }
 
   requiresUserInput(): boolean {
@@ -103,13 +106,16 @@ export class ImageAnalyzeTester extends BaseCapabilityTester<
     const colorCount = result.result?.colors?.length || 0
 
     return this.buildTestResult(result, {
-      message: `图片分析完成，识别 ${objectCount} 个对象和 ${colorCount} 个主色`,
+      message: t('intelligence.capabilityTest.message.imageAnalyze', {
+        objects: objectCount,
+        colors: colorCount
+      }),
       textPreview: result.result?.description || JSON.stringify(result.result, null, 2)
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置示例图片进行内容分析'
+    return t('intelligence.capabilityTest.hint.imageAnalyze')
   }
 
   requiresUserInput(): boolean {
@@ -138,13 +144,15 @@ export class ImageTranslateE2eTester extends BaseCapabilityTester<
     const targetText = result.result?.targetText || ''
 
     return this.buildTestResult(result, {
-      message: `图片翻译完成，输出 ${result.result?.imageMimeType || 'image/png'}`,
+      message: t('intelligence.capabilityTest.message.imageTranslate', {
+        mimeType: result.result?.imageMimeType || 'image/png'
+      }),
       textPreview: [sourceText, targetText].filter(Boolean).join('\n→ ')
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置含文字图片进行端到端翻译测试'
+    return t('intelligence.capabilityTest.hint.imageTranslate')
   }
 
   requiresUserInput(): boolean {
@@ -175,16 +183,18 @@ export class ImageGenerateTester extends BaseCapabilityTester<
     const imageCount = result.result?.images?.length || 0
     const first = result.result?.images?.[0]
     const preview =
-      first?.revisedPrompt || first?.url || (first?.base64 ? 'base64 image returned' : '')
+      first?.revisedPrompt ||
+      first?.url ||
+      (first?.base64 ? t('intelligence.capabilityTest.preview.base64Image') : '')
 
     return this.buildTestResult(result, {
-      message: `图片生成完成，返回 ${imageCount} 张图片`,
+      message: t('intelligence.capabilityTest.message.imageGenerate', { count: imageCount }),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要生成的图片描述'
+    return t('intelligence.capabilityTest.hint.imageGenerate')
   }
 
   requiresUserInput(): boolean {
@@ -208,16 +218,18 @@ export class ImageEditTester extends BaseCapabilityTester<
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceImageEditResult>) {
     const preview =
-      result.result?.revisedPrompt || result.result?.image?.url || 'edited image returned'
+      result.result?.revisedPrompt ||
+      result.result?.image?.url ||
+      t('intelligence.capabilityTest.preview.editedImage')
 
     return this.buildTestResult(result, {
-      message: '图片编辑测试成功',
+      message: t('intelligence.capabilityTest.message.imageEdit'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入图片编辑指令'
+    return t('intelligence.capabilityTest.hint.imageEdit')
   }
 
   requiresUserInput(): boolean {

@@ -252,6 +252,7 @@ const _appSettingOriginData = {
   localAiCli: {
     enabled: false,
     defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
+    terminalFontFamily: '',
     providers: {
       'pi': { enabled: false, executableOverride: '' },
       'codex': { enabled: false, executableOverride: '' },
@@ -417,6 +418,11 @@ const _appSettingOriginData = {
      * that cannot take the stored level never rewrites it: the level simply is not sent there.
      */
     reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING as ReasoningEffortSetting,
+    /**
+     * Whether to show turn execution metrics (latency, token speed, model, coordinator)
+     * at the bottom of assistant message bubbles.
+     */
+    showTurnMetrics: true,
   },
   dashboard: {
     enable: false,

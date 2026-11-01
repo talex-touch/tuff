@@ -115,15 +115,19 @@ function formatSize(bytes: number): string {
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) {
-    return `${Math.round(seconds)}${t('common.seconds')}`
+    return t('download.duration_seconds', { count: Math.round(seconds) })
   } else if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
-    return `${minutes}${t('common.minutes')}${secs}${t('common.seconds')}`
+    return secs > 0
+      ? t('download.duration_minutes_seconds', { minutes, seconds: secs })
+      : t('download.duration_minutes', { count: minutes })
   } else {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
-    return `${hours}${t('common.hours')}${minutes}${t('common.minutes')}`
+    return minutes > 0
+      ? t('download.duration_hours_minutes', { hours, minutes })
+      : t('download.duration_hours', { count: hours })
   }
 }
 

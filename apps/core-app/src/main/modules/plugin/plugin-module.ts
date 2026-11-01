@@ -76,7 +76,7 @@ import {
 } from './plugin-data-disposition-production'
 import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { getLocale } from '../../utils/i18n-helper'
+import { getLocale, onLocaleChange, t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -89,6 +89,7 @@ import { getPermissionModule } from '../permission'
 import { voiceService } from '../voice/voice-service'
 import {
   clearPluginLocalizationEntries,
+  getHostLocale,
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
@@ -120,6 +121,7 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createPluginLanguageCapabilities } from './host/plugin-host-language-capabilities'
 import { createPluginRecommendationCapabilities } from './host/plugin-host-recommend-capabilities'
 import { getPluginRecommendationApi } from '../box-tool/search-engine/recommendation/plugin-recommendation-api'
 import { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview } from '../quick-ops'
@@ -2278,12 +2280,19 @@ export class PluginModule extends BaseModule {
           getPluginRecommendationApi()?.unregisterPluginProvider(pluginName, providerId) ?? false
       }
     })
+    const languageCapabilities = createPluginLanguageCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) => this.runtimeService?.resolveHostGeneration(activation),
+      resolveSdkApi: (pluginName) =>
+        (pluginModule.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined)
+          ?.sdkapi,
+      service: { getLanguage: getHostLocale, onLanguageChange: onLocaleChange }
+    })
     const intelligenceHostService = createPluginIntelligenceHostService()
-    const createTranslationCapability = (activation: PluginActivationIdentity) =>
+    const createIntelligenceCapability = (activation: PluginActivationIdentity) =>
       createPluginIntelligenceCapabilities({
         activation,
-        invokeCapabilities: Object.freeze(['text.translate', 'vision.ocr']),
-        providerModelCapabilities: Object.freeze(['text.translate']),
         resolveCurrentActivation: (pluginName) =>
           ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
         resolveHostGeneration: (activation) =>
@@ -2413,6 +2422,7 @@ export class PluginModule extends BaseModule {
         )
     })
     const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
+      translate: t,
       showMessageBox: async (options) => {
         const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
         if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
@@ -3127,7 +3137,8 @@ export class PluginModule extends BaseModule {
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
         ...voiceCapabilities.definitions,
-        ...recommendationCapabilities.definitions
+        ...recommendationCapabilities.definitions,
+        ...languageCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,
@@ -3140,7 +3151,7 @@ export class PluginModule extends BaseModule {
       systemAction: (activation) => createSystemActionCapability(activation),
       browserOpen: (activation) => createBrowserOpenCapability(activation),
       browserData: (activation) => createBrowserDataCapability(activation),
-      translation: (activation) => createTranslationCapability(activation),
+      intelligence: (activation) => createIntelligenceCapability(activation),
       intelligenceContext: (activation) => createIntelligenceContextCapability(activation),
       windowManager: (activation) => createWindowManagerCapability(activation),
       windowPreset: (activation) => createWindowPresetCapability(activation),

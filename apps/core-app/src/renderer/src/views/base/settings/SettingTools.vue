@@ -34,7 +34,7 @@ import { shortconApi } from '~/modules/channel/main/shortcon'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
-import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
+import type { SaveState, ShortcutRow } from './components/shortcut-dialog.types'
 import {
   BETA_FEATURE_SHORTCUTS,
   isBetaFeatureEnabled,
@@ -69,7 +69,6 @@ const savingBetaFeatures = reactive(new Set<BetaShortcutFeature>())
 const showBetaFeatures = computed(() => appSetting.dev?.advancedSettings === true)
 const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
-const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
 
 /**
@@ -378,11 +377,14 @@ async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
   }
 }
 
+/** Advanced Settings and the OmniPanel opt-in together, the same gate main registers it under. */
+const omniPanelEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'omniPanel'))
+
 const omniPanelMouseTriggerEnabled = computed(() => {
   const target = shortcuts.value?.find(
     (shortcut) => shortcut.id === 'core.omniPanel.mouseLongPress'
   )
-  if (!isBetaFeatureEnabled(appSetting, 'omniPanel') || !target) return false
+  if (!omniPanelEnabled.value || !target) return false
   return isShortcutEnabled(target)
 })
 
@@ -541,20 +543,6 @@ function getRowSaveState(id: string): SaveState | undefined {
   return saveStateMap.get(id)
 }
 
-function getRowSaveText(id: string): string {
-  const state = getRowSaveState(id)
-  if (state === 'saving') {
-    return t('settingTools.shortcutsDialog.saving')
-  }
-  if (state === 'success') {
-    return t('settingTools.shortcutsDialog.saveSuccess')
-  }
-  if (state === 'error') {
-    return t('settingTools.shortcutsDialog.saveFailed')
-  }
-  return ''
-}
-
 async function saveShortcut(
   id: string,
   payload: { accelerator?: string; enabled?: boolean }
@@ -609,23 +597,23 @@ function isTriggerShortcut(shortcut: ShortcutWithStatus): boolean {
   return shortcut.type === ShortcutType.TRIGGER
 }
 
-function getShortcutSourceLabel(shortcut: ShortcutWithStatus): string {
-  if (isSystemShortcut(shortcut)) {
-    return t('settingTools.shortcutsDialog.sourceSystem')
-  }
-  const author = shortcut.meta?.author
-  if (author) {
-    return t('settingTools.shortcutsDialog.sourcePlugin', { name: author })
-  }
-  return t('settingTools.shortcutsDialog.sourceUnknown')
-}
-
 /** ⌘⇧L: main registers its callback only while the local agent master switch is on. */
 const LOCAL_AI_CLI_QUICK_OPEN_SHORTCUT_ID = 'local-ai-cli.quick-open'
 
-function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
+/** The row's status: the save in flight or just finished, else what registration reports. */
+function getShortcutStatus(shortcut: ShortcutWithStatus): ShortcutRow['status'] {
+  const saveState = getRowSaveState(shortcut.id)
+  if (saveState === 'saving') {
+    return { text: t('settingTools.shortcutsDialog.saving'), tone: 'info' }
+  }
+  if (saveState === 'success') {
+    return { text: t('settingTools.shortcutsDialog.saveSuccess'), tone: 'success' }
+  }
+  if (saveState === 'error') {
+    return { text: t('settingTools.shortcutsDialog.saveFailed'), tone: 'danger' }
+  }
   if (shortcut.meta?.enabled === false || shortcut.status?.state === 'disabled') {
-    return t('settingTools.shortcutsDialog.statusDisabled')
+    return { text: t('settingTools.shortcutsDialog.statusDisabled'), tone: 'muted' }
   }
   if (
     shortcut.id === 'core.omniPanel.mouseLongPress' &&
@@ -633,31 +621,44 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
     isMac.value &&
     omniPanelAccessibilityGranted.value === false
   ) {
-    return t('settingTools.shortcutStatus.omniPanelAccessibilityRequired')
+    return {
+      text: t('settingTools.shortcutStatus.omniPanelAccessibilityRequired'),
+      tone: 'warning'
+    }
   }
   const status = shortcut.status
   if (!status || status.state === 'active') {
-    return null
+    return { text: t('settingTools.shortcutsDialog.statusActive'), tone: 'success' }
   }
   if (status.state === 'conflict') {
-    return status.reason === 'conflict-system'
-      ? t('settingTools.shortcutStatus.conflictSystem')
-      : t('settingTools.shortcutStatus.conflictPlugin')
+    return {
+      text:
+        status.reason === 'conflict-system'
+          ? t('settingTools.shortcutStatus.conflictSystem')
+          : t('settingTools.shortcutStatus.conflictPlugin'),
+      tone: 'danger'
+    }
   }
   if (status.reason === 'invalid') {
-    return t('settingTools.shortcutStatus.invalid')
+    return { text: t('settingTools.shortcutStatus.invalid'), tone: 'danger' }
   }
   // The record outlives its owner's callback: nothing asked the system for the key, so this is not
   // a registration failure.
   if (status.reason === 'runtime-missing') {
-    return shortcut.id === LOCAL_AI_CLI_QUICK_OPEN_SHORTCUT_ID
-      ? t('settingTools.shortcutStatus.localAiCliOff')
-      : t('settingTools.shortcutStatus.runtimeMissing')
+    return {
+      text:
+        shortcut.id === LOCAL_AI_CLI_QUICK_OPEN_SHORTCUT_ID
+          ? t('settingTools.shortcutStatus.localAiCliOff')
+          : t('settingTools.shortcutStatus.runtimeMissing'),
+      tone: 'warning'
+    }
   }
-  return t('settingTools.shortcutStatus.unavailable')
+  return { text: t('settingTools.shortcutStatus.unavailable'), tone: 'danger' }
 }
 
-function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
+/** What to do about a state the status alone cannot fix; nothing while a save is reporting. */
+function getShortcutHint(shortcut: ShortcutWithStatus): string | null {
+  if (getRowSaveState(shortcut.id)) return null
   if (
     shortcut.id === 'core.omniPanel.mouseLongPress' &&
     isShortcutEnabled(shortcut) &&
@@ -700,44 +701,42 @@ const filteredShortcuts = computed(() => {
   return systemShortcuts.value.filter((shortcut) => {
     const label = getShortcutLabel(shortcut.id).toLowerCase()
     const triggerText = getShortcutTriggerLabel(shortcut).toLowerCase()
-    const source = getShortcutSourceLabel(shortcut).toLowerCase()
     return (
       label.includes(query) ||
       shortcut.id.toLowerCase().includes(query) ||
-      triggerText.includes(query) ||
-      source.includes(query)
+      triggerText.includes(query)
     )
   })
 })
 
-const shortcutRows = computed<ShortcutRowBase[]>(() =>
-  filteredShortcuts.value.map((shortcut) => {
-    const label = getShortcutLabel(shortcut.id)
-    const isTrigger = isTriggerShortcut(shortcut)
-    return {
-      shortcut,
-      label,
-      desc: t(isTrigger ? 'settingTools.triggerDesc' : 'settingTools.shortcutDesc', {
-        shortcut: label
-      }),
-      sourceLabel: getShortcutSourceLabel(shortcut),
-      statusText: getShortcutStatusText(shortcut),
-      spotlightHint: getSpotlightHint(shortcut),
-      saveState: getRowSaveState(shortcut.id),
-      saveText: getRowSaveText(shortcut.id),
-      isEnabled: isShortcutEnabled(shortcut),
-      inputMode: isTrigger ? 'trigger' : 'keyboard',
-      triggerLabel: getShortcutTriggerLabel(shortcut)
-    }
-  })
+const shortcutRows = computed<ShortcutRow[]>(() =>
+  filteredShortcuts.value.map((shortcut) => ({
+    id: shortcut.id,
+    label: getShortcutLabel(shortcut.id),
+    accelerator: shortcut.accelerator,
+    isTrigger: isTriggerShortcut(shortcut),
+    triggerLabel: getShortcutTriggerLabel(shortcut),
+    isEnabled: isShortcutEnabled(shortcut),
+    status: getShortcutStatus(shortcut),
+    hint: getShortcutHint(shortcut)
+  }))
 )
 
-function openShortcutsDialog(event: MouseEvent): void {
-  shortcutsDialogSource.value =
-    event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+function openShortcutsDialog(): void {
   void refreshOmniPanelAccessibilityStatus()
   shortcutsDialogVisible.value = true
 }
+
+/**
+ * Opens the manager for a page that was asked to (CoreBox's 「快捷键」 result lands on
+ * `/setting/plugins?panel=shortcuts`). Only the half that renders the manager can.
+ */
+function openShortcuts(): void {
+  if (props.advancedOnly) return
+  openShortcutsDialog()
+}
+
+defineExpose({ openShortcuts })
 
 async function resetShortcutChanges(): Promise<void> {
   const snapshot = initialShortcutSnapshot.value
@@ -913,7 +912,6 @@ onBeforeUnmount(() => {
       :title="t('settingTools.shortcutsTitle')"
       :description="t('settingTools.shortcutsDesc')"
       class="ShortcutEntry"
-      :class="{ 'ShortcutEntry--hidden': shortcutsDialogVisible }"
     >
       <div class="ShortcutSummary">
         {{ t('settingTools.shortcutsCount', { count: systemShortcuts.length }) }}
@@ -930,7 +928,9 @@ onBeforeUnmount(() => {
     appear exactly once (a dedicated title awaits the in-flight lang files).
   -->
   <TuffGroupBlock v-else :collapsible="false">
+    <!-- OmniPanel's own setting: absent until Advanced Settings and its opt-in are both on. -->
     <TuffBlockSelect
+      v-if="omniPanelEnabled"
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
@@ -981,7 +981,6 @@ onBeforeUnmount(() => {
     v-if="!props.advancedOnly"
     v-model="shortcutsDialogVisible"
     v-model:search="shortcutSearch"
-    :source="shortcutsDialogSource"
     :loading="shortcutsLoading"
     :rows="shortcutRows"
     @reset="resetShortcutChanges"
@@ -998,14 +997,5 @@ onBeforeUnmount(() => {
 .ShortcutSummary {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
-}
-
-.ShortcutEntry {
-  transition: opacity 0.2s ease;
-}
-
-.ShortcutEntry--hidden {
-  opacity: 0;
-  pointer-events: none;
 }
 </style>

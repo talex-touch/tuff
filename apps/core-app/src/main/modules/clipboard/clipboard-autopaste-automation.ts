@@ -11,12 +11,13 @@ import type { LogOptions } from '../../utils/logger'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { clipboard } from 'electron'
+import { t } from '../../utils/i18n-helper'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { notificationModule } from '../notification'
 import { getAutoPasteCapabilityPatch } from '../platform/capability-adapter'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
 import {
-  AUTO_PASTE_FAILED_MESSAGE,
+  autoPasteFailedMessage,
   ClipboardActionRuntimeError,
   normalizeClipboardActionError,
   summarizeClipboardApplyPayload
@@ -98,7 +99,7 @@ export class ClipboardAutopasteAutomation {
       return this.toActionFailureResult(
         new ClipboardActionRuntimeError(
           'CLIPBOARD_DATABASE_UNAVAILABLE',
-          'Clipboard database is not ready.'
+          t('clipboardActions.databaseUnavailable')
         ),
         'Clipboard apply failed',
         {
@@ -107,7 +108,7 @@ export class ClipboardAutopasteAutomation {
           pluginName: context.plugin?.name ?? null,
           autoPaste: request?.autoPaste !== false
         },
-        'Clipboard database is not ready.'
+        t('clipboardActions.databaseUnavailable')
       )
     }
 
@@ -127,7 +128,7 @@ export class ClipboardAutopasteAutomation {
       return this.toActionFailureResult(
         new ClipboardActionRuntimeError(
           'CLIPBOARD_ITEM_NOT_FOUND',
-          `Clipboard history item not found: ${request.id}`
+          t('clipboardActions.itemNotFound')
         ),
         'Clipboard apply failed',
         {
@@ -136,7 +137,7 @@ export class ClipboardAutopasteAutomation {
           pluginName: context.plugin?.name ?? null,
           autoPaste: request?.autoPaste !== false
         },
-        'Clipboard history item not found.'
+        t('clipboardActions.itemNotFound')
       )
     }
 
@@ -158,7 +159,7 @@ export class ClipboardAutopasteAutomation {
           pluginName: context.plugin?.name ?? null,
           autoPaste: request?.autoPaste !== false
         },
-        AUTO_PASTE_FAILED_MESSAGE,
+        autoPasteFailedMessage(),
         { notify: true }
       )
     }
@@ -180,7 +181,7 @@ export class ClipboardAutopasteAutomation {
           ...summarizeClipboardApplyPayload(applyPayload),
           pluginName: context.plugin?.name ?? null
         },
-        AUTO_PASTE_FAILED_MESSAGE,
+        autoPasteFailedMessage(),
         { notify: true }
       )
     }
@@ -189,7 +190,11 @@ export class ClipboardAutopasteAutomation {
   public async handleVoiceTextRequest(text: string): Promise<ClipboardActionResult> {
     const trimmed = text.trim()
     if (!trimmed)
-      return { success: false, code: 'AUTO_PASTE_FAILED', message: 'Voice text is empty.' }
+      return {
+        success: false,
+        code: 'AUTO_PASTE_FAILED',
+        message: t('clipboardActions.voiceTextEmpty')
+      }
 
     return await withClipboardCaptureSuppressed(async () => {
       const snapshot = snapshotClipboard()
@@ -199,7 +204,7 @@ export class ClipboardAutopasteAutomation {
           return {
             success: false,
             code: 'AUTO_PASTE_FAILED',
-            message: 'Voice text was pasted, but the previous clipboard could not be restored.'
+            message: t('clipboardActions.voiceClipboardNotRestored')
           }
         }
         return { success: true }
@@ -209,7 +214,7 @@ export class ClipboardAutopasteAutomation {
           error,
           'Voice text auto-paste failed',
           { platform: process.platform },
-          AUTO_PASTE_FAILED_MESSAGE
+          autoPasteFailedMessage()
         )
       }
     })
@@ -354,7 +359,7 @@ export class ClipboardAutopasteAutomation {
     const code = failure.code ?? 'AUTO_PASTE_FAILED'
     notificationModule.showInternalSystemNotification({
       id: `clipboard-auto-paste-failed:${code}`,
-      title: '自动粘贴失败',
+      title: t('clipboardActions.notificationTitle'),
       message: failure.message,
       level: 'error',
       dedupeKey: `clipboard-auto-paste-failed:${code}`,
@@ -374,7 +379,7 @@ export class ClipboardAutopasteAutomation {
 
       await sendPlatformShortcut('paste')
     } catch (error) {
-      const failure = normalizeClipboardActionError(error, AUTO_PASTE_FAILED_MESSAGE)
+      const failure = normalizeClipboardActionError(error, autoPasteFailedMessage())
       this.options.logError('Failed to simulate paste command', {
         error: failure.originalError,
         meta: {

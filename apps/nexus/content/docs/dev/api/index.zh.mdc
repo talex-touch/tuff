@@ -40,7 +40,7 @@ code: |
 | [DivisionBox SDK](./division-box.zh.mdc)                    | `useDivisionBox()`                             | 独立窗口管理                                        |
 | [Flow SDK](./flow-transfer.zh.mdc)                          | `createFlowSDK()`                              | 插件间数据流转                                       |
 | [Intelligence SDK](./intelligence.zh.mdc)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI 能力调用与 Provider 发现                          |
-| [Localization SDK](./i18n.zh.mdc)                           | `usePluginI18n()` / `plugin.i18n`              | 主机语言、localized text 与隔离 Domain Lexicon        |
+| [Language SDK](./i18n.zh.mdc)                               | `useLanguage()` / `plugin.language`            | 应用语言、localized text 与 Domain Lexicon    |
 <!-- markdownlint-enable MD060 -->
 ::alert{type="info"}
 **新功能：** [TuffTransport](./transport.zh.mdc) 是新插件推荐使用的 IPC API。它提供类型安全的事件、自动批量处理和流式传输支持。查看 [TuffTransport 技术内幕](./transport-internals.zh.mdc) 了解技术细节。

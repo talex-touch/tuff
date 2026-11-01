@@ -112,11 +112,6 @@ function showWindowPreferenceLoading(): void {
 
 let wallpaperSourceSwitchToken = 0
 
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  return typeof error === 'string' ? error : 'Unknown error'
-}
-
 function ensureBackground() {
   const normalized = normalizeWallpaperBackground(appSetting.background)
   if (!appSetting.background) {
@@ -300,14 +295,13 @@ async function copyWallpaperToLibrary(
   try {
     const result = await transport.send(copyWallpaperEvent, { sourcePath, type })
     if (!result?.storedPath) {
-      const message =
-        result?.error || t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library')
+      // Main's reason is English and goes to the log; the toast says it in the interface language.
       themeStyleLog.error('Failed to copy wallpaper to library:', {
         type,
         sourcePath,
-        message
+        message: result?.error
       })
-      toast.error(message)
+      toast.error(t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library'))
       return false
     }
     if (!appSetting.background?.library) return false
@@ -391,12 +385,11 @@ async function refreshDesktopWallpaperInternal(options?: {
     const result = await transport.send(getDesktopWallpaperEvent)
     const desktopPath = result?.path ?? ''
     if (!desktopPath) {
-      const message =
-        result?.error ||
-        t('themeStyle.desktopWallpaperUnavailable', 'Desktop wallpaper is unavailable.')
-      themeStyleLog.error('Failed to refresh desktop wallpaper:', message)
+      themeStyleLog.error('Failed to refresh desktop wallpaper:', result?.error)
       if (!options?.silentError) {
-        toast.error(message)
+        toast.error(
+          t('themeStyle.desktopWallpaperUnavailable', 'Desktop wallpaper is unavailable.')
+        )
       }
       return false
     }
@@ -409,12 +402,8 @@ async function refreshDesktopWallpaperInternal(options?: {
   } catch (error) {
     themeStyleLog.error('Failed to refresh desktop wallpaper:', error)
     if (!options?.silentError) {
-      const message = toErrorMessage(error)
       toast.error(
-        t(
-          'themeStyle.desktopWallpaperRefreshFailed',
-          `Failed to refresh desktop wallpaper: ${message}`
-        )
+        t('themeStyle.desktopWallpaperRefreshFailed', 'Failed to refresh desktop wallpaper.')
       )
     }
     return false
@@ -704,7 +693,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
                   />
                 </div>
                 <span class="ThemeStyle-SliderValue">
-                  {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
+                  {{ t('themeStyle.intervalMinutes', { count: folderIntervalMinutes }) }}
                 </span>
               </div>
             </TuffBlockSlot>

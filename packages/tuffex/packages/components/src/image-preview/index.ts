@@ -5,9 +5,11 @@ import type {
   ImagePreviewIndicator,
   ImagePreviewItem,
   ImagePreviewOrigin,
-  ImagePreviewOriginRect,
+  ImagePreviewMinimapSlotProps,
   ImagePreviewProps,
+  ImagePreviewSlotProps,
   ImagePreviewSource,
+  ImagePreviewThumbnailSlotProps,
   ImagePreviewTransition,
 } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
@@ -24,9 +26,11 @@ export type {
   ImagePreviewIndicator,
   ImagePreviewItem,
   ImagePreviewOrigin,
-  ImagePreviewOriginRect,
+  ImagePreviewMinimapSlotProps,
   ImagePreviewProps,
+  ImagePreviewSlotProps,
   ImagePreviewSource,
+  ImagePreviewThumbnailSlotProps,
   ImagePreviewTransition,
 }
 export type TxImagePreviewInstance = InstanceType<typeof TxImagePreview>

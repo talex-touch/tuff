@@ -1,14 +1,14 @@
-import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { execFile, spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { constants, createReadStream, existsSync, statSync } from 'node:fs'
+import { constants, existsSync, statSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { lstat, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
+import { cachedFileSha256 } from './local-embedding-digest'
 import {
   embeddingModelDirectories,
   locateLocalEmbeddingModel,
@@ -18,6 +18,7 @@ import {
   verifyLocalEmbeddingModel,
   verifyLocalEmbeddingMediaModel
 } from './local-embedding-model'
+import { currentEmbeddingPriority, EmbeddingJobQueue } from './local-embedding-queue'
 import type { LocalEmbeddingAssets } from './local-embedding-assets'
 import { resolveLocalEmbeddingAssets } from './local-embedding-assets'
 
@@ -305,9 +306,7 @@ function readOptionalBoolean(value: Record<string, unknown>, key: string): boole
   return field
 }
 async function verifyHelperBinary(helper: string, expected: string): Promise<void> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(helper, { highWaterMark: 8 << 20 })) hash.update(chunk)
-  if (hash.digest('hex') !== expected.toLowerCase())
+  if ((await cachedFileSha256(helper)) !== expected.toLowerCase())
     throw new Error('Local EmbeddingGemma helper checksum mismatch')
 }
 
@@ -379,7 +378,7 @@ class DigUpEmbeddingRuntime implements LocalEmbeddingRuntime {
   private child: ChildProcessWithoutNullStreams | null = null
   private ready = false
   private nextId = 1
-  private busy = false
+  private readonly jobs = new EmbeddingJobQueue(abortError)
   private stdout = ''
   private pending = new Map<number, PendingRequest>()
   private startResolve: (() => void) | null = null
@@ -431,15 +430,17 @@ class DigUpEmbeddingRuntime implements LocalEmbeddingRuntime {
     if (text.length > MAX_INPUT_CHARS) {
       throw new Error(`Local EmbeddingGemma input exceeds ${MAX_INPUT_CHARS} characters`)
     }
-    if (this.busy) throw new Error('Local EmbeddingGemma runtime is busy')
-    this.busy = true
+    const release = await this.jobs.acquire(currentEmbeddingPriority(), signal)
     try {
       await this.ensureStarted(signal)
       if (!this.child || !this.ready) throw new Error('Local EmbeddingGemma runtime is not ready')
       return await this.request('text', text, signal)
     } finally {
-      await this.stopping
-      this.busy = false
+      try {
+        await this.stopping
+      } finally {
+        release()
+      }
     }
   }
 
@@ -449,9 +450,12 @@ class DigUpEmbeddingRuntime implements LocalEmbeddingRuntime {
   ): Promise<LocalEmbeddingGeneration> {
     if (this.closed) throw new Error('Local EmbeddingGemma runtime is closed')
     if (signal?.aborted) throw abortError()
-    if (this.busy) throw new Error('Local EmbeddingGemma runtime is busy')
     if (!this.isImageReady()) throw new Error('Local EmbeddingGemma media model is unavailable')
-    this.busy = true
+    const release = await this.jobs.acquire(currentEmbeddingPriority(), signal)
+    if (signal?.aborted) {
+      release()
+      throw abortError()
+    }
     const controller = new AbortController()
     this.imageController = controller
     const onAbort = () => controller.abort()
@@ -488,13 +492,14 @@ class DigUpEmbeddingRuntime implements LocalEmbeddingRuntime {
         await this.stopping
         await snapshot?.cleanup()
       } finally {
-        this.busy = false
+        release()
       }
     }
   }
 
   close(): void {
     this.closed = true
+    this.jobs.close(new Error('Local EmbeddingGemma runtime closed'))
     this.imageController?.abort()
     this.terminate(new Error('Local EmbeddingGemma runtime closed'))
   }

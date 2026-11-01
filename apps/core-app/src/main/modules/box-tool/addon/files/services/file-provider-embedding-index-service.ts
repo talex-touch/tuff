@@ -26,7 +26,13 @@ export interface FileProviderEmbeddingIndexPort {
       image?: { path: string; mtime: number; size: number }
     }>,
     signal?: AbortSignal
-  ) => Promise<{ indexed: number; skipped: number; failed: number }>
+  ) => Promise<{ indexed: number; skipped: number; failed: number; retryFileIds?: string[] }>
+}
+
+/** What a flush needs to know about the embeddings it just asked for. */
+export interface FileProviderEmbeddingIndexOutcome {
+  /** Text files whose vectors failed and may be tried again: their progress must stay pending. */
+  retryFileIds: number[]
 }
 
 export interface FileProviderEmbeddingIndexServiceDeps {
@@ -60,7 +66,9 @@ export class FileProviderEmbeddingIndexService {
    * Embeds committed text entries and real image files. Image bytes never cross the worker;
    * only an authorized path plus the live filesystem identity reaches the host runtime.
    */
-  async indexCommittedEntries(entries: IndexWorkerFileResult[]): Promise<void> {
+  async indexCommittedEntries(
+    entries: IndexWorkerFileResult[]
+  ): Promise<FileProviderEmbeddingIndexOutcome | void> {
     if (this.deps.checkContentCapacity && !(await this.deps.checkContentCapacity())) return
     const embeddingService = this.getEmbeddingService()
     if (!embeddingService) return
@@ -135,6 +143,7 @@ export class FileProviderEmbeddingIndexService {
         failed: result.failed
       })
     }
+    return { retryFileIds: (result.retryFileIds ?? []).map(Number) }
   }
 
   /**

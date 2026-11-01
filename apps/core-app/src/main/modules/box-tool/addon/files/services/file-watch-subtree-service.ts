@@ -37,6 +37,12 @@ export interface FileWatchSubtreeDeps<
   saveCursor: (scope: string, cursor: number) => Promise<void>
   finishMissingSweep: (scope: string) => Promise<void>
   canContinue: () => boolean
+  /**
+   * A read of the index failed in a way waiting cures (the reader is restarting, its queue is full,
+   * a read timed out). The folder is still brought up to date; only the missing-file sweep is left
+   * for a later pass, which is what `deferred` reports.
+   */
+  isTransientReadFailure?: (error: unknown) => boolean
   now?: () => number
 }
 
@@ -86,8 +92,14 @@ export class FileWatchSubtreeService<
       deferred: false
     }
     if (!this.deps.isAdmitted(normalizedScope)) return { ...result, skipped: 1 }
-    const throughId = await this.deps.getHighWaterMark(normalizedScope, signal)
-    if (!Number.isSafeInteger(throughId) || throughId < 0)
+    let throughId: number | null
+    try {
+      throughId = await this.deps.getHighWaterMark(normalizedScope, signal)
+    } catch (error) {
+      if (!this.isTransientReadFailure(error, signal)) throw error
+      throughId = null
+    }
+    if (throughId !== null && (!Number.isSafeInteger(throughId) || throughId < 0))
       throw new Error('Invalid file watch subtree high-water mark')
     const scopeExists = await this.deps.pathExists(normalizedScope, signal)
     signal?.throwIfAborted()
@@ -110,19 +122,20 @@ export class FileWatchSubtreeService<
     // scan() must reject partial/unknown-quality runs. Its completion is the
     // prerequisite for this durable job, never a TEMP seen-path restart cursor.
     signal?.throwIfAborted()
+    if (throughId === null) return { ...result, deferred: true }
     await this.deps.beginMissingSweep(normalizedScope, signal)
     let afterId = await this.deps.loadCursor(normalizedScope, signal)
     for (let page = 0; afterId < throughId && page < 16; page += 1) {
       signal?.throwIfAborted()
       if (!this.deps.canContinue() || now() - startedAt >= roundBudgetMs)
         return { ...result, deferred: true }
-      const records = await this.deps.readPage(
-        normalizedScope,
-        afterId,
-        throughId,
-        batchSize,
-        signal
-      )
+      let records: TRecord[]
+      try {
+        records = await this.deps.readPage(normalizedScope, afterId, throughId, batchSize, signal)
+      } catch (error) {
+        if (!this.isTransientReadFailure(error, signal)) throw error
+        return { ...result, deferred: true }
+      }
       if (records.length === 0) {
         afterId = throughId
         break
@@ -163,6 +176,10 @@ export class FileWatchSubtreeService<
     if (afterId < throughId) return { ...result, deferred: true }
     await this.deps.finishMissingSweep(normalizedScope)
     return result
+  }
+
+  private isTransientReadFailure(error: unknown, signal?: AbortSignal): boolean {
+    return !signal?.aborted && this.deps.isTransientReadFailure?.(error) === true
   }
 
   private isInScope(scope: string, candidate: string): boolean {

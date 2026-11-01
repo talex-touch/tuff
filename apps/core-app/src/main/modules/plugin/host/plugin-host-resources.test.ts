@@ -160,7 +160,7 @@ describe('PluginHostResourceRegistry', () => {
       (target as unknown as PluginHostCapabilityResourceContext).register('stream', vi.fn())
     ).toThrow(new PluginHostResourceError('PLUGIN_HOST_RESOURCE_CLOSED'))
 
-    const invocation = begin(target, 'intelligence.stream', 'intelligence.basic')
+    const invocation = begin(target, 'intelligence.stream', 'intelligence.context')
     const handle = invocation.resources.register('stream', vi.fn())
     await invocation.commit(handle)
     expect(() => invocation.resources.register('stream', vi.fn())).toThrow(

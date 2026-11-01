@@ -53,6 +53,7 @@ Open `AI 命令管理` from CoreBox with `ai commands`, `AI命令`, `AI 命令`,
 ## Permissions
 
 - `intelligence.basic`: invoke Tuff Intelligence text chat and OCR capabilities.
+- `intelligence.context`: run asks in Context sessions that carry conversation history, saved memories, and retrieved context. Asks stop with a permission error until it is granted.
 - `clipboard.write`: copy AI answers or route selected-text replacement through the governed host copy-and-paste action. On macOS, replacement also requires Talex Touch automation access to the target application.
 
 ## Release Notes

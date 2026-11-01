@@ -202,6 +202,42 @@ vi.mock('@talex-touch/tuffex/dropdown-menu', () => {
     })
   }
 })
+interface DialogButtonStub {
+  content: string
+  type: string
+  onClick?: () => boolean
+}
+
+vi.mock('@talex-touch/tuffex/dialog', () => ({
+  TxBottomDialog: defineComponent({
+    name: 'TxBottomDialog',
+    props: {
+      title: { type: String, default: '' },
+      message: { type: String, default: '' },
+      btns: { type: Array as () => DialogButtonStub[], default: () => [] },
+      close: { type: Function, default: () => {} }
+    },
+    setup(props) {
+      return () =>
+        h('div', { class: 'tx-bottom-dialog' }, [
+          h('span', { class: 'dialog-title' }, props.title),
+          h('span', { class: 'dialog-message' }, props.message),
+          props.btns.map((btn) =>
+            h(
+              'button',
+              {
+                class: `dialog-btn-${btn.type}`,
+                onClick: () => {
+                  if (btn.onClick?.() !== false) props.close?.()
+                }
+              },
+              btn.content
+            )
+          )
+        ])
+    }
+  })
+}))
 
 vi.mock('~/modules/conversation/useConversationHistory', () => {
   historyHolder.conversations = ref<ConversationRecord[]>([])
@@ -1389,7 +1425,7 @@ describe('shellConversationList chats section', () => {
 })
 
 describe('shellConversationList conversation delete', () => {
-  it('deletes a conversation on the second press of its trash can, not the first', async () => {
+  it('requires secondary confirmation in a dialog before deleting a conversation', async () => {
     listState.projects = [project({ id: 'p1' })]
     historyHolder.conversations!.value = [
       conversation({ id: 'loose' }),
@@ -1402,14 +1438,23 @@ describe('shellConversationList conversation delete', () => {
       ['.ShellProjectFolder-Children', 'filed'],
       ['.ShellConversationList-Section--chats', 'loose']
     ] as const) {
-      const button = wrapper.find(`${scope} .ShellProjectRows-Delete`)
-      await button.trigger('click')
-      await flushPromises()
-      expect(historyRemoveMock).not.toHaveBeenCalled()
-      expect(button.classes()).toContain('is-armed')
+      const deleteItem = wrapper
+        .find(scope)
+        .findAll('.tx-dropdown-item')
+        .find((item) => item.text().includes('shell.history.delete'))
+      if (!deleteItem) throw new Error(`Missing delete item in ${scope}`)
 
-      await button.trigger('click')
+      await deleteItem.trigger('click')
       await flushPromises()
+
+      // Confirmation dialog is open, not removed yet
+      expect(wrapper.find('.tx-bottom-dialog').exists()).toBe(true)
+      expect(historyRemoveMock).not.toHaveBeenCalled()
+
+      // Confirm delete in dialog
+      await wrapper.find('.dialog-btn-error').trigger('click')
+      await flushPromises()
+
       expect(historyRemoveMock).toHaveBeenCalledWith(id)
       historyRemoveMock.mockClear()
     }

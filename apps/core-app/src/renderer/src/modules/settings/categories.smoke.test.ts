@@ -250,8 +250,10 @@ describe('destination catalog route parity', () => {
         expect(definition.route).toBeNull()
         continue
       }
+      // A query opens something on the page (`?panel=shortcuts`); the path is what has to exist.
+      const path = (definition.route as string).split('?')[0]
       expect(
-        registeredRoutes.has(definition.route as string),
+        registeredRoutes.has(path),
         `${definition.id} -> ${definition.route} is not a registered route`
       ).toBe(true)
     }

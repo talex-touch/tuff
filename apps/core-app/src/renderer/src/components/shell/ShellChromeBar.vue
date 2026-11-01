@@ -29,8 +29,11 @@ const { canGoBack, canGoForward, goBack, goForward } = useHistoryNavigation()
  * through the visit stack" apart from "leave settings" — the kind of mis-click you cannot undo
  * by clicking again.
  */
-const showBrandLabel = computed(() => !collapsed.value && width.value >= SIDEBAR_BRAND_LABEL_MIN)
-const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HISTORY_MIN)
+const brandLabelMin = computed(() => (isMac.value ? 258 : SIDEBAR_BRAND_LABEL_MIN))
+const historyMin = computed(() => (isMac.value ? 218 : SIDEBAR_HISTORY_MIN))
+
+const showBrandLabel = computed(() => !collapsed.value && width.value >= brandLabelMin.value)
+const showHistory = computed(() => !collapsed.value && width.value >= historyMin.value)
 </script>
 
 <template>
@@ -121,11 +124,11 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
 
 .ShellChromeBar-Brand {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   // No `gap`: the wordmark carries its own leading margin, so collapsing it leaves no orphan
   // space between the mark and the button that follows.
   align-items: center;
-  min-width: 0;
+  min-width: 22px;
   padding-left: 2px;
 }
 
@@ -163,6 +166,11 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: none;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 // Pushes history navigation to the trailing edge. A `margin-left: auto` on the group itself
@@ -238,6 +246,7 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
 
   .ShellChromeBar-Brand {
     flex: 0 0 auto;
+    min-width: 20px;
     padding-left: 0;
   }
 

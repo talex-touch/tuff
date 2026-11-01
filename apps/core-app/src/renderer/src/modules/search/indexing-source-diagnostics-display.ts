@@ -25,11 +25,19 @@ import {
 // Both helpers are alias-free and framework-free for the same reason.
 import { formatResetTime } from '../../components/intelligence/audit/audit-format'
 import { usageLimitLabelKey } from '../../components/intelligence/audit/usage-limit-labels'
+import { describePublicFailure } from '../../../../shared/public-failure'
 
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
 
-/** The interface's `t`: names the chips put in a message are translated before they go in. */
-export type IndexingSourceTranslate = (key: string) => string
+/**
+ * The interface's `t`: names and phrases the chips put in a message are translated before they go in.
+ * Without it they stay as stored, and a recent task's summary stays in the English the evidence
+ * verifier (`scripts/settings-indexing-diagnostics-verify.ts`) matches.
+ */
+export type IndexingSourceTranslate = (
+  key: string,
+  values?: Record<string, string | number>
+) => string
 
 export interface IndexingSourceTaskChip {
   id: 'scan' | 'watch' | 'reconcile' | 'reset'
@@ -101,9 +109,7 @@ export function resolveIndexingSourceResetSuccessMessage(
   return {
     labelKey: 'settings.settingFileIndex.sourceActionResetSuccess',
     values: {
-      clearedSearchIndex: result.clearedSearchIndex ? 'yes' : 'no',
       clearedSearchIndexRows: result.clearedSearchIndexRows ?? 0,
-      clearedScanProgress: result.clearedScanProgress ? 'yes' : 'no',
       scanProgressRows: result.scanProgressRows ?? 0
     }
   }
@@ -117,7 +123,8 @@ export function resolveIndexingSourceMaintenanceActions(
 
 export function resolveIndexingSourceRecoveryChip(
   source: IndexedSourceDiagnostics,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceRecoveryChip | null {
   const recommendation = resolveIndexedSourceRecoveryRecommendation(source)
   if (recommendation.action === 'none') return null
@@ -128,7 +135,7 @@ export function resolveIndexingSourceRecoveryChip(
     labelKey: `settings.settingFileIndex.sourceRecoveryChip.${recommendation.action}`,
     values: {
       reason: recommendation.reason ?? '',
-      ...resolveRecoveryReasonValues(recommendation.reason, locale),
+      ...resolveRecoveryReasonValues(recommendation.reason, locale, translate),
       maintenanceAction: recommendation.maintenanceAction ?? '',
       blockedReason: recommendation.blockedReason ?? ''
     }
@@ -237,27 +244,31 @@ function resolveRecoveryTone(
 
 function resolveRecoveryReasonValues(
   reason: string | undefined,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): Record<string, string | number> {
   const retry = parseRetryWindowReason(reason)
   if (retry) {
+    const time = formatIndexingSourceTimestamp(retry.nextRetryAt, locale)
     return {
-      taskKind: retry.taskKind,
+      taskKind: formatTaskKind(retry.taskKind, translate),
       nextRetryAt: retry.nextRetryAt,
-      nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt, locale),
+      nextRetryAtText: time,
       runGateReason: '',
-      waitDetail: `retry after ${formatIndexingSourceTimestamp(retry.nextRetryAt, locale)}`
+      waitDetail: translate
+        ? translate('settings.settingFileIndex.sourceRecoveryWait.retryAfter', { time })
+        : `retry after ${time}`
     }
   }
 
   const runGate = parseRunGateReason(reason)
   if (runGate) {
     return {
-      taskKind: runGate.taskKind,
+      taskKind: formatTaskKind(runGate.taskKind, translate),
       nextRetryAt: '',
       nextRetryAtText: '',
       runGateReason: runGate.reason,
-      waitDetail: runGate.reason
+      waitDetail: translate ? translate(RUN_GATE_WAIT_KEYS[runGate.reason]) : runGate.reason
     }
   }
 
@@ -285,16 +296,31 @@ function parseRetryWindowReason(
   }
 }
 
+type RunGateWaitReason = 'already-running' | 'debounced'
+
+const RUN_GATE_WAIT_KEYS: Record<RunGateWaitReason, string> = {
+  'already-running': 'settings.settingFileIndex.sourceRecoveryWait.alreadyRunning',
+  debounced: 'settings.settingFileIndex.sourceRecoveryWait.debounced'
+}
+
 function parseRunGateReason(
   reason: string | undefined
-): { taskKind: IndexedSourceTaskHistoryKind; reason: string } | null {
+): { taskKind: IndexedSourceTaskHistoryKind; reason: RunGateWaitReason } | null {
   const match = reason?.match(/^run-gate:(scan|watch|reconcile|reset):(already-running|debounced)$/)
   if (!match) return null
 
   return {
     taskKind: match[1] as IndexedSourceTaskHistoryKind,
-    reason: match[2]
+    reason: match[2] as RunGateWaitReason
   }
+}
+
+/** A task kind by the name the interface gives it, or as stored without a translator. */
+function formatTaskKind(
+  kind: IndexedSourceTaskHistoryKind,
+  translate?: IndexingSourceTranslate
+): string {
+  return translate ? translate(`settings.settingFileIndex.sourceTaskKind.${kind}`) : kind
 }
 
 function clampProgressPercent(progress: IndexedSourceProgress): number {
@@ -355,8 +381,13 @@ function toOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function toEvidenceBoolean(value: unknown): string {
+function toEvidenceBoolean(value: unknown, translate?: IndexingSourceTranslate): string {
   if (typeof value !== 'boolean') return '-'
+  return formatBoolean(value, translate)
+}
+
+function formatBoolean(value: boolean, translate?: IndexingSourceTranslate): string {
+  if (translate) return translate(value ? 'common.yes' : 'common.no')
   return value ? 'yes' : 'no'
 }
 
@@ -396,7 +427,9 @@ function resolveEvidenceChipValues(
 
   return {
     label: evidence.label,
-    status: evidence.status,
+    status: translate
+      ? translate(resolveIndexingSourceStatusKey(evidence.status))
+      : evidence.status,
     count: resolveEvidenceCount(evidence),
     reason: evidence.reason ?? '',
     total: evidence.id.endsWith(':scan-progress')
@@ -418,7 +451,7 @@ function resolveEvidenceChipValues(
     error: typeof metadata.error === 'string' ? metadata.error : '',
     ftsRows: toEvidenceNumber(metadata.ftsRows),
     filesRows: toEvidenceNumber(metadata.filesRows),
-    needsRebuild: toEvidenceBoolean(metadata.needsRebuild),
+    needsRebuild: toEvidenceBoolean(metadata.needsRebuild, translate),
     orphanedKeywordsRemoved: toEvidenceNumber(metadata.orphanedKeywordsRemoved),
     resetSearchIndexRows: toEvidenceNumber(metadata.resetSearchIndexRows),
     resetScanProgressRows: toEvidenceNumber(metadata.resetScanProgressRows),
@@ -486,10 +519,11 @@ function resolveRunGateSortPriority(entry: IndexedSourceTaskRunGateSnapshotEntry
 
 function resolveRunGateValues(
   entry: IndexedSourceTaskRunGateSnapshotEntry,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): Record<string, string | number> {
   return {
-    kind: entry.kind,
+    kind: formatTaskKind(entry.kind, translate),
     blockedCount: entry.blockedCount,
     runningSince: formatIndexingSourceTimestamp(entry.runningSince, locale),
     lastCompletedAt: formatIndexingSourceTimestamp(entry.lastCompletedAt, locale),
@@ -499,94 +533,157 @@ function resolveRunGateValues(
   }
 }
 
-function toSummaryValue(value: unknown): string | number {
+function toSummaryValue(value: unknown, translate?: IndexingSourceTranslate): string | number {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) return value
-  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (typeof value === 'boolean') return formatBoolean(value, translate)
   return '-'
 }
 
-function appendAuditSummaryParts(parts: string[], task: IndexedSourceTaskHistoryEntry): void {
+/**
+ * One part of a recent task's summary: `sourceRecentTaskSummary.<key>` with `values` when there is a
+ * translator, else `fallback` — the English the evidence verifier matches, which the en catalog
+ * repeats word for word.
+ */
+function formatSummaryPart(
+  key: string,
+  values: Record<string, string | number>,
+  fallback: string,
+  translate?: IndexingSourceTranslate
+): string {
+  return translate
+    ? translate(`settings.settingFileIndex.sourceRecentTaskSummary.${key}`, values)
+    : fallback
+}
+
+function appendAuditSummaryParts(
+  parts: string[],
+  task: IndexedSourceTaskHistoryEntry,
+  translate?: IndexingSourceTranslate
+): void {
   const summary = task.summary ?? {}
-  const durationMs = toSummaryValue(summary.durationMs ?? task.durationMs)
+  const durationMs = toSummaryValue(summary.durationMs ?? task.durationMs, translate)
   if (durationMs !== '-') {
-    parts.push(`duration ${durationMs}ms`)
+    parts.push(
+      formatSummaryPart('duration', { ms: durationMs }, `duration ${durationMs}ms`, translate)
+    )
   }
 
-  const trigger = toSummaryValue(summary.trigger ?? task.trigger)
+  const trigger = toSummaryValue(summary.trigger ?? task.trigger, translate)
   if (trigger !== '-') {
-    parts.push(`trigger ${trigger}`)
+    parts.push(formatSummaryPart('trigger', { trigger }, `trigger ${trigger}`, translate))
   }
 
-  const reason = toSummaryValue(summary.reason ?? task.reason)
+  const reason = toSummaryValue(summary.reason ?? task.reason, translate)
   if (reason !== '-') {
-    parts.push(`reason ${reason}`)
+    parts.push(formatSummaryPart('reason', { reason }, `reason ${reason}`, translate))
   }
 
-  const attempt = toSummaryValue(summary.attempt ?? task.attempt)
+  const attempt = toSummaryValue(summary.attempt ?? task.attempt, translate)
   if (attempt !== '-') {
-    parts.push(`attempt ${attempt}`)
+    parts.push(formatSummaryPart('attempt', { attempt }, `attempt ${attempt}`, translate))
   }
 
-  const errorCode = toSummaryValue(summary.errorCode ?? task.errorCode)
+  const errorCode = toSummaryValue(summary.errorCode ?? task.errorCode, translate)
   if (errorCode !== '-') {
-    parts.push(`code ${errorCode}`)
+    parts.push(formatSummaryPart('code', { code: errorCode }, `code ${errorCode}`, translate))
   }
 }
 
-function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
+function resolveRecentTaskSummary(
+  task: IndexedSourceTaskHistoryEntry,
+  translate?: IndexingSourceTranslate
+): string {
   const summary = task.summary ?? {}
+  const value = (raw: unknown): string | number => toSummaryValue(raw, translate)
 
   if (task.kind === 'scan') {
-    const indexedRecords = summary.indexedRecords ?? summary.records
+    const indexed = value(summary.indexedRecords ?? summary.records)
+    const records = value(summary.records)
+    const batches = value(summary.batches)
     const parts = [
-      `indexed ${toSummaryValue(indexedRecords)}/${toSummaryValue(summary.records)}`,
-      `batches ${toSummaryValue(summary.batches)}`
+      formatSummaryPart(
+        'indexed',
+        { indexed, records },
+        `indexed ${indexed}/${records}`,
+        translate
+      ),
+      formatSummaryPart('batches', { batches }, `batches ${batches}`, translate)
     ]
 
     if (typeof summary.phase === 'string' && summary.phase.trim()) {
-      parts.push(`phase ${summary.phase.trim()}`)
+      const phase = summary.phase.trim()
+      parts.push(formatSummaryPart('phase', { phase }, `phase ${phase}`, translate))
     }
 
-    appendAuditSummaryParts(parts, task)
+    appendAuditSummaryParts(parts, task, translate)
     return parts.join(' / ')
   }
 
   if (task.kind === 'watch') {
+    const applied = value(summary.appliedDeltas)
+    const deltas = value(summary.deltas)
+    const action = value(summary.action)
     const parts = [
-      `delta ${toSummaryValue(summary.appliedDeltas)}/${toSummaryValue(summary.deltas)}`,
-      `action ${toSummaryValue(summary.action)}`
+      formatSummaryPart('delta', { applied, deltas }, `delta ${applied}/${deltas}`, translate),
+      formatSummaryPart('action', { action }, `action ${action}`, translate)
     ]
-    appendAuditSummaryParts(parts, task)
+    appendAuditSummaryParts(parts, task, translate)
     return parts.join(' / ')
   }
 
   if (task.kind === 'reconcile') {
+    const skipped = value(summary.skipped)
     const parts = [
-      `+${toSummaryValue(summary.added)} ~${toSummaryValue(summary.changed)} -${toSummaryValue(summary.deleted)}`,
-      `skipped ${toSummaryValue(summary.skipped)}`
+      `+${value(summary.added)} ~${value(summary.changed)} -${value(summary.deleted)}`,
+      formatSummaryPart('skipped', { skipped }, `skipped ${skipped}`, translate)
     ]
-    appendAuditSummaryParts(parts, task)
+    appendAuditSummaryParts(parts, task, translate)
     return parts.join(' / ')
   }
 
-  const parts = [`clear index ${toSummaryValue(summary.clearedSearchIndex)}`]
+  const clearedIndex = value(summary.clearedSearchIndex)
+  const parts = [
+    formatSummaryPart(
+      'clearIndex',
+      { cleared: clearedIndex },
+      `clear index ${clearedIndex}`,
+      translate
+    )
+  ]
   if (typeof summary.clearedSearchIndexRows !== 'undefined') {
-    parts.push(`index rows ${toSummaryValue(summary.clearedSearchIndexRows)}`)
+    const rows = value(summary.clearedSearchIndexRows)
+    parts.push(formatSummaryPart('indexRows', { rows }, `index rows ${rows}`, translate))
   }
 
-  parts.push(`progress ${toSummaryValue(summary.clearedScanProgress)}`)
+  const clearedProgress = value(summary.clearedScanProgress)
+  parts.push(
+    formatSummaryPart(
+      'progress',
+      { cleared: clearedProgress },
+      `progress ${clearedProgress}`,
+      translate
+    )
+  )
   if (typeof summary.scanProgressRows !== 'undefined') {
-    parts.push(`progress rows ${toSummaryValue(summary.scanProgressRows)}`)
+    const rows = value(summary.scanProgressRows)
+    parts.push(formatSummaryPart('progressRows', { rows }, `progress rows ${rows}`, translate))
   }
 
-  appendAuditSummaryParts(parts, task)
+  appendAuditSummaryParts(parts, task, translate)
   return parts.join(' / ')
+}
+
+/** A task's stored failure; main's public sentence reads in the interface language when it can. */
+function taskErrorText(error: string | undefined, translate?: IndexingSourceTranslate): string {
+  if (!error) return ''
+  return translate ? describePublicFailure(error, translate) : error
 }
 
 export function resolveIndexingSourceTaskChips(
   source: IndexedSourceDiagnostics,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceTaskChip[] {
   const chips: IndexingSourceTaskChip[] = []
 
@@ -604,7 +701,7 @@ export function resolveIndexingSourceTaskChips(
         records: source.lastScan.records,
         indexedRecords: source.lastScan.indexedRecords,
         phase: source.lastScan.phase ?? '-',
-        error: source.lastScan.error ?? ''
+        error: taskErrorText(source.lastScan.error, translate)
       }
     })
   }
@@ -625,7 +722,7 @@ export function resolveIndexingSourceTaskChips(
         deltas: source.lastWatch.deltas,
         applied: source.lastWatch.appliedDeltas,
         failed,
-        error: source.lastWatch.error ?? ''
+        error: taskErrorText(source.lastWatch.error, translate)
       }
     })
   }
@@ -648,7 +745,7 @@ export function resolveIndexingSourceTaskChips(
         errors: source.lastReconcile.errors,
         reason: source.lastReconcile.reason ?? '',
         rootCount: source.lastReconcile.rootCount ?? 0,
-        error: source.lastReconcile.error ?? ''
+        error: taskErrorText(source.lastReconcile.error, translate)
       }
     })
   }
@@ -664,11 +761,9 @@ export function resolveIndexingSourceTaskChips(
         time: formatIndexingSourceTimestamp(source.lastReset.completedAt, locale),
         jobId: source.lastReset.jobId ?? '-',
         reason: source.lastReset.reason,
-        clearedSearchIndex: source.lastReset.clearedSearchIndex ? 'yes' : 'no',
         clearedSearchIndexRows: source.lastReset.clearedSearchIndexRows ?? 0,
-        clearedScanProgress: source.lastReset.clearedScanProgress ? 'yes' : 'no',
         scanProgressRows: source.lastReset.scanProgressRows ?? 0,
-        error: source.lastReset.error ?? ''
+        error: taskErrorText(source.lastReset.error, translate)
       }
     })
   }
@@ -679,7 +774,8 @@ export function resolveIndexingSourceTaskChips(
 export function resolveIndexingSourceRecentTaskChips(
   source: IndexedSourceDiagnostics,
   limit = 3,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceRecentTaskChip[] {
   return (source.recentTasks ?? []).slice(0, limit).map((task, index) => ({
     id: `${task.kind}:${task.jobId ?? task.completedAt}:${index}`,
@@ -693,7 +789,7 @@ export function resolveIndexingSourceRecentTaskChips(
       reason: toSummaryValue(task.summary?.reason ?? task.reason),
       attempt: toSummaryValue(task.summary?.attempt ?? task.attempt),
       errorCode: toSummaryValue(task.summary?.errorCode ?? task.errorCode),
-      summary: resolveRecentTaskSummary(task),
+      summary: resolveRecentTaskSummary(task, translate),
       error: task.error ?? ''
     }
   }))
@@ -702,7 +798,8 @@ export function resolveIndexingSourceRecentTaskChips(
 export function resolveIndexingSourceRunGateChips(
   source: IndexedSourceDiagnostics,
   limit = 3,
-  locale?: string
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceRunGateChip[] {
   return [...(source.taskRunGate ?? [])]
     .sort(
@@ -715,7 +812,7 @@ export function resolveIndexingSourceRunGateChips(
       id: `${entry.sourceId}:${entry.kind}`,
       tone: resolveRunGateTone(entry),
       labelKey: resolveRunGateLabelKey(entry),
-      values: resolveRunGateValues(entry, locale)
+      values: resolveRunGateValues(entry, locale, translate)
     }))
 }
 
@@ -750,7 +847,8 @@ export function resolveIndexingSourceAdmissionIssueChips(
 /**
  * `locale` and `translate` are the interface's: a usage-limit pause names its reset time in that
  * language and its limit by Audit's name for it, the way the audit page and the refusal copy do.
- * Without them the time falls back to the runtime's own format and the limit to its stored key.
+ * The status and the integrity row's rebuild flag are translated too. Without them the time falls
+ * back to the runtime's own format, and the limit, status and flag to their stored values.
  */
 export function resolveIndexingSourceEvidenceChips(
   source: IndexedSourceDiagnostics,

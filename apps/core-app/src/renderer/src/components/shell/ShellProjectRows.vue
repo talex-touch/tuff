@@ -1,23 +1,13 @@
-<script lang="ts">
-/**
- * The one delete waiting for its confirming click, sidebar-wide. Every open folder and the Chats
- * section render their own copy of this component, so arming a row disarms whichever copy held the
- * previous one through this hand-off; the pointer and focus rules alone would let two stay armed.
- */
-let disarmActiveDelete: (() => void) | null = null
-</script>
-
 <script setup lang="ts">
 import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { onBeforeUnmount, ref } from 'vue'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
-
-/** How long an armed delete waits for its second click before it turns back into the trash can. */
-const DELETE_CONFIRM_WINDOW_MS = 3000
 
 const props = withDefaults(
   defineProps<{
@@ -37,16 +27,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { isConversationLoading } = useConversationLoading()
+const openConversationMenuRef = ref<string | null>(null)
 const openSessionMenuRef = ref<string | null>(null)
-/** The conversation whose trash can has turned into 「确认？」, if any. */
-const armedId = ref<string | null>(null)
-let disarmTimer: number | null = null
-
+const pendingDeleteConversation = ref<ConversationRecord | null>(null)
 function sessionDisabledReason(session: LocalAiCliSessionSummary): string | undefined {
   if (session.state === 'missing') return t('shell.projects.sessionMissing')
   if (session.state === 'conflict') return t('shell.projects.sessionConflict')
   if (props.dispatchDisabled) return t('shell.projects.sessionArchived')
   return undefined
+}
+
+function setConversationMenu(id: string, open: boolean): void {
+  openConversationMenuRef.value = open ? id : null
 }
 
 function setSessionMenu(sessionRef: string, open: boolean): void {
@@ -57,64 +49,18 @@ function conversationTitle(conversation: ConversationRecord): string {
   return conversation.title || t('shell.history.untitled')
 }
 
-function deleteLabel(conversation: ConversationRecord): string {
-  return armedId.value === conversation.id
-    ? t('shell.history.deleteConfirmLabel', { title: conversationTitle(conversation) })
-    : t('shell.history.delete')
+function requestDelete(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  pendingDeleteConversation.value = conversation
 }
 
-function disarm(): void {
-  if (disarmTimer !== null) {
-    window.clearTimeout(disarmTimer)
-    disarmTimer = null
+function onConfirmDelete(): boolean {
+  if (pendingDeleteConversation.value) {
+    emit('removeConversation', pendingDeleteConversation.value.id)
+    pendingDeleteConversation.value = null
   }
-  armedId.value = null
-  if (disarmActiveDelete === disarm) disarmActiveDelete = null
+  return true
 }
-
-function arm(id: string): void {
-  if (disarmActiveDelete !== null && disarmActiveDelete !== disarm) disarmActiveDelete()
-  disarm()
-  armedId.value = id
-  disarmActiveDelete = disarm
-  disarmTimer = window.setTimeout(disarm, DELETE_CONFIRM_WINDOW_MS)
-}
-
-/**
- * The first press arms, the second deletes. Enter and Space arrive here as clicks, from the native
- * button, so the keyboard takes the same two steps.
- */
-function onDelete(id: string): void {
-  if (armedId.value !== id) {
-    arm(id)
-    return
-  }
-  disarm()
-  emit('removeConversation', id)
-}
-
-/** Pointer leaving the row, or focus leaving the button, gives the trash can back. */
-function release(id: string): void {
-  if (armedId.value === id) disarm()
-}
-
-/**
- * Escape backs out of an armed delete, and is only claimed when there is one to back out of. A held
- * Enter repeats the button's click, which would arm and delete in one press; only a fresh press may
- * take the second step.
- */
-function onDeleteKeydown(event: KeyboardEvent, id: string): void {
-  if (event.key === 'Enter' && event.repeat) {
-    event.preventDefault()
-    return
-  }
-  if (event.key !== 'Escape' || armedId.value !== id) return
-  event.preventDefault()
-  event.stopPropagation()
-  disarm()
-}
-
-onBeforeUnmount(disarm)
 </script>
 
 <template>
@@ -124,9 +70,9 @@ onBeforeUnmount(disarm)
       class="ShellProjectRows-Row"
       :class="{
         active: row.conversation.id === activeId,
-        'is-loading': isConversationLoading(row.conversation.id)
+        'is-loading': isConversationLoading(row.conversation.id),
+        'is-menu-open': openConversationMenuRef === row.conversation.id
       }"
-      @mouseleave="release(row.conversation.id)"
     >
       <button
         class="ShellProjectRows-Open"
@@ -135,35 +81,48 @@ onBeforeUnmount(disarm)
         :aria-current="row.conversation.id === activeId ? 'page' : undefined"
         @click="emit('openConversation', row.conversation.id)"
       >
-        {{ conversationTitle(row.conversation) }}
+        <Transition name="shell-spinner-slide">
+          <span
+            v-if="isConversationLoading(row.conversation.id)"
+            class="ShellProjectRows-LoadingIndicator"
+            :title="t('shell.history.loading')"
+            :aria-label="t('shell.history.loading')"
+          >
+            <TxSpinner
+              :size="13"
+              :stroke-width="1.5"
+              class="ShellProjectRows-Spinner ShellProjectRows-TxSpinner"
+            />
+          </span>
+        </Transition>
+        <span class="ShellProjectRows-Title">{{ conversationTitle(row.conversation) }}</span>
       </button>
-      <div
-        v-if="isConversationLoading(row.conversation.id)"
-        class="ShellProjectRows-LoadingIndicator"
-        :title="t('shell.history.loading')"
-        :aria-label="t('shell.history.loading')"
+      <TxDropdownMenu
+        :model-value="openConversationMenuRef === row.conversation.id"
+        placement="bottom-end"
+        @update:model-value="setConversationMenu(row.conversation.id, $event)"
       >
-        <span class="ShellProjectRows-Spinner" aria-hidden="true" />
-      </div>
-      <!-- One button in both states, so focus stays put when the icon turns into 「确认？」. -->
-      <button
-        class="ShellProjectRows-Action ShellProjectRows-Delete"
-        :class="{ 'is-armed': armedId === row.conversation.id }"
-        type="button"
-        :title="deleteLabel(row.conversation)"
-        :aria-label="deleteLabel(row.conversation)"
-        @click.stop="onDelete(row.conversation.id)"
-        @blur="release(row.conversation.id)"
-        @keydown="onDeleteKeydown($event, row.conversation.id)"
-      >
-        <span v-if="armedId === row.conversation.id" class="ShellProjectRows-Confirm">
-          {{ t('shell.history.deleteConfirm') }}
-        </span>
-        <span v-else class="i-ri-delete-bin-6-line" aria-hidden="true" />
-      </button>
+        <template #trigger>
+          <button
+            class="ShellProjectRows-Action"
+            type="button"
+            :aria-label="t('shell.projects.sessionActions')"
+          >
+            <span class="i-ri-more-2-fill" />
+          </button>
+        </template>
+        <TxDropdownItem danger @select="requestDelete(row.conversation)">
+          <span class="i-ri-delete-bin-line mr-1.5" />
+          {{ t('shell.history.delete') }}
+        </TxDropdownItem>
+      </TxDropdownMenu>
     </div>
 
-    <div v-else class="ShellProjectRows-Row ShellProjectRows-Row--session">
+    <div
+      v-else
+      class="ShellProjectRows-Row ShellProjectRows-Row--session"
+      :class="{ 'is-menu-open': openSessionMenuRef === row.session.sessionRef }"
+    >
       <button
         class="ShellProjectRows-Open ShellProjectRows-Session"
         type="button"
@@ -200,6 +159,28 @@ onBeforeUnmount(disarm)
       </TxDropdownMenu>
     </div>
   </template>
+
+  <TxBottomDialog
+    v-if="pendingDeleteConversation"
+    :title="t('shell.history.deleteConfirmTitle')"
+    :message="
+      t('shell.history.deleteConfirmLabel', { title: conversationTitle(pendingDeleteConversation) })
+    "
+    :close-label="t('common.close')"
+    :btns="[
+      { content: t('common.cancel'), type: 'info', onClick: () => true },
+      {
+        content: t('shell.history.delete'),
+        type: 'error',
+        onClick: onConfirmDelete
+      }
+    ]"
+    :close="
+      () => {
+        pendingDeleteConversation = null
+      }
+    "
+  />
 </template>
 
 <style scoped lang="scss">
@@ -227,7 +208,7 @@ onBeforeUnmount(disarm)
     background: var(--shell-primary-soft);
   }
 
-  &.is-loading {
+  &.is-loading.active {
     border-color: color-mix(in srgb, var(--shell-primary) 32%, transparent);
     animation: shell-row-glow-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 
@@ -261,6 +242,8 @@ onBeforeUnmount(disarm)
 }
 
 .ShellProjectRows-Open {
+  display: flex;
+  align-items: center;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -271,9 +254,7 @@ onBeforeUnmount(disarm)
   color: var(--shell-text-regular);
   font-family: inherit;
   font-size: var(--shell-fs-body);
-  white-space: nowrap;
   text-align: left;
-  text-overflow: ellipsis;
   cursor: pointer;
   -webkit-app-region: no-drag;
 
@@ -286,6 +267,14 @@ onBeforeUnmount(disarm)
     color: var(--shell-primary);
     font-weight: 500;
   }
+}
+
+.ShellProjectRows-Title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ShellProjectRows-Session {
@@ -368,27 +357,46 @@ onBeforeUnmount(disarm)
 }
 
 .ShellProjectRows-LoadingIndicator {
-  display: flex;
+  display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
   color: var(--shell-primary);
   pointer-events: none;
-  z-index: 3;
+  vertical-align: middle;
+}
+
+.ShellProjectRows-TxSpinner {
+  color: var(--shell-primary);
+  flex-shrink: 0;
 }
 
 .ShellProjectRows-Spinner {
-  display: inline-block;
-  box-sizing: border-box;
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid color-mix(in srgb, var(--shell-primary) 28%, transparent);
-  border-top-color: var(--shell-primary);
-  border-radius: 50%;
-  animation: shell-spinner-rotate 0.75s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-spinner-slide-enter-active,
+.shell-spinner-slide-leave-active {
+  transition:
+    width 0.24s cubic-bezier(0.2, 0, 0, 1),
+    margin-right 0.24s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.shell-spinner-slide-enter-from,
+.shell-spinner-slide-leave-to {
+  width: 0 !important;
+  margin-right: 0 !important;
+  opacity: 0;
+  transform: scale(0.5);
 }
 
 .ShellProjectRows-Row:has(.ShellProjectRows-Delete.is-armed) .ShellProjectRows-LoadingIndicator {
@@ -421,17 +429,9 @@ onBeforeUnmount(disarm)
   }
 }
 
-@keyframes shell-spinner-rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 /** Reduced motion swaps icon and label outright; the fade that reveals the button stays. */
 @media (prefers-reduced-motion: reduce) {
-  .ShellProjectRows-Row.is-loading {
+  .ShellProjectRows-Row.is-loading.active {
     animation: none;
     border-color: var(--shell-primary-border);
     box-shadow: inset 0 0 0 1px var(--shell-primary-border);
@@ -441,9 +441,9 @@ onBeforeUnmount(disarm)
     }
   }
 
-  .ShellProjectRows-Spinner {
-    animation: none;
-    border-top-color: var(--shell-primary);
+  .shell-spinner-slide-enter-active,
+  .shell-spinner-slide-leave-active {
+    transition: opacity 0.15s ease;
   }
 
   .ShellProjectRows-Delete {

@@ -3,6 +3,7 @@ import type {
   IntelligenceChatPayload
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 export class ChatCapabilityTester extends BaseCapabilityTester<IntelligenceChatPayload, string> {
@@ -25,13 +26,13 @@ export class ChatCapabilityTester extends BaseCapabilityTester<IntelligenceChatP
     const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
     return this.buildTestResult(result, {
-      message: '对话测试成功',
+      message: t('intelligence.capabilityTest.message.chat'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入测试消息，例如：你好'
+    return t('intelligence.capabilityTest.hint.chat')
   }
 
   requiresUserInput(): boolean {

@@ -12,6 +12,7 @@ import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
 import { createRendererLogger } from './utils/renderer-log'
+import UpdateRestartOverlay from './components/update/UpdateRestartOverlay.vue'
 
 const VoiceDock = defineAsyncComponent(() => import('./views/assistant/VoiceDock.vue'))
 const ScreenshotOverlay = defineAsyncComponent(
@@ -81,6 +82,7 @@ watchEffect(() => {
       :theme="resolvedTheme"
       rich-colors
     />
+    <UpdateRestartOverlay />
     <WhatsChangedDialog v-if="appEntranceMode === 'MainApp'" />
     <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />

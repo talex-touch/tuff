@@ -2201,6 +2201,50 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('blocks AI send when only intelligence.context permission is denied', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn()
+    const permission = {
+      check: vi.fn(async (permissionId: string) => permissionId !== 'intelligence.context'),
+      request: vi.fn(async () => false),
+    }
+    const pluginWithoutContext = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const result = await pluginWithoutContext.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+
+    expect(permission.check).toHaveBeenCalledWith('intelligence.basic')
+    expect(permission.check).toHaveBeenCalledWith('intelligence.context')
+    expect(invoke).not.toHaveBeenCalled()
+    expect(pushItems.mock.calls[0][0][0].meta).toMatchObject({
+      status: 'error',
+      intelligence: { status: 'error', errorCode: 'PERMISSION_DENIED' },
+    })
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+    })
+  })
+
   it('allows local/BYOK AI send when auth state is logged out', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()

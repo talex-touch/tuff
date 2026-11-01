@@ -72,7 +72,11 @@
     "intelligence": {
       "basic": { "name": "Basic Intelligence", "desc": "Use basic Intelligence capabilities" },
       "admin": { "name": "Intelligence Admin", "desc": "Use high-risk Intelligence capabilities" },
-      "agents": { "name": "Intelligence Agents", "desc": "Invoke the agents system" }
+      "agents": { "name": "Intelligence Agents", "desc": "Invoke the agents system" },
+      "context": {
+        "name": "Intelligence Context",
+        "desc": "Run Intelligence requests in Context sessions that use conversation history, saved memories and retrieved context"
+      }
     },
     "storage": {
       "plugin": { "name": "Plugin Storage", "desc": "Use plugin private storage" },

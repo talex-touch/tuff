@@ -21,9 +21,16 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const frameRef = ref<HTMLIFrameElement | null>(null)
-const { status, error, height, srcdoc } = useWidgetSandbox(toRef(props, 'source'), frameRef)
+const { status, failure, height, srcdoc } = useWidgetSandbox(toRef(props, 'source'), frameRef)
 
 const frameStyle = computed(() => ({ height: `${height.value}px` }))
+const failureReason = computed(() => {
+  const value = failure.value
+  if (!value) return ''
+  if (value.reason === 'timedOut') return t('home.widget.timedOut')
+  if (value.reason === 'blocked') return t('home.widget.blocked', { directive: value.directive })
+  return value.message
+})
 </script>
 
 <template>
@@ -45,7 +52,7 @@ const frameStyle = computed(() => ({ height: `${height.value}px` }))
 
     <div v-if="status === 'failed'" class="ToolWidgetCard-Failed" role="alert">
       <p class="ToolWidgetCard-FailedTitle">{{ t('home.widget.failed') }}</p>
-      <p class="ToolWidgetCard-FailedReason">{{ error }}</p>
+      <p v-if="failureReason" class="ToolWidgetCard-FailedReason">{{ failureReason }}</p>
       <!-- The tool still produced something; showing it beats showing nothing. -->
       <pre v-if="props.fallback" class="ToolWidgetCard-Fallback">{{ props.fallback }}</pre>
     </div>

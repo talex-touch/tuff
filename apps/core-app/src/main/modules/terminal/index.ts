@@ -20,6 +20,7 @@ import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { withPermission } from '../permission/channel-guard'
 import { ptySessionCore, watchPtyOwner } from './pty-session-core'
+import { scanTerminalFonts } from './terminal-font-service'
 
 const terminalLog = createLogger('Terminal')
 const SCOPE = 'terminal'
@@ -132,6 +133,12 @@ export class TerminalModule extends BaseModule {
     register(TerminalEvents.session.resize, (payload, context) => this.resize(payload, context))
     register(TerminalEvents.session.close, (payload, context) => this.close(payload, context))
     register(TerminalEvents.session.ack, (payload, context) => this.acknowledge(payload, context))
+    this.disposers.push(
+      transport.on(TerminalEvents.fonts.list, async () => {
+        const fonts = await scanTerminalFonts()
+        return { fonts }
+      })
+    )
   }
 
   private send<T>(context: HandlerContext, event: TuffEvent<T, void>, payload: T): void {
@@ -152,10 +159,17 @@ export class TerminalModule extends BaseModule {
     if (!payload || typeof payload !== 'object') throw new Error('TERMINAL_COMMAND_INVALID')
     const recipient = { ...context, ...(context.plugin ? { plugin: { ...context.plugin } } : {}) }
     const flowControl = payload.flowControl === true
+    const defaultShell =
+      process.platform === 'win32'
+        ? process.env.COMSPEC || 'powershell.exe'
+        : process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+    const command = (payload.command && payload.command.trim()) || defaultShell
+    const defaultArgs = process.platform !== 'win32' ? ['-l'] : []
+    const args = payload.args ?? (payload.command ? [] : defaultArgs)
     const session = await this.core.create({
       owner,
-      command: payload.command,
-      args: payload.args,
+      command,
+      args,
       cwd: payload.cwd,
       cols: payload.cols,
       rows: payload.rows,

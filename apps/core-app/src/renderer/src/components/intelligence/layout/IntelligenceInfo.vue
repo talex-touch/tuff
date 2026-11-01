@@ -37,6 +37,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 import { isLocalCliProvider } from '~/modules/intelligence/provider-channel-type'
+import { describeFailure } from '~/utils/failure-text'
 import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue'
 import IntelligenceApiConfig from '../config/IntelligenceApiConfig.vue'
 import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
@@ -92,8 +93,9 @@ async function handleFetchNexusModels() {
       toast.error(result.message || t('intelligence.config.api.modelsFetchFailed'))
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(message)
+    toast.error(t('intelligence.config.api.modelsFetchFailed'), {
+      description: describeFailure(error, t, '') || undefined
+    })
   } finally {
     isFetchingNexusModels.value = false
   }
@@ -243,7 +245,7 @@ function handleToggleCliEnabled() {
           :title="t('intelligence.config.model.models')"
           :description="
             nexusModels.length > 0
-              ? `${nexusModels.length} ${t('intelligence.config.model.modelsCount')}`
+              ? t('intelligence.config.model.modelsCount', { count: nexusModels.length })
               : t('intelligence.config.model.noModels')
           "
           default-icon="i-carbon-model"

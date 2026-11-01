@@ -1,6 +1,7 @@
 import { Notification } from 'electron'
 import { isVoiceCaptureUnavailableCode } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { VoiceDictateResult } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { shortcutModule } from '../global-shortcon'
 import { voiceService } from './voice-service'
@@ -16,11 +17,21 @@ const log = createLogger('VoiceGlobal')
  * Only one of the two gestures needs it, and only once per press.
  */
 async function loadSelectionCapture(): Promise<{
-  capture: () => Promise<{ text: string; issueMessage?: string }>
+  capture: () => Promise<{ text: string; issueCode?: string; issueMessage?: string }>
 }> {
   const module = await import('../system/selection-capture')
   return module.selectionCaptureService
 }
+
+/**
+ * Why the selection could not be read, by the reader's issue code. Its own message is a diagnostic
+ * in English and goes to the log; an empty selection, or no code, gets the prompt to select text.
+ */
+const SELECTION_ISSUE_BODY_KEYS: Readonly<Record<string, string>> = Object.freeze({
+  unsupported: 'notifications.voice.selectionUnsupportedBody',
+  disabled: 'notifications.voice.selectionDisabledBody',
+  failed: 'notifications.voice.selectionFailedBody'
+})
 
 const DICTATION_SHORTCUT_ID = 'voice.dictation.toggle'
 const QUICK_EDIT_SHORTCUT_ID = 'voice.quickEdit'
@@ -129,9 +140,15 @@ export class GlobalDictationController {
       // go check their microphone sends them somewhere nothing is wrong. The code is what tells
       // the two apart; the notification is the only surface this gesture has.
       if (isVoiceCaptureUnavailableCode((error as { code?: unknown } | null)?.code)) {
-        this.notify('语音输入不可用', '本机应用缺少录音组件，请更新或重新安装后再试')
+        this.notify(
+          t('notifications.voice.captureUnavailableTitle'),
+          t('notifications.voice.captureUnavailableBody')
+        )
       } else {
-        this.notify('语音手势失败', '请检查麦克风权限与语音服务配置')
+        this.notify(
+          t('notifications.voice.gestureFailedTitle'),
+          t('notifications.voice.gestureFailedBody')
+        )
       }
     } finally {
       this.busy = false
@@ -160,9 +177,10 @@ export class GlobalDictationController {
         log.info(
           `Quick edit found no usable selection${capture.issueMessage ? ` (${capture.issueMessage})` : ''}`
         )
+        const issueBodyKey = capture.issueCode ? SELECTION_ISSUE_BODY_KEYS[capture.issueCode] : null
         this.notify(
-          '划词改口：先选中一段文字',
-          capture.issueMessage || '在任意应用里选中文字，再按一次快捷键'
+          t('notifications.voice.quickEditNoSelectionTitle'),
+          t(issueBodyKey ?? 'notifications.voice.quickEditNoSelectionBody')
         )
         return
       }
@@ -179,7 +197,10 @@ export class GlobalDictationController {
       this.activeSessionId = sessionId
       this.activeGesture = gesture
       log.success(`Quick edit listening over ${selection.length} selected characters`)
-      this.notify('✍️ 正在改口…', `选中 ${selection.length} 字，说完再按一次快捷键`)
+      this.notify(
+        `✍️ ${t('notifications.voice.quickEditListeningTitle')}`,
+        t('notifications.voice.quickEditListeningBody', { count: selection.length })
+      )
       return
     }
 
@@ -195,7 +216,10 @@ export class GlobalDictationController {
     this.activeSessionId = sessionId
     this.activeGesture = gesture
     log.success('Dictation listening')
-    this.notify('🎙️ 正在听写…', '再次按下快捷键停止并键入')
+    this.notify(
+      `🎙️ ${t('notifications.voice.dictationListeningTitle')}`,
+      t('notifications.voice.dictationListeningBody')
+    )
   }
 
   private async finish(): Promise<void> {
@@ -213,17 +237,32 @@ export class GlobalDictationController {
       return
     }
     if (!result.text) {
-      this.notify('没有识别到语音', '请靠近麦克风再试一次')
+      this.notify(t('notifications.voice.noSpeechTitle'), t('notifications.voice.noSpeechBody'))
       return
     }
     if (result.delivery?.method === 'autopaste') return
     if (result.delivery?.method === 'clipboard') {
-      this.notify('听写已复制', '请手动粘贴')
+      this.notify(
+        t('notifications.voice.dictationCopiedTitle'),
+        t('notifications.voice.pasteManuallyBody')
+      )
       return
     }
 
     if (result.delivery?.method === 'none') {
-      this.notify('听写未写入', result.delivery.reason || '当前应用目标已变化，请重试')
+      // The reason is a code (`target-changed`, an auto-paste failure code, …), not something to
+      // show; the two the user can act on are named, the rest ask for another try.
+      const reason = result.delivery.reason
+      this.notify(
+        t('notifications.voice.dictationNotDeliveredTitle'),
+        t(
+          reason === 'target-unavailable'
+            ? 'notifications.voice.targetUnavailableBody'
+            : reason === 'target-changed' || !reason
+              ? 'notifications.voice.targetChangedBody'
+              : 'notifications.voice.dictationRetryBody'
+        )
+      )
     }
   }
 
@@ -237,21 +276,34 @@ export class GlobalDictationController {
   private reportQuickEdit(result: VoiceDictateResult): void {
     const reason = result.delivery?.reason
     if (reason === 'quick-edit-cancelled') {
-      this.notify('已取消改口', '选中文字保持原样')
+      this.notify(
+        t('notifications.voice.quickEditCancelledTitle'),
+        t('notifications.voice.selectionUnchangedBody')
+      )
       return
     }
     if (!result.text) {
-      this.notify('改口未应用', '没听清改写要求，选中文字保持原样')
+      this.notify(
+        t('notifications.voice.quickEditNotAppliedTitle'),
+        t('notifications.voice.quickEditNotHeardBody')
+      )
       return
     }
     if (result.delivery?.method === 'clipboard') {
-      this.notify('改口结果已复制', '请手动粘贴')
+      this.notify(
+        t('notifications.voice.quickEditCopiedTitle'),
+        t('notifications.voice.pasteManuallyBody')
+      )
       return
     }
     if (result.delivery?.method !== 'none') return
     this.notify(
-      '改口未写入',
-      reason === 'target-changed' ? '当前应用已切换，选中文字保持原样' : reason || '请重试'
+      t('notifications.voice.quickEditNotDeliveredTitle'),
+      t(
+        reason === 'target-changed'
+          ? 'notifications.voice.quickEditTargetChangedBody'
+          : 'notifications.voice.selectionUnchangedRetryBody'
+      )
     )
   }
 

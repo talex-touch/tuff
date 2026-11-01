@@ -43,6 +43,10 @@ the variable.
 - Settings → About → Advanced Settings reveals the Beta switches in Plugins & Tools. Turning
   advanced visibility on does not enable a feature. Home recommendations also requires advanced
   visibility to expose its existing opt-in control.
+- OmniPanel additionally requires Advanced Settings itself to be on: `isBetaFeatureEnabled`
+  returns false for `omniPanel` while `dev.advancedSettings !== true`, whatever its own opt-in
+  says. Turning Advanced Settings off therefore releases OmniPanel's key, mouse trigger and native
+  hook in the same settings pass; turning it back on restores the stored opt-in.
 - `shared/beta-features.ts` maps the primary shortcuts and OmniPanel's mouse trigger to their
   feature. Settings hides their rows while the feature is off; enabled features retain disabled
   shortcut rows so users can re-enable a binding. The local AI key follows its existing master switch.
@@ -636,7 +640,7 @@ const group = [...groupedByAccelerator].find(([grouped]) =>
   - the main window's command window: `renderer/components/shell/MainWindowCommandPalette.vue`, and
     the Open CoreBox row in `renderer/modules/shortcuts/main-window-command-catalog.ts`;
   - onboarding: `renderer/views/base/begin/internal/Done.vue`;
-  - the settings shortcut list: `SettingTools.vue` and `ShortcutDialogRow.vue`;
+  - the settings shortcut list: `SettingTools.vue` and `ShortcutDialog.vue`;
   - the notices.
 - Changing `getEffectiveAccelerator`, `getShortcutBinding`, `onBindingsChanged`, `publishBindings`,
   `shared/events/shortcut-binding.ts`, `useCoreBoxShortcut` or `shared/accelerator-label.ts`.
@@ -1016,94 +1020,23 @@ const renamed = renameMacOnlyModifiers(shortcut.accelerator)
 }
 ```
 
-## Note: Settings status ink (R9)
+## Note: Settings shortcut manager (R9, superseded 2026-10-30)
 
-The settings status line (`.ShortcutDialog-StatusText` in
-`renderer/views/base/settings/components/ShortcutDialogRow.vue`, 12px) reads its colour from three
-custom properties.
+The settings shortcut manager is `renderer/views/base/settings/components/ShortcutDialog.vue`: a
+`TxModal` holding a `TxDataTable` (sticky header, skeleton placeholder rows, empty state) with three
+columns — name with its command ID and `TxCopyButton`, the recorder (`FlatKeyInput`) or the trigger
+as a `TxTag`, and `TxSwitch` plus a `TxStatusBadge`.
 
-Base rule (light themes, high contrast included):
-
-```scss
---shortcut-status-danger:  color-mix(in srgb, var(--tx-color-danger, #f56c6c) 55%, var(--tx-text-color-primary, #303133));
---shortcut-status-success: color-mix(in srgb, var(--tx-color-success, #67c23a) 45%, var(--tx-text-color-primary, #303133));
---shortcut-status-muted:   var(--tx-text-color-regular, #606266);
-```
-
-`.dark .ShortcutDialog-StatusText` (dark themes, high contrast included): the plain tokens,
-`--tx-color-danger`, `--tx-color-success` and `--tx-text-color-secondary`. The dark themes stay as
-they were, by decision (R9).
-
-Which class uses which variable:
-
-- the base rule (a key that does nothing: refused, in conflict, invalid) → danger;
-- `.active`, `.disabled` and `.is-saving` → muted;
-- `.is-success` → success;
-- `.is-error` → danger.
-
-Measured in Chromium (WCAG 2), in the order red / green / grey:
-
-- before, light theme on `#ffffff`: 2.90 / 2.24 / 3.08 (grey was `secondary`);
-- after, light theme on `#ffffff`: 5.66 / 5.61 / 6.11;
-- after, light high contrast: 11.47 / 12.42 / 14.68;
-- dark on `#1d1e1f`: 6.04 / 9.58 / 6.85;
-- dark high contrast on `#111827`: 9.38 / 12.63 / 12.04.
-
-The same numbers live in the SFC comment. Re-measure when a hue or ink token moves.
-
-An amber `--shortcut-status-warning` and an `.is-warning` class once coloured the stand-in line
-("注册失败，本次暂用 ⌘E"). They went with the stand-in (see "No fallback").
-
-The percentages are tuffex's same-hue recipe, and grey sits on `regular` rather than `secondary`.
-Both rules are in [../frontend/tuffex-design-rules.md](../frontend/tuffex-design-rules.md): "White
-ink on a solid semantic fill is not a supported pairing" and "Resting ink for 13px text is
-`regular`, not `secondary`".
-
-Pinned by `renderer/views/base/settings/components/ShortcutDialogRow.test.ts` › "status ink
-contrast", which parses the SFC `<style>`:
-
-- the light recipes, verbatim, and no other custom property;
-- the dark block equals the three plain tokens;
-- every status class uses its variable, the classless (red) line included;
-- contrast ≥ 4.5 against `--tx-bg-color-overlay`, read from the `:root` and `.dark` blocks of
-  `packages/tuffex/packages/components/style/variables.scss`;
-- each recipe's `var()` fallback equals the light token it stands for.
-
-### The save-result row tint
-
-A save result tints its row, and the status line sits on that tint:
-
-```css
-.ShortcutDialog-Row.is-success { --shortcut-row-tint: rgb(var(--tx-color-success-rgb) / 0.08); }
-.ShortcutDialog-Row.is-error   { --shortcut-row-tint: rgb(var(--tx-color-danger-rgb) / 0.16); }
-.ShortcutDialog-Row.is-success, .ShortcutDialog-Row.is-error { background-color: var(--shortcut-row-tint); }
-/* the sticky status cell of those rows */
-background: linear-gradient(var(--shortcut-row-tint), var(--shortcut-row-tint)), var(--tx-bg-color-overlay);
-```
-
-- **Only the slash form parses.** Every `--tx-color-*-rgb` token in tuffex is a space-separated
-  triplet (`103 194 58`). `rgba(var(--…-rgb), alpha)` substitutes to `rgba(103 194 58, 0.08)`,
-  which is invalid at computed-value time, so the declaration drops. Probed in the dev app's
-  Electron renderer: the comma form computes to `rgba(0, 0, 0, 0)`, the slash form to the tint.
-  Until 2026-09-26 the row never showed a tint for that reason.
-- **The sticky cell keeps its opaque base and carries one tint.** It used `background: inherit`,
-  which, once the tint rendered, would have laid the translucent tint a second time over the row's.
-  Red on the doubled tint reads 4.15 on light and 3.68 on dark, under 4.5. The gradient layer
-  gives the cell the row's single tint over `--tx-bg-color-overlay`, and it stays opaque, so
-  columns scrolled under it never show through. `.is-saving` rows are untinted, and their cell
-  still inherits.
-- **Contrast on the tint**, green / red, computed from the tokens (sRGB compositing, WCAG 2):
-  5.26 / 4.78 light, 11.05 / 8.78 light high contrast, 8.18 / 4.73 dark, 10.61 / 6.83 dark high
-  contrast. The SFC comment carries the same numbers.
-
-Pinned by `ShortcutDialogRow.test.ts` › "save-result tint":
-
-- the stylesheet has no `rgba(var(--…-rgb),` form, and each state's tint parses as
-  `rgb(var(--tx-color-*-rgb) / alpha)` with 0.08 and 0.16;
-- each state's row uses `var(--shortcut-row-tint)`, and its cell uses the gradient-over-overlay
-  value above;
-- in `:root` and `.dark`, the success and danger inks clear 4.5:1 on the overlay under the tint,
-  taking the triplet and the alpha from the stylesheet, so a stronger tint fails it.
+- It replaced a hand-written grid opened through the flip overlay. The flip rotated and scaled the
+  whole table in 3D from the 「管理」 button and dropped frames all the way open; `TxModal` enters
+  with a plain scale/translate.
+- The status line is a `TxStatusBadge` whose tone `SettingTools.getShortcutStatus` picks: a save in
+  flight `info`, saved `success`, a failed save `danger`; then disabled `muted`, active `success`,
+  conflict / invalid / refused `danger`, owner not running or a missing permission `warning`. The
+  badge owns its own contrast, so the R9 ink recipes, the save-result row tint and
+  `ShortcutDialogRow.test.ts` that pinned them were removed with the custom row.
+- `SettingTools.shortcut-status.test.ts` pins which text each state shows, live, through the
+  dialog's real cell slots.
 
 ## Known remaining instances
 
@@ -1140,8 +1073,7 @@ npx vitest run src/main/modules/global-shortcon.test.ts src/main/modules/box-too
   src/renderer/src/components/shell/ShellSidebar.test.ts \
   src/renderer/src/components/shell/MainWindowCommandPalette.test.ts \
   src/renderer/src/views/base/begin/internal/Done.test.ts \
-  src/renderer/src/views/base/settings/SettingTools.shortcut-status.test.ts \
-  src/renderer/src/views/base/settings/components/ShortcutDialogRow.test.ts
+  src/renderer/src/views/base/settings/SettingTools.shortcut-status.test.ts
 npm run typecheck:node
 ```
 

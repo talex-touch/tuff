@@ -190,7 +190,7 @@ export class TpexPluginProvider implements PluginProvider {
         const exists = await fse.pathExists(filePath)
         if (!exists) {
           this.log.error('Local TPEX file not found')
-          throw new Error('Specified TPEX file does not exist')
+          throw new Error('PLUGIN_SOURCE_FILE_NOT_FOUND')
         }
       }
 
@@ -239,7 +239,8 @@ export class TpexPluginProvider implements PluginProvider {
   ): Promise<PluginInstallResult> {
     const parsed = parseTpexSource(request.source)
     if (!parsed) {
-      throw new Error(`Invalid TPEX source format: ${request.source}`)
+      this.log.error('Unrecognized TPEX registry source', { meta: { source: request.source } })
+      throw new Error('PLUGIN_SOURCE_INVALID')
     }
 
     const { slug, version } = parsed
@@ -268,9 +269,10 @@ export class TpexPluginProvider implements PluginProvider {
     })
     if (detailRes.status !== 200) {
       if (detailRes.status === 404) {
-        throw new Error(`Plugin not found: ${slug}`)
+        this.log.error('Plugin not found in the registry', { meta: { slug } })
+        throw new Error('PLUGIN_NOT_FOUND')
       }
-      throw new Error(`Failed to fetch plugin details: ${detailRes.statusText}`)
+      throw new Error(`NETWORK_HTTP_STATUS_${detailRes.status}`)
     }
 
     const detail: TpexDetailResponse = detailRes.data
@@ -282,7 +284,10 @@ export class TpexPluginProvider implements PluginProvider {
     }
 
     if (!targetVersion?.packageUrl) {
-      throw new Error(`No downloadable version found for plugin: ${slug}`)
+      this.log.error('No downloadable version in the registry', {
+        meta: { slug, version: version ?? 'latest' }
+      })
+      throw new Error('PLUGIN_VERSION_UNAVAILABLE')
     }
 
     // Construct full download URL

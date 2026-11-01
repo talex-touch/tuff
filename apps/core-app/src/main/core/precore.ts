@@ -30,7 +30,11 @@ import { installDefaultSessionPermissionPolicy } from './default-session-permiss
 import { installReportOnlyCspPolicy } from './report-only-csp'
 import { installLeaveGuard } from './leave-guard'
 import { getCurrentTouchApp } from './main-runtime-state'
-import { DEFAULT_BEFORE_QUIT_TIMEOUT_MS, runWithBeforeQuitTimeout } from './before-quit-guard'
+import {
+  DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
+  UPDATE_NOW_BEFORE_QUIT_TIMEOUT_MS,
+  runWithBeforeQuitTimeout
+} from './before-quit-guard'
 import { stopWatchersBeforeQuit } from './before-quit-stop-watchers'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
@@ -83,7 +87,7 @@ function broadcastBeforeQuit(): void {
   transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
 }
 
-async function quiesceRenderersBeforeQuit(): Promise<void> {
+async function quiesceRenderersBeforeQuit(timeoutMs = 1_500): Promise<void> {
   if (rendererQuitNotified) return
   const channel = getCurrentTouchApp()?.channel
   if (!channel) return
@@ -110,10 +114,10 @@ async function quiesceRenderersBeforeQuit(): Promise<void> {
       if (notified) acknowledgements.push(notified)
     }
     await Promise.allSettled(acknowledgements)
-  }, 1_500)
+  }, timeoutMs)
   if (drain.timedOut) {
     mainLog.warn('Renderer shutdown acknowledgement timed out; continuing shutdown', {
-      meta: { timeoutMs: 1_500, windowCount: windows.length, pluginPageCount: pluginPages.length }
+      meta: { timeoutMs, windowCount: windows.length, pluginPageCount: pluginPages.length }
     })
   }
 
@@ -465,6 +469,11 @@ app.on('before-quit', (event) => {
   beforeQuitFlowPromise = (async () => {
     try {
       const quitEvent = new BeforeAppQuitEvent(event, intent)
+      const isUpdateNow = intent.kind === 'update-now'
+      const rendererTimeoutMs = isUpdateNow ? 600 : 1_500
+      const timeoutMs = isUpdateNow
+        ? UPDATE_NOW_BEFORE_QUIT_TIMEOUT_MS
+        : DEFAULT_BEFORE_QUIT_TIMEOUT_MS
       const beforeQuitResult = await runWithBeforeQuitTimeout(
         async () => {
           // Native watchers first: their streams must be gone before any path that can reach
@@ -476,10 +485,10 @@ app.on('before-quit', (event) => {
               meta: { durationMs: stopWatchers.durationMs }
             })
           }
-          await quiesceRenderersBeforeQuit()
+          await quiesceRenderersBeforeQuit(rendererTimeoutMs)
           await touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent)
         },
-        DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
+        timeoutMs,
         getBeforeQuitTimeoutHint
       )
       if (beforeQuitResult.timedOut) {
@@ -488,7 +497,7 @@ app.on('before-quit', (event) => {
           : mainLog.error.bind(mainLog)
         logTimeout('before-quit handlers timed out, continue shutdown', {
           meta: {
-            timeoutMs: DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
+            timeoutMs,
             durationMs: beforeQuitResult.durationMs,
             timeoutHint: stringifyTimeoutHint(beforeQuitResult.timeoutHint)
           }

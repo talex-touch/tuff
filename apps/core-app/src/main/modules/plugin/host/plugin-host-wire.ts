@@ -54,7 +54,9 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'intelligence.sessions',
   'media.image-tools',
   'recommend.provider.register',
-  'recommend.provider.unregister'
+  'recommend.provider.unregister',
+  'language.get',
+  'language.subscribe'
 ] as const
 
 export const PLUGIN_HOST_LIFECYCLE_METHODS = [

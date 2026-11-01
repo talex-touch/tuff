@@ -3,9 +3,10 @@ import type {
   MainWindowCommandId
 } from './main-window-command-catalog'
 import { computed, ref, shallowRef } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { MAIN_WINDOW_COMMAND_CATALOG, PALETTE_COMMAND_ID } from './main-window-command-catalog'
-import { commandModifierHeld, shortcutChordMatches } from './shortcut-chord'
+import { shortcutChordMatches } from './shortcut-chord'
 
 /**
  * The MainWindow shortcut layer: which chords are live, which are being held down, and whether the
@@ -65,6 +66,69 @@ export const mainWindowCommands = computed<readonly MainWindowCommand[]>(() => {
     return handler ? [{ ...descriptor, enabled: handler.enabled, run: handler.run }] : []
   })
 })
+export const DEFAULT_HINT_HOLD_DELAY_MS = 300
+export const DEFAULT_TYPING_COOLDOWN_MS = 1000
+
+const MODIFIER_KEYS: Record<string, true> = {
+  Meta: true,
+  Control: true,
+  Alt: true,
+  Shift: true,
+  AltGraph: true,
+  CapsLock: true,
+  Fn: true,
+  FnLock: true,
+  Hyper: true,
+  Super: true,
+  Symbol: true,
+  SymbolLock: true
+}
+
+const NON_TYPING_INPUT_TYPES: Record<string, true> = {
+  button: true,
+  checkbox: true,
+  color: true,
+  file: true,
+  hidden: true,
+  image: true,
+  radio: true,
+  range: true,
+  reset: true,
+  submit: true
+}
+export function isEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  if (target instanceof HTMLTextAreaElement) return true
+  if (target instanceof HTMLInputElement) {
+    return !NON_TYPING_INPUT_TYPES[target.type.toLowerCase()]
+  }
+  if ('isContentEditable' in target && (target as HTMLElement).isContentEditable) return true
+  if ('contentEditable' in target && (target as HTMLElement).contentEditable === 'true') return true
+  const attr = target.getAttribute?.('contenteditable')?.toLowerCase()
+  if (attr !== undefined && attr !== null && attr !== 'false') return true
+  if (target.closest?.('[contenteditable]:not([contenteditable="false"])')) return true
+  return false
+}
+
+let isImeComposing = false
+let lastTypingTimestamp = 0
+
+export function isUserTyping(typingCooldownMs: number = DEFAULT_TYPING_COOLDOWN_MS): boolean {
+  if (isImeComposing) return true
+  if (hasDocument() && isEditableElement(document.activeElement)) {
+    if (Date.now() - lastTypingTimestamp < typingCooldownMs) {
+      return true
+    }
+  }
+  return false
+}
+
+export function resetMainWindowShortcutsState(): void {
+  commandKeyHeld.value = false
+  mainWindowPaletteOpen.value = false
+  isImeComposing = false
+  lastTypingTimestamp = 0
+}
 
 /** Whether the platform's command key is down right now. */
 const commandKeyHeld = ref(false)
@@ -111,6 +175,10 @@ export async function runMainWindowCommand(id: string): Promise<void> {
 export interface MainWindowShortcutCaptureOptions {
   /** The platform, read at event time: a window opened on one display still reports one platform. */
   isMac: () => boolean
+  /** Delay in milliseconds of holding the command modifier before opening shortcut hints. Defaults to 300ms. */
+  hintDelayMs?: number
+  /** Minimum quiet time after typing before shortcut hints are allowed. Defaults to 1000ms. */
+  typingCooldownMs?: number
 }
 
 /**
@@ -124,16 +192,123 @@ export interface MainWindowShortcutCaptureOptions {
 export function installMainWindowShortcutCapture(
   options: MainWindowShortcutCaptureOptions
 ): () => void {
+  const hintDelayMs = options.hintDelayMs ?? DEFAULT_HINT_HOLD_DELAY_MS
+  const typingCooldownMs = options.typingCooldownMs ?? DEFAULT_TYPING_COOLDOWN_MS
+
+  let hintTimer: number | NodeJS.Timeout | null = null
+  let isHoldingModifier = false
+  let chordPressedDuringHold = false
+
+  const recordTyping = (): void => {
+    lastTypingTimestamp = Date.now()
+    if (hintTimer !== null) {
+      clearTimeout(hintTimer)
+      hintTimer = null
+    }
+    commandKeyHeld.value = false
+  }
+
+  const releaseCommandKey = (): void => {
+    if (hintTimer !== null) {
+      clearTimeout(hintTimer)
+      hintTimer = null
+    }
+    isHoldingModifier = false
+    chordPressedDuringHold = false
+    commandKeyHeld.value = false
+  }
+
+  const onBeforeInput = (event: Event): void => {
+    if (
+      isEditableElement(event.target) ||
+      (hasDocument() && isEditableElement(document.activeElement))
+    ) {
+      recordTyping()
+    }
+  }
+
+  const onInput = (event: Event): void => {
+    if (
+      isEditableElement(event.target) ||
+      (hasDocument() && isEditableElement(document.activeElement))
+    ) {
+      recordTyping()
+    }
+  }
+
+  const onCompositionStart = (): void => {
+    isImeComposing = true
+    recordTyping()
+  }
+
+  const onCompositionEnd = (): void => {
+    isImeComposing = false
+    recordTyping()
+  }
+
   const onKeyDown = (event: KeyboardEvent): void => {
     const isMac = options.isMac()
+    const isCommandModifier = isMac ? event.key === 'Meta' : event.key === 'Control'
 
-    if (event.key === 'Meta' || event.key === 'Control') {
-      commandKeyHeld.value = true
+    if (event.isComposing || event.keyCode === 229) {
+      isImeComposing = true
+      recordTyping()
       return
     }
-    // A chord arriving with its modifier already down means the key went down before this window
-    // had focus (⌘-Tab back into the app): the hold never announced itself, so adopt it here.
-    if (commandModifierHeld(event, isMac)) commandKeyHeld.value = true
+
+    if (!MODIFIER_KEYS[event.key]) {
+      if (
+        isEditableElement(event.target) ||
+        (hasDocument() && isEditableElement(document.activeElement))
+      ) {
+        recordTyping()
+      }
+    }
+
+    if (isCommandModifier) {
+      if (event.repeat || isHoldingModifier) return
+
+      isHoldingModifier = true
+      chordPressedDuringHold = false
+
+      if (hintTimer !== null) {
+        clearTimeout(hintTimer)
+        hintTimer = null
+      }
+
+      if (isUserTyping(typingCooldownMs)) {
+        commandKeyHeld.value = false
+        return
+      }
+
+      if (hintDelayMs <= 0) {
+        commandKeyHeld.value = true
+      } else {
+        hintTimer = setTimeout(() => {
+          hintTimer = null
+          if (
+            isHoldingModifier &&
+            !chordPressedDuringHold &&
+            !mainWindowPaletteOpen.value &&
+            !isUserTyping(typingCooldownMs) &&
+            hasDocument() &&
+            document.visibilityState !== 'hidden'
+          ) {
+            commandKeyHeld.value = true
+          }
+        }, hintDelayMs)
+      }
+      return
+    }
+
+    if (!MODIFIER_KEYS[event.key]) {
+      chordPressedDuringHold = true
+      if (hintTimer !== null) {
+        clearTimeout(hintTimer)
+        hintTimer = null
+      }
+      commandKeyHeld.value = false
+    }
 
     // Held-down auto-repeat must not re-run a command a dozen times.
     if (event.repeat) return
@@ -151,16 +326,13 @@ export function installMainWindowShortcutCapture(
   }
 
   const onKeyUp = (event: KeyboardEvent): void => {
-    if (event.key === 'Meta' || event.key === 'Control') commandKeyHeld.value = false
+    const isMac = options.isMac()
+    const isCommandModifier = isMac ? event.key === 'Meta' : event.key === 'Control'
+    if (isCommandModifier) {
+      releaseCommandKey()
+    }
   }
 
-  /**
-   * The release that never arrives: ⌘-Tab to another app, a mission-control swipe, a locked screen.
-   * Without these the badges stay up over an app that is no longer listening.
-   */
-  const releaseCommandKey = (): void => {
-    commandKeyHeld.value = false
-  }
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') releaseCommandKey()
   }
@@ -168,12 +340,24 @@ export function installMainWindowShortcutCapture(
   window.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('keyup', onKeyUp, true)
   window.addEventListener('blur', releaseCommandKey)
+  window.addEventListener('beforeinput', onBeforeInput, true)
+  window.addEventListener('input', onInput, true)
+  window.addEventListener('compositionstart', onCompositionStart, true)
+  window.addEventListener('compositionend', onCompositionEnd, true)
   document.addEventListener('visibilitychange', onVisibilityChange)
 
   return () => {
+    if (hintTimer !== null) {
+      clearTimeout(hintTimer)
+      hintTimer = null
+    }
     window.removeEventListener('keydown', onKeyDown, true)
     window.removeEventListener('keyup', onKeyUp, true)
     window.removeEventListener('blur', releaseCommandKey)
+    window.removeEventListener('beforeinput', onBeforeInput, true)
+    window.removeEventListener('input', onInput, true)
+    window.removeEventListener('compositionstart', onCompositionStart, true)
+    window.removeEventListener('compositionend', onCompositionEnd, true)
     document.removeEventListener('visibilitychange', onVisibilityChange)
     releaseCommandKey()
   }

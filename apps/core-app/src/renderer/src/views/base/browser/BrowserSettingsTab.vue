@@ -132,7 +132,7 @@ function selectCategory(item: SettingNavItem): void {
             v-if="item.beta"
             class="ml-auto rounded-full bg-[var(--tx-color-primary-light-8)] px-1.5 py-0.2 text-[10px] text-[var(--tx-color-primary)]"
           >
-            Beta
+            {{ t('settings.platformTags.beta') }}
           </span>
         </button>
       </div>

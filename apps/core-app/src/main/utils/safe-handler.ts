@@ -1,8 +1,9 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { ProtectedChannelOptions, ProtectedHandler } from '../modules/permission/channel-guard'
 import { withPermission } from '../modules/permission/channel-guard'
+import { PublicFailure } from '../../shared/public-failure'
 
-const SAFE_HANDLER_PUBLIC_ERROR = 'The operation failed. Please retry.'
+const SAFE_HANDLER_PUBLIC_ERROR = PublicFailure.OperationFailed
 
 export interface ApiErrorProjection {
   error: string

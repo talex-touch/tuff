@@ -16,6 +16,7 @@ export type AppDestinationId =
   | 'store'
   | 'store-installed'
   | 'downloads'
+  | 'shortcuts'
   | 'settings-overview'
   | 'settings-general'
   | 'settings-appearance'
@@ -60,6 +61,12 @@ export function normalizeAppDestinationQuery(value: string): string {
     .toLowerCase()
     .replace(/[\s_-]+/g, '')
 }
+
+/** Query a settings page reads to open one of its panels on arrival. */
+export const SETTINGS_PANEL_QUERY = 'panel'
+
+/** The `panel` value that opens the shortcut manager on the Plugins & Tools page. */
+export const SHORTCUTS_SETTINGS_PANEL = 'shortcuts'
 
 /**
  * Alias policy: exact phrases only.
@@ -422,6 +429,50 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
     searchable: true,
     advanced: false,
     commonSetting: true
+  },
+  {
+    /**
+     * The shortcut manager, a dialog on the Plugins & Tools page rather than a page of its own. The
+     * `panel` query is what that page reads to open it, so the door lands on the list itself.
+     *
+     * Phrased the way people ask for it (修改 tuff 快捷键, 唤出快捷键). The bare English
+     * `shortcuts` is left out on purpose: it is the name of the macOS Shortcuts app, and an exact
+     * alias would rank this row above it.
+     */
+    id: 'shortcuts',
+    route: `/setting/plugins?${SETTINGS_PANEL_QUERY}=${SHORTCUTS_SETTINGS_PANEL}`,
+    titleKey: 'settingTools.shortcutsTitle',
+    subtitleKey: 'corebox.destinations.shortcutsSubtitle',
+    icon: 'i-ri-keyboard-line',
+    aliases: {
+      en: [
+        'keyboard shortcuts',
+        'shortcut settings',
+        'global shortcuts',
+        'hotkeys',
+        'hotkey settings',
+        'change shortcut',
+        'change hotkey'
+      ],
+      zh: [
+        '快捷键',
+        '快捷方式',
+        '快捷键设置',
+        '快捷方式设置',
+        '全局快捷键',
+        '快捷键管理',
+        '修改快捷键',
+        '修改 tuff 快捷键',
+        '修改塔芙快捷键',
+        '唤出快捷键',
+        '呼出快捷键',
+        '唤起快捷键'
+      ],
+      pinyin: ['kuaijiejian', 'kjj', 'kuaijiefangshi', 'kjfs', 'xiugaikuaijiejian', 'xgkjj']
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: false
   },
   {
     id: 'settings-applications',

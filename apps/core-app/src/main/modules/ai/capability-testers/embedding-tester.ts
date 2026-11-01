@@ -3,6 +3,7 @@ import type {
   IntelligenceEmbeddingPayload
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 export class EmbeddingCapabilityTester extends BaseCapabilityTester<
@@ -21,19 +22,22 @@ export class EmbeddingCapabilityTester extends BaseCapabilityTester<
 
   formatTestResult(result: IntelligenceInvokeResult<number[]>) {
     const vectorLength = result.result.length
-    const preview = `向量维度: ${vectorLength}, 前5个值: [${result.result
-      .slice(0, 5)
-      .map((v) => v.toFixed(4))
-      .join(', ')}...]`
+    const preview = t('intelligence.capabilityTest.preview.embedding', {
+      dimensions: vectorLength,
+      values: result.result
+        .slice(0, 5)
+        .map((v) => v.toFixed(4))
+        .join(', ')
+    })
 
     return this.buildTestResult(result, {
-      message: 'Embedding 测试成功',
+      message: t('intelligence.capabilityTest.message.embedding'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要生成向量的文本'
+    return t('intelligence.capabilityTest.hint.embedding')
   }
 
   requiresUserInput(): boolean {

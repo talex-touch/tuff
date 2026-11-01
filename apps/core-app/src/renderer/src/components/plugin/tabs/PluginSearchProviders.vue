@@ -1,6 +1,8 @@
 <script setup lang="ts" name="PluginSearchProviders">
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type {
+  SearchProviderMode,
+  SearchProviderOwner,
   SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
@@ -15,6 +17,7 @@ import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { describeSearchProviderIssue } from '~/modules/plugin/plugin-issue-display'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -22,7 +25,7 @@ const props = defineProps<{
 }>()
 
 const settingsSdk = useSettingsSdk()
-const { t } = useI18n()
+const { t, te, locale } = useI18n()
 const pluginSearchProvidersLog = createRendererLogger('PluginSearchProviders')
 
 const providers = ref<SearchProviderRuntimeConfig[]>([])
@@ -48,10 +51,13 @@ const hasSearchProviders = computed(
 const summaryText = computed(() => {
   if (loading.value) return t('plugin.permissions.searchProviders.loading')
 
+  // Each count is worded on its own, so the sources and the issues each take their own plural.
   return t('plugin.permissions.searchProviders.summary', {
-    total: pluginProviders.value.length,
+    total: t('plugin.permissions.searchProviders.sourceCount', {
+      count: pluginProviders.value.length
+    }),
     enabled: pluginProviders.value.filter((provider) => provider.enabled).length,
-    issues: pluginIssues.value.length
+    issues: t('plugin.permissions.searchProviders.issueCount', { count: pluginIssues.value.length })
   })
 })
 
@@ -64,25 +70,46 @@ function toSearchProviderUserConfigs(nextProviders = providers.value): SearchPro
   }))
 }
 
-function formatProviderDescription(provider: SearchProviderRuntimeConfig): string {
-  const source =
-    provider.descriptor.policy.indexedSourceId ??
-    provider.descriptor.policy.indexedSource?.id ??
-    t('settings.settingFileIndex.providerConfigSourceUnknown')
-
-  return t('plugin.permissions.searchProviders.providerDesc', {
-    mode: provider.descriptor.mode,
-    source
-  })
+/** A word Main reports as an identifier, in the interface language when there is one for it. */
+function wordFor(group: string, value: string): string {
+  const key = `plugin.permissions.searchProviders.${group}.${value}`
+  return te(key) ? t(key) : value
 }
 
+function modeLabel(mode: SearchProviderMode): string {
+  return wordFor('modes', mode)
+}
+
+function ownerLabel(owner: SearchProviderOwner): string {
+  return wordFor('owners', owner)
+}
+
+/** Only an indexed source is fed from somewhere; a push or pull source has nothing to name. */
+function formatProviderDescription(provider: SearchProviderRuntimeConfig): string {
+  const mode = modeLabel(provider.descriptor.mode)
+  const source =
+    provider.descriptor.policy.indexedSourceId ?? provider.descriptor.policy.indexedSource?.id
+  return source ? t('plugin.permissions.searchProviders.providerDesc', { mode, source }) : mode
+}
+
+/**
+ * Main's `message` is the plugin developer's English; it is shown only for an issue this window has
+ * no words for, or one that arrived without the fields its sentence needs.
+ */
 function formatIssue(issue: SearchProviderRegistryIssue): string {
-  const provider = issue.providerId || issue.pluginName || issue.source || issue.code
-  return t('settings.settingFileIndex.providerConfigIssue', {
-    provider,
-    code: issue.code,
-    message: issue.message
-  })
+  return (
+    describeSearchProviderIssue(
+      issue,
+      issue.providerId || issue.pluginName || '',
+      t,
+      locale.value
+    ) ??
+    t('settings.settingFileIndex.providerConfigIssue', {
+      provider: issue.providerId || issue.pluginName || issue.source || issue.code,
+      code: issue.code,
+      message: issue.message
+    })
+  )
 }
 
 async function loadProviderConfig() {
@@ -171,15 +198,15 @@ onMounted(() => {
       v-if="pluginIssues.length > 0"
       :title="t('settings.settingFileIndex.providerConfigIssues')"
       :description="
-        t('plugin.permissions.searchProviders.issueDesc', { count: pluginIssues.length })
+        t('plugin.permissions.searchProviders.issueCount', { count: pluginIssues.length })
       "
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt-filled"
     >
       <div class="PluginSearchProviders-Issues">
         <TxTag
-          v-for="issue in pluginIssues"
-          :key="`${issue.providerId ?? issue.pluginName ?? issue.code}:${issue.source ?? ''}`"
+          v-for="(issue, index) in pluginIssues"
+          :key="`${index}:${issue.code}:${issue.providerId ?? issue.pluginName ?? ''}`"
           :color="issue.type === 'error' ? 'var(--tx-color-danger)' : 'var(--tx-color-warning)'"
           size="sm"
         >
@@ -202,7 +229,7 @@ onMounted(() => {
     >
       <template #tags>
         <TxTag color="var(--tx-color-info)" size="sm">
-          {{ provider.descriptor.owner }}
+          {{ ownerLabel(provider.descriptor.owner) }}
         </TxTag>
         <TxTag
           v-if="provider.descriptor.policy.requiresUserConsent"

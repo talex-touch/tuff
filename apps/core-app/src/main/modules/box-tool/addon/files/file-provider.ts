@@ -59,7 +59,6 @@ import {
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   mapIndexedFileSourceRecord,
-  mapIndexedWriteFullScanUpsertRecords,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 import { and, eq, gt, inArray } from 'drizzle-orm'
@@ -122,6 +121,10 @@ import {
 import { FileProviderWatchService } from './services/file-provider-watch-service'
 import { FILE_WATCH_SUBTREE_RECONCILE_REASON } from './services/file-watch-subtree-service'
 import { FileProviderWatchSubtreeReconcileService } from './services/file-provider-watch-subtree-reconcile-service'
+import {
+  FileProviderSubtreePersistService,
+  readFileRowsByPath
+} from './services/file-provider-subtree-persist-service'
 import { FileProviderOpenerService } from './services/file-provider-opener-service'
 import {
   FileProviderIncrementalQueueService,
@@ -392,6 +395,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
   private readonly watchService: FileProviderWatchService
   private readonly watchSubtreeReconcileService: FileProviderWatchSubtreeReconcileService
+  private readonly subtreePersistService: FileProviderSubtreePersistService
   private readonly openerService: FileProviderOpenerService
   private readonly indexRuntimeService: FileProviderIndexRuntimeService
   private readonly integrityService: FileProviderIntegrityService
@@ -489,7 +493,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     isRuntimeReady: () => Boolean(this.dbUtils && this.indexedSourceRuntimeMutationDelegate),
     getRuntimeMutationDelegate: () => this.requireRuntimeMutationDelegate(),
     getMaintenance: () => this.maintenanceService,
-    getWatchRootCount: () => this.watchPaths.length,
+    getWatchPaths: () => this.watchPaths,
     countIndexedRows: (reason) => this.countSearchIndexByProvider(this.id, reason),
     mapRecord: (row) => this.mapFileToIndexedSourceRecord(row),
     emitRecordBatch: (batch) => this.emitIndexedSourceRecordBatchFromBatch(batch),
@@ -665,9 +669,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       logDebug: (message, meta) => this.logDebug(message, meta),
       logInfo: (message, meta) => this.logInfo(message, meta)
     })
+    this.subtreePersistService = new FileProviderSubtreePersistService({
+      sourceId: this.id,
+      maintenance: this.maintenanceService,
+      planner: this.incrementalWritePlanner,
+      readRows: (paths) => readFileRowsByPath(this.dbUtils, paths),
+      mapRecord: (row) => this.mapFileToIndexedSourceRecord(row),
+      applyBatchWithPersistence: (batch, records) =>
+        this.requireRuntimeMutationDelegate().applyBatchWithPersistence(batch, records),
+      emitCommittedScanProgress: (count, options) => this.emitCommittedScanProgress(count, options)
+    })
     this.watchSubtreeReconcileService = new FileProviderWatchSubtreeReconcileService({
       sourceId: this.id,
-      getDbUtils: () => this.dbUtils,
+      getSearchIndex: () => this.searchIndex,
       getWatchPaths: () => this.watchPaths,
       isShuttingDown: () => this.shuttingDown,
       ensureFileSystemWatchers: () => this.ensureFileSystemWatchers(),
@@ -682,7 +696,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.handleIncrementalAddsOrChanges(entries, options),
       deleteReconciledRecords: (records, options) =>
         this.maintenanceService.deleteFileRecords(records, 'missing', options),
-      persistSubtreeRecords: (records, options) => this.persistSubtreeRecordBatch(records, options),
+      persistSubtreeRecords: (records, options) =>
+        this.subtreePersistService.persist(records, options),
       pathAbsenceEvidence: (filePath) => this.maintenanceService.getFileAbsenceEvidence(filePath),
       isStaleIndexPath: (filePath) => this.maintenanceService.isStaleExcludedIndexPath(filePath),
       canContinue: (options) => this.maintenanceService.canContinueFileMaintenance(options),
@@ -1441,74 +1456,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { updatedCount: result.persistedCount }
   }
 
-  private async persistSubtreeRecordBatch(
-    files: ScannedFileInfo[],
-    options: FileIndexRunOptions
-  ): Promise<{ added: number; changed: number }> {
-    const records = mapIndexedWriteFullScanUpsertRecords(files, { lastIndexedAt: new Date() })
-    let added = 0
-    let changed = 0
-    for (const chunk of chunkArray(records, 10)) {
-      const result = await this.maintenanceService.withFileMutationSlice(
-        options,
-        async (mutationLeaseId) => {
-          if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-          const accepted = await this.maintenanceService.admitScanRecords(chunk)
-          if (accepted.length === 0) return { added: 0, changed: 0, persistedCount: 0 }
-          const rows = await this.dbUtils
-            .getFileIndexReadDb()
-            .select()
-            .from(filesSchema)
-            .where(
-              and(
-                fileTypeIs('file'),
-                inArray(
-                  filesSchema.path,
-                  accepted.map((record) => record.path)
-                )
-              )
-            )
-          const plan = this.incrementalWritePlanner.plan({
-            records: accepted,
-            existingRows: rows,
-            manualPaths: new Set<string>(),
-            manualTotal: 0
-          })
-          const dirtyPaths = new Set([
-            ...plan.filesToInsert.map((record) => record.path),
-            ...plan.filesToUpdate.map((record) => record.path)
-          ])
-          const dirty = accepted.filter((record) => dirtyPaths.has(record.path))
-          if (dirty.length === 0) return { added: 0, changed: 0, persistedCount: 0 }
-          const existingByPath = new Map(rows.map((row) => [row.path, row]))
-          const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
-          const committed = await mutation(
-            {
-              sourceId: this.id,
-              mutationLeaseId,
-              records: dirty.map((record) =>
-                this.mapFileToIndexedSourceRecord({
-                  ...existingByPath.get(record.path),
-                  ...record
-                })
-              )
-            },
-            dirty
-          )
-          return {
-            added: plan.filesToInsert.length,
-            changed: committed.persistedCount - plan.filesToInsert.length,
-            persistedCount: committed.persistedCount
-          }
-        }
-      )
-      added += result.added
-      changed += result.changed
-      await this.emitCommittedScanProgress(result.persistedCount, options)
-    }
-    return { added, changed }
-  }
-
   private async emitCommittedScanProgress(
     committedRecordCount: number,
     options?: FileIndexRunOptions,
@@ -1709,6 +1656,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         if (workerReady) {
           this.backgroundStartupReady = true
+          void this.bootPassService.maybeRunHotCatchup()
           this.maintenanceService.scheduleFileMaintenance()
           // Layer-2 safety net for the split topology: if the (rebuildable)
           // search file holds zero index rows while watch roots exist, request

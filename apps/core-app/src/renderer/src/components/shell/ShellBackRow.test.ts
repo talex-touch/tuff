@@ -29,6 +29,7 @@ vi.mock('~/modules/platform/renderer-platform', () => ({
 }))
 
 import ShellBackRow from './ShellBackRow.vue'
+import type { MainWindowShortcutCaptureOptions } from '~/modules/shortcuts/main-window-shortcuts'
 import {
   closeMainWindowPalette,
   installMainWindowShortcutCapture,
@@ -63,8 +64,12 @@ function unmountRow(): void {
 }
 
 /** 捕获层就是真实宿主：⌘ 的按下/松开只有经过它才会传到这里。 */
-function installCapture(): void {
-  disposeCapture = installMainWindowShortcutCapture({ isMac: () => true })
+function installCapture(options?: Partial<MainWindowShortcutCaptureOptions>): void {
+  disposeCapture = installMainWindowShortcutCapture({
+    isMac: () => true,
+    hintDelayMs: 0,
+    ...options
+  })
 }
 
 /** 键盘走到捕获层的唯一入口：事件必须落在 window 上，才和真实宿主同路。 */
@@ -171,5 +176,24 @@ describe('shellBackRow hint badge', () => {
     toggleMainWindowPalette()
     await settle()
     expect(hintBadge(target)).toBeNull()
+  })
+
+  it('does not draw the hint badge if user is actively typing in an editable field', async () => {
+    const target = mountRow()
+    installCapture()
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    document.body.appendChild(input)
+    input.focus()
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+
+    press({ key: 'Meta' })
+    await settle()
+    expect(hintBadge(target)).toBeNull()
+
+    document.body.removeChild(input)
   })
 })

@@ -2,6 +2,7 @@ import type { StorePlugin, StoreProviderListOptions } from '@talex-touch/utils/s
 import { BaseStoreProvider } from './base-provider'
 import { normalizeStoreIcon } from './store-icon-normalizer'
 import { devLog } from '~/utils/dev-log'
+import { failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 interface NexusManifestEntry {
@@ -78,9 +79,13 @@ export class NexusStoreProvider extends BaseStoreProvider {
       })
       devLog('[NexusStoreProvider] Response status:', response.status)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
+      // The code alone when there is no message: the provider drawer prints this beneath its own
+      // words, and an English filler would sit in it whatever the interface language.
+      const message = failureMessage(err)
       nexusStoreLog.error('Request failed', { manifestUrl, message })
-      throw new TypeError(`STORE_NEXUS_REQUEST_FAILED: ${message}`)
+      throw new TypeError(
+        message ? `STORE_NEXUS_REQUEST_FAILED: ${message}` : 'STORE_NEXUS_REQUEST_FAILED'
+      )
     }
 
     let data: unknown = response.data

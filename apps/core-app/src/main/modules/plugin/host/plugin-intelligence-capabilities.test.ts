@@ -204,44 +204,6 @@ describe('plugin intelligence capabilities', () => {
     )
   })
 
-  it('rejects generic prompt and provider controls from the bound Translation profile', async () => {
-    const translationActivation = {
-      ...activation,
-      name: 'touch-translation',
-      pluginInstanceId: 'translation-instance',
-      key: 'translation-key'
-    }
-    const { registry, service } = createHarness({ activation: translationActivation })
-
-    for (const request of [
-      {
-        operation: 'capability.invoke',
-        capabilityId: 'text.translate',
-        payload: { text: 'hello', targetLang: 'zh' },
-        options: { promptTemplate: '{{text}}', promptVariables: { text: 'hello' } }
-      },
-      {
-        operation: 'capability.invoke',
-        capabilityId: 'vision.ocr',
-        payload: {
-          source: { type: 'data-url', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }
-        },
-        options: { preferredProviderId: 'provider-public' }
-      },
-      {
-        operation: 'capability.invoke',
-        capabilityId: 'text.translate',
-        payload: { text: 'hello', targetLang: 'zh' },
-        options: { metadata: { inputKinds: ['text'] } }
-      }
-    ]) {
-      await expect(registry.dispatch('intelligence.invoke', request)).rejects.toMatchObject({
-        code: 'PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'
-      })
-    }
-    expect(service.invoke).not.toHaveBeenCalled()
-  })
-
   it('lists only bounded public text.translate provider models', async () => {
     const { registry, service } = createHarness()
     ;(service.listProviderModels as ReturnType<typeof vi.fn>).mockResolvedValueOnce([

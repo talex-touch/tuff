@@ -11,6 +11,7 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
 import { FlowEvents } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
@@ -150,11 +151,14 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     for (const target of targets) {
       flowTargetRegistry.registerTarget('native', target, {
-        pluginName: '系统分享',
         pluginIcon: 'ri:share-forward-line',
         isEnabled: true,
         hasFlowHandler: true, // Native share always has handler
-        isNativeShare: true
+        isNativeShare: true,
+        wording: () => ({
+          ...nativeShareService.describeTarget(target.id),
+          pluginName: t('nativeShare.sectionTitle')
+        })
       })
     }
 

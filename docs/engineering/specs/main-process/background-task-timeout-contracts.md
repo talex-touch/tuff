@@ -314,6 +314,43 @@ Contract for a polled child-process probe:
 - throttle the failure log. 278 unthrottled ERROR entries in one session, each
   embedding an AppleScript source dump, is its own main-thread IO cost.
 
+## The local embedding helper runs one job at a time, queued by priority
+
+`DigUpEmbeddingRuntime` (`modules/ai/local-embedding-runtime.ts`) owns one `digup worker` child and
+serves one request at a time. It used to answer a second caller with `busy`, so a semantic search
+cancelled the image embedding in flight to get the slot and that image's vector was lost.
+
+- `EmbeddingJobQueue` (`local-embedding-queue.ts`): one FIFO per priority, interactive before
+  background, no preemption of the running job. `generate` / `generateImage` keep their signatures;
+  the priority travels in an `AsyncLocalStorage` scope (`runWithEmbeddingPriority`), default
+  background. `EmbeddingService.getQueryEmbedding` is the only caller that sets interactive.
+- Depth is bounded per lane (interactive 8, background 64). A full lane rejects the new caller with
+  `Local EmbeddingGemma <lane> queue is full`; it never evicts a waiter.
+- An interactive waiter is turned away after `INTERACTIVE_QUEUE_WAIT_MS` (2.5 s) in its lane: it
+  leaves the lane and rejects with `Local EmbeddingGemma runtime is busy`, the answer a second
+  caller got before there was a queue, so `getQueryEmbedding` logs one warning and the search goes
+  on lexical-only instead of waiting out an image job. Only the wait is bounded. The running job is
+  never interrupted, background waiters have no bound, and the timer is cleared on grant, abort and
+  `close()`. An image job holds the slot while it prepares its snapshot (decode, resize, HEIC
+  through `sips`), so that preparation counts against a waiting query; it stays inside the slot
+  because moving it ahead would hold up to 64 decoded images in memory while they queue.
+- A caller's `AbortSignal` removes its queued waiter without touching the running job or the helper.
+  Aborting the running request still terminates the helper (unchanged) and the next queued job
+  starts a fresh one; helper death rejects only the running job; `close()` rejects every waiter.
+- `EmbeddingService.semanticSearch` must not call `cancelPending()`. Only content-indexing disable
+  and shutdown cancel in-flight embeddings.
+- Model and helper SHA-256 are checked once per process and again whenever the file's
+  `(dev, ino, size, mtimeNs, ctimeNs)` changes (`cachedFileSha256`). The file is opened once: the
+  stamp is the descriptor's `fstat` taken before the read, the bytes come from the same descriptor,
+  and a second `fstat` after the read must give the same stamp before the digest is stored. So a
+  file renamed over the path, or a write during hashing, is never filed under the other file's
+  digest. The cache is in-process only: a stamp stored next to the asset could be forged along
+  with it, so every launch hashes once (about 0.9 GB, chunked and asynchronous).
+- Anchors: `local-embedding-queue.test.ts`, `local-embedding-digest.test.ts`,
+  `local-embedding-model.test.ts`, `local-embedding-runtime.test.ts` (real fake-helper subprocess),
+  `local-embedding-priority.test.ts` (the SDK hop) and the search-beside-image case in
+  `embedding-service.split.test.ts`.
+
 ## `waitForIdle()`: bounded or not depends on who is waiting
 
 `appTaskGate.waitForIdle()` with no argument waits forever. That is **correct**
@@ -323,7 +360,7 @@ for anything a user is waiting on. Classify before touching one:
 
 | Caller                                                    | On timeout                                               | Bound                                 |
 | --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------- |
-| Repeatable hot-path work (per-capture clipboard refresh)  | **skip** — there is another chance next keystroke        | `CLIPBOARD_APP_TASK_WAIT_MS` (200ms)  |
+| Repeatable hot-path work (per-capture clipboard refresh)  | **skip** — a change signal is retried (see below)        | `CLIPBOARD_APP_TASK_WAIT_MS` (200ms)  |
 | One-shot startup work (watcher start, cache hydrate, OCR) | **proceed anyway** — skipping means it never initializes | `APP_TASK_GATE_STARTUP_WAIT_MS` (10s) |
 | Interactive entry point (`recommend()` on empty query)    | **proceed anyway**, under the renderer's own give-up     | 300ms (renderer gives up at 400ms)    |
 | Background indexing / maintenance                         | n/a                                                      | none — leave unbounded                |
@@ -341,6 +378,56 @@ Two traps found in the one-shot category, both worse than "it's slow":
 The renderer awaits a clipboard refresh _before_ it builds the query, so an
 unbounded wait on that path stalls the entire search for as long as the
 app-index scan runs.
+
+### A change signal that a gate holds back is retried
+
+"Skip, there is another chance" holds for a poll and for nothing else. While the native
+clipboard watcher is live (the normal state), `runClipboardMonitor` returns before a poll can
+reach the gates in `checkClipboard`, so the only things that capture a change are its single
+`native-watch` event and the CoreBox-show baseline. A change signal dropped by the app-task gate
+or by the event-loop lag window (a lag of at least 1 s, then `CLIPBOARD_LAG_ADAPT_WINDOW_MS` =
+8 s) was lost until the next CoreBox show: a PixPin screenshot copied at 06:17:03 on 2026-10-30
+was captured at 06:17:20, when CoreBox opened.
+
+Contract (`clipboard/clipboard-deferred-capture.ts`):
+
+- Only `native-watch` and `corebox-show-baseline` are deferred. `background-poll` and
+  `visible-poll` keep the plain skip.
+- Nothing is deferred while `isClipboardCaptureSuppressed()` is true (the app's own clipboard
+  writes, #769). The three defer sites drop the signal at the gate as they always did: a replay
+  runs after the suppression window has closed and would record the app's own write.
+- One timer per module, unref'd, cancelled in `destroy()`. A drop while it is pending coalesces
+  into it: the timer armed first stands (a later drop asking for a shorter delay does not pull it
+  forward), the baseline source wins, the highest round is kept, and the signal time is the latest
+  `native-watch` signal, or the first baseline's when only baselines were dropped.
+- Delay: for lag, the end of the window plus `CLIPBOARD_DEFER_GRACE_MS` (100 ms), clamped to
+  `[0, CLIPBOARD_LAG_ADAPT_WINDOW_MS + CLIPBOARD_DEFER_GRACE_MS]` because the lag snapshot is
+  wall-clock and a clock stepped back leaves it ahead of now; for the app-task gate,
+  `CLIPBOARD_APP_TASK_RETRY_MS` (3 s).
+- The retry goes through the normal `runClipboardMonitor` path with its original source and the
+  number of deferrals used (`deferRound`, carried through the pending-options merge as a
+  maximum), so every gate is evaluated again and may defer once more. After
+  `CLIPBOARD_DEFER_MAX_ROUNDS` (3) deferrals the capture goes through whatever the gates say,
+  so a loop that never stops lagging cannot starve capture. That holds for the CoreBox baseline
+  as well. A `native-watch` retry that a baseline merged into replays as the baseline, and the
+  baseline's app-task branch used to drop it at the cap, losing the copy for as long as the scan
+  lasted. `isDestroyed` is checked again after the baseline's bounded wait, so a module torn down
+  meanwhile arms nothing.
+- The retry does nothing when the native change count already equals `lastCaptureChangeToken`,
+  i.e. something else captured the change meanwhile.
+- A replay keeps the time the change was signalled, not the time it runs. The signal
+  (`{ at, isChange }`, stamped when `runClipboardMonitor` first sees a deferrable source) travels
+  with the retry, `runDeferredCapture`, the `runClipboardMonitor` options, the pending-options
+  merge, `checkClipboard`, `checkClipboardInternal` and
+  `ClipboardCapturePipeline.process(source, { observedAt })`. The pipeline stamps the
+  `observed_at` meta, the freshness base and the history row `timestamp` with it (never later than
+  the scan), so auto-paste measures the user's window from the copy. `setLastSuccessfulScanAt`
+  still gets the real scan start. A capture that was not deferred takes the old path unchanged:
+  `process(source)` with no second argument.
+- Worst case: a replay runs about 24 s after the signal (3 deferrals of at most about 8.1 s each;
+  an app-task deferral is 3 s). The source app is still resolved at replay time from the stage-B
+  active-app cache, so a copy followed by an app switch inside that window can be attributed to
+  the app in front when the replay ran. That cache is TTL-based, so it was already approximate.
 
 ### Adding an export to `app-task-gate` breaks its mocks silently
 

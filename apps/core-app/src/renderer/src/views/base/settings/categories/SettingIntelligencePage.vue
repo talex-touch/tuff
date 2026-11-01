@@ -6,6 +6,7 @@ import SettingChip from '~/components/settings/SettingChip.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import SettingLocalAiCli from '../SettingLocalAiCli.vue'
@@ -19,6 +20,18 @@ const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 const subPages = computed(() =>
   settingCategoryChildren('intelligence', developerMode.value).filter((subPage) => !subPage.navIcon)
 )
+
+const showTurnMetrics = computed({
+  get: () => appSetting.conversation?.showTurnMetrics !== false,
+  set: (val: boolean) => {
+    if (!appSetting.conversation) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      appSetting.conversation = { showTurnMetrics: val } as any
+    } else {
+      appSetting.conversation.showTurnMetrics = val
+    }
+  }
+})
 </script>
 
 <template>
@@ -34,6 +47,21 @@ const subPages = computed(() =>
       would have dropped it. Intelligence rather than General: it configures an assistant backend.
     -->
     <SettingLocalAiCli data-settings-section="local-ai-cli" />
+
+    <!-- 对话偏好设置 -->
+    <TuffGroupBlock :name="t('settingsConversation.title')">
+      <SettingRow
+        :title="t('settingsConversation.showMetricsTitle')"
+        :description="t('settingsConversation.showMetricsDesc')"
+      >
+        <template #trailing>
+          <TuffBlockSwitch
+            v-model="showTurnMetrics"
+            :title="t('settingsConversation.showMetricsTitle')"
+          />
+        </template>
+      </SettingRow>
+    </TuffGroupBlock>
 
     <!-- Workflows and audit stay together here; frequently used configuration lives in nav. -->
     <!-- No dividers between the rows: the group card draws its own hairlines between children. -->

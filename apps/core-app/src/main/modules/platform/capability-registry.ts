@@ -29,6 +29,10 @@ class PlatformCapabilityRegistry {
 const registry = new PlatformCapabilityRegistry()
 let defaultsRegistered = false
 
+/**
+ * The text here is English. `localizePlatformCapability` (capability-text.ts) words a capability in
+ * the interface language when the list is built, so a new capability needs an entry there too.
+ */
 export function registerDefaultPlatformCapabilities(): void {
   if (defaultsRegistered) return
   defaultsRegistered = true
@@ -36,7 +40,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.permission-center',
     name: 'Permission Center',
-    description: '插件权限申请、授权与审计',
+    description: 'Plugin permission requests, grants and auditing',
     scope: 'system',
     status: 'stable',
     supportLevel: 'supported',
@@ -46,7 +50,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.storage',
     name: 'Storage',
-    description: '配置与持久化存储能力',
+    description: 'Configuration and persistent storage',
     scope: 'system',
     status: 'stable',
     supportLevel: 'supported'
@@ -55,7 +59,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.download-center',
     name: 'Download Center',
-    description: '统一下载任务管理与通知',
+    description: 'Download tasks and their notifications, in one place',
     scope: 'system',
     status: 'stable',
     supportLevel: 'supported'
@@ -64,7 +68,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.temp-file',
     name: 'TempFile',
-    description: '临时文件创建与清理',
+    description: 'Creating and cleaning up temporary files',
     scope: 'system',
     status: 'beta',
     supportLevel: 'supported'
@@ -73,7 +77,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.flow-transfer',
     name: 'Flow Transfer',
-    description: '插件间数据流转能力',
+    description: 'Passing data between plugins',
     scope: 'plugin',
     status: 'beta',
     supportLevel: 'best_effort',
@@ -88,7 +92,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.division-box',
     name: 'DivisionBox',
-    description: '插件浮动窗口与 UI 容器',
+    description: 'Floating windows and UI containers for plugins',
     scope: 'plugin',
     status: 'beta',
     supportLevel: 'supported'
@@ -97,7 +101,7 @@ export function registerDefaultPlatformCapabilities(): void {
   registry.register({
     id: 'platform.intelligence-agents',
     name: 'Intelligence Agents',
-    description: '智能体任务执行与工具调用',
+    description: 'Running agent tasks and their tool calls',
     scope: 'ai',
     status: 'beta',
     supportLevel: 'supported'

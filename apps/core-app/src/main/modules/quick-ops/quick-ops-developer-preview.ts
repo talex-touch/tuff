@@ -16,7 +16,7 @@ import {
   QuickOpsDeveloperAbility
 } from '@talex-touch/utils/core-box/preview'
 import { app, clipboard } from 'electron'
-import { getLocale } from '../../utils/i18n-helper'
+import { getLocale, t } from '../../utils/i18n-helper'
 import { getMainConfig } from '../storage'
 import { extractQrSvg, isQrSvgPayload, renderQrSvgToPng } from './quick-ops-qr-png'
 
@@ -108,7 +108,7 @@ export async function saveQuickOpsDeveloperPreview(
     return {
       state: 'degraded',
       reason: 'qr-png-render-failed',
-      message: '无法生成 QR PNG'
+      message: t('quickOps.errors.qrPngRenderFailed')
     }
   }
 
@@ -143,7 +143,10 @@ export async function saveQuickOpsDeveloperPreview(
         code === 'EACCES' || code === 'EPERM'
           ? 'developer-preview-save-permission-denied'
           : 'developer-preview-save-failed',
-      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '保存预览文件失败'
+      message:
+        code === 'EACCES' || code === 'EPERM'
+          ? t('quickOps.errors.tempWritePermissionDenied')
+          : t('quickOps.errors.previewSaveFailed')
     }
   }
 }

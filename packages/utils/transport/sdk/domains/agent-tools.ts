@@ -41,6 +41,17 @@ export const FORM_RESULT_PREFIX = 'tuff:form:'
  * meaningfully vet arbitrary JS, so the boundary is the sandbox, not a parser.
  */
 export const WIDGET_RESULT_PREFIX = 'tuff:widget:'
+/**
+ * Marks a tool result as a generative Intelligence UI / OpenUI component tree.
+ * Both sides read it: main writes it, renderer renders it natively.
+ */
+export const UI_RESULT_PREFIX = 'tuff:ui:'
+
+export interface UiSpec {
+  title?: string
+  spec: string
+}
+
 
 /** Matches `WIDGET_SANDBOX_SOURCE_MAX_CHARS`, the plugin widget source ceiling. */
 export const WIDGET_SOURCE_MAX_CHARS = 1_048_576

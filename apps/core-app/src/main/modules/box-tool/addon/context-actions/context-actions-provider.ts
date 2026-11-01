@@ -534,6 +534,30 @@ function getContextActionResultMeta(item: TuffItem): ContextActionResultItemMeta
   return typeof resultSessionId === 'string' && resultSessionId ? { resultSessionId } : null
 }
 
+/** The issue codes selection capture reports, by the entry that words each one. */
+const CAPTURE_ISSUE_KEYS: Readonly<Record<string, string>> = {
+  empty: 'coreBox.contextActions.issues.empty',
+  unsupported: 'coreBox.contextActions.issues.unsupported',
+  failed: 'coreBox.contextActions.issues.failed',
+  disabled: 'coreBox.contextActions.issues.disabled'
+}
+
+/**
+ * Why the selection was not used, worded from its code. The capture's own message is an English
+ * diagnostic, so it is shown only for a code the table doesn't know.
+ */
+function describeCaptureIssue(input: ContextActionInput): string | undefined {
+  const issueCode = input.diagnostic?.issueCode
+  const issueMessage = input.diagnostic?.issueMessage
+  if (!issueCode) return issueMessage
+  // With nothing captured at all, the note says the clipboard held no image either.
+  if (issueCode === 'empty' && !input.available) {
+    return t('coreBox.contextActions.errors.emptyContext')
+  }
+  const key = CAPTURE_ISSUE_KEYS[issueCode]
+  return key ? t(key) : issueMessage
+}
+
 class BuiltinContextActionProvider implements ContextActionProvider<ContextActionId> {
   readonly id = 'builtin-context-actions'
   readonly displayName = 'Core Context Actions'
@@ -788,10 +812,12 @@ export class ContextActionsProvider implements ISearchProvider<ProviderContext> 
       input.type === 'text'
         ? input.content.replace(/\s+/g, ' ').trim().slice(0, 140)
         : t('coreBox.contextActions.context.imagePreview')
-    const issue = input.diagnostic?.issueMessage
-    const subtitle = issue
-      ? t('coreBox.contextActions.context.withIssue', { preview, issue })
+    const issue = describeCaptureIssue(input)
+    const subtitle = !issue
+      ? preview
       : preview
+        ? t('coreBox.contextActions.context.withIssue', { preview, issue })
+        : t('coreBox.contextActions.context.issueOnly', { issue })
 
     return {
       id: `${this.id}:${sessionId}:context`,

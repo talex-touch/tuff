@@ -1,7 +1,8 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 
 interface SubscriptionStatus {
   plan: string
@@ -45,7 +46,11 @@ export function useAccountOverview() {
   const profileVisible = ref(false)
   const accountLoading = ref(false)
   const accountLoaded = ref(false)
-  const accountError = ref('')
+  /**
+   * The last load's failure as it came, kept so its words follow the interface language; null when
+   * the load did not fail.
+   */
+  const accountFailure = ref<string | null>(null)
   const subscriptionStatus = ref<SubscriptionStatus | null>(null)
   const teamSummary = ref<TeamSummary | null>(null)
   const deviceCount = ref<number | null>(null)
@@ -53,7 +58,7 @@ export function useAccountOverview() {
 
   function resetAccountSnapshot() {
     accountLoaded.value = false
-    accountError.value = ''
+    accountFailure.value = null
     subscriptionStatus.value = null
     teamSummary.value = null
     deviceCount.value = null
@@ -63,10 +68,10 @@ export function useAccountOverview() {
   async function fetchNexusJson<T>(path: string): Promise<T> {
     const response = await fetchNexusWithAuth(path, {}, `user-profile:${path}`)
     if (!response) {
-      throw new Error(t('userProfile.authRequired', '登录后才能获取账户信息'))
+      throw new Error('NOT_AUTHENTICATED')
     }
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`)
+      throw new Error(`HTTP_ERROR_${response.status}`)
     }
     return response.json() as Promise<T>
   }
@@ -89,7 +94,7 @@ export function useAccountOverview() {
       return
     }
     accountLoading.value = true
-    accountError.value = ''
+    accountFailure.value = null
     try {
       const subscription = await fetchNexusJson<SubscriptionStatus>('/api/subscription/status')
       subscriptionStatus.value = subscription
@@ -99,14 +104,28 @@ export function useAccountOverview() {
       accountLoaded.value = true
       lastFetchedAt.value = now
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : ''
-      accountError.value = /^401\b/.test(errorMessage)
-        ? t('userProfile.authRequired', '登录后才能获取账户信息')
-        : errorMessage || t('userProfile.loadFailed', '加载账户信息失败')
+      accountFailure.value = failureMessage(error)
     } finally {
       accountLoading.value = false
     }
   }
+
+  /**
+   * Not being signed in reads as such; any other failure follows the plain sentence, as a status
+   * Nexus answered with or the request's own failure.
+   */
+  const accountError = computed(() => {
+    const failure = accountFailure.value
+    if (failure === null) return ''
+    if (failure === 'NOT_AUTHENTICATED' || failure === 'HTTP_ERROR_401') {
+      return t('userProfile.authRequired')
+    }
+    const status = /^HTTP_ERROR_(\d{3})$/.exec(failure)?.[1]
+    const reason = status
+      ? t('common.failures.httpStatus', { status })
+      : describeFailure(failure, t, '')
+    return reason ? t('userProfile.loadFailedReason', { reason }) : t('userProfile.loadFailed')
+  })
 
   function openAccountOverview() {
     if (!isLoggedIn.value) {

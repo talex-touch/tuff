@@ -8,6 +8,7 @@ import type {
   IntelligenceSemanticSearchResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 const SAMPLE_DOCUMENTS = [
@@ -52,13 +53,16 @@ export class RagQueryTester extends BaseCapabilityTester<
     const sourceCount = result.result?.sources?.length || 0
 
     return this.buildTestResult(result, {
-      message: `RAG 查询完成，引用 ${sourceCount} 个来源，置信度 ${(result.result?.confidence ?? 0).toFixed(2)}`,
+      message: t('intelligence.capabilityTest.message.ragQuery', {
+        count: sourceCount,
+        confidence: (result.result?.confidence ?? 0).toFixed(2)
+      }),
       textPreview: result.result?.answer || ''
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要基于内置示例文档回答的问题'
+    return t('intelligence.capabilityTest.hint.ragQuery')
   }
 
   requiresUserInput(): boolean {
@@ -88,13 +92,13 @@ export class SemanticSearchTester extends BaseCapabilityTester<
     const preview = results.map((item) => `${item.id} ${(item.score * 100).toFixed(1)}%`).join(', ')
 
     return this.buildTestResult(result, {
-      message: `语义搜索完成，返回 ${results.length} 条结果`,
+      message: t('intelligence.capabilityTest.message.semanticSearch', { count: results.length }),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入语义搜索查询'
+    return t('intelligence.capabilityTest.hint.semanticSearch')
   }
 
   requiresUserInput(): boolean {
@@ -119,17 +123,23 @@ export class RerankTester extends BaseCapabilityTester<
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceRerankResult>) {
     const results = result.result?.results || []
     const preview = results
-      .map((item) => `${item.id}: rank ${item.originalRank} → ${(item.score * 100).toFixed(1)}%`)
+      .map((item) =>
+        t('intelligence.capabilityTest.preview.rerankRow', {
+          id: item.id,
+          rank: item.originalRank,
+          score: (item.score * 100).toFixed(1)
+        })
+      )
       .join('\n')
 
     return this.buildTestResult(result, {
-      message: `文档重排序完成，返回 ${results.length} 条结果`,
+      message: t('intelligence.capabilityTest.message.rerank', { count: results.length }),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入用于文档重排序的查询'
+    return t('intelligence.capabilityTest.hint.rerank')
   }
 
   requiresUserInput(): boolean {

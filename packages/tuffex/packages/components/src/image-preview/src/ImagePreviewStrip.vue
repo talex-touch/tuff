@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
-import type { ImagePreviewItem } from './types'
+import type { ImagePreviewItem, ImagePreviewThumbnailSlotProps } from './types'
 import type { PreviewSize } from './zoom'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
 import { usePressScrub } from '../../../../utils/press-scrub'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
+import ImagePreviewContent from './ImagePreviewContent.vue'
 
 // Internal: the strip along the bottom of TxImagePreview, a thumbnail for each picture, the
 // current one opened out to its shape, or a dot for each. It follows a page as it turns, and a
@@ -26,6 +27,10 @@ const props = defineProps<{
   formatter: (current: number, total: number, name?: string) => string
   /** The controls' surface. */
   material: { mode?: BaseSurfaceMode, color?: string, opacity?: number, blur?: number }
+}>()
+
+defineSlots<{
+  thumbnail?: (props: ImagePreviewThumbnailSlotProps) => any
 }>()
 
 const emit = defineEmits<{
@@ -115,12 +120,12 @@ function jumpTo(at: number): void {
 }
 
 function thumbSrc(item: ImagePreviewItem): string {
-  return item.thumbnail || item.url
+  return item.thumbnail || item.url || ''
 }
 
 /** The width of a picture's thumbnail opened out to its shape. */
 function thumbWide(item: ImagePreviewItem): number {
-  const size = props.sizes.get(item.url)
+  const size = props.sizes.get(item.url ?? '')
     ?? (item.width && item.height ? { width: item.width, height: item.height } : thumbShapes.value.get(thumbSrc(item)))
   const aspect = size && size.width > 0 && size.height > 0 ? size.width / size.height : 1
   return Math.min(THUMB_HEIGHT * THUMB_MAX_ASPECT, Math.max(THUMB_NARROW, THUMB_HEIGHT * aspect))
@@ -170,8 +175,9 @@ const cells = computed(() => {
     const src = thumbSrc(item)
     list.push({
       index: i,
+      item,
       src,
-      failed: thumbFailed.value.has(src) || (src === item.url && props.failed(item.url)),
+      failed: thumbFailed.value.has(src) || (!!item.url && src === item.url && props.failed(item.url)),
       current: i === props.current,
       label: props.formatter(i + 1, n, item.name),
       style: {
@@ -257,8 +263,10 @@ onBeforeUnmount(() => {
       :aria-current="cell.current ? 'true' : undefined"
       @click="jumpTo(cell.index)"
     >
-      <span v-if="cell.failed" class="tx-image-preview__cell-failed" aria-hidden="true" />
-      <img v-else :src="cell.src" alt="" draggable="false" loading="lazy" decoding="async" @load="onThumbLoad" @error="onThumbError">
+      <slot v-if="$slots.thumbnail" name="thumbnail" :item="cell.item" :index="cell.index" :current="cell.current" />
+      <span v-else-if="cell.failed" class="tx-image-preview__cell-failed" aria-hidden="true" />
+      <img v-else-if="cell.src" :src="cell.src" alt="" draggable="false" loading="lazy" decoding="async" @load="onThumbLoad" @error="onThumbError">
+      <ImagePreviewContent v-else :item="cell.item" :size="{ width: cell.item.width || 800, height: cell.item.height || 600 }" fit aria-hidden="true" />
     </button>
   </div>
 

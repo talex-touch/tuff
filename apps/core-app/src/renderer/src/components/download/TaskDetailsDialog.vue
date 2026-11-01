@@ -121,13 +121,13 @@ function formatSpeed(bytesPerSecond: number): string {
 
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
-    return `${Math.round(seconds)}${t('common.seconds')}`
+    return t('download.duration_seconds', { count: Math.round(seconds) })
   } else if (seconds < 3600) {
     const minutes = Math.round(seconds / 60)
-    return `${minutes}${t('common.minutes')}`
+    return t('download.duration_minutes', { count: minutes })
   } else {
     const hours = Math.round(seconds / 3600)
-    return `${hours}${t('common.hours')}`
+    return t('download.duration_hours', { count: hours })
   }
 }
 

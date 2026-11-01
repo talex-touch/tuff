@@ -30,13 +30,6 @@ import {
 } from '../runtime/plugin-sql-policy'
 import { PluginSqliteResourceError } from '../runtime/plugin-sqlite-resource-owner'
 import { PluginSqliteWorkerError } from '../runtime/plugin-sqlite-worker-client'
-import {
-  isTranslationProviderConfigSafe,
-  isTranslationProviderSecretKey,
-  migrateTranslationProviderCredentials,
-  resolveLegacyTranslationCredential,
-  stripTranslationProviderCredentials
-} from './translation-provider-credential-migration'
 
 type TransportDisposer = () => void
 
@@ -66,95 +59,6 @@ export function registerPluginStorageTransportHandlers(
     toErrorMessage
   } = context
   const disposers: TransportDisposer[] = []
-  const translationMigrationPromises = new Map<string, Promise<Record<string, unknown>>>()
-  const translationMigrationFatalFailures = new Set<string>()
-
-  const currentActivationKey = (plugin: TouchPlugin): string => {
-    const activation = plugin.getActivationIdentity()
-    return `${activation.name}:${activation.pluginInstanceId}:${activation.activationGeneration}`
-  }
-
-  const assertCurrentActivation = (plugin: TouchPlugin, expectedKey: string): void => {
-    if (
-      (plugin.status !== PluginStatus.ENABLED && plugin.status !== PluginStatus.ACTIVE) ||
-      currentActivationKey(plugin) !== expectedKey
-    ) {
-      throw new Error('TRANSLATION_CREDENTIAL_ACTIVATION_STALE')
-    }
-  }
-
-  const migrateTranslationConfig = (
-    plugin: TouchPlugin,
-    rawConfig: unknown
-  ): Promise<Record<string, unknown>> => {
-    const activationKey = currentActivationKey(plugin)
-    if (translationMigrationFatalFailures.has(activationKey)) {
-      return Promise.reject(new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED'))
-    }
-    const existing = translationMigrationPromises.get(activationKey)
-    if (existing) return existing
-    const migration = migrateTranslationProviderCredentials({
-      pluginName: plugin.name,
-      config: rawConfig,
-      assertCurrent: () => assertCurrentActivation(plugin, activationKey),
-      getSecret: (key) =>
-        getSecureStoreValueStrict(secureStoreRootPath, key, 'plugin-secret', () => undefined),
-      applySecrets: async (entries) =>
-        await applySecureStoreBatch(
-          secureStoreRootPath,
-          entries.map((entry) => ({ ...entry, purpose: 'plugin-secret' })),
-          () => undefined
-        ),
-      persistConfig: async (config) =>
-        plugin.savePluginFile('providers_config', config, { broadcast: false }).success
-    }).then(
-      (result) => {
-        translationMigrationFatalFailures.delete(activationKey)
-        return result.config
-      },
-      (error) => {
-        if (error instanceof Error && error.message === 'TRANSLATION_CREDENTIAL_ROLLBACK_FAILED') {
-          translationMigrationFatalFailures.add(activationKey)
-        }
-        throw error
-      }
-    )
-    translationMigrationPromises.set(activationKey, migration)
-    void migration
-      .finally(() => {
-        if (translationMigrationPromises.get(activationKey) === migration) {
-          translationMigrationPromises.delete(activationKey)
-        }
-      })
-      .catch(() => undefined)
-    return migration
-  }
-
-  const awaitTranslationMigration = async (
-    plugin: TouchPlugin,
-    allowFailure = false
-  ): Promise<void> => {
-    const activationKey = currentActivationKey(plugin)
-    if (translationMigrationFatalFailures.has(activationKey)) {
-      throw new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED')
-    }
-    const migration = translationMigrationPromises.get(activationKey)
-    if (migration) {
-      try {
-        await migration
-      } catch (error) {
-        const code = error instanceof Error ? error.message : ''
-        if (!allowFailure || code === 'TRANSLATION_CREDENTIAL_ROLLBACK_FAILED') throw error
-      }
-    }
-    if (translationMigrationFatalFailures.has(activationKey)) {
-      throw new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED')
-    }
-    assertCurrentActivation(plugin, activationKey)
-  }
-
-  const isTranslationProviderConfig = (plugin: TouchPlugin, fileName: string): boolean =>
-    plugin.name === 'touch-translation' && fileName === 'providers_config'
 
   const resolveTouchPlugin = (
     payload: unknown,
@@ -263,9 +167,6 @@ export function registerPluginStorageTransportHandlers(
   const normalizePluginSecretKey = (pluginName: string, rawKey: unknown): string => {
     const key = typeof rawKey === 'string' ? rawKey : ''
     if (key !== key.trim() || !/^[\w.-]{1,48}$/.test(key)) invalidSecretRequest()
-    if (pluginName === 'touch-translation' && !isTranslationProviderSecretKey(key)) {
-      invalidSecretRequest()
-    }
     return `plugin.${pluginName}.${key}`
   }
 
@@ -443,21 +344,7 @@ export function registerPluginStorageTransportHandlers(
         if ('error' in resolved) {
           return { error: resolved.error }
         }
-        const translationConfig = isTranslationProviderConfig(resolved.plugin, fileName)
-        if (translationConfig) {
-          const privilegedPlugin = resolvePrivilegedPlugin(payload, context)
-          ensureStoragePermission(privilegedPlugin, 'storage:plugin:file')
-        }
-        const raw = resolved.plugin.getPluginFile(fileName)
-        if (!translationConfig) return raw
-        try {
-          return await migrateTranslationConfig(resolved.plugin, raw)
-        } catch (error) {
-          const code =
-            error instanceof Error ? error.message : 'TRANSLATION_CREDENTIAL_MIGRATION_FAILED'
-          pluginIpcLog.warn('Translation provider credential migration deferred', { error: code })
-          return stripTranslationProviderCredentials(raw)
-        }
+        return resolved.plugin.getPluginFile(fileName)
       } catch (error) {
         logIpcHandlerError('plugin:storage:get-file', error)
         return { error: toErrorMessage(error) }
@@ -475,19 +362,6 @@ export function registerPluginStorageTransportHandlers(
         const resolved = resolveTouchPlugin(payload, context)
         if ('error' in resolved) {
           return { success: false, error: resolved.error }
-        }
-        if (isTranslationProviderConfig(resolved.plugin, fileName)) {
-          const privilegedPlugin = resolvePrivilegedPlugin(payload, context)
-          ensureStoragePermission(privilegedPlugin, 'storage:plugin:file')
-          await awaitTranslationMigration(privilegedPlugin)
-          if (!isTranslationProviderConfigSafe(payload?.content)) {
-            return {
-              success: false,
-              error: 'TRANSLATION_CREDENTIAL_ORDINARY_STORAGE_FORBIDDEN'
-            }
-          }
-          const sanitized = stripTranslationProviderCredentials(payload?.content)
-          return privilegedPlugin.savePluginFile(fileName, sanitized)
         }
         return resolved.plugin.savePluginFile(fileName, payload?.content)
       } catch (error) {
@@ -521,17 +395,8 @@ export function registerPluginStorageTransportHandlers(
       try {
         const request = exactSecretRecord(payload, ['pluginName', 'key'], ['key'])
         const plugin = ensureSecretAccess(request, context)
-        await awaitTranslationMigration(plugin, true)
         const secureKey = normalizePluginSecretKey(plugin.name, request.key)
-        const requestedKey = request.key as string
         if (!isSecureStoreAvailable(secureStoreRootPath)) {
-          if (plugin.name === 'touch-translation') {
-            const fallback = resolveLegacyTranslationCredential(
-              plugin.getPluginFile('providers_config'),
-              requestedKey
-            )
-            if (fallback) return fallback
-          }
           throw new PluginStorageServiceError(
             PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
             'Plugin secret storage is unavailable.'
@@ -547,12 +412,7 @@ export function registerPluginStorageTransportHandlers(
               error: PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE
             })
         )
-        const usableStored = stored && stored.trim() ? stored : null
-        if (usableStored || plugin.name !== 'touch-translation') return usableStored
-        return resolveLegacyTranslationCredential(
-          plugin.getPluginFile('providers_config'),
-          requestedKey
-        )
+        return stored && stored.trim() ? stored : null
       } catch (error) {
         logSecretFailure('plugin:storage:get-secret', error)
         return toSecretFailure(error)
@@ -578,7 +438,6 @@ export function registerPluginStorageTransportHandlers(
       try {
         const request = exactSecretRecord(payload, ['pluginName', 'key', 'value'], ['key', 'value'])
         const plugin = ensureSecretAccess(request, context)
-        await awaitTranslationMigration(plugin)
         const secureKey = normalizePluginSecretKey(plugin.name, request.key)
         const value = normalizeSecretValue(request.value, true)
         if (!isSecureStoreAvailable(secureStoreRootPath)) {
@@ -617,7 +476,6 @@ export function registerPluginStorageTransportHandlers(
       try {
         const request = exactSecretRecord(payload, ['pluginName', 'entries'], ['entries'])
         const plugin = ensureSecretAccess(request, context)
-        await awaitTranslationMigration(plugin)
         const batch = exactSecretEntries(request.entries)
         if (!isSecureStoreAvailable(secureStoreRootPath)) {
           throw new PluginStorageServiceError(
@@ -656,7 +514,6 @@ export function registerPluginStorageTransportHandlers(
       try {
         const request = exactSecretRecord(payload, ['pluginName', 'key'], ['key'])
         const plugin = ensureSecretAccess(request, context)
-        await awaitTranslationMigration(plugin)
         const secureKey = normalizePluginSecretKey(plugin.name, request.key)
         if (!isSecureStoreAvailable(secureStoreRootPath)) {
           throw new PluginStorageServiceError(

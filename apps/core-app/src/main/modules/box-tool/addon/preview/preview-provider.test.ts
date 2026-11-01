@@ -138,7 +138,7 @@ describe('PreviewProvider', () => {
     })
     expect(result.items[0]?.render.custom?.data).toEqual(
       expect.objectContaining({
-        badges: ['Calculator'],
+        badges: ['previewCard.common.calculator'],
         meta: expect.objectContaining({
           explicitCommand: 'calc',
           rawQuery: 'calc: 2 + 2',

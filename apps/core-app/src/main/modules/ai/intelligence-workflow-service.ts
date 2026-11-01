@@ -20,6 +20,7 @@ import {
   intelligenceWorkflowRunSteps,
   intelligenceWorkflowSteps
 } from '../../db/schema'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
 
@@ -201,13 +202,19 @@ function omitModelContractMetadata(metadata: Record<string, unknown>): Record<st
   return rest
 }
 
+/*
+ * The built-in templates' names, descriptions and labels come from the renderer catalogs, in the
+ * language main has when a template is built. Their prompts stay as written: a prompt's language
+ * steers the reply, so changing it is a product decision.
+ */
+
 function createDefaultManualTrigger(): WorkflowDefinition['triggers'] {
   return [
     {
       id: 'manual',
       type: 'manual',
       enabled: true,
-      label: '手动运行'
+      label: t('intelligence.workflow.defaults.trigger.manual')
     }
   ]
 }
@@ -217,7 +224,7 @@ function createClipboardBatchTrigger(limit: number): WorkflowDefinition['trigger
     id: 'clipboard-batch',
     type: 'clipboard.batch',
     enabled: true,
-    label: '剪贴板批处理',
+    label: t('intelligence.workflow.defaults.trigger.clipboardBatch'),
     config: {
       limit,
       acceptedInputTypes: ['text', 'html']
@@ -231,7 +238,7 @@ function createDefaultTemplateContextSources(limit: number): WorkflowDefinition[
       id: 'clipboard.recent',
       type: 'clipboard.recent',
       enabled: true,
-      label: '最近剪贴板',
+      label: t('intelligence.workflow.defaults.context.clipboardRecent'),
       config: {
         limit
       }
@@ -240,13 +247,13 @@ function createDefaultTemplateContextSources(limit: number): WorkflowDefinition[
       id: 'desktop.active-app',
       type: 'desktop.active-app',
       enabled: true,
-      label: '前台应用'
+      label: t('intelligence.workflow.defaults.context.desktopActiveApp')
     },
     {
       id: 'session.memory',
       type: 'session.memory',
       enabled: true,
-      label: '当前会话记忆'
+      label: t('intelligence.workflow.defaults.context.sessionMemory')
     }
   ]
 }
@@ -262,8 +269,8 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
   const timestamp = now()
   return {
     id: 'builtin.organize-recent-clipboard',
-    name: '整理近期剪贴板',
-    description: '读取最近剪贴板历史，按主题分组并生成可复制的整理结果。',
+    name: t('intelligence.workflow.templates.organizeRecentClipboard.name'),
+    description: t('intelligence.workflow.templates.organizeRecentClipboard.description'),
     version: '1',
     enabled: true,
     triggers: [...createDefaultManualTrigger(), createClipboardBatchTrigger(8)],
@@ -273,10 +280,9 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     steps: [
       {
         id: 'organize-clipboard',
-        name: '整理近期剪贴板',
+        name: t('intelligence.workflow.templates.organizeRecentClipboard.stepName'),
         kind: 'model',
-        description:
-          '读取最近的剪贴板内容，按主题或任务分组，输出简明摘要和一个适合再次复制的整理结果。',
+        description: t('intelligence.workflow.templates.organizeRecentClipboard.stepDescription'),
         prompt:
           '你会收到近期剪贴板、前台应用和会话记忆。请把近期剪贴板按主题或任务分组，输出 Markdown，总结每组要点，并在结尾给出一个适合再次复制的整理结果代码块。',
         input: {
@@ -288,12 +294,12 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
           {
             type: 'clipboardRef',
             key: 'clipboard.recent',
-            label: '最近剪贴板'
+            label: t('intelligence.workflow.defaults.context.clipboardRecent')
           },
           {
             type: 'workflow.input',
             key: 'text',
-            label: '手动输入'
+            label: t('intelligence.workflow.templates.input.manual')
           }
         ],
         output: {
@@ -321,8 +327,8 @@ function createMeetingSummaryTemplate(): WorkflowDefinition {
   const timestamp = now()
   return {
     id: 'builtin.meeting-summary',
-    name: '会议纪要 / 摘要',
-    description: '整理会议转写稿或会议相关文本，生成摘要、决议和行动项。',
+    name: t('intelligence.workflow.templates.meetingSummary.name'),
+    description: t('intelligence.workflow.templates.meetingSummary.description'),
     version: '1',
     enabled: true,
     triggers: createDefaultManualTrigger(),
@@ -332,9 +338,9 @@ function createMeetingSummaryTemplate(): WorkflowDefinition {
     steps: [
       {
         id: 'summarize-meeting',
-        name: '生成会议纪要',
+        name: t('intelligence.workflow.templates.meetingSummary.stepName'),
         kind: 'model',
-        description: '根据近期剪贴板、前台应用和会话记忆中的会议文本生成结构化会议纪要。',
+        description: t('intelligence.workflow.templates.meetingSummary.stepDescription'),
         prompt:
           '你会收到会议转写稿、会议相关剪贴板、前台应用和会话记忆。请输出 Markdown：1. 三句话摘要；2. 决议；3. 行动项，包含负责人、截止时间和状态，未知请写“待确认”；4. 风险 / 待确认项。不要编造不存在的负责人或时间。',
         input: {
@@ -345,12 +351,12 @@ function createMeetingSummaryTemplate(): WorkflowDefinition {
           {
             type: 'workflow.input',
             key: 'text',
-            label: '会议文本'
+            label: t('intelligence.workflow.templates.input.meetingText')
           },
           {
             type: 'clipboardRef',
             key: 'clipboard.recent',
-            label: '最近剪贴板'
+            label: t('intelligence.workflow.defaults.context.clipboardRecent')
           }
         ],
         output: {
@@ -378,8 +384,8 @@ function createBatchTextProcessingTemplate(): WorkflowDefinition {
   const timestamp = now()
   return {
     id: 'builtin.batch-text-processing',
-    name: '文本批处理',
-    description: '按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。',
+    name: t('intelligence.workflow.templates.batchTextProcessing.name'),
+    description: t('intelligence.workflow.templates.batchTextProcessing.description'),
     version: '1',
     enabled: true,
     triggers: [...createDefaultManualTrigger(), createClipboardBatchTrigger(12)],
@@ -389,9 +395,9 @@ function createBatchTextProcessingTemplate(): WorkflowDefinition {
     steps: [
       {
         id: 'process-text-batch',
-        name: '批量处理文本',
+        name: t('intelligence.workflow.templates.batchTextProcessing.stepName'),
         kind: 'model',
-        description: '从近期剪贴板和会话上下文中识别多段文本，逐条输出处理结果与失败原因。',
+        description: t('intelligence.workflow.templates.batchTextProcessing.stepDescription'),
         prompt:
           '你会收到多段文本、近期剪贴板、前台应用和会话记忆。请把输入拆成编号条目，逐条处理并输出 Markdown 表格：序号、原文摘要、处理结果、状态、需人工确认项。默认执行清洗、格式化和摘要；如果文本明确要求翻译或改写，则按该要求处理。无法可靠处理的条目标记为“需人工确认”，不要静默跳过。',
         input: {
@@ -403,12 +409,12 @@ function createBatchTextProcessingTemplate(): WorkflowDefinition {
           {
             type: 'workflow.input',
             key: 'items',
-            label: '批处理条目'
+            label: t('intelligence.workflow.templates.input.batchItems')
           },
           {
             type: 'clipboardRef',
             key: 'clipboard.recent',
-            label: '最近剪贴板'
+            label: t('intelligence.workflow.defaults.context.clipboardRecent')
           }
         ],
         output: {
@@ -438,6 +444,49 @@ function createBuiltinWorkflowTemplates(): WorkflowDefinition[] {
     createMeetingSummaryTemplate(),
     createBatchTextProcessingTemplate()
   ]
+}
+
+function withLabelsOf<T extends { id?: string; label?: string }>(items: T[], fresh: T[]): T[] {
+  return items.map((item) => {
+    const label = fresh.find((candidate) => candidate.id === item.id)?.label
+    return label ? { ...item, label } : item
+  })
+}
+
+/**
+ * A stored built-in template with its text in the interface language. The stored copy is worded
+ * in the language main had when it was seeded, so names, descriptions and labels are taken from
+ * `template`, built just now, and matched by id. Everything else is kept as stored. A workflow
+ * that only reuses a built-in id, without `metadata.builtin`, is the user's and is left alone.
+ */
+function localizeBuiltinTemplate(
+  workflow: WorkflowDefinition,
+  template: WorkflowDefinition | undefined
+): WorkflowDefinition {
+  if (!template || workflow.metadata?.builtin !== true) return workflow
+
+  return {
+    ...workflow,
+    name: template.name,
+    description: template.description,
+    triggers: withLabelsOf(workflow.triggers ?? [], template.triggers ?? []),
+    contextSources: withLabelsOf(workflow.contextSources ?? [], template.contextSources ?? []),
+    steps: workflow.steps.map((step) => {
+      const fresh = template.steps.find((candidate) => candidate.id === step.id)
+      if (!fresh) return step
+      return {
+        ...step,
+        name: fresh.name,
+        description: fresh.description,
+        inputSources: step.inputSources?.map((source) => {
+          const label = fresh.inputSources?.find(
+            (candidate) => candidate.type === source.type && candidate.key === source.key
+          )?.label
+          return label ? { ...source, label } : source
+        })
+      }
+    })
+  }
 }
 
 export class IntelligenceWorkflowService {
@@ -1259,7 +1308,7 @@ export class IntelligenceWorkflowService {
       stepMap.set(row.workflowId, list)
     }
 
-    return rows.map((row) => ({
+    const workflows: WorkflowDefinition[] = rows.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description ?? undefined,
@@ -1297,6 +1346,14 @@ export class IntelligenceWorkflowService {
         )
       })
     }))
+
+    // Built for each read, so a list read after a language switch is worded in the new language.
+    const templates = new Map(
+      createBuiltinWorkflowTemplates().map((template) => [template.id, template])
+    )
+    return workflows.map((workflow) =>
+      localizeBuiltinTemplate(workflow, templates.get(workflow.id))
+    )
   }
 
   private hydrateRuns(

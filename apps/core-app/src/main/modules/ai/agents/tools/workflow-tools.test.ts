@@ -81,4 +81,24 @@ describe('workflow clipboard and browser tools', () => {
     })
     expect(openExternalMock).not.toHaveBeenCalled()
   })
+
+  it('executes shell commands and returns stdout and exitCode', async () => {
+    registerWorkflowTools({
+      clipboard: { write: writeClipboardMock },
+      systemShell: { openExternal: openExternalMock }
+    })
+
+    expect(toolRegistry.getTool('system.exec')?.permissions).toEqual(['system:exec'])
+    expect(toolRegistry.getTool('bash')?.permissions).toEqual(['system:exec'])
+
+    const result = await toolRegistry.executeTool(
+      'system.exec',
+      { command: 'echo "hello tuff"' },
+      { taskId: 'task-shell', agentId: 'agent-workflow' }
+    )
+    expect(result.success).toBe(true)
+    const output = result.output as { stdout: string; exitCode: number }
+    expect(output.stdout.trim()).toBe('hello tuff')
+    expect(output.exitCode).toBe(0)
+  })
 })

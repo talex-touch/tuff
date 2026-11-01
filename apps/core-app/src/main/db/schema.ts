@@ -2,6 +2,7 @@
 
 import type { SQL } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
+import { encodeVectorBlob, readStoredVector } from './embedding-vector-codec'
 import {
   customType,
   foreignKey,
@@ -31,6 +32,28 @@ const vectorType = customType<{ data: number[]; driverData: string }>({
   fromDriver(value: string): number[] {
     // 从数据库读取时，将 JSON 字符串解析回数组
     return JSON.parse(value)
+  }
+})
+
+/**
+ * 文件/笔记内容向量：新行存小端 float32 BLOB（768 维约 3 KB），旧行仍是 JSON 文本，两种都能读。
+ * 列声明保持 TEXT：SQLite 的 TEXT 亲和性不会改写 BLOB 值，所以无需重建表。
+ */
+const embeddingVectorType = customType<{
+  data: number[]
+  driverData: string | ArrayBuffer | ArrayBufferView
+}>({
+  dataType() {
+    return 'text'
+  },
+  toDriver(value: number[]) {
+    return encodeVectorBlob(value)
+  },
+  fromDriver(value) {
+    if (typeof value === 'string') return JSON.parse(value)
+    return Array.from(
+      readStoredVector(value, value.byteLength / Float32Array.BYTES_PER_ELEMENT) ?? []
+    )
   }
 })
 
@@ -263,7 +286,7 @@ export const embeddings = sqliteTable('embeddings', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   sourceId: text('source_id').notNull(), // 多态关联ID, e.g., files.id
   sourceType: text('source_type').notNull(), // 源类型, e.g., 'file', 'note'
-  embedding: vectorType('embedding').notNull(), // 内容的向量表示
+  embedding: embeddingVectorType('embedding').notNull(), // 内容的向量表示（float32 BLOB，兼容旧 JSON）
   model: text('model').notNull(), // e.g., 'bge-base-zh-v1.5'
   contentHash: text('content_hash'), // 源内容的哈希，用于检测变化以决定是否更新向量
   createdAt: integer('created_at', { mode: 'timestamp' })

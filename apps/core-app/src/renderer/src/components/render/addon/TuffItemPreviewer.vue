@@ -9,6 +9,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { FileType, getFileTypeFromPath } from '@talex-touch/utils'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxSelect } from '@talex-touch/tuffex/select'
 import { TxTextTransformer } from '@talex-touch/tuffex/text-transformer'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
@@ -21,6 +22,11 @@ import {
   VideoPreview
 } from './preview'
 import { splitHighlightedText } from './preview/text-highlight'
+import {
+  TEXT_ENCODING_OPTIONS,
+  type TextEncoding,
+  type TextEncodingSelection
+} from './preview/text-encoding'
 
 const props = defineProps<{
   item: TuffItem
@@ -125,6 +131,64 @@ const previewComponent = computed(() => {
       return DefaultPreview
   }
 })
+
+const isTextLikePreview = computed(() => {
+  const filePath = props.item.meta?.file?.path
+  if (!filePath) return false
+  const fileType = getFileType(filePath)
+  return fileType === 'text' || fileType === 'code' || fileType === 'markdown'
+})
+
+const selectedEncoding = ref<TextEncodingSelection>('auto')
+const detectedEncoding = ref<TextEncoding | null>(null)
+
+const ENCODING_LABEL_KEYS: Record<TextEncoding, string> = {
+  'utf-8': 'encodingUtf8',
+  gb18030: 'encodingGb18030',
+  big5: 'encodingBig5',
+  shift_jis: 'encodingShiftJis',
+  'euc-kr': 'encodingEucKr',
+  'utf-16le': 'encodingUtf16le',
+  'utf-16be': 'encodingUtf16be',
+  'windows-1252': 'encodingWindows1252'
+}
+
+function encodingLabel(encoding: TextEncoding): string {
+  return t(`fileInfo.${ENCODING_LABEL_KEYS[encoding]}`)
+}
+
+const encodingOptions = computed(() =>
+  TEXT_ENCODING_OPTIONS.map((value) => ({
+    value,
+    label:
+      value === 'auto'
+        ? t('fileInfo.encodingAuto', {
+            encoding: detectedEncoding.value
+              ? encodingLabel(detectedEncoding.value)
+              : t('fileInfo.encodingUnknown')
+          })
+        : encodingLabel(value)
+  }))
+)
+
+function handleEncodingDetected(encoding: TextEncoding): void {
+  detectedEncoding.value = encoding
+}
+
+function handleEncodingChange(value: string | number | (string | number)[]): void {
+  if (Array.isArray(value)) return
+  const next = String(value) as TextEncodingSelection
+  if (TEXT_ENCODING_OPTIONS.includes(next)) selectedEncoding.value = next
+}
+
+watch(
+  () => [props.item.id, props.item.meta?.file?.path] as const,
+  () => {
+    selectedEncoding.value = 'auto'
+    detectedEncoding.value = null
+  },
+  { immediate: true }
+)
 
 const RESOURCE_PREVIEW_TYPES = new Set<FilePreviewType>([
   'image',
@@ -389,6 +453,8 @@ const snippetSegments = computed(() =>
           :item="item"
           :resource-url="previewResourceUrl"
           :search-query="searchQuery"
+          :encoding="isTextLikePreview ? selectedEncoding : undefined"
+          @encoding-detected="handleEncodingDetected"
         />
         <DefaultPreview v-else-if="previewResourceReady" :item="item" />
         <span
@@ -524,6 +590,20 @@ const snippetSegments = computed(() =>
             <div class="w-[65%]">
               {{ item?.meta?.file?.modified_at || '-' }}
             </div>
+          </div>
+          <div
+            v-if="isTextLikePreview && detectedEncoding"
+            class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
+          >
+            <div class="w-[80px] text-right">{{ t('fileInfo.encoding') }}</div>
+            <TxSelect
+              class="encoding-select w-[65%]"
+              :model-value="selectedEncoding"
+              :options="encodingOptions"
+              :searchable="false"
+              :aria-label="t('fileInfo.encoding')"
+              @update:model-value="handleEncodingChange"
+            />
           </div>
         </div>
       </div>

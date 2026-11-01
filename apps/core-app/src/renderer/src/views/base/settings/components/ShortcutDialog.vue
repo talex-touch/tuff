@@ -1,21 +1,31 @@
 <script setup lang="ts">
-import type { ShortcutRowBase, ShortcutRowView } from './shortcut-dialog.types'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import type { ShortcutRow } from './shortcut-dialog.types'
 
-import { TxButton } from '@talex-touch/tuffex/button'
+import { TxButton, TxCopyButton } from '@talex-touch/tuffex/button'
+import { TxDataTable } from '@talex-touch/tuffex/data-table'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxSearchInput } from '@talex-touch/tuffex/search-input'
-import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
-import { computed, watch } from 'vue'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { TxTag } from '@talex-touch/tuffex/tag'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import ShortcutDialogRow from './ShortcutDialogRow.vue'
-import { useShortcutCopy } from './useShortcutCopy'
+import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 
+/**
+ * The shortcut manager.
+ *
+ * A plain `TxModal` rather than the flip overlay it used to be: the flip rotated and scaled a
+ * full table in 3D from the 「管理」 button, repainting every row's material on each frame, and
+ * dropped frames all the way open. Layout, sticky header, skeleton and empty state are
+ * `TxDataTable`'s own; this file only fills the three cells.
+ */
 const props = defineProps<{
   modelValue: boolean
-  source: HTMLElement | null
   search: string
   loading: boolean
-  rows: ShortcutRowBase[]
+  rows: ShortcutRow[]
 }>()
 
 const emit = defineEmits<{
@@ -26,15 +36,10 @@ const emit = defineEmits<{
   (event: 'update-enabled', id: string, value: boolean): void
 }>()
 
-/** Placeholder rows while the shortcut table is still being read. */
-const SKELETON_ROWS = 6
+/** Placeholder rows before the first read lands: about as many as the list usually holds. */
+const SKELETON_ROWS = 5
 
-/**
- * Bound straight to `loading`, without a separate first-load flag: the parent
- * derives it from `shortcuts === null`, which only holds until the first read
- * lands and never returns, so a reload cannot blank the rendered table.
- */
-const showSkeleton = useDeferredLoading(() => props.loading)
+const { t } = useI18n()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -46,257 +51,160 @@ const searchModel = computed({
   set: (value: string) => emit('update:search', value)
 })
 
-const { t } = useI18n()
-const { copyShortcutId, getCopyIcon, getCopyState, resetCopyState } = useShortcutCopy({
-  success: t('settingTools.shortcutsDialog.copySuccess'),
-  failed: t('settingTools.shortcutsDialog.copyFailed')
-})
-
-const displayRows = computed<ShortcutRowView[]>(() =>
-  props.rows.map((row) => ({
-    ...row,
-    copyIcon: getCopyIcon(row.shortcut.id),
-    copyState: getCopyState(row.shortcut.id)
-  }))
-)
-
-watch(visible, (value) => {
-  if (!value) return
-  resetCopyState()
-})
+const columns = computed<DataTableColumn<ShortcutRow>[]>(() => [
+  { key: 'name', title: t('settingTools.shortcutsDialog.columns.name'), minWidth: 200 },
+  { key: 'key', title: t('settingTools.shortcutsDialog.columns.key'), width: 300, nowrap: true },
+  { key: 'state', title: t('settingTools.shortcutsDialog.columns.enabled'), width: 200 }
+])
 </script>
 
 <template>
-  <FlipDialog v-model="visible" :reference="source" size="lg" :scrollable="false">
-    <template #header-display>
-      <div class="ShortcutDialog-TitleBlock">
-        <div class="ShortcutDialog-Title">
-          {{ t('settingTools.shortcutsDialog.title') }}
-        </div>
-        <div class="ShortcutDialog-Subtitle">
-          {{ t('settingTools.shortcutsDialog.desc') }}
-        </div>
-      </div>
-    </template>
+  <TxModal
+    v-model="visible"
+    :title="t('settingTools.shortcutsDialog.title')"
+    :close-label="t('common.close')"
+    width="min(860px, calc(100vw - 48px))"
+  >
+    <TxSearchInput
+      v-model="searchModel"
+      class="ShortcutDialog-Search"
+      clearable
+      :placeholder="t('settingTools.shortcutsDialog.searchPlaceholder')"
+    />
 
-    <template #header-actions>
-      <div class="ShortcutDialog-SearchWrap">
-        <TxSearchInput
-          v-model="searchModel"
-          class="ShortcutDialog-SearchInput"
-          :placeholder="t('settingTools.shortcutsDialog.searchPlaceholder')"
-        />
-      </div>
-    </template>
-
-    <template #default="{ close }">
-      <div class="ShortcutDialog">
-        <div class="ShortcutDialog-TableScroller">
-          <div class="ShortcutDialog-TableHeader">
-            <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
-            <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
-            <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
-            <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
-            <div class="ShortcutDialog-EnabledCell">
-              {{ t('settingTools.shortcutsDialog.columns.enabled') }}
-            </div>
-          </div>
-          <!--
-            The rows live in a child component whose styles are scoped to it, so
-            the placeholder row is declared here instead. It reuses the same grid
-            custom properties as the header and the real rows, which is what
-            keeps the five columns lined up; only the padding and hairline are
-            restated. Applies: the dialog opens onto a known five-column table.
-          -->
-          <div v-if="showSkeleton" class="ShortcutDialog-Rows" aria-hidden="true">
-            <div v-for="i in SKELETON_ROWS" :key="i" class="ShortcutDialog-SkeletonRow">
-              <div class="ShortcutDialog-SkeletonName">
-                <TxSkeleton width="72%" :height="13" :radius="4" />
-                <TxSkeleton width="94%" :height="11" :radius="4" />
-              </div>
-              <TxSkeleton width="80%" :height="12" :radius="4" />
-              <TxSkeleton width="64%" :height="12" :radius="4" />
-              <TxSkeleton width="56%" :height="12" :radius="4" />
-              <div class="ShortcutDialog-EnabledCell">
-                <TxSkeleton variant="rect" :width="36" :height="20" :radius="10" />
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="loading" class="ShortcutDialog-Empty">
-            {{ t('settingTools.shortcutsDialog.loading') }}
-          </div>
-          <div v-else-if="rows.length === 0" class="ShortcutDialog-Empty">
-            {{ t('settingTools.shortcutsDialog.empty') }}
-          </div>
-          <div v-else class="ShortcutDialog-Rows">
-            <ShortcutDialogRow
-              v-for="row in displayRows"
-              :key="row.shortcut.id"
-              :row="row"
-              :status-active-label="t('settingTools.shortcutsDialog.statusActive')"
-              @copy="copyShortcutId"
-              @update-accelerator="(id, value) => emit('update-accelerator', id, value)"
-              @update-enabled="(id, value) => emit('update-enabled', id, value)"
+    <TxDataTable
+      class="ShortcutDialog-Table"
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      loading-variant="skeleton"
+      :skeleton-rows="SKELETON_ROWS"
+      :empty-text="t('settingTools.shortcutsDialog.empty')"
+      sticky-header
+      max-height="min(56vh, 520px)"
+    >
+      <template #cell-name="{ row }">
+        <div class="ShortcutDialog-Name">
+          <span class="ShortcutDialog-Label">{{ row.label }}</span>
+          <span class="ShortcutDialog-Id">
+            <code class="ShortcutDialog-IdValue" :title="row.id">{{ row.id }}</code>
+            <TxCopyButton
+              icon-only
+              :text="row.id"
+              :copy-label="t('common.copy')"
+              :copied-label="t('common.copied')"
             />
-          </div>
+          </span>
         </div>
+      </template>
 
-        <div class="ShortcutDialog-Footer">
-          <div class="ShortcutDialog-Count">
-            {{ t('settingTools.shortcutsDialog.count', { count: rows.length }) }}
-          </div>
-          <div class="ShortcutDialog-FooterActions">
-            <TxButton variant="flat" @click="emit('reset')">
-              {{ t('settingTools.shortcutsDialog.reset') }}
-            </TxButton>
-            <TxButton variant="flat" type="primary" @click="close">
-              {{ t('settingTools.shortcutsDialog.close') }}
-            </TxButton>
-          </div>
+      <template #cell-key="{ row }">
+        <TxTag
+          v-if="row.isTrigger"
+          :label="row.triggerLabel"
+          icon="i-ri-mouse-line"
+          variant="plain"
+          size="md"
+        />
+        <FlatKeyInput
+          v-else
+          :model-value="row.accelerator"
+          @update:model-value="(value) => emit('update-accelerator', row.id, String(value))"
+        />
+      </template>
+
+      <template #cell-state="{ row }">
+        <div class="ShortcutDialog-State">
+          <TxSwitch
+            :model-value="row.isEnabled"
+            :aria-label="row.label"
+            @update:model-value="(value) => emit('update-enabled', row.id, Boolean(value))"
+          />
+          <TxStatusBadge
+            class="ShortcutDialog-StatusText"
+            size="sm"
+            :status="row.status.tone"
+            :text="row.status.text"
+          />
         </div>
-      </div>
+        <p v-if="row.hint" class="ShortcutDialog-Hint">{{ row.hint }}</p>
+      </template>
+    </TxDataTable>
+
+    <template #footer>
+      <span class="ShortcutDialog-Count">
+        {{ t('settingTools.shortcutsDialog.count', { count: rows.length }) }}
+      </span>
+      <TxButton variant="flat" @click="emit('reset')">
+        {{ t('settingTools.shortcutsDialog.reset') }}
+      </TxButton>
+      <TxButton variant="flat" type="primary" @click="visible = false">
+        {{ t('common.close') }}
+      </TxButton>
     </template>
-  </FlipDialog>
+  </TxModal>
 </template>
 
 <style scoped>
-.ShortcutDialog {
-  display: flex;
-  flex-direction: column;
-  height: min(70dvh, 760px);
-  max-height: 100%;
-  --shortcut-dialog-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(180px, 1.1fr)
-    minmax(110px, 0.8fr) minmax(140px, 0.9fr);
-  --shortcut-dialog-gap: 12px;
-}
-
-.ShortcutDialog-TitleBlock {
-  min-width: 180px;
-}
-
-.ShortcutDialog-Title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.ShortcutDialog-Subtitle {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-SearchWrap {
-  width: min(420px, calc(100vw - 180px));
-  min-width: 220px;
-}
-
-.ShortcutDialog-SearchInput {
+.ShortcutDialog-Search {
   width: 100%;
 }
 
-.ShortcutDialog-TableScroller {
+.ShortcutDialog-Name {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-.ShortcutDialog-TableHeader {
-  display: grid;
-  grid-template-columns: var(--shortcut-dialog-columns);
-  gap: var(--shortcut-dialog-gap);
-  padding: 12px 24px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--tx-text-color-secondary);
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-  width: 100%;
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--tx-bg-color-overlay);
-}
-
-.ShortcutDialog-Empty {
-  padding: 40px 24px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-Rows {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-/* Mirrors `.ShortcutDialog-Row` in ShortcutDialogRow.vue, which is scoped there
-   and so cannot be reused from here. The columns and gutter come from the same
-   custom properties, so only the padding and hairline are restated. */
-.ShortcutDialog-SkeletonRow {
-  display: grid;
-  grid-template-columns: var(--shortcut-dialog-columns);
-  gap: var(--shortcut-dialog-gap);
-  align-items: center;
-  width: 100%;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.ShortcutDialog-SkeletonRow:last-child {
-  border-bottom: none;
-}
-
-.ShortcutDialog-SkeletonName {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 
-.ShortcutDialog-EnabledCell {
-  position: sticky;
-  right: 0;
-  background: var(--tx-bg-color-overlay);
-  z-index: 3;
-  box-shadow: -12px 0 16px rgba(0, 0, 0, 0.06);
+.ShortcutDialog-Label {
+  font-size: 14px;
+  font-weight: var(--tx-font-weight-medium, 500);
+  color: var(--tx-text-color-primary);
 }
 
-.ShortcutDialog-Footer {
+.ShortcutDialog-Id {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-top: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color-overlay);
-  flex-shrink: 0;
-}
-
-.ShortcutDialog-FooterActions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.ShortcutDialog-Count {
-  font-size: 12px;
+  gap: 4px;
+  min-width: 0;
   color: var(--tx-text-color-secondary);
 }
 
-@media (max-width: 960px) {
-  .ShortcutDialog {
-    height: min(76dvh, 760px);
-    --shortcut-dialog-columns: minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(180px, 1fr)
-      minmax(110px, 0.8fr) minmax(140px, 0.9fr);
-  }
+.ShortcutDialog-IdValue {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .ShortcutDialog-SearchWrap {
-    width: min(320px, calc(100vw - 180px));
-    min-width: 180px;
-  }
+.ShortcutDialog-State {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The recorder sizes itself for a settings row; in a table cell it takes the column instead. */
+.ShortcutDialog-Table :deep(.FlatKeyInput),
+.ShortcutDialog-Table :deep(.FlatKeyInput-Field) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.ShortcutDialog-Hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-text-color-secondary);
+}
+
+.ShortcutDialog-Count {
+  margin-right: auto;
+  align-self: center;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
 }
 </style>

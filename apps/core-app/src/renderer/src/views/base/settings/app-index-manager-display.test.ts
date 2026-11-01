@@ -95,7 +95,7 @@ describe('app-index-manager-display', () => {
       state: 'needs-attention',
       label: 'Needs attention',
       tone: 'warning',
-      detail: 'target-not-found'
+      detail: 'settings.settingFileIndex.appIndexManagerReasons.notFound'
     })
   })
 
