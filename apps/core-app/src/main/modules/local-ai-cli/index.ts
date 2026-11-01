@@ -99,6 +99,8 @@ import { setLocalAiCliWorkspaceRoot } from './workspace-root'
 const localAiCliLog = createLogger('LocalAiCli')
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
+/** Idle time after which a persistent pi child is closed; the next turn starts it again. */
+const PERSISTENT_PI_IDLE_MS = 10 * 60 * 1000
 const LOCAL_AI_CLI_SHORTCUT_ID = 'local-ai-cli.quick-open'
 const LOCAL_AI_CLI_SHORTCUT_OWNER = 'core-app:local-ai-cli'
 
@@ -115,6 +117,8 @@ interface PersistentPiHandle {
   session: PersistentPiRpcSession
   pointer: StoredLocalAiCliSession
   releaseLease: () => void
+  /** Closes the child after an idle period; cleared while a turn holds it. */
+  idleTimer?: ReturnType<typeof setTimeout>
 }
 
 interface LocalAiCliExecution {
@@ -963,7 +967,27 @@ export class LocalAiCliModule extends BaseModule {
     }
   }
 
+  /** Arms the idle close; a turn that ends on this child re-arms it from its own finally. */
+  private schedulePersistentPiIdle(handle: PersistentPiHandle): void {
+    this.clearPersistentPiIdle(handle)
+    if (this.persistentPiSessions.get(handle.pointer.id) !== handle) return
+    const timer = setTimeout(() => {
+      handle.idleTimer = undefined
+      if (handle.session.hasActiveTurn) return
+      void this.discardPersistentPi(handle).catch(() => undefined)
+    }, PERSISTENT_PI_IDLE_MS)
+    timer.unref?.()
+    handle.idleTimer = timer
+  }
+
+  private clearPersistentPiIdle(handle: PersistentPiHandle): void {
+    if (!handle.idleTimer) return
+    clearTimeout(handle.idleTimer)
+    handle.idleTimer = undefined
+  }
+
   private async discardPersistentPi(handle: PersistentPiHandle): Promise<void> {
+    this.clearPersistentPiIdle(handle)
     if (this.persistentPiSessions.get(handle.pointer.id) === handle) {
       this.persistentPiSessions.delete(handle.pointer.id)
     }
@@ -982,7 +1006,9 @@ export class LocalAiCliModule extends BaseModule {
     const prompt = buildPrompt(request.prompt, request.context)
     let handle: PersistentPiHandle | undefined
     let completeText = ''
-    let failed = false
+    // pi retries inside one run, so only the latest assistant message says whether an attempt failed.
+    let attemptFailed = false
+    let turnFailed = false
     context.emit({ type: 'status', callId, status: 'starting' })
     try {
       const status = await this.requireRunnableProvider(request.provider, request.access)
@@ -991,6 +1017,8 @@ export class LocalAiCliModule extends BaseModule {
         throw new Error('PROVIDER_RESUME_UNSUPPORTED')
       }
       handle = await this.getOrCreatePersistentPi(request, status, execution)
+      this.clearPersistentPiIdle(handle)
+      context.emit({ type: 'session', callId, provider: 'pi', sessionRef: handle.pointer.id })
 
       const beforeResponse = await handle.session.request(
         { id: 'tuff-turn-before', type: 'get_entries' },
@@ -1020,16 +1048,13 @@ export class LocalAiCliModule extends BaseModule {
           context.emit({ type: 'text-delta', callId, text: decoded.delta })
         }
         if (!completeText && decoded.completeText) completeText = decoded.completeText
-        if (decoded.failed) failed = true
-      }
-
-      if (context.isCancelled()) {
-        context.emit({ type: 'cancelled', callId })
-        return
-      }
-      if (failed) {
-        context.emit({ type: 'failed', callId, code: 'PROCESS_EXITED', recoverable: true })
-        return
+        if (
+          nativeEvent.type === 'message_end' &&
+          asObject(nativeEvent.message)?.role === 'assistant'
+        ) {
+          attemptFailed = decoded.failed === true
+        }
+        if (decoded.completed) turnFailed = decoded.failed === true || attemptFailed
       }
 
       const afterResponse = await handle.session.request(
@@ -1060,14 +1085,18 @@ export class LocalAiCliModule extends BaseModule {
       await this.touchNativeSession(handle.pointer, finalHead)
       handle.pointer = (await getLocalAiCliSession(handle.pointer.id)) ?? handle.pointer
 
-      if (!completeText.trim()) {
+      // pi has written this turn whatever its outcome, so the head moves before the terminal chunk.
+      if (context.isCancelled()) {
+        context.emit({ type: 'cancelled', callId })
+      } else if (turnFailed || !completeText.trim()) {
         context.emit({ type: 'failed', callId, code: 'PROCESS_EXITED', recoverable: true })
       } else {
         context.emit({ type: 'complete', callId, text: completeText.trim() })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (handle) {
+      // A busy child is streaming another owner's turn; closing it here would kill that turn.
+      if (handle && message !== 'NATIVE_SESSION_BUSY') {
         if (message === 'NATIVE_SESSION_CONFLICT') {
           await markLocalAiCliSessionState(handle.pointer.id, 'conflict').catch(() => undefined)
         } else if (message === 'NATIVE_SESSION_MISSING') {
@@ -1087,6 +1116,7 @@ export class LocalAiCliModule extends BaseModule {
         })
       }
     } finally {
+      if (handle) this.schedulePersistentPiIdle(handle)
       context.end()
     }
   }
@@ -1879,6 +1909,7 @@ export class LocalAiCliModule extends BaseModule {
     this.persistentPiSessions.clear()
     await Promise.allSettled(
       persistentSessions.map(async (session) => {
+        this.clearPersistentPiIdle(session)
         await session.session.close()
         session.releaseLease()
       })
