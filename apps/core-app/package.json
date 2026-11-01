@@ -70,6 +70,7 @@
     "search:scan-progress-simulate": "pnpm exec tsx \"scripts/scan-progress-source-scope-simulation.ts\"",
     "search:scan-progress-migration": "pnpm exec tsx \"scripts/scan-progress-source-scope-migration.ts\"",
     "update:diagnostic:verify": "pnpm exec tsx \"scripts/update-diagnostic-verify.ts\"",
+    "search:stress": "pnpm exec tsx \"scripts/search-index-stress/cli.ts\"",
     "search:trace:stats": "pnpm exec tsx \"scripts/search-trace-stats.ts\"",
     "search:trace:verify": "pnpm exec tsx \"scripts/search-trace-verify.ts\"",
     "windows:capability:evidence": "pnpm exec tsx \"scripts/windows-capability-evidence.ts\"",
@@ -143,7 +144,7 @@
     "talex-mica-electron": "^1.0.2",
     "v-wave": "^3.1.1",
     "vue": "catalog:frontend",
-    "vue-i18n": "^11.4.0",
+    "vue-i18n": "^11.4.14",
     "vue-router": "^4.6.4",
     "yaml": "^2.9.0",
     "zod": "4.6.6"

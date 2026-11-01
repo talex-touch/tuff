@@ -24,6 +24,8 @@ const SKELETON_DELAY_MS = 150
 
 export interface PreviewPicturesOptions {
   items: () => readonly ImagePreviewItem[]
+  /** A content slot replaces the image renderer for every item. */
+  custom?: () => boolean
   current: Readonly<Ref<number>>
   /** The URLs the host already knows to have failed. */
   hostFailed: () => Iterable<string> | undefined
@@ -37,8 +39,11 @@ export interface PreviewPictures {
   standIns: Readonly<Ref<ReadonlyMap<string, PreviewStandIn>>>
   /** The placeholder shimmers. */
   skeletonShown: Readonly<Ref<boolean>>
-  isFailed: (url: string) => boolean
-  isLoaded: (url: string) => boolean
+  isFailed: (url: string | undefined) => boolean
+  isLoaded: (url: string | undefined) => boolean
+  isCustom: (item: ImagePreviewItem) => boolean
+  /** Custom canvases are ready synchronously; images wait for their actual pixels. */
+  readySize: (item: ImagePreviewItem) => PreviewSize | null
   /** The shape a picture is expected at: the host's, else the last picture's. */
   shapeOf: (item: ImagePreviewItem) => PreviewSize
   /** The size a picture is drawn at: its own once loaded, else its stand-in's, else its expected shape. */
@@ -90,12 +95,12 @@ export function usePreviewPictures(options: PreviewPicturesOptions): PreviewPict
   const skeletonShown = ref(false)
   let skeletonTimer: ReturnType<typeof setTimeout> | undefined
 
-  function isFailed(url: string): boolean {
-    return hostFailed.value.has(url) || failedHere.value.has(url)
+  function isFailed(url: string | undefined): boolean {
+    return !!url && (hostFailed.value.has(url) || failedHere.value.has(url))
   }
 
-  function isLoaded(url: string): boolean {
-    return sizes.value.has(url)
+  function isLoaded(url: string | undefined): boolean {
+    return !!url && sizes.value.has(url)
   }
 
   function shapeOf(item: ImagePreviewItem): PreviewSize {
@@ -104,8 +109,16 @@ export function usePreviewPictures(options: PreviewPicturesOptions): PreviewPict
       : lastShape.value
   }
 
+  const isCustom = (item: ImagePreviewItem): boolean => item.type === 'custom' || !!options.custom?.()
+
+  function readySize(item: ImagePreviewItem): PreviewSize | null {
+    if (isCustom(item))
+      return shapeOf(item)
+    return item.url && !isFailed(item.url) ? sizes.value.get(item.url) ?? null : null
+  }
+
   function sizeOf(item: ImagePreviewItem): PreviewSize {
-    return sizes.value.get(item.url) ?? standIns.value.get(item.url)?.size ?? shapeOf(item)
+    return readySize(item) ?? (item.url ? standIns.value.get(item.url)?.size : undefined) ?? shapeOf(item)
   }
 
   function dropStandIn(url: string): void {
@@ -170,7 +183,7 @@ export function usePreviewPictures(options: PreviewPicturesOptions): PreviewPict
 
   function adoptOrigin(item: ImagePreviewItem, origin: PreviewOrigin): void {
     const image = origin.image
-    if (!image || !image.complete || !(image.naturalWidth > 0 && image.naturalHeight > 0) || isLoaded(item.url))
+    if (item.type === 'custom' || options.custom?.() || !item.url || !image || !image.complete || !(image.naturalWidth > 0 && image.naturalHeight > 0) || isLoaded(item.url))
       return
     const natural = { width: image.naturalWidth, height: image.naturalHeight }
     const src = image.currentSrc || image.src
@@ -210,6 +223,8 @@ export function usePreviewPictures(options: PreviewPicturesOptions): PreviewPict
     skeletonShown,
     isFailed,
     isLoaded,
+    isCustom,
+    readySize,
     shapeOf,
     sizeOf,
     markLoaded,

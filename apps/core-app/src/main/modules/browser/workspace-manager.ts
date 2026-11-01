@@ -135,15 +135,12 @@ export class BrowserWorkspaceManager {
   }
 
   private blankTab(id: string = randomUUID(), url = '', title = ''): BrowserTabState {
-    let defaultTitle = title
-    if (!defaultTitle) {
-      if (url === 'tuff://store') defaultTitle = '插件'
-      else if (url === 'tuff://settings' || url === 'tuff://setting') defaultTitle = '设置'
-    }
     return {
       id,
       url,
-      title: defaultTitle,
+      // An internal page is named by the renderer from its URL, in the language the interface is in
+      // now. A title kept here is persisted, and stayed in the language the tab was opened in.
+      title: url.startsWith('tuff://') ? '' : title,
       favicon: null,
       loading: false,
       canGoBack: false,

@@ -8,6 +8,7 @@ const sdkapi = SdkApi.V260713;
 function createTransport() {
   return {
     send: vi.fn<(...args: any[]) => Promise<any>>(),
+    stream: vi.fn<(...args: any[]) => Promise<any>>(),
   };
 }
 
@@ -49,8 +50,10 @@ describe("Plugin Localization SDK", () => {
       aliases: { default: ["status"] },
     };
 
-    await expect(sdk.i18n.getLocale()).resolves.toBe("zh-CN");
-    await expect(sdk.i18n.resolveText(text, "zh-CN")).resolves.toBe("已本地化");
+    await expect(sdk.language.getLanguage()).resolves.toBe("zh-CN");
+    await expect(sdk.language.resolveText(text, "zh-CN")).resolves.toBe(
+      "已本地化",
+    );
     await expect(
       sdk.lexicon.resolve("unit.length.meter", {
         locale: "en-US",
@@ -113,13 +116,14 @@ describe("Plugin Localization SDK", () => {
     const transport = createTransport();
     const sdk = createPluginLocalizationSDK(transport, sdkapi);
 
-    expect(sdk.i18n.createMessage(" plugin.status ", { count: 2 })).toBe(
+    expect(sdk.language.createMessage(" plugin.status ", { count: 2 })).toBe(
       '$i18n:plugin.status|{"count":2}',
     );
-    expect(() => sdk.i18n.createMessage("   ")).toThrow(
-      "[Plugin Localization SDK] Message key is required",
+    expect(() => sdk.language.createMessage("   ")).toThrow(
+      "[Language SDK] Message key is required",
     );
     expect(transport.send).not.toHaveBeenCalled();
+    expect(transport.stream).not.toHaveBeenCalled();
   });
 
   it("preserves transport errors instead of converting them to a facade result", async () => {

@@ -116,6 +116,12 @@ const WIDGET_SANDBOX_RUNTIME_ID = 'virtual:widget-sandbox-runtime'
  *
  * A virtual id never reaches resolution against node_modules at all, so there
  * is nothing for the optimizer to claim.
+ *
+ * The source is bundled into one module, not read from the entry file: the
+ * entry imports a chunk beside it by relative path (`./chunks/internal-….mjs`),
+ * and the frame imports the runtime from a `blob:` URL, against which no
+ * relative path resolves. Read as it was, every widget failed to start with
+ * "Failed to resolve module specifier".
  */
 function widgetSandboxRuntimePlugin(): Plugin {
   return {
@@ -126,9 +132,19 @@ function widgetSandboxRuntimePlugin(): Plugin {
       // the dev server's file watcher, that this id is not a real file.
       return `\0${WIDGET_SANDBOX_RUNTIME_ID}`
     },
-    load(id) {
+    async load(id) {
       if (id !== `\0${WIDGET_SANDBOX_RUNTIME_ID}`) return null
-      return `export default ${JSON.stringify(readFileSync(arrowRuntimeEntry, 'utf8'))}`
+      const result = await esbuildBuild({
+        entryPoints: [arrowRuntimeEntry],
+        bundle: true,
+        format: 'esm',
+        logLevel: 'silent',
+        platform: 'browser',
+        write: false
+      })
+      const [runtime] = result.outputFiles
+      if (!runtime) throw new Error('Failed to bundle the arrow runtime for the widget sandbox.')
+      return `export default ${JSON.stringify(runtime.text)}`
     }
   }
 }

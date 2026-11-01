@@ -87,9 +87,9 @@ code: |
   </script>
 
   <template>
-    <button @click="toggle">
-      {{ isDark ? '浅色' : '深色' }}
-    </button>
+    <TxButton variant="primary" @click="toggle">
+      {{ isDark ? '切换到浅色' : '切换到深色' }}
+    </TxButton>
   </template>
 ---
 :::

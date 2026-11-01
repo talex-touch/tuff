@@ -9,6 +9,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { t } from '../../../utils/i18n-helper'
 import { getCapabilityPrompt } from '../intelligence-config'
 import { BaseCapabilityTester } from './base-tester'
 import { createSampleImageSource } from './image-tester'
@@ -50,16 +51,20 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
     const preview =
       ocrResult.text.length > 200 ? `${ocrResult.text.slice(0, 200)}...` : ocrResult.text
 
-    const keywords = ocrResult.keywords?.length ? `\n关键词: ${ocrResult.keywords.join(', ')}` : ''
+    const keywords = ocrResult.keywords?.length
+      ? t('intelligence.capabilityTest.preview.keywords', {
+          keywords: ocrResult.keywords.join(', ')
+        })
+      : ''
 
     return this.buildTestResult(result, {
-      message: 'OCR 测试成功',
-      textPreview: preview + keywords
+      message: t('intelligence.capabilityTest.message.vision'),
+      textPreview: [preview, keywords].filter(Boolean).join('\n')
     })
   }
 
   getDefaultInputHint(): string {
-    return '使用内置示例图片进行测试'
+    return t('intelligence.capabilityTest.hint.vision')
   }
 
   requiresUserInput(): boolean {

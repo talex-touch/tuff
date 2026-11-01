@@ -1908,6 +1908,49 @@ describe('file-provider startup readiness', () => {
     }
   })
 
+  it('starts the hot-directory catch-up as soon as startup is ready, ahead of file maintenance', async () => {
+    const provider = fileProvider as unknown as MutableFileProvider
+    resetProviderState(provider)
+    const maintenance = (
+      provider as unknown as { maintenanceService: { scheduleFileMaintenance: () => void } }
+    ).maintenanceService
+    const hotCatchup = vi.spyOn(provider.bootPassService, 'maybeRunHotCatchup').mockResolvedValue()
+    const scheduleMaintenance = vi
+      .spyOn(maintenance, 'scheduleFileMaintenance')
+      .mockImplementation(() => undefined)
+
+    try {
+      await provider.onLoad(createContext())
+      await provider.backgroundStartupPromise
+
+      expect(hotCatchup).toHaveBeenCalledTimes(1)
+      // The startup chain's own call is the last one; the hot pass claims the lane before it.
+      const maintenanceOrder = scheduleMaintenance.mock.invocationCallOrder
+      expect(hotCatchup.mock.invocationCallOrder[0]).toBeLessThan(
+        maintenanceOrder[maintenanceOrder.length - 1]
+      )
+    } finally {
+      hotCatchup.mockRestore()
+      scheduleMaintenance.mockRestore()
+    }
+  })
+
+  it('does not start the hot-directory catch-up while the search index worker is unavailable', async () => {
+    const provider = fileProvider as unknown as MutableFileProvider
+    resetProviderState(provider)
+    const hotCatchup = vi.spyOn(provider.bootPassService, 'maybeRunHotCatchup').mockResolvedValue()
+    filePersistenceWaitUntilReady.mockRejectedValueOnce(new Error('worker unavailable'))
+
+    try {
+      await provider.onLoad(createContext())
+      await provider.backgroundStartupPromise
+
+      expect(hotCatchup).not.toHaveBeenCalled()
+    } finally {
+      hotCatchup.mockRestore()
+    }
+  })
+
   it('returns a stale search result without waiting for background candidate enumeration', async () => {
     vi.useFakeTimers()
     const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi

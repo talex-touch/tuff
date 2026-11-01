@@ -58,8 +58,14 @@ async function readCodeDirectoryHash(bundle: string, signal?: AbortSignal): Prom
 }
 
 /** Revalidate the actual prepared bytes, not just a receipt or an existing directory. */
+export interface ValidatePreparedMacUpdateOptions {
+  fast?: boolean
+}
+
+/** Revalidate the actual prepared bytes, not just a receipt or an existing directory. */
 export async function validatePreparedMacUpdate(
-  input: MacUpdatePreparationInput
+  input: MacUpdatePreparationInput,
+  options?: ValidatePreparedMacUpdateOptions
 ): Promise<PreparedMacUpdate> {
   const value: unknown = JSON.parse(
     await fs.readFile(path.join(input.attemptRoot, 'macos-prepared.json'), 'utf8')
@@ -87,7 +93,14 @@ export async function validatePreparedMacUpdate(
   const preparedStat = await fs.lstat(preparedApp)
   if (!preparedStat.isDirectory() || preparedStat.isSymbolicLink())
     throw new Error('Invalid prepared application directory')
-  await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', preparedApp], {
+  // In fast mode (during handoff), skip the recursive --deep traversal across all nested
+  // frameworks and helpers: prepareMacUpdate already verified the entire bundle deeply when
+  // prepared. Non-deep verify still strictly validates the top-level bundle, Info.plist and
+  // sealed resources (CodeResources), while readCodeDirectoryHash confirms binary integrity.
+  const verifyArgs = options?.fast
+    ? ['--verify', '--strict', preparedApp]
+    : ['--verify', '--deep', '--strict', preparedApp]
+  await execFileAsync('/usr/bin/codesign', verifyArgs, {
     timeout: 120_000,
     maxBuffer: 64 * 1024,
     signal: input.signal

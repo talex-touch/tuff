@@ -4,6 +4,19 @@
 
 ### 📦 组件变动 (Components)
 
+- **新增组件**: `touch-surface`
+- **更新组件**: `glass-surface`
+
+### ✨ 组件增强
+
+- `TxGlassSurface` 新增 `engine="lens"` 液态透镜引擎（折射），默认仍是 `classic`（扭曲），`TxBaseSurface`、`TxRadioGroup`、`TxSlider` 等内部使用者不变。透镜把边缘看成一圈凸起的玻璃，按斯涅尔定律与折射率算出每一点的位移：边缘一圈把背后的画面向内拉，中间几乎保持原样。新增属性 `bezel`（边缘宽度，默认随短边取 4–10px）、`thickness`（玻璃厚度，默认随短边取 8–24px）、`ior`（折射率，1–3，默认 1.5）、`refraction`（边缘强度倍率）、`zoom`（中间的放大倍率，单独走一道位移）、`profile`（`squircle` 或 `circle`）、`rimLight`（边缘高光）、`rimSaturation`（透过边缘的颜色饱和度，大于 1 发艳）、`dispersion`（红、绿、蓝分离，0–0.5）与 `frost`（背景磨砂半径）；`saturation` 在 `lens` 下默认 1.5。折射图按实测尺寸画成位图并按形状缓存，同一帧里改多个属性只重画一次；`zoom` 为 1 时中间与页面一样锐利。折射只在 Chromium 内核里发生：Safari、Firefox、SSR 与第一帧退为磨砂玻璃（模糊取 `frost` 与 12px 中较大者，着色不低于 0.22），形状、阴影与拖拽照常；高对比度下不折射，改画不透明底色加一圈轮廓。
+- 新增 `useLiquidDrag`，让透镜像一滴液态玻璃：按下时抬起，沿拖动方向拉长，停下后以弹簧弹回。位置严格跟随指针，只有形状滞后；整个过程只改 `transform`，透镜的布局尺寸与折射图不变。选项为 `bounds`、`disabled`、`ignore`、`stiffness`、`damping`、`stretch`、`maxStretch`、`restHeight`、`pressGrow` 与 `swell`，数值选项可以是 ref 或 getter，每一帧重新读取，能直接绑到滑块上调。按下时除了对元素设置指针捕获，还在 `window` 上监听 `pointermove`、`pointerup` 与 `pointercancel`，指针越出透镜也照样跟随；减少动态效果时只抬起、不缓动也不拉伸。新增导出 `useLiquidDrag`、`LiquidDragOptions` 与 `LiquidDragState`。
+- 新增 `TxTouchSurface` 与 `useLiquidTouch`，让任意表面在鼠标划过或手指按下时像一滴液态玻璃：抬起、朝指针倾斜、顺着指针移动的方向拉长（垂直方向变薄，体积不变），指针离开后以弹簧弹回。`surface` 选择效果铺在哪种表面上：`'base'`（默认，即 `TxBaseSurface`）、`'glass'`（`TxGlassSurface`），或根元素就是表面的自定义组件，其余属性与默认插槽原样交给表面。选项为 `disabled`、`lean`、`maxLean`、`hoverLift`、`pressGrow`、`stretch`、`maxStretch`、`swell`、`stiffness` 与 `damping`，数值选项可以是 ref 或 getter，每一帧重新读取。只写 `translate` 与 `scale` 属性，不碰元素自己的 `transform`，表面的布局尺寸与折射图不变，静止时什么都不写；玻璃透镜经 `--tx-glass-lift` 读取抬起程度。手指没有悬停，只有按下；手指开始滚动页面时浏览器发出 `pointercancel`，表面随之松手，需要在上面滑动的表面设 `touch-action: none`。鼠标只认主键，按下之后在 `window` 上继续跟随，没有按键的移动会结束这次按下。减少动态效果时只抬起、不缓动，也不倾斜、不拉长；一切静止后帧循环休眠。归入 Pro 套件，新增导出 `TxTouchSurface`、`useLiquidTouch`、`LiquidTouchOptions`、`LiquidTouchState`、`TouchSurfaceProps` 与 `TouchSurfaceBase`。
+
+## [0.9.2] - 2026-10-27
+
+### 📦 组件变动 (Components)
+
 - **新增组件**: `drawer-form`, `image-preview`, `modal-form`, `steps-form`
 - **更新组件**: `attachment-tray`, `avatar`, `base-surface`, `charts`, `checkbox`, `command-palette`, `dialog`, `drawer`, `flip-overlay`, `form`, `group-block`, `image-gallery`, `input`, `modal`, `motion-transition`, `number-input`, `radio`, `select`, `sensitive-input`, `stream-markdown`, `switch`, `textarea`
 
@@ -17,6 +30,8 @@
 - 新增 `TxStepsForm` 与 `TxFormStep`，把一个表单分成几步，步骤条由 `TxSteps` 绘制。「下一步」只校验当前一步的字段，通过后焦点移到下一步；最后一步提交整个表单，有字段出错时回到它所在的一步并聚焦它。当前步骤可经 `v-model:active` 控制，开启 `persist` 时草稿记下所在的步骤，恢复草稿时回到那一步。按钮文案由 `prevText`、`nextText` 与 `submitText` 设定。其余属性与 `TxForm` 相同，`autosave` 除外。
 - `TxForm` 新增 `autosave`（`true` 或 `{ delay }`）：编辑停顿 1 秒（或 `delay` 毫秒）后经 `onSubmit` 保存，表单内的提交改为立即保存。只校验改过的字段，出错或异步校验未完成的字段保留已保存的值、其余字段照存，保存结果由读屏播报（`messages.autosaved` / `autosaveFailed`）。新增 `readonly`：表单里读取表单状态的控件能聚焦、能复制、不能修改，字段不再标必填，提交照常可用；`TxCheckbox`、`TxRadio`、`TxSelect` 与 `TxSwitch` 只读时去掉悬停与按下反馈，自定义控件从 `useTxFormField()` 读取 `readonly`。新增事件 `submit-success`，在提交或自动保存成功后触发。离开字段时鼠标仍按着的（例如按在字段下方的提交按钮上），消息等松手、点击处理完再显示，免得消息把按钮推开、这次点击落空。草稿存储新增可选的 `keys(prefix)`；`clearTxFormDrafts()` 的 `namespace` 可传函数，清掉它接受的所有命名空间的草稿（例如启动时清掉当前账号以外的所有账号），存储没有 `keys` 时给出警告并跳过。新增类型导出 `FormAutosaveOptions`。
 - 新增 `TxImagePreview` 全窗口图片预览，一次看一张，左右相邻的图片候在两侧。滚轮以指针为中心缩放，触控板捏合与 ⌘/Ctrl + 滚轮跟手缩放，放大后拖动平移、松手滑行；未放大时横向拖动或一划翻页，上下拖走关闭。触屏双指捏合、双击放大或恢复、单击隐藏或显示控件，长按 480 ms 弹出操作菜单。传 `origin` 时图片按缩略图的裁切与圆角飞出、关闭时飞回，越过终点的程度由 `bounce` 控制（默认 `0.2`）。`actions` 逐项开关旋转、复制、分享与下载，右键或菜单键打开同一组操作的菜单（`contextMenu`），`action` 事件在执行前触发，`preventDefault()` 后由宿主处理。底部条用缩略图或圆点（`indicator`）。工具栏的比例读数打开缩放菜单，列出「适应屏幕」（`resetLabel`）与 25%、50%、100%、200% 直到 1600% 中比整张大、不超过 `maxScale` 的几档，当前比例打勾。放大后右下角的小地图（`minimap`）显示整张图片并框出画面中的部分，点按或拖动它移动画面，在它上面滚动滚轮以画面中心缩放。遮罩默认 `refraction` 材质、控件默认 `blur` 材质，各有颜色、不透明度与模糊半径可调。宽度不超过 640px 或高度不超过 480px 时改用手机版式。所有文字与可访问名称都是 props，另有 `counterFormatter`、`scaleFormatter`、`indicatorItemFormatter`、`labelFormatter` 与 `readoutLabelFormatter`。
+- `TxImagePreview` 新增自定义内容与组件预览支持：`items` 支持 `type: 'custom'` 自定义条目（无外链 URL 时即刻就绪），支持 `#default` / `#item` 内容插槽、`#thumbnail` 底部条缩略图插槽、`#minimap` 小地图插槽，缩放、平移手势与旋转在自定义组件上完整保留；新增导出 `ImagePreviewSlotProps`、`ImagePreviewThumbnailSlotProps`、`ImagePreviewMinimapSlotProps`。
+- `TxMermaidBlock` 放大查看接入 `TxImagePreview`：点击图表直接进入原生全功能预览器，享受缩放、拖拽平移、键盘操控与小地图导航，移除此前简陋的独立覆盖层。
 - `TxImageGallery` 与 `TxAttachmentTray` 改用 `TxImagePreview`：图片从点开的缩略图飞出、关闭时飞回。两者新增 `previewProps`，把预览的其余选项（操作、底部条、动效与材质）原样传入，新增 `action` 事件转发预览的操作；`TxAttachmentTray` 另新增 `openLabelFormatter`，由图片名生成缩略图的 `aria-label`（默认 `` (name) => `${previewTitle}: ${name}` ``）。原内部预览器 `ImageGalleryViewer` 移除，它不在包的导出中。预览在第一次要用时才加载：指针移到画廊或托盘上、焦点进入其中，或按下缩略图时开始，加载完成前按下的那张在加载完成后打开。预览的样式在 `image-preview` 的样式表里，按需样式插件让它们随预览一起加载（见「按需样式」）；手动引入样式时需另引 `@talex-touch/tuffex/image-preview/style.css`，以及它依赖的 `base-surface`、`flow-light` 与 `glass-surface` 的样式表。
 - `TxTimeseriesChart` 的 `labels` 新增 `loading` 与 `more`：加载骨架的可访问名称（默认 `Loading chart`）与 tooltip 里收起多余序列的那一行（默认 `` (n) => `+${n} more` ``）此前写死为英文，现在可以换成界面语言的文案。`TxTimeseriesSkeleton` 单独使用时以新增的 `label` 命名。新增导出 `TimeseriesChartLabels` 与 `TIMESERIES_DEFAULT_LABELS`。
 - `TxSankeyChart` 的 `labels` 新增 `value` 与 `items`：默认 tooltip 里数值行的名称（默认 `Value`）与可下钻节点的条目数（默认 `` (n) => `${n} items` ``）此前写死为英文，现在可以换成界面语言的文案。

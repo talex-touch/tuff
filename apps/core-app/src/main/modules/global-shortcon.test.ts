@@ -32,13 +32,18 @@ const mainStorageMocks = vi.hoisted(() => ({
 }))
 
 const appSettingMocks = vi.hoisted(() => ({
-  config: {} as { betaFeatures?: Record<string, unknown>; tools?: Record<string, unknown> },
+  config: {} as {
+    betaFeatures?: Record<string, unknown>
+    tools?: Record<string, unknown>
+    dev?: { advancedSettings?: unknown }
+  },
   listeners: new Set<(config: unknown) => void>()
 }))
 
 beforeEach(() => {
   appSettingMocks.config = {
-    betaFeatures: { screenshot: true, voiceDictation: true, voiceQuickEdit: true, omniPanel: true }
+    betaFeatures: { screenshot: true, voiceDictation: true, voiceQuickEdit: true, omniPanel: true },
+    dev: { advancedSettings: true }
   }
 })
 
@@ -321,7 +326,10 @@ describe('ShortcutModule Beta feature gates', () => {
   it.each(Object.entries(BETA_FEATURE_SHORTCUTS))(
     'switching %s off immediately releases its key and switching it on restores the stored key',
     (feature, id) => {
-      appSettingMocks.config = { betaFeatures: { [feature]: true } }
+      appSettingMocks.config = {
+        betaFeatures: { [feature]: true },
+        dev: { advancedSettings: true }
+      }
       const module = start()
       const beta = vi.fn()
       const corebox = vi.fn()
@@ -369,7 +377,10 @@ describe('ShortcutModule Beta feature gates', () => {
   })
 
   it('deactivates and restores the mouse trigger when the OmniPanel feature changes', () => {
-    appSettingMocks.config = { betaFeatures: { omniPanel: true } }
+    appSettingMocks.config = {
+      betaFeatures: { omniPanel: true },
+      dev: { advancedSettings: true }
+    }
     const module = start()
     const states: boolean[] = []
     module.registerMainTrigger(
@@ -387,6 +398,35 @@ describe('ShortcutModule Beta feature gates', () => {
     appSettingMocks.config.betaFeatures!.omniPanel = true
     publishSettings()
     expect(states.at(-1)).toBe(true)
+  })
+
+  it('holds OmniPanel off while Advanced Settings is off, even with its own opt-in', () => {
+    appSettingMocks.config = {
+      betaFeatures: { omniPanel: true },
+      dev: { advancedSettings: false }
+    }
+    const module = start()
+    const states: boolean[] = []
+    module.registerMainShortcut('core.omniPanel.toggle', 'Alt+P', vi.fn(), { enabled: true })
+    module.registerMainTrigger(
+      'core.omniPanel.mouseLongPress',
+      ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS,
+      { enabled: true, onStateChange: (active) => states.push(active) }
+    )
+    expect(module.getShortcutBinding('core.omniPanel.toggle').effective).toBeNull()
+    expect(dispatch.has('Alt+P')).toBe(false)
+    expect(states.at(-1)).not.toBe(true)
+
+    appSettingMocks.config.dev!.advancedSettings = true
+    publishSettings()
+    expect(module.getShortcutBinding('core.omniPanel.toggle').effective).toBe('Alt+P')
+    expect(states.at(-1)).toBe(true)
+
+    // Turning Advanced Settings back off releases the key and the mouse hook it was holding.
+    appSettingMocks.config.dev!.advancedSettings = false
+    publishSettings()
+    expect(dispatch.has('Alt+P')).toBe(false)
+    expect(states.at(-1)).toBe(false)
   })
 })
 

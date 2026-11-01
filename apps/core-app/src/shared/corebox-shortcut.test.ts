@@ -22,7 +22,7 @@ const DISPLAY_PATHS = [
   'renderer/src/views/base/begin/internal/Done.vue',
   'renderer/src/views/base/begin/internal/components/BeginShortcutKey.vue',
   'renderer/src/views/base/settings/SettingTools.vue',
-  'renderer/src/views/base/settings/components/ShortcutDialogRow.vue'
+  'renderer/src/views/base/settings/components/ShortcutDialog.vue'
 ]
 
 /** ⌘E / Ctrl+E as a key cap, a label or an Electron accelerator, and the in-window `KeyE` chord. */

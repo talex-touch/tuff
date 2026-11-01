@@ -442,17 +442,21 @@ export async function withLocalSkillDir(
   config: LocalSkillConfig,
   dir: string
 ): Promise<LocalSkillConfig> {
+  // One code for every way the path can be unusable; the settings page words it, and the rest is for
+  // the log.
   const requested = dir.trim()
-  if (!requested) throw new Error('A skill directory path is required')
-  if (!isAbsolute(requested)) throw new Error('A skill directory must be an absolute path')
+  if (!requested) throw new Error('LOCAL_SKILL_DIR_INVALID: a skill directory path is required')
+  if (!isAbsolute(requested))
+    throw new Error('LOCAL_SKILL_DIR_INVALID: a skill directory must be an absolute path')
 
   let resolved: string
   try {
     resolved = await realpath(requested)
   } catch {
-    throw new Error(`Skill directory ${requested} does not exist`)
+    throw new Error(`LOCAL_SKILL_DIR_INVALID: skill directory ${requested} does not exist`)
   }
-  if (!(await isDirectory(resolved))) throw new Error(`${requested} is not a directory`)
+  if (!(await isDirectory(resolved)))
+    throw new Error(`LOCAL_SKILL_DIR_INVALID: ${requested} is not a directory`)
 
   const known = new Set<string>()
   for (const existing of config.dirs) {

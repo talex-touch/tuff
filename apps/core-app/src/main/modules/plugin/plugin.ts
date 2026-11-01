@@ -101,6 +101,7 @@ import { clampBatteryPercent } from '@talex-touch/utils'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import { TuffItemBuilder, type RecommendProvider } from '@talex-touch/utils/core-box'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { normalizePermissionId } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import {
@@ -139,7 +140,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { deviceIdleService } from '../../service/device-idle-service'
-import { t as translate } from '../../utils/i18n-helper'
+import { getLocale, t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
@@ -161,10 +162,7 @@ import { createPluginBatchRenameFilesystemCapability } from './host/plugin-files
 import { isPromiseLike, PluginFeature, snapshotLifecycleFeature } from './plugin-feature'
 import { validatePluginFeatureAdmission } from './plugin-feature-admission'
 import { createPluginHttpClient } from './plugin-http-client'
-import {
-  createPluginClassicUtilityCapabilityBundle,
-  resolvePluginRuntimeCapabilityAllowlist
-} from './plugin-runtime-capabilities'
+import { createPluginClassicUtilityCapabilityBundle } from './plugin-runtime-capabilities'
 import {
   createRemovedChannelError,
   createSafePluginClipboardApi,
@@ -1251,17 +1249,11 @@ export class TouchPlugin implements ITouchPlugin {
         }))
       })
     ) as Record<string, PluginRuntimeSnapshotValue>
-    let locale = 'en-US'
-    try {
-      const resolvedLocale = app.getLocale()
-      if (/^[A-Z0-9-]{2,64}$/i.test(resolvedLocale)) locale = resolvedLocale
-    } catch {
-      // A frozen fallback keeps locale lookup child-local when Electron locale is unavailable.
-    }
     return Object.freeze({
       platform: process.platform,
       arch: process.arch,
-      locale,
+      // The app display language, so it agrees with plugin.language rather than the OS locale.
+      locale: getLocale(),
       manifest: Object.freeze(manifest)
     })
   }
@@ -1822,6 +1814,14 @@ export class TouchPlugin implements ITouchPlugin {
     return privileges.isPrivilegedPluginFor(capability, this.name)
   }
 
+  private declaresPermission(permissionId: string): boolean {
+    const normalized = normalizePermissionId(permissionId)
+    return [
+      ...(this.declaredPermissions?.required ?? []),
+      ...(this.declaredPermissions?.optional ?? [])
+    ].some((declared) => normalizePermissionId(declared) === normalized)
+  }
+
   private createBatchRenameFilesystemCapability(
     activation: PluginActivationIdentity
   ): PluginBatchRenameFilesystemCapability | null {
@@ -1898,13 +1898,13 @@ export class TouchPlugin implements ITouchPlugin {
     return factory(activation)
   }
 
-  private createTranslationCapability(
+  private createIntelligenceCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceCapabilities | null {
-    if (!this.canUse('translation')) return null
-    const factory = TouchPlugin.capability('translation')
+    if (!this.declaresPermission('intelligence.basic')) return null
+    const factory = TouchPlugin.capability('intelligence')
     if (!factory) {
-      const code = 'PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'
+      const code = 'PLUGIN_INTELLIGENCE_CAPABILITY_UNAVAILABLE'
       throw Object.assign(new Error(code), { code })
     }
     return factory(activation)
@@ -1913,7 +1913,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createIntelligenceContextCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceContextCapabilities | null {
-    if (!this.canUse('intelligenceContext')) return null
+    if (!this.declaresPermission('intelligence.context')) return null
     const factory = TouchPlugin.capability('intelligenceContext')
     if (!factory) {
       const code = 'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'
@@ -2056,7 +2056,7 @@ export class TouchPlugin implements ITouchPlugin {
       const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
       const browserOpenCapability = this.createBrowserOpenCapability(currentActivation)
       const browserDataCapability = this.createBrowserDataCapability(currentActivation)
-      const translationCapability = this.createTranslationCapability(currentActivation)
+      const intelligenceCapability = this.createIntelligenceCapability(currentActivation)
       const intelligenceContextCapability =
         this.createIntelligenceContextCapability(currentActivation)
       const snipasteProcessCapability = this.createSnipasteProcessCapability(currentActivation)
@@ -2176,7 +2176,7 @@ export class TouchPlugin implements ITouchPlugin {
         ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...(browserOpenCapability ? browserOpenCapability.definitions : []),
         ...(browserDataCapability ? browserDataCapability.definitions : []),
-        ...(translationCapability ? translationCapability.definitions : []),
+        ...(intelligenceCapability ? intelligenceCapability.definitions : []),
         ...(intelligenceContextCapability ? intelligenceContextCapability.definitions : []),
         ...(snipasteProcessCapability ? snipasteProcessCapability.definitions : []),
         ...(systemActionCapability ? systemActionCapability.definitions : []),
@@ -2185,7 +2185,6 @@ export class TouchPlugin implements ITouchPlugin {
         ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : []),
         ...(classicUtilityCapabilities?.definitions ?? [])
       ])
-      const capabilityAllowlist = resolvePluginRuntimeCapabilityAllowlist(this.name)
       const runtimeActivation = await activeRuntime.startActivation({
         activation: currentActivation,
         scriptContent,
@@ -2193,7 +2192,6 @@ export class TouchPlugin implements ITouchPlugin {
         ...(activationCapabilityDefinitions.length > 0
           ? { capabilityDefinitions: activationCapabilityDefinitions }
           : {}),
-        ...(capabilityAllowlist ? { capabilityAllowlist } : {}),
         ...(closeActivationResources ? { closeResources: closeActivationResources } : {}),
         onCrash: (diagnostic) => this.handleRuntimeCrash(currentActivation, diagnostic)
       })
@@ -3297,7 +3295,7 @@ export class TouchPlugin implements ITouchPlugin {
       voice,
       screenshot,
       system,
-      i18n: localization.i18n,
+      language: localization.language,
       lexicon: localization.lexicon,
       power: powerSDK,
       recommend: recommendSDK
@@ -3319,7 +3317,7 @@ export class TouchPlugin implements ITouchPlugin {
       voice,
       screenshot,
       system,
-      i18n: localization.i18n,
+      language: localization.language,
       lexicon: localization.lexicon,
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,

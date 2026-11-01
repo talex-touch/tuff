@@ -138,7 +138,7 @@ test('onFeatureTriggered publishes a stable redacted fallback when the host oper
 
   assert.equal(await plugin.onFeatureTriggered('quickops', { text: 'quickops' }), true)
   assert.equal(state.items[0].render.basic.title, 'QuickOps 加载失败')
-  assert.equal(state.items[0].render.basic.subtitle, '宿主能力暂不可用')
+  assert.equal(state.items[0].render.basic.subtitle, 'Tuff 暂时无法提供这项功能，请稍后再试')
   assert.deepEqual(state.logs, [['[touch-quickops] Failed to render QuickOps summary']])
   assert.doesNotMatch(JSON.stringify(state), /private|quickops failure/)
 })

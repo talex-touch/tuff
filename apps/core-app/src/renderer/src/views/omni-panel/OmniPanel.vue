@@ -37,6 +37,7 @@ import {
   resolveOmniPanelAiInput,
   type OmniPanelAiActionId
 } from './ai-actions'
+import { describeOmniPanelExecuteError, wordOmniPanelFeature } from './feature-wording'
 import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
 import { resolveOmniPanelSelectionRecovery } from './selection-recovery'
@@ -64,7 +65,6 @@ const selectionSupportLevel = ref<'supported' | 'best_effort' | 'unsupported' | 
 const selectionIssueCode = ref<'disabled' | 'empty' | 'failed' | 'unsupported' | undefined>(
   undefined
 )
-const selectionIssueMessage = ref('')
 const contextCapsule = ref<OmniPanelDesktopContextCapsule | undefined>(undefined)
 const loading = ref(false)
 
@@ -102,20 +102,11 @@ interface AiPreviewState {
 
 const aiPreview = ref<AiPreviewState | null>(null)
 
-const executeCodeMessageMap: Record<string, string> = {
-  FEATURE_UNAVAILABLE: 'corebox.omniPanel.featureUnavailable',
-  SELECTION_REQUIRED: 'corebox.omniPanel.selectionRequired',
-  COREBOX_UNAVAILABLE: 'corebox.omniPanel.coreboxUnavailable',
-  FEATURE_EXECUTION_FAILED: 'corebox.omniPanel.executeFailed',
-  INTERNAL_ERROR: 'corebox.omniPanel.executeFailed'
-}
-
 const footerHint = computed(() => {
   const recovery = resolveOmniPanelSelectionRecovery({
     hasSelection: hasSelection.value,
     selectedText: selectedText.value,
     issueCode: selectionIssueCode.value,
-    issueMessage: selectionIssueMessage.value,
     supportLevel: selectionSupportLevel.value
   })
   const base = t(recovery.labelKey, recovery.fallback)
@@ -127,13 +118,15 @@ const footerHintTone = computed(
       hasSelection: hasSelection.value,
       selectedText: selectedText.value,
       issueCode: selectionIssueCode.value,
-      issueMessage: selectionIssueMessage.value,
       supportLevel: selectionSupportLevel.value
     }).tone
 )
 
+/** The list in this window's language, which is what the search matches and the tiles show. */
+const shownFeatures = computed(() => features.value.map((item) => wordOmniPanelFeature(item, t)))
+
 const filteredFeatures = computed(() => {
-  return filterOmniPanelFeatures(features.value, searchKeyword.value)
+  return filterOmniPanelFeatures(shownFeatures.value, searchKeyword.value)
 })
 
 const aiPreviewInputPreview = computed(() => {
@@ -290,13 +283,13 @@ async function syncLocalAiAction(): Promise<void> {
 }
 
 function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse): string {
-  const fallback = t('corebox.omniPanel.executeFailed')
-  if (!response) return fallback
-  if (response.error) return response.error
-  if (response.code && executeCodeMessageMap[response.code]) {
-    return t(executeCodeMessageMap[response.code])
+  if (response?.error) {
+    omniPanelLog.warn('Feature execution was refused or failed', {
+      code: response.code,
+      error: response.error
+    })
   }
-  return fallback
+  return describeOmniPanelExecuteError(response?.code, t)
 }
 
 async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
@@ -421,7 +414,7 @@ async function retryAiPreview(): Promise<void> {
   const current = aiPreview.value
   if (!current) return
   aiClipboardError.value = ''
-  const item = features.value.find((feature) => feature.id === current.featureId)
+  const item = shownFeatures.value.find((feature) => feature.id === current.featureId)
   if (!item) return
   await executeAiFeature(item, current.featureId)
 }
@@ -436,8 +429,7 @@ async function copyAiResult(): Promise<void> {
     toast.success(t('corebox.omniPanel.aiCopied'))
   } catch (error) {
     omniPanelLog.error('Failed to copy OmniPanel AI result', error)
-    aiClipboardError.value =
-      error instanceof Error ? error.message : t('corebox.omniPanel.aiCopyFailed')
+    aiClipboardError.value = t('corebox.omniPanel.aiCopyFailed')
     toast.error(t('corebox.omniPanel.aiCopyFailed'))
   }
 }
@@ -458,8 +450,7 @@ async function replaceClipboardWithAiResult(): Promise<void> {
     toast.success(t('corebox.omniPanel.aiClipboardReplaced'))
   } catch (error) {
     omniPanelLog.error('Failed to replace clipboard with OmniPanel AI result', error)
-    aiClipboardError.value =
-      error instanceof Error ? error.message : t('corebox.omniPanel.aiCopyFailed')
+    aiClipboardError.value = t('corebox.omniPanel.aiCopyFailed')
     toast.error(t('corebox.omniPanel.aiCopyFailed'))
   }
 }
@@ -476,7 +467,13 @@ function handleContext(payload: OmniPanelContextPayload): void {
   source.value = payload.source || 'manual'
   selectionSupportLevel.value = payload.selectionSupportLevel
   selectionIssueCode.value = payload.selectionIssueCode
-  selectionIssueMessage.value = payload.selectionIssueMessage || ''
+  if (payload.selectionIssueMessage) {
+    // The hint below the grid explains the issue by its code; main's own words are for diagnosis.
+    omniPanelLog.debug('Selection capture issue', {
+      code: payload.selectionIssueCode,
+      message: payload.selectionIssueMessage
+    })
+  }
   contextCapsule.value = payload.capsule
   clearAiPreview()
   if (

@@ -382,6 +382,7 @@ const PLUGIN_NAME = 'touch-intelligence'
 const PLUGIN_SDK_API = 260713
 const REQUIRED_PERMISSIONS = [
   'intelligence.basic',
+  'intelligence.context',
   'search.root-results',
   'storage.plugin'
 ] as const

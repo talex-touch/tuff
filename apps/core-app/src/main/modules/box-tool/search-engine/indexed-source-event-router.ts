@@ -2,6 +2,7 @@ import process from 'node:process'
 import path from 'node:path'
 import type { ITouchEvent } from '@talex-touch/utils'
 import type {
+  IndexedSourceReconcileResult,
   IndexingWatchDeltaAction,
   IndexingWatchDeltaBasePayload
 } from '@talex-touch/utils/search'
@@ -36,6 +37,8 @@ interface PendingSubtreeInvalidation {
   rootPath: string
   scopes: Set<string>
   reasons: Map<string, MacOSInvalidationReason>
+  /** Watcher invalidations folded into each scope; read only by the reconcile log. */
+  events: Map<string, number>
 }
 
 type MacOSInvalidationReason = 'directory-change' | 'event-loss' | 'overflow' | 'symlink-change'
@@ -43,6 +46,15 @@ type MacOSInvalidationReason = 'directory-change' | 'event-loss' | 'overflow' | 
 type RuntimeAccessor = () => IndexingRuntime | null
 
 type WatchDeltaPayload = IndexingWatchDeltaBasePayload<IndexingWatchDeltaAction>
+
+/** One exclusive turn of the subtree-reconcile chain; see `withHotSubtreeLane`. */
+export interface HotSubtreeLane {
+  /** Null when the runtime is down or the file source does not own the directory. */
+  reconcile: (
+    directoryPath: string,
+    signal?: AbortSignal
+  ) => Promise<IndexedSourceReconcileResult | null>
+}
 
 export interface IndexedSourceEventRouterOptions {
   /**
@@ -70,6 +82,8 @@ export class IndexedSourceEventRouter {
   private readonly subtreeInvalidations = new Map<string, PendingSubtreeInvalidation>()
   private subtreeInvalidationTimer: ReturnType<typeof setTimeout> | null = null
   private subtreeInvalidationChain: Promise<void> = Promise.resolve()
+  private readonly hotLanes: Array<() => Promise<void>> = []
+  private hotLaneAbort = new AbortController()
 
   constructor(
     private readonly getRuntime: RuntimeAccessor,
@@ -164,6 +178,7 @@ export class IndexedSourceEventRouter {
 
   subscribe(): void {
     if (this.subscribed) return
+    this.hotLaneAbort = new AbortController()
     touchEventBus.on(TalexEvents.FILE_ADDED, this.handleFileAddedOrChanged)
     touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleFileAddedOrChanged)
     touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleFileUnlinked)
@@ -203,6 +218,8 @@ export class IndexedSourceEventRouter {
     // within the 400ms coalescing window was discarded outright, with no reconcile
     // marker, leaving the index stale until the next full scan (#676).
     this.subscribed = false
+    // A hot lane holds the chain for its whole run; shutdown must not wait out its budget.
+    this.hotLaneAbort.abort(new Error('INDEXED_SOURCE_ROUTER_UNSUBSCRIBED'))
     await Promise.all([
       this.appQueue.drain(),
       this.fileQueue.drain(),
@@ -247,26 +264,45 @@ export class IndexedSourceEventRouter {
     const normalizedSubtree = path.resolve(subtreePath)
     let pending = this.subtreeInvalidations.get(normalizedRoot)
     if (!pending) {
-      pending = { rootPath: normalizedRoot, scopes: new Set(), reasons: new Map() }
+      pending = {
+        rootPath: normalizedRoot,
+        scopes: new Set(),
+        reasons: new Map(),
+        events: new Map()
+      }
       this.subtreeInvalidations.set(normalizedRoot, pending)
     }
-    if (pending.scopes.has(normalizedRoot)) return
-    for (const existing of pending.scopes) {
-      if (this.isSubtreeInsideRoot(normalizedSubtree, existing)) return
+    if (pending.scopes.has(normalizedRoot)) {
+      pending.events.set(normalizedRoot, (pending.events.get(normalizedRoot) ?? 0) + 1)
+      return
     }
     for (const existing of pending.scopes) {
+      if (this.isSubtreeInsideRoot(normalizedSubtree, existing)) {
+        pending.events.set(existing, (pending.events.get(existing) ?? 0) + 1)
+        return
+      }
+    }
+    let folded = 1
+    for (const existing of pending.scopes) {
       if (this.isSubtreeInsideRoot(existing, normalizedSubtree)) {
+        folded += pending.events.get(existing) ?? 0
         pending.scopes.delete(existing)
         pending.reasons.delete(existing)
+        pending.events.delete(existing)
       }
     }
     pending.scopes.add(normalizedSubtree)
     pending.reasons.set(normalizedSubtree, reason)
+    pending.events.set(normalizedSubtree, folded)
     if (pending.scopes.size > MAX_PENDING_INVALIDATION_SCOPES) {
+      let total = 0
+      for (const count of pending.events.values()) total += count
       pending.scopes.clear()
       pending.reasons.clear()
+      pending.events.clear()
       pending.scopes.add(normalizedRoot)
       pending.reasons.set(normalizedRoot, 'overflow')
+      pending.events.set(normalizedRoot, total)
     }
     this.scheduleSubtreeInvalidations()
   }
@@ -277,6 +313,12 @@ export class IndexedSourceEventRouter {
       relative === '' ||
       (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
     )
+  }
+
+  /** Directory levels from the watch root down to the scope; 0 for the root itself. */
+  private depthBelowRoot(rootPath: string, scopePath: string): number {
+    const relative = path.relative(rootPath, scopePath)
+    return relative === '' ? 0 : relative.split(path.sep).length
   }
 
   private scheduleSubtreeInvalidations(): void {
@@ -295,6 +337,16 @@ export class IndexedSourceEventRouter {
       .then(async () => {
         for (const entry of pending) {
           for (const subtreePath of entry.scopes) {
+            await this.runHotLanes()
+            // Says why a reconcile runs without naming the user's paths: a whole-root pass that
+            // came from `overflow` and a one-folder pass from `directory-change` cost very
+            // differently and used to be indistinguishable in the log.
+            log.info('Reconciling invalidated file watch subtree', {
+              reason: entry.reasons.get(subtreePath),
+              atWatchRoot: subtreePath === entry.rootPath,
+              depth: this.depthBelowRoot(entry.rootPath, subtreePath),
+              coalesced: entry.events.get(subtreePath) ?? 1
+            })
             try {
               await this.reconcileInvalidatedSubtree(subtreePath, entry.rootPath)
             } catch (error) {
@@ -321,9 +373,47 @@ export class IndexedSourceEventRouter {
     await this.subtreeInvalidationChain
   }
 
-  private async reconcileInvalidatedSubtree(subtreePath: string, rootPath: string): Promise<void> {
+  /**
+   * Runs `run` as one exclusive turn of the subtree-reconcile chain, ahead of every scope that has
+   * not started yet. The runtime allows one reconcile per source, so a hot scope can neither
+   * overlap a scope the chain is running nor go around the chain: it takes the next turn. A scope
+   * already running is never interrupted, and scopes that flush meanwhile wait for `run`, so the
+   * caller owns the time budget (unsubscribe aborts the lane's signal).
+   */
+  withHotSubtreeLane<T>(run: (lane: HotSubtreeLane) => Promise<T>): Promise<T> {
+    if (!this.subscribed) return Promise.reject(new Error('INDEXED_SOURCE_ROUTER_NOT_SUBSCRIBED'))
+    const routerSignal = this.hotLaneAbort.signal
+    return new Promise<T>((resolve, reject) => {
+      this.hotLanes.push(async () => {
+        try {
+          resolve(
+            await run({
+              reconcile: async (directoryPath, signal) => {
+                const merged = signal ? AbortSignal.any([routerSignal, signal]) : routerSignal
+                merged.throwIfAborted()
+                return await this.reconcileInvalidatedSubtree(directoryPath, directoryPath, merged)
+              }
+            })
+          )
+        } catch (error) {
+          reject(error)
+        }
+      })
+      this.subtreeInvalidationChain = this.subtreeInvalidationChain.then(() => this.runHotLanes())
+    })
+  }
+
+  private async runHotLanes(): Promise<void> {
+    for (let lane = this.hotLanes.shift(); lane; lane = this.hotLanes.shift()) await lane()
+  }
+
+  private async reconcileInvalidatedSubtree(
+    subtreePath: string,
+    rootPath: string,
+    signal?: AbortSignal
+  ): Promise<IndexedSourceReconcileResult | null> {
     const runtime = this.getRuntime()
-    if (!runtime || runtime.isShuttingDown?.()) return
+    if (!runtime || runtime.isShuttingDown?.()) return null
     const event = {
       sourceId: FILE_INDEXED_SOURCE_ID,
       action: 'change' as const,
@@ -331,18 +421,22 @@ export class IndexedSourceEventRouter {
       rootPath,
       occurredAt: Date.now()
     }
-    if (runtime.getSource(FILE_INDEXED_SOURCE_ID)?.shouldHandleWatchEvent?.(event) === false) return
-    await runtime.reconcileSource(FILE_INDEXED_SOURCE_ID, {
-      reason: FILE_WATCH_SUBTREE_RECONCILE_REASON,
-      roots: [
-        {
-          sourceId: FILE_INDEXED_SOURCE_ID,
-          path: subtreePath,
-          permissionState: 'granted',
-          reason: FILE_WATCH_SUBTREE_RECONCILE_REASON
-        }
-      ]
-    })
+    if (runtime.getSource(FILE_INDEXED_SOURCE_ID)?.shouldHandleWatchEvent?.(event) === false)
+      return null
+    return (
+      (await runtime.reconcileSource(FILE_INDEXED_SOURCE_ID, {
+        reason: FILE_WATCH_SUBTREE_RECONCILE_REASON,
+        roots: [
+          {
+            sourceId: FILE_INDEXED_SOURCE_ID,
+            path: subtreePath,
+            permissionState: 'granted',
+            reason: FILE_WATCH_SUBTREE_RECONCILE_REASON
+          }
+        ],
+        ...(signal ? { signal } : {})
+      })) ?? null
+    )
   }
 
   private readonly handleAppAddedOrChanged = (event: ITouchEvent): void => {

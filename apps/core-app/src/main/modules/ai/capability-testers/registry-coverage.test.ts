@@ -5,6 +5,7 @@ import type {
   PromptWorkflowExecution
 } from '@talex-touch/tuff-intelligence'
 import '../intelligence-test-harness'
+import { t } from '../../../utils/i18n-helper'
 
 const EXPECTED_STABLE_CAPABILITY_IDS = [
   'text.chat',
@@ -167,7 +168,7 @@ describe('AI capability tester registry coverage', () => {
       latency: 60,
       usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }
     })
-    expect(visibleText).toContain('completed')
+    expect(visibleText).toContain(t('intelligence.workflow.statusCompleted'))
     expect(visibleText).toContain('2')
     expect(visibleText).toContain('1')
   })

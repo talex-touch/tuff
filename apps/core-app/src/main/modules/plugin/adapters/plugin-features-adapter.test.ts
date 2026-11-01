@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { IProviderActivate } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TuffInputType } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { isCommandMatch, PluginFeaturesAdapter } from './plugin-features-adapter'
@@ -54,6 +54,17 @@ vi.mock('../view/plugin-view-loader', () => ({
   PluginViewLoader: {
     loadPluginView: vi.fn()
   }
+}))
+
+const itemActionNotification = vi.hoisted(() => ({ show: vi.fn() }))
+
+vi.mock('../../notification', () => ({
+  notificationModule: { showInternalSystemNotification: itemActionNotification.show }
+}))
+
+vi.mock('../../../utils/i18n-helper', () => ({
+  getLocale: () => 'zh-CN',
+  t: (key: string, params?: Record<string, string>) => `${key}:${params?.name ?? ''}`
 }))
 
 vi.mock('../../../core/runtime-accessor', () => ({
@@ -687,6 +698,148 @@ describe('plugin-features-adapter', () => {
       expect(result.items[0].meta?.extension?.source, type).toBe('input')
     }
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+})
+
+describe('item action message', () => {
+  const activation = { id: 'plugin-features', meta: { pluginName: 'test-plugin' } }
+
+  beforeEach(() => {
+    itemActionNotification.show.mockReset()
+  })
+
+  async function runItemAction(
+    onItemAction: () => Promise<unknown>
+  ): Promise<IProviderActivate | null> {
+    const adapter = createAdapter()
+    const plugin = {
+      ...createPlugin(),
+      displayName: 'Test Plugin',
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    const plugins = pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>
+    plugins.set('test-plugin', plugin)
+    try {
+      return await adapter.onExecute({
+        item: {
+          id: 'test-plugin/widget-ready',
+          source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+          kind: 'feature',
+          meta: { pluginName: 'test-plugin', actionId: 'run' }
+        }
+      } as never)
+    } finally {
+      plugins.clear()
+    }
+  }
+
+  it('shows the message of a finished action as one success notification', async () => {
+    await runItemAction(async () => ({ success: true, message: '已复制' }))
+
+    expect(itemActionNotification.show).toHaveBeenCalledTimes(1)
+    expect(itemActionNotification.show).toHaveBeenCalledWith({
+      title: 'Test Plugin',
+      message: '已复制',
+      level: 'success',
+      system: { silent: true }
+    })
+  })
+
+  it('shows the message of a refused action as one error notification', async () => {
+    await runItemAction(async () => ({
+      success: false,
+      status: 'blocked',
+      message: '缺少 clipboard.write 权限'
+    }))
+
+    expect(itemActionNotification.show).toHaveBeenCalledTimes(1)
+    expect(itemActionNotification.show).toHaveBeenCalledWith({
+      title: 'plugin.notifications.itemActionFailedTitle:Test Plugin',
+      message: '缺少 clipboard.write 权限',
+      level: 'error',
+      system: { silent: false }
+    })
+  })
+
+  it('treats a failure status without success:false as a failure', async () => {
+    await runItemAction(async () => ({ status: 'failed', message: '执行失败' }))
+
+    expect(itemActionNotification.show).toHaveBeenCalledTimes(1)
+    expect(itemActionNotification.show.mock.calls[0]?.[0]).toMatchObject({ level: 'error' })
+  })
+
+  it('takes success:true over a failure status, as the touch-intelligence stop returns', async () => {
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+
+    await runItemAction(async () => ({
+      success: true,
+      status: 'cancelled',
+      message: '已停止生成'
+    }))
+
+    expect(itemActionNotification.show).toHaveBeenCalledTimes(1)
+    expect(itemActionNotification.show).toHaveBeenCalledWith({
+      title: 'Test Plugin',
+      message: '已停止生成',
+      level: 'success',
+      system: { silent: true }
+    })
+    expect(executeRecorderMock.recordAcceptedExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows nothing when the result has no message', async () => {
+    await runItemAction(async () => ({ success: true }))
+    await runItemAction(async () => ({ success: false, status: 'blocked', reason: 'denied' }))
+    await runItemAction(async () => undefined)
+    await runItemAction(async () => ({ message: 42 }))
+
+    expect(itemActionNotification.show).not.toHaveBeenCalled()
+  })
+
+  it('shows a hostile message as capped one-line text', async () => {
+    await runItemAction(async () => ({
+      message: `\u202eevil\n\u0000\u001b[2Jtext ${'z'.repeat(1000)}`
+    }))
+
+    const request = itemActionNotification.show.mock.calls[0]?.[0]
+    expect(request.message).toBe(`evil [2Jtext ${'z'.repeat(187)}…`)
+    expect(request.message).not.toMatch(/[\p{Cc}\p{Cf}]/u)
+  })
+
+  it('shows the message and still returns the activation the action asked for', async () => {
+    const result = await runItemAction(async () => ({
+      shouldActivate: true,
+      activation,
+      message: '已打开'
+    }))
+
+    expect(result).toEqual(activation)
+    expect(itemActionNotification.show).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows nothing when the callback throws', async () => {
+    await runItemAction(async () => {
+      throw new Error('copy failed: /Users/someone/secret.txt')
+    })
+
+    expect(itemActionNotification.show).not.toHaveBeenCalled()
+  })
+
+  it('does not let a notification that cannot be shown change the outcome', async () => {
+    itemActionNotification.show.mockImplementation(() => {
+      throw new Error('notifications unavailable')
+    })
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+
+    const result = await runItemAction(async () => ({
+      shouldActivate: true,
+      activation,
+      message: '已打开'
+    }))
+
+    expect(result).toEqual(activation)
+    expect(executeRecorderMock.recordAcceptedExecute).toHaveBeenCalledTimes(1)
   })
 })
 

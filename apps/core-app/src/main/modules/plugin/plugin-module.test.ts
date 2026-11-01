@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
+  LOCALIZATION_FACADE_MIN_VERSION,
   PluginStatus,
   type IPluginFeature,
   type IPluginManager,
@@ -82,6 +83,11 @@ const mocks = vi.hoisted(() => {
       return dispose
     }
   )
+  const transportOnStream = vi.fn((_channel: unknown) => {
+    const dispose = vi.fn()
+    disposers.push(dispose)
+    return dispose
+  })
   const plugin = {
     name: 'calendar',
     sdkapi: 260215,
@@ -205,12 +211,14 @@ const mocks = vi.hoisted(() => {
     startUpdateScheduler: vi.fn(),
     stopUpdateScheduler: vi.fn(),
     transportOn,
+    transportOnStream,
     vscodeFilesystem
   }
 })
 
 const transport = {
   on: mocks.transportOn,
+  onStream: mocks.transportOnStream,
   broadcast: vi.fn(),
   broadcastPlugin: vi.fn(),
   keyManager: { resolveCurrentIdentity: mocks.keyResolveCurrentIdentity },
@@ -775,6 +783,7 @@ describe('PluginModule facade', () => {
     mocks.isSecureStoreAvailable.mockReset()
     mocks.setSecureStoreValue.mockReset()
     mocks.transportOn.mockClear()
+    mocks.transportOnStream.mockClear()
     mocks.eventBusOn.mockClear()
     mocks.ensureDir.mockReset()
     mocks.ensureDir.mockResolvedValue(undefined)
@@ -965,6 +974,8 @@ describe('PluginModule facade', () => {
     expect(definitionIds).toContain('voice.stream')
     expect(definitionIds).toContain('recommend.provider.register')
     expect(definitionIds).toContain('recommend.provider.unregister')
+    expect(definitionIds).toContain('language.get')
+    expect(definitionIds).toContain('language.subscribe')
     expect(definitionIds).not.toContain('intelligence.invoke')
     expect(definitionIds).not.toContain('intelligence.context.invoke')
     expect(definitionIds).not.toContain('system.invoke')
@@ -978,7 +989,7 @@ describe('PluginModule facade', () => {
       systemAction: expect.any(Function),
       browserOpen: expect.any(Function),
       browserData: expect.any(Function),
-      translation: expect.any(Function),
+      intelligence: expect.any(Function),
       intelligenceContext: expect.any(Function),
       windowManager: expect.any(Function),
       windowPreset: expect.any(Function),
@@ -1009,9 +1020,6 @@ describe('PluginModule facade', () => {
       'intelligence.context.invoke',
       'intelligence.stream'
     ])
-    expect(() => contextFactory?.({ ...intelligenceActivation, name: 'calendar' })).toThrow(
-      'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_INVALID'
-    )
     const factories = mocks.setCapabilities.mock.calls.at(-1)?.[0] as Record<string, unknown>
     const classicFactories: ReadonlyArray<readonly [string, string, string]> = [
       ['hosts', 'touch-hosts', 'system.hosts'],
@@ -1063,6 +1071,51 @@ describe('PluginModule facade', () => {
     expect(authorize?.('missing', 'clipboard.read')).toBe(false)
 
     await module.onDestroy()
+  })
+
+  it('wires plugin.language to the manager sdkapi and the host app language', async () => {
+    const activation = Object.freeze({
+      name: 'calendar',
+      pluginInstanceId: 'calendar-instance',
+      activationGeneration: 1,
+      key: 'calendar-key'
+    })
+    const declaredSdkapi = mocks.plugin.sdkapi
+    mocks.manager.getPluginByName.mockImplementation((name) =>
+      name === 'calendar' ? mocks.plugin : undefined
+    )
+    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+    mocks.runtimeResolveHostGeneration.mockReturnValue(7)
+    const module = new PluginModule()
+
+    try {
+      await initializeModule(module)
+      const definition = (
+        mocks.runtimeOptions?.capabilityDefinitions as Array<{
+          id: string
+          invoke(
+            context: unknown,
+            request: unknown,
+            signal: AbortSignal,
+            resources: unknown
+          ): unknown
+        }>
+      ).find((entry) => entry.id === 'language.get')
+      if (!definition) throw new Error('LANGUAGE_CAPABILITY_MISSING')
+      const context = issuePluginSecurityContext(activation, 'plugin-host', { hostGeneration: 7 })
+      const read = (): unknown => definition.invoke(context, null, new AbortController().signal, {})
+
+      mocks.plugin.sdkapi = LOCALIZATION_FACADE_MIN_VERSION - 1
+      expect(read).toThrow(
+        expect.objectContaining({ code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
+      )
+
+      mocks.plugin.sdkapi = LOCALIZATION_FACADE_MIN_VERSION
+      expect(['zh-CN', 'en-US']).toContain(read())
+    } finally {
+      mocks.plugin.sdkapi = declaredSdkapi
+      await module.onDestroy()
+    }
   })
 
   it('keeps onInit business and browser consumers live only for current starting or active hosts', async () => {

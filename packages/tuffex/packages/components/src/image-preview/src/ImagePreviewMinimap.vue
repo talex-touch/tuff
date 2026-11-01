@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
+import type { ImagePreviewItem, ImagePreviewMinimapSlotProps } from './types'
 import type { PreviewPoint, PreviewSize, PreviewView } from './zoom'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { hasDocument } from '../../../../utils/env'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
+import ImagePreviewContent from './ImagePreviewContent.vue'
 
 // Internal: the minimap of TxImagePreview, in the corner while a picture is zoomed in. It shows
 // the whole picture as turned and frames the part of it on the stage; a press moves the view
@@ -12,7 +14,9 @@ import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 defineOptions({ name: 'TxImagePreviewMinimap' })
 
 const props = defineProps<{
-  src: string
+  src?: string
+  item?: ImagePreviewItem
+  index?: number
   /** The picture's own size, before it is turned. */
   size: PreviewSize
   /** Quarter turns clockwise it is turned by. */
@@ -25,6 +29,10 @@ const props = defineProps<{
   shown: boolean
   /** The controls' surface. */
   material: { mode?: BaseSurfaceMode, color?: string, opacity?: number, blur?: number }
+}>()
+
+defineSlots<{
+  minimap?: (props: ImagePreviewMinimapSlotProps) => any
 }>()
 
 const emit = defineEmits<{
@@ -194,7 +202,14 @@ onBeforeUnmount(release)
       @pointercancel="onPointerEnd"
       @lostpointercapture="onPointerEnd"
     >
-      <img class="tx-image-preview__minimap-image tx-image-preview__part" :src="src" alt="" draggable="false" :style="imageStyle">
+      <div v-if="item && ($slots.minimap || item.type === 'custom')" class="tx-image-preview__minimap-image tx-image-preview__part" :style="imageStyle">
+        <ImagePreviewContent :item="item" :size="size" fit>
+          <template v-if="$slots.minimap" #default>
+            <slot name="minimap" :item="item" :index="index ?? 0" :view="view" :stage="stage" :turns="turns" />
+          </template>
+        </ImagePreviewContent>
+      </div>
+      <img v-else-if="src" class="tx-image-preview__minimap-image tx-image-preview__part" :src="src" alt="" draggable="false" :style="imageStyle">
       <span class="tx-image-preview__minimap-viewport tx-image-preview__part" :style="viewportStyle" />
     </div>
   </div>

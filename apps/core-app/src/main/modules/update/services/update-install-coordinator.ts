@@ -288,16 +288,19 @@ export class UpdateInstallCoordinator {
     if (this.deps.platform === 'darwin') {
       const appBundlePath = resolveCurrentMacAppBundlePath(this.deps.executablePath)
       if (!appBundlePath) throw new Error('Unable to resolve the installed macOS app')
-      preparedMacUpdate = await validatePreparedMacUpdate({
-        attemptId: lifecycle.attemptId,
-        attemptRoot: paths.attemptRoot,
-        appBundlePath,
-        packagePath: verifiedPackage.filePath,
-        packageSha256: verifiedPackage.sha256,
-        targetVersion: normalizeUpdateVersion(lifecycle.targetVersion),
-        resourcesPath: this.deps.resourcesPath,
-        appPath: this.deps.appPath
-      })
+      preparedMacUpdate = await validatePreparedMacUpdate(
+        {
+          attemptId: lifecycle.attemptId,
+          attemptRoot: paths.attemptRoot,
+          appBundlePath,
+          packagePath: verifiedPackage.filePath,
+          packageSha256: verifiedPackage.sha256,
+          targetVersion: normalizeUpdateVersion(lifecycle.targetVersion),
+          resourcesPath: this.deps.resourcesPath,
+          appPath: this.deps.appPath
+        },
+        { fast: true }
+      )
       const swapHelper = await resolveMacSwapHelper(this.deps.resourcesPath, this.deps.appPath)
       for (const name of ['macos-apply-update.sh', 'macos-restore-update.sh']) {
         await fs.promises.copyFile(

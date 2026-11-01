@@ -87,7 +87,7 @@ type Leaving =
 
 export function usePreviewPresence(options: PreviewPresenceOptions): PreviewPresence {
   const { open, current, transition, pictures, origins } = options
-  const { sizes, standIns, isFailed } = pictures
+  const { standIns, isFailed } = pictures
   // Resolved in setup: inject is only valid here, while allocation happens on opening.
   const zIndexAllocator = useZIndexAllocator()
 
@@ -158,10 +158,10 @@ export function usePreviewPresence(options: PreviewPresenceOptions): PreviewPres
   async function startOpen(token: number): Promise<void> {
     const at = current.value
     const item = options.items()[at]
-    let origin = item && !isFailed(item.url) ? origins.zoomOrigin(at) : null
+    let origin = item && (pictures.isCustom(item) || !isFailed(item.url)) ? origins.zoomOrigin(at) : null
     if (item && origin) {
       pictures.adoptOrigin(item, origin)
-      if (!standIns.value.has(item.url)) {
+      if (!pictures.isCustom(item) && !standIns.value.has(item.url ?? '')) {
         await pictureReady(PICTURE_WAIT_MS)
         if (token !== openToken)
           return
@@ -170,8 +170,8 @@ export function usePreviewPresence(options: PreviewPresenceOptions): PreviewPres
       }
     }
     arrived.value = true
-    const size = item ? sizes.value.get(item.url) ?? standIns.value.get(item.url)?.size : undefined
-    if (!item || !origin || !size || isFailed(item.url) || current.value !== at) {
+    const size = item ? pictures.readySize(item) ?? standIns.value.get(item.url ?? '')?.size : undefined
+    if (!item || !origin || !size || (!pictures.isCustom(item) && isFailed(item.url)) || current.value !== at) {
       transition.enter('fade')
       return
     }
@@ -233,7 +233,7 @@ export function usePreviewPresence(options: PreviewPresenceOptions): PreviewPres
     if (!aside && (transition.running.value || transition.presence.value !== 1))
       return { kind: 'fade' }
     const item = currentItem()
-    const size = item && !isFailed(item.url) ? sizes.value.get(item.url) ?? standIns.value.get(item.url)?.size : undefined
+    const size = item && (pictures.isCustom(item) || !isFailed(item.url)) ? pictures.readySize(item) ?? standIns.value.get(item.url ?? '')?.size : undefined
     const origin = size ? origins.zoomOrigin(current.value) : null
     return origin && size ? { kind: 'home', origin, size } : { kind: 'fade' }
   }

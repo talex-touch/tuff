@@ -3,6 +3,7 @@ import type {
   IntelligenceSummarizePayload
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
+import { t } from '../../../utils/i18n-helper'
 import { BaseCapabilityTester } from './base-tester'
 
 export class SummarizeCapabilityTester extends BaseCapabilityTester<
@@ -26,13 +27,13 @@ export class SummarizeCapabilityTester extends BaseCapabilityTester<
     const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
     return this.buildTestResult(result, {
-      message: '摘要生成成功',
+      message: t('intelligence.capabilityTest.message.summarize'),
       textPreview: preview
     })
   }
 
   getDefaultInputHint(): string {
-    return '请输入要摘要的长文本'
+    return t('intelligence.capabilityTest.hint.summarize')
   }
 
   requiresUserInput(): boolean {

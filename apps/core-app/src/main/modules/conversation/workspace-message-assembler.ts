@@ -43,6 +43,7 @@ export class WorkspaceMessageAssembler {
   private reasoningStartedAt: number | undefined
   private committed = { contentLength: 0, partsLength: 0, textLength: 0 }
   private readonly startedAt = Date.now()
+  private firstTokenAt: number | undefined
   private content = ''
   private meta: Record<string, unknown>
   private status: StoredConversationMessage['status'] = 'streaming'
@@ -68,8 +69,16 @@ export class WorkspaceMessageAssembler {
     return this.content
   }
 
+  private markFirstToken(): void {
+    if (!this.firstTokenAt) {
+      this.firstTokenAt = Date.now()
+      this.meta.ttftMs = this.firstTokenAt - this.startedAt
+    }
+  }
+
   delta(delta: string): void {
     if (!delta) return
+    this.markFirstToken()
     this.providerActivity = true
     this.content += delta
     if (this.parts) {
@@ -166,6 +175,7 @@ export class WorkspaceMessageAssembler {
         return
       }
       case 'reasoning-delta':
+        this.markFirstToken()
         if (this.openReasoning) this.openReasoning.text += event.delta
         return
       case 'reasoning-end':
@@ -181,6 +191,7 @@ export class WorkspaceMessageAssembler {
         this.reasoningStartedAt = undefined
         return
       case 'tool-start': {
+        this.markFirstToken()
         // A replayed start names the same call; it does not create another card or
         // downgrade a result already observed for that identity.
         if (this.tools.has(event.callId)) return

@@ -140,17 +140,25 @@ export interface PluginSystemActionMessageBoxOptions {
   readonly title: string
   readonly message: string
   readonly detail: string
-  readonly buttons: readonly ['取消', '确定']
+  /** Response 1 confirms; every other response declines. */
+  readonly buttons: readonly [cancel: string, confirm: string]
   readonly defaultId: 0
   readonly cancelId: 0
   readonly noLink: true
   readonly signal: AbortSignal
 }
 
+/**
+ * Main's `t`. The wording stays fixed and main-owned - the keys are this module's - but it is read
+ * in the interface's language when the dialog opens rather than always in Chinese.
+ */
+export type PluginSystemActionTranslate = (key: string) => string
+
 export interface FixedPluginSystemActionConfirmationOptions {
   showMessageBox(
     options: PluginSystemActionMessageBoxOptions
   ): Promise<{ readonly response: number }>
+  translate: PluginSystemActionTranslate
 }
 
 type SystemActionRequest = {
@@ -301,9 +309,28 @@ const WINDOWS_COMMANDS: Readonly<Partial<Record<PluginSystemActionId, FixedSyste
     })
   })
 
-const ACTION_LABELS: Readonly<Record<'restart' | 'shutdown', string>> = Object.freeze({
-  restart: '重启',
-  shutdown: '关机'
+/**
+ * Every sentence is its own key per action: an action name spliced into a shared sentence does not
+ * survive translation ("Confirm Shut Down", "Are you sure you want to Shut Down?").
+ */
+const ACTION_DIALOG_KEYS: Readonly<
+  Record<
+    'restart' | 'shutdown',
+    Readonly<{ title: string; message: string; messageAgain: string; confirm: string }>
+  >
+> = Object.freeze({
+  restart: Object.freeze({
+    title: 'nativeDialogs.systemAction.restart.title',
+    message: 'nativeDialogs.systemAction.restart.message',
+    messageAgain: 'nativeDialogs.systemAction.restart.messageAgain',
+    confirm: 'nativeDialogs.systemAction.restart.confirm'
+  }),
+  shutdown: Object.freeze({
+    title: 'nativeDialogs.systemAction.shutdown.title',
+    message: 'nativeDialogs.systemAction.shutdown.message',
+    messageAgain: 'nativeDialogs.systemAction.shutdown.messageAgain',
+    confirm: 'nativeDialogs.systemAction.shutdown.confirm'
+  })
 })
 
 function invalid(): never {
@@ -951,23 +978,39 @@ export function createPluginSystemActionProcess(child: ChildProcess): PluginSyst
 export function createFixedPluginSystemActionConfirmation(
   rawOptions: FixedPluginSystemActionConfirmationOptions
 ): PluginSystemActionConfirmationService {
-  const showMessageBox = dataMethod<FixedPluginSystemActionConfirmationOptions['showMessageBox']>(
-    rawOptions,
-    'showMessageBox'
-  )
+  const dependencies = exactRecord(rawOptions, ['showMessageBox', 'translate'])
+  if (
+    typeof dependencies.showMessageBox !== 'function' ||
+    utilTypes.isProxy(dependencies.showMessageBox) ||
+    typeof dependencies.translate !== 'function' ||
+    utilTypes.isProxy(dependencies.translate)
+  ) {
+    invalid()
+  }
+  const showMessageBox =
+    dependencies.showMessageBox as FixedPluginSystemActionConfirmationOptions['showMessageBox']
+  const translate = dependencies.translate as PluginSystemActionTranslate
+  const text = (key: string): string => {
+    const value: unknown = translate.call(rawOptions, key)
+    if (typeof value !== 'string') invalid()
+    return value
+  }
   return Object.freeze({
     async confirm(actionId: PluginSystemActionId, signal: AbortSignal): Promise<boolean> {
       assertSignal(signal)
       if (actionId !== 'restart' && actionId !== 'shutdown') return true
-      const actionName = ACTION_LABELS[actionId]
+      const keys = ACTION_DIALOG_KEYS[actionId]
       for (let step = 1; step <= 2; step += 1) {
         assertSignal(signal)
         const options: PluginSystemActionMessageBoxOptions = Object.freeze({
           type: 'warning',
-          title: `确认${actionName}`,
-          message: step === 1 ? `确定要执行${actionName}吗？` : `请再次确认执行${actionName}`,
-          detail: '该操作会立即影响系统状态，请确认你已保存当前工作内容。',
-          buttons: Object.freeze(['取消', '确定']) as readonly ['取消', '确定'],
+          title: text(keys.title),
+          message: text(step === 1 ? keys.message : keys.messageAgain),
+          detail: text('nativeDialogs.systemAction.detail'),
+          buttons: Object.freeze([text('common.cancel'), text(keys.confirm)]) as readonly [
+            string,
+            string
+          ],
           defaultId: 0,
           cancelId: 0,
           noLink: true,

@@ -12,7 +12,7 @@ function createService() {
   }
   return new FileProviderWatchSubtreeReconcileService({
     sourceId: 'file-provider',
-    getDbUtils: () => null,
+    getSearchIndex: () => null,
     getWatchPaths: () => ['/Users/someone'],
     isShuttingDown: () => false,
     ensureFileSystemWatchers: async () => undefined,

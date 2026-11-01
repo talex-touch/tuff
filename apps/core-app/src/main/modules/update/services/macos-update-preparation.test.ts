@@ -30,6 +30,7 @@ describe.runIf(process.platform === 'darwin')('macOS pre-quit preparation', () =
     expect((await stat(fixture.appBundlePath)).ino).toBe(oldInode)
     expect(await readMacBundleVersion(prepared)).toBe('2.4.10')
     expect(await validatePreparedMacUpdate(fixture.input)).toEqual(receipt)
+    expect(await validatePreparedMacUpdate(fixture.input, { fast: true })).toEqual(receipt)
     await rm(fixture.packagePath)
     expect(await prepareMacUpdate(fixture.input)).toEqual(receipt)
     expect((await stat(prepared)).ino).toBe(preparedInode)

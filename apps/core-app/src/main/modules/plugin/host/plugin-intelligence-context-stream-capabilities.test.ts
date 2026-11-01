@@ -185,7 +185,7 @@ describe('plugin Intelligence context stream capability', () => {
     expect(capabilities.definitions).toHaveLength(1)
     expect(capabilities.definitions[0]).toMatchObject({
       id: 'intelligence.stream',
-      permission: 'intelligence.basic',
+      permission: 'intelligence.context',
       timeoutMs: 30_000,
       maxConcurrency: 2,
       callbackLifetime: 'resource',

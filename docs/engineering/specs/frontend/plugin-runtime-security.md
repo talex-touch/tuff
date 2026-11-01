@@ -323,8 +323,8 @@ if (record.sender === context.sender) confirmPort(record)
 - Trigger: the renderer plugin facade delegates to an Intelligence domain SDK,
   or a plugin receives an invoke/stream terminal failure through typed transport.
 - This boundary spans the explicit event manifest, raw channel lane,
-  authoritative identity, SDK version, `intelligence.basic`, registrar,
-  MessagePort envelope, channel fallback, and consumer cleanup.
+  authoritative identity, SDK version, `intelligence.basic` / `intelligence.context`,
+  registrar, MessagePort envelope, channel fallback, and consumer cleanup.
 
 ### 2. Signatures
 
@@ -338,6 +338,9 @@ interface StreamErrorPayload {
 
 registerProtectedSafe(event, action, 'intelligence.basic', handler)
 registerProtectedStream(event, action, 'intelligence.basic', handler)
+// Context execute / stream carry the dedicated permission instead
+registerProtectedSafe(intelligenceContextEvents.execute, action, 'intelligence.context', handler)
+registerProtectedStream(intelligenceContextEvents.stream, action, 'intelligence.context', handler)
 ```
 
 The manifest contains exactly the 14 facade-reachable invoke, stream, TTS,
@@ -350,7 +353,11 @@ compatibility chat, safe capability discovery, Context, and Knowledge events.
   manifest and verify it in both directions against the facade.
 - Every manifest event uses the protected registrar. A plugin call must have a
   runtime-branded current identity, authoritative declared SDK API, and a fresh
-  `intelligence.basic` decision on every call. Missing runtime, denial, revoke,
+  decision on every call for the event's own permission: `intelligence.basic` for
+  twelve of the events, `intelligence.context` for the two Context events
+  (`intelligenceContextEvents.execute` / `.stream`). Holding one never implies the
+  other, because Context reads conversation history, saved memories and retrieved
+  context that ordinary model calls never touch. Missing runtime, denial, revoke,
   mismatch, stale identity, and forged structural identity fail before Provider,
   Context, Knowledge, audit, or quota work.
 - Host callers preserve existing behavior. Provider configuration, quota/admin,
@@ -394,7 +401,9 @@ compatibility chat, safe capability discovery, Context, and Knowledge events.
 ### 6. Tests Required
 
 - Bidirectional facade/manifest tests pin all 14 events and prove host-only
-  methods remain absent and unregistered for plugins.
+  methods remain absent and unregistered for plugins. The channel-boundary test pins the
+  permission each event is checked against, so a Context event cannot slip back to
+  `intelligence.basic`.
 - Registrar tests cover host success plus unavailable, deny, revoke, forged
   identity, stale identity, and SDK mismatch with zero Provider/dependency calls.
 - Synthetic typed-transport tests cover invoke/stream success, fallback,
@@ -470,8 +479,15 @@ current activation authority`. A default grant, including `storage.plugin`, neve
 - `TextEncoder`, `TextDecoder`, random bytes, and digest return values are child-realm
   values. Supported digest algorithms are an exact allow-list, and oversized input
   fails before hashing or invoking plugin-controlled iteration.
-- Locale is a validated, bounded, immutable load snapshot. `plugin.getLocale()` reads
-  that snapshot and does not call back into mutable main-process state.
+- Locale is a validated, bounded, immutable load snapshot of the app display language
+  (not the OS locale), taken when the activation starts. `plugin.getLocale()` reads
+  that snapshot and does not call back into mutable main-process state. The live app
+  language is a separate surface, `plugin.language`, projected only from the declared
+  `language.get` / `language.subscribe` capabilities. Both require `i18n.read` and
+  `sdkapi >= LOCALIZATION_FACADE_MIN_VERSION`; `language.subscribe` takes exactly one
+  resource-owned `onChange` callback, which the host calls with the current language and
+  then once per distinct change. The subscription ends with the activation, and revoking
+  `i18n.read` fails the activation closed like any other permission-bound resource.
 - Prelude capability calls are asynchronous. Await clear-before-push, storage writes,
   clipboard writes, external opens, HTTP requests, and lifecycle cleanup before
   reporting success. Fixed business actions use exact host-owned request/reply IDs
@@ -985,8 +1001,9 @@ return validateProjectedIntelligenceResult(projected)
 
 ### 1. Scope / Trigger
 
-- Trigger: the exact isolated `touch-intelligence` activation needs a governed,
-  non-streaming `text.chat` fallback without admitting a durable Context operation.
+- Trigger: an isolated plugin activation whose manifest declares `intelligence.context` (the
+  official `touch-intelligence` is one) needs a governed, non-streaming `text.chat` fallback
+  without admitting a durable Context operation.
 - This foundation covers `intelligence.context.invoke`, main-derived actor identity,
   current-input secret policy, host cancellation, exact result projection, and the child
   `intelligence.contextInvoke()` facade. Persistent sessions, turns, package logs,
@@ -1026,9 +1043,13 @@ It contains no session, turn, package, checkpoint or continuation identity.
 
 ### 3. Contracts
 
-- Install `intelligence.context.invoke` only in the exact `touch-intelligence` activation.
-  Recheck the branded plugin-host context, full activation identity, permission and host
-  generation on every call. Main derives `caller = plugin:touch-intelligence`.
+- Install `intelligence.context.invoke` in every activation whose manifest declares
+  `intelligence.context`; installation follows the declared permission, never the plugin name.
+  `intelligence.basic` alone does not install it. Recheck the branded plugin-host context, full
+  activation identity, permission and host generation on every call. Main derives
+  `caller = plugin:<name>` from the activation. The Context owner policy names no plugin: the
+  permission is the gate, and the entrypoint pair below is the only shape it checks. A plugin caller without a matching entrypoint fails `CONTEXT_SESSION_OWNER_FORBIDDEN`
+  before Context or provider work.
 - The host service always injects frozen `{ signal, persistence: 'ephemeral' }`. Child
   fields cannot enable persistence, select an actor, provide a signal, or alter caller,
   endpoint, credentials, quota identity or host generation.
@@ -1059,7 +1080,7 @@ It contains no session, turn, package, checkpoint or continuation identity.
 
 | Condition | Required result |
 | --- | --- |
-| Non-`touch-intelligence`, stale activation, wrong host generation or missing permission | Reject before Context/provider work |
+| Plugin caller with a missing or mismatched entrypoint (`CONTEXT_SESSION_OWNER_FORBIDDEN`), stale activation, wrong host generation or missing `intelligence.context` permission | Reject before Context/provider work |
 | Unknown operation/capability, extra field, Proxy, accessor, sparse/cyclic/class DTO | Invalid request before provider work |
 | Child supplies caller, signal, persistence, endpoint, credential or mismatched entrypoint | Invalid request before host work |
 | `continue` or any supplied session id | `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED`; provider untouched |
@@ -1071,13 +1092,17 @@ It contains no session, turn, package, checkpoint or continuation identity.
 
 ### 5. Good / Base / Bad Cases
 
-- Good: the current `touch-intelligence` activation runs a bounded stateless AI command;
-  main derives the caller, checks the fully rendered prompt for secrets, and returns an
-  ephemeral metadata-only summary with no database write.
+- Good: a current activation holding `intelligence.context` (the official `touch-intelligence`
+  declares it as required) runs a bounded stateless AI command; main derives the caller, checks
+  the fully rendered prompt for secrets, and returns an ephemeral metadata-only summary with no
+  database write.
 - Base: `new` executes with current input only and explicitly reports persistence
   unavailable; callers do not retain a returned session id.
 - Bad: accept `continue`, run ContextHygiene, append an assistant turn, trust child history,
   or introduce a capability-specific committed-success exception after child cancellation.
+- Bad: gate Context on the plugin name, or let `intelligence.basic` alone reach it — a plugin
+  that never asked for conversation history, saved memories and retrieved context would read
+  them.
 
 ### 6. Tests Required
 
@@ -1209,20 +1234,23 @@ await plugin.widget.pushItems([item])
 
 ### 1. Scope / Trigger
 
-- Trigger: the isolated official `touch-intelligence` Prelude needs governed streaming
-  `text.chat` events assembled through the host ContextHygiene pipeline.
+- Trigger: an isolated Prelude whose manifest declares `intelligence.context` (the official
+  `touch-intelligence` is one) needs governed streaming `text.chat` events assembled through the
+  host ContextHygiene pipeline.
 - This contract covers the activation-local `intelligence.stream` capability, retained
   event callback, stream resource, child `intelligence.contextStream()` controller, and
-  the official Prelude migration. It does not authorize another plugin, memory evaluation,
-  Agent sessions, raw checkpoints, provider credentials, or a generic stream transport.
+  the official Prelude migration. It does not authorize memory evaluation, Agent sessions,
+  raw checkpoints, provider credentials, or a generic stream transport.
 
 ### 2. Contracts
 
-- Register `intelligence.context.invoke` and `intelligence.stream` only through the exact
-  `touch-intelligence` activation factory. Neither id belongs in the global manifest.
-  Construction and every call must match the full activation identity and current host
-  generation; main derives `caller = plugin:touch-intelligence`.
-- `intelligence.stream` requires `intelligence.basic`, exact Context request DTOs, one
+- Register `intelligence.context.invoke` and `intelligence.stream` through the activation-local
+  factory of every activation whose manifest declares `intelligence.context`. Neither id belongs
+  in the global manifest, and no per-plugin allowlist exists: the child projects facades from
+  what the activation declares. Construction and every call must match the full activation
+  identity and current host generation; main derives `caller = plugin:<name>`, and the Context
+  owner policy admits a plugin caller only with a matching `corebox.ai-ask` entrypoint.
+- `intelligence.stream` requires `intelligence.context`, exact Context request DTOs, one
   resource-lifetime `onEvent` callback, a bounded timeout, and bounded concurrency. The
   child cannot supply caller, signal, actor authority, endpoint, credential, arbitrary
   capability id, or resource identity.
@@ -1254,7 +1282,7 @@ await plugin.widget.pushItems([item])
 
 | Condition | Required result |
 | --- | --- |
-| Non-Intelligence activation, stale identity/generation, or undeclared capability | Reject before Context/provider work |
+| Activation without `intelligence.context`, stale identity/generation, or undeclared capability | Reject before Context/provider work |
 | Permission denied/revoked or stream resource disposed | Abort and close the iterator; no late child event |
 | Extra request/event field, wrong capability id, Proxy/accessor/class DTO | Stable invalid request/result before plugin callback |
 | Stream ends without a terminal event or host iteration fails | Redacted `INTELLIGENCE_STREAM_FAILED` |
@@ -3248,9 +3276,9 @@ return await withOwnedTemporaryCopy(copy, () => fixedReadOnlyQuery(copy.database
 
 ### 1. Scope / Trigger
 
-- Trigger: activation-local `intelligence.stream` runs for the exact isolated
-  `touch-intelligence` activation and persists the terminal assistant turn through its
-  owner-bound retained resource.
+- Trigger: activation-local `intelligence.stream` runs for an isolated activation holding
+  `intelligence.context` (the official `touch-intelligence` declares it) and persists the
+  terminal assistant turn through its owner-bound retained resource.
 - This boundary covers callback backpressure, iterator teardown, stream finalization,
   custom widget projection and activation close. It does not change the ephemeral
   `intelligence.context.invoke` contract above; host-owned non-plugin Context invoke keeps
@@ -3275,8 +3303,11 @@ type PluginIntelligenceStreamResource = {
 
 ### 3. Contracts
 
-- Install `intelligence.stream` only for the exact `touch-intelligence` activation with
-  `intelligence.basic`, one retained `onEvent` callback and one owner-bound stream resource.
+- Install `intelligence.stream` for activations that declare `intelligence.context`, with one
+  retained `onEvent` callback and one owner-bound stream resource; a plugin actor passes the
+  Context owner policy only with a matching `corebox.ai-ask` entrypoint. Sessions stay isolated
+  per actor, so one plugin never continues another's Context session
+  (`CONTEXT_SESSION_SCOPE_MISMATCH`).
 - Main derives actor/caller, prepares persistent Context through the host service and
   validates every event before invoking the child callback. Callback delivery is serial and
   awaited for backpressure.
@@ -3350,11 +3381,12 @@ try {
 
 ### 1. Scope / Trigger
 
-- Trigger: the exact isolated `touch-translation` activation needs text translation,
+- Trigger: an isolated activation that declares `intelligence.basic` needs text translation,
   screenshot OCR-to-text, public provider enumeration, bounded active-feature/widget item
-  publication, and an explicit copy action.
+  publication, and an explicit copy action. The official `touch-translation` Prelude is one such
+  activation and holds nothing that another plugin declaring the same permission would not hold.
 - This boundary does not authorize direct network access, provider configuration, provider
-  credentials, generic Intelligence, image translation output, or window/control-plane APIs.
+  credentials, image translation output, or window/control-plane APIs.
 
 ### 2. Signatures
 
@@ -3377,21 +3409,21 @@ type PluginTranslationFacade = Readonly<{
 
 ### 3. Contracts
 
-- Main installs `intelligence.invoke` only into the exact current `touch-translation`
-  activation, bound to its main-issued activation identity and host generation, and limits it
-  to `text.translate`, `vision.ocr`, and public `text.translate` provider enumeration.
-- The child exposes a frozen null-prototype `plugin.translation` facade only when both the
-  manifest name and declaration match. Translation additionally receives the declaration-gated
-  `plugin.widget.pushItems()` facade only when `feature.items.widget.push` is present in its exact
-  activation allowlist. Raw `hostCapabilities`, generic Intelligence, HTTP/open-url, Secret,
-  Storage, permission, channel, process, filesystem, system, QuickOps, Flow, feature-registry,
-  and voice facades remain absent even if shared host definitions exist in the activation manifest.
-  Widget publication remains `active-feature` only, owner-bound, custom-render-only, and guarded
-  by `search.root-results`; it does not expand Translation's provider or control-plane authority.
-- Translation options admit only provider/model preference plus exact diagnostic metadata.
-  OCR options admit diagnostic metadata only. Caller, credentials, endpoints, headers,
-  tokens, quota identity, prompt templates/variables, and generic AI command fields fail
-  before service work.
+- Main installs `intelligence.invoke` into every activation whose manifest declares
+  `intelligence.basic`, bound to that activation's main-issued identity and host generation. It
+  admits `text.chat`, `text.translate` and `vision.ocr` invocations plus public provider
+  enumeration for `text.chat` and `text.translate`. No plugin name selects a narrower or wider
+  set, and no per-plugin allowlist narrows the Prelude.
+- The child exposes a frozen null-prototype `plugin.translation` facade whenever
+  `intelligence.invoke` is declared, beside the generic `plugin.intelligence` facade. Both are
+  projected from that one declaration and neither depends on the manifest name. Every other
+  facade, including `plugin.widget.pushItems()` and `plugin.language`, is likewise
+  declaration-gated. Widget publication remains `active-feature` only, owner-bound,
+  custom-render-only, and guarded by `search.root-results`; it does not expand any plugin's
+  provider or control-plane authority.
+- Invoke options admit provider/model preference, bounded prompt template and variables, and
+  exact diagnostic metadata, identically for every declaring plugin. Caller, credentials,
+  endpoints, headers, tokens, quota identity and extra fields fail before service work.
 - OCR accepts only canonical bounded PNG/JPEG/WebP base64 data URLs with matching signatures.
   Main returns OCR text only; source bytes, layout blocks, raw provider data, usage, reasoning,
   native errors, and stacks do not cross back to the child.
@@ -3414,8 +3446,8 @@ type PluginTranslationFacade = Readonly<{
 
 | Condition | Required result |
 | --- | --- |
-| Wrong plugin name, undeclared capability, stale activation/host generation | Reject before provider enumeration or invocation |
-| Prompt/control-plane option, caller, credential, endpoint, header, token, or extra DTO field | Invalid request before service work |
+| Undeclared `intelligence.invoke`, ungranted `intelligence.basic`, stale activation/host generation | Reject before provider enumeration or invocation |
+| Caller, credential, endpoint, header, token, quota identity, or extra DTO field | Invalid request before service work |
 | Non-canonical, oversized, mismatched-signature, or unsupported image data URL | Invalid request before OCR/provider work |
 | Permission revoke or lifecycle cancellation during provider wait | Stable cancellation/permission result; late value discarded |
 | Older feature request settles after a newer feature begins | No old clear/push or copy authority may affect current output |
@@ -3426,21 +3458,22 @@ type PluginTranslationFacade = Readonly<{
 
 ### 5. Good / Base / Bad Cases
 
-- Good: a current Translation activation uses only the fixed translation and widget facades,
+- Good: a current Translation activation uses the fixed translation and widget facades,
   awaits serialized custom-item publication and accepts copy only for its own generation-bound
   result.
 - Base: a denied provider or unsupported OCR input returns a stable blocked result without
   feature mutation, provider detail or native image output.
-- Bad: expose generic Intelligence/network/storage, let the child select a credential or
-  endpoint, reuse a prior generation request id, or return source image bytes.
+- Bad: expose network or storage beyond the declared permissions, let the child select a
+  credential or endpoint, reuse a prior generation request id, or return source image bytes.
 
 ### 6. Tests Required
 
 - Host DTO tests cover exact translate/OCR/provider-list requests and projections, multibyte
   bounds, hostile records/arrays, extra control fields, authority, permission, revoke,
   cancellation, and late settlement.
-- Child tests declare unrelated shared capabilities deliberately and still prove only the
-  Translation-specific facade plus declared feature/widget/clipboard surfaces are reachable.
+- Child tests prove the fixed translation facade and the generic Intelligence facade are
+  projected from the declaration alone, identically for `touch-translation` and any other
+  plugin name.
 - Prelude tests cover text, multi-source cap, screenshot OCR-to-text, cross-feature races,
   serialized clear/push, custom widget payload/query matching, forged/stale copy actions, destroy
   invalidation, redaction, and UTF-8 bounds.

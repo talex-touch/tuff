@@ -34,9 +34,11 @@ Path prefixes: `utils/` = `packages/utils/`, `main/` = `apps/core-app/src/main/`
 
 ### 1. Scope / Trigger
 
-- Changing `search-engine/search-index-commit-coalescer.ts`; `SearchEngineCore`'s
+- Changing `search-engine/search-index-commit-coalescer.ts` or
+  `search-engine/leading-trailing-throttle.ts`; `SearchEngineCore`'s
   `registerIndexCommitStream`, `emitIndexCommit`, `handleSearchIndexCommit`,
-  `invalidateAppRecommendationPresentation` or `destroy` (`search-engine/search-core.ts`);
+  `refreshRecommendationGrid`, `invalidateAppRecommendationPresentation` or `destroy`
+  (`search-engine/search-core.ts`);
   `CoreBoxSearchIndexCommitPayload` (`utils/transport/events/types/core-box.ts`); or anything that
   pushes to `CoreBoxEvents.search.indexCommitted` (registered in `main/modules/box-tool/core-box/ipc.ts`).
 - Cross-layer: main runs two clocks. The hub revision is cache correctness and moves on every commit;
@@ -80,18 +82,28 @@ export interface CoreBoxSearchIndexCommitPayload {
   bulk?: boolean // only on a notification flushed from a bulk window
 }
 
+// search-engine/leading-trailing-throttle.ts
+export class LeadingTrailingThrottle {
+  constructor(options: { intervalMs: number; onTrailing: () => void; onError?: (error: unknown) => void })
+  trigger(): boolean // true: the leading edge, act now; false: held for the trailing run
+  dispose(): void // clears the timer and what it held; later triggers return false
+}
+
 // search-engine/search-core.ts
 private readonly indexCommitStreams: Map<
   StreamContext<CoreBoxSearchIndexCommitPayload>,
   SearchIndexCommitCoalescer
 >
+private readonly fileCommitInvalidation: LeadingTrailingThrottle // FILE_COMMIT_INVALIDATION_INTERVAL_MS = 60_000
+private refreshRecommendationGrid(): void // drop the ranking cache, push { providerIds: [], recommendationsInvalidated: true }
 ```
 
 ### 3. Contracts
 
 - **Only the notification is paced.** `markCommitted` still increments the revision synchronously,
   and `handleSearchIndexCommit` still runs per commit: an app commit drops the recommendation cache, a
-  file commit at most once per `FILE_COMMIT_INVALIDATION_INTERVAL_MS` (60s). `cacheSearchResult`
+  file commit through `fileCommitInvalidation` (below), at most once per
+  `FILE_COMMIT_INVALIDATION_INTERVAL_MS` (60s). `cacheSearchResult`
   refuses a result whose revision the hub has passed, and a lookup against an older revision
   classifies as `revision-mismatch`. The coalescer sits after all of that, inside `emitIndexCommit`.
   Pacing the hub or `publishCommit` instead would serve cached results a commit made stale.
@@ -132,6 +144,24 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
   does not move.
 - A new payload field stays optional and additive, and `mergeIndexCommitPayloads` must say how it
   folds.
+- **A file commit the throttle holds back is answered, not dropped (2026-10-30).** The throttle used
+  to keep only its leading edge, so a file indexed 10s after an invalidation stayed out of the
+  empty-query grid until some later commit landed past the 60s mark. `LeadingTrailingThrottle`
+  lets the first commit of a window invalidate inline (`trigger()` is true, the payload carries
+  `recommendationsInvalidated: true`); a commit inside the window returns false (the payload says
+  `false`) and marks the window held. When a window closes with anything held,
+  `refreshRecommendationGrid()` runs once, however many commits it held, and the next window opens,
+  so a steady stream still costs one ranking recompute per 60s. A window that held nothing closes
+  quietly and the next file commit is a leading edge again.
+- **The trailing refresh is a real notification.** `refreshRecommendationGrid()` is the body of
+  `invalidateAppRecommendationPresentation()`: drop the ranking cache, then push
+  `{ revision: <current>, providerIds: [], sourceGenerations: {}, recommendationsInvalidated: true }`
+  through the per-stream coalescers. Dropping the cache alone would leave an open CoreBox on the
+  empty query showing the stale grid. App commits never go through the throttle.
+- **The throttle's timer is `unref`'d and owned by the engine.** `destroy()` disposes it first, so
+  no refresh runs against a half-torn-down engine; a throw from the trailing refresh is caught and
+  logged (`Trailing recommendation invalidation failed`), because the timer callback is where
+  nothing else would catch it.
 
 ### 4. Validation & Error Matrix
 
@@ -147,14 +177,23 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
 | Renderer closes the stream mid-window      | Pending notification dropped; coalescer disposed                                                                              |
 | `dispose()`                                | Timer cleared; later pushes ignored                                                                                           |
 | Any commit                                 | `searchIndexCommitHub.getRevision()` has moved before the push returns                                                        |
+| File commit 10s after an invalidation      | Held, not dropped: one `refreshRecommendationGrid()` at 60s, pushing `recommendationsInvalidated: true`                       |
+| Commits every 1s for 300s                  | 6 invalidations (t = 0, 60 … 300): one per window, the last of them a trailing run                                            |
+| Window closes with nothing held            | No trailing run; the next file commit is a leading edge again                                                                 |
+| Trailing refresh throws                    | `Trailing recommendation invalidation failed` is logged; the next window is still paced                                       |
+| `destroy()` with a commit held             | Throttle disposed first; no trailing refresh runs                                                                             |
 
 ### 5. Good / Base / Bad Cases
 
 - Good: a full scan committing every ~300ms yields one `bulk: true` notification per 3s per open
   CoreBox, and every commit still invalidates cached searches.
 - Base: saving one file yields one ordinary notification about 1s later, in the pre-coalescing shape.
+- Base: a screenshot saved 10s after the previous ranking invalidation reaches the empty-query grid when
+  that window closes, 50s later, and costs one recompute.
 - Bad: throttling `markCommitted`; a trailing debounce; one coalescer shared by every stream (closing
-  one stream drops another's notification); deriving `bulk` in the renderer from arrival rate.
+  one stream drops another's notification); deriving `bulk` in the renderer from arrival rate; a
+  file-commit invalidation throttle that keeps only its leading edge (a commit inside the window is
+  never answered).
 
 ### 6. Tests Required
 
@@ -170,6 +209,18 @@ sourceGenerations: {}, recommendationsInvalidated: true }` through the same coal
   the pending notification of a stream the renderer closed"; "coalesces a storm of file commits into
   one ranking invalidation". The recommendation-flag and icon-presentation cases advance
   `INDEX_COMMIT_NOTIFY_WINDOW_MS` before asserting.
+- `search-engine/leading-trailing-throttle.test.ts` (fake timers): the first trigger is the leading
+  edge and schedules nothing else; a trigger inside the window runs once at the window's end; a burst
+  folds into one run; the trailing run opens a window (300 triggers over 300s give 1 leading + 5
+  trailing); a quiet window makes the next trigger a leading edge; `dispose()` leaves
+  `vi.getTimerCount() === 0` and later triggers return false; the timer is `unref`'d; a throwing
+  callback reaches `onError` (or is swallowed) and the next window stays open.
+- `search-engine/search-core.contracts.test.ts`, "trailing ranking invalidation for file commits": a
+  commit held at 10s is answered at exactly 60s (not at 59.999s); the answer reaches open streams as
+  `recommendationsInvalidated: true, providerIds: []` after the coalescer window; 100 held commits give
+  one run; nothing is scheduled when the window held nothing; 300 commits at 1s give 6 invalidations;
+  an app commit still invalidates at once inside a file window; a throwing trailing refresh does not
+  escape the timer and the next window still runs; `destroy()` cancels a held run.
 
 ### 7. Wrong vs Correct
 
@@ -941,6 +992,31 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
   after that transaction. Without this guard, completed images return to the recovery queue and
   repeatedly occupy the head of a partially admitted page. Failed or unavailable image encoding
   remains durably pending, not falsely completed.
+- **A failed text vector keeps its file in the retry lane (2026-10-30).** A text file whose vectors
+  failed used to end `completed` with `embedding_status = 'pending'`, and nothing revisited it.
+  `EmbeddingService.indexFiles` now lists a text file whose own attempt `failed` in
+  `retryFileIds` (`paused` and `skipped` are not failures; images are never listed, their
+  transaction owns completion). `indexCommittedEntries` passes the ids to the flush as numbers, and
+  the flush's final confirmation leaves those rows at the `pending` its first persist wrote, so the
+  `pending` / `processing` retry lane re-reads them at the next resume. The list lives in the
+  flush's retained publication stage: a replay after a capacity pause neither re-embeds nor
+  completes them. A file gets three attempts per file version: the count is in memory (a success
+  clears it, a restart forgets it), the third failure is not listed, and the row then completes and
+  leaves the retry lane for good, so a deterministic failure is bounded and a restart does not buy
+  an exhausted file more. Environment errors (helper down, request timeout) count like any other
+  failure; attempts are at least one resume round apart (45 s cooldown), so a helper that stays
+  down for about 90 s exhausts all three. The count table holds 4,096 files and never evicts: a new
+  failing file that finds it full is treated as exhausted on its first failure, so a batch larger
+  than the table still converges within three rounds (evicting the oldest made every file restart
+  its count in turn and none finish). Exhausted rows join the legacy set of rows `completed` with
+  `embedding_status = 'pending'`; backfilling that set is a separate product decision. The set is
+  **not** enrolled: the retry lane selects on progress status alone and nothing migrates it, and a
+  text file that ends `skipped` or `paused` (embedding unavailable, usage-limit or capacity pause)
+  completes into it instead of entering the retry lane. A negative availability answer (the probe
+  threw, or returned an unusable vector) is remembered for 60 s rather than for the process, so
+  the first batch after the helper comes up probes again; the files batches skipped inside that
+  minute stay in the legacy set. Only a flush wired with `checkContentCapacity` (production) can
+  hold a row pending; without it the first persist already completes the row.
 - **Disable is a fenced cleanup.** The main process suppresses intake, stops resume timers, cancels queued enrichment and drains committed work. Inside one source mutation lease and one Writer admission, it clears `files.content`, file embeddings, `file_index_progress` and `search_index.content` without deleting file metadata. The SourceScoped writer then crosses the reader visibility barrier and publishes one file-source commit. Only after that succeeds does `saveMainConfigDurable` persist `false`; enabling likewise durably saves `true` before resume starts. Cleanup or durable-save failure leaves the prior setting in memory and on disk, and re-arms resume when that prior setting is enabled, so the UI cannot claim a transition succeeded.
 
 - **No self-excitation.** Each page runs inside `withMutationLease`: `scheduleIndexing(rows, label,
@@ -994,17 +1070,36 @@ enrichment recovery paused`), as do five consecutive iterations that admit nothi
   - Anything else → `failed`, counted. The batch's `done` message carries up to three samples, and
     `FileIndexWorkerBatchFailedError` adds them as `lastErrorSamples` to the `File index worker
 failed` warning.
-- **Output past the budget is truncated, not failed (2026-10-22).** The worker parses with
-  `maxOutputBytes: 200_000` (UTF-8 bytes of content and chunk text combined) and `maxChunks: 1024`.
-  Past either limit, or past the PDF page cap, the code and PDF parsers keep the leading text that
-  fits and set `FileParserResult.truncated`, as Elasticsearch's `indexed_chars` and Tika's write
-  limit do. The worker indexes that prefix and records `truncated` with `lastError: null`; content it
-  cuts at `MAX_CONTENT_LENGTH` is recorded the same way. `truncated` is terminal like `completed`:
-  flush confirms it, index stats count it as completed, and it is not counted in `failed` or
-  retried until a write marks the file pending again. The 1 MiB result budget stays as a backstop
-  (`result-too-large` → `failed`), which these limits keep out of reach. Code chunk overlap is at
-  most a quarter of the chunk and only covers lines the chunk was first to reach, so a line lands in
-  at most two chunks.
+- **A file too long to index is not indexed at all (2026-10-31, supersedes the 2026-10-22 prefix rule).**
+  The 10-22 rule indexed the leading 200,000 characters of a long file and recorded `truncated`. A
+  hit in the first part of a novel says little about the rest, while the body is stored in
+  `files.content`, the FTS `content` column and its page overhead, so on a measured 6.4 GB index a
+  few thousand long files held about 450 MB of body. `FILE_CONTENT_MAX_CHARS` (50,000, in
+  `addon/files/constants.ts`) now bounds it: a file whose extracted text is longer, or whose parser
+  stopped early (`FileParserResult.truncated`: output budget, chunk limit, PDF page cap), is recorded
+  `skipped` with `lastError: 'content-too-long'` and `fileUpdate: { content: null, embeddingStatus:
+  'none' }`. No prefix, chunk or vector is kept; the null update also removes what an earlier,
+  shorter version of the same file left behind, and the file stays findable by name and path. It is
+  terminal like every skip, not counted in `failed`, and not retried until a write marks the file
+  pending again. The worker parses with `maxOutputBytes = FILE_PARSE_OUTPUT_MAX_BYTES` (8 bytes per
+  allowed character: a 4-byte code point counted once in content and once in a chunk) and
+  `maxChunks: 1024`, so a file within the cap is never cut by the budget. The worker no longer emits
+  `truncated`; the status stays in the enum and in index stats for rows written before this rule.
+  The 1 MiB result budget stays as a backstop (`result-too-large` → `failed`). Code chunk overlap is
+  at most a quarter of the chunk and only covers lines the chunk was first to reach, so a line lands
+  in at most two chunks.
+- **Existing over-long bodies are cleared by a boot pass (2026-10-31).**
+  `FileProviderOverlongContentCleanupService` (config key
+  `file_provider_overlong_content_cleanup_version`) walks, in id pages of 50, every file whose
+  `files.content` is longer than the cap or whose progress is `truncated`. Per page it first
+  re-emits the records with `content: null` through the normal write path (the document hash covers
+  `content`, so the FTS column is replaced and the title still matches), and only then, in one
+  writer transaction, clears `files.content`, the file's embeddings and `content_chunks`, and sets
+  progress to `skipped` / `content-too-long`. The order matters: a failure between the two leaves
+  the page selected, so the next boot retries it, whereas the reverse would strand a stale FTS body
+  that nothing selects any more. It runs after the keyword backfill and before the embedding BLOB
+  pass (so no vector is converted just to be deleted), followed by the single `boot-check`
+  compaction that returns the freed pages to the disk.
 - **Samples stay in the local log.** A sample is a raw errno message with an absolute path in it. It
   goes to `fileProviderLog.warn` only: never into transport payloads, dashboards,
   `operationalErrorService.report` context, Sentry or Nexus
@@ -1022,7 +1117,8 @@ failed` warning.
 | One page's chunk fails                 | The round continues; `failedPages` in the completion log                         |
 | ENOENT, ENOTDIR, EPERM, EACCES reads   | `skipped`; `failed: 0`; no `failureSamples`                                      |
 | Four EISDIR reads                      | `failed: 4`; exactly three samples                                               |
-| Code or PDF output past the budget     | `truncated`; `failed: 0`; the leading chunks and content are indexed             |
+| Text over `FILE_CONTENT_MAX_CHARS`, or a parser cut at its budget | `skipped` / `content-too-long`; `failed: 0`; no content, chunks or vectors; the name still matches |
+| Text of exactly `FILE_CONTENT_MAX_CHARS`                          | `completed`; the whole body is indexed                                           |
 | A flush of only missing files          | No `applyBatch`, no commit                                                       |
 
 ### 5. Good / Base / Bad Cases

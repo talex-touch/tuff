@@ -260,7 +260,7 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
     })
   }
 
-  private getGatewayState(): AgentToolGatewayState {
+  getGatewayState(): AgentToolGatewayState {
     const config = this.getRuntimeConfig()
     return {
       enabled: this.enabled,

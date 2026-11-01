@@ -49,7 +49,11 @@ export const AGENT_WORKSPACE_ERROR_CODES = [
   'WORKSPACE_FORK_NATIVE_UNSAFE',
   'WORKSPACE_RUN_NOT_PENDING',
   'WORKSPACE_STALE_TURN',
-  'WORKSPACE_VOICE_UNAVAILABLE'
+  'WORKSPACE_VOICE_UNAVAILABLE',
+  'WORKSPACE_PROVIDER_UNAVAILABLE',
+  'WORKSPACE_INPUT_INVALID',
+  'WORKSPACE_ATTACHMENT_INVALID',
+  'WORKSPACE_ATTACHMENT_UNSAFE'
 ] as const
 
 export type AgentWorkspaceErrorCode = (typeof AGENT_WORKSPACE_ERROR_CODES)[number] | 'unknown'
@@ -178,9 +182,9 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
   const resuming = ref(false)
   const runDecision = ref<'approve' | 'reject' | null>(null)
 
-  /** A blank Home's mode and profile before Main holds the thread. */
-  const draftMode = ref<ConversationWorkspaceMode>('chat')
-  const draftProfileId = ref<string | undefined>(undefined)
+  /** A blank Home's mode and profile before Main holds the thread: defaults to Tuff Coordinator. */
+  const draftMode = ref<ConversationWorkspaceMode>('agent')
+  const draftProfileId = ref<string | undefined>('default-pi')
 
   /**
    * Stream frame bookkeeping. A turn's frames apply in `seq` order and only while it is the turn

@@ -33,6 +33,7 @@ import { createLogger } from '../../utils/logger'
 import { AgentPermission } from '@talex-touch/utils'
 import { agentManager, toolRegistry } from './agents'
 import { tuffIntelligence } from './intelligence-sdk'
+import { toolGatewayModule } from '../tool-gateway'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { CLI_PROFILE_PROVIDER_MAP } from './providers/pi-cli-runtime'
 import { PI_RUNTIME_PROTOCOL_VERSION, PI_RUNTIME_SERVICE_NAME } from './pi-agent-runtime-protocol'
@@ -740,60 +741,136 @@ export class PiAgentRuntimeHost {
     let response: PiRuntimeModelResponse
     try {
       await context.workspace?.assertAuthority()
-      const result = await tuffIntelligence.invoke<string>(
+      let fullText = ''
+      let providerName =
+        context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+      let modelName = context.workspace?.model
+      let promptTokens = 0
+      let completionTokens = 0
+      let totalTokens = 0
+      let cost: number | undefined
+
+      const streamOptions = {
+        modelPreference: context.workspace?.model
+          ? [context.workspace.model]
+          : request.modelPreference.length > 0
+            ? request.modelPreference
+            : undefined,
+        ...(context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+          ? {
+              preferredProviderId:
+                context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+            }
+          : {}),
+        ...(context.workspace?.reasoningEffort
+          ? { reasoningEffort: context.workspace.reasoningEffort }
+          : {}),
+        signal: context.controller.signal,
+        metadata: {
+          caller: 'ai-cli-orchestrator',
+          runId: request.runId,
+          sessionId: context.run.sessionId,
+          step: request.step
+        }
+      }
+
+      for await (const event of tuffIntelligence.stream<string>(
         'text.chat',
         { messages: normalizeModelMessages(request, context.workspace?.modelAttachments) },
-        {
-          modelPreference: context.workspace?.model
-            ? [context.workspace.model]
-            : request.modelPreference.length > 0
-              ? request.modelPreference
-              : undefined,
-          ...(context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
-            ? {
-                preferredProviderId:
-                  context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
-              }
-            : {}),
-          ...(context.workspace?.reasoningEffort
-            ? { reasoningEffort: context.workspace.reasoningEffort }
-            : {}),
-          signal: context.controller.signal,
-          metadata: {
-            caller: 'ai-cli-orchestrator',
-            runId: request.runId,
-            sessionId: context.run.sessionId,
-            step: request.step
+        streamOptions
+      )) {
+        if (context.controller.signal.aborted) break
+
+        if (event.type === 'start') {
+          if (event.provider) providerName = event.provider
+          if (event.model) modelName = event.model
+          if (context.workspace) {
+            context.pendingEvents = context.pendingEvents.then(async () => {
+              await this.onEvent?.({
+                runId: request.runId,
+                type: 'provider_response',
+                payload: {
+                  provider: providerName,
+                  model: modelName,
+                  usageReported: false
+                }
+              })
+            })
           }
+        } else if (event.type === 'delta' && event.delta) {
+          fullText += event.delta
+          if (context.workspace) {
+            const deltaText = event.delta
+            context.pendingEvents = context.pendingEvents.then(async () => {
+              await this.onEvent?.({
+                runId: request.runId,
+                type: 'message_update',
+                payload: {
+                  assistantMessageEvent: {
+                    type: 'text_delta',
+                    delta: deltaText
+                  }
+                }
+              })
+            })
+          }
+        } else if (event.type === 'part' && event.partEvent?.kind === 'reasoning-delta') {
+          if (context.workspace) {
+            const reasoningDelta = event.partEvent.delta
+            context.pendingEvents = context.pendingEvents.then(async () => {
+              await this.onEvent?.({
+                runId: request.runId,
+                type: 'message_update',
+                payload: {
+                  assistantMessageEvent: {
+                    type: 'thinking_delta',
+                    delta: reasoningDelta
+                  }
+                }
+              })
+            })
+          }
+        } else if (event.type === 'usage' && event.usage) {
+          promptTokens = event.usage.promptTokens ?? promptTokens
+          completionTokens = event.usage.completionTokens ?? completionTokens
+          totalTokens = event.usage.totalTokens ?? totalTokens
+          cost = event.usage.cost ?? cost
         }
-      )
-      if (context.workspace) {
+      }
+
+      if (context.workspace && totalTokens > 0) {
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
             runId: request.runId,
             type: 'provider_response',
             payload: {
-              provider: result.provider,
-              model: result.model,
-              usageReported: result.usageReported === true,
-              ...(result.usageReported && result.usage ? { usage: result.usage } : {})
+              provider: providerName,
+              model: modelName,
+              usageReported: true,
+              usage: {
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                cost
+              }
             }
           })
         })
-        await context.pendingEvents
       }
+      await context.pendingEvents
+
       response = {
         requestId: request.requestId,
         runId: request.runId,
-        text: result.result,
+        text: fullText,
         usage: {
-          promptTokens: result.usage?.promptTokens ?? 0,
-          completionTokens: result.usage?.completionTokens ?? 0,
-          totalTokens: result.usage?.totalTokens ?? 0,
-          cost: result.usage?.cost
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          cost
         },
-        provider: result.provider,
-        model: result.model
+        provider: providerName,
+        model: modelName
       }
     } catch (error) {
       // The worker's protocol carries no codes, so it is told only that the request failed. The run
@@ -924,8 +1001,15 @@ export class PiAgentRuntimeHost {
       }
     }
 
+    const isFullPermission =
+      toolGatewayModule.getGatewayState().mode === 'full' ||
+      context.profile.permissionPolicy.allowedPermissions.includes('*') ||
+      context.profile.id === 'default-pi'
+
     if (!approval && requiredPermissions.size > 0) {
-      if (context.profile.permissionPolicy.mode === 'preauthorized') {
+      if (isFullPermission) {
+        approval = undefined
+      } else if (context.profile.permissionPolicy.mode === 'preauthorized') {
         const allowed = new Set(context.profile.permissionPolicy.allowedPermissions)
         const missing = Array.from(requiredPermissions).filter(
           (permission) => !allowed.has(permission)

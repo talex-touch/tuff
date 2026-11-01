@@ -298,9 +298,32 @@ function summarizeRunStep(step: WorkflowRunRecord['steps'][number]): WorkflowRun
   }
 }
 
+/**
+ * The JSON box a parse failure is reported against: the box's own label, and the 1-based position
+ * of the step it belongs to. The parser's reason is the engine's English message, so the field
+ * name is what tells the user, in their language, which box to fix.
+ */
+interface JsonFieldRef {
+  labelKey: string
+  step?: number
+}
+
+function describeJsonFailure(field: JsonFieldRef, reason: string, t: Translate): string {
+  const label = t(workflowTextKey(field.labelKey))
+  return field.step === undefined
+    ? t(workflowTextKey('validationFieldReason'), { field: label, reason })
+    : t(workflowTextKey('validationFieldReasonAtStep'), {
+        field: label,
+        reason,
+        index: field.step
+      })
+}
+
 function parseJson(
   text: string,
   errorCode: WorkflowValidationErrorCode,
+  field: JsonFieldRef,
+  t: Translate,
   stepUid?: string
 ): Record<string, unknown> {
   const source = text.trim()
@@ -310,14 +333,17 @@ function parseJson(
   try {
     return JSON.parse(source) as Record<string, unknown>
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'invalid JSON'
-    throw new WorkflowValidationError(errorCode, reason, stepUid)
+    const reason =
+      error instanceof Error ? error.message : t(workflowTextKey('validationInvalidJson'))
+    throw new WorkflowValidationError(errorCode, describeJsonFailure(field, reason, t), stepUid)
   }
 }
 
 function parseJsonArray<T>(
   text: string,
   errorCode: WorkflowValidationErrorCode,
+  field: JsonFieldRef,
+  t: Translate,
   stepUid?: string
 ): T[] {
   const source = text.trim()
@@ -327,23 +353,39 @@ function parseJsonArray<T>(
   try {
     const parsed = JSON.parse(source)
     if (!Array.isArray(parsed)) {
-      throw new Error('expected JSON array')
+      throw new Error(t(workflowTextKey('validationExpectedArray')))
     }
     return parsed as T[]
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'invalid JSON'
-    throw new WorkflowValidationError(errorCode, reason, stepUid)
+    const reason =
+      error instanceof Error ? error.message : t(workflowTextKey('validationInvalidJson'))
+    throw new WorkflowValidationError(errorCode, describeJsonFailure(field, reason, t), stepUid)
   }
 }
 
-function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): WorkflowStepDraft {
+function createDefaultStep(index: number, kind: WorkflowStepKind, t: Translate): WorkflowStepDraft {
   const defaultInput =
     kind === 'model'
       ? '{\n  "capabilityId": "text.chat",\n  "outputFormat": "markdown"\n}'
       : '{\n  "outputFormat": "markdown"\n}'
   const defaultInputSources =
     kind === 'model'
-      ? '[\n  {\n    "type": "workflow.input",\n    "key": "text",\n    "label": "Input text"\n  },\n  {\n    "type": "clipboardRef",\n    "key": "clipboard.recent",\n    "label": "Recent clipboard"\n  }\n]'
+      ? JSON.stringify(
+          [
+            {
+              type: 'workflow.input',
+              key: 'text',
+              label: t(workflowTextKey('defaults.inputSource.text'))
+            },
+            {
+              type: 'clipboardRef',
+              key: 'clipboard.recent',
+              label: t(workflowTextKey('defaults.context.clipboardRecent'))
+            }
+          ],
+          null,
+          2
+        )
       : '[]'
   const defaultOutputContract =
     kind === 'model'
@@ -355,10 +397,10 @@ function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): Wor
     id: `step-${index + 1}`,
     name:
       kind === 'agent'
-        ? `Agent Step ${index + 1}`
+        ? t(workflowTextKey('defaults.stepName.agent'), { index: index + 1 })
         : kind === 'model'
-          ? `Use Model ${index + 1}`
-          : `Step ${index + 1}`,
+          ? t(workflowTextKey('defaults.stepName.model'), { index: index + 1 })
+          : t(workflowTextKey('defaults.stepName.generic'), { index: index + 1 }),
     kind,
     instruction: '',
     toolId: '',
@@ -417,18 +459,22 @@ function createDefaultWorkflowDraft(t: Translate): WorkflowDraft {
       label: item.label || item.type || '',
       config: safeJsonStringify(item.config ?? {})
     })),
-    steps: [createDefaultStep(0)],
+    steps: [createDefaultStep(0, 'agent', t)],
     isBuiltin: false
   }
 }
 
-function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowStepDraft {
+function mapStepToDraft(
+  step: WorkflowDefinitionStep,
+  index: number,
+  t: Translate
+): WorkflowStepDraft {
   const kind =
     step.kind === 'tool' || step.kind === 'prompt' || step.kind === 'model' ? step.kind : 'agent'
   return {
     uid: createUid(),
     id: step.id || `step-${index + 1}`,
-    name: step.name || `Step ${index + 1}`,
+    name: step.name || t(workflowTextKey('defaults.stepName.generic'), { index: index + 1 }),
     kind,
     instruction: step.prompt || step.description || '',
     toolId: step.toolId || '',
@@ -479,7 +525,7 @@ function mapWorkflowToDraft(workflow: WorkflowDefinition, t: Translate): Workflo
       label: source.label || source.type || '',
       config: safeJsonStringify(source.config ?? {})
     })),
-    steps: workflow.steps.map((step, index) => mapStepToDraft(step, index)),
+    steps: workflow.steps.map((step, index) => mapStepToDraft(step, index, t)),
     isBuiltin: metadata.builtin === true || workflow.id.startsWith('builtin.')
   }
 }
@@ -591,13 +637,14 @@ export function filterReviewQueueItems(
   return items.filter((item) => item.status === filter)
 }
 
+/** A failed item's card shows its failure above the hint, so the hint doesn't repeat it. */
 export function resolveReviewQueueActionHint(
-  item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>
+  item: Pick<WorkflowReviewQueueItem, 'status'>
 ): WorkflowReviewQueueActionHint {
   if (item.status === 'failed') {
     return {
       tone: 'warning',
-      labelKey: item.error ? 'reviewHintFailedWithError' : 'reviewHintFailed'
+      labelKey: 'reviewHintFailed'
     }
   }
 
@@ -621,6 +668,7 @@ export function resolveReviewQueueActionHint(
   }
 }
 
+/** A failed item's card shows its failure on its own line, so no chip repeats it. */
 export function resolveReviewQueueMetaChips(
   item: Pick<
     WorkflowReviewQueueItem,
@@ -635,8 +683,6 @@ export function resolveReviewQueueMetaChips(
     | 'latency'
     | 'totalTokens'
     | 'riskLevel'
-    | 'status'
-    | 'error'
   >
 ): WorkflowReviewQueueMetaChip[] {
   const chips: WorkflowReviewQueueMetaChip[] = [
@@ -696,22 +742,19 @@ export function resolveReviewQueueMetaChips(
     tone: item.riskLevel === 'medium' ? 'warning' : 'default'
   })
 
-  if (item.status === 'failed' && item.error) {
-    chips.push({
-      labelKey: 'reviewMetaFailure',
-      fallback: 'Failure',
-      value: item.error,
-      tone: 'warning'
-    })
-  }
-
   return chips
 }
+
+/**
+ * Recorded on a review item this window had no clipboard to write to. The item keeps the code, not
+ * a sentence, so the page words it in whatever language it is read in later.
+ */
+export const REVIEW_CLIPBOARD_UNAVAILABLE = 'WORKFLOW_REVIEW_CLIPBOARD_UNAVAILABLE'
 
 async function writeClipboardText(text: string): Promise<void> {
   const clipboard = globalThis.navigator?.clipboard
   if (!clipboard?.writeText) {
-    throw new Error('Clipboard write is not available')
+    throw new Error(REVIEW_CLIPBOARD_UNAVAILABLE)
   }
   await clipboard.writeText(text)
 }
@@ -796,7 +839,7 @@ export function useWorkflowEditor() {
   function addStep(kind: WorkflowStepKind = 'agent'): void {
     workflowDraft.value.steps = [
       ...workflowDraft.value.steps,
-      createDefaultStep(workflowDraft.value.steps.length, kind)
+      createDefaultStep(workflowDraft.value.steps.length, kind, t)
     ]
   }
 
@@ -933,13 +976,23 @@ export function useWorkflowEditor() {
       throw new WorkflowValidationError('min_steps', t(workflowTextKey('validationMinSteps')))
     }
 
-    const metadata = parseJson(draft.metadata, 'metadata_json')
+    const metadata = parseJson(
+      draft.metadata,
+      'metadata_json',
+      { labelKey: 'metadataJsonTitle' },
+      t
+    )
     const triggers: WorkflowTrigger[] = draft.triggers.map((trigger) => ({
       id: trigger.id || createUid(),
       type: trigger.type,
       enabled: trigger.enabled,
       label: trigger.label.trim() || undefined,
-      config: parseJson(trigger.config, 'trigger_config_json')
+      config: parseJson(
+        trigger.config,
+        'trigger_config_json',
+        { labelKey: 'jsonFieldTriggerConfig' },
+        t
+      )
     }))
 
     const contextSources: WorkflowContextSource[] = draft.contextSources.map((source) => ({
@@ -947,7 +1000,12 @@ export function useWorkflowEditor() {
       type: source.type,
       enabled: source.enabled,
       label: source.label.trim() || undefined,
-      config: parseJson(source.config, 'context_config_json')
+      config: parseJson(
+        source.config,
+        'context_config_json',
+        { labelKey: 'jsonFieldContextConfig' },
+        t
+      )
     }))
 
     const workflowId = draft.id.trim()
@@ -972,10 +1030,23 @@ export function useWorkflowEditor() {
         )
       }
 
-      const input = parseJson(step.input, 'input_json', step.uid)
+      const stepNumber = index + 1
+      const input = parseJson(
+        step.input,
+        'input_json',
+        { labelKey: 'inputJsonShort', step: stepNumber },
+        t,
+        step.uid
+      )
       const parsedInputSources =
         step.kind === 'model'
-          ? parseJsonArray<WorkflowModelInputSource>(step.inputSources, 'input_json', step.uid)
+          ? parseJsonArray<WorkflowModelInputSource>(
+              step.inputSources,
+              'input_json',
+              { labelKey: 'modelInputSources', step: stepNumber },
+              t,
+              step.uid
+            )
           : undefined
       const inputSources = parsedInputSources?.map((source) => {
         if (!shouldRegenerateStepIds || source.type !== 'previousStep' || !source.stepId) {
@@ -986,7 +1057,13 @@ export function useWorkflowEditor() {
       })
       const output =
         step.kind === 'model'
-          ? (parseJson(step.outputContract, 'input_json', step.uid) as WorkflowModelOutputContract)
+          ? (parseJson(
+              step.outputContract,
+              'input_json',
+              { labelKey: 'modelOutputContract', step: stepNumber },
+              t,
+              step.uid
+            ) as WorkflowModelOutputContract)
           : undefined
       if (step.kind === 'tool' && !step.toolId.trim()) {
         throw new WorkflowValidationError(

@@ -11,9 +11,10 @@ import { getMainConfig, saveMainConfig } from '../modules/storage'
 import { TalexTouch } from '../types'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
-import { getLocale } from '../utils/i18n-helper'
+import { getLocale, t } from '../utils/i18n-helper'
 import { mainLog } from '../utils/logger'
 import { getAppVersionSafe } from '../utils/version-util'
+import { isAutoDevtoolsDisabled } from './acceptance-mode'
 import { genTouchChannel } from './channel-core'
 import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import type { QuitIntentKind } from './quit-intent'
@@ -315,11 +316,11 @@ export class TouchApp implements TalexTouch.TouchApp {
     // they are actionable only for a developer. In the dialog they are something a user screenshots
     // into a support request, disclosing their OS username and directory layout for nothing (#800).
     const detail = [
-      'The application files appear to be incomplete or damaged.',
+      t('nativeDialogs.rendererMissing.damaged'),
       '',
-      'Reinstalling usually fixes this.',
+      t('nativeDialogs.rendererMissing.reinstall'),
       '',
-      'If you are reporting the problem, please attach the log file.'
+      t('nativeDialogs.rendererMissing.attachLog')
     ].join('\n')
     mainLog.error('Renderer entry missing, showing recovery dialog', {
       meta: { filePath, triedPaths: triedPaths.join(', ') }
@@ -330,10 +331,10 @@ export class TouchApp implements TalexTouch.TouchApp {
     // it, ending up in a screenshot.
     const { response } = await dialog.showMessageBox(window || undefined, {
       type: 'error',
-      title: 'File Not Found',
-      message: 'Cannot find this file.',
+      title: t('nativeDialogs.rendererMissing.title'),
+      message: t('nativeDialogs.rendererMissing.message'),
       detail,
-      buttons: ['OK', 'Open Log Folder'],
+      buttons: [t('nativeDialogs.ok'), t('nativeDialogs.rendererMissing.openLogFolder')],
       defaultId: 0,
       cancelId: 0,
       noLink: true
@@ -528,7 +529,8 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     const startSilent = this._startSilent
 
-    const shouldOpenDevtools = this.version === TalexTouch.AppVersion.DEV && !startSilent
+    const shouldOpenDevtools =
+      this.version === TalexTouch.AppVersion.DEV && !startSilent && !isAutoDevtoolsDisabled()
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
       mainLog.info('Booting packaged build', {

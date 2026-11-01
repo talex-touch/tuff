@@ -98,11 +98,10 @@ export function buildWidgetSandboxDocument(input: WidgetSandboxDocumentInput): s
 const post = (type, payload) => parent.postMessage({ type, ...payload }, '*')
 
 // A violation here is a signal, not a silent no-op: it means the widget tried
-// to reach outside and the policy stopped it. The host shows it.
+// to reach outside and the policy stopped it. The host words it, naming the
+// directive that stopped it.
 addEventListener('securitypolicyviolation', (event) => {
-  post(${JSON.stringify(WIDGET_SANDBOX_MESSAGE.error)}, {
-    message: 'blocked by sandbox policy: ' + event.violatedDirective
-  })
+  post(${JSON.stringify(WIDGET_SANDBOX_MESSAGE.error)}, { directive: event.violatedDirective })
 })
 
 addEventListener('error', (event) => {

@@ -67,6 +67,9 @@ vi.mock('electron', () => ({
   }
 }))
 
+// The messages are worded by main's translator; the keys are what this suite pins down.
+vi.mock('../../utils/i18n-helper', () => ({ t: (key: string) => key }))
+
 vi.mock('@sentry/electron/main', () => ({
   init: vi.fn(),
   captureException: vi.fn(),
@@ -267,7 +270,7 @@ describe('clipboard-autopaste-automation', () => {
     const noDb = new ClipboardAutopasteAutomation(createOptions({ hasDatabase: () => false }))
     await expect(noDb.handleApplyRequest({ id: 1 }, createContext())).resolves.toEqual({
       success: false,
-      message: 'Clipboard database is not ready.',
+      message: 'clipboardActions.databaseUnavailable',
       code: 'CLIPBOARD_DATABASE_UNAVAILABLE'
     })
 
@@ -276,7 +279,7 @@ describe('clipboard-autopaste-automation', () => {
     )
     await expect(missing.handleApplyRequest({ id: 99 }, createContext())).resolves.toEqual({
       success: false,
-      message: 'Clipboard history item not found: 99',
+      message: 'clipboardActions.itemNotFound',
       code: 'CLIPBOARD_ITEM_NOT_FOUND'
     })
   })
@@ -320,7 +323,7 @@ describe('clipboard-autopaste-automation', () => {
       await expect(delivery).resolves.toEqual({
         success: false,
         code: 'AUTO_PASTE_FAILED',
-        message: 'Voice text was pasted, but the previous clipboard could not be restored.'
+        message: 'clipboardActions.voiceClipboardNotRestored'
       })
 
       expect(mocks.clipboardClear).toHaveBeenCalledOnce()

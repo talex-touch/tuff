@@ -72,6 +72,10 @@ const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
 // terminate it. Always falls through to terminate() so teardown can't hang.
 const GRACEFUL_CLOSE_TIMEOUT_MS = 2_000
 const SHUTDOWN_GRACEFUL_CLOSE_TIMEOUT_MS = 500
+// An idle maintenance slice wakes on the same 60 s anchor as the idle-worker retirement, so it
+// can land inside that graceful-close window. Waiting the window out is cheaper than a rejected
+// request plus a 250 ms re-dispatch, and it keeps the slice off the retiring worker.
+const MAINTENANCE_RETIREMENT_WAIT_MS = GRACEFUL_CLOSE_TIMEOUT_MS + DEFAULT_TERMINATION_TIMEOUT_MS
 
 function resolveSearchIndexWorkerPath(): string {
   const candidates = new Set<string>([
@@ -628,6 +632,9 @@ export class SearchIndexWorkerClient {
   ): Promise<T | null> {
     const { signal } = options
     signal?.throwIfAborted()
+    if (options.maintenance && this.terminationBarrier) {
+      await this.awaitRetirementBeforeMaintenance(signal)
+    }
     await this.ensureInitialized(signal)
     signal?.throwIfAborted()
     // Initialization/respawn may have outlived the writer's earlier idle check.
@@ -1094,6 +1101,50 @@ export class SearchIndexWorkerClient {
     const termination = this.terminationBarrier
     if (!termination) return
     await this.awaitWorkerTermination(termination)
+  }
+
+  /**
+   * Idle maintenance shares its 60 s anchor with the idle-worker retirement, so the slice can
+   * arrive while the previous worker is still closing. `assertTerminationConfirmed` would reject
+   * it as `pending` and the runner would only re-dispatch 250 ms later; waiting for the barrier
+   * instead lets the slice reach the fresh worker on its first attempt. Bounded and abort-aware:
+   * a barrier that never settles keeps the previous `pending` rejection.
+   */
+  private async awaitRetirementBeforeMaintenance(signal?: AbortSignal): Promise<void> {
+    if (this.terminationFailure) throw this.terminationFailure
+    const termination = this.terminationBarrier
+    if (!termination) return
+    await new Promise<void>((resolve, reject) => {
+      let timer: NodeJS.Timeout | undefined
+      const settle = (finish: () => void): void => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', abort)
+        finish()
+      }
+      const abort = (): void => settle(() => reject(signal?.reason))
+      timer = setTimeout(
+        () =>
+          settle(() =>
+            reject(
+              this.terminationFailure ?? new SearchIndexWorkerTerminationUnconfirmedError('pending')
+            )
+          ),
+        MAINTENANCE_RETIREMENT_WAIT_MS
+      )
+      timer.unref?.()
+      signal?.addEventListener('abort', abort, { once: true })
+      void termination.then(
+        () => settle(resolve),
+        (error: unknown) =>
+          settle(() =>
+            reject(
+              error instanceof Error
+                ? error
+                : new SearchIndexWorkerTerminationUnconfirmedError('rejected')
+            )
+          )
+      )
+    })
   }
 
   private async awaitWorkerTermination(termination: Promise<void>): Promise<void> {

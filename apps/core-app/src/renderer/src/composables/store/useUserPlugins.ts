@@ -1,5 +1,6 @@
 import type { StorePlugin } from '@talex-touch/utils/store'
 import { computed, ref } from 'vue'
+import type { NexusAuthResponse } from '~/modules/store/nexus-auth-client'
 import { uploadNexusWithAuth, fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { isAuthenticated } from '~/modules/store/auth-token-service'
@@ -194,6 +195,10 @@ export function useUserPlugins() {
     })
   }
 
+  /**
+   * Nexus says why it refused a request in the body's `statusMessage`. A body without one - a
+   * proxy's error page, an empty reply - says nothing a person can use, so the status stands in.
+   */
   function resolveErrorMessage(text: string, fallback: string): string {
     if (!text) return fallback
     try {
@@ -204,19 +209,26 @@ export function useUserPlugins() {
           : typeof parsed.message === 'string'
             ? parsed.message
             : ''
-      return message || text
+      return message || fallback
     } catch {
-      return text
+      return fallback
     }
+  }
+
+  /**
+   * Main retries a 401 once with a refreshed token when it can, so one that gets here means
+   * signing in again.
+   */
+  async function responseFailure(response: NexusAuthResponse): Promise<Error> {
+    if (response.status === 401) return new Error('UNAUTHORIZED')
+    const text = await response.text()
+    return new Error(resolveErrorMessage(text, `HTTP_ERROR_${response.status}`))
   }
 
   async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetchNexusWithAuth(path, init, `user-plugins:${path}`)
     if (!response) throw new Error('NOT_AUTHENTICATED')
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(resolveErrorMessage(text, `HTTP_ERROR_${response.status}`))
-    }
+    if (!response.ok) throw await responseFailure(response)
     return await response.json<T>()
   }
 
@@ -232,10 +244,7 @@ export function useUserPlugins() {
       method
     )
     if (!response) throw new Error('NOT_AUTHENTICATED')
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(resolveErrorMessage(text, `HTTP_ERROR_${response.status}`))
-    }
+    if (!response.ok) throw await responseFailure(response)
     return await response.json<T>()
   }
 

@@ -13,6 +13,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus, type AppSecondaryLaunch } from '../core/eventbus/touch-event'
+import { t } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import './protocol-handler'
 
@@ -126,8 +127,8 @@ export default {
 
           if (!service) {
             dialog.showErrorBox(
-              'Unsupported File Type',
-              `No plugin is registered to handle ".${extName}" files. Install a compatible plugin from the plugin store.`
+              t('nativeDialogs.unsupportedFile.title'),
+              t('nativeDialogs.unsupportedFile.body', { extension: extName })
             )
             return
           }
@@ -148,8 +149,8 @@ export default {
           })
         } else {
           dialog.showErrorBox(
-            'Unsupported Input',
-            'Folder input is not supported by plugin services.'
+            t('nativeDialogs.unsupportedInput.title'),
+            t('nativeDialogs.unsupportedInput.body')
           )
         }
       })

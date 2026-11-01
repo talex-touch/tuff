@@ -55,6 +55,19 @@ export type PluginEntityState =
   | 'crashed'
   | 'dev-disconnected'
 
+/**
+ * What keeps the plugin from running, as main recorded it: the code and details word it in the
+ * interface language, and `message` is main's own sentence, shown beneath as the detail.
+ */
+export interface PluginEntityProblem {
+  type: 'error' | 'warning'
+  code?: string
+  source?: string
+  message: string
+  suggestion?: string
+  meta?: Record<string, unknown>
+}
+
 export interface PluginEntityFeature {
   id: string
   name: string
@@ -72,8 +85,8 @@ export interface PluginEntitySnapshot {
   state: PluginEntityState
   /** The action Enter runs; also the row's primary ⌘K action. */
   primaryAction: PluginEntityActionId
-  /** Load error or the first error issue, already a sentence. */
-  problem?: string
+  /** Load error or the first error issue. */
+  problem?: PluginEntityProblem
   dev: boolean
   features: PluginEntityFeature[]
 }

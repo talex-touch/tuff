@@ -76,10 +76,10 @@ export function usePreviewActions(props: PreviewActionProps, options: PreviewAct
 
   function actionDisabled(action: ImagePreviewAction): boolean {
     const item = options.item()
-    if (!item || options.isFailed(item.url))
+    if (!item || (item.type !== 'custom' && options.isFailed(item.url ?? '')))
       return true
     // A picture turns once it has a size to turn.
-    return action === 'rotate' && !options.canRotate()
+    return action === 'rotate' ? !options.canRotate() : !item.url
   }
 
   function runAction(action: ImagePreviewAction, reverse = false): void {
@@ -106,6 +106,8 @@ export function usePreviewActions(props: PreviewActionProps, options: PreviewAct
         options.rotate(reverse ? -1 : 1)
         break
       case 'copy':
+        if (!item.url)
+          break
         void copyImage(item.url, options.sizes().get(item.url)).then((outcome) => {
           say(outcome === 'image' ? props.copiedText : outcome === 'link' ? props.linkCopiedText : props.copyFailedText)
         })

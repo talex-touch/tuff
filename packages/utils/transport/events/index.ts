@@ -393,6 +393,8 @@ import type {
   PluginEnableRequest,
   PluginI18nGetLocaleRequest,
   PluginI18nGetLocaleResponse,
+  PluginI18nLocaleChangedChunk,
+  PluginI18nLocaleChangedRequest,
   PluginI18nResolveTextRequest,
   PluginI18nResolveTextResponse,
   PluginIndexCommunicateRequest,
@@ -1823,6 +1825,16 @@ export const PluginEvents = {
       .module('i18n')
       .event('get-locale')
       .define<PluginI18nGetLocaleRequest, PluginI18nGetLocaleResponse>(),
+    /**
+     * Per-plugin stream: the current app locale first, then every change.
+     * Opened by `LanguageSDK.onLanguageChange`; gated like `getLocale`.
+     */
+    localeChanged: defineEvent('plugin')
+      .module('i18n')
+      .event('locale-changed')
+      .define<PluginI18nLocaleChangedRequest, AsyncIterable<PluginI18nLocaleChangedChunk>>({
+        stream: { enabled: true },
+      }),
     resolveText: defineEvent('plugin')
       .module('i18n')
       .event('resolve-text')

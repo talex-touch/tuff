@@ -2,6 +2,7 @@ import type { ITuffTransport } from '@talex-touch/utils/transport'
 import type { Router } from 'vue-router'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { createNotificationSdk } from '@talex-touch/utils/transport/sdk/domains/notification'
+import { resolveStoreInstallFailureReason } from '~/composables/store/store-install-error-utils'
 import { useI18nText } from '~/modules/lang/useI18nText'
 
 let registered = false
@@ -56,8 +57,11 @@ export function registerPluginInstallListener(transport: ITuffTransport, router:
       message = error
         ? resolveI18nText(
             'notifications.pluginInstallFailedBodyWithReason',
-            'Failed to add {name}: {error}.',
-            { name: displayName, error }
+            'Failed to add {name}: {error}',
+            {
+              name: displayName,
+              error: resolveStoreInstallFailureReason(error, useI18nText().t)
+            }
           )
         : resolveI18nText('notifications.pluginInstallFailedBody', 'Failed to add {name}.', {
             name: displayName

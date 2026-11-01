@@ -83,7 +83,7 @@ CoreApp renderer 宿主 SDK 保留完整上下文管理面。插件 facade 会�
 
 Plugin intelligence SDK 暴露 typed domain 方法，不会恢复已裁切的 `chat` 旧别名，也不会暴露 host-only Memory 管理方法。插件入口应先用发现接口判断能力是否可用，再调用对应 wrapper，例如 `intelligence.text.chat(payload, options)`；自定义能力则继续使用 `intelligence.invoke<Result>(capabilityId, payload, options)`。
 
-CoreBox 类对话入口应优先使用 `contextInvoke()` 或 `contextStream()`。当前 contract 只支持 `text.chat`，不会信任调用方提供的 user/assistant history。宿主只保留调用方 system message，再按有界顺序加入已验证的 summary、recent turns、Memory、retrieval context 与当前输入。`mode` 可取 `new`、`continue` 或 `stateless`；继续会话必须携带上一轮安全 context 摘要返回的 `sessionId`。
+CoreBox 类对话入口应优先使用 `contextInvoke()` 或 `contextStream()`。当前 contract 只支持 `text.chat`，不会信任调用方提供的 user/assistant history。宿主只保留调用方 system message，再按有界顺序加入已验证的 summary、recent turns、Memory、retrieval context 与当前输入。`mode` 可取 `new`、`continue` 或 `stateless`；继续会话必须携带上一轮安全 context 摘要返回的 `sessionId`。这两个调用都需要 `intelligence.context` 权限，只声明 `intelligence.basic` 不够；`contextEvaluateMemory()` 仍归 `intelligence.basic`。
 
 ```typescript
 let contextSessionId: string | undefined;

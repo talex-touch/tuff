@@ -387,6 +387,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/motion-metric',
     // pro — Effects
     '/docs/dev/components/glass-surface',
+    '/docs/dev/components/touch-surface',
     '/docs/dev/components/gradient-border',
     '/docs/dev/components/outline-border',
     '/docs/dev/components/border-beam',

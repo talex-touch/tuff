@@ -24,7 +24,7 @@ export interface IndexWorkerProgressUpdate {
 
 export interface IndexWorkerFileUpdate {
   content: string | null
-  embeddingStatus: 'pending' | 'completed'
+  embeddingStatus: 'none' | 'pending' | 'completed'
   embeddings?: FileParserEmbedding[]
   contentHash?: string | null
   chunks?: FileParserChunk[]

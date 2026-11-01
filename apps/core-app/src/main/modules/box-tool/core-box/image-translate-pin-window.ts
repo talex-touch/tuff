@@ -4,6 +4,7 @@ import { platform } from 'node:process'
 import { clipboard, Menu, nativeImage, screen } from 'electron'
 import { TouchWindow } from '../../../core/touch-window'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
+import { t } from '../../../utils/i18n-helper'
 
 export interface ImageTranslatePinWindowPayload {
   translatedImageBase64: string
@@ -295,54 +296,60 @@ function registerPinWindowActions(
   const resetZoom = (): void => {
     applyZoomIndex(PIN_ZOOM_LEVELS.indexOf(1), true)
   }
-  const applyOpacity = (opacity: number): void => {
-    if (!window.isDestroyed()) window.setOpacity(opacity)
+  let opacityIndex = 0
+  const applyOpacity = (index: number): void => {
+    opacityIndex = index
+    if (!window.isDestroyed()) window.setOpacity(PIN_OPACITY_OPTIONS[index].value)
   }
 
-  const template: MenuItemConstructorOptions[] = [
-    {
-      label: 'Copy Translated Image',
-      click: () => clipboard.writeImage(image)
+  // Built each time it opens, so it is worded in the language the interface is in now: a pinned
+  // translation can stay open across a language switch.
+  const buildContextMenu = (): Menu => {
+    const template: MenuItemConstructorOptions[] = [
+      {
+        label: t('corebox.imageTranslatePin.copyImage'),
+        click: () => clipboard.writeImage(image)
+      }
+    ]
+    if (targetText) {
+      template.push({
+        label: t('corebox.imageTranslatePin.copyTranslation'),
+        click: () => clipboard.writeText(targetText)
+      })
     }
-  ]
-  if (targetText) {
-    template.push({
-      label: 'Copy Translation',
-      click: () => clipboard.writeText(targetText)
-    })
-  }
-  if (sourceText) {
-    template.push({
-      label: 'Copy Source Text',
-      click: () => clipboard.writeText(sourceText)
-    })
-  }
-  template.push(
-    { type: 'separator' },
-    { label: 'Zoom In', click: () => stepZoom(1) },
-    { label: 'Zoom Out', click: () => stepZoom(-1) },
-    { label: 'Reset Zoom', click: resetZoom },
-    {
-      label: 'Opacity',
-      enabled: platform !== 'linux',
+    if (sourceText) {
+      template.push({
+        label: t('corebox.imageTranslatePin.copySource'),
+        click: () => clipboard.writeText(sourceText)
+      })
+    }
+    template.push(
+      { type: 'separator' },
+      { label: t('corebox.imageTranslatePin.zoomIn'), click: () => stepZoom(1) },
+      { label: t('corebox.imageTranslatePin.zoomOut'), click: () => stepZoom(-1) },
+      { label: t('corebox.imageTranslatePin.resetZoom'), click: resetZoom },
+      {
+        label: t('corebox.imageTranslatePin.opacity'),
+        enabled: platform !== 'linux',
 
-      submenu: PIN_OPACITY_OPTIONS.map(
-        (option, index): MenuItemConstructorOptions => ({
-          label: option.label,
-          type: 'radio',
-          checked: index === 0,
-          click: () => applyOpacity(option.value)
-        })
-      )
-    },
-    { type: 'separator' },
-    { label: 'Close', click: closeWindow }
-  )
-  const menu = Menu.buildFromTemplate(template)
+        submenu: PIN_OPACITY_OPTIONS.map(
+          (option, index): MenuItemConstructorOptions => ({
+            label: option.label,
+            type: 'radio',
+            checked: index === opacityIndex,
+            click: () => applyOpacity(index)
+          })
+        )
+      },
+      { type: 'separator' },
+      { label: t('corebox.imageTranslatePin.close'), click: closeWindow }
+    )
+    return Menu.buildFromTemplate(template)
+  }
 
   window.webContents.on('context-menu', (event) => {
     event.preventDefault()
-    menu.popup({ window })
+    buildContextMenu().popup({ window })
   })
   window.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'Escape') {
@@ -386,7 +393,7 @@ export async function openImageTranslatePinWindow(
     minHeight: MIN_PIN_HEIGHT,
     show: false,
     frame: true,
-    title: 'Image Translation',
+    title: t('corebox.imageTranslatePin.windowTitle'),
     alwaysOnTop: true,
     webPreferences: buildWindowWebPreferences('app')
   })

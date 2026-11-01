@@ -16,6 +16,7 @@ import StoreIcon from '~/components/store/StoreIcon.vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { useUserPlugins } from '~/composables/store/useUserPlugins'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 
 const { t, locale } = useI18n()
 const {
@@ -57,6 +58,33 @@ const previewLoading = ref(false)
 const previewError = ref<string | null>(null)
 
 const channels: UserPluginChannel[] = ['SNAPSHOT', 'BETA', 'RELEASE']
+
+/** What each of this page's requests does, as the sentence that says it did not happen. */
+type PublisherAction = 'load' | 'timeline' | 'preview' | 'submit' | 'status' | 'deleteVersion'
+
+// `useUserPlugins` reports these by code: three ways of not being signed in to Nexus, and a status
+// Nexus answered without saying why.
+const SIGN_IN_CODES = new Set(['NOT_AUTHENTICATED', 'NO_TOKEN', 'UNAUTHORIZED'])
+const HTTP_STATUS_CODE = /^HTTP_ERROR_(\d{3})$/
+
+function publisherFailureReason(failure: unknown): string {
+  const message = failureMessage(failure)
+  if (!message || message === 'UNKNOWN_ERROR') return ''
+  if (SIGN_IN_CODES.has(message)) return t('store.publisher.failures.signInRequired')
+  const status = HTTP_STATUS_CODE.exec(message)?.[1]
+  if (status) return t('common.failures.httpStatus', { status })
+  // Nexus's own refusal (`Plugin not found.`) or the request's failure, as it came.
+  return describeFailure(message, t, '')
+}
+
+/** A request's failure as the page shows it: what did not happen, then why when there is a why. */
+function describePublisherFailure(action: PublisherAction, failure: unknown): string {
+  const what = t(`store.publisher.failures.${action}`)
+  const reason = publisherFailureReason(failure)
+  return reason ? t('store.publisher.failures.withReason', { action: what, reason }) : what
+}
+
+const loadError = computed(() => (error.value ? describePublisherFailure('load', error.value) : ''))
 const form = reactive({
   slug: '',
   name: '',
@@ -165,7 +193,7 @@ async function refreshTimeline(pluginId: string) {
   try {
     timeline.value = await loadPluginTimeline(pluginId)
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Failed to load timeline'
+    actionError.value = describePublisherFailure('timeline', err)
   } finally {
     timelineLoading.value = false
   }
@@ -226,7 +254,7 @@ async function handlePackageChange(event: Event) {
       form.changelog = manifest.changelog
     if (result.readmeMarkdown && !form.readme) form.readme = result.readmeMarkdown
   } catch (err) {
-    previewError.value = err instanceof Error ? err.message : 'Package preview failed'
+    previewError.value = describePublisherFailure('preview', err)
   } finally {
     previewLoading.value = false
   }
@@ -313,7 +341,7 @@ async function submitForm() {
     formVisible.value = false
     resetForm()
   } catch (err) {
-    previewError.value = err instanceof Error ? err.message : 'Publish failed'
+    previewError.value = describePublisherFailure('submit', err)
   } finally {
     formSaving.value = false
   }
@@ -325,7 +353,7 @@ async function setStatus(plugin: UserPluginRecord, status: 'draft' | 'pending') 
     await updatePluginStatus(plugin.id, status)
     if (selected.value?.id === plugin.id) selected.value.status = status
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Status update failed'
+    actionError.value = describePublisherFailure('status', err)
   }
 }
 
@@ -353,7 +381,7 @@ async function handleDeleteVersion(plugin: UserPluginRecord, versionId: string) 
     await deleteVersion(plugin.id, versionId)
     selected.value = records.value.find((item) => item.id === plugin.id) ?? selected.value
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Delete version failed'
+    actionError.value = describePublisherFailure('deleteVersion', err)
   }
 }
 
@@ -405,7 +433,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <p v-if="error" class="publisher-error">{{ error }}</p>
+    <p v-if="loadError" class="publisher-error">{{ loadError }}</p>
     <p v-if="actionError" class="publisher-error">{{ actionError }}</p>
 
     <div v-if="loading && !records.length" class="publisher-empty">{{ t('store.loading') }}</div>

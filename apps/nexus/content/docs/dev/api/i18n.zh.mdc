@@ -1,19 +1,20 @@
 ---
 title: 插件本地化 SDK
-description: 面向插件的权限门控主机语言、localized text 与隔离 Domain Lexicon API
+description: 面向插件的权限门控应用语言、语言变化订阅、localized text 与隔离 Domain Lexicon API
 ---
 
 # 插件本地化 SDK
 
 ## 概述
 
-Localization SDK 是插件读取主机语言、解析本地化值、创建可跨 transport 传递的 i18n 消息，以及使用宿主 Domain Lexicon 的正式合同。
+Localization SDK 是插件读取应用显示语言并跟随其变化、解析本地化值、创建可跨 transport 传递的 i18n 消息，以及使用宿主 Domain Lexicon 的正式合同。`LanguageSDK` 负责语言与 localized text，`PluginLexiconSDK` 负责 Domain Lexicon。
 
 `sdkapi >= 260713` 的插件可从以下入口使用：
 
-- 主进程 / runtime context：`context.utils.i18n` 与 `context.utils.lexicon`
-- 主进程镜像：`context.utils.plugin.i18n` 与 `context.utils.plugin.lexicon`
-- 插件 renderer：从 `@talex-touch/utils/plugin/sdk` 导入 `usePluginI18n()` 与 `usePluginLexicon()`
+- 主进程 / runtime context：`context.utils.language` 与 `context.utils.lexicon`
+- 主进程镜像：`context.utils.plugin.language` 与 `context.utils.plugin.lexicon`
+- 插件 renderer：从 `@talex-touch/utils/plugin/sdk` 导入 `useLanguage()` 与 `usePluginLexicon()`
+- Prelude 脚本：`plugin.language`，只提供 `getLanguage()` 与 `onLanguageChange()`（见下文「语言变化」）
 
 当前主机语言为 `en-US` 与 `zh-CN`。
 
@@ -39,11 +40,11 @@ code: |
 ---
 :::
 
-| 权限               | 对应方法                       |
-| ------------------ | ------------------------------ |
-| `i18n.read`        | `getLocale()`、`resolveText()` |
-| `lexicon.read`     | `resolve()`、`search()`        |
-| `lexicon.register` | `register()`                   |
+| 权限               | 对应方法                                               |
+| ------------------ | ------------------------------------------------------ |
+| `i18n.read`        | `getLanguage()`、`onLanguageChange()`、`resolveText()` |
+| `lexicon.read`     | `resolve()`、`search()`                                |
+| `lexicon.register` | `register()`                                           |
 
 宿主会同时校验 SDK marker、manifest 声明、当前 grant、插件已加载状态和 verified plugin identity。任一条件缺失都会在 locale / lexicon 服务执行前 fail-closed。
 
@@ -55,35 +56,34 @@ code: |
 ---
 code: |
   export default {
-  async onInit(context) {
-  const { i18n, lexicon } = context.utils
+    async onInit(context) {
+      const { language, lexicon } = context.utils
 
-        const locale = await i18n.getLocale()
-        const title = await i18n.resolveText(
-          {
-            default: 'Unit Converter',
-            locales: { 'zh-CN': '单位换算' }
-          },
-          locale
-        )
-        const message = i18n.createMessage('plugin.ready', { title })
+      const locale = await language.getLanguage()
+      const title = await language.resolveText(
+        {
+          default: 'Unit Converter',
+          locales: { 'zh-CN': '单位换算' }
+        },
+        locale
+      )
+      const message = language.createMessage('plugin.ready', { title })
 
-        const meter = await lexicon.resolve('unit.length.meter', {
-          locale,
-          domain: 'unit'
-        })
-        const matches = await lexicon.search('米', {
-          locale,
-          domain: 'unit',
-          limit: 5
-        })
+      const meter = await lexicon.resolve('unit.length.meter', {
+        locale,
+        domain: 'unit'
+      })
+      const matches = await lexicon.search('米', {
+        locale,
+        domain: 'unit',
+        limit: 5
+      })
 
-        context.utils.logger.info(
-          `${message}:${meter?.label ?? 'missing'}:${matches.length}`
-        )
-      }
-
-  ## }
+      context.utils.logger.info(
+        `${message}:${meter?.label ?? 'missing'}:${matches.length}`
+      )
+    }
+  }
 ---
 :::
 
@@ -93,36 +93,93 @@ code: |
 ---
 code: |
   import {
-  usePluginI18n,
-  usePluginLexicon
+    useLanguage,
+    usePluginLexicon
   } from '@talex-touch/utils/plugin/sdk'
 
-  const i18n = usePluginI18n()
+  const language = useLanguage()
   const lexicon = usePluginLexicon()
 
-  const locale = await i18n.getLocale()
-  const label = await i18n.resolveText({
-  default: 'Ready',
-  locales: { 'zh-CN': '就绪' }
+  const locale = await language.getLanguage()
+  const label = await language.resolveText({
+    default: 'Ready',
+    locales: { 'zh-CN': '就绪' }
   })
   const capabilities = await lexicon.search('就绪', {
-  locale,
-  domain: 'capability'
+    locale,
+    domain: 'capability'
   })
 ---
 :::
 
 Renderer hooks 需要已建立的插件 renderer channel。不要在普通应用 renderer 中调用，也不要在插件 channel ready 前调用。
 
+## 语言变化
+
+`getLanguage()` 只读取一次应用显示语言。插件需要在运行期间跟随语言时，例如重绘视图或切换自己的文案，使用 `onLanguageChange()` 订阅。需要同样的 `i18n.read` 权限与 `sdkapi >= 260713`。
+
+| 位置          | 读取                            | 订阅                                                                             |
+| ------------- | ------------------------------- | -------------------------------------------------------------------------------- |
+| 插件 renderer | `useLanguage().getLanguage()`   | `useLanguage().onLanguageChange(handler)`，返回 `() => void`                     |
+| Prelude 脚本  | `plugin.language.getLanguage()` | `plugin.language.onLanguageChange(handler)`，返回 `Promise<() => Promise<void>>` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useLanguage } from '@talex-touch/utils/plugin/sdk'
+
+  const language = useLanguage()
+  const current = await language.getLanguage()
+
+  // 先以当前语言调用，之后每次变化再调用。
+  const stop = language.onLanguageChange((next) => {
+    document.documentElement.lang = next
+  })
+
+  // 稍后视图销毁时：
+  stop()
+---
+:::
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js (Prelude 脚本)
+  let stopLanguage
+  let currentLanguage
+
+  module.exports = {
+    async onInit() {
+      // 订阅注册完成后才 resolve。之后 handler 先以当前语言运行，
+      // 每次变化再运行。
+      stopLanguage = await plugin.language.onLanguageChange((language) => {
+        currentLanguage = language
+      })
+    },
+    async onDestroy() {
+      await stopLanguage?.()
+    }
+  }
+---
+:::
+
+- handler 先收到当前语言，之后收到每一次变化；连续两次不会收到相同的值。
+- Prelude 只有 `getLanguage()` 与 `onLanguageChange()`，没有 `resolveText()`、`createMessage()` 和 Domain Lexicon。
+- `plugin.getLocale()` 仍是快照：Prelude 激活那一刻的应用显示语言。它不会更新，需要实时值时使用 `plugin.language.getLanguage()`。
+- 每次调用都会校验权限。renderer 订阅在每次投递前再次校验 `i18n.read`，权限被撤销或插件不再处于加载状态时以错误结束。
+- Prelude 订阅则与授权绑定：订阅存续期间撤销 `i18n.read` 会停止插件运行时，与其他受权限约束的宿主资源一致。禁用或卸载插件会释放订阅。
+- 这里的语言是应用显示语言：在设置里选择的语言，或开启「跟随系统语言」时采用的系统语言。应用运行期间操作系统语言发生变化不会被检测到，重启应用后才会生效。
+
 ## API 参考
 
-### I18n
+### Language
 
-| 方法                          | 返回值                        | 说明                                                                |
-| ----------------------------- | ----------------------------- | ------------------------------------------------------------------- |
-| `getLocale()`                 | `Promise<'en-US' \| 'zh-CN'>` | 读取当前主机语言。                                                  |
-| `resolveText(value, locale?)` | `Promise<string>`             | 解析字符串或 `{ default, locales }`；省略 `locale` 时使用主机语言。 |
-| `createMessage(key, params?)` | `string`                      | 不调用宿主，创建 `$i18n:` transport message。                       |
+| 方法                          | 返回值                                                          | 说明                                                                                  |
+| ----------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `getLanguage()`               | `Promise<'en-US' \| 'zh-CN'>`                                   | 读取当前应用显示语言。                                                                |
+| `onLanguageChange(handler)`   | renderer：`() => void`；Prelude：`Promise<() => Promise<void>>` | 先以当前语言调用 `handler`，之后每次变化再调用；返回用于停止订阅的函数。              |
+| `resolveText(value, locale?)` | `Promise<string>`                                               | 解析字符串或 `{ default, locales }`；省略 `locale` 时使用应用语言。Prelude 中不可用。 |
+| `createMessage(key, params?)` | `string`                                                        | 不调用宿主，创建 `$i18n:` transport message。Prelude 中不可用。                       |
 
 ### Domain Lexicon
 
@@ -185,6 +242,8 @@ code: |
 - `PLUGIN_LOCALIZATION_SDK_UNSUPPORTED`
 - `PLUGIN_LOCALIZATION_INVALID_REQUEST`
 - `PLUGIN_LOCALIZATION_PLUGIN_UNAVAILABLE`
+
+`onLanguageChange()` 的拒绝形态不同。在插件 renderer 中它只记录一条 warning 且不会回调；需要让拒绝以 reject 的形式传达给插件时，请使用 `getLanguage()`。在 Prelude 中，`getLanguage()` 与 `onLanguageChange()` 都会 reject：`i18n.read` 未授权或 `sdkapi` 低于 `260713` 时为 `PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED`，权限状态无法读取时为 `PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE`。
 
 ## 不要把宿主内部接口当成插件 API
 

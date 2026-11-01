@@ -75,6 +75,7 @@ function settings(
   return {
     enabled: true,
     defaultProvider: null,
+    terminalFontFamily: '',
     providers: {
       pi: provider('pi'),
       codex: provider('codex'),

@@ -227,7 +227,7 @@ describe('plugin host child recommend facade', () => {
           platform: 'darwin',
           arch: 'arm64',
           locale: 'zh-CN',
-          manifest: { name: 'touch-translation' }
+          manifest: { name: 'touch-hosts' }
         }
       },
       { invokeCapability }

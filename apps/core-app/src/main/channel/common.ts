@@ -149,6 +149,7 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
+import { localizePlatformCapability } from '../modules/platform/capability-text'
 import { activeAppService } from '../modules/system/active-app'
 import { wallpaperAdapter } from '../modules/system/wallpaper-adapter'
 import { getAppDestinationNavigationService } from '../modules/app-destination/app-destination-navigation'
@@ -183,6 +184,8 @@ const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
+/** Ceiling on a raw-bytes (`encoding: 'base64'`) read: the largest preview, code and markdown. */
+const READ_FILE_BASE64_MAX_BYTES = 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
 const PLUGIN_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000
@@ -192,17 +195,18 @@ const execFileAsync = promisify(execFile)
  * LaunchServices leaves a rejected promise rather than a handler that never settles.
  */
 const OPEN_WITH_TIMEOUT_MS = 10_000
+// English, like the registry's; `localizePlatformCapability` words them when the list is built.
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
-  description: 'CLI 工具联动能力（Beta）',
+  description: 'Working with the Tuff command-line tool (Beta)',
   scope: 'plugin',
   status: 'beta'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
   name: 'Active App',
-  description: '当前前台应用与窗口上下文读取能力',
+  description: 'Reads the foreground app and its window context',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -210,7 +214,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
 const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
   id: 'platform.selection-capture',
   name: 'Selection Capture',
-  description: '活动应用选中文本抓取能力',
+  description: 'Captures the text selected in the active app',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -218,7 +222,7 @@ const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
 const AUTO_PASTE_CAPABILITY: PlatformCapability = {
   id: 'platform.auto-paste',
   name: 'Auto Paste',
-  description: '向当前焦点应用回写剪贴板内容',
+  description: 'Pastes clipboard content into the focused app',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -226,21 +230,21 @@ const AUTO_PASTE_CAPABILITY: PlatformCapability = {
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: '仅 macOS 提供原生系统分享能力',
+  description: 'Native system sharing, on macOS only',
   scope: 'system',
   status: 'beta'
 }
 const TERMINAL_CAPABILITY: PlatformCapability = {
   id: 'platform.terminal',
   name: 'Terminal Command Runtime',
-  description: '命令进程执行能力（非 PTY 终端）',
+  description: 'Runs commands as child processes, not in a PTY terminal',
   scope: 'system',
   status: 'beta'
 }
 const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
   id: 'platform.permission-deep-link',
   name: 'Permission Deep-Link',
-  description: '系统权限设置检查与跳转能力',
+  description: 'Checks system permission settings and opens them',
   scope: 'system',
   status: 'beta',
   sensitive: true
@@ -248,7 +252,7 @@ const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
 const EVERYTHING_SEARCH_CAPABILITY: PlatformCapability = {
   id: 'platform.everything-search',
   name: 'Everything Search',
-  description: 'Windows Everything 文件搜索后端能力',
+  description: 'Windows file search backend powered by Everything',
   scope: 'system',
   status: 'beta'
 }
@@ -709,17 +713,14 @@ async function listPlatformCapabilities(
     applyCapabilityRuntimePatch(TERMINAL_CAPABILITY, {
       supportLevel: 'best_effort',
       issueCode: 'NO_PTY',
-      reason:
-        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.',
-      limitations: [
-        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
-      ]
+      reason: t('settings.settingPlatformCapabilities.items.terminal.noPty'),
+      limitations: [t('settings.settingPlatformCapabilities.items.terminal.noPty')]
     })
   )
   appendDynamicCapability(
     applyCapabilityRuntimePatch(TUFF_CLI_CAPABILITY, await getTuffCliCapabilityPatch())
   )
-  return capabilities
+  return capabilities.map(localizePlatformCapability)
 }
 
 function isLocale(value: string): value is Locale {
@@ -2536,7 +2537,7 @@ export class CommonChannelModule extends BaseModule {
         if (!win) return { filePath: undefined }
 
         const result = await dialog.showSaveDialog(win, {
-          title: payload?.title ?? 'Save File',
+          title: payload?.title ?? t('nativeDialogs.files.saveFile'),
           defaultPath: payload?.defaultPath,
           filters: payload?.filters
         })
@@ -2604,6 +2605,27 @@ export class CommonChannelModule extends BaseModule {
 
     if (!resolvedPath) {
       throw new Error('Unsupported file source')
+    }
+
+    // Raw bytes for a renderer that decodes them itself (the preview pane's encoding picker). The
+    // reply crosses IPC as JSON, so the bytes travel base64-encoded, and only the head is read: a
+    // preview never needs the rest of a large file. Not cached: the text cache holds decoded UTF-8,
+    // which is exactly what this caller cannot use.
+    if (payload?.encoding === 'base64') {
+      const maxBytes =
+        typeof payload.maxBytes === 'number' && Number.isFinite(payload.maxBytes)
+          ? Math.max(0, Math.trunc(payload.maxBytes))
+          : READ_FILE_BASE64_MAX_BYTES
+      try {
+        const bytes = await getNetworkService().readLocalFileHead(
+          resolvedSource,
+          Math.min(maxBytes, READ_FILE_BASE64_MAX_BYTES)
+        )
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+      } catch (error) {
+        if (allowMissing && isFileMissingError(error)) return ''
+        throw error
+      }
     }
 
     // Preview grants are short-lived bearer capabilities. Never let the

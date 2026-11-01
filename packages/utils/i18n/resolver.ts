@@ -95,7 +95,11 @@ export class I18nResolver {
    * @param str The message string to resolve
    * @param fallbackLocale Fallback locale if message not found in current locale
    */
-  resolve(str: string, fallbackLocale: MessageLocale = 'en'): string {
+  resolve(
+    str: string,
+    preferredLocale?: MessageLocale | string,
+    fallbackLocale: MessageLocale = 'en'
+  ): string {
     if (!isI18nMessage(str)) {
       return str
     }
@@ -106,12 +110,19 @@ export class I18nResolver {
     }
 
     const { key, params } = parsed
+    let targetLocale = this.locale
+    if (preferredLocale) {
+      const normalized = normalizeLocale(preferredLocale)
+      if (normalized) {
+        targetLocale = toShortLocale(normalized)
+      }
+    }
 
-    // Try current locale
-    let message = this.getMessage(key, this.locale)
+    // Try current or preferred locale
+    let message = this.getMessage(key, targetLocale)
 
     // Try fallback locale
-    if (!message && this.locale !== fallbackLocale) {
+    if (!message && targetLocale !== fallbackLocale) {
       message = this.getMessage(key, fallbackLocale)
     }
 

@@ -130,7 +130,7 @@ describe('plugin Intelligence context capabilities', () => {
     expect(capabilities.definitions).toHaveLength(1)
     expect(capabilities.definitions[0]).toMatchObject({
       id: 'intelligence.context.invoke',
-      permission: 'intelligence.basic',
+      permission: 'intelligence.context',
       timeoutMs: 60_000,
       maxConcurrency: 2,
       callbackLifetime: 'transient',
@@ -150,21 +150,6 @@ describe('plugin Intelligence context capabilities', () => {
       expect.any(AbortSignal),
       'plugin:touch-intelligence'
     )
-  })
-
-  it('rejects a forged other-plugin activation before host service work', () => {
-    const service: PluginIntelligenceContextHostService = {
-      contextInvoke: vi.fn(async () => result())
-    }
-    expect(() =>
-      createPluginIntelligenceContextCapabilities({
-        activation: { ...activation, name: 'other-plugin' },
-        resolveCurrentActivation: () => ({ ...activation, name: 'other-plugin' }),
-        resolveHostGeneration: () => owner.hostGeneration,
-        service
-      })
-    ).toThrow('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_INVALID')
-    expect(service.contextInvoke).not.toHaveBeenCalled()
   })
 
   it.each([

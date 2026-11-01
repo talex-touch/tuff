@@ -10,7 +10,6 @@ export interface OmniPanelSelectionRecoveryInput {
   hasSelection: boolean
   selectedText: string
   issueCode?: OmniPanelSelectionIssueCode
-  issueMessage?: string
   supportLevel?: OmniPanelSelectionSupportLevel
 }
 
@@ -31,11 +30,13 @@ export function createOmniPanelSelectionPreview(value: string, maxLength = 24): 
   return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`
 }
 
+/**
+ * The hint under the action grid. An issue is explained by its code alone: the capture's own message
+ * is an English diagnostic, so the panel no longer appends it.
+ */
 export function resolveOmniPanelSelectionRecovery(
   input: OmniPanelSelectionRecoveryInput
 ): OmniPanelSelectionRecoveryHint {
-  const detail = input.issueMessage?.trim() || null
-
   if (input.hasSelection && normalizeSelectionText(input.selectedText)) {
     return {
       tone: 'neutral',
@@ -45,12 +46,24 @@ export function resolveOmniPanelSelectionRecovery(
     }
   }
 
+  // Checked before the support level, which a skipped capture also reports as unsupported. The panel
+  // skips the capture only on macOS without Accessibility permission.
+  if (input.issueCode === 'disabled') {
+    return {
+      tone: 'warning',
+      labelKey: 'corebox.omniPanel.selectionHint.disabled',
+      fallback: 'Allow Accessibility access to read the selected text.',
+      detail: null
+    }
+  }
+
+  // Otherwise this is Linux without xdotool in practice; macOS and Windows attempt the capture.
   if (input.issueCode === 'unsupported' || input.supportLevel === 'unsupported') {
     return {
       tone: 'warning',
       labelKey: 'corebox.omniPanel.selectionHint.unsupported',
-      fallback: 'Selected-text capture is not supported here. Paste text or use clipboard input.',
-      detail
+      fallback: "Can't read the selected text here. On Linux, install xdotool.",
+      detail: null
     }
   }
 
@@ -59,17 +72,7 @@ export function resolveOmniPanelSelectionRecovery(
       tone: 'danger',
       labelKey: 'corebox.omniPanel.selectionHint.failed',
       fallback: 'Selected-text capture failed. Check desktop automation permissions, then retry.',
-      detail
-    }
-  }
-
-  if (input.issueCode === 'disabled') {
-    return {
-      tone: 'warning',
-      labelKey: 'corebox.omniPanel.selectionHint.disabled',
-      fallback:
-        'Selected-text capture is disabled. Enable OmniPanel capture or paste text manually.',
-      detail
+      detail: null
     }
   }
 

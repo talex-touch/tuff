@@ -11,6 +11,7 @@ import {
   mapIndexedWriteFlushExecutorResult
 } from '@talex-touch/utils/search'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
+import type { FileProviderEmbeddingIndexOutcome } from './file-provider-embedding-index-service'
 import {
   IndexMaintenanceDeferredError,
   indexMaintenanceContext
@@ -55,8 +56,14 @@ export interface FileProviderIndexFlushExecutorServiceDeps {
    *
    * Called after the rows are durable, never before: a file that fails to persist must not
    * produce an embedding row pointing at an id the files table does not have.
+   *
+   * A file listed in `retryFileIds` keeps its pending progress row instead of being completed, so
+   * the enrichment retry lane re-reads it; without a capacity check the first persist already
+   * completes the row and there is nothing left to keep.
    */
-  indexEmbeddings?: (entries: IndexWorkerFileResult[]) => Promise<void>
+  indexEmbeddings?: (
+    entries: IndexWorkerFileResult[]
+  ) => Promise<FileProviderEmbeddingIndexOutcome | void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   waitForCapacity?: (maxQueued: number) => Promise<void>
   now?: () => number
@@ -93,6 +100,7 @@ export class FileProviderIndexFlushExecutorService {
       indexedItems: number | null
       embeddingsComplete: boolean
       completionsComplete: boolean
+      retryFileIds: ReadonlySet<number>
     }
   >()
 
@@ -167,7 +175,12 @@ export class FileProviderIndexFlushExecutorService {
             : entries.filter((entry) => !skippedFileIds.has(entry.fileId))
         let stage = this.publicationStages.get(entries)
         if (!stage) {
-          stage = { indexedItems: null, embeddingsComplete: false, completionsComplete: false }
+          stage = {
+            indexedItems: null,
+            embeddingsComplete: false,
+            completionsComplete: false,
+            retryFileIds: new Set()
+          }
           this.publicationStages.set(entries, stage)
         }
         if (stage.indexedItems === null)
@@ -179,7 +192,8 @@ export class FileProviderIndexFlushExecutorService {
         // and a failure here must not fail an otherwise-good flush.
         if (!stage.embeddingsComplete && this.indexEmbeddings && committedEntries.length > 0) {
           try {
-            await this.indexEmbeddings(committedEntries)
+            const outcome = await this.indexEmbeddings(committedEntries)
+            if (outcome) stage.retryFileIds = new Set(outcome.retryFileIds)
           } catch (error) {
             if (error instanceof IndexMaintenanceDeferredError) throw error
             deps.recordStorageFailure?.(error)
@@ -195,10 +209,12 @@ export class FileProviderIndexFlushExecutorService {
           assertFlushAllowed()
           // Image embedding owns its completion transaction. A worker's original
           // pending/processing state must not overwrite that committed outcome.
+          const { retryFileIds } = stage
           const completions = persistEntries
             .filter(
               (entry) =>
                 !skippedFileIds.has(entry.fileId) &&
+                !retryFileIds.has(entry.fileId) &&
                 (entry.progress.status === 'completed' ||
                   entry.progress.status === 'truncated' ||
                   entry.progress.status === 'skipped' ||

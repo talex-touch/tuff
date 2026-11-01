@@ -49,7 +49,7 @@ export class FilePluginProvider implements PluginProvider {
         this.log.error('本地插件文件不存在', {
           meta: { filePath }
         })
-        throw new Error('指定的插件文件不存在')
+        throw new Error('PLUGIN_SOURCE_FILE_NOT_FOUND')
       }
 
       const stats = await fse.stat(filePath)

@@ -83,6 +83,9 @@ vi.mock('../../../core/touch-window', () => ({
   }
 }))
 
+// Labels are worded by main's translator; the keys are what this suite pins down.
+vi.mock('../../../utils/i18n-helper', () => ({ t: (key: string) => key }))
+
 import { openImageTranslatePinWindow } from './image-translate-pin-window'
 
 interface ContextMenuItem {
@@ -106,8 +109,10 @@ function createdWindowOptions(): Record<string, unknown> {
   return options as Record<string, unknown>
 }
 
+// The menu is built when it opens, so each read opens it.
 function menuItems(): ContextMenuItem[] {
-  const template = electronMocks.buildFromTemplate.mock.calls[0]?.[0]
+  webContentsHandler('context-menu')({ preventDefault: vi.fn() })
+  const template = electronMocks.buildFromTemplate.mock.calls.at(-1)?.[0]
   if (!Array.isArray(template)) {
     throw new TypeError('Expected context menu template')
   }
@@ -189,26 +194,27 @@ describe('openImageTranslatePinWindow', () => {
         .map((item) => item.label)
         .filter(Boolean)
     ).toEqual([
-      'Copy Translated Image',
-      'Copy Translation',
-      'Copy Source Text',
-      'Zoom In',
-      'Zoom Out',
-      'Reset Zoom',
-      'Opacity',
-      'Close'
+      'corebox.imageTranslatePin.copyImage',
+      'corebox.imageTranslatePin.copyTranslation',
+      'corebox.imageTranslatePin.copySource',
+      'corebox.imageTranslatePin.zoomIn',
+      'corebox.imageTranslatePin.zoomOut',
+      'corebox.imageTranslatePin.resetZoom',
+      'corebox.imageTranslatePin.opacity',
+      'corebox.imageTranslatePin.close'
     ])
 
-    menuItem('Copy Translated Image').click?.()
-    menuItem('Copy Translation').click?.()
-    menuItem('Copy Source Text').click?.()
-    menuItem('Close').click?.()
+    menuItem('corebox.imageTranslatePin.copyImage').click?.()
+    menuItem('corebox.imageTranslatePin.copyTranslation').click?.()
+    menuItem('corebox.imageTranslatePin.copySource').click?.()
+    menuItem('corebox.imageTranslatePin.close').click?.()
 
     expect(electronMocks.writeImage).toHaveBeenCalledWith(electronMocks.image)
     expect(electronMocks.writeText).toHaveBeenNthCalledWith(1, 'translated text')
     expect(electronMocks.writeText).toHaveBeenNthCalledWith(2, 'source text')
     expect(pinWindowMocks.close).toHaveBeenCalledOnce()
 
+    electronMocks.menu.popup.mockClear()
     const preventDefault = vi.fn()
     webContentsHandler('context-menu')({ preventDefault })
     expect(preventDefault).toHaveBeenCalledOnce()
@@ -218,7 +224,7 @@ describe('openImageTranslatePinWindow', () => {
   it('zooms around the window center within the work area and applies opacity presets', async () => {
     await openImageTranslatePinWindow({ translatedImageBase64: translatedImageBase64() })
 
-    menuItem('Zoom In').click?.()
+    menuItem('corebox.imageTranslatePin.zoomIn').click?.()
     expect(pinWindowMocks.setBounds).toHaveBeenLastCalledWith({
       x: 378,
       y: 124,
@@ -226,7 +232,7 @@ describe('openImageTranslatePinWindow', () => {
       height: 473
     })
 
-    menuItem('Reset Zoom').click?.()
+    menuItem('corebox.imageTranslatePin.resetZoom').click?.()
     expect(pinWindowMocks.setBounds).toHaveBeenLastCalledWith({
       x: 430,
       y: 171,
@@ -234,8 +240,9 @@ describe('openImageTranslatePinWindow', () => {
       height: 378
     })
 
-    submenuItem('Opacity', '70%').click?.()
+    submenuItem('corebox.imageTranslatePin.opacity', '70%').click?.()
     expect(pinWindowMocks.setOpacity).toHaveBeenCalledWith(0.7)
+    expect(submenuItem('corebox.imageTranslatePin.opacity', '70%').checked).toBe(true)
   })
 
   it('handles close, copy, and zoom keyboard shortcuts', async () => {
@@ -248,13 +255,13 @@ describe('openImageTranslatePinWindow', () => {
         .map((item) => item.label)
         .filter(Boolean)
     ).toEqual([
-      'Copy Translated Image',
-      'Copy Translation',
-      'Zoom In',
-      'Zoom Out',
-      'Reset Zoom',
-      'Opacity',
-      'Close'
+      'corebox.imageTranslatePin.copyImage',
+      'corebox.imageTranslatePin.copyTranslation',
+      'corebox.imageTranslatePin.zoomIn',
+      'corebox.imageTranslatePin.zoomOut',
+      'corebox.imageTranslatePin.resetZoom',
+      'corebox.imageTranslatePin.opacity',
+      'corebox.imageTranslatePin.close'
     ])
 
     const keyHandler = webContentsHandler('before-input-event')
@@ -309,13 +316,13 @@ describe('openImageTranslatePinWindow', () => {
         .map((item) => item.label)
         .filter(Boolean)
     ).toEqual([
-      'Copy Translated Image',
-      'Copy Source Text',
-      'Zoom In',
-      'Zoom Out',
-      'Reset Zoom',
-      'Opacity',
-      'Close'
+      'corebox.imageTranslatePin.copyImage',
+      'corebox.imageTranslatePin.copySource',
+      'corebox.imageTranslatePin.zoomIn',
+      'corebox.imageTranslatePin.zoomOut',
+      'corebox.imageTranslatePin.resetZoom',
+      'corebox.imageTranslatePin.opacity',
+      'corebox.imageTranslatePin.close'
     ])
   })
 
@@ -330,7 +337,14 @@ describe('openImageTranslatePinWindow', () => {
       menuItems()
         .map((item) => item.label)
         .filter(Boolean)
-    ).toEqual(['Copy Translated Image', 'Zoom In', 'Zoom Out', 'Reset Zoom', 'Opacity', 'Close'])
+    ).toEqual([
+      'corebox.imageTranslatePin.copyImage',
+      'corebox.imageTranslatePin.zoomIn',
+      'corebox.imageTranslatePin.zoomOut',
+      'corebox.imageTranslatePin.resetZoom',
+      'corebox.imageTranslatePin.opacity',
+      'corebox.imageTranslatePin.close'
+    ])
 
     const preventDefault = vi.fn()
     webContentsHandler('before-input-event')(

@@ -195,7 +195,6 @@ type QuickOpsDiagnosticsFixture = {
 type QuickOpsSessionFixture = {
   id: string
   kind: 'keep-awake' | 'system-awake' | 'timer' | 'pomodoro' | 'screen-clean' | 'stopwatch'
-  title: string
   startedAt: number
   durationMs: number
   expiresAt?: number
@@ -670,10 +669,16 @@ vi.mock('./quick-ops-runtime-host', () => ({
   })
 }))
 
-vi.mock('./quick-ops-session-manager', () => ({
-  formatDuration: formatDurationMock,
-  getSessionDisplayDurationMs: vi.fn((session: { elapsedMs?: number }) => session.elapsedMs ?? 0)
-}))
+vi.mock('./quick-ops-session-manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./quick-ops-session-manager')>()
+  return {
+    formatDuration: formatDurationMock,
+    formatInterfaceDuration: formatDurationMock,
+    formatQuickOpsSessionSnapshots: actual.formatQuickOpsSessionSnapshots,
+    getQuickOpsSessionTitle: actual.getQuickOpsSessionTitle,
+    getSessionDisplayDurationMs: vi.fn((session: { elapsedMs?: number }) => session.elapsedMs ?? 0)
+  }
+})
 
 vi.mock('../../core/runtime-accessor', () => ({
   resolveMainRuntime: vi.fn(() => ({
@@ -1395,7 +1400,6 @@ describe('QuickOpsModule', () => {
       {
         id: 'quick-ops:screen-clean:1',
         kind: 'screen-clean',
-        title: '清洁屏幕',
         startedAt: 1_781_800_000_000,
         durationMs: 60_000,
         windows: [{ id: 1 }]
@@ -1540,7 +1544,6 @@ describe('QuickOpsModule', () => {
       {
         id: 'quick-ops:timer:1',
         kind: 'timer',
-        title: '计时器',
         startedAt: 1_781_800_000_000,
         durationMs: 90_000,
         expiresAt: Date.now() + 90_000
@@ -1548,7 +1551,6 @@ describe('QuickOpsModule', () => {
       {
         id: 'quick-ops:stopwatch:1',
         kind: 'stopwatch',
-        title: '秒表',
         startedAt: 1_781_800_000_000,
         durationMs: 0,
         pausedAt: 1_781_800_006_000,
@@ -1605,7 +1607,6 @@ describe('QuickOpsModule', () => {
       {
         id: 'quick-ops:timer:1',
         kind: 'timer',
-        title: '计时器',
         startedAt: 1_781_800_000_000,
         durationMs: 90_000,
         expiresAt: Date.now() + 90_000
@@ -1613,7 +1614,6 @@ describe('QuickOpsModule', () => {
       {
         id: 'quick-ops:screen-clean:1',
         kind: 'screen-clean',
-        title: '清洁屏幕',
         startedAt: 1_781_800_000_000,
         durationMs: 60_000,
         windows: [{ id: 1 }, { id: 2 }]
@@ -2020,7 +2020,7 @@ describe('QuickOpsModule', () => {
     await expect(handler?.({ text: 'hash' })).resolves.toEqual({
       state: 'degraded',
       degradedReason: 'file-hash-missing-file',
-      message: '未找到要计算 Hash 的文件'
+      message: '未找到要计算哈希的文件'
     })
     expect(computeFileHashes).not.toHaveBeenCalled()
   })

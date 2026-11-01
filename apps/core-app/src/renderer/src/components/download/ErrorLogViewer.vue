@@ -84,8 +84,8 @@ async function refreshLogs() {
       toast.error(t('download.load_logs_failed'))
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(`${t('download.load_logs_failed')}: ${message}`)
+    downloadErrorLog.error('Failed to load download logs:', error)
+    toast.error(t('download.load_logs_failed'))
   } finally {
     loading.value = false
   }
@@ -128,8 +128,8 @@ async function confirmClearLogs(): Promise<boolean> {
       toast.error(t('download.clear_logs_failed'))
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(`${t('download.clear_logs_failed')}: ${message}`)
+    downloadErrorLog.error('Failed to clear download logs:', error)
+    toast.error(t('download.clear_logs_failed'))
   }
   return true
 }

@@ -171,8 +171,8 @@ watch(
           <p>
             {{
               t('plugin.structure.files.summary', {
-                files: fileCount,
-                directories: directoryCount
+                files: t('plugin.structure.files.fileCount', { count: fileCount }),
+                directories: t('plugin.structure.files.folderCount', { count: directoryCount })
               })
             }}
           </p>

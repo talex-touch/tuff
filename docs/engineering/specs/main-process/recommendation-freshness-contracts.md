@@ -65,7 +65,11 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   (`cacheInvalidatedAt` rejects older rows) + generation counter (a recommend() started
   before invalidation may not write back to any layer). The aux `recommendation_cache`
   row deletion runs with `dropPolicy: 'drop'` — it is cleanup, never the mechanism.
-  Index-commit trigger fires only for `providerIds` containing `APP_INDEXED_SOURCE_ID`.
+  An index commit triggers it from `search-core`: a commit whose `providerIds` contain
+  `APP_INDEXED_SOURCE_ID` at once, a file-source commit through a 60s leading + trailing throttle
+  (the first commit of a window now; the ones inside it as one refresh when the window closes, so
+  a file saved just after an invalidation is not left out of the grid). See
+  [index-commit-refresh-contracts.md](index-commit-refresh-contracts.md).
 - **Candidate-shape cache versions.** Persisted keys begin with `reco-v<schemaVersion>` (currently
   4), followed by local date/hour/minute, time-source availability, source-app identity, semantic
   settings and pin signature. A different app or clock window must not reuse learned-scene recall.
@@ -201,7 +205,8 @@ never-overwrite), engine tests "treats an app as new only when…" (four-quadran
 "hands ranking back to frecency…", "orders the cold-start catalog by install stamp
 rather than index time" (discriminating fixture: ctime and stamp point opposite ways —
 a stub without `getFileExtensionsByFileIds` silently tests the degraded path),
-`search-core.contracts` app-vs-file commit invalidation, exposure slice isolation tests.
+`search-core.contracts` app-vs-file commit invalidation and the trailing file-commit invalidation,
+exposure slice isolation tests.
 For the source union / evidence contracts (09-04):
 `recommendation-presentation.test.ts` "has a badge for every source the scorer can record"
 (the earlier `item-rebuilder.test.ts` "distinct badge and reason" assertion no longer

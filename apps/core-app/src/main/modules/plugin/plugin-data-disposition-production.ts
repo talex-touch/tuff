@@ -11,6 +11,7 @@ import { lstatSync, realpathSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
+import { t } from '../../utils/i18n-helper'
 import {
   countSecureStoreValuesByPrefixes,
   deleteSecureStoreValuesByPrefixes
@@ -223,10 +224,10 @@ export function createProductionPluginDataDispositionCoordinator(
   const ordinaryExporter = createPrivacyCategoryExporter({
     showSaveDialog: async () => {
       const result = await dialog.showSaveDialog({
-        title: 'Export plugin data',
+        title: t('nativeDialogs.files.exportPluginData'),
         defaultPath: 'talex-touch-plugin-data-export.json',
         properties: ['createDirectory', 'showOverwriteConfirmation'],
-        filters: [{ name: 'Talex Touch Privacy Export', extensions: ['json'] }]
+        filters: [{ name: t('nativeDialogs.files.privacyExportFilter'), extensions: ['json'] }]
       })
       return Object.freeze({
         canceled: result.canceled,
@@ -237,10 +238,10 @@ export function createProductionPluginDataDispositionCoordinator(
   const secretFiles = createMainPrivacySecretFileAdapter({
     showSaveDialog: async () => {
       const result = await dialog.showSaveDialog({
-        title: 'Export encrypted plugin credentials',
+        title: t('nativeDialogs.files.exportPluginCredentials'),
         defaultPath: 'talex-touch-plugin-secret-backup.json',
         properties: ['createDirectory', 'showOverwriteConfirmation'],
-        filters: [{ name: 'Talex Touch Secret Backup', extensions: ['json'] }]
+        filters: [{ name: t('nativeDialogs.files.secretBackupFilter'), extensions: ['json'] }]
       })
       return Object.freeze({
         canceled: result.canceled,

@@ -1,5 +1,6 @@
 import type { AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { ConversationError } from './conversation-error-display'
 import type { ConversationMessage, ConversationMessageStatus } from './useHomeConversation'
 
 /**
@@ -24,13 +25,101 @@ export interface ActivityTool {
   error?: string
 }
 
+export interface ActivityTokens {
+  prompt?: number
+  completion?: number
+  total?: number
+}
+
+export interface ActivityRequestDetail {
+  prompt: string
+  userMessageId?: string
+  coordinator?: string
+  model?: string
+  provider?: string
+  reasoningEffort?: string
+  attachments?: Array<{
+    name?: string
+    kind?: string
+    size?: number
+    type?: string
+  }>
+  modelAttachments?: unknown[]
+  voice?: {
+    durationMs?: number
+    url?: string
+  }
+  contextTokens?: number
+  contextCharacters?: number
+  contextMessagesCount?: number
+  contextMessages?: Array<{
+    role: string
+    content: string
+    attachments?: Array<{ name?: string; kind?: string; size?: number }>
+  }>
+}
+
+export interface ActivityResponseDetail {
+  messageId: string
+  status: ConversationMessageStatus
+  content: string
+  model?: string
+  provider?: string
+  latencyMs?: number
+  ttftMs?: number
+  tokens?: ActivityTokens
+  tools?: ActivityTool[]
+  parts?: unknown[]
+  error?: ConversationError
+}
+
 export interface ActivityTurn {
   messageId: string
   messageIndex: number
   status: ConversationMessageStatus
   provider?: string
   model?: string
-  errorCode?: string
+  coordinator?: string
+  latencyMs?: number
+  ttftMs?: number
+  tokens?: ActivityTokens
+  userPrompt?: string
+  request: ActivityRequestDetail
+  response: ActivityResponseDetail
+  rawPayload: Record<string, unknown>
+  /** Why a failed reply ended, as main stored it on the message. */
+  error?: ConversationError
+  tools: ActivityTool[]
+}
+
+export interface ActivityResponseDetail {
+  messageId: string
+  status: ConversationMessageStatus
+  content: string
+  model?: string
+  provider?: string
+  latencyMs?: number
+  tokens?: ActivityTokens
+  tools?: ActivityTool[]
+  parts?: unknown[]
+  error?: ConversationError
+}
+
+export interface ActivityTurn {
+  messageId: string
+  messageIndex: number
+  status: ConversationMessageStatus
+  provider?: string
+  model?: string
+  coordinator?: string
+  latencyMs?: number
+  tokens?: ActivityTokens
+  userPrompt?: string
+  request: ActivityRequestDetail
+  response: ActivityResponseDetail
+  rawPayload: Record<string, unknown>
+  /** Why a failed reply ended, as main stored it on the message. */
+  error?: ConversationError
   tools: ActivityTool[]
 }
 
@@ -86,13 +175,113 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
         error: part.status === 'error' ? part.error : undefined
       })
     }
+    let userMessage: ConversationMessage | undefined
+    let userPrompt: string | undefined
+    for (let u = index - 1; u >= 0; u -= 1) {
+      if (messages[u]?.role === 'user') {
+        userMessage = messages[u]
+        userPrompt = messages[u]?.content?.trim()
+        break
+      }
+    }
+
+    const tokens: ActivityTokens | undefined =
+      message.meta?.totalTokens !== undefined ||
+      message.meta?.promptTokens !== undefined ||
+      message.meta?.completionTokens !== undefined
+        ? {
+            prompt: message.meta?.promptTokens,
+            completion: message.meta?.completionTokens,
+            total: message.meta?.totalTokens
+          }
+        : undefined
+
+    const userAttachments = userMessage?.attachments?.map((att) => ({
+      name: att.name,
+      kind: att.kind,
+      size: att.kind === 'file' ? att.size : undefined,
+      type: att.kind === 'file' ? att.mime : undefined
+    }))
+
+    const contextMessages = messages.slice(0, index).map((m) => ({
+      role: m.role,
+      content: m.content,
+      ...(m.attachments?.length
+        ? {
+            attachments: m.attachments.map((a) => ({
+              name: a.name,
+              kind: a.kind,
+              size: a.kind === 'file' ? a.size : undefined
+            }))
+          }
+        : {})
+    }))
+
+    const contextCharacters = contextMessages.reduce((sum, m) => sum + m.content.length, 0)
+    const ttftMs = typeof message.meta?.ttftMs === 'number' ? message.meta.ttftMs : undefined
+
+    const request: ActivityRequestDetail = {
+      prompt: userPrompt ?? '',
+      userMessageId: userMessage?.id,
+      coordinator: 'Tuff Coordinator',
+      model: message.meta?.model,
+      provider: message.meta?.provider,
+      reasoningEffort: message.meta?.reasoningRequested,
+      attachments: userAttachments,
+      modelAttachments: userMessage?.modelAttachments,
+      voice: userMessage?.voice,
+      contextTokens: tokens?.prompt,
+      contextCharacters,
+      contextMessagesCount: contextMessages.length,
+      contextMessages
+    }
+
+    const response: ActivityResponseDetail = {
+      messageId: message.id,
+      status: message.status,
+      content: message.content,
+      model: message.meta?.model,
+      provider: message.meta?.provider,
+      latencyMs: message.meta?.latencyMs,
+      ttftMs,
+      tokens,
+      tools: [...byCall.values()],
+      parts: message.parts,
+      error: message.error
+    }
+
+    const rawPayload: Record<string, unknown> = {
+      request,
+      response,
+      id: message.id,
+      role: message.role,
+      status: message.status,
+      content: message.content,
+      model: message.meta?.model,
+      provider: message.meta?.provider,
+      latencyMs: message.meta?.latencyMs,
+      ttftMs,
+      tokens,
+      error: message.error,
+      meta: message.meta,
+      parts: message.parts
+    }
+
     turns.push({
       messageId: message.id,
       messageIndex: index,
       status: message.status,
       provider: message.meta?.provider,
       model: message.meta?.model,
-      errorCode: message.error?.code,
+      coordinator: 'Tuff Coordinator',
+      latencyMs: message.meta?.latencyMs,
+      ttftMs,
+      tokens,
+      userPrompt,
+      request,
+      response,
+      rawPayload,
+      error: message.error,
       tools: [...byCall.values()]
     })
   }

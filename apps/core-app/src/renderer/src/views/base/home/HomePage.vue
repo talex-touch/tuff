@@ -51,6 +51,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
@@ -58,6 +59,7 @@ import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
+import { describeToolCallError } from '~/modules/conversation/tool-call-error'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
 import {
@@ -73,8 +75,8 @@ import {
   generateConversationTitle,
   shouldGenerateTitle
 } from '~/modules/conversation/conversation-title'
+import type { ConversationError } from '~/modules/conversation/conversation-error-display'
 import {
-  CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
   CONVERSATION_ERROR_USAGE_LIMIT_REACHED
 } from '~/modules/conversation/conversation-error-display'
@@ -98,6 +100,7 @@ import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
+import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
@@ -106,6 +109,7 @@ import {
   resolveIntelligenceErrorRecovery,
   USAGE_LIMITS_ROUTE
 } from '~/modules/intelligence/ai-error-recovery'
+import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolvedTheme } from '~/modules/storage/theme-style'
@@ -733,7 +737,8 @@ function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speak
 function segmentsOf(message: ConversationMessage): MessageSegment[] {
   return toMessageSegments(message.parts, message.status === 'streaming', {
     thinking: t('home.thinking'),
-    interrupted: t('home.toolInterrupted')
+    interrupted: t('home.toolInterrupted'),
+    toolError: (error) => describeToolCallError(error, t)
   })
 }
 
@@ -917,10 +922,8 @@ function workspaceErrorText(failure: AgentWorkspaceError): string {
 /** A workspace call the reader made failed: say what Main said, in their language. */
 function reportWorkspaceError(failure: AgentWorkspaceError, action: string): void {
   homeLog.warn(`Workspace ${action} rejected`, failure.detail)
-  toast.error(
-    workspaceErrorText(failure),
-    failure.code === 'unknown' && failure.detail ? { description: failure.detail } : undefined
-  )
+  const description = failure.code === 'unknown' ? describeFailure(failure.detail, t, '') : ''
+  toast.error(workspaceErrorText(failure), description ? { description } : undefined)
 }
 
 function reportSubmitError(error: unknown): void {
@@ -936,6 +939,8 @@ function reportSubmitError(error: unknown): void {
 function agentProfileMissing(): boolean {
   const settings = workspace.settings.value
   if (settings.mode !== 'agent') return false
+  // Built-in Tuff Coordinator is always available
+  if (!settings.profileId || settings.profileId === 'default-pi') return false
   const profile = workspace.profiles.value.find((entry) => entry.id === settings.profileId)
   return !profile?.enabled
 }
@@ -1306,12 +1311,17 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   dictation.cancel()
 }
 
-function resolveErrorTitle(code: string | undefined): string {
-  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE) return t('home.error.noProvider')
-  if (code === CONVERSATION_ERROR_EMPTY_RESPONSE) return t('home.error.empty')
-  if (code === 'WORKSPACE_TURN_INTERRUPTED')
-    return t('home.workspace.error.WORKSPACE_TURN_INTERRUPTED')
-  return t('home.error.generic')
+const { classifyTurnFailure, resolveErrorTitle } = useTurnFailureWording()
+
+/**
+ * What to do about a failure the intelligence layer named. Not for a provider's own text, passed on
+ * as thrown or named `UNKNOWN`: it can say "quota" about the provider's plan, where the advice is
+ * about Nexus credits.
+ */
+function resolveErrorAdvice(error: ConversationError | undefined): string {
+  if (!error || !isIntelligenceErrorCode(error.code) || error.code === 'UNKNOWN') return ''
+  const recovery = classifyTurnFailure(error)
+  return recovery && recovery.code !== 'provider' ? recovery.detail : ''
 }
 
 function resolveErrorReportCode(error: { code?: string } | undefined): string {
@@ -1347,10 +1357,14 @@ function openUsageLimits(): void {
 /**
  * Retrying a missing provider reruns the same failure forever, so that one case swaps the retry for
  * a way out. `/setting/intelligence/channels` is where a provider is actually enabled — the
- * intelligence settings page only cross-links to it.
+ * intelligence settings page only cross-links to it. Its credentials are fixed there too.
  */
-function isProviderUnavailable(code: string | undefined): boolean {
-  return code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
+function isProviderUnavailable(error: ConversationError | undefined): boolean {
+  const code = error?.code
+  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE || code === 'WORKSPACE_PROVIDER_UNAVAILABLE')
+    return true
+  const kind = classifyTurnFailure(error)?.code
+  return kind === 'provider' || kind === 'credentials'
 }
 
 function openProviderSettings(): void {
@@ -2012,6 +2026,82 @@ const activityTurns = computed(() => buildActivityTurns(messages.value))
 /** The routed model's own limits from its effective binding; auto routing knows none. */
 const modelLimits = computed(() => toHomeModelLimits(modelScope.resolvedChoice.value?.binding))
 
+const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
+
+function formatMetricLatency(ms?: number): string {
+  if (ms === undefined || ms === null || !Number.isFinite(ms)) return ''
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function calculateTokenSpeed(message: ConversationMessage): number | null {
+  const latency = message.meta?.latencyMs
+  if (!latency || latency < 200) return null
+  const tokens = message.meta?.completionTokens ?? message.meta?.totalTokens
+  if (!tokens || tokens <= 0) return null
+  const seconds = latency / 1000
+  return Math.round(tokens / seconds)
+}
+
+function metricTokensTitle(message: ConversationMessage): string {
+  const meta = message.meta
+  const prompt = meta?.promptTokens ?? 0
+  const completion = meta?.completionTokens ?? 0
+  const total = meta?.totalTokens ?? 0
+  return `输入: ${prompt} · 输出: ${completion} · 总计: ${total}`
+}
+
+function metricLatencyTitle(message: ConversationMessage): string {
+  const meta = message.meta
+  const latency = meta?.latencyMs ? formatMetricLatency(meta.latencyMs) : ''
+  const ttft = meta?.ttftMs ? formatMetricLatency(meta.ttftMs) : ''
+  if (ttft) {
+    return `总耗时: ${latency} · 首字响应 (TTFT): ${ttft}`
+  }
+  return `耗时: ${latency}`
+}
+
+const activeFooterMessageIds = ref<Set<string>>(new Set())
+const footerTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function revealTurnFooter(messageId: string): void {
+  activeFooterMessageIds.value.add(messageId)
+  const existing = footerTimers.get(messageId)
+  if (existing) clearTimeout(existing)
+  const timer = setTimeout(() => {
+    activeFooterMessageIds.value.delete(messageId)
+    footerTimers.delete(messageId)
+  }, 4500)
+  footerTimers.set(messageId, timer)
+}
+
+function isTurnFooterResting(message: ConversationMessage): boolean {
+  if (activeFooterMessageIds.value.has(message.id)) return false
+  return true
+}
+
+watch(
+  () => messages.value.map((m) => `${m.id}:${m.status}`).join(';'),
+  (_current, previous) => {
+    if (!previous) return
+    const prevMap = new Map(previous.split(';').map((s) => s.split(':') as [string, string]))
+    for (const msg of messages.value) {
+      if (
+        msg.role === 'assistant' &&
+        msg.status === 'complete' &&
+        prevMap.get(msg.id) !== 'complete'
+      ) {
+        revealTurnFooter(msg.id)
+      }
+    }
+  }
+)
+
+onScopeDispose(() => {
+  for (const timer of footerTimers.values()) clearTimeout(timer)
+  footerTimers.clear()
+})
+
 // ============================================================================
 // Command layer
 // ============================================================================
@@ -2369,18 +2459,23 @@ onBeforeUnmount(() => disposeCommands?.())
                         <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
                         <div class="HomePage-ErrorBody">
                           <p class="HomePage-ErrorTitle">
-                            {{ resolveErrorTitle(message.error?.code) }}
+                            {{ resolveErrorTitle(message.error) }}
+                          </p>
+                          <p v-if="resolveErrorAdvice(message.error)" class="HomePage-ErrorDetail">
+                            {{ resolveErrorAdvice(message.error) }}
                           </p>
                           <p class="HomePage-ErrorReport" data-testid="home-error-report">
                             <span
                               >{{ t('home.error.codeLabel') }}:
                               {{ resolveErrorReportCode(message.error) }}</span
                             >
-                            <span>{{ resolveErrorReportDetail(message.error) }}</span>
+                            <span v-if="!isStoppedTurn(message.error)">{{
+                              resolveErrorReportDetail(message.error)
+                            }}</span>
                           </p>
                         </div>
                         <button
-                          v-if="isProviderUnavailable(message.error?.code)"
+                          v-if="isProviderUnavailable(message.error)"
                           class="HomePage-RetryBtn"
                           type="button"
                           @click="openProviderSettings"
@@ -2399,34 +2494,91 @@ onBeforeUnmount(() => disposeCommands?.())
 
                       <!-- Surfaces out of a blur once the answer settles; the last
                            reply keeps it on show, older ones reveal on hover. -->
-                      <TxMessageActions
+                      <div
                         v-if="message.status === 'complete'"
-                        class="HomePage-MsgActions"
-                        :class="{ 'is-resting': index !== messages.length - 1 }"
-                        :copy-text="message.content"
-                        :regenerable="index === messages.length - 1 && !isStreaming"
-                        :speakable="!!message.content"
-                        :speak-state="speakStateOf(message)"
-                        :copy-label="t('home.copy')"
-                        :copied-label="t('home.copied')"
-                        :regenerate-label="t('home.regenerate')"
-                        :speak-label="t('home.speak')"
-                        :stop-speak-label="t('home.speakStop')"
-                        @regenerate="conversation.retry()"
-                        @speak="toggleSpeak(message)"
+                        class="HomePage-TurnFooter"
+                        :class="{ 'is-resting': isTurnFooterResting(message) }"
                       >
-                        <button
-                          v-if="canBranchFrom(message, index)"
-                          class="tx-message-actions__btn"
-                          type="button"
-                          :disabled="branching"
-                          :title="t('home.workspace.fork.fromHere')"
-                          :aria-label="t('home.workspace.fork.fromHere')"
-                          @click="branchTo({ messageId: message.id })"
+                        <TxMessageActions
+                          class="HomePage-MsgActions"
+                          :copy-text="message.content"
+                          :regenerable="index === messages.length - 1 && !isStreaming"
+                          :speakable="!!message.content"
+                          :speak-state="speakStateOf(message)"
+                          :copy-label="t('home.copy')"
+                          :copied-label="t('home.copied')"
+                          :regenerate-label="t('home.regenerate')"
+                          :speak-label="t('home.speak')"
+                          :stop-speak-label="t('home.speakStop')"
+                          @regenerate="conversation.retry()"
+                          @speak="toggleSpeak(message)"
                         >
-                          <span class="i-ri-git-branch-line" aria-hidden="true" />
-                        </button>
-                      </TxMessageActions>
+                          <button
+                            v-if="canBranchFrom(message, index)"
+                            class="tx-message-actions__btn"
+                            type="button"
+                            :disabled="branching"
+                            :title="t('home.workspace.fork.fromHere')"
+                            :aria-label="t('home.workspace.fork.fromHere')"
+                            @click="branchTo({ messageId: message.id })"
+                          >
+                            <span class="i-ri-git-branch-line" aria-hidden="true" />
+                          </button>
+                        </TxMessageActions>
+
+                        <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
+                        <div
+                          v-if="
+                            showTurnMetrics &&
+                            (message.meta?.latencyMs ||
+                              message.meta?.model ||
+                              message.meta?.totalTokens)
+                          "
+                          class="HomePage-TurnMetrics"
+                        >
+                          <!-- 耗时 (Latency) -->
+                          <span
+                            v-if="message.meta?.latencyMs"
+                            class="HomePage-MetricTag"
+                            :title="metricLatencyTitle(message)"
+                          >
+                            <span class="i-ri-time-line" aria-hidden="true" />
+                            <span>{{ formatMetricLatency(message.meta.latencyMs) }}</span>
+                          </span>
+
+                          <!-- Tokens 与 速度 (Tokens & Speed) -->
+                          <span
+                            v-if="message.meta?.totalTokens"
+                            class="HomePage-MetricTag"
+                            :title="metricTokensTitle(message)"
+                          >
+                            <span class="i-ri-database-2-line" aria-hidden="true" />
+                            <span>{{ message.meta.totalTokens }} tokens</span>
+                            <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
+                              >({{ calculateTokenSpeed(message) }} t/s)</span
+                            >
+                          </span>
+
+                          <!-- 模型 (Model) -->
+                          <span
+                            v-if="message.meta?.model"
+                            class="HomePage-MetricTag is-model"
+                            :title="t('home.workspace.activity.metrics.model')"
+                          >
+                            <span class="i-ri-sparkling-line" aria-hidden="true" />
+                            <span>{{ message.meta.model }}</span>
+                          </span>
+
+                          <!-- 调度器 (Coordinator) -->
+                          <span
+                            class="HomePage-MetricTag"
+                            :title="t('home.workspace.activity.metrics.coordinator')"
+                          >
+                            <span class="i-ri-robot-2-line" aria-hidden="true" />
+                            <span>{{ message.meta?.coordinator || 'Tuff Coordinator' }}</span>
+                          </span>
+                        </div>
+                      </div>
                     </template>
                   </div>
                 </div>
@@ -3319,19 +3471,71 @@ onBeforeUnmount(() => disposeCommands?.())
   }
 }
 
-.HomePage-MsgActions {
-  margin-top: 2px;
+.HomePage-TurnFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  width: 100%;
+  opacity: 1;
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Older messages keep a quiet surface; the bar returns under the pointer. */
   &.is-resting {
     opacity: 0;
-    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
   }
 }
 
-.HomePage-Message:hover .HomePage-MsgActions.is-resting,
-.HomePage-MsgActions.is-resting:focus-within {
+.HomePage-Message:hover .HomePage-TurnFooter.is-resting,
+.HomePage-TurnFooter.is-resting:focus-within {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.HomePage-MsgActions {
+  margin-top: 0;
+}
+
+.HomePage-TurnMetrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.HomePage-MetricTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 11px;
+  font-family: var(--shell-font-mono, monospace);
+  line-height: 1.2;
+  user-select: none;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--shell-text);
+  }
+
+  &.is-model {
+    color: var(--shell-text-muted);
+
+    &:hover {
+      color: var(--shell-text);
+    }
+  }
+}
+
+.HomePage-MetricSpeed {
+  color: var(--shell-primary);
+  font-weight: 500;
+  margin-left: 2px;
 }
 
 .HomePage-Error {

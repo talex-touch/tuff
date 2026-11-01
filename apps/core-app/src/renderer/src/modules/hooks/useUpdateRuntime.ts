@@ -17,7 +17,7 @@ import {
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
 import { isMainWindow, useUpdateSdk } from '@talex-touch/utils/renderer'
-import { h, readonly, ref, shallowRef } from 'vue'
+import { computed, h, readonly, ref, shallowRef } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
@@ -65,6 +65,16 @@ let updateListenerInitialized = false
 const updateRuntimeLog = createRendererLogger('useUpdateRuntime')
 const lifecycleSnapshotState = shallowRef<UpdateLifecycleSnapshot | null>(null)
 const lifecycleSnapshot = readonly(lifecycleSnapshotState)
+
+const restartingForUpdateInternal = ref(false)
+export const isRestartingForUpdate = computed(() => {
+  const phase = lifecycleSnapshotState.value?.phase
+  return (
+    restartingForUpdateInternal.value ||
+    phase === 'install-scheduled' ||
+    phase === 'handoff-started'
+  )
+})
 
 function acceptUpdateLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): UpdateLifecycleSnapshot {
   const current = lifecycleSnapshotState.value
@@ -542,22 +552,34 @@ export function useUpdateRuntime() {
         acceptUpdateLifecycleSnapshot(response.snapshot)
       }
       if (!response.success) {
-        throw new Error(response.error || t('common.unknownError'))
+        updateRuntimeLog.error('Download was refused or failed', {
+          errorCode: response.errorCode,
+          error: response.error
+        })
+        toast.error(describeDownloadFailure(response.errorCode))
+        return false
       }
       toast.success(t('update.download_started'))
       return true
     } catch (downloadError) {
       updateRuntimeLog.error('Download failed', downloadError)
-      toast.error(
-        t('update.download_failed_with_reason', {
-          reason: downloadError instanceof Error ? downloadError.message : t('common.unknownError')
-        })
-      )
+      toast.error(describeDownloadFailure())
       return false
     }
   }
 
+  /**
+   * The toast for a download main refused or could not start. Main's `error` is an English
+   * diagnostic and is logged instead; only a release main no longer offers has more to say.
+   */
+  function describeDownloadFailure(errorCode?: string): string {
+    return errorCode === 'UPDATE_DOWNLOAD_REJECTED'
+      ? t('update.download_unavailable')
+      : t('update.download_start_failed')
+  }
+
   async function installDownloadedUpdate(taskId?: string): Promise<boolean> {
+    restartingForUpdateInternal.value = true
     try {
       const response = await sendRequest(
         'update:install',
@@ -568,17 +590,18 @@ export function useUpdateRuntime() {
         acceptUpdateLifecycleSnapshot(response.snapshot)
       }
       if (!response.success) {
-        const reason =
-          response.errorCode === 'MAC_UPDATE_DESTINATION_NOT_WRITABLE'
-            ? t('settings.settingUpdate.messages.macSilentUpdateNotWritable')
-            : response.errorCode === 'MAC_UPDATE_BUILD_UNTRUSTED'
-              ? t('settings.settingUpdate.messages.macSilentUpdateUntrusted')
-              : response.error || t('common.unknownError')
-        throw new Error(reason)
+        restartingForUpdateInternal.value = false
+        updateRuntimeLog.error('Install was refused or failed', {
+          errorCode: response.errorCode,
+          error: response.error
+        })
+        toast.error(describeInstallFailure(response.errorCode))
+        return false
       }
       toast.success(t('settings.settingUpdate.messages.installStarted'))
       return true
     } catch (installError) {
+      restartingForUpdateInternal.value = false
       if (
         installError instanceof UpdateRequestTimeoutError &&
         installError.channel === 'update:install'
@@ -589,12 +612,27 @@ export function useUpdateRuntime() {
       }
 
       updateRuntimeLog.error('Install update failed', installError)
-      toast.error(
-        t('settings.settingUpdate.messages.installFailedWithReason', {
-          reason: installError instanceof Error ? installError.message : t('common.unknownError')
-        })
-      )
+      toast.error(describeInstallFailure())
       return false
+    }
+  }
+
+  /**
+   * The toast for an install main refused or could not start. Main's `error` is an English
+   * diagnostic and is logged instead; the macOS blockers main names by code say what to do.
+   */
+  function describeInstallFailure(errorCode?: string): string {
+    switch (errorCode) {
+      case 'MAC_UPDATE_DESTINATION_NOT_WRITABLE':
+        return t('settings.settingUpdate.messages.installFailedWithReason', {
+          reason: t('settings.settingUpdate.messages.macSilentUpdateNotWritable')
+        })
+      case 'MAC_UPDATE_BUILD_UNTRUSTED':
+        return t('settings.settingUpdate.messages.installFailedWithReason', {
+          reason: t('settings.settingUpdate.messages.macSilentUpdateUntrusted')
+        })
+      default:
+        return t('settings.settingUpdate.messages.installFailed')
     }
   }
 
@@ -747,6 +785,7 @@ export function useUpdateRuntime() {
     checkApplicationUpgrade,
     handleDownloadUpdate,
     installDownloadedUpdate,
+    isRestartingForUpdate,
     handleIgnoreVersion,
     getUpdateSettings,
     updateSettings,

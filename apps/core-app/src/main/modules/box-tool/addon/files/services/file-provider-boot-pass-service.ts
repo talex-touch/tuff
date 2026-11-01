@@ -1,10 +1,13 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import {
   IndexedSourceScanReasons,
   type IndexedSourceRecord,
   type IndexedSourceRecordBatch
 } from '@talex-touch/utils/search'
-import { and, eq, gt, inArray } from 'drizzle-orm'
+import { and, eq, gt, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../../../db/db-write'
 import { getStartupDegradeWindowRemainingMs } from '../../../../../db/runtime-flags'
@@ -12,13 +15,21 @@ import { config as configSchema, files as filesSchema, fileTypeIs } from '../../
 import type { DbUtils } from '../../../../../db/utils'
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import { searchIndexWriter } from '../../../search-engine/search-index-writer'
-import { chunkArray } from '../constants'
+import { chunkArray, FILE_CONTENT_MAX_CHARS, FILE_CONTENT_TOO_LONG_REASON } from '../constants'
 import type { FileIndexedSourceRuntimeMutationDelegate } from '../file-provider-index-contracts'
+import { findLinkedWorktreeHolding } from '../file-traversal-policy'
 import { shouldBootstrapFileReindex } from './file-provider-bootstrap-reindex'
+import {
+  FileProviderHotCatchupService,
+  HOT_CATCHUP_KNOWN_FOLDER_NAMES,
+  HOT_CATCHUP_RETRY_DELAYS_MS
+} from './file-provider-hot-catchup-service'
 import {
   FILE_KEYWORD_BACKFILL_VERSION,
   FileProviderKeywordBackfillService
 } from './file-provider-keyword-backfill-service'
+import { FileProviderEmbeddingBlobMigrationService } from './file-provider-embedding-blob-migration-service'
+import { FileProviderOverlongContentCleanupService } from './file-provider-overlong-content-cleanup-service'
 import type { FileProviderMaintenanceService } from './file-provider-maintenance-service'
 import {
   FileProviderPathNormalizationService,
@@ -34,6 +45,8 @@ const FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS = 30_000
 const FILE_PATH_NORMALIZATION_CONFIG_KEY = 'file_provider_path_normalization_version'
 const FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS = 30_000
 const FILE_KEYWORD_BACKFILL_CONFIG_KEY = 'file_provider_keyword_schema_version'
+const FILE_EMBEDDING_BLOB_CONFIG_KEY = 'file_provider_embedding_blob_version'
+const FILE_OVERLONG_CONTENT_CONFIG_KEY = 'file_provider_overlong_content_cleanup_version'
 
 export interface FileProviderBootPassServiceDeps {
   sourceId: string
@@ -45,7 +58,7 @@ export interface FileProviderBootPassServiceDeps {
   getRuntimeMutationDelegate: () => FileIndexedSourceRuntimeMutationDelegate
   /** Lazy: tests swap the maintenance service after construction. */
   getMaintenance: () => FileProviderMaintenanceService
-  getWatchRootCount: () => number
+  getWatchPaths: () => readonly string[]
   countIndexedRows: (reason: string) => Promise<number>
   mapRecord: (row: FileRecord) => IndexedSourceRecord
   emitRecordBatch: (batch: IndexedSourceRecordBatch) => Promise<void>
@@ -61,6 +74,11 @@ export interface FileProviderBootPassServiceDeps {
 export class FileProviderBootPassService {
   /** Once-per-boot guard for the split-topology bootstrap reindex net. */
   private bootstrapReindexChecked = false
+  /** Once-per-boot guard for the hot-directory catch-up; its repeats are counted separately. */
+  private hotCatchupStarted = false
+  private hotCatchup: FileProviderHotCatchupService | null = null
+  private hotCatchupPasses = 0
+  private hotCatchupRetryTimer: NodeJS.Timeout | null = null
   /** Once-per-boot guard for the NFC path repair pass. */
   private pathNormalizationScheduled = false
   /** Set after the repair's first attempt, successful or not. */
@@ -71,6 +89,8 @@ export class FileProviderBootPassService {
   private keywordBackfillTimer: NodeJS.Timeout | null = null
   private readonly pathNormalizationService: FileProviderPathNormalizationService
   private readonly keywordBackfillService: FileProviderKeywordBackfillService<FileRecord>
+  private readonly embeddingBlobMigrationService: FileProviderEmbeddingBlobMigrationService
+  private readonly overlongContentCleanupService: FileProviderOverlongContentCleanupService<FileRecord>
 
   constructor(private readonly deps: FileProviderBootPassServiceDeps) {
     this.pathNormalizationService = new FileProviderPathNormalizationService({
@@ -131,6 +151,37 @@ export class FileProviderBootPassService {
       logInfo: (message, meta) => this.deps.logInfo(message, meta),
       logWarn: (message, error, meta) => this.deps.logWarn(message, error, meta)
     })
+    this.embeddingBlobMigrationService = new FileProviderEmbeddingBlobMigrationService({
+      getAppliedVersion: () => this.getEmbeddingBlobMigrationAppliedVersion(),
+      setAppliedVersion: (version) => this.setEmbeddingBlobMigrationAppliedVersion(version),
+      isReady: () => this.deps.isRuntimeReady(),
+      loadPage: (afterId, limit) => this.loadEmbeddingBlobMigrationPage(afterId, limit),
+      writePage: (updates) => this.writeEmbeddingBlobMigrationPage(updates),
+      waitForWriteCapacity: async () => {
+        await appTaskGate.waitForIdle()
+        await dbWriteScheduler.waitForCapacity(4)
+      },
+      logInfo: (message, meta) => this.deps.logInfo(message, meta),
+      logWarn: (message, error, meta) => this.deps.logWarn(message, error, meta)
+    })
+    this.overlongContentCleanupService = new FileProviderOverlongContentCleanupService<FileRecord>({
+      getAppliedVersion: () => this.readAppliedVersion(FILE_OVERLONG_CONTENT_CONFIG_KEY),
+      setAppliedVersion: (version) =>
+        this.writeAppliedVersion(
+          FILE_OVERLONG_CONTENT_CONFIG_KEY,
+          'file-index.overlong-content-cleanup.version',
+          version
+        ),
+      isReady: () => this.deps.isRuntimeReady(),
+      loadPage: (afterId, limit) => this.loadOverlongContentPage(afterId, limit),
+      processPage: (rows) => this.clearOverlongContentPage(rows),
+      waitForWriteCapacity: async () => {
+        await appTaskGate.waitForIdle()
+        await dbWriteScheduler.waitForCapacity(4)
+      },
+      logInfo: (message, meta) => this.deps.logInfo(message, meta),
+      logWarn: (message, error, meta) => this.deps.logWarn(message, error, meta)
+    })
   }
 
   /** Stops the passes that have not started; reconciliation must not stay parked waiting on them. */
@@ -145,6 +196,10 @@ export class FileProviderBootPassService {
     if (this.keywordBackfillTimer) {
       clearTimeout(this.keywordBackfillTimer)
       this.keywordBackfillTimer = null
+    }
+    if (this.hotCatchupRetryTimer) {
+      clearTimeout(this.hotCatchupRetryTimer)
+      this.hotCatchupRetryTimer = null
     }
   }
 
@@ -177,7 +232,7 @@ export class FileProviderBootPassService {
       if (splitEnabled) {
         indexedCount = await this.deps.countIndexedRows('bootstrap.emptiness-check')
       }
-      const watchRootCount = this.deps.getWatchRootCount()
+      const watchRootCount = this.deps.getWatchPaths().length
       const decision = shouldBootstrapFileReindex({
         splitEnabled,
         indexedCount,
@@ -205,6 +260,80 @@ export class FileProviderBootPassService {
       // progress" style failures here mean the normal path took over.
       this.deps.logWarn('Search index bootstrap reindex failed', error)
     }
+  }
+
+  /**
+   * Catches the folders most likely to have changed while the app was down up to date before the
+   * whole-home reconcile gets to them, so a screenshot taken meanwhile is searchable seconds after
+   * launch. Planned once per boot; bounded in scopes and time and run on the router's hot lane, so
+   * it neither stalls startup nor waits behind queued resume work. A scope the pass could not
+   * finish (a whole-source reconcile holding the run gate, or maintenance busy past the scope's
+   * time budget) is repeated after 1 and again after 5 minutes, then left to the broad scan.
+   * Contained: a failure here must never reject the startup chain.
+   */
+  async maybeRunHotCatchup(): Promise<void> {
+    if (this.deps.isShuttingDown() || this.hotCatchupStarted || !this.deps.isRuntimeReady()) return
+    try {
+      const delegate = this.deps.getRuntimeMutationDelegate()
+      const withLane = delegate.withHotSubtreeLane?.bind(delegate)
+      if (!withLane) return
+      this.hotCatchupStarted = true
+      this.hotCatchup = new FileProviderHotCatchupService({
+        isShuttingDown: () => this.deps.isShuttingDown(),
+        getWatchPaths: () => this.deps.getWatchPaths(),
+        getHomeDirectory: () => os.homedir(),
+        getKnownFolders: () =>
+          HOT_CATCHUP_KNOWN_FOLDER_NAMES.map((name) => path.join(os.homedir(), name)),
+        readRecentFiles: async (sinceMs, limit) => {
+          const rows =
+            (await this.deps.getDbUtils()?.getRecentlyCreatedFiles(new Date(sinceMs), limit)) ?? []
+          return rows.map((row) => ({ path: row.path, createdAtMs: row.ctime.getTime() }))
+        },
+        readDirectoryMtimeMs: async (directoryPath) => {
+          try {
+            const stats = await fs.lstat(directoryPath)
+            return stats.isDirectory() ? stats.mtimeMs : null
+          } catch {
+            return null
+          }
+        },
+        isAdmitted: async (directoryPath) =>
+          !this.deps.getMaintenance().isStaleExcludedIndexPath(directoryPath) &&
+          (await findLinkedWorktreeHolding(directoryPath, this.deps.getWatchPaths())) === null,
+        withLane,
+        logInfo: (message, meta) => this.deps.logInfo(message, meta),
+        logDebug: (message, meta) => this.deps.logDebug(message, meta)
+      })
+    } catch (error) {
+      this.deps.logWarn('Hot-directory catch-up failed', error)
+      return
+    }
+    await this.runHotCatchupPass(undefined)
+  }
+
+  /** Never rejects. `retryScopes` is the `unfinished` list of the pass before; none plans afresh. */
+  private async runHotCatchupPass(retryScopes: readonly string[] | undefined): Promise<void> {
+    const catchup = this.hotCatchup
+    if (!catchup) return
+    this.hotCatchupPasses += 1
+    try {
+      const outcome = await catchup.run(retryScopes)
+      this.scheduleHotCatchupRetry(outcome.stoppedBy === 'shutdown' ? [] : outcome.unfinished)
+    } catch (error) {
+      this.deps.logWarn('Hot-directory catch-up failed', error)
+      // A pass that threw has no verdict on its scopes (or never planned any): same input again.
+      this.scheduleHotCatchupRetry(retryScopes)
+    }
+  }
+
+  private scheduleHotCatchupRetry(scopes: readonly string[] | undefined): void {
+    const delay = HOT_CATCHUP_RETRY_DELAYS_MS[this.hotCatchupPasses - 1]
+    if (delay === undefined || scopes?.length === 0 || this.deps.isShuttingDown()) return
+    this.hotCatchupRetryTimer = setTimeout(() => {
+      this.hotCatchupRetryTimer = null
+      if (!this.deps.isShuttingDown()) void this.runHotCatchupPass(scopes)
+    }, delay)
+    this.hotCatchupRetryTimer.unref?.()
   }
 
   /**
@@ -294,10 +423,17 @@ export class FileProviderBootPassService {
           this.deps.logWarn('File keyword schema backfill failed', error)
         })
         .finally(() => {
-          // The backfill rewrites every file's keyword rows; hand the pages it freed back to the disk.
-          if (!this.deps.isShuttingDown()) {
-            void this.deps.getMaintenance().compactSearchIndex('boot-check')
-          }
+          // The backfill rewrites every file's keyword rows. Over-long bodies go first so the BLOB
+          // pass does not convert vectors that are about to be deleted, and the compaction runs once
+          // after both: it is what hands the freed pages back to the disk.
+          if (this.deps.isShuttingDown()) return
+          void this.runOverlongContentCleanup()
+            .then(() => (this.deps.isShuttingDown() ? undefined : this.runEmbeddingBlobMigration()))
+            .finally(() => {
+              if (!this.deps.isShuttingDown()) {
+                void this.deps.getMaintenance().compactSearchIndex('boot-check')
+              }
+            })
         })
     }, delayMs)
   }
@@ -328,6 +464,175 @@ export class FileProviderBootPassService {
       sourceId: this.deps.sourceId,
       records: rows.map((row) => this.deps.mapRecord(row))
     })
+  }
+
+  private async runOverlongContentCleanup(): Promise<void> {
+    try {
+      const result = await this.overlongContentCleanupService.run()
+      if (result.status === 'skipped') {
+        this.deps.logDebug('Over-long content cleanup skipped', { reason: result.reason })
+      }
+    } catch (error) {
+      this.deps.logWarn('Over-long content cleanup failed', error)
+    }
+  }
+
+  /**
+   * Rows still holding a body above the cap, or recorded `truncated` (a cut prefix of an even longer
+   * file). Both predicates are read from the worker's home, the one the clear below writes to.
+   */
+  private async loadOverlongContentPage(afterId: number, limit: number): Promise<FileRecord[]> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils) return []
+    return await dbUtils
+      .getFileIndexReadDb()
+      .select()
+      .from(filesSchema)
+      .where(
+        and(
+          fileTypeIs('file'),
+          gt(filesSchema.id, afterId),
+          sql`(length(${filesSchema.content}) > ${FILE_CONTENT_MAX_CHARS}
+            OR ${filesSchema.id} IN (SELECT file_id FROM file_index_progress WHERE status = 'truncated'))`
+        )
+      )
+      .orderBy(filesSchema.id)
+      .limit(limit)
+  }
+
+  /**
+   * Publishes the emptied search documents first, then clears the rows. Re-emitting the record with
+   * `content: null` replaces the FTS `content` column through the normal write path (the document
+   * hash covers it). A failure between the two leaves `files.content` in place, so the page is
+   * selected again on the next boot.
+   */
+  private async clearOverlongContentPage(rows: FileRecord[]): Promise<void> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils || rows.length === 0) return
+    await this.deps.emitRecordBatch({
+      sourceId: this.deps.sourceId,
+      records: rows.map((row) => this.deps.mapRecord({ ...row, content: null }))
+    })
+
+    const ids = rows.map((row) => row.id)
+    const reason = FILE_CONTENT_TOO_LONG_REASON
+    if (this.deps.isSearchSplitEnabled()) {
+      const marks = ids.map(() => '?').join(', ')
+      await searchIndexWriter.execWrite(
+        [
+          {
+            sql: `UPDATE files SET content = NULL, embedding_status = 'none' WHERE id IN (${marks})`,
+            args: ids
+          },
+          {
+            sql: `DELETE FROM embeddings WHERE source_type = 'file' AND source_id IN (${marks})`,
+            args: ids.map(String)
+          },
+          {
+            sql: `DELETE FROM file_extensions WHERE key = 'content_chunks' AND file_id IN (${marks})`,
+            args: ids
+          },
+          {
+            sql: `INSERT INTO file_index_progress (file_id, status, progress, last_error, updated_at)
+              SELECT id, 'skipped', 100, ?, strftime('%s', 'now') FROM files WHERE id IN (${marks})
+              ON CONFLICT(file_id) DO UPDATE SET status = 'skipped', progress = 100,
+                last_error = excluded.last_error, updated_at = excluded.updated_at`,
+            args: [reason, ...ids]
+          }
+        ],
+        'transaction'
+      )
+      return
+    }
+    const fileIds = sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `
+    )
+    const sourceIds = sql.join(
+      ids.map((id) => sql`${String(id)}`),
+      sql`, `
+    )
+    const db = dbUtils.getDb()
+    await scheduleDbWrite('file-index.overlong-content-cleanup', async () => {
+      await db.transaction(async (tx) => {
+        await tx.run(
+          sql`UPDATE files SET content = NULL, embedding_status = 'none' WHERE id IN (${fileIds})`
+        )
+        await tx.run(
+          sql`DELETE FROM embeddings WHERE source_type = 'file' AND source_id IN (${sourceIds})`
+        )
+        await tx.run(
+          sql`DELETE FROM file_extensions WHERE key = 'content_chunks' AND file_id IN (${fileIds})`
+        )
+        await tx.run(sql`INSERT INTO file_index_progress (file_id, status, progress, last_error, updated_at)
+          SELECT id, 'skipped', 100, ${reason}, strftime('%s', 'now') FROM files WHERE id IN (${fileIds})
+          ON CONFLICT(file_id) DO UPDATE SET status = 'skipped', progress = 100,
+            last_error = excluded.last_error, updated_at = excluded.updated_at`)
+      })
+    })
+  }
+
+  private async runEmbeddingBlobMigration(): Promise<void> {
+    try {
+      const result = await this.embeddingBlobMigrationService.run()
+      if (result.status === 'skipped') {
+        this.deps.logDebug('Embedding BLOB migration skipped', { reason: result.reason })
+      }
+    } catch (error) {
+      this.deps.logWarn('Embedding BLOB migration failed', error)
+    }
+  }
+
+  private async loadEmbeddingBlobMigrationPage(
+    afterId: number,
+    limit: number
+  ): Promise<Array<{ id: number; embedding: string }>> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils) return []
+    // Split-aware home: the rewrite lands in the index file the worker owns (contracts §6).
+    const rows = await dbUtils.getFileIndexReadDb().all<{ id: number; embedding: string }>(sql`
+      SELECT id, embedding FROM embeddings
+      WHERE id > ${afterId} AND typeof(embedding) = 'text'
+      ORDER BY id LIMIT ${limit}`)
+    return rows.map((row) => ({ id: Number(row.id), embedding: row.embedding }))
+  }
+
+  private async writeEmbeddingBlobMigrationPage(
+    updates: Array<{ id: number; blob: Uint8Array }>
+  ): Promise<void> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils) return
+    // `typeof(...) = 'text'` keeps a vector the embedding service rewrote in the meantime.
+    const statements = updates.map((update) => ({
+      sql: "UPDATE embeddings SET embedding = ? WHERE id = ? AND typeof(embedding) = 'text'",
+      args: [update.blob, update.id]
+    }))
+    if (this.deps.isSearchSplitEnabled()) {
+      await searchIndexWriter.execWrite(statements, 'transaction')
+      return
+    }
+    const db = dbUtils.getDb()
+    await scheduleDbWrite('file-index.embedding-blob-migration', async () => {
+      await db.transaction(async (tx) => {
+        for (const update of updates) {
+          await tx.run(
+            sql`UPDATE embeddings SET embedding = ${update.blob} WHERE id = ${update.id} AND typeof(embedding) = 'text'`
+          )
+        }
+      })
+    })
+  }
+
+  private async getEmbeddingBlobMigrationAppliedVersion(): Promise<number | null> {
+    return await this.readAppliedVersion(FILE_EMBEDDING_BLOB_CONFIG_KEY)
+  }
+
+  private async setEmbeddingBlobMigrationAppliedVersion(version: number): Promise<void> {
+    await this.writeAppliedVersion(
+      FILE_EMBEDDING_BLOB_CONFIG_KEY,
+      'file-index.embedding-blob-migration.version',
+      version
+    )
   }
 
   private async getKeywordBackfillAppliedVersion(): Promise<number | null> {

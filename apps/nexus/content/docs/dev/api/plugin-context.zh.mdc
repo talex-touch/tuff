@@ -30,7 +30,7 @@ code: |
   intelligence,
   screenshot,
   system,
-  i18n,
+  language,
   lexicon,
   power,
   recommend,
@@ -53,7 +53,7 @@ code: |
         intelligence,
         screenshot,
         system,
-        i18n,
+        language,
         lexicon,
         power,
         recommend,
@@ -84,7 +84,7 @@ code: |
 | `intelligence`                   | AI capability discovery、invoke 与 stream | [Intelligence](./intelligence.zh.mdc)                                 |
 | `screenshot`                     | 权限门禁下的显示器、指针屏幕与区域截图                     | [Screenshot](./screenshot.zh.mdc)                                     |
 | `system`                         | 前台应用与 permission-gated 选中文本             | [Clipboard](./clipboard.zh.mdc)                                       |
-| `i18n`, `lexicon`                | 主机语言与插件隔离 Domain Lexicon                | [Localization](./i18n.zh.mdc)                                         |
+| `language`, `lexicon`            | 应用语言与插件隔离 Domain Lexicon                | [Language SDK](./i18n.zh.mdc)                                         |
 | `quickActions`, `quickOps`       | 全局动作与 bounded built-in tools            | [Quick Actions](./quick-actions.zh.mdc)、[QuickOps](./quickops.zh.mdc) |
 | `divisionBox`, `channel`         | 独立窗口与插件 transport                       | [DivisionBox](./division-box.zh.mdc)、[Channel](./channel.zh.mdc)      |
 | `power`, `recommend`             | 低电量适配与 recommendation provider          | [Power](./power.zh.mdc)、[Recommend](./recommend.zh.mdc)               |
@@ -93,7 +93,7 @@ code: |
 
 ## Legacy global 兼容
 
-现有 `index.js` 插件仍可从 `globalThis` 读取 `logger`、`clipboard`、`storage`、`feature`、`box`、`openUrl` 等 utilities。新 lifecycle 代码应在 `onInit` 中获取 `context.utils`，因为它才包含完整 typed SDK surface，包括 `secret`、`intelligence`、`screenshot`、`system`、`i18n` 与 `lexicon`。
+现有 `index.js` 插件仍可从 `globalThis` 读取 `logger`、`clipboard`、`storage`、`feature`、`box`、`openUrl` 等 utilities。新 lifecycle 代码应在 `onInit` 中获取 `context.utils`，因为它才包含完整 typed SDK surface，包括 `secret`、`intelligence`、`screenshot`、`system`、`language` 与 `lexicon`。
 
 ---
 
@@ -677,6 +677,38 @@ code: |
   ## module.exports = pluginLifecycle
 ---
 :::
+
+### onItemAction 的返回值
+
+`onItemAction` 可以什么都不返回，也可以返回一个对象。告诉宿主动作结果的字段有三个：
+
+| 字段      | 类型      | 说明                                                                                                   |
+| --------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `message` | `string`  | 一行结果提示。动作返回后，宿主用系统通知显示它；不返回则不提示。                                       |
+| `success` | `boolean` | `false` 表示动作没有完成：不计入一次使用，`message` 按失败提示显示。                                   |
+| `status`  | `string`  | `blocked`、`error`、`failed`、`cancelled`、`canceled` 与 `success: false` 等价；其他取值宿主不会读取。 |
+
+`success` 是布尔值时由它单独决定：`success: true` 表示动作已完成，不管 `status` 写什么；只有没有 `success` 时才会读取 `status`。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async onItemAction(item) {
+    const copyAction = item.actions.find(a => a.type === 'copy')
+    if (!copyAction?.payload) {
+      return { success: false, message: '没有可复制的内容' }
+    }
+    clipboard.writeText(copyAction.payload)
+    return { success: true, message: '已复制' }
+  }
+---
+:::
+
+提示走系统通知，是因为 CoreBox 通常在动作执行前就已经关闭，窗口里没有地方可以显示它。成功时通知静音，标题是插件名；失败时通知带提示音，标题是「插件名 操作失败」。同一次动作最多一条，没有 `message` 就不提示。
+
+- `message` 按不可信文本处理：控制字符与不可见字符不会显示，换行和连续空白折成一个空格，超过 200 个字符的部分会被截断。
+- 想显示插件自己的多语言文案，返回 `context.utils.i18n.resolveText()` 取到的当前语言字符串（需要 `i18n.read` 权限）。也可以返回 `i18n.createMessage()` 生成的 `$i18n:` 消息，但宿主只会按界面语言解析它自带的文案，比如 `flowTransfer.copiedToClipboard`；宿主没有的 key 不会显示任何内容。详见 [Localization](./i18n.zh.mdc)。
+- 动作抛出的错误只写入日志，不会提示。
 
 ---
 

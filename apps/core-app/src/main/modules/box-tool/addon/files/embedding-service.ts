@@ -5,6 +5,7 @@ import {
   type LocalEmbeddingImageInput
 } from '../../../ai/local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from '../../../ai/local-embedding-model'
+import { runWithEmbeddingPriority } from '../../../ai/local-embedding-queue'
 import type { FileParserChunk } from '@talex-touch/utils/electron/file-parsers'
 import { hashFileContentChunk } from './services/file-content-match'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
@@ -19,6 +20,7 @@ import {
   files as filesSchema
 } from '../../../../db/schema'
 import { scheduleDbWrite } from '../../../../db/db-write'
+import { encodeVectorBlob } from '../../../../db/embedding-vector-codec'
 import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import {
@@ -31,6 +33,12 @@ const logger = getLogger('EmbeddingService')
 const SOURCE_TYPE = 'file'
 const MAX_TEXT_LENGTH = 8000
 const EMBEDDING_CACHE_TTL = 30 * 60 * 1000 // 30 min
+/** In-process only: a text file that keeps failing ends up finished-without-vectors like before. */
+const MAX_TEXT_EMBEDDING_ATTEMPTS = 3
+/** Tracked failing files; a new one finding the table full is given up on, never swapped in. */
+const MAX_TRACKED_TEXT_FAILURES = 4096
+/** A "not available" probe answer expires after this long; "available" lasts the process. */
+const UNAVAILABLE_RECHECK_MS = 60_000
 /**
  * Stable usage-ledger caller for every file-content embedding, the availability probe included
  * (audit rebuild design §1.4). A fresh object per call: options travel by reference.
@@ -144,10 +152,11 @@ function usableVector(vector: number[]): boolean {
 
 export class EmbeddingService {
   private available: boolean | null = null
+  private lastProbeAt = 0
   private queryCache = new Map<string, CachedEmbedding>()
   private usageLimitPause: EmbeddingUsageLimitPause | null = null
   private imageOperationController = new AbortController()
-  private imageOperation: Promise<unknown> | null = null
+  private readonly failedTextAttempts = new Map<string, number>()
   private semanticReader: { path: string; client: SearchIndexReadWorkerClient } | null = null
   private closed = false
 
@@ -160,12 +169,6 @@ export class EmbeddingService {
   cancelPending(): void {
     this.imageOperationController.abort(new Error('FILE_EMBEDDING_CANCELLED'))
     this.imageOperationController = new AbortController()
-  }
-
-  private async waitForImageOperation(): Promise<void> {
-    const operation = this.imageOperation
-    if (!operation) return
-    await operation.catch(() => undefined)
   }
 
   constructor(
@@ -297,12 +300,17 @@ export class EmbeddingService {
 
   /**
    * Check if the embedding capability is available.
-   * Caches the result to avoid repeated probing.
+   * Caches the result to avoid repeated probing: "available" for the process, "not available" for
+   * `UNAVAILABLE_RECHECK_MS`.
    */
   async isAvailable(): Promise<boolean> {
     // Paused by the usage limit: unavailable until the reset, without probing (a probe is a call).
     if (this.getUsageLimitPause()) return false
-    if (this.available !== null) return this.available
+    if (this.available === true) return true
+    const now = Date.now()
+    if (this.available === false && now - this.lastProbeAt < UNAVAILABLE_RECHECK_MS) return false
+    // Stamped before probing so a probe that throws without an answer is not repeated per caller.
+    this.lastProbeAt = now
 
     try {
       const disposeCheck = enterPerfContext('Embedding.isAvailable', { textLength: 4 })
@@ -428,7 +436,7 @@ export class EmbeddingService {
             ),
           ...generated.map((result, index) =>
             writeDb.insert(embeddingsSchema).select(sql`
-          SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${JSON.stringify(result.vector)},
+          SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${encodeVectorBlob(result.vector)},
             ${result.model}, ${hashes[index]}, strftime('%s', 'now')
           FROM ${filesSchema} WHERE ${fileFence}
         `)
@@ -468,13 +476,10 @@ export class EmbeddingService {
     ])
     if (operationSignal.aborted) return 'skipped'
     try {
-      const operation = tuffIntelligence.embedding.generateLocalImage(image, {
+      const generated = await tuffIntelligence.embedding.generateLocalImage(image, {
         signal: operationSignal,
         metadata: { caller: 'core.files.embedding' }
       })
-      this.imageOperation = operation
-      const generated = await operation
-      if (this.imageOperation === operation) this.imageOperation = null
       if (operationSignal.aborted) return 'skipped'
       if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
         return 'paused'
@@ -518,7 +523,7 @@ export class EmbeddingService {
               )
             ),
           writeDb.insert(embeddingsSchema).select(sql`
-            SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${JSON.stringify(generated.result)},
+            SELECT NULL, ${fileId}, ${SOURCE_TYPE}, ${encodeVectorBlob(generated.result)},
               ${generated.model}, NULL, strftime('%s', 'now')
             FROM ${filesSchema} WHERE ${fileFence}
           `),
@@ -537,7 +542,6 @@ export class EmbeddingService {
       )
       return written > 0 && !operationSignal.aborted ? 'done' : 'skipped'
     } catch (error) {
-      this.imageOperation = null
       if (operationSignal.aborted) return 'skipped'
       if (this.routing.recordStorageFailure?.(error)) return 'paused'
       logger.warn('File image embedding failed', {
@@ -553,7 +557,7 @@ export class EmbeddingService {
   async indexFiles(
     files: EmbeddingFileInput[],
     signal?: AbortSignal
-  ): Promise<{ indexed: number; skipped: number; failed: number }> {
+  ): Promise<{ indexed: number; skipped: number; failed: number; retryFileIds?: string[] }> {
     if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity())) {
       return { indexed: 0, skipped: files.length, failed: 0 }
     }
@@ -567,6 +571,7 @@ export class EmbeddingService {
     const start = performance.now()
     let indexed = 0
     let failed = 0
+    const retryFileIds: string[] = []
     // One file's vectors at a time; chunks must commit atomically, not multiply
     // the retained model buffers by concurrent files.
     for (const file of files) {
@@ -575,6 +580,7 @@ export class EmbeddingService {
       const outcome = await this.indexFileOutcome(file, operationSignal)
       if (outcome === 'done') indexed++
       if (outcome === 'failed') failed++
+      if (!file.image && this.shouldRetryText(file.fileId, outcome)) retryFileIds.push(file.fileId)
     }
     const skipped = files.length - indexed - failed
     logger.info('Batch embedding finished', {
@@ -583,7 +589,26 @@ export class EmbeddingService {
       failed,
       durationMs: Math.round(performance.now() - start)
     })
-    return { indexed, skipped, failed }
+    return { indexed, skipped, failed, ...(retryFileIds.length > 0 ? { retryFileIds } : {}) }
+  }
+
+  /** A failed text file is reported for the enrichment retry lane until it has used its attempts. */
+  private shouldRetryText(fileId: string, outcome: IndexFileOutcome): boolean {
+    if (outcome !== 'failed') {
+      this.failedTextAttempts.delete(fileId)
+      return false
+    }
+    const counted = this.failedTextAttempts.get(fileId)
+    // Evicting restarts a count, so a batch bigger than the table would never finish.
+    if (counted === undefined && this.failedTextAttempts.size >= MAX_TRACKED_TEXT_FAILURES)
+      return false
+    const attempts = (counted ?? 0) + 1
+    if (attempts >= MAX_TEXT_EMBEDDING_ATTEMPTS) {
+      this.failedTextAttempts.delete(fileId)
+      return false
+    }
+    this.failedTextAttempts.set(fileId, attempts)
+    return true
   }
 
   /**
@@ -625,8 +650,6 @@ export class EmbeddingService {
       limit: resultLimit
     })
     try {
-      this.cancelPending()
-      await this.waitForImageOperation()
       const queryEmbedding = await this.getQueryEmbedding(query, signal)
       if (this.closed || !queryEmbedding || signal?.aborted) return []
       const reader = this.getSemanticReader()
@@ -669,7 +692,9 @@ export class EmbeddingService {
     const cached = this.queryCache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < EMBEDDING_CACHE_TTL) return cached
     try {
-      const result = await this.generate(query, signal, 'query')
+      const result = await runWithEmbeddingPriority('interactive', () =>
+        this.generate(query, signal, 'query')
+      )
       if (!usableVector(result.vector) || !result.model) return null
       const entry = { vector: result.vector, model: result.model, timestamp: Date.now() }
       this.queryCache.set(cacheKey, entry)

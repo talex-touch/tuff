@@ -395,7 +395,7 @@
   // Theme-invariant, so it is defined once here rather than per theme. Mirrors
   // the stack `--tx-bui-font-mono` uses; the two layers stay separate because a
   // host may override either on its own.
-  --tx-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+  --tx-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", "Symbols Nerd Font Mono", "Symbols Nerd Font", "Maple Mono NF CN", "Maple Mono NF", "JetBrainsMono Nerd Font", monospace;
   // The name `--tx-font-family` implies. Components, Nexus and the app read it
   // in about twenty places, which fell through to their fallbacks until it
   // aliased the token above.

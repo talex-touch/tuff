@@ -18,6 +18,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { describeFailure } from '~/utils/failure-text'
 
 /**
  * On-device speech models: what the cloud offers, and what this machine has.
@@ -110,6 +111,16 @@ function startPolling(): void {
   }, 700)
 }
 
+/**
+ * Why an install or a removal failed. An install reads the catalog first, so a catalog failure with
+ * a code reads as the catalog's; anything else as main put it.
+ */
+function actionFailureText(error: unknown): string {
+  const code = error instanceof VoiceApiError ? error.code : undefined
+  if (isVoiceSpeechCatalogErrorCode(code)) return t(catalogErrorKey(code))
+  return describeFailure(error, t, t('common.failures.operationFailed'))
+}
+
 async function install(entry: VoiceSpeechModelEntry): Promise<void> {
   const key = keyOf(entry.id, entry.version)
   busyKey.value = key
@@ -119,7 +130,7 @@ async function install(entry: VoiceSpeechModelEntry): Promise<void> {
     await voiceSdk.installSpeechModel({ id: entry.id, version: entry.version })
     await Promise.all([loadInstalled(), loadCatalog()])
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
+    actionError.value = actionFailureText(error)
   } finally {
     stopPolling()
     busyKey.value = null
@@ -134,7 +145,7 @@ async function uninstall(entry: VoiceSpeechModelEntry): Promise<void> {
     await voiceSdk.uninstallSpeechModel({ id: entry.id, version: entry.version })
     await Promise.all([loadInstalled(), loadCatalog()])
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
+    actionError.value = actionFailureText(error)
   } finally {
     busyKey.value = null
   }
@@ -165,8 +176,8 @@ const rows = computed(() => {
   }))
 })
 
-const catalogErrorTitleKey = computed(() => {
-  switch (catalogError.value) {
+function catalogErrorKey(code: VoiceSpeechCatalogErrorCode | null): string {
+  switch (code) {
     case VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired:
       return 'settingSpeechRecognition.models.catalogErrors.authRequired'
     case VOICE_SPEECH_CATALOG_ERROR_CODES.timeout:
@@ -178,7 +189,9 @@ const catalogErrorTitleKey = computed(() => {
     default:
       return 'settingSpeechRecognition.models.catalogErrors.unavailable'
   }
-})
+}
+
+const catalogErrorTitleKey = computed(() => catalogErrorKey(catalogError.value))
 
 const catalogImpactKey = computed(
   () => `settingSpeechRecognition.models.catalogImpact.${props.source}`

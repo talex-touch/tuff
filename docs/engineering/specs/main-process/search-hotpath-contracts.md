@@ -45,6 +45,10 @@ receives a SearchIndexReadExecutor owned by SearchEngineCore; FTS, exact/prefix,
 ngram/subsequence, counts and commit-visibility reads use that executor. Keep SQL
 construction and result semantics in SearchIndexService, not a second worker query
 implementation. Writer-side services retain their existing local connection.
+Maintenance reads that a cold index would turn into a blocked main thread use the
+same executor through typed `SearchIndexService` methods (file index stats,
+enrichment-resume pages, the scoped-reconcile bound and pages), never an ad-hoc
+`readAll` or the main-thread connection.
 
 The reader opens the same `getSearchDatabaseFilePath()` selected for the writer,
 requires an existing regular database and enables `PRAGMA query_only`. It never
@@ -63,6 +67,8 @@ every pending caller without replay or a synchronous main-thread fallback. Core
 closes both readers from its shutdown finally path, after normal writer drains.
 
 File semantic recall owns a separate `semantic` reader lane over the same worker script and physical read home. The host sends the query vector, model identity and top-K limit; the worker keyset-pages 128 embeddings at a time, rejects invalid/wrong-space vectors and retains only the best chunk per top-K file. Full vector rows and cosine loops never cross to Electron main or renderer. A shared cancellation flag stops page/row work after caller cancellation; retire/shutdown still waits for native reads instead of terminating a libSQL thread. `EmbeddingService.close()` prevents a late query embedding from reopening a reader, and provider shutdown closes this lane. File-vector counts also use the reader.
+
+`embeddings.embedding` holds a little-endian float32 BLOB (4 bytes per dimension, the layout libSQL `vector32()` writes; about 3 KB at 768 dimensions against about 16 KB as JSON). The column stays declared TEXT: SQLite's TEXT affinity leaves a BLOB value untouched, so no table rebuild is needed. Rows written before 2026-10-31 hold a JSON array and stay readable; the worker and `readStoredVector` (`db/embedding-vector-codec.ts`) accept both and skip, never score, a row that is malformed, non-finite, or not exactly `dimension` components. A paged boot pass (`FileProviderEmbeddingBlobMigrationService`, config key `file_provider_embedding_blob_version`) rewrites the JSON rows, each only while it is still `typeof(embedding) = 'text'` so a concurrent rewrite wins, and leaves an undecodable row as it is. It is not one SQL `UPDATE ... vector32(embedding)`: that fails the whole statement on the first malformed row and holds a multi-minute write transaction. The pass runs after the keyword backfill and is followed by one `boot-check` compaction, because the shrink only returns space to the disk once the freed pages are vacuumed.
 
 Canonical keyword mappings are lowercase. Prefix lookup combines escaped literal LIKE with an explicit BINARY keyword range so the provider/keyword index bounds the scan; compute the exclusive Unicode successor rather than appending U+FFFF, which would omit astral continuations. FTS reads use the native `rank` cursor with explicit `rank MATCH 'bm25()'`, preserving BM25 scores without an external SQL sort. Never extend provider deadlines to hide query or queue latency. The existing fast-layer snapshot is published even when empty; deferred SQL, native Spotlight and semantic inference do not hold that snapshot.
 

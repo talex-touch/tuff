@@ -151,7 +151,8 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     { default: searchEngineCore },
     { getSentryService },
     { aiCliOrchestrator },
-    { aiOrchestratorStore }
+    { aiOrchestratorStore },
+    { t }
   ] = await Promise.all([
     import('electron'),
     import('../../core/precore'),
@@ -165,7 +166,8 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     import('../box-tool/search-engine/search-core'),
     import('../sentry'),
     import('../ai/ai-cli-orchestrator'),
-    import('../ai/ai-orchestrator-store')
+    import('../ai/ai-orchestrator-store'),
+    import('../../utils/i18n-helper')
   ])
   const { coreClient, auxiliaryClient } = requireDatabaseClients(databaseModule)
   const sentryService = getSentryService()
@@ -188,7 +190,7 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
   const exporter = createPrivacyCategoryExporter({
     showSaveDialog: async () => {
       const result = await dialog.showSaveDialog({
-        title: 'Export privacy data',
+        title: t('nativeDialogs.files.exportPrivacyData'),
         defaultPath: 'talex-touch-privacy-export.json',
         properties: ['createDirectory', 'showOverwriteConfirmation']
       })
@@ -204,10 +206,10 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
   const secretFiles = createMainPrivacySecretFileAdapter({
     showSaveDialog: async () => {
       const result = await dialog.showSaveDialog({
-        title: 'Export encrypted credentials',
+        title: t('nativeDialogs.files.exportCredentials'),
         defaultPath: 'talex-touch-secret-backup.json',
         properties: ['createDirectory', 'showOverwriteConfirmation'],
-        filters: [{ name: 'Talex Touch Secret Backup', extensions: ['json'] }]
+        filters: [{ name: t('nativeDialogs.files.secretBackupFilter'), extensions: ['json'] }]
       })
       return Object.freeze({
         canceled: result.canceled,
@@ -216,9 +218,9 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     },
     showOpenDialog: async () => {
       const result = await dialog.showOpenDialog({
-        title: 'Restore encrypted credentials',
+        title: t('nativeDialogs.files.restoreCredentials'),
         properties: ['openFile'],
-        filters: [{ name: 'Talex Touch Secret Backup', extensions: ['json'] }]
+        filters: [{ name: t('nativeDialogs.files.secretBackupFilter'), extensions: ['json'] }]
       })
       return Object.freeze({
         canceled: result.canceled,

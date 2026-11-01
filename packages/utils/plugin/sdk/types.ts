@@ -10,7 +10,8 @@ import type {
 } from "../../transport/events/types";
 import type { IPluginFeature } from "../index";
 import type { PluginStandardChannelData } from "./channel-client";
-import type { PluginI18nSDK, PluginLexiconSDK } from "./localization";
+import type { LanguageSDK } from "./language";
+import type { PluginLexiconSDK } from "./localization";
 import type { PluginSystemSDK } from './system'
 import path from "node:path";
 
@@ -286,8 +287,8 @@ export interface IPluginUtils {
   /** Permission-gated active-app and selected-text facade. */
   system: PluginSystemSDK;
 
-  /** Host locale and localized-text resolver facade. */
-  i18n: PluginI18nSDK;
+  /** App display language, language-change subscription and localized-text resolver facade. */
+  language: LanguageSDK;
 
   /** Official and plugin-scoped Domain Lexicon facade. */
   lexicon: PluginLexiconSDK;
@@ -357,8 +358,8 @@ export interface IPluginUtils {
     /** Permission-gated active-app and selected-text facade mirror. */
     system: PluginSystemSDK;
 
-    /** Host locale and localized-text resolver facade. */
-    i18n: PluginI18nSDK;
+    /** App display language, language-change subscription and localized-text resolver facade. */
+    language: LanguageSDK;
 
     /** Official and plugin-scoped Domain Lexicon facade. */
     lexicon: PluginLexiconSDK;

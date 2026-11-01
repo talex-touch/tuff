@@ -3,6 +3,7 @@ import type {
   AppIndexManagedEntry
 } from '@talex-touch/utils/transport/events/types'
 import type { ComposerTranslation } from 'vue-i18n'
+import { describeAppIndexFailure } from './app-index-failure-reason'
 
 export interface AppIndexEntrySourceSummary {
   kind: AppIndexEntrySourceKind
@@ -199,7 +200,9 @@ export function resolveAppIndexEntryDiagnosticSummary(
       'Needs attention'
     ),
     tone: 'warning',
-    detail: diagnostic.reason || diagnostic.status
+    detail:
+      describeAppIndexFailure(diagnostic.reason || diagnostic.status, t) ??
+      t('settings.settingFileIndex.appIndexManagerDiagnoseFailed', 'App index diagnostic failed')
   }
 }
 

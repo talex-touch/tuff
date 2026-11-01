@@ -3,7 +3,7 @@ title: "ModalForm"
 description: "A form that edits one record in a dialog."
 category: Form
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [form, modal, dialog]
 syncStatus: reviewed
 verified: true

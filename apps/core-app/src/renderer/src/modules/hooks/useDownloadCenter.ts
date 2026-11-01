@@ -22,8 +22,8 @@ export function useDownloadCenter() {
   const downloadSdk = useDownloadSdk()
   const { t } = useI18nText()
   /**
-   * The reason when main gave none. Callers toast it after a localized "pause failed:"-style
-   * prefix, so it must not restate the action, and must be in the same language as the prefix.
+   * The reason when main gave none. It rides on the thrown error and in `error`; callers log the
+   * error and toast a localized headline of their own, so no view shows this reason.
    */
   const unknownError = (): string => t('download.error.unknown')
   const transportDisposers: Array<() => void> = []

@@ -3,7 +3,7 @@ title: "StepsForm"
 description: "One long form, filled in over several steps."
 category: Form
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [form, steps, wizard]
 syncStatus: reviewed
 verified: true

@@ -261,27 +261,13 @@ describe('shell list action styles', () => {
     }
   })
 
-  it('runs the armed delete from the icon slot to the label, and not under reduced motion', () => {
+  it('sizes the more action button to 24px and reveals it under pointer or active menu', () => {
     const css = compileStyles('./ShellProjectRows.vue')
-    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(css)
-    expect(reduced, 'reduced-motion block').not.toBeNull()
-    const reducedRules = parseRules(reduced![1]!)
-    const outside = parseRules(css.replace(reduced![0], ''))
+    const outside = parseRules(css)
 
-    const base = outside.find(({ selector }) => selector === '.ShellProjectRows-Delete')
-    expect(base?.declarations.get('interpolate-size')).toBe('allow-keywords')
-    expect(base?.declarations.get('transition')).toMatch(/\bwidth\b/)
-
-    const armed = outside.find(({ selector }) => selector === '.ShellProjectRows-Delete.is-armed')
-    expect(armed?.declarations.get('width')).toBe('auto')
-    // Same slot height as the icon it replaces, so the row does not grow.
-    for (const property of ['height', 'min-height', 'line-height', 'margin']) {
-      expect(armed?.declarations.has(property), property).toBe(false)
-    }
-    expect(declared('ShellProjectRows-Action', 'height')).toBe('24px')
-
-    const calm = reducedRules.find(({ selector }) => selector === '.ShellProjectRows-Delete')
-    expect(calm?.declarations.get('transition')).toBeDefined()
-    expect(calm?.declarations.get('transition')).not.toMatch(/\b(width|padding)\b/)
+    const action = outside.find(({ selector }) => selector === '.ShellProjectRows-Action')
+    expect(action?.declarations.get('height')).toBe('24px')
+    expect(action?.declarations.get('width')).toBe('24px')
+    expect(action?.declarations.get('opacity')).toBe('0')
   })
 })

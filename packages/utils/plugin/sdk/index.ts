@@ -26,7 +26,9 @@ export {
 export * from "./flow";
 export * from "./hooks/index";
 export * from "./intelligence";
+export * from "./language";
 export * from "./localization";
+export * from "./language";
 export * from "./network";
 
 export * from "./meta-sdk";

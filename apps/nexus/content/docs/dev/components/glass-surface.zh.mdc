@@ -1,10 +1,10 @@
 ---
 title: "GlassSurface 玻璃拟态"
-description: "折射背后内容的玻璃容器"
+description: "折射背后内容的玻璃容器，可选物理折射透镜与液态拖拽"
 category: Effects
 status: beta
 since: 0.3.4
-tags: [glass, blur, refraction]
+tags: [glass, blur, refraction, lens]
 syncStatus: reviewed
 verified: true
 ---
@@ -46,6 +46,62 @@ code: |
 ---
 :::
 
+### 液态透镜
+玻璃有两种外观，由 `engine` 选择。默认的 `classic` 用位移渐变弯折背后的画面，看起来是扭曲；`engine="lens"` 换用按物理建模的透镜，让画面折射：边缘一圈（`bezel`）按玻璃的折射率把背后的画面向内拉，中间几乎保持原样。`zoom` 另外放大中间，`dispersion` 让红、绿、蓝在边缘分开，`rimSaturation` 让透过边缘看到的颜色发艳。
+
+:::TuffDemoWrapper{demo="GlassSurfaceLensDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlassSurface
+      engine="lens"
+      :width="220"
+      :height="140"
+      :border-radius="70"
+      :bezel="22"
+      :thickness="40"
+      :zoom="1.1"
+      :rim-saturation="4"
+    />
+    <TxSlider v-model="bezel" :min="2" :max="40" />
+  </template>
+---
+:::
+
+### 液态拖拽
+`useLiquidDrag` 让透镜像一滴液态玻璃：按下时抬起，沿拖动方向拉长，停下后弹回原形。位置严格跟随指针，只有形状滞后；整个过程只改 `transform`，透镜的布局尺寸与折射图不变。两种引擎都能用。想让玻璃在鼠标划过或手指触摸时（而不是拖动时）有这种流动感，用 [TouchSurface](./touch-surface.zh.mdc) 并设 `surface="glass"`。
+
+:::TuffDemoWrapper{demo="GlassSurfaceLiquidDragDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { useLiquidDrag } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const stage = ref(null)
+  const lens = ref(null)
+
+  useLiquidDrag(lens, { bounds: stage, restHeight: 0.8, pressGrow: 0.25 })
+  </script>
+
+  <template>
+    <div ref="stage" class="stage">
+      <TxGlassSurface
+        ref="lens"
+        engine="lens"
+        :width="210"
+        :height="150"
+        :border-radius="75"
+        :bezel="25"
+        :thickness="50"
+        :zoom="1.13"
+        :rim-saturation="9"
+      />
+    </div>
+  </template>
+---
+:::
+
 ### 最佳实践
 
 - 只在插画、图片或渐变背景需要折射感时使用；普通卡片用 `TxBaseSurface` 或 `TxCard`。
@@ -53,6 +109,10 @@ code: |
 - 对照真实背景调 `blur`、`backgroundOpacity`、`saturation`，避免背后的文字不可读。
 - 大幅 `distortionScale` 或较宽的通道偏移只用于 hero 或预览表面，不用于密集表单。
 - 重要控件放进默认插槽。
+- 要「拖动时边框像液体一样流动」就用 `useLiquidDrag`（两种引擎都行），要玻璃回应划过或触摸就用 `TxTouchSurface`；不动的卡片与面板继续用默认引擎或 `TxBaseSurface`。
+- 透镜的折射只在 Chromium 内核（Chrome、Edge、Electron）里发生，Safari 与 Firefox 看到的是磨砂玻璃：别让内容靠折射才看得清。
+- `zoom` 大于 1 会把中间重采样，里面的小字略软；放文字的控件保持 `zoom` 为 1，把效果留给 `bezel` 与 `thickness`。
+- 每个透镜都是一层随画面重算的背景滤镜，同屏只放需要的几个。
 
 ## API 参考
 
@@ -72,7 +132,11 @@ rows:
   - name: borderRadius
     type: number
     default: 20
-    description: 外层圆角（px），也用于位移图。
+    description: 外层圆角（px），也用于位移图；`lens` 下不超过短边的一半。
+  - name: engine
+    type: "'classic' | 'lens'"
+    default: "'classic'"
+    description: 渲染引擎。`classic` 是位移斜坡玻璃，读取本表的属性；`lens` 按建模的凸起边缘折射，读取下一张表的属性。两者共用 `width`、`height`、`borderRadius`、`backgroundOpacity` 与 `saturation`。
   - name: borderWidth
     type: number
     default: 0.07
@@ -96,11 +160,11 @@ rows:
   - name: backgroundOpacity
     type: number
     default: 0
-    description: SVG 滤镜路径上的背景透明度。
+    description: SVG 滤镜路径上的背景透明度；`lens` 下是背景蒙层的不透明度，降级为毛玻璃时至少取 0.22。
   - name: saturation
     type: number
     default: 1
-    description: SVG 滤镜路径上的饱和度。
+    description: SVG 滤镜路径上的饱和度；`lens` 下默认 1.5。
   - name: distortionScale
     type: number
     default: -180
@@ -132,24 +196,101 @@ rows:
 ---
 ::
 
+### 透镜属性（`engine="lens"`）
+
+::TuffPropsTable
+---
+rows:
+  - name: bezel
+    type: number
+    default: "自动：短边的 12%，限制在 4–10px"
+    description: 折射边缘的宽度（px），不超过短边的一半。
+  - name: thickness
+    type: number
+    default: "自动：短边的 20%，限制在 8–24px"
+    description: 玻璃的厚度（px）；越厚，边缘把背后的内容带得越远。
+  - name: ior
+    type: number
+    default: 1.5
+    description: 折射率，取值 1–3；同样的坡度下折射率越高，边缘弯得越狠。
+  - name: refraction
+    type: number
+    default: 1
+    description: 边缘带走内容的强度倍率，0 及以上。
+  - name: zoom
+    type: number
+    default: 1
+    description: 中间的放大倍率，1 及以上；单独走一道位移，大于 1 时中间被重采样。
+  - name: profile
+    type: "'squircle' | 'circle'"
+    default: "'squircle'"
+    description: 边缘的截面：`squircle` 是平顶陡边的圆顶，`circle` 更圆。
+  - name: rimLight
+    type: number
+    default: 1
+    description: 沿边缘的高光强度，0 及以上。
+  - name: rimSaturation
+    type: number
+    default: 1
+    description: 透过边缘看到的内容的饱和度；大于 1 时发艳。
+  - name: dispersion
+    type: number
+    default: 0
+    description: 边缘处红、绿、蓝分开的程度，取值 0–0.5。
+  - name: frost
+    type: number
+    default: 0
+    description: 背后内容的磨砂模糊半径（px）。
+---
+::
+
 ### 插槽
 
 | 插槽名 | 参数 | 说明 |
 |--------|------|------|
 | `default` | - | 面板内容，在 `.tx-glass-surface__content` 中居中，位于滤镜层之上。 |
 
+### useLiquidDrag 选项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `bounds` | `MaybeRefOrGetter<HTMLElement \| ComponentPublicInstance \| null \| undefined>` | — | 透镜不得越出的元素；不传则指针到哪它到哪。 |
+| `disabled` | `MaybeRefOrGetter<boolean>` | `false` | 暂停拖动而不卸载。 |
+| `ignore` | `string` | — | 内部不触发拖动的元素的选择器，例如按钮。 |
+| `stiffness` | `MaybeRefOrGetter<number>` | `150` | 抬起与拉伸的弹簧刚度。 |
+| `damping` | `MaybeRefOrGetter<number>` | `19` | 弹簧阻尼；低则晃得久，高则立刻停。 |
+| `stretch` | `MaybeRefOrGetter<number>` | `0.00018` | 沿某一轴每 1 px/s 的速度拉长的比例（相对该轴尺寸）。 |
+| `maxStretch` | `MaybeRefOrGetter<number>` | `0.3` | 单个轴最多拉长的比例。 |
+| `restHeight` | `MaybeRefOrGetter<number>` | `1` | 静止时的高度，相对布局高度的比例。 |
+| `pressGrow` | `MaybeRefOrGetter<number>` | `0.1` | 按下时在静止高度上再长高的比例。 |
+| `swell` | `MaybeRefOrGetter<number>` | `0.016` | 抬起与落下时，每单位速度加宽的量。 |
+
+第一个参数是透镜的元素或组件实例（可以是 ref 或 getter）。数值选项每一帧都会重新读取，所以可以直接绑到滑块上调。返回 `{ dragging, position, reset }`：`dragging` 是只读的 `Ref<boolean>`，`position()` 给出透镜离布局位置的偏移（px），`reset()` 把它放回布局位置。组件与 `useLiquidDrag` 都从 `@talex-touch/tuffex/glass-surface` 导出，根入口也带上它们。
+
 ## 概述
 
+- `engine` 默认是 `classic`，`TxBaseSurface`、`TxRadioGroup`、`TxSlider` 等内部使用者不受影响。下面三条说的是 `classic`。
 - 按能力依次选择渲染路径：支持 `backdrop-filter: url()` 时用 SVG 位移折射；否则用 `blur()` 毛玻璃；仍不支持时退为半透明背景加边框。
 - Safari、Firefox、SSR 与没有 `CSS.supports` 的环境不走折射路径；降级路径保留尺寸、圆角与可读性，但没有 RGB 折射。
 - 位移图按实测尺寸的长宽比画成位图，长边不超过 256px，再拉伸铺满；容器尺寸或光学参数变化时重画。浏览器不走 SVG 滤镜路径或拿不到 2D canvas 时，位移图仍是 SVG。
 - 生成的 SVG 只做装饰，不可交互，位于内容层之下。
-- 高对比度下（触发条件见《[主题定制](./theming.zh.mdc)》）不折射、不模糊，改画不透明的浮层底色。
+- 高对比度下（触发条件见《[主题定制](./theming.zh.mdc)》）不折射、不模糊，改画不透明的浮层底色；`lens` 另把阴影换成一圈轮廓。
+- `lens` 引擎同样靠 `backdrop-filter: url()` 折射，所以只在 Chromium 内核里折射。Safari、Firefox、SSR 与还没量出尺寸的第一帧里，它是磨砂玻璃：模糊取 `frost` 与 12px 中较大的一个，再铺不低于 0.22 的着色；形状、圆角、阴影与拖拽照常。
+- `feDisplacementMap` 不在像素之间插值，所以在 1× 屏幕上，边缘下方的大块高亮细节（比如大号白字）会出现阶梯状的边；2× 及以上渲染平滑，1× 下把 `frost` 设为 1px 左右即可抹平。
+- `lens` 的折射图按实测尺寸画成位图，同一形状只画一次并缓存；同一帧里改多个属性只重画一次。`bezel` 与 `thickness` 不传时随短边取值，小控件得到薄边，大药丸得到深边。
+- `zoom` 为 1 时中间与页面一样锐利，模糊只混入被边缘折射的那一圈；`zoom` 大于 1 时中间被重采样，整块都会略软。
+- `lens` 的阴影由 `--tx-glass-lift`（静止 0，按下 1）与 `--tx-glass-unit`（小于 150px 的透镜按比例缩小）两个 CSS 变量驱动，光从左上来，投影落向右下；`useLiquidDrag` 写入前者。
+- `useLiquidDrag` 在按下时接管指针：对元素设置指针捕获，同时在 `window` 上监听 `pointermove`、`pointerup` 与 `pointercancel`，指针越出透镜、甚至越出窗口都照样跟随。元素被设为 `touch-action: none` 与 `user-select: none`，光标显示抓手，卸载或换元素时还原。减少动态效果时只抬起、不缓动，也不拉伸。
 
 ## 技术实现
 
 - 三个 `feDisplacementMap` 分别位移红、绿、蓝通道后合成，形成色散折射。
 - 位移图用位图而不用整幅 SVG：Chromium 每出一帧，都要在 CPU 上把 `feImage` 按绘制尺寸栅格化后随合成帧提交，整幅大小的位移图在大面板上每帧要花上百毫秒。
+- `lens` 把边缘看成一圈凸起的玻璃，截面高度为 `H(t) = (1 − (1 − t)⁴)^(1/4)`（`squircle`），按斯涅尔定律、折射率 `ior` 与玻璃厚度 `thickness` 算出每一点的位移，写进位移图的红、绿通道，交给 `feDisplacementMap`；`dispersion` 大于 0 时改为三道位移，红、蓝各偏离绿通道一点。边缘高光是另一张位图，`rimSaturation` 大于 1 时只对这一圈额外加一道 `saturate`。
+- 中间的放大是单独的一道位移：位移图只有 8 位精度，把放大和边缘折射合进一张图，放大区会出现台阶。
+- 滤镜用 `filterUnits="userSpaceOnUse"` 与显式的像素尺寸：0×0 的 SVG 里，百分比的滤镜子区域会塌成空，整个滤镜随之失效。
+- 同一帧里被多个属性触发的重画合并成一次；位移图、放大图与边缘高光各自按形状缓存，只改高光强度时只重画高光。
+- 折射剖面与弹簧手感的数值参考 glisse（https://glisse.kelvinzhang.com，MIT）的 Liquid Glass。
 - 源码：`packages/tuffex/packages/components/src/glass-surface/`。
 
 <TuffDocSourceLink />

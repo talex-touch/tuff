@@ -38,8 +38,8 @@ describe('privileged plugin capabilities', () => {
   // An undefined name reaches this from three different shapes upstream — activation.name,
   // expectedActivation.name, snapshot.manifest.name — and any of them can be absent.
   it('refuses an absent plugin name rather than treating it as a wildcard', () => {
-    expect(isPrivilegedPluginFor('translation', undefined)).toBe(false)
-    expect(isPrivilegedPluginFor('translation', '')).toBe(false)
+    expect(isPrivilegedPluginFor('snipasteProcess', undefined)).toBe(false)
+    expect(isPrivilegedPluginFor('snipasteProcess', '')).toBe(false)
   })
 
   it('names every holder exactly once', () => {
@@ -55,7 +55,6 @@ describe('privileged plugin capabilities', () => {
     it('returns the sole holder for a single-holder capability', () => {
       expect(privilegedPluginFor('batchRenameFilesystem')).toBe('touch-batch-rename')
       expect(privilegedPluginFor('snipasteProcess')).toBe('touch-snipaste')
-      expect(privilegedPluginFor('translation')).toBe('touch-translation')
     })
 
     // Returning the first of several would read as "the owner" at a call site that renders it as

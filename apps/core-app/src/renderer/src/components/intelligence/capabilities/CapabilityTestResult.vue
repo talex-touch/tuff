@@ -16,15 +16,29 @@ const props = defineProps<{
 const { t, locale } = useI18n()
 const router = useRouter()
 
+/** How main names a failed capability call for the app's own pages: `[CODE:capability] reason`. */
+const NAMED_FAILURE = /^\[[A-Z][A-Z0-9_]*(?::[^\]]*)?\]/
+
+const failure = computed(() => (props.result.success ? '' : (props.result.message ?? '')))
+
 /**
  * A test the usage limit refused says so in the interface's language — that the limit set in
- * Audit is used up, when it resets, and the way there — instead of main's English reason. Every
- * other failure keeps the message it came with.
+ * Audit is used up, when it resets, and the way there — instead of main's English reason.
  */
 const usageLimit = computed(() => {
-  const message = props.result.success ? '' : (props.result.message ?? '')
-  if (!message || !isUsageLimitFailure(message)) return null
-  return resolveIntelligenceErrorRecovery({ error: message }, t, locale.value)
+  if (!failure.value || !isUsageLimitFailure(failure.value)) return null
+  return resolveIntelligenceErrorRecovery({ error: failure.value }, t, locale.value)
+})
+
+/**
+ * Any other failure main named leads with what kind it is and what to do about it, in the
+ * interface's language; the message stays beneath, as the technical detail. A failure main did
+ * not name keeps the message it came with.
+ */
+const namedFailure = computed(() => {
+  if (usageLimit.value || !NAMED_FAILURE.test(failure.value)) return null
+  const recovery = resolveIntelligenceErrorRecovery({ error: failure.value }, t, locale.value)
+  return { title: recovery.title, advice: recovery.code === 'unknown' ? '' : recovery.detail }
 })
 
 const resultIcon = computed(() => {
@@ -48,6 +62,11 @@ const hasMetrics = computed(() => {
 const stabilityClass = computed(() => {
   return `test-result__stability--${props.result.stability?.status || 'unknown'}`
 })
+
+// The status is a code. Main words the summary and signals in the interface language itself.
+const stabilityStatusLabel = computed(() =>
+  t(`intelligence.capabilityTest.status.${props.result.stability?.status || 'unknown'}`)
+)
 </script>
 
 <template>
@@ -76,6 +95,21 @@ const stabilityClass = computed(() => {
       >
         {{ usageLimit.action.label }}
       </TxButton>
+    </div>
+    <div
+      v-else-if="namedFailure"
+      class="test-result__section"
+      data-testid="capability-test-named-failure"
+    >
+      <p class="test-result__message">
+        {{ namedFailure.title }}
+      </p>
+      <p v-if="namedFailure.advice" class="test-result__advice">
+        {{ namedFailure.advice }}
+      </p>
+      <p class="test-result__detail">
+        {{ failure }}
+      </p>
     </div>
     <div v-else-if="result.message" class="test-result__section">
       <p class="test-result__message">
@@ -130,7 +164,7 @@ const stabilityClass = computed(() => {
       </div>
       <div class="test-result__stability" :class="stabilityClass">
         <div class="test-result__stability-head">
-          <span class="test-result__stability-status">{{ result.stability.status }}</span>
+          <span class="test-result__stability-status">{{ stabilityStatusLabel }}</span>
           <span
             v-if="typeof result.stability.score === 'number'"
             class="test-result__stability-score"
@@ -227,6 +261,22 @@ const stabilityClass = computed(() => {
   font-size: 0.875rem;
   color: var(--tx-text-color-primary);
   line-height: 1.6;
+}
+
+.test-result__advice {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--tx-text-color-regular);
+  line-height: 1.6;
+}
+
+.test-result__detail {
+  margin: 0.5rem 0 0;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--tx-text-color-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .test-result__action {

@@ -65,8 +65,8 @@ import { agentBrand, agentCountsFrom } from '~/components/settings/resources/age
 import ResourceAgentBar from '~/components/settings/resources/ResourceAgentBar.vue'
 import ResourceRow from '~/components/settings/resources/ResourceRow.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
+import { describeFailure } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { errorMessage } from './setting-ai-import-shared'
 import {
   builtinDraftDirty,
   builtinRevertWrite,
@@ -79,6 +79,7 @@ import {
   enabledSkillCount,
   filterBuiltinSkills,
   filterSkillRows,
+  localSkillFailureText,
   mergeBuiltinDraft,
   normalizeBuiltinDraft,
   sharedNames,
@@ -315,7 +316,7 @@ async function onSwitch(row: SkillInventoryRow, value: boolean): Promise<void> {
     log.error('Failed to switch a skill', error)
     const message = t('settings.skillsPage.toggleFailed', {
       name: row.name,
-      reason: errorMessage(error, t('settings.skillsPage.toggleFailedUnknown'))
+      reason: localSkillFailureText(error, t, t('settings.skillsPage.toggleFailedUnknown'))
     })
     failures.set(row.id, message)
     toast.error(message)
@@ -355,7 +356,7 @@ async function addDir(): Promise<void> {
     log.error('Failed to add a skill directory', error)
     toast.error(
       t('settings.skillsPage.dirAddFailed', {
-        reason: errorMessage(error, t('settings.skillsPage.toggleFailedUnknown'))
+        reason: localSkillFailureText(error, t, t('settings.skillsPage.toggleFailedUnknown'))
       })
     )
   } finally {
@@ -374,7 +375,7 @@ async function removeDir(path: string): Promise<void> {
     log.error('Failed to remove a skill directory', error)
     toast.error(
       t('settings.skillsPage.dirRemoveFailed', {
-        reason: errorMessage(error, t('settings.skillsPage.toggleFailedUnknown'))
+        reason: localSkillFailureText(error, t, t('settings.skillsPage.toggleFailedUnknown'))
       })
     )
   } finally {
@@ -539,7 +540,7 @@ async function runTest(params?: {
   } catch (error) {
     testResults[id] = {
       success: false,
-      message: error instanceof Error ? error.message : t('settings.skillsPage.testFailed'),
+      message: describeFailure(error, t, t('settings.skillsPage.testFailed')),
       timestamp: Date.now()
     }
   } finally {

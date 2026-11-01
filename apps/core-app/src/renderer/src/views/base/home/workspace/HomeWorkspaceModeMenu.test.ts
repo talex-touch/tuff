@@ -118,7 +118,7 @@ async function pressEscape(): Promise<void> {
 describe('HomeWorkspaceModeMenu', () => {
   it('names the chip after the mode or the profile, never with a prefix', async () => {
     const menu = mountMenu()
-    expect(menu.get('.ComposerChip-Label').text()).toBe('home.workspace.mode.chat')
+    expect(menu.get('.ComposerChip-Label').text()).toBe('Tuff Pi Coordinator')
 
     await menu.setProps({ mode: 'agent', profileId: 'tuff-pi' })
     expect(menu.get('.ComposerChip-Label').text()).toBe('Tuff Pi Coordinator')
@@ -128,30 +128,24 @@ describe('HomeWorkspaceModeMenu', () => {
     )
   })
 
-  it('lists 「对话」 and the enabled profiles by name only, and reads them again on every open', async () => {
+  it('lists Tuff Coordinator and the enabled profiles by name only, and reads them again on every open', async () => {
     const menu = await openMenu()
 
-    expect(rowNames(menu)).toEqual(['home.workspace.mode.chat', 'Tuff Pi Coordinator'])
+    expect(rowNames(menu)).toEqual(['Tuff Pi Coordinator'])
     expect(menu.find('.HomeWorkspaceModeMenu-Hint').exists()).toBe(false)
     // Positive control below: the same finder sees both switches in 「管理智能体」.
     expect(menu.findAllComponents({ name: 'TuffSwitch' })).toHaveLength(0)
-    expect(rowNamed(menu, 'home.workspace.mode.chat').attributes('aria-checked')).toBe('true')
+    expect(rowNamed(menu, 'Tuff Pi Coordinator').attributes('aria-checked')).toBe('true')
     expect(menu.emitted('load-profiles')).toHaveLength(1)
     // Opening lands on the current choice, so the arrows start from it.
     await nextTick()
-    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    expect(document.activeElement).toBe(rowNamed(menu, 'Tuff Pi Coordinator').element)
   })
 
-  it('turns a picked profile into Agent mode with that profile, and 「对话」 back into Chat', async () => {
+  it('turns a picked profile into Agent mode with that profile', async () => {
     const menu = await openMenu()
     await rowNamed(menu, 'Tuff Pi Coordinator').trigger('click')
     expect(menu.emitted('select-agent')).toEqual([['tuff-pi']])
-
-    await menu.setProps({ mode: 'agent', profileId: 'tuff-pi' })
-    await menu.get('.ComposerChip').trigger('click')
-    await nextTick()
-    await rowNamed(menu, 'home.workspace.mode.chat').trigger('click')
-    expect(menu.emitted('select-chat')).toHaveLength(1)
   })
 
   it('says a mode change continues in a branch, and holds it while a reply runs', async () => {
@@ -188,10 +182,9 @@ describe('HomeWorkspaceModeMenu', () => {
     await rows[1]!.findComponent({ name: 'TuffSwitch' }).vm.$emit('update:modelValue', true)
     expect(menu.emitted('toggle-profile')).toEqual([[RESEARCHER, true]])
 
+    await menu.setProps({ profiles: [COORDINATOR, { ...RESEARCHER, enabled: true }] })
     await menu.get('.HomeWorkspaceModeMenu-Back').trigger('click')
-    expect(rowNames(menu)).toEqual(['home.workspace.mode.chat', 'Tuff Pi Coordinator'])
-
-    await menu.get('.HomeWorkspaceModeMenu-Row[role="menuitem"]').trigger('click')
+    expect(rowNames(menu)).toEqual(['Tuff Pi Coordinator', '资料研究员'])
     await menu.get('.ComposerChip').trigger('click')
     await nextTick()
     await menu.get('.ComposerChip').trigger('click')
@@ -226,7 +219,7 @@ describe('HomeWorkspaceModeMenu', () => {
   it('returns focus to the chip when Escape closes the menu, even after focus fell to the page', async () => {
     const menu = await openMenu()
     await nextTick()
-    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    expect(document.activeElement).toBe(rowNamed(menu, 'Tuff Pi Coordinator').element)
     await pressEscape()
     expect(menu.find('.dropdown-stub__panel').exists()).toBe(false)
     expect(document.activeElement).toBe(menu.get('.ComposerChip').element)
@@ -236,7 +229,7 @@ describe('HomeWorkspaceModeMenu', () => {
     await menu.get('.ComposerChip').trigger('click')
     await nextTick()
     await nextTick()
-    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    expect(document.activeElement).toBe(rowNamed(menu, 'Tuff Pi Coordinator').element)
     ;(document.activeElement as HTMLElement).blur()
     expect(document.activeElement).toBe(document.body)
     await pressEscape()
@@ -269,7 +262,7 @@ describe('HomeWorkspaceModeMenu', () => {
     await menu.setProps({ profiles: [COORDINATOR], profilesError: false })
     await nextTick()
     expect(menu.find('.HomeWorkspaceModeMenu-Link').exists()).toBe(false)
-    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    expect(document.activeElement).toBe(rowNamed(menu, 'Tuff Pi Coordinator').element)
   })
 
   it('shows a skeleton row on the first read and the reason when there is nothing to run', async () => {

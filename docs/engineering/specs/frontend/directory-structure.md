@@ -78,7 +78,7 @@ Use `plugins/<plugin>/` for official plugin manifests, prelude/runtime code, and
 ## Naming Conventions
 
 - Vue components use PascalCase filenames: `TxFileUploader.vue`, `SettingFileIndex.vue`, `IntelligenceAuditPage.vue`.
-- Composables use `use*` names: `useShortcutCopy`, `useDocEngagementTracker`.
+- Composables use `use*` names: `useUpdateDownloadProgress`, `useDocEngagementTracker`.
 - Pinia stores use `use*Store`: `usePluginStore`.
 - Domain display helpers use descriptive kebab or domain names near the owner: `indexing-source-diagnostics-display.ts`, `app-index-manager-display.ts`.
 - Tests generally sit beside the feature and end in `.test.ts`; TuffEx tests live under component-local `__tests__/`.
@@ -88,7 +88,7 @@ Use `plugins/<plugin>/` for official plugin manifests, prelude/runtime code, and
 ## Examples
 
 - CoreApp global renderer state: `apps/core-app/src/renderer/src/stores/plugin.ts`.
-- CoreApp local composable: `apps/core-app/src/renderer/src/views/base/settings/components/useShortcutCopy.ts`.
+- CoreApp local composable: `apps/core-app/src/renderer/src/views/base/settings/useUpdateDownloadProgress.ts`.
 - Nexus client lifecycle composable: `apps/nexus/app/composables/useDocEngagementTracker.ts`.
 - TuffEx primitive and test: `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue` and `packages/tuffex/packages/components/src/collapse/__tests__/collapse.test.ts`.
 - Shared localized value helpers: `packages/utils/i18n/localized.ts`.

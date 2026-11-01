@@ -11,7 +11,10 @@ import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { resolveStoreInstallFailureReason } from './store-install-error-utils'
+import {
+  resolveStoreInstallActiveUi,
+  resolveStoreInstallFailureReason
+} from './store-install-error-utils'
 import { usePluginVersionStatus } from './usePluginVersionStatus'
 
 const storeInstallLog = createRendererLogger('StoreInstall')
@@ -180,11 +183,11 @@ export function useStoreInstall() {
 
       // Handle active UI error specially
       const errorMessage = getErrorMessage(error)
-      if (errorMessage.startsWith('PLUGIN_HAS_ACTIVE_UI:')) {
-        const uiInfo = errorMessage.replace('PLUGIN_HAS_ACTIVE_UI:', '')
+      const activeUi = resolveStoreInstallActiveUi(errorMessage, t)
+      if (activeUi !== null) {
         await forTouchTip(
           t('store.upgradeDialog.activeUITitle'),
-          t('store.upgradeDialog.activeUIMessage', { name: plugin.name, ui: uiInfo }),
+          t('store.upgradeDialog.activeUIMessage', { name: plugin.name, ui: activeUi }),
           [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
         )
         return

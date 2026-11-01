@@ -76,7 +76,7 @@ const summaryLabel = computed(() => {
     return t('download.no_tasks')
   }
 
-  return `${speedLabel.value} · ${progressPercent.value}% · ${activeTaskCount.value}${t('download.items')}`
+  return `${speedLabel.value} · ${progressPercent.value}% · ${t('download.items', { count: activeTaskCount.value })}`
 })
 
 const buttonLabel = computed(() =>

@@ -3,7 +3,7 @@ title: "ImagePreview"
 description: "A full-window image viewer with zoom, rotation, and swipe paging."
 category: Data
 status: beta
-since: 0.9.1
+since: 0.9.2
 tags: [image, zoom, gesture, lightbox]
 syncStatus: reviewed
 verified: false

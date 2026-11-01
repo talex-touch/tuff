@@ -11,6 +11,7 @@ import type {
   ConversationTurnMeta
 } from './useHomeConversation'
 import { applyMessageUpdate } from '@talex-touch/pi-desktop-reuse/message-stream'
+import { readTurnFailure } from './conversation-error-display'
 
 /**
  * The narrow projection between Tuff's Home message and PI-Desktop's streaming row.
@@ -67,7 +68,7 @@ export function fromHostMessage(host: WorkspaceHostMessage): ConversationMessage
     content: host.content,
     status: host.status
   }
-  if (host.error) message.error = host.error
+  if (host.error) message.error = readTurnFailure(host.error)
   if (host.meta && Object.keys(host.meta).length > 0) {
     message.meta = host.meta as ConversationTurnMeta
   }

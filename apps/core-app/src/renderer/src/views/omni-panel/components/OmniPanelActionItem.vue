@@ -111,6 +111,13 @@ const sourceLabel = computed(() => {
   color: inherit;
 }
 
+// TxButton wraps the slot in a flex row of its own, which put the title beside the icon and cut it
+// to a few letters; the tile stacks them.
+.OmniPanelActionItem__action :deep(.tx-button__inner) {
+  flex-direction: column;
+  height: 100%;
+}
+
 .OmniPanelActionItem__body {
   flex: 1;
   width: 100%;

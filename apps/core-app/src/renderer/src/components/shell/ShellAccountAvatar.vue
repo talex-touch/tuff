@@ -63,6 +63,28 @@ const accountLabel = computed(() =>
     : t('accountMenu.signedOut')
 )
 const profiles = computed(() => connection.state.value?.profiles ?? [])
+/**
+ * The profiles worth listing: one whose Chrome is not running reads 「等待 Chrome」 and offers
+ * nothing to pick, so it stays out of the menu until Chrome opens. Pairing, an unsupported
+ * platform and an empty connection are the manage view's to explain.
+ */
+const liveProfiles = computed(() =>
+  profiles.value.filter((profile) => profile.status !== 'offline')
+)
+const chromeLoadFailed = computed(
+  () => !connection.state.value && !connection.loading.value && Boolean(connection.loadError.value)
+)
+const showChromeProfiles = computed(
+  () => liveProfiles.value.length > 0 || chromeLoadFailed.value || Boolean(actionError.value)
+)
+/**
+ * In the Home top bar, the avatar entry only appears when a browser connection is live.
+ * On the Browser page itself, it always appears as part of that surface's toolbar.
+ */
+const shouldShow = computed(() => {
+  if (route.path === '/browser') return true
+  return isBetaFeatureEnabled(appSetting, 'browserWorkspace') && liveProfiles.value.length > 0
+})
 const chromeSummary = computed(() => {
   const active = connection.activeProfile.value
   if (active) return `${active.label} · ${t(browserProfileStatus(active).label)}`
@@ -204,7 +226,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-none" style="-webkit-app-region: no-drag">
+  <div v-if="shouldShow" class="flex-none" style="-webkit-app-region: no-drag">
     <TxPopover
       v-model="open"
       trigger="manual"
@@ -321,9 +343,6 @@ onBeforeUnmount(() => {
               </div>
             </template>
             <template v-else>
-              <p class="m-0 px-1.5 text-xs leading-normal text-[var(--tx-text-color-secondary)]">
-                {{ t('accountMenu.signedOutHint') }}
-              </p>
               <div class="flex flex-wrap gap-1">
                 <TxButton
                   variant="flat"
@@ -345,14 +364,13 @@ onBeforeUnmount(() => {
                 </TxButton>
               </div>
             </template>
-            <p class="m-0 px-1.5 text-[11px] leading-normal text-[var(--tx-text-color-secondary)]">
-              {{ t('accountMenu.identityNote') }}
-            </p>
           </section>
 
           <section
+            v-if="showChromeProfiles"
             class="flex flex-col gap-2 border-t border-[var(--tx-border-color-light)] pt-3"
             :aria-labelledby="chromeHeadingId"
+            :aria-label="t('accountMenu.chromeProfiles')"
           >
             <h3
               :id="chromeHeadingId"
@@ -368,16 +386,7 @@ onBeforeUnmount(() => {
               {{ actionError }}
             </p>
             <div
-              v-if="!connection.state.value && connection.loading.value"
-              class="flex flex-col gap-1.5 px-1.5"
-              aria-busy="true"
-              :aria-label="t('browserConnection.loading')"
-            >
-              <TxSkeleton width="100%" :height="32" :radius="8" />
-              <TxSkeleton width="100%" :height="32" :radius="8" />
-            </div>
-            <div
-              v-else-if="!connection.state.value"
+              v-if="chromeLoadFailed"
               role="alert"
               class="flex flex-col items-start gap-1.5 px-1.5"
             >
@@ -394,58 +403,42 @@ onBeforeUnmount(() => {
                 {{ t('browserConnection.retry') }}
               </TxButton>
             </div>
-            <template v-else>
-              <p
-                v-if="!profiles.length"
-                class="m-0 px-1.5 text-xs leading-normal text-[var(--tx-text-color-secondary)]"
+            <div
+              v-else-if="connection.state.value && liveProfiles.length"
+              class="flex flex-col gap-0.5"
+              role="group"
+              :aria-label="t('accountMenu.chromeProfiles')"
+            >
+              <TxButton
+                v-for="profile in liveProfiles"
+                :key="profile.id"
+                variant="ghost"
+                size="md"
+                block
+                :aria-pressed="connection.state.value.activeProfileId === profile.id"
+                :disabled="connection.busy.has('select')"
+                :data-profile-id="profile.id"
+                @click="selectProfile(profile.id)"
               >
-                {{
-                  t(
-                    !connection.state.value.installation.supported
-                      ? 'browserConnection.connector.unsupported'
-                      : connection.state.value.pairing
-                        ? 'accountMenu.chromePairing'
-                        : 'accountMenu.chromeEmpty'
-                  )
-                }}
-              </p>
-              <div
-                v-else
-                class="flex flex-col gap-0.5"
-                role="group"
-                :aria-label="t('accountMenu.chromeProfiles')"
-              >
-                <TxButton
-                  v-for="profile in profiles"
-                  :key="profile.id"
-                  variant="ghost"
-                  size="md"
-                  block
-                  :aria-pressed="connection.state.value.activeProfileId === profile.id"
-                  :disabled="connection.busy.has('select')"
-                  :data-profile-id="profile.id"
-                  @click="selectProfile(profile.id)"
-                >
-                  <span class="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    <span
-                      class="inline-flex h-4 w-4 flex-none"
-                      :class="
-                        connection.state.value.activeProfileId === profile.id
-                          ? 'i-ri-checkbox-circle-fill text-[var(--tx-color-primary)]'
-                          : 'i-ri-chrome-line'
-                      "
-                      aria-hidden="true"
-                    />
-                    <span class="min-w-0 flex-1 truncate">{{ profile.label }}</span>
-                    <TxStatusBadge
-                      :text="t(browserProfileStatus(profile).label)"
-                      :status="browserProfileStatus(profile).tone"
-                      size="sm"
-                    />
-                  </span>
-                </TxButton>
-              </div>
-            </template>
+                <span class="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <span
+                    class="inline-flex h-4 w-4 flex-none"
+                    :class="
+                      connection.state.value.activeProfileId === profile.id
+                        ? 'i-ri-checkbox-circle-fill text-[var(--tx-color-primary)]'
+                        : 'i-ri-chrome-line'
+                    "
+                    aria-hidden="true"
+                  />
+                  <span class="min-w-0 flex-1 truncate">{{ profile.label }}</span>
+                  <TxStatusBadge
+                    :text="t(browserProfileStatus(profile).label)"
+                    :status="browserProfileStatus(profile).tone"
+                    size="sm"
+                  />
+                </span>
+              </TxButton>
+            </div>
             <TxButton
               variant="ghost"
               size="sm"

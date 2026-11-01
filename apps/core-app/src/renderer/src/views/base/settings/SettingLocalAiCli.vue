@@ -6,7 +6,9 @@ import type {
   LocalAiCliProviderStatus,
   LocalAiCliStatus
 } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type { TerminalFontInfo } from '@talex-touch/utils/transport/events/terminal'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
+import { createTerminalSdk } from '@talex-touch/utils/transport/sdk/domains/terminal'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -15,11 +17,15 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
+import { describeFailure, failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
-const sdk = createLocalAiCliSdk(useTuffTransport())
+const transport = useTuffTransport()
+const sdk = createLocalAiCliSdk(transport)
+const terminalSdk = createTerminalSdk(transport)
 const log = createRendererLogger('SettingLocalAiCli')
+const availableFonts = ref<TerminalFontInfo[]>([])
 
 const status = ref<LocalAiCliStatus | null>(null)
 const loading = ref(false)
@@ -57,9 +63,12 @@ function providerDescription(provider: LocalAiCliProviderStatus): string {
       )
     : ''
   if (!provider.installed) {
-    const unavailable = provider.issueCode
-      ? t('settingLocalAiCli.providerUnavailableWithReason', { reason: provider.issueCode })
-      : t('settingLocalAiCli.providerUnavailable')
+    // A detailed status says why a CLI is missing only as PROVIDER_UNAVAILABLE: looked for and not
+    // found, which is what the plain sentence says.
+    const unavailable =
+      provider.issueCode && provider.issueCode !== 'PROVIDER_UNAVAILABLE'
+        ? t('settingLocalAiCli.providerUnavailableWithReason', { reason: provider.issueCode })
+        : t('settingLocalAiCli.providerUnavailable')
     return [overrideNote, unavailable].filter(Boolean).join(' · ')
   }
   return [overrideNote, provider.version, provider.executablePath, capabilityLabel(provider)]
@@ -72,6 +81,7 @@ function cloneLocalAiSettings(): typeof appSetting.localAiCli {
   return {
     enabled: current.enabled,
     defaultProvider: current.defaultProvider,
+    terminalFontFamily: current.terminalFontFamily || '',
     providers: {
       pi: { ...current.providers.pi },
       codex: { ...current.providers.codex },
@@ -134,6 +144,19 @@ async function setDefaultProvider(provider: string | number): Promise<void> {
   await persistLocalAiSettings(next)
 }
 
+async function setTerminalFontFamily(font: string | number): Promise<void> {
+  const next = cloneLocalAiSettings()
+  next.terminalFontFamily = typeof font === 'string' ? font : ''
+  await persistLocalAiSettings(next)
+}
+
+async function loadFonts(): Promise<void> {
+  try {
+    availableFonts.value = await terminalSdk.listFonts()
+  } catch (error) {
+    log.warn('Failed to load system terminal fonts', error)
+  }
+}
 /**
  * Reads the status. The main process answers from what it probed before; `refresh` (the
  * 「重新探测」 button) makes it look for every CLI and ask each its version again. Always with
@@ -155,11 +178,17 @@ async function refreshStatus(options: { refresh?: boolean } = {}): Promise<void>
 async function locateProvider(provider: LocalAiCliProviderId): Promise<void> {
   locatingProvider.value = provider
   try {
+    // A pick that fails the version check is saved all the same and comes back as
+    // `settingsOverrideRejected`, which the provider's description reads. A picker closed
+    // without a pick is no failure.
     await sdk.locate({ provider })
     await refreshStatus()
   } catch (error) {
+    if (failureMessage(error).includes('LOCAL_AI_CLI_LOCATE_CANCELLED')) return
     log.error('Failed to locate local AI CLI executable', error)
-    toast.error(t('settingLocalAiCli.messages.locateFailed'))
+    toast.error(t('settingLocalAiCli.messages.locateFailed'), {
+      description: describeFailure(error, t, '') || undefined
+    })
   } finally {
     locatingProvider.value = null
   }
@@ -167,6 +196,7 @@ async function locateProvider(provider: LocalAiCliProviderId): Promise<void> {
 
 onMounted(() => {
   void refreshStatus()
+  void loadFonts()
 })
 </script>
 
@@ -225,6 +255,19 @@ onMounted(() => {
       <TxSelectItem value="">{{ t('settingLocalAiCli.defaultAutomatic') }}</TxSelectItem>
       <TxSelectItem v-for="provider in enabledProviders" :key="provider.id" :value="provider.id">
         {{ provider.label }}
+      </TxSelectItem>
+    </TuffBlockSelect>
+
+    <TuffBlockSelect
+      :model-value="appSetting.localAiCli.terminalFontFamily || ''"
+      :disabled="saving || !appSetting.localAiCli.enabled"
+      :title="t('settingLocalAiCli.terminalFont')"
+      :description="t('settingLocalAiCli.terminalFontDesc')"
+      @update:model-value="setTerminalFontFamily"
+    >
+      <TxSelectItem value="">{{ t('settingLocalAiCli.terminalFontDefault') }}</TxSelectItem>
+      <TxSelectItem v-for="font in availableFonts" :key="font.family" :value="font.family">
+        {{ font.label }}
       </TxSelectItem>
     </TuffBlockSelect>
   </TuffGroupBlock>

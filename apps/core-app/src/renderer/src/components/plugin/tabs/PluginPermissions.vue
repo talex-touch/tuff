@@ -15,6 +15,7 @@ import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
+import { describePluginSdkBlock } from '~/modules/plugin/plugin-issue-display'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -28,7 +29,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const permissionSdk = usePermissionSdk()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const pluginPermissionsLog = createRendererLogger('PluginPermissions')
 
 interface PluginPermissionStatus {
@@ -77,9 +78,9 @@ const permissionBlocked = computed(() => {
   return sdkBlocked.value
 })
 
-const blockedMessage = computed(() => {
-  return sdkBlockedState.value.message
-})
+const blockedMessage = computed(() =>
+  sdkBlocked.value ? describePluginSdkBlock(props.plugin, t, locale.value) : ''
+)
 const declaredPermissionIds = computed(() => {
   const required = props.plugin.declaredPermissions?.required || []
   const optional = props.plugin.declaredPermissions?.optional || []
@@ -259,6 +260,7 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
     'system.tray',
     'system.shortcut',
     'intelligence.basic',
+    'intelligence.context',
     'storage.shared',
     'account.read'
   ]
@@ -284,6 +286,7 @@ function getPermissionIcon(permissionId: string): string {
     'intelligence.basic': 'i-carbon-bot',
     'intelligence.admin': 'i-carbon-shield',
     'intelligence.agents': 'i-carbon-user-multiple',
+    'intelligence.context': 'i-carbon-chat',
     'storage.plugin': 'i-carbon-data-base',
     'storage.shared': 'i-carbon-share',
     'window.create': 'i-carbon-application',

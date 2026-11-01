@@ -33,6 +33,9 @@ export interface DrawnSlide extends PreviewSlide {
   style: CSSProperties | undefined
   frame: Record<string, string>
   picture: Record<string, string>
+  view: PreviewView
+  turns: number
+  stage: PreviewSize
   /** The thumbnail's pixels standing in until the picture loads. */
   standIn: string | null
   loaded: boolean
@@ -147,7 +150,7 @@ export function usePreviewSlides(options: PreviewSlidesOptions): PreviewSlides {
    * which may load mid-air. One paged away from mid-air lands where it waits beside the current one.
    */
   function landingPose(slide: PreviewSlide, size: PreviewSize): FlightPose {
-    const own = pictures.isFailed(slide.item.url) ? undefined : pictures.sizes.value.get(slide.item.url)
+    const own = pictures.readySize(slide.item)
     const base = own ?? size
     // A neighbour at rest has its place across from its slide; a flight is drawn without one.
     const rest = slide.offset === 0 ? null : restPose(slide, base)
@@ -179,8 +182,8 @@ export function usePreviewSlides(options: PreviewSlidesOptions): PreviewSlides {
         ? lerpPose(shown.from, shown.to ?? landingPose(slide, size), presence)
         : restPose(slide, size)
       const styles = poseStyles(pose, size)
-      const standIn = pictures.standIns.value.get(slide.item.url)?.src ?? null
-      const loaded = pictures.isLoaded(slide.item.url)
+      const standIn = slide.item.url ? pictures.standIns.value.get(slide.item.url)?.src ?? null : null
+      const loaded = pictures.readySize(slide.item) !== null
       return {
         ...slide,
         key: `${slide.index}:${slide.item.url}`,
@@ -191,9 +194,14 @@ export function usePreviewSlides(options: PreviewSlidesOptions): PreviewSlides {
         style: flying ? undefined : slideStyle(slide),
         frame: styles.frame,
         picture: styles.image,
+        view: slide.offset === 0
+          ? gestures.view.value ?? fitView(size, options.fitBox())
+          : outgoing.value?.index === slide.index ? outgoing.value.view : fitView(size, options.fitBox()),
+        turns: slide.offset === 0 ? gestures.turns.value : outgoing.value?.index === slide.index ? outgoing.value.turns : 0,
+        stage: options.stageSize(),
         standIn,
         loaded,
-        failed: pictures.isFailed(slide.item.url),
+        failed: !pictures.isCustom(slide.item) && pictures.isFailed(slide.item.url),
         placeholder: pictures.skeletonShown.value && !loaded && !standIn ? placeholderStyle(slide) : null,
       }
     })

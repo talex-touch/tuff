@@ -97,6 +97,7 @@ code: |
 | `system.notification` | Low | System notifications |
 | `system.tray` | Medium | System tray |
 | `intelligence.basic` | Low | Basic intelligence |
+| `intelligence.context` | Medium | Context sessions with history and memories |
 | `intelligence.admin` | High | Admin intelligence |
 | `intelligence.agents` | High | Intelligence agents |
 | `storage.plugin` | Low | Plugin storage (auto-granted) |

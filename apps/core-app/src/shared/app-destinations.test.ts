@@ -215,7 +215,18 @@ describe('app destination alias matching', () => {
     ['settings-update', 'jcgx'],
     ['settings-update', 'rjgx'],
     ['settings-about', 'gy'],
-    ['settings-about', 'bbxx']
+    ['settings-about', 'bbxx'],
+    // The shortcut manager, asked for the way people ask for it.
+    ['shortcuts', '快捷键'],
+    ['shortcuts', '快捷方式'],
+    ['shortcuts', '修改快捷键'],
+    ['shortcuts', '修改 Tuff 快捷键'],
+    ['shortcuts', '修改tuff快捷键'],
+    ['shortcuts', '唤出快捷键'],
+    ['shortcuts', 'tuff 快捷键'],
+    ['shortcuts', 'keyboard shortcuts'],
+    ['shortcuts', 'hotkeys'],
+    ['shortcuts', 'kjj']
   ] as const)('resolves %s from the %s phrase', (destinationId, query) => {
     expect(resolveAppDestinationQuery(query)?.id).toBe(destinationId)
   })
@@ -250,6 +261,8 @@ describe('app destination alias matching', () => {
     '语音',
     '渠道',
     '索引',
+    // macOS's Shortcuts app: an exact alias would rank Tuff's manager above it.
+    'shortcuts',
     'unknown destination text'
   ])('returns no destination for the bare or ambiguous query %s', (query) => {
     expect(resolveAppDestinationQuery(query)).toBeNull()
@@ -393,6 +406,7 @@ describe('app destination icon classes', () => {
       'i-ri-mic-line',
       'i-ri-file-chart-line',
       'i-ri-puzzle-line',
+      'i-ri-keyboard-line',
       'i-ri-apps-2-line',
       'i-ri-file-search-line',
       'i-ri-global-line',
