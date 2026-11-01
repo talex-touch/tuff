@@ -5,7 +5,7 @@ import type {
 import { computed, ref, shallowRef } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { MAIN_WINDOW_COMMAND_CATALOG, PALETTE_COMMAND_ID } from './main-window-command-catalog'
-import { commandModifierHeld, shortcutChordMatches } from './shortcut-chord'
+import { shortcutChordMatches } from './shortcut-chord'
 
 /**
  * The MainWindow shortcut layer: which chords are live, which are being held down, and whether the

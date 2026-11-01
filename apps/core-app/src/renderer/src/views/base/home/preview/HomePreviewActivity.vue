@@ -8,7 +8,7 @@ import type {
 import { computed, ref } from 'vue'
 import { INTERRUPTED_TOOL_CALL_ERROR } from '~/modules/conversation/chain-steps'
 import { describeToolCallError } from '~/modules/conversation/tool-call-error'
-import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
+import { isStoppedTurn } from '~/modules/conversation/useTurnFailureWording'
 import { useI18n } from 'vue-i18n'
 import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
@@ -31,7 +31,6 @@ const props = defineProps<{
 defineEmits<{ (event: 'locate', messageIndex: number): void }>()
 
 const { t } = useI18n()
-const { describeTurnFailure } = useTurnFailureWording()
 
 function toolErrorText(error: string): string {
   return error === INTERRUPTED_TOOL_CALL_ERROR
@@ -42,15 +41,6 @@ function toolErrorText(error: string): string {
 /** Main stores a reply the reader or the app stopped as failed; the row says it stopped. */
 function turnState(turn: ActivityTurn): string {
   return turn.status === 'failed' && isStoppedTurn(turn.error) ? 'stopped' : turn.status
-}
-
-/**
- * The reply's model, and for a failed reply what ended it — the conversation's own words for the
- * failure, left out when all they would add is that it failed.
- */
-function turnDetail(turn: ActivityTurn): string {
-  const failure = turnState(turn) === 'failed' ? describeTurnFailure(turn.error) : null
-  return [turn.model, failure].filter(Boolean).join(' · ')
 }
 
 const TOOL_ICON: Record<ActivityTool['status'], string> = {

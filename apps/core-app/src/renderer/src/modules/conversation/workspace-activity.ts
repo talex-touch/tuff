@@ -199,8 +199,8 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
     const userAttachments = userMessage?.attachments?.map((att) => ({
       name: att.name,
       kind: att.kind,
-      size: att.size,
-      type: att.type
+      size: att.kind === 'file' ? att.size : undefined,
+      type: att.kind === 'file' ? att.mime : undefined
     }))
 
     const contextMessages = messages.slice(0, index).map((m) => ({
@@ -211,7 +211,7 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
             attachments: m.attachments.map((a) => ({
               name: a.name,
               kind: a.kind,
-              size: a.size
+              size: a.kind === 'file' ? a.size : undefined
             }))
           }
         : {})

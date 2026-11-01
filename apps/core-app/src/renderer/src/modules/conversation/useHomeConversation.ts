@@ -66,6 +66,7 @@ export interface ConversationTurnMeta {
   totalTokens?: number
   latencyMs?: number
   ttftMs?: number
+  coordinator?: string
   /** How many times the provider compacted its context while producing this turn. */
   compactions?: number
   /**

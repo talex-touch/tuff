@@ -2084,7 +2084,7 @@ function isTurnFooterResting(message: ConversationMessage): boolean {
 
 watch(
   () => messages.value.map((m) => `${m.id}:${m.status}`).join(';'),
-  (current, previous) => {
+  (_current, previous) => {
     if (!previous) return
     const prevMap = new Map(previous.split(';').map((s) => s.split(':') as [string, string]))
     for (const msg of messages.value) {

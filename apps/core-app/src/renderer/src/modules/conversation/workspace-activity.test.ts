@@ -30,10 +30,11 @@ describe('workspace-activity request details', () => {
         status: 'complete',
         attachments: [
           {
+            id: 'att-u2',
             name: 'sample.png',
-            kind: 'image',
+            kind: 'file',
             size: 1024,
-            type: 'image/png'
+            mime: 'image/png'
           }
         ]
       },
@@ -68,7 +69,7 @@ describe('workspace-activity request details', () => {
     expect(secondTurn.request.attachments).toEqual([
       {
         name: 'sample.png',
-        kind: 'image',
+        kind: 'file',
         size: 1024,
         type: 'image/png'
       }

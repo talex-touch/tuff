@@ -93,7 +93,8 @@ export function writableConversationSettings(): ConversationSettings {
       model: null,
       favoriteModels: [],
       recentModels: [],
-      reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING
+      reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING,
+      showTurnMetrics: true
     }
     appSetting.conversation = created
   }
