@@ -1,4 +1,8 @@
 import type {
+  AiChainStep,
+  AiToolCallPart,
+} from "@talex-touch/tuffex/ai-elements";
+import type {
   ChatComposerAttachment,
   ChatMessageModel,
 } from "@talex-touch/tuffex/chat";
@@ -45,8 +49,6 @@ export interface TxAiRevealProps {
   motion?: TxAiMotionPreset;
   appear?: boolean;
   duration?: number;
-  delay?: number;
-  delayStep?: number;
   disabledMotion?: boolean;
 }
 
@@ -56,8 +58,7 @@ export interface TxAiStreamTextProps {
   streaming?: boolean;
   cursor?: boolean;
   motion?: TxAiMotionPreset;
-  duration?: number;
-  wrap?: boolean;
+  /** One word is released every this many milliseconds. */
   stagger?: number;
 }
 
@@ -183,6 +184,27 @@ export interface TxAiCitationProps {
   href?: string;
   index?: number;
   description?: string;
+}
+
+/**
+ * One ordered piece of an assistant turn: a thought, a tool call, or prose, in the order the model
+ * produced them. Structurally the host's `MessageSegment`, so hosts pass theirs unchanged.
+ */
+export type TxAiSegment =
+  | { kind: "reasoning"; id: string; step: AiChainStep }
+  | { kind: "tool"; id: string; part: AiToolCallPart }
+  | { kind: "text"; id: string; text: string; streaming: boolean };
+
+export interface TxAiAssistantTurnProps {
+  segments: TxAiSegment[];
+  /** The turn is still being produced; drives the live state of its thought blocks. */
+  streaming?: boolean;
+  /** Bound to every prose block (`TxStreamElement`): locale, copy labels, markdown labels. */
+  elementProps?: Record<string, unknown>;
+  /** Bound to every tool card (`TxToolCallCard`): its labels. */
+  toolCallProps?: Record<string, unknown>;
+  /** Tools the host renders itself through the `tool` slot (widgets, forms, charts). */
+  hasToolFace?: (part: AiToolCallPart) => boolean;
 }
 
 export function toTuffexChatMessage(

@@ -155,20 +155,6 @@ export function useMessageParts(options: MessagePartsOptions) {
   })
 
   /**
-   * The reader's manual open/collapse, keyed per thinking block. Held here rather
-   * than in the chain component because streaming re-renders can recreate that
-   * instance — state kept there dies mid-turn, which read as "clicking does
-   * nothing". Keyed by segment rather than by message now that one turn can
-   * carry several blocks.
-   */
-  const chainOpen = reactive(new Map<string, boolean>())
-  /**
-   * Manual open/collapse for tool cards, keyed per segment id.
-   * Held here so streaming re-renders never wipe the reader's open state.
-   */
-  const toolOpen = reactive(new Map<string, boolean>())
-
-  /**
    * Labels for the tool card. TuffEx carries no i18n, so the wording comes from here.
    */
   const toolCallLabels = computed(() => ({
@@ -233,8 +219,6 @@ export function useMessageParts(options: MessagePartsOptions) {
     showToolPayload,
     payloadFor,
     payloadJson,
-    chainOpen,
-    toolOpen,
     toolCallLabels,
     markdownLabels,
     codePartProps

@@ -405,6 +405,7 @@ button {
 
 .uikit-mockup__segmented {
   display: inline-flex;
+  flex: none;
   gap: 4px;
   border: 1px solid var(--mock-border);
   border-radius: 12px;
@@ -418,6 +419,7 @@ button {
     padding: 6px 10px;
     color: var(--mock-muted);
     font-size: 14px;
+    white-space: nowrap;
     cursor: pointer;
 
     &.is-active {

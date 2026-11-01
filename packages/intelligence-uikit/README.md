@@ -69,7 +69,7 @@ import { TxAiConversation } from '@talex-touch/intelligence-uikit'
 
 ### Phase 4：AI 体验渐进替换
 
-- 在 `apps/conversation` 增加 `@talex-touch/intelligence-uikit` 依赖。
+- 在 `apps/core-app` 增加 `@talex-touch/intelligence-uikit` 依赖。
 - 更新 Nuxt alias / transpile。
 - 先替换低风险内部组件，再替换主聊天页。
 

@@ -57,6 +57,10 @@ export default defineConfig({
         replacement: path.join(tuffexRoot, 'packages', 'components', 'src', '$1', 'index.ts')
       },
       {
+        find: /^@talex-touch\/intelligence-uikit$/,
+        replacement: path.join(workspaceRoot, 'packages', 'intelligence-uikit', 'src', 'index.ts')
+      },
+      {
         find: /^@talex-touch\/tuffex$/,
         replacement: path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
       }

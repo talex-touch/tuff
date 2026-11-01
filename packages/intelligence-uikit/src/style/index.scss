@@ -1,57 +1,70 @@
 @import '@talex-touch/tuffex/base.css';
-@import '@talex-touch/tuffex/auto-sizer/style.css';
 @import '@talex-touch/tuffex/chat/style.css';
 @import '@talex-touch/tuffex/icon/style.css';
 @import '@talex-touch/tuffex/markdown-view/style.css';
-@import '@talex-touch/tuffex/stagger/style.css';
-@import '@talex-touch/tuffex/text-transformer/style.css';
-@import '@talex-touch/tuffex/transition/style.css';
+@import '@talex-touch/tuffex/stream-markdown/style.css';
+@import '@talex-touch/tuffex/stream-text/style.css';
+@import '@talex-touch/tuffex/edge-fade-mask/style.css';
+@import '@talex-touch/tuffex/tool-call-card/style.css';
 
-.tx-ai-reveal {
-  --tx-ai-reveal-duration: 220ms;
-  --tx-ai-reveal-delay: 0ms;
+// Entrance for TxAiReveal. A CSS animation on the wrapper, not a <Transition>: the slot
+// may hold any number of children and the reveal only ever needs to run once, on mount.
+.tx-ai-reveal.is-appearing {
+  animation-duration: var(--tx-ai-reveal-duration, 220ms);
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: both;
 }
 
-.tx-ai-stream-text {
-  display: inline-flex;
-  align-items: baseline;
-  max-width: 100%;
-  color: inherit;
+.tx-ai-reveal--fade.is-appearing,
+.tx-ai-reveal--blur.is-appearing {
+  animation-name: tx-ai-reveal-fade;
+}
 
-  &.is-wrap {
-    white-space: pre-wrap;
+.tx-ai-reveal--slide-fade.is-appearing {
+  animation-name: tx-ai-reveal-slide;
+}
+
+.tx-ai-reveal--rebound.is-appearing {
+  animation-name: tx-ai-reveal-rebound;
+}
+
+@keyframes tx-ai-reveal-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
-.tx-ai-stream-text__plain {
-  overflow: hidden;
-  text-overflow: ellipsis;
+@keyframes tx-ai-reveal-slide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.tx-ai-stream-text__characters {
-  display: inline;
-}
+@keyframes tx-ai-reveal-rebound {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 
-.tx-ai-stream-text__char {
-  display: inline-block;
-  opacity: 0;
-  animation: tx-ai-character-fade var(--tx-ai-char-duration, 240ms) ease both;
-  animation-delay: var(--tx-ai-char-delay, 0ms);
-  will-change: opacity, transform, filter;
-}
+  60% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 
-.tx-ai-stream-text__cursor {
-  width: 1px;
-  height: 1em;
-  margin-left: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  animation: tx-ai-cursor-blink 1s steps(2, start) infinite;
-}
-
-.tx-ai-stream-text.is-streaming .tx-ai-stream-text__char {
-  animation-name: tx-ai-character-fade-in-out;
-  animation-duration: calc(var(--tx-ai-char-duration, 240ms) + 520ms);
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .tx-ai-thinking {
@@ -60,29 +73,11 @@
   color: var(--tx-text-color-secondary, #6b7280);
 }
 
-.tx-ai-markdown.is-streaming .markdown-body > * {
-  animation: tx-ai-markdown-node-enter 220ms ease both;
-}
-
-.tx-ai-markdown.is-streaming .markdown-body > :nth-child(2) {
-  animation-delay: 28ms;
-}
-
-.tx-ai-markdown.is-streaming .markdown-body > :nth-child(3) {
-  animation-delay: 56ms;
-}
-
-.tx-ai-markdown.is-streaming .markdown-body > :nth-child(4) {
-  animation-delay: 84ms;
-}
-
-.tx-ai-markdown.is-streaming .markdown-body > :nth-child(5) {
-  animation-delay: 112ms;
-}
-
-.tx-ai-markdown.is-streaming .markdown-body > :nth-child(6) {
-  animation-delay: 140ms;
-}
+// No per-node entrance animation while streaming. `v-html` replaces the whole body on
+// every chunk, so every node is a new element on every chunk and any animation on it
+// restarts: at a 40ms chunk rate the growing paragraph never leaves the animation's
+// start opacity. The block's own reveal (TxAiReveal on the markdown view) is the
+// entrance; content that arrives mid-stream simply appears.
 
 .tx-ai-loading-hint,
 .tx-ai-tool-call {
@@ -90,7 +85,7 @@
   align-items: center;
   gap: 10px;
   max-width: 100%;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
+  border: 1px solid color-mix(in srgb, var(--tx-ai-tone, var(--tx-border-color-lighter, #e5e7eb)) 42%, var(--tx-border-color-lighter, #e5e7eb));
   border-radius: 12px;
   background: color-mix(in srgb, var(--tx-fill-color-blank, #fff) 88%, transparent);
   padding: 8px 10px;
@@ -119,7 +114,47 @@
   height: 8px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: currentColor;
+  background: var(--tx-ai-tone, currentColor);
+}
+
+// Tone and status arrive as `<component>--<token>` classes. Nothing styled them, so an
+// errored tool call and a successful one painted the same neutral dot and the same
+// border. Each element carries one `--tx-ai-tone`; the base border rules read it with
+// the neutral border as the fallback, so a new tone is one line, not one rule per
+// component, and rule order cannot decide the winner.
+$tx-ai-tone-colors: (
+  primary: var(--tx-color-primary, #409eff),
+  success: var(--tx-color-success, #67c23a),
+  warning: var(--tx-color-warning, #e6a23c),
+  danger: var(--tx-color-danger, #f56c6c),
+  info: var(--tx-color-info, #909399),
+);
+
+@each $tone, $color in $tx-ai-tone-colors {
+  .tx-ai-loading-hint--#{$tone},
+  .tx-ai-result-card--#{$tone},
+  .tx-ai-agent-badge--#{$tone} {
+    --tx-ai-tone: #{$color};
+  }
+}
+
+// `status` is the tool-call axis and outranks `tone` for the dot: a failed tool is red
+// whatever tone the caller asked for.
+.tx-ai-loading-hint--pending,
+.tx-ai-loading-hint--running {
+  --tx-ai-tone: var(--tx-color-primary, #409eff);
+}
+
+.tx-ai-loading-hint--success {
+  --tx-ai-tone: var(--tx-color-success, #67c23a);
+}
+
+.tx-ai-loading-hint--error {
+  --tx-ai-tone: var(--tx-color-danger, #f56c6c);
+}
+
+.tx-ai-loading-hint--cancelled {
+  --tx-ai-tone: var(--tx-color-info, #909399);
 }
 
 .tx-ai-message__blocks {
@@ -294,11 +329,9 @@
 
 .tx-ai-rich-block__image {
   max-width: min(100%, 320px);
-  border: 0;
+  margin: 0;
   border-radius: 12px;
-  padding: 0;
   overflow: hidden;
-  cursor: pointer;
 
   img {
     display: block;
@@ -310,7 +343,7 @@
 .tx-ai-rich-block__error,
 .tx-ai-rich-block__card,
 .tx-ai-result-card {
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
+  border: 1px solid color-mix(in srgb, var(--tx-ai-tone, var(--tx-border-color-lighter, #e5e7eb)) 42%, var(--tx-border-color-lighter, #e5e7eb));
   border-radius: 12px;
   background: var(--tx-fill-color-blank, #fff);
   padding: 10px 12px;
@@ -389,6 +422,7 @@
   color: var(--tx-text-color-secondary, #6b7280);
   font-size: 14px;
   line-height: 1.55;
+  animation: tx-ai-thought-content-fade 180ms ease both;
 }
 
 .tx-ai-rich-block__thought-sizer {
@@ -402,10 +436,6 @@
 
 .tx-ai-rich-block__thought-plain {
   display: block;
-}
-
-.tx-ai-rich-block__thought-content {
-  animation: tx-ai-thought-content-fade 180ms ease both;
 }
 
 .tx-ai-rich-block__thought-content.is-running {
@@ -436,7 +466,7 @@
   align-items: center;
   gap: 8px;
   max-width: 100%;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
+  border: 1px solid color-mix(in srgb, var(--tx-ai-tone, var(--tx-border-color-lighter, #e5e7eb)) 42%, var(--tx-border-color-lighter, #e5e7eb));
   border-radius: 999px;
   background: var(--tx-fill-color-blank, #fff);
   padding: 4px 8px;
@@ -454,7 +484,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  background: color-mix(in srgb, var(--tx-ai-tone, var(--tx-color-primary, #409eff)) 12%, transparent);
   font-size: 12px;
   font-weight: 600;
 
@@ -469,65 +499,6 @@
 .tx-ai-citation__body {
   display: grid;
   min-width: 0;
-}
-
-@keyframes tx-ai-cursor-blink {
-  0%,
-  45% {
-    opacity: 1;
-  }
-
-  46%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes tx-ai-character-fade {
-  from {
-    opacity: 0;
-    filter: blur(3px);
-    transform: translateY(0.18em);
-  }
-
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-}
-
-@keyframes tx-ai-character-fade-in-out {
-  0% {
-    opacity: 0;
-    filter: blur(3px);
-    transform: translateY(0.18em);
-  }
-
-  38%,
-  76% {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-
-  100% {
-    opacity: 0.72;
-    filter: blur(0.4px);
-    transform: translateY(0);
-  }
-}
-
-@keyframes tx-ai-markdown-node-enter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes tx-ai-thought-content-fade {
@@ -568,9 +539,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tx-ai-stream-text__char,
-  .tx-ai-markdown.is-streaming .markdown-body > *,
-  .tx-ai-stream-text__cursor,
+  .tx-ai-reveal.is-appearing,
   .tx-ai-rich-block__thought.is-running .tx-ai-rich-block__thought-title,
   .tx-ai-composer.is-submitting .tx-chat-composer__card::after {
     animation: none;

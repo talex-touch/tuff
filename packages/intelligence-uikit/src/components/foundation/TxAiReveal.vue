@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { TxAiRevealProps } from '../../types'
 import { computed } from 'vue'
-import { TxStagger } from '@talex-touch/tuffex/stagger'
-import { TxTransition } from '@talex-touch/tuffex/transition'
 
 defineOptions({
   name: 'TxAiReveal',
@@ -13,21 +11,21 @@ const props = withDefaults(defineProps<TxAiRevealProps>(), {
   motion: 'slide-fade',
   appear: true,
   duration: 220,
-  delay: 0,
-  delayStep: 28,
   disabledMotion: false,
 })
 
-const transitionPreset = computed(() => {
-  if (props.motion === 'rebound')
-    return 'rebound'
-  if (props.motion === 'fade' || props.motion === 'blur')
-    return 'fade'
-  return 'slide-fade'
-})
+// A one-shot entrance on the wrapper itself, not a <Transition> around the slot: the
+// slot may hold any number of children, and Transition only accepts one. The wrapper is
+// ours, so `as` is honoured and a consumer's class still lands on the same element.
+const animated = computed(() => props.appear && !props.disabledMotion && props.motion !== 'none')
+
+const rootClass = computed(() => ({
+  'tx-ai-reveal': true,
+  'is-appearing': animated.value,
+  [`tx-ai-reveal--${props.motion}`]: animated.value,
+}))
 
 const rootStyle = computed(() => ({
-  '--tx-ai-reveal-delay': `${props.delay}ms`,
   '--tx-ai-reveal-duration': `${props.duration}ms`,
 }))
 </script>
@@ -35,24 +33,9 @@ const rootStyle = computed(() => ({
 <template>
   <component
     :is="as"
-    v-if="disabledMotion || motion === 'none'"
-    class="tx-ai-reveal"
+    :class="rootClass"
     :style="rootStyle"
   >
     <slot />
   </component>
-
-  <TxStagger
-    v-else
-    :tag="as"
-    class="tx-ai-reveal"
-    :appear="appear"
-    :duration="duration"
-    :delay-base="delay"
-    :delay-step="delayStep"
-  >
-    <TxTransition :preset="transitionPreset" :duration="duration">
-      <slot />
-    </TxTransition>
-  </TxStagger>
 </template>

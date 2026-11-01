@@ -9,7 +9,7 @@ import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspa
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
+import { TxAiAssistantTurn } from '@talex-touch/intelligence-uikit'
 import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
@@ -23,7 +23,6 @@ import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
 import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
-import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
@@ -93,6 +92,8 @@ import { useHomeAttachments } from './composables/useHomeAttachments'
 import { useLeavingHead } from './composables/useLeavingHead'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { usePassageSelection } from './composables/usePassageSelection'
+import { useFileLinkClick } from './composables/useFileLinkClick'
+import HomeFilePreviewDrawer from './preview/HomeFilePreviewDrawer.vue'
 import { useConversationTitle } from './composables/useConversationTitle'
 import { useThinkingTicker } from './composables/useThinkingTicker'
 import { useHomeCommands } from './composables/useHomeCommands'
@@ -582,8 +583,6 @@ const {
   showToolPayload,
   payloadFor,
   payloadJson,
-  chainOpen,
-  toolOpen,
   toolCallLabels,
   markdownLabels,
   codePartProps
@@ -614,6 +613,24 @@ const { passageSelection, passageActions, runPassageAction } = usePassageSelecti
   draft,
   conversationId,
   autoGrow
+})
+
+// ---------------------------------------------------------------------------
+// File path links: Command-Click opens in right drawer, Shift-Command-Click in system
+// ---------------------------------------------------------------------------
+
+const fileDrawerVisible = ref(false)
+const previewFilePath = ref('')
+const previewDisplayPath = ref('')
+
+useFileLinkClick({
+  container: bodyRef,
+  projectRoot: computed(() => currentProject.value?.rootPath),
+  onOpenRight: ({ absolutePath, displayPath }) => {
+    previewFilePath.value = absolutePath
+    previewDisplayPath.value = displayPath
+    fileDrawerVisible.value = true
+  }
 })
 
 /**
@@ -1143,105 +1160,70 @@ useHomeCommands({
                     </template>
 
                     <template v-else>
-                      <!-- Reasoning and tool calls in the order they streamed:
-                           each thinking span its own block, each call its own
-                           card. One trail per turn used to fold everything into
-                           a single box, which lost that order entirely.
-                           Keyed by segment: the surrounding v-if/v-for branches
-                           churn on every streaming delta, and unkeyed alignment
-                           can recreate these mid-turn — taking the user's
-                           open/collapse choice with it. -->
-                      <template v-for="segment in segmentsOf(message)" :key="segment.id">
-                        <!-- The label carries the span's own title, so the
-                             block reads as that thought rather than as a
-                             generic container. -->
-                        <TxChainOfThought
-                          v-if="segment.kind === 'reasoning'"
-                          class="HomePage-Chain"
-                          :steps="[segment.step]"
-                          :streaming="message.status === 'streaming'"
-                          :default-open="false"
-                          :user-open="chainOpen.get(segment.id)"
-                          :label="segment.step.title"
-                          @toggle="chainOpen.set(segment.id, $event)"
-                        />
+                      <!-- Reasoning, prose and tool calls in the order they streamed. The kit
+                           keys each segment, so a streaming delta never resets what the reader
+                           opened. Tools with a face of their own (widget, form, chart) come
+                           through the `tool` slot; the machinery card stays for the rest. -->
+                      <TxAiAssistantTurn
+                        :segments="segmentsOf(message)"
+                        :streaming="message.status === 'streaming'"
+                        :element-props="{
+                          class: 'HomePage-Reply',
+                          locale,
+                          copyLabel: t('home.copy'),
+                          copiedLabel: t('home.copied'),
+                          markdownProps: markdownLabels,
+                          ...codePartProps
+                        }"
+                        :tool-call-props="{ class: 'HomePage-Tool', ...toolCallLabels }"
+                        :has-tool-face="
+                          (part) => !!(formSpecOf(part) || chartSpecOf(part) || widgetSpecOf(part))
+                        "
+                      >
+                        <template #tool="{ segment }">
+                          <div class="HomePage-WidgetBlock">
+                            <ToolWidgetCard
+                              v-if="widgetSpecOf(segment.part)"
+                              :source="widgetSpecOf(segment.part)!.source"
+                              :title="widgetSpecOf(segment.part)!.title"
+                              :fallback="segment.part.output"
+                            />
+                            <ToolFormCard
+                              v-else-if="formSpecOf(segment.part)"
+                              v-bind="codePartProps"
+                              :spec="formSpecOf(segment.part)!"
+                              :submitted="
+                                submittedForms.has(segment.part.id) ||
+                                segment.part.submitted === true
+                              "
+                              :initial-values="formDrafts.get(segment.part.id)"
+                              :submit-label="t('home.formSubmit')"
+                              :reset-label="t('home.formReset')"
+                              :required-hint="t('home.formRequired')"
+                              :submitted-label="t('home.formDone')"
+                              :select-placeholder="t('home.formSelect')"
+                              @submit="submitForm(segment.part, $event)"
+                              @change="formDrafts.set(segment.part.id, $event)"
+                            />
+                            <ToolChartCard
+                              v-else
+                              :spec="chartSpecOf(segment.part)!"
+                              :animate="message.status === 'streaming'"
+                            />
 
-                        <!-- Prose sits where it was spoken. Tested before the
-                             widget branch below, which reads `segment.part` —
-                             a text segment carries no call to read it from. -->
-                        <TxStreamElement
-                          v-else-if="segment.kind === 'text'"
-                          class="HomePage-Reply"
-                          :content="segment.text"
-                          :streaming="segment.streaming"
-                          :locale="locale"
-                          :copy-label="t('home.copy')"
-                          :copied-label="t('home.copied')"
-                          :markdown-props="markdownLabels"
-                          v-bind="codePartProps"
-                        />
-
-                        <!-- Widgets embed as themselves — a form is a form, not
-                             a tool log with a form inside. The machinery card
-                             stays for tools without a face, and for the
-                             running window before a widget's spec exists. -->
-                        <div
-                          v-else-if="
-                            formSpecOf(segment.part) ||
-                            chartSpecOf(segment.part) ||
-                            widgetSpecOf(segment.part)
-                          "
-                          class="HomePage-WidgetBlock"
-                        >
-                          <ToolWidgetCard
-                            v-if="widgetSpecOf(segment.part)"
-                            :source="widgetSpecOf(segment.part)!.source"
-                            :title="widgetSpecOf(segment.part)!.title"
-                            :fallback="segment.part.output"
-                          />
-                          <ToolFormCard
-                            v-else-if="formSpecOf(segment.part)"
-                            v-bind="codePartProps"
-                            :spec="formSpecOf(segment.part)!"
-                            :submitted="
-                              submittedForms.has(segment.part.id) || segment.part.submitted === true
-                            "
-                            :initial-values="formDrafts.get(segment.part.id)"
-                            :submit-label="t('home.formSubmit')"
-                            :reset-label="t('home.formReset')"
-                            :required-hint="t('home.formRequired')"
-                            :submitted-label="t('home.formDone')"
-                            :select-placeholder="t('home.formSelect')"
-                            @submit="submitForm(segment.part, $event)"
-                            @change="formDrafts.set(segment.part.id, $event)"
-                          />
-                          <ToolChartCard
-                            v-else
-                            :spec="chartSpecOf(segment.part)!"
-                            :animate="message.status === 'streaming'"
-                          />
-
-                          <!-- The raw call, for builders only: a whisper of a
-                               toggle, and none at all outside dev builds. -->
-                          <button
-                            v-if="showToolPayload"
-                            class="HomePage-PayloadBtn"
-                            type="button"
-                            @click="payloadFor = segment.part"
-                          >
-                            <span class="i-ri-braces-line" />
-                            <span>{{ t('home.toolPayload') }}</span>
-                          </button>
-                        </div>
-                        <TxToolCallCard
-                          v-else
-                          class="HomePage-Tool"
-                          :tool-call="segment.part"
-                          :user-open="toolOpen.get(segment.id)"
-                          v-bind="toolCallLabels"
-                          @toggle="toolOpen.set(segment.id, $event)"
-                        />
-                      </template>
+                            <!-- The raw call, for builders only: none outside dev builds. -->
+                            <button
+                              v-if="showToolPayload"
+                              class="HomePage-PayloadBtn"
+                              type="button"
+                              @click="payloadFor = segment.part"
+                            >
+                              <span class="i-ri-braces-line" />
+                              <span>{{ t('home.toolPayload') }}</span>
+                            </button>
+                          </div>
+                        </template>
+                      </TxAiAssistantTurn>
 
                       <!-- A turn that never carried structured parts stays a
                            plain string; the loop above has nothing to render
@@ -1806,6 +1788,13 @@ useHomeCommands({
       hide-prompt
       @action="runPassageAction"
     />
+
+    <!-- File preview drawer for command-clicking file paths in conversation -->
+    <HomeFilePreviewDrawer
+      v-model:visible="fileDrawerVisible"
+      :file-path="previewFilePath"
+      :display-path="previewDisplayPath"
+    />
   </div>
 </template>
 
@@ -2330,8 +2319,8 @@ useHomeCommands({
   pointer-events: auto;
 }
 
-.HomePage-Chain,
-.HomePage-Tool {
+:deep(.HomePage-Tool),
+:deep(.HomePage-Chain) {
   width: 100%;
 }
 
@@ -2427,7 +2416,7 @@ useHomeCommands({
  * raised surface. The class now sits on TxStreamMarkdown — no `pre-wrap` here, markdown
  * owns its own whitespace; colour and size align the markdown body with the shell.
  */
-.HomePage-Reply {
+:deep(.HomePage-Reply) {
   width: 100%;
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-md);
@@ -3067,6 +3056,17 @@ textarea.HomePage-Input:focus-visible {
 
   .HomePage-Compacting {
     animation: none;
+  }
+
+  :deep(.is-command-path-clickable) {
+    cursor: pointer !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px !important;
+    color: var(--tx-color-primary, #409eff) !important;
+  }
+
+  :deep(.has-command-active code) {
+    cursor: pointer;
   }
 }
 </style>

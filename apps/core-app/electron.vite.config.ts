@@ -167,7 +167,11 @@ const tuffexDevPlugins: Plugin[] = isProduction
 const vueSetupExtendPlugin = VueSetupExtend() as Plugin
 const shouldSkipSetupExtend = (id: string) => {
   const cleanId = id.split('?', 1)[0]
-  return cleanId.includes('/packages/tuffex/') || cleanId.includes('/packages/tuff-business/')
+  return (
+    cleanId.includes('/packages/tuffex/') ||
+    cleanId.includes('/packages/tuff-business/') ||
+    cleanId.includes('/packages/intelligence-uikit/')
+  )
 }
 const filteredVueSetupExtend: Plugin = {
   name: 'vite:setup-name-support-filter',
@@ -412,6 +416,10 @@ export default defineConfig({
         ...tuffexAliases,
         ...tuffBusinessAliases,
         ...tuffIntelligenceAliases,
+        {
+          find: /^@talex-touch\/intelligence-uikit$/,
+          replacement: path.join(workspaceRoot, 'packages', 'intelligence-uikit', 'src', 'index.ts')
+        },
         ...utilsAliases
       ]
     },
