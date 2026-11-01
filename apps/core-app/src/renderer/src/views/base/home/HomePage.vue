@@ -9,7 +9,10 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { MessageSegment } from '~/modules/conversation/chain-steps'
-import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import type {
+  ConversationMessage,
+  ConversationTurnMeta
+} from '~/modules/conversation/useHomeConversation'
 import type {
   ConversationWorkspaceMode,
   WorkspaceSubmitDisposition
@@ -23,12 +26,18 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
+import type { SelectionActionItem, SelectionPayload } from '@talex-touch/tuffex/selection-actions'
+import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxModal } from '@talex-touch/tuffex/modal'
+import { TxMotionText } from '@talex-touch/tuffex/motion-text'
+import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
-import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
+import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
+import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
@@ -54,12 +63,12 @@ import { toast } from 'vue-sonner'
 import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
-import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
 import { describeToolCallError } from '~/modules/conversation/tool-call-error'
+import { rollThinkingVerb } from '~/modules/conversation/thinking-words'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
 import {
@@ -102,6 +111,7 @@ import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelli
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
 import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
+import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
@@ -113,7 +123,6 @@ import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/typ
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolvedTheme } from '~/modules/storage/theme-style'
-import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
@@ -121,15 +130,24 @@ import type { DictationFailureNotice } from './composer/dictation-notice'
 import { classifyDictationFailure, showDictationNotice } from './composer/dictation-notice'
 import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
+import HomeContextMeter from './composer/HomeContextMeter.vue'
+import HomeRunStatus from './composer/HomeRunStatus.vue'
+import {
+  contextPercent,
+  deriveRunStep,
+  formatWindow,
+  lastReportedTurn
+} from './composer/run-status'
 import { useComposerDictation } from './composer/useComposerDictation'
 import { voiceGlowDriveLevel, voiceGlowLobes, voiceGlowResponse } from './composer/voice-glow'
-import ComposerControl from './composer/ComposerControl.vue'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
 import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
 import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
+import { homeLog } from './composables/home-log'
+import { useReadAloud } from './composables/useReadAloud'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -153,6 +171,10 @@ const MAX_INPUT_HEIGHT = 200
 
 const draft = ref('')
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+/** The scrolling transcript column: the subtree a text selection is scoped to. */
+const bodyRef = ref<HTMLElement | null>(null)
+/** The floating selection bar itself; focusing it must not read as a deselection. */
+const selectionBarRef = ref<HTMLElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
 const composerRef = ref<HTMLElement | null>(null)
@@ -523,6 +545,7 @@ const generatedTitle = ref<string | null>(null)
  */
 let titleInFlightFor: string | null = null
 const titleSequence = createLatestOnly()
+const titleFailedFor = new Set<string>()
 
 const firstUserContent = computed(
   () => messages.value.find((message) => message.role === 'user')?.content
@@ -682,51 +705,23 @@ watch(
 
 const intelligenceSdk = useIntelligenceSdk()
 
-/** At most one message reads at a time; starting another stops the current. */
-const speaking = ref<{ id: string; state: 'loading' | 'speaking' } | null>(null)
-let speakAudio: HTMLAudioElement | null = null
-let speakToken = 0
+const { toggleSpeak, speakStateOf } = useReadAloud()
 
-function stopSpeaking(): void {
-  speakToken += 1
-  speakAudio?.pause()
-  speakAudio = null
-  speaking.value = null
-}
+/**
+ * One verb per turn, held by message id: the header must not reshuffle on every
+ * streaming delta (a re-render happens tens of times a second), but a new turn
+ * should read differently from the last one.
+ */
+const thinkingVerbs = new Map<string, string>()
 
-async function toggleSpeak(message: ConversationMessage): Promise<void> {
-  if (speaking.value?.id === message.id) {
-    stopSpeaking()
-    return
-  }
-  stopSpeaking()
-  if (!message.content) return
-
-  const token = ++speakToken
-  speaking.value = { id: message.id, state: 'loading' }
-  try {
-    const result = await intelligenceSdk.ttsSpeak({ text: message.content })
-    // The user may have toggled away while synthesis ran.
-    if (token !== speakToken) return
-    const audio = new Audio(result.audio)
-    speakAudio = audio
-    audio.onended = () => {
-      if (token === speakToken) stopSpeaking()
-    }
-    await audio.play()
-    if (token === speakToken) speaking.value = { id: message.id, state: 'speaking' }
-  } catch (error) {
-    if (token !== speakToken) return
-    homeLog.warn('Read aloud failed', String(error))
-    toast.error(t('home.speakFailed'))
-    stopSpeaking()
-  }
-}
-
-onBeforeUnmount(stopSpeaking)
-
-function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speaking' {
-  return speaking.value?.id === message.id ? speaking.value.state : 'idle'
+function thinkingVerbFor(message: ConversationMessage): string {
+  const existing = thinkingVerbs.get(message.id)
+  if (existing) return existing
+  // A host that stubs `useI18n` (tests) can leave `locale` absent; the verb list
+  // then falls back to the source language rather than throwing mid-render.
+  const verb = rollThinkingVerb(locale?.value ?? 'zh')
+  thinkingVerbs.set(message.id, verb)
+  return verb
 }
 
 /**
@@ -736,7 +731,8 @@ function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speak
  */
 function segmentsOf(message: ConversationMessage): MessageSegment[] {
   return toMessageSegments(message.parts, message.status === 'streaming', {
-    thinking: t('home.thinking'),
+    thinking: t('home.thinkingVerb', { verb: thinkingVerbFor(message) }),
+    thinkingFor: (time) => t('home.thinkingFor', { time }),
     interrupted: t('home.toolInterrupted'),
     toolError: (error) => describeToolCallError(error, t)
   })
@@ -842,6 +838,11 @@ const payloadJson = computed(() => {
  * carry several blocks.
  */
 const chainOpen = reactive(new Map<string, boolean>())
+/**
+ * Manual open/collapse for tool cards, keyed per segment id.
+ * Held here so streaming re-renders never wipe the reader's open state.
+ */
+const toolOpen = reactive(new Map<string, boolean>())
 
 /** Grows the composer with its content up to a cap, then scrolls — the usual chat affordance. */
 function autoGrow(): void {
@@ -850,6 +851,100 @@ function autoGrow(): void {
   input.style.height = 'auto'
   input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`
 }
+
+// ---------------------------------------------------------------------------
+// Highlighted transcript text
+// ---------------------------------------------------------------------------
+
+/**
+ * A snapshot of what the reader highlighted inside the transcript. Scoped to the
+ * scrolling column so a selection in the composer or the side panel never raises the bar,
+ * and kept as a snapshot because focusing the bar collapses the live range.
+ */
+const { selection: passageSelection, clear: clearPassageSelection } = useSelectionAnchor({
+  root: bodyRef,
+  ignore: () => [selectionBarRef.value],
+  minLength: 2
+})
+
+const passageActions = computed<SelectionActionItem[]>(() => [
+  { id: 'copy', label: t('home.copy') },
+  { id: 'quote', label: t('home.quote') }
+])
+
+/** Drops the live highlight as well as the snapshot: the bar is gone, the mark should go too. */
+function dismissPassage(): void {
+  clearPassageSelection()
+  window.getSelection()?.removeAllRanges()
+}
+
+/** Quotes the passage into the composer as a blockquote, leaving the caret after it. */
+function quotePassage(text: string): void {
+  const quoted = text
+    .trim()
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n')
+  const existing = draft.value.replace(/\s+$/, '')
+  draft.value = existing ? `${existing}\n\n${quoted}\n\n` : `${quoted}\n\n`
+  void nextTick(() => {
+    const input = inputRef.value
+    if (!input) return
+    input.focus()
+    input.selectionStart = input.value.length
+    input.selectionEnd = input.value.length
+    autoGrow()
+  })
+}
+
+async function runPassageAction(payload: {
+  id: string
+  selection: SelectionPayload
+}): Promise<void> {
+  if (payload.id === 'copy') {
+    try {
+      await navigator.clipboard.writeText(payload.selection.text)
+    } catch {
+      // A denied clipboard is not worth an error state in the transcript.
+    }
+  } else if (payload.id === 'quote') {
+    quotePassage(payload.selection.text)
+  }
+  dismissPassage()
+}
+
+/**
+ * The bar is about one passage in one thread, so it must not outlive either:
+ * a click anywhere outside the highlight retracts it, and switching
+ * conversation retracts it outright. Without this it stayed pinned over the
+ * new thread's messages, still holding a snapshot of text that is no longer
+ * on screen.
+ *
+ * `pointerdown`, not `click`: pressing a message's own action button would
+ * otherwise collapse the highlight first and the click would land on nothing.
+ */
+function onDocumentPointerDown(event: PointerEvent): void {
+  if (!passageSelection.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  // A click inside the bar is the bar acting on the passage, and a new drag
+  // inside the transcript is the reader choosing a different one.
+  if (selectionBarRef.value?.contains(target)) return
+  if (bodyRef.value?.contains(target)) {
+    // A press inside the column only retracts when it did not start a new
+    // selection: pressing to select is how the next passage is chosen.
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && selection.toString().trim()) return
+    dismissPassage()
+    return
+  }
+  dismissPassage()
+}
+
+onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown, true))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointerDown, true))
+
+watch(conversationId, () => dismissPassage())
 
 /**
  * The field returns to one line once its draft is sent — eased rather than snapped when `animate`:
@@ -1545,7 +1640,6 @@ const composerClearance = computed(() =>
 // Persistence
 // ============================================================================
 
-const homeLog = createRendererLogger('HomeConversation')
 const history = useConversationHistory()
 const projectStore = useProjectStore()
 
@@ -1575,7 +1669,10 @@ const toolCallLabels = computed(() => ({
   runningLabel: t('home.toolCall.running'),
   doneLabel: t('home.toolCall.done'),
   errorLabel: t('home.toolCall.error'),
-  inputLabel: t('home.toolCall.input')
+  inputLabel: t('home.toolCall.input'),
+  emptyResultLabel: t('home.toolCall.emptyResult'),
+  linesToggleFormatter: (hiddenCount: number, expanded: boolean) =>
+    expanded ? t('home.toolCall.linesLess') : t('home.toolCall.linesMore', { count: hiddenCount })
 }))
 
 const markdownLabels = computed(() => ({
@@ -1836,7 +1933,8 @@ function maybeGenerateTitle(): void {
       generatedTitle: generatedTitle.value,
       inFlight: titleInFlightFor === idAtStart,
       firstUserContent: firstUserContent.value,
-      firstAssistantContent: firstAssistant
+      firstAssistantContent: firstAssistant,
+      failed: titleFailedFor.has(idAtStart)
     })
   ) {
     return
@@ -1855,10 +1953,15 @@ function maybeGenerateTitle(): void {
           assistantLabel: t('home.titleGen.assistantLabel')
         }
       )
-      if (!title || !isCurrent() || conversationId.value !== idAtStart) return
+      if (!title) {
+        titleFailedFor.add(idAtStart)
+        return
+      }
+      if (!isCurrent() || conversationId.value !== idAtStart) return
       generatedTitle.value = title
       await history.rename(idAtStart, title)
     } catch (error) {
+      titleFailedFor.add(idAtStart)
       // The working title is already on screen and stored; a label upgrade may fail silently.
       homeLog.warn('Conversation title generation failed', String(error))
     } finally {
@@ -2026,12 +2129,57 @@ const activityTurns = computed(() => buildActivityTurns(messages.value))
 /** The routed model's own limits from its effective binding; auto routing knows none. */
 const modelLimits = computed(() => toHomeModelLimits(modelScope.resolvedChoice.value?.binding))
 
+/** The assistant message of the turn in flight, if one is streaming. */
+const streamingAssistant = computed(() => {
+  const last = messages.value[messages.value.length - 1]
+  return last?.role === 'assistant' && last.status === 'streaming' ? last : undefined
+})
+
+/**
+ * When the turn in flight began, for the run-status clock: Main's own stamp on the streaming
+ * message, taken when it claimed the turn. It survives a reload mid-run, and a turn that waited in
+ * the queue is timed from its claim, not from the click.
+ */
+const runStartedAt = computed(() => streamingAssistant.value?.createdAt)
+
+/** The step the streaming assistant message is on, read off its parts. */
+const runStep = computed(() => deriveRunStep(streamingAssistant.value?.parts))
+
+/**
+ * Share of the routed model's window the last request occupied. `null` unless the provider reported
+ * usage for it and the binding knows its window - neither is ever defaulted. The turn read is the
+ * last one that reported usage, not the newest: the reply still streaming has none until its `end`,
+ * so reading the newest would blank the meter for the whole run.
+ */
+const contextShare = computed(() => {
+  const turn = lastReportedTurn(messages.value) as ConversationTurnMeta | undefined
+  const occupancy = turn
+    ? contextOccupancyTokens({
+        inputTokens: turn.promptTokens ?? 0,
+        outputTokens: turn.completionTokens ?? 0,
+        totalTokens: turn.totalTokens ?? 0
+      })
+    : 0
+  return contextPercent(
+    occupancy > 0 ? occupancy : undefined,
+    modelLimits.value.contextWindow?.value
+  )
+})
+const contextWindowText = computed(() => formatWindow(modelLimits.value.contextWindow?.value ?? 0))
+
 const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
 
 function formatMetricLatency(ms?: number): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms)) return ''
   if (ms < 1000) return `${Math.round(ms)}ms`
   return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatTokenCount(count: number): string {
+  if (count < 1000) return `${count}`
+  if (count < 10000) return `${(count / 1000).toFixed(1)}K`
+  if (count < 1000000) return `${Math.round(count / 1000)}K`
+  return `${(count / 1000000).toFixed(1)}M`
 }
 
 function calculateTokenSpeed(message: ConversationMessage): number | null {
@@ -2059,6 +2207,16 @@ function metricLatencyTitle(message: ConversationMessage): string {
     return `总耗时: ${latency} · 首字响应 (TTFT): ${ttft}`
   }
   return `耗时: ${latency}`
+}
+
+function metricCacheLabel(message: ConversationMessage): string {
+  return t('home.workspace.activity.cache', {
+    tokens: formatTokenCount(message.meta?.cacheReadTokens ?? 0)
+  })
+}
+
+function metricCacheTitle(message: ConversationMessage): string {
+  return t('home.workspace.activity.cacheTitle', { tokens: message.meta?.cacheReadTokens ?? 0 })
 }
 
 const activeFooterMessageIds = ref<Set<string>>(new Set())
@@ -2163,8 +2321,6 @@ onBeforeUnmount(() => disposeCommands?.())
     <HomeTopBar
       v-if="!browserLanding"
       :title="conversationTitle"
-      :model-name="modelPill.label"
-      :model-icon="modelPill.icon"
       :panel-open="panelOpen"
       :turn="lastTurn"
       :message-count="messages.length"
@@ -2177,14 +2333,28 @@ onBeforeUnmount(() => disposeCommands?.())
     />
 
     <div class="HomePage-Split">
-      <div class="HomePage-Body">
+      <div ref="bodyRef" class="HomePage-Body">
+        <TxGradualBlur
+          v-if="!isEmpty"
+          position="top"
+          height="72px"
+          :strength="2.5"
+          curve="bezier"
+          :z-index="4"
+          class="HomePage-TopBlur"
+        />
         <div class="HomePage-Center">
           <Transition name="home-head">
             <div v-if="isEmpty" ref="headRef" class="HomePage-Head">
-              <AppLogo class="HomePage-Mark" />
-              <h1 class="HomePage-Greeting">
-                {{ t(browserLanding ? 'browser.greeting' : 'home.greeting') }}
-              </h1>
+              <div class="HomePage-MarkHost">
+                <TxTuffLogoStroke class="HomePage-Mark" :size="67" mode="breathe" />
+              </div>
+              <TxMotionText
+                tag="h1"
+                class="HomePage-Greeting"
+                variant="txt-dia"
+                :text="t(browserLanding ? 'browser.greeting' : 'home.greeting')"
+              />
               <!-- The assistant speaks first. Three lines tall whatever it holds — skeleton, a
                    stream, or nothing — so the composer and the card below never move for it. -->
               <div
@@ -2281,13 +2451,17 @@ onBeforeUnmount(() => disposeCommands?.())
                       <div class="HomePage-UserBubble">
                         {{ message.content }}
                       </div>
-                      <TxMessageActions
-                        class="HomePage-MsgActions is-resting"
-                        :appear="false"
-                        :copy-text="message.content"
-                        :copy-label="t('home.copy')"
-                        :copied-label="t('home.copied')"
-                      />
+                      <div class="HomePage-MsgActionsSlot">
+                        <div class="HomePage-MsgActionsSlotInner">
+                          <TxMessageActions
+                            class="HomePage-MsgActions"
+                            :appear="false"
+                            :copy-text="message.content"
+                            :copy-label="t('home.copy')"
+                            :copied-label="t('home.copied')"
+                          />
+                        </div>
+                      </div>
                     </template>
 
                     <template v-else>
@@ -2317,12 +2491,15 @@ onBeforeUnmount(() => disposeCommands?.())
                         <!-- Prose sits where it was spoken. Tested before the
                              widget branch below, which reads `segment.part` —
                              a text segment carries no call to read it from. -->
-                        <TxStreamMarkdown
+                        <TxStreamElement
                           v-else-if="segment.kind === 'text'"
                           class="HomePage-Reply"
                           :content="segment.text"
                           :streaming="segment.streaming"
-                          v-bind="markdownLabels"
+                          :locale="locale"
+                          :copy-label="t('home.copy')"
+                          :copied-label="t('home.copied')"
+                          :markdown-props="markdownLabels"
                         />
 
                         <!-- Widgets embed as themselves — a form is a form, not
@@ -2380,7 +2557,9 @@ onBeforeUnmount(() => disposeCommands?.())
                           v-else
                           class="HomePage-Tool"
                           :tool-call="segment.part"
+                          :user-open="toolOpen.get(segment.id)"
                           v-bind="toolCallLabels"
+                          @toggle="toolOpen.set(segment.id, $event)"
                         />
                       </template>
 
@@ -2389,23 +2568,32 @@ onBeforeUnmount(() => disposeCommands?.())
                            for it. Guarded on `parts` rather than on segment
                            count so a turn whose parts are all tool calls does
                            not replay its text here as well. -->
-                      <TxStreamMarkdown
+                      <TxStreamElement
                         v-if="!message.parts && message.content"
                         class="HomePage-Reply"
-                        v-bind="markdownLabels"
+                        :locale="locale"
+                        :copy-label="t('home.copy')"
+                        :copied-label="t('home.copied')"
+                        :markdown-props="markdownLabels"
                         :content="message.content"
                         :streaming="message.status === 'streaming'"
                       />
 
-                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. The send
-                           key's `waiting` reads the same predicate, so the two cannot disagree. -->
-                      <TxThinkingOrb
-                        v-else-if="isAwaitingFirstToken(message)"
-                        class="HomePage-Thinking"
-                        :size="64"
-                        :display-size="28"
-                        :label="t('home.thinking')"
-                      />
+                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response and
+                           tinted with its gradient ink, beside a verb that is fresh for this
+                           turn. The send key's `waiting` reads the same predicate, so the two
+                           cannot disagree. -->
+                      <div v-else-if="isAwaitingFirstToken(message)" class="HomePage-Thinking">
+                        <TxThinkingOrb
+                          :size="64"
+                          :display-size="28"
+                          variant="gradient"
+                          :label="thinkingVerbFor(message)"
+                        />
+                        <span class="HomePage-ThinkingLabel">{{
+                          t('home.thinkingVerb', { verb: thinkingVerbFor(message) })
+                        }}</span>
+                      </div>
 
                       <!-- The provider is squeezing its context mid-turn; a
                            silent pause here read as a hang. -->
@@ -2499,84 +2687,96 @@ onBeforeUnmount(() => disposeCommands?.())
                         class="HomePage-TurnFooter"
                         :class="{ 'is-resting': isTurnFooterResting(message) }"
                       >
-                        <TxMessageActions
-                          class="HomePage-MsgActions"
-                          :copy-text="message.content"
-                          :regenerable="index === messages.length - 1 && !isStreaming"
-                          :speakable="!!message.content"
-                          :speak-state="speakStateOf(message)"
-                          :copy-label="t('home.copy')"
-                          :copied-label="t('home.copied')"
-                          :regenerate-label="t('home.regenerate')"
-                          :speak-label="t('home.speak')"
-                          :stop-speak-label="t('home.speakStop')"
-                          @regenerate="conversation.retry()"
-                          @speak="toggleSpeak(message)"
-                        >
-                          <button
-                            v-if="canBranchFrom(message, index)"
-                            class="tx-message-actions__btn"
-                            type="button"
-                            :disabled="branching"
-                            :title="t('home.workspace.fork.fromHere')"
-                            :aria-label="t('home.workspace.fork.fromHere')"
-                            @click="branchTo({ messageId: message.id })"
+                        <div class="HomePage-TurnFooterRow">
+                          <TxMessageActions
+                            class="HomePage-MsgActions"
+                            :copy-text="message.content"
+                            :regenerable="index === messages.length - 1 && !isStreaming"
+                            :speakable="!!message.content"
+                            :speak-state="speakStateOf(message)"
+                            :copy-label="t('home.copy')"
+                            :copied-label="t('home.copied')"
+                            :regenerate-label="t('home.regenerate')"
+                            :speak-label="t('home.speak')"
+                            :stop-speak-label="t('home.speakStop')"
+                            @regenerate="conversation.retry()"
+                            @speak="toggleSpeak(message)"
                           >
-                            <span class="i-ri-git-branch-line" aria-hidden="true" />
-                          </button>
-                        </TxMessageActions>
-
-                        <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
-                        <div
-                          v-if="
-                            showTurnMetrics &&
-                            (message.meta?.latencyMs ||
-                              message.meta?.model ||
-                              message.meta?.totalTokens)
-                          "
-                          class="HomePage-TurnMetrics"
-                        >
-                          <!-- 耗时 (Latency) -->
-                          <span
-                            v-if="message.meta?.latencyMs"
-                            class="HomePage-MetricTag"
-                            :title="metricLatencyTitle(message)"
-                          >
-                            <span class="i-ri-time-line" aria-hidden="true" />
-                            <span>{{ formatMetricLatency(message.meta.latencyMs) }}</span>
-                          </span>
-
-                          <!-- Tokens 与 速度 (Tokens & Speed) -->
-                          <span
-                            v-if="message.meta?.totalTokens"
-                            class="HomePage-MetricTag"
-                            :title="metricTokensTitle(message)"
-                          >
-                            <span class="i-ri-database-2-line" aria-hidden="true" />
-                            <span>{{ message.meta.totalTokens }} tokens</span>
-                            <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
-                              >({{ calculateTokenSpeed(message) }} t/s)</span
+                            <button
+                              v-if="canBranchFrom(message, index)"
+                              class="tx-message-actions__btn"
+                              type="button"
+                              :disabled="branching"
+                              :title="t('home.workspace.fork.fromHere')"
+                              :aria-label="t('home.workspace.fork.fromHere')"
+                              @click="branchTo({ messageId: message.id })"
                             >
-                          </span>
+                              <span class="i-ri-git-branch-line" aria-hidden="true" />
+                            </button>
+                          </TxMessageActions>
 
-                          <!-- 模型 (Model) -->
-                          <span
-                            v-if="message.meta?.model"
-                            class="HomePage-MetricTag is-model"
-                            :title="t('home.workspace.activity.metrics.model')"
+                          <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
+                          <div
+                            v-if="
+                              showTurnMetrics &&
+                              (message.meta?.latencyMs ||
+                                message.meta?.model ||
+                                message.meta?.totalTokens)
+                            "
+                            class="HomePage-TurnMetrics"
                           >
-                            <span class="i-ri-sparkling-line" aria-hidden="true" />
-                            <span>{{ message.meta.model }}</span>
-                          </span>
+                            <!-- 耗时 (Latency) -->
+                            <span
+                              v-if="message.meta?.latencyMs"
+                              class="HomePage-MetricTag"
+                              :title="metricLatencyTitle(message)"
+                            >
+                              <span class="i-ri-time-line" aria-hidden="true" />
+                              <span>{{ formatMetricLatency(message.meta.latencyMs) }}</span>
+                            </span>
 
-                          <!-- 调度器 (Coordinator) -->
-                          <span
-                            class="HomePage-MetricTag"
-                            :title="t('home.workspace.activity.metrics.coordinator')"
-                          >
-                            <span class="i-ri-robot-2-line" aria-hidden="true" />
-                            <span>{{ message.meta?.coordinator || 'Tuff Coordinator' }}</span>
-                          </span>
+                            <!-- Tokens 与 速度 (Tokens & Speed) -->
+                            <span
+                              v-if="message.meta?.totalTokens"
+                              class="HomePage-MetricTag"
+                              :title="metricTokensTitle(message)"
+                            >
+                              <span class="i-ri-database-2-line" aria-hidden="true" />
+                              <span>{{ message.meta.totalTokens }} tokens</span>
+                              <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
+                                >({{ calculateTokenSpeed(message) }} t/s)</span
+                              >
+                            </span>
+
+                            <!-- 缓存读取 (Cache read) -->
+                            <span
+                              v-if="message.meta?.cacheReadTokens"
+                              class="HomePage-MetricTag"
+                              :title="metricCacheTitle(message)"
+                            >
+                              <span class="i-ri-stack-line" aria-hidden="true" />
+                              <span>{{ metricCacheLabel(message) }}</span>
+                            </span>
+
+                            <!-- 模型 (Model) -->
+                            <span
+                              v-if="message.meta?.model"
+                              class="HomePage-MetricTag is-model"
+                              :title="t('home.workspace.activity.metrics.model')"
+                            >
+                              <span class="i-ri-sparkling-line" aria-hidden="true" />
+                              <span>{{ message.meta.model }}</span>
+                            </span>
+
+                            <!-- 调度器 (Coordinator) -->
+                            <span
+                              class="HomePage-MetricTag"
+                              :title="t('home.workspace.activity.metrics.coordinator')"
+                            >
+                              <span class="i-ri-robot-2-line" aria-hidden="true" />
+                              <span>{{ message.meta?.coordinator || 'Tuff Coordinator' }}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </template>
@@ -2652,17 +2852,20 @@ onBeforeUnmount(() => disposeCommands?.())
               />
             </div>
 
-            <HomeWorkspaceQueue
-              v-if="workspace.state.value && workspace.queue.value.length > 0"
-              :items="workspace.queue.value"
-              :status="workspace.state.value.status"
-              :held="workspace.state.value.queueHeld"
-              :limit="WORKSPACE_QUEUE_LIMIT"
-              :pending="workspace.queuePending.value"
-              :resuming="workspace.resuming.value"
-              @action="workspace.queueAction"
-              @resume="workspace.resume()"
-            />
+            <Transition name="home-queue">
+              <HomeWorkspaceQueue
+                v-if="workspace.state.value && workspace.queue.value.length > 0"
+                :items="workspace.queue.value"
+                :status="workspace.state.value.status"
+                :held="workspace.state.value.queueHeld"
+                :limit="WORKSPACE_QUEUE_LIMIT"
+                :pending="workspace.queuePending.value"
+                :resuming="workspace.resuming.value"
+                @action="workspace.queueAction"
+                @update="workspace.updateQueued"
+                @resume="workspace.resume()"
+              />
+            </Transition>
 
             <!-- An untouched Home has no stream for the voice clip to end: it waits here instead. -->
             <HomeVoiceDraft
@@ -2675,6 +2878,20 @@ onBeforeUnmount(() => disposeCommands?.())
               @send="sendVoiceDraft()"
               @dismiss="dictation.dismissClip()"
             />
+
+            <!-- Above the composer, not in the transcript: the turn's clock and current step while it
+                 runs, and how full the context is. The meter's track sits ON the box's top border
+                 (the dock is pulled down by the group's gap), inset by the corner radius so it rides
+                 the straight edge. Both state what the page already knows. -->
+            <div v-if="!isEmpty && (isStreaming || contextShare !== null)" class="HomePage-RunDock">
+              <HomeRunStatus v-if="isStreaming" :started-at="runStartedAt" :step="runStep" />
+              <HomeContextMeter
+                v-if="contextShare !== null"
+                class="HomePage-ContextMeter"
+                :percent="contextShare"
+                :window-text="contextWindowText"
+              />
+            </div>
 
             <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
                  reads that edge's 24px radius off the element in its slot. -->
@@ -2764,6 +2981,7 @@ onBeforeUnmount(() => disposeCommands?.())
                   v-model:permission-mode="agentToolsMode"
                   :model="composerModel"
                   :send-state="sendState"
+                  :send-queues="sendQueues"
                   :mic-state="dictation.state.value"
                   :mic-blocked="dictation.captureBlocked.value"
                   :mic-elapsed-ms="dictation.elapsedMs.value"
@@ -2812,16 +3030,6 @@ onBeforeUnmount(() => disposeCommands?.())
                       @toggle-profile="workspace.setProfileEnabled"
                       @load-profiles="workspace.loadProfiles()"
                     />
-                    <!-- While Main is busy a send queues; the key says so before it is pressed. -->
-                    <ComposerControl
-                      v-if="sendQueues && draft.trim().length > 0"
-                      :label="t('home.workspace.queue.add')"
-                      :title="t('home.workspace.queue.addHint')"
-                      :disabled="!canSend"
-                      @click="pressSend"
-                    >
-                      <span class="i-ri-play-list-add-line" />
-                    </ComposerControl>
                   </template>
                 </ComposerToolbar>
 
@@ -2895,6 +3103,20 @@ onBeforeUnmount(() => disposeCommands?.())
       <div ref="liftFillRef" class="HomePage-SendLiftFill" />
       <div ref="liftTextRef" class="HomePage-UserBubble HomePage-SendLiftText" />
     </div>
+
+    <!-- Highlighting a passage in the transcript raises this over the last selected line. It sits
+         on the page root, not in the scrolling column, so the column's own overflow cannot clip it. -->
+    <!-- Mounted only while something is selected: a floating layer has no business
+         existing, measuring or animating when there is no passage to act on. -->
+    <TxSelectionActions
+      v-if="passageSelection"
+      ref="selectionBarRef"
+      :selection="passageSelection"
+      :actions="passageActions"
+      :aria-label="t('home.selectionActions')"
+      hide-prompt
+      @action="runPassageAction"
+    />
   </div>
 </template>
 
@@ -2923,11 +3145,10 @@ onBeforeUnmount(() => disposeCommands?.())
   // ---------------------------------------------------------------------------
   --home-z-leaving: 0; // the stream and greeting dissolving on their way out
   --home-z-flight: 1; // the send flight's clone
-  --home-z-composer: 2; // composer and pending confirmation — above every message
-  // The one exception: the send lift's bubble. It starts as the draft's own text, which lies on the
-  // composer's surface, so it leaves from above the box rather than from behind it; its fill is
-  // transparent while it still overlaps the box, so nothing of the composer is covered.
-  --home-z-lift: 3;
+  --home-z-topblur: 4; // gradual blur at the top of the conversation
+  --home-z-topbar: 6; // top bar above blur and messages
+  --home-z-composer: 8; // composer and pending confirmation — above every message
+  --home-z-lift: 9;
 
   // The TuffIntelligence wheel the running state wears — the composer's live light and the send
   // key's stop-capsule ring (`composer/ComposerSendIsland.vue`) read the same stops, in oklch.
@@ -2978,6 +3199,13 @@ onBeforeUnmount(() => disposeCommands?.())
     --tx-fill-color: var(--shell-surface-2);
     --tx-fill-color-darker: var(--shell-border);
   }
+}
+
+:deep(.HomeTopBar) {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: var(--home-z-topbar);
 }
 
 /**
@@ -3050,11 +3278,29 @@ onBeforeUnmount(() => disposeCommands?.())
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  position: relative;
 
-  // The stream owns the scroll once a conversation exists, so the body must not scroll too.
+  // When conversing, messages run all the way through to the top under HomeTopBar and TxGradualBlur.
   .HomePage.conversing & {
+    grid-row: 1 / -1;
     overflow: hidden;
   }
+}
+
+.HomePage-TopBlur {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  z-index: var(--home-z-topblur);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--shell-bg) 80%, transparent) 0%,
+    color-mix(in srgb, var(--shell-bg) 35%, transparent) 40%,
+    transparent 100%
+  );
 }
 
 .HomePage-Center {
@@ -3064,11 +3310,8 @@ onBeforeUnmount(() => disposeCommands?.())
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  // Artboard lifts the block above true centre rather than bottom-weighting it like Codex. The lift
-  // gives way in a short window before the stage has to scroll: at 600px the hero — greeting,
-  // opening, composer and the guide's tallest page — takes all the height under the top bar.
-  padding-bottom: clamp(0px, calc(100vh - 620px), 52px);
-  box-sizing: border-box;
+  // Truly centered vertically; slight optical balance for the top bar without top-heavy bias.
+  padding-bottom: 16px;
   // Anchors the floating composer in conversation, and the dissolving stream
   // while it leaves — the anchor must not vanish with the `conversing` class
   // mid-dissolve, so it lives here unconditionally.
@@ -3114,7 +3357,7 @@ onBeforeUnmount(() => disposeCommands?.())
 .HomePage-Head {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   // The chat lane, like the composer under it: the opening wraps at this width. A centred flex item
   // would otherwise shrink to its content, and the opening's content is one long line.
@@ -3128,20 +3371,29 @@ onBeforeUnmount(() => disposeCommands?.())
   }
 }
 
-/* Scaled up 20% (48px * 1.2 = 57.6px ≈ 58px) and lifted 30% for visual breathing room */
+.HomePage-MarkHost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 67px;
+  height: 67px;
+  transform: none;
+}
+
 .HomePage-Mark {
-  width: 58px;
-  height: 58px;
-  transform: translateY(-30%);
+  width: 67px;
+  height: 67px;
 }
 
 .HomePage-Greeting {
+  display: block;
   margin: 0;
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-display);
   font-weight: 600;
   // One display line, set tight for the same room.
   line-height: 1.2;
+  text-align: center;
 }
 
 /**
@@ -3232,7 +3484,7 @@ onBeforeUnmount(() => disposeCommands?.())
    * an actionable card. `:deep` is required because both controls live inside the stream.
    */
   :deep(.tx-conversation-stream__scroller) {
-    padding: 28px 0 calc(var(--home-composer-height, 112px) + 28px);
+    padding: 72px 0 calc(var(--home-composer-height, 112px) + 28px);
     box-sizing: border-box;
   }
 
@@ -3294,6 +3546,35 @@ onBeforeUnmount(() => disposeCommands?.())
 .HomePage-VoiceDraftDock {
   width: var(--home-chat-lane-width, 100%);
   max-width: 100%;
+}
+
+/**
+ * The status line and the context meter, as one block above the composer. Its bottom edge is the
+ * meter's track, and the margin cancels the group's gap except for 4px, so the track rides above the
+ * box rather than over its border: the border, which turns blue on focus, stays whole, and the 3px
+ * focus ring around it stays clear of the track. It paints over the beam wrapper (`z-index: 2`) so
+ * the beam's bloom never dims it.
+ */
+.HomePage-RunDock {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  // The clock, the step and the meter are one reading, not three cards: 4px holds them as a block
+  // without the meter drifting away from the line it belongs to.
+  gap: 4px;
+  width: var(--home-chat-lane-width);
+  min-width: 0;
+  // Cancels the group's gap and then some, so the block sits ON the box's top edge instead of
+  // floating a card-height above it: 4px is the gap left between the meter's track and the border.
+  margin-bottom: calc(-1 * var(--home-group-gap) + 4px);
+  pointer-events: none;
+}
+
+.HomePage-ContextMeter {
+  // The box's corner radius: the track rides the straight part of the edge, not the curve.
+  padding-inline: 24px;
+  box-sizing: border-box;
 }
 
 /**
@@ -3446,8 +3727,48 @@ onBeforeUnmount(() => disposeCommands?.())
   word-break: break-word;
 }
 
+// The orb and its verb read as one line of the answer's own type, so the wait
+// looks like the start of a reply rather than a spinner bolted on beside it.
 .HomePage-Thinking {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
   margin: 2px 0;
+  color: var(--shell-text-muted);
+}
+
+.HomePage-ThinkingLabel {
+  font-size: var(--shell-fs-md);
+  font-style: italic;
+  line-height: 1.4;
+
+  // A quiet shimmer over the words, matching the chain header's live state.
+  background: linear-gradient(
+    90deg,
+    var(--shell-text-muted) 35%,
+    var(--shell-text) 50%,
+    var(--shell-text-muted) 65%
+  );
+  background-clip: text;
+  background-size: 200% 100%;
+  color: transparent;
+  animation: HomePage-ThinkingShimmer 1.6s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    background: none;
+    color: var(--shell-text-muted);
+  }
+}
+
+@keyframes HomePage-ThinkingShimmer {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
 }
 
 .HomePage-Compacting {
@@ -3471,31 +3792,74 @@ onBeforeUnmount(() => disposeCommands?.())
   }
 }
 
+// The action row takes no space until the message is hovered: a resting thread then reads
+// as one block of text instead of text with a gap under every turn. `grid-template-rows:
+// 0fr → 1fr` animates to the row's *measured* height, so a footer that wraps onto two lines
+// still opens fully — a `max-height` guess would either clip it or leave a gap.
 .HomePage-TurnFooter {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+
+// A turn that just finished stays open for a beat (`is-resting` is what the timer clears);
+// hovering or focusing the message opens it at any time.
+.HomePage-TurnFooter:not(.is-resting),
+.HomePage-Message:hover .HomePage-TurnFooter,
+.HomePage-TurnFooter:focus-within {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.HomePage-TurnFooterRow {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
-  margin-top: 4px;
-  width: 100%;
-  opacity: 1;
-  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &.is-resting {
-    opacity: 0;
-    pointer-events: none;
-  }
-}
-
-.HomePage-Message:hover .HomePage-TurnFooter.is-resting,
-.HomePage-TurnFooter.is-resting:focus-within {
-  opacity: 1;
-  pointer-events: auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 4px;
 }
 
 .HomePage-MsgActions {
   margin-top: 0;
+}
+
+// Same treatment for the user bubble's own copy button.
+.HomePage-MsgActionsSlot {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+
+  &.is-open,
+  &:focus-within {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.HomePage-Message:hover .HomePage-MsgActionsSlot {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.HomePage-MsgActionsSlotInner {
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 6px;
 }
 
 .HomePage-TurnMetrics {
@@ -3634,10 +3998,12 @@ onBeforeUnmount(() => disposeCommands?.())
 .HomePage-ComposerGroup {
   // Between the composer and the push card on the empty stage; the card's leave pins it there.
   --home-card-gap: 12px;
+  // What the group's own `gap` is, so a child that overlaps the box below it can cancel exactly that.
+  --home-group-gap: var(--home-card-gap);
 
   display: flex;
   flex-direction: column;
-  gap: var(--home-card-gap);
+  gap: var(--home-group-gap);
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -3658,8 +4024,13 @@ onBeforeUnmount(() => disposeCommands?.())
     right: 0;
     bottom: 20px;
     left: 0;
-    gap: 18px;
+    --home-group-gap: 18px;
+    gap: var(--home-group-gap);
     pointer-events: none;
+
+    &:has(.HomeWorkspaceQueue) {
+      --home-group-gap: 0px;
+    }
   }
 }
 
@@ -3671,6 +4042,8 @@ onBeforeUnmount(() => disposeCommands?.())
 .HomePage-ComposerBeam {
   width: var(--home-chat-lane-width);
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .HomePage-Composer {
@@ -3709,60 +4082,9 @@ onBeforeUnmount(() => disposeCommands?.())
       0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
   }
 
-  /* While a response runs, the box wears the TuffIntelligence gradient as
-     living light: a hairline rim in the frame edge plus a tight bloom around
-     it, both cut from one conic wheel (oklch keeps the colour travel luminous
-     instead of muddying between stops). The layers spin in opposite
-     directions and breathe on co-prime periods, so no two moments align —
-     weather, not a spinner. The layers are always present and gated by
-     `--home-glow-on`, which is what lets the light fade in and out instead
-     of snapping with the class. */
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: conic-gradient(from var(--home-glow-angle) in oklch, var(--home-live-stops));
-    pointer-events: none;
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
-
-  /* The bloom: a compact ring, blurred slightly less than it is thick, so the
-     light stays a vivid band hugging the frame and dies within ~14px — wide
-     low-alpha spreads curdle into pastel fog on a light surface. The radius
-     grows with the inset so the corners stay concentric instead of pooling.
-     `::before` paints under the box's children — the inward bleed lands
-     beneath the glass, never over the text. */
-  &::before {
-    inset: -6px;
-    border-radius: calc(var(--shell-radius-2xl) + 6px);
-    padding: 8px;
-    filter: blur(7px) saturate(1.05);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.45);
-    animation:
-      home-glow-spin 17s linear infinite reverse,
-      home-glow-breathe 7.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
-  &::after {
-    /* The half-pixel blur melts the hairline into the frame edge — without it
-       the ring reads as a sticker laid on top rather than light in the rim. */
-    filter: blur(0.5px);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.62);
-    animation:
-      home-glow-spin 11s linear infinite,
-      home-glow-rim 5.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
+  /* The box itself stays plain while a response runs: the border carries no light. `is-live`
+     only sets the gate below, which the send key's stop ring (`composer/ComposerSendIsland.vue`)
+     reads to fade in and out with the run. */
   &.is-live {
     --home-glow-on: 1;
   }
@@ -3810,6 +4132,13 @@ onBeforeUnmount(() => disposeCommands?.())
 .HomePage-Composer > .ComposerToolbar {
   position: relative;
   z-index: 1;
+}
+
+.HomePage-Composer:hover :deep(.ComposerToolbar-Badges),
+.HomePage-Composer:focus-within :deep(.ComposerToolbar-Badges) {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
 }
 
 .HomePage-Input {
@@ -3988,55 +4317,40 @@ textarea.HomePage-Input:focus-visible {
   transform: translateX(-50%) translateY(8px);
 }
 
-/* @property is what lets these interpolate — same trick as IntelligenceHeader. */
-@property --home-glow-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
+/* The queue card smoothly emerges from and tucks behind the composer box. */
+@media (prefers-reduced-motion: no-preference) {
+  .home-queue-enter-active {
+    transition:
+      opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .home-queue-leave-active {
+    transition:
+      opacity 0.2s cubic-bezier(0.4, 0, 1, 1),
+      transform 0.2s cubic-bezier(0.4, 0, 1, 1);
+  }
 }
 
-/* The breathing amplitude. Kept apart from `opacity` itself so the keyframes
-   compose with the on/off gate instead of fighting it for the property. */
-@property --home-glow-alpha {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 1;
+.home-queue-enter-from,
+.home-queue-leave-to {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
 }
 
-/* The gate: set on the composer, read by both pseudo layers, and — because it
-   is a registered number — transitionable, which is the whole fade. */
+@media (prefers-reduced-motion: reduce) {
+  .home-queue-enter-active,
+  .home-queue-leave-active {
+    transition: none;
+  }
+}
+
+/* The gate: set on the composer, read by the send key's stop ring, and — because it is a
+   registered number — transitionable, which is the whole fade. */
 @property --home-glow-on {
   syntax: '<number>';
   inherits: true;
   initial-value: 0;
-}
-
-@keyframes home-glow-spin {
-  to {
-    --home-glow-angle: 360deg;
-  }
-}
-
-@keyframes home-glow-breathe {
-  0%,
-  100% {
-    --home-glow-alpha: 0.62;
-  }
-
-  50% {
-    --home-glow-alpha: 1;
-  }
-}
-
-@keyframes home-glow-rim {
-  0%,
-  100% {
-    --home-glow-alpha: 0.72;
-  }
-
-  50% {
-    --home-glow-alpha: 1;
-  }
 }
 
 @keyframes home-msg-pop {
@@ -4065,12 +4379,6 @@ textarea.HomePage-Input:focus-visible {
   .home-stream-leave-active,
   .home-stream-enter-active {
     transition: none;
-  }
-
-  /* The light holds still but stays on — the running state must survive. */
-  .HomePage-Composer::before,
-  .HomePage-Composer::after {
-    animation: none;
   }
 
   .HomePage-Compacting {
