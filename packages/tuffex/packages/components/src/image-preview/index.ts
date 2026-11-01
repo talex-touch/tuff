@@ -5,7 +5,6 @@ import type {
   ImagePreviewIndicator,
   ImagePreviewItem,
   ImagePreviewOrigin,
-  ImagePreviewOriginRect,
   ImagePreviewMinimapSlotProps,
   ImagePreviewProps,
   ImagePreviewSlotProps,

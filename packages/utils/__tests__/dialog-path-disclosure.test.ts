@@ -64,7 +64,7 @@ describe('renderer-not-found dialog', () => {
   it('offers the log folder as an action rather than as text', () => {
     // The user still needs to reach the log; a button gets them there without the folder location
     // appearing on screen.
-    expect(dialogBody).toContain("buttons: ['OK', 'Open Log Folder']")
+    expect(dialogBody).toContain("buttons: [t('nativeDialogs.ok'), t('nativeDialogs.rendererMissing.openLogFolder')]")
     expect(dialogBody).toContain("shell.openPath(app.getPath('logs'))")
   })
 })
