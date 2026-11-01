@@ -72,17 +72,6 @@
       "expires": "2026-11-09"
     },
     {
-      "id": "GHSA-86w9-cpqp-85rv",
-      "module": "node-forge",
-      "severity": "high",
-      "versions": [
-        "1.4.0"
-      ],
-      "reason": "Reaches --prod only through listhen@1.10.0, the local HTTP(S) listener behind `nuxt dev` / `nitro dev` (it also mints the self-signed dev certificate). Traced with `pnpm why node-forge --prod`: listhen -> @nuxt/cli@3.37.0 -> nuxt, and listhen -> nitropack@2.13.4 -> @talex-touch/tuff-nexus. Not in the deployed worker: no file under nitropack/dist/runtime imports listhen; only dist/core/index.mjs and dist/cli/dev.mjs do. The advisory is RSA PKCS#1 v1.5 signature verification accepting extra nested DigestAlgorithm elements, and no runtime path verifies a signature with node-forge. No patched release exists (vulnerable <= 1.4.0, first_patched_version null). Remove this entry and upgrade when node-forge ships a fix.",
-      "owner": "#328",
-      "expires": "2026-11-02"
-    },
-    {
       "id": "GHSA-v5rq-49vh-5v5c",
       "module": "@simple-git/argv-parser",
       "severity": "critical",
