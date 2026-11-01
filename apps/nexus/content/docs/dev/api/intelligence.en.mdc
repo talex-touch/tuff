@@ -83,7 +83,7 @@ Until workspace/project memory has a stable `scopeRef`, it remains visible to ho
 
 The plugin intelligence SDK exposes typed domain methods and does not restore the retired `chat` alias or host-only memory-management methods. Gate plugin actions with discovery first, then call the matching wrapper such as `intelligence.text.chat(payload, options)`, or fall back to `intelligence.invoke<Result>(capabilityId, payload, options)` for custom capabilities.
 
-For CoreBox-style conversational execution, prefer `contextInvoke()` or `contextStream()`. The current contract supports `text.chat`; caller-supplied user/assistant history is not trusted. The host keeps caller system messages, then appends validated summary, recent turns, Memory, retrieval context, and the current input in a bounded order. `mode` is `new`, `continue`, or `stateless`; a continuation must carry the `sessionId` returned by the previous safe context summary.
+For CoreBox-style conversational execution, prefer `contextInvoke()` or `contextStream()`. The current contract supports `text.chat`; caller-supplied user/assistant history is not trusted. The host keeps caller system messages, then appends validated summary, recent turns, Memory, retrieval context, and the current input in a bounded order. `mode` is `new`, `continue`, or `stateless`; a continuation must carry the `sessionId` returned by the previous safe context summary. Both calls need the `intelligence.context` permission; declaring `intelligence.basic` alone is not enough. `contextEvaluateMemory()` stays under `intelligence.basic`.
 
 ```typescript
 let contextSessionId: string | undefined;
