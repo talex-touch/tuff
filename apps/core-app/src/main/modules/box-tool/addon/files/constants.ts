@@ -23,6 +23,23 @@ export interface ExtensionMetadata {
 }
 
 const DEFAULT_CONTENT_SIZE_LIMIT_MB = 25
+
+/**
+ * Longest extracted text (UTF-16 units) a file may have and still be content-indexed. A longer file
+ * is not indexed at all: no `files.content`, no FTS body, no chunks, no vectors. It stays findable
+ * by name and path. A cut prefix was rejected because a hit in the first 50k characters of a novel
+ * says little about the rest, while the body is stored three times (files.content, the FTS
+ * `content` column and its page overhead).
+ */
+export const FILE_CONTENT_MAX_CHARS = 50_000
+/** `file_index_progress.last_error` of a file skipped for exceeding {@link FILE_CONTENT_MAX_CHARS}. */
+export const FILE_CONTENT_TOO_LONG_REASON = 'content-too-long'
+/**
+ * Parser output budget (UTF-8 bytes of content plus chunk text). Eight bytes per allowed character
+ * covers 4-byte code points counted once in the content and once in the chunks, so a file within
+ * the cap can never be reported `truncated` by the budget; one that does hit it is over the cap.
+ */
+export const FILE_PARSE_OUTPUT_MAX_BYTES = FILE_CONTENT_MAX_CHARS * 8
 export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   const safeChunkSize = Math.max(1, Math.floor(chunkSize))
   const chunks: T[][] = []
