@@ -3272,7 +3272,8 @@
     },
     "notifications": {
       "widgetLoadFailedTitle": "Widget failed to load",
-      "widgetLoadFailedMessage": "Plugin widget initialization failed. Check the plugin version, path, and runtime logs."
+      "widgetLoadFailedMessage": "Plugin widget initialization failed. Check the plugin version, path, and runtime logs.",
+      "itemActionFailedTitle": "{name}: action failed"
     },
     "view": {
       "loading": "Plugin is loading...",

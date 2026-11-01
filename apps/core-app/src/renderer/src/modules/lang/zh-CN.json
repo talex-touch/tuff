@@ -3272,7 +3272,8 @@
     },
     "notifications": {
       "widgetLoadFailedTitle": "Widget 加载失败",
-      "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
+      "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。",
+      "itemActionFailedTitle": "{name} 操作失败"
     },
     "view": {
       "loading": "插件加载中...",
