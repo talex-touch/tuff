@@ -16,6 +16,7 @@ import { toast } from 'vue-sonner'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import SettingLocalAiCliImport from './SettingLocalAiCliImport.vue'
 import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
 import { describeFailure, failureMessage } from '~/utils/failure-text'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -270,6 +271,7 @@ onMounted(() => {
         {{ font.label }}
       </TxSelectItem>
     </TuffBlockSelect>
+    <SettingLocalAiCliImport />
   </TuffGroupBlock>
 </template>
 

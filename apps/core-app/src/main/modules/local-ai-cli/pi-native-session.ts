@@ -341,9 +341,10 @@ export async function verifyPiSessionAppend(input: {
  * before the prompt — pi (0.84.3) writes a new session's file whole with its first assistant reply
  * — so the file is checked from its header on: it must be this session's, in this workspace, and
  * every entry after the header accounted for. First come the entries `get_entries` reported before
- * the prompt, in that order; then this run's, one parent chain on from that captured head, opening
- * with the one user message and holding at least one assistant reply; the last of them is the head
- * `get_entries` reports now, and those are exactly the entries it reports as new.
+ * the prompt, in that order; pi may then persist an unreported system preamble before this run's
+ * user message, which must continue on from the captured head and hold at least one assistant reply;
+ * the last of them is the head `get_entries` reports now, and those are exactly the entries it
+ * reports as new.
  */
 export async function verifyPiSessionFirstWrite(input: {
   sessionFile: string
@@ -377,8 +378,14 @@ export async function verifyPiSessionFirstWrite(input: {
   if (input.before.leafId !== capturedHead) conflict()
 
   const run = entries.slice(before.length)
-  const userEntry = run[0]
-  if (userEntry?.type !== 'message' || userEntry.message?.role !== 'user') conflict()
+  const userIndex = run.findIndex(
+    (entry) => entry.type === 'message' && entry.message?.role === 'user'
+  )
+  if (userIndex < 0) conflict()
+  for (const preambleEntry of run.slice(0, userIndex)) {
+    if (preambleEntry.type !== 'message' || preambleEntry.message?.role !== 'system') conflict()
+  }
+  const userEntry = run[userIndex]!
   let userMessages = 0
   let assistantMessages = 0
   for (const entry of run) {
