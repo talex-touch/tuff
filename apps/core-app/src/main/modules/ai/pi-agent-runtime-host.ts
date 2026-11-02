@@ -7,14 +7,17 @@ import type {
   AiSessionHistoryMessage
 } from '@talex-touch/utils/types/ai-orchestrator'
 import type {
+  IntelligenceChatTool,
   IntelligenceMessage,
   IntelligenceMessageAttachment,
+  IntelligenceMessageToolCall,
   IntelligenceReasoningEffort
 } from '@talex-touch/utils/types/intelligence'
 
 import type { UtilityProcess } from 'electron'
 import type {
   PiRuntimeChildPayload,
+  PiRuntimeRunRecord,
   PiRuntimeModelRequest,
   PiRuntimeModelResponse,
   PiRuntimeParentMessage,
@@ -37,28 +40,25 @@ import { toolGatewayModule } from '../tool-gateway'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { CLI_PROFILE_PROVIDER_MAP } from './providers/pi-cli-runtime'
 import { PI_RUNTIME_PROTOCOL_VERSION, PI_RUNTIME_SERVICE_NAME } from './pi-agent-runtime-protocol'
+import { PiModelStreamBuffer } from './pi-model-stream-buffer'
 import {
   createApprovalRequiredError,
   createInterruptedToolCallError,
   createRunCancelledError,
   createRunInterruptedError,
+  createRunFailedError,
   createRunUsageLimitedError,
   isInterruptedToolCallMessage,
   isPiRuntimeControlError,
   parseApprovalRequirement
 } from './pi-agent-runtime-control-error'
 import {
+  describeToolFailure,
   formatStableToolError,
   projectToolError,
   projectToolErrorCode,
   type StableToolErrorCode
 } from './tool-error-projection'
-import {
-  containsCredentialLikeText,
-  containsLocalPathLikeText,
-  isCredentialLikeKey,
-  isLocalPathLikeKey
-} from './sensitive-text'
 /** Main-only execution context. It is never accepted from renderer metadata or sent to the worker. */
 export interface PiWorkspaceAuthority {
   readonly conversationId: string
@@ -71,10 +71,11 @@ export interface PiWorkspaceAuthority {
   readonly modelAttachments?: IntelligenceMessageAttachment[]
   readonly assertAuthority: () => Promise<void>
   readonly onRunCreated?: (run: AiOrchestratorRunRecord) => Promise<void>
-  readonly onRunResult?: (run: AiOrchestratorRunRecord) => Promise<void>
+  readonly onRunResult?: (run: AiOrchestratorRunRecord, failureDetail?: string) => Promise<void>
   readonly onEvent?: (event: PiRuntimeRunEvent) => Promise<void>
 }
 import { isUsageLimitError } from './usage-ledger/usage-limits'
+import { projectRunFailureDetail } from './run-failure-detail'
 
 export type PiRuntimeToolCallOutcome = {
   error?: string
@@ -99,10 +100,22 @@ interface ActiveRunContext {
    * request failed (its protocol carries no codes); a run that then fails is failed as refused.
    */
   usageLimitRefused: boolean
+  /**
+   * Why the latest model request failed, redacted. The worker is only told the request failed (its
+   * protocol carries no reasons), so the host keeps the reason for the run that fails next.
+   */
+  modelFailureDetail: string | undefined
 }
 
 export interface PiAgentRuntimeHostOptions {
   onEvent?: (event: PiRuntimeRunEvent) => void | Promise<void>
+  /**
+   * An agent message of the run ended: the run's log gains one record. Called in order with the
+   * run's events, and a tool request waits for it, so the assistant turn that asked for a tool is
+   * logged before that tool runs. Must not throw: a record that cannot be kept costs the run its
+   * place to resume from, never the run.
+   */
+  onRecord?: (runId: string, record: PiRuntimeRunRecord) => void | Promise<void>
   loadToolCallResult?: (
     runId: string,
     toolCallId: string,
@@ -123,12 +136,6 @@ export interface PiAgentRuntimeHostOptions {
 }
 
 const runtimeLog = createLogger('Intelligence').child('PiRuntimeHost')
-const BRIDGE_SYSTEM_PROMPT = `You are the model backend for Tuff Pi, a host-governed coordinator.
-You receive the complete conversation and an explicit list of tools.
-When a tool is required, reply with exactly one JSON object and no markdown:
-{"type":"tool","name":"tool.name","arguments":{}}
-Call one tool at a time. Use only a listed tool and provide valid arguments.
-When no more tools are needed, return the final answer as plain text or {"type":"final","text":"..."}.`
 
 const MODEL_REQUEST_FAILED = 'MODEL_REQUEST_FAILED: Model request failed.'
 
@@ -140,10 +147,6 @@ function projectRuntimeToolFailure(error: unknown): string {
   return formatStableToolError(projectToolError(error))
 }
 
-const PATH_LIKE_TOOL_OUTPUT_KEY =
-  /^(?:path|file|folder|directory|dir|cwd|root|source|destination)$|(?:^|[_-])(?:path|file|folder|directory|dir|cwd|root|source|destination)(?:$|[_-])/i
-const CAMEL_CASE_PATH_LIKE_TOOL_OUTPUT_KEY =
-  /(?:Path|File|Folder|Directory|Dir|Cwd|Root|Source|Destination)$/
 const MAX_TOOL_OUTPUT_CONTAINER_ENTRIES = 100
 const MAX_TOOL_OUTPUT_DEPTH = 8
 const MAX_TOOL_OUTPUT_NODES = 512
@@ -181,18 +184,6 @@ function approvalFingerprint(request: PiRuntimeToolRequest): string {
     .digest('hex')
 }
 
-function isSensitiveToolOutputKey(key: string): boolean {
-  return isCredentialLikeKey(key) || containsCredentialLikeText(key)
-}
-
-function isPathLikeToolOutputKey(key: string): boolean {
-  return (
-    PATH_LIKE_TOOL_OUTPUT_KEY.test(key) ||
-    CAMEL_CASE_PATH_LIKE_TOOL_OUTPUT_KEY.test(key) ||
-    isLocalPathLikeKey(key) ||
-    containsLocalPathLikeText(key)
-  )
-}
 
 function readBoundedToolOutputEntries(
   value: object
@@ -255,37 +246,38 @@ function sanitizeToolOutputValue(
     return '[truncated]'
   }
   if (typeof value === 'string') {
-    return containsCredentialLikeText(value) || containsLocalPathLikeText(value)
-      ? '[redacted]'
-      : value.slice(0, MAX_TOOL_OUTPUT_STRING_CHARS)
+    return value.slice(0, MAX_TOOL_OUTPUT_STRING_CHARS)
   }
-  if (typeof value === 'function' || typeof value === 'symbol') return '[redacted]'
+  if (typeof value === 'function' || typeof value === 'symbol') return undefined
   if (typeof value === 'bigint') return value.toString()
   if (!value || typeof value !== 'object') return value
   if (Array.isArray(value)) {
     const items = readBoundedToolOutputArray(value)
-    if (!items) return '[redacted]'
+    if (!items) return '[unreadable]'
     return items.map((item) =>
       item === REDACTED_TOOL_OUTPUT_ACCESSOR
-        ? '[redacted]'
+        ? '[unreadable]'
         : sanitizeToolOutputValue(item, depth + 1, state)
     )
   }
-  if (!isPlainToolOutputRecord(value)) return '[redacted]'
+  if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+    return value.valueOf()
+  }
+  if (!isPlainToolOutputRecord(value)) {
+    if (value instanceof Error) {
+      return value.message || String(value)
+    }
+    return String(value)
+  }
   const entries = readBoundedToolOutputEntries(value)
-  if (!entries) return '[redacted]'
+  if (!entries) return '[unreadable]'
   return Object.fromEntries(
-    entries.map(([key, nested], index) => {
-      const safeKey =
-        containsCredentialLikeText(key) || containsLocalPathLikeText(key)
-          ? `redactedKey${index}`
-          : key.slice(0, 256)
+    entries.map(([key, nested]) => {
+      const safeKey = key.slice(0, 256)
       return [
         safeKey,
-        nested === REDACTED_TOOL_OUTPUT_ACCESSOR ||
-        isSensitiveToolOutputKey(key) ||
-        isPathLikeToolOutputKey(key)
-          ? '[redacted]'
+        nested === REDACTED_TOOL_OUTPUT_ACCESSOR
+          ? '[unreadable]'
           : sanitizeToolOutputValue(nested, depth + 1, state)
       ]
     })
@@ -355,58 +347,101 @@ function createRestrictedEnvironment(): NodeJS.ProcessEnv {
   return env
 }
 
+/**
+ * The text of a message's content. Tool calls are not text: they travel as `toolCalls`, so their
+ * blocks contribute nothing here.
+ */
 function textFromContent(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return JSON.stringify(content ?? null)
   return content
-    .map((block) => {
-      if (!block || typeof block !== 'object') return String(block)
-      const record = block as Record<string, unknown>
-      if (record.type === 'text') return String(record.text || '')
-      if (record.type === 'thinking') return String(record.thinking || '')
-      if (record.type === 'image') return ''
-      if (record.type === 'toolCall') {
-        return `[tool call ${String(record.name)} ${JSON.stringify(record.arguments ?? {})}]`
-      }
-      return JSON.stringify(record)
+    .map((block: unknown) => {
+      if (block === null || typeof block !== 'object') return String(block)
+      if (!('type' in block)) return JSON.stringify(block)
+      if (block.type === 'text' && 'text' in block) return String(block.text || '')
+      if (block.type === 'thinking' && 'thinking' in block) return String(block.thinking || '')
+      if (block.type === 'image' || block.type === 'toolCall') return ''
+      return JSON.stringify(block)
     })
+    .filter((text) => text !== '')
     .join('\n')
 }
 
+/** The calls an assistant message made: its `toolCall` content blocks, with their ids. */
+function toolCallsFromContent(content: unknown): IntelligenceMessageToolCall[] {
+  if (!Array.isArray(content)) return []
+  const calls: IntelligenceMessageToolCall[] = []
+  for (const block of content as unknown[]) {
+    if (block === null || typeof block !== 'object') continue
+    if (!('type' in block) || block.type !== 'toolCall') continue
+    if (!('id' in block) || typeof block.id !== 'string') continue
+    if (!('name' in block) || typeof block.name !== 'string') continue
+    const args = 'arguments' in block ? block.arguments : undefined
+    calls.push({
+      id: block.id,
+      name: block.name,
+      arguments:
+        args !== null && typeof args === 'object' && !Array.isArray(args)
+          ? Object.fromEntries(Object.entries(args))
+          : {}
+    })
+  }
+  return calls
+}
+
+/** The tools the worker offered, as the chat tools a provider takes (a JSON Schema each). */
+function toChatTools(tools: PiRuntimeModelRequest['tools']): IntelligenceChatTool[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters:
+      tool.parameters !== null && typeof tool.parameters === 'object'
+        ? Object.fromEntries(Object.entries(tool.parameters))
+        : { type: 'object' }
+  }))
+}
+
+/**
+ * The conversation as structured messages: an assistant turn keeps the calls it made, and a tool
+ * result keeps the id of the call it answers. Whether that goes to the provider as native fields
+ * or as the text protocol is the SDK's decision, made per provider.
+ */
 function normalizeModelMessages(
   request: PiRuntimeModelRequest,
   modelAttachments?: IntelligenceMessageAttachment[]
 ): IntelligenceMessage[] {
-  const messages: IntelligenceMessage[] = [{ role: 'system', content: BRIDGE_SYSTEM_PROMPT }]
+  const messages: IntelligenceMessage[] = []
   if (request.systemPrompt.trim()) {
     messages.push({ role: 'system', content: request.systemPrompt.trim() })
-  }
-  if (request.tools.length > 0) {
-    messages.push({
-      role: 'system',
-      content: `Available tools:\n${JSON.stringify(request.tools)}`
-    })
   }
 
   const lastUser = request.messages.findLastIndex(
     (raw) => raw !== null && typeof raw === 'object' && 'role' in raw && raw.role === 'user'
   )
   for (const [index, raw] of request.messages.entries()) {
-    if (!raw || typeof raw !== 'object') continue
-    const message = raw as Record<string, unknown>
-    if (message.role === 'system' || message.role === 'user' || message.role === 'assistant') {
+    if (raw === null || typeof raw !== 'object' || !('role' in raw)) continue
+    const content = 'content' in raw ? raw.content : undefined
+    if (raw.role === 'system' || raw.role === 'user') {
       const attachments = index === lastUser ? modelAttachments : undefined
       messages.push({
-        role: message.role,
-        content: textFromContent(message.content),
+        role: raw.role,
+        content: textFromContent(content),
         ...(attachments?.length ? { attachments } : {})
       })
-      continue
-    }
-    if (message.role === 'toolResult') {
+    } else if (raw.role === 'assistant') {
+      const toolCalls = toolCallsFromContent(content)
       messages.push({
-        role: 'user',
-        content: `[Tool result: ${String(message.toolName || 'unknown')}]\n${textFromContent(message.content)}`
+        role: 'assistant',
+        content: textFromContent(content),
+        ...(toolCalls.length > 0 ? { toolCalls } : {})
+      })
+    } else if (raw.role === 'toolResult') {
+      messages.push({
+        role: 'tool',
+        content: textFromContent(content),
+        ...('toolCallId' in raw && typeof raw.toolCallId === 'string'
+          ? { toolCallId: raw.toolCallId }
+          : {})
       })
     }
   }
@@ -482,6 +517,7 @@ export class PiAgentRuntimeHost {
   private readyTimeout: ReturnType<typeof setTimeout> | null = null
   private readonly activeRuns = new Map<string, ActiveRunContext>()
   private readonly onEvent?: PiAgentRuntimeHostOptions['onEvent']
+  private readonly onRecord?: PiAgentRuntimeHostOptions['onRecord']
   private readonly loadToolCallResult?: PiAgentRuntimeHostOptions['loadToolCallResult']
   private readonly persistToolCallResult?: PiAgentRuntimeHostOptions['persistToolCallResult']
   private readonly beginToolCall?: PiAgentRuntimeHostOptions['beginToolCall']
@@ -493,6 +529,7 @@ export class PiAgentRuntimeHost {
 
   constructor(options: PiAgentRuntimeHostOptions = {}) {
     this.onEvent = options.onEvent
+    this.onRecord = options.onRecord
     this.loadToolCallResult = options.loadToolCallResult
     this.persistToolCallResult = options.persistToolCallResult
     this.beginToolCall = options.beginToolCall
@@ -601,7 +638,8 @@ export class PiAgentRuntimeHost {
         timeout,
         workspace,
         pendingEvents: Promise.resolve(),
-        usageLimitRefused: false
+        usageLimitRefused: false,
+        modelFailureDetail: undefined
       })
       try {
         this.post({ type: 'run.start', payload })
@@ -692,6 +730,15 @@ export class PiAgentRuntimeHost {
         await context.pendingEvents
         return
       }
+      case 'run.record': {
+        const context = this.activeRuns.get(message.payload.runId)
+        if (!context) return
+        context.pendingEvents = context.pendingEvents.then(async () => {
+          await this.onRecord?.(message.payload.runId, message.payload.record)
+        })
+        await context.pendingEvents
+        return
+      }
       case 'run.completed': {
         const context = this.activeRuns.get(message.payload.runId)
         await context?.pendingEvents
@@ -711,7 +758,11 @@ export class PiAgentRuntimeHost {
             ? createRunCancelledError()
             : context?.usageLimitRefused
               ? createRunUsageLimitedError()
-              : new Error('Pi runtime worker reported failure')
+              : createRunFailedError(
+                  // The model request that failed is the cause the worker's own message only
+                  // paraphrases; fall back to what the worker said when no request failed.
+                  context?.modelFailureDetail ?? projectRunFailureDetail(message.error)
+                )
         )
         return
       }
@@ -749,7 +800,26 @@ export class PiAgentRuntimeHost {
       let completionTokens = 0
       let totalTokens = 0
       let cost: number | undefined
-
+      let cacheReadTokens: number | undefined
+      const nativeToolCalls = new Map<
+        string,
+        { id: string; name: string; arguments: Record<string, unknown> }
+      >()
+      const streamBuffer = new PiModelStreamBuffer((deltaText) => {
+        if (!context.workspace) return
+        context.pendingEvents = context.pendingEvents.then(async () => {
+          await this.onEvent?.({
+            runId: request.runId,
+            type: 'message_update',
+            payload: {
+              assistantMessageEvent: {
+                type: 'text_delta',
+                delta: deltaText
+              }
+            }
+          })
+        })
+      })
       const streamOptions = {
         modelPreference: context.workspace?.model
           ? [context.workspace.model]
@@ -776,7 +846,10 @@ export class PiAgentRuntimeHost {
 
       for await (const event of tuffIntelligence.stream<string>(
         'text.chat',
-        { messages: normalizeModelMessages(request, context.workspace?.modelAttachments) },
+        {
+          messages: normalizeModelMessages(request, context.workspace?.modelAttachments),
+          ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {})
+        },
         streamOptions
       )) {
         if (context.controller.signal.aborted) break
@@ -799,45 +872,48 @@ export class PiAgentRuntimeHost {
           }
         } else if (event.type === 'delta' && event.delta) {
           fullText += event.delta
-          if (context.workspace) {
-            const deltaText = event.delta
-            context.pendingEvents = context.pendingEvents.then(async () => {
-              await this.onEvent?.({
-                runId: request.runId,
-                type: 'message_update',
-                payload: {
-                  assistantMessageEvent: {
-                    type: 'text_delta',
-                    delta: deltaText
+          streamBuffer.pushDelta(event.delta)
+        } else if (event.type === 'part' && event.partEvent) {
+          const part = event.partEvent
+          if (part.kind === 'reasoning-delta') {
+            if (context.workspace) {
+              const reasoningDelta = part.delta
+              context.pendingEvents = context.pendingEvents.then(async () => {
+                await this.onEvent?.({
+                  runId: request.runId,
+                  type: 'message_update',
+                  payload: {
+                    assistantMessageEvent: {
+                      type: 'thinking_delta',
+                      delta: reasoningDelta
+                    }
                   }
-                }
+                })
               })
+            }
+          } else if (part.kind === 'tool-start') {
+            streamBuffer.markTool()
+            nativeToolCalls.set(part.callId, {
+              id: part.callId,
+              name: part.name,
+              arguments: {}
             })
-          }
-        } else if (event.type === 'part' && event.partEvent?.kind === 'reasoning-delta') {
-          if (context.workspace) {
-            const reasoningDelta = event.partEvent.delta
-            context.pendingEvents = context.pendingEvents.then(async () => {
-              await this.onEvent?.({
-                runId: request.runId,
-                type: 'message_update',
-                payload: {
-                  assistantMessageEvent: {
-                    type: 'thinking_delta',
-                    delta: reasoningDelta
-                  }
-                }
-              })
-            })
+          } else if (part.kind === 'tool-input-end') {
+            const existing = nativeToolCalls.get(part.callId)
+            if (existing && part.input && typeof part.input === 'object') {
+              existing.arguments = part.input as Record<string, unknown>
+            }
           }
         } else if (event.type === 'usage' && event.usage) {
           promptTokens = event.usage.promptTokens ?? promptTokens
           completionTokens = event.usage.completionTokens ?? completionTokens
           totalTokens = event.usage.totalTokens ?? totalTokens
           cost = event.usage.cost ?? cost
+          cacheReadTokens = event.usage.cacheReadTokens ?? cacheReadTokens
         }
       }
 
+      streamBuffer.complete()
       if (context.workspace && totalTokens > 0) {
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
@@ -851,6 +927,7 @@ export class PiAgentRuntimeHost {
                 promptTokens,
                 completionTokens,
                 totalTokens,
+                cacheReadTokens,
                 cost
               }
             }
@@ -863,10 +940,12 @@ export class PiAgentRuntimeHost {
         requestId: request.requestId,
         runId: request.runId,
         text: fullText,
+        ...(nativeToolCalls.size > 0 ? { toolCalls: Array.from(nativeToolCalls.values()) } : {}),
         usage: {
           promptTokens,
           completionTokens,
           totalTokens,
+          cacheReadTokens,
           cost
         },
         provider: providerName,
@@ -876,6 +955,7 @@ export class PiAgentRuntimeHost {
       // The worker's protocol carries no codes, so it is told only that the request failed. The run
       // remembers why when it was the user's usage limit: a run that fails next is failed as refused.
       if (isUsageLimitError(error)) context.usageLimitRefused = true
+      context.modelFailureDetail = projectRunFailureDetail(error) || undefined
       response = {
         requestId: request.requestId,
         runId: request.runId,
@@ -887,6 +967,8 @@ export class PiAgentRuntimeHost {
 
   private async handleToolRequest(request: PiRuntimeToolRequest): Promise<void> {
     const context = this.activeRuns.get(request.runId)
+    // The assistant turn that asked for this tool is logged first (see `onRecord`).
+    await context?.pendingEvents
     let response: PiRuntimeToolResponse
     let controlError: Error | undefined
     try {
@@ -900,6 +982,7 @@ export class PiAgentRuntimeHost {
       response = { requestId: request.requestId, runId: request.runId, ...outcome }
     } catch (error) {
       if (isPiRuntimeControlError(error)) controlError = error
+      else runtimeLog.warn(`Pi runtime tool request failed | ${describeToolFailure(error)}`)
       response = {
         requestId: request.requestId,
         runId: request.runId,

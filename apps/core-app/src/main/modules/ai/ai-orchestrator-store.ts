@@ -16,7 +16,7 @@ import type {
 } from '@talex-touch/utils/types/ai-orchestrator'
 import { createHash, randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { and, asc, desc, eq, gte, inArray, lt, notExists, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, lt, notExists, or, sql } from 'drizzle-orm'
 import type { MainDatabase } from '../../db/db-write'
 import { scheduleDbWrite } from '../../db/db-write'
 import {
@@ -28,6 +28,7 @@ import {
   aiImportScans,
   aiImportSources,
   aiOrchestratorEvents,
+  aiOrchestratorRunMessages,
   aiOrchestratorRuns
 } from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
@@ -312,6 +313,11 @@ async function queryOrchestratorRunRetentionCandidates(
           SELECT SUM(length(CAST(COALESCE(e.payload, '') AS BLOB)))
           FROM ai_orchestrator_events e
           WHERE e.run_id = r.id
+        ), 0) +
+        COALESCE((
+          SELECT SUM(length(CAST(m.envelope AS BLOB)))
+          FROM ai_orchestrator_run_messages m
+          WHERE m.run_id = r.id
         ), 0) AS "byteCount"
     FROM ai_orchestrator_runs AS r INDEXED BY idx_ai_orchestrator_runs_retention
     WHERE r.status IN ('completed', 'failed', 'cancelled', 'interrupted')
@@ -1460,6 +1466,67 @@ export class AiOrchestratorStore {
     )
   }
 
+  /** Appends an opaque encrypted record with a sequence assigned by the sole writer. */
+  async appendRunMessage(runId: string, envelope: string): Promise<number> {
+    return await scheduleDbWrite(
+      'ai-orchestrator.run-message.append',
+      async () => {
+        const rows = await databaseModule
+          .getDb()
+          .insert(aiOrchestratorRunMessages)
+          .values({
+            runId,
+            seq: sql<number>`(SELECT COALESCE(MAX(seq), 0) + 1 FROM ai_orchestrator_run_messages WHERE run_id = ${runId})`,
+            envelope,
+            createdAt: Date.now()
+          })
+          .returning({ seq: aiOrchestratorRunMessages.seq })
+        return rows[0].seq
+      },
+      { priority: 'interactive' }
+    )
+  }
+
+  async listRunMessages(runId: string): Promise<Array<{ seq: number; envelope: string }>> {
+    return await databaseModule
+      .getDb()
+      .select({ seq: aiOrchestratorRunMessages.seq, envelope: aiOrchestratorRunMessages.envelope })
+      .from(aiOrchestratorRunMessages)
+      .where(eq(aiOrchestratorRunMessages.runId, runId))
+      .orderBy(asc(aiOrchestratorRunMessages.seq))
+  }
+
+  async deleteRunMessages(runId: string): Promise<void> {
+    await scheduleDbWrite(
+      'ai-orchestrator.run-message.delete',
+      async () => {
+        await databaseModule
+          .getDb()
+          .delete(aiOrchestratorRunMessages)
+          .where(eq(aiOrchestratorRunMessages.runId, runId))
+      },
+      { priority: 'interactive' }
+    )
+  }
+
+  async truncateRunMessages(runId: string, keepCount: number): Promise<void> {
+    await scheduleDbWrite(
+      'ai-orchestrator.run-message.truncate',
+      async () => {
+        await databaseModule
+          .getDb()
+          .delete(aiOrchestratorRunMessages)
+          .where(
+            and(
+              eq(aiOrchestratorRunMessages.runId, runId),
+              gt(aiOrchestratorRunMessages.seq, keepCount)
+            )
+          )
+      },
+      { priority: 'interactive' }
+    )
+  }
+
   async appendOrchestratorEvent(
     runId: string,
     type: string,
@@ -1931,19 +1998,19 @@ export class AiOrchestratorStore {
     return rows.map(mapAutomationRun)
   }
 
+  /**
+   * Automation runs left `queued` or `running` by the last process become `interrupted`, which the
+   * scheduler's own recovery then picks up. Orchestrator runs are not touched here: the
+   * orchestrator decides, run by run, whether one can resume and interrupts the rest itself, with
+   * the reason it recorded (`AiCliOrchestrator.recoverPersistedRuns`).
+   */
   private async markInterruptedRuns(): Promise<void> {
     const now = Date.now()
     await scheduleDbWrite(
       'ai-orchestrator.recovery.mark-interrupted',
       async () => {
-        const db = databaseModule.getDb()
-        await db
-          .update(aiOrchestratorRuns)
-          .set({ status: 'interrupted', error: 'Host restarted during execution', updatedAt: now })
-          .where(
-            or(eq(aiOrchestratorRuns.status, 'queued'), eq(aiOrchestratorRuns.status, 'running'))
-          )
-        await db
+        await databaseModule
+          .getDb()
           .update(aiAutomationRuns)
           .set({ status: 'interrupted', error: 'Host restarted during execution', updatedAt: now })
           .where(or(eq(aiAutomationRuns.status, 'queued'), eq(aiAutomationRuns.status, 'running')))

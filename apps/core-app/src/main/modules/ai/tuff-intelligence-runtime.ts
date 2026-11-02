@@ -20,6 +20,7 @@ import { agentManager } from './agents'
 import { toolRegistry } from './agents/tool-registry'
 import { tuffIntelligence } from './intelligence-sdk'
 import {
+  describeToolFailure,
   formatStableToolError,
   projectToolError,
   projectToolErrorCode,
@@ -860,6 +861,12 @@ export class TuffIntelligenceRuntime {
           .find((node) => node.toolId === payload.toolId && node.status !== 'completed')
       : undefined
 
+    if (!payload.success) {
+      runtimeLog.warn(
+        `External tool failure reported: tool=${toSafeRuntimeIdentifier(payload.toolId, 'unknown')} | ${describeToolFailure(payload.error)}`
+      )
+    }
+
     if (matchedNode) {
       matchedNode.status = payload.success ? 'completed' : 'failed'
       matchedNode.output = payload.output
@@ -1191,6 +1198,7 @@ export class TuffIntelligenceRuntime {
       return { success: true, toolCall: false }
     } catch (error) {
       const failure = projectToolError(error)
+      runtimeLog.warn(`Action ${node.id} failed | ${describeToolFailure(error)}`)
       node.status = 'failed'
       node.error = formatStableToolError(failure)
       node.updatedAt = now()
@@ -1401,6 +1409,9 @@ export class TuffIntelligenceRuntime {
         lastFailure = stableToolFailure(result.errorCode ?? 'TOOL_EXECUTION_FAILED')
       } catch (error) {
         const projection = projectToolError(error)
+        runtimeLog.warn(
+          `Tool ${toSafeRuntimeIdentifier(toolId, 'unknown')} attempt ${attempt + 1} threw | ${describeToolFailure(error)}`
+        )
         lastFailure = {
           error: formatStableToolError(projection),
           errorCode: projection.code
