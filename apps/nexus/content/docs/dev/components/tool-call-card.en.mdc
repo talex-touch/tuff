@@ -39,7 +39,7 @@ code: |
 - Put structured results (a table, a chart, a widget) in the `result` slot and keep `output` as the plain-text fallback.
 - On `retry`, set `status` back to `running` right away so users don't click repeatedly.
 - Append logs line by line instead of replacing the block, so tail-following stays smooth.
-- On non-English surfaces, override all six label props together to avoid a mixed-language card.
+- On non-English surfaces, override the label props (including `linesToggleFormatter`) together to avoid a mixed-language card.
 - Write `summary` as what the call did, not the tool name again; the collapsed row is all users scan.
 
 ## API Reference
@@ -55,9 +55,10 @@ code: |
 | `runningLabel` | `string` | `'Running'` | Label for `running`. |
 | `doneLabel` | `string` | `'Done'` | Label for `done` and any unmatched status. |
 | `errorLabel` | `string` | `'Failed'` | Label for `error`. |
-| `inputLabel` | `string` | `'Input'` | Heading of the input section. |
+| `inputLabel` | `string` | `'Input'` | Accessible name of the input section; not drawn as a heading. |
+| `linesToggleFormatter` | `(hiddenCount: number, expanded: boolean) => string` | `'N more lines'` / `'Show less'` | Label of the toggle when the input runs past four lines. |
 
-`AiToolCallPart` is `{ type, id, name, status, summary?, input?, output?, error?, logs? }`, where `status` is `'pending' | 'running' | 'done' | 'error'`.
+`AiToolCallPart` is `{ type, id, name, status, summary?, input?, output?, error?, logs?, durationMs? }`, where `status` is `'pending' | 'running' | 'done' | 'error'`.
 
 ### Events
 
@@ -70,7 +71,7 @@ code: |
 
 | Name | Scope | Description |
 |------|-------|-------------|
-| `summary` | `{ toolCall }` | Replaces the summary in the collapsed header. |
+| `summary` | `{ toolCall }` | Replaces the arguments text in the header (defaults to `summary`, then the first input line). |
 | `result` | `{ toolCall }` | Result surface for the host's own rendering; replaces `output` when provided. |
 | `icon` | `{ status }` | Replaces the status icon. |
 
@@ -83,6 +84,9 @@ code: |
 ## Overview
 
 - The body follows `status`: `running` shows `logs`, `done` shows the `result` slot (falling back to `output`), and `error` shows `error` with a retry button; `input` shows whenever it is set.
+- The header reads: elapsed time while in flight (`(1.0)`), the name (shimmering while in flight), the arguments (`summary`, else the first input line), then the duration once `durationMs` is set.
+- `pending` and `running` auto-expand; once settled the card collapses and keeps the last two lines of output as a preview. Logs, output and the preview stay pinned to their bottom.
+- Input longer than four lines shows its first four and a toggle built by `linesToggleFormatter`; the footer shows the status.
 - Every change to `logs` scrolls the log region to the bottom.
 - `status` is mirrored onto the root's `data-status` for styling.
 
