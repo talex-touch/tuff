@@ -39,6 +39,7 @@ function printableToolInput(value: unknown): string {
 export class WorkspaceMessageAssembler {
   private parts: AiMessagePart[] | undefined
   private readonly tools = new Map<string, AiToolCallPart>()
+  private readonly toolStartedAt = new Map<string, number>()
   private openReasoning: AiReasoningPart | undefined
   private reasoningStartedAt: number | undefined
   private committed = { contentLength: 0, partsLength: 0, textLength: 0 }
@@ -76,8 +77,26 @@ export class WorkspaceMessageAssembler {
     }
   }
 
+  private openReasoningSpan(): AiReasoningPart {
+    const span: AiReasoningPart = { type: 'reasoning', text: '', done: false }
+    this.reasoningStartedAt = Date.now()
+    this.openReasoning = span
+    this.ensureParts().push(span)
+    return span
+  }
+
+  private closeReasoning(): void {
+    if (!this.openReasoning) return
+    this.openReasoning.done = true
+    if (this.reasoningStartedAt !== undefined)
+      this.openReasoning.durationMs = Date.now() - this.reasoningStartedAt
+    this.openReasoning = undefined
+    this.reasoningStartedAt = undefined
+  }
+
   delta(delta: string): void {
     if (!delta) return
+    this.closeReasoning()
     this.markFirstToken()
     this.providerActivity = true
     this.content += delta
@@ -89,7 +108,12 @@ export class WorkspaceMessageAssembler {
   }
 
   recordUsage(usage: IntelligenceUsageInfo): void {
-    for (const key of ['promptTokens', 'completionTokens', 'totalTokens'] as const) {
+    for (const key of [
+      'promptTokens',
+      'completionTokens',
+      'totalTokens',
+      'cacheReadTokens'
+    ] as const) {
       const value = usage[key]
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0) this.meta[key] = value
     }
@@ -166,18 +190,19 @@ export class WorkspaceMessageAssembler {
       return
     }
     this.providerActivity = true
+    if (!event.kind.startsWith('reasoning')) this.closeReasoning()
     switch (event.kind) {
       case 'reasoning-start': {
         if (this.openReasoning && !this.openReasoning.done) return
-        this.reasoningStartedAt = Date.now()
-        this.openReasoning = { type: 'reasoning', text: '', done: false }
-        this.ensureParts().push(this.openReasoning)
+        this.openReasoningSpan()
         return
       }
-      case 'reasoning-delta':
+      case 'reasoning-delta': {
         this.markFirstToken()
-        if (this.openReasoning) this.openReasoning.text += event.delta
+        const span = this.openReasoning ?? this.openReasoningSpan()
+        span.text += event.delta
         return
+      }
       case 'reasoning-end':
         if (this.openReasoning) {
           this.openReasoning.done = true
@@ -202,6 +227,7 @@ export class WorkspaceMessageAssembler {
           status: 'running'
         }
         this.tools.set(event.callId, tool)
+        this.toolStartedAt.set(event.callId, Date.now())
         this.ensureParts().push(tool)
         return
       }
@@ -227,6 +253,11 @@ export class WorkspaceMessageAssembler {
           this.ensureParts().push(tool)
         }
         tool.status = event.isError ? 'error' : 'done'
+        const startedAt = this.toolStartedAt.get(event.callId)
+        if (startedAt !== undefined) {
+          tool.durationMs = Date.now() - startedAt
+          this.toolStartedAt.delete(event.callId)
+        }
         const output = sanitizeToolOutputForRuntime(event.output)
         const text = boundedPartText(
           typeof output === 'string' ? output : JSON.stringify(output ?? null)
@@ -244,7 +275,11 @@ export class WorkspaceMessageAssembler {
   }
 
   complete(text?: string): void {
-    if (typeof text === 'string' && text !== this.content) {
+    // An agent run reports only its last assistant message, which the stream has already
+    // assembled as the tail of everything it said. Replacing the content with it would erase the
+    // earlier messages (and their text parts) around the tool calls.
+    const alreadyStreamed = typeof text === 'string' && this.content.trimEnd().endsWith(text.trim())
+    if (typeof text === 'string' && text !== this.content && !alreadyStreamed) {
       // Invocation fallback can supply the whole answer, whereas streams already
       // assembled it. Do not append an entire final answer to its own deltas.
       if (!this.content) this.delta(text)

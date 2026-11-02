@@ -101,6 +101,7 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
           id: 'review-1',
           name: 'file.review',
           status: isError ? 'error' : 'done',
+          durationMs: expect.any(Number),
           ...(isError ? { error: 'Permission denied' } : { output: 'reviewed 3 files' })
         },
         { type: 'text', text: 'Finished.' }
@@ -130,12 +131,26 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
         id: 'kept',
         name: 'file.review',
         status: 'done',
+        durationMs: expect.any(Number),
         output: 'reviewed 3 files'
       },
       { type: 'text', text: 'Recorded changes. Final answer.' }
     ])
     expect(saved.status).toBe('complete')
     expect(saved.meta.outcome).toBe('completed')
+  })
+
+  it('an agent run reporting only its last message keeps the earlier messages and the tool card', () => {
+    assembler.delta('Here is the chart:\n```svg\n<svg/>\n```\n')
+    assembler.part({ kind: 'message-commit' })
+    assembler.part({ kind: 'tool-start', callId: 'probe', name: 'system.exec' })
+    result('probe')
+    assembler.delta('Anything else?')
+    assembler.part({ kind: 'message-commit' })
+    assembler.complete('Anything else?')
+    const saved = persisted()
+    expect(saved.content).toBe('Here is the chart:\n```svg\n<svg/>\n```\nAnything else?')
+    expect(saved.meta.parts.map((part) => part.type)).toEqual(['text', 'tool-call', 'text'])
   })
 
   it('a commit before parts exist still preserves the text when a provisional tool opens then resets', () => {
@@ -179,6 +194,7 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
         id: 'review-1',
         name: 'file.review',
         status: 'done',
+        durationMs: expect.any(Number),
         output: 'reviewed 3 files'
       }
     ])
@@ -244,7 +260,12 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
         status: 'error',
         error: 'TOOL_EXECUTION_INTERRUPTED'
       },
-      { type: 'reasoning', text: 'Unfinished analysis', done: true },
+      {
+        type: 'reasoning',
+        text: 'Unfinished analysis',
+        done: true,
+        durationMs: expect.any(Number)
+      },
       { type: 'text', text: 'Partial answer' }
     ])
     expect(assembler.isCompacting).toBe(false)
@@ -301,7 +322,7 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     })
   })
 
-  it('persisted tool input redacts nested credential/path values while retaining non-sensitive results', () => {
+  it('persisted tool input preserves nested values and path data without redaction', () => {
     assembler.part({ kind: 'tool-start', callId: 'review-1', name: 'file.review' })
     assembler.part({
       kind: 'tool-input-end',
@@ -321,7 +342,11 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     if (tool.type !== 'tool-call') throw new Error('Expected tool card')
     expect(JSON.parse(tool.input!)).toEqual({
       count: 3,
-      nested: { apiKey: '[redacted]', workspacePath: '[redacted]', note: 'ready' }
+      nested: {
+        apiKey: 'synthetic-secret-canary',
+        workspacePath: '/Users/private/project.txt',
+        note: 'ready'
+      }
     })
     expect(tool.output).toBe('reviewed 3 files')
   })
@@ -337,7 +362,7 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
       value: 'failed at /Users/private/native-stack.ts:42',
       isError: true
     }
-  ])('$name is sanitized before the durable snapshot', ({ value, isError }) => {
+  ])('$name preserves actual tool output in durable snapshot', ({ value, isError }) => {
     result('review-1', value, isError)
     expect(persisted().meta.parts).toEqual([
       {
@@ -345,12 +370,12 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
         id: 'review-1',
         name: 'file.review',
         status: isError ? 'error' : 'done',
-        ...(isError ? { error: '[redacted]' } : { output: '[redacted]' })
+        ...(isError ? { error: value } : { output: value })
       }
     ])
   })
 
-  it('provisional tool-input logs cannot persist a credential before tool-input-end arrives', () => {
+  it('provisional tool-input logs persist text before tool-input-end arrives', () => {
     assembler.part({ kind: 'tool-start', callId: 'review-1', name: 'file.review' })
     assembler.part({
       kind: 'tool-input-delta',
@@ -360,7 +385,7 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     assembler.fail('RUN_INTERRUPTED', 'interrupted')
     const tool = persisted().meta.parts.find((part) => part.type === 'tool-call')!
     if (tool.type !== 'tool-call') throw new Error('Expected tool card')
-    expect(tool.logs).toBe('[redacted]')
+    expect(tool.logs).toBe('Authorization: Bearer synthetic-provisional-canary')
     expect(tool.error).toBe('TOOL_EXECUTION_INTERRUPTED')
   })
 

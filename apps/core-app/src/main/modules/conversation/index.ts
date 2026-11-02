@@ -11,7 +11,8 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { ConversationEvents } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
-import { fileReviewService } from './file-review-service'
+import { fileReviewService, setFileReviewGatewayProvider } from './file-review-service'
+import { toolGatewayModule } from '../tool-gateway'
 import { ConversationWorkspaceRunner } from './workspace-runner'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -68,6 +69,8 @@ export class ConversationModule extends BaseModule<TalexEvents> {
           transport.broadcast(ConversationReviewEvents.changed, notification)
       })
     )
+    setFileReviewGatewayProvider(toolGatewayModule)
+    this.disposers.push(() => setFileReviewGatewayProvider(null))
 
     this.disposers.push(
       transport.on(AgentWorkspaceEvents.get, (payload, context) => {
@@ -105,6 +108,10 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       transport.on(AgentWorkspaceEvents.promoteQueued, (payload, context) => {
         assertHostOwned(context)
         return runner.service.promoteQueued(payload.conversationId, payload.queueId)
+      }),
+      transport.on(AgentWorkspaceEvents.updateQueued, (payload, context) => {
+        assertHostOwned(context)
+        return runner.service.updateQueued(payload)
       }),
       transport.on(AgentWorkspaceEvents.fork, (payload, context) => {
         assertHostOwned(context)
