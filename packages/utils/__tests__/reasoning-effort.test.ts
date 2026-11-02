@@ -12,6 +12,7 @@ import {
   resolveReasoningEffortSupport,
   toLangChainAnthropicThinkingFields,
   toLangChainOpenAiReasoningFields,
+  toLangChainOpenAiResponsesReasoningFields,
 } from '../intelligence/reasoning-effort'
 import { TUFF_NEXUS_PROVIDER_ID } from '../intelligence/nexus-provider'
 
@@ -243,6 +244,16 @@ describe('toLangChainOpenAiReasoningFields', () => {
     expect(toLangChainOpenAiReasoningFields(plan('high', deepseek('deepseek-v4-flash')))).toEqual({
       modelKwargs: { reasoning_effort: 'high', thinking: { type: 'enabled' } },
     })
+  })
+})
+
+describe('toLangChainOpenAiResponsesReasoningFields', () => {
+  it('spells the level as the Responses reasoning object, and nothing for other wires', () => {
+    expect(toLangChainOpenAiResponsesReasoningFields(undefined)).toBeNull()
+    expect(toLangChainOpenAiResponsesReasoningFields(plan('max', openai('gpt-5.5')))).toEqual({
+      modelKwargs: { reasoning: { effort: 'xhigh' } },
+    })
+    expect(toLangChainOpenAiResponsesReasoningFields(plan('high', deepseek('deepseek-v4-flash')))).toBeNull()
   })
 })
 
