@@ -823,6 +823,7 @@ export class PiAgentRuntimeHost {
         context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
       let modelName = context.workspace?.model
       let reportedProvider: string | undefined
+      let reportedModel: string | undefined
       let promptTokens = 0
       let completionTokens = 0
       let totalTokens = 0
@@ -888,14 +889,16 @@ export class PiAgentRuntimeHost {
           if (event.model) modelName = event.model
           if (context.workspace) {
             const startProvider = providerName
+            const startModel = modelName
             reportedProvider = startProvider
+            reportedModel = startModel
             context.pendingEvents = context.pendingEvents.then(async () => {
               await this.onEvent?.({
                 runId: request.runId,
                 type: 'provider_response',
                 payload: {
                   provider: startProvider,
-                  model: modelName,
+                  model: startModel,
                   usageReported: false
                 }
               })
@@ -935,8 +938,9 @@ export class PiAgentRuntimeHost {
               existing.arguments = part.input as Record<string, unknown>
             }
           }
-        } else if (event.type === 'end' && event.provider) {
-          providerName = event.provider
+        } else if (event.type === 'end') {
+          if (event.provider) providerName = event.provider
+          if (event.model) modelName = event.model
         } else if (event.type === 'usage' && event.usage) {
           promptTokens = event.usage.promptTokens ?? promptTokens
           completionTokens = event.usage.completionTokens ?? completionTokens
@@ -947,8 +951,8 @@ export class PiAgentRuntimeHost {
       }
 
       streamBuffer.complete()
-      const providerChanged = providerName !== reportedProvider
-      if (context.workspace && (totalTokens > 0 || providerChanged)) {
+      const identityChanged = providerName !== reportedProvider || modelName !== reportedModel
+      if (context.workspace && (totalTokens > 0 || identityChanged)) {
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
             runId: request.runId,

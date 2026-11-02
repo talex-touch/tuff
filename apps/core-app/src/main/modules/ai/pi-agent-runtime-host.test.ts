@@ -426,7 +426,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     intelligenceMocks.stream.mockImplementationOnce(async function* () {
       yield { type: 'start', provider: 'omp-cli', model: 'model-meta' }
       yield { type: 'delta', delta: 'pong' }
-      yield { type: 'end', provider: 'omp-config', model: 'model-meta' }
+      yield { type: 'end', provider: 'omp-config', model: 'model-fallback' }
     })
     hostMocks.emit('message', {
       type: 'model.request',
@@ -448,6 +448,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       .filter((event) => event.type === 'provider_response')
     expect(answered.at(-1)?.payload).toMatchObject({
       provider: 'omp-config',
+      model: 'model-fallback',
       usageReported: false
     })
     await completeRun(payload, execution)

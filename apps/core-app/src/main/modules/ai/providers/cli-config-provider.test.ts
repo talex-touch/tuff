@@ -110,6 +110,14 @@ describe('resolveCliConfigEndpoint', () => {
     expect(endpoint?.provider).toBeInstanceOf(CliConfigProvider)
   })
 
+  it('falls through to models.yaml when models.yml parses to nothing', async () => {
+    await writeAt(join(root, 'omp'), 'models.yml', '')
+    await writeAt(join(root, 'omp'), 'models.yaml', OMP_MODELS)
+    const endpoint = resolveCliConfigEndpoint('omp', 'cpa/gemini-3.8-flash')
+    expect(endpoint?.providerId).toBe('omp-config')
+    expect(endpoint?.modelId).toBe('gemini-3.8-flash')
+  })
+
   it('reads models.yaml when models.yml is absent, as the OMP catalog does', async () => {
     await writeAt(join(root, 'omp'), 'models.yaml', OMP_MODELS)
     const endpoint = resolveCliConfigEndpoint('omp', 'cpa/gemini-3.8-flash')

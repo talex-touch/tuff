@@ -77,7 +77,8 @@ const OMP_MODEL_FILES = ['models.yml', 'models.yaml', 'models.json'] as const
 function readOmpModelConfig(): Record<string, unknown> | null {
   for (const name of OMP_MODEL_FILES) {
     const content = readFile(join(ompAgentDir(), name))
-    if (content !== null) return parseConfig(content, extname(name))
+    const config = content === null ? null : parseConfig(content, extname(name))
+    if (config) return config
   }
   return null
 }
