@@ -47,6 +47,7 @@
 - [`voice-architecture-ecosystem-survey-2026-10-14.md`](./voice-architecture-ecosystem-survey-2026-10-14.md)：语音模型全景技术调研与 Tuff 指令二次确认/桌面语音选型报告，含阿里增强 7 模、智谱 GLM-ASR-Nano、SGLang-Omni MLX Native Voxt、通义 Qwen3-ASR-Flash 及 HN 爆火 EmbeddingGemma 288x 剖析；完成短指令控制与长语音听写的分层定位与三级架构设计。
 - [`electron-browser-feasibility-survey-2026-10-17.md`](./electron-browser-feasibility-survey-2026-10-17.md)：Electron 构建浏览器可行性与兼容性调研报告，含通用主力浏览器 vs. 垂直工作流/AI 浏览器的技术壁垒对照（Chrome 扩展 MV3 缺陷、Widevine DRM 授权缺失、自动填充与权限管理纯手搓、Tab 生命周期与内存膨胀、Brave/Muon 重构教训）及架构定界建议。
 - [`file-provider-architecture-refactoring-analysis-2026-10-18.md`](./file-provider-architecture-refactoring-analysis-2026-10-18.md)：`file-provider.ts`（4,073 行）巨石架构深拆分析与 4 角色解耦演进方案（SRP Wave C 规划），含已抽离 20+ 服务但宿主仍膨胀的归因剖析、4 角色解耦模型、4 步平滑迁移路径与 3 条工程底线。
+- [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](./omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)：omp 运行时与 Tern 预留协议 GUI 集成技术调研报告，含内置 `pi` 切换为 `omp` 的可行性、Tern 协议（Carly / ACP / Control Socket）接入路径、omp 为什么不能直接作为 Node 进程内 npm 包的四重技术鸿沟（Bun 绑定、事件循环阻塞、崩溃扩散、生命周期截断）及以 SDK 包装器模式分发的方案，并规划了 `HomePage.vue` 巨石瘦身与 `intelligence-uikit` 的四阶段演进路线。
 
 
 ## 活报告
