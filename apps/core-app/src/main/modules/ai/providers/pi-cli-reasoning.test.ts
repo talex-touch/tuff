@@ -10,11 +10,14 @@ import {
   buildOmpArgs,
   buildPiArgs,
   CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   cliReasoningLevel,
   CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
+  OMP_CLI_PROFILE_ID,
   OMP_CLI_PROVIDER_ID,
   PI_CLI_ORIGIN,
   PI_CLI_PROVIDER_ID,
@@ -132,7 +135,17 @@ describe('PiCliProvider argv under a reasoning plan', () => {
     model: string,
     reasoningEffort?: 'low' | 'medium' | 'high' | 'max'
   ): Promise<string[]> {
-    const options = { modelPreference: [model], ...(reasoningEffort ? { reasoningEffort } : {}) }
+    // Each third-party CLI binary runs only under its own scheduler, so that scheduler drives its argv.
+    const scheduler: string | undefined = {
+      [CODEX_CLI_PROVIDER_ID]: CODEX_CLI_PROFILE_ID,
+      [CLAUDE_CLI_PROVIDER_ID]: CLAUDE_CLI_PROFILE_ID,
+      [OMP_CLI_PROVIDER_ID]: OMP_CLI_PROFILE_ID
+    }[config.id]
+    const options = {
+      modelPreference: [model],
+      ...(scheduler ? { metadata: { profileId: scheduler } } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {})
+    }
     const planned = withReasoningPlan(options, planProviderReasoning(options, config, model))
     for await (const _chunk of new PiCliProvider(config, () => true).chatStream(
       { messages: [{ role: 'user', content: 'hi' }] },

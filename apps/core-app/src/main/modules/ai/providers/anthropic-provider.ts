@@ -312,7 +312,7 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions & { readonly signal?: AbortSignal }
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
 
@@ -327,7 +327,8 @@ export class AnthropicProvider extends IntelligenceProvider {
     const tools = toLangChainTools(payload.tools)
     const assembler = new ToolCallAssembler()
     const stream = await (tools.length > 0 ? model.bindTools(tools) : model).stream(
-      toLangChainMessages(payload.messages)
+      toLangChainMessages(payload.messages),
+      options.signal ? { signal: options.signal } : undefined
     )
     for await (const chunk of stream) {
       for (const partEvent of assembler.pushMessageChunk(chunk)) {

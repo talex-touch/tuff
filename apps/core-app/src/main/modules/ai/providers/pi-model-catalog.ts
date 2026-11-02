@@ -150,11 +150,11 @@ function providerCatalogEntries(providers: unknown): Map<string, IntelligenceMod
   return entries
 }
 
-function ompAgentDir(): string {
+export function ompAgentDir(): string {
   return process.env.TUFF_OMP_AGENT_DIR || join(homedir(), '.omp', 'agent')
 }
 
-function codexDir(): string {
+export function codexDir(): string {
   return process.env.CODEX_HOME || join(homedir(), '.codex')
 }
 
