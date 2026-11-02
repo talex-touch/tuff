@@ -131,6 +131,7 @@ vi.mock('@talex-touch/tuffex/border-beam', () => ({ TxBorderBeam: Paint }))
 vi.mock('@talex-touch/tuffex/chain-of-thought', () => ({ TxChainOfThought: Paint }))
 vi.mock('@talex-touch/tuffex/choice-card', () => ({ TxChoiceCard: Paint }))
 vi.mock('@talex-touch/tuffex/message-actions', () => ({ TxMessageActions: Paint }))
+vi.mock('@talex-touch/tuffex/gradual-blur', () => ({ TxGradualBlur: Paint }))
 vi.mock('@talex-touch/tuffex/modal', () => ({ TxModal: Paint }))
 vi.mock('@talex-touch/tuffex/skeleton', async () => {
   const { ref } = await import('vue')

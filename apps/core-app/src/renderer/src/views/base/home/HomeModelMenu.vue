@@ -805,6 +805,14 @@ onBeforeUnmount(() => {
   display: contents;
 }
 
+:deep(.tx-popover__reference),
+:deep(.tx-tooltip__reference),
+:deep(.tx-base-anchor__reference) {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+
 /* Panel chrome (surface, border, shadow, placement) belongs to the primitive; this is content. */
 /*
  * Never taller than the room the anchor gives the panel (`--tx-ba-max-height`, less the card's

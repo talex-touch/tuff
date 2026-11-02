@@ -6,30 +6,17 @@ import type {
   ConversationTurnMeta
 } from '~/modules/conversation/useHomeConversation'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
-import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxAiAssistantTurn } from '@talex-touch/intelligence-uikit'
-import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
-import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
-import { TxModal } from '@talex-touch/tuffex/modal'
-import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
-import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
-import { TxCodeBlock } from '@talex-touch/tuffex/stream-markdown'
-import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
-import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
-import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
-import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
-import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { prefersReducedMotion, useSendChoreography } from '~/composables/useSendChoreography'
 import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -72,6 +59,8 @@ import TuffAIComposer from './TuffAIComposer.vue'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeMessageRail from './HomeMessageRail.vue'
+import HomeMessageRow from './HomeMessageRow.vue'
+import { homeMessageContextKey } from './composables/home-message-context'
 import HomeTopBar from './HomeTopBar.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
 import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
@@ -94,8 +83,8 @@ import { useSendState } from './composables/useSendState'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
 import { useTurnMetrics } from './composables/useTurnMetrics'
 import HomeEmptyHead from './HomeEmptyHead.vue'
-import HomeTurnError from './HomeTurnError.vue'
-import HomeTurnFooter from './HomeTurnFooter.vue'
+import HomePayloadModal from './HomePayloadModal.vue'
+import HomePushCard from './HomePushCard.vue'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -533,21 +522,7 @@ const intelligenceSdk = useIntelligenceSdk()
 
 const { toggleSpeak, speakStateOf } = useReadAloud()
 
-const {
-  segmentsOf,
-  chartSpecOf,
-  formSpecOf,
-  widgetSpecOf,
-  submittedForms,
-  formDrafts,
-  submitForm,
-  showToolPayload,
-  payloadFor,
-  payloadJson,
-  toolCallLabels,
-  markdownLabels,
-  codePartProps
-} = useMessageParts({
+const messageParts = useMessageParts({
   submit: (text, attachments, options) => workspace.submit(text, attachments, options),
   clearDraft: () => {
     draft.value = ''
@@ -876,6 +851,14 @@ const thinkingTicker = useThinkingTicker({
   locale
 })
 
+provide(homeMessageContextKey, {
+  ...messageParts,
+  attachPreviewProps,
+  attachOpenLabel,
+  thinkingVerb: thinkingTicker.activeVerb,
+  thinkingLabel: thinkingTicker.activeLabel
+})
+
 function estimateTextTokens(text: string): number {
   if (!text) return 0
   let count = 0
@@ -1018,7 +1001,7 @@ useHomeCommands({
               <template #item="{ item: message, index }">
                 <!-- The voice clip waits where the message it may become will land. -->
                 <div v-if="message.id === VOICE_DRAFT_ID" class="HomePage-StreamRow">
-                  <div class="HomePage-Message user">
+                  <div class="HomePage-VoiceRow">
                     <HomeVoiceDraft
                       v-if="dictation.clip.value"
                       :clip="dictation.clip.value"
@@ -1031,220 +1014,28 @@ useHomeCommands({
                   </div>
                 </div>
                 <div v-else class="HomePage-StreamRow">
-                  <div
-                    class="HomePage-Message"
-                    :class="[
-                      message.role,
-                      { 'HomePage-Message--enter': enteringMessages.has(message.id) }
-                    ]"
-                    :data-message-id="message.id"
-                    :aria-busy="message.status === 'streaming'"
-                  >
-                    <template v-if="message.role === 'user'">
-                      <!-- A voice message: its recording, then its transcript as the bubble. -->
-                      <TxVoiceClip
-                        v-if="message.voice"
-                        class="HomePage-MsgVoice"
-                        :src="message.voice.url"
-                        :duration-ms="message.voice.durationMs"
-                        :play-label="t('home.voiceClip.play')"
-                        :pause-label="t('home.voiceClip.pause')"
-                        :seek-label="t('home.voiceClip.seek')"
-                        :unavailable-label="t('home.voiceClip.unavailable')"
-                      />
-                      <TxAttachmentTray
-                        v-if="message.attachments?.length"
-                        class="HomePage-MsgAttachments"
-                        :attachments="message.attachments"
-                        :preview-title="t('home.attachPreview')"
-                        :previous-label="t('home.attachPrevious')"
-                        :next-label="t('home.attachNext')"
-                        :previous-text="t('home.attachPreviousText')"
-                        :next-text="t('home.attachNextText')"
-                        :close-label="t('common.close')"
-                        :zoom-in-label="t('home.attachViewer.zoomIn')"
-                        :zoom-out-label="t('home.attachViewer.zoomOut')"
-                        :reset-label="t('home.attachViewer.reset')"
-                        :failed-text="t('home.attachViewer.failed')"
-                        :open-label-formatter="attachOpenLabel"
-                        :preview-props="attachPreviewProps"
-                      />
-                      <div class="HomePage-UserBubble">
-                        {{ message.content }}
-                      </div>
-                      <div class="HomePage-MsgActionsSlot">
-                        <div class="HomePage-MsgActionsSlotInner">
-                          <TxMessageActions
-                            class="HomePage-MsgActions"
-                            :appear="false"
-                            :copy-text="message.content"
-                            :copy-label="t('home.copy')"
-                            :copied-label="t('home.copied')"
-                          />
-                        </div>
-                      </div>
-                    </template>
-
-                    <template v-else>
-                      <!-- Reasoning, prose and tool calls in the order they streamed. The kit
-                           keys each segment, so a streaming delta never resets what the reader
-                           opened. Tools with a face of their own (widget, form, chart) come
-                           through the `tool` slot; the machinery card stays for the rest. -->
-                      <TxAiAssistantTurn
-                        :segments="segmentsOf(message)"
-                        :streaming="message.status === 'streaming'"
-                        :element-props="{
-                          class: 'HomePage-Reply',
-                          locale,
-                          copyLabel: t('home.copy'),
-                          copiedLabel: t('home.copied'),
-                          markdownProps: markdownLabels,
-                          ...codePartProps
-                        }"
-                        :tool-call-props="{ class: 'HomePage-Tool', ...toolCallLabels }"
-                        :has-tool-face="
-                          (part) => !!(formSpecOf(part) || chartSpecOf(part) || widgetSpecOf(part))
-                        "
-                      >
-                        <template #tool="{ segment }">
-                          <div class="HomePage-WidgetBlock">
-                            <ToolWidgetCard
-                              v-if="widgetSpecOf(segment.part)"
-                              :source="widgetSpecOf(segment.part)!.source"
-                              :title="widgetSpecOf(segment.part)!.title"
-                              :fallback="segment.part.output"
-                            />
-                            <ToolFormCard
-                              v-else-if="formSpecOf(segment.part)"
-                              v-bind="codePartProps"
-                              :spec="formSpecOf(segment.part)!"
-                              :submitted="
-                                submittedForms.has(segment.part.id) ||
-                                segment.part.submitted === true
-                              "
-                              :initial-values="formDrafts.get(segment.part.id)"
-                              :submit-label="t('home.formSubmit')"
-                              :reset-label="t('home.formReset')"
-                              :required-hint="t('home.formRequired')"
-                              :submitted-label="t('home.formDone')"
-                              :select-placeholder="t('home.formSelect')"
-                              @submit="submitForm(segment.part, $event)"
-                              @change="formDrafts.set(segment.part.id, $event)"
-                            />
-                            <ToolChartCard
-                              v-else
-                              :spec="chartSpecOf(segment.part)!"
-                              :animate="message.status === 'streaming'"
-                            />
-
-                            <!-- The raw call, for builders only: none outside dev builds. -->
-                            <button
-                              v-if="showToolPayload"
-                              class="HomePage-PayloadBtn"
-                              type="button"
-                              @click="payloadFor = segment.part"
-                            >
-                              <span class="i-ri-braces-line" />
-                              <span>{{ t('home.toolPayload') }}</span>
-                            </button>
-                          </div>
-                        </template>
-                      </TxAiAssistantTurn>
-
-                      <!-- A turn that never carried structured parts stays a
-                           plain string; the loop above has nothing to render
-                           for it. Guarded on `parts` rather than on segment
-                           count so a turn whose parts are all tool calls does
-                           not replay its text here as well. -->
-                      <TxStreamElement
-                        v-if="!message.parts && message.content"
-                        class="HomePage-Reply"
-                        :locale="locale"
-                        :copy-label="t('home.copy')"
-                        :copied-label="t('home.copied')"
-                        :markdown-props="markdownLabels"
-                        v-bind="codePartProps"
-                        :content="message.content"
-                        :streaming="message.status === 'streaming'"
-                      />
-
-                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response and
-                           tinted with its gradient ink, beside a verb that is fresh for this
-                           turn. The send key's `waiting` reads the same predicate, so the two
-                           cannot disagree. -->
-                      <div v-else-if="isAwaitingFirstToken(message)" class="HomePage-Thinking">
-                        <TxThinkingOrb
-                          :size="64"
-                          :display-size="28"
-                          variant="gradient"
-                          :label="thinkingTicker.activeVerb.value"
-                        />
-                        <span class="HomePage-ThinkingLabel">
-                          <TxTextMorph
-                            :text="thinkingTicker.activeLabel.value"
-                            :duration-ms="320"
-                          />
-                        </span>
-                      </div>
-
-                      <!-- The provider is squeezing its context mid-turn; a
-                           silent pause here read as a hang. -->
-                      <p
-                        v-if="message.status === 'streaming' && isCompacting"
-                        class="HomePage-Compacting"
-                        role="status"
-                      >
-                        <span class="i-ri-archive-2-line" aria-hidden="true" />
-                        <span>{{ t('home.compacting') }}</span>
-                      </p>
-
-                      <HomeTurnError
-                        v-if="message.status === 'failed'"
-                        :error="message.error"
-                        :retryable="index === messages.length - 1"
-                        @retry="conversation.retry()"
-                      />
-
-                      <!-- Surfaces out of a blur once the answer settles; the last
-                           reply keeps it on show, older ones reveal on hover. -->
-                      <HomeTurnFooter
-                        v-if="message.status === 'complete'"
-                        :message="message"
-                        :resting="isTurnFooterResting(message)"
-                        :regenerable="index === messages.length - 1 && !isStreaming"
-                        :speak-state="speakStateOf(message)"
-                        :branchable="canBranchFrom(message, index)"
-                        :branching="branching"
-                        :show-metrics="showTurnMetrics"
-                        @regenerate="conversation.retry()"
-                        @speak="toggleSpeak(message)"
-                        @branch="branchTo({ messageId: message.id })"
-                      />
-                    </template>
-                  </div>
+                  <HomeMessageRow
+                    :message="message"
+                    :entering="enteringMessages.has(message.id)"
+                    :latest="index === messages.length - 1"
+                    :streaming="isStreaming"
+                    :compacting="isCompacting"
+                    :resting="isTurnFooterResting(message)"
+                    :branchable="canBranchFrom(message, index)"
+                    :branching="branching"
+                    :speak-state="speakStateOf(message)"
+                    :show-metrics="showTurnMetrics"
+                    @retry="conversation.retry()"
+                    @regenerate="conversation.retry()"
+                    @speak="toggleSpeak(message)"
+                    @branch="branchTo({ messageId: message.id })"
+                  />
                 </div>
               </template>
             </TxConversationStream>
           </Transition>
 
-          <!-- The dev payload inspector: one dialog for whichever widget's
-               toggle was clicked, highlighted JSON with its own copy button. -->
-          <TxModal
-            :model-value="payloadFor !== null"
-            :title="`${payloadFor?.name ?? ''} · ${t('home.toolPayload')}`"
-            :close-label="t('common.close')"
-            width="640px"
-            @update:model-value="payloadFor = null"
-          >
-            <TxCodeBlock
-              class="HomePage-PayloadCode"
-              lang="json"
-              :code="payloadJson"
-              :closed="true"
-              :copy-label="t('home.copy')"
-              :copied-label="t('home.copied')"
-            />
-          </TxModal>
+          <HomePayloadModal />
 
           <div ref="composerGroupRef" class="HomePage-ComposerGroup">
             <!-- Main could not read this thread: nothing below is its state, so say so and offer
@@ -1423,24 +1214,19 @@ useHomeCommands({
               appear-from-class="home-card-appear-from"
               appear-active-class="home-card-appear-active"
             >
-              <div v-if="isEmpty && homeRecommendationsEnabled" class="HomePage-Push">
-                <div class="HomePage-PushSlot" :style="pushSlotStyle">
-                  <TxChoiceCard
-                    v-model:step="pushStep"
-                    class="HomePage-PushCard"
-                    :class="{ 'is-settling': pushSettling }"
-                    :steps="pushSteps"
-                    :selected="pushSelected"
-                    :loading="pushSkeleton"
-                    :loading-rows="pushLoadingRows"
-                    :columns="2"
-                    :appear="false"
-                    :prev-label="pushLabels.prev"
-                    :next-label="pushLabels.next"
-                    @select="choosePush"
-                  />
-                </div>
-              </div>
+              <HomePushCard
+                v-if="isEmpty && homeRecommendationsEnabled"
+                v-model:step="pushStep"
+                :steps="pushSteps"
+                :selected="pushSelected"
+                :loading="pushSkeleton"
+                :loading-rows="pushLoadingRows"
+                :settling="pushSettling"
+                :prev-label="pushLabels.prev"
+                :next-label="pushLabels.next"
+                :slot-style="pushSlotStyle"
+                @select="choosePush"
+              />
             </Transition>
             <slot v-if="browserLanding" name="browser-footer" />
           </div>
@@ -1570,16 +1356,6 @@ useHomeCommands({
   container-type: inline-size;
   // The top bar is pinned, so the page itself never scrolls — the body below it owns the overflow.
   overflow: hidden;
-
-  // The bridge above folds tuffex's four fills onto the shell's two surfaces, so `--tx-fill-color`
-  // and `--tx-fill-color-light` are one colour — and the push card rests its options on the second
-  // and hovers them onto the first: a hover with nothing to change to. Inside the card the ramp
-  // runs a step further instead. The hover takes the shell's second surface, and the skeleton bars
-  // the card draws on a resting row (`--tx-fill-color-darker`) a step past that, where they read.
-  .HomePage-Push {
-    --tx-fill-color: var(--shell-surface-2);
-    --tx-fill-color-darker: var(--shell-border);
-  }
 }
 
 :deep(.HomeTopBar) {
@@ -1782,44 +1558,11 @@ useHomeCommands({
   box-sizing: border-box;
 }
 
-.HomePage-Message {
+/* The voice clip's row, on the message lane's right edge where the message it may become will land. */
+.HomePage-VoiceRow {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  /* All arrival physics deform from the bottom edge — where hits land and
-     where bubbles rise from. The motion itself runs on WAAPI springs. */
-  transform-origin: 50% 100%;
-
-  /* Holds a freshly appended row invisible for the frame between render and
-     its spring taking over; the animation's own opacity replaces this. */
-  &.HomePage-Message--enter {
-    opacity: 0;
-  }
-
-  &.user {
-    align-items: flex-end;
-  }
-
-  &.assistant {
-    align-items: flex-start;
-  }
-}
-
-/**
- * The stand-in that flies from the composer to the landing row. It is a message,
- * so it obeys the message rule: one layer under the composer, which means the
- * bubble rises out from behind the box instead of sliding across its face.
- */
-.HomePage-FlightClone {
-  z-index: var(--home-z-flight);
-}
-
-.HomePage-MsgAttachments {
-  max-width: 78%;
-}
-
-.HomePage-MsgVoice {
-  max-width: 78%;
+  align-items: flex-end;
 }
 
 /* Above the composer on an untouched Home: the lane the messages will use, its right edge. */
@@ -1903,61 +1646,6 @@ useHomeCommands({
   pointer-events: auto;
 }
 
-:deep(.HomePage-Tool),
-:deep(.HomePage-Chain) {
-  width: 100%;
-}
-
-/** A widget stands on its own: one quiet frame, no tool-log chrome around it. */
-.HomePage-WidgetBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 14px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-surface);
-  box-sizing: border-box;
-}
-
-.HomePage-PayloadBtn {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  align-self: flex-start;
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-family: inherit;
-  font-size: var(--shell-fs-caption);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-secondary);
-  }
-}
-
-.HomePage-PayloadCode {
-  max-height: 420px;
-  overflow: auto;
-}
-
-.HomePage-UserBubble {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-surface-2);
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-md);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /**
  * The send lift's bubble: fixed to the viewport so it can cross the whole pane, moved by
  * `transform` alone (`composables/send-lift`), and laid out once exactly as the landed bubble —
@@ -1993,94 +1681,6 @@ useHomeCommands({
   position: relative;
   margin: 0;
   background: none;
-}
-
-/**
- * No fill on replies: in v2 the raised look comes from strokes, and body copy is not a
- * raised surface. The class now sits on TxStreamMarkdown — no `pre-wrap` here, markdown
- * owns its own whitespace; colour and size align the markdown body with the shell.
- */
-:deep(.HomePage-Reply) {
-  width: 100%;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-md);
-  word-break: break-word;
-}
-
-// The orb and its verb read as one line of the answer's own type, so the wait
-// looks like the start of a reply rather than a spinner bolted on beside it.
-.HomePage-Thinking {
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-  margin: 4px 0;
-  color: var(--shell-text-muted);
-}
-
-.HomePage-ThinkingLabel {
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--shell-fs-md);
-  font-style: italic;
-  line-height: 1.4;
-  color: var(--shell-text-muted);
-  user-select: none;
-  white-space: nowrap;
-}
-
-.HomePage-Compacting {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  margin: 2px 0 0;
-  color: var(--shell-text-muted);
-  font-size: 12px;
-  animation: home-compacting-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes home-compacting-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
-.HomePage-MsgActions {
-  margin-top: 0;
-}
-
-// Same treatment for the user bubble's own copy button.
-.HomePage-MsgActionsSlot {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease;
-
-  &.is-open,
-  &:focus-within {
-    grid-template-rows: 1fr;
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-.HomePage-Message:hover .HomePage-MsgActionsSlot {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.HomePage-MsgActionsSlotInner {
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 6px;
 }
 
 .HomePage-ErrorIcon {
@@ -2144,53 +1744,6 @@ useHomeCommands({
       --home-group-gap: 0px;
     }
   }
-}
-
-/**
- * The push card's lane, and a query container: its slot reserves rows for the columns the card
- * actually lays out. The card's own sizes are compacted here — TxChoiceCard reads them from any
- * ancestor — so the guide's tallest page still fits a 600px window under the composer.
- */
-.HomePage-Push {
-  --tx-choice-card-pad: 6px;
-  --tx-choice-card-label-line: 18px;
-  --tx-choice-card-desc-line: 16px;
-
-  container: home-push / inline-size;
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-}
-
-/**
- * Holds the mode's tallest page (`pushSlotStyle`), so the card can shrink inside it — a shorter
- * page, fewer rows, rows replacing their skeleton — without the centred stage moving the composer.
- *
- * The arithmetic is TxChoiceCard's own box: 10px of block padding and a 2px gap in each option, 6px
- * between rows, and a head of 6px + a 20px title line + 10px, with a 24px pager and a 4px gap above
- * the title when there are pages to turn. Only the two text lines and the inset are variables; the
- * rest is restated here, so a change to the card's spacing shows up as a slot that no longer fits.
- */
-.HomePage-PushSlot {
-  --home-push-row: calc(
-    20px + var(--tx-choice-card-label-line) + 2px + var(--tx-choice-card-desc-line)
-  );
-  --home-push-rows: var(--home-push-rows-1);
-  --home-push-head: calc(36px + var(--home-push-pager) * 28px);
-  --home-push-list: calc(var(--home-push-rows) * (var(--home-push-row) + 6px) - 6px);
-
-  min-height: calc(2 * var(--tx-choice-card-pad) + var(--home-push-head) + var(--home-push-list));
-}
-
-/* TxChoiceCard turns to two columns at 480px of its content box, inside its two 6px insets. */
-@container home-push (width >= 492px) {
-  .HomePage-PushSlot {
-    --home-push-rows: var(--home-push-rows-2);
-  }
-}
-
-/* Rows that are not final, before the skeleton is due (`pushSettling`). */
-.HomePage-PushCard.is-settling {
-  visibility: hidden;
 }
 
 /* The greeting bows out as the first message lands, and — once the composer
@@ -2312,13 +1865,27 @@ useHomeCommands({
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* The watcher never marks rows under reduced motion; this guards a marked
-     row against ever being stranded invisible if it does slip through. */
-  .HomePage-Message.HomePage-Message--enter {
-    opacity: 1;
-  }
+/* A path named in the reply: dotted until hovered, solid while ⌘ is held (it opens on ⌘ click). */
+:deep(.is-file-path) {
+  color: var(--shell-primary);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
 
+  &:hover {
+    text-decoration-style: solid;
+    background: color-mix(in srgb, var(--shell-primary) 10%, transparent);
+  }
+}
+
+:deep(.is-command-path-clickable) {
+  cursor: pointer !important;
+  text-decoration: underline solid !important;
+  text-underline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
   .home-head-leave-active,
   .home-head-enter-active,
   .home-card-leave-active,
@@ -2327,21 +1894,6 @@ useHomeCommands({
   .home-stream-leave-active,
   .home-stream-enter-active {
     transition: none;
-  }
-
-  .HomePage-Compacting {
-    animation: none;
-  }
-
-  :deep(.is-command-path-clickable) {
-    cursor: pointer !important;
-    text-decoration: underline !important;
-    text-underline-offset: 2px !important;
-    color: var(--tx-color-primary, #409eff) !important;
-  }
-
-  :deep(.has-command-active code) {
-    cursor: pointer;
   }
 }
 </style>

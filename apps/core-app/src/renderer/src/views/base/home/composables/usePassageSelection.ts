@@ -8,13 +8,22 @@ export interface PassageSelectionOptions {
   /** The scrolling transcript column: the subtree a text selection is scoped to. */
   body: Ref<HTMLElement | null>
   /** The floating bar itself; focusing it must not read as a deselection. */
-  bar: Ref<HTMLElement | null>
+  bar: Ref<unknown>
   /** The composer field a quoted passage lands in. */
   input: Ref<HTMLTextAreaElement | null>
   draft: Ref<string>
   /** Switching thread retracts the bar. */
   conversationId: Ref<string | null>
   autoGrow: () => void
+}
+
+function extractDomNode(value: unknown): Node | null {
+  if (value instanceof Node) return value
+  if (value && typeof value === 'object') {
+    if ('$el' in value && value.$el instanceof Node) return value.$el
+    if ('el' in value && value.el instanceof Node) return value.el
+  }
+  return null
 }
 
 /**
@@ -31,7 +40,10 @@ export function usePassageSelection(options: PassageSelectionOptions) {
    */
   const { selection: passageSelection, clear: clearPassageSelection } = useSelectionAnchor({
     root: options.body,
-    ignore: () => [options.bar.value],
+    ignore: () => {
+      const node = extractDomNode(options.bar.value)
+      return node instanceof Element ? [node] : []
+    },
     minLength: 2
   })
 
@@ -95,23 +107,46 @@ export function usePassageSelection(options: PassageSelectionOptions) {
     if (!passageSelection.value) return
     const target = event.target
     if (!(target instanceof Node)) return
-    // A click inside the bar is the bar acting on the passage, and a new drag
-    // inside the transcript is the reader choosing a different one.
-    if (options.bar.value?.contains(target)) return
-    if (options.body.value?.contains(target)) {
-      // A press inside the column only retracts when it did not start a new
-      // selection: pressing to select is how the next passage is chosen.
-      const selection = window.getSelection()
-      if (selection && !selection.isCollapsed && selection.toString().trim()) return
-      dismissPassage()
-      return
-    }
+    const barNode = extractDomNode(options.bar.value)
+    if (barNode?.contains(target)) return
+
+    // Any press outside the floating bar retracts the previous passage highlight.
+    // If the reader starts a new drag, selectionchange will resolve the fresh range.
     dismissPassage()
   }
 
-  onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown, true))
-  onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointerDown, true))
+  function onWindowBlur(): void {
+    if (passageSelection.value) {
+      dismissPassage()
+    }
+  }
 
+  function onDocumentKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && passageSelection.value) {
+      dismissPassage()
+    }
+  }
+
+  function onSelectionChange(): void {
+    if (!passageSelection.value) return
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+      clearPassageSelection()
+    }
+  }
+
+  onMounted(() => {
+    document.addEventListener('pointerdown', onDocumentPointerDown, true)
+    document.addEventListener('keydown', onDocumentKeyDown)
+    document.addEventListener('selectionchange', onSelectionChange)
+    window.addEventListener('blur', onWindowBlur)
+  })
+  onBeforeUnmount(() => {
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+    document.removeEventListener('keydown', onDocumentKeyDown)
+    document.removeEventListener('selectionchange', onSelectionChange)
+    window.removeEventListener('blur', onWindowBlur)
+  })
   watch(options.conversationId, () => dismissPassage())
 
   return { passageSelection, passageActions, runPassageAction }
