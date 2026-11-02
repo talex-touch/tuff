@@ -410,6 +410,95 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     expect(vi.getTimerCount()).toBe(before)
   })
 
+  it('reports the endpoint that answered even when the stream carries no usage', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    const execution = host.execute(payload, {
+      conversationId: 'conversation-meta-2',
+      turnId: 'turn-meta-2',
+      projectId: null,
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield { type: 'start', provider: 'omp-cli', model: 'model-meta' }
+      yield { type: 'delta', delta: 'pong' }
+      yield { type: 'end', provider: 'omp-config', model: 'model-fallback' }
+    })
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-meta-2',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: 'Answer briefly.',
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: [],
+        modelPreference: ['cpa/gemini-3.8-flash']
+      }
+    })
+    await settleAsyncWork()
+
+    const answered = onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'provider_response')
+    expect(answered.at(-1)?.payload).toMatchObject({
+      provider: 'omp-config',
+      model: 'model-fallback',
+      usageReported: false
+    })
+    await completeRun(payload, execution)
+  })
+
+  it('reports the endpoint that answered at stream end, not the provider the run was routed to', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    const execution = host.execute(payload, {
+      conversationId: 'conversation-meta-1',
+      turnId: 'turn-meta-1',
+      projectId: null,
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield { type: 'start', provider: 'codex-cli', model: 'model-meta' }
+      yield { type: 'delta', delta: 'pong' }
+      yield {
+        type: 'usage',
+        usage: { promptTokens: 4, completionTokens: 1, totalTokens: 5 }
+      }
+      yield { type: 'end', provider: 'codex-config', model: 'model-meta' }
+    })
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-meta-1',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: 'Answer briefly.',
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: [],
+        modelPreference: ['ktvsky-2/gpt-6.1-sol']
+      }
+    })
+    await settleAsyncWork()
+
+    const answered = onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'provider_response')
+      .map((event) => event.payload.provider)
+    expect(answered.at(-1)).toBe('codex-config')
+    await completeRun(payload, execution)
+  })
+
   it('preserves run and model request IDs while relaying host-owned model responses', async () => {
     const payload = startPayload()
     const host = new PiAgentRuntimeHost()
@@ -449,7 +538,8 @@ describe('piAgentRuntimeHost protocol boundary', () => {
           caller: 'ai-cli-orchestrator',
           runId: payload.run.id,
           sessionId: payload.run.sessionId,
-          step: 1
+          step: 1,
+          profileId: payload.profile.id
         }
       })
     )

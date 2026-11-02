@@ -278,12 +278,15 @@ function copyReply(text: string): void {
 
 .HomePage-MsgActions {
   margin-top: 0;
+  padding-top: 16px;
 }
 
 // Same treatment for the user bubble's own copy button.
 .HomePage-MsgActionsSlot {
   display: grid;
   grid-template-rows: 0fr;
+  /* Cancels the 10px row gap while folded; the inner padding restores it when open. */
+  margin-top: -10px;
   opacity: 0;
   pointer-events: none;
   transition:
@@ -307,7 +310,6 @@ function copyReply(text: string): void {
 .HomePage-MsgActionsSlotInner {
   min-height: 0;
   overflow: hidden;
-  padding-top: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {

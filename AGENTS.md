@@ -28,6 +28,14 @@ Several agents work in this checkout at once on the user's own workstation, next
 - Before starting any Electron instance or crash harness, check that the user's dev instance is not running (an `Electron Helper` process whose `--user-data-dir` is the default `@talex-touch/core-app` profile, or a listener on the vite port 5173). If it is, do not start yours.
 - One isolated Electron instance per agent at a time; close it as soon as the evidence is captured.
 
+## Runtime invariants
+
+- **The scheduler decides the executor.** A third-party CLI binary (`codex`, `claude`, `omp`) runs only under its own scheduler profile: `profile:cli:codex`, `profile:cli:claude`, `profile:cli:omp`. Any other scheduler, Tuff included, and a run that names no scheduler, handed a model of that CLI only reuses the endpoint the CLI's own config describes (`providers/cli-config-provider.ts`): `~/.codex/config.toml`, `~/.claude/settings.json`, `~/.omp/agent/models.yml`. The model's provider supplies endpoint configuration; it never selects the executor. The built-in Tuff runtime (`pi`) is not a third-party CLI and is outside this rule.
+  - Enforced by the `THIRD_PARTY_CLIS` table and `chatStream` in `providers/pi-cli-provider.ts`; locked by `providers/pi-cli-provider.cli-config.test.ts` and `providers/cli-config-provider.test.ts`. Do not add a setting, provider flag, or fallback that lets a non-matching run spawn a CLI binary.
+  - Why: a CLI runs its own agent loop and tools outside Tuff's policy, and `codex exec` streams no token deltas. Under the Tuff scheduler the host must own the turn.
+  - Meta: a reused endpoint tags each chunk with its own provider id (`codex-config`, `claude-config`, `omp-config`); the pi host records it at stream end, so message meta names the endpoint that answered, not the routed CLI provider.
+  - How to apply: keep `metadata.profileId` as the only switch. Any new call site that can reach `PiCliProvider` must carry the scheduler's profile id.
+
 ## Standing Audits / Known Issues
 
 Before touching **search / file-indexing / cross-platform** code, read the living audit backlog — it tracks confirmed defects and prioritized risks with `file:line` references so you don't re-discover or re-introduce them:

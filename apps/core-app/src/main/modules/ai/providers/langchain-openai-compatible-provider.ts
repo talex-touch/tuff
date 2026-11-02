@@ -90,7 +90,7 @@ function createOpenAiChatModelCallOptions(
   return options.signal ? { signal: options.signal } : undefined
 }
 
-type OpenAiClientFetch = NonNullable<import('openai').ClientOptions['fetch']>
+export type OpenAiClientFetch = NonNullable<import('openai').ClientOptions['fetch']>
 
 function trimBaseUrl(value: string): string {
   return value.replace(/\/+$/, '')
@@ -689,6 +689,10 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return this.config.apiKey || 'tuff-local-key'
   }
 
+  protected resolveFetch(): OpenAiClientFetch {
+    return createNetworkServiceFetch()
+  }
+
   protected resolveRequestTimeout(
     options: IntelligenceInvokeOptions,
     defaultTimeout = 30_000
@@ -772,7 +776,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       timeout: this.resolveRequestTimeout(params.options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
-        fetch: createNetworkServiceFetch()
+        fetch: this.resolveFetch()
       }
     }
     if (this.usesResponsesApi(params.model)) {
@@ -882,7 +886,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       timeout: this.resolveRequestTimeout(options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
-        fetch: createNetworkServiceFetch()
+        fetch: this.resolveFetch()
       }
     })
 

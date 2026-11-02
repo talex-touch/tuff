@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PiCliProvider } from './pi-cli-provider'
 import {
   CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   PI_CLI_ORIGIN,
   PI_CLI_PROVIDER_ID,
@@ -498,7 +499,7 @@ describe('PiCliProvider claude', () => {
     await expect(async () => {
       for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }, () => true).chatStream(
         imageTurn(),
-        {}
+        { metadata: { profileId: CLAUDE_CLI_PROFILE_ID } }
       )) {
         void _chunk
       }
