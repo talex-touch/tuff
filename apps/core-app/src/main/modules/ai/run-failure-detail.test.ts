@@ -27,7 +27,9 @@ describe('projectRunFailureDetail', () => {
   })
 
   it('does not treat a URL or a ~ path as a filesystem path to shorten', () => {
-    const detail = projectRunFailureDetail('GET https://api.example.com/v1/models failed in ~/x/y.ts')
+    const detail = projectRunFailureDetail(
+      'GET https://api.example.com/v1/models failed in ~/x/y.ts'
+    )
     expect(detail).toContain('https://api.example.com/v1/models')
     expect(detail).toContain('~/x/y.ts')
   })

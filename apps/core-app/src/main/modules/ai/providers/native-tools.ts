@@ -34,7 +34,9 @@ export interface LangChainFunctionTool {
   function: { name: string; description: string; parameters: Record<string, unknown> }
 }
 
-export function toLangChainTools(tools: IntelligenceChatTool[] | undefined): LangChainFunctionTool[] {
+export function toLangChainTools(
+  tools: IntelligenceChatTool[] | undefined
+): LangChainFunctionTool[] {
   return (tools ?? []).map((tool) => ({
     type: 'function' as const,
     function: {

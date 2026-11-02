@@ -60,7 +60,6 @@ export function isTextEmbeddingEligible(filePath: string, extension: string): bo
   return true
 }
 
-
 /**
  * The slice of `EmbeddingService` this service needs. Narrowed to keep the dependency
  * one-directional -- the embedding service knows nothing about index flushing.

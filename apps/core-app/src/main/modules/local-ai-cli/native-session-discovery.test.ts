@@ -301,7 +301,12 @@ describe('findNativeSessionFile', () => {
     await writeJsonl(join(roots.pi, 'pi-1.jsonl'), piSessionLines('pi-1', projectRoot))
     const claudeId = '11111111-2222-3333-4444-555555555555'
     await writeJsonl(join(roots.claude, `${claudeId}.jsonl`), [
-      { type: 'user', sessionId: claudeId, cwd: projectRoot, message: { role: 'user', content: 'hi' } }
+      {
+        type: 'user',
+        sessionId: claudeId,
+        cwd: projectRoot,
+        message: { role: 'user', content: 'hi' }
+      }
     ])
     await writeJsonl(join(roots.codex, 'codex-1.jsonl'), [
       { type: 'session_meta', payload: { id: 'codex-1', cwd: projectRoot } }

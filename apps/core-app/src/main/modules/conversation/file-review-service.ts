@@ -366,7 +366,12 @@ export class FileReviewService {
     }
 
     const authority = await this.resolveAuthority(ctx)
-    const targets = await this.resolveReviewedPaths(authority, ctx.workingDirectory!, paths, operation)
+    const targets = await this.resolveReviewedPaths(
+      authority,
+      ctx.workingDirectory!,
+      paths,
+      operation
+    )
     const absolutes = targets.map((target) => target.absolute)
 
     const outcome = await this.locks.withLocks(absolutes, async () => {
@@ -647,7 +652,10 @@ export class FileReviewService {
 
       let outside = false
       if (relative === null) {
-        const gateway = activeGatewayProvider?.getGatewayState() ?? { enabled: false, mode: 'review' }
+        const gateway = activeGatewayProvider?.getGatewayState() ?? {
+          enabled: false,
+          mode: 'review'
+        }
         if (!gateway.enabled) {
           throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
         }
@@ -670,7 +678,12 @@ export class FileReviewService {
               throw toolRefusal('TOOL_APPROVAL_DENIED')
             }
           } catch (error) {
-            if (error && typeof error === 'object' && 'code' in error && error.code === 'TOOL_APPROVAL_DENIED') {
+            if (
+              error &&
+              typeof error === 'object' &&
+              'code' in error &&
+              error.code === 'TOOL_APPROVAL_DENIED'
+            ) {
               throw error
             }
             throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')

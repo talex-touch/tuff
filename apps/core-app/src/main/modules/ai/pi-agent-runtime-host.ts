@@ -184,7 +184,6 @@ function approvalFingerprint(request: PiRuntimeToolRequest): string {
     .digest('hex')
 }
 
-
 function readBoundedToolOutputEntries(
   value: object
 ): Array<[key: string, value: unknown]> | undefined {

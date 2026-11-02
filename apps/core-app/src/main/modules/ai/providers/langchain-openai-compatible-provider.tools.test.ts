@@ -89,7 +89,12 @@ describe('OpenAI-compatible native tools over HTTP', () => {
       chunk({ role: 'assistant', content: null }),
       chunk({
         tool_calls: [
-          { index: 0, id: 'call_9', type: 'function', function: { name: 'file__read', arguments: '' } }
+          {
+            index: 0,
+            id: 'call_9',
+            type: 'function',
+            function: { name: 'file__read', arguments: '' }
+          }
         ]
       }),
       chunk({ tool_calls: [{ index: 0, function: { arguments: '{"path":"a' } }] }),

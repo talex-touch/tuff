@@ -48,7 +48,9 @@ function sortByPriority(
   })
 }
 export function isLocalCliProvider(
-  provider: IntelligenceProviderConfig | { metadata?: Record<string, unknown>; id?: string; type?: string }
+  provider:
+    | IntelligenceProviderConfig
+    | { metadata?: Record<string, unknown>; id?: string; type?: string }
 ): boolean {
   return (
     provider.metadata?.isLocalCli === true ||

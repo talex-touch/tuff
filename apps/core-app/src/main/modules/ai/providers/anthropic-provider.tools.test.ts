@@ -14,7 +14,9 @@ async function startLoopback(events: Array<[string, unknown]>) {
       bodies.push(JSON.parse(raw))
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       for (const [name, data] of events) {
-        response.write(`event: ${name}\ndata: ${JSON.stringify({ type: name, ...(data as object) })}\n\n`)
+        response.write(
+          `event: ${name}\ndata: ${JSON.stringify({ type: name, ...(data as object) })}\n\n`
+        )
       }
       response.end()
     })
@@ -115,10 +117,7 @@ describe('Anthropic native tools over HTTP', () => {
     const server = await startLoopback([
       ['message_start', message],
       ['content_block_start', { index: 0, content_block: { type: 'text', text: '' } }],
-      [
-        'content_block_delta',
-        { index: 0, delta: { type: 'text_delta', text: 'It says hello.' } }
-      ],
+      ['content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'It says hello.' } }],
       ['content_block_stop', { index: 0 }],
       [
         'message_delta',

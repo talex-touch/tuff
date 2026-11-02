@@ -77,12 +77,7 @@ describe('planRunResume', () => {
   })
 
   it('replays the second turn, not the first, when the run stopped inside it', () => {
-    const records = [
-      user(),
-      turn(1, ['a'], 15),
-      result('a', 1, 15),
-      turn(2, ['b'], 30)
-    ]
+    const records = [user(), turn(1, ['a'], 15), result('a', 1, 15), turn(2, ['b'], 30)]
     const plan = planRunResume(records, PROMPT)
 
     expect(plan?.keepCount).toBe(3)

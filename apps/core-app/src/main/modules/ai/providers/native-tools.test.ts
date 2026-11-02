@@ -101,8 +101,8 @@ describe('LangChain message conversion', () => {
     expect(() => toLangChainToolMessage({ role: 'tool', content: 'x' })).toThrow(
       /TOOL_RESULT_UNPAIRED/
     )
-    expect(toLangChainToolMessage({ role: 'tool', content: 'x', toolCallId: 'call_1' })).toMatchObject(
-      { tool_call_id: 'call_1' }
-    )
+    expect(
+      toLangChainToolMessage({ role: 'tool', content: 'x', toolCallId: 'call_1' })
+    ).toMatchObject({ tool_call_id: 'call_1' })
   })
 })

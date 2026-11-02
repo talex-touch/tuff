@@ -422,9 +422,7 @@ describe('initSearchDatabase size cap', () => {
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as {
       entries: Array<{ tag: string }>
     }
-    journal.entries = journal.entries.filter(
-      (entry) => entry.tag < '0055_search_keyword_postings'
-    )
+    journal.entries = journal.entries.filter((entry) => entry.tag < '0055_search_keyword_postings')
     await writeFile(journalPath, JSON.stringify(journal))
     const seed = createClient({ url: `file:${dbPath}` })
     await migrate(drizzle(seed), { migrationsFolder: previous })

@@ -2366,11 +2366,21 @@ describe('conversation session file reveal', () => {
     const event = LocalAiCliEvents.session.revealFile.toEventName()
 
     await expect(
-      invokeHandler(transport, event, { conversationId: 'conv-1' }, { plugin: { name: 'demo' }, sender: { id: 5 } })
+      invokeHandler(
+        transport,
+        event,
+        { conversationId: 'conv-1' },
+        { plugin: { name: 'demo' }, sender: { id: 5 } }
+      )
     ).rejects.toThrow('LOCAL_AI_CLI_HOST_ONLY')
 
     await expect(
-      invokeHandler(transport, event, { conversationId: 'conv-without-file' }, { plugin: null, sender: { id: 11 } })
+      invokeHandler(
+        transport,
+        event,
+        { conversationId: 'conv-without-file' },
+        { plugin: null, sender: { id: 11 } }
+      )
     ).resolves.toEqual({ revealed: false })
   })
 })

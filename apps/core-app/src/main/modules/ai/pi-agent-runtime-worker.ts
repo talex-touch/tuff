@@ -526,7 +526,11 @@ export function emitModelResponse(
     }
     if (text) {
       const contentIndex = toolCalls.length
-      const textPartial = createBaseAssistantMessage(response, [{ type: 'text', text: '' }], 'toolUse')
+      const textPartial = createBaseAssistantMessage(
+        response,
+        [{ type: 'text', text: '' }],
+        'toolUse'
+      )
       stream.push({ type: 'text_start', contentIndex, partial: textPartial })
       stream.push({ type: 'text_delta', contentIndex, delta: text, partial: message })
       stream.push({ type: 'text_end', contentIndex, content: text, partial: message })
@@ -753,7 +757,11 @@ function countersOf(active: ActiveRun): PiRuntimeCounters {
 function isLoggedMessage(message: AgentMessage): boolean {
   if (message.role === 'user' || message.role === 'toolResult') return true
   // A turn that errored or was aborted is never resumed from; logging it would only poison the log.
-  return message.role === 'assistant' && message.stopReason !== 'error' && message.stopReason !== 'aborted'
+  return (
+    message.role === 'assistant' &&
+    message.stopReason !== 'error' &&
+    message.stopReason !== 'aborted'
+  )
 }
 
 async function startRun(payload: PiRuntimeStartPayload): Promise<void> {

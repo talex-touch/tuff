@@ -495,15 +495,10 @@ describe('FileReviewService consumer evidence and inverse operations', () => {
     })
 
     await expect(
-      service.executeFileOperation(
-        ctx,
-        'write',
-        [outsideFile],
-        async ([target]) => {
-          await fs.writeFile(target!, 'should not write\n')
-          return 'fail'
-        }
-      )
+      service.executeFileOperation(ctx, 'write', [outsideFile], async ([target]) => {
+        await fs.writeFile(target!, 'should not write\n')
+        return 'fail'
+      })
     ).rejects.toMatchObject({ code: 'TOOL_APPROVAL_DENIED' })
     setFileReviewGatewayProvider(null)
   })
@@ -516,19 +511,13 @@ describe('FileReviewService consumer evidence and inverse operations', () => {
     })
 
     await expect(
-      service.executeFileOperation(
-        ctx,
-        'write',
-        [outsideFile],
-        async ([target]) => {
-          await fs.writeFile(target!, 'should not write\n')
-          return 'fail'
-        }
-      )
+      service.executeFileOperation(ctx, 'write', [outsideFile], async ([target]) => {
+        await fs.writeFile(target!, 'should not write\n')
+        return 'fail'
+      })
     ).rejects.toMatchObject({ code: 'TOOL_RESOURCE_ACCESS_DENIED' })
     setFileReviewGatewayProvider(null)
   })
-
 
   it('a symlink substituted after capture cannot be followed during rollback', async () => {
     await fs.writeFile(join(root, 'source.txt'), 'old\n')

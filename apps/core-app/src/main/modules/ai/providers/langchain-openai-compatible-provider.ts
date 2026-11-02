@@ -29,7 +29,7 @@ import type {
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import {
   toLangChainOpenAiReasoningFields,
   toLangChainOpenAiResponsesReasoningFields

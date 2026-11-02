@@ -954,7 +954,9 @@ export class AiCliOrchestrator {
       const rows = await aiOrchestratorStore.listRunMessages(run.id)
       if (rows.length === 0) return undefined
       const records = await openRunRecords(run.id, rows)
-      const plan = records ? planRunResume(records, buildObjectivePrompt(run.objective, input)) : null
+      const plan = records
+        ? planRunResume(records, buildObjectivePrompt(run.objective, input))
+        : null
       if (!plan) {
         await aiOrchestratorStore.deleteRunMessages(run.id)
         return undefined

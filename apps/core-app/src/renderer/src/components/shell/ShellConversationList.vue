@@ -321,224 +321,148 @@ function onRailRowClick(row: RailConversationRow): void {
 
 <template>
   <nav class="ShellConversationList" :aria-label="t('shell.history.label')">
-    <TxEdgeFadeMask
-      class="ShellConversationList-Fade"
-      :size="24"
-      :disabled="collapsed"
-    >
+    <TxEdgeFadeMask class="ShellConversationList-Fade" :size="24" :disabled="collapsed">
       <!--
         Built from the loaded Projects section's own boxes — its section, its header, rows on the shared
         row metrics with a square in the icon column and a bar in the name column, on a line of the
         name's type — so each placeholder sits where the real title and folders land and nothing moves
         when the data arrives.
       -->
-    <div
-      v-if="showSkeleton"
-      class="ShellConversationList-Section ShellConversationList-Skeleton"
-      aria-hidden="true"
-    >
-      <template v-if="collapsed">
-        <TxSkeleton v-for="i in 3" :key="i" :width="38" :height="32" :radius="6" />
-      </template>
-      <template v-else>
-        <div class="ShellConversationList-SectionHeader">
-          <TxSkeleton :width="56" :height="9" :radius="3" />
-        </div>
-        <div
-          v-for="width in SKELETON_NAME_WIDTHS"
-          :key="width"
-          class="ShellConversationList-SkeletonRow"
-        >
-          <TxSkeleton width="var(--shell-row-icon)" height="var(--shell-row-icon)" :radius="4" />
-          <div class="ShellConversationList-SkeletonName">
-            <TxSkeleton :width="width" :height="10" :radius="3" />
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <!-- Rail mode: compact buttons with hover popover -->
-    <div v-else-if="collapsed" class="ShellConversationList-RailList">
-      <TxPopover
-        v-for="row in railRows"
-        :key="row.key"
-        trigger="hover"
-        placement="right"
-        :offset="10"
-        :open-delay="100"
-        :close-delay="80"
-        panel-shadow="soft"
+      <div
+        v-if="showSkeleton"
+        class="ShellConversationList-Section ShellConversationList-Skeleton"
+        aria-hidden="true"
       >
-        <template #reference>
-          <button
-            class="ShellConversationList-RailItem"
-            :class="{
-              active: row.kind === 'conversation' && row.id === activeId,
-              'is-loading': Boolean(row.id && isConversationLoading(row.id))
-            }"
-            type="button"
-            :aria-label="row.title"
-            @click="onRailRowClick(row)"
-          >
-            <span class="ShellConversationList-RailShortTitle">{{ shortTitle(row.title) }}</span>
-            <Transition name="shell-rail-dot">
-              <span
-                v-if="row.id && isConversationLoading(row.id)"
-                class="ShellConversationList-RailLoadingDot"
-                aria-hidden="true"
-              />
-            </Transition>
-          </button>
+        <template v-if="collapsed">
+          <TxSkeleton v-for="i in 3" :key="i" :width="38" :height="32" :radius="6" />
         </template>
-
-        <div class="ShellConversationList-RailPopover">
-          <div class="ShellConversationList-RailPopoverHeader">
-            <span class="ShellConversationList-RailPopoverTitle">{{ row.title }}</span>
-            <span
-              v-if="row.id && isConversationLoading(row.id)"
-              class="ShellConversationList-RailPopoverLoading"
-            >
-              {{ t('shell.history.loading') }}
-            </span>
-            <button
-              v-if="row.kind === 'conversation' && row.id"
-              class="ShellConversationList-RailPopoverDelete"
-              :title="t('shell.history.delete')"
-              :aria-label="t('shell.history.delete')"
-              @click.stop="removeConversation(row.id)"
-            >
-              <span class="i-ri-delete-bin-6-line" />
-            </button>
+        <template v-else>
+          <div class="ShellConversationList-SectionHeader">
+            <TxSkeleton :width="56" :height="9" :radius="3" />
           </div>
           <div
-            v-if="row.projectName || formatRowTime(row.updatedAt)"
-            class="ShellConversationList-RailPopoverMeta"
+            v-for="width in SKELETON_NAME_WIDTHS"
+            :key="width"
+            class="ShellConversationList-SkeletonRow"
           >
-            <span v-if="row.projectName" class="ShellConversationList-RailPopoverProject">
-              <i class="i-ri-folder-2-line" />
-              {{ row.projectName }}
-            </span>
-            <span v-if="formatRowTime(row.updatedAt)" class="ShellConversationList-RailPopoverTime">
-              {{ formatRowTime(row.updatedAt) }}
-            </span>
+            <TxSkeleton width="var(--shell-row-icon)" height="var(--shell-row-icon)" :radius="4" />
+            <div class="ShellConversationList-SkeletonName">
+              <TxSkeleton :width="width" :height="10" :radius="3" />
+            </div>
           </div>
-        </div>
-      </TxPopover>
-    </div>
-
-    <template v-else>
-      <!-- Always present, even with no projects: the section title's + is where new projects start. -->
-      <section class="ShellConversationList-Section ShellConversationList-Section--projects">
-        <div class="ShellConversationList-SectionHeader">
-          <span class="ShellConversationList-SectionTitle">{{ t('shell.projects.section') }}</span>
-          <MetaHintBadge command="new-project" />
-          <button
-            class="ShellConversationList-SectionAction"
-            type="button"
-            :title="t('shell.newProject')"
-            :aria-label="t('shell.newProject')"
-            @click="enterPickedProjectConversation"
-          >
-            <span class="i-ri-add-line" />
-          </button>
-        </div>
-
-        <template v-for="group in groups.active" :key="group.key">
-          <ShellProjectFolder
-            v-if="group.project"
-            :project="group.project"
-            :rows="group.rows"
-            :active-id="activeId"
-            :current="group.project.id === currentProjectId"
-            :expanded="folders.isExpanded(group.project.id)"
-            :renaming="renamingProjectId === group.project.id"
-            :discovering-project-id="discoveringProjectId"
-            :project-names="projectNames"
-            @toggle="folders.toggle(group.project.id)"
-            @enter="enterConversation(group.project.id)"
-            @run-agent="openProjectAgent(group.project.id, $event)"
-            @discover="discoverSessions(group.project)"
-            @begin-rename="beginRename(group.project)"
-            @rename="saveRename(group.project, $event)"
-            @cancel-rename="cancelRename"
-            @toggle-pinned="togglePinned(group.project)"
-            @toggle-archived="toggleArchived(group.project)"
-            @open-conversation="openConversation"
-            @remove-conversation="removeConversation"
-            @rename-conversation="renameConversation"
-            @copy-conversation="copyConversation"
-            @open-conversation-file="openConversationFile"
-            @continue-session="continueSession"
-            @forget-session="forgetSession"
-          />
         </template>
+      </div>
 
-        <!-- Only once the load has settled: before that, no folders means "not known yet". -->
-        <button
-          v-if="loaded && !groups.active.length"
-          class="ShellConversationList-NewFromFolder"
-          type="button"
-          @click="enterPickedProjectConversation"
+      <!-- Rail mode: compact buttons with hover popover -->
+      <div v-else-if="collapsed" class="ShellConversationList-RailList">
+        <TxPopover
+          v-for="row in railRows"
+          :key="row.key"
+          trigger="hover"
+          placement="right"
+          :offset="10"
+          :open-delay="100"
+          :close-delay="80"
+          panel-shadow="soft"
         >
-          <span class="ShellConversationList-NewFromFolderIcon i-ri-folder-add-line" />
-          <span class="ShellConversationList-NewFromFolderLabel">
-            {{ t('shell.projects.newFromFolder') }}
-          </span>
-        </button>
-      </section>
+          <template #reference>
+            <button
+              class="ShellConversationList-RailItem"
+              :class="{
+                active: row.kind === 'conversation' && row.id === activeId,
+                'is-loading': Boolean(row.id && isConversationLoading(row.id))
+              }"
+              type="button"
+              :aria-label="row.title"
+              @click="onRailRowClick(row)"
+            >
+              <span class="ShellConversationList-RailShortTitle">{{ shortTitle(row.title) }}</span>
+              <Transition name="shell-rail-dot">
+                <span
+                  v-if="row.id && isConversationLoading(row.id)"
+                  class="ShellConversationList-RailLoadingDot"
+                  aria-hidden="true"
+                />
+              </Transition>
+            </button>
+          </template>
 
-      <section
-        v-if="groups.home.rows.length"
-        class="ShellConversationList-Section ShellConversationList-Section--chats"
-      >
-        <div class="ShellConversationList-SectionHeader">
-          <span class="ShellConversationList-SectionTitle">{{ t('shell.projects.chats') }}</span>
-          <MetaHintBadge command="new-chat" />
-          <!-- The Projects title's + in the same place, for a new chat outside every project. -->
-          <button
-            class="ShellConversationList-SectionAction ShellConversationList-SectionAction--reveal"
-            type="button"
-            :title="t('shell.newChat')"
-            :aria-label="t('shell.newChat')"
-            @click="enterConversation(null)"
-          >
-            <span class="i-ri-add-line" />
-          </button>
-        </div>
-        <ShellProjectRows
-          :rows="groups.home.rows"
-          :active-id="activeId"
-          :project-names="projectNames"
-          @open-conversation="openConversation"
-          @remove-conversation="removeConversation"
-          @rename-conversation="renameConversation"
-          @copy-conversation="copyConversation"
-          @open-conversation-file="openConversationFile"
-          @continue-session="continueSession"
-          @forget-session="forgetSession"
-        />
-      </section>
+          <div class="ShellConversationList-RailPopover">
+            <div class="ShellConversationList-RailPopoverHeader">
+              <span class="ShellConversationList-RailPopoverTitle">{{ row.title }}</span>
+              <span
+                v-if="row.id && isConversationLoading(row.id)"
+                class="ShellConversationList-RailPopoverLoading"
+              >
+                {{ t('shell.history.loading') }}
+              </span>
+              <button
+                v-if="row.kind === 'conversation' && row.id"
+                class="ShellConversationList-RailPopoverDelete"
+                :title="t('shell.history.delete')"
+                :aria-label="t('shell.history.delete')"
+                @click.stop="removeConversation(row.id)"
+              >
+                <span class="i-ri-delete-bin-6-line" />
+              </button>
+            </div>
+            <div
+              v-if="row.projectName || formatRowTime(row.updatedAt)"
+              class="ShellConversationList-RailPopoverMeta"
+            >
+              <span v-if="row.projectName" class="ShellConversationList-RailPopoverProject">
+                <i class="i-ri-folder-2-line" />
+                {{ row.projectName }}
+              </span>
+              <span
+                v-if="formatRowTime(row.updatedAt)"
+                class="ShellConversationList-RailPopoverTime"
+              >
+                {{ formatRowTime(row.updatedAt) }}
+              </span>
+            </div>
+          </div>
+        </TxPopover>
+      </div>
 
-      <section v-if="groups.archived.length" class="ShellConversationList-Archived">
-        <button
-          class="ShellConversationList-ArchivedToggle"
-          type="button"
-          :aria-expanded="archivedOpen"
-          @click="archivedOpen = !archivedOpen"
-        >
-          <span :class="archivedOpen ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-right-s-line'" />
-          {{ t('shell.projects.archived') }}
-        </button>
-        <div v-if="archivedOpen" class="ShellConversationList-ArchivedBody">
-          <template v-for="group in groups.archived" :key="group.key">
+      <template v-else>
+        <!-- Always present, even with no projects: the section title's + is where new projects start. -->
+        <section class="ShellConversationList-Section ShellConversationList-Section--projects">
+          <div class="ShellConversationList-SectionHeader">
+            <span class="ShellConversationList-SectionTitle">{{
+              t('shell.projects.section')
+            }}</span>
+            <MetaHintBadge command="new-project" />
+            <button
+              class="ShellConversationList-SectionAction"
+              type="button"
+              :title="t('shell.newProject')"
+              :aria-label="t('shell.newProject')"
+              @click="enterPickedProjectConversation"
+            >
+              <span class="i-ri-add-line" />
+            </button>
+          </div>
+
+          <template v-for="group in groups.active" :key="group.key">
             <ShellProjectFolder
               v-if="group.project"
               :project="group.project"
               :rows="group.rows"
               :active-id="activeId"
               :current="group.project.id === currentProjectId"
-              archived
+              :expanded="folders.isExpanded(group.project.id)"
+              :renaming="renamingProjectId === group.project.id"
+              :discovering-project-id="discoveringProjectId"
               :project-names="projectNames"
+              @toggle="folders.toggle(group.project.id)"
+              @enter="enterConversation(group.project.id)"
+              @run-agent="openProjectAgent(group.project.id, $event)"
+              @discover="discoverSessions(group.project)"
+              @begin-rename="beginRename(group.project)"
+              @rename="saveRename(group.project, $event)"
+              @cancel-rename="cancelRename"
+              @toggle-pinned="togglePinned(group.project)"
               @toggle-archived="toggleArchived(group.project)"
               @open-conversation="openConversation"
               @remove-conversation="removeConversation"
@@ -549,8 +473,85 @@ function onRailRowClick(row: RailConversationRow): void {
               @forget-session="forgetSession"
             />
           </template>
-        </div>
-      </section>
+
+          <!-- Only once the load has settled: before that, no folders means "not known yet". -->
+          <button
+            v-if="loaded && !groups.active.length"
+            class="ShellConversationList-NewFromFolder"
+            type="button"
+            @click="enterPickedProjectConversation"
+          >
+            <span class="ShellConversationList-NewFromFolderIcon i-ri-folder-add-line" />
+            <span class="ShellConversationList-NewFromFolderLabel">
+              {{ t('shell.projects.newFromFolder') }}
+            </span>
+          </button>
+        </section>
+
+        <section
+          v-if="groups.home.rows.length"
+          class="ShellConversationList-Section ShellConversationList-Section--chats"
+        >
+          <div class="ShellConversationList-SectionHeader">
+            <span class="ShellConversationList-SectionTitle">{{ t('shell.projects.chats') }}</span>
+            <MetaHintBadge command="new-chat" />
+            <!-- The Projects title's + in the same place, for a new chat outside every project. -->
+            <button
+              class="ShellConversationList-SectionAction ShellConversationList-SectionAction--reveal"
+              type="button"
+              :title="t('shell.newChat')"
+              :aria-label="t('shell.newChat')"
+              @click="enterConversation(null)"
+            >
+              <span class="i-ri-add-line" />
+            </button>
+          </div>
+          <ShellProjectRows
+            :rows="groups.home.rows"
+            :active-id="activeId"
+            :project-names="projectNames"
+            @open-conversation="openConversation"
+            @remove-conversation="removeConversation"
+            @rename-conversation="renameConversation"
+            @copy-conversation="copyConversation"
+            @open-conversation-file="openConversationFile"
+            @continue-session="continueSession"
+            @forget-session="forgetSession"
+          />
+        </section>
+
+        <section v-if="groups.archived.length" class="ShellConversationList-Archived">
+          <button
+            class="ShellConversationList-ArchivedToggle"
+            type="button"
+            :aria-expanded="archivedOpen"
+            @click="archivedOpen = !archivedOpen"
+          >
+            <span :class="archivedOpen ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-right-s-line'" />
+            {{ t('shell.projects.archived') }}
+          </button>
+          <div v-if="archivedOpen" class="ShellConversationList-ArchivedBody">
+            <template v-for="group in groups.archived" :key="group.key">
+              <ShellProjectFolder
+                v-if="group.project"
+                :project="group.project"
+                :rows="group.rows"
+                :active-id="activeId"
+                :current="group.project.id === currentProjectId"
+                archived
+                :project-names="projectNames"
+                @toggle-archived="toggleArchived(group.project)"
+                @open-conversation="openConversation"
+                @remove-conversation="removeConversation"
+                @rename-conversation="renameConversation"
+                @copy-conversation="copyConversation"
+                @open-conversation-file="openConversationFile"
+                @continue-session="continueSession"
+                @forget-session="forgetSession"
+              />
+            </template>
+          </div>
+        </section>
       </template>
     </TxEdgeFadeMask>
   </nav>
@@ -965,7 +966,9 @@ function onRailRowClick(row: RailConversationRow): void {
 }
 .shell-rail-dot-enter-active,
 .shell-rail-dot-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .shell-rail-dot-enter-from,

@@ -1503,7 +1503,10 @@ export class TuffIntelligenceSDK {
         usageAdmission = await this.admitGlobalUsage(capabilityId, signal)
       }
       if (!outerGoverned && this.config.enableQuota && caller) {
-        const quotaCheck = await awaitIntelligenceBoundary(this.checkQuota(caller, 0, signal), signal)
+        const quotaCheck = await awaitIntelligenceBoundary(
+          this.checkQuota(caller, 0, signal),
+          signal
+        )
         if (!quotaCheck.allowed) {
           throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
         }
@@ -2544,9 +2547,7 @@ export class TuffIntelligenceSDK {
       throwIfIntelligenceCancelled(signal)
       if (isLocalCliProvider(fallbackConfig)) {
         if (triedLocalCli) {
-          logInfo(
-            `Skipping fallback provider ${fallbackConfig.id}: local CLI already attempted`
-          )
+          logInfo(`Skipping fallback provider ${fallbackConfig.id}: local CLI already attempted`)
           continue
         }
         triedLocalCli = true

@@ -579,13 +579,14 @@ export async function findNativeSessionFile(
   const canonicalProjectRoot = await canonicalDirectory(projectRoot)
   if (!canonicalProjectRoot || canonicalProjectRoot !== projectRoot) return null
   const roots = options.roots ?? resolveNativeSessionDiscoveryRoots()
-  const archive: ProviderArchive = provider === 'pi'
-    ? { provider, root: roots.pi, maxDepth: 1 }
-    : provider === 'oh-my-pi'
-      ? { provider, root: roots['oh-my-pi'], maxDepth: 1 }
-      : provider === 'claude'
-        ? { provider, root: roots.claude, maxDepth: 1 }
-        : { provider, root: roots.codex, maxDepth: MAX_DEPTH }
+  const archive: ProviderArchive =
+    provider === 'pi'
+      ? { provider, root: roots.pi, maxDepth: 1 }
+      : provider === 'oh-my-pi'
+        ? { provider, root: roots['oh-my-pi'], maxDepth: 1 }
+        : provider === 'claude'
+          ? { provider, root: roots.claude, maxDepth: 1 }
+          : { provider, root: roots.codex, maxDepth: MAX_DEPTH }
   let canonicalRoot: string | null
   try {
     canonicalRoot = await canonicalDirectory(archive.root)
@@ -595,7 +596,12 @@ export async function findNativeSessionFile(
   if (!canonicalRoot) return null
   let collection: { files: string[]; incomplete: boolean }
   try {
-    collection = await collectJsonlFiles(canonicalRoot, archive.maxDepth, options.signal, nativeSessionId)
+    collection = await collectJsonlFiles(
+      canonicalRoot,
+      archive.maxDepth,
+      options.signal,
+      nativeSessionId
+    )
   } catch {
     return null
   }
@@ -618,7 +624,7 @@ export async function findNativeSessionFile(
         .map(parseJsonLine)
         .find((record) => record?.type === 'session_meta')
       const id = meta
-        ? nestedString(meta, ['payload', 'id']) ?? nestedString(meta, ['payload', 'session_id'])
+        ? (nestedString(meta, ['payload', 'id']) ?? nestedString(meta, ['payload', 'session_id']))
         : undefined
       if (id !== nativeSessionId) continue
       const cwd = meta ? nestedString(meta, ['payload', 'cwd']) : undefined

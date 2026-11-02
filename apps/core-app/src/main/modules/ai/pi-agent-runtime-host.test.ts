@@ -13,7 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PiAgentRuntimeHost, sanitizeToolOutputForRuntime } from './pi-agent-runtime-host'
 import { AgentPermission } from '@talex-touch/utils'
-import { isRunInterruptedControlError, readRunFailureDetail } from './pi-agent-runtime-control-error'
+import {
+  isRunInterruptedControlError,
+  readRunFailureDetail
+} from './pi-agent-runtime-control-error'
 
 const hostMocks = vi.hoisted(() => {
   const listeners = new Map<string, Array<(payload: unknown) => void>>()
@@ -316,7 +319,9 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     expect(sanitized).toEqual({ message: 'Published.', toJSON: undefined })
     expect(JSON.stringify(sanitized)).toContain('Published.')
     expect(toJSON).not.toHaveBeenCalled()
-    expect(sanitizeToolOutputForRuntime(new String('/Users/private/release.md'))).toBe('/Users/private/release.md')
+    expect(sanitizeToolOutputForRuntime(new String('/Users/private/release.md'))).toBe(
+      '/Users/private/release.md'
+    )
   })
 
   it('never exposes values beyond the bounded tool-output graph budget', () => {

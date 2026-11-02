@@ -109,7 +109,8 @@ print('writing file')
   })
 
   it('reports a corrupted tool directive as an invalid call instead of failing the run', () => {
-    const corruptedToolDirective = '{"type":"tool","name":"system.exec", broken json without arguments'
+    const corruptedToolDirective =
+      '{"type":"tool","name":"system.exec", broken json without arguments'
     expect(parseBridgeResponse(corruptedToolDirective, toolNames)).toMatchObject({
       type: 'invalid',
       name: 'system.exec'
@@ -117,7 +118,8 @@ print('writing file')
   })
 
   it('keeps the prose after a complete tool call as text beside the call', () => {
-    const reply = '{"type":"tool","name":"browser.search","arguments":{"query":"Warp"}}Warp 是一款终端。'
+    const reply =
+      '{"type":"tool","name":"browser.search","arguments":{"query":"Warp"}}Warp 是一款终端。'
     expect(parseBridgeResponse(reply, toolNames)).toEqual({
       type: 'tool',
       name: 'browser.search',
@@ -127,7 +129,8 @@ print('writing file')
   })
 
   it('does not fold prose after a complete system.exec call into its command', () => {
-    const reply = '{"type":"tool","name":"system.exec","arguments":{"command":"echo done"}}\n\n这是输出。'
+    const reply =
+      '{"type":"tool","name":"system.exec","arguments":{"command":"echo done"}}\n\n这是输出。'
     expect(parseBridgeResponse(reply, toolNames)).toEqual({
       type: 'tool',
       name: 'system.exec',
@@ -137,7 +140,8 @@ print('writing file')
   })
 
   it('does not fold prose after a complete file.write call into its content', () => {
-    const reply = '{"type":"tool","name":"file.write","arguments":{"path":"a.txt","content":"hi"}}\n\n已写入。'
+    const reply =
+      '{"type":"tool","name":"file.write","arguments":{"path":"a.txt","content":"hi"}}\n\n已写入。'
     expect(parseBridgeResponse(reply, toolNames)).toEqual({
       type: 'tool',
       name: 'file.write',
@@ -159,7 +163,8 @@ print('writing file')
   })
 
   it('does not rebuild a tool call from a name quoted inside prose', () => {
-    const prose = '示例:{"type":"tool","name":"system.exec","arguments":{"command":"ls"}} 这就是格式。'
+    const prose =
+      '示例:{"type":"tool","name":"system.exec","arguments":{"command":"ls"}} 这就是格式。'
     expect(parseBridgeResponse(prose, toolNames)).toEqual({ type: 'final', text: prose })
   })
 })

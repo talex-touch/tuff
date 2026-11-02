@@ -684,7 +684,9 @@ async function verifyJournaledMigration(
     // Keep the 0041 index checks isolated, then bring the fixture to the current schema
     // before invoking today's store (which also accounts for encrypted run messages).
     assertAcceptance(
-      numberValue(await scalar(upgradeDatabase.client, 'SELECT COUNT(*) FROM __drizzle_migrations')) ===
+      numberValue(
+        await scalar(upgradeDatabase.client, 'SELECT COUNT(*) FROM __drizzle_migrations')
+      ) ===
         target + 1,
       'MIGRATION_RETENTION_JOURNAL'
     )

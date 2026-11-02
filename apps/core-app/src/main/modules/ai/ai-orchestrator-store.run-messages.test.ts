@@ -216,6 +216,8 @@ describe('AiOrchestratorStore run messages', () => {
     const after = await store.listOrchestratorRunRetentionCandidates(10_000, undefined, 20)
     const afterCandidate = after.candidates.find((candidate) => candidate.runId === runId)
     if (!afterCandidate) throw new Error(`missing retention candidate for ${runId}`)
-    expect(afterCandidate.byteCount - beforeCandidate.byteCount).toBe(Buffer.byteLength(envelope, 'utf8'))
+    expect(afterCandidate.byteCount - beforeCandidate.byteCount).toBe(
+      Buffer.byteLength(envelope, 'utf8')
+    )
   })
 })

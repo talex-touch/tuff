@@ -143,7 +143,6 @@ export type WorkspaceDirectAdmission =
   | { disposition: 'duplicate'; state: ConversationWorkspaceState }
   | { disposition: 'started'; turn: WorkspaceAdmittedTurn; state: ConversationWorkspaceState }
 
-
 export interface WorkspaceServiceOptions {
   getDb?: () => MainDatabase
   attachments?: WorkspaceAttachmentStore
@@ -1209,7 +1208,6 @@ export class ConversationWorkspaceService {
     })
   }
 
-
   async takeNext(conversationId: string): Promise<WorkspaceAdmittedTurn | undefined> {
     return this.serial(conversationId, async () => {
       const state = await this.readState(conversationId)
@@ -1467,7 +1465,8 @@ export class ConversationWorkspaceService {
     return this.serial(request.conversationId, async () => {
       const queue = await this.queue(request.conversationId)
       const record = queue.find(request.queueId)
-      if (!record || record.sessionId !== request.conversationId) throw new Error('WORKSPACE_NOT_FOUND')
+      if (!record || record.sessionId !== request.conversationId)
+        throw new Error('WORKSPACE_NOT_FOUND')
       const input = inputSchema.parse(record.payload)
 
       const newStored = request.attachments?.length

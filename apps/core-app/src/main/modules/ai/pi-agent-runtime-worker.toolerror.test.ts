@@ -32,7 +32,10 @@ function startPayload(runId: string, maxToolCalls = 20): PiRuntimeStartPayload {
   return {
     run: { id: runId, sessionId: 'session_1' } as PiRuntimeStartPayload['run'],
     request: { objective: 'Write a page.' } as PiRuntimeStartPayload['request'],
-    profile: { systemPrompt: 'be brief', modelPreference: [] } as unknown as PiRuntimeStartPayload['profile'],
+    profile: {
+      systemPrompt: 'be brief',
+      modelPreference: []
+    } as unknown as PiRuntimeStartPayload['profile'],
     tools: [
       {
         id: 'file.write',
