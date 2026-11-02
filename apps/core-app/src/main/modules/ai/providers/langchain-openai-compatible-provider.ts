@@ -29,8 +29,11 @@ import type {
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import { toLangChainOpenAiReasoningFields } from '@talex-touch/utils/intelligence/reasoning-effort'
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import {
+  toLangChainOpenAiReasoningFields,
+  toLangChainOpenAiResponsesReasoningFields
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { getNetworkService } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -45,6 +48,11 @@ import {
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
+/**
+ * Model names LangChain's OpenAI client already sends to the Responses API on its own
+ * (`_modelPrefersResponsesAPI`). Responses-only models such as gpt-5.6 and codex refuse Chat Completions.
+ */
+const RESPONSES_MODEL_MARKERS = ['gpt-5.2-pro', 'gpt-5.4-pro', 'gpt-5.5-pro', 'gpt-5.6', 'codex']
 
 type LangChainOpenAiModule = typeof import('@langchain/openai')
 let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
@@ -735,6 +743,12 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return model
   }
 
+  /** Responses for a provider declared with that transport, and for the names that need it. */
+  private usesResponsesApi(model: string): boolean {
+    if (this.config.metadata?.transport === 'responses') return true
+    return RESPONSES_MODEL_MARKERS.some((marker) => model.includes(marker))
+  }
+
   private async createChatModel(params: {
     model: string
     options: CancellableIntelligenceInvokeOptions
@@ -742,26 +756,38 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     maxTokens?: number
     streaming?: boolean
   }): Promise<OpenAiChatModelLike> {
-    const { ChatOpenAICompletions } = await getLangChainOpenAiModule()
+    const { ChatOpenAICompletions, ChatOpenAIResponses } = await getLangChainOpenAiModule()
     // Main's plan for this provider, translated and nothing more: without one — an auto turn, a
     // non-reasoning model — the model below is built exactly as it always was.
-    const reasoning = toLangChainOpenAiReasoningFields(readReasoningPlan(params.options))
-    // Always the Chat Completions class: `ChatOpenAI` routes gpt-5.6* and codex model names to the
-    // Responses API. `n: 1` is what LangChain 0.4 sent by default; 1.x sends nothing, so it is set.
-    return new ChatOpenAICompletions({
+    const plan = readReasoningPlan(params.options)
+    // A reasoning level that applies owns the sampling: a reasoning model rejects any temperature but
+    // its default, so the caller's temperature is left out, as the Nexus adapter already does.
+    const chatReasoning = toLangChainOpenAiReasoningFields(plan)
+    const common = {
       apiKey: this.resolveApiKey(),
       model: params.model,
-      temperature: params.temperature,
+      temperature: chatReasoning ? undefined : params.temperature,
       maxTokens: params.maxTokens,
-      n: 1,
       streaming: params.streaming,
       timeout: this.resolveRequestTimeout(params.options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
         fetch: createNetworkServiceFetch()
-      },
+      }
+    }
+    if (this.usesResponsesApi(params.model)) {
+      const responsesReasoning = toLangChainOpenAiResponsesReasoningFields(plan)
+      return new ChatOpenAIResponses({
+        ...common,
+        ...(responsesReasoning ? { modelKwargs: responsesReasoning.modelKwargs } : {})
+      })
+    }
+    // Chat Completions for everything else. `n: 1` is what LangChain 0.4 sent by default; 1.x sends nothing.
+    return new ChatOpenAICompletions({
+      ...common,
+      n: 1,
       // Spread into the body verbatim, so `minimal` / `xhigh` / `max` pass the OpenAI types untouched.
-      ...(reasoning ? { modelKwargs: reasoning.modelKwargs } : {})
+      ...(chatReasoning ? { modelKwargs: chatReasoning.modelKwargs } : {})
     })
   }
 
