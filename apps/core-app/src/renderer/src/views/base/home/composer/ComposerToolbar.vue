@@ -254,7 +254,6 @@ defineExpose({ launch })
   }
 }
 
-
 .ComposerToolbar-Right {
   position: relative;
 }

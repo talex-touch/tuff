@@ -96,6 +96,9 @@ function host(initial: ConversationWorkspaceState[]) {
   }
   const sdk: AgentWorkspaceSdk = {
     get: async (id) => states.get(id) ?? null,
+    updateQueued: async () => {
+      throw new Error('updateQueued is not exercised by this test')
+    },
     configure: async (id, settings) => {
       const previous = states.get(id)!
       const state = { ...previous, settings: { ...settings }, revision: previous.revision + 1 }

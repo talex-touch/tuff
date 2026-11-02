@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file */
 import type { WorkspaceQueuedInput } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { VueWrapper } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
@@ -6,13 +7,21 @@ import { defineComponent, h, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import HomeWorkspaceQueue from './HomeWorkspaceQueue.vue'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => `${key}${params ? JSON.stringify(params) : ''}` }) }))
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      `${key}${params ? JSON.stringify(params) : ''}`
+  })
+}))
 vi.mock('vue-sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('@talex-touch/tuffex/modal', () => ({
   TxModal: defineComponent({
     name: 'TxModal',
-    props: ['modelValue', 'title'],
+    props: {
+      modelValue: { type: Boolean, default: false },
+      title: { type: String, default: '' }
+    },
     emits: ['update:modelValue'],
     setup(props, { slots }) {
       return () =>
@@ -30,7 +39,12 @@ vi.mock('@talex-touch/tuffex/modal', () => ({
 vi.mock('@talex-touch/tuffex/button', () => ({
   TxButton: defineComponent({
     name: 'TxButton',
-    props: ['disabled', 'loading', 'type', 'variant'],
+    props: {
+      disabled: { type: Boolean, default: false },
+      loading: { type: Boolean, default: false },
+      type: { type: String },
+      variant: { type: String }
+    },
     setup(props, { slots, attrs }) {
       return () => h('button', { ...attrs, disabled: props.disabled }, slots.default?.())
     }
@@ -45,7 +59,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function queued(id: string, text: string, overrides: Partial<WorkspaceQueuedInput> = {}): WorkspaceQueuedInput {
+function queued(
+  id: string,
+  text: string,
+  overrides: Partial<WorkspaceQueuedInput> = {}
+): WorkspaceQueuedInput {
   return {
     id,
     conversationId: 'c1',
@@ -89,8 +107,8 @@ describe('HomeWorkspaceQueue', () => {
           kind: 'image',
           name: 'photo.png',
           mimeType: 'image/png',
-          sizeBytes: 1024,
-          dataUrl: 'data:image/png;base64,abc'
+          size: 1024,
+          previewUrl: 'data:image/png;base64,abc'
         }
       ]
     })

@@ -52,7 +52,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       <h1 v-if="props.title" class="HomeTopBar-Title" :title="props.title">
         {{ props.title }}
       </h1>
-
     </div>
 
     <div class="HomeTopBar-Actions">
@@ -188,7 +187,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 .HomeTopBar-Actions {
   display: flex;

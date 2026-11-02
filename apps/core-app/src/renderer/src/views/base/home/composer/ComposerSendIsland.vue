@@ -485,7 +485,7 @@ defineExpose({ launch })
     :data-tone="tone"
     :style="islandStyle"
     :aria-label="capsuleState ? stopLabel : sendLabel"
-    :title="capsuleState ? stopLabel : (sendTitle || sendLabel)"
+    :title="capsuleState ? stopLabel : sendTitle || sendLabel"
     :aria-disabled="state === 'empty' || undefined"
     @click="onClick"
   >
@@ -504,7 +504,11 @@ defineExpose({ launch })
       </span>
     </span>
     <span ref="skinRef" class="ComposerSendIsland-Skin" aria-hidden="true">
-      <span ref="arrowRef" class="ComposerSendIsland-Arrow" :class="sendIcon ?? 'i-ri-arrow-up-line'" />
+      <span
+        ref="arrowRef"
+        class="ComposerSendIsland-Arrow"
+        :class="sendIcon ?? 'i-ri-arrow-up-line'"
+      />
       <span ref="stopRef" class="ComposerSendIsland-Stop">
         <span ref="squareRef" class="ComposerSendIsland-Square" />
         <span class="ComposerSendIsland-StopText">{{ stopText }}</span>

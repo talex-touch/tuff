@@ -79,13 +79,12 @@ const previewItems = computed<ImagePreviewItem[]>(() => svg.value
   : [])
 let renderToken = 0
 
+const maskRef = ref<{ viewport?: HTMLElement | null, refresh?: () => void } | null>(null)
 /**
  * The capped frame's own scroll position. A diagram redrawn (theme flip, a
  * settled fence) keeps the reader where they were instead of snapping to the
  * top; the frame only resets when the diagram itself changes size.
  */
-const frameRef = ref<HTMLElement | null>(null)
-const maskRef = ref<{ viewport?: HTMLElement | null, refresh?: () => void } | null>(null)
 const frameScroll = ref(0)
 
 /**
@@ -215,7 +214,7 @@ onBeforeUnmount(() => {
         axis="vertical"
         :size="20"
       >
-        <div ref="frameRef" class="tx-mermaid-block__svg" v-html="svg" />
+        <div class="tx-mermaid-block__svg" v-html="svg" />
       </TxEdgeFadeMask>
     </button>
 

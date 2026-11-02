@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file */
 import type { VueWrapper } from '@vue/test-utils'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
 import * as rendererSdk from '@talex-touch/utils/renderer'
@@ -26,10 +27,18 @@ afterEach(() => {
 })
 
 const pathCases = [
-  { name: 'implicit relative path', raw: 'docs/plan-prd/TODO-AI.md', path: 'docs/plan-prd/TODO-AI.md' },
+  {
+    name: 'implicit relative path',
+    raw: 'docs/plan-prd/TODO-AI.md',
+    path: 'docs/plan-prd/TODO-AI.md'
+  },
   { name: 'dot relative path', raw: './src/index.ts', path: './src/index.ts' },
   { name: 'parent relative path', raw: '../package.json', path: '../package.json' },
-  { name: 'POSIX absolute path', raw: '/Users/foo/project/file.md', path: '/Users/foo/project/file.md' },
+  {
+    name: 'POSIX absolute path',
+    raw: '/Users/foo/project/file.md',
+    path: '/Users/foo/project/file.md'
+  },
   { name: 'Windows absolute path', raw: 'C:\\project\\file.ts', path: 'C:\\project\\file.ts' },
   { name: 'backticks', raw: '`docs/plan-prd/TODO-AI.md`', path: 'docs/plan-prd/TODO-AI.md' },
   { name: 'single quotes', raw: "'src/main.ts'", path: 'src/main.ts' },
@@ -38,7 +47,11 @@ const pathCases = [
   { name: 'parentheses and line number', raw: '(docs/TODO.md:42)', path: 'docs/TODO.md' },
   { name: 'line number', raw: 'src/main.ts:10', path: 'src/main.ts' },
   { name: 'line and column', raw: 'src/main.ts:10:20', path: 'src/main.ts' },
-  { name: 'Windows drive and line number', raw: 'C:\\project\\file.ts:10:20', path: 'C:\\project\\file.ts' }
+  {
+    name: 'Windows drive and line number',
+    raw: 'C:\\project\\file.ts:10:20',
+    path: 'C:\\project\\file.ts'
+  }
 ]
 
 describe('cleanPathCandidate', () => {
@@ -184,18 +197,22 @@ function mountFileLinks(projectRoot: string | undefined) {
   vi.spyOn(environment, 'isElectronRenderer').mockReturnValue(true)
   const onOpenRight = vi.fn()
   const root = ref(projectRoot)
-  const wrapper = mount(defineComponent({
-    setup() {
-      const container = ref<HTMLElement | null>(null)
-      useFileLinkClick({ container, projectRoot: root, onOpenRight })
-      return () => h('div', { ref: container }, [
-        h('code', '`docs/plan-prd/TODO-AI.md:10:20`'),
-        h('span', 'This is ordinary prose')
-      ])
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        const container = ref<HTMLElement | null>(null)
+        useFileLinkClick({ container, projectRoot: root, onOpenRight })
+        return () =>
+          h('div', { ref: container }, [
+            h('code', '`docs/plan-prd/TODO-AI.md:10:20`'),
+            h('span', 'This is ordinary prose')
+          ])
+      }
+    }),
+    {
+      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: {} } })] }
     }
-  }), {
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: {} } })] }
-  })
+  )
   wrappers.push(wrapper)
   return { wrapper, onOpenRight, openApp, root }
 }
@@ -210,18 +227,21 @@ describe('useFileLinkClick', () => {
   it.each([
     { name: 'Command', modifiers: { metaKey: true } },
     { name: 'Control', modifiers: { ctrlKey: true } }
-  ])('$name+Click opens the cleaned path in the right pane and consumes navigation', ({ modifiers }) => {
-    const { wrapper, onOpenRight, openApp } = mountFileLinks('/workspace/project')
+  ])(
+    '$name+Click opens the cleaned path in the right pane and consumes navigation',
+    ({ modifiers }) => {
+      const { wrapper, onOpenRight, openApp } = mountFileLinks('/workspace/project')
 
-    const event = click(wrapper.get('code').element, modifiers)
+      const event = click(wrapper.get('code').element, modifiers)
 
-    expect(onOpenRight).toHaveBeenCalledExactlyOnceWith({
-      absolutePath: '/workspace/project/docs/plan-prd/TODO-AI.md',
-      displayPath: 'docs/plan-prd/TODO-AI.md'
-    })
-    expect(openApp).not.toHaveBeenCalled()
-    expect(event.defaultPrevented).toBe(true)
-  })
+      expect(onOpenRight).toHaveBeenCalledExactlyOnceWith({
+        absolutePath: '/workspace/project/docs/plan-prd/TODO-AI.md',
+        displayPath: 'docs/plan-prd/TODO-AI.md'
+      })
+      expect(openApp).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(true)
+    }
+  )
 
   it('Command+Shift+Click opens the resolved path with the system instead of the right pane', () => {
     const { wrapper, onOpenRight, openApp } = mountFileLinks('/workspace/project')
@@ -264,7 +284,11 @@ describe('useFileLinkClick', () => {
     { name: 'regular click', selector: 'code', modifiers: {} },
     { name: 'Shift-only click', selector: 'code', modifiers: { shiftKey: true } },
     { name: 'Command+Click on prose', selector: 'span', modifiers: { metaKey: true } },
-    { name: 'Command+Shift+Click on prose', selector: 'span', modifiers: { metaKey: true, shiftKey: true } }
+    {
+      name: 'Command+Shift+Click on prose',
+      selector: 'span',
+      modifiers: { metaKey: true, shiftKey: true }
+    }
   ])('leaves $name untouched', ({ selector, modifiers }) => {
     const { wrapper, onOpenRight, openApp } = mountFileLinks('/workspace/project')
 

@@ -84,7 +84,10 @@ export function useTurnError() {
     void router.push('/setting/intelligence/channels')
   }
 
-  function errorDisplay(error: ConversationError | undefined, retryable: boolean): TxAiErrorBlockProps {
+  function errorDisplay(
+    error: ConversationError | undefined,
+    retryable: boolean
+  ): TxAiErrorBlockProps {
     const limit = resolveUsageLimitFailure(error)
     return {
       title: limit?.title ?? resolveErrorTitle(error),
@@ -93,7 +96,9 @@ export function useTurnError() {
       reportDetail: limit || isStoppedTurn(error) ? undefined : resolveErrorReportDetail(error),
       codeLabel: t('home.error.codeLabel'),
       tone: limit ? 'warning' : 'danger',
-      actionLabel: limit?.action?.label ?? (isProviderUnavailable(error) ? t('home.configureProvider') : undefined),
+      actionLabel:
+        limit?.action?.label ??
+        (isProviderUnavailable(error) ? t('home.configureProvider') : undefined),
       retryable,
       retryLabel: t('home.retry')
     }

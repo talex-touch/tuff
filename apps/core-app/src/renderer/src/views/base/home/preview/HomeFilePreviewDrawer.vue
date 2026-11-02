@@ -175,10 +175,6 @@ async function revealInFolder(): Promise<void> {
     toast.error(t('home.preview.openFailed') || '打开所在文件夹失败')
   }
 }
-
-function handleClose(): void {
-  emit('update:visible', false)
-}
 </script>
 
 <template>
@@ -252,11 +248,7 @@ function handleClose(): void {
       </div>
 
       <div v-else-if="isImage" class="HomeFilePreviewDrawer-ImageContainer">
-        <img
-          :src="imageDataUrl"
-          :alt="fileName"
-          class="HomeFilePreviewDrawer-Image"
-        />
+        <img :src="imageDataUrl" :alt="fileName" class="HomeFilePreviewDrawer-Image" />
       </div>
 
       <div v-else-if="isMarkdown" class="HomeFilePreviewDrawer-Markdown">

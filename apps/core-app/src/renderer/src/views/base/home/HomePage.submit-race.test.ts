@@ -482,7 +482,9 @@ describe('HomePage failed conversation report', () => {
     const report = view.get('[data-testid="home-error-report"]')
     const card = view.get('.tx-ai-error-block')
     expect(card.attributes('role')).toBe('alert')
-    expect(card.get('.tx-ai-error-block-Title').text()).toBe(catalogText(enUS, 'home.error.generic'))
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'home.error.generic')
+    )
     expect(report.text()).toContain('PROVIDER_TIMEOUT')
     expect(report.text()).toContain(detail)
 

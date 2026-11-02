@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { AppSdk } from '@talex-touch/utils/transport/sdk/domains/app'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { isElectronRenderer } from '@talex-touch/utils/env'
+import { hasDocument, isElectronRenderer } from '@talex-touch/utils/env'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
@@ -75,7 +75,7 @@ interface CaretPosition {
   offset: number
 }
 
-interface DocumentWithCaretPosition extends Document {
+interface DocumentWithCaretPosition {
   caretPositionFromPoint?: (x: number, y: number) => CaretPosition | null
   caretRangeFromPoint?: (x: number, y: number) => Range | null
 }
@@ -107,7 +107,7 @@ export function extractPathFromEvent(event: MouseEvent): string | null {
   }
 
   // 3. Plain text under caret position
-  if (typeof document !== 'undefined') {
+  if (hasDocument()) {
     const doc = document as DocumentWithCaretPosition
     let node: Node | null = null
     let offset = 0

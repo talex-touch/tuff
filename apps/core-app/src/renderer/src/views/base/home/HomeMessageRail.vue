@@ -50,8 +50,14 @@ function parseSegments(content: string, attachments?: unknown[]): PromptSegment[
   if (Array.isArray(attachments)) {
     attachments.forEach((att) => {
       const isImg =
-        (typeof att === 'object' && att !== null && 'kind' in att && (att as any).kind === 'image') ||
-        (typeof att === 'object' && att !== null && 'mimeType' in att && String((att as any).mimeType).startsWith('image/'))
+        (typeof att === 'object' &&
+          att !== null &&
+          'kind' in att &&
+          (att as { kind?: unknown }).kind === 'image') ||
+        (typeof att === 'object' &&
+          att !== null &&
+          'mimeType' in att &&
+          String((att as { mimeType?: unknown }).mimeType).startsWith('image/'))
       if (isImg) {
         imgIdx++
         segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
@@ -83,7 +89,10 @@ const turns = computed<TurnNavEntry[]>(() => {
   props.items.forEach((msg, index) => {
     if (msg.role === 'user') {
       const rawText = msg.content || ''
-      const segments = parseSegments(rawText, msg.attachments || (msg as any).modelAttachments)
+      const segments = parseSegments(
+        rawText,
+        msg.attachments || (msg as typeof msg & { modelAttachments?: unknown[] }).modelAttachments
+      )
       result.push({
         id: msg.id || `turn-${index}`,
         turnNumber: result.length + 1,
@@ -98,11 +107,7 @@ const turns = computed<TurnNavEntry[]>(() => {
 </script>
 
 <template>
-  <nav
-    v-if="turns.length > 0"
-    class="HomeMessageRail"
-    aria-label="消息大纲导航"
-  >
+  <nav v-if="turns.length > 0" class="HomeMessageRail" aria-label="消息大纲导航">
     <div class="HomeMessageRail-Track">
       <div
         v-for="turn in turns"
@@ -123,7 +128,9 @@ const turns = computed<TurnNavEntry[]>(() => {
             @click.stop="emit('navigate', turn.userIndex)"
           >
             <template v-for="(seg, idx) in turn.segments" :key="idx">
-              <span v-if="seg.type === 'image'" class="HomeMessageRail-ImageTag">{{ seg.value }}</span>
+              <span v-if="seg.type === 'image'" class="HomeMessageRail-ImageTag">{{
+                seg.value
+              }}</span>
               <template v-else>{{ seg.value }}</template>
             </template>
           </div>
@@ -212,7 +219,9 @@ const turns = computed<TurnNavEntry[]>(() => {
   opacity: 0.5;
   min-width: 16px;
   text-align: right;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
 
   .is-hovered & {
     opacity: 1;

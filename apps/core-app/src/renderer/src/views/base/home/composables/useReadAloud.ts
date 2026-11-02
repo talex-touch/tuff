@@ -6,7 +6,6 @@ import { toast } from 'vue-sonner'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { homeLog } from './home-log'
 
-
 /** At most one message reads at a time; starting another stops the current. */
 export function useReadAloud() {
   const { t } = useI18n()

@@ -11,6 +11,7 @@ import type {
   WorkspaceSubmitDisposition
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
+import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef, Ref } from 'vue'
 import type { SessionModelSettings } from './home-model-scope'
 import type {

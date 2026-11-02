@@ -145,7 +145,7 @@ function openEdit(item: WorkspaceQueuedInput): void {
 
 function clearNewAttachments(): void {
   for (const item of editNewAttachments.value) {
-    if (item.url && item.url.startsWith('blob:')) {
+    if (item.kind === 'image' && item.url.startsWith('blob:')) {
       URL.revokeObjectURL(item.url)
     }
   }
@@ -165,7 +165,7 @@ function removeKeptAttachment(id: string): void {
 
 function removeNewAttachment(index: number): void {
   const [removed] = editNewAttachments.value.splice(index, 1)
-  if (removed?.url && removed.url.startsWith('blob:')) {
+  if (removed?.kind === 'image' && removed.url.startsWith('blob:')) {
     URL.revokeObjectURL(removed.url)
   }
 }
@@ -183,7 +183,6 @@ function onEditFilePick(event: Event): void {
       id: crypto.randomUUID(),
       kind: 'image',
       name: file.name,
-      file,
       url
     })
   }
@@ -199,13 +198,7 @@ async function saveEdit(): Promise<void> {
     const newAttachmentsPayload = editNewAttachments.value.length
       ? await toModelAttachments(editNewAttachments.value)
       : undefined
-    emit(
-      'update',
-      editingItem.value.id,
-      text,
-      newAttachmentsPayload,
-      editKeptAttachmentIds.value
-    )
+    emit('update', editingItem.value.id, text, newAttachmentsPayload, editKeptAttachmentIds.value)
     toast.success(t('home.workspace.queue.updated'))
     cancelEdit()
   } catch {
@@ -277,7 +270,12 @@ async function saveEdit(): Promise<void> {
               class="HomeWorkspaceQueue-ThumbItem"
               :title="att.name ?? 'attachment'"
             >
-              <img v-if="att.dataUrl" :src="att.dataUrl" :alt="att.name ?? 'attachment'" class="HomeWorkspaceQueue-ThumbImg" />
+              <img
+                v-if="att.previewUrl"
+                :src="att.previewUrl"
+                :alt="att.name ?? 'attachment'"
+                class="HomeWorkspaceQueue-ThumbImg"
+              />
               <span v-else class="i-ri-image-line" />
             </div>
             <span class="HomeWorkspaceQueue-ThumbCount">
@@ -339,7 +337,9 @@ async function saveEdit(): Promise<void> {
           >
             <span
               :class="
-                isPending(item, 'remove') ? 'i-ri-loader-4-line is-spinning' : 'i-ri-delete-bin-line'
+                isPending(item, 'remove')
+                  ? 'i-ri-loader-4-line is-spinning'
+                  : 'i-ri-delete-bin-line'
               "
             />
           </button>
@@ -371,7 +371,12 @@ async function saveEdit(): Promise<void> {
             class="HomeWorkspaceQueue-EditThumb"
             :title="att.name"
           >
-            <img v-if="att.dataUrl" :src="att.dataUrl" :alt="att.name" class="HomeWorkspaceQueue-ThumbImg" />
+            <img
+              v-if="att.previewUrl"
+              :src="att.previewUrl"
+              :alt="att.name"
+              class="HomeWorkspaceQueue-ThumbImg"
+            />
             <button
               class="HomeWorkspaceQueue-EditThumbRemove"
               type="button"
@@ -389,7 +394,12 @@ async function saveEdit(): Promise<void> {
             class="HomeWorkspaceQueue-EditThumb"
             :title="att.name"
           >
-            <img v-if="att.url" :src="att.url" :alt="att.name" class="HomeWorkspaceQueue-ThumbImg" />
+            <img
+              v-if="att.kind === 'image' && att.url"
+              :src="att.url"
+              :alt="att.name"
+              class="HomeWorkspaceQueue-ThumbImg"
+            />
             <button
               class="HomeWorkspaceQueue-EditThumbRemove"
               type="button"
