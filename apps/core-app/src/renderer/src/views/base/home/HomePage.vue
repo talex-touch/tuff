@@ -10,6 +10,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
+import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +22,7 @@ import { prefersReducedMotion, useSendChoreography } from '~/composables/useSend
 import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
+import { useCodePreviewTabs } from '~/modules/conversation/useCodePreviewTabs'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
@@ -213,6 +215,20 @@ const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
+const panelTab = ref('outputs')
+const {
+  tabs: codeTabs,
+  activeId: activeCodeTabId,
+  open: openCodeTab,
+  select: selectCodeTab,
+  close: closeCodeTab
+} = useCodePreviewTabs(conversationId)
+
+function showCodePreview(preview: StreamMarkdownCodePreview): void {
+  openCodeTab(preview)
+  panelTab.value = 'preview'
+  panelOpen.value = true
+}
 const { setConversationLoading } = useConversationLoading()
 
 /**
@@ -1029,6 +1045,7 @@ useHomeCommands({
                     @regenerate="conversation.retry()"
                     @speak="toggleSpeak(message)"
                     @branch="branchTo({ messageId: message.id })"
+                    @code-preview="showCodePreview"
                   />
                 </div>
               </template>
@@ -1241,6 +1258,7 @@ useHomeCommands({
       <Transition name="home-panel">
         <div v-if="panelOpen" class="HomePage-PanelSlot">
           <HomeSidePanel
+            v-model:tab="panelTab"
             :messages="messages"
             :conversation-id="conversationId"
             :context="workspace.state.value?.context"
@@ -1250,7 +1268,11 @@ useHomeCommands({
             :gateway="gatewayApprovals"
             :pending-run="workspace.state.value?.pendingRun"
             :loading="workspace.loading.value"
+            :code-tabs="codeTabs"
+            :active-code-tab-id="activeCodeTabId"
             @locate="streamRef?.scrollToIndex($event)"
+            @select-code-tab="selectCodeTab"
+            @close-code-tab="closeCodeTab"
           />
         </div>
       </Transition>

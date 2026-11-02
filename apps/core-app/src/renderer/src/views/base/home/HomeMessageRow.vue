@@ -1,10 +1,11 @@
 <script lang="ts" name="HomeMessageRow" setup>
 import { TxAiAssistantTurn, formatTokenCount } from '@talex-touch/intelligence-uikit'
 import type { TxAiSpeakState } from '@talex-touch/intelligence-uikit'
+import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
-import { computed, inject } from 'vue'
+import { computed, inject, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWidgetSandbox } from '~/modules/widget-sandbox/use-widget-sandbox'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   (event: 'regenerate'): void
   (event: 'speak'): void
   (event: 'branch'): void
+  (event: 'code-preview', preview: StreamMarkdownCodePreview): void
 }>()
 
 const { t, locale } = useI18n()
@@ -66,6 +68,12 @@ const {
   thinkingVerb,
   thinkingLabel
 } = inject(homeMessageContextKey)!
+
+const codePreviewLabels = computed(() => ({
+  ...unref(markdownLabels),
+  inlineCodePreview: false,
+  onCodePreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview),
+}))
 
 const { errorDisplay, activateErrorAction } = useTurnError()
 const turnFooter = computed(() => props.message.status === 'complete' ? {
@@ -151,7 +159,7 @@ function copyReply(text: string): void {
           locale,
           copyLabel: t('home.copy'),
           copiedLabel: t('home.copied'),
-          markdownProps: markdownLabels,
+          markdownProps: codePreviewLabels,
           ...codePartProps
         }"
         :tool-call-props="{ class: 'HomePage-Tool', ...toolCallLabels }"
