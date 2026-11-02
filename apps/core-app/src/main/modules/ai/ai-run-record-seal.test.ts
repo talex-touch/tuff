@@ -101,7 +101,10 @@ describe('run record seal', () => {
   it('does not open a tampered envelope, or something that is not an envelope', async () => {
     const envelope = await seal('run_a', 1, record('one'))
     const parsed = JSON.parse(envelope) as { c: string }
-    const flipped = JSON.stringify({ ...parsed, c: `A${parsed.c.slice(1)}` })
+    const flipped = JSON.stringify({
+      ...parsed,
+      c: `${parsed.c[0] === 'A' ? 'B' : 'A'}${parsed.c.slice(1)}`
+    })
 
     await expect(openRunRecords('run_a', [{ seq: 1, envelope: flipped }])).resolves.toBeNull()
     await expect(openRunRecords('run_a', [{ seq: 1, envelope: 'plain text' }])).resolves.toBeNull()
