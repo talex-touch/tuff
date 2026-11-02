@@ -6,7 +6,7 @@ const currentState = ref<'idle' | 'working' | 'thinking' | 'success'>('idle')
 function toggleState() {
   const states: ('idle' | 'working' | 'thinking' | 'success')[] = ['idle', 'working', 'thinking', 'success']
   const next = (states.indexOf(currentState.value) + 1) % states.length
-  currentState.value = states[next]
+  currentState.value = states[next] ?? 'idle'
 }
 </script>
 
