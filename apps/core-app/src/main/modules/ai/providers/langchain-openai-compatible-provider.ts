@@ -29,12 +29,19 @@ import type {
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { toLangChainOpenAiReasoningFields } from '@talex-touch/utils/intelligence/reasoning-effort'
 import { getNetworkService } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { decodeImageAttachment } from './attachment-spill'
+import {
+  type LangChainFunctionTool,
+  ToolCallAssembler,
+  toLangChainAssistantMessage,
+  toLangChainToolMessage,
+  toLangChainTools
+} from './native-tools'
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
@@ -58,12 +65,17 @@ interface OpenAiChatModelCallOptions {
   readonly signal?: AbortSignal
 }
 
-interface OpenAiChatModelLike {
+/** A chat model call surface: what a model, or the same model with tools bound, can be asked. */
+interface OpenAiChatRunnable {
   invoke: (messages: BaseMessage[], options?: OpenAiChatModelCallOptions) => Promise<unknown>
   stream: (
     messages: BaseMessage[],
     options?: OpenAiChatModelCallOptions
   ) => Promise<AsyncIterable<unknown>>
+}
+
+interface OpenAiChatModelLike extends OpenAiChatRunnable {
+  bindTools: (tools: LangChainFunctionTool[]) => OpenAiChatRunnable
 }
 
 type CancellableIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
@@ -265,7 +277,10 @@ function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
       return new SystemMessage(message.content)
     }
     if (message.role === 'assistant') {
-      return new AIMessage(message.content)
+      return toLangChainAssistantMessage(message)
+    }
+    if (message.role === 'tool') {
+      return toLangChainToolMessage(message)
     }
     return toLangChainUserMessage(message)
   })
@@ -308,11 +323,13 @@ function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     tokenUsage.total_tokens,
     promptTokens + completionTokens
   )
+  const cacheReadTokens = numberFrom(asRecord(usageMetadata.input_token_details).cache_read)
 
   return {
     promptTokens,
     completionTokens,
-    totalTokens
+    totalTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {})
   }
 }
 
@@ -654,6 +671,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
   protected readonly requireApiKey: boolean = true
   protected readonly embeddingSupported: boolean = true
   protected readonly visionSupported: boolean = true
+  /** Sends `payload.tools` as OpenAI function tools; a subclass whose models may not take them says no. */
+  readonly supportsNativeTools: boolean = true
 
   protected resolveBaseUrl(): string {
     return normalizeOpenAiCompatibleBaseUrl(this.config.baseUrl || this.defaultBaseUrl)
@@ -802,15 +821,21 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       streaming: true
     })
 
-    const stream = await model.stream(
+    const tools = toLangChainTools(payload.tools)
+    const assembler = new ToolCallAssembler()
+    const stream = await (tools.length > 0 ? model.bindTools(tools) : model).stream(
       toLangChainMessages(payload.messages),
       createOpenAiChatModelCallOptions(options)
     )
     for await (const chunk of stream) {
+      for (const partEvent of assembler.pushMessageChunk(chunk)) {
+        yield { delta: '', done: false, partEvent }
+      }
       const text = extractTextContent(asRecord(chunk).content)
       if (!text) continue
       yield { delta: text, done: false }
     }
+    for (const partEvent of assembler.finish()) yield { delta: '', done: false, partEvent }
 
     yield { delta: '', done: true }
   }
