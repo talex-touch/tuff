@@ -27,7 +27,7 @@ export function normalizeCapabilityMessages(messages: unknown): IntelligenceMess
   if (!Array.isArray(messages))
     return []
   return messages
-    .map((message) => {
+    .map((message): IntelligenceMessage | null => {
       const row = toRecord(message)
       const roleRaw = String(row.role || '').trim().toLowerCase()
       const role: IntelligenceMessage['role']
