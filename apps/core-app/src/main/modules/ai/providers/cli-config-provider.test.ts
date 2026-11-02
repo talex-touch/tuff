@@ -77,6 +77,14 @@ describe('resolveCliConfigEndpoint', () => {
     expect(resolveCliConfigEndpoint('codex', undefined)?.modelId).toBe('ktvsky-2/gpt-6.1-sol')
   })
 
+  it('reads the active Codex provider even when config.toml names no model', async () => {
+    const withoutModel = CODEX_TOML.replace(/^model = .*\n/m, '')
+    await writeAt(join(root, 'codex'), 'config.toml', withoutModel)
+    const endpoint = resolveCliConfigEndpoint('codex', 'ktvsky-2/gpt-6.1-sol')
+    expect(endpoint?.providerId).toBe('codex-config')
+    expect(endpoint?.modelId).toBe('ktvsky-2/gpt-6.1-sol')
+  })
+
   it('returns null for Codex when config.toml is missing', () => {
     expect(resolveCliConfigEndpoint('codex', 'ktvsky-2/gpt-6.1-sol')).toBeNull()
   })
@@ -100,6 +108,13 @@ describe('resolveCliConfigEndpoint', () => {
     expect(endpoint?.providerId).toBe('omp-config')
     expect(endpoint?.modelId).toBe('gemini-3.8-flash')
     expect(endpoint?.provider).toBeInstanceOf(CliConfigProvider)
+  })
+
+  it('reads models.yaml when models.yml is absent, as the OMP catalog does', async () => {
+    await writeAt(join(root, 'omp'), 'models.yaml', OMP_MODELS)
+    const endpoint = resolveCliConfigEndpoint('omp', 'cpa/gemini-3.8-flash')
+    expect(endpoint?.providerId).toBe('omp-config')
+    expect(endpoint?.modelId).toBe('gemini-3.8-flash')
   })
 
   it('uses the Anthropic client for an OMP provider that speaks anthropic-messages', async () => {
@@ -133,5 +148,25 @@ describe('withExtraHeaders', () => {
     })
     expect(sent[0].get('x-openai-actor-authorization')).toBe('fixture-actor-token')
     expect(sent[0].get('x-request-id')).toBe('from-request')
+  })
+
+  it('lets a configured Authorization replace the SDK placeholder only when asked to', async () => {
+    const sent: Headers[] = []
+    const base = async (_url: unknown, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers))
+      return new Response('ok')
+    }
+    const placeholder = { headers: { authorization: 'Bearer placeholder' } }
+    const configured = { authorization: 'fixture-configured-auth' }
+    await withExtraHeaders(base as never, configured, { replaceAuthorization: true })(
+      'http://127.0.0.1:3425/v1/responses',
+      placeholder
+    )
+    await withExtraHeaders(base as never, configured)(
+      'http://127.0.0.1:3425/v1/responses',
+      placeholder
+    )
+    expect(sent[0].get('authorization')).toBe('fixture-configured-auth')
+    expect(sent[1].get('authorization')).toBe('Bearer placeholder')
   })
 })

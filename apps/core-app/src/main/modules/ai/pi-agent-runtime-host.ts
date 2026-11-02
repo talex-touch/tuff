@@ -822,6 +822,7 @@ export class PiAgentRuntimeHost {
       let providerName =
         context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
       let modelName = context.workspace?.model
+      let reportedProvider: string | undefined
       let promptTokens = 0
       let completionTokens = 0
       let totalTokens = 0
@@ -886,12 +887,14 @@ export class PiAgentRuntimeHost {
           if (event.provider) providerName = event.provider
           if (event.model) modelName = event.model
           if (context.workspace) {
+            const startProvider = providerName
+            reportedProvider = startProvider
             context.pendingEvents = context.pendingEvents.then(async () => {
               await this.onEvent?.({
                 runId: request.runId,
                 type: 'provider_response',
                 payload: {
-                  provider: providerName,
+                  provider: startProvider,
                   model: modelName,
                   usageReported: false
                 }
@@ -944,7 +947,8 @@ export class PiAgentRuntimeHost {
       }
 
       streamBuffer.complete()
-      if (context.workspace && totalTokens > 0) {
+      const providerChanged = providerName !== reportedProvider
+      if (context.workspace && (totalTokens > 0 || providerChanged)) {
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
             runId: request.runId,
@@ -952,14 +956,18 @@ export class PiAgentRuntimeHost {
             payload: {
               provider: providerName,
               model: modelName,
-              usageReported: true,
-              usage: {
-                promptTokens,
-                completionTokens,
-                totalTokens,
-                cacheReadTokens,
-                cost
-              }
+              usageReported: totalTokens > 0,
+              ...(totalTokens > 0
+                ? {
+                    usage: {
+                      promptTokens,
+                      completionTokens,
+                      totalTokens,
+                      cacheReadTokens,
+                      cost
+                    }
+                  }
+                : {})
             }
           })
         })

@@ -2,7 +2,7 @@ import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import { parseConfig, parseModelProviders } from '../ai-import-config-parser'
 import type { IntelligenceProvider } from '../runtime/base-provider'
 import { AnthropicProvider } from './anthropic-provider'
@@ -49,7 +49,7 @@ export function resolveCliConfigEndpoint(
       ? { providerId: config.id, modelId: requestedModel, provider: endpointProvider(config) }
       : null
   }
-  const found = buildOmpEndpoint(readFile(join(ompAgentDir(), 'models.yml')), requestedModel)
+  const found = buildOmpEndpoint(readOmpModelConfig(), requestedModel)
   return found
     ? {
         providerId: found.config.id,
@@ -71,13 +71,26 @@ function readFile(path: string): string | null {
   }
 }
 
+/** The same files, in the same order, that the OMP model catalog reads. */
+const OMP_MODEL_FILES = ['models.yml', 'models.yaml', 'models.json'] as const
+
+function readOmpModelConfig(): Record<string, unknown> | null {
+  for (const name of OMP_MODEL_FILES) {
+    const content = readFile(join(ompAgentDir(), name))
+    if (content !== null) return parseConfig(content, extname(name))
+  }
+  return null
+}
+
 function buildCodexEndpointConfig(content: string | null): IntelligenceProviderConfig | null {
   const parsed = content ? parseConfig(content, '.toml') : null
-  if (!parsed) return null
+  if (!parsed || typeof parsed.model_provider !== 'string') return null
+  const activeId = `codex-${parsed.model_provider.trim()}`
   const active = parseModelProviders(parsed).find(
-    (provider) => provider.source === 'codex' && provider.baseUrl && provider.defaultModel
+    (provider) => provider.source === 'codex' && provider.id === activeId
   )
-  if (!active?.baseUrl || !active.defaultModel) return null
+  if (!active?.baseUrl) return null
+  const configuredModel = typeof parsed.model === 'string' ? parsed.model.trim() : ''
   return {
     id: CODEX_CONFIG_PROVIDER_ID,
     type: IntelligenceProviderType.CUSTOM,
@@ -87,7 +100,7 @@ function buildCodexEndpointConfig(content: string | null): IntelligenceProviderC
     apiKey: active.apiKey,
     baseUrl: active.baseUrl,
     models: active.models.map((model) => ({ id: model.id, alias: model.name })),
-    defaultModel: active.defaultModel,
+    defaultModel: configuredModel || undefined,
     timeout: 120000,
     capabilities: ['text.chat'],
     metadata: {
@@ -125,10 +138,10 @@ function buildClaudeEndpointConfig(
 
 /** OMP names a model `provider/model`; the endpoint expects the part after the first slash. */
 function buildOmpEndpoint(
-  content: string | null,
+  modelConfig: Record<string, unknown> | null,
   requestedModel: string
 ): { config: IntelligenceProviderConfig; modelId: string } | null {
-  const providers = content ? parseConfig(content, '.yml')?.providers : undefined
+  const providers = modelConfig?.providers
   if (!providers || typeof providers !== 'object') return null
   const slash = requestedModel.indexOf('/')
   if (slash <= 0) return null
@@ -172,14 +185,17 @@ function endpointProvider(config: IntelligenceProviderConfig): IntelligenceProvi
 
 export function withExtraHeaders(
   base: OpenAiClientFetch,
-  extra: Record<string, string>
+  extra: Record<string, string>,
+  options: { replaceAuthorization?: boolean } = {}
 ): OpenAiClientFetch {
   const entries = Object.entries(extra)
   if (entries.length === 0) return base
   return (url, init) => {
     const headers = new Headers(init?.headers)
     for (const [name, value] of entries) {
-      if (!headers.has(name)) headers.set(name, value)
+      const replace =
+        options.replaceAuthorization === true && name.toLowerCase() === 'authorization'
+      if (replace || !headers.has(name)) headers.set(name, value)
     }
     return base(url, { ...init, headers })
   }
@@ -194,9 +210,11 @@ export class CliConfigProvider extends OpenAiCompatibleLangChainProvider {
 
   protected override resolveFetch(): OpenAiClientFetch {
     const headers = this.config.metadata?.headers
+    // The SDK's placeholder bearer stands in only when no key is configured.
     return withExtraHeaders(
       createNetworkServiceFetch(),
-      headers && typeof headers === 'object' ? (headers as Record<string, string>) : {}
+      headers && typeof headers === 'object' ? (headers as Record<string, string>) : {},
+      { replaceAuthorization: !this.config.apiKey }
     )
   }
 }
