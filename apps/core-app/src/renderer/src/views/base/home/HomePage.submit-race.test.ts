@@ -57,6 +57,7 @@ vi.mock('@talex-touch/utils/transport', () => ({
   }
 }))
 vi.mock('@talex-touch/utils/renderer', () => ({
+  useAppSdk: () => ({}),
   useIntelligenceSdk: () => ({
     getProviderModelOptions: async () => [],
     text: {

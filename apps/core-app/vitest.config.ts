@@ -28,6 +28,17 @@ export default defineConfig({
   },
   plugins: [
     vue(),
+    {
+      // The real runtime is served by electron.vite.config; tests never start a widget frame.
+      name: 'widget-sandbox-runtime-stub',
+      enforce: 'pre',
+      resolveId(id) {
+        if (id === 'virtual:widget-sandbox-runtime') return '\0widget-sandbox-runtime'
+      },
+      load(id) {
+        if (id === '\0widget-sandbox-runtime') return 'export default ""'
+      }
+    },
     AutoImport({
       imports: ['vue', 'vue-router'],
       dts: false
