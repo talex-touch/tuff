@@ -586,7 +586,7 @@ const previewDocument = computed(() => {
   const inner = lang === 'svg' || lang === 'xml'
     ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center">${props.code}</body>`
     : props.code
-  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${previewPolicy()}"><style>html,body{margin:0;height:100%;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${previewSandbox.value}" srcdoc="${escapeAttribute(inner)}"></iframe>`
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${previewPolicy()}"><style>html,body{margin:0;height:100%;background:var(--tx-bui-surface, #fff)}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${previewSandbox.value}" srcdoc="${escapeAttribute(inner)}"></iframe>`
 })
 
 const hasHeader = computed(
@@ -838,7 +838,7 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     width: 100%;
     height: var(--tx-code-stream-preview-height, 360px);
     border: 0;
-    background: #fff;
+    background: var(--tx-bui-surface, #fff);
   }
 
   .tx-bui-code-stream__body {
