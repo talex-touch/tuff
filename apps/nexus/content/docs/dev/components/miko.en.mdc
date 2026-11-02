@@ -1,0 +1,90 @@
+---
+title: "Miko Desktop Companion"
+description: "Pure SVG and CSS keyframe-animated pixel desktop companion with 12 real-time Agent interactive states"
+category: AiAgent
+status: beta
+since: 0.6.2
+tags: [miko, mascot, pet, agent, svg, pixel]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+The `state` property binds directly to the Agent lifecycle: `idle` on standby, `working` while executing tool calls, `thinking` during inference, and `success` when complete.
+::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const state = ref<'idle' | 'working' | 'thinking' | 'success'>('idle')
+  </script>
+
+  <template>
+    <TxMiko :state="state" size="md" />
+    <TxMiko :state="state" size="lg" color="#199FFE" />
+  </template>
+---
+::::
+
+### States
+Miko features 12 customized pixel animations derived from authentic cat behaviors (loaf posture, paw tapping, alert airplane ears, etc.), eliminating awkward bipedal postures.
+::::TuffDemoWrapper{demo="MikoStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMiko state="idle" size="md" />
+    <TxMiko state="working" size="md" />
+    <TxMiko state="thinking" size="md" />
+    <TxMiko state="success" size="md" />
+    <TxMiko state="alert" size="md" />
+    <TxMiko state="error" size="md" />
+    <TxMiko state="sleeping" size="md" />
+    <TxMiko state="juggling" size="md" />
+    <TxMiko state="sweeping" size="md" />
+    <TxMiko state="reading" size="md" />
+    <TxMiko state="dizzy" size="md" />
+    <TxMiko state="peeking" size="md" />
+  </template>
+---
+::::
+
+### Best Practices
+
+- **Lifecycle Mapping**: Align precisely with Agent events: `session_start` to `idle`, `UserPromptSubmit` to `thinking`, `tool_call` to `working`, `Stop` to `success`, `PermissionRequest` to `alert`, and idle timeouts to `sleeping`.
+- **Pure Vector Performance**: No external sprite sheets or canvas animation loops required. All elements are clean SVG `<rect>` blocks accelerated by CSS `@keyframes` with sub-kilobyte footprint.
+- **Proportions**: Use standard `'xs' | 'sm' | 'md' | 'lg'` sizes or numerical values. The 3:2 aspect ratio with flat horizontal base docks neatly in status bars, CoreBox corners, or conversation headers.
+- **Monochrome & Accessibility**: Defaults to Tuff signature electric violet (`#810DC6`), customizable via the `color` prop. Includes built-in `role="img"` and accessible ARIA announcements.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `state` | `MikoState` | `'idle'` | Current action state, supporting 12 core states. |
+| `size` | `MikoSize` | `'md'` | Size preset (`'xs'` 24px, `'sm'` 32px, `'md'` 48px, `'lg'` 64px) or custom dimension. |
+| `color` | `string` | `'#810DC6'` | Main body color. |
+| `labels` | `Partial<MikoLabels>` | `{}` | Localized accessibility label overrides. |
+| `ariaLabel` | `string` | Generated | Overrides the default accessible announcement. |
+
+### Events
+
+| Name | Type | Description |
+|------|------|-------------|
+| `click` | `[event: MouseEvent]` | Triggered when clicking on the companion. |
+
+## Overview
+
+- Renders an ultra-sharp pixel SVG with `role="img"` and `shape-rendering="crispEdges"`.
+- 12 supported states: `idle`, `working`, `thinking`, `success`, `alert`, `error`, `sleeping`, `juggling`, `sweeping`, `reading`, `dizzy`, and `peeking`.
+- Driven entirely by native CSS `@keyframes` without external GIF or PNG assets.
+
+## Technical Details
+
+- Source located at `packages/tuffex/packages/components/src/miko/`.
+- Fixed 3:2 aspect ratio with internal `viewBox="0 0 36 24"`.
+
+<TuffDocSourceLink />

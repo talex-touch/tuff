@@ -1,0 +1,90 @@
+---
+title: "Miko 桌面伴侣猫"
+description: "纯 SVG 与 CSS 关键帧驱动的像素桌宠，提供 12 种 Agent 实时交互状态"
+category: AiAgent
+status: beta
+since: 0.6.2
+tags: [miko, mascot, pet, agent, svg, pixel]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`state` 属性绑定 Agent 的实时生命周期：待命中为 `idle`，执行代码时为 `working`，模型推理为 `thinking`，成功则为 `success`。
+::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const state = ref<'idle' | 'working' | 'thinking' | 'success'>('idle')
+  </script>
+
+  <template>
+    <TxMiko :state="state" size="md" />
+    <TxMiko :state="state" size="lg" color="#199FFE" />
+  </template>
+---
+::::
+
+### 完整状态
+Miko 包含 12 种基于猫咪天性（揣手趴卧、踩奶打字、飞机耳警觉等）深度定制的像素动画，彻底去除四肢人形感。
+::::TuffDemoWrapper{demo="MikoStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMiko state="idle" size="md" />
+    <TxMiko state="working" size="md" />
+    <TxMiko state="thinking" size="md" />
+    <TxMiko state="success" size="md" />
+    <TxMiko state="alert" size="md" />
+    <TxMiko state="error" size="md" />
+    <TxMiko state="sleeping" size="md" />
+    <TxMiko state="juggling" size="md" />
+    <TxMiko state="sweeping" size="md" />
+    <TxMiko state="reading" size="md" />
+    <TxMiko state="dizzy" size="md" />
+    <TxMiko state="peeking" size="md" />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- **状态映射契约**：与 Agent 的生命周期钩子精确对应：`session_start` 对应 `idle`，`UserPromptSubmit` 对应 `thinking`，`tool_call` 对应 `working`，`Stop` 对应 `success`，`PermissionRequest` 对应 `alert`，长时静止对应 `sleeping`。
+- **纯矢量性能**：无需加载额外图片资源或启动高开销 Canvas 循环，全部由纯 SVG `<rect>` 像素块和 CSS `@keyframes` 硬件加速驱动，开销极低。
+- **尺寸比例**：推荐使用 `'xs' | 'sm' | 'md' | 'lg'` 规格或数值；宽高比为 3:2，底边水平平齐适合停靠在状态栏、CoreBox 边角或对话框底端。
+- **单色与可访问性**：默认为 Tuff 经典电光紫（`#810DC6`），支持通过 `color` 自定义；已内置 `role="img"` 与可访问标签。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `state` | `MikoState` | `'idle'` | 当前动作状态，支持 12 种核心状态。 |
+| `size` | `MikoSize` | `'md'` | 尺寸大小，支持 `'xs'` (24px)、`'sm'` (32px)、`'md'` (48px)、`'lg'` (64px) 或自定义宽高数值。 |
+| `color` | `string` | `'#810DC6'` | 身体主色调。 |
+| `labels` | `Partial<MikoLabels>` | `{}` | 各状态的可访问文案标签覆盖。 |
+| `ariaLabel` | `string` | 自动生成 | 覆盖默认的无障碍文本公告。 |
+
+### 事件
+
+| 事件名 | 类型 | 说明 |
+|--------|------|------|
+| `click` | `[event: MouseEvent]` | 点击桌宠时触发。 |
+
+## 概述
+
+- 渲染为携带 `role="img"` 的高精度像素 SVG，并应用 `shape-rendering="crispEdges"`。
+- 12 种状态包括：待命 (`idle`)、敲代码 (`working`)、思考 (`thinking`)、成功 (`success`)、警觉 (`alert`)、报错 (`error`)、休眠 (`sleeping`)、多任务 (`juggling`)、扫地 (`sweeping`)、研读 (`reading`)、眩晕 (`dizzy`)、探头 (`peeking`)。
+- 动画全程通过纯 CSS `@keyframes` 驱动，零外部帧序列依赖。
+
+## 技术实现
+
+- 源码位于 `packages/tuffex/packages/components/src/miko/`。
+- 宽高比固定为 3:2，SVG 内置坐标系为 `viewBox="0 0 36 24"`。
+
+<TuffDocSourceLink />

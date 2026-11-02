@@ -3836,6 +3836,24 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
           </ClientOnly>
         </div>
       </section>
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('miko')">
+          {{ cellLabel('Miko', '伴侣猫') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxMiko state="idle" size="sm" />
+              <TxMiko state="working" size="sm" />
+              <TxMiko state="thinking" size="sm" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
 
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('ai-elements')">
