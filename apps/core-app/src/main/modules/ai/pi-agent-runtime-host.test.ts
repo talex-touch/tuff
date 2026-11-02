@@ -476,6 +476,257 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
     await expect(execution).resolves.toMatchObject({ runId: payload.run.id, output: 'done' })
   })
+  describe('workspace model text event delivery', () => {
+    it('delivers host-streamed text exactly once when the worker replays the whole response', async () => {
+      const payload = startPayload()
+      const modelText =
+        'The release readiness summary is complete. All required checks passed without outstanding blockers.'
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-1',
+        turnId: 'turn-stable-1',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield { type: 'delta', delta: 'The release readiness summary is complete. ' }
+        yield { type: 'delta', delta: 'All required checks passed without outstanding blockers.' }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-1',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: 'Follow the release policy.',
+          messages: [{ role: 'user', content: 'Is it ready?' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: {
+          runId: payload.run.id,
+          type: 'message_update',
+          payload: {
+            assistantMessageEvent: { type: 'text_delta', delta: modelText }
+          }
+        }
+      })
+      await settleAsyncWork()
+
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toEqual([
+        'The release readiness summary is complete. ',
+        'All required checks passed without outstanding blockers.'
+      ])
+      expect(textDeltas.join('')).toBe(modelText)
+
+      await completeRun(payload, execution)
+    })
+
+    it('forwards non-text worker events after host text streaming', async () => {
+      const payload = startPayload()
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-2',
+        turnId: 'turn-stable-2',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield {
+          type: 'delta',
+          delta: 'A streamed answer that is intentionally longer than forty characters.'
+        }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-2',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Summarize it.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      const thinkingEvent = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: {
+          assistantMessageEvent: { type: 'thinking_delta', delta: 'Checking release gates.' }
+        }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: thinkingEvent
+      })
+      await settleAsyncWork()
+
+      expect(onEvent).toHaveBeenCalledWith(thinkingEvent)
+      await completeRun(payload, execution)
+    })
+
+    it('resets the drop for a later model request that streams no text', async () => {
+      const payload = startPayload()
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-3',
+        turnId: 'turn-stable-3',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream
+        .mockImplementationOnce(async function* () {
+          yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+          yield { type: 'delta', delta: 'The first response is streamed by the host.' }
+        })
+        .mockImplementationOnce(async function* () {
+          yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+          yield {
+            type: 'part',
+            partEvent: { kind: 'tool-start', callId: 'tool-call-dedup-3', name: 'tool.inspect' }
+          }
+        })
+
+      const request = (requestId: string, step: number) => ({
+        type: 'model.request' as const,
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId,
+          runId: payload.run.id,
+          step,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Continue.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      hostMocks.emit('message', request('model-request-dedup-3a', 1))
+      await settleAsyncWork()
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: {
+          runId: payload.run.id,
+          type: 'message_update',
+          payload: { assistantMessageEvent: { type: 'text_delta', delta: 'first replay' } }
+        }
+      })
+      await settleAsyncWork()
+
+      hostMocks.emit('message', request('model-request-dedup-3b', 2))
+      await settleAsyncWork()
+      const secondReplay = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: {
+          assistantMessageEvent: { type: 'text_delta', delta: 'second response from worker' }
+        }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: secondReplay
+      })
+      await settleAsyncWork()
+
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toContain('second response from worker')
+      await completeRun(payload, execution)
+    })
+
+    it('forwards worker text replay when no workspace is attached', async () => {
+      const payload = startPayload()
+      const replayText = 'This worker response is delivered without a workspace authority.'
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload)
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield { type: 'delta', delta: replayText }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-4',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Reply.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      const replayEvent = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: { assistantMessageEvent: { type: 'text_delta', delta: replayText } }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: replayEvent
+      })
+      await settleAsyncWork()
+
+      expect(onEvent).toHaveBeenCalledWith(replayEvent)
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toEqual([replayText])
+      await completeRun(payload, execution)
+    })
+  })
 
   it('projects provider failures before they cross into the runtime worker', async () => {
     const payload = startPayload()

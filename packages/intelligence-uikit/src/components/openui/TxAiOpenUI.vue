@@ -36,11 +36,18 @@ function evaluateNode(node: ASTNode, extraScope?: Record<string, unknown>) {
   return evaluate(node, { ...evaluationContext, extraScope })
 }
 function notice(message: string) { error.value = message }
+const formFields = new Map<string, Set<() => { label: string, value: unknown }>>()
+function registerField(form: string, read: () => { label: string, value: unknown }) {
+  const fields = formFields.get(form) ?? new Set()
+  fields.add(read)
+  formFields.set(form, fields)
+  return () => { fields.delete(read); if (!fields.size) formFields.delete(form) }
+}
 function trigger(plan: unknown, label = '', form = '') {
   if (props.streaming) return
   try {
-    const formState = form ? store.get(form) : undefined
-    const params = formState && typeof formState === 'object' ? { formState } : undefined
+    const formState = form ? Object.fromEntries([...(formFields.get(form) ?? [])].map(read => { const field = read(); return [field.label, field.value] })) : undefined
+    const params = formState ? { formState } : undefined
     if (!plan) { emit('action', { type: 'continue_conversation', context: label, params }); return }
     if (typeof plan !== 'object') return
     if ('steps' in plan && Array.isArray(plan.steps)) {
@@ -74,7 +81,7 @@ function trigger(plan: unknown, label = '', form = '') {
   }
   catch { notice(props.labels.actionError ?? 'This action could not be completed.') }
 }
-provide(OPENUI_CONTEXT, { store, version, streaming: toRef(props, 'streaming'), labels: toRef(props, 'labels'), resolveImage: query => props.resolveImage?.(query) ?? Promise.resolve(null), trigger, evaluate: evaluateNode, notice })
+provide(OPENUI_CONTEXT, { store, version, streaming: toRef(props, 'streaming'), labels: toRef(props, 'labels'), resolveImage: query => props.resolveImage?.(query) ?? Promise.resolve(null), trigger, registerField, evaluate: evaluateNode, notice })
 watch(() => [props.content, props.streaming] as const, ([content, streaming]) => {
   error.value = ''
   try {
@@ -107,7 +114,7 @@ function renderNode(node: unknown, path = 'root'): VNodeChild {
     key,
     typeName: element.typeName,
     props: element.props,
-    statementId: element.statementId,
+    statementId: element.statementId ?? path,
     'data-openui-node': element.statementId ?? path,
     renderNode: (child: unknown, childPath = 'children') => renderNode(child, `${path}.${childPath}`),
   })
@@ -120,6 +127,8 @@ onBeforeUnmount(() => { unsubscribe(); store.dispose() })
 <template>
   <div class="tx-ai-openui" :aria-busy="streaming">
     <Tree />
-    <p v-if="error" class="tx-ai-openui__notice" role="status">{{ error }}</p>
+    <p v-if="error" class="tx-ai-openui__notice" role="status">
+      {{ error }}
+    </p>
   </div>
 </template>

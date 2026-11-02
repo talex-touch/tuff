@@ -1,4 +1,4 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, type Ref, watch } from 'vue'
 import { rollNextThinkingVerb, rollThinkingVerb } from '../utils/thinking-words'
 
 export interface UseThinkingTickerOptions {

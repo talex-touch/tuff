@@ -23,6 +23,20 @@ export type MikoState =
   | 'hacking'
   | 'celebrating'
   | 'box'
+  | 'running'
+  | 'demon'
+  | 'coffee'
+  | 'guitar'
+  | 'sleepy'
+  | 'ninja'
+  | 'fishing'
+  | 'magic'
+  | 'umbrella'
+  | 'heart'
+  | 'workout'
+  | 'dj'
+  | 'chef'
+  | 'space'
 
 export type MikoSize = 'xs' | 'sm' | 'md' | 'lg' | (string & {}) | number
 
@@ -51,6 +65,20 @@ export interface MikoLabels {
   hacking: string
   celebrating: string
   box: string
+  running: string
+  demon: string
+  coffee: string
+  guitar: string
+  sleepy: string
+  ninja: string
+  fishing: string
+  magic: string
+  umbrella: string
+  heart: string
+  workout: string
+  dj: string
+  chef: string
+  space: string
 }
 
 export const MIKO_DEFAULT_LABELS: MikoLabels = {
@@ -78,6 +106,20 @@ export const MIKO_DEFAULT_LABELS: MikoLabels = {
   hacking: '极客超频',
   celebrating: '庆祝',
   box: '钻纸箱',
+  running: '奔跑中',
+  demon: '闪光恶魔',
+  coffee: '品尝咖啡',
+  guitar: '弹奏吉他',
+  sleepy: '困倦呵欠',
+  ninja: '忍者潜行',
+  fishing: '垂钓时光',
+  magic: '施展魔法',
+  umbrella: '雨中漫步',
+  heart: '发射爱心',
+  workout: '举重健身',
+  dj: 'DJ打碟',
+  chef: '料理大厨',
+  space: '太空宇航',
 }
 
 export interface MikoProps {
@@ -105,7 +147,7 @@ export interface MikoProps {
    */
   ariaLabel?: string
   /**
-   * 是否开启交互响应（悬停轻微浮起、点击欢快互动动效、连续点击眩晕彩蛋）
+   * 是否开启交互响应（悬停柔和发光、点击欢快互动动效、连续点击眩晕彩蛋）
    * @default false
    */
   interactive?: boolean
@@ -119,10 +161,21 @@ export interface MikoProps {
    * @default 5000
    */
   randomInterval?: number
+  /**
+   * 是否强制化身为「闪光恶魔」变异形态（小恶魔犄角、蝙蝠羽翼、小恶魔叉尾与闪烁星火）
+   * @default false
+   */
+  demon?: boolean
+  /**
+   * 触发随机变异为「闪光恶魔」的概率 (0 ~ 1)，默认为 0.06 (6%)
+   * @default 0.06
+   */
+  mutationChance?: number
 }
 
 export interface MikoEmits {
-  (e: 'click', event: MouseEvent): void
-  (e: 'stateChange', state: MikoState): void
-  (e: 'update:state', state: MikoState): void
+  click: [event: MouseEvent]
+  stateChange: [state: MikoState]
+  'update:state': [state: MikoState]
+  mutate: [isDemon: boolean]
 }

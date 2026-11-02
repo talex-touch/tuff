@@ -83,7 +83,7 @@ describe('ompAgentRuntimeHost', () => {
         sessionId: 'session-1',
         objective: 'Count to 3',
         profileId: 'default',
-        runtimeProvider: 'omp-core',
+        runtimeProvider: 'pi-core',
         cwd: '/tmp',
         status: 'running',
         metadata: {},
@@ -98,17 +98,23 @@ describe('ompAgentRuntimeHost', () => {
         id: 'default',
         name: 'Default Agent',
         description: 'Default',
-        runtimeProvider: 'omp-core',
+        runtimeProvider: 'pi-core',
         enabled: true,
         modelPreference: ['cpa/gemini-3.8-flash'],
-        allowedToolIds: []
+        allowedToolIds: [],
+        enabledSkillIds: [],
+        permissionPolicy: { mode: 'manual', allowedPermissions: [] },
+        timeoutMs: 30_000,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
       },
       tools: [],
       history: [],
       budget: {
-        maxTimeMs: 60000,
         maxSteps: 10,
-        maxToolCalls: 10
+        maxToolCalls: 10,
+        maxChildRuns: 0,
+        maxConcurrency: 1
       }
     }
 

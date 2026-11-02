@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('TxAiTurnFooter host-owned actions', () => {
+describe('txAiTurnFooter host-owned actions', () => {
   it('emits exact copy text and action intents without writing to the clipboard', async () => {
     const writeText = vi.fn()
     vi.stubGlobal('navigator', { clipboard: { writeText } })

@@ -1,8 +1,9 @@
 <script lang="ts" name="HomeEmptyHead" setup>
+import type { MikoState } from '@talex-touch/tuffex/miko'
+import { TxMiko } from '@talex-touch/tuffex/miko'
 import { TxMotionText } from '@talex-touch/tuffex/motion-text'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/opening'
 
@@ -14,7 +15,7 @@ import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/op
  * The root is exposed: the page measures it before the stage flips to a conversation and pins it
  * where it stood (`useLeavingHead`), which adds `is-leaving` to it.
  */
-defineProps<{
+const props = defineProps<{
   browserLanding: boolean
   /** Home recommendations are on: the opening line is shown at all. */
   openingEnabled: boolean
@@ -30,13 +31,18 @@ const { t } = useI18n()
 
 const el = ref<HTMLElement | null>(null)
 
+const computedMikoState = computed<MikoState | undefined>(() => {
+  if (props.busy) return 'thinking'
+  return undefined
+})
+
 defineExpose({ el })
 </script>
 
 <template>
   <div ref="el" class="HomeEmptyHead">
     <div class="HomeEmptyHead-MarkHost">
-      <TxTuffLogoStroke class="HomeEmptyHead-Mark" :size="67" mode="breathe" />
+      <TxMiko class="HomeEmptyHead-Mark" :size="68" :state="computedMikoState" interactive random />
     </div>
     <TxMotionText
       tag="h1"
@@ -92,14 +98,14 @@ defineExpose({ el })
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 67px;
-  height: 67px;
+  width: auto;
+  min-width: 67px;
+  height: 72px;
   transform: none;
 }
 
 .HomeEmptyHead-Mark {
-  width: 67px;
-  height: 67px;
+  filter: drop-shadow(0 4px 14px rgba(129, 13, 198, 0.25));
 }
 
 .HomeEmptyHead-Greeting {

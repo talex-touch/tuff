@@ -1,4 +1,4 @@
-// Adapted from thesysdev/open-intelligent-ui (Apache-2.0).
+// Adapted from thesysdev/open-intelligent-ui; Copyright (c) 2026 Thesys Inc. MIT; see ../LICENSE.thesys.
 import { defineFunction } from "@openuidev/lang-core";
 import { z } from "zod/v4";
 import { list, MAX_ITEMS, read } from "./shared";

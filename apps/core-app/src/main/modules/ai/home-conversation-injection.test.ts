@@ -1,4 +1,7 @@
-import type { IntelligenceInvokeOptions } from '@talex-touch/utils/types/intelligence'
+import type {
+  IntelligenceChatPayload,
+  IntelligenceInvokeOptions
+} from '@talex-touch/utils/types/intelligence'
 import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -16,7 +19,9 @@ const homeOptions = (autoContext: boolean): IntelligenceInvokeOptions => ({
   metadata: { surface: INTELLIGENCE_HOME_SURFACE, autoContext }
 })
 
-const chatPayload = () => ({ messages: [{ role: 'user' as const, content: 'hello' }] })
+const chatPayload = (): IntelligenceChatPayload => ({
+  messages: [{ role: 'user', content: 'hello' }]
+})
 
 describe('applyHomeConversationInjection', () => {
   beforeEach(() => {
@@ -29,12 +34,13 @@ describe('applyHomeConversationInjection', () => {
 
     const result = await applyHomeConversationInjection(payload, homeOptions(true), false)
 
-    expect(result).toEqual({
-      messages: [
-        { role: 'system', content: 'SKILLS AND RULES' },
-        { role: 'user', content: 'hello' }
-      ]
-    })
+    const systemContent = (result.messages[0]?.content ?? '') as string
+    expect(result.messages[0]?.role).toBe('system')
+    expect(systemContent).toContain('SKILLS AND RULES')
+    expect(systemContent).toContain('exact opening line is ```openui')
+    expect(systemContent.indexOf('SKILLS AND RULES')).toBeLessThan(
+      systemContent.indexOf('exact opening line is ```openui')
+    )
     // The caller's payload is replaced, not mutated: a retry reuses the same object.
     expect(payload.messages).toHaveLength(1)
   })
@@ -45,21 +51,26 @@ describe('applyHomeConversationInjection', () => {
    * second system message they reject on every turn.
    */
   it('folds into a leading system message the caller supplied, keeping one system prompt', async () => {
-    const payload = {
+    const payload: IntelligenceChatPayload = {
       messages: [
-        { role: 'system' as const, content: 'OPENING NOTE' },
-        { role: 'user' as const, content: 'hello' }
+        { role: 'system', content: 'OPENING NOTE' },
+        { role: 'user', content: 'hello' }
       ]
     }
 
     const result = await applyHomeConversationInjection(payload, homeOptions(true), false)
 
-    expect(result).toEqual({
-      messages: [
-        { role: 'system', content: 'SKILLS AND RULES\n\nOPENING NOTE' },
-        { role: 'user', content: 'hello' }
-      ]
-    })
+    const systemContent = (result.messages[0]?.content ?? '') as string
+    expect(result.messages[0]?.role).toBe('system')
+    expect(systemContent).toContain('SKILLS AND RULES')
+    expect(systemContent).toContain('exact opening line is ```openui')
+    expect(systemContent).toContain('OPENING NOTE')
+    expect(systemContent.indexOf('SKILLS AND RULES')).toBeLessThan(
+      systemContent.indexOf('exact opening line is ```openui')
+    )
+    expect(systemContent.indexOf('exact opening line is ```openui')).toBeLessThan(
+      systemContent.indexOf('OPENING NOTE')
+    )
     expect(payload.messages[0]).toEqual({ role: 'system', content: 'OPENING NOTE' })
   })
 
@@ -91,13 +102,15 @@ describe('applyHomeConversationInjection', () => {
     expect(injectionMocks.buildHomeInjection).not.toHaveBeenCalled()
   })
 
-  it('leaves the payload untouched when nothing is active or the payload is not a chat', async () => {
+  it('injects OpenUI even when no skills are active, but leaves non-chat payloads untouched', async () => {
     const payload = chatPayload()
     injectionMocks.buildHomeInjection.mockResolvedValue(null)
 
-    await expect(applyHomeConversationInjection(payload, homeOptions(true), false)).resolves.toBe(
-      payload
-    )
+    const result = await applyHomeConversationInjection(payload, homeOptions(true), false)
+    expect(result).not.toBe(payload)
+    expect(result.messages[0]?.role).toBe('system')
+    expect(result.messages[0]?.content).toContain('exact opening line is ```openui')
+    expect(result.messages[0]?.content).not.toContain('SKILLS AND RULES')
 
     const notAChat = { text: 'summarise this' }
     await expect(applyHomeConversationInjection(notAChat, homeOptions(true), false)).resolves.toBe(

@@ -1,6 +1,6 @@
 ---
 title: "Miko Desktop Companion"
-description: "Pure SVG and CSS keyframe-animated pixel desktop companion with 12 real-time Agent interactive states"
+description: "Pure SVG and CSS keyframe-animated pixel desktop companion with 38 real-time Agent interactive, occupational, and fantasy mutation states"
 category: AiAgent
 status: beta
 since: 0.6.2
@@ -12,51 +12,50 @@ verified: true
 ## Usage
 
 ### Basic
-The `state` property binds directly to the Agent lifecycle: `idle` on standby, `working` while executing tool calls, `thinking` during inference, and `success` when complete.
+The `state` property binds directly to the Agent lifecycle: `idle` on standby, `working` while executing tool calls, `running` during step dispatch, `thinking` during inference, and `success` when complete. Enable `interactive` and `random` for autonomous playful behaviors, click reactions, and Shiny Devil mutations.
 ::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const state = ref<'idle' | 'working' | 'thinking' | 'success'>('idle')
+  const state = ref<'idle' | 'working' | 'running' | 'thinking' | 'success'>('idle')
   </script>
 
   <template>
     <TxMiko :state="state" size="md" />
     <TxMiko :state="state" size="lg" color="#199FFE" />
+    <TxMiko size="md" demon />
+    <TxMiko size="md" interactive random />
   </template>
 ---
 ::::
 
 ### States
-Miko features 12 customized pixel animations derived from authentic cat behaviors (loaf posture, paw tapping, alert airplane ears, etc.), eliminating awkward bipedal postures.
+Miko features 38 customized pixel animations derived from authentic cat behaviors, playful professions, and whimsical fantasy (loaf posture, paw tapping, fast running gallop, coffee sipping, guitar playing, DJ mixing, ninja stealth, magic casting, master chef, fishing time, astronaut space walk, heart beaming, dumbbell workout, umbrella stroll, yawning sleepyhead, shiny devil, airplane ears, stretching, face washing, curious tilting, scratching, purring, fish snack, swaying dance, penlight cheering, handheld gaming, cyberpunk hacking, confetti celebration, cardboard box peek, etc.).
 ::::TuffDemoWrapper{demo="MikoStatesDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxMiko state="idle" size="md" />
-    <TxMiko state="working" size="md" />
-    <TxMiko state="thinking" size="md" />
-    <TxMiko state="success" size="md" />
-    <TxMiko state="alert" size="md" />
-    <TxMiko state="error" size="md" />
-    <TxMiko state="sleeping" size="md" />
-    <TxMiko state="juggling" size="md" />
-    <TxMiko state="sweeping" size="md" />
-    <TxMiko state="reading" size="md" />
-    <TxMiko state="dizzy" size="md" />
-    <TxMiko state="peeking" size="md" />
+    <TxMiko state="coffee" size="md" />
+    <TxMiko state="guitar" size="md" />
+    <TxMiko state="dj" size="md" />
+    <TxMiko state="magic" size="md" />
+    <TxMiko state="running" size="md" />
+    <TxMiko state="demon" size="md" />
+    <TxMiko state="space" size="md" />
   </template>
 ---
 ::::
 
 ### Best Practices
 
-- **Lifecycle Mapping**: Align precisely with Agent events: `session_start` to `idle`, `UserPromptSubmit` to `thinking`, `tool_call` to `working`, `Stop` to `success`, `PermissionRequest` to `alert`, and idle timeouts to `sleeping`.
+- **Lifecycle Mapping**: Align precisely with Agent events: `session_start` to `idle`, `UserPromptSubmit` to `thinking`, `tool_call` to `running` or `working`, `Stop` to `success`, `PermissionRequest` to `alert`, and idle timeouts to `sleeping` or `sleepy`.
+- **Interaction & Devil Mutation**: Pass `interactive` to enable tactile click feedback and a rapid-click dizziness easter egg; autonomous exploration or clicking has a chance to mutate into the "Shiny Devil" form (horns, bat wings, arrow tail, golden glints), which can also be forced via the `demon` prop.
 - **Pure Vector Performance**: No external sprite sheets or canvas animation loops required. All elements are clean SVG `<rect>` blocks accelerated by CSS `@keyframes` with sub-kilobyte footprint.
-- **Proportions**: Use standard `'xs' | 'sm' | 'md' | 'lg'` sizes or numerical values. The 3:2 aspect ratio with flat horizontal base docks neatly in status bars, CoreBox corners, or conversation headers.
-- **Monochrome & Accessibility**: Defaults to Tuff signature electric violet (`#810DC6`), customizable via the `color` prop. Includes built-in `role="img"` and accessible ARIA announcements.
+- **Proportions**: Use standard `'xs' | 'sm' | 'md' | 'lg'` sizes or numerical values. The 36:20 aspect ratio with flat horizontal base docks neatly in status bars, CoreBox corners, or conversation headers.
+- **Monochrome & Accessibility**: Defaults to Tuff signature electric violet (`#810DC6`), shifts to deep obsidian crimson (`#4C0519`) in devil form, and is customizable via the `color` prop. Includes built-in `role="img"` and accessible ARIA announcements.
 
 ## API Reference
 
@@ -64,27 +63,35 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `state` | `MikoState` | `'idle'` | Current action state, supporting 12 core states. |
-| `size` | `MikoSize` | `'md'` | Size preset (`'xs'` 24px, `'sm'` 32px, `'md'` 48px, `'lg'` 64px) or custom dimension. |
+| `state` | `MikoState` | `'idle'` | Current action state, supporting 38 states in total. |
+| `size` | `MikoSize` | `'md'` | Size preset (`'xs'` 22px, `'sm'` 30px, `'md'` 50px, `'lg'` 66px) or custom dimension. |
 | `color` | `string` | `'#810DC6'` | Main body color. |
 | `labels` | `Partial<MikoLabels>` | `{}` | Localized accessibility label overrides. |
 | `ariaLabel` | `string` | Generated | Overrides the default accessible announcement. |
+| `interactive` | `boolean` | `false` | Enables click feedback, hover glow, and click reactions. |
+| `random` | `boolean` | `false` | Enables autonomous random cycling through casual idle behaviors. |
+| `randomInterval` | `number` | `5000` | Interval in milliseconds between random state changes. |
+| `demon` | `boolean` | `false` | Forces the "Shiny Devil" mutated form. |
+| `mutationChance` | `number` | `0.06` | Probability (0 ~ 1) of mutating into the Shiny Devil form during interaction or random state cycles. |
 
 ### Events
 
 | Name | Type | Description |
 |------|------|-------------|
 | `click` | `[event: MouseEvent]` | Triggered when clicking on the companion. |
+| `stateChange` | `[state: MikoState]` | Triggered when the active state changes (via random timer or reaction). |
+| `update:state` | `[state: MikoState]` | Enables `v-model:state` two-way state binding. |
+| `mutate` | `[isDemon: boolean]` | Triggered when mutating into or reverting from the Shiny Devil form. |
 
 ## Overview
 
 - Renders an ultra-sharp pixel SVG with `role="img"` and `shape-rendering="crispEdges"`.
-- 12 supported states: `idle`, `working`, `thinking`, `success`, `alert`, `error`, `sleeping`, `juggling`, `sweeping`, `reading`, `dizzy`, and `peeking`.
+- 38 supported states: `idle`, `working`, `running`, `demon`, `coffee`, `guitar`, `sleepy`, `ninja`, `fishing`, `magic`, `umbrella`, `heart`, `workout`, `dj`, `chef`, `space`, `thinking`, `success`, `alert`, `error`, `sleeping`, `juggling`, `sweeping`, `reading`, `dizzy`, `peeking`, `stretching`, `bathing`, `curious`, `scratching`, `purring`, `eating`, `dancing`, `cheering`, `gaming`, `hacking`, `celebrating`, and `box`.
 - Driven entirely by native CSS `@keyframes` without external GIF or PNG assets.
 
 ## Technical Details
 
 - Source located at `packages/tuffex/packages/components/src/miko/`.
-- Fixed 3:2 aspect ratio with internal `viewBox="0 0 36 24"`.
+- Fixed 1.8:1 aspect ratio with internal `viewBox="0 0 36 20"`.
 
 <TuffDocSourceLink />

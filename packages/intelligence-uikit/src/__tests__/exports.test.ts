@@ -1,6 +1,12 @@
 import type { App } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import install, {
+  calculateTokenSpeed,
+  describeToolCallError,
+  formatMetricLatency,
+  parseToolResult,
+  toMessageSegments,
+  toolFaceOf,
   TxAiAssistantTurn,
   TxAiComposer,
   TxAiConversation,
@@ -12,16 +18,10 @@ import install, {
   TxAiToolForm,
   TxAiToolWidget,
   TxAiTurnFooter,
-  calculateTokenSpeed,
-  describeToolCallError,
-  formatMetricLatency,
-  parseToolResult,
-  toMessageSegments,
-  toolFaceOf,
   useThinkingTicker,
   useTurnFooterState,
 } from '../index'
-import * as utils from '../utils/index'
+import * as utils from '@talex-touch/intelligence-uikit/utils'
 
 describe('intelligence-uikit exports', () => {
   it('exports the public conversation and tool components', () => {

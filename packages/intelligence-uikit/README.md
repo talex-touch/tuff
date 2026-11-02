@@ -71,6 +71,12 @@ import { TxAiConversation } from '@talex-touch/intelligence-uikit'
 
 `motion="none"` 关闭组件自有过渡，CSS 动效也遵守 `prefers-reduced-motion`。
 
+## OpenUI 生成式界面
+
+`TxAiAssistantTurn` 会把文本段里的 ` ```openui ` 围栏交给 `TxAiOpenUI` 渲染（其余仍走 `TxStreamElement`），动作通过 `openui-action` 事件交给宿主：`continue_conversation` 作为下一条用户消息，`open_url` / `copy_to_clipboard` 由宿主执行。`openui` prop 设为 `false` 可关闭围栏渲染；`openuiLabels`、`resolveOpenuiImage` 由宿主提供文案和 `SearchImage` 的图片解析。
+
+模型端提示词从纯入口 `@talex-touch/intelligence-uikit/openui-prompt` 取（无 Vue / echarts 依赖，主进程可用）。已实现：Col、Row、Box、Grid、Card、Carousel、Divider、Spacer、Title、Text、Caption、Label、Badge、Link、List、ListItem、Markdown、Quote、Code、Button、IconButton、Input、TextArea、Select、SegmentedControl、Slider、Checkbox、RadioGroup、Form、Image、SearchImage、Icon、Table、Chart。未实现：Map、Svg、HtmlView、Math、YouTube、Flashcard、Celebration、DatePicker、Timer、Popover、Query / Mutation。
+
 ## 动效扩展规范
 
 - 所有 AI 动效组件必须支持 `motion="none"` 或等效关闭方式。

@@ -105,6 +105,12 @@ interface ActiveRunContext {
    * protocol carries no reasons), so the host keeps the reason for the run that fails next.
    */
   modelFailureDetail: string | undefined
+  /**
+   * The host already streamed this model request's text to the workspace, chunk by chunk. The
+   * worker then replays the whole response as one `text_delta` through `run.event`; forwarding it
+   * too would append the answer twice. Reset by each model request, consumed by the first replay.
+   */
+  textStreamedByHost: boolean
 }
 
 export interface PiAgentRuntimeHostOptions {
@@ -182,6 +188,18 @@ function approvalFingerprint(request: PiRuntimeToolRequest): string {
   return createHash('sha256')
     .update(`${request.toolId}:${JSON.stringify(canonicalToolInput(request.input))}`)
     .digest('hex')
+}
+
+/** A worker `message_update` that carries assistant text, as opposed to reasoning or tool deltas. */
+function isTextDeltaEvent(event: PiRuntimeRunEvent): boolean {
+  if (event.type !== 'message_update') return false
+  const update = event.payload?.assistantMessageEvent
+  return (
+    typeof update === 'object' &&
+    update !== null &&
+    'type' in update &&
+    update.type === 'text_delta'
+  )
 }
 
 function readBoundedToolOutputEntries(
@@ -638,7 +656,8 @@ export class PiAgentRuntimeHost {
         workspace,
         pendingEvents: Promise.resolve(),
         usageLimitRefused: false,
-        modelFailureDetail: undefined
+        modelFailureDetail: undefined,
+        textStreamedByHost: false
       })
       try {
         this.post({ type: 'run.start', payload })
@@ -723,6 +742,13 @@ export class PiAgentRuntimeHost {
       case 'run.event': {
         const context = this.activeRuns.get(message.payload.runId)
         if (!context) return
+        // The host streamed this response's text itself; the worker's whole-response replay of it
+        // is the same text again. Consume the flag on the first replay so a later, host-unstreamed
+        // response (text the stream buffer swallowed) still reaches the workspace.
+        if (context.textStreamedByHost && isTextDeltaEvent(message.payload)) {
+          context.textStreamedByHost = false
+          return
+        }
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.(message.payload)
         })
@@ -788,6 +814,7 @@ export class PiAgentRuntimeHost {
       return
     }
 
+    context.textStreamedByHost = false
     let response: PiRuntimeModelResponse
     try {
       await context.workspace?.assertAuthority()
@@ -806,6 +833,7 @@ export class PiAgentRuntimeHost {
       >()
       const streamBuffer = new PiModelStreamBuffer((deltaText) => {
         if (!context.workspace) return
+        if (deltaText) context.textStreamedByHost = true
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
             runId: request.runId,

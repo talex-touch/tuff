@@ -15,6 +15,7 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./openui-prompt": "./src/components/openui/prompt.ts",
     "./utils": "./src/utils/index.ts",
     "./style.css": "./src/style/index.scss"
   },
@@ -33,6 +34,7 @@
     "vue": "^3.5.27"
   },
   "dependencies": {
+    "@lucide/vue": "^1.66.0",
     "@openuidev/lang-core": "^1.0.2",
     "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",

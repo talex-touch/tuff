@@ -68,7 +68,7 @@ function textFieldValue(wrapper: ReturnType<typeof mountCard>): string {
   return (wrapper.get('input[type="text"]').element as HTMLInputElement).value
 }
 
-describe('TxAiToolForm rendering', () => {
+describe('txAiToolForm rendering', () => {
   it('gives every field type its own control', () => {
     const wrapper = mountCard({
       spec: spec({
@@ -100,7 +100,7 @@ describe('TxAiToolForm rendering', () => {
   })
 })
 
-describe('TxAiToolForm submission', () => {
+describe('txAiToolForm submission', () => {
   it('blocks submission on an empty required field and clears the error once answered', async () => {
     const wrapper = mountCard({
       spec: spec({
@@ -169,7 +169,7 @@ describe('TxAiToolForm submission', () => {
   })
 })
 
-describe('TxAiToolForm submitted state', () => {
+describe('txAiToolForm submitted state', () => {
   it('locks the card after one submission and echoes what was sent', async () => {
     const wrapper = mountCard({
       spec: spec({ fields: [{ key: 'name', label: 'Your name', type: 'text' }] })
@@ -213,7 +213,7 @@ describe('TxAiToolForm submitted state', () => {
   })
 })
 
-describe('TxAiToolForm drafts across virtualization', () => {
+describe('txAiToolForm drafts across virtualization', () => {
   // The conversation stream virtualizes rows out of the DOM; an unmount takes
   // this card's half-typed state with it. The host stores what `change` hands
   // out and returns it through `initialValues` on remount — this suite is that
@@ -291,7 +291,7 @@ describe('TxAiToolForm drafts across virtualization', () => {
   })
 })
 
-describe('TxAiToolForm draft and submission boundary', () => {
+describe('txAiToolForm draft and submission boundary', () => {
   it('keeps a restored draft visible but locked when the host marks it already submitted', async () => {
     const wrapper = mount(TxAiToolForm, {
       props: {

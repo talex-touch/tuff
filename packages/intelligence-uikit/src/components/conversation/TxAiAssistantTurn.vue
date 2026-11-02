@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable vue/custom-event-name-casing -- kebab-case is the form templates listen to (`@form-submit`) */
 import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxAiAssistantTurnProps, TxAiSegment } from '../../types'
@@ -14,6 +15,9 @@ import TxAiToolForm from '../tool-agent/TxAiToolForm.vue'
 import TxAiToolWidget from '../tool-agent/TxAiToolWidget.vue'
 import TxAiTurnFooter from './TxAiTurnFooter.vue'
 import TxAiErrorBlock from './TxAiErrorBlock.vue'
+import TxAiOpenUI from '../openui/TxAiOpenUI.vue'
+import { splitOpenUIFences } from '../openui/fences'
+import type { OpenUIAction } from '../openui'
 
 defineOptions({ name: 'TxAiAssistantTurn' })
 const props = withDefaults(defineProps<TxAiAssistantTurnProps>(), {
@@ -25,6 +29,7 @@ const props = withDefaults(defineProps<TxAiAssistantTurnProps>(), {
   thinkingLabel: 'Thinking…',
   compactingLabel: 'Compacting context…',
   motion: 'fade',
+  openui: true,
 })
 const emit = defineEmits<{
   'form-submit': [part: AiToolCallPart, values: Record<string, FormFieldValue>]
@@ -36,6 +41,7 @@ const emit = defineEmits<{
   'branch': []
   'retry': []
   'error-action': []
+  'openui-action': [event: OpenUIAction]
 }>()
 defineSlots<{
   /** When present overrides tools; hasToolFace optionally restricts the override. */
@@ -49,6 +55,11 @@ const toolOpen = reactive(new Map<string, boolean>())
 // Parse result envelopes once per update, never repeatedly in a template branch.
 const toolFaces = computed(() => new Map(props.segments.flatMap(segment =>
   segment.kind === 'tool' ? [[segment.id, toolFaceOf(segment.part)] as const] : [],
+)))
+// Prose and ```openui fences, split once per delta. Keys are `segment:index`, so a settled
+// block is never re-mounted by the text that streams in after it.
+const textParts = computed(() => new Map(props.segments.flatMap(segment =>
+  segment.kind === 'text' && props.openui ? [[segment.id, splitOpenUIFences(segment.text)] as const] : [],
 )))
 </script>
 
@@ -66,6 +77,26 @@ const toolFaces = computed(() => new Map(props.segments.flatMap(segment =>
         :label="segment.step.title"
         @toggle="chainOpen.set(segment.id, $event)"
       />
+      <div v-else-if="segment.kind === 'text' && openui" class="tx-ai-turn__text-flow">
+        <template v-for="(part, index) in textParts.get(segment.id)" :key="`${segment.id}:${index}`">
+          <TxStreamElement
+            v-if="part.kind === 'markdown'"
+            class="tx-ai-turn__text"
+            v-bind="elementProps"
+            :content="part.text"
+            :streaming="segment.streaming && index === (textParts.get(segment.id)?.length ?? 1) - 1"
+          />
+          <TxAiOpenUI
+            v-else
+            class="tx-ai-turn__openui"
+            :content="part.text"
+            :streaming="segment.streaming && !part.complete"
+            :labels="openuiLabels"
+            :resolve-image="resolveOpenuiImage"
+            @action="emit('openui-action', $event)"
+          />
+        </template>
+      </div>
       <TxStreamElement
         v-else-if="segment.kind === 'text'"
         class="tx-ai-turn__text"

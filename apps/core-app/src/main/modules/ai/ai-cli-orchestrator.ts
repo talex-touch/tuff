@@ -36,6 +36,7 @@ import type { PiWorkspaceAuthority } from './pi-agent-runtime-host'
 import type { PiRuntimeResume, PiRuntimeRunEvent } from './pi-agent-runtime-protocol'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
+import { openUIPrompt } from '@talex-touch/intelligence-uikit/openui-prompt'
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
@@ -318,11 +319,20 @@ function boundedInteger(
   return Math.max(min, Math.min(max, Math.floor(finite)))
 }
 
+/** An absent cap is unlimited; a child that omits its cap inherits the parent's. */
+function exceedsToolCallCap(child: number | undefined, parent: number | undefined): boolean {
+  return child !== undefined && parent !== undefined && child > parent
+}
+
 function resolveExecutionBudget(request: AiOrchestratorExecuteRequest): AiExecutionBudget {
   const budget = request.budget ?? {}
   return {
     maxSteps: boundedInteger(budget.maxSteps, 20, 1, 100),
-    maxToolCalls: boundedInteger(budget.maxToolCalls, 20, 1, 100),
+    // Omitted means no cap: only a caller that sets a budget (automation policy) gets one.
+    maxToolCalls:
+      budget.maxToolCalls === undefined
+        ? undefined
+        : boundedInteger(budget.maxToolCalls, 20, 1, 100),
     maxCost:
       typeof budget.maxCost === 'number' && Number.isFinite(budget.maxCost) && budget.maxCost >= 0
         ? budget.maxCost
@@ -1503,7 +1513,14 @@ export class AiCliOrchestrator {
         )
         const runtimeProfile: AiAgentProfile = {
           ...profile,
-          systemPrompt: [profile.systemPrompt, importedSystemPrompt].filter(Boolean).join('\n\n')
+          // Workspace authority is Main-owned; renderer/plugin metadata cannot opt into Home UI.
+          systemPrompt: [
+            profile.systemPrompt,
+            importedSystemPrompt,
+            workspace ? openUIPrompt() : ''
+          ]
+            .filter(Boolean)
+            .join('\n\n')
         }
         if (this.closing) throw createRunInterruptedError()
         const result = await this.runtimeHost.execute(
@@ -2297,7 +2314,7 @@ export class AiCliOrchestrator {
       if (deniedTool) return `Tool ${deniedTool} is not preauthorized for delegation`
       if (
         node.budget.maxSteps > policyBudget.maxSteps ||
-        (node.budget.maxToolCalls ?? 20) > (policyBudget.maxToolCalls ?? 20) ||
+        exceedsToolCallCap(node.budget.maxToolCalls, policyBudget.maxToolCalls) ||
         node.budget.maxChildRuns > policyBudget.maxChildRuns ||
         node.budget.maxConcurrency > policyBudget.maxConcurrency ||
         (policyBudget.maxCost !== undefined &&
@@ -2385,10 +2402,13 @@ export class AiCliOrchestrator {
       allowedNetworkTargets: Object.freeze(parentPolicy ? parentPolicy.allowedNetworkTargets : []),
       budget: Object.freeze({
         maxSteps: Math.min(node.budget.maxSteps, policyBudget.maxSteps),
-        maxToolCalls: Math.min(
-          node.budget.maxToolCalls ?? 20,
-          policyBudget.maxToolCalls ?? parentBudget.maxToolCalls ?? 20
-        ),
+        ...(() => {
+          const caps = [
+            node.budget.maxToolCalls,
+            policyBudget.maxToolCalls ?? parentBudget.maxToolCalls
+          ].filter((cap): cap is number => cap !== undefined)
+          return caps.length > 0 ? { maxToolCalls: Math.min(...caps) } : {}
+        })(),
         ...(node.budget.maxCost !== undefined && policyBudget.maxCost !== undefined
           ? { maxCost: Math.min(node.budget.maxCost, policyBudget.maxCost) }
           : node.budget.maxCost !== undefined
@@ -2442,7 +2462,7 @@ export class AiCliOrchestrator {
       })
       if (
         budget.maxSteps > parentBudget.maxSteps ||
-        (budget.maxToolCalls ?? 20) > (parentBudget.maxToolCalls ?? 20) ||
+        exceedsToolCallCap(budget.maxToolCalls, parentBudget.maxToolCalls) ||
         budget.maxChildRuns > parentBudget.maxChildRuns ||
         budget.maxConcurrency > parentBudget.maxConcurrency ||
         (parentBudget.maxCost !== undefined &&

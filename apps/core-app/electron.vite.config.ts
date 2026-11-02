@@ -28,6 +28,14 @@ const rendererPath = path.join(basePath, 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 const tuffBusinessRoot = path.join(workspaceRoot, 'packages', 'tuff-business')
 const tuffIntelligenceRoot = path.join(workspaceRoot, 'packages', 'tuff-intelligence')
+const intelligenceUIKitRoot = path.join(workspaceRoot, 'packages', 'intelligence-uikit')
+const intelligenceUIKitPromptEntry = path.join(
+  intelligenceUIKitRoot,
+  'src',
+  'components',
+  'openui',
+  'prompt.ts'
+)
 const tuffVoiceRoot = path.join(workspaceRoot, 'packages', 'tuff-voice')
 const piDesktopReuseRoot = path.join(workspaceRoot, 'packages', 'pi-desktop-reuse', 'src')
 const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
@@ -280,6 +288,7 @@ export default defineConfig({
           '@talex-touch/pi-desktop-reuse',
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
+          '@talex-touch/intelligence-uikit', // OpenUI prompt entry is workspace TypeScript and must be bundled
           '@talex-touch/tuff-voice', // Provider protocol source must be bundled for Node ESM resolution
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
           '@earendil-works/pi-ai', // Pi provider bridge 与 agent-core 一并内联
@@ -296,7 +305,8 @@ export default defineConfig({
         // 这样就不会引入 ws 模块，避免原生依赖问题
         '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs',
         '@talex-touch/pi-desktop-reuse': piDesktopReuseRoot,
-        '@talex-touch/tuff-voice': tuffVoiceSourceEntry
+        '@talex-touch/tuff-voice': tuffVoiceSourceEntry,
+        '@talex-touch/intelligence-uikit/openui-prompt': intelligenceUIKitPromptEntry
       }
     },
     define: {

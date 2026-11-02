@@ -20,7 +20,7 @@ import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import { prefersReducedMotion, useSendChoreography } from '~/composables/useSendChoreography'
 import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
-import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import { useCodePreviewTabs } from '~/modules/conversation/useCodePreviewTabs'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
@@ -538,8 +538,11 @@ const intelligenceSdk = useIntelligenceSdk()
 
 const { toggleSpeak, speakStateOf } = useReadAloud()
 
+const appSdk = useAppSdk()
+
 const messageParts = useMessageParts({
   submit: (text, attachments, options) => workspace.submit(text, attachments, options),
+  openExternal: (url) => appSdk.openExternal(url),
   clearDraft: () => {
     draft.value = ''
   },

@@ -11,9 +11,11 @@ import type {
   IntelligenceInvokeOptions
 } from '@talex-touch/utils/types/intelligence'
 import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
+import { openUIPrompt } from '@talex-touch/intelligence-uikit/openui-prompt'
 import { createLogger } from '../../utils/logger'
 import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
 
+const HOME_OPENUI_PROMPT = openUIPrompt()
 const homeInjectionLog = createLogger('Intelligence').child('HomeInjection')
 
 function isChatPayload(payload: unknown): payload is IntelligenceChatPayload {
@@ -41,11 +43,11 @@ function wantsHomeInjection(
 }
 
 /**
- * Prepends the active skills/rules block to a home conversation payload.
+ * Prepends the active skills/rules block and the OpenUI capability prompt to a Home payload.
  *
- * Returns the payload untouched for every other caller, and whenever the user has nothing active —
- * so the only cost on an unconfigured machine is one store read. Re-read per turn rather than
- * cached: enabling a skill has to take effect on the next send, not on the next app start.
+ * The OpenUI prompt remains useful when no skills are active, so an unconfigured machine still
+ * receives the compact renderer contract. Re-read skills per turn rather than cached: enabling a
+ * skill has to take effect on the next send, not on the next app start.
  */
 export function applyHomeConversationInjection(
   payload: IntelligenceChatPayload,
@@ -64,10 +66,14 @@ export async function applyHomeConversationInjection(
 ): Promise<unknown> {
   if (!wantsHomeInjection(options, isPluginCaller) || !isChatPayload(payload)) return payload
 
-  const injection = await aiImportedConfigRuntime.buildHomeInjection()
-  if (!injection) return payload
+  const skillsInjection = await aiImportedConfigRuntime.buildHomeInjection()
+  const injection = skillsInjection
+    ? `${skillsInjection}\n\n${HOME_OPENUI_PROMPT}`
+    : HOME_OPENUI_PROMPT
 
-  homeInjectionLog.info(`Injected ${injection.length} chars of imported skills and rules`)
+  homeInjectionLog.info(
+    `Injected ${injection.length} chars of Home skills/rules and OpenUI context (${HOME_OPENUI_PROMPT.length} OpenUI chars)`
+  )
   // Leading, so a system part the caller supplied itself still reads as the more specific
   // instruction. Providers that take a single system prompt (the pi CLI) concatenate the system
   // messages in order, so position here is the position in the final prompt.

@@ -9,15 +9,23 @@ const emit = defineEmits<{ retry: []; action: [] }>()
   <div class="tx-ai-error-block" :class="{ 'is-usage-limit': tone === 'warning' }" role="alert" :data-testid="tone === 'warning' ? 'home-usage-limit-error' : undefined">
     <span class="tx-ai-error-block-Icon" :class="tone === 'warning' ? 'i-ri-timer-line' : 'i-ri-error-warning-line'" aria-hidden="true" />
     <div class="tx-ai-error-block-Body">
-      <p class="tx-ai-error-block-Title">{{ title }}</p>
-      <p v-if="detail" class="tx-ai-error-block-Detail">{{ detail }}</p>
+      <p class="tx-ai-error-block-Title">
+        {{ title }}
+      </p>
+      <p v-if="detail" class="tx-ai-error-block-Detail">
+        {{ detail }}
+      </p>
       <p v-if="reportCode || reportDetail" class="tx-ai-error-block-Report" :data-testid="tone === 'warning' ? 'home-usage-limit-report' : 'home-error-report'">
         <span v-if="reportCode">{{ codeLabel }}: {{ reportCode }}</span>
         <span v-if="reportDetail">{{ reportDetail }}</span>
       </p>
     </div>
-    <button v-if="actionLabel" class="tx-ai-error-block-Action" type="button" :data-testid="tone === 'warning' ? 'home-open-usage-limits' : undefined" @click="emit('action')">{{ actionLabel }}</button>
-    <button v-else-if="retryable" class="tx-ai-error-block-Action" type="button" @click="emit('retry')">{{ retryLabel }}</button>
+    <button v-if="actionLabel" class="tx-ai-error-block-Action" type="button" :data-testid="tone === 'warning' ? 'home-open-usage-limits' : undefined" @click="emit('action')">
+      {{ actionLabel }}
+    </button>
+    <button v-else-if="retryable" class="tx-ai-error-block-Action" type="button" @click="emit('retry')">
+      {{ retryLabel }}
+    </button>
   </div>
 </template>
 

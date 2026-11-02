@@ -54,6 +54,7 @@ const {
   submittedForms,
   formDrafts,
   submitForm,
+  handleOpenUIAction,
   showToolPayload,
   payloadFor,
   toolCallLabels,
@@ -72,25 +73,33 @@ const {
 const codePreviewLabels = computed(() => ({
   ...unref(markdownLabels),
   inlineCodePreview: false,
-  onCodePreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview),
+  onCodePreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview)
 }))
 
 const { errorDisplay, activateErrorAction } = useTurnError()
-const turnFooter = computed(() => props.message.status === 'complete' ? {
-  content: props.message.content,
-  metrics: props.message.meta,
-  resting: props.resting,
-  regenerable: props.latest && !props.streaming,
-  speakState: props.speakState,
-  branchable: props.branchable,
-  branching: props.branching,
-  showMetrics: props.showMetrics,
-  labels: {
-    ...footerLabels.value,
-    cache: t('home.workspace.activity.cache', { tokens: formatTokenCount(props.message.meta?.cacheReadTokens ?? 0) }),
-    cacheTitle: t('home.workspace.activity.cacheTitle', { tokens: props.message.meta?.cacheReadTokens ?? 0 })
-  }
-} : undefined)
+const turnFooter = computed(() =>
+  props.message.status === 'complete'
+    ? {
+        content: props.message.content,
+        metrics: props.message.meta,
+        resting: props.resting,
+        regenerable: props.latest && !props.streaming,
+        speakState: props.speakState,
+        branchable: props.branchable,
+        branching: props.branching,
+        showMetrics: props.showMetrics,
+        labels: {
+          ...footerLabels.value,
+          cache: t('home.workspace.activity.cache', {
+            tokens: formatTokenCount(props.message.meta?.cacheReadTokens ?? 0)
+          }),
+          cacheTitle: t('home.workspace.activity.cacheTitle', {
+            tokens: props.message.meta?.cacheReadTokens ?? 0
+          })
+        }
+      }
+    : undefined
+)
 
 function copyReply(text: string): void {
   void navigator.clipboard.writeText(text).catch(() => {})
@@ -179,6 +188,7 @@ function copyReply(text: string): void {
         :footer="turnFooter"
         :error="message.status === 'failed' ? errorDisplay(message.error, latest) : undefined"
         @form-submit="submitForm"
+        @openui-action="handleOpenUIAction"
         @form-change="(part, values) => formDrafts.set(part.id, values)"
         @payload="payloadFor = $event"
         @copy="copyReply"
@@ -254,7 +264,6 @@ function copyReply(text: string): void {
   width: 100%;
 }
 
-
 /**
  * No fill on replies: in v2 the raised look comes from strokes, and body copy is not a
  * raised surface. The class now sits on TxStreamMarkdown — no `pre-wrap` here, markdown
@@ -266,7 +275,6 @@ function copyReply(text: string): void {
   font-size: var(--shell-fs-md);
   word-break: break-word;
 }
-
 
 .HomePage-MsgActions {
   margin-top: 0;
@@ -308,6 +316,5 @@ function copyReply(text: string): void {
   .HomePage-Message.HomePage-Message--enter {
     opacity: 1;
   }
-
 }
 </style>

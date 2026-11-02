@@ -55,7 +55,10 @@ export class OmpAgentRuntimeHost {
       ompHostLog.info('Starting OMP ACP client', { meta: { ompExe } })
       this.client = await OmpAcpClient.spawn({ executablePath: ompExe })
       ompHostLog.success('OMP ACP client initialized', {
-        meta: { agentInfo: this.client.agentInfo }
+        meta: {
+          agentName: this.client.agentInfo?.name,
+          agentVersion: this.client.agentInfo?.version
+        }
       })
     })().finally(() => {
       this.startPromise = null
@@ -92,10 +95,7 @@ export class OmpAgentRuntimeHost {
     }
 
     const preferredModel =
-      workspace?.model ||
-      payload.request.modelPreference?.[0] ||
-      payload.profile.modelPreference[0] ||
-      'cpa/gemini-3.8-flash'
+      workspace?.model || payload.profile.modelPreference[0] || 'cpa/gemini-3.8-flash'
 
     const session = await this.client.createSession({
       cwd: payload.run.cwd,
@@ -113,7 +113,10 @@ export class OmpAgentRuntimeHost {
     }
 
     try {
-      const promptText = payload.run.objective || payload.request.objective || ''
+      const objective = payload.run.objective || payload.request.objective || ''
+      // ACP exposes prompt content, not a separate system role. Preserve the Main-built profile
+      // context (including Home skills/rules and OpenUI) ahead of the workspace user request.
+      const promptText = [payload.profile.systemPrompt, objective].filter(Boolean).join('\n\n')
 
       for await (const event of session.promptStream(promptText)) {
         if (controller.signal.aborted) break

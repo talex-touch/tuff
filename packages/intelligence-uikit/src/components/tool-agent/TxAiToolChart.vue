@@ -419,80 +419,80 @@ onBeforeUnmount(() => {
           <span>{{ chartLabels.edit }}</span>
         </button>
         <Teleport to="body">
-        <TxFlipOverlay
-          v-model="editing"
-          :source="editButton"
-          :header-title="chartLabels.edit"
-          :header-desc="spec.title"
-          :close-aria-label="chartLabels.close"
-          :duration="motion === 'none' ? 0 : undefined"
-          :card-style="{ width: 'min(760px, calc(100vw - 32px))', maxHeight: 'min(72dvh, 640px)' }"
-        >
-          <template #header-actions="{ close }">
-            <TxButton variant="flat" size="sm" @click="close">
-              {{ chartLabels.done }}
-            </TxButton>
-          </template>
+          <TxFlipOverlay
+            v-model="editing"
+            :source="editButton"
+            :header-title="chartLabels.edit"
+            :header-desc="spec.title"
+            :close-aria-label="chartLabels.close"
+            :duration="motion === 'none' ? 0 : undefined"
+            :card-style="{ width: 'min(760px, calc(100vw - 32px))', maxHeight: 'min(72dvh, 640px)' }"
+          >
+            <template #header-actions="{ close }">
+              <TxButton variant="flat" size="sm" @click="close">
+                {{ chartLabels.done }}
+              </TxButton>
+            </template>
 
-          <template #default>
-            <div class="tx-ai-tool-chart-Editor">
-              <table class="tx-ai-tool-chart-Table">
-                <thead>
-                  <tr>
-                    <th>{{ chartLabels.label }}</th>
-                    <th v-for="(entry, index) in tableSeries" :key="index">
-                      {{ entry.name || `#${index + 1}` }}
-                    </th>
-                    <th aria-hidden="true" />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(label, rowIndex) in tableLabels" :key="rowIndex">
-                    <td>
-                      <input
-                        class="tx-ai-tool-chart-Input"
-                        :value="label"
-                        @change="setLabel(rowIndex, ($event.target as HTMLInputElement).value)"
-                      />
-                    </td>
-                    <td v-for="(entry, seriesIndex) in tableSeries" :key="seriesIndex">
-                      <input
-                        class="tx-ai-tool-chart-Input is-number"
-                        type="number"
-                        :value="entry.values[rowIndex] ?? 0"
-                        @change="
-                          setCell(seriesIndex, rowIndex, ($event.target as HTMLInputElement).value)
-                        "
-                      />
-                    </td>
-                    <td>
-                      <button
-                        class="tx-ai-tool-chart-RowBtn"
-                        type="button"
-                        :aria-label="chartLabels.remove"
-                        @click="removeRow(rowIndex)"
-                      >
-                        <span class="i-ri-delete-bin-line" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <template #default>
+              <div class="tx-ai-tool-chart-Editor">
+                <table class="tx-ai-tool-chart-Table">
+                  <thead>
+                    <tr>
+                      <th>{{ chartLabels.label }}</th>
+                      <th v-for="(entry, index) in tableSeries" :key="index">
+                        {{ entry.name || `#${index + 1}` }}
+                      </th>
+                      <th aria-hidden="true" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(label, rowIndex) in tableLabels" :key="rowIndex">
+                      <td>
+                        <input
+                          class="tx-ai-tool-chart-Input"
+                          :value="label"
+                          @change="setLabel(rowIndex, ($event.target as HTMLInputElement).value)"
+                        >
+                      </td>
+                      <td v-for="(entry, seriesIndex) in tableSeries" :key="seriesIndex">
+                        <input
+                          class="tx-ai-tool-chart-Input is-number"
+                          type="number"
+                          :value="entry.values[rowIndex] ?? 0"
+                          @change="
+                            setCell(seriesIndex, rowIndex, ($event.target as HTMLInputElement).value)
+                          "
+                        >
+                      </td>
+                      <td>
+                        <button
+                          class="tx-ai-tool-chart-RowBtn"
+                          type="button"
+                          :aria-label="chartLabels.remove"
+                          @click="removeRow(rowIndex)"
+                        >
+                          <span class="i-ri-delete-bin-line" />
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
 
-              <form class="tx-ai-tool-chart-AddRow" @submit.prevent="addRow">
-                <input
-                  v-model="newLabel"
-                  class="tx-ai-tool-chart-Input"
-                  :placeholder="chartLabels.addPlaceholder"
-                />
-                <button class="tx-ai-tool-chart-AddBtn" type="submit" :disabled="!newLabel.trim()">
-                  <span class="i-ri-add-line" />
-                  <span>{{ chartLabels.add }}</span>
-                </button>
-              </form>
-            </div>
-          </template>
-        </TxFlipOverlay>
+                <form class="tx-ai-tool-chart-AddRow" @submit.prevent="addRow">
+                  <input
+                    v-model="newLabel"
+                    class="tx-ai-tool-chart-Input"
+                    :placeholder="chartLabels.addPlaceholder"
+                  >
+                  <button class="tx-ai-tool-chart-AddBtn" type="submit" :disabled="!newLabel.trim()">
+                    <span class="i-ri-add-line" />
+                    <span>{{ chartLabels.add }}</span>
+                  </button>
+                </form>
+              </div>
+            </template>
+          </TxFlipOverlay>
         </Teleport>
       </div>
     </div>

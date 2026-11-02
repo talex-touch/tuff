@@ -18,13 +18,13 @@ describe('txMiko', () => {
     const wrapperSm = mount(Miko, {
       props: { size: 'sm' },
     })
-    expect(wrapperSm.attributes('style')).toContain('width: 48px;')
-    expect(wrapperSm.attributes('style')).toContain('height: 32px;')
+    expect(wrapperSm.attributes('style')).toContain('width: 54px;')
+    expect(wrapperSm.attributes('style')).toContain('height: 30px;')
 
     const wrapperNum = mount(Miko, {
       props: { size: 60 },
     })
-    expect(wrapperNum.attributes('style')).toContain('width: 90px;')
+    expect(wrapperNum.attributes('style')).toContain('width: 108px;')
     expect(wrapperNum.attributes('style')).toContain('height: 60px;')
   })
 
@@ -67,7 +67,59 @@ describe('txMiko', () => {
     expect(wrapperHack.attributes('aria-label')).toBe('Miko: 极客超频')
     expect(wrapperHack.find('.sunglasses').exists()).toBe(true)
   })
+  it('renders running and demon states correctly', () => {
+    const wrapperRun = mount(Miko, {
+      props: { state: 'running' },
+    })
+    expect(wrapperRun.classes()).toContain('state-running')
+    expect(wrapperRun.attributes('aria-label')).toBe('Miko: 奔跑中')
+    expect(wrapperRun.find('.cat-running').exists()).toBe(true)
 
+    const wrapperDemon = mount(Miko, {
+      props: { state: 'demon' },
+    })
+    expect(wrapperDemon.classes()).toContain('state-demon')
+    expect(wrapperDemon.classes()).toContain('is-demon')
+    expect(wrapperDemon.find('.demon-wing-l').exists()).toBe(true)
+  })
+  it('renders occupational and whimsical states (coffee, guitar, dj, ninja, magic, space, etc.)', () => {
+    const wrapperCoffee = mount(Miko, {
+      props: { state: 'coffee' },
+    })
+    expect(wrapperCoffee.classes()).toContain('state-coffee')
+    expect(wrapperCoffee.attributes('aria-label')).toBe('Miko: 品尝咖啡')
+    expect(wrapperCoffee.find('.coffee-cup').exists()).toBe(true)
+
+    const wrapperGuitar = mount(Miko, {
+      props: { state: 'guitar' },
+    })
+    expect(wrapperGuitar.classes()).toContain('state-guitar')
+    expect(wrapperGuitar.find('.guitar-instrument').exists()).toBe(true)
+
+    const wrapperDJ = mount(Miko, {
+      props: { state: 'dj' },
+    })
+    expect(wrapperDJ.classes()).toContain('state-dj')
+    expect(wrapperDJ.find('.dj-deck').exists()).toBe(true)
+
+    const wrapperMagic = mount(Miko, {
+      props: { state: 'magic' },
+    })
+    expect(wrapperMagic.classes()).toContain('state-magic')
+    expect(wrapperMagic.find('.wizard-hat').exists()).toBe(true)
+
+    const wrapperSpace = mount(Miko, {
+      props: { state: 'space' },
+    })
+    expect(wrapperSpace.classes()).toContain('state-space')
+    expect(wrapperSpace.find('.space-helmet').exists()).toBe(true)
+
+    // Test fallback safety net on arbitrary unknown state
+    const wrapperFallback = mount(Miko, {
+      props: { state: 'unknown_test_state' as any },
+    })
+    expect(wrapperFallback.find('svg g').exists()).toBe(true)
+  })
   it('supports interactive click reactions and class', async () => {
     const wrapper = mount(Miko, {
       props: { interactive: true },

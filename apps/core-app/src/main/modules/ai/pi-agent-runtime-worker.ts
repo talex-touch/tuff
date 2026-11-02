@@ -682,8 +682,8 @@ function createTools(payload: PiRuntimeStartPayload): AgentTool[] {
       const active = activeRuns.get(payload.run.id)
       if (!active) throw new Error(`Run ${payload.run.id} is not active`)
       active.toolCalls += 1
-      const maxToolCalls = payload.budget.maxToolCalls ?? 20
-      if (active.toolCalls > maxToolCalls) {
+      const maxToolCalls = payload.budget.maxToolCalls
+      if (maxToolCalls !== undefined && active.toolCalls > maxToolCalls) {
         const error = `Execution budget exceeded: maxToolCalls=${maxToolCalls}`
         active.failure = error
         throw new Error(error)

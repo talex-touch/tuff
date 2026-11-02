@@ -44,6 +44,23 @@ describe('splitOpenUIFences', () => {
     ])
   })
 
+  it('ends a program at a closing fence that has prose glued to it', () => {
+    expect(splitOpenUIFences('```openui\nroot = Text("Hi")\n```结合调研，如下\n\n### Next')).toEqual([
+      { kind: 'openui', text: 'root = Text("Hi")\n', complete: true },
+      { kind: 'markdown', text: '结合调研，如下\n\n### Next', complete: true },
+    ])
+    expect(splitOpenUIFences('```openui\nroot = Text("Hi")\n```Then see below\nmore')).toEqual([
+      { kind: 'openui', text: 'root = Text("Hi")\n', complete: true },
+      { kind: 'markdown', text: 'Then see below\nmore', complete: true },
+    ])
+  })
+
+  it('keeps a lone word after a fence inside the program', () => {
+    expect(splitOpenUIFences('```openui\nroot = Text("Hi")\n```op')).toEqual([
+      { kind: 'openui', text: 'root = Text("Hi")\n```op', complete: false },
+    ])
+  })
+
   it('preserves CRLF bytes inside and outside OpenUI blocks', () => {
     expect(splitOpenUIFences('before\r\n```openui\r\nroot = Text("CRLF")\r\n```\r\nafter')).toEqual([
       { kind: 'markdown', text: 'before\r\n', complete: true },
@@ -74,19 +91,50 @@ describe('tx-ai-openui', () => {
     })
 
     await wrapper.setProps({ content: chunks[1] })
-    const first = wrapper
-      .findAll('[data-openui-node]')
-      .find((node) => node.text() === 'First')
-    expect(first?.text()).toBe('First')
-    const firstElement = first!.element
+    const first = wrapper.find('[data-openui-node="a"]')
+    expect(first.text()).toBe('First')
+    const firstElement = first.element
 
     await wrapper.setProps({ content: chunks[2], streaming: false })
 
-    const nodes = wrapper.findAll('[data-openui-node]')
-    expect(nodes.map((node) => node.text())).toContain('First')
-    expect(nodes.map((node) => node.text())).toContain('Second')
-    const settledFirst = nodes.find((node) => node.text() === 'First')
-    expect(settledFirst?.element).toBe(firstElement)
+    expect(wrapper.find('[data-openui-node="a"]').text()).toBe('First')
+    expect(wrapper.find('[data-openui-node="b"]').text()).toBe('Second')
+    expect(wrapper.find('[data-openui-node="a"]').element).toBe(firstElement)
+  })
+
+  it('tolerates short cumulative chunks without remounting settled nodes', async () => {
+    const program = 'root = Col([a,b])\na = Text("First")\nb = Text("Second")'
+    const chunks = Array.from({ length: Math.ceil(program.length / 7) }, (_, index) => program.slice(0, (index + 1) * 7))
+    const wrapper = mount(TxAiOpenUI, {
+      props: { content: '', streaming: true },
+    })
+    let previousNodeCount = 0
+    let settledFirstElement: Element | undefined
+
+    for (const content of chunks) {
+      let thrown: unknown
+      try {
+        await wrapper.setProps({ content, streaming: true })
+      }
+      catch (error) {
+        thrown = error
+      }
+      expect(thrown).toBeUndefined()
+
+      const nodeCount = wrapper.findAll('[data-openui-node]').length
+      expect(nodeCount).toBeGreaterThanOrEqual(previousNodeCount)
+      previousNodeCount = nodeCount
+
+      const first = wrapper.find('[data-openui-node="a"]')
+      if (first.exists() && first.text() === 'First') {
+        if (settledFirstElement) expect(first.element).toBe(settledFirstElement)
+        else settledFirstElement = first.element
+      }
+    }
+
+    await wrapper.setProps({ content: program, streaming: false })
+    expect(wrapper.find('[data-openui-node="a"]').element).toBe(settledFirstElement)
+    expect(wrapper.find('[data-openui-node="b"]').text()).toBe('Second')
   })
 
   it('updates dependent text when a bound input changes', async () => {
@@ -130,5 +178,67 @@ describe('tx-ai-openui', () => {
       type: 'continue_conversation',
       context: 'Help me',
     })
+  })
+  it('includes untouched and edited form values in ToAssistant actions', async () => {
+    const wrapper = mount(TxAiOpenUI, {
+      props: {
+        content: [
+          'root = Form([field,agree,submit])',
+          '$name = "Ada"',
+          '$yes = true',
+          'field = Input($name,"Name")',
+          'agree = Checkbox($yes,"Agree")',
+          'submit = Button("Submit", @ToAssistant("Use these"))',
+        ].join('\n'),
+        streaming: false,
+      },
+    })
+
+    const submit = wrapper.find('button[aria-label="Submit"]')
+    await submit.trigger('click')
+
+    const firstAction = wrapper.emitted('action')?.[0]?.[0]
+    expect(firstAction).toMatchObject({
+      type: 'continue_conversation',
+      context: 'Use these',
+      params: { formState: { Name: 'Ada', Agree: true } },
+    })
+
+    await wrapper.find('input[aria-label="Name"]').setValue('Grace')
+    await nextTick()
+    await submit.trigger('click')
+
+    const secondAction = wrapper.emitted('action')?.[1]?.[0]
+    expect(secondAction).toMatchObject({
+      params: { formState: { Name: 'Grace', Agree: true } },
+    })
+  })
+
+  it('applies Set and Reset actions to reactive state', async () => {
+    const wrapper = mount(TxAiOpenUI, {
+      props: {
+        content: [
+          'root = Col([increment,reset,readout])',
+          '$count = 0',
+          'increment = Button("Increment", @Set($count,$count+1))',
+          'reset = Button("Reset", @Reset($count))',
+          'readout = Text("Count: " + $count)',
+        ].join('\n'),
+        streaming: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Count: 0')
+    const buttons = wrapper.findAll('button')
+    const increment = buttons.find((button) => button.text() === 'Increment')!
+    const reset = buttons.find((button) => button.text() === 'Reset')!
+
+    await increment.trigger('click')
+    await nextTick()
+    expect(wrapper.text()).toContain('Count: 1')
+
+    await reset.trigger('click')
+    await nextTick()
+    expect(wrapper.text()).toContain('Count: 0')
   })
 })

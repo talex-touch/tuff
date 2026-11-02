@@ -1,7 +1,8 @@
 <script lang="ts" name="HomeRunStatus" setup>
+import type { MikoState } from '@talex-touch/tuffex/miko'
 import type { RunStep } from './run-status'
+import { TxMiko } from '@talex-touch/tuffex/miko'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
-import { TxTuffLogoStroke } from '@talex-touch/tuffex/tuff-logo-stroke'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatElapsed } from './run-status'
@@ -63,11 +64,34 @@ const label = computed(() => {
       return props.verb || t('home.runStatus.waiting')
   }
 })
+
+const mikoState = computed<MikoState>(() => {
+  switch (props.step.kind) {
+    case 'tool':
+      return 'running'
+    case 'thinking':
+      return 'thinking'
+    case 'writing':
+      return 'working'
+    default:
+      return 'thinking'
+  }
+})
 </script>
 
 <template>
   <div class="HomeRunStatus" role="status" aria-live="off">
-    <TxTuffLogoStroke class="HomeRunStatus-Mark" :size="16" mode="breathe" aria-hidden="true" />
+    <div class="HomeRunStatus-MarkSlot">
+      <Transition name="home-run-miko-fade" mode="out-in">
+        <TxMiko
+          :key="mikoState"
+          class="HomeRunStatus-Mark"
+          :size="16"
+          :state="mikoState"
+          aria-hidden="true"
+        />
+      </Transition>
+    </div>
     <span v-if="elapsed" class="HomeRunStatus-Time">
       <TxTextMorph :text="elapsed" :duration-ms="420" />
     </span>
@@ -92,8 +116,32 @@ const label = computed(() => {
   font-size: var(--shell-fs-sm);
 }
 
+.HomeRunStatus-MarkSlot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 29px;
+  height: 16px;
+}
+
 .HomeRunStatus-Mark {
   flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-run-miko-fade-enter-active,
+  .home-run-miko-fade-leave-active {
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+}
+
+.home-run-miko-fade-enter-from,
+.home-run-miko-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.88);
 }
 
 .HomeRunStatus-Time {

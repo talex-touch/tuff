@@ -56,7 +56,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
       <div
         v-if="
           showMetrics &&
-          (metrics?.latencyMs || metrics?.model || metrics?.totalTokens)
+            (metrics?.latencyMs || metrics?.model || metrics?.totalTokens)
         "
         class="tx-ai-turn-footer-Metrics"
       >
@@ -78,9 +78,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
         >
           <span class="i-ri-database-2-line" aria-hidden="true" />
           <span>{{ metrics.totalTokens }} tokens</span>
-          <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed"
-            >({{ calculateTokenSpeed(metricMessage) }} t/s)</span
-          >
+          <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} t/s)</span>
         </span>
 
         <!-- 缓存读取 (Cache read) -->

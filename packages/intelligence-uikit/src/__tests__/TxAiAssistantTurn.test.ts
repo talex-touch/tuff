@@ -27,7 +27,7 @@ const sandbox: TxAiWidgetSandbox = source => ({
   status: ref('ready'), failure: ref(null), height: ref(120), srcdoc: ref(`<p>${source.value}</p>`),
 })
 
-describe('TxAiAssistantTurn tool registry', () => {
+describe('txAiAssistantTurn tool registry', () => {
   it.each([
     { name: 'named chart', toolName: 'tuff_render_chart', prefix: CHART_RESULT_PREFIX, spec: chartSpec, selector: '.tx-ai-tool-chart' },
     { name: 'prefixed chart', toolName: 'custom-chart', prefix: CHART_RESULT_PREFIX, spec: chartSpec, selector: '.tx-ai-tool-chart' },
@@ -49,8 +49,8 @@ describe('TxAiAssistantTurn tool registry', () => {
   it.each([
     { name: 'unmatched tool', part: tool() },
     { name: 'unfinished result', part: tool({ name: 'tuff_render_form', status: 'running', output: FORM_RESULT_PREFIX + JSON.stringify(formSpec) }) },
-    { name: 'malformed envelope', part: tool({ name: 'tuff_render_chart', output: CHART_RESULT_PREFIX + '{' }) },
-    { name: 'invalid face spec', part: tool({ output: FORM_RESULT_PREFIX + '{"title":"No fields"}' }) },
+    { name: 'malformed envelope', part: tool({ name: 'tuff_render_chart', output: `${CHART_RESULT_PREFIX  }{` }) },
+    { name: 'invalid face spec', part: tool({ output: `${FORM_RESULT_PREFIX  }{"title":"No fields"}` }) },
     { name: 'widget without sandbox', part: tool({ name: 'tuff_render_widget', output: WIDGET_RESULT_PREFIX + JSON.stringify(widgetSpec) }) },
   ])('keeps $name on the generic tool card', ({ part }) => {
     const wrapper = mountTurn({ segments: [segment(part)] })
@@ -99,7 +99,7 @@ describe('TxAiAssistantTurn tool registry', () => {
   })
 })
 
-describe('TxAiAssistantTurn presentation and actions', () => {
+describe('txAiAssistantTurn presentation and actions', () => {
   it('shows host waiting text independently of streaming, and only shows compaction during streaming', async () => {
     const wrapper = mountTurn({ waiting: true, streaming: false, compacting: true, thinkingVerb: 'Searching', thinkingLabel: 'Finding sources', compactingLabel: 'Summarizing context' })
     expect(wrapper.get('.tx-ai-turn__thinking').text()).toContain('Finding sources')

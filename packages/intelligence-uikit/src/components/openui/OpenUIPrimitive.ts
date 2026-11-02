@@ -8,34 +8,31 @@ import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelect } from '@talex-touch/tuffex/select'
 import { TxSlider } from '@talex-touch/tuffex/slider'
-import { defineComponent, h, inject, provide, ref } from 'vue'
+import { icons } from '@lucide/vue'
+import { defineComponent, h, inject, onBeforeUnmount, provide, ref } from 'vue'
 import TxAiMarkdown from '../content/TxAiMarkdown.vue'
 import { OPENUI_CONTEXT, OPENUI_FORM } from './context'
 import OpenUIChart from './OpenUIChart.vue'
 import OpenUIImage from './OpenUIImage.vue'
+import '@talex-touch/tuffex/button/style.css'
+import '@talex-touch/tuffex/input/style.css'
+import '@talex-touch/tuffex/select/style.css'
+import '@talex-touch/tuffex/checkbox/style.css'
+import '@talex-touch/tuffex/slider/style.css'
+import '@talex-touch/tuffex/card/style.css'
+import '@talex-touch/tuffex/badge/style.css'
+import '@talex-touch/tuffex/stream-markdown/style.css'
+import '@talex-touch/tuffex/base-anchor/style.css'
+import '@talex-touch/tuffex/base-surface/style.css'
+import '@talex-touch/tuffex/card-item/style.css'
+import '@talex-touch/tuffex/text-morph/style.css'
 
-const iconPaths: Record<string, string> = {
-  'plus': 'M12 5v14M5 12h14',
-  'minus': 'M5 12h14',
-  'check': 'm5 12 4 4L19 6',
-  'arrow-right': 'M4 12h16m-6-6 6 6-6 6',
-  'arrow-left': 'M20 12H4m6-6-6 6 6 6',
-  'heart': 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z',
-  'star': 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9Z',
-  'search': 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
-  'copy': 'M9 9h12v12H9ZM15 5V3H3v12h2',
-  'clock': 'M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
-  'map-pin': 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
-  'info': 'M12 11v6m0-10v1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
-  'circle': 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
-  'check-circle': 'm7 12 3 3 7-7M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
-}
 function icon(name: unknown, size: unknown = 'md') {
   const pixels = ({ sm: 14, md: 18, lg: 24, xl: 32 } as Record<string, number>)[String(size)] ?? 18
-  const path = iconPaths[String(name)]
-  return path
-    ? h('svg', { viewBox: '0 0 24 24', width: pixels, height: pixels, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': true }, [h('path', { d: path })])
-    : h('span', { role: 'img', 'aria-label': String(name), class: 'tx-ai-openui__unknown-icon' }, String(name))
+  const normalized = String(name ?? '').trim().replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase()
+  const key = normalized.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('')
+  const component = icons[key as keyof typeof icons]
+  return component ? h(component, { size: pixels, strokeWidth: 1.8, 'aria-hidden': true }) : null
 }
 const alignments: Record<string, string> = { start: 'flex-start', end: 'flex-end', center: 'center', stretch: 'stretch', between: 'space-between' }
 const colors: Record<string, string> = { ink: '--tx-text-color-primary', muted: '--tx-text-color-secondary', faint: '--tx-text-color-placeholder', surface: '--tx-fill-color-light', info: '--tx-color-primary', success: '--tx-color-success', warning: '--tx-color-warning', danger: '--tx-color-danger', purple: '--tx-color-primary', pink: '--tx-color-danger' }
@@ -67,6 +64,13 @@ export default defineComponent({
     const form = view.typeName === 'Form' ? (view.statementId ?? `form-${view.typeName}`) : parentForm
     if (view.typeName === 'Form') provide(OPENUI_FORM, form)
     const local = ref<unknown>(undefined)
+    if (form && ['Input', 'TextArea', 'Select', 'SegmentedControl', 'Slider', 'Checkbox', 'RadioGroup'].includes(view.typeName)) {
+      const unregister = ctx.registerField(form, () => {
+        const field = view.typeName === 'Checkbox' ? view.props.checked : view.props.value
+        return { label: String(view.props.label ?? view.statementId ?? view.typeName), value: isReactiveAssign(field) ? ctx.store.get(field.target) : local.value === undefined ? field : local.value }
+      })
+      onBeforeUnmount(unregister)
+    }
     return () => {
       void ctx.version.value
       const p = view.props
@@ -76,15 +80,11 @@ export default defineComponent({
       const disabled = ctx.streaming.value || !!p.disabled
       const field = name === 'Checkbox' ? p.checked : p.value
       const value = isReactiveAssign(field) ? ctx.store.get(field.target) : local.value === undefined ? field : local.value
-      const label = String(p.label ?? p.placeholder ?? view.statementId ?? name)
+      const label = String(p.label ?? p.placeholder ?? ctx.labels.value[name] ?? name)
       const update = (next: unknown) => {
         if (disabled) return
         if (isReactiveAssign(field)) ctx.store.set(field.target, ctx.evaluate(field.expr, { $value: next }))
         else local.value = next
-        if (form) {
-          const previous = ctx.store.get(form)
-          ctx.store.set(form, { ...(previous && typeof previous === 'object' ? previous : {}), [label]: next })
-        }
       }
       const wrapField = (control: VNodeChild) => h('label', { class: 'tx-ai-openui__field' }, [p.label ? h('span', { class: 'tx-ai-openui__label' }, String(p.label)) : null, control])
       const choices = (Array.isArray(p.options) ? p.options : []).flatMap((item: unknown) => {
@@ -93,12 +93,15 @@ export default defineComponent({
         return []
       })
       if (['Col', 'Row', 'Box', 'Grid', 'Card', 'Carousel', 'Form'].includes(name)) {
+        const columns = Math.min(12, Math.max(1, Math.round(Number(p.columns ?? 2))))
+        const gap = space(p.gap) ?? '12px'
+        const minimum = p.minChildWidth ? `min(100%, max(${Math.max(0, Number(p.minChildWidth))}px, calc((100% - ${columns - 1} * ${gap}) / ${columns})))` : '0'
         const style = {
           gap: space(p.gap), padding: space(p.padding), alignItems: alignments[String(p.align)], justifyContent: alignments[String(p.justify)],
           flexWrap: p.wrap ? 'wrap' : undefined, width: length(p.width), height: length(p.height), flex: typeof p.flex === 'number' ? `${p.flex} 1 0%` : undefined,
           background: color(p.background), borderRadius: radius(p.radius), boxShadow: p.border ? 'inset 0 0 0 1px var(--tx-border-color-light)' : undefined,
           flexDirection: name === 'Box' && p.direction === 'row' ? 'row' : undefined,
-          gridTemplateColumns: name === 'Grid' ? `repeat(${p.minChildWidth ? 'auto-fit' : Math.min(12, Math.max(1, Number(p.columns ?? 2)))}, minmax(${p.minChildWidth ? `min(100%, ${Number(p.minChildWidth)}px)` : '0'}, 1fr))` : undefined,
+          gridTemplateColumns: name === 'Grid' ? `repeat(${p.minChildWidth ? 'auto-fit' : columns}, minmax(${minimum}, 1fr))` : undefined,
           '--openui-item-width': length(p.itemWidth ?? 260),
         }
         const attrs = { class: [`tx-ai-openui__${name.toLowerCase()}`, p.variant === 'soft' && 'is-soft'], style }

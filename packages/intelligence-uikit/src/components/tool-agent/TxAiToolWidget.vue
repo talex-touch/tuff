@@ -42,8 +42,12 @@ const failureReason = computed(() => {
     </p>
 
     <div v-if="status === 'failed'" class="tx-ai-tool-widget-Failed" role="alert">
-      <p class="tx-ai-tool-widget-FailedTitle">{{ widgetLabels.failed }}</p>
-      <p v-if="failureReason" class="tx-ai-tool-widget-FailedReason">{{ failureReason }}</p>
+      <p class="tx-ai-tool-widget-FailedTitle">
+        {{ widgetLabels.failed }}
+      </p>
+      <p v-if="failureReason" class="tx-ai-tool-widget-FailedReason">
+        {{ failureReason }}
+      </p>
       <!-- The tool still produced something; showing it beats showing nothing. -->
       <pre v-if="props.fallback" class="tx-ai-tool-widget-Fallback">{{ props.fallback }}</pre>
     </div>

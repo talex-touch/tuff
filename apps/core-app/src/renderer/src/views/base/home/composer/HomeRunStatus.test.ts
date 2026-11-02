@@ -18,7 +18,7 @@ describe('HomeRunStatus', () => {
       },
       global: {
         stubs: {
-          TxTuffLogoStroke: true,
+          TxMiko: true,
           TxTextMorph: {
             props: ['text'],
             template: '<span class="stub-morph">{{ text }}</span>'
@@ -37,7 +37,7 @@ describe('HomeRunStatus', () => {
       },
       global: {
         stubs: {
-          TxTuffLogoStroke: true,
+          TxMiko: true,
           TxTextMorph: {
             props: ['text'],
             template: '<span class="stub-morph">{{ text }}</span>'
@@ -57,7 +57,7 @@ describe('HomeRunStatus', () => {
       },
       global: {
         stubs: {
-          TxTuffLogoStroke: true,
+          TxMiko: true,
           TxTextMorph: {
             props: ['text'],
             template: '<span class="stub-morph">{{ text }}</span>'
@@ -77,7 +77,7 @@ describe('HomeRunStatus', () => {
       },
       global: {
         stubs: {
-          TxTuffLogoStroke: true,
+          TxMiko: true,
           TxTextMorph: {
             props: ['text'],
             template: '<span class="stub-morph">{{ text }}</span>'

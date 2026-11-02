@@ -10,7 +10,10 @@ const streaming = ref('')
 const drafts = ref<Record<string, string>>({})
 const action = ref<OpenUIAction | null>(null)
 let timer: ReturnType<typeof setInterval> | undefined
-watch(dark, value => { document.documentElement.classList.toggle('openui-playground-dark', value) }, { immediate: true })
+watch(dark, (value) => {
+  document.documentElement.classList.toggle('openui-playground-dark', value)
+  document.documentElement.dataset.theme = value ? 'dark' : 'light'
+}, { immediate: true })
 function stream(program: (typeof openUIPrograms)[number]) {
   clearInterval(timer)
   streaming.value = program.id
@@ -22,23 +25,46 @@ function stream(program: (typeof openUIPrograms)[number]) {
     if (index >= program.code.length) { clearInterval(timer); streaming.value = '' }
   }, 30)
 }
-onBeforeUnmount(() => { clearInterval(timer); document.documentElement.classList.remove('openui-playground-dark') })
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  document.documentElement.classList.remove('openui-playground-dark')
+  delete document.documentElement.dataset.theme
+})
 </script>
 
 <template>
   <main class="openui-playground">
     <header class="openui-playground__header">
-      <div><a href="/">intelligence-uikit</a><h1>Answers you can use.</h1><p>OpenUI Lang · Vue 3 · Live, local state</p></div>
-      <button type="button" :aria-pressed="dark" @click="dark = !dark">{{ dark ? 'Light mode' : 'Dark mode' }}</button>
+      <div>
+        <a href="/">intelligence-uikit</a>
+        <h1>Answers you can use.</h1>
+        <p>OpenUI Lang · Vue 3 · Live, local state</p>
+      </div>
+      <button type="button" :aria-pressed="dark" @click="dark = !dark">
+        {{ dark ? 'Light mode' : 'Dark mode' }}
+      </button>
     </header>
     <aside class="openui-playground__action" role="status" aria-live="polite">
       <strong>Host action</strong><code data-testid="last-action">{{ action ? JSON.stringify(action) : 'Interact with a program. Assistant actions appear here.' }}</code>
     </aside>
     <div class="openui-playground__gallery">
       <section v-for="program in openUIPrograms" :id="program.id" :key="program.id" class="openui-playground__example">
-        <div class="openui-playground__example-heading"><div><h2>{{ program.title }}</h2><p>{{ program.note }}</p></div><button type="button" :disabled="!!streaming" :aria-label="`Stream ${program.title}`" @click="stream(program)">{{ streaming === program.id ? 'Streaming…' : 'Stream it' }}</button></div>
-        <div class="openui-playground__preview"><TxAiOpenUI :content="drafts[program.id] ?? program.code" :streaming="streaming === program.id" @action="action = $event" /></div>
-        <details><summary>View OpenUI program</summary><pre>{{ program.code }}</pre></details>
+        <div class="openui-playground__example-heading">
+          <div>
+            <h2>{{ program.title }}</h2>
+            <p>{{ program.note }}</p>
+          </div>
+          <button type="button" :disabled="!!streaming" :aria-label="`Stream ${program.title}`" @click="stream(program)">
+            {{ streaming === program.id ? 'Streaming…' : 'Stream it' }}
+          </button>
+        </div>
+        <div class="openui-playground__preview">
+          <TxAiOpenUI :content="drafts[program.id] ?? program.code" :streaming="streaming === program.id" @action="action = $event" />
+        </div>
+        <details>
+          <summary>View OpenUI program</summary>
+          <pre>{{ program.code }}</pre>
+        </details>
       </section>
     </div>
   </main>
@@ -88,11 +114,11 @@ body:has(.openui-playground) { margin: 0; }
 .openui-playground__header { display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .openui-playground__header a { color: var(--tx-color-primary); font-size: 13px; text-decoration: none; }
 .openui-playground h1 { font-size: 32px; line-height: 1.25; font-weight: 600; margin: 12px 0 8px; }
-.openui-playground p { color: var(--tx-text-color-secondary); margin: 0; }
-.openui-playground button { color: var(--tx-text-color-primary); font: inherit; font-size: 13px; padding: 7px 12px; border: 0; border-radius: 7px; background: var(--tx-bg-color); box-shadow: inset 0 0 0 1px var(--tx-border-color); cursor: pointer; flex-shrink: 0; }
-.openui-playground button:hover:not(:disabled) { background: var(--tx-fill-color); }
-.openui-playground button:disabled { opacity: .55; cursor: default; }
-.openui-playground button:focus-visible, .openui-playground summary:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
+.openui-playground__header p, .openui-playground__example-heading p { color: var(--tx-text-color-secondary); margin: 0; }
+.openui-playground__header > button, .openui-playground__example-heading > button { color: var(--tx-text-color-primary); font: inherit; font-size: 13px; padding: 7px 12px; border: 0; border-radius: 7px; background: var(--tx-bg-color); box-shadow: inset 0 0 0 1px var(--tx-border-color); cursor: pointer; flex-shrink: 0; }
+.openui-playground__header > button:hover:not(:disabled), .openui-playground__example-heading > button:hover:not(:disabled) { background: var(--tx-fill-color); }
+.openui-playground__example-heading > button:disabled { opacity: .55; cursor: default; }
+.openui-playground__header > button:focus-visible, .openui-playground__example-heading > button:focus-visible, .openui-playground summary:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
 .openui-playground__action { display: flex; gap: 16px; align-items: baseline; padding: 12px 16px; margin-bottom: 28px; border-radius: 8px; background: var(--tx-fill-color); overflow-wrap: anywhere; }
 .openui-playground__action strong { font-size: 12px; white-space: nowrap; }
 .openui-playground__action code { font-size: 12px; color: var(--tx-text-color-secondary); }
@@ -104,6 +130,6 @@ body:has(.openui-playground) { margin: 0; }
 .openui-playground__preview { padding: 24px; }
 .openui-playground details { border-top: 1px solid var(--tx-border-color-light); padding: 10px 20px; font-size: 12px; color: var(--tx-text-color-secondary); }
 .openui-playground summary { cursor: pointer; }
-.openui-playground pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.openui-playground details pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
 @media (max-width: 780px) { .openui-playground { padding: 20px; } .openui-playground__gallery { grid-template-columns: minmax(0, 1fr); } .openui-playground__action { flex-direction: column; gap: 4px; } }
 </style>

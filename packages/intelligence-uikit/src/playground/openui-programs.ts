@@ -1,4 +1,4 @@
-// Adapted from thesysdev/open-intelligent-ui gallery programs (Apache-2.0).
+// Adapted from thesysdev/open-intelligent-ui; Copyright (c) 2026 Thesys Inc. MIT; see ../components/openui/LICENSE.thesys.
 export const openUIPrograms = [
   {
     id: 'answer', title: 'An answer, composed', note: 'A readable answer made of headings, facts and useful detail.',

@@ -288,6 +288,12 @@ export interface TxAiAssistantTurnProps {
   footer?: TxAiTurnFooterProps
   error?: TxAiErrorBlockProps
   motion?: TxAiMotionPreset
+  /** Render ```openui fences in prose as interactive OpenUI. Off keeps them as plain code. */
+  openui?: boolean
+  /** Labels for the OpenUI renderer (notices, button text). */
+  openuiLabels?: Record<string, string>
+  /** Host lookup for OpenUI `SearchImage`; resolve a query to an image URL, or null. */
+  resolveOpenuiImage?: (query: string) => Promise<string | null>
 }
 
 export function toTuffexChatMessage(

@@ -1,23 +1,28 @@
 import type { AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import type { TxAiSegment } from '@talex-touch/intelligence-uikit'
-import { describeToolCallError, rollThinkingVerb, toMessageSegments } from '@talex-touch/intelligence-uikit/utils'
+import type { OpenUIAction, TxAiSegment } from '@talex-touch/intelligence-uikit'
+import {
+  describeToolCallError,
+  rollThinkingVerb,
+  toMessageSegments
+} from '@talex-touch/intelligence-uikit/utils'
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 
 export interface MessagePartsOptions {
-  /** Sends a form answer as the next user turn; rejects when Main refuses it. */
+  /** Sends text as the next user turn; rejects when Main refuses it. */
   submit: (
     text: string,
     attachments: undefined,
-    options: { answersToolCallId: string }
+    options?: { answersToolCallId: string }
   ) => Promise<unknown>
+  /** Opens an http(s) link outside the app. */
+  openExternal: (url: string) => Promise<unknown>
   /** The composer draft: a form answer is not typed text, so it clears what was there. */
   clearDraft: () => void
   onSubmitError: (error: unknown) => void
 }
-
 
 /**
  * How an assistant turn's body is read: ordered segments, the widget a tool result becomes, the
@@ -51,9 +56,10 @@ export function useMessageParts(options: MessagePartsOptions) {
    */
   function segmentsOf(message: ConversationMessage): TxAiSegment[] {
     const streaming = message.status === 'streaming'
-    if (!message.parts) return message.content
-      ? [{ kind: 'text', id: `${message.id}-text`, text: message.content, streaming }]
-      : []
+    if (!message.parts)
+      return message.content
+        ? [{ kind: 'text', id: `${message.id}-text`, text: message.content, streaming }]
+        : []
     return toMessageSegments(message.parts, streaming, {
       thinking: t('home.thinkingVerb', { verb: thinkingVerbFor(message) }),
       thinkingFor: (time) => t('home.thinkingFor', { time }),
@@ -61,7 +67,6 @@ export function useMessageParts(options: MessagePartsOptions) {
       toolError: (error) => describeToolCallError(error, t)
     })
   }
-
 
   /** Ids of forms already answered this session — locks their cards. */
   const submittedForms = reactive(new Set<string>())
@@ -93,6 +98,30 @@ export function useMessageParts(options: MessagePartsOptions) {
         submittedForms.delete(tool.id)
         options.onSubmitError(error)
       })
+  }
+
+  /**
+   * What an interactive answer (an ```openui block) asks of the host. The kit validates and
+   * emits; the effect is the page's. `continue_conversation` is the answer speaking as the user,
+   * so it goes out as the next turn; anything unrecognised is dropped, not guessed at.
+   */
+  function handleOpenUIAction(action: OpenUIAction): void {
+    if (action.type === 'continue_conversation') {
+      const message = action.context?.trim()
+      if (!message) return
+      options.clearDraft()
+      void options.submit(message, undefined).catch(options.onSubmitError)
+      return
+    }
+    if (action.type === 'open_url') {
+      const url = String(action.params?.url ?? '')
+      if (/^https?:\/\//i.test(url)) void options.openExternal(url).catch(() => {})
+      return
+    }
+    if (action.type === 'copy_to_clipboard') {
+      const text = action.params?.text
+      if (typeof text === 'string') void navigator.clipboard.writeText(text).catch(() => {})
+    }
   }
 
   /**
@@ -168,31 +197,53 @@ export function useMessageParts(options: MessagePartsOptions) {
     codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang })
   }))
 
-  const chartProps = computed(() => ({ labels: {
-    line: t('home.chartView.line'), bar: t('home.chartView.bar'), area: t('home.chartView.area'),
-    edit: t('home.chartEdit'), done: t('home.chartDone'), label: t('home.chartLabel'),
-    remove: t('home.chartRemove'), addPlaceholder: t('home.chartAddPlaceholder'),
-    add: t('home.chartAdd'), failed: t('home.chartFailed'), close: t('common.close')
-  } }))
+  const chartProps = computed(() => ({
+    labels: {
+      line: t('home.chartView.line'),
+      bar: t('home.chartView.bar'),
+      area: t('home.chartView.area'),
+      edit: t('home.chartEdit'),
+      done: t('home.chartDone'),
+      label: t('home.chartLabel'),
+      remove: t('home.chartRemove'),
+      addPlaceholder: t('home.chartAddPlaceholder'),
+      add: t('home.chartAdd'),
+      failed: t('home.chartFailed'),
+      close: t('common.close')
+    }
+  }))
   const formProps = computed(() => ({
-    submitLabel: t('home.formSubmit'), resetLabel: t('home.formReset'),
-    requiredHint: t('home.formRequired'), submittedLabel: t('home.formDone'),
+    submitLabel: t('home.formSubmit'),
+    resetLabel: t('home.formReset'),
+    requiredHint: t('home.formRequired'),
+    submittedLabel: t('home.formDone'),
     selectPlaceholder: t('home.formSelect')
   }))
   const widgetProps = computed(() => ({
     labels: {
-      generated: t('home.widget.generated'), sandboxed: t('home.widget.sandboxed'),
-      loading: t('home.widget.loading'), failed: t('home.widget.failed'), timedOut: t('home.widget.timedOut')
+      generated: t('home.widget.generated'),
+      sandboxed: t('home.widget.sandboxed'),
+      loading: t('home.widget.loading'),
+      failed: t('home.widget.failed'),
+      timedOut: t('home.widget.timedOut')
     },
     blockedLabel: (directive: string) => t('home.widget.blocked', { directive })
   }))
   const footerLabels = computed(() => ({
-    copy: t('home.copy'), copied: t('home.copied'), regenerate: t('home.regenerate'),
-    speak: t('home.speak'), speakStop: t('home.speakStop'), branch: t('home.workspace.fork.fromHere'),
-    input: t('home.workspace.activity.metrics.input'), output: t('home.workspace.activity.metrics.output'),
-    total: t('home.workspace.activity.metrics.total'), latency: t('home.workspace.activity.metrics.latency'),
-    totalLatency: t('home.workspace.activity.metrics.totalLatency'), ttft: t('home.workspace.activity.metrics.ttft'),
-    model: t('home.workspace.activity.metrics.model'), coordinator: t('home.workspace.activity.metrics.coordinator')
+    copy: t('home.copy'),
+    copied: t('home.copied'),
+    regenerate: t('home.regenerate'),
+    speak: t('home.speak'),
+    speakStop: t('home.speakStop'),
+    branch: t('home.workspace.fork.fromHere'),
+    input: t('home.workspace.activity.metrics.input'),
+    output: t('home.workspace.activity.metrics.output'),
+    total: t('home.workspace.activity.metrics.total'),
+    latency: t('home.workspace.activity.metrics.latency'),
+    totalLatency: t('home.workspace.activity.metrics.totalLatency'),
+    ttft: t('home.workspace.activity.metrics.ttft'),
+    model: t('home.workspace.activity.metrics.model'),
+    coordinator: t('home.workspace.activity.metrics.coordinator')
   }))
 
   return {
@@ -205,6 +256,7 @@ export function useMessageParts(options: MessagePartsOptions) {
     submittedForms,
     formDrafts,
     submitForm,
+    handleOpenUIAction,
     showToolPayload,
     payloadFor,
     payloadJson,

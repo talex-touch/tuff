@@ -1,12 +1,17 @@
 <script setup lang="ts">
+import type { MikoState } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 
-const currentState = ref<'idle' | 'working' | 'thinking' | 'success'>('idle')
+const currentState = ref<MikoState>('idle')
+const lastClickedState = ref<MikoState | null>(null)
+const isDemonActive = ref(false)
 
-function toggleState() {
-  const states: ('idle' | 'working' | 'thinking' | 'success')[] = ['idle', 'working', 'thinking', 'success']
-  const next = (states.indexOf(currentState.value) + 1) % states.length
-  currentState.value = states[next] ?? 'idle'
+function onStateChange(state: MikoState) {
+  lastClickedState.value = state
+}
+
+function onMutate(mutated: boolean) {
+  isDemonActive.value = mutated
 }
 </script>
 
@@ -26,18 +31,25 @@ function toggleState() {
         <TxMiko size="md" :state="currentState" />
       </div>
       <div class="miko-basic-demo__item">
-        <span class="miko-basic-demo__label">LG (64px)</span>
-        <TxMiko size="lg" :state="currentState" />
+        <span class="miko-basic-demo__label">闪光恶魔变异体</span>
+        <TxMiko size="md" demon />
       </div>
       <div class="miko-basic-demo__item">
-        <span class="miko-basic-demo__label">Cyan (#199FFE)</span>
-        <TxMiko size="md" color="#199FFE" :state="currentState" />
+        <span class="miko-basic-demo__label">交互 + 随机 + 突变</span>
+        <TxMiko
+          size="md"
+          interactive
+          random
+          color="#199FFE"
+          @state-change="onStateChange"
+          @mutate="onMutate"
+        />
       </div>
     </div>
-    <div class="miko-basic-demo__footer">
-      <button class="miko-basic-demo__btn" @click="toggleState">
-        切换状态 (当前: {{ currentState }})
-      </button>
+    <div class="miko-basic-demo__hint">
+      点击右侧 Miko 触发互动反馈；有概率突变为带恶魔犄角、蝙蝠羽翼的「闪光恶魔」。连续快速点击 4 次可触发眩晕彩蛋。
+      <span v-if="lastClickedState" class="miko-basic-demo__state-tag">当前动作: {{ lastClickedState }}</span>
+      <span v-if="isDemonActive" class="miko-basic-demo__state-tag is-demon-tag">✦ 闪光恶魔变异中 ✦</span>
     </div>
   </div>
 </template>
@@ -69,17 +81,28 @@ function toggleState() {
   color: var(--tx-text-color-secondary, #8b88a8);
 }
 
-.miko-basic-demo__footer {
-  margin-top: 8px;
+.miko-basic-demo__hint {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary, #8b88a8);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.miko-basic-demo__btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid var(--tx-border-color, #333);
-  background: var(--tx-bg-color-overlay, #222);
+.miko-basic-demo__state-tag {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: var(--tx-bg-color-overlay, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--tx-border-color, rgba(255, 255, 255, 0.1));
   color: var(--tx-text-color-primary, #fff);
-  cursor: pointer;
+}
+
+.miko-basic-demo__state-tag.is-demon-tag {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #f87171;
+  font-weight: 600;
 }
 </style>

@@ -13,6 +13,7 @@ export interface OpenUIContext {
   labels: Readonly<Ref<Record<string, string>>>
   resolveImage?: (query: string) => Promise<string | null>
   trigger: (plan: unknown, label?: string, form?: string) => void
+  registerField: (form: string, read: () => { label: string, value: unknown }) => () => void
   evaluate: (node: ASTNode, extraScope?: Record<string, unknown>) => unknown
   notice: (message: string) => void
 }

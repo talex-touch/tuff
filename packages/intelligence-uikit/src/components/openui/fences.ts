@@ -6,6 +6,8 @@ export interface OpenUIFenceSegment {
   complete: boolean
 }
 
+const LANGUAGE_TAG = /^[\w+#.-]+$/
+
 /** Keeps ordinary Markdown byte-for-byte, including fences in other languages. */
 export function splitOpenUIFences(text: string): OpenUIFenceSegment[] {
   const parts: OpenUIFenceSegment[] = []
@@ -16,8 +18,13 @@ export function splitOpenUIFences(text: string): OpenUIFenceSegment[] {
   for (const line of lines) {
     const match = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)\r?\n?$/.exec(line)
     if (program !== null) {
-      if (match && match[1]![0] === '`' && match[1]!.length >= fence!.length && !match[2]!.trim()) {
+      // A model sometimes glues prose onto the closing fence ("```Then we see…"). That line still
+      // ends the program and the prose goes back to Markdown. A lone word ("```ts", or a chunk
+      // of "```op" still arriving) reads as an info string, so it stays inside the program.
+      const info = match?.[2]!.trim() ?? ''
+      if (match && match[1]![0] === '`' && match[1]!.length >= fence!.length && !LANGUAGE_TAG.test(info)) {
         parts.push({ kind: 'openui', text: program, complete: true })
+        if (info) markdown = line.slice(line.indexOf(match[1]!) + match[1]!.length)
         program = null
         fence = null
       }
