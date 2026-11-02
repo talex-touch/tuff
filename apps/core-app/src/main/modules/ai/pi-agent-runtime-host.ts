@@ -932,6 +932,8 @@ export class PiAgentRuntimeHost {
               existing.arguments = part.input as Record<string, unknown>
             }
           }
+        } else if (event.type === 'end' && event.provider) {
+          providerName = event.provider
         } else if (event.type === 'usage' && event.usage) {
           promptTokens = event.usage.promptTokens ?? promptTokens
           completionTokens = event.usage.completionTokens ?? completionTokens

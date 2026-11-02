@@ -42,6 +42,7 @@ import { readHostInvokePurpose } from '../intelligence-invoke-purpose'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments } from './attachment-spill'
+import type { ThirdPartyCli } from './cli-config-provider'
 import { runCliChat } from './cli/cli-process-runtime'
 import { createClaudeLineParser } from './cli/claude-stream-json'
 import { createCodexLineParser } from './cli/codex-exec-json'
@@ -51,12 +52,14 @@ import {
   buildPiArgs,
   buildPiPrompt,
   CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   cliReasoningLevel,
   CODEX_CLI_ORIGIN,
   CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
+  OMP_CLI_PROFILE_ID,
   OMP_CLI_PROVIDER_ID,
   PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
@@ -224,17 +227,41 @@ function firstUserPrompt(payload: IntelligenceChatPayload): string {
  * on-device destination.
  */
 /**
- * Only the Codex scheduler runs the Codex binary. A Codex model handed to any other scheduler is
- * called through the endpoint `~/.codex/config.toml` names, the way the Tuff scheduler reuses a model.
+ * Each third-party CLI binary runs only under its own scheduler; the scheduler picks the executor,
+ * not the model. Any other run that lands on that CLI's model reuses the endpoint its config describes.
  */
-function isNonCodexSchedulerRun(
-  config: IntelligenceProviderConfig,
-  options: IntelligenceInvokeOptions
-): boolean {
-  const isCodex =
-    config.id === CODEX_CLI_PROVIDER_ID || config.metadata?.origin === CODEX_CLI_ORIGIN
-  const profileId = options.metadata?.profileId
-  return isCodex && typeof profileId === 'string' && profileId !== CODEX_CLI_PROFILE_ID
+const THIRD_PARTY_CLIS: ReadonlyArray<{
+  cli: ThirdPartyCli
+  providerId: string
+  origin: string
+  schedulerProfileId: string
+}> = [
+  {
+    cli: 'codex',
+    providerId: CODEX_CLI_PROVIDER_ID,
+    origin: CODEX_CLI_ORIGIN,
+    schedulerProfileId: CODEX_CLI_PROFILE_ID
+  },
+  {
+    cli: 'claude',
+    providerId: CLAUDE_CLI_PROVIDER_ID,
+    origin: CLAUDE_CLI_ORIGIN,
+    schedulerProfileId: CLAUDE_CLI_PROFILE_ID
+  },
+  {
+    cli: 'omp',
+    providerId: OMP_CLI_PROVIDER_ID,
+    origin: OMP_CLI_ORIGIN,
+    schedulerProfileId: OMP_CLI_PROFILE_ID
+  }
+]
+
+function thirdPartyCliOf(config: IntelligenceProviderConfig) {
+  return (
+    THIRD_PARTY_CLIS.find(
+      (entry) => config.id === entry.providerId || config.metadata?.origin === entry.origin
+    ) ?? null
+  )
 }
 
 export class PiCliProvider extends IntelligenceProvider {
@@ -260,11 +287,17 @@ export class PiCliProvider extends IntelligenceProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
-    if (isNonCodexSchedulerRun(this.config, options)) {
-      const { resolveCodexConfigProvider } = await import('./codex-config-provider')
-      const direct = resolveCodexConfigProvider()
-      if (!direct) throw new Error('CODEX_CONFIG_PROVIDER_UNAVAILABLE')
-      yield* direct.chatStream(payload, options)
+    const external = thirdPartyCliOf(this.config)
+    if (external && options.metadata?.profileId !== external.schedulerProfileId) {
+      const { resolveCliConfigEndpoint } = await import('./cli-config-provider')
+      const endpoint = resolveCliConfigEndpoint(external.cli, this.resolveModel(options))
+      if (!endpoint) throw new Error(`${external.cli.toUpperCase()}_CONFIG_PROVIDER_UNAVAILABLE`)
+      for await (const chunk of endpoint.provider.chatStream(payload, {
+        ...options,
+        modelPreference: [endpoint.modelId]
+      })) {
+        yield { ...chunk, provider: endpoint.providerId }
+      }
       return
     }
     if (!this.localCliEnabled()) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
