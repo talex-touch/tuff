@@ -133,7 +133,7 @@ describe('txMiko', () => {
 
   it('triggers dizzy reaction on rapid clicks in interactive mode', async () => {
     const wrapper = mount(Miko, {
-      props: { interactive: true },
+      props: { interactive: true, mutationChance: 0 },
     })
 
     await wrapper.trigger('click')
