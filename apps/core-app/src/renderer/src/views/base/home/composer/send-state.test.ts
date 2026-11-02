@@ -33,10 +33,10 @@ describe('deriveSendState', () => {
     // A pending tool confirmation outranks the wait: the model is waiting on the user.
     [{ streaming: true, blocked: true }, 'blocked'],
     [{ streaming: true, blocked: true, awaitingFirstToken: true }, 'blocked'],
-    // Streaming ignores the draft and the dictation: the key is a stop button.
-    [{ streaming: true, hasText: true }, 'streaming'],
+    // Streaming with draft text switches to steer / queue send:
+    [{ streaming: true, hasText: true }, 'ready'],
     [{ streaming: true, dictating: true }, 'streaming'],
-    [{ streaming: true, hasText: true, awaitingFirstToken: true, dictating: true }, 'waiting']
+    [{ streaming: true, hasText: true, awaitingFirstToken: true, dictating: true }, 'ready']
   ]
 
   it.each(table)('%o → %s', (input, expected) => {
@@ -50,8 +50,15 @@ describe('deriveSendState', () => {
         keys.map((key, bit) => [key, Boolean(mask & (1 << bit))])
       ) as unknown as SendStateInput
       const state = deriveSendState(input)
-      expect(isCapsuleSendState(state)).toBe(input.streaming)
-      if (!input.streaming) expect(state).toBe(input.hasText || input.dictating ? 'ready' : 'empty')
+      if (input.hasText) {
+        expect(state).toBe('ready')
+        expect(isCapsuleSendState(state)).toBe(false)
+      } else if (!input.streaming) {
+        expect(state).toBe(input.dictating ? 'ready' : 'empty')
+        expect(isCapsuleSendState(state)).toBe(false)
+      } else {
+        expect(isCapsuleSendState(state)).toBe(true)
+      }
     }
   })
 })

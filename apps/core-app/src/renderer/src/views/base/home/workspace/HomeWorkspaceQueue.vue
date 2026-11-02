@@ -3,9 +3,15 @@ import type {
   ConversationWorkspaceStatus,
   WorkspaceQueuedInput
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
+import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { WorkspaceQueueAction } from '~/modules/conversation/useAgentWorkspace'
-import { computed, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxModal } from '@talex-touch/tuffex/modal'
+import { toModelAttachments } from '~/modules/conversation/attachment-payload'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 /**
  * Main's pending inputs for this conversation, above the composer.
@@ -29,22 +35,33 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'action', queueId: string, action: WorkspaceQueueAction): void
+  (
+    event: 'update',
+    queueId: string,
+    text: string,
+    attachments?: IntelligenceMessageAttachment[],
+    keptAttachmentIds?: string[]
+  ): void
   (event: 'resume'): void
 }>()
 
 const { t } = useI18n()
 
-const expanded = ref(false)
-const COLLAPSED_ROWS = 2
+const listRef = ref<HTMLElement | null>(null)
 
 const promotedCount = computed(
   () => props.items.filter((item) => item.priority === 'promoted').length
 )
 
-const visibleItems = computed(() =>
-  expanded.value ? props.items : props.items.slice(0, COLLAPSED_ROWS)
+watch(
+  () => props.items.length,
+  async (newLen, oldLen) => {
+    if (newLen > oldLen) {
+      await nextTick()
+      listRef.value?.scrollTo({ top: listRef.value.scrollHeight, behavior: 'smooth' })
+    }
+  }
 )
-
 /** Why the queue is not draining, in the words of the state Main reported. */
 const heldReason = computed(() => {
   if (!props.held) return null
@@ -104,6 +121,99 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
     act(item, 'remove')
   }
 }
+
+const editingItem = ref<WorkspaceQueuedInput | null>(null)
+const editText = ref('')
+const editKeptAttachmentIds = ref<string[]>([])
+const editNewAttachments = ref<AiAttachment[]>([])
+const editFileInputRef = ref<HTMLInputElement | null>(null)
+const savingEdit = ref(false)
+
+const keptAttachments = computed(() => {
+  if (!editingItem.value) return []
+  return (editingItem.value.attachments ?? []).filter((att) =>
+    editKeptAttachmentIds.value.includes(att.id)
+  )
+})
+
+function openEdit(item: WorkspaceQueuedInput): void {
+  editingItem.value = item
+  editText.value = item.text
+  editKeptAttachmentIds.value = (item.attachments ?? []).map((att) => att.id)
+  clearNewAttachments()
+}
+
+function clearNewAttachments(): void {
+  for (const item of editNewAttachments.value) {
+    if (item.url && item.url.startsWith('blob:')) {
+      URL.revokeObjectURL(item.url)
+    }
+  }
+  editNewAttachments.value = []
+}
+
+function cancelEdit(): void {
+  clearNewAttachments()
+  editingItem.value = null
+  editText.value = ''
+  editKeptAttachmentIds.value = []
+}
+
+function removeKeptAttachment(id: string): void {
+  editKeptAttachmentIds.value = editKeptAttachmentIds.value.filter((i) => i !== id)
+}
+
+function removeNewAttachment(index: number): void {
+  const [removed] = editNewAttachments.value.splice(index, 1)
+  if (removed?.url && removed.url.startsWith('blob:')) {
+    URL.revokeObjectURL(removed.url)
+  }
+}
+
+function onEditFilePick(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (!files.length) return
+  input.value = ''
+
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue
+    const url = URL.createObjectURL(file)
+    editNewAttachments.value.push({
+      id: crypto.randomUUID(),
+      kind: 'image',
+      name: file.name,
+      file,
+      url
+    })
+  }
+}
+
+async function saveEdit(): Promise<void> {
+  if (!editingItem.value) return
+  const text = editText.value.trim()
+  if (!text) return
+
+  savingEdit.value = true
+  try {
+    const newAttachmentsPayload = editNewAttachments.value.length
+      ? await toModelAttachments(editNewAttachments.value)
+      : undefined
+    emit(
+      'update',
+      editingItem.value.id,
+      text,
+      newAttachmentsPayload,
+      editKeptAttachmentIds.value
+    )
+    toast.success(t('home.workspace.queue.updated'))
+    cancelEdit()
+  } catch {
+    toast.error(t('home.workspace.queue.updateFailed'))
+  } finally {
+    savingEdit.value = false
+  }
+}
 </script>
 
 <template>
@@ -135,9 +245,15 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
       </button>
     </header>
 
-    <ol v-if="items.length" class="HomeWorkspaceQueue-List">
+    <TransitionGroup
+      v-if="items.length"
+      ref="listRef"
+      tag="ol"
+      name="queue-row"
+      class="HomeWorkspaceQueue-List"
+    >
       <li
-        v-for="(item, index) in visibleItems"
+        v-for="(item, index) in items"
         :key="item.id"
         class="HomeWorkspaceQueue-Row"
         :class="{ 'is-pending': isPending(item) }"
@@ -154,17 +270,32 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
         </span>
         <span class="HomeWorkspaceQueue-Body">
           <span class="HomeWorkspaceQueue-Text">{{ item.text }}</span>
-          <span
-            v-if="item.attachments?.length || item.settings.mode === 'agent'"
-            class="HomeWorkspaceQueue-Meta"
-          >
-            <span v-if="item.settings.mode === 'agent'">{{ t('home.workspace.mode.agent') }}</span>
-            <span v-if="item.attachments?.length">
+          <div v-if="item.attachments?.length" class="HomeWorkspaceQueue-ThumbList">
+            <div
+              v-for="att in item.attachments"
+              :key="att.id"
+              class="HomeWorkspaceQueue-ThumbItem"
+              :title="att.name ?? 'attachment'"
+            >
+              <img v-if="att.dataUrl" :src="att.dataUrl" :alt="att.name ?? 'attachment'" class="HomeWorkspaceQueue-ThumbImg" />
+              <span v-else class="i-ri-image-line" />
+            </div>
+            <span class="HomeWorkspaceQueue-ThumbCount">
               {{ t('home.workspace.queue.attachments', { count: item.attachments.length }) }}
             </span>
-          </span>
+          </div>
         </span>
         <span class="HomeWorkspaceQueue-Actions">
+          <button
+            class="HomeWorkspaceQueue-Btn"
+            type="button"
+            :aria-label="t('home.workspace.queue.edit')"
+            :title="t('home.workspace.queue.edit')"
+            :disabled="pending !== null"
+            @click.stop="openEdit(item)"
+          >
+            <span class="i-ri-edit-line" />
+          </button>
           <button
             class="HomeWorkspaceQueue-Btn"
             type="button"
@@ -201,49 +332,133 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
             class="HomeWorkspaceQueue-Btn is-danger"
             type="button"
             tabindex="-1"
-            :aria-label="t('home.workspace.queue.remove')"
-            :title="t('home.workspace.queue.remove')"
+            :aria-label="t('common.delete')"
+            :title="t('common.delete')"
             :disabled="pending !== null"
-            @click="act(item, 'remove')"
+            @click.stop="act(item, 'remove')"
           >
             <span
               :class="
-                isPending(item, 'remove') ? 'i-ri-loader-4-line is-spinning' : 'i-ri-close-line'
+                isPending(item, 'remove') ? 'i-ri-loader-4-line is-spinning' : 'i-ri-delete-bin-line'
               "
             />
           </button>
         </span>
       </li>
-    </ol>
-
-    <button
-      v-if="items.length > COLLAPSED_ROWS"
-      class="HomeWorkspaceQueue-More"
-      type="button"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
+    </TransitionGroup>
+    <!-- Edit Modal Dialog -->
+    <TxModal
+      :model-value="editingItem !== null"
+      :title="t('home.workspace.queue.editTitle')"
+      :close-label="t('common.close')"
+      width="560px"
+      @update:model-value="cancelEdit"
     >
-      {{
-        expanded
-          ? t('home.workspace.queue.collapse')
-          : t('home.workspace.queue.expand', { count: items.length - COLLAPSED_ROWS })
-      }}
-    </button>
+      <div class="HomeWorkspaceQueue-EditDialog">
+        <textarea
+          v-model="editText"
+          class="HomeWorkspaceQueue-EditText"
+          rows="4"
+          :placeholder="t('home.workspace.queue.editPlaceholder')"
+          autofocus
+        />
+
+        <div class="HomeWorkspaceQueue-EditAttachments">
+          <!-- Existing attachments with remove button -->
+          <div
+            v-for="att in keptAttachments"
+            :key="att.id"
+            class="HomeWorkspaceQueue-EditThumb"
+            :title="att.name"
+          >
+            <img v-if="att.dataUrl" :src="att.dataUrl" :alt="att.name" class="HomeWorkspaceQueue-ThumbImg" />
+            <button
+              class="HomeWorkspaceQueue-EditThumbRemove"
+              type="button"
+              :title="t('home.attachRemove')"
+              @click="removeKeptAttachment(att.id)"
+            >
+              <span class="i-ri-close-line" />
+            </button>
+          </div>
+
+          <!-- Newly added attachments -->
+          <div
+            v-for="(att, idx) in editNewAttachments"
+            :key="att.id"
+            class="HomeWorkspaceQueue-EditThumb"
+            :title="att.name"
+          >
+            <img v-if="att.url" :src="att.url" :alt="att.name" class="HomeWorkspaceQueue-ThumbImg" />
+            <button
+              class="HomeWorkspaceQueue-EditThumbRemove"
+              type="button"
+              :title="t('home.attachRemove')"
+              @click="removeNewAttachment(idx)"
+            >
+              <span class="i-ri-close-line" />
+            </button>
+          </div>
+
+          <!-- Add image button -->
+          <button
+            class="HomeWorkspaceQueue-EditAddBtn"
+            type="button"
+            :title="t('home.attach')"
+            @click="editFileInputRef?.click()"
+          >
+            <span class="i-ri-image-add-line" />
+            <span>{{ t('home.workspace.queue.addImage') }}</span>
+          </button>
+          <input
+            ref="editFileInputRef"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            style="display: none"
+            @change="onEditFilePick"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="HomeWorkspaceQueue-EditFooter">
+          <TxButton variant="flat" type="text" @click="cancelEdit">
+            {{ t('common.cancel') }}
+          </TxButton>
+          <TxButton
+            type="primary"
+            :disabled="!editText.trim() || savingEdit"
+            :loading="savingEdit"
+            @click="saveEdit"
+          >
+            {{ t('common.save') }}
+          </TxButton>
+        </div>
+      </template>
+    </TxModal>
   </section>
 </template>
 
 <style lang="scss" scoped>
 .HomeWorkspaceQueue {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: var(--home-chat-lane-width);
+  gap: 4px;
+  width: calc(var(--home-chat-lane-width) - 48px);
   min-width: 0;
-  padding: 10px 12px;
+  margin: 0 auto -20px auto;
+  padding: 6px 12px 22px 12px;
   border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-bg);
+  border-bottom: none;
+  border-radius: var(--shell-radius-xl) var(--shell-radius-xl) 0 0;
+  background: var(--shell-surface);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04);
   box-sizing: border-box;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   pointer-events: auto;
 
   &.is-held {
@@ -254,21 +469,24 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
 .HomeWorkspaceQueue-Head {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 4px 8px;
   align-items: center;
+  padding: 0 4px;
 }
 
 .HomeWorkspaceQueue-Title {
   display: inline-flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   color: var(--shell-text-primary);
-  font-size: var(--shell-fs-sm);
+  font-size: var(--shell-fs-caption);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .HomeWorkspaceQueue-HeadIcon {
+  font-size: 13px;
   color: var(--shell-text-secondary);
 }
 
@@ -280,8 +498,8 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
   flex: 1;
   min-width: 0;
   color: var(--shell-text-regular);
-  font-size: var(--shell-fs-caption);
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .HomeWorkspaceQueue-Resume {
@@ -289,15 +507,15 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
   flex: none;
   gap: 4px;
   align-items: center;
-  height: 26px;
+  height: 20px;
   margin-left: auto;
-  padding: 0 12px;
+  padding: 0 8px;
   border: 1px solid var(--shell-primary-border);
   border-radius: var(--shell-radius-full);
   background: var(--shell-primary-soft);
   color: var(--shell-primary);
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: 11px;
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -318,25 +536,86 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
 .HomeWorkspaceQueue-List {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  max-height: 168px;
+  gap: 1px;
+  max-height: 84px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-border) transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: var(--shell-border);
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.queue-row-enter-active {
+  transition:
+    opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    padding 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.queue-row-leave-active {
+  transition:
+    opacity 0.2s cubic-bezier(0.4, 0, 1, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 1, 1),
+    max-height 0.2s cubic-bezier(0.4, 0, 1, 1),
+    padding 0.2s cubic-bezier(0.4, 0, 1, 1);
+  overflow: hidden;
+}
+
+.queue-row-enter-from,
+.queue-row-leave-to {
+  opacity: 0;
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  transform: translateY(6px);
+}
+
+.queue-row-enter-to,
+.queue-row-leave-from {
+  opacity: 1;
+  max-height: 52px;
+  transform: translateY(0);
+}
+
+.queue-row-move {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-row-enter-active,
+  .queue-row-leave-active,
+  .queue-row-move {
+    transition: none;
+  }
 }
 
 .HomeWorkspaceQueue-Row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-start;
-  padding: 5px 4px 5px 6px;
+  padding: 2.5px 6px;
   border-radius: var(--shell-radius-sm);
+  background: transparent;
 
-  &:hover,
-  &:focus-within {
-    background: var(--shell-surface);
+  &:hover {
+    background: var(--shell-surface-2);
   }
 
   &:focus-visible {
@@ -351,27 +630,29 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
 
 .HomeWorkspaceQueue-Position {
   flex: none;
-  min-width: 18px;
+  min-width: 14px;
   margin-top: 1px;
   color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  line-height: 1.35;
 }
 
 .HomeWorkspaceQueue-Next {
   display: inline-block;
-  padding: 0 6px;
+  padding: 0 4px;
   border-radius: var(--shell-radius-full);
   background: var(--shell-primary-soft);
   color: var(--shell-primary);
+  font-size: 10px;
 }
 
 .HomeWorkspaceQueue-Body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -379,8 +660,8 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
   display: -webkit-box;
   overflow: hidden;
   color: var(--shell-text-primary);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.5;
+  font-size: var(--shell-fs-caption);
+  line-height: 1.35;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -388,9 +669,9 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
 
 .HomeWorkspaceQueue-Meta {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
+  font-size: 11px;
 }
 
 .HomeWorkspaceQueue-Actions {
@@ -405,7 +686,6 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
   }
 }
 
-/* A pointerless reader still sees the actions: the row's own shortcuts are announced instead. */
 @media (hover: none) {
   .HomeWorkspaceQueue-Actions {
     opacity: 1;
@@ -415,18 +695,18 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
 .HomeWorkspaceQueue-Btn {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
-  border-radius: var(--shell-radius-sm);
+  border-radius: var(--shell-radius-xs, 4px);
   background: transparent;
   color: var(--shell-text-secondary);
-  font-size: 14px;
+  font-size: 12px;
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: var(--shell-surface-2);
+    background: var(--shell-surface);
     color: var(--shell-text-primary);
   }
 
@@ -450,26 +730,136 @@ function onRowKeydown(event: KeyboardEvent, item: WorkspaceQueuedInput): void {
   }
 }
 
-.HomeWorkspaceQueue-More {
-  align-self: flex-start;
-  padding: 2px 6px;
-  border: none;
+.HomeWorkspaceQueue-ThumbList {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.HomeWorkspaceQueue-ThumbItem {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-sm);
-  background: transparent;
+  background: var(--shell-surface-2);
+  overflow: hidden;
+}
+
+.HomeWorkspaceQueue-ThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.HomeWorkspaceQueue-ThumbCount {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+}
+
+.HomeWorkspaceQueue-EditDialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.HomeWorkspaceQueue-EditText {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface-1);
+  color: var(--shell-text-primary);
+  font-family: inherit;
+  font-size: var(--shell-fs-sm);
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+
+  &:focus {
+    border-color: var(--shell-primary);
+    box-shadow: 0 0 0 1px var(--shell-primary);
+  }
+}
+
+.HomeWorkspaceQueue-EditAttachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.HomeWorkspaceQueue-EditThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface-2);
+  overflow: hidden;
+
+  &:hover .HomeWorkspaceQueue-EditThumbRemove {
+    opacity: 1;
+  }
+}
+
+.HomeWorkspaceQueue-EditThumbRemove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+
+  &:hover {
+    background: var(--shell-danger);
+    opacity: 1;
+  }
+}
+
+.HomeWorkspaceQueue-EditAddBtn {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 56px;
+  padding: 0 14px;
+  border: 1px dashed var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
   color: var(--shell-text-secondary);
   font-family: inherit;
   font-size: var(--shell-fs-caption);
   cursor: pointer;
+  transition: all 0.15s;
 
   &:hover {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-primary);
+    border-color: var(--shell-primary);
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .is-spinning {
-    animation: none;
-  }
+.HomeWorkspaceQueue-EditFooter {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 </style>

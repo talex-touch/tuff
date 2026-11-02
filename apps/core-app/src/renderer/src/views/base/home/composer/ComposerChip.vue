@@ -220,7 +220,7 @@ function onClick(event: MouseEvent): void {
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
-  max-width: 220px;
+  max-width: 320px;
   height: 32px;
   margin: 0;
   padding: 0 11px;
@@ -286,13 +286,14 @@ function onClick(event: MouseEvent): void {
   align-items: center;
   gap: 5px;
   min-width: 0;
+  line-height: 18px;
 }
 
 .ComposerChip-Label {
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 18px;
 }
-
 .ComposerChip-Suffix {
   flex: none;
   color: color-mix(in srgb, var(--shell-text-secondary) 50%, var(--shell-text-regular));
