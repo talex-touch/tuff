@@ -317,7 +317,12 @@ const LIMITS = {
   // plus minimal headroom, growth from here fails.
   // 872 -> 872.5 on 2026-10-31: measured 872.3 KiB after the image preview slots, the Mermaid
   // reuse and the terminal font stack landed. Minimal headroom, growth from here fails.
-  fullCssBytes: 872.5 * 1024,
+  // 872.5 -> 897.5 on 2026-11-02 for Miko, whose `miko/style.css` (21,260 B) is a new sheet, and
+  // the sheets its work reached: tool-call-card +2,658 B, code-stream +874 B, chain-of-thought
+  // +461 B, stream-markdown +282 B, edge-fade-mask +19 B, base-anchor -22 B. Measured 918,771 B
+  // against master's 893,239 B, exactly that growth (25,532 B). No rule repeats across sheets.
+  // Minimal headroom, growth from here fails.
+  fullCssBytes: 897.5 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -338,6 +343,13 @@ const LIMITS = {
     // 2026-08-18 and has failed tuffex CI on every commit since — which cost
     // every tuffex change its build signal, this file's own audits included.
     'border-beam/src/styles.js': 80 * 1024,
+    // 171.49 KiB measured 2026-11-02 (175,608 B) for `miko`, one 83 KB single-file component whose
+    // template runs to about 950 lines. Kept with an exception for now; tree-shaking adapts to it
+    // when a consumer uses Miko. Minimal headroom, growth from here fails.
+    'miko/src/TxMiko2.vue.js': 172 * 1024,
+    // 48.03 KiB measured 2026-11-02 (49,189 B; master 49,028 B). The barrel grows by Miko's export,
+    // 161 B. Minimal headroom, growth from here fails.
+    'components.js': 48.5 * 1024,
   },
   emptyStateAliasCssBytes: 128,
 }
@@ -421,7 +433,11 @@ const pageStyleBudgets = [
     // minimal headroom, growth from here fails.
     // 156 -> 174 on 2026-10-31: measured 173.5 KiB after the image preview, Mermaid and terminal
     // font changes landed. Minimal headroom, growth from here fails.
-    limit: 174 * 1024,
+    // 174 -> 174.5 on 2026-11-02: measured 178,382 B (174.2 KiB) in 28 sheets, where master measured
+    // 177,688 B (173.5 KiB) in 27. edge-fade-mask (434 B) joins the page because stream-markdown now
+    // depends on it; stream-markdown grew 282 B and base-anchor shrank 22 B. Minimal headroom, growth
+    // from here fails.
+    limit: 174.5 * 1024,
   },
 ]
 

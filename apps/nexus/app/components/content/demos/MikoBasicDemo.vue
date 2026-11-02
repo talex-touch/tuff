@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MikoState } from '@talex-touch/tuffex'
+import type { MikoState } from '@talex-touch/tuffex/miko'
 import { ref } from 'vue'
 
 const currentState = ref<MikoState>('idle')

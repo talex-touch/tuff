@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MikoState } from '@talex-touch/tuffex'
+import type { MikoState } from '@talex-touch/tuffex/miko'
 
 const states: { state: MikoState, label: string }[] = [
   { state: 'idle', label: '待命 (Idle)' },
