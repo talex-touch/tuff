@@ -32,6 +32,7 @@ export const OMP_CLI_ORIGIN = 'omp-cli'
 
 export const CODEX_CLI_PROVIDER_ID = 'codex-cli'
 export const CODEX_CLI_ORIGIN = 'codex-cli'
+export const CODEX_CLI_PROFILE_ID = 'profile:cli:codex'
 
 export const CLAUDE_CLI_PROVIDER_ID = 'claude-cli'
 export const CLAUDE_CLI_ORIGIN = 'claude-cli'
@@ -844,7 +845,7 @@ export const LOCAL_CLI_PROFILE_SPECS: CliAgentProfileSpec[] = [
     getExecutable: getResolvedClaudeExecutable
   },
   {
-    id: 'profile:cli:codex',
+    id: CODEX_CLI_PROFILE_ID,
     name: 'Codex',
     description: 'Local Codex CLI agent with host tools.',
     providerId: CODEX_CLI_PROVIDER_ID,
@@ -866,6 +867,6 @@ export const LOCAL_CLI_PROFILE_SPECS: CliAgentProfileSpec[] = [
 export const CLI_PROFILE_PROVIDER_MAP: Readonly<Record<string, string>> = Object.freeze({
   'default-pi': PI_CLI_PROVIDER_ID,
   'profile:cli:claude': CLAUDE_CLI_PROVIDER_ID,
-  'profile:cli:codex': CODEX_CLI_PROVIDER_ID,
+  [CODEX_CLI_PROFILE_ID]: CODEX_CLI_PROVIDER_ID,
   'profile:cli:omp': OMP_CLI_PROVIDER_ID
 })

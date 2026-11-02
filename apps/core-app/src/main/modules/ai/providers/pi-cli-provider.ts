@@ -54,6 +54,7 @@ import {
   CLAUDE_CLI_PROVIDER_ID,
   cliReasoningLevel,
   CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
   OMP_CLI_PROVIDER_ID,
@@ -222,6 +223,20 @@ function firstUserPrompt(payload: IntelligenceChatPayload): string {
  * credentials — and the privacy layer already classifies a `local` provider with no `baseUrl` as an
  * on-device destination.
  */
+/**
+ * Only the Codex scheduler runs the Codex binary. A Codex model handed to any other scheduler is
+ * called through the endpoint `~/.codex/config.toml` names, the way the Tuff scheduler reuses a model.
+ */
+function isNonCodexSchedulerRun(
+  config: IntelligenceProviderConfig,
+  options: IntelligenceInvokeOptions
+): boolean {
+  const isCodex =
+    config.id === CODEX_CLI_PROVIDER_ID || config.metadata?.origin === CODEX_CLI_ORIGIN
+  const profileId = options.metadata?.profileId
+  return isCodex && typeof profileId === 'string' && profileId !== CODEX_CLI_PROFILE_ID
+}
+
 export class PiCliProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.LOCAL
 
@@ -245,6 +260,13 @@ export class PiCliProvider extends IntelligenceProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
+    if (isNonCodexSchedulerRun(this.config, options)) {
+      const { resolveCodexConfigProvider } = await import('./codex-config-provider')
+      const direct = resolveCodexConfigProvider()
+      if (!direct) throw new Error('CODEX_CONFIG_PROVIDER_UNAVAILABLE')
+      yield* direct.chatStream(payload, options)
+      return
+    }
     if (!this.localCliEnabled()) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
     const rawSignal = (options as PiCliRuntimeOptions).signal
     if (rawSignal?.aborted) return

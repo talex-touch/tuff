@@ -867,7 +867,8 @@ export class PiAgentRuntimeHost {
           caller: 'ai-cli-orchestrator',
           runId: request.runId,
           sessionId: context.run.sessionId,
-          step: request.step
+          step: request.step,
+          profileId: context.profile.id
         }
       }
 

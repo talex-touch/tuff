@@ -449,7 +449,8 @@ describe('piAgentRuntimeHost protocol boundary', () => {
           caller: 'ai-cli-orchestrator',
           runId: payload.run.id,
           sessionId: payload.run.sessionId,
-          step: 1
+          step: 1,
+          profileId: payload.profile.id
         }
       })
     )

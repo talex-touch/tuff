@@ -161,7 +161,7 @@ const textParts = computed(() => new Map(props.segments.flatMap(segment =>
 </template>
 
 <style scoped>
-.tx-ai-turn { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+.tx-ai-turn { --tx-ai-turn-gap: 10px; display: flex; flex-direction: column; gap: var(--tx-ai-turn-gap); width: 100%; min-width: 0; }
 .tx-ai-turn__face { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 14px; box-sizing: border-box; border-radius: var(--tx-border-radius-large, 12px); box-shadow: inset 0 0 0 1px var(--tx-border-color-light); background: var(--tx-bg-color); }
 .tx-ai-turn__payload { display: inline-flex; align-items: center; align-self: flex-start; gap: 5px; padding: 2px 6px; border: none; border-radius: 4px; background: transparent; color: var(--tx-text-color-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .tx-ai-turn__payload:hover { background: var(--tx-fill-color-light); }

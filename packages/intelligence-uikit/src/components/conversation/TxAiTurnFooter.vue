@@ -14,7 +14,7 @@ const metricMessage = computed(() => ({ meta: props.metrics }))
 const footerLabels = computed<Record<string, string>>(() => ({
   copy: 'Copy', copied: 'Copied', regenerate: 'Regenerate', speak: 'Read aloud',
   speakStop: 'Stop reading', branch: 'Branch from here', model: 'Model',
-  coordinator: 'Coordinator', coordinatorFallback: 'Coordinator', cacheTitle: 'Cached input tokens',
+  coordinator: 'Coordinator', cacheTitle: 'Cached input tokens',
   ...props.labels,
 }))
 </script>
@@ -22,90 +22,92 @@ const footerLabels = computed<Record<string, string>>(() => ({
 <template>
   <div class="tx-ai-turn-footer" :class="{ 'is-resting': resting }" :data-motion="motion">
     <div class="tx-ai-turn-footer-Row">
-      <TxMessageActions
-        class="tx-ai-turn-footer-Actions"
-        :appear="motion !== 'none'"
-        :regenerable="regenerable"
-        :speakable="!!content"
-        :speak-state="speakState"
-        :copy-label="footerLabels.copy"
-        :copied-label="footerLabels.copied"
-        :regenerate-label="footerLabels.regenerate"
-        :speak-label="footerLabels.speak"
-        :stop-speak-label="footerLabels.speakStop"
-        @regenerate="emit('regenerate')"
-        @speak="emit('speak')"
-      >
-        <button v-if="content !== undefined" class="tx-message-actions__btn" type="button" :title="footerLabels.copy" :aria-label="footerLabels.copy" @click="emit('copy', content ?? '')">
-          <span class="i-ri-file-copy-line" aria-hidden="true" />
-        </button>
-        <button
-          v-if="branchable"
-          class="tx-message-actions__btn"
-          type="button"
-          :disabled="branching"
-          :title="footerLabels.branch"
-          :aria-label="footerLabels.branch"
-          @click="emit('branch')"
+      <div class="tx-ai-turn-footer-Bar">
+        <TxMessageActions
+          class="tx-ai-turn-footer-Actions"
+          :appear="motion !== 'none'"
+          :regenerable="regenerable"
+          :speakable="!!content"
+          :speak-state="speakState"
+          :copy-label="footerLabels.copy"
+          :copied-label="footerLabels.copied"
+          :regenerate-label="footerLabels.regenerate"
+          :speak-label="footerLabels.speak"
+          :stop-speak-label="footerLabels.speakStop"
+          @regenerate="emit('regenerate')"
+          @speak="emit('speak')"
         >
-          <span class="i-ri-git-branch-line" aria-hidden="true" />
-        </button>
-      </TxMessageActions>
+          <button v-if="content !== undefined" class="tx-message-actions__btn" type="button" :title="footerLabels.copy" :aria-label="footerLabels.copy" @click="emit('copy', content ?? '')">
+            <span class="i-ri-file-copy-line" aria-hidden="true" />
+          </button>
+          <button
+            v-if="branchable"
+            class="tx-message-actions__btn"
+            type="button"
+            :disabled="branching"
+            :title="footerLabels.branch"
+            :aria-label="footerLabels.branch"
+            @click="emit('branch')"
+          >
+            <span class="i-ri-git-branch-line" aria-hidden="true" />
+          </button>
+        </TxMessageActions>
 
-      <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
-      <div
-        v-if="
-          showMetrics &&
-            (metrics?.latencyMs || metrics?.model || metrics?.totalTokens)
-        "
-        class="tx-ai-turn-footer-Metrics"
-      >
-        <!-- 耗时 (Latency) -->
-        <span
-          v-if="metrics?.latencyMs"
-          class="tx-ai-turn-footer-Tag"
-          :title="metricLatencyTitle(metricMessage, footerLabels)"
+        <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
+        <div
+          v-if="
+            showMetrics &&
+              (metrics?.latencyMs || metrics?.model || metrics?.totalTokens)
+          "
+          class="tx-ai-turn-footer-Metrics"
         >
-          <span class="i-ri-time-line" aria-hidden="true" />
-          <span>{{ formatMetricLatency(metrics.latencyMs) }}</span>
-        </span>
+          <!-- 耗时 (Latency) -->
+          <span
+            v-if="metrics?.latencyMs"
+            class="tx-ai-turn-footer-Tag"
+            :title="metricLatencyTitle(metricMessage, footerLabels)"
+          >
+            <span class="i-ri-time-line" aria-hidden="true" />
+            <span>{{ formatMetricLatency(metrics.latencyMs) }}</span>
+          </span>
 
-        <!-- Tokens 与 速度 (Tokens & Speed) -->
-        <span
-          v-if="metrics?.totalTokens"
-          class="tx-ai-turn-footer-Tag"
-          :title="metricTokensTitle(metricMessage, footerLabels)"
-        >
-          <span class="i-ri-database-2-line" aria-hidden="true" />
-          <span>{{ metrics.totalTokens }} tokens</span>
-          <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} t/s)</span>
-        </span>
+          <!-- Tokens 与 速度 (Tokens & Speed) -->
+          <span
+            v-if="metrics?.totalTokens"
+            class="tx-ai-turn-footer-Tag"
+            :title="metricTokensTitle(metricMessage, footerLabels)"
+          >
+            <span class="i-ri-database-2-line" aria-hidden="true" />
+            <span>{{ metrics.totalTokens }} tokens</span>
+            <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} t/s)</span>
+          </span>
 
-        <!-- 缓存读取 (Cache read) -->
-        <span
-          v-if="metrics?.cacheReadTokens"
-          class="tx-ai-turn-footer-Tag"
-          :title="footerLabels.cacheTitle"
-        >
-          <span class="i-ri-stack-line" aria-hidden="true" />
-          <span>{{ footerLabels.cache ?? `${formatTokenCount(metrics?.cacheReadTokens ?? 0)} cached` }}</span>
-        </span>
+          <!-- 缓存读取 (Cache read) -->
+          <span
+            v-if="metrics?.cacheReadTokens"
+            class="tx-ai-turn-footer-Tag"
+            :title="footerLabels.cacheTitle"
+          >
+            <span class="i-ri-stack-line" aria-hidden="true" />
+            <span>{{ footerLabels.cache ?? `${formatTokenCount(metrics?.cacheReadTokens ?? 0)} cached` }}</span>
+          </span>
 
-        <!-- 模型 (Model) -->
-        <span
-          v-if="metrics?.model"
-          class="tx-ai-turn-footer-Tag"
-          :title="footerLabels.model"
-        >
-          <span class="i-ri-sparkling-line" aria-hidden="true" />
-          <span>{{ metrics.model }}</span>
-        </span>
+          <!-- 模型 (Model) -->
+          <span
+            v-if="metrics?.model"
+            class="tx-ai-turn-footer-Tag"
+            :title="footerLabels.model"
+          >
+            <span class="i-ri-sparkling-line" aria-hidden="true" />
+            <span>{{ metrics.model }}</span>
+          </span>
 
-        <!-- 调度器 (Coordinator) -->
-        <span class="tx-ai-turn-footer-Tag" :title="footerLabels.coordinator">
-          <span class="i-ri-robot-2-line" aria-hidden="true" />
-          <span>{{ metrics?.coordinator || footerLabels.coordinatorFallback }}</span>
-        </span>
+          <!-- 调度器 (Coordinator) -->
+          <span v-if="metrics?.coordinator || footerLabels.coordinatorFallback" class="tx-ai-turn-footer-Tag" :title="footerLabels.coordinator">
+            <span class="i-ri-robot-2-line" aria-hidden="true" />
+            <span>{{ metrics?.coordinator || footerLabels.coordinatorFallback }}</span>
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -120,6 +122,8 @@ const footerLabels = computed<Record<string, string>>(() => ({
   display: grid;
   grid-template-rows: 0fr;
   width: 100%;
+  // The parent's flex gap is cancelled while folded; the open row gives it back as padding.
+  margin-top: calc(-1 * var(--tx-ai-turn-gap, 0px));
   opacity: 0;
   pointer-events: none;
   transition:
@@ -128,25 +132,31 @@ const footerLabels = computed<Record<string, string>>(() => ({
 }
 
 // A turn that just finished stays open for a beat (`is-resting` is what the timer clears);
-// hovering or focusing the message opens it at any time.
+// hovering or focusing the message opens it at any time. Keep the ancestor hover as a plain
+// descendant selector: `:global(…) .x` makes the scoped compiler drop `.x`, so hover never opens it.
 .tx-ai-turn-footer:not(.is-resting),
-:global(.HomePage-Message:hover) .tx-ai-turn-footer,
-:global(.tx-ai-turn:hover) .tx-ai-turn-footer,
+.HomePage-Message:hover .tx-ai-turn-footer,
+.tx-ai-turn:hover .tx-ai-turn-footer,
 .tx-ai-turn-footer:focus-within {
   grid-template-rows: 1fr;
   opacity: 1;
   pointer-events: auto;
 }
 
+// The row is the grid item that folds to 0. Padding on it would stay as the folded height,
+// so the top space sits on the bar inside it.
 .tx-ai-turn-footer-Row {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tx-ai-turn-footer-Bar {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 4px;
+  padding-top: calc(var(--tx-ai-turn-gap, 0px) + 4px);
 }
 
 .tx-ai-turn-footer-Actions {

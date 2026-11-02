@@ -223,7 +223,6 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
     const request: ActivityRequestDetail = {
       prompt: userPrompt ?? '',
       userMessageId: userMessage?.id,
-      coordinator: 'Tuff Coordinator',
       model: message.meta?.model,
       provider: message.meta?.provider,
       reasoningEffort: message.meta?.reasoningRequested,
@@ -273,7 +272,6 @@ export function buildActivityTurns(messages: readonly ConversationMessage[]): Ac
       status: message.status,
       provider: message.meta?.provider,
       model: message.meta?.model,
-      coordinator: 'Tuff Coordinator',
       latencyMs: message.meta?.latencyMs,
       ttftMs,
       tokens,
