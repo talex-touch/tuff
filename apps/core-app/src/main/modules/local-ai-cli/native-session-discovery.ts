@@ -560,6 +560,84 @@ export async function hasPiSessionFileNamedFor(
   return collection.files.length > 0
 }
 
+/**
+ * The file an agent keeps this session in, for any provider Tuff can continue.
+ *
+ * Only the id is taken from the caller — never a path — and the match is made the same way
+ * discovery makes it: a `.jsonl` under that provider's own session root whose name carries the id
+ * and whose header agrees with it. A thread Tuff wrote alone has no such file, which is `null` here
+ * rather than an error.
+ */
+export async function findNativeSessionFile(
+  provider: LocalAiCliProviderId,
+  nativeSessionId: string,
+  projectRoot: string,
+  options: { roots?: NativeSessionDiscoveryRoots; signal?: AbortSignal } = {}
+): Promise<string | null> {
+  if (!/^[A-Za-z0-9-]{1,128}$/u.test(nativeSessionId))
+    throw new Error('LOCAL_AI_CLI_SESSION_INVALID')
+  const canonicalProjectRoot = await canonicalDirectory(projectRoot)
+  if (!canonicalProjectRoot || canonicalProjectRoot !== projectRoot) return null
+  const roots = options.roots ?? resolveNativeSessionDiscoveryRoots()
+  const archive: ProviderArchive =
+    provider === 'pi'
+      ? { provider, root: roots.pi, maxDepth: 1 }
+      : provider === 'oh-my-pi'
+        ? { provider, root: roots['oh-my-pi'], maxDepth: 1 }
+        : provider === 'claude'
+          ? { provider, root: roots.claude, maxDepth: 1 }
+          : { provider, root: roots.codex, maxDepth: MAX_DEPTH }
+  let canonicalRoot: string | null
+  try {
+    canonicalRoot = await canonicalDirectory(archive.root)
+  } catch {
+    return null
+  }
+  if (!canonicalRoot) return null
+  let collection: { files: string[]; incomplete: boolean }
+  try {
+    collection = await collectJsonlFiles(
+      canonicalRoot,
+      archive.maxDepth,
+      options.signal,
+      nativeSessionId
+    )
+  } catch {
+    return null
+  }
+  for (const filePath of collection.files) {
+    const file = await readStableJsonl(filePath, canonicalRoot, options.signal, true)
+    if (!file) continue
+    if (provider === 'claude') {
+      // Claude names the file after the session id, and its records carry the `cwd` it ran in.
+      const fileId = UUID_PATTERN.exec(path.basename(file.filePath))?.[1]
+      if (!fileId || fileId !== nativeSessionId) continue
+      const cwd = file.prefixLines
+        .map(parseJsonLine)
+        .map((record) => (record ? stringValue(record.cwd) : undefined))
+        .find((value) => typeof value === 'string')
+      if (await canonicalCandidateRoot(cwd, canonicalProjectRoot)) return file.filePath
+      continue
+    }
+    if (provider === 'codex') {
+      const meta = file.prefixLines
+        .map(parseJsonLine)
+        .find((record) => record?.type === 'session_meta')
+      const id = meta
+        ? (nestedString(meta, ['payload', 'id']) ?? nestedString(meta, ['payload', 'session_id']))
+        : undefined
+      if (id !== nativeSessionId) continue
+      const cwd = meta ? nestedString(meta, ['payload', 'cwd']) : undefined
+      if (await canonicalCandidateRoot(cwd, canonicalProjectRoot)) return file.filePath
+      continue
+    }
+    const header = file.prefixLines.map(parseJsonLine).find((record) => record?.type === 'session')
+    if (header?.id !== nativeSessionId) continue
+    if (await canonicalCandidateRoot(header.cwd, canonicalProjectRoot)) return file.filePath
+  }
+  return null
+}
+
 export async function scanNativeSessionsForProject(
   projectRoot: string,
   options: {

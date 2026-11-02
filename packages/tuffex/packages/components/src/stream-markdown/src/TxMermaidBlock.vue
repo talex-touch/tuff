@@ -11,7 +11,8 @@ let mermaidIdSeq = 0
 <script setup lang="ts">
 import type { ImagePreviewItem } from '../../image-preview/src/types'
 import { hasDocument } from '@talex-touch/utils/env'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
+import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
 import TxImagePreview from '../../image-preview/src/TxImagePreview.vue'
 import TxCodeBlock from './TxCodeBlock.vue'
 
@@ -37,6 +38,16 @@ const props = withDefaults(
     copyLabel?: string
     /** Shown on the fallback's copy button after a successful copy. @default 'Copied' */
     copiedLabel?: string
+    /** Viewer's save action label. @default 'Download' */
+    downloadLabel?: string
+    /** Said by the viewer when the source could not be copied. @default 'Could not copy' */
+    copyFailedText?: string
+    /**
+     * Tallest the diagram may draw before it scrolls inside its own frame.
+     * A wide, deep chart would otherwise push the whole transcript off screen;
+     * the zoom preview still shows it whole. @default 480
+     */
+    maxHeight?: number
   }>(),
   {
     lang: 'mermaid',
@@ -50,6 +61,9 @@ const props = withDefaults(
     errorText: 'Diagram failed to render — showing source.',
     copyLabel: 'Copy',
     copiedLabel: 'Copied',
+    downloadLabel: 'Download',
+    copyFailedText: 'Could not copy',
+    maxHeight: 480,
   },
 )
 
@@ -59,9 +73,54 @@ const zoomOpen = ref(false)
 const figureRef = ref<HTMLButtonElement | null>(null)
 const svgSize = ref({ width: 800, height: 600 })
 const previewItems = computed<ImagePreviewItem[]>(() => svg.value
-  ? [{ type: 'custom', svg: svg.value, ...svgSize.value }]
+  // The viewer's copy puts the diagram's *source* on the clipboard, which is what a reader
+  // wants to paste into a doc or an editor; saving writes the rendered SVG.
+  ? [{ type: 'custom', svg: svg.value, copyText: props.code, name: 'diagram', ...svgSize.value }]
   : [])
 let renderToken = 0
+
+const maskRef = ref<{ viewport?: HTMLElement | null, refresh?: () => void } | null>(null)
+/**
+ * The capped frame's own scroll position. A diagram redrawn (theme flip, a
+ * settled fence) keeps the reader where they were instead of snapping to the
+ * top; the frame only resets when the diagram itself changes size.
+ */
+const frameScroll = ref(0)
+
+/**
+ * The mask owns the scroll box, so its viewport — not the inner frame — is what
+ * scrolls and what the reading position has to be read from.
+ */
+function onFrameScroll(): void {
+  frameScroll.value = maskRef.value?.viewport?.scrollTop ?? 0
+}
+
+let boundViewport: HTMLElement | null = null
+
+function bindViewport(): void {
+  boundViewport?.removeEventListener('scroll', onFrameScroll)
+  boundViewport = maskRef.value?.viewport ?? null
+  boundViewport?.addEventListener('scroll', onFrameScroll, { passive: true })
+}
+
+onMounted(bindViewport)
+onUpdated(bindViewport)
+onBeforeUnmount(() => {
+  boundViewport?.removeEventListener('scroll', onFrameScroll)
+  boundViewport = null
+})
+
+// The whole diagram is the zoom preview's job; inside the transcript it must not
+// grow past the frame. A redraw after a scroll keeps the same reading position.
+watch(svg, () => {
+  void nextTick(() => {
+    const el = maskRef.value?.viewport
+    if (el && frameScroll.value > 0)
+      el.scrollTop = frameScroll.value
+    maskRef.value?.refresh?.()
+    bindViewport()
+  })
+})
 
 /**
  * Theme rides an init directive in the source instead of `initialize()` so
@@ -144,9 +203,19 @@ onBeforeUnmount(() => {
       type="button"
       class="tx-mermaid-block__figure"
       :aria-label="zoomLabel"
+      :style="{ '--tx-mermaid-max-height': `${maxHeight}px` }"
       @click="openZoom"
     >
-      <div class="tx-mermaid-block__svg" v-html="svg" />
+      <!-- The frame is capped and the mask fades whichever edge can still be
+           scrolled toward: a deep chart reads as scrollable, not as truncated. -->
+      <TxEdgeFadeMask
+        ref="maskRef"
+        class="tx-mermaid-block__scroller"
+        axis="vertical"
+        :size="20"
+      >
+        <div class="tx-mermaid-block__svg" v-html="svg" />
+      </TxEdgeFadeMask>
     </button>
 
     <div v-else-if="failed" class="tx-mermaid-block__fallback">
@@ -174,7 +243,11 @@ onBeforeUnmount(() => {
       :origin="() => figureRef"
       :label="previewLabel"
       :close-label="closeLabel"
-      :actions="['rotate']"
+      :actions="['rotate', 'copy', 'download']"
+      :copy-label="copyLabel"
+      :download-label="downloadLabel"
+      :copied-text="copiedLabel"
+      :copy-failed-text="copyFailedText"
     >
       <template #item="{ item }">
         <div class="tx-mermaid-block__zoomed" :class="theme" v-html="item.svg" />
@@ -201,6 +274,13 @@ onBeforeUnmount(() => {
     }
   }
 
+  // The cap lives on the mask, which owns the scroll box and fades the edge that
+  // can still be scrolled toward; the svg keeps its own size inside it, so a deep
+  // chart is scrolled rather than squashed. The zoom preview still shows it whole.
+  .tx-mermaid-block__scroller {
+    max-height: var(--tx-mermaid-max-height, 480px);
+  }
+
   .tx-mermaid-block__svg {
     display: flex;
     justify-content: center;
@@ -208,6 +288,9 @@ onBeforeUnmount(() => {
     svg {
       max-width: 100%;
       height: auto;
+      // A diagram taller than the frame must keep its aspect ratio and scroll,
+      // not be compressed to fit.
+      flex: none;
     }
   }
 

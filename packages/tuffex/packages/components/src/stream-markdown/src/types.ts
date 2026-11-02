@@ -40,6 +40,14 @@ export interface StreamMarkdownBlockContext {
 /** A component rendering a fenced block; receives `StreamMarkdownBlockContext` as props. */
 export type StreamMarkdownBlockRenderer = Component
 
+/** A settled markup fence the host is asked to show, when inline preview is off. */
+export interface StreamMarkdownCodePreview {
+  lang: string
+  code: string
+  /** Markup for a frame with `sandbox=""` as its `srcdoc`; nothing in it runs. */
+  srcdoc: string
+}
+
 export interface StreamMarkdownProps {
   content: string
   /** Keeps the tail cursor visible and defers tail-fence rendering while true. */
@@ -79,6 +87,12 @@ export interface StreamMarkdownProps {
    */
   codePreviewText?: string
   codeSourceText?: string
+  /**
+   * Renders a settled HTML, SVG or XML fence's preview below its header. Off, the
+   * preview button emits `code-preview` with the markup and the host shows it.
+   * @default true
+   */
+  inlineCodePreview?: boolean
   /** Builds the code preview frame's accessible name. @default (lang) => `${lang} preview` */
   codeFrameLabelFormatter?: (lang: string) => string
   copyCodeText?: string
@@ -87,4 +101,6 @@ export interface StreamMarkdownProps {
   diagramPreviewLabel?: string
   diagramCloseLabel?: string
   diagramErrorText?: string
+  diagramDownloadLabel?: string
+  diagramCopyFailedText?: string
 }

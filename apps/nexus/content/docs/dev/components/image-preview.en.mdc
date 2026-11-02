@@ -151,6 +151,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `open` | `boolean` | `false` | Whether the preview is open; use with `v-model:open`. |
 | `index` | `number` | `0` | The current image; use with `v-model:index`. Clamped to the list. |
 | `images` | `ImagePreviewSource[]` | `[]` | URLs, or objects with a name, a size, and a thumbnail; the preview closes when the list empties. |
+| `items` | `ImagePreviewSource[]` | — | Images or custom content; wins over `images` when given. For custom content with `svg` / `raw` and no `url`, copy and save work on the text: copy yields `copyText` (the markup itself by default) and save writes an `.svg` file; share stays unavailable. |
 | `origin` | `(index: number) => ImagePreviewOrigin \| null \| undefined` | - | Where image `index` sits on the page, asked on opening and again on closing for the image shown then. |
 | `transition` | `'zoom' \| 'fade'` | `'zoom'` | How the preview opens and closes; `zoom` fades instead without an `origin`, with the thumbnail out of view, with an image not ready in time, or with reduced motion. |
 | `maxScale` | `number` | `4` | The largest zoom against the image's own pixels, so `1` is 100%; never below the whole image's fit. |

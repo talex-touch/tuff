@@ -506,9 +506,10 @@ jobs:
       # scraping a 6000-line log.
       # apps/nexus imports @talex-touch/tuffex/utils, whose exports map resolves
       # only into dist/ — without a build those tests fail on module resolution
-      # rather than on anything they actually assert.
+      # rather than on anything they actually assert. core-app's OpenUI primitives import
+      # per-component style.css files, which resolve into dist/ the same way.
       - name: Build tuffex
-        if: ${{ matrix.app == 'nexus' }}
+        if: ${{ matrix.app == 'nexus' || matrix.app == 'core-app' }}
         run: pnpm -C packages/tuffex build
 
       # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only

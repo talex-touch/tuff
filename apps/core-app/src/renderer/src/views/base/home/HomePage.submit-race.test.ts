@@ -57,6 +57,7 @@ vi.mock('@talex-touch/utils/transport', () => ({
   }
 }))
 vi.mock('@talex-touch/utils/renderer', () => ({
+  useAppSdk: () => ({}),
   useIntelligenceSdk: () => ({
     getProviderModelOptions: async () => [],
     text: {
@@ -130,6 +131,7 @@ vi.mock('@talex-touch/tuffex/border-beam', () => ({ TxBorderBeam: Paint }))
 vi.mock('@talex-touch/tuffex/chain-of-thought', () => ({ TxChainOfThought: Paint }))
 vi.mock('@talex-touch/tuffex/choice-card', () => ({ TxChoiceCard: Paint }))
 vi.mock('@talex-touch/tuffex/message-actions', () => ({ TxMessageActions: Paint }))
+vi.mock('@talex-touch/tuffex/gradual-blur', () => ({ TxGradualBlur: Paint }))
 vi.mock('@talex-touch/tuffex/modal', () => ({ TxModal: Paint }))
 vi.mock('@talex-touch/tuffex/skeleton', async () => {
   // Mock factories run before static imports; this paint-only ref must come from the active Vue module.
@@ -146,9 +148,6 @@ vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
 vi.mock('@talex-touch/tuffex/tool-call-card', () => ({ TxToolCallCard: Paint }))
 vi.mock('@talex-touch/tuffex/tool-confirmation', () => ({ TxToolConfirmation: Paint }))
 vi.mock('~/components/icon/AppLogo.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolChartCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolWidgetCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolFormCard.vue', () => ({ default: Paint }))
 vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
@@ -405,9 +404,6 @@ afterAll(() => {
     '@talex-touch/tuffex/tool-call-card',
     '@talex-touch/tuffex/tool-confirmation',
     '~/components/icon/AppLogo.vue',
-    '~/components/intelligence/ToolChartCard.vue',
-    '~/components/intelligence/ToolWidgetCard.vue',
-    '~/components/intelligence/ToolFormCard.vue',
     './composer/ComposerToolbar.vue',
     './HomeTopBar.vue',
     './HomeSidePanel.vue',
@@ -469,7 +465,7 @@ function expectTarget(view: VueWrapper, target: string, text: string, attachment
     view.findAll('.HomePage-Message.user .HomePage-UserBubble').map((bubble) => bubble.text())
   ).toEqual([`${target} saved question`])
   expect(draft(view)).toBe(text)
-  expect(view.get('.HomePage-ComposerTray').text()).toBe(attachment)
+  expect(view.get('.TuffAIComposer-Tray').text()).toBe(attachment)
 }
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: translate }) }))
@@ -484,9 +480,11 @@ describe('HomePage failed conversation report', () => {
     )
 
     const report = view.get('[data-testid="home-error-report"]')
-    const card = view.get('.HomePage-Error')
+    const card = view.get('.tx-ai-error-block')
     expect(card.attributes('role')).toBe('alert')
-    expect(card.get('.HomePage-ErrorTitle').text()).toBe(catalogText(enUS, 'home.error.generic'))
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'home.error.generic')
+    )
     expect(report.text()).toContain('PROVIDER_TIMEOUT')
     expect(report.text()).toContain(detail)
 
@@ -586,7 +584,7 @@ describe('HomePage submit owns the view in which it was pressed', () => {
     await flushPromises()
     expect(router.currentRoute.value.params.id).toBe('child')
     expect(draft(view)).toBe('')
-    expect(view.find('.HomePage-ComposerTray').exists()).toBe(false)
+    expect(view.find('.TuffAIComposer-Tray').exists()).toBe(false)
     expect(
       view.findAll('.HomePage-Message.user .HomePage-UserBubble').map((bubble) => bubble.text())
     ).toEqual(['child saved question'])
@@ -623,7 +621,7 @@ describe('HomePage submit owns the view in which it was pressed', () => {
       await flushPromises()
       expect(router.currentRoute.value.path).toBe(path)
       expect(draft(view)).toBe('original question')
-      expect(view.get('.HomePage-ComposerTray').text()).toBe('original.txt')
+      expect(view.get('.TuffAIComposer-Tray').text()).toBe('original.txt')
       await send(view, 'original question')
       const retried = main.pending[1]!.request
       expect(retried.text).toBe('original question')

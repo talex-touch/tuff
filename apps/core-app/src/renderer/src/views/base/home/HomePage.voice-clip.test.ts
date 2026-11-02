@@ -56,6 +56,7 @@ vi.mock('@talex-touch/utils/transport', () => ({
   }
 }))
 vi.mock('@talex-touch/utils/renderer', () => ({
+  useAppSdk: () => ({}),
   useIntelligenceSdk: () => ({
     getProviderModelOptions: async () => [],
     text: {
@@ -131,6 +132,7 @@ vi.mock('@talex-touch/tuffex/border-beam', () => ({ TxBorderBeam: Paint }))
 vi.mock('@talex-touch/tuffex/chain-of-thought', () => ({ TxChainOfThought: Paint }))
 vi.mock('@talex-touch/tuffex/choice-card', () => ({ TxChoiceCard: Paint }))
 vi.mock('@talex-touch/tuffex/message-actions', () => ({ TxMessageActions: Paint }))
+vi.mock('@talex-touch/tuffex/gradual-blur', () => ({ TxGradualBlur: Paint }))
 vi.mock('@talex-touch/tuffex/modal', () => ({ TxModal: Paint }))
 vi.mock('@talex-touch/tuffex/skeleton', async () => {
   const { ref } = await import('vue')
@@ -146,9 +148,6 @@ vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
 vi.mock('@talex-touch/tuffex/tool-call-card', () => ({ TxToolCallCard: Paint }))
 vi.mock('@talex-touch/tuffex/tool-confirmation', () => ({ TxToolConfirmation: Paint }))
 vi.mock('~/components/icon/AppLogo.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolChartCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolWidgetCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolFormCard.vue', () => ({ default: Paint }))
 vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))

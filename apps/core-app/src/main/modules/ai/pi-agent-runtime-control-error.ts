@@ -126,6 +126,27 @@ export function isRunUsageLimitedError(error: unknown): error is Error {
   return error instanceof PiRunUsageLimitedError
 }
 
+/**
+ * A run the worker reported as failed, carrying why. Not a control error: nothing is to be
+ * approved, cancelled or resumed. `detail` is already redacted (`run-failure-detail.ts`) and is for
+ * the conversation that started the run only - it is never written to the run record or its events.
+ */
+class PiRunFailedError extends Error {
+  constructor(readonly detail: string) {
+    super('Pi runtime worker reported failure')
+    this.name = 'PiRunFailedError'
+  }
+}
+
+export function createRunFailedError(detail: string): Error {
+  return new PiRunFailedError(detail)
+}
+
+/** The redacted reason a run failed, if the error carries one. */
+export function readRunFailureDetail(error: unknown): string | undefined {
+  return error instanceof PiRunFailedError && error.detail ? error.detail : undefined
+}
+
 export function parseApprovalRequirement(message: string): PiApprovalRequirement | undefined {
   if (!message.startsWith(APPROVAL_REQUIRED_PREFIX)) return undefined
   const raw = message.slice(APPROVAL_REQUIRED_PREFIX.length).trim()

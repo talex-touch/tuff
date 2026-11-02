@@ -1,8 +1,10 @@
-<script lang="ts" name="ToolChartCard" setup>
+<script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { TxFlipOverlay } from '@talex-touch/tuffex/flip-overlay'
+import type { TxAiToolChartSpec } from '../../types'
+
+defineOptions({ name: 'TxAiToolChart' })
 
 /**
  * Renders a validated chart spec produced by the `tuff_render_chart` tool.
@@ -10,20 +12,11 @@ import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
  * The spec is declarative and was checked in the main process, so nothing the
  * model wrote is executed here — this maps fixed fields onto ECharts options.
  */
-export interface ToolChartSpec {
-  type: string
-  title?: string
-  labels: string[]
-  series: Array<{ name?: string; values: number[] }>
-  xLabel?: string
-  yLabel?: string
-  stacked?: boolean
-  showValues?: boolean
-}
+
 
 const props = withDefaults(
   defineProps<{
-    spec: ToolChartSpec
+    spec: TxAiToolChartSpec
     /**
      * Entry animation. The transcript virtualizes rows, so a chart scrolled
      * away and back REMOUNTS — replaying the draw-in every time read as the
@@ -31,11 +24,14 @@ const props = withDefaults(
      * render; remounts draw the settled picture in one frame.
      */
     animate?: boolean
+    motion?: "none" | "fade"
+    labels?: Record<string, string>
   }>(),
-  { animate: false }
+  { animate: false, motion: 'fade', labels: () => ({}) }
 )
 
-const { t } = useI18n()
+const chartLabels = computed(() => ({ line: 'Line', bar: 'Bar', area: 'Area', edit: 'Edit data', done: 'Done', label: 'Label', remove: 'Remove row', addPlaceholder: 'New label', add: 'Add row', failed: 'Unable to render chart', close: 'Close', ...props.labels }))
+const editButton = ref<HTMLElement | null>(null)
 
 const hostRef = ref<HTMLElement | null>(null)
 // `shallowRef`: an ECharts instance is a large mutable object and making it
@@ -46,6 +42,7 @@ const chart = shallowRef<{
   dispose: () => void
 } | null>(null)
 const failed = ref(false)
+let disposed = false
 let observer: ResizeObserver | null = null
 
 // ============================================================================
@@ -119,7 +116,7 @@ function setLabel(rowIndex: number, raw: string): void {
 }
 
 /** What actually renders: draft over spec, minus hidden series, view applied. */
-const effectiveSpec = computed<ToolChartSpec>(() => {
+const effectiveSpec = computed<TxAiToolChartSpec>(() => {
   const base = draft.value ?? props.spec
   return {
     ...props.spec,
@@ -141,7 +138,7 @@ interface ChartInk {
 }
 
 function buildOption(
-  spec: ToolChartSpec,
+  spec: TxAiToolChartSpec,
   ink: ChartInk,
   animate: boolean
 ): Record<string, unknown> {
@@ -320,10 +317,11 @@ async function render(reinit = false): Promise<void> {
     // Imported on demand: charts are rare in a conversation and echarts is
     // heavy enough that the home surface should not pay for it up front.
     const echarts = await import('echarts')
+    if (disposed) return
     const option = buildOption(
       effectiveSpec.value,
       readInk(host),
-      props.animate || interacted.value
+      props.motion !== 'none' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && (props.animate || interacted.value)
     )
     if (chart.value && !reinit) {
       // In-place update: filtering, edits and view switches morph the marks.
@@ -364,6 +362,7 @@ onMounted(() => {
 watch(effectiveSpec, () => void render())
 
 onBeforeUnmount(() => {
+  disposed = true
   observer?.disconnect()
   observer = null
   themeObserver?.disconnect()
@@ -374,144 +373,147 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ToolChartCard">
-    <div v-if="!failed" class="ToolChartCard-Toolbar">
-      <div class="ToolChartCard-Chips">
+  <div class="tx-ai-tool-chart">
+    <div v-if="!failed" class="tx-ai-tool-chart-Toolbar">
+      <div class="tx-ai-tool-chart-Chips">
         <button
           v-for="(entry, index) in tableSeries"
           :key="index"
-          class="ToolChartCard-Chip"
+          class="tx-ai-tool-chart-Chip"
           :class="{ 'is-off': hiddenSeries.has(index) }"
           type="button"
           :aria-pressed="!hiddenSeries.has(index)"
           @click="toggleSeries(index)"
         >
           <span
-            class="ToolChartCard-ChipDot"
+            class="tx-ai-tool-chart-ChipDot"
             :style="{ background: SERIES_COLORS[index % SERIES_COLORS.length] }"
           />
           <span>{{ entry.name || `#${index + 1}` }}</span>
         </button>
       </div>
 
-      <div class="ToolChartCard-Tools">
-        <div v-if="isCartesian" class="ToolChartCard-Views" role="group">
+      <div class="tx-ai-tool-chart-Tools">
+        <div v-if="isCartesian" class="tx-ai-tool-chart-Views" role="group">
           <button
             v-for="option in VIEW_OPTIONS"
             :key="option"
-            class="ToolChartCard-View"
+            class="tx-ai-tool-chart-View"
             :class="{ 'is-active': (view ?? spec.type) === option }"
             type="button"
             @click="view = option === spec.type ? null : option"
           >
-            {{ t(`home.chartView.${option}`) }}
+            {{ chartLabels[option] }}
           </button>
         </div>
-        <FlipDialog
-          v-model="editing"
-          :header-title="t('home.chartEdit')"
-          :header-desc="spec.title"
-          size="md"
-          max-height="min(72dvh, 640px)"
+        <button
+          ref="editButton"
+          class="tx-ai-tool-chart-Edit"
+          :class="{ 'is-active': editing }"
+          type="button"
+          aria-haspopup="dialog"
+          :aria-expanded="editing"
+          @click="editing = true"
         >
-          <template #reference>
-            <button
-              class="ToolChartCard-Edit"
-              :class="{ 'is-active': editing }"
-              type="button"
-              aria-haspopup="dialog"
-              :aria-expanded="editing"
-            >
-              <span class="i-ri-table-line" />
-              <span>{{ t('home.chartEdit') }}</span>
-            </button>
-          </template>
+          <span class="i-ri-table-line" />
+          <span>{{ chartLabels.edit }}</span>
+        </button>
+        <Teleport to="body">
+          <TxFlipOverlay
+            v-model="editing"
+            :source="editButton"
+            :header-title="chartLabels.edit"
+            :header-desc="spec.title"
+            :close-aria-label="chartLabels.close"
+            :duration="motion === 'none' ? 0 : undefined"
+            :card-style="{ width: 'min(760px, calc(100vw - 32px))', maxHeight: 'min(72dvh, 640px)' }"
+          >
+            <template #header-actions="{ close }">
+              <TxButton variant="flat" size="sm" @click="close">
+                {{ chartLabels.done }}
+              </TxButton>
+            </template>
 
-          <template #header-actions="{ close }">
-            <TxButton variant="flat" size="sm" @click="close">
-              {{ t('home.chartDone') }}
-            </TxButton>
-          </template>
+            <template #default>
+              <div class="tx-ai-tool-chart-Editor">
+                <table class="tx-ai-tool-chart-Table">
+                  <thead>
+                    <tr>
+                      <th>{{ chartLabels.label }}</th>
+                      <th v-for="(entry, index) in tableSeries" :key="index">
+                        {{ entry.name || `#${index + 1}` }}
+                      </th>
+                      <th aria-hidden="true" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(label, rowIndex) in tableLabels" :key="rowIndex">
+                      <td>
+                        <input
+                          class="tx-ai-tool-chart-Input"
+                          :value="label"
+                          @change="setLabel(rowIndex, ($event.target as HTMLInputElement).value)"
+                        >
+                      </td>
+                      <td v-for="(entry, seriesIndex) in tableSeries" :key="seriesIndex">
+                        <input
+                          class="tx-ai-tool-chart-Input is-number"
+                          type="number"
+                          :value="entry.values[rowIndex] ?? 0"
+                          @change="
+                            setCell(seriesIndex, rowIndex, ($event.target as HTMLInputElement).value)
+                          "
+                        >
+                      </td>
+                      <td>
+                        <button
+                          class="tx-ai-tool-chart-RowBtn"
+                          type="button"
+                          :aria-label="chartLabels.remove"
+                          @click="removeRow(rowIndex)"
+                        >
+                          <span class="i-ri-delete-bin-line" />
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
 
-          <template #default>
-            <div class="ToolChartCard-Editor">
-              <table class="ToolChartCard-Table">
-                <thead>
-                  <tr>
-                    <th>{{ t('home.chartLabel') }}</th>
-                    <th v-for="(entry, index) in tableSeries" :key="index">
-                      {{ entry.name || `#${index + 1}` }}
-                    </th>
-                    <th aria-hidden="true" />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(label, rowIndex) in tableLabels" :key="rowIndex">
-                    <td>
-                      <input
-                        class="ToolChartCard-Input"
-                        :value="label"
-                        @change="setLabel(rowIndex, ($event.target as HTMLInputElement).value)"
-                      />
-                    </td>
-                    <td v-for="(entry, seriesIndex) in tableSeries" :key="seriesIndex">
-                      <input
-                        class="ToolChartCard-Input is-number"
-                        type="number"
-                        :value="entry.values[rowIndex] ?? 0"
-                        @change="
-                          setCell(seriesIndex, rowIndex, ($event.target as HTMLInputElement).value)
-                        "
-                      />
-                    </td>
-                    <td>
-                      <button
-                        class="ToolChartCard-RowBtn"
-                        type="button"
-                        :aria-label="t('home.chartRemove')"
-                        @click="removeRow(rowIndex)"
-                      >
-                        <span class="i-ri-delete-bin-line" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <form class="ToolChartCard-AddRow" @submit.prevent="addRow">
-                <input
-                  v-model="newLabel"
-                  class="ToolChartCard-Input"
-                  :placeholder="t('home.chartAddPlaceholder')"
-                />
-                <button class="ToolChartCard-AddBtn" type="submit" :disabled="!newLabel.trim()">
-                  <span class="i-ri-add-line" />
-                  <span>{{ t('home.chartAdd') }}</span>
-                </button>
-              </form>
-            </div>
-          </template>
-        </FlipDialog>
+                <form class="tx-ai-tool-chart-AddRow" @submit.prevent="addRow">
+                  <input
+                    v-model="newLabel"
+                    class="tx-ai-tool-chart-Input"
+                    :placeholder="chartLabels.addPlaceholder"
+                  >
+                  <button class="tx-ai-tool-chart-AddBtn" type="submit" :disabled="!newLabel.trim()">
+                    <span class="i-ri-add-line" />
+                    <span>{{ chartLabels.add }}</span>
+                  </button>
+                </form>
+              </div>
+            </template>
+          </TxFlipOverlay>
+        </Teleport>
       </div>
     </div>
 
-    <div v-show="!failed" ref="hostRef" class="ToolChartCard-Canvas" />
+    <div v-show="!failed" ref="hostRef" class="tx-ai-tool-chart-Canvas" />
 
-    <p v-if="failed" class="ToolChartCard-Failed" role="alert">
-      {{ $t('home.chartFailed') }}
+    <p v-if="failed" class="tx-ai-tool-chart-Failed" role="alert">
+      {{ chartLabels.failed }}
     </p>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.ToolChartCard {
+.tx-ai-tool-chart {
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
 }
 
-.ToolChartCard-Toolbar {
+.tx-ai-tool-chart-Toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -519,123 +521,123 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 
-.ToolChartCard-Chips {
+.tx-ai-tool-chart-Chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.ToolChartCard-Chip {
+.tx-ai-tool-chart-Chip {
   display: inline-flex;
   gap: 6px;
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-full);
+  border: 1px solid var(--shell-border, var(--tx-border-color-light));
+  border-radius: var(--shell-radius-full, 999px);
   background: transparent;
-  color: var(--shell-text-secondary);
+  color: var(--shell-text-secondary, var(--tx-text-color-regular));
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
   cursor: pointer;
   transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    border-color: var(--shell-border-strong);
+    border-color: var(--shell-border-strong, var(--tx-border-color));
   }
 
   &.is-off {
     opacity: 0.45;
 
-    .ToolChartCard-ChipDot {
-      background: var(--shell-text-muted) !important;
+    .tx-ai-tool-chart-ChipDot {
+      background: var(--shell-text-muted, var(--tx-text-color-secondary)) !important;
     }
   }
 }
 
-.ToolChartCard-ChipDot {
+.tx-ai-tool-chart-ChipDot {
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 999px;
 }
 
-.ToolChartCard-Tools {
+.tx-ai-tool-chart-Tools {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.ToolChartCard-Views {
+.tx-ai-tool-chart-Views {
   display: inline-flex;
   padding: 2px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-full);
+  border: 1px solid var(--shell-border, var(--tx-border-color-light));
+  border-radius: var(--shell-radius-full, 999px);
 }
 
-.ToolChartCard-View {
+.tx-ai-tool-chart-View {
   height: 20px;
   padding: 0 9px;
   border: none;
-  border-radius: var(--shell-radius-full);
+  border-radius: var(--shell-radius-full, 999px);
   background: transparent;
-  color: var(--shell-text-muted);
+  color: var(--shell-text-muted, var(--tx-text-color-secondary));
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
   cursor: pointer;
 
   &.is-active {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-primary);
+    background: var(--shell-surface-2, var(--tx-fill-color-light));
+    color: var(--shell-text-primary, var(--tx-text-color-primary));
   }
 }
 
-.ToolChartCard-Edit {
+.tx-ai-tool-chart-Edit {
   display: inline-flex;
   gap: 5px;
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-full);
+  border: 1px solid var(--shell-border, var(--tx-border-color-light));
+  border-radius: var(--shell-radius-full, 999px);
   background: transparent;
-  color: var(--shell-text-secondary);
+  color: var(--shell-text-secondary, var(--tx-text-color-regular));
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
   cursor: pointer;
 
   &:hover {
-    border-color: var(--shell-border-strong);
+    border-color: var(--shell-border-strong, var(--tx-border-color));
   }
 
   &.is-active {
-    border-color: var(--shell-primary-border);
-    background: var(--shell-primary-soft);
-    color: var(--shell-primary);
+    border-color: var(--shell-primary-border, var(--tx-color-primary-light-5));
+    background: var(--shell-primary-soft, var(--tx-color-primary-light-9));
+    color: var(--shell-primary, var(--tx-color-primary));
   }
 }
 
-.ToolChartCard-Canvas {
+.tx-ai-tool-chart-Canvas {
   width: 100%;
   height: 260px;
 }
 
 // Lives in the flip dialog body, which carries no padding of its own.
-.ToolChartCard-Editor {
+.tx-ai-tool-chart-Editor {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 2px 16px 16px;
 }
 
-.ToolChartCard-Table {
+.tx-ai-tool-chart-Table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
 
   th {
     padding: 2px 6px;
-    color: var(--shell-text-muted);
+    color: var(--shell-text-muted, var(--tx-text-color-secondary));
     font-weight: 500;
     text-align: left;
   }
@@ -645,22 +647,22 @@ onBeforeUnmount(() => {
   }
 }
 
-.ToolChartCard-Input {
+.tx-ai-tool-chart-Input {
   width: 100%;
   min-width: 64px;
   height: 26px;
   padding: 0 8px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-sm);
-  background: var(--shell-bg);
-  color: var(--shell-text-primary);
+  border: 1px solid var(--shell-border, var(--tx-border-color-light));
+  border-radius: var(--shell-radius-sm, 4px);
+  background: var(--shell-bg, var(--tx-bg-color));
+  color: var(--shell-text-primary, var(--tx-text-color-primary));
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
   outline: none;
   box-sizing: border-box;
 
   &:focus {
-    border-color: var(--shell-primary);
+    border-color: var(--shell-primary, var(--tx-color-primary));
   }
 
   &.is-number {
@@ -668,45 +670,45 @@ onBeforeUnmount(() => {
   }
 }
 
-.ToolChartCard-RowBtn {
+.tx-ai-tool-chart-RowBtn {
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: var(--shell-radius-sm);
+  border-radius: var(--shell-radius-sm, 4px);
   background: transparent;
-  color: var(--shell-text-muted);
+  color: var(--shell-text-muted, var(--tx-text-color-secondary));
   cursor: pointer;
 
   &:hover {
-    background: var(--shell-danger-soft);
-    color: var(--shell-danger);
+    background: var(--shell-danger-soft, var(--tx-color-danger-light-9));
+    color: var(--shell-danger, var(--tx-color-danger));
   }
 }
 
-.ToolChartCard-AddRow {
+.tx-ai-tool-chart-AddRow {
   display: flex;
   gap: 6px;
   align-items: center;
 
-  .ToolChartCard-Input {
+  .tx-ai-tool-chart-Input {
     max-width: 220px;
   }
 }
 
-.ToolChartCard-AddBtn {
+.tx-ai-tool-chart-AddBtn {
   display: inline-flex;
   gap: 4px;
   align-items: center;
   height: 26px;
   padding: 0 10px;
-  border: 1px solid var(--shell-border-strong);
-  border-radius: var(--shell-radius-full);
+  border: 1px solid var(--shell-border-strong, var(--tx-border-color));
+  border-radius: var(--shell-radius-full, 999px);
   background: transparent;
   color: var(--shell-text-regular);
   font-family: inherit;
-  font-size: var(--shell-fs-caption);
+  font-size: var(--shell-fs-caption, 12px);
   cursor: pointer;
 
   &:disabled {
@@ -715,13 +717,13 @@ onBeforeUnmount(() => {
   }
 
   &:hover:not(:disabled) {
-    background: var(--shell-surface);
+    background: var(--shell-surface, var(--tx-bg-color));
   }
 }
 
-.ToolChartCard-Failed {
+.tx-ai-tool-chart-Failed {
   margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
+  color: var(--shell-text-muted, var(--tx-text-color-secondary));
+  font-size: var(--shell-fs-sm, 13px);
 }
 </style>

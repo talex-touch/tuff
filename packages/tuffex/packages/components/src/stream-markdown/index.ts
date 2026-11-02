@@ -11,6 +11,7 @@ import type {
   StreamBlock,
   StreamMarkdownBlockContext,
   StreamMarkdownBlockRenderer,
+  StreamMarkdownCodePreview,
   StreamMarkdownProps,
 } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
@@ -44,6 +45,7 @@ export type {
   StreamBlock,
   StreamMarkdownBlockContext,
   StreamMarkdownBlockRenderer,
+  StreamMarkdownCodePreview,
   StreamMarkdownProps,
 }
 export type TxStreamMarkdownInstance = InstanceType<typeof TxStreamMarkdown>

@@ -90,6 +90,7 @@ vi.mock('../ai/skill-local-sources', () => ({
   listEnabledLocalSkills: vi.fn().mockResolvedValue([])
 }))
 vi.mock('../ai/tool-error-projection', () => ({
+  describeToolFailure: vi.fn(() => 'detail=stub'),
   formatStableToolError: vi.fn((e: unknown) => String(e)),
   projectToolError: vi.fn()
 }))

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import type { AiChainStep } from '../../ai-elements/src/types'
-import DOMPurify from 'dompurify'
-import { Marked } from 'marked'
-import { computed, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import TxThinkingOrb from '../../thinking-orb/src/TxThinkingOrb.vue'
+import TxThinkingBody from './TxThinkingBody.vue'
 
 defineOptions({ name: 'TxChainOfThought' })
 
@@ -22,15 +21,27 @@ const props = withDefaults(
      * falls back to the internal override for standalone use.
      */
     userOpen?: boolean
+    /**
+     * How long (ms) to hold the trail open after active thinking settles before
+     * automatically collapsing. Allows the reader visual continuity to read the thought.
+     * @default 2000
+     */
+    collapseDelayMs?: number
+    /**
+     * Whether to show step bullets (spinner/checkmark markers).
+     * Defaults to true when there are multiple steps, false for single-step thoughts.
+     */
+    bullets?: boolean
   }>(),
   {
     streaming: false,
     defaultOpen: true,
     label: 'Chain of thought',
     userOpen: undefined,
+    collapseDelayMs: 2000,
+    bullets: undefined,
   },
 )
-
 const emit = defineEmits<{
   toggle: [open: boolean]
 }>()
@@ -41,41 +52,72 @@ const hasActive = computed(() => props.steps.some(step => step.status === 'activ
 
 /**
  * Open follows the thinking: while a step is live the trail holds itself
- * open, and once the last live step settles it folds away on its own. A
- * click overrides the automation from then on — the reader's choice wins.
+ * open. Once the last live step settles, it stays open for `collapseDelayMs`
+ * so the reader can see the conclusion, and then folds away automatically.
+ * A click overrides the automation from then on — the reader's choice wins.
  */
 const userOverride = ref<boolean | null>(null)
+const settlingGrace = ref(false)
+let collapseTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearCollapseTimer(): void {
+  if (collapseTimer) {
+    clearTimeout(collapseTimer)
+    collapseTimer = undefined
+  }
+}
+
+watch(
+  hasActive,
+  (active, prev) => {
+    if (active) {
+      clearCollapseTimer()
+      settlingGrace.value = false
+    } else if (prev && props.collapseDelayMs && props.collapseDelayMs > 0) {
+      settlingGrace.value = true
+      clearCollapseTimer()
+      collapseTimer = setTimeout(() => {
+        settlingGrace.value = false
+        collapseTimer = undefined
+      }, props.collapseDelayMs)
+    }
+  },
+  { flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  clearCollapseTimer()
+})
+
+const autoOpen = computed(() => {
+  if (props.streaming) {
+    return hasActive.value || settlingGrace.value
+  }
+  return settlingGrace.value ? true : props.defaultOpen
+})
 
 const open = computed(
   () =>
     props.userOpen
     ?? userOverride.value
-    ?? (props.streaming ? hasActive.value : props.defaultOpen),
+    ?? autoOpen.value,
 )
 
 function toggle(): void {
   const next = !open.value
+  clearCollapseTimer()
+  settlingGrace.value = false
   userOverride.value = next
   emit('toggle', next)
 }
-
-// Per-component parser, mirroring TxStreamMarkdown's reasoning: a shared
-// mutable `marked` singleton would leak configuration across consumers.
-const thinkingMarked = new Marked({ gfm: true, breaks: true })
-
-/** Reasoning text is model output — sanitized like any other markdown. */
-function renderThinking(body: string): string {
-  // `async: false` guarantees a string; marked's overloads just don't narrow.
-  return DOMPurify.sanitize(thinkingMarked.parse(body, { async: false }) as string)
-}
-
 /** `12.3s` under ten seconds, whole seconds above — locale-neutral units. */
 function formatStepDuration(ms: number): string {
   const seconds = ms / 1000
   return seconds >= 10 ? `${Math.round(seconds)}s` : `${Math.max(0.1, seconds).toFixed(1)}s`
 }
 
-// The active step's body follows its own tail while text streams in.
+// A live tool step's output follows its own tail; a thinking step's body does it itself, as the
+// text is released (`TxThinkingBody`), so jumping it to the end on arrival would undo the pacing.
 const activeBodyRef = ref<HTMLElement | null>(null)
 
 /**
@@ -95,6 +137,67 @@ watch(
       el.scrollTop = el.scrollHeight
   },
   { flush: 'post' },
+)
+
+// ---------------------------------------------------------------------------
+// Live elapsed time
+// ---------------------------------------------------------------------------
+
+/**
+ * A thought that has been running for ten seconds looks identical to one that
+ * just started: the shimmer says "live", not "how long". The header carries the
+ * elapsed time next to the chevron while a step is active, so the wait is
+ * legible without opening the trail. It stops with the last active step; a
+ * settled trail falls back to each step's own duration suffix.
+ */
+const elapsedMs = ref(0)
+let elapsedTimer: ReturnType<typeof setInterval> | undefined
+let startedAt = 0
+
+function stopElapsed(): void {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = undefined
+  }
+}
+
+function startElapsed(): void {
+  stopElapsed()
+  startedAt = performance.now() - elapsedMs.value
+  elapsedTimer = setInterval(() => {
+    elapsedMs.value = performance.now() - startedAt
+  }, 100)
+}
+
+watch(
+  hasActive,
+  (active) => {
+    if (active) startElapsed()
+    else stopElapsed()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(stopElapsed)
+
+/** `0.0s` → `12.3s` → `1m02s`, matching the step durations under the trail. */
+const elapsedLabel = computed(() => {
+  const seconds = elapsedMs.value / 1000
+  if (seconds < 10) return `${seconds.toFixed(1)}s`
+  const whole = Math.round(seconds)
+  return whole < 60 ? `${whole}s` : `${Math.floor(whole / 60)}m${String(whole % 60).padStart(2, '0')}s`
+})
+
+/**
+ * A single step whose title is the header's own label would otherwise read twice:
+ * once as the header, once as the step row under it. The header already says it.
+ */
+const showStepTitles = computed(
+  () => props.steps.length > 1 || props.steps.some(step => step.title !== props.label),
+)
+
+const showBullets = computed(
+  () => props.bullets ?? props.steps.length > 1,
 )
 </script>
 
@@ -118,6 +221,10 @@ watch(
       <span class="tx-chain-of-thought__label">{{ label }}</span>
       <!-- A count of one is noise: the label already names the single step. -->
       <span v-if="steps.length > 1" class="tx-chain-of-thought__count">{{ steps.length }}</span>
+      <!-- How long the live thought has been running; the chevron follows it. -->
+      <span v-if="streaming && hasActive" class="tx-chain-of-thought__elapsed">{{
+        elapsedLabel
+      }}</span>
       <span class="tx-chain-of-thought__chevron" :class="{ 'is-open': open }" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m6 9 6 6 6-6" />
@@ -131,10 +238,11 @@ watch(
           v-for="step in steps"
           :key="step.id"
           class="tx-chain-of-thought__step"
+          :class="{ 'is-single': !showBullets }"
           :data-status="step.status"
           :data-kind="step.kind"
         >
-          <span class="tx-chain-of-thought__bullet" aria-hidden="true">
+          <span v-if="showBullets" class="tx-chain-of-thought__bullet" aria-hidden="true">
             <svg v-if="step.status === 'active'" class="tx-chain-of-thought__spin" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4">
               <path d="M21 12a9 9 0 1 1-9-9" />
             </svg>
@@ -149,7 +257,7 @@ watch(
             </svg>
           </span>
           <div class="tx-chain-of-thought__content">
-            <span class="tx-chain-of-thought__title">
+            <span v-if="showStepTitles" class="tx-chain-of-thought__title">
               {{ step.title
               }}<span
                 v-if="step.status === 'done' && step.durationMs"
@@ -158,7 +266,7 @@ watch(
             </span>
             <div
               v-if="step.body"
-              :ref="(el) => trackActiveBody(el, step.status === 'active')"
+              :ref="(el) => trackActiveBody(el, step.status === 'active' && step.kind !== 'thinking')"
               class="tx-chain-of-thought__body"
               :class="{ 'is-plain': step.kind !== 'thinking' }"
             >
@@ -169,10 +277,10 @@ watch(
                    embedding the full streaming component here froze the
                    trail's own update reactivity (bisected), and a trail body
                    needs typography, not a markdown pipeline. -->
-              <div
+              <TxThinkingBody
                 v-if="step.kind === 'thinking'"
-                class="tx-chain-of-thought__md"
-                v-html="renderThinking(step.body)"
+                :text="step.body"
+                :streaming="streaming && step.status === 'active'"
               />
               <span v-if="step.kind !== 'thinking'" class="tx-chain-of-thought__raw">{{
                 step.body
@@ -205,6 +313,10 @@ watch(
     display: inline-flex;
   }
 
+  .tx-chain-of-thought__label {
+    font-style: italic;
+  }
+
   &.is-thinking .tx-chain-of-thought__label {
     background: linear-gradient(
       90deg,
@@ -224,6 +336,14 @@ watch(
     background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 12%, transparent);
     font-size: 10.5px;
     font-weight: var(--tx-font-weight-semibold, 600);
+  }
+
+  // Tabular figures so the tenths tick without the label beside it shifting.
+  .tx-chain-of-thought__elapsed {
+    margin-left: 2px;
+    color: var(--tx-text-color-secondary, #6b7280);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
 
   .tx-chain-of-thought__chevron {
@@ -272,6 +392,15 @@ watch(
 
     &:last-child {
       padding-bottom: 2px;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    &.is-single {
+      gap: 0;
+      padding: 0 0 2px 0;
 
       &::before {
         display: none;
@@ -331,10 +460,11 @@ watch(
     mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), rgb(0 0 0 / 40%) 100%);
   }
 
+  // Reasoning reads as prose and must not be boxed: a thought is part of the answer's
+  // flow, so it takes its natural height and the trail folds it away once it settles.
+  // Tool output is the one that gets bounded — a log or a JSON dump can be megabytes.
   .tx-chain-of-thought__body {
-    max-height: 140px;
     margin-top: 4px;
-    overflow: auto;
     color: var(--tx-text-color-secondary, #6b7280);
     font-size: 12px;
     line-height: 1.6;
@@ -342,6 +472,9 @@ watch(
 
     // Verbatim tool output keeps its own line breaks; markdown owns its own.
     &.is-plain {
+      max-height: var(--tx-chain-of-thought-output-max-height, 140px);
+      overflow: auto;
+      overscroll-behavior: contain;
       white-space: pre-wrap;
     }
   }

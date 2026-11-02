@@ -21,13 +21,20 @@ import {
 /** Marks a `tuff_write_file` success. The tool creates with `wx` and never overwrites. */
 const CREATED_PREFIX = 'Created '
 
-export type PreviewArtifactKind = 'created' | 'uploaded'
+/**
+ * `created` is a file the host wrote, `uploaded` one the user brought. `page`, `image` and
+ * `diagram` are not on disk: they are the HTML, SVG and Mermaid fences of a reply, which the
+ * transcript already renders, listed here so they can be found again.
+ */
+export type PreviewArtifactKind = 'created' | 'uploaded' | 'page' | 'image' | 'diagram'
 
 export interface PreviewArtifact {
   id: string
   kind: PreviewArtifactKind
-  /** File name for display. */
+  /** File name for display; empty for a fence that carries no title of its own. */
   name: string
+  /** Fence language (`html`, `svg`, `mermaid`) of a reply fence. */
+  language?: string
   /** Absolute path; absent for an upload that only ever existed in the window. */
   path?: string
   /** Containing directory, for disambiguating same-named files. */
@@ -128,6 +135,62 @@ function collectArtifact(
   into.push({ id: tool.id, kind: 'created', name, path, dir, messageIndex })
 }
 
+/** What a fence's language makes of it; anything else is source code and not an output. */
+const FENCE_KIND: Record<string, PreviewArtifactKind | undefined> = {
+  html: 'page',
+  svg: 'image',
+  mermaid: 'diagram'
+}
+
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})\s*([\w+-]*)/
+
+/** A page's own `<title>`, so the row reads as that page rather than as "HTML". */
+function readPageTitle(source: string): string {
+  const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(source)
+  return match?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
+/**
+ * Closed fences of one text. A fence still open at the end of the text is skipped: its code is
+ * still arriving, and listing half a page would point at something that is not there yet.
+ * `counter` runs across a message's parts and counts every fence, so ids hold still while a
+ * later fence streams in.
+ */
+function collectFences(
+  text: string,
+  messageId: string,
+  messageIndex: number,
+  counter: { next: number },
+  into: PreviewArtifact[]
+): void {
+  let open: { marker: string; language: string; lines: string[] } | null = null
+  for (const line of text.split('\n')) {
+    if (!open) {
+      const start = FENCE_OPEN.exec(line)
+      if (start) open = { marker: start[1]!, language: (start[2] ?? '').toLowerCase(), lines: [] }
+      continue
+    }
+    const closes = line.trim().startsWith(open.marker) && /^[`~]+\s*$/.test(line.trim())
+    if (!closes) {
+      open.lines.push(line)
+      continue
+    }
+    const ordinal = counter.next++
+    const kind = FENCE_KIND[open.language]
+    if (kind && open.lines.join('').trim()) {
+      const source = open.lines.join('\n')
+      into.push({
+        id: `${messageId}:fence:${ordinal}`,
+        kind,
+        name: kind === 'page' ? readPageTitle(source) : '',
+        language: open.language,
+        messageIndex
+      })
+    }
+    open = null
+  }
+}
+
 function collectWidget(tool: AiToolCallPart, messageIndex: number, into: PreviewWidget[]): void {
   if (tool.status !== 'done') return
   const output = tool.output
@@ -220,6 +283,20 @@ export function buildPreviewIndex(messages: ConversationMessage[]): PreviewIndex
         name: attachment.name || attachment.id,
         messageIndex
       })
+    }
+
+    // A streaming reply is skipped whole: its last fence may be open, and the list should not
+    // grow and renumber word by word. It appears once the turn settles.
+    if (message.role === 'assistant' && message.status !== 'streaming') {
+      const counter = { next: 0 }
+      if (message.parts) {
+        for (const part of message.parts) {
+          if (part.type === 'text')
+            collectFences(part.text, message.id, messageIndex, counter, index.artifacts)
+        }
+      } else {
+        collectFences(message.content, message.id, messageIndex, counter, index.artifacts)
+      }
     }
 
     for (const part of message.parts ?? []) {

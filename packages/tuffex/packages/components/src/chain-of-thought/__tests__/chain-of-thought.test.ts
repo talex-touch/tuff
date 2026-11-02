@@ -1,6 +1,7 @@
 import type { AiChainStep } from '../../ai-elements/src/types'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import TxChainOfThought from '../src/TxChainOfThought.vue'
 
 function steps(overrides: Partial<AiChainStep>[] = []): AiChainStep[] {
@@ -34,6 +35,27 @@ describe('txChainOfThought', () => {
 
     expect(wrapper.findAll('.tx-chain-of-thought__step')).toHaveLength(1)
     expect(wrapper.find('.tx-chain-of-thought__count').exists()).toBe(false)
+    expect(wrapper.find('.tx-chain-of-thought__bullet').exists()).toBe(false)
+  })
+
+  it('omits bullet icon on single-step thoughts by default and respects bullets prop', () => {
+    const singleActive = [{ id: 't1', kind: 'thinking' as const, title: 'T1', status: 'active' as const }]
+    const defaultWrapper = mount(TxChainOfThought, {
+      props: { steps: singleActive, streaming: true },
+    })
+    expect(defaultWrapper.find('.tx-chain-of-thought__bullet').exists()).toBe(false)
+    expect(defaultWrapper.find('.tx-chain-of-thought__spin').exists()).toBe(false)
+
+    const forcedWrapper = mount(TxChainOfThought, {
+      props: { steps: singleActive, streaming: true, bullets: true },
+    })
+    expect(forcedWrapper.find('.tx-chain-of-thought__bullet').exists()).toBe(true)
+    expect(forcedWrapper.find('.tx-chain-of-thought__spin').exists()).toBe(true)
+
+    const multiWrapper = mount(TxChainOfThought, {
+      props: { steps: steps(), streaming: true, bullets: false },
+    })
+    expect(multiWrapper.find('.tx-chain-of-thought__bullet').exists()).toBe(false)
   })
 
   it('shimmers only while streaming with an active step', async () => {
@@ -82,6 +104,31 @@ describe('txChainOfThought', () => {
     // Withdrawing the override (a fresh message) hands control back to auto.
     await wrapper.setProps({ userOpen: undefined })
     expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).toContain('is-open')
+  })
+  it('holds open for collapseDelayMs after active step settles, then automatically collapses', async () => {
+    vi.useFakeTimers()
+    const active = [{ id: 'a', kind: 'thinking' as const, title: 'T', status: 'active' as const }]
+    const wrapper = mount(TxChainOfThought, {
+      props: { steps: active, streaming: true, defaultOpen: false, collapseDelayMs: 1500 },
+    })
+
+    expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).toContain('is-open')
+
+    // Settle the active step (e.g. tool call starts)
+    await wrapper.setProps({
+      steps: [{ id: 'a', kind: 'thinking' as const, title: 'T', status: 'done' as const }],
+    })
+
+    // During grace period: remains open for reading
+    expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).toContain('is-open')
+
+    // Advance past grace delay
+    vi.advanceTimersByTime(1500)
+    await nextTick()
+
+    // Automatically collapsed
+    expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).not.toContain('is-open')
+    vi.useRealTimers()
   })
 
   it('renders thinking bodies as sanitized markdown', () => {

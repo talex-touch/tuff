@@ -128,6 +128,7 @@ catalogs:
 
 allowBuilds:
   '@google/genai': true
+  '@openuidev/lang-core': true
   '@parcel/watcher': true
   '@sentry/cli': true
   '@talex-touch/tuff-native': true

@@ -24,7 +24,14 @@ import type { ManualImportedItemInput } from './ai-orchestrator-store'
 import type { IntelligenceMcpProfile } from './intelligence-mcp-registry'
 import { createHash, randomUUID } from 'node:crypto'
 import { readMcpFailureReason } from './intelligence-mcp-failure'
-import { formatStableToolError, projectToolError } from './tool-error-projection'
+import {
+  describeToolFailure,
+  formatStableToolError,
+  projectToolError
+} from './tool-error-projection'
+import { createLogger } from '../../utils/logger'
+
+const mcpServerAdminLog = createLogger('Intelligence').child('McpServerAdmin')
 
 const MAX_TEXT_LENGTH = 512
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -74,6 +81,9 @@ export async function probeProfile(
   try {
     return { toolCount: (await runner.listServerTools(profile.id)).length }
   } catch (error) {
+    mcpServerAdminLog.warn(
+      `MCP probe failed: profile=${profile.id} | ${describeToolFailure(error)}`
+    )
     return {
       failure: readMcpFailureReason(error)
         ? formatStableToolError(projectToolError(error))

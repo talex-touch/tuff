@@ -62,6 +62,7 @@ code: |
 | `copiedTableText` | `string` | `'Copied'` | Button text shown briefly after a successful copy. |
 | `codePreviewText` | `string` | `'Preview'` | Text of a code block's button that shows HTML, SVG, or XML rendered. |
 | `codeSourceText` | `string` | `'Code'` | Text of the same button while the preview shows, which returns to the source. |
+| `inlineCodePreview` | `boolean` | `true` | Renders a settled HTML, SVG, or XML fence's preview below its code. Off, the preview button emits `code-preview` and the host shows the preview. |
 | `codeFrameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | Builds the preview frame's accessible name from the fence language. |
 | `copyCodeText` | `string` | `'Copy'` | Text of a code block's copy button. |
 | `copiedCodeText` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
@@ -69,6 +70,8 @@ code: |
 | `diagramPreviewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen diagram preview and of the diagram's scrolling area in it. |
 | `diagramCloseLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
 | `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when a diagram fails to render. |
+| `diagramDownloadLabel` | `string` | `'Download'` | Name of the Save action in the diagram preview. |
+| `diagramCopyFailedText` | `string` | `'Could not copy'` | Said by the diagram preview when copying the source fails. |
 
 ### TxCodeBlock Props
 
@@ -77,6 +80,7 @@ The built-in renderer for every language without one of its own, also exported f
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `previewable` | `boolean` | `true` | Offers a rendered view of a settled HTML, SVG, or XML fence. |
+| `inlinePreview` | `boolean` | `true` | Renders the preview below the code. Off, the preview button emits `preview` instead. |
 | `previewLabel` | `string` | `'Preview'` | Text of the button that shows the rendered view. |
 | `codeLabel` | `string` | `'Code'` | Text of the same button while the preview shows. |
 | `frameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | Builds the preview frame's accessible name from the fence language. |
@@ -95,6 +99,17 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 | `errorText` | `string` | `'Diagram failed to render — showing source.'` | Shown above the source when the diagram fails to render. |
 | `copyLabel` | `string` | `'Copy'` | Text of the copy button on the source shown after a failed render. |
 | `copiedLabel` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
+| `downloadLabel` | `string` | `'Download'` | Name of the Save action in the diagram preview. |
+| `copyFailedText` | `string` | `'Could not copy'` | Said by the diagram preview when copying the source fails. |
+
+### Events
+
+| Name | Source | Payload | Description |
+|------|--------|---------|-------------|
+| `code-preview` | `TxStreamMarkdown` | `StreamMarkdownCodePreview` | Fired by a code block's preview button when `inlineCodePreview` is `false`. |
+| `preview` | `TxCodeBlock` | `StreamMarkdownCodePreview` | Fired by the preview button when `inlinePreview` is `false`; `TxStreamMarkdown` re-emits it as `code-preview`. |
+
+The payload is `{ lang, code, srcdoc }`. Put `srcdoc` in an iframe whose `sandbox` omits `allow-scripts`, the same isolation the inline preview uses.
 
 ## Overview
 

@@ -216,3 +216,34 @@ export function downloadImage(item: ImagePreviewItem): void {
   }
   follow(url.href, { download: pictureFileName(item) })
 }
+
+/** The text a markup item (`svg` / `raw`, no `url`) yields to copy and to save: `copyText` wins for copying. */
+export function markupOf(item: ImagePreviewItem, purpose: 'copy' | 'download'): string {
+  if (item.url)
+    return ''
+  return (purpose === 'copy' ? item.copyText : undefined) ?? item.svg ?? item.raw ?? ''
+}
+
+/** Puts text on the clipboard; started inside the click, like the picture copy. */
+export async function copyMarkup(text: string): Promise<boolean> {
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+  if (!clipboard?.writeText)
+    return false
+  try {
+    await clipboard.writeText(text)
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+/** Saves a markup item as an `.svg` file: a Blob URL this page owns, revoked once the click is done. */
+export function downloadMarkup(item: ImagePreviewItem): void {
+  const markup = markupOf(item, 'download')
+  if (!markup || typeof document === 'undefined')
+    return
+  const href = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }))
+  follow(href, { download: pictureFileName({ name: item.name }, 'image/svg+xml') })
+  setTimeout(() => URL.revokeObjectURL(href), 0)
+}

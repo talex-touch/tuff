@@ -1,4 +1,7 @@
+export { default as TxAiAssistantTurn } from './TxAiAssistantTurn.vue'
 export { default as TxAiComposer } from './TxAiComposer.vue'
 export { default as TxAiConversation } from './TxAiConversation.vue'
 export { default as TxAiMessage } from './TxAiMessage.vue'
 export { default as TxAiSuggestion } from './TxAiSuggestion.vue'
+export { default as TxAiTurnFooter } from './TxAiTurnFooter.vue'
+export { default as TxAiErrorBlock } from './TxAiErrorBlock.vue'

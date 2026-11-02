@@ -29,15 +29,30 @@ import type {
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
-import { toLangChainOpenAiReasoningFields } from '@talex-touch/utils/intelligence/reasoning-effort'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import {
+  toLangChainOpenAiReasoningFields,
+  toLangChainOpenAiResponsesReasoningFields
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { getNetworkService } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { decodeImageAttachment } from './attachment-spill'
+import {
+  type LangChainFunctionTool,
+  ToolCallAssembler,
+  toLangChainAssistantMessage,
+  toLangChainToolMessage,
+  toLangChainTools
+} from './native-tools'
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
+/**
+ * Model names LangChain's OpenAI client already sends to the Responses API on its own
+ * (`_modelPrefersResponsesAPI`). Responses-only models such as gpt-5.6 and codex refuse Chat Completions.
+ */
+const RESPONSES_MODEL_MARKERS = ['gpt-5.2-pro', 'gpt-5.4-pro', 'gpt-5.5-pro', 'gpt-5.6', 'codex']
 
 type LangChainOpenAiModule = typeof import('@langchain/openai')
 let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
@@ -53,12 +68,17 @@ interface OpenAiChatModelCallOptions {
   readonly signal?: AbortSignal
 }
 
-interface OpenAiChatModelLike {
+/** A chat model call surface: what a model, or the same model with tools bound, can be asked. */
+interface OpenAiChatRunnable {
   invoke: (messages: BaseMessage[], options?: OpenAiChatModelCallOptions) => Promise<unknown>
   stream: (
     messages: BaseMessage[],
     options?: OpenAiChatModelCallOptions
   ) => Promise<AsyncIterable<unknown>>
+}
+
+interface OpenAiChatModelLike extends OpenAiChatRunnable {
+  bindTools: (tools: LangChainFunctionTool[]) => OpenAiChatRunnable
 }
 
 type CancellableIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
@@ -260,7 +280,10 @@ function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
       return new SystemMessage(message.content)
     }
     if (message.role === 'assistant') {
-      return new AIMessage(message.content)
+      return toLangChainAssistantMessage(message)
+    }
+    if (message.role === 'tool') {
+      return toLangChainToolMessage(message)
     }
     return toLangChainUserMessage(message)
   })
@@ -303,11 +326,13 @@ function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     tokenUsage.total_tokens,
     promptTokens + completionTokens
   )
+  const cacheReadTokens = numberFrom(asRecord(usageMetadata.input_token_details).cache_read)
 
   return {
     promptTokens,
     completionTokens,
-    totalTokens
+    totalTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {})
   }
 }
 
@@ -649,6 +674,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
   protected readonly requireApiKey: boolean = true
   protected readonly embeddingSupported: boolean = true
   protected readonly visionSupported: boolean = true
+  /** Sends `payload.tools` as OpenAI function tools; a subclass whose models may not take them says no. */
+  readonly supportsNativeTools: boolean = true
 
   protected resolveBaseUrl(): string {
     return normalizeOpenAiCompatibleBaseUrl(this.config.baseUrl || this.defaultBaseUrl)
@@ -716,6 +743,12 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return model
   }
 
+  /** Responses for a provider declared with that transport, and for the names that need it. */
+  private usesResponsesApi(model: string): boolean {
+    if (this.config.metadata?.transport === 'responses') return true
+    return RESPONSES_MODEL_MARKERS.some((marker) => model.includes(marker))
+  }
+
   private async createChatModel(params: {
     model: string
     options: CancellableIntelligenceInvokeOptions
@@ -723,26 +756,38 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     maxTokens?: number
     streaming?: boolean
   }): Promise<OpenAiChatModelLike> {
-    const { ChatOpenAICompletions } = await getLangChainOpenAiModule()
+    const { ChatOpenAICompletions, ChatOpenAIResponses } = await getLangChainOpenAiModule()
     // Main's plan for this provider, translated and nothing more: without one — an auto turn, a
     // non-reasoning model — the model below is built exactly as it always was.
-    const reasoning = toLangChainOpenAiReasoningFields(readReasoningPlan(params.options))
-    // Always the Chat Completions class: `ChatOpenAI` routes gpt-5.6* and codex model names to the
-    // Responses API. `n: 1` is what LangChain 0.4 sent by default; 1.x sends nothing, so it is set.
-    return new ChatOpenAICompletions({
+    const plan = readReasoningPlan(params.options)
+    // A reasoning level that applies owns the sampling: a reasoning model rejects any temperature but
+    // its default, so the caller's temperature is left out, as the Nexus adapter already does.
+    const chatReasoning = toLangChainOpenAiReasoningFields(plan)
+    const common = {
       apiKey: this.resolveApiKey(),
       model: params.model,
-      temperature: params.temperature,
+      temperature: chatReasoning ? undefined : params.temperature,
       maxTokens: params.maxTokens,
-      n: 1,
       streaming: params.streaming,
       timeout: this.resolveRequestTimeout(params.options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
         fetch: createNetworkServiceFetch()
-      },
+      }
+    }
+    if (this.usesResponsesApi(params.model)) {
+      const responsesReasoning = toLangChainOpenAiResponsesReasoningFields(plan)
+      return new ChatOpenAIResponses({
+        ...common,
+        ...(responsesReasoning ? { modelKwargs: responsesReasoning.modelKwargs } : {})
+      })
+    }
+    // Chat Completions for everything else. `n: 1` is what LangChain 0.4 sent by default; 1.x sends nothing.
+    return new ChatOpenAICompletions({
+      ...common,
+      n: 1,
       // Spread into the body verbatim, so `minimal` / `xhigh` / `max` pass the OpenAI types untouched.
-      ...(reasoning ? { modelKwargs: reasoning.modelKwargs } : {})
+      ...(chatReasoning ? { modelKwargs: chatReasoning.modelKwargs } : {})
     })
   }
 
@@ -794,15 +839,21 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       streaming: true
     })
 
-    const stream = await model.stream(
+    const tools = toLangChainTools(payload.tools)
+    const assembler = new ToolCallAssembler()
+    const stream = await (tools.length > 0 ? model.bindTools(tools) : model).stream(
       toLangChainMessages(payload.messages),
       createOpenAiChatModelCallOptions(options)
     )
     for await (const chunk of stream) {
+      for (const partEvent of assembler.pushMessageChunk(chunk)) {
+        yield { delta: '', done: false, partEvent }
+      }
       const text = extractTextContent(asRecord(chunk).content)
       if (!text) continue
       yield { delta: text, done: false }
     }
+    for (const partEvent of assembler.finish()) yield { delta: '', done: false, partEvent }
 
     yield { delta: '', done: true }
   }

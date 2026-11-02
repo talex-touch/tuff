@@ -1993,6 +1993,21 @@ export const aiOrchestratorEvents = sqliteTable(
   })
 )
 
+export const aiOrchestratorRunMessages = sqliteTable(
+  'ai_orchestrator_run_messages',
+  {
+    runId: text('run_id')
+      .notNull()
+      .references(() => aiOrchestratorRuns.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    envelope: text('envelope').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.runId, table.seq] })
+  })
+)
+
 export const aiAutomations = sqliteTable(
   'ai_automations',
   {

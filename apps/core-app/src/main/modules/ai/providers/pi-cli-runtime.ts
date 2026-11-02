@@ -284,11 +284,14 @@ export const PI_CLI_TOOLS_SYSTEM_PROMPT =
   'Announce it first: before invoking a render tool, write one short sentence in the ' +
   "user's language saying what you are about to generate, then call the tool. " +
   'After a render tool succeeds the widget is already on screen — do not repeat its ' +
-  'contents as text; at most add one short follow-up sentence.'
+  'contents as text; at most add one short follow-up sentence. ' +
+  'When following up on short continuation prompts (e.g. "goon", "继续"), strictly continue the direct topic of the preceding message (e.g. refining the sequence diagram or addressing edge cases); never arbitrarily invent a new project or dump unrequested boilerplate Vue code. ' +
+  'Do not hallucinate fictional component names: Tuff UI primitives are in @talex-touch/tuffex with Tx* prefix (TxButton, TxInput, TxCard, TxForm); never use obsolete or fake names like TButton or TCard.'
 const ROLE_LABELS: Record<IntelligenceMessage['role'], string> = {
   system: 'System',
   user: 'User',
-  assistant: 'Assistant'
+  assistant: 'Assistant',
+  tool: 'Tool'
 }
 
 /**
@@ -494,13 +497,16 @@ export function buildOmpArgs(
   prompt: PiCliPrompt,
   model?: string,
   attachmentPaths: string[] = [],
-  thinking?: IntelligenceReasoningLevel
+  thinking?: IntelligenceReasoningLevel,
+  configOverlayPath?: string
 ): string[] {
   const args = [
     '--print',
     '--mode',
     'json',
     '--no-tools',
+    // Applied last by omp, so it wins over the shared config.yml for this run only.
+    ...(configOverlayPath ? ['--config', configOverlayPath] : []),
     '--no-extensions',
     '--no-skills',
     '--no-rules',
@@ -607,10 +613,12 @@ function parseUsage(value: unknown): IntelligenceUsageInfo | undefined {
       ? totalCost
       : undefined
 
+  const cacheReadTokens = readCount(usage.cacheRead)
   return {
     promptTokens,
     completionTokens,
     totalTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
     ...(reportedCost !== undefined ? { cost: reportedCost } : {})
   }
 }

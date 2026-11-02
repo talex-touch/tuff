@@ -1,6 +1,6 @@
-import type { AiAttachment, AiMessagePart } from '@talex-touch/tuffex/ai-elements'
 import type { MessageUpdateEvent } from '@talex-touch/pi-desktop-reuse/message-stream'
 import type { UiMessage } from '@talex-touch/pi-desktop-reuse/types/message-stream'
+import type { AiAttachment, AiMessagePart } from '@talex-touch/tuffex/ai-elements'
 import type {
   WorkspaceAttachmentRef,
   WorkspaceHostMessage
@@ -66,7 +66,8 @@ export function fromHostMessage(host: WorkspaceHostMessage): ConversationMessage
     id: host.id,
     role: host.role,
     content: host.content,
-    status: host.status
+    status: host.status,
+    ...(Number.isFinite(host.createdAt) && host.createdAt > 0 ? { createdAt: host.createdAt } : {})
   }
   if (host.error) message.error = readTurnFailure(host.error)
   if (host.meta && Object.keys(host.meta).length > 0) {
@@ -125,6 +126,13 @@ function appendText(parts: AiMessagePart[], delta: string, reset: boolean): void
   }
   if (delta) parts.push({ type: 'text', text: delta })
 }
+function closeOpenReasoning(parts: AiMessagePart[]): void {
+  for (const part of parts) {
+    if (part.type === 'reasoning' && !part.done) {
+      part.done = true
+    }
+  }
+}
 
 function appendReasoning(parts: AiMessagePart[], delta: string, reset: boolean): void {
   for (let index = parts.length - 1; index >= 0; index -= 1) {
@@ -159,6 +167,7 @@ export function applyWorkspaceUpdate(
   }
   if (previous.parts && (update.deltaText !== undefined || update.resetText)) {
     patched.parts = previous.parts.map((part) => ({ ...part }))
+    closeOpenReasoning(patched.parts)
     appendText(patched.parts, update.deltaText ?? '', update.resetText === true)
   }
   if (update.deltaThinking !== undefined || update.resetThinking) {

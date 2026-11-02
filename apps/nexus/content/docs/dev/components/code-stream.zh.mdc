@@ -65,6 +65,23 @@ code: |
 ---
 :::
 
+### 渲染预览
+`html`、`svg`、`xml` 代码在停止输出后，头部出现「预览」开关，点击用沙箱 `iframe` 渲染成页面，再点回源码。流式输出中、diff 模式下不出现。`auto-preview` 让代码一结束就直接打开渲染结果，读者仍可切回源码。
+:::TuffDemoWrapper{demo="CodeStreamPreviewDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="html"
+      lang="html"
+      filename="pelican.html"
+      lang-label="HTML"
+      auto-preview
+    />
+  </template>
+---
+:::
+
 ### 统一 Diff
 传 `diff` 渲染统一 diff。被删行与替换它的新增行共用行号，所以行号逐行给出。
 :::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
@@ -94,6 +111,8 @@ code: |
 - 语言不确定时不传 `lang`：纯文本总是正确的。
 - 长代码配合外层滚动容器：代码区只横向滚动，高度随内容。
 - 需要与 `TxStreamMarkdown` 的围栏统一观感时用 `TxCodeBlock`；需要文件名头部、行号与逐行显现时用本组件。
+- 预览页默认不运行脚本。只有宿主确认页面可信时才设 `preview-scripts`；即便如此，页面仍在无同源、无网络的沙箱里，只能绘制，碰不到宿主。
+- 模型要求「给我一个页面」时，用 `auto-preview`；只是展示片段时不要开，读者先看到的应是源码。
 
 ## API 参考
 
@@ -121,6 +140,12 @@ code: |
 | `copyable` | `boolean` | `true` | 渲染复制按钮。 |
 | `copyLabel` | `string` | `'Copy'` | 复制按钮文案；与 `copiedLabel` 一起本地化。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案。 |
+| `previewable` | `boolean` | `true` | 为 `html`、`svg`、`xml` 代码在停止输出后提供「预览」开关；流式输出中与 diff 模式下不出现。 |
+| `autoPreview` | `boolean` | `false` | 代码停止输出时直接打开渲染结果；读者可切回源码。 |
+| `previewScripts` | `boolean` | `false` | 允许预览页运行自带脚本；帧始终是无同源、无网络的沙箱。 |
+| `previewLabel` | `string` | `'Preview'` | 开关文案。 |
+| `codeLabel` | `string` | `'Code'` | 渲染结果显示时的开关文案。 |
+| `frameLabelFormatter` | `(lang: string) => string` | ``(lang) => `${lang} preview` `` | 预览帧的无障碍名称。 |
 | `minHeight` | `number \| string` | — | 代码区高度下限；缺省时按完整清单的高度预留。 |
 | `diff` | `CodeDiffRow[]` | — | 统一 diff 行，渲染时附增删计数；复制按钮仍复制 `code`。 |
 
@@ -165,6 +190,7 @@ code: |
 - `revealedLines` 模式下，光标只在显现过程中（`0 < revealedLines < 总行数`）出现在最后一行末尾，且保持静止。
 - 删除行用斜纹槽标、新增行用实心槽标，不只靠红绿两种色调区分。
 - 只有 Shiki 生成的标记进入 `v-html`，其中代码文本已转义；未高亮时走普通插值。
+- 预览帧是 `sandbox` 的 `iframe`，没有 `allow-same-origin`；它的文档写在外层 `srcdoc` 里，策略 `<meta>` 放在外层，被预览的代码作为转义后的内层 `srcdoc` 嵌入，所以代码里的 `"` 或 `<head>` 改不了策略。策略为 `default-src 'none'`，仅放行内联样式、`data:`/`blob:` 图片与媒体；`script-src` 默认 `'none'`，设 `previewScripts` 才为 `'unsafe-inline'`。
 - 减弱动效时不播放行或词的进场：`revealedLines` 照常显现，流式模式直接显示，光标静止。
 
 ## 技术实现

@@ -8,7 +8,8 @@ import type {
   WorkspaceQueuedInput,
   WorkspaceSubmitRequest,
   WorkspaceSubmitResult,
-  WorkspaceAttachmentRef
+  WorkspaceAttachmentRef,
+  WorkspaceUpdateQueuedRequest
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
 import type { MainDatabase } from '../../db/db-write'
@@ -138,6 +139,9 @@ export interface WorkspaceAdmittedTurn {
   assistant: StoredConversationMessage
   context?: ConversationWorkspaceState['context']
 }
+export type WorkspaceDirectAdmission =
+  | { disposition: 'duplicate'; state: ConversationWorkspaceState }
+  | { disposition: 'started'; turn: WorkspaceAdmittedTurn; state: ConversationWorkspaceState }
 
 export interface WorkspaceServiceOptions {
   getDb?: () => MainDatabase
@@ -881,6 +885,328 @@ export class ConversationWorkspaceService {
       return { disposition: 'queued', state: await this.changed(request.conversationId, !held) }
     })
   }
+  async canStartDirectly(conversationId: string): Promise<boolean> {
+    return this.serial(conversationId, async () => {
+      const state = await this.readState(conversationId)
+      if (!state) return true
+      if (
+        state.activeTurnId ||
+        state.queueHeld ||
+        state.status === 'running' ||
+        state.status === 'pending_approval'
+      )
+        return false
+      const queue = await this.queue(conversationId)
+      return queue.size(conversationId) === 0
+    })
+  }
+
+  async admitDirectly(raw: WorkspaceSubmitRequest): Promise<WorkspaceDirectAdmission> {
+    const request = submitSchema.parse(raw)
+    if (
+      !isContextInputProviderSafe(
+        [request.text, request.lead?.text, request.lead?.note].filter(Boolean).join('\n')
+      )
+    )
+      throw new Error('WORKSPACE_INPUT_INVALID')
+    return this.serial(request.conversationId, async () => {
+      const held = await this.readState(request.conversationId)
+      if (!held && !request.create) throw new Error('WORKSPACE_NOT_FOUND')
+      const projectId = held?.projectId ?? request.create?.projectId ?? null
+      if (held && request.create && held.projectId !== request.create.projectId)
+        throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
+      const settings = request.settings ?? held?.settings ?? DEFAULT_SETTINGS
+      if (held?.messages.length && settings.mode !== held.settings.mode)
+        throw new Error('WORKSPACE_MODE_REQUIRES_FORK')
+      await this.validate(settings, projectId)
+      if (request.retryOfMessageId) {
+        const last = held?.messages.at(-1)
+        if (
+          held?.activeTurnId ||
+          !last ||
+          last.id !== request.retryOfMessageId ||
+          last.role !== 'assistant' ||
+          last.status !== 'failed'
+        )
+          throw new Error('WORKSPACE_STALE_TURN')
+      }
+      if (
+        held &&
+        (held.activeTurnId ||
+          held.queueHeld ||
+          held.status === 'running' ||
+          held.status === 'pending_approval')
+      )
+        throw new Error('WORKSPACE_BUSY')
+      const queue = await this.queue(request.conversationId)
+      if (queue.size(request.conversationId) > 0) throw new Error('WORKSPACE_BUSY')
+
+      const digest = createHash('sha256')
+        .update(
+          JSON.stringify({
+            ...request,
+            attachments: request.attachments?.map((attachment) => ({
+              type: attachment.type,
+              name: attachment.name,
+              digest: createHash('sha256').update(attachment.dataUrl).digest('hex')
+            }))
+          })
+        )
+        .digest('hex')
+      const [receipt] = await this.db()
+        .select()
+        .from(conversationWorkspaceReceipts)
+        .where(
+          and(
+            eq(conversationWorkspaceReceipts.conversationId, request.conversationId),
+            eq(conversationWorkspaceReceipts.id, request.id)
+          )
+        )
+      if (receipt) {
+        if (receipt.inputHash !== digest) throw new Error('WORKSPACE_STALE_TURN')
+        return { disposition: 'duplicate', state: (await this.readState(request.conversationId))! }
+      }
+      const stored = await this.attachments.persist(
+        request.conversationId,
+        request.attachments ?? []
+      )
+      if (request.voiceRecordingId) {
+        const source = this.options.resolveVoiceRecording?.(request.voiceRecordingId) ?? null
+        try {
+          if (!source) throw new Error('WORKSPACE_VOICE_UNAVAILABLE')
+          stored.push(await this.attachments.persistAudio(request.conversationId, source))
+        } catch (error) {
+          await this.attachments.remove(stored)
+          throw error
+        }
+      }
+      let refs = stored.map((asset) => ({
+        id: asset.id,
+        kind: asset.mimeType === 'audio/wav' ? ('audio' as const) : ('image' as const),
+        mimeType: asset.mimeType,
+        size: asset.size,
+        ...(asset.name ? { name: asset.name } : {})
+      }))
+      if (request.retryOfMessageId) {
+        const previousUser = [...(held?.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === 'user')
+        refs = previousUser?.attachments?.map(({ previewUrl: _preview, ...ref }) => ref) ?? []
+      }
+      const now = Date.now()
+      const input: WorkspaceQueuedInput = {
+        id: request.id,
+        conversationId: request.conversationId,
+        text: request.text,
+        settings,
+        projectId,
+        createdAt: now,
+        ...(refs.length ? { attachments: refs } : {}),
+        ...(request.lead ? { lead: request.lead } : {}),
+        ...(request.retryOfMessageId ? { retryOfMessageId: request.retryOfMessageId } : {}),
+        ...(request.answersToolCallId ? { answersToolCallId: request.answersToolCallId } : {})
+      }
+      const previousUser = input.retryOfMessageId
+        ? [...(held?.messages ?? [])].reverse().find((message) => message.role === 'user')
+        : undefined
+      const user: StoredConversationMessage = previousUser ?? {
+        id: `user-${input.id}`,
+        role: 'user',
+        content: input.text,
+        status: 'complete',
+        seq: 0,
+        createdAt: now
+      }
+      const assistant: StoredConversationMessage = {
+        id: `assistant-${input.id}`,
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+        meta: { turnId: input.id },
+        seq: 0,
+        createdAt: now
+      }
+
+      const db = this.db()
+      try {
+        await scheduleDbWrite('conversation.workspace.admitDirectly', () =>
+          db.transaction(async (tx) => {
+            let [workspace] = await tx
+              .select()
+              .from(conversationWorkspaces)
+              .where(eq(conversationWorkspaces.conversationId, request.conversationId))
+            if (!workspace) {
+              if (!request.create) throw new Error('WORKSPACE_NOT_FOUND')
+              await tx.insert(conversations).values({
+                id: request.conversationId,
+                title: request.create.title,
+                projectId: request.create.projectId,
+                createdAt: now,
+                updatedAt: now
+              })
+              await tx.insert(conversationWorkspaces).values({
+                conversationId: request.conversationId,
+                settingsJson: JSON.stringify(input.settings),
+                updatedAt: now
+              })
+              const [inserted] = await tx
+                .select()
+                .from(conversationWorkspaces)
+                .where(eq(conversationWorkspaces.conversationId, request.conversationId))
+              workspace = inserted
+            }
+            if (!workspace || workspace.queueHeld || workspace.activeTurnId)
+              throw new Error('WORKSPACE_BUSY')
+
+            for (const attachment of stored)
+              await tx.insert(conversationAttachments).values(attachment)
+
+            const messages = await tx
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, request.conversationId))
+              .orderBy(asc(conversationMessages.seq))
+            const nextSeq = (messages.at(-1)?.seq ?? -1) + 1
+
+            if (input.retryOfMessageId) {
+              const last = messages.at(-1)
+              if (
+                !last ||
+                last.id !== input.retryOfMessageId ||
+                last.role !== 'assistant' ||
+                last.status !== 'failed'
+              )
+                throw new Error('WORKSPACE_STALE_TURN')
+              await tx
+                .delete(conversationMessages)
+                .where(
+                  and(
+                    eq(conversationMessages.conversationId, request.conversationId),
+                    eq(conversationMessages.id, last.id)
+                  )
+                )
+              assistant.seq = last.seq
+              await tx
+                .insert(conversationMessages)
+                .values(messageRow(request.conversationId, assistant))
+            } else {
+              let seq = nextSeq
+              if (!messages.length && input.lead) {
+                await tx.insert(conversationMessages).values({
+                  conversationId: request.conversationId,
+                  id: `lead-${input.id}`,
+                  role: 'assistant',
+                  content: input.lead.text,
+                  status: 'complete',
+                  meta: JSON.stringify({ leadNote: input.lead.note }),
+                  seq: seq++,
+                  createdAt: now
+                })
+              }
+              user.seq = seq++
+              assistant.seq = seq
+              await tx
+                .insert(conversationMessages)
+                .values([
+                  messageRow(request.conversationId, user),
+                  messageRow(request.conversationId, assistant)
+                ])
+              for (const attachment of input.attachments ?? []) {
+                await tx.insert(conversationMessageAttachments).values({
+                  conversationId: request.conversationId,
+                  messageId: user.id,
+                  attachmentId: attachment.id
+                })
+              }
+            }
+
+            if (input.answersToolCallId) {
+              for (const message of messages) {
+                const meta = parseMeta(message.meta)
+                const parts = Array.isArray(meta?.parts) ? meta.parts : []
+                let changed = false
+                for (const part of parts)
+                  if (
+                    part &&
+                    typeof part === 'object' &&
+                    'type' in part &&
+                    part.type === 'tool-call' &&
+                    'id' in part &&
+                    part.id === input.answersToolCallId
+                  ) {
+                    Object.assign(part, { submitted: true })
+                    changed = true
+                  }
+                if (changed)
+                  await tx
+                    .update(conversationMessages)
+                    .set({ meta: JSON.stringify(meta) })
+                    .where(
+                      and(
+                        eq(conversationMessages.conversationId, request.conversationId),
+                        eq(conversationMessages.id, message.id)
+                      )
+                    )
+              }
+            }
+
+            await tx
+              .update(conversationWorkspaces)
+              .set({
+                status: 'running',
+                activeTurnId: input.id,
+                runId: null,
+                pendingRunJson: null,
+                settingsJson: JSON.stringify(input.settings),
+                revision: sql`${conversationWorkspaces.revision} + 1`,
+                updatedAt: now
+              })
+              .where(eq(conversationWorkspaces.conversationId, request.conversationId))
+
+            await tx.insert(conversationWorkspaceReceipts).values({
+              conversationId: request.conversationId,
+              id: input.id,
+              inputHash: digest,
+              status: 'running',
+              createdAt: now,
+              updatedAt: now
+            })
+
+            await tx
+              .update(conversations)
+              .set({ updatedAt: now })
+              .where(eq(conversations.id, request.conversationId))
+
+            if ((held ? held.projectId : input.projectId) === null) {
+              await tx
+                .insert(conversationSyncState)
+                .values({ conversationId: request.conversationId, dirtyAt: now, deletedAt: null })
+                .onConflictDoUpdate({
+                  target: conversationSyncState.conversationId,
+                  set: { dirtyAt: now, deletedAt: null }
+                })
+            }
+          })
+        )
+      } catch (error) {
+        await this.attachments.remove(stored)
+        throw error
+      }
+
+      if (request.voiceRecordingId) {
+        void Promise.resolve(this.options.releaseVoiceRecording?.(request.voiceRecordingId)).catch(
+          () => undefined
+        )
+      }
+
+      const state = (await this.changed(request.conversationId, !held))!
+      return {
+        disposition: 'started',
+        turn: { input, user, assistant, context: held?.context },
+        state
+      }
+    })
+  }
 
   async takeNext(conversationId: string): Promise<WorkspaceAdmittedTurn | undefined> {
     return this.serial(conversationId, async () => {
@@ -1130,6 +1456,66 @@ export class ConversationWorkspaceService {
     return this.serial(conversationId, async () => {
       await (await this.queue(conversationId)).promote(conversationId, queueId)
       return this.changed(conversationId)
+    })
+  }
+
+  async updateQueued(request: WorkspaceUpdateQueuedRequest): Promise<ConversationWorkspaceState> {
+    const text = request.text.trim()
+    if (!text) throw new Error('WORKSPACE_INPUT_INVALID')
+    return this.serial(request.conversationId, async () => {
+      const queue = await this.queue(request.conversationId)
+      const record = queue.find(request.queueId)
+      if (!record || record.sessionId !== request.conversationId)
+        throw new Error('WORKSPACE_NOT_FOUND')
+      const input = inputSchema.parse(record.payload)
+
+      const newStored = request.attachments?.length
+        ? await this.attachments.persist(request.conversationId, request.attachments)
+        : []
+
+      const existingRefs = input.attachments ?? []
+      const keptRefs = request.keptAttachmentIds
+        ? existingRefs.filter((ref) => request.keptAttachmentIds!.includes(ref.id))
+        : existingRefs
+
+      // The attachment store keeps images only.
+      const newRefs = newStored.map((item) => ({
+        id: item.id,
+        kind: 'image' as const,
+        name: item.name,
+        mimeType: item.mimeType,
+        size: item.size
+      }))
+
+      const combinedAttachments = [...keptRefs, ...newRefs]
+
+      const updatedInput = {
+        ...input,
+        text,
+        attachments: combinedAttachments.length ? combinedAttachments : undefined
+      }
+
+      record.payload = updatedInput
+      record.content = updatedInput.text
+      const digest = createHash('sha256').update(JSON.stringify(updatedInput)).digest('hex')
+      record.inputHash = digest
+
+      await scheduleDbWrite('conversation.workspace.update-queued', () =>
+        this.db()
+          .update(conversationQueuedInputs)
+          .set({
+            inputJson: JSON.stringify(updatedInput),
+            inputHash: digest
+          })
+          .where(
+            and(
+              eq(conversationQueuedInputs.conversationId, request.conversationId),
+              eq(conversationQueuedInputs.id, request.queueId)
+            )
+          )
+      )
+
+      return this.changed(request.conversationId)
     })
   }
 

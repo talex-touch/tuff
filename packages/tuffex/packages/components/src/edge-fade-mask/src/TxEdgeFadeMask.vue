@@ -156,6 +156,17 @@ onUnmounted(() => {
 onUpdated(() => {
   updateFadeState()
 })
+
+/**
+ * The scrolling element, for a host that has to drive or observe the scroll
+ * itself — pinning a streamed body to its tail, or measuring an offset. The
+ * mask owns the overflow, so this is the element those jobs need, not the root.
+ */
+defineExpose({
+  viewport: viewportRef,
+  /** Re-measures the fade edges now, for content the resize observer cannot see. */
+  refresh: updateFadeState,
+})
 </script>
 
 <template>
@@ -177,6 +188,9 @@ onUpdated(() => {
 .tx-edge-fade-mask__viewport {
   width: 100%;
   height: 100%;
+  /* A host that caps the mask (`max-height` on the root) wants the capped
+     viewport to be the scroller, not a clipped, unscrollable box. */
+  max-height: inherit;
   -webkit-overflow-scrolling: touch;
 }
 

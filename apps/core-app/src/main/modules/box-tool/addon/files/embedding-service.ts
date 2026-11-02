@@ -356,9 +356,10 @@ export class EmbeddingService {
     if (!(await this.isAvailable())) return this.usageLimitPause ? 'paused' : 'skipped'
     if (!input.content?.trim()) return 'skipped'
     const { fileId, content } = input
-    const chunks = input.chunks?.length
+    const allChunks = input.chunks?.length
       ? input.chunks
       : [{ text: content.slice(0, MAX_TEXT_LENGTH) }]
+    const chunks = allChunks.slice(0, 16)
     const hashes = chunks.map(hashFileContentChunk)
     try {
       if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
@@ -368,11 +369,13 @@ export class EmbeddingService {
         return 'paused'
       if (!usableVector(first.vector) || !first.model)
         throw new Error('FILE_EMBEDDING_INVALID_VECTOR')
+
       const existing = await this.routing
         .getReadDb()
         .select({
           contentHash: embeddingsSchema.contentHash,
-          model: embeddingsSchema.model
+          model: embeddingsSchema.model,
+          embedding: embeddingsSchema.embedding
         })
         .from(embeddingsSchema)
         .where(
@@ -385,25 +388,48 @@ export class EmbeddingService {
         )
       )
         return 'done'
+      const existingByHash = new Map<string, { vector: number[]; model: string }>()
+      for (const row of existing) {
+        if (row.contentHash && row.model) {
+          const vec = Array.isArray(row.embedding)
+            ? row.embedding
+            : typeof row.embedding === 'string'
+              ? JSON.parse(row.embedding)
+              : null
+          if (usableVector(vec)) {
+            existingByHash.set(row.contentHash, { vector: vec, model: row.model })
+          }
+        }
+      }
 
       const generated = [first]
       for (let index = 1; index < chunks.length; index++) {
         if (this.getUsageLimitPause()) return 'paused'
         if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
           return 'paused'
-        const result = await this.generate(chunks[index].text, signal)
-        if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
-          return 'paused'
+
+        const cached = existingByHash.get(hashes[index]!)
+        let result: { vector: number[]; model: string }
         if (
-          !usableVector(result.vector) ||
-          result.model !== first.model ||
-          result.vector.length !== first.vector.length
+          cached &&
+          cached.model === first.model &&
+          cached.vector.length === first.vector.length
         ) {
-          throw new Error('FILE_EMBEDDING_MODEL_CHANGED')
+          result = cached
+        } else {
+          result = await this.generate(chunks[index].text, signal)
+          if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
+            return 'paused'
+          if (
+            !usableVector(result.vector) ||
+            result.model !== first.model ||
+            result.vector.length !== first.vector.length
+          ) {
+            throw new Error('FILE_EMBEDDING_MODEL_CHANGED')
+          }
         }
         generated.push(result)
       }
-
       const fileFence = and(
         eq(filesSchema.id, Number(fileId)),
         eq(filesSchema.content, content),

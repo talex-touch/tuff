@@ -114,6 +114,12 @@ code: |
 | `renderers` | `Record<string, Component>` | — | Components for custom parts, by name; a `part-<name>` slot wins. |
 | `copyLabel` | `string` | `'Copy'` | Copy-button wording on code parts, passed to `TxCodeStream`; fences in delegated parts read `markdownProps.copyCodeText`. |
 | `copiedLabel` | `string` | `'Copied'` | Wording once copied; fences in delegated parts read `markdownProps.copiedCodeText`. |
+| `previewable` | `boolean` | `true` | Offers a "Preview" toggle on settled `html`, `svg` and `xml` code parts, handed to `TxCodeStream`; fences in delegated parts read `markdownProps`. |
+| `autoPreview` | `boolean` | `false` | Code parts show their rendering as soon as they settle; the reader can switch back to the source. |
+| `previewScripts` | `boolean` | `false` | Lets the previewed page run its own scripts; the frame always has an opaque origin and no network. |
+| `previewLabel` | `string` | `'Preview'` | Preview toggle wording. |
+| `codeLabel` | `string` | `'Code'` | Wording of the same toggle while the rendering shows. |
+| `codeFrameLabelFormatter` | `(lang: string) => string` | ``(lang) => `${lang} preview` `` | Accessible name of the preview frame. |
 | `markdownProps` | `Partial<StreamMarkdownProps>` | — | Forwarded to the `TxStreamMarkdown` that renders delegated parts. |
 | `locale` | `string` | `'zh'` | Locale for `Intl.Segmenter` word segmentation. |
 

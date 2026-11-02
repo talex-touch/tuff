@@ -30,11 +30,13 @@ function readClaudeUsage(record: JsonRecord): IntelligenceUsageInfo | null {
     readCount(usage.cache_creation_input_tokens) +
     readCount(usage.cache_read_input_tokens)
   const completionTokens = readCount(usage.output_tokens)
+  const cacheReadTokens = readCount(usage.cache_read_input_tokens)
   const cost = record.total_cost_usd
   return {
     promptTokens,
     completionTokens,
     totalTokens: promptTokens + completionTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
     ...(typeof cost === 'number' && Number.isFinite(cost) ? { cost } : {})
   }
 }

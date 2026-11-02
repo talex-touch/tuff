@@ -39,7 +39,7 @@ code: |
 - 结构化结果（表格、图表、widget）放进 `result` 插槽，`output` 留作纯文本回退。
 - 收到 `retry` 后立即把 `status` 改回 `running`，避免重复点击。
 - 日志逐行追加，不要整段替换，尾部跟随才连贯。
-- 非英文界面一并覆盖六个文案 prop，避免中英混排。
+- 非英文界面一并覆盖文案 prop（含 `linesToggleFormatter`），避免中英混排。
 - `summary` 写这次调用做了什么，不要重复工具名：折叠态是用户唯一会扫读的内容。
 
 ## API 参考
@@ -55,9 +55,10 @@ code: |
 | `runningLabel` | `string` | `'Running'` | `running` 的状态文案。 |
 | `doneLabel` | `string` | `'Done'` | `done` 及其他未匹配状态的文案。 |
 | `errorLabel` | `string` | `'Failed'` | `error` 的状态文案。 |
-| `inputLabel` | `string` | `'Input'` | 入参区标题。 |
+| `inputLabel` | `string` | `'Input'` | 入参区的无障碍名称，不显示为标题。 |
+| `linesToggleFormatter` | `(hiddenCount: number, expanded: boolean) => string` | 英文 `N more lines` / `Show less` | 入参超过四行时，折叠与展开按钮的文案。 |
 
-`AiToolCallPart` 为 `{ type, id, name, status, summary?, input?, output?, error?, logs? }`，`status` 取 `'pending' | 'running' | 'done' | 'error'`。
+`AiToolCallPart` 为 `{ type, id, name, status, summary?, input?, output?, error?, logs?, durationMs? }`，`status` 取 `'pending' | 'running' | 'done' | 'error'`。
 
 ### 事件
 
@@ -70,7 +71,7 @@ code: |
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
-| `summary` | `{ toolCall }` | 替换折叠头部的摘要。 |
+| `summary` | `{ toolCall }` | 替换标题中的参数文本（缺省为 `summary`，再缺省为入参首行）。 |
 | `result` | `{ toolCall }` | 结果区挂载点，供宿主渲染自己的组件；设置后不再渲染 `output`。 |
 | `icon` | `{ status }` | 替换状态图标。 |
 
@@ -83,6 +84,9 @@ code: |
 ## 概述
 
 - 展开区随 `status` 切换：`running` 显示 `logs`，`done` 显示 `result` 插槽（缺省为 `output`），`error` 显示 `error` 与重试按钮；`input` 存在时始终显示。
+- 标题依次为计时（进行中显示 `(1.0)`）、名称（进行中扫光）、参数（`summary`，缺省为入参首行）与耗时（结算后由 `durationMs` 给出）。
+- `pending` 与 `running` 自动展开；结算后自动收起，收起态保留输出的最后两行。日志、输出与收起预览都滚动到底部。
+- 入参超过四行时只露出前四行，由 `linesToggleFormatter` 生成的按钮展开或收起；底栏显示状态。
 - `logs` 每次变化，日志区都滚到底部。
 - `status` 同步到根节点的 `data-status`，供外部定制样式。
 

@@ -87,6 +87,18 @@ export function useSelectionAnchor(options: UseSelectionAnchorOptions = {}): Use
     }
   }
 
+  function extractDomNode(value: unknown): Node | null {
+    if (value instanceof Node)
+      return value
+    if (value && typeof value === 'object') {
+      if ('$el' in value && value.$el instanceof Node)
+        return value.$el
+      if ('el' in value && value.el instanceof Node)
+        return value.el
+    }
+    return null
+  }
+
   function holdsFocus(): boolean {
     if (typeof document === 'undefined')
       return false
@@ -95,7 +107,10 @@ export function useSelectionAnchor(options: UseSelectionAnchorOptions = {}): Use
     if (!active)
       return false
 
-    return (toValue(options.ignore) ?? []).some(element => element && (element === active || element.contains(active)))
+    return (toValue(options.ignore) ?? []).some((element) => {
+      const node = extractDomNode(element)
+      return node !== null && (node === active || node.contains(active))
+    })
   }
 
   function resolve(): void {

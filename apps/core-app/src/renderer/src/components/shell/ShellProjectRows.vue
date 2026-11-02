@@ -4,32 +4,45 @@ import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domain
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import { ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
+import { SHELL_MENU_CARD } from './shell-menu-panel'
 
 const props = withDefaults(
   defineProps<{
     rows: ConversationProjectRow[]
     activeId: string | null
     dispatchDisabled?: boolean
+    /** Project names by id, for the info dialog's 所属项目 row. */
+    projectNames?: Record<string, string>
   }>(),
-  { dispatchDisabled: false }
+  { dispatchDisabled: false, projectNames: () => ({}) }
 )
 
 const emit = defineEmits<{
   openConversation: [id: string]
   removeConversation: [id: string]
+  renameConversation: [id: string, title: string]
+  copyConversation: [conversation: ConversationRecord]
+  openConversationFile: [conversation: ConversationRecord]
   continueSession: [session: LocalAiCliSessionSummary]
   forgetSession: [sessionRef: string]
 }>()
 
-const { t } = useI18n()
+const { t, d } = useI18n()
 const { isConversationLoading } = useConversationLoading()
 const openConversationMenuRef = ref<string | null>(null)
 const openSessionMenuRef = ref<string | null>(null)
 const pendingDeleteConversation = ref<ConversationRecord | null>(null)
+const infoConversation = ref<ConversationRecord | null>(null)
+const renamingId = ref<string | null>(null)
+const renameDraft = ref('')
+const renameInputRef = ref<HTMLInputElement | null>(null)
+const MENU_CARD = SHELL_MENU_CARD
+
 function sessionDisabledReason(session: LocalAiCliSessionSummary): string | undefined {
   if (session.state === 'missing') return t('shell.projects.sessionMissing')
   if (session.state === 'conflict') return t('shell.projects.sessionConflict')
@@ -61,6 +74,98 @@ function onConfirmDelete(): boolean {
   }
   return true
 }
+
+/**
+ * Rename in place, as the project folder does: the field replaces the title inside the row and the
+ * menu closes behind it. Focus lands on the frame after it mounts — the menu hands focus back to its
+ * trigger on close, which would otherwise take the caret straight back.
+ */
+function beginRename(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  renamingId.value = conversation.id
+  renameDraft.value = conversation.title
+  void nextTick(() => {
+    renameInputRef.value?.focus()
+    renameInputRef.value?.select()
+  })
+}
+
+function cancelRename(): void {
+  renamingId.value = null
+  renameDraft.value = ''
+}
+
+/**
+ * Enter saves, Escape abandons — except while an IME composes: macOS Chromium sends the Enter that
+ * picks a candidate before `v-model` holds the composed text, and the Escape that closes the
+ * candidate list arrives with `isComposing` set. `keyCode` 229 covers engines that end the
+ * composition before the key reaches us.
+ */
+function onRenameKeydown(event: KeyboardEvent): void {
+  if (event.isComposing || event.keyCode === 229) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commitRename()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelRename()
+  }
+}
+
+function commitRename(): void {
+  const id = renamingId.value
+  if (!id) return
+  const title = renameDraft.value.trim().slice(0, 80)
+  if (!title) {
+    cancelRename()
+    return
+  }
+  renamingId.value = null
+  emit('renameConversation', id, title)
+}
+
+function requestCopy(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  emit('copyConversation', conversation)
+}
+
+function requestOpenFile(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  emit('openConversationFile', conversation)
+}
+
+function requestInfo(conversation: ConversationRecord): void {
+  openConversationMenuRef.value = null
+  infoConversation.value = conversation
+}
+
+function projectNameFor(conversation: ConversationRecord): string {
+  if (!conversation.projectId) return t('router.home')
+  return props.projectNames[conversation.projectId] ?? t('router.home')
+}
+
+function formatTimestamp(value: number): string {
+  return d(value, 'long')
+}
+
+const infoRows = computed(() => {
+  const conversation = infoConversation.value
+  if (!conversation) return []
+  return [
+    { key: 'id', label: t('shell.history.infoId'), value: conversation.id },
+    { key: 'project', label: t('shell.history.infoProject'), value: projectNameFor(conversation) },
+    {
+      key: 'created',
+      label: t('shell.history.infoCreated'),
+      value: formatTimestamp(conversation.createdAt)
+    },
+    {
+      key: 'updated',
+      label: t('shell.history.infoUpdated'),
+      value: formatTimestamp(conversation.updatedAt)
+    }
+  ]
+})
 </script>
 
 <template>
@@ -75,6 +180,7 @@ function onConfirmDelete(): boolean {
       }"
     >
       <button
+        v-if="renamingId !== row.conversation.id"
         class="ShellProjectRows-Open"
         type="button"
         :title="conversationTitle(row.conversation)"
@@ -97,9 +203,23 @@ function onConfirmDelete(): boolean {
         </Transition>
         <span class="ShellProjectRows-Title">{{ conversationTitle(row.conversation) }}</span>
       </button>
+      <input
+        v-else
+        ref="renameInputRef"
+        v-model="renameDraft"
+        class="ShellProjectRows-Rename"
+        type="text"
+        maxlength="80"
+        :aria-label="t('shell.history.rename')"
+        :placeholder="t('shell.history.renamePlaceholder')"
+        @keydown="onRenameKeydown"
+        @blur="commitRename"
+      />
       <TxDropdownMenu
+        v-if="renamingId !== row.conversation.id"
         :model-value="openConversationMenuRef === row.conversation.id"
         placement="bottom-end"
+        :panel-card="MENU_CARD"
         @update:model-value="setConversationMenu(row.conversation.id, $event)"
       >
         <template #trigger>
@@ -111,6 +231,22 @@ function onConfirmDelete(): boolean {
             <span class="i-ri-more-2-fill" />
           </button>
         </template>
+        <TxDropdownItem @select="beginRename(row.conversation)">
+          <span class="i-ri-edit-line mr-1.5" />
+          {{ t('shell.history.rename') }}
+        </TxDropdownItem>
+        <TxDropdownItem @select="requestCopy(row.conversation)">
+          <span class="i-ri-file-copy-line mr-1.5" />
+          {{ t('shell.history.copy') }}
+        </TxDropdownItem>
+        <TxDropdownItem @select="requestOpenFile(row.conversation)">
+          <span class="i-ri-folder-open-line mr-1.5" />
+          {{ t('shell.history.openFile') }}
+        </TxDropdownItem>
+        <TxDropdownItem @select="requestInfo(row.conversation)">
+          <span class="i-ri-information-line mr-1.5" />
+          {{ t('shell.history.info') }}
+        </TxDropdownItem>
         <TxDropdownItem danger @select="requestDelete(row.conversation)">
           <span class="i-ri-delete-bin-line mr-1.5" />
           {{ t('shell.history.delete') }}
@@ -136,6 +272,7 @@ function onConfirmDelete(): boolean {
       <TxDropdownMenu
         :model-value="openSessionMenuRef === row.session.sessionRef"
         placement="bottom-end"
+        :panel-card="MENU_CARD"
         @update:model-value="setSessionMenu(row.session.sessionRef, $event)"
       >
         <template #trigger>
@@ -181,6 +318,29 @@ function onConfirmDelete(): boolean {
       }
     "
   />
+
+  <!--
+    Read-only facts about the thread. A dialog rather than a tooltip: the id is long enough to want
+    selecting, and the times are what a user checks before deleting or branching a conversation.
+  -->
+  <TxModal
+    :model-value="infoConversation !== null"
+    :title="t('shell.history.infoTitle')"
+    width="420px"
+    :close-label="t('common.close')"
+    @update:model-value="
+      (open: boolean) => {
+        if (!open) infoConversation = null
+      }
+    "
+  >
+    <dl class="ShellProjectRows-Info">
+      <div v-for="row of infoRows" :key="row.key" class="ShellProjectRows-InfoRow">
+        <dt>{{ row.label }}</dt>
+        <dd :class="{ 'is-id': row.key === 'id' }">{{ row.value }}</dd>
+      </div>
+    </dl>
+  </TxModal>
 </template>
 
 <style scoped lang="scss">
@@ -277,6 +437,64 @@ function onConfirmDelete(): boolean {
   white-space: nowrap;
 }
 
+/**
+ * The inline rename field, sized to sit exactly where the title did: the row keeps its height
+ * because the field wears the same type and line box, and only the border and the inset padding
+ * distinguish it.
+ */
+.ShellProjectRows-Rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0 4px 0 0;
+  padding: calc(var(--shell-row-pad-y) - 1px) var(--shell-row-pad-x)
+    calc(var(--shell-row-pad-y) - 1px) calc(var(--shell-row-pad-x) + var(--shell-rows-indent, 0px));
+  border: 1px solid var(--shell-primary-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
+  color: var(--shell-text-regular);
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
+  outline: none;
+  -webkit-app-region: no-drag;
+
+  &:focus {
+    border-color: var(--shell-primary);
+  }
+}
+
+/** The info dialog's rows: a quiet label column, and values that keep their own line breaks. */
+.ShellProjectRows-Info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--shell-fs-sm);
+
+  .ShellProjectRows-InfoRow {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 10px;
+    align-items: baseline;
+  }
+
+  dt {
+    color: var(--shell-text-muted);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--shell-text-regular);
+  }
+
+  .is-id {
+    font-family: var(--tx-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--shell-fs-caption);
+    user-select: text;
+  }
+}
+
 .ShellProjectRows-Session {
   display: flex;
   gap: 6px;
@@ -315,45 +533,14 @@ function onConfirmDelete(): boolean {
   -webkit-app-region: no-drag;
 
   &:focus-visible,
-  .ShellProjectRows-Row:hover & {
+  .ShellProjectRows-Row:hover &,
+  .is-menu-open & {
     opacity: 1;
   }
 
   &:hover {
-    color: var(--shell-danger);
+    color: var(--shell-text-regular);
   }
-}
-
-/**
- * Armed, the trash can's slot becomes a small danger chip reading 「确认？」: same slot, same 24px
- * height, so the row keeps its height and the title ellipsizes to make room. `interpolate-size`
- * is what lets `width` run between the icon's 24px and the label's own width; `auto` does not
- * interpolate without it. The label is clipped while the slot grows, so it is uncovered rather
- * than spilling over the title.
- */
-.ShellProjectRows-Delete {
-  interpolate-size: allow-keywords;
-  overflow: hidden;
-  white-space: nowrap;
-  transition:
-    opacity 0.15s ease,
-    width 0.18s ease,
-    padding 0.18s ease;
-
-  &.is-armed {
-    width: auto;
-    padding: 0 8px;
-    box-shadow: inset 0 0 0 1px var(--shell-danger-border);
-    background: var(--shell-danger-soft);
-    color: var(--shell-danger);
-    opacity: 1;
-  }
-}
-
-.ShellProjectRows-Confirm {
-  font-size: var(--shell-fs-sm);
-  font-weight: 500;
-  line-height: 1;
 }
 
 .ShellProjectRows-LoadingIndicator {
@@ -399,10 +586,6 @@ function onConfirmDelete(): boolean {
   transform: scale(0.5);
 }
 
-.ShellProjectRows-Row:has(.ShellProjectRows-Delete.is-armed) .ShellProjectRows-LoadingIndicator {
-  display: none;
-}
-
 @property --shell-row-spin-angle {
   syntax: '<angle>';
   inherits: false;
@@ -443,10 +626,6 @@ function onConfirmDelete(): boolean {
 
   .shell-spinner-slide-enter-active,
   .shell-spinner-slide-leave-active {
-    transition: opacity 0.15s ease;
-  }
-
-  .ShellProjectRows-Delete {
     transition: opacity 0.15s ease;
   }
 }

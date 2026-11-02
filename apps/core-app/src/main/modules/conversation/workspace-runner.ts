@@ -65,7 +65,12 @@ const providerResponseSchema = z
     model: z.string(),
     usageReported: z.boolean(),
     usage: z
-      .object({ promptTokens: z.number(), completionTokens: z.number(), totalTokens: z.number() })
+      .object({
+        promptTokens: z.number(),
+        completionTokens: z.number(),
+        totalTokens: z.number(),
+        cacheReadTokens: z.number().optional()
+      })
       .optional()
   })
   .passthrough()
@@ -124,6 +129,60 @@ export class ConversationWorkspaceRunner {
 
   async submit(request: WorkspaceSubmitRequest): Promise<WorkspaceSubmitResult> {
     if (this.closing || this.deleting.has(request.conversationId)) throw new Error('WORKSPACE_BUSY')
+    const canDirect =
+      !this.slots.has(request.conversationId) &&
+      (await this.service.canStartDirectly(request.conversationId))
+
+    if (canDirect) {
+      const slot: ExecutionSlot = {
+        conversationId: request.conversationId,
+        controller: new AbortController(),
+        pendingApproval: false,
+        ended: false,
+        seq: 0,
+        lastPersist: 0,
+        pendingWrites: Promise.resolve(),
+        context: {}
+      }
+      this.slots.set(request.conversationId, slot)
+      try {
+        const result = await this.service.admitDirectly(request)
+        if (result.disposition === 'duplicate') {
+          this.slots.delete(request.conversationId)
+          return result
+        }
+        const { turn } = result
+        slot.turn = turn
+        slot.context = turn.context ?? {}
+        slot.assembler = new WorkspaceMessageAssembler(turn.assistant, turn.input.id)
+        this.snapshot(slot)
+        slot.task = this.execute(slot).catch(async (error) => {
+          if (slot.ended || slot.pendingApproval) return
+          const detail = error instanceof Error && error.message ? error.message : String(error)
+          log.error('Workspace execution failed', {
+            conversationId: slot.conversationId,
+            turnId: slot.turn?.input.id,
+            error: detail
+          })
+          await this.end(
+            slot,
+            slot.controller.signal.aborted
+              ? 'WORKSPACE_TURN_CANCELLED'
+              : 'WORKSPACE_EXECUTION_FAILED',
+            slot.controller.signal.aborted ? 'cancelled' : 'failed',
+            slot.controller.signal.aborted ? undefined : detail
+          )
+        })
+        return {
+          disposition: 'started',
+          state: (await this.service.get(request.conversationId))!
+        }
+      } catch (error) {
+        this.slots.delete(request.conversationId)
+        if (error instanceof Error && error.message !== 'WORKSPACE_BUSY') throw error
+      }
+    }
+
     const result = await this.service.enqueue(request)
     if (result.disposition === 'duplicate') return result
     const started = await this.kick(request.conversationId)
@@ -522,7 +581,7 @@ export class ConversationWorkspaceRunner {
           if (slot.controller.signal.aborted) await aiCliOrchestrator.cancelPersistedRun(run.id)
         },
         onEvent: (event) => this.agentEvent(slot, event),
-        onRunResult: async (run) => {
+        onRunResult: async (run, failureDetail) => {
           if (slot.ended) return
           if (run.status === 'pending_approval') {
             slot.pendingApproval = true
@@ -549,7 +608,8 @@ export class ConversationWorkspaceRunner {
                 ? 'cancelled'
                 : run.status === 'interrupted'
                   ? 'interrupted'
-                  : 'failed'
+                  : 'failed',
+              run.status === 'failed' ? failureDetail : undefined
             )
           }
         }

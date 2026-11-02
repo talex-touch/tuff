@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.9.2",
-  "totalComponents": 190,
+  "totalComponents": 191,
   "versions": [
     {
       "version": "0.9.2",
@@ -930,6 +930,11 @@
       "slug": "metal-fx",
       "since": "0.6.2",
       "suite": "pro"
+    },
+    "miko": {
+      "slug": "miko",
+      "since": "0.9.2",
+      "suite": "ai"
     },
     "modal": {
       "slug": "modal",

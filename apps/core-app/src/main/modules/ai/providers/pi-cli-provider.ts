@@ -45,6 +45,7 @@ import { collectMessageAttachments } from './attachment-spill'
 import { runCliChat } from './cli/cli-process-runtime'
 import { createClaudeLineParser } from './cli/claude-stream-json'
 import { createCodexLineParser } from './cli/codex-exec-json'
+import { createOmpIsolation, type OmpIsolation } from './cli/omp-isolation'
 import {
   buildOmpArgs,
   buildPiArgs,
@@ -245,8 +246,28 @@ export class PiCliProvider extends IntelligenceProvider {
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     if (!this.localCliEnabled()) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
-    const signal = (options as PiCliRuntimeOptions).signal
-    if (signal?.aborted) return
+    const rawSignal = (options as PiCliRuntimeOptions).signal
+    if (rawSignal?.aborted) return
+
+    const timeoutMs = options.timeout ?? this.config.timeout
+    let timeoutTimer: NodeJS.Timeout | undefined
+    let abortController: AbortController | undefined
+    let removeRawListener: (() => void) | undefined
+
+    let signal: AbortSignal | undefined = rawSignal
+
+    if (timeoutMs && timeoutMs > 0) {
+      abortController = new AbortController()
+      if (rawSignal) {
+        const onRawAbort = () => abortController?.abort(rawSignal.reason)
+        rawSignal.addEventListener('abort', onRawAbort, { once: true })
+        removeRawListener = () => rawSignal.removeEventListener('abort', onRawAbort)
+      }
+      timeoutTimer = setTimeout(() => {
+        abortController?.abort(new Error(`CLI request timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
+      signal = abortController.signal
+    }
 
     const isOmp =
       this.config.id === OMP_CLI_PROVIDER_ID || this.config.metadata?.origin === OMP_CLI_ORIGIN
@@ -314,8 +335,10 @@ export class PiCliProvider extends IntelligenceProvider {
     // `codex` and `claude` still read AGENTS.md / CLAUDE.md out of their working directory, so a run
     // started from the app's launch directory would feed unrelated repository rules into the chat.
     // The throwaway directory is the whole isolation — removed in `finally`, whatever the turn did.
+    // omp is isolated from the app's launch directory the same way, and from the user's own agent
+    // directory below (see `createOmpIsolation`).
     const isolationRoot =
-      isCodex || isClaude ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
+      isCodex || isClaude || isOmp ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
     // Taken only once there is nothing left to fail before the guarded block: the lease is released
     // in the `finally` below, so taking it ahead of a call that can reject would strand the thread
     // in NATIVE_SESSION_BUSY until the app restarted.
@@ -323,8 +346,10 @@ export class PiCliProvider extends IntelligenceProvider {
       ? acquireHomeConversationLease(home.conversationId)
       : undefined
     let toolRuntime: PiToolRuntimeConfig | null = null
+    let ompIsolation: OmpIsolation | undefined
 
     try {
+      if (isOmp) ompIsolation = await createOmpIsolation()
       if (nativeSession && cwd && pointer) {
         releaseNativeLease = nativeSessionLeaseRegistry.acquire({
           provider: localProviderId,
@@ -385,7 +410,14 @@ export class PiCliProvider extends IntelligenceProvider {
           errorPrefix,
           executable,
           args: isOmp
-            ? (attachmentPaths) => buildOmpArgs(prompt, model, attachmentPaths, thinkingLevel)
+            ? (attachmentPaths) =>
+                buildOmpArgs(
+                  prompt,
+                  model,
+                  attachmentPaths,
+                  thinkingLevel,
+                  ompIsolation?.configOverlayPath
+                )
             : isCodex && isolationRoot
               ? (attachmentPaths) => [
                   'exec',
@@ -478,6 +510,7 @@ export class PiCliProvider extends IntelligenceProvider {
             : {}),
           env: {
             PI_RETRY_STALL_TIMEOUT_MS: '0',
+            ...(ompIsolation?.env ?? {}),
             ...(toolRuntime
               ? {
                   TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
@@ -529,9 +562,12 @@ export class PiCliProvider extends IntelligenceProvider {
       }
       throw error
     } finally {
+      clearTimeout(timeoutTimer)
+      removeRawListener?.()
       // The gateway scope ends with the run: completion, abort and every error path alike.
       toolRuntime?.release?.()
       if (isolationRoot) await rm(isolationRoot, { recursive: true, force: true }).catch(() => {})
+      await ompIsolation?.dispose()
       releaseNativeLease?.()
       releaseConversationLease?.()
     }

@@ -355,6 +355,29 @@ describe('PiCliProvider.chatStream', () => {
     expect(() => process.kill(childPid, 0)).toThrow()
     expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
   })
+
+  it('terminates a stalled child when options.timeout expires', async () => {
+    // Integration seam: verifies OS process termination driven by real timer expiration against
+    // a spawned child process. Real time is required because fake timers cannot drive OS child stdio.
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: String(process.pid) } })
+      setInterval(() => {}, 1000)
+    `)
+
+    const iterator = provider().chatStream(userTurn(), {
+      timeout: 800
+    })
+    const first = await iterator.next()
+    const childPid = Number(first.value?.delta)
+    expect(childPid).toBeGreaterThan(0)
+
+    const startedAt = Date.now()
+    const second = await iterator.next()
+    expect(second.done).toBe(true)
+    expect(Date.now() - startedAt).toBeLessThan(2000)
+    expect(() => process.kill(childPid, 0)).toThrow()
+  })
 })
 
 describe('PiCliProvider attachments', () => {

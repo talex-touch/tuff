@@ -1,0 +1,97 @@
+---
+title: "Miko 桌面伴侣猫"
+description: "纯 SVG 与 CSS 关键帧驱动的像素桌宠，提供 38 种 Agent 实时交互、趣味职业与奇幻变异状态"
+category: AiAgent
+status: beta
+since: 0.9.2
+tags: [miko, mascot, pet, agent, svg, pixel]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`state` 属性绑定 Agent 的实时生命周期：待命中为 `idle`，执行代码时为 `working`，工具调度奔跑为 `running`，模型推理为 `thinking`，成功则为 `success`。开启 `interactive` 和 `random` 即可拥有自主随机动作、点击互动与闪光恶魔变异。
+::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const state = ref<'idle' | 'working' | 'running' | 'thinking' | 'success'>('idle')
+  </script>
+
+  <template>
+    <TxMiko :state="state" size="md" />
+    <TxMiko :state="state" size="lg" color="#199FFE" />
+    <TxMiko size="md" demon />
+    <TxMiko size="md" interactive random />
+  </template>
+---
+::::
+
+### 完整状态
+Miko 包含 38 种基于猫咪天性、丰富职业与趣味奇幻（揣手趴卧、踩奶打字、急速奔跑、品尝咖啡、弹奏吉他、DJ打碟、忍者潜行、施展魔法、料理大厨、垂钓时光、太空宇航、发射爱心、举重健身、雨中漫步、困倦呵欠、闪光恶魔、飞机耳、伸懒腰、洗脸、好奇歪头、磨爪、呼噜、吃鱼干、摇摆舞、打call、游戏机、极客黑客、撒花、纸箱等）深度定制的像素动画。
+::::TuffDemoWrapper{demo="MikoStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMiko state="idle" size="md" />
+    <TxMiko state="coffee" size="md" />
+    <TxMiko state="guitar" size="md" />
+    <TxMiko state="dj" size="md" />
+    <TxMiko state="magic" size="md" />
+    <TxMiko state="running" size="md" />
+    <TxMiko state="demon" size="md" />
+    <TxMiko state="space" size="md" />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- **状态映射契约**：与 Agent 的生命周期钩子精确对应：`session_start` 对应 `idle`，`UserPromptSubmit` 对应 `thinking`，`tool_call` 对应 `running` 或 `working`，`Stop` 对应 `success`，`PermissionRequest` 对应 `alert`，长时静止对应 `sleeping` 或 `sleepy`。
+- **互动与恶魔突变**：传入 `interactive` 可开启点击反馈，支持快速连续点击触发眩晕彩蛋；自主探索或点击中有概率触发「闪光恶魔」变异形态（小恶魔犄角、蝙蝠羽翼、小叉尾与金色星火），也可通过 `demon` 属性直接开启。
+- **纯矢量性能**：无需加载额外图片资源或启动高开销 Canvas 循环，全部由纯 SVG `<rect>` 像素块和 CSS `@keyframes` 硬件加速驱动，开销极低。
+- **尺寸比例**：推荐使用 `'xs' | 'sm' | 'md' | 'lg'` 规格或数值；宽高比收敛至 36:20，平稳横向比例适合停靠在状态栏、CoreBox 边角或对话框底端。
+- **单色与可访问性**：默认为 Tuff 经典电光紫（`#810DC6`），恶魔变异下为深邃暗绯色（`#4C0519`），支持通过 `color` 自定义；已内置 `role="img"` 与可访问标签。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `state` | `MikoState` | `'idle'` | 当前动作状态，支持 38 种完整状态。 |
+| `size` | `MikoSize` | `'md'` | 尺寸大小，支持 `'xs'` (22px)、`'sm'` (30px)、`'md'` (50px)、`'lg'` (66px) 或自定义宽高数值。 |
+| `color` | `string` | `'#810DC6'` | 身体主色调。 |
+| `labels` | `Partial<MikoLabels>` | `{}` | 各状态的可访问文案标签覆盖。 |
+| `ariaLabel` | `string` | 自动生成 | 覆盖默认的无障碍文本公告。 |
+| `interactive` | `boolean` | `false` | 是否开启点击互动反馈与悬停发光动画。 |
+| `random` | `boolean` | `false` | 是否在空闲时随机轮换日常趣味动作。 |
+| `randomInterval` | `number` | `5000` | 随机动作切换的时间间隔（毫秒）。 |
+| `demon` | `boolean` | `false` | 是否强制开启「闪光恶魔」变异形态。 |
+| `mutationChance` | `number` | `0.06` | 交互或随机状态下突变为闪光恶魔的概率 (0 ~ 1)。 |
+
+### 事件
+
+| 事件名 | 类型 | 说明 |
+|--------|------|------|
+| `click` | `[event: MouseEvent]` | 点击桌宠时触发。 |
+| `stateChange` | `[state: MikoState]` | 动作状态发生改变时触发（如随机轮换或互动反馈）。 |
+| `update:state` | `[state: MikoState]` | 支持 `v-model:state` 双向绑定状态。 |
+| `mutate` | `[isDemon: boolean]` | 突变为闪光恶魔或恢复时触发。 |
+
+## 概述
+
+- 渲染为携带 `role="img"` 的高精度像素 SVG，并应用 `shape-rendering="crispEdges"`。
+- 包含 38 种状态：待命 (`idle`)、敲代码 (`working`)、急步奔跑 (`running`)、闪光恶魔 (`demon`)、品尝咖啡 (`coffee`)、弹奏吉他 (`guitar`)、困倦呵欠 (`sleepy`)、忍者潜行 (`ninja`)、垂钓时光 (`fishing`)、施展魔法 (`magic`)、雨中漫步 (`umbrella`)、发射爱心 (`heart`)、举重健身 (`workout`)、DJ打碟 (`dj`)、料理大厨 (`chef`)、太空宇航 (`space`)、思考 (`thinking`)、成功 (`success`)、警觉 (`alert`)、报错 (`error`)、休眠 (`sleeping`)、多任务 (`juggling`)、扫地 (`sweeping`)、研读 (`reading`)、眩晕 (`dizzy`)、探头 (`peeking`)、猫式伸展 (`stretching`)、舔爪洗脸 (`bathing`)、好奇歪头 (`curious`)、磨爪挠挠 (`scratching`)、呼噜发颤 (`purring`)、吃小鱼干 (`eating`)、节拍摇摆 (`dancing`)、打call应援 (`cheering`)、专注打机 (`gaming`)、极客超频 (`hacking`)、撒花庆祝 (`celebrating`)、纸箱猫猫 (`box`)。
+- 动画全程通过纯 CSS `@keyframes` 驱动，零外部帧序列依赖。
+
+## 技术实现
+
+- 源码位于 `packages/tuffex/packages/components/src/miko/`。
+- 宽高比固定为 1.8:1，SVG 内置坐标系为 `viewBox="0 0 36 20"`。
+
+<TuffDocSourceLink />

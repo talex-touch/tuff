@@ -65,6 +65,23 @@ code: |
 ---
 :::
 
+### Rendered Preview
+Once `html`, `svg` or `xml` code stops arriving, a "Preview" toggle appears in the header; it renders the code as a page in a sandboxed `iframe`, and the same button returns to the source. It never appears while streaming or in diff mode. `auto-preview` opens on the rendering as soon as the code settles; the reader can still switch back to the source.
+:::TuffDemoWrapper{demo="CodeStreamPreviewDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="html"
+      lang="html"
+      filename="pelican.html"
+      lang-label="HTML"
+      auto-preview
+    />
+  </template>
+---
+:::
+
 ### Unified Diff
 `diff` renders a unified diff. A removed row and the added row replacing it share a number, so numbers are given per row.
 :::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
@@ -94,6 +111,8 @@ code: |
 - When the language is uncertain, omit `lang`: plain text is always correct.
 - Put long listings in an outer scroll container; the code area scrolls only horizontally and its height follows content.
 - Use `TxCodeBlock` to match `TxStreamMarkdown` fences; use this component for a filename header, line numbers, and a line-by-line reveal.
+- A previewed page does not run scripts by default. Set `preview-scripts` only when the host trusts the page; even then the frame has no same-origin access and no network, so a script can draw but cannot reach the host.
+- Use `auto-preview` when the model was asked for a page; leave it off when the code is only a snippet on show, where the reader should see the source first.
 
 ## API Reference
 
@@ -121,6 +140,12 @@ code: |
 | `copyable` | `boolean` | `true` | Renders the copy button. |
 | `copyLabel` | `string` | `'Copy'` | Copy button text; localize it together with `copiedLabel`. |
 | `copiedLabel` | `string` | `'Copied'` | Text shown after a successful copy. |
+| `previewable` | `boolean` | `true` | Offers a "Preview" toggle for `html`, `svg` and `xml` code once it stops arriving; never while streaming or in diff mode. |
+| `autoPreview` | `boolean` | `false` | Opens on the rendering as soon as the code settles; the reader can switch back to the source. |
+| `previewScripts` | `boolean` | `false` | Lets the previewed page run its own scripts; the frame stays an opaque-origin sandbox with no network. |
+| `previewLabel` | `string` | `'Preview'` | Toggle text. |
+| `codeLabel` | `string` | `'Code'` | Toggle text while the rendering shows. |
+| `frameLabelFormatter` | `(lang: string) => string` | ``(lang) => `${lang} preview` `` | Accessible name of the preview frame. |
 | `minHeight` | `number \| string` | — | Floor for the code area; defaults to the full listing's height. |
 | `diff` | `CodeDiffRow[]` | — | Unified diff rows; renders them with an added/removed tally. The copy button still yields `code`. |
 
@@ -165,6 +190,7 @@ code: |
 - With `revealedLines`, the caret appears only while revealing (`0 < revealedLines < total`), still, at the end of the last line.
 - Removed rows take a hatched gutter marker and added rows a solid one, so the distinction never rests on red and green alone.
 - Only Shiki-generated markup reaches `v-html`, with the code text escaped; unhighlighted code is plain interpolation.
+- The preview frame is a `sandbox` `iframe` without `allow-same-origin`. Its document is written as an outer `srcdoc`: the policy `<meta>` sits in the outer document and the previewed code is embedded as an escaped inner `srcdoc`, so a `"` or a `<head>` inside the code cannot move the policy. The policy is `default-src 'none'` with only inline styles and `data:`/`blob:` images and media allowed; `script-src` is `'none'` unless `previewScripts` is set, which makes it `'unsafe-inline'`.
 - Under reduced motion no line or word entrance plays: `revealedLines` still reveals, streaming mode shows code as it arrives, and the caret rests.
 
 ## Technologies

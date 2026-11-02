@@ -49,7 +49,8 @@ describe('createCodexLineParser', () => {
       usage: {
         promptTokens: 12935,
         completionTokens: 41,
-        totalTokens: 12976
+        totalTokens: 12976,
+        cacheReadTokens: 2432
       },
       stopReason: 'stop'
     })
@@ -65,7 +66,12 @@ describe('createCodexLineParser', () => {
     // Codex reports non-fatal warnings as error items; the turn below still finishes.
     expect(parse(ITEM_ERROR)).toBeNull()
     expect(parse(TURN_COMPLETED)).toEqual({
-      usage: { promptTokens: 12935, completionTokens: 41, totalTokens: 12976 },
+      usage: {
+        promptTokens: 12935,
+        completionTokens: 41,
+        totalTokens: 12976,
+        cacheReadTokens: 2432
+      },
       stopReason: 'stop'
     })
   })

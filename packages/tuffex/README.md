@@ -91,7 +91,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **190**.
+Current source-of-truth export modules: **191**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -133,7 +133,7 @@ Motion content, chart data and business state come from the caller. Changing tex
 Chat, agent, reasoning and context components for AI-native interfaces. Import from `@talex-touch/tuffex/ai`.
 
 - `Chat (9)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`, `voice-clip`
-- `Agents (10)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`
+- `Agents (11)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`, `miko`
 - `Reasoning (10)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `Context & Insight (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
 - `Flow (1)`: `flowchart`
