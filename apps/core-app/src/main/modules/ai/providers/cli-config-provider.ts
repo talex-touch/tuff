@@ -1,3 +1,4 @@
+import YAML from 'yaml'
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { readFileSync } from 'node:fs'
@@ -77,10 +78,23 @@ const OMP_MODEL_FILES = ['models.yml', 'models.yaml', 'models.json'] as const
 function readOmpModelConfig(): Record<string, unknown> | null {
   for (const name of OMP_MODEL_FILES) {
     const content = readFile(join(ompAgentDir(), name))
-    const config = content === null ? null : parseConfig(content, extname(name))
+    const config = content === null ? null : parseOmpModelFile(content, extname(name))
     if (config) return config
   }
   return null
+}
+
+// parseConfig falls back to a permissive YAML reader that accepts broken files; the catalog skips them.
+function parseOmpModelFile(content: string, extension: string): Record<string, unknown> | null {
+  if (extension === '.json') return parseConfig(content, extension)
+  try {
+    const parsed: unknown = YAML.parse(content)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
 }
 
 function buildCodexEndpointConfig(content: string | null): IntelligenceProviderConfig | null {
