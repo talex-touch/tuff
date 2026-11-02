@@ -228,6 +228,7 @@ import {
   createApprovalRequiredError,
   createInterruptedToolCallError,
   createRunCancelledError,
+  createRunFailedError,
   createRunInterruptedError
 } from './pi-agent-runtime-control-error'
 
@@ -601,22 +602,26 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(payload?.budget.maxCost).toBeUndefined()
   })
 
-  it('marks persisted queued and running runs interrupted during initialization recovery', async () => {
+  it('marks persisted queued and running runs interrupted when they cannot be resumed', async () => {
+    // A conversation turn is never resumed by the orchestrator: its controller owns its authority.
     const queued = parentRun()
     orchestratorMocks.runs.set(parentRunId, {
       ...queued,
       status: 'queued',
       metadata: {
         ...queued.metadata,
+        workspaceExecution: true,
         arbitraryCallerField: CANARY,
         requestInput: { credential: CANARY },
         allowedToolIds: ['tool.safe']
       }
     })
+    const running = parentRun()
     orchestratorMocks.runs.set('running-recovery-run', {
-      ...parentRun(),
+      ...running,
       id: 'running-recovery-run',
-      status: 'running'
+      status: 'running',
+      metadata: { ...running.metadata, workspaceExecution: true }
     })
 
     const recoveredOrchestrator = new AiCliOrchestrator()
@@ -879,6 +884,8 @@ describe('AiCliOrchestrator delegation boundary', () => {
     })
     expect(pending.status).toBe('pending_approval')
 
+    // The run `beforeEach` seeded is resumable, so the restart would pick it up and run it.
+    orchestratorMocks.runs.delete(parentRunId)
     const restarted = new AiCliOrchestrator()
     await restarted.initialize()
     const interrupted = await restarted.approveRun(pending.id)
@@ -946,6 +953,7 @@ describe('AiCliOrchestrator delegation boundary', () => {
     )
     expect(JSON.stringify(orchestratorMocks.runs.get(pending.id)?.metadata)).not.toContain(CANARY)
 
+    orchestratorMocks.runs.delete(parentRunId)
     const restarted = new AiCliOrchestrator()
     await restarted.initialize()
     const approved = await restarted.approveRun(pending.id)
@@ -1334,6 +1342,43 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(run).toMatchObject({ status: 'failed', error: 'AI_RUN_FAILED: AI run failed.' })
   })
 
+  it('hands a workspace the redacted reason a run failed for, while the record keeps the fixed code', async () => {
+    orchestratorMocks.profiles.set('profile-autonomous', enabledProfile('profile-autonomous'))
+    orchestratorMocks.runtimeExecute.mockRejectedValueOnce(
+      createRunFailedError('Gemini rejected the call: invalid API key')
+    )
+    const onRunResult = vi.fn(async () => undefined)
+
+    const run = await orchestrator.executeWorkspace(
+      {
+        objective: 'Say hello.',
+        profileId: 'profile-autonomous',
+        metadata: { orchestratorRunId: 'failure-detail-run' }
+      },
+      {
+        conversationId: 'conversation-failure-detail',
+        turnId: 'turn-failure-detail',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined,
+        onRunResult
+      }
+    )
+
+    expect(run).toMatchObject({ status: 'failed', error: 'AI_RUN_FAILED: AI run failed.' })
+    expect(onRunResult).toHaveBeenCalledWith(
+      expect.objectContaining({ id: run.id }),
+      'Gemini rejected the call: invalid API key'
+    )
+    const persisted = JSON.stringify({
+      run: orchestratorMocks.runs.get(run.id),
+      events: orchestratorMocks.appendOrchestratorEvent.mock.calls.filter(
+        ([runId]) => runId === run.id
+      )
+    })
+    expect(persisted).not.toContain('Gemini rejected')
+  })
+
   it('counts completed children against the cumulative delegation budget', async () => {
     orchestratorMocks.runs.set('existing-child', {
       ...parentRun(),
@@ -1435,7 +1480,7 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(orchestratorMocks.runs.get(grandchild.id)?.status).toBe('cancelled')
   })
 
-  it('atomically migrates and sanitizes a legacy completed tool-call record', async () => {
+  it('atomically migrates and bounds a legacy completed tool-call record', async () => {
     const toolCallId = 'legacy-call-completed'
     const toolId = 'tool.private.release'
     const toolCallRef = opaqueRuntimeReference('pi-call', toolCallId)
@@ -1464,7 +1509,11 @@ describe('AiCliOrchestrator delegation boundary', () => {
     await expect(
       latestHostCallbacks().loadToolCallResult(parentRunId, toolCallId, toolId)
     ).resolves.toEqual({
-      output: { safe: 'Published.', credential: '[redacted]', path: '[redacted]' }
+      output: {
+        safe: 'Published.',
+        credential: 'AKIA1234567890ABCDEF',
+        path: '/workspace/private/release.md'
+      }
     })
 
     const metadata = orchestratorMocks.runs.get(parentRunId)?.metadata
@@ -1474,7 +1523,11 @@ describe('AiCliOrchestrator delegation boundary', () => {
       },
       completedToolCallResults: {
         [toolCallRef]: {
-          output: { safe: 'Published.', credential: '[redacted]', path: '[redacted]' }
+          output: {
+            safe: 'Published.',
+            credential: 'AKIA1234567890ABCDEF',
+            path: '/workspace/private/release.md'
+          }
         }
       }
     })
@@ -1484,8 +1537,6 @@ describe('AiCliOrchestrator delegation boundary', () => {
     )
     expect(JSON.stringify(metadata)).not.toContain(toolCallId)
     expect(JSON.stringify(metadata)).not.toContain(toolId)
-    expect(JSON.stringify(metadata)).not.toContain('AKIA1234567890ABCDEF')
-    expect(JSON.stringify(metadata)).not.toContain('/workspace/private/release.md')
   })
 
   it('migrates a legacy started call and rejects a mismatched legacy tool identity', async () => {

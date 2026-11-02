@@ -149,4 +149,50 @@ describe('intelligence strategy manager', () => {
 
     expect(result.selectedProvider.id).toBe('pi-cli-default')
   })
+
+  it('never cascades through multiple local CLI providers in fallback list', async () => {
+    const cliProviders: IntelligenceProviderConfig[] = [
+      {
+        id: 'omp-cli',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'OMP (local CLI)',
+        enabled: true,
+        priority: 1,
+        metadata: { isLocalCli: true }
+      },
+      {
+        id: 'pi-cli-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Pi (local CLI)',
+        enabled: true,
+        priority: 2,
+        metadata: { isLocalCli: true }
+      },
+      {
+        id: 'codex-cli',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Codex (local CLI)',
+        enabled: true,
+        priority: 3,
+        metadata: { isLocalCli: true }
+      },
+      {
+        id: 'openai-default',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'OpenAI',
+        enabled: true,
+        priority: 4
+      }
+    ]
+
+    const result = await strategyManager.select({
+      capabilityId: 'text.chat',
+      options: {},
+      availableProviders: cliProviders
+    })
+
+    expect(result.selectedProvider.id).toBe('omp-cli')
+    // pi-cli-default and codex-cli are local CLIs and must not be in the fallback list after omp-cli
+    expect(result.fallbackProviders.map((p) => p.id)).toEqual(['openai-default'])
+  })
 })

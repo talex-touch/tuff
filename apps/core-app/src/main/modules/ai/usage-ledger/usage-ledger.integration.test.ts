@@ -372,6 +372,9 @@ describe('outer governance rows (AC-B3)', () => {
           provider: 'tuff-pi-runtime'
         } as IntelligenceInvokeResult<never>
       },
+      streamAgentCapability: async function* () {
+        throw new Error('not used')
+      },
       executeWorkflowCapability: async () => {
         throw new Error('not used')
       }

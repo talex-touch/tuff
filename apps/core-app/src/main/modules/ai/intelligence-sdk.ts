@@ -89,8 +89,9 @@ import { intelligenceCapabilityRegistry } from './intelligence-capability-regist
 import { isOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
-import { strategyManager } from './intelligence-strategy-manager'
+import { isLocalCliProvider, strategyManager } from './intelligence-strategy-manager'
 import { planChatModelRequest } from './model-request-plan'
+import { foldToolsIntoPrompt } from './tool-text-protocol'
 import { fetchProviderModels } from './provider-models'
 import {
   planProviderReasoning,
@@ -586,6 +587,10 @@ export interface IntelligenceAutonomousRuntimeAdapter {
     payload: IntelligenceAgentPayload,
     options: IntelligenceInvokeOptions
   ) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
+  streamAgentCapability: (
+    payload: IntelligenceAgentPayload,
+    options: HostIntelligenceInvokeOptions
+  ) => AsyncGenerator<IntelligenceStreamEvent<IntelligenceAgentResult>>
   executeWorkflowCapability: (
     payload: unknown,
     options: IntelligenceInvokeOptions
@@ -955,7 +960,8 @@ export class TuffIntelligenceSDK {
                 manager,
                 fallbackProviders: strategyResult.fallbackProviders,
                 promptTemplate,
-                promptVariables
+                promptVariables,
+                selectedProvider: strategyResult.selectedProvider
               })
         // Fallback success has the same logical commit point as primary success.
         throwIfIntelligenceCancelled(signal)
@@ -1037,7 +1043,9 @@ export class TuffIntelligenceSDK {
     throwIfIntelligenceCancelled(signal)
     const outerGoverned = isOuterGovernedInvocation(options)
     capabilityId = this.normalizeCapabilityId(capabilityId)
-    assertCancellableCapability(capabilityId, signal)
+    // An agent run is cancelled through the run itself (`streamAgentCapability`), not through a
+    // provider call, so the provider-level cancellation allow-list does not apply to it.
+    if (capabilityId !== 'agent.run') assertCancellableCapability(capabilityId, signal)
     const requestStartTime = Date.now()
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
@@ -1057,6 +1065,10 @@ export class TuffIntelligenceSDK {
       const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
         throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
+      }
+      if (capability.type === 'agent') {
+        yield* this.streamAgentRun<T>(capabilityId, payload, options, capability, outerGoverned)
+        return
       }
       if (capability.type !== 'chat') {
         throw new Error(`[Intelligence] Capability ${capabilityId} does not support streaming`)
@@ -1213,7 +1225,11 @@ export class TuffIntelligenceSDK {
           providerRuntimeOptions,
           providerConfig
         )
-        const nextPayload = plannedChat.payload
+        // A provider that sends tools on its own wire gets them as structured fields; every other
+        // one gets the same tools and tool turns as the text protocol, and never sees the fields.
+        const nextPayload = provider.supportsNativeTools
+          ? plannedChat.payload
+          : foldToolsIntoPrompt(plannedChat.payload)
         const startTime = Date.now()
         const provisionalTraceId = intelligenceAuditLogger.generateTraceId()
         const configuredModel =
@@ -1409,7 +1425,17 @@ export class TuffIntelligenceSDK {
         )
 
         let lastError: unknown = error
+        let triedLocalCliStream = isLocalCliProvider(strategyResult.selectedProvider)
         for (const fallbackProvider of strategyResult.fallbackProviders) {
+          if (isLocalCliProvider(fallbackProvider)) {
+            if (triedLocalCliStream) {
+              logInfo(
+                `Skipping stream fallback provider ${fallbackProvider.id}: local CLI already attempted`
+              )
+              continue
+            }
+            triedLocalCliStream = true
+          }
           let fallbackProviderEmittedDelta = false
           beginTerminalAttempt(fallbackProvider)
           try {
@@ -1452,6 +1478,108 @@ export class TuffIntelligenceSDK {
     } finally {
       usageAdmission.release()
       disposeStream()
+    }
+  }
+
+  /**
+   * `stream('agent.run')`: governed like `invoke('agent.run')` - usage limit, caller quota, provider
+   * routing, audit - and then handed to the autonomous runtime, which reports the run as it happens.
+   * The events are the runtime's own (text, reasoning, tool calls); nothing is parsed out of model
+   * text here.
+   */
+  private async *streamAgentRun<T>(
+    capabilityId: string,
+    payload: unknown,
+    options: HostIntelligenceInvokeOptions,
+    capability: { type: string; supportedProviders: Array<IntelligenceProviderConfig['type']> },
+    outerGoverned: boolean
+  ): AsyncGenerator<IntelligenceStreamEvent<T>> {
+    const { signal } = options
+    const startTime = Date.now()
+    const caller = resolveUsageCaller(options.metadata)
+    let usageAdmission: UsageAdmission = NO_USAGE_ADMISSION
+    try {
+      if (!outerGoverned && this.config.enableQuota) {
+        usageAdmission = await this.admitGlobalUsage(capabilityId, signal)
+      }
+      if (!outerGoverned && this.config.enableQuota && caller) {
+        const quotaCheck = await awaitIntelligenceBoundary(this.checkQuota(caller, 0, signal), signal)
+        if (!quotaCheck.allowed) {
+          throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
+        }
+      }
+
+      const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
+        capabilityId,
+        options
+      )
+      const manager = ensureProviderManager()
+      const availableProviders = this.resolveAvailableProviders(
+        manager,
+        capabilityId,
+        capability.type,
+        capability.supportedProviders,
+        runtimeOptions,
+        false
+      )
+      const { selectedProvider } = await awaitIntelligenceBoundary(
+        strategyManager.select({ capabilityId, options: runtimeOptions, availableProviders }),
+        signal
+      )
+      this.applyModelPreference(runtimeOptions, selectedProvider, capabilityId)
+
+      const auditBase = {
+        startTime,
+        capabilityId,
+        providerId: selectedProvider.id,
+        caller,
+        userId: runtimeOptions.metadata?.userId,
+        metadata: runtimeOptions.metadata,
+        promptTemplate,
+        promptVariables,
+        usageAdmission
+      }
+      let auditCommitted = false
+      try {
+        const events = ensureAutonomousRuntimeAdapter().streamAgentCapability(
+          payload as IntelligenceAgentPayload,
+          runtimeOptions
+        )
+        for await (const event of events) {
+          if (event.type === 'end') {
+            throwIfIntelligenceCancelled(signal)
+            auditCommitted = true
+            if (!outerGoverned) {
+              await this.writeSuccessAudit({
+                ...auditBase,
+                result: {
+                  result: event.result,
+                  provider: event.provider ?? selectedProvider.id,
+                  model: event.model ?? 'unknown',
+                  traceId: event.traceId ?? intelligenceAuditLogger.generateTraceId(),
+                  usage: event.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+                  latency: Date.now() - startTime
+                }
+              })
+            }
+          }
+          // The runtime's events are typed for the agent result; `T` is the caller's name for it.
+          const typed = event as unknown as IntelligenceStreamEvent<T>
+          yield typed
+        }
+      } catch (error) {
+        if (signal?.aborted) throw new IntelligenceOperationCancelledError()
+        if (!auditCommitted && !outerGoverned) {
+          auditCommitted = true
+          await this.writeFailureAudit({
+            ...auditBase,
+            error: providerFailureForBoundary(error, Boolean(signal))
+          })
+        }
+        throw error
+      }
+    } finally {
+      usageAdmission.release()
     }
   }
 
@@ -2388,6 +2516,7 @@ export class TuffIntelligenceSDK {
     fallbackProviders: IntelligenceProviderConfig[]
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
+    selectedProvider?: IntelligenceProviderConfig
   }): Promise<{ result: IntelligenceInvokeResult<T>; providerId: string } | null> {
     const {
       capabilityId,
@@ -2397,7 +2526,8 @@ export class TuffIntelligenceSDK {
       manager,
       fallbackProviders,
       promptTemplate,
-      promptVariables
+      promptVariables,
+      selectedProvider
     } = params
 
     if (fallbackProviders.length === 0) {
@@ -2408,8 +2538,19 @@ export class TuffIntelligenceSDK {
     throwIfIntelligenceCancelled(signal)
     logWarn(`Attempting fallback providers for ${capabilityId}`)
 
+    let triedLocalCli = selectedProvider ? isLocalCliProvider(selectedProvider) : false
+
     for (const fallbackConfig of fallbackProviders) {
       throwIfIntelligenceCancelled(signal)
+      if (isLocalCliProvider(fallbackConfig)) {
+        if (triedLocalCli) {
+          logInfo(
+            `Skipping fallback provider ${fallbackConfig.id}: local CLI already attempted`
+          )
+          continue
+        }
+        triedLocalCli = true
+      }
       const fallbackProvider = manager.get(fallbackConfig.id)
       if (!fallbackProvider) continue
 

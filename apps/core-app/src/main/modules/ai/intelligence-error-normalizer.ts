@@ -1,7 +1,7 @@
 import type { IntelligenceErrorCode as SharedIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import type { UsageLimitInfo } from './usage-ledger/usage-limits'
-import { homedir } from 'node:os'
 import { readUsageLimitInfo, USAGE_LIMIT_REACHED_CODE } from './usage-ledger/usage-limits'
+import { redactProviderDetail } from './provider-detail-redaction'
 
 export type IntelligenceErrorCode = SharedIntelligenceErrorCode
 
@@ -242,9 +242,6 @@ export function toNormalizedIntelligenceError(
 // What the provider said, for the app's own renderer
 // ---------------------------------------------------------------------------
 
-/** Longest provider detail the renderer is sent: one or two lines of the failed bubble. */
-export const PROVIDER_DETAIL_MAX_CHARS = 300
-
 /**
  * What the provider itself said about a failure (`providerDetail`, set where a local CLI's run ended
  * without an answer), found on the error or anywhere down its `cause` chain — the SDK and the
@@ -258,31 +255,6 @@ export function readProviderDetail(error: unknown): string | null {
     current = (current as { cause?: unknown }).cause
   }
   return null
-}
-
-const REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\bsk-[\w-]{6,}/g, 'sk-…'],
-  [/\b(bearer)\s+[\w.~+/=-]{8,}/gi, '$1 …'],
-  [
-    /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization)(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi,
-    '$1$2…'
-  ],
-  // Any other long unbroken run of key-like characters.
-  [/[\w+/-]{32,}={0,2}/g, '…']
-]
-
-/**
- * A provider's words made fit to show: one line, credential-shaped runs and the home directory
- * masked, cut to {@link PROVIDER_DETAIL_MAX_CHARS}.
- */
-export function redactProviderDetail(text: string, home = homedir()): string {
-  let out = text.replace(/\s+/g, ' ').trim()
-  if (home && home.length > 1) out = out.split(home).join('~')
-  for (const [pattern, replacement] of REDACTIONS) out = out.replace(pattern, replacement)
-  const chars = [...out]
-  return chars.length > PROVIDER_DETAIL_MAX_CHARS
-    ? `${chars.slice(0, PROVIDER_DETAIL_MAX_CHARS - 1).join('')}…`
-    : out
 }
 
 /**

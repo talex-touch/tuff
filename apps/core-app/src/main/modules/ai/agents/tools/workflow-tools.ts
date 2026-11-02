@@ -8,6 +8,10 @@ import { activeAppService } from '../../../system/active-app'
 import { clipboardModule } from '../../../clipboard'
 import { intelligenceDesktopContextService } from '../../intelligence-desktop-context'
 import { toolRegistry } from '../tool-registry'
+import { describeToolFailure } from '../../tool-error-projection'
+import { createLogger } from '../../../../utils/logger'
+
+const workflowToolsLog = createLogger('Intelligence').child('WorkflowTools')
 
 function stripHtml(html: string): string {
   return html
@@ -238,8 +242,15 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
             results.push({ title: title || query, url: resultUrl, snippet })
           }
         }
-      } catch {
-        // Fallback gracefully to returning search URL
+        if (results.length === 0) {
+          workflowToolsLog.warn(
+            `browser.search parsed no results from DuckDuckGo: html bytes=${html.length}`
+          )
+        }
+      } catch (error) {
+        workflowToolsLog.warn(
+          `browser.search DuckDuckGo request failed, returning the search URL only | ${describeToolFailure(error)}`
+        )
       }
       return { provider, query, url, opened, results }
     }

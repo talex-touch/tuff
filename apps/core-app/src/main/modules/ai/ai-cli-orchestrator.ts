@@ -3,6 +3,7 @@ import type {
   IntelligenceAgentResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceStreamEvent,
   PromptWorkflowExecution,
   WorkflowDefinition,
   WorkflowDefinitionStep,
@@ -32,6 +33,7 @@ import type {
   AiDelegationPlan
 } from '@talex-touch/utils/types/ai-orchestrator'
 import type { PiWorkspaceAuthority } from './pi-agent-runtime-host'
+import type { PiRuntimeResume, PiRuntimeRunEvent } from './pi-agent-runtime-protocol'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
@@ -39,11 +41,15 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { AgentStatus, structuredStrictStringify } from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
+import { createAgentRunStreamMapper } from './agent-run-stream-events'
 import { agentManager, toolRegistry } from './agents'
 import { normalizeAutomationPolicy } from './ai-automation-policy'
 import { aiAutomationScheduler } from './ai-automation-scheduler'
 import { aiCliImportService } from './ai-cli-import-service'
 import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
+import { discardRunInput, loadRunInput, saveRunInput } from './ai-run-input-vault'
+import { buildObjectivePrompt, planRunResume } from './pi-agent-run-log'
+import { openRunRecords, sealRunRecord } from './ai-run-record-seal'
 import { aiOrchestratorStore, DEFAULT_PROFILE_ID } from './ai-orchestrator-store'
 import {
   PiAgentRuntimeHost,
@@ -59,7 +65,8 @@ import {
   isInterruptedToolCallControlError,
   isRunCancelledControlError,
   isRunInterruptedControlError,
-  isRunUsageLimitedError
+  isRunUsageLimitedError,
+  readRunFailureDetail
 } from './pi-agent-runtime-control-error'
 import { formatStableToolError, projectToolErrorCode } from './tool-error-projection'
 
@@ -121,6 +128,17 @@ function createOrchestratorRunId(): string {
 
 function digestStructuredValue(value: unknown): string {
   return createHash('sha256').update(structuredStrictStringify(value)).digest('hex')
+}
+
+/** A run that can be picked up again after a restart, with the authority it will run under. */
+interface ResumableRun {
+  run: AiOrchestratorRunRecord
+  profile: AiAgentProfile
+  allowedToolIds: string[]
+  automationPolicy?: AiAutomationPolicy
+  input?: unknown
+  /** Where the run's log says it had got to; absent when the log has nothing to resume from. */
+  resume?: PiRuntimeResume
 }
 
 function profileAuthorityDigest(profile: AiAgentProfile): string {
@@ -476,6 +494,8 @@ export class AiCliOrchestrator {
   private closing = false
   private shutdownPromise: Promise<void> | null = null
   private readonly activeExecutions = new Set<Promise<unknown>>()
+  /** Vault deletions in flight; `shutdown` waits for them so a finished run leaves nothing behind. */
+  private readonly pendingInputDiscards = new Set<Promise<void>>()
   private readonly toolCallMetadataMutations = new Map<string, Promise<unknown>>()
   private readonly privacyRunDeletionFences = new Set<string>()
   private readonly runWriteLeaseCounts = new Map<string, number>()
@@ -484,8 +504,42 @@ export class AiCliOrchestrator {
   private readonly trustedAutomationPolicies = new Map<string, AiAutomationPolicy>()
   private readonly agentTaskRunIds = new Map<string, string>()
   private readonly workspaceAuthorities = new Map<string, PiWorkspaceAuthority>()
+  /** Why a workspace run failed, redacted, until the conversation that owns it has read it once. */
+  private readonly failureDetails = new Map<string, string>()
+  /** Raw runtime events of runs a caller is streaming; keyed by run id, removed when the stream ends. */
+  private readonly runObservers = new Map<string, (event: PiRuntimeRunEvent) => void>()
+  /**
+   * Where each resumed run continues from, handed to the runtime once by `executePreparedRun`.
+   * Present only for a run picked up after a restart whose log had something to resume from.
+   */
+  private readonly resumePlans = new Map<string, PiRuntimeResume>()
+  /** Records in each run's message log, as far as this process knows; the next record is seq + 1. */
+  private readonly runLogSeq = new Map<string, number>()
+  /** Runs whose log stopped being written; what was written stays a valid prefix. */
+  private readonly runLogBroken = new Set<string>()
   private readonly runtimeHost = new PiAgentRuntimeHost({
+    onRecord: async (runId, record) => {
+      // A conversation turn is never resumed here (its controller owns its authority), so what its
+      // tools returned is not kept.
+      if (this.workspaceAuthorities.has(runId) || this.runLogBroken.has(runId)) return
+      // A record that cannot be kept ends the log at the last one that was: that prefix is still a
+      // log a restart can resume from, and the run itself goes on.
+      try {
+        const seq = (this.runLogSeq.get(runId) ?? 0) + 1
+        const envelope = await sealRunRecord(runId, seq, record)
+        if (!envelope) throw new Error('RUN_RECORD_NOT_SEALED')
+        const stored = await aiOrchestratorStore.appendRunMessage(runId, envelope)
+        if (stored !== seq) throw new Error('RUN_RECORD_OUT_OF_ORDER')
+        this.runLogSeq.set(runId, seq)
+      } catch (error) {
+        this.runLogBroken.add(runId)
+        orchestratorLog.warn('Run message log stopped; a restart resumes from what was kept', {
+          error
+        })
+      }
+    },
     onEvent: async (event) => {
+      this.notifyRunObserver(event)
       await this.workspaceAuthorities.get(event.runId)?.onEvent?.(event)
       const payload = projectPiEvent(event.type, event.payload)
       if (!payload) return
@@ -746,6 +800,9 @@ export class AiCliOrchestrator {
     while (this.toolCallMetadataMutations.size > 0) {
       await Promise.allSettled(Array.from(this.toolCallMetadataMutations.values()))
     }
+    while (this.pendingInputDiscards.size > 0) {
+      await Promise.allSettled(Array.from(this.pendingInputDiscards))
+    }
   }
 
   private assertPrivacyRunWritable(runId: string): void {
@@ -785,7 +842,7 @@ export class AiCliOrchestrator {
     this.closing = false
     await aiOrchestratorStore.initialize()
     await aiImportedConfigRuntime.initialize()
-    await this.recoverPersistedRuns()
+    const resumable = await this.recoverPersistedRuns()
     this.registerDelegationTool()
     this.registerImportedRuntimeTools()
     aiAutomationScheduler.setExecutor((request, automationId) =>
@@ -802,9 +859,22 @@ export class AiCliOrchestrator {
       await this.runtimeHost.stop().catch(() => undefined)
       throw error
     }
+    // Only now: a resumed run is an execution, and the orchestrator admits none before it is up.
+    for (const run of resumable) this.resumeInBackground(run)
   }
 
-  private async recoverPersistedRuns(): Promise<void> {
+  /**
+   * A run that was `queued` or `running` when the app last stopped is picked up again, not written
+   * off. It resumes only when everything it needs is still there - the profile and tools it was
+   * granted, and its input, which must match the digest the run row recorded. Anything less and
+   * it is interrupted as before: the reason is recorded, nothing is guessed.
+   *
+   * Returns the runs to resume; `initialize` starts them once it is ready to admit executions.
+   * Safe to repeat: tool calls that had started before the stop are refused a second execution
+   * (`beginToolCall`), so a resumed run stops at the first one it cannot prove unfinished.
+   * Workspace (conversation) runs are left to their own controller, which owns their authority.
+   */
+  private async recoverPersistedRuns(): Promise<ResumableRun[]> {
     const recoverable = new Map<string, AiOrchestratorRunRecord>()
     for (const status of ['queued', 'running'] as const) {
       const runs = await aiOrchestratorStore.listOrchestratorRuns({ status, limit: 200 })
@@ -812,23 +882,143 @@ export class AiCliOrchestrator {
         if (run.status === status) recoverable.set(run.id, run)
       }
     }
-    const interruptedAt = Date.now()
+    const resumable: ResumableRun[] = []
     for (const run of recoverable.values()) {
-      const error = `Run was interrupted by application restart while ${run.status}`
-      await this.withRunWriteLease(run.id, async () => {
-        await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-          status: 'interrupted',
-          error,
-          metadata: projectPersistedRunMetadata(run.metadata),
-          completedAt: interruptedAt,
-          updatedAt: interruptedAt
-        })
-        await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.interrupted', {
-          reason: 'application_restart',
-          previousStatus: run.status
-        })
-      })
+      const prepared = await this.prepareResume(run)
+      if (prepared) resumable.push(prepared)
+      else await this.interruptForRestart(run)
     }
+    return resumable
+  }
+
+  private async interruptForRestart(run: AiOrchestratorRunRecord): Promise<void> {
+    const interruptedAt = Date.now()
+    const error = `Run was interrupted by application restart while ${run.status}`
+    await this.withRunWriteLease(run.id, async () => {
+      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+        status: 'interrupted',
+        error,
+        metadata: projectPersistedRunMetadata(run.metadata),
+        completedAt: interruptedAt,
+        updatedAt: interruptedAt
+      })
+      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.interrupted', {
+        reason: 'application_restart',
+        previousStatus: run.status
+      })
+    })
+    this.clearVolatileRunState(run.id)
+  }
+
+  /**
+   * The run, with the authority it was granted and the input it was given, when it can be resumed;
+   * null when it cannot. The stored input is put where `restoreRunAuthority` looks for it, and that
+   * check - the same one an approved run goes through - is what compares it with the recorded
+   * digest, so an input that was altered or replaced is refused there, not trusted here.
+   */
+  private async prepareResume(run: AiOrchestratorRunRecord): Promise<ResumableRun | null> {
+    const metadata = toRecord(run.metadata)
+    // A conversation turn belongs to the conversation controller, which no longer holds its
+    // authority after a restart; resuming it here would run it without one.
+    if (metadata.workspaceExecution === true || run.automationId || run.parentRunId) return null
+    if (metadata.requestInputPresent === true) {
+      const stored = await loadRunInput(run.id)
+      if (!stored) return null
+      const digest =
+        typeof metadata.requestInputDigest === 'string' ? metadata.requestInputDigest : ''
+      this.volatileRunInputs.set(run.id, { digest, input: stored.input })
+    }
+    try {
+      const authority = await this.restoreRunAuthority(run)
+      // Only after the authority check passed: a run that is refused never has its log read.
+      const resume = await this.loadResume(run, authority.input)
+      return { run, ...authority, ...(resume ? { resume } : {}) }
+    } catch {
+      this.clearVolatileRunState(run.id)
+      return null
+    }
+  }
+
+  /**
+   * Where the run's log says it can continue from, or undefined when it has nothing to resume from.
+   * A log that cannot be trusted - an envelope that does not open for its run and position, a
+   * message out of order, a prompt that is not this run's - is deleted and the run starts over; a
+   * log that can be used is cut back to the messages the resumed run keeps, and the run goes on
+   * appending after them.
+   */
+  private async loadResume(
+    run: AiOrchestratorRunRecord,
+    input: unknown
+  ): Promise<PiRuntimeResume | undefined> {
+    try {
+      const rows = await aiOrchestratorStore.listRunMessages(run.id)
+      if (rows.length === 0) return undefined
+      const records = await openRunRecords(run.id, rows)
+      const plan = records ? planRunResume(records, buildObjectivePrompt(run.objective, input)) : null
+      if (!plan) {
+        await aiOrchestratorStore.deleteRunMessages(run.id)
+        return undefined
+      }
+      await aiOrchestratorStore.truncateRunMessages(run.id, plan.keepCount)
+      this.runLogSeq.set(run.id, plan.keepCount)
+      return { messages: plan.messages, replay: plan.replay, counters: plan.counters }
+    } catch (error) {
+      orchestratorLog.warn('A run message log could not be read; the run starts over', { error })
+      return undefined
+    }
+  }
+
+  /** Forgets everything stored for a run that is over: its input and its message log. */
+  private async discardStoredRunState(runId: string): Promise<void> {
+    try {
+      await discardRunInput(runId)
+    } catch (error) {
+      orchestratorLog.warn('A run input could not be deleted', { error })
+    }
+    try {
+      await aiOrchestratorStore.deleteRunMessages(runId)
+    } catch (error) {
+      orchestratorLog.warn('A run message log could not be deleted', { error })
+    }
+  }
+
+  /**
+   * Runs it in the background, on the same path an approved run takes. The result is recorded on the
+   * run row by `executePreparedRun`; nothing here waits for it or reports it to a caller, because
+   * the caller that started the run is gone.
+   */
+  private resumeInBackground(resumable: ResumableRun): void {
+    const { run, profile, allowedToolIds, input, automationPolicy, resume } = resumable
+    if (resume) this.resumePlans.set(run.id, resume)
+    const budget = resolveExecutionBudget({
+      objective: run.objective,
+      budget: toRecord(toRecord(run.metadata).executionBudget) as Partial<AiExecutionBudget>
+    })
+    void this.trackExecution(async () => {
+      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
+        reason: 'application_restart',
+        previousStatus: run.status
+      })
+      return await this.executePreparedRun(
+        run,
+        {
+          objective: run.objective,
+          input,
+          profileId: run.profileId,
+          cwd: run.cwd,
+          approved: false,
+          allowedToolIds,
+          sessionId: run.sessionId,
+          metadata: automationPolicy ? { automationPolicy } : undefined,
+          budget
+        },
+        profile,
+        allowedToolIds,
+        budget
+      )
+    }).catch((error) => {
+      orchestratorLog.warn('A resumed run did not finish', { error })
+    })
   }
 
   shutdown(): Promise<void> {
@@ -853,6 +1043,9 @@ export class AiCliOrchestrator {
     }
     await this.drainExecutions()
     this.volatileRunInputs.clear()
+    this.resumePlans.clear()
+    this.runLogSeq.clear()
+    this.runLogBroken.clear()
     this.trustedAllowedToolIds.clear()
     this.trustedAutomationPolicies.clear()
     this.agentTaskRunIds.clear()
@@ -888,6 +1081,13 @@ export class AiCliOrchestrator {
     this.trustedAllowedToolIds.delete(runId)
     this.trustedAutomationPolicies.delete(runId)
     this.workspaceAuthorities.delete(runId)
+    // The stored copies go wherever the in-memory ones do: every terminal path calls this.
+    this.resumePlans.delete(runId)
+    this.runLogSeq.delete(runId)
+    this.runLogBroken.delete(runId)
+    const discard = this.discardStoredRunState(runId)
+    this.pendingInputDiscards.add(discard)
+    void discard.finally(() => this.pendingInputDiscards.delete(discard))
   }
 
   private async interruptPendingRun(
@@ -1130,6 +1330,11 @@ export class AiCliOrchestrator {
     }
     if (requestInputPresent && requestInputDigest) {
       this.volatileRunInputs.set(run.id, { digest: requestInputDigest, input: request.input })
+      // Written before the run is announced, so a crash at any later point finds it. A run whose
+      // input cannot be stored still executes; it just cannot be resumed after a restart.
+      if (!(await saveRunInput(run.id, request.input))) {
+        orchestratorLog.warn('Run input was not stored; this run cannot resume after a restart')
+      }
     }
     this.trustedAllowedToolIds.set(run.id, Object.freeze([...allowedToolIds]))
     if (automationPolicy) this.trustedAutomationPolicies.set(run.id, automationPolicy)
@@ -1164,7 +1369,9 @@ export class AiCliOrchestrator {
       allowedToolIds,
       budget
     )
-    await workspace?.onRunResult?.(result)
+    const failureDetail = this.failureDetails.get(result.id)
+    this.failureDetails.delete(result.id)
+    await workspace?.onRunResult?.(result, failureDetail)
     return result
   }
 
@@ -1257,7 +1464,9 @@ export class AiCliOrchestrator {
       allowedToolIds,
       budget
     )
-    await workspace?.onRunResult?.(result)
+    const failureDetail = this.failureDetails.get(result.id)
+    this.failureDetails.delete(result.id)
+    await workspace?.onRunResult?.(result, failureDetail)
     return result
   }
 
@@ -1302,6 +1511,7 @@ export class AiCliOrchestrator {
             profile: runtimeProfile,
             tools: resolvePiRuntimeToolSpecs(allowedToolIds),
             history,
+            ...(this.resumePlans.has(run.id) ? { resume: this.resumePlans.get(run.id) } : {}),
             budget
           },
           workspace
@@ -1352,6 +1562,13 @@ export class AiCliOrchestrator {
               : isRunUsageLimitedError(error)
                 ? AI_RUN_USAGE_LIMIT_REACHED
                 : AI_RUN_FAILED
+        // The record keeps the fixed code; the cause goes to the conversation that started the run
+        // (in memory, redacted) and to the local log, so a failed turn says why it failed.
+        if (status === 'failed' && publicError === AI_RUN_FAILED) {
+          const detail = readRunFailureDetail(error)
+          orchestratorLog.error(`Agent run ${run.id} failed: ${detail ?? 'no reason reported'}`)
+          if (workspace && detail) this.failureDetails.set(run.id, detail)
+        }
         const completedAt = status === 'pending_approval' ? undefined : Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
@@ -1544,23 +1761,7 @@ export class AiCliOrchestrator {
     options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<IntelligenceAgentResult>> {
     const startedAt = Date.now()
-    const run = await this.execute({
-      objective: payload.task,
-      input: { task: payload.task },
-      profileId:
-        typeof options.metadata?.profileId === 'string' ? options.metadata.profileId : undefined,
-      cwd:
-        typeof options.metadata?.workingDirectory === 'string'
-          ? options.metadata.workingDirectory
-          : undefined,
-      approved: options.metadata?.approved === true,
-      allowedToolIds: Array.isArray(options.metadata?.allowedToolIds)
-        ? options.metadata.allowedToolIds.filter((item): item is string => typeof item === 'string')
-        : undefined,
-      sessionId:
-        typeof options.metadata?.sessionId === 'string' ? options.metadata.sessionId : undefined,
-      metadata: options.metadata
-    })
+    const run = await this.execute(this.agentCapabilityRequest(payload, options))
     if (run.status !== 'completed') throw new Error(run.error || 'Pi agent execution failed')
     const output = run.output || ''
     return {
@@ -1579,6 +1780,119 @@ export class AiCliOrchestrator {
       latency: Date.now() - startedAt,
       traceId: run.id,
       provider: 'tuff-pi-runtime'
+    }
+  }
+
+  private agentCapabilityRequest(
+    payload: IntelligenceAgentPayload,
+    options: IntelligenceInvokeOptions
+  ): AiOrchestratorExecuteRequest {
+    return {
+      objective: payload.task,
+      input: { task: payload.task },
+      profileId:
+        typeof options.metadata?.profileId === 'string' ? options.metadata.profileId : undefined,
+      cwd:
+        typeof options.metadata?.workingDirectory === 'string'
+          ? options.metadata.workingDirectory
+          : undefined,
+      approved: options.metadata?.approved === true,
+      allowedToolIds: Array.isArray(options.metadata?.allowedToolIds)
+        ? options.metadata.allowedToolIds.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      sessionId:
+        typeof options.metadata?.sessionId === 'string' ? options.metadata.sessionId : undefined,
+      metadata: options.metadata
+    }
+  }
+
+  private notifyRunObserver(event: PiRuntimeRunEvent): void {
+    const observer = this.runObservers.get(event.runId)
+    if (!observer) return
+    try {
+      observer(event)
+    } catch {
+      // A caller's listener must never fail the run it is watching.
+    }
+  }
+
+  /**
+   * `stream('agent.run')`: the same run `executeAgentCapability` performs, reported as it happens.
+   * Text, reasoning and tool calls arrive as the runtime executes them; `end` carries the settled
+   * result. Aborting the signal - or closing the stream early - cancels the run.
+   */
+  async *streamAgentCapability(
+    payload: IntelligenceAgentPayload,
+    options: IntelligenceInvokeOptions & { signal?: AbortSignal } = {}
+  ): AsyncGenerator<IntelligenceStreamEvent<IntelligenceAgentResult>> {
+    const capabilityId = 'agent.run'
+    const { signal } = options
+    const startedAt = Date.now()
+    const runId = createOrchestratorRunId()
+    const mapper = createAgentRunStreamMapper(capabilityId, sanitizeToolOutputForRuntime)
+    const queue: IntelligenceStreamEvent<IntelligenceAgentResult>[] = []
+    let wake: (() => void) | undefined
+    let settled = false
+    const signalWake = (): void => {
+      const resume = wake
+      wake = undefined
+      resume?.()
+    }
+    this.runObservers.set(runId, (event) => {
+      queue.push(...mapper.map(event))
+      signalWake()
+    })
+    const cancelRun = (): void => {
+      if (!this.cancel(runId)) void this.cancelPersistedRun(runId).catch(() => undefined)
+    }
+    signal?.addEventListener('abort', cancelRun, { once: true })
+    const execution = this.trackExecution(() =>
+      this.executeWithAuthority(
+        this.agentCapabilityRequest(payload, options),
+        undefined,
+        undefined,
+        undefined,
+        runId
+      )
+    )
+    const settle = (): void => {
+      settled = true
+      signalWake()
+    }
+    void execution.then(settle, settle)
+
+    try {
+      yield { type: 'start', capabilityId, traceId: runId }
+      while (true) {
+        while (queue.length > 0) yield queue.shift()!
+        if (settled) break
+        await new Promise<void>((resolve) => {
+          wake = resolve
+          if (queue.length > 0 || settled) signalWake()
+        })
+      }
+      const run = await execution
+      if (run.status !== 'completed') throw new Error(run.error || 'Pi agent execution failed')
+      const output = run.output || ''
+      yield {
+        type: 'end',
+        capabilityId,
+        traceId: run.id,
+        result: mapper.result(output),
+        content: output,
+        usage: {
+          promptTokens: run.usage?.promptTokens ?? 0,
+          completionTokens: run.usage?.completionTokens ?? 0,
+          totalTokens: run.usage?.totalTokens ?? 0
+        },
+        provider: 'tuff-pi-runtime',
+        model: 'pi-agent-core',
+        metadata: { latency: Date.now() - startedAt }
+      }
+    } finally {
+      signal?.removeEventListener('abort', cancelRun)
+      this.runObservers.delete(runId)
+      if (!settled) cancelRun()
     }
   }
 
