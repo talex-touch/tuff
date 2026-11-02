@@ -8,6 +8,58 @@ import { IMAGE_EMBEDDING_EXTENSIONS } from '../constants'
 import fs from 'node:fs/promises'
 /** The one method the delete path needs; keeps callers free to pass a tx or a db. */
 export type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete'>
+const CODE_EXTENSIONS: Record<string, true> = {
+  '.c': true,
+  '.cpp': true,
+  '.cc': true,
+  '.m': true,
+  '.mm': true,
+  '.hpp': true,
+  '.swift': true,
+  '.php': true,
+  '.rb': true,
+  '.sh': true,
+  '.bash': true,
+  '.zsh': true,
+  '.fish': true,
+  '.bat': true,
+  '.ps1': true,
+  '.sql': true,
+  '.js': true,
+  '.jsx': true,
+  '.ts': true,
+  '.tsx': true,
+  '.vue': true,
+  '.py': true,
+  '.go': true,
+  '.rs': true,
+  '.java': true,
+  '.kt': true,
+  '.cs': true
+}
+
+const DEV_PATH_PATTERN = /[\\/](node_modules|\.git|dist|build|coverage|\.next|\.nuxt|target)[\\/]/i
+const TEST_FILE_PATTERN = /\.(test|spec)\.[a-z0-9]+$/i
+
+export function isTextEmbeddingEligible(filePath: string, extension: string): boolean {
+  const ext = extension.toLowerCase()
+  if (CODE_EXTENSIONS[ext]) return false
+  if (TEST_FILE_PATTERN.test(filePath)) return false
+  if (DEV_PATH_PATTERN.test(filePath)) return false
+  if (/[\\/]Workspace[\\/]/i.test(filePath)) {
+    const DOCUMENT_EXTENSIONS: Record<string, true> = {
+      '.txt': true,
+      '.md': true,
+      '.pdf': true,
+      '.doc': true,
+      '.docx': true,
+      '.rtf': true
+    }
+    return Boolean(DOCUMENT_EXTENSIONS[ext])
+  }
+  return true
+}
+
 
 /**
  * The slice of `EmbeddingService` this service needs. Narrowed to keep the dependency
@@ -84,11 +136,13 @@ export class FileProviderEmbeddingIndexService {
     for (const entry of entries) {
       const extension = (entry.indexItem?.extension ?? '').toLowerCase()
       const content = entry.indexItem?.content
+      const filePath = entry.indexItem?.path ?? ''
       if (content) {
+        if (!isTextEmbeddingEligible(filePath, extension)) continue
         candidates.push({
           fileId: String(entry.fileId),
           content,
-          chunks: entry.fileUpdate?.chunks,
+          chunks: entry.fileUpdate?.chunks?.slice(0, 16),
           fileVersion: entry.fileVersion,
           fileSize: entry.fileSize
         })

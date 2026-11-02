@@ -920,6 +920,42 @@ describe('EmbeddingService real image publication contracts', () => {
     ])
   })
 
+  it('excludes source code and test files from semantic vector indexing', async () => {
+    const home = await makeDb('code-embedding-skipped')
+    const service = imageService(home)
+    const content = 'import { describe, it } from "vitest"\ndescribe("test", () => {})'
+    await home.client.execute({ sql: 'UPDATE files SET content = ? WHERE id = 1', args: [content] })
+    const codeEntry: IndexWorkerFileResult = {
+      type: 'file',
+      taskId: 'code-entry',
+      fileId: 1,
+      fileSize: 64,
+      progress: {
+        status: 'completed',
+        progress: 100,
+        processedBytes: 64,
+        totalBytes: 64,
+        lastError: null
+      },
+      fileUpdate: { content, embeddingStatus: 'pending' },
+      indexItem: {
+        itemId: '/Users/demo/Workspace/src/ShellConversationList.test.ts',
+        providerId: 'files',
+        type: 'file',
+        path: '/Users/demo/Workspace/src/ShellConversationList.test.ts',
+        name: 'ShellConversationList.test.ts',
+        extension: '.ts',
+        content
+      }
+    }
+    const consumer = new FileProviderEmbeddingIndexService({
+      getEmbeddingService: () => service,
+      logDebug: () => {}
+    })
+    await consumer.indexCommittedEntries([codeEntry])
+    expect((await home.client.execute('SELECT source_id FROM embeddings')).rows).toEqual([])
+  })
+
   it('lets a semantic search queue behind a running image embedding instead of aborting it', async () => {
     const home = await makeDb('search-beside-image')
     const { input } = await prepareImage(home)

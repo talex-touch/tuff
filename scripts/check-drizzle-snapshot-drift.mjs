@@ -106,8 +106,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * the pre-0055 chain through 0055; 0054 is a plain CREATE IF NOT EXISTS with no dedicated chain
  * test. This records those two known additions; it does not regenerate or repair historical
  * snapshots.
+ *
+ * Raised 42 → 43 on 2026-10-31 for `0056_ai_orchestrator_run_messages`, the hand-written
+ * main-DB run-message log with per-run sequence keys and cascading run deletion. The real
+ * migrated libSQL store tests pin ordering, missing-parent rejection and deletion. This
+ * records only the known gap; it does not regenerate or repair historical snapshots.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 42
+export const KNOWN_MISSING_SNAPSHOTS = 43
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

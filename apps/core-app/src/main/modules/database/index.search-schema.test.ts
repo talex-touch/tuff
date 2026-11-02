@@ -423,7 +423,7 @@ describe('initSearchDatabase size cap', () => {
       entries: Array<{ tag: string }>
     }
     journal.entries = journal.entries.filter(
-      (entry) => entry.tag !== '0055_search_keyword_postings'
+      (entry) => entry.tag < '0055_search_keyword_postings'
     )
     await writeFile(journalPath, JSON.stringify(journal))
     const seed = createClient({ url: `file:${dbPath}` })
@@ -539,11 +539,15 @@ describe('initSearchDatabase size cap', () => {
       const migration = journal.entries.find(
         (entry) => entry.tag === '0055_search_keyword_postings'
       )
+      // Every later journal row must be undone too, or the migrator skips 0055 on reopen.
+      await client.execute('DROP TABLE ai_orchestrator_run_messages')
       const undone = await client.execute({
-        sql: 'DELETE FROM __drizzle_migrations WHERE created_at = ?',
+        sql: 'DELETE FROM __drizzle_migrations WHERE created_at >= ?',
         args: [migration!.when]
       })
-      expect(undone.rowsAffected).toBe(1)
+      expect(undone.rowsAffected).toBe(
+        journal.entries.filter((entry) => entry.when >= migration!.when).length
+      )
       await client.execute('VACUUM')
       await client.execute('PRAGMA wal_checkpoint(TRUNCATE)')
       return {
