@@ -3,6 +3,7 @@ import type {
   IntelligenceEmbeddingPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceProviderConfig,
   IntelligenceStreamChunk,
   IntelligenceTranslatePayload,
   IntelligenceUsageInfo
@@ -224,6 +225,18 @@ function firstUserPrompt(payload: IntelligenceChatPayload): string {
 export class PiCliProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.LOCAL
 
+  /**
+   * `localCliEnabled` reads the `localAiCli.enabled` master switch. A local CLI sends the prompt to a
+   * program on this machine, so no call reaches it while the switch is off. The factory passes the
+   * real reader; a caller has to pass one explicitly.
+   */
+  constructor(
+    config: IntelligenceProviderConfig,
+    private readonly localCliEnabled: () => boolean
+  ) {
+    super(config)
+  }
+
   private resolveModel(options: IntelligenceInvokeOptions): string | undefined {
     return options.modelPreference?.[0] || this.config.defaultModel || undefined
   }
@@ -232,6 +245,7 @@ export class PiCliProvider extends IntelligenceProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
+    if (!this.localCliEnabled()) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
     const rawSignal = (options as PiCliRuntimeOptions).signal
     if (rawSignal?.aborted) return
 

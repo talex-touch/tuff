@@ -205,7 +205,9 @@ describe('Anthropic reasoning on the wire', () => {
       plannedOptions('claude-opus-4-8')
     )
 
-    expect(bodies[0]).toMatchObject({ max_tokens: 96, temperature: 0.3 })
+    expect(bodies[0]).toMatchObject({ max_tokens: 96 })
+    // An adaptive-only model takes no sampling knob, so the caller's temperature is not sent.
+    expect(bodies[0]).not.toHaveProperty('temperature')
     expect(['enabled', 'adaptive']).not.toContain(thinkingSchema.parse(bodies[0].thinking)?.type)
     expect(bodies[0]).not.toHaveProperty('output_config')
   })

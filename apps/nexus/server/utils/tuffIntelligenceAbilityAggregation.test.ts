@@ -81,11 +81,13 @@ vi.mock('./creditPricingStore', async () => {
 })
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
 vi.mock('./teamStore', () => ({ recordWeeklyAiUsage: vi.fn(async () => {}) }))
-vi.mock('@langchain/openai', () => ({
-  ChatOpenAI: class {
+vi.mock('@langchain/openai', () => {
+  // The adapters build Chat Completions models; both names are the same double.
+  class MockChatOpenAI {
     invoke(messages: unknown) { return langchainMocks.invoke(messages) }
-  },
-}))
+  }
+  return { ChatOpenAI: MockChatOpenAI, ChatOpenAICompletions: MockChatOpenAI }
+})
 
 function event() {
   return { node: { req: { headers: { 'user-agent': 'vitest' } } }, context: {}, path: '/test' } as any

@@ -218,7 +218,7 @@ const CASE_ENVIRONMENT_KEYS = [
 ] as const
 
 function provider(): PiCliProvider {
-  return new PiCliProvider({ ...CONFIG })
+  return new PiCliProvider({ ...CONFIG }, () => true)
 }
 
 function homeOptions(
@@ -930,11 +930,14 @@ describe('PiCliProvider Home native sessions', () => {
 
     try {
       const failed = await collectError(
-        new PiCliProvider({
-          ...CONFIG,
-          id: CLAUDE_CLI_PROVIDER_ID,
-          metadata: { origin: CLAUDE_CLI_ORIGIN }
-        }).chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
+        new PiCliProvider(
+          {
+            ...CONFIG,
+            id: CLAUDE_CLI_PROVIDER_ID,
+            metadata: { origin: CLAUDE_CLI_ORIGIN }
+          },
+          () => true
+        ).chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
       )
       expect(failed.error?.message).toMatch(/ENOENT/)
 

@@ -23,16 +23,17 @@ async function* chunks() {
   yield { content: 'ok' }
 }
 
-vi.mock('@langchain/openai', () => ({
-  ChatOpenAI: class {
+vi.mock('@langchain/openai', () => {
+  const capture = class {
     constructor(config: Record<string, unknown>) {
       built.openai.push(config)
     }
 
     invoke() { return Promise.resolve(answer()) }
     stream() { return Promise.resolve(chunks()) }
-  },
-}))
+  }
+  return { ChatOpenAI: capture, ChatOpenAICompletions: capture }
+})
 
 vi.mock('@langchain/anthropic', () => ({
   ChatAnthropic: class {
@@ -102,8 +103,12 @@ describe('OpenAI-compatible adapters', () => {
     await invokeOpenAiCompatibleProviderAdapter(payload('openai', 'gpt-5.5', 'max'))
     await drain(streamOpenAiCompatibleProviderAdapter(payload('openai', 'o3', 'medium')))
 
-    expect(built.openai[0]).toMatchObject({ model: 'gpt-5.5', reasoningEffort: 'xhigh' })
-    expect(built.openai[1]).toMatchObject({ model: 'o3', reasoningEffort: 'medium', streaming: true })
+    expect(built.openai[0]).toMatchObject({ model: 'gpt-5.5', modelKwargs: { reasoning_effort: 'xhigh' } })
+    expect(built.openai[1]).toMatchObject({
+      model: 'o3',
+      modelKwargs: { reasoning_effort: 'medium' },
+      streaming: true,
+    })
     for (const config of built.openai) expect(config).not.toHaveProperty('temperature')
   })
 
@@ -111,8 +116,7 @@ describe('OpenAI-compatible adapters', () => {
     await drain(streamOpenAiCompatibleProviderAdapter(payload('deepseek', 'deepseek-v4-pro', 'low')))
 
     expect(built.openai[0]).toMatchObject({
-      reasoningEffort: 'high',
-      modelKwargs: { thinking: { type: 'enabled' } },
+      modelKwargs: { reasoning_effort: 'high', thinking: { type: 'enabled' } },
     })
   })
 

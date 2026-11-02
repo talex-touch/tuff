@@ -191,17 +191,6 @@
       "reason": "The runtime the packaged app ships. Reaches --prod through the root package.json's electron ^41.10.6 dependency and through @electron-toolkit/preload and @electron-toolkit/utils, production dependencies of @talex-touch/core-app that take electron as a peer (`pnpm audit --prod --json`, 3 paths). The advisory is Chromium's distrust of compromised eMudhra intermediate certificates: until the runtime moves, the app's network stack still accepts certificates chained to them. No 41.x release carries the fix (patched in 42.11.16, 43.8.1, 44.9.1 and 45.0.0-beta.6), and leaving Electron 41 is a major upgrade with its own native-module and packaging verification. Remove this entry when core-app moves to a patched major.",
       "owner": "#328",
       "expires": "2026-11-23"
-    },
-    {
-      "id": "GHSA-mrhx-c7xc-m3w5",
-      "module": "zod",
-      "severity": "high",
-      "versions": [
-        "3.25.76"
-      ],
-      "reason": "LangChain 0.3's own copy. Reaches --prod only through @langchain/core@0.3.80 and @langchain/langgraph@0.4.9 (zod ^3.25.32) and @langchain/openai@0.4.9 (zod ^3.22.4), with @langchain/anthropic reaching it through @langchain/core; production dependencies of apps/core-app, apps/nexus and packages/tuff-intelligence (`pnpm audit --prod --json`, 34 paths). LangChain validates tool arguments and structured output with it, so an oversized collection would have to come from the configured model provider's response, in core-app's main process, packages/tuff-intelligence or Nexus's server/utils/tuffIntelligenceLangChainProviderAdapters.ts. The advisory is memory exhaustion while validating oversized constrained collections. No 3.x release is patched (vulnerable < 4.6.6); the zod 4 copy moved to 4.6.6 in the same change. Remove this entry when LangChain moves to a release that runs on zod 4.",
-      "owner": "#328",
-      "expires": "2026-11-23"
     }
   ]
 }

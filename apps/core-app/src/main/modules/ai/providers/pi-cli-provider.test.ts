@@ -49,7 +49,7 @@ async function writeStub(body: string): Promise<void> {
 }
 
 function provider(): PiCliProvider {
-  return new PiCliProvider({ ...CONFIG })
+  return new PiCliProvider({ ...CONFIG }, () => true)
 }
 
 function userTurn(content = 'hi') {
@@ -496,7 +496,7 @@ describe('PiCliProvider claude', () => {
 
   it('refuses an image turn instead of answering as though the picture had been seen', async () => {
     await expect(async () => {
-      for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }).chatStream(
+      for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }, () => true).chatStream(
         imageTurn(),
         {}
       )) {

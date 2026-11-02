@@ -30,6 +30,8 @@ export interface LocalAiCliStartRequest {
   context: LocalAiCliContextItem[]
   projectId?: string
   sessionRef?: string
+  /** Keep the provider process alive so GUI and TUI turns share one live RPC session. */
+  persistent?: boolean
 }
 
 export type LocalAiCliErrorCode
@@ -309,6 +311,7 @@ export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStart
     context,
     ...(projectId ? { projectId } : {}),
     ...(sessionRef ? { sessionRef } : {}),
+    ...(value.persistent === true ? { persistent: true } : {})
   }
 }
 

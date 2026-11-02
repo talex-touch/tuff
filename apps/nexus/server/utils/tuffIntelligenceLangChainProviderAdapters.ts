@@ -23,24 +23,20 @@ const OPENAI_DEFAULT_TEMPERATURE = 0.2;
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 1200;
 
 type ChatOpenAIFields = NonNullable<
-  ConstructorParameters<typeof import("@langchain/openai").ChatOpenAI>[0]
+  ConstructorParameters<typeof import("@langchain/openai").ChatOpenAICompletions>[0]
 >;
 
 /**
- * The payload's reasoning plan as `ChatOpenAI` fields. Without one the model keeps the fixed 0.2;
+ * The payload's reasoning plan as `ChatOpenAICompletions` fields. Without one the model keeps the fixed 0.2;
  * with one the temperature is left out, because a reasoning model rejects any but its default.
  */
 function openAiReasoningConfig(
   payload: IntelligenceProviderAdapterPayload,
-): Pick<ChatOpenAIFields, "temperature" | "reasoningEffort" | "modelKwargs"> {
+): Pick<ChatOpenAIFields, "temperature" | "modelKwargs"> {
   const reasoning = toLangChainOpenAiReasoningFields(payload.reasoning);
   if (!reasoning) return { temperature: OPENAI_DEFAULT_TEMPERATURE };
-  return {
-    // Written into the body verbatim; LangChain's bundled OpenAI types stop at `high`.
-    reasoningEffort:
-      reasoning.reasoningEffort as ChatOpenAIFields["reasoningEffort"],
-    ...(reasoning.modelKwargs ? { modelKwargs: reasoning.modelKwargs } : {}),
-  };
+  // Spread into the body verbatim: LangChain drops `reasoning` for model names it does not know.
+  return { modelKwargs: reasoning.modelKwargs };
 }
 
 /**
@@ -311,8 +307,8 @@ export async function invokeOpenAiCompatibleProviderAdapter(
   const baseUrl = normalizeOpenAiBaseUrl(
     resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl),
   );
-  const { ChatOpenAI } = await import("@langchain/openai");
-  const runner = new ChatOpenAI({
+  const { ChatOpenAICompletions } = await import("@langchain/openai");
+  const runner = new ChatOpenAICompletions({
     apiKey: context.apiKey || "tuff-local-key",
     model: context.model,
     ...openAiReasoningConfig(payload),
@@ -376,8 +372,8 @@ export async function* streamOpenAiCompatibleProviderAdapter(
   const baseUrl = normalizeOpenAiBaseUrl(
     resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl),
   );
-  const { ChatOpenAI } = await import("@langchain/openai");
-  const runner = new ChatOpenAI({
+  const { ChatOpenAICompletions } = await import("@langchain/openai");
+  const runner = new ChatOpenAICompletions({
     apiKey: context.apiKey || "tuff-local-key",
     model: context.model,
     ...openAiReasoningConfig(payload),

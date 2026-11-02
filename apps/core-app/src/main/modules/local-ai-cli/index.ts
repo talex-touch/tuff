@@ -98,11 +98,14 @@ import {
   upsertDiscoveredLocalAiCliSessions,
   upsertLocalAiCliSession
 } from './session-store'
+import { PersistentPiRpcSession } from './pi-rpc-session'
 import { setLocalAiCliWorkspaceRoot } from './workspace-root'
 
 const localAiCliLog = createLogger('LocalAiCli')
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
+/** Idle time after which a persistent pi child is closed; the next turn starts it again. */
+const PERSISTENT_PI_IDLE_MS = 10 * 60 * 1000
 const LOCAL_AI_CLI_SHORTCUT_ID = 'local-ai-cli.quick-open'
 const LOCAL_AI_CLI_SHORTCUT_OWNER = 'core-app:local-ai-cli'
 
@@ -113,6 +116,14 @@ interface TaskProcessSession {
   abortController?: AbortController
   releaseLease?: () => void
   done?: Promise<void>
+}
+
+interface PersistentPiHandle {
+  session: PersistentPiRpcSession
+  pointer: StoredLocalAiCliSession
+  releaseLease: () => void
+  /** Closes the child after an idle period; cleared while a turn holds it. */
+  idleTimer?: ReturnType<typeof setTimeout>
 }
 
 interface LocalAiCliExecution {
@@ -306,6 +317,8 @@ export class LocalAiCliModule extends BaseModule {
   private readonly disposers: Array<() => void> = []
   private readonly approvals = new LocalAiCliApprovalBroker()
   private readonly taskProcesses = new Map<string, TaskProcessSession>()
+  private readonly persistentPiSessions = new Map<string, PersistentPiHandle>()
+  private readonly persistentPiStarts = new Set<string>()
   private terminalLifecycle = new AbortController()
   private readonly nativeSessionLeases = nativeSessionLeaseRegistry
   private workspacePath = ''
@@ -467,9 +480,8 @@ export class LocalAiCliModule extends BaseModule {
       }),
       transport.on(LocalAiCliEvents.session.revealFile, async (payload, context) => {
         assertHostContext(context)
-        const conversationId = typeof payload?.conversationId === 'string'
-          ? payload.conversationId.trim()
-          : ''
+        const conversationId =
+          typeof payload?.conversationId === 'string' ? payload.conversationId.trim() : ''
         if (!conversationId || conversationId.length > 128 || conversationId.includes('\0'))
           throw new Error('LOCAL_AI_CLI_SESSION_INVALID')
         const pointer = await getLocalAiCliSessionForConversation(conversationId)
@@ -906,12 +918,243 @@ export class LocalAiCliModule extends BaseModule {
     }
   }
 
+  private async getOrCreatePersistentPi(
+    request: LocalAiCliStartRequest,
+    status: LocalAiCliProviderStatus,
+    execution: LocalAiCliExecution
+  ): Promise<PersistentPiHandle> {
+    const existing = execution.pointer
+      ? this.persistentPiSessions.get(execution.pointer.id)
+      : undefined
+    if (existing) return existing
+
+    const startKey = `${execution.cwd}\0${execution.pointer?.id ?? 'new'}`
+    if (this.persistentPiStarts.has(startKey)) throw new Error('NATIVE_SESSION_BUSY')
+    this.persistentPiStarts.add(startKey)
+    let session: PersistentPiRpcSession | undefined
+    let releaseLease: (() => void) | undefined
+    try {
+      const spec = createLocalAiCliTaskSpec(
+        'pi',
+        '',
+        request.access,
+        execution.pointer?.nativeSessionId
+      )
+      session = await PersistentPiRpcSession.create({
+        executable: status.executablePath!,
+        cwd: execution.cwd,
+        args: spec.args,
+        env: withExecutableDirOnPath(sanitizedChildEnv(), status.executablePath!)
+      })
+      if (execution.pointer && session.state.sessionId !== execution.pointer.nativeSessionId) {
+        await markLocalAiCliSessionState(execution.pointer.id, 'missing')
+        throw new Error('NATIVE_SESSION_MISSING')
+      }
+
+      const beforeResponse = await session.request(
+        { id: 'tuff-before', type: 'get_entries' },
+        (record) => record.type === 'response' && record.command === 'get_entries'
+      )
+      const beforeEntries = parsePiEntriesResponse(beforeResponse)
+      if (!beforeEntries) throw new Error('PROTOCOL_INVALID')
+
+      let pointer = execution.pointer
+      if (pointer) {
+        if (beforeEntries.leafId !== pointer.expectedHeadId) {
+          await markLocalAiCliSessionState(pointer.id, 'conflict')
+          throw new Error('NATIVE_SESSION_CONFLICT')
+        }
+        releaseLease = this.acquirePointerLease(pointer)
+      } else {
+        const registered = await this.registerFreshNativeSession(
+          execution,
+          'pi',
+          session.state.sessionId,
+          request.prompt,
+          beforeEntries.leafId
+        )
+        pointer = registered.pointer
+        releaseLease = registered.releaseLease
+      }
+
+      const handle: PersistentPiHandle = { session, pointer, releaseLease }
+      this.persistentPiSessions.set(pointer.id, handle)
+      return handle
+    } catch (error) {
+      releaseLease?.()
+      await session?.close().catch(() => undefined)
+      throw error
+    } finally {
+      this.persistentPiStarts.delete(startKey)
+    }
+  }
+
+  /** Arms the idle close; a turn that ends on this child re-arms it from its own finally. */
+  private schedulePersistentPiIdle(handle: PersistentPiHandle): void {
+    this.clearPersistentPiIdle(handle)
+    if (this.persistentPiSessions.get(handle.pointer.id) !== handle) return
+    const timer = setTimeout(() => {
+      handle.idleTimer = undefined
+      if (handle.session.hasActiveTurn) return
+      void this.discardPersistentPi(handle).catch(() => undefined)
+    }, PERSISTENT_PI_IDLE_MS)
+    timer.unref?.()
+    handle.idleTimer = timer
+  }
+
+  private clearPersistentPiIdle(handle: PersistentPiHandle): void {
+    if (!handle.idleTimer) return
+    clearTimeout(handle.idleTimer)
+    handle.idleTimer = undefined
+  }
+
+  private async discardPersistentPi(handle: PersistentPiHandle): Promise<void> {
+    this.clearPersistentPiIdle(handle)
+    if (this.persistentPiSessions.get(handle.pointer.id) === handle) {
+      this.persistentPiSessions.delete(handle.pointer.id)
+    }
+    try {
+      await handle.session.close()
+    } finally {
+      handle.releaseLease()
+    }
+  }
+
+  private async runPersistentPiTask(
+    request: LocalAiCliStartRequest,
+    context: StreamContext<LocalAiCliTaskChunk>
+  ): Promise<void> {
+    const callId = randomUUID()
+    const prompt = buildPrompt(request.prompt, request.context)
+    let handle: PersistentPiHandle | undefined
+    let completeText = ''
+    // pi retries inside one run, so only the latest assistant message says whether an attempt failed.
+    let attemptFailed = false
+    let turnFailed = false
+    context.emit({ type: 'status', callId, status: 'starting' })
+    try {
+      const status = await this.requireRunnableProvider(request.provider, request.access)
+      const execution = await this.resolveLocalAiCliExecution(request)
+      if (execution.pointer && !status.capabilities.taskResume) {
+        throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+      }
+      handle = await this.getOrCreatePersistentPi(request, status, execution)
+      // A turn already streaming on this child owns the head; reading it now would report a false conflict.
+      if (handle.session.hasActiveTurn) throw new Error('NATIVE_SESSION_BUSY')
+      this.clearPersistentPiIdle(handle)
+      context.emit({ type: 'session', callId, provider: 'pi', sessionRef: handle.pointer.id })
+
+      const beforeResponse = await handle.session.request(
+        { id: 'tuff-turn-before', type: 'get_entries' },
+        (record) => record.type === 'response' && record.command === 'get_entries'
+      )
+      const beforeEntries = parsePiEntriesResponse(beforeResponse)
+      if (!beforeEntries) throw new Error('PROTOCOL_INVALID')
+      if (beforeEntries.leafId !== handle.pointer.expectedHeadId) {
+        await markLocalAiCliSessionState(handle.pointer.id, 'conflict')
+        throw new Error('NATIVE_SESSION_CONFLICT')
+      }
+
+      const file = (await isPiSessionFileUnwritten(handle.session.state.sessionFile))
+        ? null
+        : await capturePiSessionFile(
+            handle.session.state.sessionFile,
+            handle.session.state.sessionId,
+            handle.pointer.projectRoot
+          )
+      const capturedHead = beforeEntries.leafId
+      context.emit({ type: 'status', callId, status: 'running' })
+
+      for await (const nativeEvent of handle.session.prompt(prompt, context.signal)) {
+        const decoded = decodeLocalAiCliEvent('pi', nativeEvent)
+        if (decoded.delta) {
+          completeText += decoded.delta
+          context.emit({ type: 'text-delta', callId, text: decoded.delta })
+        }
+        if (!completeText && decoded.completeText) completeText = decoded.completeText
+        if (
+          nativeEvent.type === 'message_end' &&
+          asObject(nativeEvent.message)?.role === 'assistant'
+        ) {
+          attemptFailed = decoded.failed === true
+        }
+        if (decoded.completed) turnFailed = decoded.failed === true || attemptFailed
+      }
+
+      const afterResponse = await handle.session.request(
+        {
+          id: 'tuff-turn-after',
+          type: 'get_entries',
+          ...(capturedHead ? { since: capturedHead } : {})
+        },
+        (record) => record.type === 'response' && record.command === 'get_entries'
+      )
+      const afterEntries = parsePiEntriesResponse(afterResponse)
+      if (!afterEntries) throw new Error('PROTOCOL_INVALID')
+      const finalHead = file
+        ? await verifyPiSessionAppend({
+            capture: file,
+            capturedHead,
+            beforeEntryIds: new Set(beforeEntries.entries.map((entry) => entry.id)),
+            post: afterEntries
+          })
+        : await verifyPiSessionFirstWrite({
+            sessionFile: handle.session.state.sessionFile,
+            nativeSessionId: handle.session.state.sessionId,
+            projectRoot: handle.pointer.projectRoot,
+            before: beforeEntries,
+            post: afterEntries
+          })
+      if (!finalHead) throw new Error('NATIVE_SESSION_CONFLICT')
+      await this.touchNativeSession(handle.pointer, finalHead)
+      handle.pointer = (await getLocalAiCliSession(handle.pointer.id)) ?? handle.pointer
+
+      // pi has written this turn whatever its outcome, so the head moves before the terminal chunk.
+      if (context.isCancelled()) {
+        context.emit({ type: 'cancelled', callId })
+      } else if (turnFailed || !completeText.trim()) {
+        context.emit({ type: 'failed', callId, code: 'PROCESS_EXITED', recoverable: true })
+      } else {
+        context.emit({ type: 'complete', callId, text: completeText.trim() })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      // A busy child is streaming another owner's turn; closing it here would kill that turn.
+      if (handle && message !== 'NATIVE_SESSION_BUSY') {
+        if (message === 'NATIVE_SESSION_CONFLICT') {
+          await markLocalAiCliSessionState(handle.pointer.id, 'conflict').catch(() => undefined)
+        } else if (message === 'NATIVE_SESSION_MISSING') {
+          await markLocalAiCliSessionState(handle.pointer.id, 'missing').catch(() => undefined)
+        }
+        await this.discardPersistentPi(handle)
+      }
+      if (context.isCancelled() || message === 'CANCELLED') {
+        context.emit({ type: 'cancelled', callId })
+      } else {
+        const code = taskFailureCode(error)
+        context.emit({
+          type: 'failed',
+          callId,
+          code,
+          recoverable: code !== 'NATIVE_SESSION_CONFLICT' && code !== 'NATIVE_SESSION_MISSING'
+        })
+      }
+    } finally {
+      if (handle) this.schedulePersistentPiIdle(handle)
+      context.end()
+    }
+  }
+
   private async runTask(
     rawRequest: unknown,
     ownerId: number,
     context: StreamContext<LocalAiCliTaskChunk>
   ): Promise<void> {
     const request = normalizeLocalAiCliStartRequest(rawRequest)
+    if (request.provider === 'pi' && request.persistent === true) {
+      await this.runPersistentPiTask(request, context)
+      return
+    }
     const status = await this.requireRunnableProvider(request.provider, request.access)
     const execution = await this.resolveLocalAiCliExecution(request)
     if (execution.pointer && !status.capabilities.taskResume) {
@@ -1686,6 +1929,15 @@ export class LocalAiCliModule extends BaseModule {
     this.lastExecutableOverrides = null
     this.approvals.destroy()
     for (const dispose of this.disposers.splice(0)) dispose()
+    const persistentSessions = [...this.persistentPiSessions.values()]
+    this.persistentPiSessions.clear()
+    await Promise.allSettled(
+      persistentSessions.map(async (session) => {
+        this.clearPersistentPiIdle(session)
+        await session.session.close()
+        session.releaseLease()
+      })
+    )
     const taskCompletions: Promise<void>[] = []
     for (const session of this.taskProcesses.values()) {
       session.abortController?.abort()

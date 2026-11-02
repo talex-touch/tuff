@@ -112,7 +112,7 @@ const OMP_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: OMP_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'OMP (local CLI)',
-  enabled: false,
+  enabled: true,
   priority: 10,
   models: [],
   timeout: 120000,
@@ -128,7 +128,7 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: PI_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Pi (local CLI)',
-  enabled: false,
+  enabled: true,
   priority: 10,
   models: [],
   timeout: 120000,
@@ -1169,7 +1169,11 @@ function withCliChatBindings(
   const existingIds = new Set(bindings.map((binding) => binding.providerId))
   const newBindings = availableProviderIds
     .filter((id) => !existingIds.has(id))
-    .map((id) => ({ providerId: id, priority: PI_CLI_BINDING_PRIORITY, enabled: true }))
+    .map((id) => ({
+      providerId: id,
+      priority: id === PI_CLI_PROVIDER_ID ? PI_CLI_BINDING_PRIORITY : PI_CLI_BINDING_PRIORITY + 1,
+      enabled: true
+    }))
 
   if (newBindings.length === 0) {
     return capabilities
