@@ -1,5 +1,5 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import { rollNextThinkingVerb, rollThinkingVerb } from '~/modules/conversation/thinking-words'
+import { rollNextThinkingVerb, rollThinkingVerb } from '../utils/thinking-words'
 
 export interface UseThinkingTickerOptions {
   /** Whether the turn is currently waiting or running an untitled thought. */

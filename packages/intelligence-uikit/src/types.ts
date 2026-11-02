@@ -1,3 +1,6 @@
+import type { Ref } from 'vue'
+import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+
 import type {
   AiChainStep,
   AiToolCallPart,
@@ -195,16 +198,96 @@ export type TxAiSegment =
   | { kind: "tool"; id: string; part: AiToolCallPart }
   | { kind: "text"; id: string; text: string; streaming: boolean };
 
+export interface TxAiToolChartSpec {
+  type: string
+  title?: string
+  labels: string[]
+  series: Array<{ name?: string; values: number[] }>
+  xLabel?: string
+  yLabel?: string
+  stacked?: boolean
+  showValues?: boolean
+}
+
+/** The host owns isolation policy, runtime loading and lifecycle cleanup. */
+export type TxAiWidgetSandbox = (
+  source: Ref<string>,
+  frame: Ref<HTMLIFrameElement | null>,
+) => {
+  status: Readonly<Ref<'loading' | 'ready' | 'failed'>>
+  failure: Readonly<Ref<
+    | { reason: 'threw'; message: string }
+    | { reason: 'blocked'; directive: string }
+    | { reason: 'timedOut' }
+    | null
+  >>
+  height: Readonly<Ref<number>>
+  srcdoc: Readonly<Ref<string>>
+}
+
+export type TxAiSpeakState = 'idle' | 'loading' | 'speaking'
+
+export interface TxAiTurnMetrics {
+  latencyMs?: number
+  ttftMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  cacheReadTokens?: number
+  model?: string
+  coordinator?: string
+}
+
+export interface TxAiMetricMessage { meta?: TxAiTurnMetrics }
+
+export interface TxAiTurnFooterProps {
+  content?: string
+  metrics?: TxAiTurnMetrics
+  resting?: boolean
+  regenerable?: boolean
+  speakState?: TxAiSpeakState
+  branchable?: boolean
+  branching?: boolean
+  showMetrics?: boolean
+  labels?: Record<string, string>
+  motion?: TxAiMotionPreset
+}
+
+export interface TxAiErrorBlockProps {
+  title: string
+  detail?: string
+  reportCode?: string
+  reportDetail?: string
+  codeLabel?: string
+  tone?: 'danger' | 'warning'
+  actionLabel?: string
+  retryable?: boolean
+  retryLabel?: string
+}
+
 export interface TxAiAssistantTurnProps {
-  segments: TxAiSegment[];
-  /** The turn is still being produced; drives the live state of its thought blocks. */
-  streaming?: boolean;
-  /** Bound to every prose block (`TxStreamElement`): locale, copy labels, markdown labels. */
-  elementProps?: Record<string, unknown>;
-  /** Bound to every tool card (`TxToolCallCard`): its labels. */
-  toolCallProps?: Record<string, unknown>;
-  /** Tools the host renders itself through the `tool` slot (widgets, forms, charts). */
-  hasToolFace?: (part: AiToolCallPart) => boolean;
+  segments: TxAiSegment[]
+  streaming?: boolean
+  elementProps?: Record<string, unknown>
+  toolCallProps?: Record<string, unknown>
+  /** Optional predicate limiting which calls are handled by the host tool slot. */
+  hasToolFace?: (part: AiToolCallPart) => boolean
+  chartProps?: Record<string, unknown>
+  formProps?: Record<string, unknown>
+  widgetProps?: Record<string, unknown>
+  widgetSandbox?: TxAiWidgetSandbox
+  submittedForms?: ReadonlySet<string>
+  formDrafts?: ReadonlyMap<string, Record<string, FormFieldValue>>
+  showToolPayload?: boolean
+  payloadLabel?: string
+  waiting?: boolean
+  thinkingVerb?: string
+  thinkingLabel?: string
+  compacting?: boolean
+  compactingLabel?: string
+  footer?: TxAiTurnFooterProps
+  error?: TxAiErrorBlockProps
+  motion?: TxAiMotionPreset
 }
 
 export function toTuffexChatMessage(

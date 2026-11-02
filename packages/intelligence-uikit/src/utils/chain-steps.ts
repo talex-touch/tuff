@@ -1,3 +1,4 @@
+import type { TxAiSegment } from '../types'
 import type {
   AiChainStep,
   AiMessagePart,
@@ -45,19 +46,6 @@ function bodyFor(text: string): string | undefined {
   return rest || text.trim() || undefined
 }
 
-/**
- * One rendered unit of an assistant turn, in the order the provider streamed
- * it — including the answer prose, so a turn that speaks between two thoughts
- * renders in that order rather than collecting all its text at the bottom.
- *
- * Callers must render text from these segments *instead of* the message's own
- * `content`, never both: in parts mode the text parts concatenate to exactly
- * that string, so doing both shows the answer twice.
- */
-export type MessageSegment
-  = | { kind: 'reasoning', id: string, step: AiChainStep }
-    | { kind: 'tool', id: string, part: AiToolCallPart }
-    | { kind: 'text', id: string, text: string, streaming: boolean }
 
 /**
  * Wording the host owns. A span's title heads its own block now, so a
@@ -178,11 +166,11 @@ export function toMessageSegments(
   parts: AiMessagePart[] | undefined,
   streaming: boolean,
   labels: SegmentLabels = {},
-): MessageSegment[] {
+): TxAiSegment[] {
   if (!parts)
     return []
 
-  const segments: MessageSegment[] = []
+  const segments: TxAiSegment[] = []
   const lastIndex = parts.length - 1
 
   for (const [index, part] of parts.entries()) {

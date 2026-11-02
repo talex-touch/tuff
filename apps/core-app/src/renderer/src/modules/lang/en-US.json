@@ -2415,6 +2415,11 @@
           "tokens": "Tokens & speed",
           "speed": "Generation speed",
           "coordinator": "Coordinator",
+          "input": "Input",
+          "output": "Output",
+          "total": "Total",
+          "totalLatency": "Total latency",
+          "ttft": "First token (TTFT)",
           "model": "Model"
         },
         "turn": {

@@ -2,7 +2,7 @@
 import type { FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import ToolFormCard from './ToolFormCard.vue'
+import TxAiToolForm from '../components/tool-agent/TxAiToolForm.vue'
 
 /**
  * The tuffex inputs are stubbed down to the native controls they wrap: this
@@ -61,14 +61,14 @@ function spec(overrides: Partial<FormSpec> = {}): FormSpec {
 }
 
 function mountCard(props: Partial<{ spec: FormSpec; submitted: boolean }> = {}) {
-  return mount(ToolFormCard, { props: { spec: spec(), ...props } })
+  return mount(TxAiToolForm, { props: { spec: spec(), ...props } })
 }
 
 function textFieldValue(wrapper: ReturnType<typeof mountCard>): string {
   return (wrapper.get('input[type="text"]').element as HTMLInputElement).value
 }
 
-describe('ToolFormCard rendering', () => {
+describe('TxAiToolForm rendering', () => {
   it('gives every field type its own control', () => {
     const wrapper = mountCard({
       spec: spec({
@@ -100,7 +100,7 @@ describe('ToolFormCard rendering', () => {
   })
 })
 
-describe('ToolFormCard submission', () => {
+describe('TxAiToolForm submission', () => {
   it('blocks submission on an empty required field and clears the error once answered', async () => {
     const wrapper = mountCard({
       spec: spec({
@@ -169,7 +169,7 @@ describe('ToolFormCard submission', () => {
   })
 })
 
-describe('ToolFormCard submitted state', () => {
+describe('TxAiToolForm submitted state', () => {
   it('locks the card after one submission and echoes what was sent', async () => {
     const wrapper = mountCard({
       spec: spec({ fields: [{ key: 'name', label: 'Your name', type: 'text' }] })
@@ -213,7 +213,7 @@ describe('ToolFormCard submitted state', () => {
   })
 })
 
-describe('ToolFormCard drafts across virtualization', () => {
+describe('TxAiToolForm drafts across virtualization', () => {
   // The conversation stream virtualizes rows out of the DOM; an unmount takes
   // this card's half-typed state with it. The host stores what `change` hands
   // out and returns it through `initialValues` on remount — this suite is that
@@ -238,7 +238,7 @@ describe('ToolFormCard drafts across virtualization', () => {
   })
 
   it('seeds a remount from the stored draft, over the spec defaults', () => {
-    const wrapper = mount(ToolFormCard, {
+    const wrapper = mount(TxAiToolForm, {
       props: {
         spec: spec({
           fields: [
@@ -257,7 +257,7 @@ describe('ToolFormCard drafts across virtualization', () => {
   })
 
   it('ignores draft keys the spec does not know and type-mismatched values', () => {
-    const wrapper = mount(ToolFormCard, {
+    const wrapper = mount(TxAiToolForm, {
       props: {
         spec: spec({
           fields: [
@@ -276,7 +276,7 @@ describe('ToolFormCard drafts across virtualization', () => {
   })
 
   it('publishes the defaults again on reset — reset discards the draft', async () => {
-    const wrapper = mount(ToolFormCard, {
+    const wrapper = mount(TxAiToolForm, {
       props: {
         spec: spec({ fields: [{ key: 'name', label: 'Your name', type: 'text', default: 'Ada' }] }),
         initialValues: { name: 'Grace' }
@@ -288,5 +288,23 @@ describe('ToolFormCard drafts across virtualization', () => {
 
     expect(textFieldValue(wrapper)).toBe('Ada')
     expect(wrapper.emitted('change')).toEqual([[{ name: 'Ada' }]])
+  })
+})
+
+describe('TxAiToolForm draft and submission boundary', () => {
+  it('keeps a restored draft visible but locked when the host marks it already submitted', async () => {
+    const wrapper = mount(TxAiToolForm, {
+      props: {
+        spec: spec({ fields: [{ key: 'name', label: 'Your name', type: 'text', default: 'Ada' }] }),
+        initialValues: { name: 'Grace' },
+        submitted: true,
+      },
+    })
+
+    expect(textFieldValue(wrapper)).toBe('Grace')
+    expect(wrapper.get('input[type="text"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')).toBeUndefined()
+    expect(wrapper.emitted('change')).toBeUndefined()
   })
 })

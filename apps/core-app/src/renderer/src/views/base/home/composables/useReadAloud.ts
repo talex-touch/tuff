@@ -1,3 +1,4 @@
+import type { TxAiSpeakState } from '@talex-touch/intelligence-uikit'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -5,7 +6,6 @@ import { toast } from 'vue-sonner'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { homeLog } from './home-log'
 
-export type SpeakState = 'idle' | 'loading' | 'speaking'
 
 /** At most one message reads at a time; starting another stops the current. */
 export function useReadAloud() {
@@ -54,7 +54,7 @@ export function useReadAloud() {
 
   onBeforeUnmount(stopSpeaking)
 
-  function speakStateOf(message: ConversationMessage): SpeakState {
+  function speakStateOf(message: ConversationMessage): TxAiSpeakState {
     return speaking.value?.id === message.id ? speaking.value.state : 'idle'
   }
 

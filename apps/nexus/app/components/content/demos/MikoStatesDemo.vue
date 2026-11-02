@@ -14,6 +14,18 @@ const states: { state: MikoState, label: string }[] = [
   { state: 'reading', label: '代码研读 (Reading)' },
   { state: 'dizzy', label: '互动眩晕 (Dizzy)' },
   { state: 'peeking', label: '边栏探头 (Peeking)' },
+  { state: 'stretching', label: '猫式伸展 (Stretching)' },
+  { state: 'bathing', label: '舔爪洗脸 (Bathing)' },
+  { state: 'curious', label: '好奇歪头 (Curious)' },
+  { state: 'scratching', label: '磨爪挠挠 (Scratching)' },
+  { state: 'purring', label: '呼噜发颤 (Purring)' },
+  { state: 'eating', label: '吃小鱼干 (Eating)' },
+  { state: 'dancing', label: '节拍摇摆 (Dancing)' },
+  { state: 'cheering', label: '打call应援 (Cheering)' },
+  { state: 'gaming', label: '专注打机 (Gaming)' },
+  { state: 'hacking', label: '极客超频 (Hacking)' },
+  { state: 'celebrating', label: '撒花庆祝 (Celebrating)' },
+  { state: 'box', label: '纸箱猫猫 (Box)' },
 ]
 </script>
 
@@ -35,8 +47,8 @@ const states: { state: MikoState, label: string }[] = [
 
 .miko-states-demo__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
 }
 
 .miko-states-demo__card {
@@ -44,7 +56,7 @@ const states: { state: MikoState, label: string }[] = [
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 14px 8px;
+  padding: 14px 6px;
   background: var(--tx-bg-color-overlay, rgba(255, 255, 255, 0.03));
   border: 1px solid var(--tx-border-color, rgba(255, 255, 255, 0.08));
   border-radius: 10px;

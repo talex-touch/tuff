@@ -1,6 +1,6 @@
 import type { AiMessagePart } from '@talex-touch/tuffex/ai-elements'
 import { describe, expect, it } from 'vitest'
-import { toMessageSegments } from './chain-steps'
+import { toMessageSegments } from '../utils/chain-steps'
 
 const parts: AiMessagePart[] = [
   { type: 'reasoning', text: 'Look for the report\nthen summarise', done: true },

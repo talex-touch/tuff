@@ -6,6 +6,14 @@
 @import '@talex-touch/tuffex/stream-text/style.css';
 @import '@talex-touch/tuffex/edge-fade-mask/style.css';
 @import '@talex-touch/tuffex/tool-call-card/style.css';
+@import '@talex-touch/tuffex/button/style.css';
+@import '@talex-touch/tuffex/input/style.css';
+@import '@talex-touch/tuffex/select/style.css';
+@import '@talex-touch/tuffex/checkbox/style.css';
+@import '@talex-touch/tuffex/flip-overlay/style.css';
+@import '@talex-touch/tuffex/message-actions/style.css';
+@import '@talex-touch/tuffex/chain-of-thought/style.css';
+@import '@talex-touch/tuffex/thinking-orb/style.css';
 
 // Entrance for TxAiReveal. A CSS animation on the wrapper, not a <Transition>: the slot
 // may hold any number of children and the reveal only ever needs to run once, on mount.

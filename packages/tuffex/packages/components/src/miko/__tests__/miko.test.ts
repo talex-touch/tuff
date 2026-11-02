@@ -38,6 +38,61 @@ describe('txMiko', () => {
     expect(wrapper.find('.paw-l').exists()).toBe(true)
   })
 
+  it('renders new animation states correctly (stretching, purring, box, hacking)', () => {
+    const wrapperStretch = mount(Miko, {
+      props: { state: 'stretching' },
+    })
+    expect(wrapperStretch.classes()).toContain('state-stretching')
+    expect(wrapperStretch.attributes('aria-label')).toBe('Miko: 伸懒腰')
+    expect(wrapperStretch.find('.cat-stretch').exists()).toBe(true)
+
+    const wrapperPurr = mount(Miko, {
+      props: { state: 'purring' },
+    })
+    expect(wrapperPurr.classes()).toContain('state-purring')
+    expect(wrapperPurr.attributes('aria-label')).toBe('Miko: 呼噜')
+    expect(wrapperPurr.find('.cat-purr').exists()).toBe(true)
+
+    const wrapperBox = mount(Miko, {
+      props: { state: 'box' },
+    })
+    expect(wrapperBox.classes()).toContain('state-box')
+    expect(wrapperBox.attributes('aria-label')).toBe('Miko: 钻纸箱')
+    expect(wrapperBox.find('.box-peeker').exists()).toBe(true)
+
+    const wrapperHack = mount(Miko, {
+      props: { state: 'hacking' },
+    })
+    expect(wrapperHack.classes()).toContain('state-hacking')
+    expect(wrapperHack.attributes('aria-label')).toBe('Miko: 极客超频')
+    expect(wrapperHack.find('.sunglasses').exists()).toBe(true)
+  })
+
+  it('supports interactive click reactions and class', async () => {
+    const wrapper = mount(Miko, {
+      props: { interactive: true },
+    })
+    expect(wrapper.classes()).toContain('is-interactive')
+
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('click')).toHaveLength(1)
+    expect(wrapper.emitted('stateChange')).toBeTruthy()
+  })
+
+  it('triggers dizzy reaction on rapid clicks in interactive mode', async () => {
+    const wrapper = mount(Miko, {
+      props: { interactive: true },
+    })
+
+    await wrapper.trigger('click')
+    await wrapper.trigger('click')
+    await wrapper.trigger('click')
+    await wrapper.trigger('click')
+
+    expect(wrapper.classes()).toContain('state-dizzy')
+    expect(wrapper.attributes('aria-label')).toBe('Miko: 眩晕')
+  })
+
   it('supports custom color', () => {
     const wrapper = mount(Miko, {
       props: { color: '#199FFE' },
@@ -56,6 +111,7 @@ describe('txMiko', () => {
   it('registers the component through install', () => {
     const app = { component: vi.fn() } as unknown as App
     InstalledMiko.install?.(app)
+
     expect(app.component).toHaveBeenCalledWith('TxMiko', InstalledMiko)
   })
 })

@@ -1,3 +1,4 @@
+import type { TxAiErrorBlockProps } from '@talex-touch/intelligence-uikit'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -6,7 +7,7 @@ import {
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
   CONVERSATION_ERROR_USAGE_LIMIT_REACHED
 } from '~/modules/conversation/conversation-error-display'
-import { useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
+import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import type { IntelligenceErrorRecovery } from '~/modules/intelligence/ai-error-recovery'
 import {
   resolveIntelligenceErrorRecovery,
@@ -83,7 +84,29 @@ export function useTurnError() {
     void router.push('/setting/intelligence/channels')
   }
 
+  function errorDisplay(error: ConversationError | undefined, retryable: boolean): TxAiErrorBlockProps {
+    const limit = resolveUsageLimitFailure(error)
+    return {
+      title: limit?.title ?? resolveErrorTitle(error),
+      detail: limit?.detail ?? resolveErrorAdvice(error),
+      reportCode: resolveErrorReportCode(error),
+      reportDetail: limit || isStoppedTurn(error) ? undefined : resolveErrorReportDetail(error),
+      codeLabel: t('home.error.codeLabel'),
+      tone: limit ? 'warning' : 'danger',
+      actionLabel: limit?.action?.label ?? (isProviderUnavailable(error) ? t('home.configureProvider') : undefined),
+      retryable,
+      retryLabel: t('home.retry')
+    }
+  }
+
+  function activateErrorAction(error: ConversationError | undefined): void {
+    if (resolveUsageLimitFailure(error)) openUsageLimits()
+    else if (isProviderUnavailable(error)) openProviderSettings()
+  }
+
   return {
+    errorDisplay,
+    activateErrorAction,
     resolveErrorTitle,
     resolveErrorAdvice,
     resolveErrorReportCode,

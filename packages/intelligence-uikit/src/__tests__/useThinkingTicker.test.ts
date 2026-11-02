@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { useThinkingTicker } from './useThinkingTicker'
+import { useThinkingTicker } from '../composables/useThinkingTicker'
 
 describe('useThinkingTicker', () => {
   it('rolls a fresh verb when activated and morphs on intervals', () => {

@@ -2415,6 +2415,11 @@
           "tokens": "Token 消耗与速度",
           "speed": "生成速度",
           "coordinator": "调度器",
+          "input": "输入",
+          "output": "输出",
+          "total": "总计",
+          "totalLatency": "总耗时",
+          "ttft": "首字响应 (TTFT)",
           "model": "模型"
         },
         "turn": {

@@ -15,6 +15,7 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./utils": "./src/utils/index.ts",
     "./style.css": "./src/style/index.scss"
   },
   "files": [
@@ -32,9 +33,12 @@
     "vue": "^3.5.27"
   },
   "dependencies": {
+    "@openuidev/lang-core": "^1.0.2",
     "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",
-    "@talex-touch/utils": "workspace:*"
+    "@talex-touch/utils": "workspace:*",
+    "echarts": "catalog:",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",

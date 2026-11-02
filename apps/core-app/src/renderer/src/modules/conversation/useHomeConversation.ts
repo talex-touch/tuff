@@ -28,7 +28,7 @@ import {
 } from '@talex-touch/utils/types/intelligence'
 import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
-import { INTERRUPTED_TOOL_CALL_ERROR } from './chain-steps'
+import { INTERRUPTED_TOOL_CALL_ERROR } from '@talex-touch/intelligence-uikit/utils'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   isGovernanceFailure,

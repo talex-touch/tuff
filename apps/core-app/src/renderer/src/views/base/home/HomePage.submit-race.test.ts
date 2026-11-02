@@ -147,9 +147,6 @@ vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
 vi.mock('@talex-touch/tuffex/tool-call-card', () => ({ TxToolCallCard: Paint }))
 vi.mock('@talex-touch/tuffex/tool-confirmation', () => ({ TxToolConfirmation: Paint }))
 vi.mock('~/components/icon/AppLogo.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolChartCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolWidgetCard.vue', () => ({ default: Paint }))
-vi.mock('~/components/intelligence/ToolFormCard.vue', () => ({ default: Paint }))
 vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
@@ -406,9 +403,6 @@ afterAll(() => {
     '@talex-touch/tuffex/tool-call-card',
     '@talex-touch/tuffex/tool-confirmation',
     '~/components/icon/AppLogo.vue',
-    '~/components/intelligence/ToolChartCard.vue',
-    '~/components/intelligence/ToolWidgetCard.vue',
-    '~/components/intelligence/ToolFormCard.vue',
     './composer/ComposerToolbar.vue',
     './HomeTopBar.vue',
     './HomeSidePanel.vue',
@@ -485,9 +479,9 @@ describe('HomePage failed conversation report', () => {
     )
 
     const report = view.get('[data-testid="home-error-report"]')
-    const card = view.get('.HomeTurnError')
+    const card = view.get('.tx-ai-error-block')
     expect(card.attributes('role')).toBe('alert')
-    expect(card.get('.HomeTurnError-Title').text()).toBe(catalogText(enUS, 'home.error.generic'))
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(catalogText(enUS, 'home.error.generic'))
     expect(report.text()).toContain('PROVIDER_TIMEOUT')
     expect(report.text()).toContain(detail)
 

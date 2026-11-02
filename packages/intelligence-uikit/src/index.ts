@@ -4,6 +4,7 @@ import "./style/index.scss";
 
 export * from "./components";
 export * from "./types";
+export * from './utils';
 
 export function install(app: App) {
   for (const component of Object.values(components)) {

@@ -1,21 +1,9 @@
 import type { AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
-import type {
-  FormFieldValue,
-  FormSpec,
-  WidgetSpec
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import {
-  CHART_RESULT_PREFIX,
-  FORM_RESULT_PREFIX,
-  WIDGET_RESULT_PREFIX
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { TxAiSegment } from '@talex-touch/intelligence-uikit'
+import { describeToolCallError, rollThinkingVerb, toMessageSegments } from '@talex-touch/intelligence-uikit/utils'
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
-import type { MessageSegment } from '~/modules/conversation/chain-steps'
-import { toMessageSegments } from '~/modules/conversation/chain-steps'
-import { rollThinkingVerb } from '~/modules/conversation/thinking-words'
-import { describeToolCallError } from '~/modules/conversation/tool-call-error'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 
 export interface MessagePartsOptions {
@@ -30,16 +18,6 @@ export interface MessagePartsOptions {
   onSubmitError: (error: unknown) => void
 }
 
-/** Parses a tool result that carries a typed payload after `prefix`; anything else is `null`. */
-function parseResult<T>(tool: AiToolCallPart, prefix: string): T | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(prefix)) return null
-  try {
-    return JSON.parse(output.slice(prefix.length)) as T
-  } catch {
-    return null
-  }
-}
 
 /**
  * How an assistant turn's body is read: ordered segments, the widget a tool result becomes, the
@@ -71,8 +49,12 @@ export function useMessageParts(options: MessagePartsOptions) {
    * its own block, each tool call its own card. Derived per render rather than
    * cached — `parts` grows in place on every delta.
    */
-  function segmentsOf(message: ConversationMessage): MessageSegment[] {
-    return toMessageSegments(message.parts, message.status === 'streaming', {
+  function segmentsOf(message: ConversationMessage): TxAiSegment[] {
+    const streaming = message.status === 'streaming'
+    if (!message.parts) return message.content
+      ? [{ kind: 'text', id: `${message.id}-text`, text: message.content, streaming }]
+      : []
+    return toMessageSegments(message.parts, streaming, {
       thinking: t('home.thinkingVerb', { verb: thinkingVerbFor(message) }),
       thinkingFor: (time) => t('home.thinkingFor', { time }),
       interrupted: t('home.toolInterrupted'),
@@ -80,27 +62,6 @@ export function useMessageParts(options: MessagePartsOptions) {
     })
   }
 
-  /**
-   * Tool results carrying a chart spec render as a chart in the card's result
-   * slot; everything else falls through to the card's own text rendering.
-   */
-  function chartSpecOf(tool: AiToolCallPart): ToolChartSpec | null {
-    return parseResult<ToolChartSpec>(tool, CHART_RESULT_PREFIX)
-  }
-
-  function formSpecOf(tool: AiToolCallPart): FormSpec | null {
-    return parseResult<FormSpec>(tool, FORM_RESULT_PREFIX)
-  }
-
-  /**
-   * A model-authored widget. No parse of the payload's *code* is attempted here —
-   * only the envelope — because nothing this side could check would make running
-   * it safer. The sandbox is what makes it safe.
-   */
-  function widgetSpecOf(tool: AiToolCallPart): WidgetSpec | null {
-    const spec = parseResult<WidgetSpec>(tool, WIDGET_RESULT_PREFIX)
-    return typeof spec?.source === 'string' && spec.source ? spec : null
-  }
 
   /** Ids of forms already answered this session — locks their cards. */
   const submittedForms = reactive(new Set<string>())
@@ -207,12 +168,40 @@ export function useMessageParts(options: MessagePartsOptions) {
     codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang })
   }))
 
+  const chartProps = computed(() => ({ labels: {
+    line: t('home.chartView.line'), bar: t('home.chartView.bar'), area: t('home.chartView.area'),
+    edit: t('home.chartEdit'), done: t('home.chartDone'), label: t('home.chartLabel'),
+    remove: t('home.chartRemove'), addPlaceholder: t('home.chartAddPlaceholder'),
+    add: t('home.chartAdd'), failed: t('home.chartFailed'), close: t('common.close')
+  } }))
+  const formProps = computed(() => ({
+    submitLabel: t('home.formSubmit'), resetLabel: t('home.formReset'),
+    requiredHint: t('home.formRequired'), submittedLabel: t('home.formDone'),
+    selectPlaceholder: t('home.formSelect')
+  }))
+  const widgetProps = computed(() => ({
+    labels: {
+      generated: t('home.widget.generated'), sandboxed: t('home.widget.sandboxed'),
+      loading: t('home.widget.loading'), failed: t('home.widget.failed'), timedOut: t('home.widget.timedOut')
+    },
+    blockedLabel: (directive: string) => t('home.widget.blocked', { directive })
+  }))
+  const footerLabels = computed(() => ({
+    copy: t('home.copy'), copied: t('home.copied'), regenerate: t('home.regenerate'),
+    speak: t('home.speak'), speakStop: t('home.speakStop'), branch: t('home.workspace.fork.fromHere'),
+    input: t('home.workspace.activity.metrics.input'), output: t('home.workspace.activity.metrics.output'),
+    total: t('home.workspace.activity.metrics.total'), latency: t('home.workspace.activity.metrics.latency'),
+    totalLatency: t('home.workspace.activity.metrics.totalLatency'), ttft: t('home.workspace.activity.metrics.ttft'),
+    model: t('home.workspace.activity.metrics.model'), coordinator: t('home.workspace.activity.metrics.coordinator')
+  }))
+
   return {
+    chartProps,
+    formProps,
+    widgetProps,
+    footerLabels,
     thinkingVerbFor,
     segmentsOf,
-    chartSpecOf,
-    formSpecOf,
-    widgetSpecOf,
     submittedForms,
     formDrafts,
     submitForm,

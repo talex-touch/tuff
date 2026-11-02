@@ -3,7 +3,7 @@ import {
   rollNextThinkingVerb,
   rollThinkingVerb,
   THINKING_VERBS
-} from './thinking-words'
+} from '../utils/thinking-words'
 
 describe('thinking-words', () => {
   it('contains at least 50 thinking verbs in english including core verbs', () => {

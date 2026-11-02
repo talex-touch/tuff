@@ -11,6 +11,18 @@ export type MikoState =
   | 'reading'
   | 'dizzy'
   | 'peeking'
+  | 'stretching'
+  | 'bathing'
+  | 'curious'
+  | 'scratching'
+  | 'purring'
+  | 'eating'
+  | 'dancing'
+  | 'cheering'
+  | 'gaming'
+  | 'hacking'
+  | 'celebrating'
+  | 'box'
 
 export type MikoSize = 'xs' | 'sm' | 'md' | 'lg' | (string & {}) | number
 
@@ -27,6 +39,18 @@ export interface MikoLabels {
   reading: string
   dizzy: string
   peeking: string
+  stretching: string
+  bathing: string
+  curious: string
+  scratching: string
+  purring: string
+  eating: string
+  dancing: string
+  cheering: string
+  gaming: string
+  hacking: string
+  celebrating: string
+  box: string
 }
 
 export const MIKO_DEFAULT_LABELS: MikoLabels = {
@@ -42,6 +66,18 @@ export const MIKO_DEFAULT_LABELS: MikoLabels = {
   reading: '研读中',
   dizzy: '眩晕',
   peeking: '观察中',
+  stretching: '伸懒腰',
+  bathing: '舔爪洗脸',
+  curious: '好奇',
+  scratching: '磨爪',
+  purring: '呼噜',
+  eating: '吃鱼干',
+  dancing: '跳舞',
+  cheering: '打call',
+  gaming: '打游戏',
+  hacking: '极客超频',
+  celebrating: '庆祝',
+  box: '钻纸箱',
 }
 
 export interface MikoProps {
@@ -68,8 +104,25 @@ export interface MikoProps {
    * 可访问名称
    */
   ariaLabel?: string
+  /**
+   * 是否开启交互响应（悬停轻微浮起、点击欢快互动动效、连续点击眩晕彩蛋）
+   * @default false
+   */
+  interactive?: boolean
+  /**
+   * 是否在空闲时随机切换日常动作状态（如伸懒腰、好奇歪头、洗脸、呼噜、探头、纸箱等）
+   * @default false
+   */
+  random?: boolean
+  /**
+   * 随机动作切换的时间间隔（毫秒），默认为 5000ms
+   * @default 5000
+   */
+  randomInterval?: number
 }
 
 export interface MikoEmits {
   (e: 'click', event: MouseEvent): void
+  (e: 'stateChange', state: MikoState): void
+  (e: 'update:state', state: MikoState): void
 }
