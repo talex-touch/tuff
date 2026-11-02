@@ -681,6 +681,16 @@ async function verifyJournaledMigration(
       !queryPlanDetail.includes('USE TEMP B-TREE')
     assertAcceptance(authoritativeQueryPlan, 'MIGRATION_INDEX_QUERY_PLAN')
 
+    // Keep the 0041 index checks isolated, then bring the fixture to the current schema
+    // before invoking today's store (which also accounts for encrypted run messages).
+    assertAcceptance(
+      numberValue(await scalar(upgradeDatabase.client, 'SELECT COUNT(*) FROM __drizzle_migrations')) ===
+        target + 1,
+      'MIGRATION_RETENTION_JOURNAL'
+    )
+    await stageMigrationChain(migrationsFolder, journal, upgradeFolder, journal.entries.length)
+    await migrate(upgradeDatabase.db, { migrationsFolder: upgradeFolder })
+
     const productionPage = await createStore(
       upgradeDatabase.db
     ).listOrchestratorRunRetentionCandidates(CUTOFF_MS, undefined, 10)
@@ -696,7 +706,7 @@ async function verifyJournaledMigration(
       await scalar(upgradeDatabase.client, 'SELECT COUNT(*) FROM __drizzle_migrations')
     )
     upgraded =
-      journalCount === target + 1 &&
+      journalCount === journal.entries.length &&
       authoritativeIndexSql &&
       authoritativeIndexColumns &&
       authoritativeQueryPlan &&

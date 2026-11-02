@@ -290,3 +290,45 @@ describe('scanNativeSessionsForProject', () => {
     )
   })
 })
+
+/**
+ * `findNativeSessionFile` is what "打开会话文件" resolves: the same archive rules discovery uses, so
+ * the file it reveals is the one the agent itself continues from — never a same-named file that
+ * belongs to another project.
+ */
+describe('findNativeSessionFile', () => {
+  it('resolves each provider to the file its own archive holds', async () => {
+    await writeJsonl(join(roots.pi, 'pi-1.jsonl'), piSessionLines('pi-1', projectRoot))
+    const claudeId = '11111111-2222-3333-4444-555555555555'
+    await writeJsonl(join(roots.claude, `${claudeId}.jsonl`), [
+      { type: 'user', sessionId: claudeId, cwd: projectRoot, message: { role: 'user', content: 'hi' } }
+    ])
+    await writeJsonl(join(roots.codex, 'codex-1.jsonl'), [
+      { type: 'session_meta', payload: { id: 'codex-1', cwd: projectRoot } }
+    ])
+
+    const { findNativeSessionFile } = await import('./native-session-discovery')
+    expect(await findNativeSessionFile('pi', 'pi-1', projectRoot, { roots })).toBe(
+      join(roots.pi, 'pi-1.jsonl')
+    )
+    expect(await findNativeSessionFile('claude', claudeId, projectRoot, { roots })).toBe(
+      join(roots.claude, `${claudeId}.jsonl`)
+    )
+    expect(await findNativeSessionFile('codex', 'codex-1', projectRoot, { roots })).toBe(
+      join(roots.codex, 'codex-1.jsonl')
+    )
+  })
+
+  it('answers null for a session Tuff wrote alone, and for a file from another project', async () => {
+    const { findNativeSessionFile } = await import('./native-session-discovery')
+    expect(await findNativeSessionFile('pi', 'no-such-session', projectRoot, { roots })).toBeNull()
+
+    const elsewhere = await realpath(await mkdtemp(join(tmpdir(), 'other-project-')))
+    try {
+      await writeJsonl(join(roots.pi, 'pi-2.jsonl'), piSessionLines('pi-2', elsewhere))
+      expect(await findNativeSessionFile('pi', 'pi-2', projectRoot, { roots })).toBeNull()
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true })
+    }
+  })
+})

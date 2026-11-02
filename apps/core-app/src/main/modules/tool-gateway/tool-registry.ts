@@ -19,10 +19,14 @@ import {
   WIDGET_SOURCE_MAX_CHARS
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import {
+  describeToolFailure,
   formatStableToolError,
   projectToolError,
   projectToolErrorCode
 } from '../ai/tool-error-projection'
+import { createLogger } from '../../utils/logger'
+
+const registryLog = createLogger('agent-tools')
 
 /**
  * How much damage a tool can do, which decides whether a session-level
@@ -43,6 +47,9 @@ function toolFailure(code: StableToolErrorCode): ToolResult {
 
 function projectedToolFailure(error: unknown): ToolResult {
   const projection = projectToolError(error)
+  registryLog.warn(
+    `Agent tool execution failed: ${formatStableToolError(projection)} | ${describeToolFailure(error)}`
+  )
   return { output: projection.message, isError: true, code: projection.code }
 }
 
@@ -554,6 +561,9 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
             }
           } catch (error) {
             // One unreachable server must not hide the rest of the catalogue.
+            registryLog.warn(
+              `MCP server unavailable in catalogue: server=${server.id} | ${describeToolFailure(error)}`
+            )
             lines.push(
               `${server.id}\tunavailable: ${formatStableToolError(projectToolError(error))}`
             )

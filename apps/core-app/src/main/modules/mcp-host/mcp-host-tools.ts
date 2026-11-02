@@ -19,8 +19,15 @@
 import type { ToolDefinition, ToolResult } from '../tool-gateway/tool-registry'
 import type { LocalSkillEntry } from '../ai/skill-local-sources'
 import { listEnabledLocalSkills } from '../ai/skill-local-sources'
-import { formatStableToolError, projectToolError } from '../ai/tool-error-projection'
+import {
+  describeToolFailure,
+  formatStableToolError,
+  projectToolError
+} from '../ai/tool-error-projection'
 import { truncateForModel } from '../tool-gateway/tool-registry'
+import { createLogger } from '../../utils/logger'
+
+const mcpHostToolsLog = createLogger('mcp-host').child('Tools')
 
 /** Mirrors the gateway's `ToolRisk`, so a card reads the same wherever it came from. */
 export type McpHostRisk = 'read' | 'write' | 'execute'
@@ -188,6 +195,9 @@ function describeLocalSkill(skill: LocalSkillEntry): string {
  * filesystem error carries.
  */
 function degradedRow(source: string, error: unknown): string {
+  mcpHostToolsLog.warn(
+    `Host skill listing degraded: source=${source} | ${describeToolFailure(error)}`
+  )
   return ['', source, '', `unavailable: ${formatStableToolError(projectToolError(error))}`].join(
     '\t'
   )

@@ -41,7 +41,7 @@ import {
   normalizeLocalAiCliTerminalCreateRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { clipboard, dialog } from 'electron'
+import { clipboard, dialog, shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
@@ -67,7 +67,11 @@ import {
 } from './executable-resolver'
 import { nativeSessionLeaseRegistry } from './native-session-lease'
 import { isNativeSessionMissingError, isPiSessionNotFoundError } from './native-session-errors'
-import { hasPiSessionFileNamedFor, scanNativeSessionsForProject } from './native-session-discovery'
+import {
+  findNativeSessionFile,
+  hasPiSessionFileNamedFor,
+  scanNativeSessionsForProject
+} from './native-session-discovery'
 import {
   capturePiSessionFile,
   isPiSessionFileUnwritten,
@@ -86,6 +90,7 @@ import {
 import {
   forgetLocalAiCliSession,
   getLocalAiCliSession,
+  getLocalAiCliSessionForConversation,
   listLocalAiCliSessions,
   markLocalAiCliSessionState,
   subscribeLocalAiCliSessionMutations,
@@ -459,6 +464,24 @@ export class LocalAiCliModule extends BaseModule {
           skipped: scan.skipped + persisted.sessions.length - persisted.created,
           incomplete: scan.incomplete
         }
+      }),
+      transport.on(LocalAiCliEvents.session.revealFile, async (payload, context) => {
+        assertHostContext(context)
+        const conversationId = typeof payload?.conversationId === 'string'
+          ? payload.conversationId.trim()
+          : ''
+        if (!conversationId || conversationId.length > 128 || conversationId.includes('\0'))
+          throw new Error('LOCAL_AI_CLI_SESSION_INVALID')
+        const pointer = await getLocalAiCliSessionForConversation(conversationId)
+        if (!pointer) return { revealed: false }
+        const filePath = await findNativeSessionFile(
+          pointer.provider,
+          pointer.nativeSessionId,
+          pointer.projectRoot
+        )
+        if (!filePath) return { revealed: false }
+        shell.showItemInFolder(filePath)
+        return { revealed: true }
       }),
       transport.on(LocalAiCliEvents.session.forget, async (payload, context) => {
         assertHostContext(context)
