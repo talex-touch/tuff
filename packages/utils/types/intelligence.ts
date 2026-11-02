@@ -475,11 +475,20 @@ export interface IntelligenceMessageAttachment {
 }
 
 /**
+ * One tool call an assistant message made. `id` pairs it with the `tool` message that answers it.
+ */
+export interface IntelligenceMessageToolCall {
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+/**
  * Chat message structure.
  */
 export interface IntelligenceMessage {
   /** Message role. */
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   /** Message content. */
   content: string
   /** Optional sender name. */
@@ -497,6 +506,10 @@ export interface IntelligenceMessage {
    * binaries simply never looks at it, which is what keeps the degrade silent instead of fatal.
    */
   attachments?: IntelligenceMessageAttachment[]
+  /** Tool calls this assistant message made; the matching results follow as `tool` messages. */
+  toolCalls?: IntelligenceMessageToolCall[]
+  /** On a `tool` message: the `id` of the call it answers. */
+  toolCallId?: string
 }
 
 /**
@@ -640,6 +653,8 @@ export interface IntelligenceUsageInfo {
   completionTokens: number
   /** Total tokens used. */
   totalTokens: number
+  /** Prompt tokens the provider served from its prompt cache; present only when reported. */
+  cacheReadTokens?: number
   /** Estimated cost. */
   cost?: number
 }
@@ -793,6 +808,15 @@ export interface IntelligenceCapabilityDescriptor {
 }
 
 /**
+ * A tool offered to the model on a chat turn. `parameters` is a JSON Schema object.
+ */
+export interface IntelligenceChatTool {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+/**
  * Payload for chat capability.
  */
 export interface IntelligenceChatPayload {
@@ -812,6 +836,12 @@ export interface IntelligenceChatPayload {
   presencePenalty?: number
   /** Stop sequences. */
   stop?: string[]
+  /**
+   * Tools the model may call. A provider that implements `supportsNativeTools` sends them on its
+   * own wire and reports each call as `tool-start` / `tool-input-end` part events; for every other
+   * provider the SDK folds them into the prompt (a JSON directive) and removes this field.
+   */
+  tools?: IntelligenceChatTool[]
 }
 
 /**
@@ -2713,6 +2743,12 @@ export interface IntelligenceSDKPersistedConfig {
 export interface IntelligenceProviderAdapter {
   /** Provider type. */
   readonly type: IntelligenceProviderType
+  /**
+   * Whether `chatStream` sends `payload.tools` on the provider's own wire and reports the model's
+   * calls as `tool-start` / `tool-input-end` part events. Absent means no: the SDK then carries
+   * tools in the prompt instead.
+   */
+  readonly supportsNativeTools?: boolean
   /** Get provider configuration. */
   getConfig: () => IntelligenceProviderConfig
   /** Update provider configuration. */
