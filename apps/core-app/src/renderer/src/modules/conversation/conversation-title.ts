@@ -128,7 +128,9 @@ export function shouldGenerateTitle(args: {
   inFlight: boolean
   firstUserContent: string | undefined
   firstAssistantContent: string | undefined
+  failed?: boolean
 }): boolean {
+  if (args.failed) return false
   if (args.generatedTitle !== null || args.inFlight) return false
   if (!args.firstUserContent?.trim()) return false
   if (!args.firstAssistantContent?.trim()) return false

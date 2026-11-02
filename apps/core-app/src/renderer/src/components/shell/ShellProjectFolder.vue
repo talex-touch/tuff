@@ -4,6 +4,7 @@ import type {
   LocalAiCliSessionSummary
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ProjectRecord } from '@talex-touch/utils/transport/sdk/domains/project'
+import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
 import type { LocalAiAgentBlocker } from '~/modules/conversation/local-ai-agents'
 import {
@@ -15,6 +16,7 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProjectStore } from '~/stores/projects'
+import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellProjectRows from './ShellProjectRows.vue'
 
 /**
@@ -43,13 +45,16 @@ const props = withDefaults(
     renaming?: boolean
     /** Project whose session discovery is in flight, if any. */
     discoveringProjectId?: string | null
+    /** Project names by id, forwarded to the rows' info dialog. */
+    projectNames?: Record<string, string>
   }>(),
   {
     current: false,
     expanded: false,
     archived: false,
     renaming: false,
-    discoveringProjectId: null
+    discoveringProjectId: null,
+    projectNames: () => ({})
   }
 )
 
@@ -66,6 +71,9 @@ const emit = defineEmits<{
   toggleArchived: []
   openConversation: [id: string]
   removeConversation: [id: string]
+  renameConversation: [id: string, title: string]
+  copyConversation: [conversation: ConversationRecord]
+  openConversationFile: [conversation: ConversationRecord]
   continueSession: [session: LocalAiCliSessionSummary]
   forgetSession: [sessionRef: string]
 }>()
@@ -86,11 +94,12 @@ const AGENT_ICONS = {
 const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
 
 /**
- * The project menu's panel: TuffEx's 流光底 (`TxFlowLight`, `corners`) over the default 琉光 card.
- * Fixed brand light rather than whatever the glass happened to refract, so the agent submenu —
- * which inherits it — glows the same as the menu it opens from. One object for every render.
+ * The project menu's panel: TuffEx's 流光底 (`TxFlowLight`, `corners`) over the shared shell card,
+ * which carries the heavier veil a menu needs when its own row title sits underneath. Fixed brand
+ * light rather than whatever the glass happened to refract, so the agent submenu — which inherits
+ * it — glows the same as the menu it opens from.
  */
-const PROJECT_MENU_CARD = { flowLight: 'corners' } as const
+const PROJECT_MENU_CARD = SHELL_MENU_CARD
 
 const { t } = useI18n()
 const projectStore = useProjectStore()
@@ -461,8 +470,12 @@ function onFolderAfterLeave(el: Element): void {
           :rows="rows"
           :active-id="activeId"
           :dispatch-disabled="archived"
+          :project-names="projectNames"
           @open-conversation="emit('openConversation', $event)"
           @remove-conversation="emit('removeConversation', $event)"
+          @rename-conversation="emit('renameConversation', $event[0], $event[1])"
+          @copy-conversation="emit('copyConversation', $event)"
+          @open-conversation-file="emit('openConversationFile', $event)"
           @continue-session="emit('continueSession', $event)"
           @forget-session="emit('forgetSession', $event)"
         />

@@ -871,7 +871,8 @@ describe('shellConversationList sections', () => {
     historyHolder.conversations!.value = [conversation({ id: 'hi' })]
     const wrapper = await mountList()
 
-    const sections = Array.from(wrapper.find('nav').element.children).map(
+    const scrollArea = wrapper.find('.tx-edge-fade-mask__viewport').element ?? wrapper.find('nav').element
+    const sections = Array.from(scrollArea.children).map(
       (section) => section.className
     )
     expect(sections).toEqual([

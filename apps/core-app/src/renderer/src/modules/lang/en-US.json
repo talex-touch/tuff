@@ -2545,6 +2545,9 @@
       "open": "Open",
       "reveal": "Reveal in folder",
       "openFailed": "Could not open this file",
+      "readFailed": "Failed to read file",
+      "fileNotFound": "File not found or moved",
+      "readTimeout": "Read file timed out",
       "sourceFile": "Local file",
       "sourceSearch": "Search hit",
       "sourceMcp": "MCP",
@@ -2558,6 +2561,15 @@
       "blocked": "Remote image blocked",
       "loadOnce": "Load this image",
       "allowSession": "Allow for this conversation"
+    },
+    "fileLink": {
+      "cmdClickTitle": "⌘ Click to open on the right",
+      "shiftCmdClickTitle": "⇧⌘ Click to open with system app",
+      "openWithSystem": "System App",
+      "openSystemAppTitle": "Open with system default application (⇧⌘ Click)",
+      "revealInFinder": "Finder",
+      "revealParentFolder": "Show Parent Folder",
+      "clickToCopyPath": "Click to copy full path"
     },
     "code": {
       "preview": "Preview",

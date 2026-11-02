@@ -5,19 +5,19 @@ import { toMessageSegments } from './chain-steps'
 const parts: AiMessagePart[] = [
   { type: 'reasoning', text: 'Look for the report\nthen summarise', done: true },
   { type: 'tool-call', id: 'c1', name: 'tuff_search_files', status: 'done', output: '3 hits' },
-  { type: 'text', text: 'Here are the files.' }
+  { type: 'text', text: 'Here are the files.' },
 ]
 
 describe('toMessageSegments', () => {
   it('carries reasoning, tools and prose as segments in stream order', () => {
     const segments = toMessageSegments(parts, false)
 
-    expect(segments.map((segment) => segment.kind)).toEqual(['reasoning', 'tool', 'text'])
+    expect(segments.map(segment => segment.kind)).toEqual(['reasoning', 'tool', 'text'])
     expect(segments[2]?.kind === 'text' && segments[2].text).toBe('Here are the files.')
     expect(segments[0]).toMatchObject({ kind: 'reasoning' })
     expect(segments[0]?.kind === 'reasoning' && segments[0].step).toMatchObject({
       kind: 'thinking',
-      status: 'done'
+      status: 'done',
     })
     // Title is the first line only; the full text stays in the body.
     expect(segments[0]?.kind === 'reasoning' && segments[0].step.title).toBe('Look for the report')
@@ -31,12 +31,12 @@ describe('toMessageSegments', () => {
       [
         { type: 'reasoning', text: 'first thought', done: true },
         { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'ok' },
-        { type: 'reasoning', text: 'second thought', done: true }
+        { type: 'reasoning', text: 'second thought', done: true },
       ],
-      false
+      false,
     )
 
-    expect(segments.map((segment) => segment.kind)).toEqual(['reasoning', 'tool', 'reasoning'])
+    expect(segments.map(segment => segment.kind)).toEqual(['reasoning', 'tool', 'reasoning'])
   })
 
   it('keeps prose in place between two thoughts', () => {
@@ -47,16 +47,16 @@ describe('toMessageSegments', () => {
         { type: 'reasoning', text: 'first thought', done: true },
         { type: 'text', text: 'Partial answer.' },
         { type: 'reasoning', text: 'second thought', done: true },
-        { type: 'text', text: 'The rest of it.' }
+        { type: 'text', text: 'The rest of it.' },
       ],
-      false
+      false,
     )
 
-    expect(segments.map((segment) => segment.kind)).toEqual([
+    expect(segments.map(segment => segment.kind)).toEqual([
       'reasoning',
       'text',
       'reasoning',
-      'text'
+      'text',
     ])
     expect(segments[0]?.id).not.toBe(segments[2]?.id)
     expect(segments[1]?.id).not.toBe(segments[3]?.id)
@@ -69,9 +69,9 @@ describe('toMessageSegments', () => {
       [
         { type: 'text', text: 'First paragraph.' },
         { type: 'reasoning', text: 'reconsidering', done: true },
-        { type: 'text', text: 'Still typing' }
+        { type: 'text', text: 'Still typing' },
       ],
-      true
+      true,
     )
 
     expect(segments[0]?.kind === 'text' && segments[0].streaming).toBe(false)
@@ -87,9 +87,9 @@ describe('toMessageSegments', () => {
     const segments = toMessageSegments(
       [
         { type: 'text', text: '' },
-        { type: 'text', text: 'real' }
+        { type: 'text', text: 'real' },
       ],
-      false
+      false,
     )
 
     expect(segments).toHaveLength(1)
@@ -101,12 +101,12 @@ describe('toMessageSegments', () => {
     // on every delta.
     const head: AiMessagePart[] = [
       { type: 'reasoning', text: 'first thought', done: true },
-      { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'ok' }
+      { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'ok' },
     ]
     const grown: AiMessagePart[] = [...head, { type: 'reasoning', text: 'later', done: false }]
 
-    const before = toMessageSegments(head, true).map((segment) => segment.id)
-    const after = toMessageSegments(grown, true).map((segment) => segment.id)
+    const before = toMessageSegments(head, true).map(segment => segment.id)
+    const after = toMessageSegments(grown, true).map(segment => segment.id)
 
     expect(after.slice(0, before.length)).toEqual(before)
   })
@@ -114,7 +114,7 @@ describe('toMessageSegments', () => {
   it('marks in-flight spans active only while the turn streams', () => {
     const live: AiMessagePart[] = [
       { type: 'reasoning', text: 'thinking', done: false },
-      { type: 'tool-call', id: 'c2', name: 'read', status: 'running' }
+      { type: 'tool-call', id: 'c2', name: 'read', status: 'running' },
     ]
 
     const streaming = toMessageSegments(live, true)
@@ -136,7 +136,7 @@ describe('toMessageSegments', () => {
       id: 'c4',
       name: 'tuff_render_form',
       status: 'done',
-      output: 'form'
+      output: 'form',
     }
     const segments = toMessageSegments([part], false)
 
@@ -157,14 +157,14 @@ describe('toMessageSegments', () => {
     const interrupted = toMessageSegments(
       [{ type: 'tool-call', id: 'c6', name: 'read', status: 'running' }],
       false,
-      { interrupted: 'Interrupted' }
+      { interrupted: 'Interrupted' },
     )
     expect(interrupted[0]?.kind === 'tool' && interrupted[0].part.error).toBe('Interrupted')
 
     const failed = toMessageSegments(
       [{ type: 'tool-call', id: 'c7', name: 'read', status: 'error', error: 'User denied' }],
       false,
-      { interrupted: 'Interrupted' }
+      { interrupted: 'Interrupted' },
     )
     expect(failed[0]?.kind === 'tool' && failed[0].part.error).toBe('User denied')
   })
@@ -173,16 +173,41 @@ describe('toMessageSegments', () => {
     // The title is the block header — a hard-coded English fallback would show
     // through in a localized UI.
     const segments = toMessageSegments([{ type: 'reasoning', text: '', done: false }], true, {
-      thinking: '正在思考'
+      thinking: '正在思考',
     })
 
     expect(segments[0]?.kind === 'reasoning' && segments[0].step.title).toBe('正在思考')
+  })
+  it('uses dynamic thinking verb and streams live body before a newline arrives', () => {
+    const segments = toMessageSegments(
+      [{ type: 'reasoning', text: 'analyzing workspace structure', done: false }],
+      true,
+      { thinking: '正在分析' },
+    )
+    const step = segments[0]?.kind === 'reasoning' ? segments[0].step : null
+
+    expect(step?.title).toBe('正在分析')
+    expect(step?.body).toBe('analyzing workspace structure')
+    expect(step?.status).toBe('active')
+  })
+
+  it('replaces dynamic verb with recognized title line once newline arrives', () => {
+    const segments = toMessageSegments(
+      [{ type: 'reasoning', text: '**Planning Architecture**\nChecking package.json', done: false }],
+      true,
+      { thinking: '正在分析' },
+    )
+    const step = segments[0]?.kind === 'reasoning' ? segments[0].step : null
+
+    expect(step?.title).toBe('Planning Architecture')
+    expect(step?.body).toBe('Checking package.json')
+    expect(step?.status).toBe('active')
   })
 
   it('truncates a long first line so a title stays one line', () => {
     const segments = toMessageSegments(
       [{ type: 'reasoning', text: 'x'.repeat(200), done: true }],
-      false
+      false,
     )
     const step = segments[0]?.kind === 'reasoning' ? segments[0].step : null
 
@@ -202,7 +227,7 @@ describe('toMessageSegments', () => {
   it('forwards reasoning duration onto the step', () => {
     const segments = toMessageSegments(
       [{ type: 'reasoning', text: 'quick check', done: true, durationMs: 3200 }],
-      false
+      false,
     )
 
     expect(segments[0]?.kind === 'reasoning' && segments[0].step.durationMs).toBe(3200)
@@ -221,13 +246,13 @@ describe('toMessageSegments', () => {
       { type: 'text', text: 'Before. ' },
       { type: 'reasoning', text: 'a thought', done: true },
       { type: 'tool-call', id: 'c8', name: 'read', status: 'done' },
-      { type: 'text', text: 'After.' }
+      { type: 'text', text: 'After.' },
     ]
     const content = 'Before. After.'
 
     const prose = toMessageSegments(streamed, false)
-      .filter((segment) => segment.kind === 'text')
-      .map((segment) => (segment.kind === 'text' ? segment.text : ''))
+      .filter(segment => segment.kind === 'text')
+      .map(segment => (segment.kind === 'text' ? segment.text : ''))
       .join('')
 
     expect(prose).toBe(content)

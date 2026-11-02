@@ -4,9 +4,13 @@ import type {
   LocalAiCliSessionSummary
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ProjectRecord } from '@talex-touch/utils/transport/sdk/domains/project'
+import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
+import { TxEdgeFadeMask } from '@talex-touch/tuffex/edge-fade-mask'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createAgentWorkspaceSdk } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -37,6 +41,8 @@ const router = useRouter()
 const transport = useTuffTransport()
 const history = useConversationHistory()
 const projectStore = useProjectStore()
+const workspaceSdk = createAgentWorkspaceSdk(transport)
+const localAiCliSdk = createLocalAiCliSdk(transport)
 const { enterConversation, enterPickedProjectConversation } = useConversationEntry()
 const { projects, localAiSessions, activeProjectId } = storeToRefs(projectStore)
 const folders = useProjectFolders({
@@ -62,6 +68,12 @@ onMounted(() => {
 const groups = computed(() =>
   projectConversationGroups(projects.value, history.conversations.value, localAiSessions.value)
 )
+/** Project names by id, so a row's info dialog can name its project instead of showing an id. */
+const projectNames = computed(() => {
+  const names: Record<string, string> = {}
+  for (const project of projects.value) names[project.id] = project.name
+  return names
+})
 const activeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : null))
 /** The folder row that is current: the one owning the blank conversation on screen, if any. */
 const currentProjectId = computed(
@@ -84,6 +96,52 @@ async function removeConversation(id: string): Promise<void> {
     return
   }
   if (wasActive) await router.push('/home')
+}
+
+async function renameConversation(id: string, title: string): Promise<void> {
+  try {
+    await history.rename(id, title)
+  } catch {
+    toast.error(t('shell.history.renameFailed'))
+  }
+}
+
+/**
+ * A conversation's copy is a fork of the whole thread, not a duplicated row: Main clones the
+ * messages, attachments and file-review evidence, and answers with the child's own state. Refused
+ * while a turn is still running — Main's `WORKSPACE_FORK_BUSY` — so the copy cannot capture a
+ * half-written reply.
+ */
+async function copyConversation(conversation: ConversationRecord): Promise<void> {
+  if (isConversationLoading(conversation.id)) {
+    toast.info(t('shell.history.copyBusy'))
+    return
+  }
+  try {
+    const child = await workspaceSdk.fork({ conversationId: conversation.id })
+    await history.refresh()
+    toast.success(
+      t('shell.history.copied', { title: conversation.title || t('shell.history.untitled') }),
+      { description: child.conversationId }
+    )
+  } catch (error) {
+    const busy = error instanceof Error && error.message.includes('WORKSPACE_FORK_BUSY')
+    toast.error(busy ? t('shell.history.copyBusy') : t('shell.history.copyFailed'))
+  }
+}
+
+/**
+ * Reveals the local agent's own session file for this conversation, when it has one. A thread
+ * written by Tuff alone lives in SQLite and has no file on disk, so that case says so rather than
+ * opening an unrelated folder.
+ */
+async function openConversationFile(conversation: ConversationRecord): Promise<void> {
+  try {
+    const pointer = await localAiCliSdk.session.revealFile(conversation.id)
+    if (!pointer.revealed) toast.error(t('shell.history.openFileFailed'))
+  } catch {
+    toast.error(t('shell.history.openFileFailed'))
+  }
 }
 
 /** Opens the project in the omni panel's local agent view with the agent the menu picked chosen. */
@@ -263,12 +321,17 @@ function onRailRowClick(row: RailConversationRow): void {
 
 <template>
   <nav class="ShellConversationList" :aria-label="t('shell.history.label')">
-    <!--
-      Built from the loaded Projects section's own boxes — its section, its header, rows on the shared
-      row metrics with a square in the icon column and a bar in the name column, on a line of the
-      name's type — so each placeholder sits where the real title and folders land and nothing moves
-      when the data arrives.
-    -->
+    <TxEdgeFadeMask
+      class="ShellConversationList-Fade"
+      :size="24"
+      :disabled="collapsed"
+    >
+      <!--
+        Built from the loaded Projects section's own boxes — its section, its header, rows on the shared
+        row metrics with a square in the icon column and a bar in the name column, on a line of the
+        name's type — so each placeholder sits where the real title and folders land and nothing moves
+        when the data arrives.
+      -->
     <div
       v-if="showSkeleton"
       class="ShellConversationList-Section ShellConversationList-Skeleton"
@@ -318,11 +381,13 @@ function onRailRowClick(row: RailConversationRow): void {
             @click="onRailRowClick(row)"
           >
             <span class="ShellConversationList-RailShortTitle">{{ shortTitle(row.title) }}</span>
-            <span
-              v-if="row.id && isConversationLoading(row.id)"
-              class="ShellConversationList-RailLoadingDot"
-              aria-hidden="true"
-            />
+            <Transition name="shell-rail-dot">
+              <span
+                v-if="row.id && isConversationLoading(row.id)"
+                class="ShellConversationList-RailLoadingDot"
+                aria-hidden="true"
+              />
+            </Transition>
           </button>
         </template>
 
@@ -388,6 +453,7 @@ function onRailRowClick(row: RailConversationRow): void {
             :expanded="folders.isExpanded(group.project.id)"
             :renaming="renamingProjectId === group.project.id"
             :discovering-project-id="discoveringProjectId"
+            :project-names="projectNames"
             @toggle="folders.toggle(group.project.id)"
             @enter="enterConversation(group.project.id)"
             @run-agent="openProjectAgent(group.project.id, $event)"
@@ -399,6 +465,9 @@ function onRailRowClick(row: RailConversationRow): void {
             @toggle-archived="toggleArchived(group.project)"
             @open-conversation="openConversation"
             @remove-conversation="removeConversation"
+            @rename-conversation="renameConversation"
+            @copy-conversation="copyConversation"
+            @open-conversation-file="openConversationFile"
             @continue-session="continueSession"
             @forget-session="forgetSession"
           />
@@ -439,8 +508,12 @@ function onRailRowClick(row: RailConversationRow): void {
         <ShellProjectRows
           :rows="groups.home.rows"
           :active-id="activeId"
+          :project-names="projectNames"
           @open-conversation="openConversation"
           @remove-conversation="removeConversation"
+          @rename-conversation="renameConversation"
+          @copy-conversation="copyConversation"
+          @open-conversation-file="openConversationFile"
           @continue-session="continueSession"
           @forget-session="forgetSession"
         />
@@ -465,16 +538,21 @@ function onRailRowClick(row: RailConversationRow): void {
               :active-id="activeId"
               :current="group.project.id === currentProjectId"
               archived
+              :project-names="projectNames"
               @toggle-archived="toggleArchived(group.project)"
               @open-conversation="openConversation"
               @remove-conversation="removeConversation"
+              @rename-conversation="renameConversation"
+              @copy-conversation="copyConversation"
+              @open-conversation-file="openConversationFile"
               @continue-session="continueSession"
               @forget-session="forgetSession"
             />
           </template>
         </div>
       </section>
-    </template>
+      </template>
+    </TxEdgeFadeMask>
   </nav>
 </template>
 
@@ -486,36 +564,57 @@ function onRailRowClick(row: RailConversationRow): void {
   gap: 12px;
   width: 100%;
   min-height: 0;
-  // With the column's own 6px gap, the first section title sits as far below the nav as the
-  // sections sit from each other.
-  padding-top: 6px;
   box-sizing: border-box;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
 
-  &::-webkit-scrollbar {
-    width: 4px;
+  .is-rail & {
+    gap: 4px;
+    align-items: center;
+    padding-top: 2px;
   }
+}
 
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
+.ShellConversationList-Fade {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
 
-  &::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 2px;
-    transition: background-color 0.2s ease;
-  }
+  :deep(.tx-edge-fade-mask__viewport) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    min-height: 0;
+    padding-top: 6px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
 
-  &:hover {
-    scrollbar-color: var(--shell-border-strong) transparent;
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--shell-border-strong);
+      background: transparent;
+      border-radius: 2px;
+      transition: background-color 0.2s ease;
+    }
+
+    &:hover {
+      scrollbar-color: var(--shell-border-strong) transparent;
+
+      &::-webkit-scrollbar-thumb {
+        background: var(--shell-border-strong);
+      }
     }
   }
-  .is-rail & {
+
+  .is-rail & :deep(.tx-edge-fade-mask__viewport) {
     gap: 4px;
     align-items: center;
     padding-top: 2px;
@@ -724,7 +823,7 @@ function onRailRowClick(row: RailConversationRow): void {
     color: var(--shell-primary);
   }
 
-  &.is-loading {
+  &.is-loading.active {
     border-color: color-mix(in srgb, var(--shell-primary) 32%, transparent);
     animation: shell-rail-glow-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 
@@ -850,7 +949,7 @@ function onRailRowClick(row: RailConversationRow): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ShellConversationList-RailItem.is-loading {
+  .ShellConversationList-RailItem.is-loading.active {
     animation: none;
     border-color: var(--shell-primary-border);
     box-shadow: inset 0 0 0 1px var(--shell-primary-border);
@@ -863,6 +962,16 @@ function onRailRowClick(row: RailConversationRow): void {
   .ShellConversationList-RailLoadingDot {
     animation: none;
   }
+}
+.shell-rail-dot-enter-active,
+.shell-rail-dot-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.shell-rail-dot-enter-from,
+.shell-rail-dot-leave-to {
+  opacity: 0;
+  transform: scale(0.4);
 }
 
 .ShellConversationList-RailPopoverDelete {

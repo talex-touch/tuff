@@ -2545,6 +2545,9 @@
       "open": "打开",
       "reveal": "在文件夹中显示",
       "openFailed": "打开失败",
+      "readFailed": "读取文件失败",
+      "fileNotFound": "文件未找到或已被移动",
+      "readTimeout": "读取文件超时",
       "sourceFile": "本地文件",
       "sourceSearch": "搜索命中",
       "sourceMcp": "MCP",
@@ -2558,6 +2561,15 @@
       "blocked": "已拦截远程图片",
       "loadOnce": "加载这张",
       "allowSession": "本次会话允许"
+    },
+    "fileLink": {
+      "cmdClickTitle": "⌘ 点击在右侧打开",
+      "shiftCmdClickTitle": "⇧⌘ 点击用系统工具打开",
+      "openWithSystem": "系统工具",
+      "openSystemAppTitle": "使用系统关联工具打开 (⇧⌘ 点击)",
+      "revealInFinder": "访达",
+      "revealParentFolder": "查看所在目录",
+      "clickToCopyPath": "点击复制完整路径"
     },
     "code": {
       "preview": "预览",

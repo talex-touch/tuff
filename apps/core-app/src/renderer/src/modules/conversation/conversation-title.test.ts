@@ -85,6 +85,9 @@ describe('shouldGenerateTitle', () => {
   it('never fires twice: an existing title, restored or generated, blocks it', () => {
     expect(shouldGenerateTitle({ ...ready, generatedTitle: '整理下载' })).toBe(false)
   })
+  it('does not fire when title generation has already failed (circuit breaker)', () => {
+    expect(shouldGenerateTitle({ ...ready, failed: true })).toBe(false)
+  })
 
   it('does not stack calls while one is in flight', () => {
     expect(shouldGenerateTitle({ ...ready, inFlight: true })).toBe(false)

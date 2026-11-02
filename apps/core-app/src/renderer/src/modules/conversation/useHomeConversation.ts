@@ -64,6 +64,8 @@ export interface ConversationTurnMeta {
   promptTokens?: number
   completionTokens?: number
   totalTokens?: number
+  /** Prompt tokens the provider served from its cache, when it reported any. */
+  cacheReadTokens?: number
   latencyMs?: number
   ttftMs?: number
   coordinator?: string
@@ -88,6 +90,11 @@ export interface ConversationMessage {
   status: ConversationMessageStatus
   error?: ConversationError
   meta?: ConversationTurnMeta
+  /**
+   * When Main created the message, in epoch ms. Only messages read back from the workspace carry
+   * it; a streaming assistant message's value is the moment its turn began.
+   */
+  createdAt?: number
   /**
    * Display URLs owned by the composer or issued for Main-managed attachment copies.
    * Object URLs are never used as durable references or sent unchanged across processes.
@@ -347,7 +354,8 @@ export function useHomeConversation(
       recordMeta({
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
-        totalTokens: usage.totalTokens
+        totalTokens: usage.totalTokens,
+        cacheReadTokens: usage.cacheReadTokens
       })
     }
 
@@ -394,6 +402,7 @@ export function useHomeConversation(
 
     const ensureParts = (): AiMessagePart[] => (assistant.parts ??= [])
     let reasoningStartedAt: number | null = null
+    const toolStartedAt = new Map<string, number>()
 
     /**
      * High-water mark of the text and parts the provider has committed.
@@ -467,6 +476,15 @@ export function useHomeConversation(
       return undefined
     }
 
+    const closeOpenReasoning = (): void => {
+      if (!assistant.parts) return
+      const reasoning = findOpenReasoning()
+      if (!reasoning) return
+      reasoning.done = true
+      if (reasoningStartedAt !== null) reasoning.durationMs = Date.now() - reasoningStartedAt
+      reasoningStartedAt = null
+    }
+
     const findToolCall = (callId: string): AiToolCallPart | undefined => {
       const parts = ensureParts()
       for (let index = parts.length - 1; index >= 0; index -= 1) {
@@ -499,6 +517,7 @@ export function useHomeConversation(
         return
       }
 
+      if (!event.kind.startsWith('reasoning')) closeOpenReasoning()
       const parts = ensureParts()
       switch (event.kind) {
         case 'reasoning-start':
@@ -506,8 +525,13 @@ export function useHomeConversation(
           parts.push({ type: 'reasoning', text: '', done: false })
           break
         case 'reasoning-delta': {
-          const reasoning = findOpenReasoning()
-          if (reasoning) reasoning.text += event.delta
+          let reasoning = findOpenReasoning()
+          if (!reasoning) {
+            reasoningStartedAt = Date.now()
+            reasoning = { type: 'reasoning', text: '', done: false }
+            parts.push(reasoning)
+          }
+          reasoning.text += event.delta
           break
         }
         case 'reasoning-end': {
@@ -522,6 +546,7 @@ export function useHomeConversation(
           break
         }
         case 'tool-start':
+          toolStartedAt.set(event.callId, Date.now())
           parts.push({ type: 'tool-call', id: event.callId, name: event.name, status: 'running' })
           break
         case 'tool-input-delta': {
@@ -544,6 +569,11 @@ export function useHomeConversation(
           const tool = findToolCall(event.callId)
           if (tool) {
             tool.status = event.isError ? 'error' : 'done'
+            const startedAt = toolStartedAt.get(event.callId)
+            if (startedAt !== undefined) {
+              tool.durationMs = Date.now() - startedAt
+              toolStartedAt.delete(event.callId)
+            }
             if (event.isError) tool.error = event.output
             else tool.output = event.output
           }
@@ -638,7 +668,10 @@ export function useHomeConversation(
         assistant.content += delta
         // Only messages that carry structured parts maintain the parallel
         // parts view — a plain text turn stays a plain `content` string.
-        if (assistant.parts) appendTextPart(delta)
+        if (assistant.parts) {
+          closeOpenReasoning()
+          appendTextPart(delta)
+        }
         // The routed backend can only name the effective provider once it has picked one, which for
         // a fallback chain is after the first delta rather than at `start`.
         if (!assistant.meta?.model) recordMeta({ provider: event.provider, model: event.model })

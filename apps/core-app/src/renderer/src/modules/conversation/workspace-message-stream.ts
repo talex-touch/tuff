@@ -1,14 +1,14 @@
-import type { AiAttachment, AiMessagePart } from '@talex-touch/tuffex/ai-elements'
 import type { MessageUpdateEvent } from '@talex-touch/pi-desktop-reuse/message-stream'
 import type { UiMessage } from '@talex-touch/pi-desktop-reuse/types/message-stream'
+import type { AiAttachment, AiMessagePart } from '@talex-touch/tuffex/ai-elements'
 import type {
   WorkspaceAttachmentRef,
-  WorkspaceHostMessage
+  WorkspaceHostMessage,
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type {
   ConversationMessage,
   ConversationMessageStatus,
-  ConversationTurnMeta
+  ConversationTurnMeta,
 } from './useHomeConversation'
 import { applyMessageUpdate } from '@talex-touch/pi-desktop-reuse/message-stream'
 import { readTurnFailure } from './conversation-error-display'
@@ -28,14 +28,16 @@ import { readTurnFailure } from './conversation-error-display'
 const STATUS_TO_UPSTREAM: Record<ConversationMessageStatus, NonNullable<UiMessage['status']>> = {
   complete: 'complete',
   streaming: 'streaming',
-  failed: 'error'
+  failed: 'error',
 }
 
 function fromUpstreamStatus(
-  status: UiMessage['status'] | undefined
+  status: UiMessage['status'] | undefined,
 ): ConversationMessageStatus | undefined {
-  if (status === 'streaming' || status === 'complete') return status
-  if (status === 'error' || status === 'aborted') return 'failed'
+  if (status === 'streaming' || status === 'complete')
+    return status
+  if (status === 'error' || status === 'aborted')
+    return 'failed'
   return undefined
 }
 
@@ -53,7 +55,7 @@ export function toDisplayAttachment(ref: WorkspaceAttachmentRef): AiAttachment {
     id: ref.id,
     name: ref.name ?? ref.id,
     size: ref.size,
-    mime: ref.mimeType
+    mime: ref.mimeType,
   }
 }
 
@@ -66,9 +68,11 @@ export function fromHostMessage(host: WorkspaceHostMessage): ConversationMessage
     id: host.id,
     role: host.role,
     content: host.content,
-    status: host.status
+    status: host.status,
+    ...(Number.isFinite(host.createdAt) && host.createdAt > 0 ? { createdAt: host.createdAt } : {}),
   }
-  if (host.error) message.error = readTurnFailure(host.error)
+  if (host.error)
+    message.error = readTurnFailure(host.error)
   if (host.meta && Object.keys(host.meta).length > 0) {
     message.meta = host.meta as ConversationTurnMeta
   }
@@ -78,15 +82,16 @@ export function fromHostMessage(host: WorkspaceHostMessage): ConversationMessage
   // Main persists only what it carried to the model, so every ref here reached it; the bubble's
   // "stayed local" hint is decided at send time instead (HomePage `submit`). A voice message's
   // recording is the exception — never carried, shown as the voice it was — and so not a tray item.
-  const audio = host.attachments?.find((ref) => ref.kind === 'audio' && ref.previewUrl)
+  const audio = host.attachments?.find(ref => ref.kind === 'audio' && ref.previewUrl)
   if (audio?.previewUrl) {
     message.voice = {
       url: audio.previewUrl,
-      ...(audio.durationMs === undefined ? {} : { durationMs: audio.durationMs })
+      ...(audio.durationMs === undefined ? {} : { durationMs: audio.durationMs }),
     }
   }
-  const shown = host.attachments?.filter((ref) => ref.kind !== 'audio') ?? []
-  if (shown.length) message.attachments = shown.map(toDisplayAttachment)
+  const shown = host.attachments?.filter(ref => ref.kind !== 'audio') ?? []
+  if (shown.length)
+    message.attachments = shown.map(toDisplayAttachment)
   return message
 }
 
@@ -99,20 +104,21 @@ function toUiMessage(message: ConversationMessage): UiMessage {
     status: STATUS_TO_UPSTREAM[message.status],
     ...(message.meta?.provider ? { providerId: message.meta.provider } : {}),
     ...(message.meta?.model ? { modelId: message.meta.model } : {}),
-    host: message
+    host: message,
   }
 }
 
 function isHostMessage(value: unknown): value is WorkspaceHostMessage {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== 'object' || value === null)
+    return false
   const candidate = value as Partial<WorkspaceHostMessage>
   return (
-    typeof candidate.id === 'string' &&
-    (candidate.role === 'user' || candidate.role === 'assistant') &&
-    typeof candidate.content === 'string' &&
-    (candidate.status === 'complete' ||
-      candidate.status === 'streaming' ||
-      candidate.status === 'failed')
+    typeof candidate.id === 'string'
+    && (candidate.role === 'user' || candidate.role === 'assistant')
+    && typeof candidate.content === 'string'
+    && (candidate.status === 'complete'
+      || candidate.status === 'streaming'
+      || candidate.status === 'failed')
   )
 }
 
@@ -123,7 +129,15 @@ function appendText(parts: AiMessagePart[], delta: string, reset: boolean): void
     last.text = reset ? delta : last.text + delta
     return
   }
-  if (delta) parts.push({ type: 'text', text: delta })
+  if (delta)
+    parts.push({ type: 'text', text: delta })
+}
+function closeOpenReasoning(parts: AiMessagePart[]): void {
+  for (const part of parts) {
+    if (part.type === 'reasoning' && !part.done) {
+      part.done = true
+    }
+  }
 }
 
 function appendReasoning(parts: AiMessagePart[], delta: string, reset: boolean): void {
@@ -134,7 +148,8 @@ function appendReasoning(parts: AiMessagePart[], delta: string, reset: boolean):
       return
     }
   }
-  if (delta) parts.push({ type: 'reasoning', text: delta, done: false })
+  if (delta)
+    parts.push({ type: 'reasoning', text: delta, done: false })
 }
 
 /**
@@ -144,33 +159,35 @@ function appendReasoning(parts: AiMessagePart[], delta: string, reset: boolean):
  */
 export function applyWorkspaceUpdate(
   previous: ConversationMessage | undefined,
-  update: MessageUpdateEvent
+  update: MessageUpdateEvent,
 ): ConversationMessage | undefined {
   if (update.stream !== 'delta') {
     const next = applyMessageUpdate(previous ? toUiMessage(previous) : undefined, update)
     return isHostMessage(next.host) ? fromHostMessage(next.host) : undefined
   }
-  if (!previous || previous.id !== update.message.id) return undefined
+  if (!previous || previous.id !== update.message.id)
+    return undefined
   const next = applyMessageUpdate(toUiMessage(previous), update)
   const patched: ConversationMessage = {
     ...previous,
     content: next.content,
-    status: fromUpstreamStatus(next.status) ?? previous.status
+    status: fromUpstreamStatus(next.status) ?? previous.status,
   }
   if (previous.parts && (update.deltaText !== undefined || update.resetText)) {
-    patched.parts = previous.parts.map((part) => ({ ...part }))
+    patched.parts = previous.parts.map(part => ({ ...part }))
+    closeOpenReasoning(patched.parts)
     appendText(patched.parts, update.deltaText ?? '', update.resetText === true)
   }
   if (update.deltaThinking !== undefined || update.resetThinking) {
     // Reasoning only exists as parts in Tuff, so a reply that starts thinking enters parts mode
     // with whatever text it had already streamed as its leading part.
-    const parts =
-      patched.parts ??
-      (previous.parts
-        ? previous.parts.map((part) => ({ ...part }))
-        : previous.content
-          ? [{ type: 'text' as const, text: previous.content }]
-          : [])
+    const parts
+      = patched.parts
+        ?? (previous.parts
+          ? previous.parts.map(part => ({ ...part }))
+          : previous.content
+            ? [{ type: 'text' as const, text: previous.content }]
+            : [])
     appendReasoning(parts, update.deltaThinking ?? '', update.resetThinking === true)
     patched.parts = parts
   }

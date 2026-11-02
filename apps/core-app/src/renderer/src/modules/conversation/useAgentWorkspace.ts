@@ -148,6 +148,12 @@ export interface UseAgentWorkspaceReturn {
   setDraftProfile: (profileId: string | undefined) => void
   resume: () => Promise<void>
   queueAction: (queueId: string, action: WorkspaceQueueAction) => Promise<void>
+  updateQueued: (
+    queueId: string,
+    text: string,
+    attachments?: IntelligenceMessageAttachment[],
+    keptAttachmentIds?: string[]
+  ) => Promise<void>
   fork: (request: Omit<WorkspaceForkRequest, 'conversationId'>) => Promise<string>
   approveRun: () => Promise<void>
   rejectRun: () => Promise<void>
@@ -538,6 +544,23 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     }
   }
 
+  async function updateQueued(
+    queueId: string,
+    text: string,
+    attachments?: IntelligenceMessageAttachment[],
+    keptAttachmentIds?: string[]
+  ): Promise<void> {
+    await mutate('queue.update', (conversationId) =>
+      sdk.updateQueued({
+        conversationId,
+        queueId,
+        text,
+        ...(attachments?.length ? { attachments } : {}),
+        ...(keptAttachmentIds ? { keptAttachmentIds } : {})
+      })
+    )
+  }
+
   async function fork(request: Omit<WorkspaceForkRequest, 'conversationId'>): Promise<string> {
     const conversationId = currentId()
     if (!conversationId) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
@@ -631,6 +654,7 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     },
     resume,
     queueAction,
+    updateQueued,
     fork,
     approveRun: () => decideRun('approve'),
     rejectRun: () => decideRun('reject'),
