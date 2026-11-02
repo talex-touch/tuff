@@ -4,7 +4,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **新增组件**: `touch-surface`
+- **新增组件**: `touch-surface`, `miko`
 - **更新组件**: `chain-of-thought`, `glass-surface`, `stream-markdown`
 
 ### ✨ 组件增强

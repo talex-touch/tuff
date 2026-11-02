@@ -3,7 +3,7 @@ title: "Miko 桌面伴侣猫"
 description: "纯 SVG 与 CSS 关键帧驱动的像素桌宠，提供 38 种 Agent 实时交互、趣味职业与奇幻变异状态"
 category: AiAgent
 status: beta
-since: 0.6.2
+since: 0.9.2
 tags: [miko, mascot, pet, agent, svg, pixel]
 syncStatus: reviewed
 verified: true
