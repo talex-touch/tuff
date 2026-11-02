@@ -38,6 +38,7 @@ const toolOpen = reactive(new Map<string, boolean>())
         :steps="[segment.step]"
         :streaming="streaming"
         :default-open="false"
+        :bullets="false"
         :user-open="chainOpen.get(segment.id)"
         :label="segment.step.title"
         @toggle="chainOpen.set(segment.id, $event)"
