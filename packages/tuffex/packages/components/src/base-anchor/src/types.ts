@@ -97,6 +97,8 @@ export type BaseAnchorPanelCardProps = Partial<Pick<
   | 'refractionProfile'
   | 'refractionTone'
   | 'refractionAngle'
+  | 'refractionRenderer'
+  | 'refractionGlassOpacity'
   | 'refractionLightFollowMouse'
   | 'refractionLightFollowIntensity'
   | 'refractionLightSpring'

@@ -1030,7 +1030,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     clip.style.clipPath = type === 'transfer'
       ? getClipPath(0)
       : type === 'expand' ? getExpandClipPath(0) : 'none'
-    clip.style.willChange = type === 'transfer' || type === 'expand' ? 'clip-path' : 'auto'
+    clip.style.willChange = type === 'transfer' ? 'clip-path' : 'auto'
     prepareArrowOpen(gsap, type)
 
     tl = gsap.timeline({
@@ -1266,7 +1266,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       clip.style.clipPath = type === 'transfer'
         ? getClipPath(1)
         : type === 'expand' ? getExpandClipPath(1) : 'none'
-      clip.style.willChange = type === 'transfer' || type === 'expand' ? 'clip-path' : 'auto'
+      clip.style.willChange = type === 'transfer' ? 'clip-path' : 'auto'
 
       tl = gsap.timeline({
         onComplete: () => finishClose(currentRunId),

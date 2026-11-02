@@ -5,13 +5,18 @@
 ### 📦 组件变动 (Components)
 
 - **新增组件**: `touch-surface`
-- **更新组件**: `glass-surface`
+- **更新组件**: `chain-of-thought`, `glass-surface`, `stream-markdown`
 
 ### ✨ 组件增强
 
 - `TxGlassSurface` 新增 `engine="lens"` 液态透镜引擎（折射），默认仍是 `classic`（扭曲），`TxBaseSurface`、`TxRadioGroup`、`TxSlider` 等内部使用者不变。透镜把边缘看成一圈凸起的玻璃，按斯涅尔定律与折射率算出每一点的位移：边缘一圈把背后的画面向内拉，中间几乎保持原样。新增属性 `bezel`（边缘宽度，默认随短边取 4–10px）、`thickness`（玻璃厚度，默认随短边取 8–24px）、`ior`（折射率，1–3，默认 1.5）、`refraction`（边缘强度倍率）、`zoom`（中间的放大倍率，单独走一道位移）、`profile`（`squircle` 或 `circle`）、`rimLight`（边缘高光）、`rimSaturation`（透过边缘的颜色饱和度，大于 1 发艳）、`dispersion`（红、绿、蓝分离，0–0.5）与 `frost`（背景磨砂半径）；`saturation` 在 `lens` 下默认 1.5。折射图按实测尺寸画成位图并按形状缓存，同一帧里改多个属性只重画一次；`zoom` 为 1 时中间与页面一样锐利。折射只在 Chromium 内核里发生：Safari、Firefox、SSR 与第一帧退为磨砂玻璃（模糊取 `frost` 与 12px 中较大者，着色不低于 0.22），形状、阴影与拖拽照常；高对比度下不折射，改画不透明底色加一圈轮廓。
 - 新增 `useLiquidDrag`，让透镜像一滴液态玻璃：按下时抬起，沿拖动方向拉长，停下后以弹簧弹回。位置严格跟随指针，只有形状滞后；整个过程只改 `transform`，透镜的布局尺寸与折射图不变。选项为 `bounds`、`disabled`、`ignore`、`stiffness`、`damping`、`stretch`、`maxStretch`、`restHeight`、`pressGrow` 与 `swell`，数值选项可以是 ref 或 getter，每一帧重新读取，能直接绑到滑块上调。按下时除了对元素设置指针捕获，还在 `window` 上监听 `pointermove`、`pointerup` 与 `pointercancel`，指针越出透镜也照样跟随；减少动态效果时只抬起、不缓动也不拉伸。新增导出 `useLiquidDrag`、`LiquidDragOptions` 与 `LiquidDragState`。
 - 新增 `TxTouchSurface` 与 `useLiquidTouch`，让任意表面在鼠标划过或手指按下时像一滴液态玻璃：抬起、朝指针倾斜、顺着指针移动的方向拉长（垂直方向变薄，体积不变），指针离开后以弹簧弹回。`surface` 选择效果铺在哪种表面上：`'base'`（默认，即 `TxBaseSurface`）、`'glass'`（`TxGlassSurface`），或根元素就是表面的自定义组件，其余属性与默认插槽原样交给表面。选项为 `disabled`、`lean`、`maxLean`、`hoverLift`、`pressGrow`、`stretch`、`maxStretch`、`swell`、`stiffness` 与 `damping`，数值选项可以是 ref 或 getter，每一帧重新读取。只写 `translate` 与 `scale` 属性，不碰元素自己的 `transform`，表面的布局尺寸与折射图不变，静止时什么都不写；玻璃透镜经 `--tx-glass-lift` 读取抬起程度。手指没有悬停，只有按下；手指开始滚动页面时浏览器发出 `pointercancel`，表面随之松手，需要在上面滑动的表面设 `touch-action: none`。鼠标只认主键，按下之后在 `window` 上继续跟随，没有按键的移动会结束这次按下。减少动态效果时只抬起、不缓动，也不倾斜、不拉长；一切静止后帧循环休眠。归入 Pro 套件，新增导出 `TxTouchSurface`、`useLiquidTouch`、`LiquidTouchOptions`、`LiquidTouchState`、`TouchSurfaceProps` 与 `TouchSurfaceBase`。
+- `TxChainOfThought` 的思考正文按节奏逐步放出。模型的思考通常整段一次性送到、间隔数秒，之前正文原地不动、再整块贴上来，读起来没有流式感。现在 `streaming` 且步骤为 `active` 时，正文走流式文本家族同一个时钟（`useStreamPacer`）：节奏稳定，积压在约 0.6 秒内追平，步骤结束后把剩余部分一次放完。显示出来的永远是已收到文本的前缀，不会被改写；未写完的 Markdown 标记（如 `**加粗`）先临时闭合，不会露出星号；已结束的步骤与减弱动效偏好下立即全量显示。思考正文放出时跟随到底部，读者向上滚动查看后停止跟随，回到底部附近后恢复；工具步骤的输出仍在变长时滚到底部。没有新增属性。
+
+### 🐛 组件修复
+
+- `TxStreamMarkdown` 的表格「复制为 CSV」按钮移到表格下方、自成一行，只在悬停或聚焦时显形，那一行的高度始终预留，显形不会推动内容。此前它绝对定位在表格右上角：压在最后一列的表头上，而粘性表头为了压住自己滚过的行带着 `z-index`，反过来把按钮盖住一半，按钮被切成半个、表头文字也读不清。表格同时改回 `display: table`——借来的 GitHub 样式把它变成会自己滚动的块级盒子，单元格因此填不满整行，右边空出一条；表格自身的下边距一并交给外层容器，滚动区域内不再垫一段空行。
 
 ## [0.9.2] - 2026-10-27
 
