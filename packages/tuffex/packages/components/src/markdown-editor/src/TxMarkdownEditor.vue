@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Component, CSSProperties } from 'vue'
+import type { MarkdownEmoji, MarkdownEmojiIndex } from './emoji'
 import type { MarkdownEdit, MarkdownFormatAction } from './markdown-format'
 import type { RichChangeKind, RichCommand, RichSurfaceHost } from './rich-surface'
 import type SourceRuntime from './TxMarkdownSourceRuntime.vue'
@@ -18,7 +19,7 @@ import type { MarkdownBox } from './use-markdown-overlay'
 import { hasDocument } from '@talex-touch/utils/env'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { TxBaseAnchor } from '../../base-anchor'
-import { loadMarkdownEmoji, peekMarkdownEmoji, rememberMarkdownEmoji } from './emoji'
+import { composeMarkdownEmoji, loadMarkdownEmoji, markdownEmojiText, peekMarkdownEmoji, rememberMarkdownEmoji } from './emoji'
 import { formatMarkdown, markdownLinkAt } from './markdown-format'
 import { markdownHighlightAt } from './markdown-highlight'
 import { MarkdownRenderer } from './markdown-render'
@@ -75,6 +76,7 @@ const props = withDefaults(defineProps<MarkdownEditorProps>(), {
   linkPrompt: undefined,
   math: true,
   emoji: true,
+  emojiPacks: undefined,
   highlight: true,
   callouts: true,
   codeTheme: 'github',
@@ -297,6 +299,7 @@ const {
   track: documentState.track,
   untrack: documentState.untrack,
   load: loadEmoji,
+  packs: () => props.emojiPacks,
   reposition: () => suggestAnchor.value?.updatePosition?.(),
 })
 
@@ -392,14 +395,15 @@ function reportEdit(
 // Views
 // ---------------------------------------------------------------------------
 
+const emojiBase = shallowRef<MarkdownEmojiIndex | null>(peekMarkdownEmoji())
+const emojiIndex = computed(() => (props.emoji && emojiBase.value ? composeMarkdownEmoji(emojiBase.value, props.emojiPacks) : null))
+
 let renderer = createRenderer()
 
 function createRenderer(): MarkdownRenderer {
   const next = new MarkdownRenderer({ math: props.math, emoji: props.emoji, highlight: props.highlight, callouts: props.callouts, sanitize: props.sanitize })
   next.setLabels(labels.value)
-  const index = props.emoji ? peekMarkdownEmoji() : null
-  if (index)
-    next.setEmoji(index.byName)
+  next.setEmoji(emojiIndex.value?.byName ?? null)
   next.onAssetsReady = refreshAssets
   return next
 }
@@ -436,7 +440,7 @@ function createSurface(key: 'wysiwyg' | 'preview'): RichSurface | null {
     math: props.math,
     highlight: props.highlight,
     callouts: props.callouts,
-    emoji: () => (props.emoji ? peekMarkdownEmoji()?.byName ?? null : null),
+    emoji: () => emojiIndex.value?.byName ?? null,
     decorateUpload: uploads.decorate,
   })
   surface.setEditable(key === 'wysiwyg' && canEdit.value, canEdit.value)
@@ -587,6 +591,11 @@ watch(() => [props.math, props.emoji, props.highlight, props.callouts, props.san
   closeMenus()
   maybeLoadEmoji()
   overlay.schedule()
+})
+
+watch(emojiIndex, (index) => {
+  renderer.setEmoji(index?.byName ?? null)
+  refreshAssets()
 })
 
 watch(labels, (value) => {
@@ -896,10 +905,11 @@ function editFormula(atom: HTMLElement, from: number, to: number): void {
   })
 }
 
-function insertEmoji(char: string): void {
-  rememberMarkdownEmoji(char)
+function insertEmoji(emoji: MarkdownEmoji): void {
+  const text = markdownEmojiText(emoji)
+  rememberMarkdownEmoji(text)
   if (formatting.value)
-    applyFormat({ type: 'insert', text: char })
+    applyFormat({ type: 'insert', text })
 }
 
 function onEmojiOpen(open: boolean): void {
@@ -1051,12 +1061,9 @@ function loadEmoji(): void {
   emojiRequested = true
   loadMarkdownEmoji()
     .then((index) => {
+      emojiBase.value ??= index
       if (unmounted || !props.emoji)
         return
-      if (!renderer.hasEmoji) {
-        renderer.setEmoji(index.byName)
-        refreshAssets()
-      }
       if (rich?.hasFocus())
         updateSuggest(true)
     })
@@ -1253,6 +1260,7 @@ defineExpose({
       @mode="setMode"
       @comment="startComment"
       @toggle-comments="sidebarOpen = !sidebarOpen"
+      :emoji-packs="emojiPacks"
       @emoji="insertEmoji"
       @emoji-open="onEmojiOpen"
       @highlight="runHighlight"
@@ -1295,6 +1303,7 @@ defineExpose({
             :highlight="highlight"
             :callouts="callouts"
             :emoji="emoji"
+            :emoji-packs="emojiPacks"
             :files="uploads.start"
             @change="(changes: MarkdownTextChange[], before: MarkdownEditorSelection, after: MarkdownEditorSelection, kind: RichChangeKind) => reportEdit('source', changes, before, after, kind)"
             @selection="onSelection('source')"
@@ -1715,6 +1724,13 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   font-family: $emoji;
   font-size: 16px;
   line-height: 1;
+
+  img {
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -0.25em;
+    object-fit: contain;
+  }
 }
 
 .tx-markdown-editor__file {
@@ -1992,6 +2008,14 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 .tx-markdown-editor__emoji {
   font-family: $emoji;
   font-style: normal;
+
+  &.is-custom img {
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -0.25em;
+    object-fit: contain;
+    pointer-events: none;
+  }
 }
 
 .tx-markdown-editor__math {

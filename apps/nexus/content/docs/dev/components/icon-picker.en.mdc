@@ -32,9 +32,37 @@ code: |
 ---
 :::
 
+### Custom emoji packs
+`emojiPacks` lists your own emoji packs at the start of the emoji section, one heading per pack with a usable emoji; a picked custom emoji is stored as a `url:` identifier.
+:::TuffDemoWrapper{demo="IconPickerCustomEmojiDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxEmojiPack } from '@talex-touch/tuffex/icon-picker'
+  import { TxIconPicker } from '@talex-touch/tuffex/icon-picker'
+  import { ref } from 'vue'
+
+  const identifier = ref('')
+
+  const packs: TxEmojiPack[] = [{
+    id: 'team',
+    name: 'Team',
+    emoji: [
+      { name: 'ship_it', src: 'https://cdn.example.com/emoji/ship-it.png', keywords: 'release launch' },
+    ],
+  }]
+  </script>
+
+  <template>
+    <TxIconPicker v-model="identifier" :emoji-packs="packs" />
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Store the identifier as-is and resolve it at render time with `parseIconIdentifier`; don't split it into two columns that can disagree.
+- A custom emoji is stored as a `url:` identifier whose value is the image address; prefer https addresses, because a `data:` address is written into storage in full.
 - In modules that only read a stored value, import `parseIconIdentifier` from `@talex-touch/tuffex/icon-picker` without loading the panel.
 - When narrowing `sections`, keep `ai` if users pick model vendors: vendor marks and AI glyphs live there, not under Brands or Icons.
 - Turn `shapeSelectable` off when the host draws its own plate, or users pick a shape they never see.
@@ -50,6 +78,7 @@ code: |
 | `shape` | `IconPickerShape` | `'rounded'` | Plate shape, bound with `v-model:shape`; `ICON_PICKER_SHAPES` lists all twelve. |
 | `sections` | `IconPickerSection[]` | all five | Sections to offer, in tab order: `emoji`, `icon`, `brand`, `ai`, and `file` as a choose-file button. |
 | `catalog` | `Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>` | - | Replaces a section's bundled rows; an entry's `category` groups it under a heading. |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs listed at the start of the emoji section, one heading per pack with a usable emoji; they add to `catalog.emoji` or the bundled emoji rather than replacing them. |
 | `shapeSelectable` | `boolean` | `true` | Shows the shape row; turn off when the host draws its own plate. |
 | `fileChooser` | `() => Promise<string \| null>` | - | Host file dialog resolving to an absolute path, or `null` on cancel. |
 | `accept` | `string` | `'image/*'` | Accept list for the file dialog and the fallback input. |
@@ -96,6 +125,8 @@ parseIconIdentifier('rocket.png')             // null
 parseIconIdentifier('🚀')                      // { type: 'emoji', value: '🚀' }
 ```
 
+A custom emoji from `emojiPacks` is stored as `url:<src>`, the same form as the `url:` example above. When its address is a `data:` address the whole address is written into the identifier, so prefer https addresses for anything you persist.
+
 ## Rendering a Picked Class
 
 The picker draws its bundled classes from path data it ships, so its grid needs no icon CSS from the host. Outside the picker a picked `class:` value is only a class name: give `TxIcon` the picker's glyphs through `classGlyph`, or safelist `ICON_CATALOG_CLASSES` in the host's utility-CSS engine.
@@ -120,6 +151,7 @@ export default defineConfig({
 - Search covers every section at once, the open tab first. It matches keywords, class names and category headings, tolerates a typo, and takes Chinese, full pinyin or initials (`火箭`, `huojian`, `hj`).
 - Focus stays in the search box: arrow keys move through the grid, Enter picks the highlighted cell (the top result while searching), and Esc clears the query before it closes the panel.
 - Browsing groups a section by category, with a row of shortcuts that jumps between them.
+- Custom emoji packs with a usable emoji form groups at the start of the emoji section, headed by the pack name; search matches an emoji's name, its keywords and the pack name.
 - The trigger morphs from one plate outline to the next; under reduced motion it switches at once.
 - The file section depends on the host: pass `fileChooser` (for example an Electron `dialog.showOpenDialog` bridge); without it, a hidden `<input type="file">` yields a data URL.
 - `shape` is presentational and stored separately; it is not part of the identifier.

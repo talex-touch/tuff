@@ -1,9 +1,10 @@
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { MarkdownEmoji } from './emoji'
 import type { RichSurface } from './rich-surface'
 import type { MarkdownEditorSelection } from './types'
 import type { MarkdownBox } from './use-markdown-overlay'
 import { computed, nextTick, shallowRef } from 'vue'
-import { peekMarkdownEmoji, rememberMarkdownEmoji, searchMarkdownEmoji } from './emoji'
+import { composeMarkdownEmoji, markdownEmojiText, peekMarkdownEmoji, rememberMarkdownEmoji, searchMarkdownEmoji } from './emoji'
 import { shortcodeBefore } from './markdown-selection'
 import { boxIn, virtualReference } from './use-markdown-overlay'
 
@@ -21,6 +22,8 @@ export interface MarkdownSuggestOptions {
   untrack: (range: MarkdownEditorSelection) => void
   /** Asks for the emoji index, which loads on first use. */
   load: () => void
+  /** The host's custom emoji packs, searched alongside the built-in set. */
+  packs: () => readonly TxEmojiPack[] | undefined
   /** The list's anchor moved. */
   reposition: () => void
 }
@@ -64,7 +67,8 @@ export function useMarkdownSuggest(options: MarkdownSuggestOptions) {
     if (typed && before?.text.endsWith(':'))
       options.load()
     const query = before ? shortcodeBefore(before.text) : null
-    const index = peekMarkdownEmoji()
+    const base = peekMarkdownEmoji()
+    const index = base ? composeMarkdownEmoji(base, options.packs()) : null
     const items = before && query && index && (typed || suggest.value) ? searchMarkdownEmoji(index, query, 8) : []
     if (!before || !query || !items.length) {
       close()
@@ -120,8 +124,9 @@ export function useMarkdownSuggest(options: MarkdownSuggestOptions) {
     close()
     if (!range)
       return
-    rememberMarkdownEmoji(item.char)
-    surface.replaceRange(range.anchor, range.head, item.char)
+    const text = markdownEmojiText(item)
+    rememberMarkdownEmoji(text)
+    surface.replaceRange(range.anchor, range.head, text)
   }
 
   function hover(position: number): void {

@@ -73,6 +73,34 @@ code: |
 ---
 ::::
 
+### 自定义表情包
+`emojiPacks` 把自己的表情图片加入选择器与 `:` 补全；文档里写的仍是 `:name:`，预览与所见即所得中显示为图片。
+::::TuffDemoWrapper{demo="MarkdownEditorCustomEmojiDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxEmojiPack } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+
+  const content = ref('今天的版本 :party_parrot: 顺利上线 :ship_it:。')
+
+  // 保持引用稳定：放进 ref 或 const，不要在模板里写字面量数组
+  const packs: TxEmojiPack[] = [{
+    id: 'party',
+    name: '派对',
+    emoji: [
+      { name: 'party_parrot', src: 'https://cdn.example.com/emoji/party-parrot.gif', keywords: '庆祝 开心' },
+      { name: 'ship_it', src: 'https://cdn.example.com/emoji/ship-it.png', keywords: '发布 上线' },
+    ],
+  }]
+  </script>
+
+  <template>
+    <TxMarkdownEditor v-model="content" :emoji-packs="packs" />
+  </template>
+---
+::::
+
 ### 多人协同
 `collaboration` 接入实时协作：编辑器收发变更集与光标，并发编辑由适配器合并。
 ::::TuffDemoWrapper{demo="MarkdownEditorCollaborationDemo" code-lang="vue"}
@@ -105,6 +133,9 @@ code: |
 ### 最佳实践
 
 - 用户或 provider 写的内容保持 `sanitize=true`。
+- 自定义表情的 `src` 用 https 或 `data:` 地址；`sanitize` 开启时（默认如此），`tfile:`、`file:` 等其他协议的地址会被消毒器去掉，图片不再显示。
+- 每个表情的 `name`（短代码）会写进文档内容，只增不改：改名后，旧文档里的 `:name:` 会变回文字。表情包的 `name` 只是标签页的名字，可以随时改。
+- `emojiPacks` 要保持引用稳定：放进 `ref` 或 `const`，不要在模板里写字面量数组。每次父组件渲染都给它一个新数组，编辑器就会重建表情索引并重绘整篇文档。
 - 模式或评论侧栏需要写入路由或 query 时，使用受控的 `mode` 或 `v-model:comments-open`；只想展开某个评论线程时调用 `openComments(id)`。
 - 评论、发布说明等窄场景用 `toolbarActions` 精简工具栏，按需关闭 `slash`、`bubble`。
 - `uploadImage` 与 `ai` 响应 `signal`：用户删除占位、停止或放弃时中止请求。
@@ -132,6 +163,7 @@ code: |
 | `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | 替换内置的链接输入框；返回 URL，返回 `''` 取消。 |
 | `math` | `boolean` | `true` | 用 KaTeX 渲染 `$…$` 与 `$$…$$`。 |
 | `emoji` | `boolean` | `true` | 渲染 `:shortcode:`，开启 `:` 补全与表情选择器。 |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | 自定义表情包：选择器里每个含合法表情的包一个标签页，`:name:` 渲染为图片。 |
 | `highlight` | `boolean` | `true` | `==文字==` 高亮与高亮笔的颜色。 |
 | `callouts` | `boolean` | `true` | 首行为 `[!NOTE]`、`[!TIP]`、`[!IMPORTANT]`、`[!WARNING]`、`[!CAUTION]` 的引用显示为提示块。 |
 | `codeTheme` | `MarkdownEditorCodeTheme` | `'github'` | 带语言的代码块的语法高亮预设；`'none'` 不着色。 |
@@ -193,6 +225,10 @@ code: |
     | 'codeBlock' | 'math' | 'divider' | 'emoji' | 'undo' | 'redo'
 
   type MarkdownEditorCodeTheme = 'github' | 'one' | 'vitesse' | 'catppuccin' | 'solarized' | 'none'
+
+  // 自定义表情：name 只含小写字母、数字、_、+、-，2 到 40 个字符
+  interface TxCustomEmoji { name: string, src: string, keywords?: string }
+  interface TxEmojiPack { id: string, name: string, emoji: TxCustomEmoji[] }
 
   interface MarkdownEditorAiRequest {
     action: 'improve' | 'shorten' | 'expand' | 'fix' | 'translate' | 'custom'
@@ -260,6 +296,8 @@ code: |
 
 - 传入 `mode` 为受控模式，否则由 `defaultMode` 初始化；三种模式共用同一份 Markdown；预览不能输入，格式按钮停用，任务列表的勾选框仍可点击切换。
 - 所见即所得按块渲染；光标进入加粗、链接、行内公式等格式时露出 Markdown 标记，可直接编辑。段首输入 `/`（中文输入法下为 `、`）打开块菜单。
+- 输入 `:` 打开补全，或点工具栏的表情按钮打开选择器。选择器的标签页依次为「最近」、各个含合法表情的表情包、内置分类；没有最近使用时默认打开第一个包。选中自定义表情插入 `:name:`，选中内置表情插入字符本身。
+- 自定义表情的 `name` 只能是小写字母、数字、`_`、`+`、`-`，2 到 40 个字符，不合法的条目被忽略；同名出现两次保留第一个，包 `id` 重复时后面的被忽略。与内置短代码同名时，自定义表情生效，内置的那个从选择器里消失。`:name:` 在预览与所见即所得中显示为图片（高约 1.25em），源码模式显示文字；表里没有的名字保持文字，图片加载失败时显示 `:name:`。
 - 选中文字浮出格式条：格式、高亮颜色、链接、评论与 AI。AI 的答案流式显示，可切换查看逐词改动，再替换、插入到下方、重试或放弃；`Esc` 放弃并恢复选区。
 - 图片先以带进度的占位插入，上传完成后换成 `uploadImage` 返回的地址；删除占位即中止上传。
 - 每次编辑都以变更集提交，撤销历史、评论区间与协作者的光标随之移动。本地光标至多每 50 ms 发送一次，协作者移动光标后显示名字 2.5 秒。
@@ -270,6 +308,7 @@ code: |
 
 - 源码模式基于 CodeMirror 6；所见即所得是 contenteditable 的块视图，按 marked 的词法结果渲染，与源码逐字符映射。代码块用 CSS Custom Highlight API 着色，shiki、KaTeX 与 AI 面板都在首次用到时加载。
 - 内置表情数据源自 emojilib 2.4.0（MIT）。
+- 自定义表情包的类型 `TxEmojiPack` 与图标选择器共用，定义在 `icon/src/emoji-pack.ts`。
 - 源码：`packages/tuffex/packages/components/src/markdown-editor/`。
 
 <TuffDocSourceLink />

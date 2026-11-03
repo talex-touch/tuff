@@ -1,4 +1,5 @@
 import type { BlockItem } from './block-view'
+import type { MarkdownEmoji } from './emoji'
 import type { MarkdownRenderer } from './markdown-render'
 import type { MarkdownEditorSelection, MarkdownTextChange } from './types'
 import { BlockView } from './block-view'
@@ -64,7 +65,7 @@ export interface RichSurfaceOptions {
   highlight: boolean
   /** Typing `[!NOTE]` on a quote's first line makes it a callout. */
   callouts: boolean
-  emoji: () => ReadonlyMap<string, string> | null
+  emoji: () => ReadonlyMap<string, MarkdownEmoji> | null
   decorateUpload?: (card: HTMLElement, id: string) => void
 }
 
@@ -880,6 +881,20 @@ export class RichSurface {
   replaceRange(from: number, to: number, insert: string, kind: RichChangeKind = 'input'): void {
     const end = from + insert.length
     this.commit([{ from, to, insert }], { anchor: end, head: end }, kind)
+  }
+
+  /**
+   * Re-renders the block holding `node` from its source, for a shortcode the
+   * user typed: the typed text is already the source, so no change reaches
+   * `commit`, which would leave the block as it is.
+   */
+  rerenderBlock(node: Node, after: MarkdownEditorSelection): void {
+    this.flush()
+    const item = this.view.itemAt(node)
+    if (item)
+      this.withoutObserver(() => this.view.refresh([item]))
+    this.pruneDirty()
+    this.setSelection(after)
   }
 
   /** Inserts Markdown over the selection, padding block content onto its own lines. */

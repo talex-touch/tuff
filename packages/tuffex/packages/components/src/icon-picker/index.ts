@@ -56,6 +56,7 @@ export type {
   IconPickerSection,
   IconPickerShape,
 }
+export type { TxCustomEmoji, TxEmojiPack } from '../icon/src/emoji-pack'
 export type TxIconPickerInstance = InstanceType<typeof TxIconPicker>
 
 export default IconPicker

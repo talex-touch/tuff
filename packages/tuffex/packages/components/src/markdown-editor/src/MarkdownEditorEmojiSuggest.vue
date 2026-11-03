@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MarkdownEmoji } from './emoji'
 import { nextTick, ref, watch } from 'vue'
+import { markdownEmojiText } from './emoji'
 
 // Internal: the `:shortcode` completion list of the rich surface. The surface
 // keeps focus; the editor drives `active` from the arrow keys.
@@ -35,7 +36,7 @@ watch(() => props.active, async (active) => {
   >
     <li
       v-for="(item, position) in items"
-      :key="item.char"
+      :key="markdownEmojiText(item)"
       class="tx-markdown-editor-suggest__item"
       :class="{ 'is-active': position === active }"
       role="option"
@@ -43,7 +44,13 @@ watch(() => props.active, async (active) => {
       @mousemove="position !== active && emit('hover', position)"
       @click="emit('pick', position)"
     >
-      <span class="tx-markdown-editor-suggest__glyph">{{ item.char }}</span>
+      <img
+        v-if="item.src"
+        class="tx-markdown-editor-suggest__glyph is-image"
+        :src="item.src"
+        alt=""
+      >
+      <span v-else class="tx-markdown-editor-suggest__glyph">{{ item.char }}</span>
       <span class="tx-markdown-editor-suggest__name">:{{ item.name }}:</span>
     </li>
   </ul>
@@ -82,6 +89,12 @@ watch(() => props.active, async (active) => {
   font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 17px;
   line-height: 1;
+}
+
+.tx-markdown-editor-suggest__glyph.is-image {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .tx-markdown-editor-suggest__name {

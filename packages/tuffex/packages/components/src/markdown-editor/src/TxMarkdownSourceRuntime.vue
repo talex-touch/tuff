@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Extension } from '@codemirror/state'
 import type { ViewUpdate } from '@codemirror/view'
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { EditorOverlay } from './editor-overlay'
 import type { RichChangeKind, RichCommand } from './rich-surface'
 import type { MarkdownEditorSelection, MarkdownTextChange } from './types'
@@ -36,6 +37,7 @@ const props = defineProps<{
   highlight: boolean
   callouts: boolean
   emoji: boolean
+  emojiPacks?: readonly TxEmojiPack[]
   files?: (files: File[], at: number) => boolean
 }>()
 
@@ -60,7 +62,7 @@ function configurationExtensions(): Extension {
     EditorState.readOnly.of(!props.editable),
     EditorView.contentAttributes.of({ 'aria-label': props.ariaLabel }),
     props.placeholder ? placeholderText(props.placeholder) : [],
-    props.emoji ? emojiCompletion() : [],
+    props.emoji ? emojiCompletion(() => props.emojiPacks) : [],
   ]
 }
 

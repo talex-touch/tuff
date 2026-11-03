@@ -1,3 +1,5 @@
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
+
 export type MarkdownEditorMode = 'wysiwyg' | 'source' | 'preview'
 export type MarkdownEditorTheme = 'auto' | 'light' | 'dark'
 
@@ -290,6 +292,8 @@ export interface MarkdownEditorProps {
   math?: boolean
   /** `:shortcode:` rendering, `:` completion and the picker. @default true */
   emoji?: boolean
+  /** Custom emoji images: a tab each in the picker, and rendered for their `:name:` shortcodes. */
+  emojiPacks?: readonly TxEmojiPack[]
   /** `==text==` highlights and the highlighter's colors. @default true */
   highlight?: boolean
   /** Quotes opening with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` as callouts. @default true */

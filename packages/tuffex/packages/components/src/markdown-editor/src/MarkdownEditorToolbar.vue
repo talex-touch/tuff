@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
+import type { MarkdownEmoji } from './emoji'
 import type { MarkdownEditorHighlightColor, MarkdownEditorLabels, MarkdownEditorMode, MarkdownEditorToolbarActionKey } from './types'
 import { hasDocument } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
@@ -30,6 +32,7 @@ const props = defineProps<{
   commentsOpen: boolean
   /** The highlighter's colour: what the highlight button applies. */
   highlightColor: MarkdownEditorHighlightColor
+  emojiPacks?: readonly TxEmojiPack[]
 }>()
 
 const emit = defineEmits<{
@@ -37,7 +40,7 @@ const emit = defineEmits<{
   'mode': [mode: MarkdownEditorMode]
   'comment': []
   'toggle-comments': []
-  'emoji': [char: string]
+  'emoji': [emoji: MarkdownEmoji]
   'emoji-open': [open: boolean]
   /** A colour from the menu, or `null` to remove the highlight. */
   'highlight': [color: MarkdownEditorHighlightColor | null]
@@ -138,9 +141,9 @@ watch(emojiOpen, (open) => {
   emit('emoji-open', open)
 })
 
-function pickEmoji(char: string): void {
+function pickEmoji(emoji: MarkdownEmoji): void {
   emojiOpen.value = false
-  emit('emoji', char)
+  emit('emoji', emoji)
 }
 
 const highlightOpen = ref(false)
@@ -303,7 +306,7 @@ defineExpose({
               <TxIcon :name="MARKDOWN_EDITOR_ACTION_ICONS.emoji" :size="16" />
             </button>
           </template>
-          <MarkdownEditorEmojiPicker :key="opens" :labels="labels" @pick="pickEmoji" />
+          <MarkdownEditorEmojiPicker :key="opens" :labels="labels" :packs="emojiPacks" @pick="pickEmoji" />
         </TxBaseAnchor>
         <span
           v-else-if="item.action === 'highlight'"

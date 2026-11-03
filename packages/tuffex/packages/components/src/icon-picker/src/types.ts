@@ -1,3 +1,4 @@
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { TxIconSource } from '../../icon/src/types'
 
 /**
@@ -40,6 +41,8 @@ export interface IconPickerEntry {
   /** The icon identifier this row yields, e.g. `class:i-ri-rocket-line`. */
   id: string
   icon: TxIconSource
+  /** The name a screen reader announces for a cell that shows only an image. */
+  label?: string
   keywords: string
   /**
    * The heading the row is grouped under, and a search term in its own
@@ -73,6 +76,11 @@ export interface IconPickerProps {
    * replaces the rows rather than adding to a catalog it cannot style.
    */
   catalog?: Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>
+  /**
+   * Custom emoji packs, listed ahead of the emoji from `catalog` or the bundled
+   * set. Each pack with a usable emoji is a heading; a picked emoji is stored as a `url:` identifier.
+   */
+  emojiPacks?: readonly TxEmojiPack[]
   /** Offer the shape row. Off when the host renders the icon on its own plate. */
   shapeSelectable?: boolean
   fileChooser?: IconPickerFileChooser

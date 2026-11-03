@@ -73,6 +73,34 @@ code: |
 ---
 ::::
 
+### Custom emoji packs
+`emojiPacks` adds your own emoji images to the picker and to `:` completion; the document still holds `:name:`, which preview and WYSIWYG show as images.
+::::TuffDemoWrapper{demo="MarkdownEditorCustomEmojiDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxEmojiPack } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+
+  const content = ref('Today the build shipped :party_parrot: and :ship_it:.')
+
+  // Keep the reference stable: hold it in a ref or const, not as a literal array in the template
+  const packs: TxEmojiPack[] = [{
+    id: 'party',
+    name: 'Party',
+    emoji: [
+      { name: 'party_parrot', src: 'https://cdn.example.com/emoji/party-parrot.gif', keywords: 'celebrate happy' },
+      { name: 'ship_it', src: 'https://cdn.example.com/emoji/ship-it.png', keywords: 'release launch' },
+    ],
+  }]
+  </script>
+
+  <template>
+    <TxMarkdownEditor v-model="content" :emoji-packs="packs" />
+  </template>
+---
+::::
+
 ### Collaboration
 `collaboration` connects real-time editing: the editor sends and receives change sets and carets, and your adapter merges concurrent edits.
 ::::TuffDemoWrapper{demo="MarkdownEditorCollaborationDemo" code-lang="vue"}
@@ -105,6 +133,9 @@ code: |
 ### Best Practices
 
 - Keep `sanitize=true` for content written by users or providers.
+- Use `https` or `data:` addresses for a custom emoji's `src`; with `sanitize` on (the default), addresses with other protocols, such as `tfile:` or `file:`, are stripped by the sanitizer and the image no longer shows.
+- Each emoji's `name` (its shortcode) is written into the document, so only add names and don't rename them: after a rename, the old `:name:` in documents turns back into text. A pack's `name` is only its tab label, so it can change freely.
+- Keep the `emojiPacks` reference stable: hold it in a `ref` or `const`, not as a literal array in the template. Each parent render that hands the editor a new array makes it rebuild the emoji index and re-render the whole document.
 - Use a controlled `mode` or `v-model:comments-open` when the route or query stores it; to just reveal a thread, call `openComments(id)`.
 - In narrow editors such as comments or release notes, trim the toolbar with `toolbarActions` and turn off `slash` or `bubble` as needed.
 - Have `uploadImage` and `ai` honour `signal`: it aborts when the user deletes the placeholder, stops or discards.
@@ -132,6 +163,7 @@ code: |
 | `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | Replaces the built-in link field; return the URL, or `''` to cancel. |
 | `math` | `boolean` | `true` | Renders `$…$` and `$$…$$` with KaTeX. |
 | `emoji` | `boolean` | `true` | Renders `:shortcode:` and turns on `:` completion and the emoji picker. |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs: one picker tab per pack with at least one accepted emoji, and `:name:` renders as the image. |
 | `highlight` | `boolean` | `true` | `==text==` highlights and the highlighter's colours. |
 | `callouts` | `boolean` | `true` | Shows quotes whose first line is `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` as callouts. |
 | `codeTheme` | `MarkdownEditorCodeTheme` | `'github'` | Syntax highlighting preset for code blocks with a language; `'none'` leaves them plain. |
@@ -193,6 +225,10 @@ code: |
     | 'codeBlock' | 'math' | 'divider' | 'emoji' | 'undo' | 'redo'
 
   type MarkdownEditorCodeTheme = 'github' | 'one' | 'vitesse' | 'catppuccin' | 'solarized' | 'none'
+
+  // Custom emoji: name holds lowercase letters, digits, _, + and -, 2 to 40 characters
+  interface TxCustomEmoji { name: string, src: string, keywords?: string }
+  interface TxEmojiPack { id: string, name: string, emoji: TxCustomEmoji[] }
 
   interface MarkdownEditorAiRequest {
     action: 'improve' | 'shorten' | 'expand' | 'fix' | 'translate' | 'custom'
@@ -260,6 +296,8 @@ The status bar counts with `markdownStats`, exported from `@talex-touch/tuffex/m
 
 - Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds it. All three modes share one Markdown document; preview takes no typing and disables the formatting buttons, but its task boxes still toggle.
 - WYSIWYG renders block by block; when the caret enters bold, a link, inline math or another format, its Markdown marks appear and can be edited in place. `/` at the start of a block (`、` with a Chinese input method) opens the block menu.
+- Type `:` to open completion, or press the toolbar's emoji button to open the picker. Its tabs run Recent, then each emoji pack with an accepted emoji, then the built-in categories; with nothing recent, the first pack opens. A custom emoji inserts `:name:`; a built-in one inserts its character.
+- A custom emoji's `name` takes lowercase letters, digits, `_`, `+` and `-`, 2 to 40 characters; an invalid entry is ignored. A name listed twice keeps its first entry, and a repeated pack `id` drops the later pack. A custom emoji with the same name as a built-in shortcode takes precedence, and the built-in one leaves the picker. `:name:` renders as an image (about 1.25em tall) in preview and WYSIWYG and as text in source mode; a name the set does not hold stays text, and when an image fails to load its alt text `:name:` shows.
 - Selecting text floats a bar with formats, highlight colours, link, comment and AI. The AI's answer streams in and can show its changes word by word; replace, insert it below, try again or discard. `Esc` discards and restores the selection.
 - An image goes in as a placeholder with progress, then becomes the address `uploadImage` returns; deleting the placeholder aborts the upload.
 - Every edit commits as a change set, which moves the undo history, comment ranges and collaborators' carets. The local caret is sent at most every 50 ms; a collaborator's name shows for 2.5 s after their caret moves.
@@ -270,6 +308,7 @@ The status bar counts with `markdownStats`, exported from `@talex-touch/tuffex/m
 
 - Source mode is CodeMirror 6; WYSIWYG is a contenteditable block view rendered from marked's tokens and mapped to the source character by character. Code blocks are coloured with the CSS Custom Highlight API; shiki, KaTeX and the AI panel load when first used.
 - The built-in emoji data comes from emojilib 2.4.0 (MIT).
+- The `TxEmojiPack` type is shared with the icon picker and defined in `icon/src/emoji-pack.ts`.
 - Source: `packages/tuffex/packages/components/src/markdown-editor/`.
 
 <TuffDocSourceLink />

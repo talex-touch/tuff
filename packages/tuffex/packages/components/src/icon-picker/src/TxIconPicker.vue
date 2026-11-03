@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Morph } from '../../icon-morph/src/engine/dom'
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { TxIconSource } from '../../icon/src/types'
 import type { IconPickerEntry, IconPickerLabels, IconPickerProps, IconPickerShape } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createMorph } from '../../icon-morph/src/engine/dom'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
-import { ICON_PICKER_CATEGORY_LABELS } from './catalog'
+import { EMOJI_CATALOG, ICON_PICKER_CATEGORY_LABELS } from './catalog'
 import { provideIconPickerGlyphs } from './glyphs'
 import { formatIconIdentifier, parseIconIdentifier } from './identifier'
 import { isIconPickerShape, SHAPE_CONTENT, shapePath } from './shapes'
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<IconPickerProps>(), {
   shape: 'rounded',
   sections: () => ['emoji', 'icon', 'brand', 'ai', 'file'],
   catalog: undefined,
+  emojiPacks: undefined,
   shapeSelectable: true,
   fileChooser: undefined,
   accept: 'image/*',
@@ -81,8 +83,50 @@ const labels = computed<IconPickerLabels>(() => {
     ...DEFAULT_LABELS,
     ...host,
     shapes: { ...(DEFAULT_LABELS.shapes ?? {}), ...legacy, ...(host.shapes ?? {}) },
-    categories: { ...(DEFAULT_LABELS.categories ?? {}), ...(host.categories ?? {}) },
+    categories: { ...(DEFAULT_LABELS.categories ?? {}), ...packCategoryLabels(props.emojiPacks), ...(host.categories ?? {}) },
   }
+})
+
+function uniquePacks(packs: readonly TxEmojiPack[] | undefined): TxEmojiPack[] {
+  const seen = new Set<string>()
+  return (packs ?? []).filter((pack) => {
+    if (seen.has(pack.id))
+      return false
+    seen.add(pack.id)
+    return true
+  })
+}
+
+function packCategoryLabels(packs: readonly TxEmojiPack[] | undefined): Record<string, string> {
+  return Object.fromEntries(uniquePacks(packs).map(pack => [`pack:${pack.id}`, pack.name]))
+}
+
+function emojiPackRows(packs: readonly TxEmojiPack[] | undefined): IconPickerEntry[] {
+  const seen = new Set<string>()
+  const rows: IconPickerEntry[] = []
+  for (const pack of uniquePacks(packs)) {
+    for (const emoji of pack.emoji) {
+      const id = `url:${emoji.src}`
+      if (!emoji.src || seen.has(id))
+        continue
+      seen.add(id)
+      rows.push({
+        id,
+        icon: { type: 'url', value: emoji.src },
+        label: emoji.name,
+        keywords: [emoji.name, emoji.keywords].filter(Boolean).join(' '),
+        category: `pack:${pack.id}`,
+      })
+    }
+  }
+  return rows
+}
+
+const panelCatalog = computed(() => {
+  const rows = emojiPackRows(props.emojiPacks)
+  if (!rows.length)
+    return props.catalog
+  return { ...props.catalog, emoji: [...rows, ...(props.catalog?.emoji ?? EMOJI_CATALOG)] }
 })
 
 const open = ref(false)
@@ -227,7 +271,7 @@ defineExpose({
     :model-value="modelValue"
     :shape="shape"
     :sections="sections"
-    :catalog="catalog"
+    :catalog="panelCatalog"
     :shape-selectable="shapeSelectable"
     :labels="labels"
     :disabled="disabled"
@@ -287,7 +331,7 @@ defineExpose({
       :model-value="modelValue"
       :shape="shape"
       :sections="sections"
-      :catalog="catalog"
+      :catalog="panelCatalog"
       :shape-selectable="shapeSelectable"
       :labels="labels"
       :disabled="disabled"

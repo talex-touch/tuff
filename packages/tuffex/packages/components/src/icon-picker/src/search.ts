@@ -85,7 +85,8 @@ function indexOf(entry: IconPickerEntry): Indexed {
       words.push(token)
   }
 
-  const value = normalize(entry.icon.value)
+  // An image address is no name: a digit or dash would match inside its characters.
+  const value = entry.icon.type === 'url' || entry.icon.type === 'file' ? '' : normalize(entry.icon.value)
   const name = entry.icon.type === 'class' ? className(value) : ''
   for (const word of name.split('-')) {
     if (word && word !== 'line' && word !== 'fill')
