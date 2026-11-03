@@ -39,6 +39,13 @@ function resolveString(recordValue: unknown, metaValue: unknown) {
   return typeof metaValue === 'string' ? metaValue : ''
 }
 
+function resolveSince(recordValue: unknown, metaValue: unknown) {
+  const value = recordValue ?? metaValue
+  if (value === null || value === undefined)
+    return null
+  return String(value).trim() || null
+}
+
 function resolveTags(recordValue: unknown, metaValue: unknown) {
   const value = Array.isArray(recordValue) ? recordValue : metaValue
   if (!Array.isArray(value))
@@ -108,6 +115,7 @@ const resolveSidebarComponents = cacheDocsContent(async (event: H3Event, locale:
           : typeof meta?.category === 'string'
             ? meta.category
             : null,
+        since: resolveSince(record.since, meta?.since),
         syncStatus: normalizeStatus(record.syncStatus ?? meta?.syncStatus, verified),
         verified,
       }
