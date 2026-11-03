@@ -1,4 +1,4 @@
-<script lang="ts" name="ToolFormCard" setup>
+<script setup lang="ts">
 import type {
   FormField,
   FormFieldValue,
@@ -10,6 +10,8 @@ import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelect } from '@talex-touch/tuffex/select'
 import { computed, ref, watch } from 'vue'
+
+defineOptions({ name: 'TxAiToolForm' })
 
 /**
  * Renders a validated form spec produced by the `tuff_render_form` tool.
@@ -182,12 +184,12 @@ function reset(): void {
 </script>
 
 <template>
-  <form class="ToolFormCard" novalidate @submit.prevent="submit">
-    <header v-if="spec.title || spec.description" class="ToolFormCard-Header">
-      <h4 v-if="spec.title" class="ToolFormCard-Title">
+  <form class="tx-ai-tool-form" novalidate @submit.prevent="submit">
+    <header v-if="spec.title || spec.description" class="tx-ai-tool-form-Header">
+      <h4 v-if="spec.title" class="tx-ai-tool-form-Title">
         {{ spec.title }}
       </h4>
-      <p v-if="spec.description" class="ToolFormCard-Desc">
+      <p v-if="spec.description" class="tx-ai-tool-form-Desc">
         {{ spec.description }}
       </p>
     </header>
@@ -195,12 +197,12 @@ function reset(): void {
     <div
       v-for="field in spec.fields"
       :key="field.key"
-      class="ToolFormCard-Field"
+      class="tx-ai-tool-form-Field"
       :class="{ 'is-inline': field.type === 'checkbox' }"
     >
-      <span :id="labelId(field.key)" class="ToolFormCard-Label">
+      <span :id="labelId(field.key)" class="tx-ai-tool-form-Label">
         {{ field.label }}
-        <span v-if="field.required" class="ToolFormCard-Required" aria-hidden="true">*</span>
+        <span v-if="field.required" class="tx-ai-tool-form-Required" aria-hidden="true">*</span>
       </span>
 
       <TxCheckbox
@@ -231,51 +233,51 @@ function reset(): void {
         @update:model-value="(value: string | number) => setValue(field, value)"
       />
 
-      <p v-if="missingKeys.includes(field.key)" class="ToolFormCard-Error" role="alert">
+      <p v-if="missingKeys.includes(field.key)" class="tx-ai-tool-form-Error" role="alert">
         {{ requiredHint }}
       </p>
     </div>
 
-    <footer class="ToolFormCard-Actions">
+    <footer class="tx-ai-tool-form-Actions">
       <TxButton native-type="submit" variant="primary" size="sm" :disabled="isSubmitted">
         {{ submitText }}
       </TxButton>
       <TxButton v-if="!isSubmitted" native-type="button" variant="ghost" size="sm" @click="reset">
         {{ resetLabel }}
       </TxButton>
-      <span v-else class="ToolFormCard-Sent" role="status">{{ submittedLabel }}</span>
+      <span v-else class="tx-ai-tool-form-Sent" role="status">{{ submittedLabel }}</span>
     </footer>
   </form>
 </template>
 
 <style lang="scss" scoped>
-.ToolFormCard {
+.tx-ai-tool-form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   width: 100%;
 }
 
-.ToolFormCard-Header {
+.tx-ai-tool-form-Header {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.ToolFormCard-Title {
+.tx-ai-tool-form-Title {
   margin: 0;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-md);
+  color: var(--shell-text-primary, var(--tx-text-color-primary));
+  font-size: var(--shell-fs-md, 14px);
   font-weight: 600;
 }
 
-.ToolFormCard-Desc {
+.tx-ai-tool-form-Desc {
   margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
+  color: var(--shell-text-muted, var(--tx-text-color-secondary));
+  font-size: var(--shell-fs-sm, 13px);
 }
 
-.ToolFormCard-Field {
+.tx-ai-tool-form-Field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -287,29 +289,29 @@ function reset(): void {
   }
 }
 
-.ToolFormCard-Label {
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-sm);
+.tx-ai-tool-form-Label {
+  color: var(--shell-text-secondary, var(--tx-text-color-regular));
+  font-size: var(--shell-fs-sm, 13px);
 }
 
-.ToolFormCard-Required {
-  color: var(--shell-danger);
+.tx-ai-tool-form-Required {
+  color: var(--shell-danger, var(--tx-color-danger));
 }
 
-.ToolFormCard-Error {
+.tx-ai-tool-form-Error {
   margin: 0;
-  color: var(--shell-danger);
-  font-size: var(--shell-fs-sm);
+  color: var(--shell-danger, var(--tx-color-danger));
+  font-size: var(--shell-fs-sm, 13px);
 }
 
-.ToolFormCard-Actions {
+.tx-ai-tool-form-Actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.ToolFormCard-Sent {
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
+.tx-ai-tool-form-Sent {
+  color: var(--shell-text-muted, var(--tx-text-color-secondary));
+  font-size: var(--shell-fs-sm, 13px);
 }
 </style>

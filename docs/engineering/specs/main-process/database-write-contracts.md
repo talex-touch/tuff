@@ -172,6 +172,21 @@ this by running a newer drizzle-kit: it would re-diff the whole schema against 0
 - **Renderer-assigned ids are scope-local.** If the renderer generates ids per parent
   ('user-1', 'assistant-2' per conversation), the PK must include the parent id.
   A global text PK on such ids collides across parents (0037's root cause).
+- Migration `0056_ai_orchestrator_run_messages` adds the primary-homed encrypted run-message
+  log: opaque `envelope`, `created_at`, and composite key `(run_id, seq)`. Its FK cascades
+  when the run root is removed by Privacy or retention. It is not an aux hot table and
+  encrypted records are not ordinary-exported. Retention byte estimates include envelope
+  UTF-8 bytes without parsing or decrypting them.
+- `AiOrchestratorStore.appendRunMessage` assigns `COALESCE(MAX(seq), 0) + 1` for the run
+  inside the interactive primary write task and propagates FK/write failures; reads are
+  ordered by `seq`, and explicit message deletion uses the same interactive write lane.
+  `truncateRunMessages(runId, keepCount)` removes only `seq > keepCount` in that lane;
+  the next append continues at the retained prefix's next sequence.
+  The run lifecycle deletes the log when a run finishes, retaining it only for resumption.
+- The hand-written `0056` migration raises `KNOWN_MISSING_SNAPSHOTS` from 42 to 43 in
+  `scripts/check-drizzle-snapshot-drift.mjs`; this acknowledges the known snapshot gap,
+  not a regenerated baseline. The ratchet test and real libSQL run-message store test
+  cover registration, per-run sequencing and cascading deletion.
 
 ### 4. Validation & error matrix
 

@@ -1,3 +1,10 @@
+import type { Ref } from 'vue'
+import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+
+import type {
+  AiChainStep,
+  AiToolCallPart,
+} from "@talex-touch/tuffex/ai-elements";
 import type {
   ChatComposerAttachment,
   ChatMessageModel,
@@ -45,8 +52,6 @@ export interface TxAiRevealProps {
   motion?: TxAiMotionPreset;
   appear?: boolean;
   duration?: number;
-  delay?: number;
-  delayStep?: number;
   disabledMotion?: boolean;
 }
 
@@ -56,8 +61,7 @@ export interface TxAiStreamTextProps {
   streaming?: boolean;
   cursor?: boolean;
   motion?: TxAiMotionPreset;
-  duration?: number;
-  wrap?: boolean;
+  /** One word is released every this many milliseconds. */
   stagger?: number;
 }
 
@@ -183,6 +187,113 @@ export interface TxAiCitationProps {
   href?: string;
   index?: number;
   description?: string;
+}
+
+/**
+ * One ordered piece of an assistant turn: a thought, a tool call, or prose, in the order the model
+ * produced them. Structurally the host's `MessageSegment`, so hosts pass theirs unchanged.
+ */
+export type TxAiSegment =
+  | { kind: "reasoning"; id: string; step: AiChainStep }
+  | { kind: "tool"; id: string; part: AiToolCallPart }
+  | { kind: "text"; id: string; text: string; streaming: boolean };
+
+export interface TxAiToolChartSpec {
+  type: string
+  title?: string
+  labels: string[]
+  series: Array<{ name?: string; values: number[] }>
+  xLabel?: string
+  yLabel?: string
+  stacked?: boolean
+  showValues?: boolean
+}
+
+/** The host owns isolation policy, runtime loading and lifecycle cleanup. */
+export type TxAiWidgetSandbox = (
+  source: Ref<string>,
+  frame: Ref<HTMLIFrameElement | null>,
+) => {
+  status: Readonly<Ref<'loading' | 'ready' | 'failed'>>
+  failure: Readonly<Ref<
+    | { reason: 'threw'; message: string }
+    | { reason: 'blocked'; directive: string }
+    | { reason: 'timedOut' }
+    | null
+  >>
+  height: Readonly<Ref<number>>
+  srcdoc: Readonly<Ref<string>>
+}
+
+export type TxAiSpeakState = 'idle' | 'loading' | 'speaking'
+
+export interface TxAiTurnMetrics {
+  latencyMs?: number
+  ttftMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  cacheReadTokens?: number
+  model?: string
+  coordinator?: string
+}
+
+export interface TxAiMetricMessage { meta?: TxAiTurnMetrics }
+
+export interface TxAiTurnFooterProps {
+  content?: string
+  metrics?: TxAiTurnMetrics
+  resting?: boolean
+  regenerable?: boolean
+  speakState?: TxAiSpeakState
+  branchable?: boolean
+  branching?: boolean
+  showMetrics?: boolean
+  labels?: Record<string, string>
+  motion?: TxAiMotionPreset
+}
+
+export interface TxAiErrorBlockProps {
+  title: string
+  detail?: string
+  reportCode?: string
+  reportDetail?: string
+  codeLabel?: string
+  tone?: 'danger' | 'warning'
+  actionLabel?: string
+  retryable?: boolean
+  retryLabel?: string
+}
+
+export interface TxAiAssistantTurnProps {
+  segments: TxAiSegment[]
+  streaming?: boolean
+  elementProps?: Record<string, unknown>
+  toolCallProps?: Record<string, unknown>
+  /** Optional predicate limiting which calls are handled by the host tool slot. */
+  hasToolFace?: (part: AiToolCallPart) => boolean
+  chartProps?: Record<string, unknown>
+  formProps?: Record<string, unknown>
+  widgetProps?: Record<string, unknown>
+  widgetSandbox?: TxAiWidgetSandbox
+  submittedForms?: ReadonlySet<string>
+  formDrafts?: ReadonlyMap<string, Record<string, FormFieldValue>>
+  showToolPayload?: boolean
+  payloadLabel?: string
+  waiting?: boolean
+  thinkingVerb?: string
+  thinkingLabel?: string
+  compacting?: boolean
+  compactingLabel?: string
+  footer?: TxAiTurnFooterProps
+  error?: TxAiErrorBlockProps
+  motion?: TxAiMotionPreset
+  /** Render ```openui fences in prose as interactive OpenUI. Off keeps them as plain code. */
+  openui?: boolean
+  /** Labels for the OpenUI renderer (notices, button text). */
+  openuiLabels?: Record<string, string>
+  /** Host lookup for OpenUI `SearchImage`; resolve a query to an image URL, or null. */
+  resolveOpenuiImage?: (query: string) => Promise<string | null>
 }
 
 export function toTuffexChatMessage(

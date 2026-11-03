@@ -270,4 +270,18 @@ describe('shell list action styles', () => {
     expect(action?.declarations.get('width')).toBe('24px')
     expect(action?.declarations.get('opacity')).toBe('0')
   })
+
+  it('applies loading border glow animation only when row is both loading and active', () => {
+    const css = compileStyles('./ShellProjectRows.vue')
+    const parsed = parseRules(css)
+    const glowRows = parsed.filter(
+      ({ selector, declarations }) =>
+        selector.includes('is-loading') &&
+        declarations.get('animation')?.includes('shell-row-glow-pulse')
+    )
+    expect(glowRows.length).toBeGreaterThan(0)
+    for (const rule of glowRows) {
+      expect(rule.selector).toContain('.active')
+    }
+  })
 })

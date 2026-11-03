@@ -32,6 +32,8 @@ export interface AiToolCallPart {
   error?: string
   /** Streaming log region while running. */
   logs?: string
+  /** Wall time the call took, set once it settles; the card's footer shows it. */
+  durationMs?: number
   /**
    * Set once an interactive result (a rendered form) has been answered.
    * Lives on the part rather than in host session state so it persists with

@@ -123,6 +123,22 @@ describe('ComposerSendIsland', () => {
     capsule.unmount()
   })
 
+  it('renders a custom send icon and title when supplied', async () => {
+    const wrapper = mount(ComposerSendIsland, {
+      props: {
+        state: 'ready',
+        sendLabel: 'Queue',
+        sendTitle: 'Queue this message',
+        sendIcon: 'i-ri-play-list-add-line',
+        stopLabel: 'Stop',
+        stopText: 'Stop'
+      }
+    })
+    expect(wrapper.get('.ComposerSendIsland-Arrow').classes()).toContain('i-ri-play-list-add-line')
+    expect(wrapper.attributes('title')).toBe('Queue this message')
+    wrapper.unmount()
+  })
+
   it('keeps an empty key focusable but inert to clicks', async () => {
     const wrapper = mountIsland('empty')
     expect(wrapper.attributes('aria-disabled')).toBe('true')

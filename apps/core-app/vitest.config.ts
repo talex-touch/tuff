@@ -28,6 +28,17 @@ export default defineConfig({
   },
   plugins: [
     vue(),
+    {
+      // The real runtime is served by electron.vite.config; tests never start a widget frame.
+      name: 'widget-sandbox-runtime-stub',
+      enforce: 'pre',
+      resolveId(id) {
+        if (id === 'virtual:widget-sandbox-runtime') return '\0widget-sandbox-runtime'
+      },
+      load(id) {
+        if (id === '\0widget-sandbox-runtime') return 'export default ""'
+      }
+    },
     AutoImport({
       imports: ['vue', 'vue-router'],
       dts: false
@@ -55,6 +66,10 @@ export default defineConfig({
       {
         find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/,
         replacement: path.join(tuffexRoot, 'packages', 'components', 'src', '$1', 'index.ts')
+      },
+      {
+        find: /^@talex-touch\/intelligence-uikit$/,
+        replacement: path.join(workspaceRoot, 'packages', 'intelligence-uikit', 'src', 'index.ts')
       },
       {
         find: /^@talex-touch\/tuffex$/,

@@ -29,7 +29,8 @@ export interface SendStateInput {
 }
 
 export function deriveSendState(input: SendStateInput): SendState {
-  if (!input.streaming) return input.hasText || input.dictating ? 'ready' : 'empty'
+  if (input.hasText || (!input.streaming && input.dictating)) return 'ready'
+  if (!input.streaming) return 'empty'
   if (input.blocked) return 'blocked'
   if (input.awaitingFirstToken) return 'waiting'
   return 'streaming'

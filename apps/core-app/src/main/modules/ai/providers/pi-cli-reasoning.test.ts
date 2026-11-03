@@ -10,11 +10,14 @@ import {
   buildOmpArgs,
   buildPiArgs,
   CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   cliReasoningLevel,
   CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
+  OMP_CLI_PROFILE_ID,
   OMP_CLI_PROVIDER_ID,
   PI_CLI_ORIGIN,
   PI_CLI_PROVIDER_ID,
@@ -51,6 +54,18 @@ describe('buildOmpArgs --thinking', () => {
     // omp is not pi: its isolation flag is `--no-rules`, never pi's `--no-context-files`.
     expect(planned).toContain('--no-rules')
     expect(planned).not.toContain('--no-context-files')
+  })
+
+  it('puts the per-run config overlay right after --no-tools, only when one is given', () => {
+    const without = buildOmpArgs(prompt, 'openai/gpt-5.5')
+    expect(without).not.toContain('--config')
+    const withOverlay = buildOmpArgs(prompt, 'openai/gpt-5.5', [], undefined, '/tmp/overlay.yml')
+    expect(withOverlay).toEqual([
+      ...without.slice(0, without.indexOf('--no-tools') + 1),
+      '--config',
+      '/tmp/overlay.yml',
+      ...without.slice(without.indexOf('--no-tools') + 1)
+    ])
   })
 })
 
@@ -120,7 +135,17 @@ describe('PiCliProvider argv under a reasoning plan', () => {
     model: string,
     reasoningEffort?: 'low' | 'medium' | 'high' | 'max'
   ): Promise<string[]> {
-    const options = { modelPreference: [model], ...(reasoningEffort ? { reasoningEffort } : {}) }
+    // Each third-party CLI binary runs only under its own scheduler, so that scheduler drives its argv.
+    const scheduler: string | undefined = {
+      [CODEX_CLI_PROVIDER_ID]: CODEX_CLI_PROFILE_ID,
+      [CLAUDE_CLI_PROVIDER_ID]: CLAUDE_CLI_PROFILE_ID,
+      [OMP_CLI_PROVIDER_ID]: OMP_CLI_PROFILE_ID
+    }[config.id]
+    const options = {
+      modelPreference: [model],
+      ...(scheduler ? { metadata: { profileId: scheduler } } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {})
+    }
     const planned = withReasoningPlan(options, planProviderReasoning(options, config, model))
     for await (const _chunk of new PiCliProvider(config, () => true).chatStream(
       { messages: [{ role: 'user', content: 'hi' }] },
@@ -224,7 +249,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
   it('runs every CLI on auto with exactly the argv it had before the setting existed', async () => {
     // Whole vectors, written out from the pre-setting argv builders: "the new flag is absent" alone
     // would not catch auto adding, dropping or reordering anything else. Only the dated system
-    // prompt and codex's temporary isolation root vary between runs.
+    // prompt, codex's temporary isolation root and omp's temporary overlay path vary between runs.
     const systemPrompt = expect.any(String)
 
     await writeStub('TUFF_PI_CLI_PATH', ANSWERS.pi)
@@ -250,6 +275,9 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       '--mode',
       'json',
       '--no-tools',
+      // The one deliberate addition: omp's per-run overlay (memory off), a temp path per run.
+      '--config',
+      expect.stringMatching(/tuff-omp-[^/]+[\\/]overlay\.yml$/),
       '--no-extensions',
       '--no-skills',
       '--no-rules',

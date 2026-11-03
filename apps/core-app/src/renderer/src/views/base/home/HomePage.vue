@@ -1,91 +1,29 @@
 <script lang="ts" name="HomePage" setup>
-import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
-import type {
-  FormFieldValue,
-  FormSpec,
-  WidgetSpec
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
-import type { MessageSegment } from '~/modules/conversation/chain-steps'
-import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import type {
-  ConversationWorkspaceMode,
-  WorkspaceSubmitDisposition
-} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+  ConversationMessage,
+  ConversationTurnMeta
+} from '~/modules/conversation/useHomeConversation'
 import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
-import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/opening'
-import type { MainWindowCommandHandler } from '~/modules/shortcuts/main-window-shortcuts'
-import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
-import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
-import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
-import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
-import { TxModal } from '@talex-touch/tuffex/modal'
-import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
-import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
+import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
-import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
-import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
-import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
+import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
-import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
-import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
-import { usePreferredReducedMotion } from '@vueuse/core'
-import {
-  CHART_RESULT_PREFIX,
-  FORM_RESULT_PREFIX,
-  WIDGET_RESULT_PREFIX
-} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  shallowRef,
-  watch
-} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { describeFailure } from '~/utils/failure-text'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
-import AppLogo from '~/components/icon/AppLogo.vue'
-import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
-import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
-import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
-import { toMessageSegments } from '~/modules/conversation/chain-steps'
-import { describeToolCallError } from '~/modules/conversation/tool-call-error'
-import { createLatestOnly } from '~/modules/conversation/latest-only'
-import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
-import {
-  FLIGHT_IMPACT_MS,
-  prefersReducedMotion,
-  SCROLL_TWEEN_MS,
-  useSendChoreography
-} from '~/composables/useSendChoreography'
-import {
-  createWorkingConversationTitle,
-  deriveRestoredTitle,
-  findTitleExchange,
-  generateConversationTitle,
-  shouldGenerateTitle
-} from '~/modules/conversation/conversation-title'
-import type { ConversationError } from '~/modules/conversation/conversation-error-display'
-import {
-  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
-  CONVERSATION_ERROR_USAGE_LIMIT_REACHED
-} from '~/modules/conversation/conversation-error-display'
-import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { prefersReducedMotion, useSendChoreography } from '~/composables/useSendChoreography'
+import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
+import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
-import {
-  createConversationId,
-  useConversationHistory
-} from '~/modules/conversation/useConversationHistory'
+import { useCodePreviewTabs } from '~/modules/conversation/useCodePreviewTabs'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import {
@@ -100,36 +38,55 @@ import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
-import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
-import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
+import { contextOccupancyTokens } from '@talex-touch/pi-desktop-reuse/context-usage'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
-import { useHomePush } from '~/modules/home-push/useHomePush'
-import {
-  resolveIntelligenceErrorRecovery,
-  USAGE_LIMITS_ROUTE
-} from '~/modules/intelligence/ai-error-recovery'
-import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
-import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
+import { USAGE_LIMITS_ROUTE } from '~/modules/intelligence/ai-error-recovery'
 import { appSetting } from '~/modules/storage/app-storage'
-import { resolvedTheme } from '~/modules/storage/theme-style'
-import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
-import ComposerToolbar from './composer/ComposerToolbar.vue'
-import type { DictationFailureNotice } from './composer/dictation-notice'
-import { classifyDictationFailure, showDictationNotice } from './composer/dictation-notice'
+import { showDictationNotice } from './composer/dictation-notice'
 import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
+import HomeContextMeter from './composer/HomeContextMeter.vue'
+import HomeRunStatus from './composer/HomeRunStatus.vue'
+import {
+  contextPercent,
+  deriveRunStep,
+  formatWindow,
+  lastReportedTurn
+} from './composer/run-status'
 import { useComposerDictation } from './composer/useComposerDictation'
-import { voiceGlowDriveLevel, voiceGlowLobes, voiceGlowResponse } from './composer/voice-glow'
-import ComposerControl from './composer/ComposerControl.vue'
+import TuffAIComposer from './TuffAIComposer.vue'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
+import HomeMessageRail from './HomeMessageRail.vue'
+import HomeMessageRow from './HomeMessageRow.vue'
+import { homeMessageContextKey } from './composables/home-message-context'
 import HomeTopBar from './HomeTopBar.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
 import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
 import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
+import { homeLog } from './composables/home-log'
+import { useReadAloud } from './composables/useReadAloud'
+import { useMessageParts } from './composables/useMessageParts'
+import { useHomeAttachments } from './composables/useHomeAttachments'
+import { useLeavingHead } from './composables/useLeavingHead'
+import { useConversationRestore } from './composables/useConversationRestore'
+import { usePassageSelection } from './composables/usePassageSelection'
+import { useFileLinkClick } from './composables/useFileLinkClick'
+import HomeFilePreviewDrawer from './preview/HomeFilePreviewDrawer.vue'
+import { useConversationTitle } from './composables/useConversationTitle'
+import { useThinkingTicker } from '@talex-touch/intelligence-uikit/utils'
+import { useHomeCommands } from './composables/useHomeCommands'
+import { useHomeOpening } from './composables/useHomeOpening'
+import { useHomeSubmit } from './composables/useHomeSubmit'
+import { useSendState } from './composables/useSendState'
+import { useWorkspaceControls } from './composables/useWorkspaceControls'
+import { useTurnMetrics } from './composables/useTurnMetrics'
+import HomeEmptyHead from './HomeEmptyHead.vue'
+import HomePayloadModal from './HomePayloadModal.vue'
+import HomePushCard from './HomePushCard.vue'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -152,16 +109,25 @@ const browserNavigating = ref(false)
 const MAX_INPUT_HEIGHT = 200
 
 const draft = ref('')
-const inputRef = ref<HTMLTextAreaElement | null>(null)
+/** The scrolling transcript column: the subtree a text selection is scoped to. */
+const bodyRef = ref<HTMLElement | null>(null)
+/** The floating selection bar itself; focusing it must not read as a deselection. */
+const selectionBarRef = ref<HTMLElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
-const composerRef = ref<HTMLElement | null>(null)
-/** The tool row; `submit()` launches its send key at the press. */
-const toolbarRef = ref<InstanceType<typeof ComposerToolbar> | null>(null)
+/** The composer component; the page reads its box, field and draft ghost through it. */
+const composerEl = ref<InstanceType<typeof TuffAIComposer> | null>(null)
+/** The field the draft is typed in. */
+const inputRef = computed(() => composerEl.value?.input ?? null)
+/** The composer's own box: what the send choreography measures and the FLIP animates. */
+const composerRef = computed(() => composerEl.value?.box ?? null)
+/** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
+const draftGhostRef = computed(() => composerEl.value?.ghost ?? null)
 /** The FLIP animates this — the composer *and* the push card under it travel as one body. */
 const composerGroupRef = ref<HTMLElement | null>(null)
-/** Measured before a send so the leaving greeting can be pinned in place. */
-const headRef = ref<HTMLElement | null>(null)
+/** The greeting's root, which the page measures before a flip and pins where it stood. */
+const headEl = ref<InstanceType<typeof HomeEmptyHead> | null>(null)
+const headRef = computed(() => headEl.value?.el ?? null)
 /**
  * Host for the send-flight clone. The page root, not `document.body`: the
  * clone must sit under the shell/tuffex CSS-variable scope or it renders in
@@ -177,14 +143,6 @@ const composerHeight = ref(0)
 const liftGhostRef = ref<HTMLElement | null>(null)
 const liftFillRef = ref<HTMLElement | null>(null)
 const liftTextRef = ref<HTMLElement | null>(null)
-/** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
-const draftGhostRef = ref<HTMLElement | null>(null)
-/**
- * The sent text is still on the composer (lifted, not yet clear of it): the empty field's
- * placeholder would read as a second text under it, so it waits.
- */
-const lifting = ref(false)
-
 const router = useRouter()
 const route = useRoute()
 
@@ -215,16 +173,6 @@ onMounted(() => {
  */
 const conversationId = ref<string | null>(null)
 const projectId = ref<string | null>(null)
-/**
- * The opening as the greeting shows it. `submit` pins it for the one flush between taking the lead
- * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
- * fade out with the words the reader saw rather than lose them a frame before it goes.
- */
-const openingHold = shallowRef<{
-  phase: HomeOpeningPhase
-  text: string
-  source: HomeOpeningSource | null
-} | null>(null)
 
 /**
  * The Main-owned workspace behind Home (A2, A5–A7): execution, history and pending inputs live in
@@ -267,6 +215,20 @@ const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
+const panelTab = ref('outputs')
+const {
+  tabs: codeTabs,
+  activeId: activeCodeTabId,
+  open: openCodeTab,
+  select: selectCodeTab,
+  close: closeCodeTab
+} = useCodePreviewTabs(conversationId)
+
+function showCodePreview(preview: StreamMarkdownCodePreview): void {
+  openCodeTab(preview)
+  panelTab.value = 'preview'
+  panelOpen.value = true
+}
 const { setConversationLoading } = useConversationLoading()
 
 /**
@@ -323,10 +285,12 @@ const dictation = useComposerDictation({
 })
 
 /**
- * A send in flight to Main: the draft stays put until Main has it, and a second press in that window
- * must not send it twice.
+ * What a send leaves on the page while it is in the air: shared by the send path, the thread
+ * restore and the append watcher. The motion score is created further down, so it is read lazily.
  */
-const sending = ref(false)
+const submitState = useSendState({ choreography: () => choreography })
+const { sending, lifting, openingHold } = submitState
+
 watch(
   [
     () => (typeof route.params.id === 'string' ? route.params.id : conversationId.value),
@@ -340,7 +304,6 @@ watch(
   },
   { immediate: true }
 )
-const pageSubmissionSequence = createLatestOnly()
 
 // A plain send waits for dictation to finish; while it runs the send key means 「结束并发送」 (D10-d).
 // A running reply does not block it: Main takes the message as a pending input (A6).
@@ -367,12 +330,6 @@ const sendQueues = computed(
  * sits where the message it may become will land; on an untouched Home it waits above the composer.
  */
 const VOICE_DRAFT_ID = '__home-voice-draft__'
-/**
- * The id `submit` minted for a first send, until that send has settled. The conversation watcher
- * leaves the clip alone for it — minted, or taken back when the send failed — because the thread
- * on screen has not changed, and a failed voice send has just put its clip back.
- */
-let ownMintedId: string | null = null
 const VOICE_DRAFT_ROW: ConversationMessage = {
   id: VOICE_DRAFT_ID,
   role: 'user',
@@ -390,50 +347,6 @@ const voiceSendBlocked = computed(
     workspace.loading.value ||
     Boolean(workspace.loadError.value)
 )
-
-/** A send of the clip: its recording's id, and its transcript — what the model reads. */
-interface VoiceSend {
-  recordingId: string
-  text: string
-}
-
-/** What a failed voice send leaves on the clip: Main no longer has the recording, or nothing. */
-function voiceSendFailure(error: unknown): DictationFailureNotice | null {
-  const failure =
-    error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
-  return failure.code === 'WORKSPACE_VOICE_UNAVAILABLE'
-    ? { kind: 'failed', detail: 'VOICE_RECORDING_NOT_FOUND' }
-    : null
-}
-
-/**
- * 「发送语音」/「直接发送」: the clip goes out as a voice message. A clip with no words of its own
- * is recognized first — no adapter carries audio, so the transcript is what the model reads — and
- * one that still has none, or fails again, stays where it is and says why.
- */
-async function sendVoiceDraft(): Promise<void> {
-  const clip = dictation.clip.value
-  if (!clip || clip.busy || voiceSendBlocked.value) return
-  if (agentProfileMissing()) {
-    toast.error(t('home.workspace.profile.required'))
-    return
-  }
-  dictation.markClipSending(true)
-  let text: string
-  try {
-    text = await dictation.clipTranscript()
-  } catch (error) {
-    dictation.markClipSending(false, classifyDictationFailure(error) ?? { kind: 'failed' })
-    return
-  }
-  // Dismissed, or replaced by a new recording, while it was being recognized.
-  if (dictation.clip.value?.recording.id !== clip.recording.id) return
-  if (!text) {
-    dictation.markClipSending(false, { kind: 'empty', detail: 'VOICE_NOTHING_TO_SEND' })
-    return
-  }
-  await submit({ recordingId: clip.recording.id, text })
-}
 
 /** The send key's face (`composer/send-state.ts`), derived from state this page already owns. */
 const sendState = computed(() =>
@@ -454,7 +367,7 @@ watch(isStreaming, (streaming) => {
 })
 watch(isHomeRoute, (visible) => {
   if (!visible) {
-    invalidatePageSubmission()
+    submitState.invalidatePageSubmission()
     void dictation.stop()
   }
 })
@@ -478,56 +391,6 @@ const composerBeamActive = computed(
     !isStreaming.value &&
     !dictation.active.value
 )
-
-/**
- * The dictation glow's level, sampled by TxVoiceBeam once per frame: the newest of the session's
- * ~10 Hz level frames while it listens, silence otherwise. A getter, so the frames never re-render
- * the page; the glow's own attack and release smooth between them (`voice-glow.ts` sets both, and
- * maps the level onto the beam's range).
- */
-function dictationLevel(): number {
-  if (dictation.state.value !== 'listening') return 0
-  return voiceGlowDriveLevel(dictation.levels.value.at(-1) ?? 0)
-}
-
-/** The glow's envelope: quick enough to follow words, the beam's own calmer one under reduced motion. */
-const reducedMotion = usePreferredReducedMotion()
-const voiceGlowMotion = computed(() => voiceGlowResponse(reducedMotion.value === 'reduce'))
-
-/**
- * The glow's lobes, read off the composer's live rim (`--home-live-stops`) once the box is mounted.
- * Until then the beam keeps its own palette, which nothing shows: dictation starts in that box.
- */
-const voiceGlowColors = ref<string[]>([])
-onMounted(() => {
-  const composer = composerRef.value
-  if (composer) {
-    voiceGlowColors.value = voiceGlowLobes(
-      getComputedStyle(composer).getPropertyValue('--home-live-stops')
-    )
-  }
-})
-
-/**
- * The opening message is the working title until the model summarises one (#969).
- *
- * Generation is once per conversation, after the first settled turn, and every failure keeps the
- * working title silently — the label is never worth an error surface. `generatedTitle` also carries
- * a stored custom title across restore, so the top bar agrees with the sidebar after a reload.
- */
-const generatedTitle = ref<string | null>(null)
-/**
- * Which conversation has a title call in flight — an id, not a boolean. This component instance is
- * reused across thread switches, so a flat flag set by conversation A would make conversation B's
- * settled turn skip its own generation window.
- */
-let titleInFlightFor: string | null = null
-const titleSequence = createLatestOnly()
-
-const firstUserContent = computed(
-  () => messages.value.find((message) => message.role === 'user')?.content
-)
-const conversationTitle = computed(() => generatedTitle.value ?? firstUserContent.value)
 
 /**
  * Auto Context has no composer control any more: it and the old tools pill read as the same
@@ -646,22 +509,13 @@ const choreography = useSendChoreography({
 })
 const enteringMessages = choreography.enteringMessages
 
-/**
- * Set by `submit` just before it sends: an explicit hand-off, not an
- * inference. A user message can also arrive programmatically — a form
- * submission calls `conversation.send` directly — and guessing "user message
- * ⇒ the composer will choreograph it" left those permanently hidden.
- */
-let choreographedSend = false
-
 watch(
   () => messages.value.length,
   (length, previous) => {
     // Consumed before ANY early return: a claim that survived reduced motion
     // (or a non-streaming append) used to latch, hijack the next programmatic
     // batch, and strand its rows at opacity 0 with nothing left to reveal them.
-    const claimed = choreographedSend
-    choreographedSend = false
+    const claimed = submitState.consumeChoreographedSend()
     if (!isStreaming.value || prefersReducedMotion()) return
     const appended = messages.value.slice(previous ?? 0, length)
     choreography.markEntering(appended.map((message) => message.id))
@@ -682,166 +536,18 @@ watch(
 
 const intelligenceSdk = useIntelligenceSdk()
 
-/** At most one message reads at a time; starting another stops the current. */
-const speaking = ref<{ id: string; state: 'loading' | 'speaking' } | null>(null)
-let speakAudio: HTMLAudioElement | null = null
-let speakToken = 0
+const { toggleSpeak, speakStateOf } = useReadAloud()
 
-function stopSpeaking(): void {
-  speakToken += 1
-  speakAudio?.pause()
-  speakAudio = null
-  speaking.value = null
-}
+const appSdk = useAppSdk()
 
-async function toggleSpeak(message: ConversationMessage): Promise<void> {
-  if (speaking.value?.id === message.id) {
-    stopSpeaking()
-    return
-  }
-  stopSpeaking()
-  if (!message.content) return
-
-  const token = ++speakToken
-  speaking.value = { id: message.id, state: 'loading' }
-  try {
-    const result = await intelligenceSdk.ttsSpeak({ text: message.content })
-    // The user may have toggled away while synthesis ran.
-    if (token !== speakToken) return
-    const audio = new Audio(result.audio)
-    speakAudio = audio
-    audio.onended = () => {
-      if (token === speakToken) stopSpeaking()
-    }
-    await audio.play()
-    if (token === speakToken) speaking.value = { id: message.id, state: 'speaking' }
-  } catch (error) {
-    if (token !== speakToken) return
-    homeLog.warn('Read aloud failed', String(error))
-    toast.error(t('home.speakFailed'))
-    stopSpeaking()
-  }
-}
-
-onBeforeUnmount(stopSpeaking)
-
-function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speaking' {
-  return speaking.value?.id === message.id ? speaking.value.state : 'idle'
-}
-
-/**
- * The message body, in the order the provider streamed it: each thinking span
- * its own block, each tool call its own card. Derived per render rather than
- * cached — `parts` grows in place on every delta.
- */
-function segmentsOf(message: ConversationMessage): MessageSegment[] {
-  return toMessageSegments(message.parts, message.status === 'streaming', {
-    thinking: t('home.thinking'),
-    interrupted: t('home.toolInterrupted'),
-    toolError: (error) => describeToolCallError(error, t)
-  })
-}
-
-/**
- * Tool results carrying a chart spec render as a chart in the card's result
- * slot; everything else falls through to the card's own text rendering.
- */
-function chartSpecOf(tool: AiToolCallPart): ToolChartSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(CHART_RESULT_PREFIX)) return null
-  try {
-    return JSON.parse(output.slice(CHART_RESULT_PREFIX.length)) as ToolChartSpec
-  } catch {
-    return null
-  }
-}
-
-function formSpecOf(tool: AiToolCallPart): FormSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(FORM_RESULT_PREFIX)) return null
-  try {
-    return JSON.parse(output.slice(FORM_RESULT_PREFIX.length)) as FormSpec
-  } catch {
-    return null
-  }
-}
-
-/**
- * A model-authored widget. No parse of the payload's *code* is attempted here —
- * only the envelope — because nothing this side could check would make running
- * it safer. The sandbox is what makes it safe.
- */
-function widgetSpecOf(tool: AiToolCallPart): WidgetSpec | null {
-  const output = tool.output
-  if (tool.status !== 'done' || !output?.startsWith(WIDGET_RESULT_PREFIX)) return null
-  try {
-    const spec = JSON.parse(output.slice(WIDGET_RESULT_PREFIX.length)) as WidgetSpec
-    return typeof spec?.source === 'string' && spec.source ? spec : null
-  } catch {
-    return null
-  }
-}
-
-/** Ids of forms already answered this session — locks their cards. */
-const submittedForms = reactive(new Set<string>())
-
-/**
- * Half-typed form input, keyed by tool call id. The stream virtualizes rows
- * out of the DOM once they scroll far enough away, and a card component's own
- * state unmounts with it — this is what hands the draft back on remount.
- * Plain Map on purpose: it is only read when a card mounts.
- */
-const formDrafts = new Map<string, Record<string, FormFieldValue>>()
-
-/**
- * A form submission continues the conversation as a plain user message: the
- * model reads it like any other turn, so the loop needs no second channel.
- * Main marks the answered call in the same write, so a reloaded thread does not
- * re-offer a spent form; the local lock covers the moment until it lands.
- */
-function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
-  submittedForms.add(tool.id)
-  formDrafts.delete(tool.id)
-  const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
-  draft.value = ''
-  void workspace
-    .submit(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`, undefined, {
-      answersToolCallId: tool.id
-    })
-    .catch((error: unknown) => {
-      submittedForms.delete(tool.id)
-      reportSubmitError(error)
-    })
-}
-
-/**
- * The raw payload affordance is for builders: dev builds only, and even
- * there just a whisper of a toggle per widget. It opens a dialog with the
- * call rendered as highlighted JSON — the code block brings its own copy
- * button, so inspection and grabbing the payload are one gesture each.
- */
-const showToolPayload = import.meta.env.DEV
-const payloadFor = ref<AiToolCallPart | null>(null)
-
-const payloadJson = computed(() => {
-  const input = payloadFor.value?.input
-  if (!input) return ''
-  try {
-    // Normalized pretty-print; the accumulator may hand over compact JSON.
-    return JSON.stringify(JSON.parse(input), null, 2)
-  } catch {
-    return input
-  }
+const messageParts = useMessageParts({
+  submit: (text, attachments, options) => workspace.submit(text, attachments, options),
+  openExternal: (url) => appSdk.openExternal(url),
+  clearDraft: () => {
+    draft.value = ''
+  },
+  onSubmitError: reportSubmitError
 })
-
-/**
- * The reader's manual open/collapse, keyed per thinking block. Held here rather
- * than in the chain component because streaming re-renders can recreate that
- * instance — state kept there dies mid-turn, which read as "clicking does
- * nothing". Keyed by segment rather than by message now that one turn can
- * carry several blocks.
- */
-const chainOpen = reactive(new Map<string, boolean>())
 
 /** Grows the composer with its content up to a cap, then scrolls — the usual chat affordance. */
 function autoGrow(): void {
@@ -850,6 +556,37 @@ function autoGrow(): void {
   input.style.height = 'auto'
   input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`
 }
+
+// ---------------------------------------------------------------------------
+// Highlighted transcript text
+// ---------------------------------------------------------------------------
+
+const { passageSelection, passageActions, runPassageAction } = usePassageSelection({
+  body: bodyRef,
+  bar: selectionBarRef,
+  input: inputRef,
+  draft,
+  conversationId,
+  autoGrow
+})
+
+// ---------------------------------------------------------------------------
+// File path links: Command-Click opens in right drawer, Shift-Command-Click in system
+// ---------------------------------------------------------------------------
+
+const fileDrawerVisible = ref(false)
+const previewFilePath = ref('')
+const previewDisplayPath = ref('')
+
+useFileLinkClick({
+  container: bodyRef,
+  projectRoot: computed(() => currentProject.value?.rootPath),
+  onOpenRight: ({ absolutePath, displayPath }) => {
+    previewFilePath.value = absolutePath
+    previewDisplayPath.value = displayPath
+    fileDrawerVisible.value = true
+  }
+})
 
 /**
  * The field returns to one line once its draft is sent — eased rather than snapped when `animate`:
@@ -876,44 +613,7 @@ function bubbleMaxWidth(): number {
   return (lane?.getBoundingClientRect().width ?? 0) * 0.78
 }
 
-/** The greeting as it stood before the stage flips to a conversation; `null` when there is none. */
-interface LeavingHead {
-  el: HTMLElement
-  rect: DOMRect
-}
-
-/** Read before the reactive flip: once the thread is non-empty, the ref no longer points at it. */
-function measureLeavingHead(): LeavingHead | null {
-  const el = headRef.value
-  return el ? { el, rect: el.getBoundingClientRect() } : null
-}
-
-/**
- * The leaving greeting must neither ride the new layout (it would teleport to the column top) nor
- * keep occupying it (it would shove the stream down, then snap it up when the fade ends): pin it
- * where it stood, out of flow. Both ways off the blank stage need it — a first send and opening a
- * stored thread.
- */
-function pinLeavingHead(head: LeavingHead | null): void {
-  if (!head?.el.isConnected || prefersReducedMotion()) return
-  const host = head.el.parentElement?.getBoundingClientRect()
-  if (!host) return
-  head.el.style.position = 'absolute'
-  head.el.style.top = `${Math.round(head.rect.top - host.top)}px`
-  head.el.style.left = `${Math.round(head.rect.left - host.left)}px`
-  // Only the measured offsets are inline; the layer rides the shared scale.
-  head.el.classList.add('is-leaving')
-}
-
-/**
- * Only images reach the model; a file in the tray never had bytes on this surface. Said once the
- * send has landed, so the reader knows which part of the message stayed behind.
- */
-function warnUnsentAttachments(attachments: AiAttachment[] | undefined): void {
-  if (attachments?.some((attachment) => attachment.kind !== 'image')) {
-    toast.info(t('home.attachmentNotSent'))
-  }
-}
+const { measureLeavingHead, pinLeavingHead } = useLeavingHead(headRef)
 
 function workspaceErrorText(failure: AgentWorkspaceError): string {
   return t(`home.workspace.error.${failure.code === 'unknown' ? 'unknown' : failure.code}`)
@@ -932,581 +632,25 @@ function reportSubmitError(error: unknown): void {
   reportWorkspaceError(failure, 'submit')
 }
 
-/**
- * Agent mode runs on one of the orchestrator's own enabled profiles; without one Main would refuse
- * the turn, so the press stops here with the reason instead of sending.
- */
-function agentProfileMissing(): boolean {
-  const settings = workspace.settings.value
-  if (settings.mode !== 'agent') return false
-  // Built-in Tuff Coordinator is always available
-  if (!settings.profileId || settings.profileId === 'default-pi') return false
-  const profile = workspace.profiles.value.find((entry) => entry.id === settings.profileId)
-  return !profile?.enabled
-}
-
-function invalidatePageSubmission(): void {
-  pageSubmissionSequence.claim()
-  sending.value = false
-  choreographedSend = false
-  openingHold.value = null
-  lifting.value = false
-  choreography.invalidate()
-}
-
-/**
- * A send while Main is busy (or holds pending inputs) joins Main's queue. The draft stays in the
- * composer until Main has persisted it — a rejected input, the full queue included, is never shown
- * as queued and never lost (A6).
- */
-async function enqueueDraft(voice?: VoiceSend): Promise<void> {
-  if ((workspace.state.value?.queue.length ?? 0) >= WORKSPACE_QUEUE_LIMIT) {
-    toast.error(t('home.workspace.queue.full', { max: WORKSPACE_QUEUE_LIMIT }))
-    if (voice) dictation.markClipSending(false)
-    return
-  }
-  const isCurrentSend = pageSubmissionSequence.claim()
-  const idAtSend = conversationId.value
-  const pathAtSend = route.fullPath
-  const ownsPage = () =>
-    isCurrentSend() &&
-    isHomeRoute.value &&
-    conversationId.value === idAtSend &&
-    route.fullPath === pathAtSend
-  const text = voice?.text ?? draft.value
-  const attachments =
-    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
-  // A voice send takes the clip off the stream now and leaves the draft to the reader, minus the
-  // clip's own words once Main has the message.
-  const draftAtSend = draft.value
-  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
-  const clip = voice ? dictation.takeClip() : null
-  sending.value = true
-  try {
-    await workspace.submit(
-      text,
-      attachments,
-      voice ? { voiceRecordingId: voice.recordingId } : undefined
-    )
-  } catch (error) {
-    if (clip) {
-      dictation.restoreClip(clip)
-      dictation.markClipSending(false, voiceSendFailure(error))
-    }
-    if (ownsPage()) reportSubmitError(error)
-    return
-  } finally {
-    if (isCurrentSend()) sending.value = false
-  }
-  // A typed send moves the thread on; the clip it may have come from goes with it.
-  if (!voice) dictation.dismissClip()
-  if (!ownsPage()) return
-  if (voice) {
-    if (draft.value === draftAtSend) draft.value = draftAfterVoice
-    await nextTick()
-    if (ownsPage()) autoGrow()
-    return
-  }
-  // Typing on while Main answered is the reader's next draft, not this one.
-  if (draft.value === text) draft.value = ''
-  pendingAttachments.value = pendingAttachments.value.filter(
-    (attachment) => !attachments?.includes(attachment)
-  )
-  await nextTick()
-  if (!ownsPage()) return
-  collapseDraft(true)
-  warnUnsentAttachments(attachments)
-}
-
-async function submit(voice?: VoiceSend): Promise<void> {
-  if (props.browserLanding && voice) browserMode.value = 'ask'
-  if (voice ? voiceSendBlocked.value : !canSend.value) return
-  if (props.browserLanding && browserMode.value === 'browse' && !voice) {
-    if (!props.browserNavigate || browserNavigating.value) return
-    browserNavigating.value = true
-    try {
-      await props.browserNavigate(draft.value)
-    } catch {
-      // BrowserPage owns the visible transport error; the typed draft remains available for retry.
-    } finally {
-      browserNavigating.value = false
-    }
-    return
-  }
-  if (agentProfileMissing()) {
-    toast.error(t('home.workspace.profile.required'))
-    return
-  }
-  // Images reach a model only when its binding and adapter accept them; Main refuses the same
-  // send, so the draft stays put here instead of being lifted and handed back. A voice send
-  // carries no images: the tray stays for the next message.
-  const imageGate = modelScope.resolvedChoice.value?.binding.imageInput
-  if (
-    !voice &&
-    imageGate &&
-    !imageGate.accepted &&
-    pendingAttachments.value.some((item) => item.kind === 'image')
-  ) {
-    toast.error(t('home.workspace.imagesUnsupported'))
-    return
-  }
-  if (sendQueues.value) {
-    await enqueueDraft(voice)
-    return
-  }
-  const isCurrentSend = pageSubmissionSequence.claim()
-  const pathAtSend = route.fullPath
-  let idAtSend = conversationId.value
-  const ownsPage = () =>
-    isCurrentSend() &&
-    isHomeRoute.value &&
-    conversationId.value === idAtSend &&
-    (route.fullPath === pathAtSend || (idAtSend !== null && route.params.id === idAtSend))
-  // The send key launches with the press — a click, Enter and the shortcut all pass here — so its
-  // arrow leaves with the lifted message and the stop capsule grows as the reply starts.
-  toolbarRef.value?.launch()
-
-  const text = voice?.text ?? draft.value
-  const attachments =
-    !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
-  // The lift carries the typed text off the composer as its own bubble. A send with attachments
-  // keeps the clone flight, which carries the whole row — the tray included — not the text alone.
-  // So does a voice send: what leaves is the clip, not the draft.
-  const input = inputRef.value
-  // The conversation's first message: its lift and the dock take their time (LIFT_SCORE).
-  const opening = isEmpty.value
-  // The Home opening above the composer becomes this thread's first message — a finished one only:
-  // one still being written is dropped here and never joins (`takeLead`). Taken before anything
-  // awaits, so no opening can start or land between the press and the append. The greeting keeps
-  // showing what it showed until it has left (`openingHold`).
-  let lead: string | undefined
-  if (opening && homeRecommendationsEnabled.value) {
-    openingHold.value = {
-      phase: openingPhase.value,
-      text: openingText.value,
-      source: openingSource.value
-    }
-    lead = push.takeLead() ?? undefined
-  }
-  const liftable =
-    !props.browserLanding && !voice && !attachments && !!input && !prefersReducedMotion()
-  let lift: SendLift | null = null
-  if (liftable && input) {
-    // A lift still in the air lands first — before this one lays its bubble over the draft.
-    choreography.invalidate()
-    // Read before the draft clears: the bubble is laid over the text where it sits.
-    lift = choreography.liftDraft({
-      text,
-      input,
-      bubbleMaxWidth: bubbleMaxWidth(),
-      draftGhost: draftGhostRef.value,
-      opening,
-      onClear: () => {
-        if (isCurrentSend()) lifting.value = false
-      }
-    })
-    lifting.value = lift !== null
-  }
-  // A voice send leaves the draft to the reader, minus the clip's own words, and takes the clip off
-  // the stream before an id is minted below — the conversation watcher dismisses any clip it sees.
-  const draftAtSend = draft.value
-  const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
-  const clip = voice ? dictation.takeClip() : null
-  if (voice) {
-    draft.value = draftAfterVoice
-  } else {
-    draft.value = ''
-    // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
-    pendingAttachments.value = []
-  }
-  await nextTick()
-  if (!ownsPage()) return
-  if (voice) autoGrow()
-  else collapseDraft(lift !== null)
-
-  // Allocated here rather than at setup so an untouched home screen never claims an id; Main
-  // creates the conversation with it in the same call that takes the message.
-  const minted = conversationId.value === null
-  conversationId.value ??= createConversationId()
-  if (minted) ownMintedId = conversationId.value
-  idAtSend = conversationId.value
-
-  // Claim the incoming batch before it exists: the length watcher fires
-  // in the flush that applies Main's reply, so the flag must already be up.
-  choreographedSend = true
-
-  // FLIP: the composer travels from centre stage to the bottom dock. Measured
-  // around the reactive flip so the same node glides instead of teleporting.
-  const composerEl = composerRef.value
-  const first = composerEl?.getBoundingClientRect()
-  const head = measureLeavingHead()
-
-  sending.value = true
-  if (idAtSend) setConversationLoading(idAtSend, true)
-  let disposition: WorkspaceSubmitDisposition
-  try {
-    disposition = await workspace.submit(text, attachments, {
-      lead,
-      ...(voice ? { voiceRecordingId: voice.recordingId } : {})
-    })
-  } catch (error) {
-    // The clip comes back whatever the page did meanwhile: its recording is still Main's to keep.
-    if (clip) {
-      dictation.restoreClip(clip)
-      dictation.markClipSending(false, voiceSendFailure(error))
-    }
-    if (!ownsPage()) return
-    // Rejection belongs to this view only. A stale completion cannot restore its
-    // draft or release a minted id after the user chose another conversation.
-    choreographedSend = false
-    openingHold.value = null
-    lift?.cancel()
-    lifting.value = false
-    if (voice) {
-      if (draft.value === draftAfterVoice) draft.value = draftAtSend
-    } else {
-      if (!draft.value) draft.value = text
-      pendingAttachments.value = [...(attachments ?? []), ...pendingAttachments.value]
-    }
-    if (minted) {
-      if (idAtSend) setConversationLoading(idAtSend, false)
-      conversationId.value = null
-      idAtSend = null
-    }
-    await nextTick()
-    if (!ownsPage()) return
-    autoGrow()
-    reportSubmitError(error)
-    return
-  } finally {
-    if (isCurrentSend()) sending.value = false
-  }
-  // The thread is this id's now: from here on a change of id is a change of thread.
-  if (minted) ownMintedId = null
-  // A typed send moves the thread on; the clip it may have come from goes with it.
-  if (!voice) dictation.dismissClip()
-  if (minted) void history.refresh()
-  if (!ownsPage()) return
-  warnUnsentAttachments(attachments)
-  if (props.browserLanding) {
-    await router.push(`/home/c/${idAtSend}`)
-    await resetBlankConversation(null)
-    return
-  }
-  // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
-  if (route.params.id !== idAtSend) void router.replace(`/home/c/${idAtSend}`)
-
-  if (disposition !== 'started') {
-    // Main took it as a pending input after all (a turn began in between): it is a queue row now,
-    // not a bubble, so nothing flies.
-    choreographedSend = false
-    openingHold.value = null
-    lift?.cancel()
-    return
-  }
-
-  // Main's reply carried the thread with this message on it; the lead is its first row.
-  const firstRow = messages.value[0]
-  const leadId = lead && firstRow?.role === 'assistant' ? firstRow.id : undefined
-  // Sending from a scrolled-up position still lands you on your own message —
-  // the stream only auto-follows readers already at the bottom.
-  await nextTick()
-  if (!ownsPage()) return
-
-  // If nothing was appended the watcher never consumed the claim, and a latched claim would steal
-  // the next batch's entrance. Clearing after the flush is free in the normal path — the watcher
-  // already consumed it.
-  choreographedSend = false
-  // The greeting left in that flush, keeping the opening it showed; nothing is left to hold.
-  openingHold.value = null
-
-  pinLeavingHead(head)
-
-  if (composerEl && first && !prefersReducedMotion()) {
-    // The box docks as the bubble rises: the two part in opposite directions, together.
-    const deltaY = first.top - composerEl.getBoundingClientRect().top
-    if (Math.abs(deltaY) > 8) {
-      choreography.playComposerFlip(deltaY, opening && lift ? { opening: true } : undefined)
-    }
-  }
-
-  // The send choreography: space and strike as ONE gesture. The freshly
-  // appended rows are already in the layout (hidden by `--enter`), so the
-  // glide opens the room while the message is already on its way —
-  // iMessage's zero-latency press.
-  //
-  // A lift took the stage at the top of `submit`, landing any lift still in
-  // the air there. That landing resolved its impact, and the placeholder reveal
-  // chained to it was stamped during the awaits since: a second bump here would
-  // silence it and leave the earlier reply hidden until the entrance watchdog —
-  // and would land this send's own lift.
-  if (!liftable) choreography.invalidate()
-  const sentId = [...messages.value].reverse().find((message) => message.role === 'user')?.id
-  const placeholderId =
-    messages.value.at(-1)?.role === 'assistant' ? messages.value.at(-1)?.id : undefined
-
-  if (prefersReducedMotion()) {
-    // Only reachable when the preference flipped mid-send: put the lifted text down.
-    lift?.cancel()
-    streamRef.value?.scrollToBottom()
-    return
-  }
-
-  void streamRef.value?.tweenToBottom(SCROLL_TWEEN_MS)
-  // The opening the reader already read above the composer takes its place at the head of the
-  // thread as the greeting leaves, before the lifted message lands under it. The append watcher
-  // hid it with the rest of the claimed batch, and the send score below reveals only the message
-  // and the placeholder. No knock: nothing sits above the first row.
-  if (leadId) choreography.playEntrance(leadId, 0)
-  let flight: SendFlightHandle | null = null
-  if (lift) {
-    if (sentId) flight = lift.fly(sentId)
-    else lift.cancel()
-  } else {
-    // No lift (attachments, or one that could not be laid out): the clone flight carries the row,
-    // so a claimed row is never left hidden for the watchdog to find.
-    flight = sentId ? choreography.playSend(sentId, composerEl) : null
-  }
-  if (placeholderId) {
-    // No knock of its own: the thread was just struck, and a second hit this
-    // close would read as stutter rather than physics.
-    const reveal = (): void => choreography.playEntrance(placeholderId, 0)
-    if (flight) {
-      void flight.impact.then(() => choreography.scheduleForCurrentSend(reveal, 80))
-    } else {
-      choreography.scheduleForCurrentSend(reveal, FLIGHT_IMPACT_MS + 80)
-    }
-  }
-}
-
-/**
- * The send key, Enter and the send shortcut. While dictating they mean 「结束并发送」 (D10-d): the
- * session stops, and once its last words have landed in the draft they go out as an ordinary send.
- * A session that heard nothing still sends what the draft already held — the press asked for a
- * send; `submit` does nothing when the draft is empty too.
- */
-async function pressSend(): Promise<void> {
-  if (dictation.active.value) {
-    const outcome = await dictation.stop()
-    if (outcome === 'inserted' || outcome === 'empty') await submit()
-    return
-  }
-  await submit()
-}
-
-function handleKeydown(event: KeyboardEvent): void {
-  // `isComposing` keeps Enter from cutting an IME candidate selection short.
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
-  event.preventDefault()
-  void pressSend()
-}
-
-/**
- * Esc cancels a dictation and puts the draft back as it was before it started — from anywhere in
- * the composer: a click leaves focus on the microphone key, not in the field.
- */
-function handleComposerKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !dictation.active.value) return
-  event.preventDefault()
-  dictation.cancel()
-}
-
-const { classifyTurnFailure, resolveErrorTitle } = useTurnFailureWording()
-
-/**
- * What to do about a failure the intelligence layer named. Not for a provider's own text, passed on
- * as thrown or named `UNKNOWN`: it can say "quota" about the provider's plan, where the advice is
- * about Nexus credits.
- */
-function resolveErrorAdvice(error: ConversationError | undefined): string {
-  if (!error || !isIntelligenceErrorCode(error.code) || error.code === 'UNKNOWN') return ''
-  const recovery = classifyTurnFailure(error)
-  return recovery && recovery.code !== 'provider' ? recovery.detail : ''
-}
-
-function resolveErrorReportCode(error: { code?: string } | undefined): string {
-  const code = error?.code?.trim()
-  return code || 'UNKNOWN_ERROR'
-}
-
-function resolveErrorReportDetail(error: { detail?: string } | undefined): string {
-  const detail = error?.detail?.trim()
-  return detail || t('home.error.noDetail')
-}
-
-/**
- * A turn the usage limit refused, read as the user's own limit rather than a fault: its own title,
- * the reset time in local words instead of main's English sentence, and the way to the limits in
- * place of a retry that would only be refused again until then.
- */
-function resolveUsageLimitFailure(
-  error: { code: string; detail: string } | undefined
-): ReturnType<typeof resolveIntelligenceErrorRecovery> | null {
-  if (error?.code !== CONVERSATION_ERROR_USAGE_LIMIT_REACHED) return null
-  return resolveIntelligenceErrorRecovery(
-    { errorCode: error.code, error: error.detail },
-    t,
-    locale.value
-  )
-}
-
-function openUsageLimits(): void {
-  void router.push(USAGE_LIMITS_ROUTE)
-}
-
-/**
- * Retrying a missing provider reruns the same failure forever, so that one case swaps the retry for
- * a way out. `/setting/intelligence/channels` is where a provider is actually enabled — the
- * intelligence settings page only cross-links to it. Its credentials are fixed there too.
- */
-function isProviderUnavailable(error: ConversationError | undefined): boolean {
-  const code = error?.code
-  if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE || code === 'WORKSPACE_PROVIDER_UNAVAILABLE')
-    return true
-  const kind = classifyTurnFailure(error)?.code
-  return kind === 'provider' || kind === 'credentials'
-}
-
-function openProviderSettings(): void {
-  void router.push('/setting/intelligence/channels')
-}
-
-// ============================================================================
-// Composer attachments (memory-only: never in the provider payload, never persisted)
-// ============================================================================
-
-const pendingAttachments = ref<AiAttachment[]>([])
-
-/**
- * Object URLs this surface created. Revoked wholesale on unmount rather than
- * per-message: the conversation is in-memory and keep-alive keeps this
- * component around, so the registry is bounded by the session, not leaked.
- */
-const objectUrls = new Set<string>()
-
-function toAttachment(file: File): AiAttachment {
-  if (file.type.startsWith('image/')) {
-    const url = URL.createObjectURL(file)
-    objectUrls.add(url)
-    return { kind: 'image', id: crypto.randomUUID(), url, name: file.name }
-  }
-  return {
-    kind: 'file',
-    id: crypto.randomUUID(),
-    name: file.name,
-    size: file.size,
-    mime: file.type
-  }
-}
-
-function addFiles(files: File[]): void {
-  // Allowed while a reply streams, like typing: only sending waits for the turn to end.
-  if (files.length === 0) return
-  if (props.browserLanding) browserMode.value = 'ask'
-  pendingAttachments.value = [...pendingAttachments.value, ...files.map(toAttachment)]
-}
-
-function removeAttachment(id: string): void {
-  const target = pendingAttachments.value.find((attachment) => attachment.id === id)
-  if (target?.kind === 'image' && objectUrls.delete(target.url)) URL.revokeObjectURL(target.url)
-  pendingAttachments.value = pendingAttachments.value.filter((attachment) => attachment.id !== id)
-}
-
-/**
- * The preview's own controls and announcements in the app's language. The tray names only the
- * buttons it has props for; everything else in the preview would stay at its English defaults.
- */
-const attachPreviewProps = computed(() => ({
-  zoomLabel: t('home.attachViewer.zoom'),
-  rotateLabel: t('home.attachViewer.rotate'),
-  copyLabel: t('home.attachViewer.copy'),
-  shareLabel: t('home.attachViewer.share'),
-  downloadLabel: t('home.attachViewer.download'),
-  menuLabel: t('home.attachViewer.menu'),
-  indicatorLabel: t('home.attachViewer.strip'),
-  copiedText: t('home.attachViewer.copied'),
-  linkCopiedText: t('home.attachViewer.linkCopied'),
-  copyFailedText: t('home.attachViewer.copyFailed'),
-  indicatorItemFormatter: (current: number, total: number, name?: string) =>
-    name
-      ? t('home.attachViewer.itemNamed', { name, current, total })
-      : t('home.attachViewer.item', { current, total }),
-  labelFormatter: (label: string, name: string) => t('home.attachViewer.named', { label, name }),
-  readoutLabelFormatter: (readout: string, label: string) =>
-    t('home.attachViewer.readout', { readout, label })
-}))
-
-function attachOpenLabel(name: string): string {
-  return t('home.attachViewer.named', { label: t('home.attachPreview'), name })
-}
-
-/** The files a paste carries — a copied picture arrives as one `image/png` file item. */
-function pastedFiles(event: ClipboardEvent): File[] {
-  const files: File[] = []
-  for (const item of Array.from(event.clipboardData?.items ?? [])) {
-    if (item.kind !== 'file') continue
-    const file = item.getAsFile()
-    if (file) files.push(file)
-  }
-  return files
-}
-
-function onPaste(event: ClipboardEvent): void {
-  const files = pastedFiles(event)
-  if (files.length === 0) return
-  // Keeps platform side text (a Finder-copied file pastes its name) out of the draft.
-  event.preventDefault()
-  addFiles(files)
-}
-
-/**
- * A picture pasted with the focus outside any field still lands in the composer: after a click on
- * the send button, on the thread or on nothing, ⌘V never reaches the textarea's own handler.
- * A paste into another field stays that field's; text pasted outside a field is dropped as before.
- */
-function onPagePaste(event: ClipboardEvent): void {
-  if (event.defaultPrevented || !isHomeRoute.value) return
-  const target = event.target instanceof Element ? event.target : null
-  if (target?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return
-  const files = pastedFiles(event)
-  if (files.length === 0) return
-  event.preventDefault()
-  addFiles(files)
-  inputRef.value?.focus()
-}
-
-window.addEventListener('paste', onPagePaste)
-onBeforeUnmount(() => window.removeEventListener('paste', onPagePaste))
-
-/** Enter/leave fire per descendant — only the pair count says "still inside". */
-const dragDepth = ref(0)
-const isDragover = computed(() => dragDepth.value > 0)
-
-function dragHasFiles(event: DragEvent): boolean {
-  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
-}
-
-function onDragEnter(event: DragEvent): void {
-  if (!dragHasFiles(event)) return
-  event.preventDefault()
-  dragDepth.value += 1
-}
-
-function onDragOver(event: DragEvent): void {
-  // Required — without it the browser refuses the drop.
-  if (isDragover.value) event.preventDefault()
-}
-
-function onDragLeave(): void {
-  dragDepth.value = Math.max(0, dragDepth.value - 1)
-}
-
-function onDrop(event: DragEvent): void {
-  if (!isDragover.value) return
-  event.preventDefault()
-  dragDepth.value = 0
-  addFiles(Array.from(event.dataTransfer?.files ?? []))
-}
+const {
+  pendingAttachments,
+  attachPreviewProps,
+  attachOpenLabel,
+  addFiles,
+  removeAttachment,
+  isDragover,
+  onPaste,
+  onDragEnter,
+  onDragOver,
+  onDragLeave,
+  onDrop
+} = useHomeAttachments({
+  isActive: () => isHomeRoute.value,
+  onAdd: () => {
+    if (props.browserLanding) browserMode.value = 'ask'
+  },
+  focusInput: () => inputRef.value?.focus()
+})
 
 /**
  * Feeds the measured composer stack height to the stream's bottom padding.
@@ -1531,8 +675,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   composerObserver?.disconnect()
   composerObserver = null
-  for (const url of objectUrls) URL.revokeObjectURL(url)
-  objectUrls.clear()
   // Pending knocks and reveals would otherwise fire against whatever mounts next.
   choreography.cancel()
 })
@@ -1545,471 +687,146 @@ const composerClearance = computed(() =>
 // Persistence
 // ============================================================================
 
-const homeLog = createRendererLogger('HomeConversation')
 const history = useConversationHistory()
+
+const { generatedTitle, conversationTitle } = useConversationTitle({
+  messages,
+  conversationId,
+  busy: () => workspace.busy.value,
+  history,
+  sdk: intelligenceSdk
+})
 const projectStore = useProjectStore()
 
 const currentProject = computed(() =>
   projectId.value ? (projectStore.projects.find((p) => p.id === projectId.value) ?? null) : null
 )
 
-watch(
+const { resetBlankConversation } = useConversationRestore({
+  browserLanding: () => props.browserLanding,
+  isHomeRoute,
+  conversationId,
   projectId,
-  (id) => {
-    if (props.browserLanding) return
-    projectStore.setActiveProjectId(id)
-  },
-  { immediate: true }
-)
-
-/**
- * Remote images in a reply are held back until the reader asks for them: an
- * image fetches with no click, so an unreviewed `src` reports their IP to
- * whoever wrote the markdown — which, for a reply built from pages the model
- * just read, is not the model. TuffEx carries no i18n, so the wording comes
- * from here.
- */
-const toolCallLabels = computed(() => ({
-  retryLabel: t('home.retry'),
-  pendingLabel: t('home.toolCall.pending'),
-  runningLabel: t('home.toolCall.running'),
-  doneLabel: t('home.toolCall.done'),
-  errorLabel: t('home.toolCall.error'),
-  inputLabel: t('home.toolCall.input')
-}))
-
-const markdownLabels = computed(() => ({
-  blockedImageText: t('home.image.blocked'),
-  loadImageOnceText: t('home.image.loadOnce'),
-  allowSessionImagesText: t('home.image.allowSession'),
-  copyTableText: t('home.table.copyTable'),
-  copiedTableText: t('home.table.copiedTable'),
-  codePreviewText: t('home.code.preview'),
-  codeSourceText: t('home.code.source'),
-  codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
-  copyCodeText: t('home.copy'),
-  copiedCodeText: t('home.copied'),
-  diagramZoomLabel: t('home.diagram.zoom'),
-  diagramPreviewLabel: t('home.diagram.preview'),
-  diagramCloseLabel: t('home.diagram.close'),
-  diagramErrorText: t('home.diagram.failed')
-}))
-
-/**
- * Consent is per conversation. Carrying it into the next thread would widen it
- * without asking, and the reader has no way to notice that it happened.
- */
-watch(conversationId, () => resetRemoteImagePolicy())
-
-/**
- * A dictation belongs to the thread it started in: switching threads abandons it where it stands,
- * without writing the draft back. (A first send never trips this — it waits for dictation to end.)
- */
-watch(conversationId, (next, previous) => {
-  dictation.cancel({ restore: false })
-  // So does its clip: it belongs to the draft of the thread it was recorded in — except across
-  // the id a first send mints, and takes back when it fails (`ownMintedId`).
-  if (ownMintedId !== null && (next === ownMintedId || previous === ownMintedId)) {
-    if (next === null) ownMintedId = null
-    return
+  generatedTitle,
+  workspace,
+  history,
+  projectStore,
+  composer: () => composerRef.value,
+  stream: () => streamRef.value,
+  focusInput: () => inputRef.value?.focus(),
+  resetConversation: () => conversation.reset(),
+  submitState,
+  invalidateChoreography: () => choreography.invalidate(),
+  playComposerFlip: (deltaY) => choreography.playComposerFlip(deltaY),
+  measureLeavingHead,
+  pinLeavingHead,
+  // A dictation belongs to the thread it started in: switching threads abandons it where it
+  // stands, without writing the draft back. (A first send never trips this — it waits for
+  // dictation to end.) Its clip goes too — except across the id a first send mints, and takes
+  // back when it fails, where the thread on screen has not changed.
+  onThreadChange: (next, previous) => {
+    dictation.cancel({ restore: false })
+    if (submitState.isOwnMintedChange(next, previous)) return
+    dictation.dismissClip()
   }
-  dictation.dismissClip()
 })
-
-/**
- * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
- * anything else, so a slower earlier load used to land after a faster later one and leave the URL
- * naming one thread while the view showed another (#826).
- */
-const restoreSequence = createLatestOnly()
-
-async function resetBlankConversation(nextProjectId: string | null): Promise<void> {
-  invalidatePageSubmission()
-  conversationId.value = null
-  projectId.value = nextProjectId
-  const composerEl = composerRef.value
-  const first = composerEl?.getBoundingClientRect()
-  conversation.reset()
-  generatedTitle.value = null
-  await nextTick()
-  if (!props.browserLanding) inputRef.value?.focus()
-  if (composerEl && first && !prefersReducedMotion()) {
-    const dy = first.top - composerEl.getBoundingClientRect().top
-    if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
-  }
-}
-
-/**
- * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
- *
- * Watching the param rather than loading once on mount is what makes the sidebar work: navigating
- * between two stored conversations reuses this component instance, so mount never fires again.
- */
-watch(
-  () => [route.path, route.params.id] as const,
-  async ([path, id]) => {
-    if (props.browserLanding || (path !== '/home' && !path.startsWith('/home/c/'))) return
-    const target = typeof id === 'string' ? id : null
-    // Claimed before any await, so a plain /home navigation also invalidates a restore in flight -
-    // otherwise it would land on top of the blank thread reset() just produced.
-    const isCurrentRestore = restoreSequence.claim()
-    if (!target) {
-      await resetBlankConversation(projectStore.consumePendingProjectId())
-      return
-    }
-    if (target === conversationId.value) return
-    invalidatePageSubmission()
-
-    // The record (title, project) and Main's workspace state are read together, so the thread is
-    // on screen in the same update that switches to it.
-    const [restored] = await Promise.all([history.load(target), workspace.prefetch(target)])
-    // A newer navigation started while this load was in flight; it owns the view now.
-    if (!isCurrentRestore()) return
-    if (!restored) return
-    // Opening a thread from the blank home docks the composer — the same
-    // journey as a first send, so it gets the same measured spring instead
-    // of teleporting. Thread-to-thread hops measure ~0 and stay still.
-    const composerEl = composerRef.value
-    const first = composerEl?.getBoundingClientRect()
-    const head = measureLeavingHead()
-    // A send still in the air lands before its thread is swapped out, rather than flying on to a row
-    // that is leaving. Not before the same-thread return above: a first send's own navigation to its
-    // new id passes through here and must leave its lift alone.
-    choreography.invalidate()
-    // The workspace mirror follows the id: Main's history replaces the stage in the next flush.
-    conversationId.value = target
-    projectId.value = restored.projectId
-    // A stored title that differs from the opening message is a real one; the working-title
-    // persist writes the opening message back, and treating that as custom would block
-    // generation forever.
-    generatedTitle.value = deriveRestoredTitle(
-      restored.title,
-      restored.messages.find((message) => message.role === 'user')?.content
-    )
-    // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
-    // reuses this instance — landing at the latest message needs an explicit call. The greeting
-    // leaves the flow first, so the scroll lands against the stream's final height.
-    await nextTick()
-    pinLeavingHead(head)
-    streamRef.value?.scrollToBottom()
-    if (composerEl && first && !prefersReducedMotion()) {
-      const dy = first.top - composerEl.getBoundingClientRect().top
-      if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  () => projectStore.pendingProjectId,
-  async (pendingProjectId) => {
-    if (props.browserLanding || !isHomeRoute.value) return
-    if (pendingProjectId === undefined || typeof route.params.id === 'string') return
-    restoreSequence.claim()
-    await resetBlankConversation(projectStore.consumePendingProjectId())
-  }
-)
 
 // ============================================================================
 // Home push: the opening line and the card under the composer
 // ============================================================================
 
-/**
- * The blank conversation's personal-assistant push (`modules/home-push`): a model-written opening
- * under the greeting, and a card under the composer — the two-page guide, or 「为你准备」 once there
- * is history.
- *
- * Set up after the thread watchers above: its immediate watcher reads `conversationId` (declared any
- * earlier it would hit the TDZ), and by now the route watcher has claimed the blank conversation's
- * project, so the first entry is already the right one. Only plain `/home` counts — `/home/c/:id` is
- * empty too while its thread loads, and must not pay for an opening it is about to replace.
- */
-/** Whether Home personal-assistant recommendations are enabled (`appSetting.tools.homeRecommendations`, off by default, Beta). */
-const homeRecommendationsEnabled = computed(
-  () => !props.browserLanding && appSetting.tools?.homeRecommendations === true
-)
-
-const push = useHomePush({
-  active: () =>
-    homeRecommendationsEnabled.value &&
-    route.path === '/home' &&
-    isEmpty.value &&
-    conversationId.value === null,
-  projectId: () => projectId.value,
-  // The opening takes the route the chat turns take — a local CLI there answers in ten-odd seconds,
-  // so the template stands in meanwhile (`modules/home-push/opening.ts`).
-  routing: () => modelRouting.value,
-  // The pinned model resolves only once the model list has loaded (the mount-time load above), and
-  // `modelRouting` reads as auto until then: the first opening after a launch waits for it.
-  routingReady: () => ensureModelOptionsLoaded(),
-  // Off unless the user turned it on in settings: each model-written opening costs their quota.
-  aiOpening: () => appSetting.tools?.homeAiOpening === true,
-  composer: {
-    // The clipboard row: written and focused, never sent — the reader sees what would go out first.
-    prefill: async (text) => {
-      draft.value = text
-      await nextTick()
-      autoGrow()
-      inputRef.value?.focus()
-    },
-    // A starter task: the ordinary send, lift included. Focused first, so the lift leaves from a
-    // composer on screen and the keyboard stays where the conversation continues.
-    send: async (text) => {
-      draft.value = text
-      await nextTick()
-      autoGrow()
-      inputRef.value?.focus()
-      await submit()
-    },
-    // 「我自己说」
-    focus: () => inputRef.value?.focus()
-  }
-})
 const {
-  mode: pushMode,
-  steps: pushSteps,
-  step: pushStep,
-  selected: pushSelected,
-  loading: pushLoading,
-  loadingRows: pushLoadingRows,
-  labels: pushLabels,
-  choose: choosePush
-} = push
-
-const openingPhase = computed(() => openingHold.value?.phase ?? push.opening.phase.value)
-const openingText = computed(() => openingHold.value?.text ?? push.opening.text.value)
-/** Keys the text: the model's opening taking the template's place is a swap, not an edit. */
-const openingSource = computed(() =>
-  openingHold.value ? openingHold.value.source : push.opening.source.value
-)
-/**
- * A screen reader waits out the skeleton and the stream, then reads what shows once it is whole:
- * the template as it stands in, and the model's opening again if it takes the template's place.
- */
-const openingBusy = computed(
-  () => openingPhase.value === 'pending' || openingPhase.value === 'streaming'
-)
-
-/**
- * The card's skeleton, held back and held on (`useDeferredLoading`): local reads that land inside
- * its delay never show one. Until they land the card stays out of sight rather than show rows that
- * are not final yet — on a cold start that is the guide, about to become 「为你准备」. Its slot keeps
- * the room either way.
- */
-const pushSkeleton = useDeferredLoading(pushLoading)
-const pushSettling = computed(() => pushLoading.value && !pushSkeleton.value)
-
-/**
- * How many option rows the card's slot holds in the current mode: the guide's longest page, or a
- * full 「为你准备」. Paging the guide, the clipboard row arriving and rows replacing their skeleton
- * then never resize the slot — and the stage is centred on its whole height, so any of them would
- * otherwise move the composer. One- and two-column counts both, for `.HomePage-PushSlot`'s
- * container query to pick from.
- */
-const pushSlotStyle = computed(() => {
-  const options =
-    pushMode.value === 'feed'
-      ? HOME_FEED_MAX_ITEMS
-      : Math.max(0, ...pushSteps.value.map((step) => step.options.length))
-  return {
-    '--home-push-rows-1': options,
-    '--home-push-rows-2': Math.ceil(options / 2),
-    '--home-push-pager': pushSteps.value.length > 1 ? 1 : 0
-  }
+  push,
+  homeRecommendationsEnabled,
+  openingPhase,
+  openingText,
+  openingSource,
+  openingBusy,
+  pushSteps,
+  pushStep,
+  pushSelected,
+  pushLoadingRows,
+  pushLabels,
+  choosePush,
+  pushSkeleton,
+  pushSettling,
+  openingSnapshot,
+  pushSlotStyle
+} = useHomeOpening({
+  openingHold,
+  browserLanding: () => props.browserLanding,
+  isEmpty,
+  conversationId,
+  projectId,
+  routing: () => modelRouting.value,
+  routingReady: () => ensureModelOptionsLoaded(),
+  draft,
+  input: inputRef,
+  autoGrow,
+  // Called only from a click, long after setup, so the send path below may be declared later.
+  submit: () => submit()
 })
 
-/**
- * Fire-and-forget: Main created the conversation with its working title, so the thread is durable
- * before the summary call even starts, and a rename upgrades the label when the call lands. A rename
- * carries no messages, so however late it lands it cannot shrink the history Main holds. Claimed
- * against `titleSequence` so switching threads mid-call drops the result instead of stamping it onto
- * the wrong conversation.
- */
-function maybeGenerateTitle(): void {
-  // The first reply to the user — never the Home opening a thread can start with, which would
-  // title the conversation after the greeting instead of what was asked.
-  const firstAssistant = findTitleExchange(messages.value).firstAssistantContent
-  const idAtStart = conversationId.value
-  if (!idAtStart) return
-  if (
-    !shouldGenerateTitle({
-      generatedTitle: generatedTitle.value,
-      inFlight: titleInFlightFor === idAtStart,
-      firstUserContent: firstUserContent.value,
-      firstAssistantContent: firstAssistant
-    })
-  ) {
-    return
-  }
-  const isCurrent = titleSequence.claim()
-  titleInFlightFor = idAtStart
-  void (async () => {
-    try {
-      const title = await generateConversationTitle(
-        intelligenceSdk,
-        firstUserContent.value ?? '',
-        firstAssistant ?? '',
-        {
-          prompt: t('home.titleGen.prompt'),
-          userLabel: t('home.titleGen.userLabel'),
-          assistantLabel: t('home.titleGen.assistantLabel')
-        }
-      )
-      if (!title || !isCurrent() || conversationId.value !== idAtStart) return
-      generatedTitle.value = title
-      await history.rename(idAtStart, title)
-    } catch (error) {
-      // The working title is already on screen and stored; a label upgrade may fail silently.
-      homeLog.warn('Conversation title generation failed', String(error))
-    } finally {
-      if (titleInFlightFor === idAtStart) titleInFlightFor = null
-    }
-  })()
-}
+// ============================================================================
+// The send path
+// ============================================================================
 
-/**
- * Once Main settles a turn the title may be generated. Main persisted the turn itself — this page
- * never writes the thread back, so a stale window can no longer overwrite what Main recorded.
- */
-watch(
-  () => workspace.busy.value,
-  (busy, wasBusy) => {
-    if (busy || !wasBusy || !conversationId.value) return
-    maybeGenerateTitle()
-    // The sidebar's order and timestamps follow the turn that just ended.
-    void history.refresh()
-  }
-)
+const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown } = useHomeSubmit({
+  submitState,
+  browserLanding: () => props.browserLanding,
+  browserNavigate: props.browserNavigate,
+  browserMode,
+  browserNavigating,
+  isHomeRoute,
+  isEmpty,
+  conversationId,
+  messages,
+  draft,
+  pendingAttachments,
+  canSend,
+  voiceSendBlocked,
+  sendQueues,
+  imageInputAccepted: () => modelScope.resolvedChoice.value?.binding.imageInput.accepted,
+  homeRecommendationsEnabled,
+  opening: openingSnapshot,
+  push,
+  workspace,
+  dictation,
+  history,
+  choreography,
+  stream: () => streamRef.value,
+  input: () => inputRef.value,
+  composer: () => composerRef.value,
+  draftGhost: () => draftGhostRef.value,
+  launchSendKey: () => composerEl.value?.launch(),
+  autoGrow,
+  collapseDraft,
+  bubbleMaxWidth,
+  measureLeavingHead,
+  pinLeavingHead,
+  resetBlankConversation,
+  setConversationLoading,
+  reportSubmitError
+})
 
 // ============================================================================
 // Workspace: mode, profile, branches, approvals
 // ============================================================================
 
-const hasHistory = computed(() => messages.value.length > 0)
-
-/** Where the first user message sits: anything before it is the Home opening, not a reply. */
-const firstUserIndex = computed(() =>
-  messages.value.findIndex((message) => message.role === 'user')
-)
-
-/** Profiles are read when Agent mode is in view; the menu reads them again on every open. */
-watch(
-  () => workspace.settings.value.mode,
-  (mode) => {
-    if (mode === 'agent') void workspace.loadProfiles()
-  },
-  { immediate: true }
-)
-
-/** The first enabled profile, as the orchestrator lists them — the menu shows which one it is. */
-function firstEnabledProfileId(): string | undefined {
-  return workspace.profiles.value.find((profile) => profile.enabled)?.id
-}
-
-/** A blank Agent Home starts on a real enabled profile once the list is known, never a placeholder. */
-watch(
-  () => [workspace.profiles.value, workspace.settings.value.mode] as const,
-  ([, mode]) => {
-    if (workspace.state.value || mode !== 'agent' || workspace.settings.value.profileId) return
-    const fallback = firstEnabledProfileId()
-    if (fallback) workspace.setDraftProfile(fallback)
-  }
-)
-
-const branching = ref(false)
-/**
- * The branch request that may still move the page. A newer branch, or the reader opening another
- * thread meanwhile, takes that right away: a branch that lands late is announced, never navigated to.
- */
-const branchSequence = createLatestOnly()
-
-async function branchTo(request: {
-  messageId?: string
-  mode?: ConversationWorkspaceMode
-  profileId?: string
-}): Promise<void> {
-  const origin = conversationId.value
-  if (!origin || branching.value) return
-  const ownsNavigation = branchSequence.claim()
-  branching.value = true
-  try {
-    const child = await workspace.fork(request)
-    void history.refresh()
-    if (ownsNavigation() && conversationId.value === origin && route.params.id === origin) {
-      await router.push(`/home/c/${child}`)
-    } else {
-      toast.success(t('home.workspace.fork.createdElsewhere'))
-    }
-  } catch (error) {
-    reportSubmitError(error)
-  } finally {
-    branching.value = false
-  }
-}
-
-/** A finished reply after the opening can anchor a branch; one still running cannot. */
-function canBranchFrom(message: ConversationMessage, index: number): boolean {
-  return (
-    message.role === 'assistant' &&
-    message.status === 'complete' &&
-    firstUserIndex.value !== -1 &&
-    index > firstUserIndex.value &&
-    !workspace.busy.value
-  )
-}
-
-/**
- * Chat and Agent are different execution authorities. A thread with history keeps its own and the
- * switch continues in a new branch; an empty one, or a blank Home, just changes what it will run as.
- */
-function selectMode(mode: ConversationWorkspaceMode): void {
-  if (!workspace.state.value) {
-    workspace.setDraftMode(mode)
-    return
-  }
-  if (hasHistory.value) {
-    void branchTo({ mode })
-    return
-  }
-  void workspace.configure({
-    mode,
-    profileId:
-      mode === 'agent' ? (workspace.settings.value.profileId ?? firstEnabledProfileId()) : undefined
-  })
-}
-
-function selectProfile(profileId: string): void {
-  if (!workspace.state.value) workspace.setDraftProfile(profileId)
-  else void workspace.configure({ profileId })
-}
-
-/**
- * The mode menu lists profiles, not modes: picking one is picking Agent mode with that profile. Within
- * Agent it is a profile change; from Chat it is a mode change, which a thread with history takes as a
- * branch. Main applies the requested profile only to the child, leaving this thread unchanged.
- */
-function selectAgentProfile(profileId: string): void {
-  const current = workspace.settings.value
-  if (current.mode === 'agent') {
-    if (current.profileId !== profileId) selectProfile(profileId)
-    return
-  }
-  if (!workspace.state.value) {
-    workspace.setDraftProfile(profileId)
-    workspace.setDraftMode('agent')
-    return
-  }
-  if (!hasHistory.value) {
-    void workspace.configure({ mode: 'agent', profileId })
-    return
-  }
-  void branchTo({ mode: 'agent', profileId })
-}
-
-/** The waiting run's profile by name, when the list has it; the card falls back to its id. */
-const pendingRunProfileName = computed(() => {
-  const profileId = workspace.state.value?.pendingRun?.profileId
-  return workspace.profiles.value.find((profile) => profile.id === profileId)?.name
+const {
+  hasHistory,
+  branching,
+  branchTo,
+  canBranchFrom,
+  selectMode,
+  selectAgentProfile,
+  pendingRunProfileName
+} = useWorkspaceControls({
+  workspace,
+  messages,
+  conversationId,
+  history,
+  onSubmitError: reportSubmitError
 })
 
 /** The gateway's requests as this conversation sees them: its own, another's, or external. */
@@ -2026,131 +843,104 @@ const activityTurns = computed(() => buildActivityTurns(messages.value))
 /** The routed model's own limits from its effective binding; auto routing knows none. */
 const modelLimits = computed(() => toHomeModelLimits(modelScope.resolvedChoice.value?.binding))
 
-const showTurnMetrics = computed(() => appSetting.conversation?.showTurnMetrics !== false)
+/** The assistant message of the turn in flight, if one is streaming. */
+const streamingAssistant = computed(() => {
+  const last = messages.value[messages.value.length - 1]
+  return last?.role === 'assistant' && last.status === 'streaming' ? last : undefined
+})
 
-function formatMetricLatency(ms?: number): string {
-  if (ms === undefined || ms === null || !Number.isFinite(ms)) return ''
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
+/**
+ * When the turn in flight began, for the run-status clock: Main's own stamp on the streaming
+ * message, taken when it claimed the turn. It survives a reload mid-run, and a turn that waited in
+ * the queue is timed from its claim, not from the click.
+ */
+const runStartedAt = computed(() => streamingAssistant.value?.createdAt)
 
-function calculateTokenSpeed(message: ConversationMessage): number | null {
-  const latency = message.meta?.latencyMs
-  if (!latency || latency < 200) return null
-  const tokens = message.meta?.completionTokens ?? message.meta?.totalTokens
-  if (!tokens || tokens <= 0) return null
-  const seconds = latency / 1000
-  return Math.round(tokens / seconds)
-}
+/** The step the streaming assistant message is on, read off its parts. */
+const runStep = computed(() => deriveRunStep(streamingAssistant.value?.parts))
 
-function metricTokensTitle(message: ConversationMessage): string {
-  const meta = message.meta
-  const prompt = meta?.promptTokens ?? 0
-  const completion = meta?.completionTokens ?? 0
-  const total = meta?.totalTokens ?? 0
-  return `输入: ${prompt} · 输出: ${completion} · 总计: ${total}`
-}
+const isThinkingActive = computed(() => {
+  if (!isStreaming.value) return false
+  const step = runStep.value
+  return step.kind === 'waiting' || (step.kind === 'thinking' && !step.title)
+})
 
-function metricLatencyTitle(message: ConversationMessage): string {
-  const meta = message.meta
-  const latency = meta?.latencyMs ? formatMetricLatency(meta.latencyMs) : ''
-  const ttft = meta?.ttftMs ? formatMetricLatency(meta.ttftMs) : ''
-  if (ttft) {
-    return `总耗时: ${latency} · 首字响应 (TTFT): ${ttft}`
+const thinkingTicker = useThinkingTicker({
+  active: isThinkingActive,
+  locale
+})
+
+provide(homeMessageContextKey, {
+  ...messageParts,
+  attachPreviewProps,
+  attachOpenLabel,
+  thinkingVerb: thinkingTicker.activeVerb,
+  thinkingLabel: thinkingTicker.activeLabel
+})
+
+function estimateTextTokens(text: string): number {
+  if (!text) return 0
+  let count = 0
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code > 0x7f) count += 1
+    else count += 0.25
   }
-  return `耗时: ${latency}`
+  return Math.ceil(count)
 }
 
-const activeFooterMessageIds = ref<Set<string>>(new Set())
-const footerTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-function revealTurnFooter(messageId: string): void {
-  activeFooterMessageIds.value.add(messageId)
-  const existing = footerTimers.get(messageId)
-  if (existing) clearTimeout(existing)
-  const timer = setTimeout(() => {
-    activeFooterMessageIds.value.delete(messageId)
-    footerTimers.delete(messageId)
-  }, 4500)
-  footerTimers.set(messageId, timer)
-}
-
-function isTurnFooterResting(message: ConversationMessage): boolean {
-  if (activeFooterMessageIds.value.has(message.id)) return false
-  return true
-}
-
-watch(
-  () => messages.value.map((m) => `${m.id}:${m.status}`).join(';'),
-  (_current, previous) => {
-    if (!previous) return
-    const prevMap = new Map(previous.split(';').map((s) => s.split(':') as [string, string]))
-    for (const msg of messages.value) {
-      if (
-        msg.role === 'assistant' &&
-        msg.status === 'complete' &&
-        prevMap.get(msg.id) !== 'complete'
-      ) {
-        revealTurnFooter(msg.id)
+function estimateTranscriptTokens(allMessages: readonly ConversationMessage[]): number {
+  let total = 0
+  for (const msg of allMessages) {
+    if (msg.content) total += estimateTextTokens(msg.content)
+    if (msg.parts) {
+      for (const part of msg.parts) {
+        if (part.type === 'text' && part.text) total += estimateTextTokens(part.text)
+        else if (part.type === 'reasoning' && part.text) total += estimateTextTokens(part.text)
       }
     }
   }
-)
+  return Math.max(1, total)
+}
 
-onScopeDispose(() => {
-  for (const timer of footerTimers.values()) clearTimeout(timer)
-  footerTimers.clear()
+/**
+ * Share of the routed model's window the request occupies.
+ * Uses the provider-reported usage if available; otherwise estimates from the transcript so the
+ * meter is present while answering (streaming) and on the first turn.
+ */
+const contextShare = computed(() => {
+  const turn = lastReportedTurn(messages.value) as ConversationTurnMeta | undefined
+  let occupancy = turn
+    ? contextOccupancyTokens({
+        inputTokens: turn.promptTokens ?? 0,
+        outputTokens: turn.completionTokens ?? 0,
+        totalTokens: turn.totalTokens ?? 0
+      })
+    : 0
+  if (occupancy <= 0) {
+    occupancy = estimateTranscriptTokens(messages.value)
+  }
+  return contextPercent(occupancy, modelLimits.value.contextWindow?.value ?? 128_000)
 })
+const contextWindowText = computed(() =>
+  formatWindow(modelLimits.value.contextWindow?.value ?? 128_000)
+)
+const { showTurnMetrics, isTurnFooterResting } = useTurnMetrics(messages)
 
 // ============================================================================
 // Command layer
 // ============================================================================
 
-/**
- * The composer's commands, registered while this page is alive.
- *
- * Their handlers are this component's state — the panel, the draft, the running turn — so they are
- * registered here rather than in the shell's list, which cannot reach any of it. Two consequences
- * worth stating: the rows disappear when the page unmounts, and every one of them is gated on the
- * Home route being visible, because the shell keeps this page alive while the user is in Settings
- * and an enabled-looking row that quietly toggles an off-screen panel is a lie.
- */
-const commandHandlers: MainWindowCommandHandler[] = [
-  {
-    id: 'toggle-panel',
-    enabled: () => isHomeRoute.value && !props.browserLanding,
-    run: () => {
-      panelOpen.value = !panelOpen.value
-    }
-  },
-  {
-    id: 'focus-composer',
-    enabled: () => isHomeRoute.value,
-    run: () => inputRef.value?.focus()
-  },
-  {
-    id: 'send',
-    enabled: () =>
-      isHomeRoute.value && (canSend.value || (dictation.active.value && !isStreaming.value)),
-    run: () => pressSend()
-  },
-  {
-    id: 'stop',
-    enabled: () => isHomeRoute.value && isStreaming.value,
-    run: () => conversation.stop()
-  }
-]
-
-let disposeCommands: (() => void) | undefined
-watch(
+useHomeCommands({
   isHomeRoute,
-  (visible) => {
-    disposeCommands?.()
-    disposeCommands = visible ? registerMainWindowCommandHandlers(commandHandlers) : undefined
-  },
-  { immediate: true }
-)
-onBeforeUnmount(() => disposeCommands?.())
+  browserLanding: () => props.browserLanding,
+  panelOpen,
+  focusComposer: () => inputRef.value?.focus(),
+  canSend: () => canSend.value || (dictation.active.value && !isStreaming.value),
+  send: pressSend,
+  isStreaming: () => isStreaming.value,
+  stop: () => conversation.stop()
+})
 </script>
 
 <template>
@@ -2163,8 +953,6 @@ onBeforeUnmount(() => disposeCommands?.())
     <HomeTopBar
       v-if="!browserLanding"
       :title="conversationTitle"
-      :model-name="modelPill.label"
-      :model-icon="modelPill.icon"
       :panel-open="panelOpen"
       :turn="lastTurn"
       :message-count="messages.length"
@@ -2177,38 +965,43 @@ onBeforeUnmount(() => disposeCommands?.())
     />
 
     <div class="HomePage-Split">
-      <div class="HomePage-Body">
+      <div ref="bodyRef" class="HomePage-Body">
+        <TxGradualBlur
+          v-if="!isEmpty"
+          position="top"
+          height="72px"
+          :strength="2.5"
+          curve="bezier"
+          :z-index="4"
+          class="HomePage-TopBlur"
+        />
+        <TxGradualBlur
+          v-if="!isEmpty"
+          position="bottom"
+          height="calc(var(--home-composer-height, 112px) + 96px)"
+          :strength="2.5"
+          curve="bezier"
+          :z-index="4"
+          class="HomePage-BottomBlur"
+        />
+        <HomeMessageRail
+          v-if="!isEmpty && !panelOpen"
+          :items="messages"
+          @navigate="streamRef?.scrollToIndex($event)"
+        />
         <div class="HomePage-Center">
           <Transition name="home-head">
-            <div v-if="isEmpty" ref="headRef" class="HomePage-Head">
-              <AppLogo class="HomePage-Mark" />
-              <h1 class="HomePage-Greeting">
-                {{ t(browserLanding ? 'browser.greeting' : 'home.greeting') }}
-              </h1>
-              <!-- The assistant speaks first. Three lines tall whatever it holds — skeleton, a
-                   stream, or nothing — so the composer and the card below never move for it. -->
-              <div
-                v-if="homeRecommendationsEnabled"
-                class="HomePage-Opening"
-                role="status"
-                :aria-busy="openingBusy || undefined"
-              >
-                <template v-if="openingPhase === 'pending'">
-                  <span class="sr-only">{{ pushLabels.openingLoading }}</span>
-                  <div class="HomePage-OpeningSkeleton" aria-hidden="true">
-                    <TxSkeleton class="HomePage-OpeningBar" :height="10" :radius="5" />
-                    <TxSkeleton class="HomePage-OpeningBar is-short" :height="10" :radius="5" />
-                  </div>
-                </template>
-                <!-- The template stands in while a slow route writes; the model's opening
-                     replaces it whole, the old words fading out first. -->
-                <Transition v-else name="home-opening-swap" mode="out-in">
-                  <p v-if="openingText" :key="openingSource ?? ''" class="HomePage-OpeningText">
-                    {{ openingText }}
-                  </p>
-                </Transition>
-              </div>
-            </div>
+            <HomeEmptyHead
+              v-if="isEmpty"
+              ref="headEl"
+              :browser-landing="browserLanding"
+              :opening-enabled="homeRecommendationsEnabled"
+              :phase="openingPhase"
+              :text="openingText"
+              :source="openingSource"
+              :busy="openingBusy"
+              :loading-label="pushLabels.openingLoading"
+            />
           </Transition>
 
           <!-- Leave: the thread dissolves in place (absolute, out of layout)
@@ -2227,7 +1020,7 @@ onBeforeUnmount(() => disposeCommands?.())
               <template #item="{ item: message, index }">
                 <!-- The voice clip waits where the message it may become will land. -->
                 <div v-if="message.id === VOICE_DRAFT_ID" class="HomePage-StreamRow">
-                  <div class="HomePage-Message user">
+                  <div class="HomePage-VoiceRow">
                     <HomeVoiceDraft
                       v-if="dictation.clip.value"
                       :clip="dictation.clip.value"
@@ -2240,370 +1033,29 @@ onBeforeUnmount(() => disposeCommands?.())
                   </div>
                 </div>
                 <div v-else class="HomePage-StreamRow">
-                  <div
-                    class="HomePage-Message"
-                    :class="[
-                      message.role,
-                      { 'HomePage-Message--enter': enteringMessages.has(message.id) }
-                    ]"
-                    :data-message-id="message.id"
-                    :aria-busy="message.status === 'streaming'"
-                  >
-                    <template v-if="message.role === 'user'">
-                      <!-- A voice message: its recording, then its transcript as the bubble. -->
-                      <TxVoiceClip
-                        v-if="message.voice"
-                        class="HomePage-MsgVoice"
-                        :src="message.voice.url"
-                        :duration-ms="message.voice.durationMs"
-                        :play-label="t('home.voiceClip.play')"
-                        :pause-label="t('home.voiceClip.pause')"
-                        :seek-label="t('home.voiceClip.seek')"
-                        :unavailable-label="t('home.voiceClip.unavailable')"
-                      />
-                      <TxAttachmentTray
-                        v-if="message.attachments?.length"
-                        class="HomePage-MsgAttachments"
-                        :attachments="message.attachments"
-                        :preview-title="t('home.attachPreview')"
-                        :previous-label="t('home.attachPrevious')"
-                        :next-label="t('home.attachNext')"
-                        :previous-text="t('home.attachPreviousText')"
-                        :next-text="t('home.attachNextText')"
-                        :close-label="t('common.close')"
-                        :zoom-in-label="t('home.attachViewer.zoomIn')"
-                        :zoom-out-label="t('home.attachViewer.zoomOut')"
-                        :reset-label="t('home.attachViewer.reset')"
-                        :failed-text="t('home.attachViewer.failed')"
-                        :open-label-formatter="attachOpenLabel"
-                        :preview-props="attachPreviewProps"
-                      />
-                      <div class="HomePage-UserBubble">
-                        {{ message.content }}
-                      </div>
-                      <TxMessageActions
-                        class="HomePage-MsgActions is-resting"
-                        :appear="false"
-                        :copy-text="message.content"
-                        :copy-label="t('home.copy')"
-                        :copied-label="t('home.copied')"
-                      />
-                    </template>
-
-                    <template v-else>
-                      <!-- Reasoning and tool calls in the order they streamed:
-                           each thinking span its own block, each call its own
-                           card. One trail per turn used to fold everything into
-                           a single box, which lost that order entirely.
-                           Keyed by segment: the surrounding v-if/v-for branches
-                           churn on every streaming delta, and unkeyed alignment
-                           can recreate these mid-turn — taking the user's
-                           open/collapse choice with it. -->
-                      <template v-for="segment in segmentsOf(message)" :key="segment.id">
-                        <!-- The label carries the span's own title, so the
-                             block reads as that thought rather than as a
-                             generic container. -->
-                        <TxChainOfThought
-                          v-if="segment.kind === 'reasoning'"
-                          class="HomePage-Chain"
-                          :steps="[segment.step]"
-                          :streaming="message.status === 'streaming'"
-                          :default-open="false"
-                          :user-open="chainOpen.get(segment.id)"
-                          :label="segment.step.title"
-                          @toggle="chainOpen.set(segment.id, $event)"
-                        />
-
-                        <!-- Prose sits where it was spoken. Tested before the
-                             widget branch below, which reads `segment.part` —
-                             a text segment carries no call to read it from. -->
-                        <TxStreamMarkdown
-                          v-else-if="segment.kind === 'text'"
-                          class="HomePage-Reply"
-                          :content="segment.text"
-                          :streaming="segment.streaming"
-                          v-bind="markdownLabels"
-                        />
-
-                        <!-- Widgets embed as themselves — a form is a form, not
-                             a tool log with a form inside. The machinery card
-                             stays for tools without a face, and for the
-                             running window before a widget's spec exists. -->
-                        <div
-                          v-else-if="
-                            formSpecOf(segment.part) ||
-                            chartSpecOf(segment.part) ||
-                            widgetSpecOf(segment.part)
-                          "
-                          class="HomePage-WidgetBlock"
-                        >
-                          <ToolWidgetCard
-                            v-if="widgetSpecOf(segment.part)"
-                            :source="widgetSpecOf(segment.part)!.source"
-                            :title="widgetSpecOf(segment.part)!.title"
-                            :fallback="segment.part.output"
-                          />
-                          <ToolFormCard
-                            v-else-if="formSpecOf(segment.part)"
-                            :spec="formSpecOf(segment.part)!"
-                            :submitted="
-                              submittedForms.has(segment.part.id) || segment.part.submitted === true
-                            "
-                            :initial-values="formDrafts.get(segment.part.id)"
-                            :submit-label="t('home.formSubmit')"
-                            :reset-label="t('home.formReset')"
-                            :required-hint="t('home.formRequired')"
-                            :submitted-label="t('home.formDone')"
-                            :select-placeholder="t('home.formSelect')"
-                            @submit="submitForm(segment.part, $event)"
-                            @change="formDrafts.set(segment.part.id, $event)"
-                          />
-                          <ToolChartCard
-                            v-else
-                            :spec="chartSpecOf(segment.part)!"
-                            :animate="message.status === 'streaming'"
-                          />
-
-                          <!-- The raw call, for builders only: a whisper of a
-                               toggle, and none at all outside dev builds. -->
-                          <button
-                            v-if="showToolPayload"
-                            class="HomePage-PayloadBtn"
-                            type="button"
-                            @click="payloadFor = segment.part"
-                          >
-                            <span class="i-ri-braces-line" />
-                            <span>{{ t('home.toolPayload') }}</span>
-                          </button>
-                        </div>
-                        <TxToolCallCard
-                          v-else
-                          class="HomePage-Tool"
-                          :tool-call="segment.part"
-                          v-bind="toolCallLabels"
-                        />
-                      </template>
-
-                      <!-- A turn that never carried structured parts stays a
-                           plain string; the loop above has nothing to render
-                           for it. Guarded on `parts` rather than on segment
-                           count so a turn whose parts are all tool calls does
-                           not replay its text here as well. -->
-                      <TxStreamMarkdown
-                        v-if="!message.parts && message.content"
-                        class="HomePage-Reply"
-                        v-bind="markdownLabels"
-                        :content="message.content"
-                        :streaming="message.status === 'streaming'"
-                      />
-
-                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. The send
-                           key's `waiting` reads the same predicate, so the two cannot disagree. -->
-                      <TxThinkingOrb
-                        v-else-if="isAwaitingFirstToken(message)"
-                        class="HomePage-Thinking"
-                        :size="64"
-                        :display-size="28"
-                        :label="t('home.thinking')"
-                      />
-
-                      <!-- The provider is squeezing its context mid-turn; a
-                           silent pause here read as a hang. -->
-                      <p
-                        v-if="message.status === 'streaming' && isCompacting"
-                        class="HomePage-Compacting"
-                        role="status"
-                      >
-                        <span class="i-ri-archive-2-line" aria-hidden="true" />
-                        <span>{{ t('home.compacting') }}</span>
-                      </p>
-
-                      <div
-                        v-if="
-                          message.status === 'failed' && resolveUsageLimitFailure(message.error)
-                        "
-                        class="HomePage-Error is-usage-limit"
-                        role="alert"
-                        data-testid="home-usage-limit-error"
-                      >
-                        <span class="i-ri-timer-line HomePage-ErrorIcon" />
-                        <div class="HomePage-ErrorBody">
-                          <p class="HomePage-ErrorTitle">
-                            {{ resolveUsageLimitFailure(message.error)?.title }}
-                          </p>
-                          <p class="HomePage-ErrorDetail">
-                            {{ resolveUsageLimitFailure(message.error)?.detail }}
-                          </p>
-                          <p class="HomePage-ErrorReport" data-testid="home-usage-limit-report">
-                            <span
-                              >{{ t('home.error.codeLabel') }}:
-                              {{ resolveErrorReportCode(message.error) }}</span
-                            >
-                          </p>
-                        </div>
-                        <button
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          data-testid="home-open-usage-limits"
-                          @click="openUsageLimits"
-                        >
-                          {{ resolveUsageLimitFailure(message.error)?.action?.label }}
-                        </button>
-                      </div>
-
-                      <div
-                        v-else-if="message.status === 'failed'"
-                        class="HomePage-Error"
-                        role="alert"
-                      >
-                        <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
-                        <div class="HomePage-ErrorBody">
-                          <p class="HomePage-ErrorTitle">
-                            {{ resolveErrorTitle(message.error) }}
-                          </p>
-                          <p v-if="resolveErrorAdvice(message.error)" class="HomePage-ErrorDetail">
-                            {{ resolveErrorAdvice(message.error) }}
-                          </p>
-                          <p class="HomePage-ErrorReport" data-testid="home-error-report">
-                            <span
-                              >{{ t('home.error.codeLabel') }}:
-                              {{ resolveErrorReportCode(message.error) }}</span
-                            >
-                            <span v-if="!isStoppedTurn(message.error)">{{
-                              resolveErrorReportDetail(message.error)
-                            }}</span>
-                          </p>
-                        </div>
-                        <button
-                          v-if="isProviderUnavailable(message.error)"
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          @click="openProviderSettings"
-                        >
-                          {{ t('home.configureProvider') }}
-                        </button>
-                        <button
-                          v-else-if="index === messages.length - 1"
-                          class="HomePage-RetryBtn"
-                          type="button"
-                          @click="conversation.retry()"
-                        >
-                          {{ t('home.retry') }}
-                        </button>
-                      </div>
-
-                      <!-- Surfaces out of a blur once the answer settles; the last
-                           reply keeps it on show, older ones reveal on hover. -->
-                      <div
-                        v-if="message.status === 'complete'"
-                        class="HomePage-TurnFooter"
-                        :class="{ 'is-resting': isTurnFooterResting(message) }"
-                      >
-                        <TxMessageActions
-                          class="HomePage-MsgActions"
-                          :copy-text="message.content"
-                          :regenerable="index === messages.length - 1 && !isStreaming"
-                          :speakable="!!message.content"
-                          :speak-state="speakStateOf(message)"
-                          :copy-label="t('home.copy')"
-                          :copied-label="t('home.copied')"
-                          :regenerate-label="t('home.regenerate')"
-                          :speak-label="t('home.speak')"
-                          :stop-speak-label="t('home.speakStop')"
-                          @regenerate="conversation.retry()"
-                          @speak="toggleSpeak(message)"
-                        >
-                          <button
-                            v-if="canBranchFrom(message, index)"
-                            class="tx-message-actions__btn"
-                            type="button"
-                            :disabled="branching"
-                            :title="t('home.workspace.fork.fromHere')"
-                            :aria-label="t('home.workspace.fork.fromHere')"
-                            @click="branchTo({ messageId: message.id })"
-                          >
-                            <span class="i-ri-git-branch-line" aria-hidden="true" />
-                          </button>
-                        </TxMessageActions>
-
-                        <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
-                        <div
-                          v-if="
-                            showTurnMetrics &&
-                            (message.meta?.latencyMs ||
-                              message.meta?.model ||
-                              message.meta?.totalTokens)
-                          "
-                          class="HomePage-TurnMetrics"
-                        >
-                          <!-- 耗时 (Latency) -->
-                          <span
-                            v-if="message.meta?.latencyMs"
-                            class="HomePage-MetricTag"
-                            :title="metricLatencyTitle(message)"
-                          >
-                            <span class="i-ri-time-line" aria-hidden="true" />
-                            <span>{{ formatMetricLatency(message.meta.latencyMs) }}</span>
-                          </span>
-
-                          <!-- Tokens 与 速度 (Tokens & Speed) -->
-                          <span
-                            v-if="message.meta?.totalTokens"
-                            class="HomePage-MetricTag"
-                            :title="metricTokensTitle(message)"
-                          >
-                            <span class="i-ri-database-2-line" aria-hidden="true" />
-                            <span>{{ message.meta.totalTokens }} tokens</span>
-                            <span v-if="calculateTokenSpeed(message)" class="HomePage-MetricSpeed"
-                              >({{ calculateTokenSpeed(message) }} t/s)</span
-                            >
-                          </span>
-
-                          <!-- 模型 (Model) -->
-                          <span
-                            v-if="message.meta?.model"
-                            class="HomePage-MetricTag is-model"
-                            :title="t('home.workspace.activity.metrics.model')"
-                          >
-                            <span class="i-ri-sparkling-line" aria-hidden="true" />
-                            <span>{{ message.meta.model }}</span>
-                          </span>
-
-                          <!-- 调度器 (Coordinator) -->
-                          <span
-                            class="HomePage-MetricTag"
-                            :title="t('home.workspace.activity.metrics.coordinator')"
-                          >
-                            <span class="i-ri-robot-2-line" aria-hidden="true" />
-                            <span>{{ message.meta?.coordinator || 'Tuff Coordinator' }}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </template>
-                  </div>
+                  <HomeMessageRow
+                    :message="message"
+                    :entering="enteringMessages.has(message.id)"
+                    :latest="index === messages.length - 1"
+                    :streaming="isStreaming"
+                    :compacting="isCompacting"
+                    :resting="isTurnFooterResting(message)"
+                    :branchable="canBranchFrom(message, index)"
+                    :branching="branching"
+                    :speak-state="speakStateOf(message)"
+                    :show-metrics="showTurnMetrics"
+                    @retry="conversation.retry()"
+                    @regenerate="conversation.retry()"
+                    @speak="toggleSpeak(message)"
+                    @branch="branchTo({ messageId: message.id })"
+                    @code-preview="showCodePreview"
+                  />
                 </div>
               </template>
             </TxConversationStream>
           </Transition>
 
-          <!-- The dev payload inspector: one dialog for whichever widget's
-               toggle was clicked, highlighted JSON with its own copy button. -->
-          <TxModal
-            :model-value="payloadFor !== null"
-            :title="`${payloadFor?.name ?? ''} · ${t('home.toolPayload')}`"
-            :close-label="t('common.close')"
-            width="640px"
-            @update:model-value="payloadFor = null"
-          >
-            <TxCodeBlock
-              class="HomePage-PayloadCode"
-              lang="json"
-              :code="payloadJson"
-              :closed="true"
-              :copy-label="t('home.copy')"
-              :copied-label="t('home.copied')"
-            />
-          </TxModal>
+          <HomePayloadModal />
 
           <div ref="composerGroupRef" class="HomePage-ComposerGroup">
             <!-- Main could not read this thread: nothing below is its state, so say so and offer
@@ -2652,17 +1104,20 @@ onBeforeUnmount(() => disposeCommands?.())
               />
             </div>
 
-            <HomeWorkspaceQueue
-              v-if="workspace.state.value && workspace.queue.value.length > 0"
-              :items="workspace.queue.value"
-              :status="workspace.state.value.status"
-              :held="workspace.state.value.queueHeld"
-              :limit="WORKSPACE_QUEUE_LIMIT"
-              :pending="workspace.queuePending.value"
-              :resuming="workspace.resuming.value"
-              @action="workspace.queueAction"
-              @resume="workspace.resume()"
-            />
+            <Transition name="home-queue">
+              <HomeWorkspaceQueue
+                v-if="workspace.state.value && workspace.queue.value.length > 0"
+                :items="workspace.queue.value"
+                :status="workspace.state.value.status"
+                :held="workspace.state.value.queueHeld"
+                :limit="WORKSPACE_QUEUE_LIMIT"
+                :pending="workspace.queuePending.value"
+                :resuming="workspace.resuming.value"
+                @action="workspace.queueAction"
+                @update="workspace.updateQueued"
+                @resume="workspace.resume()"
+              />
+            </Transition>
 
             <!-- An untouched Home has no stream for the voice clip to end: it waits here instead. -->
             <HomeVoiceDraft
@@ -2676,162 +1131,99 @@ onBeforeUnmount(() => disposeCommands?.())
               @dismiss="dictation.dismissClip()"
             />
 
-            <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
-                 reads that edge's 24px radius off the element in its slot. -->
-            <TxBorderBeam
-              class="HomePage-ComposerBeam"
-              size="pulse-outside"
-              :active="composerBeamActive"
+            <!-- Above the composer, not in the transcript: the turn's clock and current step while it
+                 runs, and how full the context is. The meter's track sits ON the box's top border
+                 (the dock is pulled down by the group's gap), inset by the corner radius so it rides
+                 the straight edge. Both state what the page already knows. -->
+            <div v-if="!isEmpty && (isStreaming || contextShare !== null)" class="HomePage-RunDock">
+              <HomeRunStatus
+                v-if="isStreaming"
+                :started-at="runStartedAt"
+                :step="runStep"
+                :verb="thinkingTicker.activeLabel.value"
+              />
+              <HomeContextMeter
+                v-if="contextShare !== null || isStreaming"
+                class="HomePage-ContextMeter"
+                :percent="contextShare ?? 0"
+                :window-text="contextWindowText"
+              />
+            </div>
+
+            <!-- The composer: the box, its beam and glow, the tray, the field and the tool row.
+                 It owns the look; the page owns what a press does. -->
+            <TuffAIComposer
+              ref="composerEl"
+              v-model:draft="draft"
+              v-model:permission-mode="agentToolsMode"
+              :placeholder="t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')"
+              :attachments="pendingAttachments"
+              :attach-open-label="attachOpenLabel"
+              :attach-preview-props="attachPreviewProps"
+              :input-disabled="browserNavigating"
+              :dragover="isDragover"
+              :live="isStreaming"
+              :lifting="lifting"
+              :beam-active="composerBeamActive"
+              :dictation="dictation"
+              :model="composerModel"
+              :send-state="sendState"
+              :send-queues="sendQueues"
+              @input="autoGrow"
+              @input-keydown="handleKeydown"
+              @box-keydown="handleComposerKeydown"
+              @paste="onPaste"
+              @dragenter="onDragEnter"
+              @dragover="onDragOver"
+              @dragleave="onDragLeave"
+              @drop="onDrop"
+              @remove="removeAttachment"
+              @files="addFiles"
+              @send="pressSend"
+              @stop="conversation.stop()"
+              @mic="dictation.toggle()"
+              @reset-approvals="resetRememberedApprovals"
             >
-              <div
-                ref="composerRef"
-                class="HomePage-Composer"
-                :class="{
-                  'is-dragover': isDragover,
-                  'is-live': isStreaming,
-                  'is-lifting': lifting
-                }"
-                @dragenter="onDragEnter"
-                @dragover="onDragOver"
-                @dragleave="onDragLeave"
-                @drop="onDrop"
-                @keydown="handleComposerKeydown"
-              >
-                <!-- The dictation glow rides inside the box as an overlay rather than wrapping it:
-                     the beam's wrapper clips, and wrapping would cut the composer's own shadow and
-                     focus ring. 「正在识别」 gathers it into the travelling processing beam. -->
-                <TxVoiceBeam
-                  class="HomePage-VoiceGlow"
-                  v-bind="voiceGlowMotion"
-                  :active="dictation.active.value"
-                  :level="dictationLevel"
-                  :processing="dictation.state.value === 'finishing'"
-                  :theme="resolvedTheme"
-                  :colors="voiceGlowColors"
-                  :border-radius="24"
-                  :scale="1.2"
-                  aria-hidden="true"
-                >
-                  <div class="HomePage-VoiceGlowHost" />
-                </TxVoiceBeam>
-
-                <TxAttachmentTray
-                  v-if="pendingAttachments.length"
-                  class="HomePage-ComposerTray"
-                  :attachments="pendingAttachments"
-                  removable
-                  :remove-label="t('home.attachRemove')"
-                  :cancel-label="t('home.attachCancel')"
-                  :preview-title="t('home.attachPreview')"
-                  :previous-label="t('home.attachPrevious')"
-                  :next-label="t('home.attachNext')"
-                  :previous-text="t('home.attachPreviousText')"
-                  :next-text="t('home.attachNextText')"
-                  :close-label="t('common.close')"
-                  :zoom-in-label="t('home.attachViewer.zoomIn')"
-                  :zoom-out-label="t('home.attachViewer.zoomOut')"
-                  :reset-label="t('home.attachViewer.reset')"
-                  :failed-text="t('home.attachViewer.failed')"
-                  :open-label-formatter="attachOpenLabel"
-                  :preview-props="attachPreviewProps"
-                  @remove="removeAttachment"
+              <template #mode>
+                <template v-if="browserLanding">
+                  <TxButton
+                    size="sm"
+                    variant="flat"
+                    :type="browserMode === 'browse' ? 'primary' : 'text'"
+                    :aria-pressed="browserMode === 'browse'"
+                    :disabled="pendingAttachments.length > 0 || browserNavigating"
+                    icon="i-ri-global-line"
+                    @click="browserMode = 'browse'"
+                    >{{ t('browser.browse') }}</TxButton
+                  >
+                  <TxButton
+                    size="sm"
+                    variant="flat"
+                    :type="browserMode === 'ask' ? 'primary' : 'text'"
+                    :aria-pressed="browserMode === 'ask'"
+                    :disabled="browserNavigating"
+                    icon="i-ri-search-line"
+                    @click="browserMode = 'ask'"
+                    >{{ t('browser.ask') }}</TxButton
+                  >
+                </template>
+                <HomeWorkspaceModeMenu
+                  v-if="!browserLanding"
+                  :mode="workspace.settings.value.mode"
+                  :profile-id="workspace.settings.value.profileId"
+                  :profiles="workspace.profiles.value"
+                  :profiles-loading="workspace.profilesLoading.value"
+                  :profile-saving="workspace.profileSaving.value"
+                  :profiles-error="workspace.profilesError.value"
+                  :branch-on-change="hasHistory"
+                  :locked="workspace.busy.value || branching"
+                  @select-chat="selectMode('chat')"
+                  @select-agent="selectAgentProfile"
+                  @toggle-profile="workspace.setProfileEnabled"
+                  @load-profiles="workspace.loadProfiles()"
                 />
-
-                <!-- Read-only while dictating: the words land at the caret, and neither a keystroke
-                     nor an IME can move the range under them. -->
-                <textarea
-                  ref="inputRef"
-                  v-model="draft"
-                  class="HomePage-Input"
-                  rows="1"
-                  :aria-label="
-                    t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')
-                  "
-                  :placeholder="
-                    t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')
-                  "
-                  :readonly="dictation.active.value"
-                  :disabled="browserNavigating"
-                  @input="autoGrow"
-                  @keydown="handleKeydown"
-                  @paste="onPaste"
-                />
-
-                <!-- One family of 32px controls (`composer/`); the send key is an island that grows
-                     into 「■ 停止」 over the microphone's slot without moving a neighbour. -->
-                <ComposerToolbar
-                  ref="toolbarRef"
-                  v-model:permission-mode="agentToolsMode"
-                  :model="composerModel"
-                  :send-state="sendState"
-                  :mic-state="dictation.state.value"
-                  :mic-blocked="dictation.captureBlocked.value"
-                  :mic-elapsed-ms="dictation.elapsedMs.value"
-                  :mic-outcome="dictation.outcome.value"
-                  @files="addFiles"
-                  @send="pressSend"
-                  @stop="conversation.stop()"
-                  @mic="dictation.toggle()"
-                  @reset-approvals="resetRememberedApprovals"
-                >
-                  <template #mode>
-                    <template v-if="browserLanding">
-                      <TxButton
-                        size="sm"
-                        variant="flat"
-                        :type="browserMode === 'browse' ? 'primary' : 'text'"
-                        :aria-pressed="browserMode === 'browse'"
-                        :disabled="pendingAttachments.length > 0 || browserNavigating"
-                        icon="i-ri-global-line"
-                        @click="browserMode = 'browse'"
-                        >{{ t('browser.browse') }}</TxButton
-                      >
-                      <TxButton
-                        size="sm"
-                        variant="flat"
-                        :type="browserMode === 'ask' ? 'primary' : 'text'"
-                        :aria-pressed="browserMode === 'ask'"
-                        :disabled="browserNavigating"
-                        icon="i-ri-search-line"
-                        @click="browserMode = 'ask'"
-                        >{{ t('browser.ask') }}</TxButton
-                      >
-                    </template>
-                    <HomeWorkspaceModeMenu
-                      v-if="!browserLanding"
-                      :mode="workspace.settings.value.mode"
-                      :profile-id="workspace.settings.value.profileId"
-                      :profiles="workspace.profiles.value"
-                      :profiles-loading="workspace.profilesLoading.value"
-                      :profiles-error="workspace.profilesError.value"
-                      :profile-saving="workspace.profileSaving.value"
-                      :branch-on-change="hasHistory"
-                      :locked="workspace.busy.value || branching"
-                      @select-chat="selectMode('chat')"
-                      @select-agent="selectAgentProfile"
-                      @toggle-profile="workspace.setProfileEnabled"
-                      @load-profiles="workspace.loadProfiles()"
-                    />
-                    <!-- While Main is busy a send queues; the key says so before it is pressed. -->
-                    <ComposerControl
-                      v-if="sendQueues && draft.trim().length > 0"
-                      :label="t('home.workspace.queue.add')"
-                      :title="t('home.workspace.queue.addHint')"
-                      :disabled="!canSend"
-                      @click="pressSend"
-                    >
-                      <span class="i-ri-play-list-add-line" />
-                    </ComposerControl>
-                  </template>
-                </ComposerToolbar>
-
-                <!-- A wrapped draft as it sat, fading out while the lifted bubble's own lines fade in
-                     (~140ms); empty otherwise. -->
-                <div class="HomePage-DraftGhost" aria-hidden="true">
-                  <div ref="draftGhostRef" class="HomePage-DraftGhostText" />
-                </div>
-              </div>
-            </TxBorderBeam>
+              </template>
+            </TuffAIComposer>
 
             <!-- The push card: the guide, or 「为你准备」. It enters once the composer has landed
                  and leaves with the greeting, pinned under the box and dissolving on its back as it
@@ -2842,24 +1234,19 @@ onBeforeUnmount(() => disposeCommands?.())
               appear-from-class="home-card-appear-from"
               appear-active-class="home-card-appear-active"
             >
-              <div v-if="isEmpty && homeRecommendationsEnabled" class="HomePage-Push">
-                <div class="HomePage-PushSlot" :style="pushSlotStyle">
-                  <TxChoiceCard
-                    v-model:step="pushStep"
-                    class="HomePage-PushCard"
-                    :class="{ 'is-settling': pushSettling }"
-                    :steps="pushSteps"
-                    :selected="pushSelected"
-                    :loading="pushSkeleton"
-                    :loading-rows="pushLoadingRows"
-                    :columns="2"
-                    :appear="false"
-                    :prev-label="pushLabels.prev"
-                    :next-label="pushLabels.next"
-                    @select="choosePush"
-                  />
-                </div>
-              </div>
+              <HomePushCard
+                v-if="isEmpty && homeRecommendationsEnabled"
+                v-model:step="pushStep"
+                :steps="pushSteps"
+                :selected="pushSelected"
+                :loading="pushSkeleton"
+                :loading-rows="pushLoadingRows"
+                :settling="pushSettling"
+                :prev-label="pushLabels.prev"
+                :next-label="pushLabels.next"
+                :slot-style="pushSlotStyle"
+                @select="choosePush"
+              />
             </Transition>
             <slot v-if="browserLanding" name="browser-footer" />
           </div>
@@ -2874,6 +1261,7 @@ onBeforeUnmount(() => disposeCommands?.())
       <Transition name="home-panel">
         <div v-if="panelOpen" class="HomePage-PanelSlot">
           <HomeSidePanel
+            v-model:tab="panelTab"
             :messages="messages"
             :conversation-id="conversationId"
             :context="workspace.state.value?.context"
@@ -2883,7 +1271,11 @@ onBeforeUnmount(() => disposeCommands?.())
             :gateway="gatewayApprovals"
             :pending-run="workspace.state.value?.pendingRun"
             :loading="workspace.loading.value"
+            :code-tabs="codeTabs"
+            :active-code-tab-id="activeCodeTabId"
             @locate="streamRef?.scrollToIndex($event)"
+            @select-code-tab="selectCodeTab"
+            @close-code-tab="closeCodeTab"
           />
         </div>
       </Transition>
@@ -2895,6 +1287,27 @@ onBeforeUnmount(() => disposeCommands?.())
       <div ref="liftFillRef" class="HomePage-SendLiftFill" />
       <div ref="liftTextRef" class="HomePage-UserBubble HomePage-SendLiftText" />
     </div>
+
+    <!-- Highlighting a passage in the transcript raises this over the last selected line. It sits
+         on the page root, not in the scrolling column, so the column's own overflow cannot clip it. -->
+    <!-- Mounted only while something is selected: a floating layer has no business
+         existing, measuring or animating when there is no passage to act on. -->
+    <TxSelectionActions
+      v-if="passageSelection"
+      ref="selectionBarRef"
+      :selection="passageSelection"
+      :actions="passageActions"
+      :aria-label="t('home.selectionActions')"
+      hide-prompt
+      @action="runPassageAction"
+    />
+
+    <!-- File preview drawer for command-clicking file paths in conversation -->
+    <HomeFilePreviewDrawer
+      v-model:visible="fileDrawerVisible"
+      :file-path="previewFilePath"
+      :display-path="previewDisplayPath"
+    />
   </div>
 </template>
 
@@ -2923,11 +1336,11 @@ onBeforeUnmount(() => disposeCommands?.())
   // ---------------------------------------------------------------------------
   --home-z-leaving: 0; // the stream and greeting dissolving on their way out
   --home-z-flight: 1; // the send flight's clone
-  --home-z-composer: 2; // composer and pending confirmation — above every message
-  // The one exception: the send lift's bubble. It starts as the draft's own text, which lies on the
-  // composer's surface, so it leaves from above the box rather than from behind it; its fill is
-  // transparent while it still overlaps the box, so nothing of the composer is covered.
-  --home-z-lift: 3;
+  --home-z-topblur: 4; // gradual blur at the top of the conversation
+  --home-z-bottomblur: 4; // gradual blur at the bottom of the conversation
+  --home-z-topbar: 6; // top bar above blur and messages
+  --home-z-composer: 8; // composer and pending confirmation — above every message
+  --home-z-lift: 9;
 
   // The TuffIntelligence wheel the running state wears — the composer's live light and the send
   // key's stop-capsule ring (`composer/ComposerSendIsland.vue`) read the same stops, in oklch.
@@ -2968,16 +1381,13 @@ onBeforeUnmount(() => disposeCommands?.())
   container-type: inline-size;
   // The top bar is pinned, so the page itself never scrolls — the body below it owns the overflow.
   overflow: hidden;
+}
 
-  // The bridge above folds tuffex's four fills onto the shell's two surfaces, so `--tx-fill-color`
-  // and `--tx-fill-color-light` are one colour — and the push card rests its options on the second
-  // and hovers them onto the first: a hover with nothing to change to. Inside the card the ramp
-  // runs a step further instead. The hover takes the shell's second surface, and the skeleton bars
-  // the card draws on a resting row (`--tx-fill-color-darker`) a step past that, where they read.
-  .HomePage-Push {
-    --tx-fill-color: var(--shell-surface-2);
-    --tx-fill-color-darker: var(--shell-border);
-  }
+:deep(.HomeTopBar) {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: var(--home-z-topbar);
 }
 
 /**
@@ -3050,13 +1460,47 @@ onBeforeUnmount(() => disposeCommands?.())
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  position: relative;
 
-  // The stream owns the scroll once a conversation exists, so the body must not scroll too.
+  // When conversing, messages run all the way through to the top under HomeTopBar and TxGradualBlur.
   .HomePage.conversing & {
+    grid-row: 1 / -1;
     overflow: hidden;
   }
 }
 
+.HomePage-TopBlur {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  z-index: var(--home-z-topblur);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--shell-bg) 80%, transparent) 0%,
+    color-mix(in srgb, var(--shell-bg) 35%, transparent) 40%,
+    transparent 100%
+  );
+}
+
+.HomePage-BottomBlur {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--home-composer-height, 112px) + 96px);
+  z-index: var(--home-z-bottomblur);
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--shell-bg) 85%, transparent) 0%,
+    color-mix(in srgb, var(--shell-bg) 60%, transparent) 35%,
+    color-mix(in srgb, var(--shell-bg) 25%, transparent) 70%,
+    transparent 100%
+  );
+}
 .HomePage-Center {
   display: flex;
   flex-direction: column;
@@ -3064,11 +1508,8 @@ onBeforeUnmount(() => disposeCommands?.())
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  // Artboard lifts the block above true centre rather than bottom-weighting it like Codex. The lift
-  // gives way in a short window before the stage has to scroll: at 600px the hero — greeting,
-  // opening, composer and the guide's tallest page — takes all the height under the top bar.
-  padding-bottom: clamp(0px, calc(100vh - 620px), 52px);
-  box-sizing: border-box;
+  // Truly centered vertically; slight optical balance for the top bar without top-heavy bias.
+  padding-bottom: 16px;
   // Anchors the floating composer in conversation, and the dissolving stream
   // while it leaves — the anchor must not vanish with the `conversing` class
   // mid-dissolve, so it lives here unconditionally.
@@ -3111,115 +1552,6 @@ onBeforeUnmount(() => disposeCommands?.())
   opacity: 0;
 }
 
-.HomePage-Head {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  // The chat lane, like the composer under it: the opening wraps at this width. A centred flex item
-  // would otherwise shrink to its content, and the opening's content is one long line.
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-
-  /* Pinned out of flow by `submit`, which measures the offsets; the layer is
-     the scale's, so the greeting dissolves under the returning composer. */
-  &.is-leaving {
-    z-index: var(--home-z-leaving);
-  }
-}
-
-/* Scaled up 20% (48px * 1.2 = 57.6px ≈ 58px) and lifted 30% for visual breathing room */
-.HomePage-Mark {
-  width: 58px;
-  height: 58px;
-  transform: translateY(-30%);
-}
-
-.HomePage-Greeting {
-  margin: 0;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-display);
-  font-weight: 600;
-  // One display line, set tight for the same room.
-  line-height: 1.2;
-}
-
-/**
- * The assistant's opening, under the greeting. Three lines tall whatever it holds — the skeleton, a
- * stream, the finished text or nothing — so text arriving never moves the composer or the card.
- *
- * 13px on a 20px line fits the longest opening the model may write (160 characters,
- * `sanitizeOpeningText`) in three lines of a full-width lane. A narrower lane clamps it with an
- * ellipsis rather than push the stage down; the whole text still joins the thread when sent.
- */
-.HomePage-Opening {
-  --home-opening-line: 20px;
-
-  width: 100%;
-  height: calc(3 * var(--home-opening-line));
-  color: var(--shell-text-regular);
-  font-size: var(--shell-fs-body);
-  line-height: var(--home-opening-line);
-  text-align: center;
-}
-
-.HomePage-OpeningText {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-/* Bars where the opening's first two lines will be — most openings run to two. */
-.HomePage-OpeningSkeleton {
-  // On the page background the skeleton's own default, the lightest fill, disappears.
-  --tx-skeleton-base-color: var(--shell-surface-2);
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* A line box each, its bar centred in it (TxSkeleton's root is a flex column). */
-.HomePage-OpeningBar {
-  justify-content: center;
-  width: 78%;
-  height: var(--home-opening-line);
-
-  &.is-short {
-    width: 52%;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* The words surface where the skeleton stood — streamed, replayed or the template alike. */
-  .HomePage-OpeningText {
-    animation: home-opening-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes home-opening-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* The template leaves before the model's opening surfaces where it stood. */
-  .HomePage-OpeningText.home-opening-swap-leave-active {
-    animation: home-opening-out 0.16s ease-in both;
-  }
-}
-
-@keyframes home-opening-out {
-  to {
-    opacity: 0;
-  }
-}
-
 /** The stream component owns the scroll; this box only claims the flex space. */
 .HomePage-Stream {
   flex: 1;
@@ -3232,11 +1564,12 @@ onBeforeUnmount(() => disposeCommands?.())
    * an actionable card. `:deep` is required because both controls live inside the stream.
    */
   :deep(.tx-conversation-stream__scroller) {
-    padding: 28px 0 calc(var(--home-composer-height, 112px) + 28px);
+    padding: 72px 0 calc(var(--home-composer-height, 112px) + 88px);
     box-sizing: border-box;
   }
 
   :deep(.tx-conversation-stream__pill) {
+    z-index: 10;
     bottom: calc(var(--home-composer-height, 112px) + 32px);
   }
 }
@@ -3250,50 +1583,46 @@ onBeforeUnmount(() => disposeCommands?.())
   box-sizing: border-box;
 }
 
-.HomePage-Message {
+/* The voice clip's row, on the message lane's right edge where the message it may become will land. */
+.HomePage-VoiceRow {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  /* All arrival physics deform from the bottom edge — where hits land and
-     where bubbles rise from. The motion itself runs on WAAPI springs. */
-  transform-origin: 50% 100%;
-
-  /* Holds a freshly appended row invisible for the frame between render and
-     its spring taking over; the animation's own opacity replaces this. */
-  &.HomePage-Message--enter {
-    opacity: 0;
-  }
-
-  &.user {
-    align-items: flex-end;
-  }
-
-  &.assistant {
-    align-items: flex-start;
-  }
-}
-
-/**
- * The stand-in that flies from the composer to the landing row. It is a message,
- * so it obeys the message rule: one layer under the composer, which means the
- * bubble rises out from behind the box instead of sliding across its face.
- */
-.HomePage-FlightClone {
-  z-index: var(--home-z-flight);
-}
-
-.HomePage-MsgAttachments {
-  max-width: 78%;
-}
-
-.HomePage-MsgVoice {
-  max-width: 78%;
+  align-items: flex-end;
 }
 
 /* Above the composer on an untouched Home: the lane the messages will use, its right edge. */
 .HomePage-VoiceDraftDock {
   width: var(--home-chat-lane-width, 100%);
   max-width: 100%;
+}
+
+/**
+ * The status line and the context meter, as one block above the composer. Its bottom edge is the
+ * meter's track, and the margin cancels the group's gap except for 4px, so the track rides above the
+ * box rather than over its border: the border, which turns blue on focus, stays whole, and the 3px
+ * focus ring around it stays clear of the track. It paints over the beam wrapper (`z-index: 2`) so
+ * the beam's bloom never dims it.
+ */
+.HomePage-RunDock {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  // The clock, the step and the meter are one reading, not three cards: 4px holds them as a block
+  // without the meter drifting away from the line it belongs to.
+  gap: 4px;
+  width: var(--home-chat-lane-width);
+  min-width: 0;
+  // Cancels the group's gap and then some, so the block sits ON the box's top edge instead of
+  // floating a card-height above it: 4px is the gap left between the meter's track and the border.
+  margin-bottom: calc(-1 * var(--home-group-gap) + 4px);
+  pointer-events: none;
+}
+
+.HomePage-ContextMeter {
+  // The box's corner radius: the track rides the straight part of the edge, not the curve.
+  padding-inline: 24px;
+  box-sizing: border-box;
 }
 
 /**
@@ -3342,61 +1671,6 @@ onBeforeUnmount(() => disposeCommands?.())
   pointer-events: auto;
 }
 
-.HomePage-Chain,
-.HomePage-Tool {
-  width: 100%;
-}
-
-/** A widget stands on its own: one quiet frame, no tool-log chrome around it. */
-.HomePage-WidgetBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 14px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-surface);
-  box-sizing: border-box;
-}
-
-.HomePage-PayloadBtn {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  align-self: flex-start;
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-family: inherit;
-  font-size: var(--shell-fs-caption);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-secondary);
-  }
-}
-
-.HomePage-PayloadCode {
-  max-height: 420px;
-  overflow: auto;
-}
-
-.HomePage-UserBubble {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-surface-2);
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-md);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /**
  * The send lift's bubble: fixed to the viewport so it can cross the whole pane, moved by
  * `transform` alone (`composables/send-lift`), and laid out once exactly as the landed bubble —
@@ -3434,161 +1708,10 @@ onBeforeUnmount(() => disposeCommands?.())
   background: none;
 }
 
-/**
- * No fill on replies: in v2 the raised look comes from strokes, and body copy is not a
- * raised surface. The class now sits on TxStreamMarkdown — no `pre-wrap` here, markdown
- * owns its own whitespace; colour and size align the markdown body with the shell.
- */
-.HomePage-Reply {
-  width: 100%;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-md);
-  word-break: break-word;
-}
-
-.HomePage-Thinking {
-  margin: 2px 0;
-}
-
-.HomePage-Compacting {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  margin: 2px 0 0;
-  color: var(--shell-text-muted);
-  font-size: 12px;
-  animation: home-compacting-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes home-compacting-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
-.HomePage-TurnFooter {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-  width: 100%;
-  opacity: 1;
-  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &.is-resting {
-    opacity: 0;
-    pointer-events: none;
-  }
-}
-
-.HomePage-Message:hover .HomePage-TurnFooter.is-resting,
-.HomePage-TurnFooter.is-resting:focus-within {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.HomePage-MsgActions {
-  margin-top: 0;
-}
-
-.HomePage-TurnMetrics {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.HomePage-MetricTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-size: 11px;
-  font-family: var(--shell-font-mono, monospace);
-  line-height: 1.2;
-  user-select: none;
-  transition: color 0.15s ease;
-
-  &:hover {
-    color: var(--shell-text);
-  }
-
-  &.is-model {
-    color: var(--shell-text-muted);
-
-    &:hover {
-      color: var(--shell-text);
-    }
-  }
-}
-
-.HomePage-MetricSpeed {
-  color: var(--shell-primary);
-  font-weight: 500;
-  margin-left: 2px;
-}
-
-.HomePage-Error {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-danger-soft);
-  box-sizing: border-box;
-}
-
 .HomePage-ErrorIcon {
   flex: none;
   margin-top: 1px;
   color: var(--shell-danger);
-}
-
-.HomePage-ErrorBody {
-  flex: 1;
-  min-width: 0;
-}
-
-.HomePage-ErrorTitle {
-  margin: 0;
-  color: var(--shell-danger);
-  font-size: var(--shell-fs-body);
-  line-height: 1.5;
-}
-
-.HomePage-ErrorDetail {
-  margin: 4px 0 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.HomePage-ErrorReport {
-  display: grid;
-  gap: 2px;
-  margin: 6px 0 0;
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-body);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-
-  > span:first-child {
-    color: var(--shell-text-muted);
-    font-family: var(--shell-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-    font-size: var(--shell-fs-sm);
-  }
 }
 
 .HomePage-RetryBtn {
@@ -3609,35 +1732,15 @@ onBeforeUnmount(() => disposeCommands?.())
   }
 }
 
-/*
- * A limit the user set is not a fault: the same block in the warning tone, whose button leads to
- * the limits instead of retrying a turn that would be refused again.
- */
-.HomePage-Error.is-usage-limit {
-  background: var(--shell-warning-soft);
-
-  .HomePage-ErrorIcon,
-  .HomePage-ErrorTitle {
-    color: var(--shell-warning);
-  }
-
-  .HomePage-RetryBtn {
-    border-color: var(--shell-warning-border, var(--shell-warning));
-    color: var(--shell-warning);
-
-    &:hover {
-      background: color-mix(in srgb, var(--shell-warning) 12%, transparent);
-    }
-  }
-}
-
 .HomePage-ComposerGroup {
   // Between the composer and the push card on the empty stage; the card's leave pins it there.
   --home-card-gap: 12px;
+  // What the group's own `gap` is, so a child that overlaps the box below it can cancel exactly that.
+  --home-group-gap: var(--home-card-gap);
 
   display: flex;
   flex-direction: column;
-  gap: var(--home-card-gap);
+  gap: var(--home-group-gap);
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -3658,262 +1761,14 @@ onBeforeUnmount(() => disposeCommands?.())
     right: 0;
     bottom: 20px;
     left: 0;
-    gap: 18px;
+    --home-group-gap: 18px;
+    gap: var(--home-group-gap);
     pointer-events: none;
+
+    &:has(.HomeWorkspaceQueue) {
+      --home-group-gap: 0px;
+    }
   }
-}
-
-/**
- * The beam is a wrapper, so it owns the lane: the beam draws on its own border box and the composer
- * fills it. Keeping `--home-chat-lane-width` here alone is what stops the `100%` inside that token
- * from resolving against a shrink-to-fit parent.
- */
-.HomePage-ComposerBeam {
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-}
-
-.HomePage-Composer {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  min-width: 0;
-  padding: 16px 16px 12px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-2xl);
-  background: var(--shell-bg);
-  /* Always on, even while the background above it is opaque and hides it:
-     gaining a backdrop layer mid-dock forces a compositor re-build that can
-     flash for a frame — cheaper to keep the layer and fade the paint. */
-  backdrop-filter: blur(20px) saturate(180%);
-  /* Layered: a tight contact shadow plus a soft ambient one reads as lift
-     without the smudge a single big blur gives. */
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
-    0 8px 24px var(--shell-shadow);
-  box-sizing: border-box;
-  --home-glow-on: 0;
-  transition:
-    border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    --home-glow-on 0.6s ease;
-
-  &:focus-within {
-    border-color: var(--shell-primary);
-    box-shadow:
-      0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
-      0 10px 30px var(--shell-shadow),
-      0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
-  }
-
-  /* While a response runs, the box wears the TuffIntelligence gradient as
-     living light: a hairline rim in the frame edge plus a tight bloom around
-     it, both cut from one conic wheel (oklch keeps the colour travel luminous
-     instead of muddying between stops). The layers spin in opposite
-     directions and breathe on co-prime periods, so no two moments align —
-     weather, not a spinner. The layers are always present and gated by
-     `--home-glow-on`, which is what lets the light fade in and out instead
-     of snapping with the class. */
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: conic-gradient(from var(--home-glow-angle) in oklch, var(--home-live-stops));
-    pointer-events: none;
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
-
-  /* The bloom: a compact ring, blurred slightly less than it is thick, so the
-     light stays a vivid band hugging the frame and dies within ~14px — wide
-     low-alpha spreads curdle into pastel fog on a light surface. The radius
-     grows with the inset so the corners stay concentric instead of pooling.
-     `::before` paints under the box's children — the inward bleed lands
-     beneath the glass, never over the text. */
-  &::before {
-    inset: -6px;
-    border-radius: calc(var(--shell-radius-2xl) + 6px);
-    padding: 8px;
-    filter: blur(7px) saturate(1.05);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.45);
-    animation:
-      home-glow-spin 17s linear infinite reverse,
-      home-glow-breathe 7.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
-  &::after {
-    /* The half-pixel blur melts the hairline into the frame edge — without it
-       the ring reads as a sticker laid on top rather than light in the rim. */
-    filter: blur(0.5px);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.62);
-    animation:
-      home-glow-spin 11s linear infinite,
-      home-glow-rim 5.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
-  &.is-live {
-    --home-glow-on: 1;
-  }
-
-  /**
-   * Floating form. The fill drops to translucent so the always-on backdrop
-   * blur has something to show — the swap rides the background transition,
-   * so the material change is a fade, not a cut. The shadow deepens because
-   * the box now has live content sliding underneath it rather than a flat
-   * page.
-   */
-  .HomePage.conversing & {
-    background: color-mix(in srgb, var(--shell-bg) 72%, transparent);
-    box-shadow: 0 6px 24px var(--shell-shadow);
-    pointer-events: auto;
-  }
-
-  /* Files hovering over the box: the border switches to an invitation. */
-  &.is-dragover {
-    border-style: dashed;
-    border-color: var(--shell-primary);
-  }
-}
-
-/**
- * The dictation glow (TuffEx `TxVoiceBeam`) as an overlay on the box: its wrapper clips to the
- * composer's 24px corners and sits under everything the box holds. The beam's own stylesheet makes
- * its wrapper `position: relative`; the child selector outranks that single attribute selector.
- */
-.HomePage-Composer > .HomePage-VoiceGlow {
-  position: absolute;
-  inset: -1px;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.HomePage-VoiceGlowHost {
-  width: 100%;
-  height: 100%;
-}
-
-/* The box's content paints above the glow's layers. */
-.HomePage-Composer > .HomePage-ComposerTray,
-.HomePage-Composer > .HomePage-Input,
-.HomePage-Composer > .ComposerToolbar {
-  position: relative;
-  z-index: 1;
-}
-
-.HomePage-Input {
-  width: 100%;
-  max-height: 200px;
-  border: none;
-  background: transparent;
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-md);
-  line-height: 1.5;
-  resize: none;
-  // The focus indicator is promoted to the whole composer via `:focus-within`, so it outlines
-  // what reads as the field instead of drawing a second ring inside the card.
-  outline: none;
-}
-
-textarea.HomePage-Input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-.HomePage-Input::placeholder {
-  color: var(--shell-text-muted);
-  // The way back in once a lifted send has cleared the box; the way out is instant (below).
-  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* The sent text is still lifting off the composer: an empty field's placeholder under it would read
-   as two texts at once. */
-.HomePage-Composer.is-lifting .HomePage-Input::placeholder {
-  color: transparent;
-  transition: none;
-}
-
-/**
- * A wrapped draft where it sat in the textarea (`fadeDraft`), fading out while the lifted bubble's
- * own lines fade in over it. Empty outside a send.
- */
-.HomePage-DraftGhost {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-/* Typeset like `.HomePage-Input`, and like a textarea wraps, so the first frame is the draft. */
-.HomePage-DraftGhostText {
-  position: absolute;
-  margin: 0;
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-md);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-/**
- * The push card's lane, and a query container: its slot reserves rows for the columns the card
- * actually lays out. The card's own sizes are compacted here — TxChoiceCard reads them from any
- * ancestor — so the guide's tallest page still fits a 600px window under the composer.
- */
-.HomePage-Push {
-  --tx-choice-card-pad: 6px;
-  --tx-choice-card-label-line: 18px;
-  --tx-choice-card-desc-line: 16px;
-
-  container: home-push / inline-size;
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-}
-
-/**
- * Holds the mode's tallest page (`pushSlotStyle`), so the card can shrink inside it — a shorter
- * page, fewer rows, rows replacing their skeleton — without the centred stage moving the composer.
- *
- * The arithmetic is TxChoiceCard's own box: 10px of block padding and a 2px gap in each option, 6px
- * between rows, and a head of 6px + a 20px title line + 10px, with a 24px pager and a 4px gap above
- * the title when there are pages to turn. Only the two text lines and the inset are variables; the
- * rest is restated here, so a change to the card's spacing shows up as a slot that no longer fits.
- */
-.HomePage-PushSlot {
-  --home-push-row: calc(
-    20px + var(--tx-choice-card-label-line) + 2px + var(--tx-choice-card-desc-line)
-  );
-  --home-push-rows: var(--home-push-rows-1);
-  --home-push-head: calc(36px + var(--home-push-pager) * 28px);
-  --home-push-list: calc(var(--home-push-rows) * (var(--home-push-row) + 6px) - 6px);
-
-  min-height: calc(2 * var(--tx-choice-card-pad) + var(--home-push-head) + var(--home-push-list));
-}
-
-/* TxChoiceCard turns to two columns at 480px of its content box, inside its two 6px insets. */
-@container home-push (width >= 492px) {
-  .HomePage-PushSlot {
-    --home-push-rows: var(--home-push-rows-2);
-  }
-}
-
-/* Rows that are not final, before the skeleton is due (`pushSettling`). */
-.HomePage-PushCard.is-settling {
-  visibility: hidden;
 }
 
 /* The greeting bows out as the first message lands, and — once the composer
@@ -3988,55 +1843,40 @@ textarea.HomePage-Input:focus-visible {
   transform: translateX(-50%) translateY(8px);
 }
 
-/* @property is what lets these interpolate — same trick as IntelligenceHeader. */
-@property --home-glow-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
+/* The queue card smoothly emerges from and tucks behind the composer box. */
+@media (prefers-reduced-motion: no-preference) {
+  .home-queue-enter-active {
+    transition:
+      opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .home-queue-leave-active {
+    transition:
+      opacity 0.2s cubic-bezier(0.4, 0, 1, 1),
+      transform 0.2s cubic-bezier(0.4, 0, 1, 1);
+  }
 }
 
-/* The breathing amplitude. Kept apart from `opacity` itself so the keyframes
-   compose with the on/off gate instead of fighting it for the property. */
-@property --home-glow-alpha {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 1;
+.home-queue-enter-from,
+.home-queue-leave-to {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
 }
 
-/* The gate: set on the composer, read by both pseudo layers, and — because it
-   is a registered number — transitionable, which is the whole fade. */
+@media (prefers-reduced-motion: reduce) {
+  .home-queue-enter-active,
+  .home-queue-leave-active {
+    transition: none;
+  }
+}
+
+/* The gate: set on the composer, read by the send key's stop ring, and — because it is a
+   registered number — transitionable, which is the whole fade. */
 @property --home-glow-on {
   syntax: '<number>';
   inherits: true;
   initial-value: 0;
-}
-
-@keyframes home-glow-spin {
-  to {
-    --home-glow-angle: 360deg;
-  }
-}
-
-@keyframes home-glow-breathe {
-  0%,
-  100% {
-    --home-glow-alpha: 0.62;
-  }
-
-  50% {
-    --home-glow-alpha: 1;
-  }
-}
-
-@keyframes home-glow-rim {
-  0%,
-  100% {
-    --home-glow-alpha: 0.72;
-  }
-
-  50% {
-    --home-glow-alpha: 1;
-  }
 }
 
 @keyframes home-msg-pop {
@@ -4050,13 +1890,27 @@ textarea.HomePage-Input:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* The watcher never marks rows under reduced motion; this guards a marked
-     row against ever being stranded invisible if it does slip through. */
-  .HomePage-Message.HomePage-Message--enter {
-    opacity: 1;
-  }
+/* A path named in the reply: dotted until hovered, solid while ⌘ is held (it opens on ⌘ click). */
+:deep(.is-file-path) {
+  color: var(--shell-primary);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
 
+  &:hover {
+    text-decoration-style: solid;
+    background: color-mix(in srgb, var(--shell-primary) 10%, transparent);
+  }
+}
+
+:deep(.is-command-path-clickable) {
+  cursor: pointer !important;
+  text-decoration: underline solid !important;
+  text-underline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
   .home-head-leave-active,
   .home-head-enter-active,
   .home-card-leave-active,
@@ -4065,16 +1919,6 @@ textarea.HomePage-Input:focus-visible {
   .home-stream-leave-active,
   .home-stream-enter-active {
     transition: none;
-  }
-
-  /* The light holds still but stays on — the running state must survive. */
-  .HomePage-Composer::before,
-  .HomePage-Composer::after {
-    animation: none;
-  }
-
-  .HomePage-Compacting {
-    animation: none;
   }
 }
 </style>

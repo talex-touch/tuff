@@ -443,6 +443,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/approval-card',
     '/docs/dev/components/working-indicator',
     '/docs/dev/components/bot-avatar',
+    '/docs/dev/components/miko',
     // ai — AiReasoning
     '/docs/dev/components/ai-elements',
     '/docs/dev/components/chain-of-thought',

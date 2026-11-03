@@ -43,6 +43,8 @@ export interface LocalAiCliSdk {
     list: (projectId?: string | null) => Promise<LocalAiCliSessionSummary[]>
     discover: (projectId: string) => Promise<LocalAiCliSessionDiscoveryResult>
     forget: (sessionRef: string) => Promise<{ forgotten: boolean }>
+    /** Shows the agent's own session file for a conversation; `revealed: false` when it has none. */
+    revealFile: (conversationId: string) => Promise<{ revealed: boolean }>
     onChanged: (listener: (payload: LocalAiCliSessionChanged) => void) => () => void
   }
   terminal: {
@@ -159,6 +161,8 @@ export function createLocalAiCliSdk(transport: ITuffTransport): LocalAiCliSdk {
         ),
       discover: projectId => transport.send(LocalAiCliEvents.session.discover, { projectId }),
       forget: sessionRef => transport.send(LocalAiCliEvents.session.forget, { sessionRef }),
+      revealFile: conversationId =>
+        transport.send(LocalAiCliEvents.session.revealFile, { conversationId }),
       onChanged: listener => transport.on(LocalAiCliEvents.session.changed, listener),
     },
     terminal: {

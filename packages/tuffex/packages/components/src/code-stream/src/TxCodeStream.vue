@@ -7,6 +7,7 @@ import type { CodeStreamProps } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
 import { hasDocument, hasWindow } from '../../../../utils/env'
 import TxCopyButton from '../../button/src/copy-button.vue'
+import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { highlightToHtml } from '../../stream-markdown/src/shiki-runtime'
 import { useAutoTheme } from '../../stream-markdown/src/use-auto-theme'
@@ -36,6 +37,12 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
   reserve: false,
   paced: true,
   appear: false,
+  previewable: true,
+  autoPreview: false,
+  previewScripts: false,
+  previewLabel: 'Preview',
+  codeLabel: 'Code',
+  frameLabelFormatter: (lang: string) => `${lang} preview`,
 })
 
 const emit = defineEmits<{
@@ -371,6 +378,57 @@ const tailStreamLine = computed(() => streamLines.value[streamLines.value.length
  */
 const settledCodeEls: (HTMLElement | null)[] = []
 const tailCodeEl = ref<HTMLElement | null>(null)
+
+// ---------------------------------------------------------------------------
+// Following the stream inside the capped body
+// ---------------------------------------------------------------------------
+
+/**
+ * The body is capped, so a file that is still arriving would grow below the
+ * visible area and the reader would watch a frozen first screen while the model
+ * writes. Pin it to its own tail while the source is live, and stop the moment
+ * the reader scrolls up — the same contract as the transcript and the fence.
+ */
+const bodyRef = ref<HTMLElement | null>(null)
+const detached = ref(false)
+
+function atBodyBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= 4
+}
+
+function onBodyScroll(): void {
+  const el = bodyRef.value
+  if (el && !detached.value && props.streaming)
+    detached.value = !atBodyBottom(el)
+}
+
+/** The mask owns the scroll box now; re-measure its edges after every patch. */
+const maskRef = ref<{ refresh?: () => void } | null>(null)
+
+function followBody(): void {
+  const el = bodyRef.value
+  if (!el || !props.streaming || detached.value)
+    return
+  el.scrollTop = el.scrollHeight
+  maskRef.value?.refresh?.()
+}
+
+watch(
+  () => [props.code, props.streaming],
+  () => {
+    if (!props.streaming) {
+      detached.value = false
+      if (bodyRef.value) bodyRef.value.scrollTop = 0
+      return
+    }
+    void nextTick(followBody)
+  },
+  { flush: 'post' },
+)
+
+onMounted(() => {
+  if (props.streaming) void nextTick(followBody)
+})
 const trackers = new Map<number, FreshChunks>()
 const trackedLines = new Map<number, { el: HTMLElement, html: string }>()
 let adoptNext = false
@@ -462,8 +520,77 @@ defineExpose({
   skip,
 })
 
+// ---------------------------------------------------------------------------
+// Preview
+// ---------------------------------------------------------------------------
+
+/**
+ * Languages whose settled output is worth showing rendered: markup the app can
+ * display inside a sandboxed frame. Anything that needs a toolchain stays source.
+ */
+const PREVIEWABLE = new Set(['html', 'svg', 'xml'])
+
+/**
+ * Nothing to look at until the code stops arriving: a half-written page renders
+ * as a different page on every word.
+ */
+const canPreview = computed(
+  () =>
+    props.previewable
+    && !isDiff.value
+    && props.streaming !== true
+    && !streamLive.value
+    && PREVIEWABLE.has(props.lang.toLowerCase())
+    && !!props.code.trim(),
+)
+
+const showPreview = ref(false)
+
+// A settled page opens on its rendering when the host asks for it; a fence that stops being
+// previewable (the language edited mid-stream) must not leave the toggle on a view that is gone.
+watch(
+  canPreview,
+  (allowed, was) => {
+    if (!allowed)
+      showPreview.value = false
+    else if (props.autoPreview && !was)
+      showPreview.value = true
+  },
+  { immediate: true },
+)
+
+/**
+ * What the frame may do. Scripts run only when the host opted in, and even then the frame
+ * has an opaque origin (no `allow-same-origin`) and a policy of its own: no network, no
+ * frames beyond the document's own, only inline script and style and data/blob media.
+ */
+function previewPolicy(): string {
+  const script = props.previewScripts ? ' \'unsafe-inline\'' : ' \'none\''
+  return `default-src 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src${script}`
+}
+
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
+const previewSandbox = computed(() => (props.previewScripts ? 'allow-scripts' : ''))
+
+/**
+ * The page runs one frame down, in a `srcdoc` iframe of a document this component writes. The
+ * policy meta sits in the outer document, so a nested `srcdoc` inherits it: the code is never
+ * parsed here to find a place to put the policy, and a `<head>` inside a script string cannot
+ * move it.
+ */
+const previewDocument = computed(() => {
+  const lang = props.lang.toLowerCase()
+  const inner = lang === 'svg' || lang === 'xml'
+    ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center">${props.code}</body>`
+    : props.code
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${previewPolicy()}"><style>html,body{margin:0;height:100%;background:var(--tx-bui-surface, #fff)}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${previewSandbox.value}" srcdoc="${escapeAttribute(inner)}"></iframe>`
+})
+
 const hasHeader = computed(
-  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || slots.header || slots.actions),
+  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || canPreview.value || slots.header || slots.actions),
 )
 
 /**
@@ -509,6 +636,15 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
           <span v-if="diffTally.removed" class="tx-bui-code-stream__removed">−{{ diffTally.removed }}</span>
         </span>
         <slot name="actions" />
+        <button
+          v-if="canPreview"
+          type="button"
+          class="tx-bui-code-stream__toggle"
+          :aria-pressed="showPreview"
+          @click="showPreview = !showPreview"
+        >
+          {{ showPreview ? codeLabel : previewLabel }}
+        </button>
         <TxCopyButton
           v-if="copyable"
           class="tx-bui-code-stream__copy"
@@ -521,66 +657,84 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
       </span>
     </div>
 
+    <!-- Opaque origin, no network, scripts only when the host opted in: the preview shows a
+         page, it never reaches the app. -->
+    <iframe
+      v-if="canPreview && showPreview"
+      class="tx-bui-code-stream__preview"
+      :sandbox="previewSandbox"
+      :title="frameLabelFormatter(lang)"
+      :srcdoc="previewDocument"
+    />
+
     <!-- A `div` rather than a `pre`: Vue's compiler preserves template
          whitespace inside `pre`, so the markup's own indentation would render
          as code. `white-space: pre` on each line carries the same meaning. -->
-    <div class="tx-bui-code-stream__body" :style="bodyStyle">
-      <!-- Streaming mode: every line is markup (`v-html`) so the entering
-           characters can be wrapped in it after each patch; Vue never owns a
-           text node the wrapping would split. -->
-      <template v-if="live">
-        <div
-          v-for="(markup, index) in settledStreamLines"
-          :key="index"
-          class="tx-bui-code-stream__line"
-        >
-          <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ index + 1 }}</span>
-          <span class="tx-bui-code-stream__content">
-            <code :ref="el => bindSettledCode(index, el)" class="tx-bui-code-stream__code" v-html="markup" />
-          </span>
-        </div>
-        <div v-if="tailStreamLine !== undefined" class="tx-bui-code-stream__line">
-          <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ streamLines.length }}</span>
-          <span class="tx-bui-code-stream__content">
-            <code ref="tailCodeEl" class="tx-bui-code-stream__code" v-html="tailStreamLine" />
-            <!-- Switched off by the host, the caret goes at once; only a stream that ends retracts it. -->
-            <Transition name="tx-bui-code-stream-caret" :css="caret">
-              <span v-if="showStreamCaret" class="tx-bui-code-stream__stream-caret" aria-hidden="true">
-                <slot name="caret" :state="streamState">
-                  <TxStreamCaret :state="streamState" />
-                </slot>
-              </span>
-            </Transition>
-          </span>
-        </div>
-      </template>
-      <template v-else>
-        <div
-          v-for="index in revealCount"
-          :key="index"
-          class="tx-bui-code-stream__line"
-          :class="lineClass(index)"
-        >
-          <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ gutterLabel(index) }}</span>
-          <span class="tx-bui-code-stream__content">
-            <!-- Shiki emits markup with the code text already escaped; nothing
-                 user-controlled reaches v-html unescaped. The plain branch below
-                 is ordinary interpolation. -->
-            <code
-              v-if="highlighted"
-              class="tx-bui-code-stream__code"
-              v-html="highlighted[index - 1]"
-            />
-            <code v-else class="tx-bui-code-stream__code">{{ plainLines[index - 1] }}</code>
-            <span
-              v-if="showCaret && index === revealCount"
-              class="tx-bui-code-stream__caret"
-              aria-hidden="true"
-            />
-          </span>
-        </div>
-      </template>
-    </div>
+    <TxEdgeFadeMask
+      v-else
+      ref="maskRef"
+      class="tx-bui-code-stream__scroller"
+      axis="vertical"
+      :size="18"
+    >
+        <div ref="bodyRef" class="tx-bui-code-stream__body" :style="bodyStyle" @scroll.passive="onBodyScroll">
+        <!-- Streaming mode: every line is markup (`v-html`) so the entering
+             characters can be wrapped in it after each patch; Vue never owns a
+             text node the wrapping would split. -->
+        <template v-if="live">
+          <div
+            v-for="(markup, index) in settledStreamLines"
+            :key="index"
+            class="tx-bui-code-stream__line"
+          >
+            <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ index + 1 }}</span>
+            <span class="tx-bui-code-stream__content">
+              <code :ref="el => bindSettledCode(index, el)" class="tx-bui-code-stream__code" v-html="markup" />
+            </span>
+          </div>
+          <div v-if="tailStreamLine !== undefined" class="tx-bui-code-stream__line">
+            <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ streamLines.length }}</span>
+            <span class="tx-bui-code-stream__content">
+              <code ref="tailCodeEl" class="tx-bui-code-stream__code" v-html="tailStreamLine" />
+              <!-- Switched off by the host, the caret goes at once; only a stream that ends retracts it. -->
+              <Transition name="tx-bui-code-stream-caret" :css="caret">
+                <span v-if="showStreamCaret" class="tx-bui-code-stream__stream-caret" aria-hidden="true">
+                  <slot name="caret" :state="streamState">
+                    <TxStreamCaret :state="streamState" />
+                  </slot>
+                </span>
+              </Transition>
+            </span>
+          </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="index in revealCount"
+            :key="index"
+            class="tx-bui-code-stream__line"
+            :class="lineClass(index)"
+          >
+            <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ gutterLabel(index) }}</span>
+            <span class="tx-bui-code-stream__content">
+              <!-- Shiki emits markup with the code text already escaped; nothing
+                   user-controlled reaches v-html unescaped. The plain branch below
+                   is ordinary interpolation. -->
+              <code
+                v-if="highlighted"
+                class="tx-bui-code-stream__code"
+                v-html="highlighted[index - 1]"
+              />
+              <code v-else class="tx-bui-code-stream__code">{{ plainLines[index - 1] }}</code>
+              <span
+                v-if="showCaret && index === revealCount"
+                class="tx-bui-code-stream__caret"
+                aria-hidden="true"
+              />
+            </span>
+          </div>
+        </template>
+      </div>
+    </TxEdgeFadeMask>
   </div>
 </template>
 
@@ -603,6 +757,13 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
   border-radius: var(--tx-bui-radius-card, 10px);
   background: var(--tx-bui-surface, #fff);
   box-shadow: var(--tx-bui-shadow-card, 0 0 0 1px #ecedef, 0 1px 2px #1018280a, 0 2px 6px #10182808);
+
+  // Same contract as the settled fence: a long streamed file scrolls inside the
+  // card instead of stretching the answer around it, and the mask fades the
+  // edge that can still be scrolled toward.
+  .tx-bui-code-stream__scroller {
+    max-height: var(--tx-code-stream-max-height, 360px);
+  }
 
   .tx-bui-code-stream__header {
     @include bui-card-bar;
@@ -642,6 +803,42 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     flex: none;
     align-items: center;
     gap: 4px;
+  }
+
+  // A pill beside the copy button. The ring is an inset shadow, not a border: the control has a
+  // fixed height, and a border would add to it. No colour in a transition: hover answers at once.
+  .tx-bui-code-stream__toggle {
+    height: 22px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--tx-bui-line, #ecedef);
+    color: var(--tx-bui-ink-2, #62656b);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-pressed='true'] {
+      box-shadow: inset 0 0 0 1px var(--tx-bui-ink-3, #9a9da3);
+      color: var(--tx-bui-ink, #1f2124);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-bui-ink-3, #9a9da3);
+      outline-offset: 1px;
+    }
+  }
+
+  // The rendered page sits where the listing was, at the height a short page needs and no more
+  // than the listing's own cap, so toggling does not push the answer around.
+  .tx-bui-code-stream__preview {
+    display: block;
+    width: 100%;
+    height: var(--tx-code-stream-preview-height, 360px);
+    border: 0;
+    background: var(--tx-bui-surface, #fff);
   }
 
   .tx-bui-code-stream__body {

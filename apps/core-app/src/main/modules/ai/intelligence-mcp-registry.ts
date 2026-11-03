@@ -13,7 +13,11 @@ import {
   existingDirectBinDirectories,
   findCommandInSearchRoots
 } from './providers/cli/cli-executable'
-import { projectToolError, projectToolErrorCode } from './tool-error-projection'
+import {
+  describeToolFailure,
+  projectToolError,
+  projectToolErrorCode
+} from './tool-error-projection'
 
 const mcpLog = createLogger('Intelligence').child('McpRegistry')
 
@@ -138,6 +142,7 @@ function normalizeMcpFailure(
 }
 
 function normalizeMcpCallFailure(error: unknown, sessionClosed: boolean): Error {
+  mcpLog.warn(`MCP call failed: sessionClosed=${sessionClosed} | ${describeToolFailure(error)}`)
   const declaredReason = readMcpFailureReason(error)
   if (declaredReason) return stableMcpFailure(declaredReason)
 

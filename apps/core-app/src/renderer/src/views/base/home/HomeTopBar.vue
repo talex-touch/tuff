@@ -1,12 +1,9 @@
 <script lang="ts" name="HomeTopBar" setup>
-import type { ITuffIcon } from '@talex-touch/utils'
 import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConversation'
-import { TxIcon } from '@talex-touch/tuffex/icon'
 import { useI18n } from 'vue-i18n'
 import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ShellAccountAvatar from '~/components/shell/ShellAccountAvatar.vue'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
-import HomeModelMenu from './HomeModelMenu.vue'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
@@ -18,9 +15,6 @@ import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 const props = defineProps<{
   /** Conversation title. Absent until the conversation has one, which selects the pill form below. */
   title?: string
-  modelName: string
-  /** The pinned model's provider icon. Absent under auto routing, which keeps the pill text-only. */
-  modelIcon?: ITuffIcon
   /** Whether the right panel is open, so the toggle can describe what it will do. */
   panelOpen?: boolean
   /** Metadata of the last settled turn, read by the `⋯` float panel. */
@@ -58,29 +52,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       <h1 v-if="props.title" class="HomeTopBar-Title" :title="props.title">
         {{ props.title }}
       </h1>
-
-      <div class="HomeTopBar-ModeSlot">
-        <HomeModelMenu placement="bottom-start">
-          <template #trigger="{ open }">
-            <button
-              class="HomeTopBar-ModePill"
-              :class="{ 'is-secondary': Boolean(props.title) }"
-              type="button"
-              :aria-label="`${t('home.model')} · ${props.modelName}`"
-              :aria-expanded="open"
-            >
-              <TxIcon
-                v-if="props.modelIcon"
-                class="HomeTopBar-ModeIcon"
-                :icon="props.modelIcon"
-                :size="props.title ? 12 : 14"
-              />
-              <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
-              <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
-            </button>
-          </template>
-        </HomeModelMenu>
-      </div>
     </div>
 
     <div class="HomeTopBar-Actions">
@@ -152,6 +123,8 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
 
 <style lang="scss" scoped>
 .HomeTopBar {
+  position: relative;
+  z-index: var(--home-z-topbar, 6);
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -213,64 +186,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
   max-width: 140px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/** The bar is a drag region; the pill (and the menu it opens) must stay clickable. */
-.HomeTopBar-ModeSlot {
-  flex: none;
-  -webkit-app-region: no-drag;
-}
-
-.HomeTopBar-ModePill {
-  display: inline-flex;
-  flex: none;
-  gap: 5px;
-  align-items: center;
-  padding: 6px 10px;
-  border: none;
-  border-radius: var(--shell-radius-md);
-  background: transparent;
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-body);
-  font-weight: 500;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-
-  &:hover {
-    background: var(--shell-surface-2);
-  }
-
-  // Titled form: a filled chip that reads as metadata about the title, not as a heading itself.
-  &.is-secondary {
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: var(--shell-radius-sm);
-    background: var(--shell-surface-2);
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-caption);
-    font-weight: 400;
-
-    &:hover {
-      background: var(--shell-border);
-    }
-  }
-}
-
-.HomeTopBar-ModeIcon {
-  display: inline-flex;
-  flex: none;
-  color: var(--shell-text-secondary);
-}
-
-.HomeTopBar-ModeChevron {
-  flex: none;
-  color: var(--shell-text-muted);
-  font-size: 14px;
-
-  .HomeTopBar-ModePill.is-secondary & {
-    font-size: 12px;
-  }
 }
 
 .HomeTopBar-Actions {

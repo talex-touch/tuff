@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   normalizeIntelligenceError,
-  PROVIDER_DETAIL_MAX_CHARS,
   readProviderDetail,
-  redactProviderDetail,
   toApiFailure,
   toNormalizedIntelligenceError,
   toStreamFailure
 } from './intelligence-error-normalizer'
+import { PROVIDER_DETAIL_MAX_CHARS, redactProviderDetail } from './provider-detail-redaction'
 import { createUsageLimitError } from './usage-ledger/usage-limits'
 
 describe('intelligence error normalization', () => {

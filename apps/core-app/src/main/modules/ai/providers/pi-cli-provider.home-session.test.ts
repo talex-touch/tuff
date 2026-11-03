@@ -41,6 +41,7 @@ import { markHomeChatInvoke } from '../intelligence-invoke-purpose'
 import { PiCliProvider, setPiToolRuntimeResolver } from './pi-cli-provider'
 import {
   CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   PI_CLI_ORIGIN,
   PI_CLI_PROVIDER_ID,
@@ -937,7 +938,13 @@ describe('PiCliProvider Home native sessions', () => {
             metadata: { origin: CLAUDE_CLI_ORIGIN }
           },
           () => true
-        ).chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
+        ).chatStream(
+          { messages: TURNS_ONE },
+          {
+            ...homeOptions(conversationId),
+            metadata: { ...homeOptions(conversationId).metadata, profileId: CLAUDE_CLI_PROFILE_ID }
+          }
+        )
       )
       expect(failed.error?.message).toMatch(/ENOENT/)
 

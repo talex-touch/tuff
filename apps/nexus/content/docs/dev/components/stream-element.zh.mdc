@@ -114,6 +114,12 @@ code: |
 | `renderers` | `Record<string, Component>` | — | 按名称渲染自定义片段的组件；`part-<name>` 插槽优先。 |
 | `copyLabel` | `string` | `'Copy'` | 代码片段复制按钮的文案，交给 `TxCodeStream`；委托片段里的代码块读 `markdownProps.copyCodeText`。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案；委托片段里的代码块读 `markdownProps.copiedCodeText`。 |
+| `previewable` | `boolean` | `true` | 已完成的 `html`、`svg`、`xml` 代码片段提供「预览」开关，交给 `TxCodeStream`；委托片段里的围栏读 `markdownProps`。 |
+| `autoPreview` | `boolean` | `false` | 代码片段完成时直接显示渲染结果，读者可切回源码。 |
+| `previewScripts` | `boolean` | `false` | 允许预览页运行自带脚本；预览帧始终无同源、无网络。 |
+| `previewLabel` | `string` | `'Preview'` | 预览开关文案。 |
+| `codeLabel` | `string` | `'Code'` | 预览显示时同一开关的文案。 |
+| `codeFrameLabelFormatter` | `(lang: string) => string` | ``(lang) => `${lang} preview` `` | 预览帧的可访问名称。 |
 | `markdownProps` | `Partial<StreamMarkdownProps>` | — | 透传给渲染委托片段的 `TxStreamMarkdown`。 |
 | `locale` | `string` | `'zh'` | `Intl.Segmenter` 分词所用的语言。 |
 

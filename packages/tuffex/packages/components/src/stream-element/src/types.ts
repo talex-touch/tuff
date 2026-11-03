@@ -60,6 +60,20 @@ export interface StreamElementProps {
   copyLabel?: string
   /** @default 'Copied' */
   copiedLabel?: string
+  /**
+   * Offers a rendered view on settled `html`, `svg` and `xml` code parts, handed to
+   * `TxCodeStream`. Fences inside delegated parts follow `markdownProps`. @default true
+   */
+  previewable?: boolean
+  /** Code parts open on their rendering once they settle. @default false */
+  autoPreview?: boolean
+  /** Previewed pages may run their own scripts, in a frame with no network and no host access. @default false */
+  previewScripts?: boolean
+  /** Preview toggle wording of code parts. @default 'Preview' */
+  previewLabel?: string
+  codeLabel?: string
+  /** Builds a code preview frame's accessible name. @default (lang) => `${lang} preview` */
+  codeFrameLabelFormatter?: (lang: string) => string
   /** Forwarded to the `TxStreamMarkdown` blocks that render delegated parts. */
   markdownProps?: Partial<StreamMarkdownProps>
   /** Word segmentation locale for `Intl.Segmenter`. @default 'zh' */

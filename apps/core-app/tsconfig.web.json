@@ -20,6 +20,7 @@
       "~/types/*": ["src/renderer/src/types/*"],
       "~/modules/*": ["src/renderer/src/modules/*"],
       "@talex-touch/pi-desktop-reuse/*": ["../../packages/pi-desktop-reuse/src/*"],
+      "@talex-touch/intelligence-uikit": ["../../packages/intelligence-uikit/src/index.ts"],
       "@talex-touch/tuff-business": ["../../packages/tuff-business/src/index.ts"],
       "@talex-touch/tuff-intelligence": ["../../packages/tuff-intelligence/src/index.ts"],
       "@talex-touch/tuff-intelligence/*": ["../../packages/tuff-intelligence/src/*"],

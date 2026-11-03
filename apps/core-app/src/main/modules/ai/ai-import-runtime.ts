@@ -553,6 +553,7 @@ export class AiImportRuntimeService {
               metadata: {
                 importedCandidateId: candidate.id,
                 importedFrom: candidate.provider,
+                ...(p.api === 'openai-responses' ? { transport: 'responses' } : {}),
                 headers: p.headers,
                 thinkingLevelMap: p.models.find((m) => m.thinkingLevelMap)?.thinkingLevelMap
               }

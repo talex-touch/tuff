@@ -109,6 +109,8 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   protected readonly defaultChatModel = 'llama3.1'
   protected readonly defaultEmbeddingModel = 'nomic-embed-text'
   protected readonly requireApiKey = false
+  /** Ollama models vary in tool support, so tools stay on the prompt protocol here. */
+  override readonly supportsNativeTools = false
 
   private resolveOllamaBaseUrl(): string {
     const normalized = (this.config.baseUrl || this.defaultBaseUrl).replace(/\/+$/, '')

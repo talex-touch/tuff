@@ -30,13 +30,14 @@ const props = withDefaults(
     permissionMode: AgentToolsMode
     model: { label: string; icon?: ITuffIcon; effort?: string }
     sendState: SendState
+    sendQueues?: boolean
     micState: DictationState
     /** This build cannot capture audio: the entry is withheld instead of failing on press. */
     micBlocked?: boolean
     micElapsedMs?: number
     micOutcome?: DictationOutcome | null
   }>(),
-  { micBlocked: false, micElapsedMs: 0, micOutcome: null }
+  { sendQueues: false, micBlocked: false, micElapsedMs: 0, micOutcome: null }
 )
 
 const emit = defineEmits<{
@@ -61,6 +62,21 @@ const dictating = computed(() => props.micState !== 'idle')
 const timerText = computed(() => {
   const seconds = Math.max(0, Math.floor(props.micElapsedMs / 1000))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+})
+
+const sendLabel = computed(() => {
+  if (props.sendQueues) return t('home.workspace.queue.add')
+  return props.micState === 'idle' ? t('home.send') : t('home.composer.finishAndSend')
+})
+
+const sendTitle = computed(() => {
+  if (props.sendQueues) return t('home.workspace.queue.addHint')
+  return undefined
+})
+
+const sendIcon = computed(() => {
+  if (props.sendQueues) return 'i-ri-play-list-add-line'
+  return 'i-ri-arrow-up-line'
 })
 
 /** What a screen reader hears, once per state — never the ticking timer. */
@@ -112,14 +128,16 @@ defineExpose({ launch })
       <ComposerControl :label="t('home.attach')" @click="fileInputRef?.click()">
         <span class="i-ri-add-line" />
       </ComposerControl>
-      <HomePermissionMenu
-        :mode="permissionMode"
-        @update:mode="emit('update:permissionMode', $event)"
-        @reset="emit('reset-approvals')"
-      />
-      <!-- The host's execution controls: Chat / Agent and its profile, and the queue key while Main
-           is busy. Left of the model so the row reads "how" before "with what". -->
-      <slot name="mode" />
+      <div class="ComposerToolbar-Badges">
+        <HomePermissionMenu
+          :mode="permissionMode"
+          @update:mode="emit('update:permissionMode', $event)"
+          @reset="emit('reset-approvals')"
+        />
+        <!-- The host's execution controls: Chat / Agent and its profile, and the queue key while Main
+             is busy. Left of the model so the row reads "how" before "with what". -->
+        <slot name="mode" />
+      </div>
     </div>
 
     <!-- The session's state where the left cluster was. Drawn for the eye only: the timer ticks
@@ -174,7 +192,9 @@ defineExpose({ launch })
         <ComposerSendIsland
           ref="islandRef"
           :state="sendState"
-          :send-label="micState === 'idle' ? t('home.send') : t('home.composer.finishAndSend')"
+          :send-label="sendLabel"
+          :send-title="sendTitle"
+          :send-icon="sendIcon"
           :stop-label="t('home.stop')"
           :stop-text="t('home.composer.stop')"
           @send="emit('send')"
@@ -207,6 +227,32 @@ defineExpose({ launch })
   gap: 8px;
   align-items: center;
 }
+.ComposerToolbar-Badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  opacity: 0;
+  transform: translateX(-4px);
+  pointer-events: none;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition:
+      opacity 0.25s cubic-bezier(0.2, 0, 0, 1),
+      transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .ComposerToolbar:hover &,
+  &:focus-within,
+  &.is-active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transform: none;
+  }
+}
 
 .ComposerToolbar-Right {
   position: relative;
@@ -230,6 +276,9 @@ defineExpose({ launch })
 }
 
 .ComposerToolbar-ModelSlot {
+  display: flex;
+  align-items: center;
+  height: 32px;
   flex: none;
   transform-origin: right center;
 }

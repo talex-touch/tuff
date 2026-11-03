@@ -102,6 +102,11 @@ export function hardenHtmlExtension(options: () => HardenHtmlOptions): MarkedExt
        * against the transcript's scroller, so the header would peel off and
        * float over the whole conversation. Contained here, both the horizontal
        * scroll and the sticky header stay inside the message they belong to.
+       *
+       * The copy button comes after the scroll container, in a line of its own:
+       * floated over the table it landed on the last column's title, and the
+       * sticky header (which needs a z-index to stay above its own rows) painted
+       * over it — the pill arrived half-clipped and the header unreadable.
        */
       table(token: Tokens.Table): string {
         // marked 17 hands over the parsed token instead of pre-rendered header/body strings, so the

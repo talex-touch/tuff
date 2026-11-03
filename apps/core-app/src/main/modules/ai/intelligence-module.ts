@@ -811,6 +811,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     setIntelligenceAutonomousRuntimeAdapter({
       executeAgentCapability: (payload, options) =>
         aiCliOrchestrator.executeAgentCapability(payload, options),
+      streamAgentCapability: (payload, options) =>
+        aiCliOrchestrator.streamAgentCapability(payload, options),
       executeWorkflowCapability: (payload, options) =>
         aiCliOrchestrator.executeWorkflowCapability(payload, options)
     })
@@ -1536,6 +1538,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         )
         await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
+        if (capabilityId === 'agent.run') await this.waitForAgentRuntime()
         const streamPayload = await applyHomeConversationInjection(
           payload,
           scopedOptions,

@@ -2,6 +2,7 @@ export * from "./adapters/index";
 export * from "./client";
 export * from "./graph";
 export * from "./langchain-bridge";
+export * from "./omp/index";
 export * from "./policy/index";
 export * from "./protocol/index";
 export * from "./registry/index";

@@ -134,6 +134,7 @@ vi.mock('./agents', () => ({
 
 const autonomousRuntimeMocks = {
   executeAgentCapability: vi.fn(),
+  streamAgentCapability: vi.fn(),
   executeWorkflowCapability: vi.fn()
 }
 setIntelligenceAutonomousRuntimeAdapter(autonomousRuntimeMocks)
@@ -4614,6 +4615,71 @@ describe('tuffIntelligenceSDK invoke', () => {
         }
       })
     )
+  })
+
+  it('streams agent.run through the runtime and reports its tool calls as structured parts', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'agent.run',
+      type: IntelligenceCapabilityType.AGENT,
+      name: 'Agent Execution',
+      description: 'test streamed agent capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
+    })
+    const chat = vi.fn()
+    setIntelligenceProviderManager(
+      new FakeProviderManager([
+        createProvider(
+          {
+            id: 'agent-stream-chat',
+            type: IntelligenceProviderType.CUSTOM,
+            name: 'Agent Stream Chat',
+            enabled: true,
+            priority: 1,
+            apiKey: 'stream-key',
+            models: [{ id: 'stream-model' }],
+            capabilities: ['text.chat']
+          },
+          chat
+        )
+      ])
+    )
+    const result = {
+      result: 'done',
+      steps: [],
+      toolCalls: [{ tool: 'file.read', input: { path: 'a.txt' }, output: 'hello' }],
+      iterations: 2
+    }
+    autonomousRuntimeMocks.streamAgentCapability.mockImplementation(async function* () {
+      yield { type: 'start', capabilityId: 'agent.run', traceId: 'run_1' }
+      yield {
+        type: 'part',
+        capabilityId: 'agent.run',
+        partEvent: { kind: 'tool-start', callId: 'c1', name: 'file.read' }
+      }
+      yield { type: 'delta', capabilityId: 'agent.run', delta: 'done' }
+      yield { type: 'end', capabilityId: 'agent.run', traceId: 'run_1', result, content: 'done' }
+    })
+
+    const events: Array<{ type: string }> = []
+    for await (const event of new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    }).stream('agent.run', { task: 'read a.txt' }, { metadata: { sessionId: 's1' } })) {
+      events.push(event)
+    }
+
+    expect(events.map((event) => event.type)).toEqual(['start', 'part', 'delta', 'end'])
+    expect(events.at(-1)).toMatchObject({ result })
+    expect(autonomousRuntimeMocks.streamAgentCapability).toHaveBeenCalledWith(
+      { task: 'read a.txt' },
+      expect.objectContaining({
+        allowedProviderIds: ['agent-stream-chat'],
+        metadata: expect.objectContaining({ capabilityId: 'agent.run', sessionId: 's1' })
+      })
+    )
+    // The agent route never asks the chat provider to answer: the runtime does, through its own calls.
+    expect(chat).not.toHaveBeenCalled()
   })
 })
 

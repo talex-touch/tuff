@@ -30,7 +30,13 @@ function readCodexUsage(value: unknown): IntelligenceUsageInfo | null {
   const promptTokens = readCount(usage.input_tokens)
   const completionTokens = readCount(usage.output_tokens)
   if (!promptTokens && !completionTokens) return null
-  return { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens }
+  const cacheReadTokens = readCount(usage.cached_input_tokens)
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {})
+  }
 }
 
 /** The failure text of `turn.failed`, which carries either a message or an error object. */

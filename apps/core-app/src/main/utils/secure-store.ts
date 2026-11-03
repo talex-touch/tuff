@@ -661,6 +661,27 @@ export async function wrapSecureStoreValue(
   }
 }
 
+/**
+ * Opens a value `wrapSecureStoreValue` sealed under `rawKey` and `purpose`. The key and purpose are
+ * part of what the envelope is authenticated against, so a value moved to another key, or sealed
+ * for another purpose, does not open. Returns null when it does not open for any reason (not an
+ * envelope, wrong key, tampered, root secret unavailable); never throws.
+ */
+export async function unwrapSecureStoreValue(
+  rootPath: string,
+  rawKey: string,
+  wrapped: string,
+  purpose?: SecureStorePurpose
+): Promise<string | null> {
+  try {
+    const envelope = tryParseEnvelope(wrapped)
+    if (!envelope) return null
+    return await decryptEnvelope(rootPath, normalizeSecureStoreKey(rawKey), envelope, purpose)
+  } catch {
+    return null
+  }
+}
+
 async function getSecureStoreValueInternal(
   rootPath: string,
   rawKey: string,

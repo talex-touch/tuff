@@ -32,7 +32,8 @@ code: |
 ### Best Practices
 
 - Key steps by a stable `id`, not an array index.
-- Keep at most one `active` step; auto-scroll follows only one.
+- Keep at most one `active` step; body following applies to only one.
+- A thinking body can be handed over whole: the component releases it at a steady pace itself, so the host does not split a paragraph into small pieces to feed it.
 - Move a finished step from `active` to `done` or `error`, or its spinner stays.
 - Write tool titles as call signatures (`read_file(src/main.ts)`), not bare tool names.
 - For custom step rendering, compose `TxReasoningDisclosure` and `TxToolCallCard`.
@@ -48,7 +49,7 @@ code: |
 | `defaultOpen` | `boolean` | `true` | Open state while not streaming. |
 | `label` | `string` | `'Chain of thought'` | Header label; override it on non-English surfaces. |
 | `userOpen` | `boolean` | — | Host-held open state that overrides everything; feed `toggle` back in so it survives remounts. |
-
+| `bullets` | `boolean` | `steps.length > 1` | Whether to show step status bullet markers. Omitted for single-step thoughts by default. |
 ### Events
 
 | Name | Payload | Description |
@@ -58,7 +59,8 @@ code: |
 ## Overview
 
 - Open state: `userOpen` wins, then a user click; otherwise it follows active steps while streaming and `defaultOpen` when not.
-- When any step's `body` grows, the active step's body scrolls to its end.
+- A thinking step's `body` is released at a steady pace while `streaming` and the step is `active` (the same clock as streamed text: a steady cadence, with a backlog cleared within about 0.6 s). A settled step, and users who prefer reduced motion, see it in full at once. What is shown is always a prefix of the text that has arrived, never rewritten; unfinished Markdown (such as `**bold`) is closed temporarily so no stray asterisks show.
+- The thinking body follows its end as text is released, stops following once the reader scrolls up, and resumes near the bottom. When a tool step's `body` grows, the active body scrolls to its end.
 - A `done` step with `durationMs` shows its duration after the title (`· 3.2s`; whole seconds from 10s).
 - The header count is `steps.length`, hidden for a single step.
 - The header is a native `<button>` with `aria-expanded` and `aria-controls`; steps are an `<ol>`.

@@ -13,7 +13,9 @@ import type {
 import { createToolKit } from '@talex-touch/tuff-intelligence'
 import { z } from 'zod'
 import { createLogger } from '../../../utils/logger'
+import { redactProviderDetail } from '../provider-detail-redaction'
 import {
+  describeToolFailure,
   formatStableToolError,
   projectToolError,
   projectToolErrorCode,
@@ -164,6 +166,7 @@ export class ToolRegistry {
   ): Promise<ToolExecutionResult> {
     const tool = this.tools.get(toolId)
     if (!tool) {
+      logWarn(`Agent tool not found: tool=${redactProviderDetail(toolId)}`)
       return {
         success: false,
         error:
@@ -181,6 +184,9 @@ export class ToolRegistry {
       // Validate input against schema if available
       const validationError = this.validateInput(input, tool.definition.inputSchema)
       if (validationError) {
+        logWarn(
+          `Agent tool input rejected: tool=${redactProviderDetail(toolId)} ${redactProviderDetail(validationError)}`
+        )
         return {
           success: false,
           error:
@@ -213,7 +219,9 @@ export class ToolRegistry {
       }
 
       const projection = projectRegistryError(error)
-      logWarn(`Agent tool failed: ${formatStableToolError(projection)}`)
+      logWarn(
+        `Agent tool failed: ${formatStableToolError(projection)} tool=${redactProviderDetail(toolId)} | ${describeToolFailure(error)}`
+      )
 
       return {
         success: false,

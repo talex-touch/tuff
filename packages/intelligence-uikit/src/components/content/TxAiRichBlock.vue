@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TxAiRichBlockProps } from '../../types'
+import type { TxAiRichBlockProps, TxAiToolStatus } from '../../types'
 import type { TxAutoSizerInstance } from '@talex-touch/tuffex/auto-sizer'
 import { computed, ref, watch } from 'vue'
 import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
@@ -34,6 +34,18 @@ const thoughtTitle = computed(() => {
 })
 const thoughtText = computed(() => String(props.block.content ?? props.block.value ?? ''))
 const isThoughtRunning = computed(() => props.block.status === 'running' || props.block.status === 'waiting' || props.block.status === 'streaming')
+// Pass the block's own status through. Coercing everything that was not `error` or
+// `cancelled` to `running` made a finished tool call spin forever.
+const toolStatus = computed<TxAiToolStatus>(() => {
+  const status = props.block.status
+  if (status === 'pending' || status === 'running' || status === 'success' || status === 'error' || status === 'cancelled')
+    return status
+  if (status === 'waiting' || status === 'streaming')
+    return 'running'
+  if (status === 'done')
+    return 'success'
+  return 'running'
+})
 
 async function setThoughtExpanded(next: boolean) {
   const seq = ++expandSeq
@@ -116,9 +128,7 @@ watch(
               :text="thoughtText"
               motion="fade"
               streaming
-              wrap
-              :duration="280"
-              :stagger="14"
+              :stagger="24"
               :cursor="false"
             />
             <span v-else class="tx-ai-rich-block__thought-plain">
@@ -144,15 +154,18 @@ watch(
         :language="typeof block.meta?.language === 'string' ? block.meta.language : ''"
       />
 
-      <button v-else-if="block.type === 'image'" type="button" class="tx-ai-rich-block__image">
+      <!-- Nothing listens for a click on a block image: the conversation's `imageClick`
+           only fires for message attachments. A `<button>` here was a focusable control
+           that did nothing, so the block is plain content until a viewer is wired. -->
+      <figure v-else-if="block.type === 'image'" class="tx-ai-rich-block__image">
         <img :src="String(block.content ?? block.value ?? '')" alt="" loading="lazy">
-      </button>
+      </figure>
 
       <TxAiLoadingHint
         v-else-if="block.type === 'tool'"
         :label="block.name || 'Tool call'"
         :description="String(block.content ?? '')"
-        :status="block.status === 'error' ? 'error' : block.status === 'cancelled' ? 'cancelled' : 'running'"
+        :status="toolStatus"
       />
 
       <div v-else-if="block.type === 'error'" class="tx-ai-rich-block__error" role="alert">

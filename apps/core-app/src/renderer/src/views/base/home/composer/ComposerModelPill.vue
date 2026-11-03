@@ -53,12 +53,22 @@ const ariaLabel = computed(() =>
 </template>
 
 <style lang="scss" scoped>
+.ComposerModelPill {
+  max-width: min(360px, 45vw);
+}
+
 .ComposerModelPill-Icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
 /* A glyph (3:1 suffices): the secondary grey measures 4.42 light / 6.30 dark on the chip. */
 .ComposerModelPill-Chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
   width: 14px;
   height: 14px;

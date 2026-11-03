@@ -19,6 +19,34 @@ export interface PiRuntimeToolSpec {
   inputSchema: JsonSchema
 }
 
+/** The counters a run's budgets are measured by; they are carried with every logged message. */
+export interface PiRuntimeCounters {
+  /** Model requests made so far: the next one is `modelSteps + 1`, so tool call ids never repeat. */
+  modelSteps: number
+  toolCalls: number
+  usage: PiRuntimeUsage
+  costKnown: boolean
+}
+
+/**
+ * One entry of a run's message log: an agent message as it ended, with the counters as they stood
+ * once it had. The main process stores these encrypted, one per message, and resumes from them.
+ */
+export interface PiRuntimeRunRecord extends PiRuntimeCounters {
+  message: unknown
+}
+
+/**
+ * How a run that was stopped continues, decided by the main process from the log it kept: the
+ * conversation the agent starts from, and the assistant message it replays instead of asking the
+ * model again, when that turn's work was not finished.
+ */
+export interface PiRuntimeResume {
+  messages: unknown[]
+  replay?: unknown
+  counters: PiRuntimeCounters
+}
+
 export interface PiRuntimeStartPayload {
   run: AiOrchestratorRunRecord
   request: AiOrchestratorExecuteRequest
@@ -26,12 +54,15 @@ export interface PiRuntimeStartPayload {
   tools: PiRuntimeToolSpec[]
   history: AiSessionHistoryMessage[]
   budget: AiExecutionBudget
+  /** Present only on a run resumed after a restart that had logged at least one tool turn. */
+  resume?: PiRuntimeResume
 }
 
 export interface PiRuntimeUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
+  cacheReadTokens?: number
   cost?: number
 }
 
@@ -49,6 +80,11 @@ export interface PiRuntimeModelResponse {
   requestId: string
   runId: string
   text?: string
+  toolCalls?: Array<{
+    id?: string
+    name: string
+    arguments: Record<string, unknown>
+  }>
   usage?: PiRuntimeUsage
   provider?: string
   model?: string
@@ -89,6 +125,7 @@ export type PiRuntimeParentPayload =
   | { type: 'model.request'; payload: PiRuntimeModelRequest }
   | { type: 'tool.request'; payload: PiRuntimeToolRequest }
   | { type: 'run.event'; payload: PiRuntimeRunEvent }
+  | { type: 'run.record'; payload: { runId: string; record: PiRuntimeRunRecord } }
   | { type: 'run.completed'; payload: PiRuntimeRunResult }
   | { type: 'run.failed'; runId: string; error: string }
   | { type: 'run.cancelled'; runId: string }

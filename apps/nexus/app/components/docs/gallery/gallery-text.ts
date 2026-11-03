@@ -256,7 +256,12 @@ const zh = {
     pagerLabelFormatter: (position: number) => `转到第 ${position} 题`,
   } satisfies PropsOf<typeof TxApprovalCard>,
   taskRows: { doneText: '已完成', errorText: '失败' } satisfies PropsOf<typeof TxTaskRows>,
-  toolCallCard: { doneLabel: '完成', inputLabel: '输入' } satisfies PropsOf<typeof TxToolCallCard>,
+  toolCallCard: {
+    doneLabel: '完成',
+    inputLabel: '输入',
+    linesToggleFormatter: (hiddenCount: number, expanded: boolean) =>
+      expanded ? '收起' : `还有 ${hiddenCount} 行`,
+  } satisfies PropsOf<typeof TxToolCallCard>,
   toolConfirmation: {
     allowLabel: '允许',
     denyLabel: '拒绝',

@@ -47,12 +47,33 @@ function sortByPriority(
     return a.id.localeCompare(b.id)
   })
 }
+export function isLocalCliProvider(
+  provider:
+    | IntelligenceProviderConfig
+    | { metadata?: Record<string, unknown>; id?: string; type?: string }
+): boolean {
+  return (
+    provider.metadata?.isLocalCli === true ||
+    (typeof provider.id === 'string' && /-(cli|omp|pi|codex|claude)$/.test(provider.id))
+  )
+}
 
 function buildFallbackProviders(
   providers: IntelligenceProviderConfig[],
   selectedProviderId: string
 ): IntelligenceProviderConfig[] {
-  return providers.filter((provider) => provider.id !== selectedProviderId)
+  const selected = providers.find((provider) => provider.id === selectedProviderId)
+  const selectedIsCli = selected ? isLocalCliProvider(selected) : false
+  let sawCli = selectedIsCli
+
+  return providers.filter((provider) => {
+    if (provider.id === selectedProviderId) return false
+    if (isLocalCliProvider(provider)) {
+      if (sawCli) return false
+      sawCli = true
+    }
+    return true
+  })
 }
 
 class DefaultStrategyManager implements StrategyManager {
@@ -118,16 +139,36 @@ class DefaultStrategyManager implements StrategyManager {
 
       return {
         selectedProvider,
-        fallbackProviders: [
-          ...sortedProviders.slice(selectedIndex + 1),
-          ...sortedProviders.slice(0, selectedIndex)
-        ],
+        fallbackProviders: (() => {
+          const rawFallbacks = [
+            ...sortedProviders.slice(selectedIndex + 1),
+            ...sortedProviders.slice(0, selectedIndex)
+          ]
+          const selectedIsCli = isLocalCliProvider(selectedProvider)
+          let sawCli = selectedIsCli
+          return rawFallbacks.filter((provider) => {
+            if (isLocalCliProvider(provider)) {
+              if (sawCli) return false
+              sawCli = true
+            }
+            return true
+          })
+        })(),
         reasoning: 'Round-robin provider selection'
       }
     }
 
     // adaptive-default currently keeps deterministic priority ordering until live telemetry is available.
-    const [selected, ...fallbacks] = sortedProviders
+    const [selected, ...rawFallbacks] = sortedProviders
+    const selectedIsCli = isLocalCliProvider(selected)
+    let sawCli = selectedIsCli
+    const fallbacks = rawFallbacks.filter((provider) => {
+      if (isLocalCliProvider(provider)) {
+        if (sawCli) return false
+        sawCli = true
+      }
+      return true
+    })
 
     return {
       selectedProvider: selected,

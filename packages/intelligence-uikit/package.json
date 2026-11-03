@@ -15,6 +15,8 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./openui-prompt": "./src/components/openui/prompt.ts",
+    "./utils": "./src/utils/index.ts",
     "./style.css": "./src/style/index.scss"
   },
   "files": [
@@ -32,15 +34,20 @@
     "vue": "^3.5.27"
   },
   "dependencies": {
+    "@lucide/vue": "^1.66.0",
+    "@openuidev/lang-core": "^1.0.2",
     "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",
-    "@talex-touch/utils": "workspace:*"
+    "@talex-touch/utils": "workspace:*",
+    "echarts": "catalog:",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",
     "eslint": "catalog:dev",
+    "sass": "catalog:",
     "typescript": "catalog:dev",
     "vite": "^7.3.6",
     "vitest": "^3.2.7",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TxAiConversationProps } from '../../types'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useStickToBottom } from '@talex-touch/tuffex/conversation-stream'
 import TxAiMessage from './TxAiMessage.vue'
 
 defineOptions({
@@ -21,76 +22,44 @@ const emit = defineEmits<{
 
 const viewportRef = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
-const showBackToBottom = ref(false)
-const isFollowing = ref(true)
 let resizeObserver: ResizeObserver | undefined
 
-function hiddenBottom(el: HTMLElement): number {
-  return Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight))
-}
-
-function syncScrollState() {
-  const el = viewportRef.value
-  if (!el)
-    return
-  const bottomGap = hiddenBottom(el)
-  isFollowing.value = bottomGap <= props.followGap
-  showBackToBottom.value = !isFollowing.value
-}
+// The follow is tuffex's critically-damped spring, not a scroll per delta: a stream
+// grows the list every few tens of milliseconds, and a fresh `scrollTo` each time reads
+// as glide-stop-glide. The spring re-reads the live bottom every frame and carries its
+// velocity through, so token growth is one continuous slide. It also owns the
+// "user scrolled away" policy, which is why following stops on an upward wheel but not
+// on the component's own programmatic scrolls.
+const { atBottom, handleScroll, handleWheel, scrollToBottom: stickToBottom, followIfSticking }
+  = useStickToBottom(viewportRef, { threshold: props.followGap })
 
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
-  const el = viewportRef.value
-  if (!el)
-    return
-
-  if (typeof el.scrollTo === 'function') {
-    el.scrollTo({ top: el.scrollHeight, behavior })
-    return
-  }
-
-  el.scrollTop = el.scrollHeight
-}
-
-async function scheduleScrollToBottom(behavior: ScrollBehavior = 'auto') {
-  await nextTick()
-  scrollToBottom(behavior)
-
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(() => {
-      scrollToBottom(behavior)
-      syncScrollState()
-    })
-    return
-  }
-
-  syncScrollState()
+  stickToBottom(behavior)
 }
 
 watch(
   () => props.messages,
   async () => {
-    const el = viewportRef.value
-    const shouldFollow = isFollowing.value || !el || hiddenBottom(el) <= props.followGap
     await nextTick()
-    syncScrollState()
-    if (props.autoFollow && shouldFollow)
-      await scheduleScrollToBottom('auto')
+    if (props.autoFollow)
+      followIfSticking(120)
   },
   { deep: true },
 )
 
 onMounted(async () => {
   await nextTick()
-  syncScrollState()
   if (props.autoFollow)
-    await scheduleScrollToBottom('auto')
+    stickToBottom('auto')
 
   if (typeof ResizeObserver === 'undefined' || !listRef.value)
     return
 
+  // Content also grows without a message change: an image decoding, a code block
+  // highlighting, a thought block expanding.
   resizeObserver = new ResizeObserver(() => {
-    if (props.autoFollow && isFollowing.value)
-      void scheduleScrollToBottom('auto')
+    if (props.autoFollow)
+      followIfSticking(120)
   })
   resizeObserver.observe(listRef.value)
 })
@@ -101,7 +70,8 @@ onBeforeUnmount(() => {
 
 defineExpose({
   scrollToBottom,
-  syncScrollState,
+  /** Re-measures whether the viewport counts as pinned to the bottom. */
+  syncScrollState: handleScroll,
 })
 </script>
 
@@ -110,7 +80,8 @@ defineExpose({
     <div
       ref="viewportRef"
       class="tx-ai-conversation__viewport"
-      @scroll="syncScrollState"
+      @scroll="handleScroll"
+      @wheel.passive="handleWheel"
     >
       <div ref="listRef" class="tx-ai-conversation__list">
         <slot name="before" />
@@ -126,9 +97,9 @@ defineExpose({
     </div>
 
     <div class="tx-ai-conversation__floating">
-      <slot name="floating" :scroll-to-bottom="scrollToBottom" :show-back-to-bottom="showBackToBottom">
+      <slot name="floating" :scroll-to-bottom="scrollToBottom" :show-back-to-bottom="!atBottom">
         <button
-          v-if="showBackToBottom"
+          v-if="!atBottom"
           type="button"
           class="tx-ai-conversation__back"
           @click="scrollToBottom()"

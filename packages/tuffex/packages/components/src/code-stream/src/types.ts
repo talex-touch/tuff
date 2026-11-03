@@ -104,6 +104,28 @@ export interface CodeStreamProps {
   /** @default 'Copied' */
   copiedLabel?: string
   /**
+   * Offers a rendered view beside the copy button for `html`, `svg` and `xml` code, once the
+   * code stops arriving (never while streaming, never for a diff).
+   * @default true
+   */
+  previewable?: boolean
+  /**
+   * Opens on the rendering the moment the code settles, instead of on the source. The reader
+   * can still switch back. @default false
+   */
+  autoPreview?: boolean
+  /**
+   * Lets the previewed page run its own scripts. The frame keeps an opaque origin and a policy
+   * with no network, so a script can draw but cannot reach the host or the web. @default false
+   */
+  previewScripts?: boolean
+  /** @default 'Preview' */
+  previewLabel?: string
+  /** Toggle text while the rendering shows. @default 'Code' */
+  codeLabel?: string
+  /** Builds the preview frame's accessible name from the language. @default (lang) => `${lang} preview` */
+  frameLabelFormatter?: (lang: string) => string
+  /**
    * Floor for the code area. Defaults to the height of the full listing, so a
    * reveal grows into reserved space instead of pushing the page around.
    */

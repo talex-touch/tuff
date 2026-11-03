@@ -290,6 +290,7 @@ TAXONOMY: dict[str, list[str]] = {
         "approval-card",
         "working-indicator",
         "bot-avatar",
+        "miko",
     ],
     "AiReasoning": [
         "ai-elements",

@@ -149,6 +149,14 @@ export interface WorkspaceRunDecisionRequest {
   runId: string
 }
 
+export interface WorkspaceUpdateQueuedRequest {
+  conversationId: string
+  queueId: string
+  text: string
+  attachments?: IntelligenceMessageAttachment[]
+  keptAttachmentIds?: string[]
+}
+
 export interface WorkspaceMessageUpdate {
   conversationId: string
   turnId: string
@@ -165,6 +173,7 @@ export const AgentWorkspaceEvents = {
   removeQueued: defineEvent('agent-workspace').module('api').event('queue:remove').define<{ conversationId: string; queueId: string }, ConversationWorkspaceState>(),
   reorderQueued: defineEvent('agent-workspace').module('api').event('queue:reorder').define<{ conversationId: string; queueId: string; direction: 'up' | 'down' }, ConversationWorkspaceState>(),
   promoteQueued: defineEvent('agent-workspace').module('api').event('queue:promote').define<{ conversationId: string; queueId: string }, ConversationWorkspaceState>(),
+  updateQueued: defineEvent('agent-workspace').module('api').event('queue:update').define<WorkspaceUpdateQueuedRequest, ConversationWorkspaceState>(),
   fork: defineEvent('agent-workspace').module('api').event('fork').define<WorkspaceForkRequest, ConversationWorkspaceState>(),
   approveRun: defineEvent('agent-workspace').module('api').event('run:approve').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
   rejectRun: defineEvent('agent-workspace').module('api').event('run:reject').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
@@ -181,6 +190,7 @@ export interface AgentWorkspaceSdk {
   removeQueued: (conversationId: string, queueId: string) => Promise<ConversationWorkspaceState>
   reorderQueued: (conversationId: string, queueId: string, direction: 'up' | 'down') => Promise<ConversationWorkspaceState>
   promoteQueued: (conversationId: string, queueId: string) => Promise<ConversationWorkspaceState>
+  updateQueued: (request: WorkspaceUpdateQueuedRequest) => Promise<ConversationWorkspaceState>
   fork: (request: WorkspaceForkRequest) => Promise<ConversationWorkspaceState>
   approveRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
   rejectRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
@@ -198,6 +208,7 @@ export function createAgentWorkspaceSdk(transport: Pick<ITuffTransport, 'send' |
     removeQueued: (conversationId, queueId) => transport.send(AgentWorkspaceEvents.removeQueued, { conversationId, queueId }),
     reorderQueued: (conversationId, queueId, direction) => transport.send(AgentWorkspaceEvents.reorderQueued, { conversationId, queueId, direction }),
     promoteQueued: (conversationId, queueId) => transport.send(AgentWorkspaceEvents.promoteQueued, { conversationId, queueId }),
+    updateQueued: request => transport.send(AgentWorkspaceEvents.updateQueued, request),
     fork: request => transport.send(AgentWorkspaceEvents.fork, request),
     approveRun: request => transport.send(AgentWorkspaceEvents.approveRun, request),
     rejectRun: request => transport.send(AgentWorkspaceEvents.rejectRun, request),

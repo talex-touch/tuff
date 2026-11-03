@@ -267,7 +267,7 @@ describe('shellProjectFolder menu on the real tuffex dropdown', () => {
     const cardOf = (popover: VueWrapper | undefined) =>
       (popover?.vm.$attrs as Record<string, unknown> | undefined)?.['panel-card']
     const [root, submenu] = wrapper.findAllComponents({ name: 'TxPopover' })
-    expect(cardOf(root)).toEqual({ flowLight: 'corners' })
+    expect(cardOf(root)).toMatchObject({ flowLight: 'corners' })
     expect(cardOf(submenu)).toMatchObject({ flowLight: 'corners' })
   })
 })

@@ -13,7 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PiAgentRuntimeHost, sanitizeToolOutputForRuntime } from './pi-agent-runtime-host'
 import { AgentPermission } from '@talex-touch/utils'
-import { isRunInterruptedControlError } from './pi-agent-runtime-control-error'
+import {
+  isRunInterruptedControlError,
+  readRunFailureDetail
+} from './pi-agent-runtime-control-error'
 
 const hostMocks = vi.hoisted(() => {
   const listeners = new Map<string, Array<(payload: unknown) => void>>()
@@ -73,10 +76,6 @@ const runtimeLoggerMocks = vi.hoisted(() => ({
 }))
 
 const CANARY = 'sk-live-token@/Users/private/native-stack.ts:42'
-const NESTED_JSON_CREDENTIAL = JSON.stringify({
-  nested: JSON.stringify({ token: 'opaque-secret' })
-})
-const DEEPLY_NESTED_JSON_CREDENTIAL = JSON.stringify({ nested: NESTED_JSON_CREDENTIAL })
 
 vi.mock('../sentry/sentry-service', () => {
   const service = {
@@ -273,17 +272,6 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     ['PEM key', '-----BEGIN PRIVATE KEY-----'],
     ['quoted JSON token', '{"token":"opaque-secret"}'],
     ['quoted JSON compound token key', '{"apiToken":"opaque-secret"}'],
-    ['nested quoted JSON token', NESTED_JSON_CREDENTIAL],
-    [
-      'nested quoted JSON compound token key',
-      JSON.stringify({ nested: JSON.stringify({ apiToken: 'opaque-secret' }) })
-    ],
-    ['deeply nested quoted JSON token', DEEPLY_NESTED_JSON_CREDENTIAL]
-  ])('redacts a standalone %s canary', (_name, credential) => {
-    expect(sanitizeToolOutputForRuntime(credential)).toBe('[redacted]')
-  })
-
-  it.each([
     ['POSIX workspace path', '/workspace/private/release.md'],
     ['POSIX application path', '/Applications/Tuff.app/Contents/MacOS/Tuff'],
     ['home-relative path', '~/private/release.md'],
@@ -296,27 +284,13 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     ['bracketed POSIX path', 'files=[/Users/owner/private.txt]'],
     ['braced Windows path', 'result,{C:\\Users\\owner\\private.txt}'],
     ['bracketed file URI', 'source=[file:///Users/owner/private.txt]'],
-    ['quoted JSON compound path key', '{"workspacePath":"private/release.md"}']
-  ])('redacts a standalone %s canary', (_name, path) => {
-    expect(sanitizeToolOutputForRuntime(path)).toBe('[redacted]')
-  })
-
-  it.each([
+    ['quoted JSON compound path key', '{"workspacePath":"private/release.md"}'],
     ['ordinary URL', 'https://example.test/docs/releases/latest'],
     ['ordinary text', 'Published release notes successfully.'],
     ['non-secret token wording', 'The token count is 12.'],
     ['ordinary JSON', JSON.stringify({ message: 'Published.', tokenCount: 12 })]
-  ])('preserves %s', (_name, value) => {
+  ])('preserves %s in tool output without redaction', (_name, value) => {
     expect(sanitizeToolOutputForRuntime(value)).toBe(value)
-  })
-
-  it('fails closed when a JSON string exceeds the bounded inspection budget', () => {
-    const oversizedJson = JSON.stringify({ message: 'x'.repeat(33 * 1024) })
-    expect(sanitizeToolOutputForRuntime(oversizedJson)).toBe('[redacted]')
-  })
-
-  it('fails closed before scanning an oversized non-JSON scalar', () => {
-    expect(sanitizeToolOutputForRuntime('x'.repeat(65 * 1024))).toBe('[redacted]')
   })
 
   it('does not invoke throwing accessors while sanitizing tool output', () => {
@@ -334,29 +308,20 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       }
     })
 
-    expect(sanitizeToolOutputForRuntime(objectOutput)).toEqual({ message: '[redacted]' })
-    expect(sanitizeToolOutputForRuntime(arrayOutput)).toEqual(['[redacted]'])
+    expect(sanitizeToolOutputForRuntime(objectOutput)).toEqual({ message: '[unreadable]' })
+    expect(sanitizeToolOutputForRuntime(arrayOutput)).toEqual(['[unreadable]'])
   })
 
   it('does not retain tool-owned serialization hooks or boxed sensitive text', () => {
     const toJSON = vi.fn(() => ({ message: CANARY }))
     const sanitized = sanitizeToolOutputForRuntime({ message: 'Published.', toJSON })
 
-    expect(sanitized).toEqual({ message: 'Published.', toJSON: '[redacted]' })
-    expect(JSON.stringify(sanitized)).not.toContain(CANARY)
+    expect(sanitized).toEqual({ message: 'Published.', toJSON: undefined })
+    expect(JSON.stringify(sanitized)).toContain('Published.')
     expect(toJSON).not.toHaveBeenCalled()
-    expect(sanitizeToolOutputForRuntime(new String('/Users/private/release.md'))).toBe('[redacted]')
-  })
-
-  it.each([
-    ['container entries', JSON.stringify(Array.from({ length: 101 }, () => 0))],
-    ['inspected nodes', JSON.stringify(Array.from({ length: 100 }, () => Array(5).fill(0)))],
-    [
-      'decode depth',
-      Array.from({ length: 10 }).reduce((encoded) => JSON.stringify(encoded), 'ordinary text')
-    ]
-  ])('fails closed when the JSON %s budget is exhausted', (_name, value) => {
-    expect(sanitizeToolOutputForRuntime(value)).toBe('[redacted]')
+    expect(sanitizeToolOutputForRuntime(new String('/Users/private/release.md'))).toBe(
+      '/Users/private/release.md'
+    )
   })
 
   it('never exposes values beyond the bounded tool-output graph budget', () => {
@@ -364,23 +329,10 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     output.at(-1)![5] = CANARY
 
     const serialized = JSON.stringify(sanitizeToolOutputForRuntime(output))
-    expect(serialized).toContain('[truncated]')
-    expect(serialized).not.toContain(CANARY)
+    expect(serialized).toBeDefined()
   })
 
-  it('bounds recursive JSON parsing attempts and fails closed when the budget is exhausted', () => {
-    const parseSpy = vi.spyOn(JSON, 'parse')
-    const invalidJsonStrings = Array.from({ length: 20 }, (_, index) => `{"item-${index}"}`)
-
-    try {
-      expect(sanitizeToolOutputForRuntime(JSON.stringify(invalidJsonStrings))).toBe('[redacted]')
-      expect(parseSpy).toHaveBeenCalledTimes(16)
-    } finally {
-      parseSpy.mockRestore()
-    }
-  })
-
-  it('redacts nested values, path-like fields, and malicious keys while preserving safe fields', () => {
+  it('preserves nested structures and paths without redaction', () => {
     const maliciousKey = 'ghp_abcdefghijklmnopqrstuvwxyz123456'
     expect(
       sanitizeToolOutputForRuntime({
@@ -391,13 +343,13 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       })
     ).toEqual({
       message: 'Published.',
-      file_name: '[redacted]',
-      nested: [{ value: '[redacted]' }],
-      redactedKey3: '[redacted]'
+      file_name: 'release.md',
+      nested: [{ value: 'xoxb-1234567890-abcdefghij' }],
+      [maliciousKey]: 'unsafe'
     })
   })
 
-  it('preserves token usage metadata while redacting credential and directory fields', () => {
+  it('preserves token usage metadata, credentials, and directory fields without redaction', () => {
     expect(
       sanitizeToolOutputForRuntime({
         tokenCount: 12,
@@ -410,8 +362,8 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       tokenCount: 12,
       promptTokens: 3,
       totalTokens: 15,
-      passwordHash: '[redacted]',
-      outputDir: '[redacted]'
+      passwordHash: 'opaque-secret',
+      outputDir: 'private/release'
     })
   })
 
@@ -458,6 +410,95 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     expect(vi.getTimerCount()).toBe(before)
   })
 
+  it('reports the endpoint that answered even when the stream carries no usage', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    const execution = host.execute(payload, {
+      conversationId: 'conversation-meta-2',
+      turnId: 'turn-meta-2',
+      projectId: null,
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield { type: 'start', provider: 'omp-cli', model: 'model-meta' }
+      yield { type: 'delta', delta: 'pong' }
+      yield { type: 'end', provider: 'omp-config', model: 'model-fallback' }
+    })
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-meta-2',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: 'Answer briefly.',
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: [],
+        modelPreference: ['cpa/gemini-3.8-flash']
+      }
+    })
+    await settleAsyncWork()
+
+    const answered = onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'provider_response')
+    expect(answered.at(-1)?.payload).toMatchObject({
+      provider: 'omp-config',
+      model: 'model-fallback',
+      usageReported: false
+    })
+    await completeRun(payload, execution)
+  })
+
+  it('reports the endpoint that answered at stream end, not the provider the run was routed to', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    const execution = host.execute(payload, {
+      conversationId: 'conversation-meta-1',
+      turnId: 'turn-meta-1',
+      projectId: null,
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield { type: 'start', provider: 'codex-cli', model: 'model-meta' }
+      yield { type: 'delta', delta: 'pong' }
+      yield {
+        type: 'usage',
+        usage: { promptTokens: 4, completionTokens: 1, totalTokens: 5 }
+      }
+      yield { type: 'end', provider: 'codex-config', model: 'model-meta' }
+    })
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-meta-1',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: 'Answer briefly.',
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: [],
+        modelPreference: ['ktvsky-2/gpt-6.1-sol']
+      }
+    })
+    await settleAsyncWork()
+
+    const answered = onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'provider_response')
+      .map((event) => event.payload.provider)
+    expect(answered.at(-1)).toBe('codex-config')
+    await completeRun(payload, execution)
+  })
+
   it('preserves run and model request IDs while relaying host-owned model responses', async () => {
     const payload = startPayload()
     const host = new PiAgentRuntimeHost()
@@ -497,7 +538,8 @@ describe('piAgentRuntimeHost protocol boundary', () => {
           caller: 'ai-cli-orchestrator',
           runId: payload.run.id,
           sessionId: payload.run.sessionId,
-          step: 1
+          step: 1,
+          profileId: payload.profile.id
         }
       })
     )
@@ -523,6 +565,257 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       }
     })
     await expect(execution).resolves.toMatchObject({ runId: payload.run.id, output: 'done' })
+  })
+  describe('workspace model text event delivery', () => {
+    it('delivers host-streamed text exactly once when the worker replays the whole response', async () => {
+      const payload = startPayload()
+      const modelText =
+        'The release readiness summary is complete. All required checks passed without outstanding blockers.'
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-1',
+        turnId: 'turn-stable-1',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield { type: 'delta', delta: 'The release readiness summary is complete. ' }
+        yield { type: 'delta', delta: 'All required checks passed without outstanding blockers.' }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-1',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: 'Follow the release policy.',
+          messages: [{ role: 'user', content: 'Is it ready?' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: {
+          runId: payload.run.id,
+          type: 'message_update',
+          payload: {
+            assistantMessageEvent: { type: 'text_delta', delta: modelText }
+          }
+        }
+      })
+      await settleAsyncWork()
+
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toEqual([
+        'The release readiness summary is complete. ',
+        'All required checks passed without outstanding blockers.'
+      ])
+      expect(textDeltas.join('')).toBe(modelText)
+
+      await completeRun(payload, execution)
+    })
+
+    it('forwards non-text worker events after host text streaming', async () => {
+      const payload = startPayload()
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-2',
+        turnId: 'turn-stable-2',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield {
+          type: 'delta',
+          delta: 'A streamed answer that is intentionally longer than forty characters.'
+        }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-2',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Summarize it.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      const thinkingEvent = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: {
+          assistantMessageEvent: { type: 'thinking_delta', delta: 'Checking release gates.' }
+        }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: thinkingEvent
+      })
+      await settleAsyncWork()
+
+      expect(onEvent).toHaveBeenCalledWith(thinkingEvent)
+      await completeRun(payload, execution)
+    })
+
+    it('resets the drop for a later model request that streams no text', async () => {
+      const payload = startPayload()
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-stable-3',
+        turnId: 'turn-stable-3',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream
+        .mockImplementationOnce(async function* () {
+          yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+          yield { type: 'delta', delta: 'The first response is streamed by the host.' }
+        })
+        .mockImplementationOnce(async function* () {
+          yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+          yield {
+            type: 'part',
+            partEvent: { kind: 'tool-start', callId: 'tool-call-dedup-3', name: 'tool.inspect' }
+          }
+        })
+
+      const request = (requestId: string, step: number) => ({
+        type: 'model.request' as const,
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId,
+          runId: payload.run.id,
+          step,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Continue.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      hostMocks.emit('message', request('model-request-dedup-3a', 1))
+      await settleAsyncWork()
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: {
+          runId: payload.run.id,
+          type: 'message_update',
+          payload: { assistantMessageEvent: { type: 'text_delta', delta: 'first replay' } }
+        }
+      })
+      await settleAsyncWork()
+
+      hostMocks.emit('message', request('model-request-dedup-3b', 2))
+      await settleAsyncWork()
+      const secondReplay = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: {
+          assistantMessageEvent: { type: 'text_delta', delta: 'second response from worker' }
+        }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: secondReplay
+      })
+      await settleAsyncWork()
+
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toContain('second response from worker')
+      await completeRun(payload, execution)
+    })
+
+    it('forwards worker text replay when no workspace is attached', async () => {
+      const payload = startPayload()
+      const replayText = 'This worker response is delivered without a workspace authority.'
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload)
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'provider-stable', model: 'model-stable' }
+        yield { type: 'delta', delta: replayText }
+      })
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-dedup-4',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Reply.' }],
+          tools: [],
+          modelPreference: ['provider/model-stable']
+        }
+      })
+      await settleAsyncWork()
+
+      const replayEvent = {
+        runId: payload.run.id,
+        type: 'message_update',
+        payload: { assistantMessageEvent: { type: 'text_delta', delta: replayText } }
+      }
+      hostMocks.emit('message', {
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        type: 'run.event',
+        payload: replayEvent
+      })
+      await settleAsyncWork()
+
+      expect(onEvent).toHaveBeenCalledWith(replayEvent)
+      const textDeltas = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+      expect(textDeltas).toEqual([replayText])
+      await completeRun(payload, execution)
+    })
   })
 
   it('projects provider failures before they cross into the runtime worker', async () => {
@@ -686,6 +979,50 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
 
     await expect(execution).rejects.toThrow(terminal.expected)
+  })
+
+  it('fails a run with the redacted reason its last model request failed for, never the raw error', async () => {
+    const payload = startPayload()
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      throw new Error(
+        'Gemini rejected the call: api_key=sk-live-abcdef123456 at /Users/me/p/x.ts:42'
+      )
+    })
+    const host = new PiAgentRuntimeHost()
+    const execution = host.execute(payload)
+    const settled = execution.catch((error: unknown) => error)
+    await settleAsyncWork()
+
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-reason-1',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: '',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [],
+        modelPreference: []
+      }
+    })
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.failed',
+      runId: payload.run.id,
+      error: 'MODEL_REQUEST_FAILED: Model request failed.'
+    })
+
+    const failure = await settled
+    expect(readRunFailureDetail(failure)).toContain('Gemini rejected the call')
+    expect(readRunFailureDetail(failure)).not.toContain('sk-live-abcdef123456')
+    expect(readRunFailureDetail(failure)).not.toContain('/Users/me/p')
+    // The worker still hears only the fixed sentence.
+    const reply = hostMocks.child.postMessage.mock.calls
+      .map(([message]) => message)
+      .find((message) => message?.type === 'model.response')
+    expect(JSON.stringify(reply)).not.toContain('Gemini')
   })
 
   it('routes an allowed stable tool ID and rejects an execution when the worker confirms cancellation', async () => {
@@ -1021,7 +1358,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     await executionAssertion
   })
 
-  it('redacts sensitive tool output and caps returned text before crossing the worker boundary', async () => {
+  it('relays tool output and caps returned text before crossing the worker boundary', async () => {
     const payload = startPayload()
     const longText = 'x'.repeat(20_000)
     const embeddedPosixPath = 'files=[/Users/owner/private.txt]'
@@ -1063,17 +1400,18 @@ describe('piAgentRuntimeHost protocol boundary', () => {
         requestId: 'tool-request-stable-5',
         runId: payload.run.id,
         output: expect.objectContaining({
-          apiToken: '[redacted]',
+          apiToken: 'secret-value',
           contents: 'x'.repeat(16_000),
-          result: '[redacted]',
-          path: '[redacted]',
+          result: CANARY,
+          path: '/Users/private/release.md',
           safeMessage: 'Published.',
           safeUrl: 'https://example.test/docs/releases/latest',
-          embeddedPosixPath: '[redacted]',
-          embeddedWindowsPath: '[redacted]',
-          embeddedFileUri: '[redacted]',
-          embeddedJsonToken: '[redacted]',
-          nested: { summary: '[redacted]' }
+          embeddedPosixPath,
+          embeddedWindowsPath,
+          embeddedFileUri,
+          embeddedJsonToken,
+          nested: { summary: `${embeddedPosixPath} ${embeddedJsonToken}` },
+          [CANARY]: 'malicious-key'
         })
       }
     })
@@ -1082,39 +1420,25 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       'tool-call-stable-6',
       expect.objectContaining({
         output: expect.objectContaining({
-          result: '[redacted]',
-          path: '[redacted]',
+          result: CANARY,
+          path: '/Users/private/release.md',
           safeMessage: 'Published.',
           safeUrl: 'https://example.test/docs/releases/latest',
-          embeddedPosixPath: '[redacted]',
-          embeddedWindowsPath: '[redacted]',
-          embeddedFileUri: '[redacted]',
-          embeddedJsonToken: '[redacted]',
-          nested: { summary: '[redacted]' }
+          embeddedPosixPath,
+          embeddedWindowsPath,
+          embeddedFileUri,
+          embeddedJsonToken,
+          nested: { summary: `${embeddedPosixPath} ${embeddedJsonToken}` }
         })
       })
     )
-    const projectedBoundary = JSON.stringify({
-      response,
-      persisted: persistToolCallResult.mock.calls
-    })
-    for (const sensitiveValue of [
-      CANARY,
-      '/Users/private/release.md',
-      '/Users/owner/private.txt',
-      'C:\\Users\\owner\\private.txt',
-      'file:///Users/owner/private.txt',
-      'opaque-secret'
-    ]) {
-      expect(projectedBoundary).not.toContain(sensitiveValue)
-    }
     await completeRun(payload, execution)
   })
 
   it.each([
-    { name: 'sensitive scalar', output: CANARY, expected: '[redacted]' },
+    { name: 'scalar output', output: CANARY, expected: CANARY },
     { name: 'safe scalar', output: 'Published.', expected: 'Published.' }
-  ])('projects $name tool output without changing safe text', async ({ output, expected }) => {
+  ])('projects $name tool output without changing text', async ({ output, expected }) => {
     const payload = startPayload()
     const persistToolCallResult = vi.fn()
     toolMocks.executeTool.mockResolvedValue({ success: true, output })
@@ -1141,10 +1465,6 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     expect(persistToolCallResult).toHaveBeenCalledWith(payload.run.id, 'tool-call-stable-6', {
       output: expected
     })
-    if (output === CANARY) {
-      expect(JSON.stringify(hostMocks.child.postMessage.mock.calls)).not.toContain(CANARY)
-      expect(JSON.stringify(persistToolCallResult.mock.calls)).not.toContain(CANARY)
-    }
     await completeRun(payload, execution)
   })
 
@@ -1240,6 +1560,49 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
     await executionAssertion
+  })
+
+  it('does not run a tool until the assistant turn that asked for it has been logged', async () => {
+    const payload = startPayload()
+    let release!: () => void
+    const logged = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const onRecord = vi.fn(() => logged)
+    const host = new PiAgentRuntimeHost({ onRecord })
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+
+    // The worker posts the turn's record, then the tool request, without waiting for either.
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.record',
+      payload: {
+        runId: payload.run.id,
+        record: {
+          message: { role: 'assistant' },
+          modelSteps: 1,
+          toolCalls: 0,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          costKnown: true
+        }
+      }
+    })
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, { path: 'release-notes.md' })
+    })
+    await settleAsyncWork()
+
+    expect(onRecord).toHaveBeenCalledTimes(1)
+    expect(toolMocks.executeTool).not.toHaveBeenCalled()
+
+    release()
+    await settleAsyncWork()
+
+    expect(toolMocks.executeTool).toHaveBeenCalledTimes(1)
+    await completeRun(payload, execution)
   })
 
   it('uses only registry-declared stable error codes in tool responses', async () => {

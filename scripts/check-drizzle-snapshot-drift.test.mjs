@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 
-import { snapshotGap } from './check-drizzle-snapshot-drift.mjs'
+import { KNOWN_MISSING_SNAPSHOTS, snapshotGap } from './check-drizzle-snapshot-drift.mjs'
 
 function withMeta(entries, snapshots, run) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'drizzle-meta-'))
@@ -41,6 +41,13 @@ describe('drizzle snapshot drift', () => {
     withMeta([0, 1, 2, 3, 4], [0, 3, 4], (meta) => {
       assert.deepEqual(snapshotGap(meta).missing, ['0001', '0002'])
     })
+  })
+
+  it('pins the repository gap and includes the run-message migration', () => {
+    const gap = snapshotGap()
+
+    assert.equal(gap.missing.length, KNOWN_MISSING_SNAPSHOTS)
+    assert.ok(gap.missing.includes('0056'))
   })
 
   it('is satisfied only by an exact match', () => {

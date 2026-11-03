@@ -33,6 +33,8 @@ const STORE = path.join(ROOT, 'node_modules', '.pnpm')
  */
 const REVIEWED = {
   '@google/genai': 'Pulled in by @earendil-works/pi-ai (the pi provider). preinstall + prepare.',
+  '@openuidev/lang-core':
+    'Pulled in by intelligence-uikit (openui renderer). postinstall sends a random install ID and a salted project-ID hash; OPENUI_TELEMETRY_DISABLED=1 or DO_NOT_TRACK=1 turns it off.',
   '@parcel/watcher': 'Native file watcher behind sass and listhen. install builds the addon.',
   '@sentry/cli': 'Pulled in by @sentry/bundler-plugin-core. postinstall downloads the CLI binary.',
   '@talex-touch/tuff-native':

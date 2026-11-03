@@ -392,6 +392,15 @@ export const LocalAiCliEvents = {
       .module('session')
       .event('forget')
       .define<{ sessionRef: string }, { forgotten: boolean }>(),
+    /**
+     * Shows the local agent's own session file for a conversation in the system file manager.
+     * Host-only, and answers whether it had one: a thread written by Tuff alone lives in SQLite and
+     * has no file on disk. The path never leaves Main.
+     */
+    revealFile: defineEvent('local-ai-cli')
+      .module('session')
+      .event('reveal-file')
+      .define<{ conversationId: string }, { revealed: boolean }>(),
     changed: defineEvent('local-ai-cli')
       .module('session')
       .event('changed')

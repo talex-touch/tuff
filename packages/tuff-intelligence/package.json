@@ -38,6 +38,11 @@
       "types": "./src/types/intelligence.ts",
       "import": "./src/types/intelligence.ts",
       "default": "./src/types/intelligence.ts"
+    },
+    "./omp": {
+      "types": "./src/omp/index.ts",
+      "import": "./src/omp/index.ts",
+      "default": "./src/omp/index.ts"
     }
   },
   "main": "src/index.ts",

@@ -25,6 +25,9 @@ const props = withDefaults(defineProps<StreamElementProps>(), {
   reveal: 'aurora',
   caret: true,
   reserve: false,
+  previewable: true,
+  autoPreview: false,
+  previewScripts: false,
   locale: 'zh',
 })
 
@@ -234,6 +237,12 @@ function renderLeaf(node: Exclude<PlanNode, { kind: 'list' | 'quote' }>, ctx: Re
         // Unset stays undefined, which leaves TxCodeStream on its own default.
         copyLabel: props.copyLabel,
         copiedLabel: props.copiedLabel,
+        previewable: props.previewable,
+        autoPreview: props.autoPreview,
+        previewScripts: props.previewScripts,
+        previewLabel: props.previewLabel,
+        codeLabel: props.codeLabel,
+        frameLabelFormatter: props.codeFrameLabelFormatter,
       }, ctx.slots.code)
     }
     case 'markdown': {

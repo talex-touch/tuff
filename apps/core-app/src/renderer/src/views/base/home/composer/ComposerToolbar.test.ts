@@ -4,6 +4,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COMPOSER_MOTION } from './composer-motion'
+import ComposerSendIsland from './ComposerSendIsland.vue'
 import ComposerToolbar from './ComposerToolbar.vue'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
@@ -247,6 +248,15 @@ describe('ComposerToolbar', () => {
     await wrapper.setProps({ sendState: 'streaming' })
     await wrapper.get('button.ComposerSendIsland').trigger('click')
     expect(wrapper.emitted('stop')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('switches the send key into steer/queue send when sendQueues is true', async () => {
+    const wrapper = mountToolbar({ sendQueues: true, sendState: 'ready' })
+    const island = wrapper.getComponent(ComposerSendIsland)
+    expect(island.props('sendIcon')).toBe('i-ri-play-list-add-line')
+    expect(island.props('sendLabel')).toBe('home.workspace.queue.add')
+    expect(island.props('sendTitle')).toBe('home.workspace.queue.addHint')
     wrapper.unmount()
   })
 })

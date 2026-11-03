@@ -37,6 +37,7 @@ vi.mock('@langchain/openai', () => {
   return {
     ChatOpenAI: MockChatOpenAI,
     ChatOpenAICompletions: MockChatOpenAI,
+    ChatOpenAIResponses: MockChatOpenAI,
     OpenAIEmbeddings: MockOpenAIEmbeddings
   }
 })

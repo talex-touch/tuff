@@ -507,8 +507,7 @@ export function planReasoningEffortForSupport(
  * What a LangChain `ChatOpenAICompletions` takes for a plan. Both fields go into the Chat Completions
  * body verbatim. `reasoning_effort` is spelled out in `modelKwargs` rather than given as `reasoning`:
  * LangChain drops `reasoning` for model names it does not know as reasoning models, such as
- * deepseek-v4-flash. The caller must pick the Chat Completions class, since `ChatOpenAI` sends
- * gpt-5.6* and codex models to the Responses API.
+ * deepseek-v4-flash. Models on the Responses API take `toLangChainOpenAiResponsesReasoningFields`.
  */
 export interface LangChainOpenAiReasoningFields {
   modelKwargs: {
@@ -533,6 +532,30 @@ export function toLangChainOpenAiReasoningFields(
     return { modelKwargs: { reasoning_effort: applied } }
   if (plan.wire === 'deepseek-thinking')
     return { modelKwargs: { reasoning_effort: applied, thinking: { type: 'enabled' } } }
+  return null
+}
+
+/**
+ * What a LangChain `ChatOpenAIResponses` takes for a plan: `reasoning.effort`, which the Responses API
+ * reads. It goes in `modelKwargs` for the same reason as the chat fields: LangChain drops `reasoning`
+ * for model names it does not know as reasoning models.
+ */
+export interface LangChainOpenAiResponsesReasoningFields {
+  modelKwargs: {
+    /** A plain level, as in the chat fields. */
+    reasoning: { effort: IntelligenceReasoningLevel }
+  }
+}
+
+/** `null` for no plan, nothing to send, or a wire the Responses API does not speak. */
+export function toLangChainOpenAiResponsesReasoningFields(
+  plan: ReasoningEffortPlan | undefined,
+): LangChainOpenAiResponsesReasoningFields | null {
+  const applied = plan?.decision.applied
+  if (!plan || !applied)
+    return null
+  if (plan.wire === 'openai-reasoning-effort')
+    return { modelKwargs: { reasoning: { effort: applied } } }
   return null
 }
 

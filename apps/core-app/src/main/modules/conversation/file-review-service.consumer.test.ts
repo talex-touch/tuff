@@ -20,7 +20,7 @@ import {
   conversations,
   projects
 } from '../../db/schema'
-import { FileReviewService } from './file-review-service'
+import { FileReviewService, setFileReviewGatewayProvider } from './file-review-service'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { getProject } from '../project/project-store'
 import { getConversation } from './conversation-store'
@@ -440,6 +440,84 @@ describe('FileReviewService consumer evidence and inverse operations', () => {
       expect(await service.list('thread')).toEqual([])
     }
   )
+  it('allows mutation outside root when full permission is granted', async () => {
+    const outsideFile = join(directory, 'external.txt')
+    setFileReviewGatewayProvider({
+      getGatewayState: () => ({ enabled: true, mode: 'full' }),
+      requestConfirmation: async () => ({ approved: true })
+    })
+
+    const result = await service.executeFileOperation(
+      ctx,
+      'write',
+      [outsideFile],
+      async ([target]) => {
+        await fs.writeFile(target!, 'written by full permission\n')
+        return 'success'
+      }
+    )
+    expect(result).toBe('success')
+    expect(await fs.readFile(outsideFile, 'utf8')).toBe('written by full permission\n')
+    setFileReviewGatewayProvider(null)
+  })
+
+  it('requests user confirmation for outside mutations in review mode', async () => {
+    const outsideFile = join(directory, 'reviewed.txt')
+    let confirmationRequested = false
+    setFileReviewGatewayProvider({
+      getGatewayState: () => ({ enabled: true, mode: 'review' }),
+      requestConfirmation: async () => {
+        confirmationRequested = true
+        return { approved: true }
+      }
+    })
+
+    const result = await service.executeFileOperation(
+      ctx,
+      'write',
+      [outsideFile],
+      async ([target]) => {
+        await fs.writeFile(target!, 'user approved write\n')
+        return 'ok'
+      }
+    )
+    expect(confirmationRequested).toBe(true)
+    expect(result).toBe('ok')
+    expect(await fs.readFile(outsideFile, 'utf8')).toBe('user approved write\n')
+    setFileReviewGatewayProvider(null)
+  })
+
+  it('rejects outside mutation when user denies confirmation in review mode', async () => {
+    const outsideFile = join(directory, 'denied.txt')
+    setFileReviewGatewayProvider({
+      getGatewayState: () => ({ enabled: true, mode: 'review' }),
+      requestConfirmation: async () => ({ approved: false })
+    })
+
+    await expect(
+      service.executeFileOperation(ctx, 'write', [outsideFile], async ([target]) => {
+        await fs.writeFile(target!, 'should not write\n')
+        return 'fail'
+      })
+    ).rejects.toMatchObject({ code: 'TOOL_APPROVAL_DENIED' })
+    setFileReviewGatewayProvider(null)
+  })
+
+  it('forbids outside mutation when tool permission is disabled (off)', async () => {
+    const outsideFile = join(directory, 'disabled.txt')
+    setFileReviewGatewayProvider({
+      getGatewayState: () => ({ enabled: false, mode: 'review' }),
+      requestConfirmation: async () => ({ approved: true })
+    })
+
+    await expect(
+      service.executeFileOperation(ctx, 'write', [outsideFile], async ([target]) => {
+        await fs.writeFile(target!, 'should not write\n')
+        return 'fail'
+      })
+    ).rejects.toMatchObject({ code: 'TOOL_RESOURCE_ACCESS_DENIED' })
+    setFileReviewGatewayProvider(null)
+  })
 
   it('a symlink substituted after capture cannot be followed during rollback', async () => {
     await fs.writeFile(join(root, 'source.txt'), 'old\n')

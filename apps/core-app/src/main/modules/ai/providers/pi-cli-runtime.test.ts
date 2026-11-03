@@ -39,6 +39,7 @@ describe('parsePiCliLine', () => {
       promptTokens: 965,
       completionTokens: 5,
       totalTokens: 4810,
+      cacheReadTokens: 3840,
       cost: 0
     })
   })

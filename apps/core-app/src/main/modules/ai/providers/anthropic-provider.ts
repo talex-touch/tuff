@@ -18,7 +18,7 @@ import type {
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ChatAnthropic } from '@langchain/anthropic'
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { toLangChainAnthropicThinkingFields } from '@talex-touch/utils/intelligence/reasoning-effort'
 import { readModelPlan } from '../model-request-plan'
@@ -30,6 +30,12 @@ import {
   hasReportedUsage,
   toLangChainUserMessage
 } from './langchain-openai-compatible-provider'
+import {
+  ToolCallAssembler,
+  toLangChainAssistantMessage,
+  toLangChainToolMessage,
+  toLangChainTools
+} from './native-tools'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
 
@@ -60,11 +66,11 @@ function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
   const system = messages.filter((message) => message.role === 'system')
   const turns = messages
     .filter((message) => message.role !== 'system')
-    .map((message) =>
-      message.role === 'assistant'
-        ? new AIMessage(message.content)
-        : toLangChainUserMessage(message)
-    )
+    .map((message) => {
+      if (message.role === 'assistant') return toLangChainAssistantMessage(message)
+      if (message.role === 'tool') return toLangChainToolMessage(message)
+      return toLangChainUserMessage(message)
+    })
   if (system.length === 0) return turns
   return [new SystemMessage(system.map((message) => message.content).join('\n\n')), ...turns]
 }
@@ -106,11 +112,16 @@ function resolveUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usage.totalTokens,
     promptTokens + completionTokens
   )
+  const cacheReadTokens = numberFrom(
+    asRecord(usageMetadata.input_token_details).cache_read,
+    usage.cache_read_input_tokens
+  )
 
   return {
     promptTokens,
     completionTokens,
-    totalTokens
+    totalTokens,
+    ...(cacheReadTokens > 0 ? { cacheReadTokens } : {})
   }
 }
 
@@ -185,6 +196,9 @@ const ADAPTIVE_ONLY_MODEL_PREFIXES = [
 
 export class AnthropicProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.ANTHROPIC
+
+  /** Sends `payload.tools` as Anthropic tools (ChatAnthropic converts the function-tool shape). */
+  readonly supportsNativeTools = true
 
   private createModel(params: {
     model: string
@@ -298,7 +312,7 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions & { readonly signal?: AbortSignal }
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
 
@@ -310,12 +324,21 @@ export class AnthropicProvider extends IntelligenceProvider {
       streaming: true
     })
 
-    const stream = await model.stream(toLangChainMessages(payload.messages))
+    const tools = toLangChainTools(payload.tools)
+    const assembler = new ToolCallAssembler()
+    const stream = await (tools.length > 0 ? model.bindTools(tools) : model).stream(
+      toLangChainMessages(payload.messages),
+      options.signal ? { signal: options.signal } : undefined
+    )
     for await (const chunk of stream) {
+      for (const partEvent of assembler.pushMessageChunk(chunk)) {
+        yield { delta: '', done: false, partEvent }
+      }
       const text = extractTextContent(asRecord(chunk).content)
       if (!text) continue
       yield { delta: text, done: false }
     }
+    for (const partEvent of assembler.finish()) yield { delta: '', done: false, partEvent }
 
     yield { delta: '', done: true }
   }

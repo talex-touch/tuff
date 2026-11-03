@@ -2354,3 +2354,33 @@ describe('localAiCli creation token ownership', () => {
     }
   })
 })
+
+/**
+ * 打开会话文件 is a reveal of a path Main resolved itself. Two properties matter: a plugin cannot
+ * ask for it at all, and a conversation without a native session file answers `revealed: false`
+ * instead of opening an unrelated folder.
+ */
+describe('conversation session file reveal', () => {
+  it('refuses a plugin caller and reports a thread with no native file', async () => {
+    const { transport } = await initModule()
+    const event = LocalAiCliEvents.session.revealFile.toEventName()
+
+    await expect(
+      invokeHandler(
+        transport,
+        event,
+        { conversationId: 'conv-1' },
+        { plugin: { name: 'demo' }, sender: { id: 5 } }
+      )
+    ).rejects.toThrow('LOCAL_AI_CLI_HOST_ONLY')
+
+    await expect(
+      invokeHandler(
+        transport,
+        event,
+        { conversationId: 'conv-without-file' },
+        { plugin: null, sender: { id: 11 } }
+      )
+    ).resolves.toEqual({ revealed: false })
+  })
+})

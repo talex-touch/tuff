@@ -5,8 +5,15 @@ import type { ToolCallPlan, ToolDefinition, ToolResult, ToolRisk } from './tool-
 import { Buffer } from 'node:buffer'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
-import { projectToolError, projectToolErrorCode } from '../ai/tool-error-projection'
+import {
+  describeToolFailure,
+  projectToolError,
+  projectToolErrorCode
+} from '../ai/tool-error-projection'
 import { isRememberable } from './tool-registry'
+import { createLogger } from '../../utils/logger'
+
+const gatewayLog = createLogger('agent-tools')
 
 /** Bodies larger than this are refused outright rather than buffered. */
 const MAX_BODY_BYTES = 256 * 1024
@@ -278,6 +285,9 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
         const safeResult = result.isError
           ? projectedFailure(projectToolErrorCode(result.code))
           : { output: result.output, isError: false }
+        if (safeResult.isError) {
+          gatewayLog.warn(`Agent tool call failed: tool=${toolId} code=${safeResult.code}`)
+        }
         emitAudit(options, {
           schema: 'agent-tool-audit/v1',
           phase: 'result',
@@ -353,6 +363,9 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
       } catch (error) {
         risk = tool.risk
         auditDecision('failed')
+        gatewayLog.warn(
+          `Agent tool classify failed: tool=${tool.name} | ${describeToolFailure(error)}`
+        )
         finish(projectedFailure(projectToolError(error)))
         return
       }
@@ -384,6 +397,9 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
           )
         } catch (error) {
           auditDecision('failed')
+          gatewayLog.warn(
+            `Agent tool confirmation failed: tool=${tool.name} | ${describeToolFailure(error)}`
+          )
           finish(projectedFailure(projectToolError(error)))
           return
         }
@@ -415,6 +431,9 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
       try {
         finish(await tool.execute(args))
       } catch (error) {
+        gatewayLog.warn(
+          `Agent tool execution threw: tool=${tool.name} | ${describeToolFailure(error)}`
+        )
         finish(projectedFailure(projectToolError(error)))
       }
     })().finally(() => {

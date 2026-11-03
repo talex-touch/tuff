@@ -96,6 +96,9 @@ function host(initial: ConversationWorkspaceState[]) {
   }
   const sdk: AgentWorkspaceSdk = {
     get: async (id) => states.get(id) ?? null,
+    updateQueued: async () => {
+      throw new Error('updateQueued is not exercised by this test')
+    },
     configure: async (id, settings) => {
       const previous = states.get(id)!
       const state = { ...previous, settings: { ...settings }, revision: previous.revision + 1 }
@@ -401,6 +404,7 @@ describe('useAgentWorkspace frames cannot outrank Main admission or durable term
           role: 'assistant' as const,
           content: 'left visible answer',
           status,
+          createdAt: 1,
           meta: { turnId: 'old-turn' },
           parts: [
             { type: 'text', text: 'left visible answer' },
@@ -421,8 +425,7 @@ describe('useAgentWorkspace frames cannot outrank Main admission or durable term
       saved.status = status === 'failed' ? 'failed' : 'idle'
       saved.messages = expected.map((message) => ({
         ...structuredClone(message),
-        seq: 0,
-        createdAt: 1
+        seq: 0
       }))
       const main = host([saved])
       const view = mounted(main.sdk, 'left')
@@ -477,6 +480,7 @@ describe('useAgentWorkspace frames cannot outrank Main admission or durable term
         role: 'assistant' as const,
         content: 'Main committed answer',
         status: 'complete' as const,
+        createdAt: 1,
         meta: { turnId: 'ending-turn' },
         parts: [
           { type: 'text', text: 'Main committed answer' },
@@ -493,7 +497,7 @@ describe('useAgentWorkspace frames cannot outrank Main admission or durable term
     const durable = {
       ...admitted,
       revision: 2,
-      messages: expected.map((message) => ({ ...structuredClone(message), seq: 1, createdAt: 1 }))
+      messages: expected.map((message) => ({ ...structuredClone(message), seq: 1 }))
     }
     // Main broadcasts mutateMessages before the terminal snapshot and finishTurn.
     main.publish(durable)

@@ -90,6 +90,25 @@ export interface FileReviewRollbackAuthority {
   readonly requiredPermissions: readonly AgentPermission[]
 }
 
+export interface FileReviewGatewayProvider {
+  getGatewayState: () => { enabled: boolean; mode: 'review' | 'full' }
+  requestConfirmation: (
+    request: {
+      tool: string
+      risk: 'read' | 'write' | 'execute'
+      summary: string
+      input: string
+    },
+    signal: AbortSignal
+  ) => Promise<{ approved: boolean }>
+}
+
+let activeGatewayProvider: FileReviewGatewayProvider | null = null
+
+export function setFileReviewGatewayProvider(provider: FileReviewGatewayProvider | null): void {
+  activeGatewayProvider = provider
+}
+
 export interface FileReviewServiceOptions {
   /**
    * Must freshly resolve the original run's profile, current enablement/allowlist/permissions and
@@ -219,7 +238,9 @@ type PrivatePath = z.infer<typeof privatePathSchema>
 // ---------------------------------------------------------------------------
 
 /** Tool-facing refusal that the registry projects through its stable error contract. */
-function toolRefusal(code: 'TOOL_RESOURCE_ACCESS_DENIED' | 'TOOL_INPUT_INVALID'): Error {
+function toolRefusal(
+  code: 'TOOL_RESOURCE_ACCESS_DENIED' | 'TOOL_INPUT_INVALID' | 'TOOL_APPROVAL_DENIED'
+): Error {
   return Object.assign(new Error(code), { code })
 }
 
@@ -260,6 +281,7 @@ interface ReviewedPath {
   absolute: string
   relative: string
   sensitive: boolean
+  outside?: boolean
 }
 
 function publicSide(state: CapturedFileState): FileReviewSide {
@@ -344,13 +366,20 @@ export class FileReviewService {
     }
 
     const authority = await this.resolveAuthority(ctx)
-    const targets = await this.resolveReviewedPaths(authority, ctx.workingDirectory!, paths)
+    const targets = await this.resolveReviewedPaths(
+      authority,
+      ctx.workingDirectory!,
+      paths,
+      operation
+    )
     const absolutes = targets.map((target) => target.absolute)
 
     const outcome = await this.locks.withLocks(absolutes, async () => {
       for (const target of targets) {
-        const confinement = await checkConfinement(authority.canonicalRoot, target.absolute)
-        if (confinement !== 'ok') throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+        if (!target.outside) {
+          const confinement = await checkConfinement(authority.canonicalRoot, target.absolute)
+          if (confinement !== 'ok') throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+        }
       }
       const before = await Promise.all(
         targets.map((target) => captureFileState(target.absolute, !target.sensitive))
@@ -598,7 +627,8 @@ export class FileReviewService {
   private async resolveReviewedPaths(
     authority: ReviewedAuthority,
     lexicalCwd: string,
-    paths: readonly string[]
+    paths: readonly string[],
+    operation: FileReviewOperation
   ): Promise<ReviewedPath[]> {
     const canonicalCwd = await fs.realpath(lexicalCwd).catch(() => null)
     if (!canonicalCwd) throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
@@ -619,13 +649,57 @@ export class FileReviewService {
           relative = relativeInside(authority.canonicalRoot, absolute)
         }
       }
-      if (relative === null) throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+
+      let outside = false
+      if (relative === null) {
+        const gateway = activeGatewayProvider?.getGatewayState() ?? {
+          enabled: false,
+          mode: 'review'
+        }
+        if (!gateway.enabled) {
+          throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+        }
+        if (gateway.mode === 'full') {
+          outside = true
+          relative = absolute
+        } else {
+          try {
+            // No run signal reaches the file review, so the prompt is answered, never aborted.
+            const decision = await activeGatewayProvider!.requestConfirmation(
+              {
+                tool: `file.${operation}`,
+                risk: 'write',
+                summary: `Write ${raw}`,
+                input: JSON.stringify({ path: raw })
+              },
+              new AbortController().signal
+            )
+            if (!decision.approved) {
+              throw toolRefusal('TOOL_APPROVAL_DENIED')
+            }
+          } catch (error) {
+            if (
+              error &&
+              typeof error === 'object' &&
+              'code' in error &&
+              error.code === 'TOOL_APPROVAL_DENIED'
+            ) {
+              throw error
+            }
+            throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+          }
+          outside = true
+          relative = absolute
+        }
+      }
+
       if (resolved.some((entry) => entry.absolute === absolute))
         throw toolRefusal('TOOL_INPUT_INVALID')
       resolved.push({
         absolute,
         relative,
-        sensitive: isCredentialPath(relative, absolute, runtimeRoot)
+        sensitive: isCredentialPath(relative, absolute, runtimeRoot),
+        outside
       })
     }
     return resolved

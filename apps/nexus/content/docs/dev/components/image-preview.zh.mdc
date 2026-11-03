@@ -156,6 +156,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `open` | `boolean` | `false` | 是否打开，配合 `v-model:open`。 |
 | `index` | `number` | `0` | 当前图片，配合 `v-model:index`；超出范围时收敛到两端。 |
 | `images` | `ImagePreviewSource[]` | `[]` | 图片地址，或带名称、尺寸与小图的对象；变为空时预览关闭。 |
+| `items` | `ImagePreviewSource[]` | — | 图片或自定义内容；传了就优先于 `images`。自定义内容只有 `svg` / `raw` 没有 `url` 时，复制与保存按文本进行：复制 `copyText`（缺省为标记本身），保存为 `.svg` 文件；分享仍不可用。 |
 | `origin` | `(index: number) => ImagePreviewOrigin \| null \| undefined` | - | 第 `index` 张图片在页面上的位置，打开时询问，关闭时再问当时那一张。 |
 | `transition` | `'zoom' \| 'fade'` | `'zoom'` | 开合方式；`zoom` 在没有 `origin`、缩略图不在视口内、图片来不及画出或减少动态效果时改为淡入淡出。 |
 | `maxScale` | `number` | `4` | 相对图片原始像素的最大缩放，`1` 即 100%；不会小于整张适配屏幕的比例。 |

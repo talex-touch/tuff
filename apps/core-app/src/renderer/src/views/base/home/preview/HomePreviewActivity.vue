@@ -6,8 +6,10 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import { computed, ref } from 'vue'
-import { INTERRUPTED_TOOL_CALL_ERROR } from '~/modules/conversation/chain-steps'
-import { describeToolCallError } from '~/modules/conversation/tool-call-error'
+import {
+  INTERRUPTED_TOOL_CALL_ERROR,
+  describeToolCallError
+} from '@talex-touch/intelligence-uikit/utils'
 import { isStoppedTurn } from '~/modules/conversation/useTurnFailureWording'
 import { useI18n } from 'vue-i18n'
 import HomePreviewEmpty from './HomePreviewEmpty.vue'
@@ -222,11 +224,12 @@ function contextBadgeTitle(turn: ActivityTurn): string {
           <!-- 调度器与模型元数据信息徽标 -->
           <div class="HomePreviewActivity-MetaBadges">
             <span
+              v-if="turn.coordinator"
               class="HomePreviewActivity-Badge"
               :title="t('home.workspace.activity.coordinator')"
             >
               <span class="i-ri-robot-2-line" aria-hidden="true" />
-              <span>{{ turn.coordinator || 'Tuff Coordinator' }}</span>
+              <span>{{ turn.coordinator }}</span>
             </span>
             <span
               v-if="turn.model"

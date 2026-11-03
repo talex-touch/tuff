@@ -1358,7 +1358,6 @@ onBeforeUnmount(() => {
   position: relative;
   pointer-events: auto;
   overflow: hidden;
-  will-change: clip-path;
   visibility: hidden;
   z-index: 2;
 }

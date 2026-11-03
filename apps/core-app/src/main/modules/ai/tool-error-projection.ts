@@ -1,3 +1,4 @@
+import { redactProviderDetail } from './provider-detail-redaction'
 import { readMcpFailureReason } from './intelligence-mcp-failure'
 
 export const STABLE_TOOL_ERRORS = {
@@ -37,6 +38,23 @@ const NODE_ERROR_CODE_MAP: Readonly<Record<string, StableToolErrorCode>> = {
   ETIMEDOUT: 'TOOL_EXECUTION_TIMEOUT'
 }
 
+const NETWORK_ERROR_CODE_MAP: Readonly<Record<string, StableToolErrorCode>> = {
+  NETWORK_ABORTED: 'TOOL_EXECUTION_ABORTED',
+  NETWORK_COOLDOWN_ACTIVE: 'TOOL_SERVICE_UNAVAILABLE',
+  NETWORK_TIMEOUT: 'TOOL_EXECUTION_TIMEOUT',
+  NETWORK_TRANSPORT_FAILED: 'TOOL_SERVICE_UNAVAILABLE'
+}
+
+const NETWORK_HTTP_STATUS_CODE = /^NETWORK_HTTP_STATUS_(\d+)$/
+
+function projectNetworkHttpStatus(status: number): StableToolErrorCode {
+  if (status === 401 || status === 403) return 'TOOL_RESOURCE_ACCESS_DENIED'
+  if (status === 404 || status === 410) return 'TOOL_RESOURCE_NOT_FOUND'
+  if (status === 408) return 'TOOL_EXECUTION_TIMEOUT'
+  if (status === 429 || status >= 500) return 'TOOL_SERVICE_UNAVAILABLE'
+  return 'TOOL_EXECUTION_FAILED'
+}
+
 function readStringProperty(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== 'object') return undefined
   try {
@@ -73,10 +91,73 @@ export function projectToolError(error: unknown): StableToolErrorProjection {
     return projectToolErrorCode('TOOL_EXECUTION_ABORTED')
   }
 
-  const nodeCode = readStringProperty(error, 'code')
-  return projectToolErrorCode(nodeCode ? NODE_ERROR_CODE_MAP[nodeCode] : undefined)
+  const code = readStringProperty(error, 'code')
+  if (!code) return projectToolErrorCode(undefined)
+  const httpStatus = NETWORK_HTTP_STATUS_CODE.exec(code)?.[1]
+  if (httpStatus) return projectToolErrorCode(projectNetworkHttpStatus(Number(httpStatus)))
+  return projectToolErrorCode(NETWORK_ERROR_CODE_MAP[code] ?? NODE_ERROR_CODE_MAP[code])
 }
 
 export function formatStableToolError(error: StableToolErrorProjection): string {
   return `${error.code}: ${error.message}`
+}
+
+const DETAIL_STACK_FRAMES = 3
+
+function readProperty(value: unknown, key: string): unknown {
+  if (!value || typeof value !== 'object') return undefined
+  try {
+    return (value as Record<string, unknown>)[key]
+  } catch {
+    return undefined
+  }
+}
+
+function safeUrlLabel(url: unknown): string | undefined {
+  if (typeof url !== 'string') return undefined
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname}`
+  } catch {
+    return undefined
+  }
+}
+
+function describeFailureParts(error: unknown, depth: number): string[] {
+  if (typeof error === 'string') return [`message=${redactProviderDetail(error)}`]
+  if (!error || typeof error !== 'object') return [`value=${redactProviderDetail(String(error))}`]
+
+  const parts: string[] = []
+  const name = readStringProperty(error, 'name')
+  if (name) parts.push(`name=${name}`)
+  const code = readStringProperty(error, 'code')
+  if (code) parts.push(`code=${code}`)
+  const status = readProperty(error, 'status')
+  if (typeof status === 'number') parts.push(`status=${status}`)
+  const url = safeUrlLabel(readProperty(error, 'url'))
+  if (url) parts.push(`url=${url}`)
+  const message = readStringProperty(error, 'message')
+  if (message) parts.push(`message=${redactProviderDetail(message)}`)
+  if (depth === 0) {
+    const cause = readProperty(error, 'cause')
+    if (cause !== undefined) parts.push(`cause={${describeFailureParts(cause, 1).join(' ')}}`)
+    const frames = (readStringProperty(error, 'stack') ?? '')
+      .split('\n')
+      .slice(1, 1 + DETAIL_STACK_FRAMES)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (frames.length > 0) parts.push(`stack=${redactProviderDetail(frames.join(' <- '))}`)
+  }
+  return parts
+}
+
+// Log-only detail: the model and the renderer only ever receive the stable projection.
+export function describeToolFailure(error: unknown): string {
+  try {
+    const mcpReason = readMcpFailureReason(error)
+    if (mcpReason) return `mcpReason=${mcpReason}`
+    return describeFailureParts(error, 0).join(' ') || 'detail=none'
+  } catch {
+    return 'detail=unreadable'
+  }
 }

@@ -1,8 +1,9 @@
+import type { TxAiSegment } from '../types'
 import type {
   AiChainStep,
   AiMessagePart,
   AiReasoningPart,
-  AiToolCallPart
+  AiToolCallPart,
 } from '@talex-touch/tuffex/ai-elements'
 
 /** Trimmed so a step title stays one readable line. */
@@ -39,24 +40,12 @@ function plainTitle(text: string): string {
 function bodyFor(text: string): string | undefined {
   const index = text.indexOf('\n')
   const first = (index === -1 ? text : text.slice(0, index)).trim()
-  if (first.length > TITLE_LIMIT) return text.trim() || undefined
+  if (first.length > TITLE_LIMIT)
+    return text.trim() || undefined
   const rest = index === -1 ? '' : text.slice(index + 1).trim()
-  return rest || undefined
+  return rest || text.trim() || undefined
 }
 
-/**
- * One rendered unit of an assistant turn, in the order the provider streamed
- * it — including the answer prose, so a turn that speaks between two thoughts
- * renders in that order rather than collecting all its text at the bottom.
- *
- * Callers must render text from these segments *instead of* the message's own
- * `content`, never both: in parts mode the text parts concatenate to exactly
- * that string, so doing both shows the answer twice.
- */
-export type MessageSegment =
-  | { kind: 'reasoning'; id: string; step: AiChainStep }
-  | { kind: 'tool'; id: string; part: AiToolCallPart }
-  | { kind: 'text'; id: string; text: string; streaming: boolean }
 
 /**
  * Wording the host owns. A span's title heads its own block now, so a
@@ -65,6 +54,8 @@ export type MessageSegment =
 export interface SegmentLabels {
   /** Header for a span whose text has not arrived yet. */
   thinking?: string
+  /** Header for a settled span, given its thinking time formatted, e.g. `10.8s`. */
+  thinkingFor?: (time: string) => string
   /** Alert text for a call the turn ended without ever answering. */
   interrupted?: string
   /**
@@ -74,23 +65,59 @@ export interface SegmentLabels {
   toolError?: (error: string) => string
 }
 
+function formatThinkingTime(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
 function toReasoningStep(
   part: AiReasoningPart,
   index: number,
   streaming: boolean,
-  thinkingLabel?: string
+  labels: SegmentLabels,
 ): AiChainStep {
+  const settled = part.done || !streaming
+  const text = part.text
+  const newlineIndex = text.indexOf('\n')
+  const hasNewline = newlineIndex !== -1
+  const first = (hasNewline ? text.slice(0, newlineIndex) : text).trim()
+  const hasRecognizedTitle = hasNewline && first.length > 0 && first.length <= TITLE_LIMIT
+
+  if (settled && part.durationMs !== undefined && labels.thinkingFor) {
+    return {
+      id: `reasoning-${index}`,
+      kind: 'thinking',
+      title: labels.thinkingFor(formatThinkingTime(part.durationMs)),
+      body: text.trim() || undefined,
+      status: 'done',
+    }
+  }
+
+  let title: string
+  let body: string | undefined
+
+  if (hasRecognizedTitle) {
+    title = plainTitle(first) || labels.thinking || 'Thinking'
+    const rest = text.slice(newlineIndex + 1).trim()
+    body = rest || text.trim() || undefined
+  }
+  else if (!hasNewline && streaming && !part.done) {
+    // Before a newline arrives during streaming, no title is recognized yet:
+    // show the dynamic verb and stream the content directly into body.
+    title = labels.thinking || 'Thinking'
+    body = text.trim() || undefined
+  }
+  else {
+    title = plainTitle(text) || labels.thinking || 'Thinking'
+    body = bodyFor(text)
+  }
+
   return {
     id: `reasoning-${index}`,
     kind: 'thinking',
-    title: plainTitle(part.text) || thinkingLabel || 'Thinking',
-    // Without the title line — repeating it as the body's first row read
-    // as a rendering bug. The rest is markdown; the trail renders it so.
-    body: bodyFor(part.text),
-    // A reasoning span with no `done` on a settled turn was interrupted,
-    // not still running — `streaming` decides which reading applies.
-    status: part.done || !streaming ? 'done' : 'active',
-    durationMs: part.durationMs
+    title,
+    body,
+    status: settled ? 'done' : 'active',
+    durationMs: part.durationMs,
   }
 }
 
@@ -110,7 +137,7 @@ function toReasoningStep(
 function settledToolPart(
   part: AiToolCallPart,
   streaming: boolean,
-  labels: SegmentLabels
+  labels: SegmentLabels,
 ): AiToolCallPart {
   if (part.status === 'error' && part.error === INTERRUPTED_TOOL_CALL_ERROR) {
     return labels.interrupted ? { ...part, error: labels.interrupted } : part
@@ -119,7 +146,8 @@ function settledToolPart(
     const error = labels.toolError(part.error)
     return error === part.error ? part : { ...part, error }
   }
-  if (streaming || part.status === 'done' || part.status === 'error') return part
+  if (streaming || part.status === 'done' || part.status === 'error')
+    return part
   // The card renders `error` as its alert text; without a fallback an
   // interrupted call would show an empty red block.
   return { ...part, status: 'error', error: part.error ?? labels.interrupted }
@@ -137,11 +165,12 @@ function settledToolPart(
 export function toMessageSegments(
   parts: AiMessagePart[] | undefined,
   streaming: boolean,
-  labels: SegmentLabels = {}
-): MessageSegment[] {
-  if (!parts) return []
+  labels: SegmentLabels = {},
+): TxAiSegment[] {
+  if (!parts)
+    return []
 
-  const segments: MessageSegment[] = []
+  const segments: TxAiSegment[] = []
   const lastIndex = parts.length - 1
 
   for (const [index, part] of parts.entries()) {
@@ -149,7 +178,7 @@ export function toMessageSegments(
       segments.push({
         kind: 'reasoning',
         id: `reasoning-${index}`,
-        step: toReasoningStep(part, index, streaming, labels.thinking)
+        step: toReasoningStep(part, index, streaming, labels),
       })
       continue
     }
@@ -158,14 +187,15 @@ export function toMessageSegments(
       segments.push({
         kind: 'tool',
         id: part.id,
-        part: settledToolPart(part, streaming, labels)
+        part: settledToolPart(part, streaming, labels),
       })
       continue
     }
 
     if (part.type === 'text') {
       // An empty part is the accumulator mid-rollback, not a paragraph.
-      if (!part.text) continue
+      if (!part.text)
+        continue
       segments.push({
         kind: 'text',
         id: `text-${index}`,
@@ -173,7 +203,7 @@ export function toMessageSegments(
         // Only the tail of the turn is still being typed. Prose with anything
         // after it is finished, and letting it keep the streaming treatment
         // would leave earlier paragraphs dimmed for the life of the thread.
-        streaming: streaming && index === lastIndex
+        streaming: streaming && index === lastIndex,
       })
     }
   }

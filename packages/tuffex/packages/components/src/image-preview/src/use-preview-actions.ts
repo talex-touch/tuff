@@ -2,7 +2,7 @@ import type { Ref } from 'vue'
 import type { ImagePreviewAction, ImagePreviewActionEvent, ImagePreviewItem, ImagePreviewProps } from './types'
 import type { PreviewSize } from './zoom'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { canShare, copyImage, downloadImage, shareImage } from './preview-actions'
+import { canShare, copyImage, copyMarkup, downloadImage, downloadMarkup, markupOf, shareImage } from './preview-actions'
 
 // The actions, in the toolbar and the menu, and the status that says what one did. The host
 // hears of each first and may take it over; preview-actions does the rest.
@@ -79,7 +79,12 @@ export function usePreviewActions(props: PreviewActionProps, options: PreviewAct
     if (!item || (item.type !== 'custom' && options.isFailed(item.url ?? '')))
       return true
     // A picture turns once it has a size to turn.
-    return action === 'rotate' ? !options.canRotate() : !item.url
+    if (action === 'rotate')
+      return !options.canRotate()
+    // Markup with no URL can still be copied and saved as text; sharing needs a link or a file.
+    if (item.url)
+      return false
+    return action === 'share' || !markupOf(item, action === 'copy' ? 'copy' : 'download')
   }
 
   function runAction(action: ImagePreviewAction, reverse = false): void {
@@ -106,8 +111,10 @@ export function usePreviewActions(props: PreviewActionProps, options: PreviewAct
         options.rotate(reverse ? -1 : 1)
         break
       case 'copy':
-        if (!item.url)
+        if (!item.url) {
+          void copyMarkup(markupOf(item, 'copy')).then(ok => say(ok ? props.copiedText : props.copyFailedText))
           break
+        }
         void copyImage(item.url, options.sizes().get(item.url)).then((outcome) => {
           say(outcome === 'image' ? props.copiedText : outcome === 'link' ? props.linkCopiedText : props.copyFailedText)
         })
@@ -116,7 +123,10 @@ export function usePreviewActions(props: PreviewActionProps, options: PreviewAct
         void shareImage(item)
         break
       default:
-        downloadImage(item)
+        if (item.url)
+          downloadImage(item)
+        else
+          downloadMarkup(item)
     }
   }
 

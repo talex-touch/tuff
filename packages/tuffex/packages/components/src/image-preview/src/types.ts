@@ -21,6 +21,11 @@ interface ImagePreviewItemBase {
   raw?: string
   /** Trusted SVG markup, rendered without fetching an external image. */
   svg?: string
+  /**
+   * What the copy action puts on the clipboard for custom content that has no `url`. Without it
+   * the markup in `svg` / `raw` is copied as text.
+   */
+  copyText?: string
 }
 
 /** Image URLs remain required unless the item explicitly renders custom content. */
