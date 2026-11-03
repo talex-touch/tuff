@@ -1181,7 +1181,7 @@ function componentSyncBadge(item: any) {
   if (status === 'not_started') {
     const since = typeof item?.since === 'string' ? item.since.trim() : ''
     if (!since) return null
-    return { status: 'since', label: locale.value === 'zh' ? `自 ${since}` : `Since ${since}` }
+    return { status: 'since', label: t('docsSidebar.since', { version: since }) }
   }
 
   return {

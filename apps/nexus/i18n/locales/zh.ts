@@ -615,6 +615,7 @@ export default {
     error: '导航加载失败，请稍后再试。',
     extensions: '扩展',
     components: '组件',
+    since: '自 {version}',
     sections: '文档分区',
     suiteSwitcher: '组件套件',
     suiteDescriptions: {

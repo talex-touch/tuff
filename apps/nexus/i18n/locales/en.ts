@@ -616,6 +616,7 @@ export default {
     error: 'Navigation failed to load. Please try again.',
     extensions: 'Ext',
     components: 'UI',
+    since: 'Since {version}',
     sections: 'Docs sections',
     suiteSwitcher: 'Component suite',
     suiteDescriptions: {
