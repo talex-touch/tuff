@@ -1027,20 +1027,18 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
     }
     // At fit, a sideways swipe turns the page once, however long its momentum runs on. Once that
     // momentum has died down, a rise out of it is a new swipe, and starts the next turn.
-    if (Math.abs(delta.x) <= Math.abs(delta.y))
-      return
     const speed = Math.abs(delta.x)
     if (current.turned) {
-      if (speed <= MOMENTUM_TAIL_PX)
-        current.tailed = true
-      else if (current.tailed && speed - current.speed >= SWIPE_RESTART_PX) {
+      if (current.tailed && speed - current.speed >= SWIPE_RESTART_PX) {
         current.turned = false
         current.tailed = false
         current.swipe = 0
       }
+      else if (speed <= MOMENTUM_TAIL_PX)
+        current.tailed = true
     }
     current.speed = speed
-    if (current.turned)
+    if (Math.abs(delta.x) <= Math.abs(delta.y) || current.turned)
       return
     current.swipe += delta.x
     if (Math.abs(current.swipe) < WHEEL_STEP_PX)
