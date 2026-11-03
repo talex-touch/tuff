@@ -20,7 +20,6 @@ import type { MessageUpdateEvent } from '@talex-touch/pi-desktop-reuse/message-s
 import type { UiMessage } from '@talex-touch/pi-desktop-reuse/types/message-stream'
 import type { WorkspaceAdmittedTurn } from './workspace-service'
 import { realpath, stat } from 'node:fs/promises'
-import { app } from 'electron'
 import { z } from 'zod'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
@@ -37,6 +36,7 @@ import { contextHygieneService } from '../ai/intelligence-context-hygiene'
 import { markHomeChatInvoke } from '../ai/intelligence-invoke-purpose'
 import { aiCliOrchestrator } from '../ai/ai-cli-orchestrator'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
+import { resolveConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import { getProject } from '../project/project-store'
 import { toolGatewayModule } from '../tool-gateway'
 import { voiceKeptRecordings } from '../voice/voice-kept-recordings'
@@ -512,7 +512,8 @@ export class ConversationWorkspaceRunner {
     const project = turn.input.projectId ? await getProject(turn.input.projectId) : null
     if (turn.input.projectId && (!project || project.archived))
       throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
-    const defaultRoot = project?.rootPath ?? process.env.HOME ?? app.getPath('userData')
+    const defaultRoot =
+      project?.rootPath ?? (await resolveConversationWorkspaceRoot(conversation.id))
     const root = await realpath(defaultRoot)
     if (!(await stat(root)).isDirectory()) throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
     const history = conversation.messages
