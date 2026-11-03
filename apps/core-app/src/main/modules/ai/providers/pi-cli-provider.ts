@@ -36,7 +36,7 @@ import {
   touchLocalAiCliSession,
   upsertLocalAiCliSession
 } from '../../local-ai-cli/session-store'
-import { getLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
+import { resolveConversationWorkspaceRoot } from '../../local-ai-cli/workspace-root'
 import { getProject } from '../../project/project-store'
 import { readHostInvokePurpose } from '../intelligence-invoke-purpose'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
@@ -196,10 +196,13 @@ function resolveHomeSessionContext(
   return { conversationId, projectId }
 }
 
-async function resolveHomeSessionRoot(projectId: string | null): Promise<string> {
+async function resolveHomeSessionRoot(
+  projectId: string | null,
+  conversationId: string
+): Promise<string> {
   const storedRoot = projectId
     ? (await getProject(projectId))?.rootPath
-    : getLocalAiCliWorkspaceRoot()
+    : await resolveConversationWorkspaceRoot(conversationId)
   if (!storedRoot) throw new Error('WORKSPACE_INVALID')
   try {
     const canonicalRoot = await realpath(storedRoot)
@@ -367,7 +370,9 @@ export class PiCliProvider extends IntelligenceProvider {
     // their home-surface turns rebuild the transcript instead of reading the session store.
     const isPi = !isOmp && !isCodex && !isClaude
     const nativeSession = home && isPi ? home : null
-    const cwd = nativeSession ? await resolveHomeSessionRoot(nativeSession.projectId) : undefined
+    const cwd = nativeSession
+      ? await resolveHomeSessionRoot(nativeSession.projectId, nativeSession.conversationId)
+      : undefined
     let pointer: StoredLocalAiCliSession | null = nativeSession
       ? await getLocalAiCliSessionForConversation(nativeSession.conversationId)
       : null

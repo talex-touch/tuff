@@ -34,7 +34,10 @@ import { migrate } from 'drizzle-orm/libsql/migrator'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../../db/schema'
 import { nativeSessionLeaseRegistry } from '../../local-ai-cli/native-session-lease'
-import { setLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
+import {
+  setLocalAiCliWorkspaceRoot,
+  setTemporarySpaceBase
+} from '../../local-ai-cli/workspace-root'
 import { IntelligenceContextExecutionService } from '../intelligence-context-execution'
 import { ContextHygieneService } from '../intelligence-context-hygiene'
 import { markHomeChatInvoke } from '../intelligence-invoke-purpose'
@@ -285,10 +288,10 @@ async function waitFor(condition: () => boolean, label: string, timeoutMs = 10_0
 }
 
 /** Acquires and immediately releases: a leaked lease makes the acquire itself throw. */
-function expectLeaseFree(nativeSessionId: string): void {
+function expectLeaseFree(nativeSessionId: string, projectRoot: string = workspaceRoot): void {
   const release = nativeSessionLeaseRegistry.acquire({
     provider: 'pi',
-    projectRoot: workspaceRoot,
+    projectRoot,
     nativeSessionId
   })
   release()
@@ -438,6 +441,7 @@ beforeEach(async () => {
   process.env.PI_CODING_AGENT_SESSION_DIR = sessionRoot
   process.env.TUFF_STUB_SPAWN_LOG = join(caseDir, 'spawns.log')
   setLocalAiCliWorkspaceRoot(workspaceRoot)
+  setTemporarySpaceBase(join(caseDir, 'tmp'))
 })
 
 afterEach(async () => {
@@ -452,6 +456,7 @@ afterEach(async () => {
     vi.restoreAllMocks()
     setPiToolRuntimeResolver(null)
     setLocalAiCliWorkspaceRoot(null)
+    setTemporarySpaceBase(null)
     nativeSessionLeaseRegistry.clear()
     resetAllCliExecutableCaches()
     if (caseDir) await rm(caseDir, { recursive: true, force: true })
@@ -494,14 +499,15 @@ describe('PiCliProvider Home native sessions', () => {
     const bound = await pointer(conversationId)
     expect(bound).not.toBeNull()
     expect(bound?.projectId).toBeNull()
-    expect(bound?.projectRoot).toBe(workspaceRoot)
+    const homeRoot = await realpath(join(caseDir, 'tmp', 'tuff-spaces', conversationId))
+    expect(bound?.projectRoot).toBe(homeRoot)
     // The stored title is the bounded first prompt line, never the whole prompt body.
     expect(bound?.title).toBe('Project smoke title')
     expect(bound?.expectedHeadId).toBe('h2')
 
     const [firstSpawn] = spawns()
     expect(firstSpawn?.create).toBe(true)
-    expect(firstSpawn?.cwd).toBe(workspaceRoot)
+    expect(firstSpawn?.cwd).toBe(homeRoot)
     expect(firstSpawn?.argv).toContain('--session-id')
     expect(firstSpawn?.argv).not.toContain('--no-session')
     expect(firstSpawn?.argv[firstSpawn!.argv.indexOf('--session-id') + 1]).toBe(
@@ -525,7 +531,7 @@ describe('PiCliProvider Home native sessions', () => {
 
     const resumed = spawns()[1]
     expect(resumed?.create).toBe(false)
-    expect(resumed?.cwd).toBe(workspaceRoot)
+    expect(resumed?.cwd).toBe(homeRoot)
     expect(resumed?.argv).toContain('--session')
     expect(resumed?.argv).not.toContain('--session-id')
     expect(resumed?.argv).not.toContain('--no-session')
@@ -820,11 +826,12 @@ describe('PiCliProvider Home native sessions', () => {
     )
     await waitFor(() => spawns().length === 1, 'the first Home spawn')
     const nativeSessionId = spawns()[0]!.sessionId as string
+    const homeRoot = await realpath(join(caseDir, 'tmp', 'tuff-spaces', conversationId))
     await waitFor(
       () =>
         nativeSessionLeaseRegistry.isLeased({
           provider: 'pi',
-          projectRoot: workspaceRoot,
+          projectRoot: homeRoot,
           nativeSessionId: nativeSessionId
         }),
       'the first turn to hold the native lease'
@@ -839,7 +846,7 @@ describe('PiCliProvider Home native sessions', () => {
     await writeFile(releaseFile, '')
     await expect(first).resolves.toBeDefined()
     expect((await pointer(conversationId))?.nativeSessionId).toBe(nativeSessionId)
-    expectLeaseFree(nativeSessionId)
+    expectLeaseFree(nativeSessionId, homeRoot)
   })
 
   it('releases both leases when a Home turn is cancelled', async () => {

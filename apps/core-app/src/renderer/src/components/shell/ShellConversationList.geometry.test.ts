@@ -140,8 +140,7 @@ const LINE_CHAIN = [
   'ShellNavItem-Label',
   'ShellConversationList',
   'ShellConversationList-Section',
-  'ShellConversationList-Section--projects',
-  'ShellConversationList-Section--chats',
+  'ShellConversationList-Section--spaces',
   'ShellConversationList-Skeleton',
   SKELETON_ROW,
   SKELETON_NAME,
@@ -236,7 +235,7 @@ describe('shell conversation list skeleton geometry', () => {
  * the contract is read from the compiled rules; the real window shows the result.
  */
 describe('shell list action styles', () => {
-  it('shows the Chats title + under the pointer, on keyboard focus, and while ⌘ hints show', () => {
+  it('shows the new-chat + under the pointer, on keyboard focus, and while ⌘ hints show', () => {
     const reveal = 'ShellConversationList-SectionAction--reveal'
     const own = rules.filter(({ selector }) => selector === `.${reveal}`)
     expect(own.map(({ declarations }) => declarations.get('opacity'))).toEqual(['0'])

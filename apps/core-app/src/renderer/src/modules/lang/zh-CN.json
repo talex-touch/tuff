@@ -1973,6 +1973,9 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
+    "spaces": {
+      "title": "Spaces"
+    },
     "browser": "浏览器",
     "newProject": "新建项目",
     "voiceInsights": "语音输入",
@@ -2015,7 +2018,6 @@
       "loading": "生成中…"
     },
     "projects": {
-      "section": "项目",
       "chats": "对话",
       "archived": "已归档项目",
       "newChat": "新建对话",

@@ -40,7 +40,7 @@ import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { isContextInputProviderSafe } from '../ai/intelligence-context-hygiene'
 import { getProject } from '../project/project-store'
 import { getLocalAiCliSessionForConversation } from '../local-ai-cli/session-store'
-import { getLocalAiCliWorkspaceRoot } from '../local-ai-cli/workspace-root'
+import { resolveConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import type { PreparedPiNativeFork } from '../local-ai-cli/pi-native-fork'
 import { preparePiNativeFork } from '../local-ai-cli/pi-native-fork'
 import { emitConversationMutation, getConversation } from './conversation-store'
@@ -1612,7 +1612,7 @@ export class ConversationWorkspaceService {
         if (pointer) {
           const root = source.projectId
             ? (await getProject(source.projectId))?.rootPath
-            : getLocalAiCliWorkspaceRoot()
+            : await resolveConversationWorkspaceRoot(source.id)
           if (!root) throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
           native = await preparePiNativeFork(pointer, await realpath(root))
         }
