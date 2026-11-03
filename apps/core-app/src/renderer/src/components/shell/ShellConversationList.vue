@@ -68,6 +68,9 @@ onMounted(() => {
 const groups = computed(() =>
   projectConversationGroups(projects.value, history.conversations.value, localAiSessions.value)
 )
+const hasTemporarySpaces = computed(() =>
+  groups.value.home.rows.some((row) => row.kind === 'conversation')
+)
 /** Project names by id, so a row's info dialog can name its project instead of showing an id. */
 const projectNames = computed(() => {
   const names: Record<string, string> = {}
@@ -507,6 +510,10 @@ function onRailRowClick(row: RailConversationRow): void {
               @continue-session="continueSession"
               @forget-session="forgetSession"
             />
+            <p v-if="hasTemporarySpaces" class="ShellConversationList-LooseNotice">
+              <span class="i-ri-information-line" />
+              <span>{{ t('shell.spaces.temporaryNotice') }}</span>
+            </p>
           </div>
         </section>
 
@@ -624,6 +631,22 @@ function onRailRowClick(row: RailConversationRow): void {
   flex-direction: column;
   gap: 2px;
   margin-top: 6px;
+}
+
+.ShellConversationList-LooseNotice {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 4px 0 0;
+  padding: 0 var(--shell-row-pad-x) 0 calc(var(--shell-row-pad-x) + 1px);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.5;
+
+  .i-ri-information-line {
+    flex: 0 0 auto;
+    margin-top: 2px;
+  }
 }
 
 /**

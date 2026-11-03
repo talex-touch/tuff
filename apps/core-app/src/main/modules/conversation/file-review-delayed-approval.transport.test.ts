@@ -403,7 +403,7 @@ describe('file-review rollback over the production typed transport', () => {
               getConversation(authority.conversationId),
               aiOrchestratorStore.getProfile(authority.profileId),
               aiOrchestratorStore.getOrchestratorRun(authority.runId),
-              getProject(authority.projectId)
+              authority.projectId ? getProject(authority.projectId) : null
             ])
             if (
               !conversation ||

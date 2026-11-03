@@ -82,7 +82,7 @@ async function validateStoredAuthority(authority: FileReviewRollbackAuthority): 
     getConversation(authority.conversationId),
     aiOrchestratorStore.getProfile(authority.profileId),
     aiOrchestratorStore.getOrchestratorRun(authority.runId),
-    getProject(authority.projectId)
+    authority.projectId ? getProject(authority.projectId) : null
   ])
   if (
     !conversation ||

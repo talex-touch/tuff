@@ -90,7 +90,8 @@ export interface FileReviewRecord {
   /** Omitted on read-only evidence inherited by a fork. */
   runId?: string
   turnId?: string
-  projectId: string
+  /** Null for a conversation without a project, whose root is its own temporary folder. */
+  projectId: string | null
   operation: FileReviewOperation
   timestamp: number
   status: FileReviewStatus

@@ -1974,7 +1974,8 @@
     "search": "搜索",
     "newChat": "新建对话",
     "spaces": {
-      "title": "Spaces"
+      "title": "Spaces",
+      "temporaryNotice": "临时空间的文件保存在系统临时目录，重启后会被删除。对话记录会保留。"
     },
     "browser": "浏览器",
     "newProject": "新建项目",
