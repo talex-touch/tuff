@@ -1,0 +1,31 @@
+# Orca 会话上下文归档（2026-11-02）
+
+这是清理 Orca 时的历史交接快照，不是实时待办。历史会话的测试数字仅表示当时的报告，本轮没有重跑这些业务测试；后续以当前 Git、CI 与任务负责人为准。未复制凭据、聊天标识、Cookie 或原始会话全文。
+
+## 1. 自定义 emoji：已提交并额外保全
+
+- 工作树：`/private/tmp/tuff-custom-emoji`；原分支 `task/feat/tuffex-custom-emoji`，没有删除工作树。
+- 旧会话留下了“未提交”状态；清理时发现另一工作流程已经提交 `de30fb229`，通过 `d76a336c1` 将 `origin/master` 更新合入功能分支，并提交后续修正 `c924a6bd3`。旧摘要已失效，不能再次复制或重做这份代码。
+- 增设的保全分支 `task/chore/orca-retain-emoji-20261102` 已推送到 GitHub，指向 `c924a6bd3`；原工作树仍回到原分支。
+- 源码压缩副本逐文件 SHA-256 校验通过。业务验收与合并状态仍由原任务负责，本轮只保全，不代替测试或发布。
+
+## 2. OpenAI Responses 支持：需核对提交归属
+
+- 会话 `工作区提交与分支合并` 报告：Responses 路由、`reasoning.effort` 映射和推理模型不发送 `temperature` 已完成，相关测试通过，但当时**尚未提交**。
+- 该会话曾在分支 `task/feat/openai-responses-support` 上工作；当前主工作树没有该分支工作树，恢复前先用 `git branch -a` / `git fsck` 核对是否已有提交，禁止从会话摘要盲目重写。
+
+## 3. HTML 预览侧栏 PR
+
+- PR `#2167`，提交 `3fec7cbf3`，修复 `inlinePreview` 关闭时侧栏未关闭。
+- 清理时查询 GitHub：PR `#2167` 已于 `2026-11-02T13:06:44Z` 合并；旧会话里的“预览排队、等待合并”不再是待办。本轮没有再次合并或重发。
+
+## 4. Intelligence UI / 错误详情与视觉间距
+
+- 历史会话报告代码与回归通过（2254 项、类型检查无错误）；本轮未重跑，不能据此承诺当前主线依然通过。
+- 未完成的是**真实 Electron 重启后的 UI 验收**：确认失败气泡显示脱敏后的真实原因，以及上下文条上移 4px 后不遮挡蓝色边框/光圈。
+- 这是验证事项，不要因为 Orca 清理而重做代码。
+
+## 5. 会话状态结论
+
+- Tuff 的大量 UI 会话（会话菜单、折射玻璃、状态条、Tuff 竞争策略）已有完成报告；本文件只保留上面仍有人工动作的部分。
+- 主检出里有三个未跟踪的探针/演示文件，属于既有工作，不因本归档自动删除或提交，原位保留，去留由文件所有者决定：`apps/core-app/.probe-limit.mts`、`apps/core-app/public/pilot-island-preview.html`、`apps/core-app/src/renderer/pilot-island-preview.html`。
