@@ -13,11 +13,26 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.2** |
-| Release version | **0.9.2** (this npm release) |
-| Component modules | **189**: Base 98 · Pro 56 · AI 35 |
+| Source version | **0.9.3** |
+| Release version | **0.9.2** (latest npm release) |
+| Component modules | **192**: Base 99 · Pro 57 · AI 36 |
 
 ## Release History
+
+### Version 0.9.3 (2026-11-03)
+
+Touch surfaces, the Miko desktop companion, text overflow, and custom emoji packs.
+
+- **New components**: touch-surface, miko, text
+- **Main updated components**: chain-of-thought, glass-surface, stream-markdown, icon-picker, markdown-editor, icon
+- **Key features**:
+  - New `TxText`: the ellipsis can sit at the start, middle or end of overflowing text (`overflow`); `scroll="auto"` loops the text back and forth, and `scroll="hover"` truncates at rest and slides the rest in on hover. On touch, `hover` becomes a tap toggle, and both scroll modes stop under reduced motion.
+  - New `TxTouchSurface` and `useLiquidTouch`: a surface that behaves like a drop of liquid glass under a hovering or pressing pointer.
+  - New `TxMiko`, the desktop companion cat.
+  - `TxIconPicker` and `TxMarkdownEditor` accept `emojiPacks`: the picker stores a picked emoji as a `url:` identifier, and the editor inserts `:name:` and renders it as an image; shortcodes are 2–40 characters.
+  - `TxGlassSurface` gains `engine="lens"` (the default stays `classic`), and `useLiquidDrag` is new.
+  - `TxChainOfThought` streams its thinking text at a steady pace.
+  - Fixes the `TxStreamMarkdown` table copy-as-CSV button, which a sticky header used to half-cover.
 
 ### Version 0.9.2 (2026-10-27)
 

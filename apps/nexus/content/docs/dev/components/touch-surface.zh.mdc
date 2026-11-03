@@ -3,7 +3,7 @@ title: TouchSurface 触摸表面
 description: 让任意表面在鼠标划过或手指触摸时，像一滴液态玻璃一样流动
 category: Effects
 status: beta
-since: 0.9.2
+since: 0.9.3
 tags: [touch, hover, liquid, surface, spring]
 syncStatus: reviewed
 verified: true

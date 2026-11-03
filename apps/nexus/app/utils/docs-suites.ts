@@ -339,6 +339,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/docs/dev/components/template-voice': 'templates',
   '/docs/dev/components/template-workbench': 'templates',
   '/docs/dev/components/terminal': 'pro',
+  '/docs/dev/components/text': 'base',
   '/docs/dev/components/text-morph': 'pro',
   '/docs/dev/components/text-transformer': 'pro',
   '/docs/dev/components/textarea': 'base',
