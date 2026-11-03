@@ -325,7 +325,9 @@ const LIMITS = {
   // 897.5 -> 898 on 2026-11-02 for custom emoji: the markdown-editor and icon-picker sheets grew
   // the full CSS by about 0.6 KiB (master 897.2 KiB after #2168, this branch 897.8 KiB in CI).
   // Minimal headroom, growth from here fails.
-  fullCssBytes: 898 * 1024,
+  // 898 -> 1024 on 2026-11-03: the owner set a 1 MiB ceiling for the full CSS when TxText landed
+  // (~1.2 KiB of styles, which the 898 KiB line could not take with 0.2 KiB of headroom).
+  fullCssBytes: 1024 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

@@ -3,7 +3,7 @@ title: TouchSurface
 description: Any surface that answers a hovering mouse or a finger like a drop of liquid glass.
 category: Effects
 status: beta
-since: 0.9.2
+since: 0.9.3
 tags: [touch, hover, liquid, surface, spring]
 syncStatus: reviewed
 verified: true

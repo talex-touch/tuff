@@ -91,7 +91,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **191**.
+Current source-of-truth export modules: **192**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -105,7 +105,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 General, form, layout, navigation, data, feedback and status components. Import from `@talex-touch/tuffex/base`.
 
-- `General (10)`: `button`, `icon`, `icon-chip`, `icon-picker`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
+- `General (11)`: `button`, `icon`, `icon-chip`, `icon-picker`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`, `text`
 - `Form (27)`: `form`, `modal-form`, `drawer-form`, `steps-form`, `input`, `textarea`, `number-input`, `search-input`, `tag-input`, `sensitive-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `Layout (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `Navigation (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`

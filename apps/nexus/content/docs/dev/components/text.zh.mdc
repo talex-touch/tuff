@@ -1,0 +1,73 @@
+---
+title: Text
+description: 溢出文字的省略位置可选，并支持自动与悬停滚动
+category: Basic
+status: beta
+since: 0.9.3
+tags: [text, ellipsis, overflow, scroll]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 省略位置
+
+::::TuffDemoWrapper{demo="TextOverflowDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="w-64">
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" overflow="start" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" overflow="middle" />
+    </div>
+  </template>
+---
+::::
+
+### 滚动方式
+
+::::TuffDemoWrapper{demo="TextScrollDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="w-64">
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="auto" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="hover" />
+    </div>
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 给 `TxText` 一个确定的宽度，或放进定宽的容器；它本身不会撑开父元素。
+- 内边距和边框放在外层容器上，不要直接加在 `TxText` 上。
+- 文件名用 `overflow="middle"`，保留开头和扩展名；路径用 `overflow="start"`，保留文件名。
+- 同一列表里不要所有条目都用 `scroll="auto"`，会分散注意力；需要读全文时用 `scroll="hover"`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string` | - | 完整文本，放得下时整段显示。 |
+| `overflow` | `'start' \| 'middle' \| 'end'` | `'end'` | 溢出时省略号放在开头、中间或末尾。`scroll="auto"` 时不生效。 |
+| `scroll` | `'none' \| 'auto' \| 'hover'` | `'none'` | `auto` 循环来回滚动；`hover` 悬停时滑动露出被截掉的部分，触屏上改为点按切换。 |
+
+## 概述
+
+- 根节点是 `<span>`，默认 `display: block`，宽度由外层决定。
+- 末尾省略用 CSS；开头和中间省略由测量决定，挂载、尺寸变化和字体加载完成后重新计算。截断时 `title` 给出完整文本。
+- 触屏上 `scroll="hover"` 点一下展开，再点一下或点组件外收回。
+- 屏幕阅读器读到的是完整文本，不会读到截断后的省略形式。
+- 减少动效时两种滚动都停止，回到静态截断。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/text/`。
+
+<TuffDocSourceLink />

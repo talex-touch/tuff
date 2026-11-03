@@ -1,8 +1,27 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.2",
-  "totalComponents": 191,
+  "currentVersion": "0.9.3",
+  "totalComponents": 192,
   "versions": [
+    {
+      "version": "0.9.3",
+      "date": "2026-11-03",
+      "title": "触控液态表面、Miko、文本省略与自定义表情包 (Touch Surface, Miko, Text Overflow & Custom Emoji)",
+      "newComponents": [
+        "touch-surface",
+        "miko",
+        "text"
+      ],
+      "updatedComponents": [
+        "chain-of-thought",
+        "glass-surface",
+        "stream-markdown",
+        "icon-picker",
+        "markdown-editor",
+        "icon"
+      ],
+      "summary": "新增 TxTouchSurface、TxMiko 与 TxText（溢出省略位置、自动与悬停滚动）；TxIconPicker 与 TxMarkdownEditor 支持 emojiPacks 自定义表情包；TxGlassSurface 新增 lens 液态透镜引擎；TxChainOfThought 思考正文按节奏流式放出；修复 TxStreamMarkdown 表格复制按钮被表头压住的问题。"
+    },
     {
       "version": "0.9.2",
       "date": "2026-10-27",
@@ -933,7 +952,7 @@
     },
     "miko": {
       "slug": "miko",
-      "since": "0.9.2",
+      "since": "0.9.3",
       "suite": "ai"
     },
     "modal": {
@@ -1291,6 +1310,11 @@
       "since": "0.7.0",
       "suite": "pro"
     },
+    "text": {
+      "slug": "text",
+      "since": "0.9.3",
+      "suite": "base"
+    },
     "text-morph": {
       "slug": "text-morph",
       "since": "0.6.0",
@@ -1348,7 +1372,7 @@
     },
     "touch-surface": {
       "slug": "touch-surface",
-      "since": "0.9.2",
+      "since": "0.9.3",
       "suite": "pro"
     },
     "transfer": {

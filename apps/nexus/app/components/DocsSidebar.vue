@@ -278,6 +278,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/icon-chip',
     '/docs/dev/components/kbd',
     '/docs/dev/components/divider',
+    '/docs/dev/components/text',
     // base — Form
     '/docs/dev/components/form',
     '/docs/dev/components/modal-form',
