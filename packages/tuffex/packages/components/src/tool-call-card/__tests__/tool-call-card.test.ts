@@ -1,7 +1,9 @@
 import type { AiToolCallPart } from '../../ai-elements/src/types'
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
 import TxToolCallCard from '../src/TxToolCallCard.vue'
+
+enableAutoUnmount(afterEach)
 
 function toolCall(overrides: Partial<AiToolCallPart> = {}): AiToolCallPart {
   return {
