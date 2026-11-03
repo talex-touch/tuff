@@ -21,6 +21,7 @@ export {
   MARKDOWN_EDITOR_DEFAULT_LABELS,
   MARKDOWN_EDITOR_HIGHLIGHT_COLORS,
 } from './src/types'
+export type { TxCustomEmoji, TxEmojiPack } from '../icon/src/emoji-pack'
 export type {
   MarkdownEditorAi,
   MarkdownEditorAiAction,

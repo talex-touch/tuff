@@ -657,7 +657,7 @@ defineExpose({
                     class="tx-icon-picker-panel__cell"
                     :class="{ 'is-selected': entry.id === modelValue, 'is-active': group.start + offset === active }"
                     :aria-selected="entry.id === modelValue"
-                    :title="entry.icon.value"
+                    :title="entry.icon.value.startsWith('data:') ? undefined : entry.icon.value"
                     :data-index="group.start + offset"
                     :disabled="disabled"
                     @click="emit('select', entry)"

@@ -1,9 +1,11 @@
 import type { MarkedExtension, RendererThis, Token, Tokens, TokenizerAndRendererExtension, TokenizerThis } from 'marked'
+import type { MarkdownEmoji } from './emoji'
 import type { CalloutToken, MarkdownCalloutTitles } from './markdown-callout'
 import type { MarkdownEditorLabels } from './types'
 import DOMPurify from 'dompurify'
 import { Marked } from 'marked'
 import { createMathExtension } from '../../../../utils/markdown-math-syntax'
+import { markdownEmojiText } from './emoji'
 import { CALLOUT_CLASS, CALLOUT_TITLE_CLASS, calloutTitles, markCallout } from './markdown-callout'
 import { highlightEnd } from './markdown-highlight'
 import { MARKDOWN_EDITOR_CALLOUT_ICONS } from './toolbar-icons'
@@ -93,6 +95,12 @@ function sourceAttr(raw: string): string {
   return `data-md-atom="" data-md-src="${encodeURIComponent(raw)}"`
 }
 
+function emojiHtml(raw: string, emoji: MarkdownEmoji): string {
+  if (emoji.src)
+    return `<span class="tx-markdown-editor__emoji is-custom" ${sourceAttr(raw)} title="${escapeHtml(raw)}"><img src="${escapeHtml(emoji.src)}" alt="${escapeHtml(raw)}" draggable="false">\u200B</span>`
+  return `<span class="tx-markdown-editor__emoji" ${sourceAttr(raw)} title="${escapeHtml(raw)}">${emoji.char}</span>`
+}
+
 /** `querySelectorAll`, plus `root` itself when it matches: a block can be its own atom. */
 function selectAll<T extends Element>(root: ParentNode, selector: string): T[] {
   const found = Array.from(root.querySelectorAll<T>(selector))
@@ -150,7 +158,7 @@ export class MarkdownRenderer {
   private katex: Katex | null = null
   private katexRequested = false
   private katexOutput: 'htmlAndMathml' | 'mathml' | null = null
-  private emojiMap: ReadonlyMap<string, string> | null = null
+  private emojiMap: ReadonlyMap<string, MarkdownEmoji> | null = null
   private calloutTitles: MarkdownCalloutTitles = calloutTitles(MARKDOWN_EDITOR_DEFAULT_LABELS)
   /**
    * Bumped whenever the same block source can render differently: reference
@@ -262,26 +270,22 @@ export class MarkdownRenderer {
       },
       tokenizer: (src: string) => {
         const match = EMOJI_RULE.exec(src)
-        const char = match ? this.emojiMap?.get(match[1]!) : undefined
-        if (!match || !char)
+        const emoji = match ? this.emojiMap?.get(match[1]!) : undefined
+        if (!match || !emoji)
           return undefined
-        return { type: 'emoji', raw: match[0], text: char }
+        return { type: 'emoji', raw: match[0], text: markdownEmojiText(emoji), emoji }
       },
-      renderer: token => `<span class="tx-markdown-editor__emoji" ${sourceAttr(token.raw)} title="${escapeHtml(token.raw)}">${token.text}</span>`,
+      renderer: token => emojiHtml(token.raw, token.emoji),
     }
   }
 
   /** Shortcodes render once the map is in; until then they stay literal text. */
-  setEmoji(map: ReadonlyMap<string, string> | null): void {
+  setEmoji(map: ReadonlyMap<string, MarkdownEmoji> | null): void {
     if (map === this.emojiMap)
       return
     this.emojiMap = map
     this.html.clear()
     this.version++
-  }
-
-  get hasEmoji(): boolean {
-    return this.emojiMap !== null
   }
 
   /** The words the renderer writes into documents: callout titles. True when they changed. */

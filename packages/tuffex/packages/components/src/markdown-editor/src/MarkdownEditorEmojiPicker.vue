@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { MarkdownEmoji, MarkdownEmojiIndex } from './emoji'
 import type { MarkdownEmojiCategory } from './emoji-data'
 import type { MarkdownEditorLabels } from './types'
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { TxIcon } from '../../icon'
-import { loadMarkdownEmoji, peekMarkdownEmoji, recentMarkdownEmoji, searchMarkdownEmoji } from './emoji'
+import { composeMarkdownEmoji, loadMarkdownEmoji, markdownEmojiText, peekMarkdownEmoji, recentMarkdownEmoji, searchMarkdownEmoji } from './emoji'
 import { focusWhenShown } from './focus-when-shown'
 import { MARKDOWN_EDITOR_UI_ICONS } from './toolbar-icons'
 
@@ -13,13 +14,14 @@ defineOptions({ name: 'TxMarkdownEditorEmojiPicker' })
 
 const props = defineProps<{
   labels: MarkdownEditorLabels
+  packs?: readonly TxEmojiPack[]
 }>()
 
 const emit = defineEmits<{
-  pick: [char: string]
+  pick: [emoji: MarkdownEmoji]
 }>()
 
-type Tab = 'recent' | MarkdownEmojiCategory
+type Tab = 'recent' | MarkdownEmojiCategory | `pack:${string}`
 
 const COLUMNS = 8
 
@@ -34,7 +36,8 @@ const CATEGORY_LABELS: Record<MarkdownEmojiCategory, keyof MarkdownEditorLabels>
   flags: 'emojiFlags',
 }
 
-const index = shallowRef<MarkdownEmojiIndex | null>(peekMarkdownEmoji())
+const base = shallowRef<MarkdownEmojiIndex | null>(peekMarkdownEmoji())
+const index = computed(() => (base.value ? composeMarkdownEmoji(base.value, props.packs) : null))
 const query = ref('')
 const tab = ref<Tab>('people')
 const focused = ref(0)
@@ -48,11 +51,13 @@ const tabs = computed(() => {
   if (!loaded)
     return []
   return [
-    ...(recent.value.length ? [{ key: 'recent' as Tab, label: props.labels.emojiRecent, glyph: '' }] : []),
+    ...(recent.value.length ? [{ key: 'recent' as Tab, label: props.labels.emojiRecent, glyph: '', src: undefined }] : []),
+    ...loaded.packs.map(pack => ({ key: pack.key as Tab, label: pack.label, glyph: '', src: pack.items[0]?.src })),
     ...loaded.categories.map(category => ({
       key: category.key as Tab,
       label: props.labels[CATEGORY_LABELS[category.key]],
       glyph: category.items[0]?.char ?? '',
+      src: undefined,
     })),
   ]
 })
@@ -65,6 +70,9 @@ const items = computed<MarkdownEmoji[]>(() => {
     return searchMarkdownEmoji(loaded, query.value, 120)
   if (tab.value === 'recent')
     return recent.value
+  const pack = loaded.packs.find(entry => entry.key === tab.value)
+  if (pack)
+    return pack.items
   return loaded.categories.find(category => category.key === tab.value)?.items ?? []
 })
 
@@ -77,9 +85,11 @@ watch(items, () => {
 
 onMounted(async () => {
   focusWhenShown(() => search.value)
-  index.value ??= await loadMarkdownEmoji()
+  base.value ??= await loadMarkdownEmoji()
   if (recent.value.length)
     tab.value = 'recent'
+  else if (index.value?.packs[0])
+    tab.value = index.value.packs[0].key as Tab
 })
 
 function cells(): HTMLButtonElement[] {
@@ -101,7 +111,7 @@ function onSearchKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter') {
     event.preventDefault()
     if (items.value[0])
-      emit('pick', items.value[0].char)
+      emit('pick', items.value[0])
   }
   else if (event.key === 'ArrowDown') {
     event.preventDefault()
@@ -155,6 +165,7 @@ function onGridKeydown(event: KeyboardEvent): void {
         @click="tab = item.key"
       >
         <TxIcon v-if="item.key === 'recent'" :name="MARKDOWN_EDITOR_UI_ICONS.recent" :size="15" />
+        <img v-else-if="item.src" class="tx-markdown-editor-emoji__image is-tab" :src="item.src" alt="">
         <span v-else class="tx-markdown-editor-emoji__glyph">{{ item.glyph }}</span>
       </button>
     </div>
@@ -162,7 +173,7 @@ function onGridKeydown(event: KeyboardEvent): void {
     <div ref="grid" class="tx-markdown-editor-emoji__grid" @keydown="onGridKeydown">
       <button
         v-for="(item, position) in items"
-        :key="item.char"
+        :key="markdownEmojiText(item)"
         type="button"
         class="tx-markdown-editor-emoji__cell"
         :aria-label="item.name.replace(/_/g, ' ')"
@@ -170,9 +181,10 @@ function onGridKeydown(event: KeyboardEvent): void {
         :tabindex="position === focused ? 0 : -1"
         @focus="focused = position"
         @mouseenter="focused = position"
-        @click="emit('pick', item.char)"
+        @click="emit('pick', item)"
       >
-        {{ item.char }}
+        <img v-if="item.src" class="tx-markdown-editor-emoji__image" :src="item.src" alt="">
+        <span v-else>{{ item.char }}</span>
       </button>
       <p v-if="index && !items.length" class="tx-markdown-editor-emoji__empty">
         {{ labels.emojiEmpty }}
@@ -181,7 +193,8 @@ function onGridKeydown(event: KeyboardEvent): void {
 
     <div class="tx-markdown-editor-emoji__footer" aria-hidden="true">
       <template v-if="current">
-        <span class="tx-markdown-editor-emoji__glyph is-large">{{ current.char }}</span>
+        <img v-if="current.src" class="tx-markdown-editor-emoji__image is-large" :src="current.src" alt="">
+        <span v-else class="tx-markdown-editor-emoji__glyph is-large">{{ current.char }}</span>
         <code>:{{ current.name }}:</code>
       </template>
     </div>
@@ -268,6 +281,24 @@ function onGridKeydown(event: KeyboardEvent): void {
 
   &.is-large {
     font-size: 20px;
+  }
+}
+
+.tx-markdown-editor-emoji__image {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  pointer-events: none;
+
+  &.is-tab {
+    width: 16px;
+    height: 16px;
+  }
+
+  &.is-large {
+    width: 22px;
+    height: 22px;
   }
 }
 

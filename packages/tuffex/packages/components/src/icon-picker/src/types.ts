@@ -1,3 +1,4 @@
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { TxIconSource } from '../../icon/src/types'
 
 /**
@@ -73,6 +74,11 @@ export interface IconPickerProps {
    * replaces the rows rather than adding to a catalog it cannot style.
    */
   catalog?: Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>
+  /**
+   * Custom emoji packs, listed ahead of the emoji from `catalog` or the bundled
+   * set. Each pack is a heading; a picked emoji is stored as a `url:` identifier.
+   */
+  emojiPacks?: readonly TxEmojiPack[]
   /** Offer the shape row. Off when the host renders the icon on its own plate. */
   shapeSelectable?: boolean
   fileChooser?: IconPickerFileChooser

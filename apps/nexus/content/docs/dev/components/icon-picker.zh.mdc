@@ -32,9 +32,37 @@ code: |
 ---
 :::
 
+### 自定义表情包
+`emojiPacks` 在 emoji 分区开头加入自己的表情包，每个包一组，标题为包名；选中后存下的是 `url:` 标识符。
+:::TuffDemoWrapper{demo="IconPickerCustomEmojiDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxEmojiPack } from '@talex-touch/tuffex/icon-picker'
+  import { TxIconPicker } from '@talex-touch/tuffex/icon-picker'
+  import { ref } from 'vue'
+
+  const identifier = ref('')
+
+  const packs: TxEmojiPack[] = [{
+    id: 'team',
+    name: '团队',
+    emoji: [
+      { name: 'ship_it', src: 'https://cdn.example.com/emoji/ship-it.png', keywords: '发布 上线' },
+    ],
+  }]
+  </script>
+
+  <template>
+    <TxIconPicker v-model="identifier" :emoji-packs="packs" />
+  </template>
+---
+:::
+
 ### 最佳实践
 
 - 原样存储标识符，渲染时用 `parseIconIdentifier` 解析；不要拆成两列，否则两列可能互相矛盾。
+- 自定义表情选中后存为 `url:` 标识符，值就是图片地址；尽量用 https 地址，`data:` 地址会整段写进存储。
 - 只读取存量值的模块从 `@talex-touch/tuffex/icon-picker` 单独引入 `parseIconIdentifier`，不必加载面板。
 - 收窄 `sections` 时，若用户要选模型厂商，记得保留 `ai`：厂商标志与 AI 图形都在这个分区，不在品牌或图标里。
 - 宿主自己画底板时关闭 `shapeSelectable`，否则用户选中的形状看不到。
@@ -50,6 +78,7 @@ code: |
 | `shape` | `IconPickerShape` | `'rounded'` | 底板形状，配合 `v-model:shape`；全部十二种见 `ICON_PICKER_SHAPES`。 |
 | `sections` | `IconPickerSection[]` | 五个分区 | 开放的分区，按标签顺序：`emoji`、`icon`、`brand`、`ai`，`file` 显示为选择文件的按钮。 |
 | `catalog` | `Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>` | - | 替换分区的内置行；条目的 `category` 决定它归在哪个分组标题下。 |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | 在 emoji 分区开头加入自定义表情包，每个包一组；叠加在 `catalog.emoji` 或内置 emoji 之前，不替换它们。 |
 | `shapeSelectable` | `boolean` | `true` | 显示形状选择行；宿主自己画底板时关闭。 |
 | `fileChooser` | `() => Promise<string \| null>` | - | 宿主的文件对话框，返回绝对路径，取消时为 `null`。 |
 | `accept` | `string` | `'image/*'` | 文件对话框与回退 input 的接受列表。 |
@@ -96,6 +125,8 @@ parseIconIdentifier('rocket.png')             // null
 parseIconIdentifier('🚀')                      // { type: 'emoji', value: '🚀' }
 ```
 
+自定义表情包（`emojiPacks`）选中后存为 `url:<src>`，与上面的 `url:` 示例相同。图片地址若是 `data:` 地址，整段都会写进标识符，持久化时优先用 https 地址。
+
 ## 在选择器外渲染
 
 选择器用随包附带的路径数据绘制内置类名，网格不依赖宿主的图标 CSS。离开选择器后，选中的 `class:` 值只是一个类名：通过 `classGlyph` 把选择器的字形交给 `TxIcon`，或在宿主的原子化 CSS 引擎里把 `ICON_CATALOG_CLASSES` 加入 safelist。
@@ -120,6 +151,7 @@ export default defineConfig({
 - 搜索同时覆盖所有分区，当前标签页的结果在前；匹配关键词、类名与分类标题，容忍一处拼写错误，也接受中文、全拼与首字母（`火箭`、`huojian`、`hj`）。
 - 焦点始终留在搜索框：方向键在网格中移动，Enter 选中高亮的格子（搜索时选第一条结果），Esc 先清空搜索词，再关闭面板。
 - 浏览时按分类分组，顶部的快捷行可在分类间跳转。
+- 自定义表情包在 emoji 分区开头各自成组，标题为包名；搜索可以匹配表情名、关键词与包名。
 - 触发器在形状之间做轮廓变形；开启减弱动态效果时直接切换。
 - 文件分区由宿主提供能力：传入 `fileChooser`（如 Electron 的 `dialog.showOpenDialog` 桥接）；未传时回退到隐藏的 `<input type="file">`，结果为 data URL。
 - `shape` 只是表现，单独存储，不属于标识符。

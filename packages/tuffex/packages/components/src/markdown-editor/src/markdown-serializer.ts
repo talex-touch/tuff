@@ -123,7 +123,8 @@ function escapeText(value: string, state: InlineState): string {
   let out = value
     // Backslash first, or it would double-escape the escapes added below.
     .replace(/\\/g, '\\\\')
-    .replace(/([`*_[\]|~])/g, '\\$1')
+    // Between two letters or digits an underscore opens and closes no emphasis.
+    .replace(/([`*[\]|~]|(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}]))/gu, '\\$1')
     // Would open inline HTML or an autolink.
     .replace(/<(?=[a-z/!?])/gi, '\\<')
     // Would read as an entity.

@@ -197,10 +197,14 @@ function inlineRule(surface: RichSurface): boolean {
       changes = [{ from, to, insert: `$${content}$` }]
     }
     else {
-      const char = surface.options.emoji()?.get(content)
-      if (!char)
+      const emoji = surface.options.emoji()?.get(content)
+      if (!emoji)
         continue
-      changes = [{ from, to, insert: char }]
+      if (emoji.src) {
+        surface.rerenderBlock(node, caret(to))
+        return true
+      }
+      changes = [{ from, to, insert: emoji.char }]
     }
     const end = mapMarkdownPosition(to, changes, 1)
     surface.commit(changes, caret(end), 'rule')
@@ -746,6 +750,11 @@ export function handleRichClick(surface: RichSurface, event: MouseEvent): void {
     return
   // A callout's title opens as its marker, the caret on the type.
   if (atom.classList.contains(CALLOUT_TITLE_CLASS)) {
+    surface.reveal.revealElement(atom)
+    return
+  }
+  // A custom emoji's image holds no text for the caret, so its shortcode opens as a formula's source does.
+  if (atom.matches('.tx-markdown-editor__emoji.is-custom')) {
     surface.reveal.revealElement(atom)
     return
   }

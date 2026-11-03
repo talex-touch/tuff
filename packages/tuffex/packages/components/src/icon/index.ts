@@ -19,6 +19,7 @@ const TxIcon = TuffIcon
 export { shouldRenderSvgAsMask } from './src/svg-color-mode'
 export { TuffIcon, TX_ICON_CONFIG_KEY, TxIcon, TxOsIcon, TxStatusIcon }
 export type { TxStatusIconProps, TxStatusIconTone } from './src/status-icon'
+export type { TxCustomEmoji, TxEmojiPack } from './src/emoji-pack'
 export type TxOsIconInstance = InstanceType<typeof TxOsIconComponent>
 export type {
   TxIconClassGlyphResolver,

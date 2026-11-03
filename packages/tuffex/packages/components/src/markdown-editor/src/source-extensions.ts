@@ -1,7 +1,9 @@
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete'
 import type { Extension, Range, Transaction } from '@codemirror/state'
 import type { DecorationSet, KeyBinding } from '@codemirror/view'
+import type { TxEmojiPack } from '../../icon/src/emoji-pack'
 import type { EditorOverlay } from './editor-overlay'
+import type { MarkdownEmoji } from './emoji'
 import type { RichChangeKind, RichCommand } from './rich-surface'
 import type { MarkdownEditorCalloutType, MarkdownEditorHighlightColor } from './types'
 import { autocompletion, insertCompletionText, pickedCompletion } from '@codemirror/autocomplete'
@@ -10,7 +12,7 @@ import { HighlightStyle, StreamLanguage, syntaxHighlighting, syntaxTree } from '
 import { Annotation, StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView, keymap, WidgetType } from '@codemirror/view'
 import { Tag, tags } from '@lezer/highlight'
-import { loadMarkdownEmoji, peekMarkdownEmoji, rememberMarkdownEmoji, searchMarkdownEmoji } from './emoji'
+import { composeMarkdownEmoji, loadMarkdownEmoji, markdownEmojiText, peekMarkdownEmoji, rememberMarkdownEmoji, searchMarkdownEmoji } from './emoji'
 import { continueMarkdownList, indentMarkdownList } from './markdown-format'
 import { isInsideMarkdownFence, markdownStreamParser } from './markdown-stream'
 import { MARKDOWN_EDITOR_CALLOUT_TYPES, MARKDOWN_EDITOR_HIGHLIGHT_COLORS } from './types'
@@ -244,7 +246,7 @@ export function sourceLanguage(math: boolean, highlight: boolean, callouts: bool
 // ---------------------------------------------------------------------------
 
 interface EmojiOption extends Completion {
-  char: string
+  emoji: MarkdownEmoji
 }
 
 const SHORTCODE_BEFORE = /(?:^|[\s(]):[a-z0-9_+-]{2,40}$/
@@ -252,52 +254,61 @@ const SHORTCODE_BEFORE = /(?:^|[\s(]):[a-z0-9_+-]{2,40}$/
 const LITERAL_TOKEN = /(?:^|_)(?:monospace|url|meta|comment|string\.special)(?:_|$)/
 
 function applyEmoji(view: EditorView, completion: Completion, from: number, to: number): void {
-  const { char } = completion as EmojiOption
-  rememberMarkdownEmoji(char)
+  const text = markdownEmojiText((completion as EmojiOption).emoji)
+  rememberMarkdownEmoji(text)
   view.dispatch({
-    ...insertCompletionText(view.state, char, from, to),
+    ...insertCompletionText(view.state, text, from, to),
     annotations: pickedCompletion.of(completion),
   })
 }
 
-async function emojiSource(context: CompletionContext): Promise<CompletionResult | null> {
-  const match = context.matchBefore(SHORTCODE_BEFORE)
-  if (!match)
-    return null
-  if (LITERAL_TOKEN.test(syntaxTree(context.state).resolveInner(context.pos, -1).name))
-    return null
-  const index = peekMarkdownEmoji() ?? await loadMarkdownEmoji()
-  if (context.aborted)
-    return null
-  const from = match.from + match.text.indexOf(':')
-  const results = searchMarkdownEmoji(index, context.state.sliceDoc(from + 1, context.pos), 30)
-  if (!results.length)
-    return null
-  return {
-    from,
-    filter: false,
-    options: results.map((item): EmojiOption => ({ label: `:${item.name}:`, char: item.char, apply: applyEmoji })),
+function emojiSource(packs: () => readonly TxEmojiPack[] | undefined) {
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const match = context.matchBefore(SHORTCODE_BEFORE)
+    if (!match)
+      return null
+    if (LITERAL_TOKEN.test(syntaxTree(context.state).resolveInner(context.pos, -1).name))
+      return null
+    const base = peekMarkdownEmoji() ?? await loadMarkdownEmoji()
+    if (context.aborted)
+      return null
+    const from = match.from + match.text.indexOf(':')
+    const index = composeMarkdownEmoji(base, packs())
+    const results = searchMarkdownEmoji(index, context.state.sliceDoc(from + 1, context.pos), 30)
+    if (!results.length)
+      return null
+    return {
+      from,
+      filter: false,
+      options: results.map((emoji): EmojiOption => ({ label: `:${emoji.name}:`, emoji, apply: applyEmoji })),
+    }
   }
 }
 
-let emojiExtension: Extension | null = null
-
-export function emojiCompletion(): Extension {
-  emojiExtension ??= autocompletion({
-    override: [emojiSource],
+export function emojiCompletion(packs: () => readonly TxEmojiPack[] | undefined): Extension {
+  return autocompletion({
+    override: [emojiSource(packs)],
     icons: false,
     maxRenderedOptions: 30,
     addToOptions: [{
       position: 20,
       render: (completion) => {
+        const { emoji } = completion as EmojiOption
         const glyph = document.createElement('span')
         glyph.className = 'tx-markdown-editor__completion-glyph'
-        glyph.textContent = (completion as EmojiOption).char
+        if (emoji.src) {
+          const image = document.createElement('img')
+          image.src = emoji.src
+          image.alt = ''
+          glyph.append(image)
+        }
+        else {
+          glyph.textContent = emoji.char
+        }
         return glyph
       },
     }],
   })
-  return emojiExtension
 }
 
 // ---------------------------------------------------------------------------
