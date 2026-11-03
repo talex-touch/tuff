@@ -399,6 +399,28 @@ export class StorageModule extends BaseModule {
         }
       }
     })
+
+    await runStartupMigration({
+      id: 'browser-workspace-default-on',
+      version: 1,
+      markerDir,
+      run: async () => {
+        const appSetting = this.getConfig(StorageList.APP_SETTING) as {
+          betaFeatures?: Record<string, unknown>
+        }
+        if (appSetting?.betaFeatures?.browserWorkspace !== false) return { changed: false }
+
+        this.saveConfig(
+          StorageList.APP_SETTING,
+          { ...appSetting, betaFeatures: { ...appSetting.betaFeatures, browserWorkspace: true } },
+          false,
+          true
+        )
+        await this.persistConfig(StorageList.APP_SETTING)
+        this.cache.clearDirty(StorageList.APP_SETTING)
+        return { changed: true }
+      }
+    })
   }
 
   public getCacheStats(): {
