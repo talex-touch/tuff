@@ -28,4 +28,4 @@
 ## 5. 会话状态结论
 
 - Tuff 的大量 UI 会话（会话菜单、折射玻璃、状态条、Tuff 竞争策略）已有完成报告；本文件只保留上面仍有人工动作的部分。
-- 当前工作树里已有的三个未跟踪探针/演示文件属于既有工作，不因本归档自动删除或提交。
+- 主检出里有三个未跟踪的探针/演示文件，属于既有工作，不因本归档自动删除或提交，原位保留，去留由文件所有者决定：`apps/core-app/.probe-limit.mts`、`apps/core-app/public/pilot-island-preview.html`、`apps/core-app/src/renderer/pilot-island-preview.html`。
