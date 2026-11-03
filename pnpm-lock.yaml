@@ -489,8 +489,8 @@ importers:
         version: 4.6.6
     devDependencies:
       '@electron-toolkit/eslint-config-prettier':
-        specifier: 3.0.0
-        version: 3.0.0(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.3)
+        specifier: 3.0.1
+        version: 3.0.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.3)
       '@electron-toolkit/eslint-config-ts':
         specifier: ^3.1.0
         version: 3.1.0(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
@@ -3180,8 +3180,8 @@ packages:
     resolution: {integrity: sha512-Zr1Vs7E9tpCNhZHDAbFVXc2gEVCG9RqPDjrno5+bdgB6LRAuvgyMHJut4NCVyYwtAieapMzc3fiQ3CSTi75ARg==}
     engines: {node: '>=22.12.0'}
 
-  '@electron-toolkit/eslint-config-prettier@3.0.0':
-    resolution: {integrity: sha512-YapmIOVkbYdHLuTa+ad1SAVtcqYL9A/SJsc7cxQokmhcwAwonGevNom37jBf9slXegcZ/Slh01I/JARG1yhNFw==}
+  '@electron-toolkit/eslint-config-prettier@3.0.1':
+    resolution: {integrity: sha512-OPdK26E9Nqjg3j8CW8gMV+gV8D3+S0WbbOGEeN8dTjWsHFBqVGxEevNdght2dJYelmeN58pqyjtEg0WTjq0gwg==}
     peerDependencies:
       eslint: '>= 9.0.0'
       prettier: '>= 3.0.0'
@@ -16711,7 +16711,7 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.4': {}
 
-  '@electron-toolkit/eslint-config-prettier@3.0.0(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.3)':
+  '@electron-toolkit/eslint-config-prettier@3.0.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.3)':
     dependencies:
       eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
