@@ -1974,7 +1974,8 @@
     "search": "Search",
     "newChat": "New Chat",
     "spaces": {
-      "title": "Spaces"
+      "title": "Spaces",
+      "temporaryNotice": "Files in temporary spaces are kept in the system temp folder and are deleted on restart. Conversations are kept."
     },
     "browser": "Browser",
     "newProject": "New Project",
