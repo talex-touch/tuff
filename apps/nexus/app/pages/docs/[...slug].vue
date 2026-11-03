@@ -942,6 +942,8 @@ const DOC_SYNC_STATUS_ALIASES: Record<string, DocSyncStatusKey> = {
   in_progress: 'in_progress',
   migrated: 'migrated',
   verified: 'verified',
+  // Reviewed docs are finished; without this they fall back to not_started and read as in progress.
+  reviewed: 'verified',
 }
 
 const docSyncStatus = computed<DocSyncStatusKey>(() => {
