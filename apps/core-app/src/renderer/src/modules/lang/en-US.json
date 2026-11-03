@@ -1973,6 +1973,9 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
+    "spaces": {
+      "title": "Spaces"
+    },
     "browser": "Browser",
     "newProject": "New Project",
     "voiceInsights": "Voice Input",
@@ -2015,7 +2018,6 @@
       "loading": "Generating…"
     },
     "projects": {
-      "section": "Projects",
       "chats": "Chats",
       "archived": "Archived projects",
       "newChat": "New Chat",

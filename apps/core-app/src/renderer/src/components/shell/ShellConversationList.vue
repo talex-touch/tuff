@@ -426,12 +426,20 @@ function onRailRowClick(row: RailConversationRow): void {
       </div>
 
       <template v-else>
-        <!-- Always present, even with no projects: the section title's + is where new projects start. -->
-        <section class="ShellConversationList-Section ShellConversationList-Section--projects">
+        <!-- Always present, even with no projects: the header's + is where new projects start. -->
+        <section class="ShellConversationList-Section ShellConversationList-Section--spaces">
           <div class="ShellConversationList-SectionHeader">
-            <span class="ShellConversationList-SectionTitle">{{
-              t('shell.projects.section')
-            }}</span>
+            <span class="ShellConversationList-SectionTitle">{{ t('shell.spaces.title') }}</span>
+            <MetaHintBadge command="new-chat" />
+            <button
+              class="ShellConversationList-SectionAction ShellConversationList-SectionAction--reveal"
+              type="button"
+              :title="t('shell.newChat')"
+              :aria-label="t('shell.newChat')"
+              @click="enterConversation(null)"
+            >
+              <span class="i-ri-add-line" />
+            </button>
             <MetaHintBadge command="new-project" />
             <button
               class="ShellConversationList-SectionAction"
@@ -486,38 +494,20 @@ function onRailRowClick(row: RailConversationRow): void {
               {{ t('shell.projects.newFromFolder') }}
             </span>
           </button>
-        </section>
-
-        <section
-          v-if="groups.home.rows.length"
-          class="ShellConversationList-Section ShellConversationList-Section--chats"
-        >
-          <div class="ShellConversationList-SectionHeader">
-            <span class="ShellConversationList-SectionTitle">{{ t('shell.projects.chats') }}</span>
-            <MetaHintBadge command="new-chat" />
-            <!-- The Projects title's + in the same place, for a new chat outside every project. -->
-            <button
-              class="ShellConversationList-SectionAction ShellConversationList-SectionAction--reveal"
-              type="button"
-              :title="t('shell.newChat')"
-              :aria-label="t('shell.newChat')"
-              @click="enterConversation(null)"
-            >
-              <span class="i-ri-add-line" />
-            </button>
+          <div v-if="groups.home.rows.length" class="ShellConversationList-Loose">
+            <ShellProjectRows
+              :rows="groups.home.rows"
+              :active-id="activeId"
+              :project-names="projectNames"
+              @open-conversation="openConversation"
+              @remove-conversation="removeConversation"
+              @rename-conversation="renameConversation"
+              @copy-conversation="copyConversation"
+              @open-conversation-file="openConversationFile"
+              @continue-session="continueSession"
+              @forget-session="forgetSession"
+            />
           </div>
-          <ShellProjectRows
-            :rows="groups.home.rows"
-            :active-id="activeId"
-            :project-names="projectNames"
-            @open-conversation="openConversation"
-            @remove-conversation="removeConversation"
-            @rename-conversation="renameConversation"
-            @copy-conversation="copyConversation"
-            @open-conversation-file="openConversationFile"
-            @continue-session="continueSession"
-            @forget-session="forgetSession"
-          />
         </section>
 
         <section v-if="groups.archived.length" class="ShellConversationList-Archived">
@@ -629,6 +619,13 @@ function onRailRowClick(row: RailConversationRow): void {
   gap: 2px;
 }
 
+.ShellConversationList-Loose {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
 /**
  * Shorter than a row and set in caption type, so it reads as a label over the rows rather than as
  * one of them. The title starts where a row's first column does (its 1px border plus the row
@@ -679,7 +676,7 @@ function onRailRowClick(row: RailConversationRow): void {
 }
 
 /**
- * The Chats title's +, out of sight until it can be wanted: the pointer over the title, the button
+ * The new-chat +, out of sight until it can be wanted: the pointer over the header, the button
  * focused from the keyboard, or the command key held, so its ⌘N badge has a button to label. It
  * keeps its box while hidden, so showing it moves nothing.
  */

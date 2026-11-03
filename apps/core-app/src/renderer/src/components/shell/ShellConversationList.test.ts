@@ -866,7 +866,7 @@ describe('shellConversationList project rename', () => {
 })
 
 describe('shellConversationList sections', () => {
-  it('lists Projects, then Chats, then the archived toggle', async () => {
+  it('lists Spaces, then the archived toggle', async () => {
     listState.projects = [project({ id: 'p1' }), project({ id: 'filed', archived: true })]
     historyHolder.conversations!.value = [conversation({ id: 'hi' })]
     const wrapper = await mountList()
@@ -875,28 +875,27 @@ describe('shellConversationList sections', () => {
       wrapper.find('.tx-edge-fade-mask__viewport').element ?? wrapper.find('nav').element
     const sections = Array.from(scrollArea.children).map((section) => section.className)
     expect(sections).toEqual([
-      'ShellConversationList-Section ShellConversationList-Section--projects',
-      'ShellConversationList-Section ShellConversationList-Section--chats',
+      'ShellConversationList-Section ShellConversationList-Section--spaces',
       'ShellConversationList-Archived'
     ])
     const titles = wrapper.findAll('.ShellConversationList-SectionTitle').map((item) => item.text())
-    expect(titles).toEqual(['shell.projects.section', 'shell.projects.chats'])
-    expect(wrapper.find('.ShellConversationList-Section--chats').text()).toContain('hi')
+    expect(titles).toEqual(['shell.spaces.title'])
+    expect(wrapper.find('.ShellConversationList-Loose').text()).toContain('hi')
   })
 
-  it('keeps the Projects title, its +, and a folder offer when there are no projects', async () => {
+  it('keeps the Spaces title, its +, and a folder offer when there are no projects', async () => {
     listState.picked = project({ id: 'p1', name: 'Picked' })
     const wrapper = await mountList()
     const store = useProjectStore()
 
-    const projectsSection = wrapper.find('.ShellConversationList-Section--projects')
-    expect(projectsSection.find('.ShellConversationList-SectionTitle').text()).toBe(
-      'shell.projects.section'
+    const spacesSection = wrapper.find('.ShellConversationList-Section--spaces')
+    expect(spacesSection.find('.ShellConversationList-SectionTitle').text()).toBe(
+      'shell.spaces.title'
     )
-    expect(projectsSection.find('.ShellConversationList-SectionAction').exists()).toBe(true)
-    expect(wrapper.find('.ShellConversationList-Section--chats').exists()).toBe(false)
+    expect(spacesSection.find('.ShellConversationList-SectionAction').exists()).toBe(true)
+    expect(wrapper.find('.ShellConversationList-Loose').exists()).toBe(false)
 
-    const offer = projectsSection.find('.ShellConversationList-NewFromFolder')
+    const offer = spacesSection.find('.ShellConversationList-NewFromFolder')
     expect(offer.text()).toBe('shell.projects.newFromFolder')
     await offer.trigger('click')
     await flushPromises()
@@ -956,8 +955,8 @@ describe('shellConversationList loading skeleton', () => {
     await flushPromises()
 
     expect(wrapper.find('.ShellConversationList-Skeleton').exists()).toBe(false)
-    const projectsSection = wrapper.find('.ShellConversationList-Section--projects').element
-    expect(projectsSection.firstElementChild?.className).toBe('ShellConversationList-SectionHeader')
+    const spacesSection = wrapper.find('.ShellConversationList-Section--spaces').element
+    expect(spacesSection.firstElementChild?.className).toBe('ShellConversationList-SectionHeader')
   })
 })
 
@@ -1030,7 +1029,7 @@ describe('shell sidebar single current row', () => {
     expect(currentRows(wrapper)).toEqual(['talex-touch'])
     expect(folder.classes()).toContain('is-current')
     expect(isExpanded(folder)).toBe(true)
-    expect(wrapper.find('.ShellConversationList-Section--chats').text()).toContain('hi')
+    expect(wrapper.find('.ShellConversationList-Loose').text()).toContain('hi')
   })
 
   it('leaves the project row alone on another page, where that page is current', async () => {
@@ -1047,7 +1046,7 @@ describe('shellConversationList new project', () => {
     const wrapper = await mountList()
     const store = useProjectStore()
 
-    const add = wrapper.find('.ShellConversationList-SectionAction')
+    const add = wrapper.find('.ShellConversationList-SectionAction[aria-label="shell.newProject"]')
     expect(add.attributes('aria-label')).toBe('shell.newProject')
     await add.trigger('click')
     await flushPromises()
@@ -1062,7 +1061,9 @@ describe('shellConversationList new project', () => {
     const wrapper = await mountList()
     const store = useProjectStore()
 
-    await wrapper.find('.ShellConversationList-SectionAction').trigger('click')
+    await wrapper
+      .find('.ShellConversationList-SectionAction[aria-label="shell.newProject"]')
+      .trigger('click')
     await flushPromises()
 
     expect(store.pendingProjectId).toBe('p1')
@@ -1380,14 +1381,14 @@ describe('shellConversationList open in local agent', () => {
   })
 })
 
-describe('shellConversationList chats section', () => {
-  it('puts a New Chat + on the Chats title, where the Projects title keeps its own', async () => {
+describe('shellConversationList spaces header', () => {
+  it('puts a New Chat + beside the New Project + in the Spaces header', async () => {
     listState.projects = [project({ id: 'p1' })]
     historyHolder.conversations!.value = [conversation({ id: 'hi' })]
     const wrapper = await mountList()
 
     const header = wrapper.find(
-      '.ShellConversationList-Section--chats .ShellConversationList-SectionHeader'
+      '.ShellConversationList-Section--spaces .ShellConversationList-SectionHeader'
     )
     const add = header.find('.ShellConversationList-SectionAction')
     expect(add.element.tagName).toBe('BUTTON')
@@ -1399,9 +1400,9 @@ describe('shellConversationList chats section', () => {
     expect(add.classes()).toContain('ShellConversationList-SectionAction--reveal')
     expect(add.find('.i-ri-add-line').exists()).toBe(true)
 
-    // The Projects + is the same control, left always visible.
+    // The New Project + is the same control, left always visible.
     const projectsAdd = wrapper.find(
-      '.ShellConversationList-Section--projects .ShellConversationList-SectionAction'
+      '.ShellConversationList-SectionAction[aria-label="shell.newProject"]'
     )
     expect(projectsAdd.classes()).not.toContain('ShellConversationList-SectionAction--reveal')
   })
@@ -1414,7 +1415,7 @@ describe('shellConversationList chats section', () => {
     store.setActiveProjectId('p1')
 
     await wrapper
-      .find('.ShellConversationList-Section--chats .ShellConversationList-SectionAction')
+      .find('.ShellConversationList-Section--spaces .ShellConversationList-SectionAction')
       .trigger('click')
     await flushPromises()
 
@@ -1436,7 +1437,7 @@ describe('shellConversationList conversation delete', () => {
 
     for (const [scope, id] of [
       ['.ShellProjectFolder-Children', 'filed'],
-      ['.ShellConversationList-Section--chats', 'loose']
+      ['.ShellConversationList-Loose', 'loose']
     ] as const) {
       const deleteItem = wrapper
         .find(scope)
