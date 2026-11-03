@@ -21,7 +21,7 @@
     "monaco-editor": "^0.57.0",
     "nprogress": "^0.2.0",
     "vue": "^3.5.39",
-    "vue-router": "^4.6.4",
+    "vue-router": "^5.4.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {

@@ -71,7 +71,7 @@
     "theme-colors": "^0.1.0",
     "typeit": "catalog:",
     "uncrypto": "^0.1.3",
-    "vue-router": "^5.1.0"
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
