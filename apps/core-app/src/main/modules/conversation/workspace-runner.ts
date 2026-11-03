@@ -796,16 +796,22 @@ export class ConversationWorkspaceRunner {
     }
   }
 
+  private async reviewedRoot(authority: FileReviewRollbackAuthority): Promise<string | null> {
+    if (!authority.projectId)
+      return realpath(await resolveConversationWorkspaceRoot(authority.conversationId))
+    const project = await getProject(authority.projectId)
+    return project && !project.archived ? realpath(project.rootPath) : null
+  }
+
   private async validateRollbackAuthority(
     authority: FileReviewRollbackAuthority
   ): Promise<boolean> {
     if (this.deleting.has(authority.conversationId) || this.slots.has(authority.conversationId))
       throw new Error('REVIEW_AUTHORITY_CHANGED')
-    const [conversation, profile, run, project] = await Promise.all([
+    const [conversation, profile, run] = await Promise.all([
       getConversation(authority.conversationId),
       aiOrchestratorStore.getProfile(authority.profileId),
-      aiCliOrchestrator.getRun(authority.runId),
-      getProject(authority.projectId)
+      aiCliOrchestrator.getRun(authority.runId)
     ])
     if (
       !conversation ||
@@ -815,9 +821,7 @@ export class ConversationWorkspaceRunner {
       !run ||
       run.profileId !== profile.id ||
       run.sessionId !== conversation.id ||
-      !project ||
-      project.archived ||
-      (await realpath(project.rootPath)) !== authority.canonicalRoot ||
+      (await this.reviewedRoot(authority)) !== authority.canonicalRoot ||
       (await realpath(run.cwd)) !== authority.canonicalRoot ||
       !profile.allowedToolIds.includes(`file.${authority.operation}`)
     )

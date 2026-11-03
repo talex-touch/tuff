@@ -4,9 +4,9 @@
  *
  * - A reviewed mutation needs the Main-only `ctx.workspace` the Pi runtime host passes after its
  *   gate and `assertAuthority()`. The run is re-loaded by `ctx.taskId` and must belong to that
- *   conversation, run in that cwd and live inside the conversation's current project root.
- *   Without `ctx.workspace` the file tools behave exactly as before and nothing is recorded; with a
- *   workspace but no project, mutations are refused.
+ *   conversation, run in that cwd and live inside the conversation's root: its project's folder, or
+ *   its own temporary folder when it has no project.
+ *   Without `ctx.workspace` the file tools behave exactly as before and nothing is recorded.
  * - Each record stores public evidence (`publicJson`: existence/hash/size per path and a bounded
  *   diff) separately from the private rollback payload (`recordJson`: canonical root, original
  *   profile policy and base64 before-snapshots up to 16 MiB each). list/get/fork never decode the
@@ -49,6 +49,7 @@ import { conversationFileReviews, conversations } from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { databaseModule } from '../database'
+import { resolveConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import { getProject } from '../project/project-store'
 import { subscribeConversationMutations } from './conversation-store'
 import {
@@ -71,6 +72,11 @@ const FILE_READ = 'file:read' as AgentPermission
 const FILE_WRITE = 'file:write' as AgentPermission
 const FILE_DELETE = 'file:delete' as AgentPermission
 const LIST_LIMIT = 500
+// `project_id` is NOT NULL, so a conversation without a project records this empty value.
+const NO_PROJECT_SCOPE = ''
+type ReviewRow = Omit<typeof conversationFileReviews.$inferSelect, 'projectId'> & {
+  projectId: string | null
+}
 
 /** Private, Main-only authority handed to the parent's rollback gate. Never sent to a renderer. */
 export interface FileReviewRollbackAuthority {
@@ -78,7 +84,7 @@ export interface FileReviewRollbackAuthority {
   readonly reviewId: string
   readonly runId: string
   readonly turnId: string
-  readonly projectId: string
+  readonly projectId: string | null
   readonly profileId: string
   /** Profile `updatedAt` when the operation ran. */
   readonly profileVersion: number
@@ -270,7 +276,7 @@ interface ReviewedAuthority {
   conversationId: string
   turnId: string
   runId: string
-  projectId: string
+  projectId: string | null
   canonicalRoot: string
   profileId: string
   profileVersion: number
@@ -567,9 +573,21 @@ export class FileReviewService {
   // Executor internals
   // -------------------------------------------------------------------------
 
+  private async currentReviewRoot(
+    conversationId: string,
+    projectId: string | null
+  ): Promise<string | null> {
+    if (projectId) {
+      const project = await getProject(projectId)
+      return project ? fs.realpath(project.rootPath).catch(() => null) : null
+    }
+    return resolveConversationWorkspaceRoot(conversationId)
+      .then((root) => fs.realpath(root))
+      .catch(() => null)
+  }
+
   private async resolveAuthority(ctx: ToolExecutionContext): Promise<ReviewedAuthority> {
     const workspace = ctx.workspace!
-    if (!workspace.projectId) throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
     await workspace.assertAuthority()
 
     const run = await aiOrchestratorStore.getOrchestratorRun(ctx.taskId)
@@ -592,14 +610,19 @@ export class FileReviewService {
       throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
     }
 
-    const project = await getProject(workspace.projectId)
+    const project = workspace.projectId ? await getProject(workspace.projectId) : null
     const profile = await aiOrchestratorStore.getProfile(run.profileId)
-    if (!project || !profile || !profile.enabled) throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+    if ((workspace.projectId && !project) || !profile || !profile.enabled) {
+      throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+    }
 
     let canonicalRoot: string
     let canonicalCwd: string
     try {
-      canonicalRoot = await fs.realpath(project.rootPath)
+      const root = project
+        ? project.rootPath
+        : await resolveConversationWorkspaceRoot(workspace.conversationId)
+      canonicalRoot = await fs.realpath(root)
       canonicalCwd = await fs.realpath(run.cwd)
     } catch {
       throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
@@ -839,7 +862,7 @@ export class FileReviewService {
           conversationId: authority.conversationId,
           runId: authority.runId,
           turnId: authority.turnId,
-          projectId: authority.projectId,
+          projectId: authority.projectId ?? NO_PROJECT_SCOPE,
           publicJson: JSON.stringify(publicRecord),
           recordJson: JSON.stringify(privateRecord),
           createdAt: now,
@@ -871,11 +894,11 @@ export class FileReviewService {
     const publicRecord = parsePublic(row.publicJson)
     const privateRecord = parsePrivate(row.recordJson)
     if (!publicRecord || !privateRecord) return null
-    return { row, publicRecord, privateRecord }
+    return { row: { ...row, projectId: row.projectId || null }, publicRecord, privateRecord }
   }
 
   private async rollbackLocked(
-    row: typeof conversationFileReviews.$inferSelect,
+    row: ReviewRow,
     publicRecord: FileReviewPublicJson,
     privateRecord: WritablePrivateRecord,
     review: FileReviewRecord,
@@ -902,8 +925,7 @@ export class FileReviewService {
       .where(eq(conversations.id, row.conversationId))
     if (!conversation || conversation.projectId !== row.projectId)
       return refuse('REVIEW_AUTHORITY_CHANGED')
-    const project = await getProject(row.projectId)
-    const currentRoot = project ? await fs.realpath(project.rootPath).catch(() => null) : null
+    const currentRoot = await this.currentReviewRoot(row.conversationId, row.projectId)
     if (!currentRoot || currentRoot !== privateRecord.canonicalRoot)
       return refuse('REVIEW_AUTHORITY_CHANGED')
 
@@ -1038,7 +1060,7 @@ export class FileReviewService {
 
   /** Persist the terminal rollback state; snapshots are dropped so nothing can be replayed. */
   private async finishRollback(
-    row: typeof conversationFileReviews.$inferSelect,
+    row: ReviewRow,
     publicRecord: FileReviewPublicJson,
     privateRecord: WritablePrivateRecord,
     restoredPaths: readonly string[],
@@ -1077,7 +1099,7 @@ export class FileReviewService {
   }
 
   private async persistRollbackState(
-    row: typeof conversationFileReviews.$inferSelect,
+    row: ReviewRow,
     publicRecord: FileReviewPublicJson,
     privateRecord: WritablePrivateRecord,
     restoredPaths: readonly string[],
@@ -1145,8 +1167,8 @@ function parsePrivate(value: string): PrivateRecord | null {
 function projectRecord(
   row: Pick<
     typeof conversationFileReviews.$inferSelect,
-    'id' | 'conversationId' | 'runId' | 'turnId' | 'projectId' | 'publicJson'
-  >,
+    'id' | 'conversationId' | 'runId' | 'turnId' | 'publicJson'
+  > & { projectId: string | null },
   includeDiff: boolean
 ): FileReviewRecord | null {
   const stored = parsePublic(row.publicJson)
@@ -1154,7 +1176,7 @@ function projectRecord(
   const record: FileReviewRecord = {
     id: row.id,
     conversationId: row.conversationId,
-    projectId: row.projectId,
+    projectId: row.projectId || null,
     operation: stored.operation,
     timestamp: stored.timestamp,
     status: stored.status,
