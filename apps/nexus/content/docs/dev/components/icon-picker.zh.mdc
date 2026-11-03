@@ -33,7 +33,7 @@ code: |
 :::
 
 ### 自定义表情包
-`emojiPacks` 在 emoji 分区开头加入自己的表情包，每个包一组，标题为包名；选中后存下的是 `url:` 标识符。
+`emojiPacks` 在 emoji 分区开头加入自己的表情包，每个含可用表情的包一组，标题为包名；选中后存下的是 `url:` 标识符。
 :::TuffDemoWrapper{demo="IconPickerCustomEmojiDemo" code-lang="vue"}
 ---
 code: |
@@ -78,7 +78,7 @@ code: |
 | `shape` | `IconPickerShape` | `'rounded'` | 底板形状，配合 `v-model:shape`；全部十二种见 `ICON_PICKER_SHAPES`。 |
 | `sections` | `IconPickerSection[]` | 五个分区 | 开放的分区，按标签顺序：`emoji`、`icon`、`brand`、`ai`，`file` 显示为选择文件的按钮。 |
 | `catalog` | `Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>` | - | 替换分区的内置行；条目的 `category` 决定它归在哪个分组标题下。 |
-| `emojiPacks` | `readonly TxEmojiPack[]` | - | 在 emoji 分区开头加入自定义表情包，每个包一组；叠加在 `catalog.emoji` 或内置 emoji 之前，不替换它们。 |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | 在 emoji 分区开头加入自定义表情包，每个含可用表情的包一组；叠加在 `catalog.emoji` 或内置 emoji 之前，不替换它们。 |
 | `shapeSelectable` | `boolean` | `true` | 显示形状选择行；宿主自己画底板时关闭。 |
 | `fileChooser` | `() => Promise<string \| null>` | - | 宿主的文件对话框，返回绝对路径，取消时为 `null`。 |
 | `accept` | `string` | `'image/*'` | 文件对话框与回退 input 的接受列表。 |
@@ -151,7 +151,7 @@ export default defineConfig({
 - 搜索同时覆盖所有分区，当前标签页的结果在前；匹配关键词、类名与分类标题，容忍一处拼写错误，也接受中文、全拼与首字母（`火箭`、`huojian`、`hj`）。
 - 焦点始终留在搜索框：方向键在网格中移动，Enter 选中高亮的格子（搜索时选第一条结果），Esc 先清空搜索词，再关闭面板。
 - 浏览时按分类分组，顶部的快捷行可在分类间跳转。
-- 自定义表情包在 emoji 分区开头各自成组，标题为包名；搜索可以匹配表情名、关键词与包名。
+- 含可用表情的自定义表情包在 emoji 分区开头各自成组，标题为包名；搜索可以匹配表情名、关键词与包名。
 - 触发器在形状之间做轮廓变形；开启减弱动态效果时直接切换。
 - 文件分区由宿主提供能力：传入 `fileChooser`（如 Electron 的 `dialog.showOpenDialog` 桥接）；未传时回退到隐藏的 `<input type="file">`，结果为 data URL。
 - `shape` 只是表现，单独存储，不属于标识符。

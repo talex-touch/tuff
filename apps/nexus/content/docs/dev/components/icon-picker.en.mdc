@@ -33,7 +33,7 @@ code: |
 :::
 
 ### Custom emoji packs
-`emojiPacks` lists your own emoji packs at the start of the emoji section, one heading per pack; a picked custom emoji is stored as a `url:` identifier.
+`emojiPacks` lists your own emoji packs at the start of the emoji section, one heading per pack with a usable emoji; a picked custom emoji is stored as a `url:` identifier.
 :::TuffDemoWrapper{demo="IconPickerCustomEmojiDemo" code-lang="vue"}
 ---
 code: |
@@ -78,7 +78,7 @@ code: |
 | `shape` | `IconPickerShape` | `'rounded'` | Plate shape, bound with `v-model:shape`; `ICON_PICKER_SHAPES` lists all twelve. |
 | `sections` | `IconPickerSection[]` | all five | Sections to offer, in tab order: `emoji`, `icon`, `brand`, `ai`, and `file` as a choose-file button. |
 | `catalog` | `Partial<Record<IconPickerCatalogSection, IconPickerEntry[]>>` | - | Replaces a section's bundled rows; an entry's `category` groups it under a heading. |
-| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs listed at the start of the emoji section, one heading per pack; they add to `catalog.emoji` or the bundled emoji rather than replacing them. |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs listed at the start of the emoji section, one heading per pack with a usable emoji; they add to `catalog.emoji` or the bundled emoji rather than replacing them. |
 | `shapeSelectable` | `boolean` | `true` | Shows the shape row; turn off when the host draws its own plate. |
 | `fileChooser` | `() => Promise<string \| null>` | - | Host file dialog resolving to an absolute path, or `null` on cancel. |
 | `accept` | `string` | `'image/*'` | Accept list for the file dialog and the fallback input. |
@@ -151,7 +151,7 @@ export default defineConfig({
 - Search covers every section at once, the open tab first. It matches keywords, class names and category headings, tolerates a typo, and takes Chinese, full pinyin or initials (`火箭`, `huojian`, `hj`).
 - Focus stays in the search box: arrow keys move through the grid, Enter picks the highlighted cell (the top result while searching), and Esc clears the query before it closes the panel.
 - Browsing groups a section by category, with a row of shortcuts that jumps between them.
-- Custom emoji packs form groups at the start of the emoji section, headed by the pack name; search matches an emoji's name, its keywords and the pack name.
+- Custom emoji packs with a usable emoji form groups at the start of the emoji section, headed by the pack name; search matches an emoji's name, its keywords and the pack name.
 - The trigger morphs from one plate outline to the next; under reduced motion it switches at once.
 - The file section depends on the host: pass `fileChooser` (for example an Electron `dialog.showOpenDialog` bridge); without it, a hidden `<input type="file">` yields a data URL.
 - `shape` is presentational and stored separately; it is not part of the identifier.

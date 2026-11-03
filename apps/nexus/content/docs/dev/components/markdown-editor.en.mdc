@@ -163,7 +163,7 @@ code: |
 | `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | Replaces the built-in link field; return the URL, or `''` to cancel. |
 | `math` | `boolean` | `true` | Renders `$…$` and `$$…$$` with KaTeX. |
 | `emoji` | `boolean` | `true` | Renders `:shortcode:` and turns on `:` completion and the emoji picker. |
-| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs: one picker tab per pack, and `:name:` renders as the image. |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | Custom emoji packs: one picker tab per pack with at least one accepted emoji, and `:name:` renders as the image. |
 | `highlight` | `boolean` | `true` | `==text==` highlights and the highlighter's colours. |
 | `callouts` | `boolean` | `true` | Shows quotes whose first line is `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` as callouts. |
 | `codeTheme` | `MarkdownEditorCodeTheme` | `'github'` | Syntax highlighting preset for code blocks with a language; `'none'` leaves them plain. |
@@ -296,7 +296,7 @@ The status bar counts with `markdownStats`, exported from `@talex-touch/tuffex/m
 
 - Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds it. All three modes share one Markdown document; preview takes no typing and disables the formatting buttons, but its task boxes still toggle.
 - WYSIWYG renders block by block; when the caret enters bold, a link, inline math or another format, its Markdown marks appear and can be edited in place. `/` at the start of a block (`、` with a Chinese input method) opens the block menu.
-- Type `:` to open completion, or press the toolbar's emoji button to open the picker. Its tabs run Recent, then each emoji pack, then the built-in categories; with nothing recent, the first pack opens. A custom emoji inserts `:name:`; a built-in one inserts its character.
+- Type `:` to open completion, or press the toolbar's emoji button to open the picker. Its tabs run Recent, then each emoji pack with an accepted emoji, then the built-in categories; with nothing recent, the first pack opens. A custom emoji inserts `:name:`; a built-in one inserts its character.
 - A custom emoji's `name` takes lowercase letters, digits, `_`, `+` and `-`, 2 to 40 characters; an invalid entry is ignored. A name listed twice keeps its first entry, and a repeated pack `id` drops the later pack. A custom emoji with the same name as a built-in shortcode takes precedence, and the built-in one leaves the picker. `:name:` renders as an image (about 1.25em tall) in preview and WYSIWYG and as text in source mode; a name the set does not hold stays text, and when an image fails to load its alt text `:name:` shows.
 - Selecting text floats a bar with formats, highlight colours, link, comment and AI. The AI's answer streams in and can show its changes word by word; replace, insert it below, try again or discard. `Esc` discards and restores the selection.
 - An image goes in as a placeholder with progress, then becomes the address `uploadImage` returns; deleting the placeholder aborts the upload.
