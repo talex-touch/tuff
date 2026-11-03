@@ -1,6 +1,6 @@
 /** One custom emoji image: written into Markdown as `:name:`, picked in the icon picker as a `url:` identifier. */
 export interface TxCustomEmoji {
-  /** Shortcode without colons: lowercase letters, digits, `_`, `+` or `-`, up to 40 characters. */
+  /** Shortcode without colons: lowercase letters, digits, `_`, `+` or `-`, 2 to 40 characters. */
   name: string
   /** An image the renderer can load: an https URL or a `data:` URL. */
   src: string

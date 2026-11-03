@@ -322,7 +322,10 @@ const LIMITS = {
   // +461 B, stream-markdown +282 B, edge-fade-mask +19 B, base-anchor -22 B. Measured 918,771 B
   // against master's 893,239 B, exactly that growth (25,532 B). No rule repeats across sheets.
   // Minimal headroom, growth from here fails.
-  fullCssBytes: 897.5 * 1024,
+  // 897.5 -> 898 on 2026-11-02 for custom emoji: the markdown-editor and icon-picker sheets grew
+  // the full CSS by about 0.6 KiB (master 897.2 KiB after #2168, this branch 897.8 KiB in CI).
+  // Minimal headroom, growth from here fails.
+  fullCssBytes: 898 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

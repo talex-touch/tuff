@@ -25,7 +25,7 @@ export interface MarkdownEmojiIndex {
   byName: Map<string, MarkdownEmoji>
 }
 
-const SHORTCODE = /^[a-z0-9_+-]{1,40}$/
+const SHORTCODE = /^[a-z0-9_+-]{2,40}$/
 
 let loaded: MarkdownEmojiIndex | null = null
 let loading: Promise<MarkdownEmojiIndex> | null = null

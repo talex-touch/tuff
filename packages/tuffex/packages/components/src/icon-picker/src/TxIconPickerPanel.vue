@@ -658,6 +658,7 @@ defineExpose({
                     :class="{ 'is-selected': entry.id === modelValue, 'is-active': group.start + offset === active }"
                     :aria-selected="entry.id === modelValue"
                     :title="entry.icon.value.startsWith('data:') ? undefined : entry.icon.value"
+                    :aria-label="entry.label"
                     :data-index="group.start + offset"
                     :disabled="disabled"
                     @click="emit('select', entry)"

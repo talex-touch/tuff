@@ -41,6 +41,8 @@ export interface IconPickerEntry {
   /** The icon identifier this row yields, e.g. `class:i-ri-rocket-line`. */
   id: string
   icon: TxIconSource
+  /** The name a screen reader announces for a cell that shows only an image. */
+  label?: string
   keywords: string
   /**
    * The heading the row is grouped under, and a search term in its own

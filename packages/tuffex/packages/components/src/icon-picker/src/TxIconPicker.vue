@@ -113,6 +113,7 @@ function emojiPackRows(packs: readonly TxEmojiPack[] | undefined): IconPickerEnt
       rows.push({
         id,
         icon: { type: 'url', value: emoji.src },
+        label: emoji.name,
         keywords: [emoji.name, emoji.keywords].filter(Boolean).join(' '),
         category: `pack:${pack.id}`,
       })
