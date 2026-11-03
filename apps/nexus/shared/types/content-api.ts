@@ -19,6 +19,7 @@ export interface SidebarComponentItem {
   normalizedPath: string
   locale: 'en' | 'zh'
   category: string | null
+  since: string | null
   syncStatus: 'not_started' | 'in_progress' | 'migrated' | 'verified'
   verified: boolean
 }

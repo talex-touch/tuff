@@ -166,6 +166,10 @@ const WHEEL_GAP_MS = 200
 const WHEEL_SETTLE_MS = 160
 /** A sideways two-finger swipe this long (px), at fit, turns the page. */
 const WHEEL_STEP_PX = 80
+/** A sideways wheel step this small (px) is a momentum tail, which only decays. */
+const MOMENTUM_TAIL_PX = 4
+/** Once the tail has died down, a sideways step rising this far (px) is a new swipe. */
+const SWIPE_RESTART_PX = 3
 /** A flick faster than this (px/s) the way a slide or a closing drag went carries it through, however short. */
 const FLICK_SPEED = 500
 /** A closing drag let go past this share of the stage's height closes. */
@@ -205,6 +209,8 @@ interface WheelStream {
   last: number
   swipe: number
   turned: boolean
+  speed: number
+  tailed: boolean
 }
 
 /** Safari's `GestureEvent`, which the DOM typings do not carry. */
@@ -1019,8 +1025,20 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       drawn.value = clampView({ k: shown.k, tx: shown.tx - delta.x, ty: shown.ty - delta.y }, boundsAt(shown.k))
       return
     }
-    // At fit, a sideways swipe turns the page: once, however long its momentum runs on.
-    if (current.turned || Math.abs(delta.x) <= Math.abs(delta.y))
+    // At fit, a sideways swipe turns the page once, however long its momentum runs on. Once that
+    // momentum has died down, a rise out of it is a new swipe, and starts the next turn.
+    const speed = Math.abs(delta.x)
+    if (current.turned) {
+      if (current.tailed && speed - current.speed >= SWIPE_RESTART_PX) {
+        current.turned = false
+        current.tailed = false
+        current.swipe = 0
+      }
+      else if (speed <= MOMENTUM_TAIL_PX)
+        current.tailed = true
+    }
+    current.speed = speed
+    if (Math.abs(delta.x) <= Math.abs(delta.y) || current.turned)
       return
     current.swipe += delta.x
     if (Math.abs(current.swipe) < WHEEL_STEP_PX)
@@ -1044,7 +1062,7 @@ export function usePreviewGestures(options: PreviewGestureOptions): PreviewGestu
       return
     }
     if (!stream || event.timeStamp - stream.last > WHEEL_GAP_MS)
-      stream = { kind: isNotchWheel(event) ? 'zoom' : 'scroll', last: event.timeStamp, swipe: 0, turned: false }
+      stream = { kind: isNotchWheel(event) ? 'zoom' : 'scroll', last: event.timeStamp, swipe: 0, turned: false, speed: 0, tailed: false }
     stream.last = event.timeStamp
     if (stream.kind === 'zoom')
       notch(delta.y, point)

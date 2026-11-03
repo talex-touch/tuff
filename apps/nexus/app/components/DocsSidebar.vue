@@ -22,6 +22,7 @@ interface SidebarComponentDoc {
   normalizedPath: string
   locale: 'en' | 'zh'
   category: string | null
+  since: string | null
   syncStatus: SyncStatusKey
   verified: boolean
 }
@@ -806,10 +807,9 @@ async function selectSuite(key: SuiteKey) {
     await navigateTo(localized)
 }
 
-const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
+const COMPONENT_SYNC_STATUS_LABELS = computed<Record<Exclude<SyncStatusKey, 'not_started'>, string>>(() => {
   if (locale.value === 'zh') {
     return {
-      not_started: '开发中',
       in_progress: '开发中',
       migrated: 'AI迁移',
       verified: '已审阅',
@@ -817,7 +817,6 @@ const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() 
   }
 
   return {
-    not_started: 'In progress',
     in_progress: 'In progress',
     migrated: 'AI migrated',
     verified: 'Reviewed',
@@ -1177,6 +1176,13 @@ function componentSyncBadge(item: any) {
 
   const status = resolveComponentItemStatus(item)
   if (!status || status === 'verified') return null
+
+  // Unrecognised sync states (such as `reviewed`) fall back to not_started: show the version, not "in progress".
+  if (status === 'not_started') {
+    const since = typeof item?.since === 'string' ? item.since.trim() : ''
+    if (!since) return null
+    return { status: 'since', label: t('docsSidebar.since', { version: since }) }
+  }
 
   return {
     status,
