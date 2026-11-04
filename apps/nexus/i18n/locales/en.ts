@@ -553,6 +553,12 @@ export default {
     },
   },
   docs: {
+    textLoopDemo: {
+      gap: 'Clears fully, then re-enters (default)',
+      clip: 'Partly clipped at the edge',
+      fade: 'Fades at the edges',
+      wrap: 'Never clears (wraps)',
+    },
     verified: 'Verified',
     loading: 'Fetching document…',
     notFoundTitle: 'Document not found',
