@@ -231,6 +231,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   FormDraftDemo: () => import('./demos/FormDraftDemo.vue'),
   FormFilterDemo: () => import('./demos/FormFilterDemo.vue'),
   FormFormDemo: () => import('./demos/FormFormDemo.vue'),
+  FormHintDemo: () => import('./demos/FormHintDemo.vue'),
   FormLayoutDemo: () => import('./demos/FormLayoutDemo.vue'),
   FormLoginDemo: () => import('./demos/FormLoginDemo.vue'),
   FormReadonlyDemo: () => import('./demos/FormReadonlyDemo.vue'),

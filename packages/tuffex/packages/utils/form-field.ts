@@ -47,6 +47,7 @@ export interface FormFieldSource {
   readonly controlId: string | undefined
   readonly labelId: string | undefined
   readonly messageId: string | undefined
+  readonly hintId: string | undefined
   readonly label: string
   /** `for`: the label is a `<label for>`. `aria`: controls must point at it with `aria-labelledby`. */
   readonly labelledBy: 'for' | 'aria'
@@ -114,7 +115,7 @@ export function useTxFormField(
       return source.label
     },
     get describedBy() {
-      return source.messageId
+      return [source.messageId, source.hintId].filter(Boolean).join(' ') || undefined
     },
     get invalid() {
       return source.invalid
@@ -157,7 +158,7 @@ export function useTxFormField(
         if (value !== undefined)
           merged[key] = value
       }
-      const describedBy = new Set([source.messageId, ...String(host['aria-describedby'] ?? '').split(/\s+/)].filter(Boolean))
+      const describedBy = new Set([source.messageId, source.hintId, ...String(host['aria-describedby'] ?? '').split(/\s+/)].filter(Boolean))
       if (describedBy.size)
         merged['aria-describedby'] = [...describedBy].join(' ')
       return merged

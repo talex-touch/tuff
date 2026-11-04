@@ -89,6 +89,7 @@ export const FORM_DEFAULT_MESSAGES: FormMessages = {
   warningPrefix: 'Warning: ',
   validating: 'Validating…',
   optional: '(optional)',
+  hint: label => `More about ${label}`,
   summaryTitle: 'There is a problem',
   draftRestored: savedAt => `Restored unsaved changes from ${draftTime(savedAt)}.`,
   draftPending: savedAt => `You have unsaved changes from ${draftTime(savedAt)}.`,
@@ -278,6 +279,8 @@ export interface FormItemProps {
   required?: boolean
   /** Helper text under the control. An error or warning takes its place while it shows. */
   help?: string
+  /** Detail behind a `?` beside the label, shown on hover or focus. Errors and warnings stay under the control. */
+  hint?: string
   width?: FormItemWidth
   showMessage?: boolean
   inline?: boolean

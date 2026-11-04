@@ -30,6 +30,8 @@ export interface FormMessages {
   validating: string
   /** After optional labels when `requiredMark` is `optional`. */
   optional: string
+  /** Accessible name of a field's `?` button, which opens its `hint`. */
+  hint: (label: string) => string
   /** Heading of `TxFormErrorSummary`. */
   summaryTitle: string
   /** Above the form once a draft has filled it in. */
