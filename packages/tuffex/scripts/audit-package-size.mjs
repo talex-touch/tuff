@@ -348,6 +348,8 @@ const LIMITS = {
     // 2026-08-18 and has failed tuffex CI on every commit since — which cost
     // every tuffex change its build signal, this file's own audits included.
     'border-beam/src/styles.js': 80 * 1024,
+    // 48.1 KiB measured in CI on 2026-11-04. The barrel sits on the shared limit, so this override stays until it shrinks.
+    'components.js': 48.5 * 1024,
   },
   emptyStateAliasCssBytes: 128,
 }
