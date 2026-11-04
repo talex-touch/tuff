@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import type {
   BrowserSavedPage,
-  BrowserTabState,
-  BrowserViewportRequest,
-  BrowserWorkspaceState
+  BrowserViewportRequest
 } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { TxButton, TxIconButton } from '@talex-touch/tuffex/button'
-import {
-  TxContextMenu,
-  TxContextMenuDivider,
-  TxContextMenuItem
-} from '@talex-touch/tuffex/context-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import {
   computed,
@@ -22,34 +15,38 @@ import {
   onDeactivated,
   onMounted,
   ref,
-  shallowRef,
   watch
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import ShellAccountAvatar from '~/components/shell/ShellAccountAvatar.vue'
+import { localIcon, shortcuts, tabIcon } from '~/modules/browser-workspace/tab-presentation'
+import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import {
   isOpenableBrowserUrl,
   useBrowserConnection
 } from '~/modules/browser-connection/useBrowserConnection'
 import Store from '~/views/base/Store.vue'
 import HomePage from '../home/HomePage.vue'
-import BrowserPluginToolbar from './BrowserPluginToolbar.vue'
 import BrowserSettingsTab from './BrowserSettingsTab.vue'
 import ChromeBookmarkDialog from './ChromeBookmarkDialog.vue'
 import ChromeLibraryPanel from './ChromeLibraryPanel.vue'
 import ChromeCookieDialog from './ChromeCookieDialog.vue'
 import { describeBrowserError } from './browser-errors'
-import type { BrowserTabMenuAction } from './tab-actions'
-import { runBrowserTabAction } from './tab-actions'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const sdk = createBrowserSdk(useTuffTransport())
-const state = shallowRef<BrowserWorkspaceState | null>(null)
-const error = ref('')
-const connecting = ref(true)
+const {
+  state,
+  connecting,
+  error,
+  tabMenuOpen,
+  pluginToolbarOpen,
+  accountOpen,
+  command,
+  retryWorkspace
+} = useBrowserWorkspace()
 const address = ref('')
 const addressFocused = ref(false)
 const addressInput = ref<HTMLInputElement | null>(null)
@@ -57,16 +54,8 @@ const viewport = ref<HTMLElement | null>(null)
 const surfaceActive = ref(true)
 const panel = ref<'history' | 'bookmarks' | 'chrome' | null>(null)
 const overlayOpen = ref(false)
-const tabMenu = ref<InstanceType<typeof TxContextMenu> | null>(null)
-const tabMenuOpen = ref(false)
-const tabMenuTargetId = ref('')
-const draggedTabId = ref<string | null>(null)
-const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
-const tabMovePending = ref(false)
-const pluginToolbarOpen = ref(false)
 // Floating layers outside this template's DOM observer reach: the shell avatar (popover and the
 // account dialog) and the "save to Chrome" form. Both report synchronously so the guest hides first.
-const accountOpen = ref(false)
 const chromeSaveOpen = ref(false)
 const cookieDialogOpen = ref(false)
 const syncingCookies = ref(false)
@@ -77,10 +66,6 @@ const {
 } = useBrowserConnection()
 const isChromeConnected = computed(() => chromeProfile.value?.status === 'connected')
 const onRoute = computed(() => surfaceActive.value && route.path === '/browser')
-const tabMenuIndex = computed(
-  () => state.value?.tabs.findIndex((tab) => tab.id === tabMenuTargetId.value) ?? -1
-)
-const tabMenuTarget = computed(() => state.value?.tabs[tabMenuIndex.value])
 const activeTab = computed(() =>
   state.value?.tabs.find((tab) => tab.id === state.value?.activeTabId)
 )
@@ -94,20 +79,6 @@ const isSettingsTab = computed(
 const isLandingTab = computed(() => Boolean(activeTab.value && !activeTab.value.url))
 const localPage = computed(() => isLandingTab.value || isStoreTab.value || isSettingsTab.value)
 
-function tabIcon(tab: BrowserTabState): string {
-  if (tab.loading) return 'i-ri-loader-4-line'
-  if (!tab.url) return 'i-ri-global-line'
-  if (tab.url.startsWith('tuff://store')) return 'i-ri-store-2-line'
-  if (tab.url.startsWith('tuff://setting')) return 'i-ri-settings-3-line'
-  return localIcon(tab.url)
-}
-
-function tabTitle(tab: BrowserTabState): string {
-  if (!tab.url) return t('browser.newTab')
-  if (tab.url.startsWith('tuff://store')) return t('shell.store')
-  if (tab.url.startsWith('tuff://setting')) return t('shell.setting')
-  return tab.title || tab.url
-}
 // Tuff's local bookmarks only; Chrome bookmarks are a separate library written back to Chrome.
 const bookmarked = computed(
   () => state.value?.bookmarks.some((page) => page.url === activeTab.value?.url) ?? false
@@ -289,73 +260,9 @@ watch(isSuspended, (suspended) => {
     })
   }
 })
-const shortcuts = [
-  {
-    title: 'Google',
-    url: 'https://www.google.com',
-    icon: 'i-simple-icons-google',
-    color: '#4285F4'
-  },
-  {
-    title: 'GitHub',
-    url: 'https://github.com',
-    icon: 'i-simple-icons-github',
-    color: 'currentColor'
-  },
-  { title: 'Figma', url: 'https://www.figma.com', icon: 'i-simple-icons-figma', color: '#F24E1E' },
-  {
-    title: 'Notion',
-    url: 'https://www.notion.so',
-    icon: 'i-simple-icons-notion',
-    color: 'currentColor'
-  },
-  { title: '知乎', url: 'https://www.zhihu.com', icon: 'i-simple-icons-zhihu', color: '#0066FF' },
-  {
-    title: 'YouTube',
-    url: 'https://www.youtube.com',
-    icon: 'i-simple-icons-youtube',
-    color: '#FF0000'
-  }
-]
-let retryAction: (() => Promise<BrowserWorkspaceState>) | null = null
-
-// The push listener is installed before getState. Both command replies and the first read may
-// arrive behind a newer push, so Main's revision is the sole ordering authority.
-function applyState(next: BrowserWorkspaceState): void {
-  if (state.value && next.revision <= state.value.revision) return
-  state.value = next
-  connecting.value = false
-}
-
-async function refreshState(): Promise<void> {
-  connecting.value = true
-  error.value = ''
-  try {
-    applyState(await sdk.getState())
-  } catch (failure) {
-    error.value = failure instanceof Error ? failure.message : String(failure)
-  } finally {
-    connecting.value = false
-  }
-}
-
-async function command(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
-  error.value = ''
-  try {
-    applyState(await action())
-    retryAction = null
-    return true
-  } catch (failure) {
-    retryAction = action
-    error.value = failure instanceof Error ? failure.message : String(failure)
-    return false
-  }
-}
-
 function retry(): void {
   lastViewport = ''
-  if (retryAction) void command(retryAction)
-  else void refreshState()
+  retryWorkspace()
 }
 
 function runActive(action: 'back' | 'forward' | 'reload' | 'stop' | 'bookmark' | 'refresh'): void {
@@ -366,94 +273,6 @@ function runActive(action: 'back' | 'forward' | 'reload' | 'stop' | 'bookmark' |
     if (action === 'refresh') return tab.loading ? sdk.stop(tab.id) : sdk.reload(tab.id)
     return sdk[action](tab.id)
   })
-}
-
-function openTabMenu(tabId: string, event: MouseEvent | KeyboardEvent): void {
-  event.preventDefault()
-  tabMenuTargetId.value = tabId
-  if (event instanceof KeyboardEvent) {
-    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-    tabMenu.value?.openAt({ x: bounds.left, y: bounds.bottom })
-  } else {
-    tabMenu.value?.openAt(event)
-  }
-}
-
-function selectTabMenuAction(action: BrowserTabMenuAction): void {
-  if (!tabMenuOpen.value) return
-  const tabId = tabMenuTargetId.value
-  tabMenuOpen.value = false
-  void command(() => runBrowserTabAction(sdk, action, tabId))
-}
-
-function resetTabDrag(): void {
-  draggedTabId.value = null
-  tabDropTarget.value = null
-}
-
-async function moveTab(tabId: string, beforeTabId: string | null): Promise<void> {
-  if (tabMovePending.value) return
-  tabMovePending.value = true
-  try {
-    if (await command(() => sdk.moveTab(tabId, beforeTabId))) {
-      await nextTick()
-      if (onRoute.value) {
-        const element = document.getElementById(`browser-tab-${tabId}`)
-        element?.focus({ preventScroll: true })
-        element?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-      }
-    }
-  } finally {
-    tabMovePending.value = false
-  }
-}
-
-function startTabDrag(tabId: string, event: DragEvent): void {
-  if (
-    tabMovePending.value ||
-    !onRoute.value ||
-    tabMenuOpen.value ||
-    pluginToolbarOpen.value ||
-    !event.dataTransfer
-  ) {
-    event.preventDefault()
-    return
-  }
-  draggedTabId.value = tabId
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('application/x-tuff-browser-tab', tabId)
-}
-
-function showTabDropTarget(event: DragEvent, tabId: string | null): void {
-  if (!draggedTabId.value || tabMovePending.value) return
-  event.preventDefault()
-  event.stopPropagation()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const before = tabId === null || event.clientX < bounds.left + bounds.width / 2
-  if (tabDropTarget.value?.id !== tabId || tabDropTarget.value.before !== before) {
-    tabDropTarget.value = { id: tabId, before }
-  }
-}
-
-function dropTab(event: DragEvent, targetId: string | null): void {
-  event.preventDefault()
-  event.stopPropagation()
-  const tabId = draggedTabId.value
-  if (!tabId || tabMovePending.value) return
-  const tabs = state.value?.tabs ?? []
-  let beforeTabId = targetId
-  if (targetId !== null) {
-    const index = tabs.findIndex((tab) => tab.id === targetId)
-    if (index < 0) {
-      resetTabDrag()
-      return
-    }
-    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-    if (event.clientX >= bounds.left + bounds.width / 2) beforeTabId = tabs[index + 1]?.id ?? null
-  }
-  resetTabDrag()
-  void moveTab(tabId, beforeTabId)
 }
 
 function focusAddress(): void {
@@ -483,18 +302,6 @@ function navigateAddress(event: KeyboardEvent): void {
   } else if (event.key === 'Escape') {
     address.value = activeTab.value?.url ?? ''
     addressInput.value?.blur()
-  }
-}
-
-function localIcon(url: string): string {
-  try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '')
-    return (
-      shortcuts.find((site) => new URL(site.url).hostname.replace(/^www\./, '') === hostname)
-        ?.icon ?? 'i-ri-global-line'
-    )
-  } catch {
-    return 'i-ri-global-line'
   }
 }
 
@@ -542,7 +349,6 @@ let viewportQueue: Promise<void> = Promise.resolve()
 let lastViewport = ''
 let resizeObserver: ResizeObserver | null = null
 let overlayObserver: MutationObserver | null = null
-let unsubscribe: (() => void) | undefined
 let unsubscribeFocus: (() => void) | undefined
 let disposed = false
 
@@ -648,49 +454,11 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
-function tabKeydown(event: KeyboardEvent, index: number): void {
-  const tabs = state.value?.tabs ?? []
-  if (event.altKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-    event.preventDefault()
-    event.stopPropagation()
-    const tab = tabs[index]
-    if (!tab || tabMovePending.value) return
-    if (event.key === 'ArrowLeft' && index > 0) void moveTab(tab.id, tabs[index - 1]!.id)
-    else if (event.key === 'ArrowRight' && index < tabs.length - 1) {
-      void moveTab(tab.id, tabs[index + 2]?.id ?? null)
-    }
-    return
-  }
-  if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-    const tab = tabs[index]
-    if (tab) openTabMenu(tab.id, event)
-    return
-  }
-  let target = index
-  if (event.key === 'ArrowRight') target = (index + 1) % tabs.length
-  else if (event.key === 'ArrowLeft') target = (index - 1 + tabs.length) % tabs.length
-  else if (event.key === 'Home') target = 0
-  else if (event.key === 'End') target = tabs.length - 1
-  else return
-  event.preventDefault()
-  const tab = tabs[target]
-  if (!tab) return
-  void command(() => sdk.activateTab(tab.id)).then(() => {
-    document.getElementById(`browser-tab-${tab.id}`)?.focus()
-  })
-}
-
 watch(
   () => [activeTab.value?.id, activeTab.value?.url],
   ([id], [previousId]) => {
     if (!addressFocused.value || id !== previousId) address.value = activeTab.value?.url ?? ''
     scheduleViewport()
-    if (id !== previousId)
-      void nextTick(() => {
-        document
-          .getElementById(`browser-tab-${id}`)
-          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-      })
   }
 )
 watch(
@@ -710,25 +478,15 @@ watch(
     flush: 'sync'
   }
 )
-watch(tabMenuOpen, (open) => {
-  if (open) return
-  void nextTick(() => {
-    if (!onRoute.value) return
-    const tabId = tabMenuTarget.value?.id ?? activeTab.value?.id
-    document.getElementById(`browser-tab-${tabId}`)?.focus()
-  })
-})
 // A revoked or deselected profile unmounts the save form; its open flag must not keep the guest hidden.
 watch(chromeProfile, (profile) => {
   if (!profile) chromeSaveOpen.value = false
 })
 onMounted(() => {
-  unsubscribe = sdk.onChanged(applyState)
   unsubscribeFocus = sdk.onFocusAddress(focusAddress)
   unsubscribeSnapshot = sdk.onSnapshot(({ tabId, snapshot }) => {
     snapshots.value[tabId] = snapshot
   })
-  void refreshState()
   resizeObserver = new ResizeObserver(scheduleViewport)
   if (viewport.value) resizeObserver.observe(viewport.value)
   overlayObserver = new MutationObserver((mutations) => {
@@ -772,15 +530,12 @@ onDeactivated(() => {
   tabMenuOpen.value = false
   pluginToolbarOpen.value = false
   chromeSaveOpen.value = false
-  resetTabDrag()
   hideViewport()
 })
 onBeforeUnmount(() => {
   disposed = true
   surfaceActive.value = false
-  resetTabDrag()
   hideViewport()
-  unsubscribe?.()
   unsubscribeFocus?.()
   unsubscribeSnapshot?.()
   resizeObserver?.disconnect()
@@ -798,98 +553,6 @@ onBeforeUnmount(() => {
     :aria-label="t('browser.label')"
     style="-webkit-app-region: no-drag; background: var(--tx-bg-color)"
   >
-    <div
-      class="flex h-11 flex-none items-center gap-1 px-2 pt-1"
-      data-browser-tabbar
-      style="background: var(--tx-fill-color-light); -webkit-app-region: drag"
-    >
-      <div
-        class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-        role="tablist"
-        :aria-label="t('browser.tabs')"
-        style="-webkit-app-region: drag"
-        @dragover.self="showTabDropTarget($event, null)"
-        @drop.self="dropTab($event, null)"
-      >
-        <div
-          v-for="(tab, index) in state?.tabs ?? []"
-          :key="tab.id"
-          class="relative flex min-w-32 max-w-56 items-center rounded-t-lg"
-          :class="{ 'opacity-50': draggedTabId === tab.id }"
-          style="-webkit-app-region: no-drag"
-          :style="{ background: tab.id === state?.activeTabId ? 'var(--tx-bg-color)' : undefined }"
-          @contextmenu="openTabMenu(tab.id, $event)"
-          @dragover="showTabDropTarget($event, tab.id)"
-          @drop="dropTab($event, tab.id)"
-        >
-          <button
-            :id="`browser-tab-${tab.id}`"
-            type="button"
-            role="tab"
-            :aria-selected="tab.id === state?.activeTabId"
-            :tabindex="tab.id === state?.activeTabId ? 0 : -1"
-            aria-controls="browser-viewport"
-            aria-haspopup="menu"
-            :aria-description="t('browser.reorderTabsHint')"
-            :aria-expanded="tabMenuOpen && tabMenuTargetId === tab.id"
-            class="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-t-lg px-3 text-sm outline-offset-[-3px]"
-            :title="tabTitle(tab)"
-            :draggable="!tabMovePending"
-            @dragstart="startTabDrag(tab.id, $event)"
-            @dragend="resetTabDrag"
-            @click="command(() => sdk.activateTab(tab.id))"
-            @keydown="tabKeydown($event, index)"
-          >
-            <span class="inline-flex h-4 w-4 flex-none" :class="tabIcon(tab)" aria-hidden="true" />
-            <span class="truncate">{{ tabTitle(tab) }}</span>
-          </button>
-          <TxIconButton
-            icon="i-ri-close-line"
-            size="xs"
-            :label="t('browser.closeTab', { title: tabTitle(tab) })"
-            @click="command(() => sdk.closeTab(tab.id))"
-          />
-          <span
-            v-if="draggedTabId && tabDropTarget?.id === tab.id"
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-y-1 w-0.5 bg-[var(--tx-color-primary)]"
-            :class="tabDropTarget.before ? 'left-0' : 'right-0'"
-          />
-        </div>
-        <TxSkeleton v-if="connecting && !state" :width="150" :height="30" :radius="8" />
-        <TxIconButton
-          icon="i-ri-add-line"
-          size="sm"
-          :label="t('browser.addTab')"
-          :disabled="!state"
-          class="flex-none"
-          style="-webkit-app-region: no-drag"
-          @click="command(() => sdk.createTab())"
-        />
-      </div>
-      <div
-        data-browser-window-drag
-        aria-hidden="true"
-        :title="t('browser.dragWindow')"
-        class="relative h-full w-12 flex-none"
-        style="-webkit-app-region: drag"
-        @dragover="showTabDropTarget($event, null)"
-        @drop="dropTab($event, null)"
-      >
-        <span
-          v-if="draggedTabId && tabDropTarget?.id === null"
-          class="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-[var(--tx-color-primary)]"
-        />
-      </div>
-      <div
-        class="shell-chrome-safe-inline-end flex flex-none items-center gap-0.5"
-        style="-webkit-app-region: no-drag"
-      >
-        <BrowserPluginToolbar :active="onRoute" @overlay-change="pluginToolbarOpen = $event" />
-        <ShellAccountAvatar :active="onRoute" @overlay-change="accountOpen = $event" />
-      </div>
-    </div>
-
     <div
       v-if="!isSettingsTab && !isStoreTab"
       class="flex h-14 flex-none items-center gap-1 border-b border-[var(--tx-border-color-light)] px-3"
@@ -1001,8 +664,9 @@ onBeforeUnmount(() => {
       />
     </div>
 
+    <!-- Route-gated so a leaving page drops its copy at once; the tab strip shows it elsewhere. -->
     <div
-      v-if="error"
+      v-if="error && onRoute"
       role="alert"
       class="flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-5 py-3 text-sm"
     >
@@ -1286,43 +950,6 @@ onBeforeUnmount(() => {
         <TxSkeleton width="100%" :height="3" :radius="0" />
       </div>
     </div>
-    <TxContextMenu
-      ref="tabMenu"
-      v-model="tabMenuOpen"
-      trigger="manual"
-      :activation-feedback="false"
-    >
-      <template #menu>
-        <TxContextMenuItem :disabled="!tabMenuTarget?.url" @select="selectTabMenuAction('reload')">
-          {{ t('browser.tabMenu.reload') }}
-        </TxContextMenuItem>
-        <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('duplicate')">
-          {{ t('browser.tabMenu.duplicate') }}
-        </TxContextMenuItem>
-        <TxContextMenuDivider />
-        <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('close')">
-          {{ t('browser.tabMenu.close') }}
-        </TxContextMenuItem>
-        <TxContextMenuItem
-          :disabled="!tabMenuTarget || (state?.tabs.length ?? 0) < 2"
-          @select="selectTabMenuAction('close-others')"
-        >
-          {{ t('browser.tabMenu.closeOthers') }}
-        </TxContextMenuItem>
-        <TxContextMenuItem
-          :disabled="tabMenuIndex <= 0"
-          @select="selectTabMenuAction('close-left')"
-        >
-          {{ t('browser.tabMenu.closeLeft') }}
-        </TxContextMenuItem>
-        <TxContextMenuItem
-          :disabled="!tabMenuTarget || tabMenuIndex >= (state?.tabs.length ?? 0) - 1"
-          @select="selectTabMenuAction('close-right')"
-        >
-          {{ t('browser.tabMenu.closeRight') }}
-        </TxContextMenuItem>
-      </template>
-    </TxContextMenu>
     <ChromeBookmarkDialog
       v-if="chromeProfile"
       v-model="chromeSaveOpen"
