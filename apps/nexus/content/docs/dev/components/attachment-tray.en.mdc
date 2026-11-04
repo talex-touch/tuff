@@ -125,7 +125,7 @@ code: |
 - An `uploading` attachment always has a cancel button: images draw a progress ring, file chips show a percentage and a thin progress bar.
 - An image's remove or cancel button sits inside the thumbnail's top-right corner; it appears on hover or keyboard focus and stays visible on touch screens.
 - Clicking an image opens it full-window in [ImagePreview](/docs/dev/components/image-preview) without emitting `open`, growing it out of the thumbnail and shrinking it back on closing; the wheel, a trackpad, or two fingers zoom, a drag pans a zoomed image, a sideways swipe or ← / → turns the page at fit, and a drag up or down closes it. At either end the page button is `aria-disabled`, so focus never drops to `body`.
-- Until an image arrives, the preview holds its place, shaped by the attachment's `width` / `height` when given and otherwise like the last image looked at, and shows a shimmering placeholder there once 150 ms have passed.
+- Until an image arrives, the preview holds its place, shaped by the attachment's `width` / `height` when given and otherwise like the last image looked at, and shows the loading effect there once 150 ms have passed (`sweep-gradient` by default, set by the preview's `loadingEffect`, passed through `previewProps`).
 - An image that fails to load shows a placeholder icon in the thumbnail and a placeholder with `failedText` in the preview; the two share the record of failures, so the same URL is not retried, and a new `url` loads again.
 
 ## Technologies

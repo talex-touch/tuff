@@ -436,11 +436,11 @@ function instancePixelSize(inst: Instance): { iw: number; ih: number } {
  *
  *  Called once at the top of each frame (before iterating instances) so the
  *  canvas size is stable for the entire tick. */
-function maybeGrowGlCanvas(s: SharedRenderer): void {
+function maybeGrowGlCanvas(s: SharedRenderer, oneShot?: Instance): void {
   let needCssW = 0;
   let needCssH = 0;
   for (const inst of s.instances) {
-    if (!inst.visible || inst.paused) continue;
+    if (inst !== oneShot && (!inst.visible || inst.paused)) continue;
     if (inst.cssWidth > needCssW) needCssW = inst.cssWidth;
     if (inst.cssHeight > needCssH) needCssH = inst.cssHeight;
   }
@@ -571,7 +571,7 @@ export function renderInstanceOnce(inst: Instance): void {
   // Make sure the GL canvas is big enough for this one-shot repaint even if
   // the loop is currently asleep (no auto-render instance is keeping it
   // sized).
-  maybeGrowGlCanvas(SHARED);
+  maybeGrowGlCanvas(SHARED, inst);
   paintInstance(SHARED, inst, performance.now());
 }
 

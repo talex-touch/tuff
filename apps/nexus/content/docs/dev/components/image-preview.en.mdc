@@ -139,6 +139,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 - Pass `origin` and `width` / `height`: the image grows out of its thumbnail and back into it, and its placeholder takes its shape before it loads.
 - Pass a `thumbnail` when you have one: the strip uses it, and otherwise loads the full image in every cell.
 - Pass URLs that already failed as thumbnails to `failed`; the preview shows its failure placeholder without requesting them again.
+- The presets need three.js (an optional peer). With three installed, they work from every entry point. Without it, importing `image-preview` directly logs `is not exported` warnings at build time (the build still succeeds), and at run time the placeholder falls back to `skeleton`; importing from the package entry point fails the whole page, a problem that predates this change.
 - Focus the trigger before opening: WebKit does not focus a clicked button, and focus can only return to an element that had it.
 - On non-English surfaces, override every text prop and all five formatters: the buttons are icons, and these names are what screen readers announce.
 
@@ -156,6 +157,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `transition` | `'zoom' \| 'fade'` | `'zoom'` | How the preview opens and closes; `zoom` fades instead without an `origin`, with the thumbnail out of view, with an image not ready in time, or with reduced motion. |
 | `maxScale` | `number` | `4` | The largest zoom against the image's own pixels, so `1` is 100%; never below the whole image's fit. |
 | `failed` | `ReadonlySet<string> \| string[]` | - | URLs the host already saw fail; shown as the failure placeholder and never requested. |
+| `loadingEffect` | `'sweep-gradient' \| 'pixels-organic' \| 'pixels-mechanic' \| 'skeleton' \| 'none'` | `'sweep-gradient'` | What shows in a picture's place while it loads: one of the three [TxImageGeneration](/docs/dev/components/image-generation) presets, the `skeleton` shimmer, or `none`. Only a picture that is loading plays it. The presets need three.js; see below. |
 | `actions` | `ImagePreviewAction[]` | `['rotate', 'copy', 'share', 'download']` | The toolbar's and the menu's actions, in this order; share shows only where the browser can share. |
 | `contextMenu` | `boolean` | `true` | A long press on the image, a right-click, or the context-menu key opens a menu of the actions. |
 | `indicator` | `'thumbnails' \| 'dots' \| 'none'` | `'thumbnails'` | The strip along the bottom: thumbnails, dots, or nothing; hidden with a single image. |
@@ -202,6 +204,12 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `close` | `()` | Fires when the person closes it: the close button, Escape, the backdrop, or dragging the image away; never when the host does. |
 | `error` | `(url: string, index: number)` | Fires once per URL when an image fails to load; the neighbours on either side preload too. |
 | `action` | `(event: ImagePreviewActionEvent)` | Fires when an action is chosen, before the preview carries it out; after `preventDefault()` the host carries it out itself. |
+
+### Slots
+
+| Slot | Description |
+|------|------|
+| `loading` | Replaces the default loading placeholder. Receives `{ item, index }` and renders in the picture's place, at the placeholder's size. |
 
 ### Exposed Methods
 
@@ -252,7 +260,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 
 ## Overview
 
-- Opening, closing, and loading: with an `origin`, the image grows out of the thumbnail's crop and corners, overshoots a little, and settles; on closing it straightens and shrinks back into place, and a flight turns round where it is when the preview opens or closes again midway. Closed in the middle of a page turn, the image more than half in view goes home, and the neighbour slides back as it fades with the backdrop, so the index stays where it was. Before an image loads, its place is held at `width` / `height`, or else at the shape of the last image looked at, and a shimmering placeholder appears only after 150 ms; a failed image shows a placeholder with `failedText`, and the same URL is not requested again.
+- Opening, closing, and loading: with an `origin`, the image grows out of the thumbnail's crop and corners, overshoots a little, and settles; on closing it straightens and shrinks back into place, and a flight turns round where it is when the preview opens or closes again midway. Closed in the middle of a page turn, the image more than half in view goes home, and the neighbour slides back as it fades with the backdrop, so the index stays where it was. Before an image loads, its place is held at `width` / `height`, or else at the shape of the last image looked at, and the `loadingEffect` effect appears only after 150 ms, and with reduced motion it holds still on one frame; a failed image shows a placeholder with `failedText`, and the same URL is not requested again.
 - Mouse and trackpad: the wheel zooms about the pointer, and a pinch or ⌘/Ctrl + wheel zooms under the fingers, Safari's pinch gestures included. A click or a double-click on the image zooms to the detail about the pointer, and another goes back; zoomed in, a drag or a two-finger scroll pans, coasts on after release, and resists like a rubber band past the edges; at fit, a sideways drag or swipe turns the page and a vertical drag pulls the image away to close. A right-click on the image opens the action menu, and Shift + right-click still gets the browser's own.
 - Touch: two fingers pinch about their midpoint, and lifting one carries on as a one-finger drag without a jump; a double tap zooms in or back, and a tap hides or shows the controls. A 480 ms long press opens the action menu above the finger, with a light vibration where the browser supports one.
 - Keyboard: `+` / `-` zoom, `0` shows the whole image, ← / → page, and while zoomed the arrows pan; `R` / `Shift + R` rotate, ⌘/Ctrl + C copies, and the context-menu key or Shift + F10 opens the menu, where ↑ / ↓ / Home / End move and Escape or Tab close it. Escape first undoes a gesture under way, then closes; Tab cycles within the dialog, and closing returns focus to the element that had it.

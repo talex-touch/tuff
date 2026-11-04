@@ -560,6 +560,13 @@ export default {
       fade: 'Fades at the edges',
       wrap: 'Never clears (wraps)',
     },
+    imagePreviewOptionsDemo: {
+      sweepGradient: 'Sweep',
+      pixelsOrganic: 'Pixels organic',
+      pixelsMechanic: 'Pixels mechanic',
+      skeleton: 'Skeleton',
+      none: 'None',
+    },
     verified: 'Verified',
     loading: 'Fetching document…',
     notFoundTitle: 'Document not found',

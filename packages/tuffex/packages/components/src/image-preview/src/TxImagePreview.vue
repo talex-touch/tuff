@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import type { ImagePreviewEmits, ImagePreviewIndicator, ImagePreviewItem, ImagePreviewMinimapSlotProps, ImagePreviewProps, ImagePreviewSlotProps, ImagePreviewThumbnailSlotProps } from './types'
+import type { ImagePreviewEmits, ImagePreviewIndicator, ImagePreviewItem, ImagePreviewLoadingSlotProps, ImagePreviewMinimapSlotProps, ImagePreviewProps, ImagePreviewSlotProps, ImagePreviewThumbnailSlotProps } from './types'
 import type { PreviewSize, PreviewView } from './zoom'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
@@ -42,6 +42,7 @@ const props = withDefaults(defineProps<ImagePreviewProps>(), {
   images: () => [],
   maxScale: 4,
   transition: 'zoom',
+  loadingEffect: 'sweep-gradient',
   actions: () => ['rotate', 'copy', 'share', 'download'],
   contextMenu: true,
   indicator: 'thumbnails',
@@ -88,6 +89,7 @@ const slots = defineSlots<{
   item?: (props: ImagePreviewSlotProps) => any
   thumbnail?: (props: ImagePreviewThumbnailSlotProps) => any
   minimap?: (props: ImagePreviewMinimapSlotProps) => any
+  loading?: (props: ImagePreviewLoadingSlotProps) => any
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -590,12 +592,17 @@ defineExpose({
           :box-style="boxStyle"
           :failed-text="failedText"
           :bind="bindImage"
+          :loading-effect="loadingEffect"
+          :reduced="reduced"
           @load="onImageLoad"
           @error="onImageError($event, slide.index)"
         >
           <template v-if="$slots.item || $slots.default" #default="scope">
             <slot v-if="$slots.item" name="item" v-bind="scope" />
             <slot v-else v-bind="scope" />
+          </template>
+          <template v-if="$slots.loading" #loading="scope">
+            <slot name="loading" v-bind="scope" />
           </template>
         </ImagePreviewSlide>
       </div>
