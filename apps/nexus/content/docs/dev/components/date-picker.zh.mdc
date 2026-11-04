@@ -47,6 +47,19 @@ code: |
 - 外层卡片已负责展开与留白时，用 `picker` 形态加 `popup="false"` 内联渲染。
 - 有明确的地区习惯时，显式设置 `weekStartsOn`。
 
+### 边缘与状态
+
+日期字段与输入框同高，悬停、展开和禁用颜色取自输入框，禁用时不降低透明度。
+
+:::TuffDemoWrapper{demo="DatePickerEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDatePicker v-model="date" variant="field" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

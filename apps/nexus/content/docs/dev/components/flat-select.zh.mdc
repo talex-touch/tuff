@@ -81,6 +81,21 @@ code: |
 - 不要在 `TxFlatSelectItem` 中放交互控件，选项本身就是 `role="option"` 的按钮。
 - 选项暂不可用时设置 `disabled`，不要把它过滤掉。
 
+### 边缘与状态
+
+平铺选择器与输入框同高，描边、焦点和禁用颜色取自输入框，禁用时不降低透明度。
+
+:::TuffDemoWrapper{demo="FlatSelectEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlatSelect v-model="value">
+      <TxFlatSelectItem value="a" label="Option A" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
 ## API 参考
 
 ### TxFlatSelect

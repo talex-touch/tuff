@@ -35,6 +35,20 @@ code: |
 - 表格筛选等高密度区域设置 `controls=false`，键盘输入更快。
 - 在校验与 API 映射中，把 `null` 当作未设置。
 
+### 边缘与状态
+
+步进按钮沿同一条内描边排列，外角与外框同心；状态颜色与输入框一致。
+
+:::TuffDemoWrapper{demo="NumberInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxNumberInput v-model="count" />
+    <TxNumberInput disabled />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性
@@ -77,7 +91,7 @@ code: |
 - 失焦时无法解析的文本回退为当前值，没有当前值时为 `null`。
 - `controls=false` 隐藏步进按钮，保留原生数字输入。
 - `readonly` 与 `disabled` 都阻止步进；`disabled` 还禁用输入框。
-- 在 `TxFormItem` 中自动取得 id、`aria-describedby`、`aria-invalid` 与 `required`，显示错误时边框变红；表单的 `disabled` 同样生效，并阻止步进。
+- 在 `TxFormItem` 中自动取得 id、`aria-describedby`、`aria-invalid` 与 `required`，显示错误时边缘变红；表单的 `disabled` 同样生效，并阻止步进。
 
 ## 技术实现
 

@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'vue'
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { isFormFieldTarget } from '../../../../utils/escape-key'
 import { createFocusReturn, markDialogLeaving, trapTab } from '../../../../utils/focus-trap'
 import { useGuardedClose } from '../../../../utils/guarded-close'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
@@ -129,6 +130,8 @@ function handleKeydown(event: KeyboardEvent) {
       trapTab(event, overlayRef.value)
     return
   }
+  if (isFormFieldTarget(event.target))
+    return
   event.preventDefault()
   requestClose('escape')
 }

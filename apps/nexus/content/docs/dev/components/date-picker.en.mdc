@@ -47,6 +47,19 @@ code: |
 - When the surrounding card already handles disclosure and spacing, render the `picker` surface inline with `popup="false"`.
 - Set `weekStartsOn` explicitly when locale conventions matter.
 
+### Edge and States
+
+The date field matches the input's height, and its hover, open and disabled colours come from the input. Disabled does not lower opacity.
+
+:::TuffDemoWrapper{demo="DatePickerEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDatePicker v-model="date" variant="field" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

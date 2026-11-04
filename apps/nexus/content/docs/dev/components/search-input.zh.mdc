@@ -124,7 +124,7 @@ code: |
 ## 概述
 
 - 根节点是 `TuffInput` 的圆角外框，带 `tx-search-input` 类；`class`、`style` 落在外框，`aria-label`、`id` 等其余属性落在内部 `<input>`。
-- 焦点只画在外框上：常规主题沿用 `TuffInput` 的边框与光环；高对比主题改为 `--tx-focus-ring-color` 描边加 `--tx-focus-ring-shadow`，内部 `<input>` 不再画矩形焦点框。
+- 焦点只画在外框上：常规主题沿用 `TuffInput` 的内描边与光环；高对比主题改为 `--tx-focus-ring-color` 描边加 `--tx-focus-ring-shadow`，内部 `<input>` 不再画矩形焦点框。
 - 高对比描边只在内部输入框聚焦时出现；清空按钮聚焦时保留它自己的焦点环。
 
 ## 技术实现

@@ -39,6 +39,20 @@ code: |
 - 传 `error` 而不是 `status="error"`，状态与文案不会走散。
 - 用 `labels` 本地化：十条文案中有七条只有屏幕阅读器听得到。
 
+### 边缘与状态
+
+敏感输入框的描边与状态与输入框一致；尺寸变体只改变高度与字号，圆角统一为 12px。
+
+:::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSensitiveInput v-model="secret" />
+    <TxSensitiveInput :error="message" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性
@@ -48,7 +62,7 @@ code: |
 | `modelValue` | `string` | `''` | 密钥本身（受控）。 |
 | `label` | `string` | `''` | 字段标签，同时是掩码容器的可访问名。 |
 | `placeholder` | `string` | `''` | 原生占位文本，仅在空状态可见。 |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 高度、内边距、圆角与图标尺寸；`md` 与 `TxInput` 对齐。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 高度、内边距与图标尺寸；圆角不随尺寸变化，与 `TxInput` 一致（12px）。 |
 | `status` | `'default' \| 'error'` | — | 显式视觉状态；不传时由 `error` 推导。 |
 | `description` | `string` | `''` | 字段下方的说明；有 `error` 时被替换。 |
 | `error` | `string` | `''` | 校验信息；非空时字段变红并设置 `aria-invalid`。 |

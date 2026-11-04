@@ -62,6 +62,20 @@ code: |
 - 帮助文案里提到的分隔符都写进 `separators`。
 - 说明、帮助与校验提示放在组件外层。
 
+### 边缘与状态
+
+标签输入的外框使用内描边；禁用时标签文字与输入文字使用禁用色，不降低透明度。
+
+:::TuffDemoWrapper{demo="TagInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTagInput v-model="tags" />
+    <TxTagInput disabled :model-value="['只读']" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

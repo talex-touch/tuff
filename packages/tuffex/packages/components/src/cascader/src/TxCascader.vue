@@ -421,17 +421,17 @@ defineExpose({
   width: 100%;
   min-width: 180px;
   min-height: 32px;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: 12px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
+  border: 0;
   background: var(--tx-bg-color, #fff);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
   box-sizing: border-box;
   cursor: pointer;
-  transition: box-shadow 0.25s;
   outline: none;
 
   &.is-morphing {
-    transition: border-color 0.25s, box-shadow 0.25s;
+    transition: box-shadow 0.25s;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
@@ -439,18 +439,23 @@ defineExpose({
   }
 
   &:hover:not(.is-disabled) {
-    border-color: var(--tx-color-primary-light-3, #79bbff);
+    box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
   }
 
   &:focus-visible:not(.is-disabled) {
-    border-color: var(--tx-color-primary, #409eff);
-    box-shadow: 0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
+    transition: box-shadow 0.25s;
+    box-shadow:
+      inset 0 0 0 1px var(--tx-color-primary, #409eff),
+      0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
   }
 
   &.is-disabled {
     background: var(--tx-disabled-bg-color, #f5f7fa);
     cursor: not-allowed;
-    opacity: 0.7;
+
+    .tx-cascader__text {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
   }
 
   &__value {
@@ -502,7 +507,7 @@ defineExpose({
   }
 
   &.is-open {
-    border-color: var(--tx-color-primary, #409eff);
+    box-shadow: inset 0 0 0 1px var(--tx-color-primary, #409eff);
 
     .tx-cascader__arrow {
       transform: rotate(180deg);
