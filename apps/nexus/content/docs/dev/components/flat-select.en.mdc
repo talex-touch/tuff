@@ -81,6 +81,21 @@ code: |
 - Don't put interactive controls inside `TxFlatSelectItem`; the item is already a button with `role="option"`.
 - Mark unavailable options `disabled` instead of filtering them out.
 
+### Edge and States
+
+The flat select matches the input's height, and its edge, focus and disabled colours come from the input. Disabled does not lower opacity.
+
+:::TuffDemoWrapper{demo="FlatSelectEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlatSelect v-model="value">
+      <TxFlatSelectItem value="a" label="Option A" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
 ## API Reference
 
 ### TxFlatSelect

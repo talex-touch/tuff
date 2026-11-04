@@ -352,13 +352,14 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 6px;
     width: 100%;
-    height: 34px;
-    padding: 0 10px;
-    border: 1px solid var(--tx-border-color-light, #e4e7ed);
-    border-radius: 10px;
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
     background: var(--tx-bg-color, #fff);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
     color: var(--tx-text-color-primary, #303133);
-    font-size: 13px;
+    font-size: 14px;
     font-family: inherit;
     cursor: pointer;
     outline: none;
@@ -367,16 +368,20 @@ onBeforeUnmount(() => {
     z-index: 2;
 
     &:hover:not(:disabled) {
-      border-color: var(--tx-border-color, #dcdfe6);
+      box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
     }
 
-    &:focus-visible {
-      border-color: var(--tx-color-primary, #409eff);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
+    &:focus:not(:disabled),
+    &[aria-expanded='true']:not(:disabled) {
+      transition: box-shadow 0.25s;
+      box-shadow:
+        inset 0 0 0 1px var(--tx-color-primary, #409eff),
+        0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
     }
 
     &:disabled {
-      opacity: 0.5;
+      background: var(--tx-disabled-bg-color, #f5f7fa);
+      color: var(--tx-disabled-text-color, #c0c4cc);
       cursor: not-allowed;
     }
   }

@@ -150,26 +150,35 @@ function onBlur(e: FocusEvent) {
 <style scoped lang="scss">
 .tx-tag-input {
   box-sizing: border-box;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
+  border: 0;
   border-radius: 12px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   background: var(--tx-bg-color, #fff);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
   cursor: text;
-  transition: box-shadow 0.2s ease;
 
   &:hover:not(.is-disabled) {
-    border-color: var(--tx-color-primary-light-3, #79bbff);
+    box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
   }
 
   &:focus-within:not(.is-disabled) {
-    border-color: var(--tx-color-primary, #409eff);
-    box-shadow: 0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
+    transition: box-shadow 0.2s ease;
+    box-shadow:
+      inset 0 0 0 1px var(--tx-color-primary, #409eff),
+      0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
   }
 
   &.is-disabled {
     background: var(--tx-disabled-bg-color, #f5f7fa);
     cursor: not-allowed;
-    opacity: 0.8;
+
+    .tx-tag-input__input {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
+
+    .tx-tag-input__tags > * {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
   }
 }
 

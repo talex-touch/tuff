@@ -73,6 +73,20 @@ code: |
 - 持久化完整路径而不是叶子 id，标签才能还原。
 - 保留可见的字段标签，不要只靠 placeholder。
 
+### 边缘与状态
+
+级联选择器的触发器使用内描边；禁用时用禁用底色和文字色，不降低透明度。
+
+:::TuffDemoWrapper{demo="CascaderEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCascader v-model="path" :options="options" />
+    <TxCascader disabled v-model="path" :options="options" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

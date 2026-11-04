@@ -71,6 +71,20 @@ code: |
 - 默认展开保持浅层，例如根部门或产品域。
 - `node` 插槽只放徽标或副标题，不要加与行选择竞争的点击目标。
 
+### 边缘与状态
+
+树选择器的触发器使用内描边；禁用时用禁用底色和文字色，不降低透明度。
+
+:::TuffDemoWrapper{demo="TreeSelectEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTreeSelect v-model="key" :options="options" />
+    <TxTreeSelect disabled v-model="key" :options="options" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

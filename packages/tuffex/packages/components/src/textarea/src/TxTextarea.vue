@@ -51,8 +51,8 @@ const isReadonly = computed(() => props.readonly || !!field?.readonly)
 // A TxFormItem showing an error for this field turns it to the error status.
 const resolvedStatus = computed(() => (field?.invalid ? 'error' : props.status))
 
-// Focus, status and disabled changes ease the border and fill; a hover
-// repaints the border at once.
+// Focus, status and disabled changes ease the ring and fill; a hover
+// repaints the ring at once.
 const morphing = useMorphWindow(() => [isFocused.value, resolvedStatus.value, isDisabled.value], 200)
 
 const textareaAttrs = computed(() => {
@@ -138,14 +138,15 @@ defineExpose({
   box-sizing: border-box;
   width: 100%;
   min-height: 96px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
+  padding: 1px;
+  border: 0;
   border-radius: 12px;
   background: var(--tx-bg-color, #ffffff);
-  transition: box-shadow 0.2s ease;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
 }
 
 .tx-textarea.is-morphing {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -155,20 +156,26 @@ defineExpose({
 }
 
 .tx-textarea:hover:not(.is-disabled) {
-  border-color: var(--tx-color-primary-light-3, #79bbff);
+  box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
 }
 
 .tx-textarea.is-focused:not(.is-disabled) {
-  border-color: var(--tx-color-primary, #409eff);
-  box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+  transition: box-shadow 0.2s ease;
+  box-shadow:
+    inset 0 0 0 1px var(--tx-color-primary, #409eff),
+    0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .tx-textarea--success:not(.is-disabled) {
-  border-color: var(--tx-color-success, #67c23a);
+  box-shadow: inset 0 0 0 1px var(--tx-color-success, #67c23a);
 }
 
 .tx-textarea--error:not(.is-disabled) {
-  border-color: var(--tx-color-danger, #f56c6c);
+  box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
 }
 
 .tx-textarea__field {
