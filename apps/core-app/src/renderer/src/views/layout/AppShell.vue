@@ -1,7 +1,6 @@
 <script lang="ts" name="AppShell" setup>
-import { computed, onMounted } from 'vue'
+import { computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import BrowserTabStrip from '~/components/shell/BrowserTabStrip.vue'
 import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
 import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
@@ -29,6 +28,8 @@ const isRefractionWindow = computed(() => windowPreference.value === 'refraction
 const isFilterWindow = computed(() => windowPreference.value === 'filter')
 const isPureWindow = computed(() => windowPreference.value === 'pure')
 const browserWorkspaceEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
+// Lazy, so a disabled beta never evaluates the tab strip or its shared workspace module.
+const BrowserTabStrip = defineAsyncComponent(() => import('~/components/shell/BrowserTabStrip.vue'))
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 const routeTransitionStyle = computed(() => themeStyle.value.theme.transition?.route ?? 'slide')

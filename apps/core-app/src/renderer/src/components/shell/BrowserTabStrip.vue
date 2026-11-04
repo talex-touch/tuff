@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { BrowserTabState } from '@talex-touch/utils/transport/sdk/domains/browser'
+import type {
+  BrowserTabState,
+  BrowserWorkspaceState
+} from '@talex-touch/utils/transport/sdk/domains/browser'
 import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { TxIconButton } from '@talex-touch/tuffex/button'
@@ -11,7 +14,8 @@ import {
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
 import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
@@ -21,6 +25,7 @@ import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const sdk = createBrowserSdk(useTuffTransport())
 const { state, connecting, command, tabMenuOpen, pluginToolbarOpen, accountOpen } =
   useBrowserWorkspace()
@@ -29,7 +34,7 @@ const tabMenuTargetId = ref('')
 const draggedTabId = ref<string | null>(null)
 const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
 const tabMovePending = ref(false)
-const onBrowserRoute = computed(() => route.path === '/browser')
+const onBrowserRoute = computed(() => route.path === APP_SURFACE_ROUTES.browser)
 const activeTabId = computed(() => state.value?.activeTabId)
 const tabMenuOpenModel = computed({
   get: () => tabMenuOpen.value,
@@ -41,6 +46,12 @@ const tabMenuIndex = computed(
   () => state.value?.tabs.findIndex((tab) => tab.id === tabMenuTargetId.value) ?? -1
 )
 const tabMenuTarget = computed(() => state.value?.tabs[tabMenuIndex.value])
+
+// Activating or creating a tab lands on the Browser page; close and reorder stay in place.
+async function runInBrowser(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
+  if (!onBrowserRoute.value) await router.push(APP_SURFACE_ROUTES.browser)
+  return command(action)
+}
 
 function tabTitle(tab: BrowserTabState): string {
   if (!tab.url) return t('browser.newTab')
@@ -72,7 +83,8 @@ function selectTabMenuAction(action: BrowserTabMenuAction): void {
   if (!tabMenuOpen.value) return
   const tabId = tabMenuTargetId.value
   tabMenuOpen.value = false
-  void command(() => runBrowserTabAction(sdk, action, tabId))
+  const run = () => runBrowserTabAction(sdk, action, tabId)
+  void (action === 'duplicate' ? runInBrowser(run) : command(run))
 }
 
 function resetTabDrag(): void {
@@ -166,7 +178,7 @@ function tabKeydown(event: KeyboardEvent, index: number): void {
   event.preventDefault()
   const tab = tabs[target]
   if (!tab) return
-  void command(() => sdk.activateTab(tab.id)).then(() => {
+  void runInBrowser(() => sdk.activateTab(tab.id)).then(() => {
     document.getElementById(`browser-tab-${tab.id}`)?.focus()
   })
 }
@@ -229,7 +241,7 @@ watch(tabMenuOpen, (open) => {
           :draggable="!tabMovePending"
           @dragstart="startTabDrag(tab.id, $event)"
           @dragend="resetTabDrag"
-          @click="command(() => sdk.activateTab(tab.id))"
+          @click="runInBrowser(() => sdk.activateTab(tab.id))"
           @keydown="tabKeydown($event, index)"
         >
           <span class="inline-flex h-4 w-4 flex-none" :class="tabIcon(tab)" aria-hidden="true" />
@@ -256,7 +268,7 @@ watch(tabMenuOpen, (open) => {
         :disabled="!state"
         class="flex-none"
         style="-webkit-app-region: no-drag"
-        @click="command(() => sdk.createTab())"
+        @click="runInBrowser(() => sdk.createTab())"
       />
     </div>
     <div

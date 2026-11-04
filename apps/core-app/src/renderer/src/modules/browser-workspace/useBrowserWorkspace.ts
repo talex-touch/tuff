@@ -3,12 +3,12 @@ import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/brows
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 
-/**
- * One renderer-wide view of the browser workspace, read by the shell tab strip and the Browser page.
- * Module-scoped like `useBrowserConnection`: both surfaces must agree on the tab list, on the error
- * that gates the guest view, and on which floating layers cover it.
- */
-const sdk = createBrowserSdk(useTuffTransport())
+// Module-scoped like `useBrowserConnection`, so the tab strip and the Browser page share one view.
+let sdk: ReturnType<typeof createBrowserSdk> | undefined
+function browserSdk(): ReturnType<typeof createBrowserSdk> {
+  if (!sdk) sdk = createBrowserSdk(useTuffTransport())
+  return sdk
+}
 const state = shallowRef<BrowserWorkspaceState | null>(null)
 const connecting = ref(true)
 const error = ref('')
@@ -31,7 +31,7 @@ async function refreshState(): Promise<void> {
   connecting.value = true
   error.value = ''
   try {
-    applyState(await sdk.getState())
+    applyState(await browserSdk().getState())
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {
@@ -61,7 +61,7 @@ export function useBrowserWorkspace() {
   onMounted(() => {
     consumers += 1
     if (consumers > 1) return
-    unsubscribe = sdk.onChanged(applyState)
+    unsubscribe = browserSdk().onChanged(applyState)
     void refreshState()
   })
   onBeforeUnmount(() => {
