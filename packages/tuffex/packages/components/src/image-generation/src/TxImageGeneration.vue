@@ -345,6 +345,11 @@ onMounted(() => {
   })
   cycle = cyc
   setInstancePaused(inst, props.paused)
+  // The frame loop skips paused instances: paint one still frame at the clock's start.
+  if (props.paused) {
+    inst.accumulatedTime = 0
+    renderInstanceOnce(inst)
+  }
   cyc.setPaused(props.paused)
   // The cycle is created up-front (independent of `autoReveal`) so that the
   // imperative `triggerReveal()` works for manual user-driven reveals too.

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import type { ImagePreviewAction, ImagePreviewIndicator } from '@talex-touch/tuffex/image-preview'
+import type { ImagePreviewAction, ImagePreviewIndicator, ImagePreviewLoadingEffect } from '@talex-touch/tuffex/image-preview'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
 
 type Material = 'refraction' | 'blur' | 'glass' | 'mask'
+type LoadingEffect = ImagePreviewLoadingEffect
 
 const ACTIONS: ImagePreviewAction[] = ['rotate', 'copy', 'share', 'download']
 const INDICATORS: ImagePreviewIndicator[] = ['thumbnails', 'dots', 'none']
+const LOADING_EFFECTS: LoadingEffect[] = ['sweep-gradient', 'pixels-organic', 'pixels-mechanic', 'skeleton', 'none']
 const MASKS: Material[] = ['refraction', 'blur', 'mask']
 const CONTROLS: Material[] = ['blur', 'glass', 'mask']
 const BOUNCES = [0, 0.2, 0.45]
@@ -32,7 +34,8 @@ const copy = computed(() => (locale.value === 'zh'
   ? {
       names: { fjord: '峡湾', canyon: '峡谷日落', pug: '巴哥', camp: '雪山营地', waterfall: '瀑布', valley: '山谷', jellyfish: '水母', strawberries: '草莓' } as Record<string, string>,
       open: (name: string) => `查看大图：${name}`,
-      settings: { indicator: '底部条', mask: '遮罩', control: '控件', bounce: '回弹', actions: '操作', menu: '长按菜单' },
+      settings: { indicator: '底部条', mask: '遮罩', control: '控件', bounce: '回弹', actions: '操作', menu: '长按菜单', loading: '加载效果' },
+      loadingEffects: { 'sweep-gradient': '扫光', 'pixels-organic': '像素有机', 'pixels-mechanic': '像素机械', skeleton: '骨架', none: '无' } as Record<LoadingEffect, string>,
       indicators: { thumbnails: '缩略图', dots: '圆点', none: '无' } as Record<ImagePreviewIndicator, string>,
       materials: { refraction: '折射', blur: '模糊', glass: '玻璃', mask: '半透明' } as Record<Material, string>,
       bounces: ['无', '轻', '强'],
@@ -59,7 +62,8 @@ const copy = computed(() => (locale.value === 'zh'
   : {
       names: { fjord: 'Fjord', canyon: 'Canyon at dusk', pug: 'Pug', camp: 'Snow camp', waterfall: 'Waterfall', valley: 'Valley', jellyfish: 'Jellyfish', strawberries: 'Strawberries' } as Record<string, string>,
       open: (name: string) => `View ${name}`,
-      settings: { indicator: 'Strip', mask: 'Mask', control: 'Controls', bounce: 'Bounce', actions: 'Actions', menu: 'Long-press menu' },
+      settings: { indicator: 'Strip', mask: 'Mask', control: 'Controls', bounce: 'Bounce', actions: 'Actions', menu: 'Long-press menu', loading: 'Loading' },
+      loadingEffects: { 'sweep-gradient': 'Sweep', 'pixels-organic': 'Pixels organic', 'pixels-mechanic': 'Pixels mechanic', skeleton: 'Skeleton', none: 'None' } as Record<LoadingEffect, string>,
       indicators: { thumbnails: 'Thumbnails', dots: 'Dots', none: 'None' } as Record<ImagePreviewIndicator, string>,
       materials: { refraction: 'Refraction', blur: 'Blur', glass: 'Glass', mask: 'Translucent' } as Record<Material, string>,
       bounces: ['None', 'Light', 'Strong'],
@@ -90,6 +94,7 @@ const indicator = ref<ImagePreviewIndicator>('thumbnails')
 const maskSurface = ref<Material>('refraction')
 const controlSurface = ref<Material>('blur')
 const bounce = ref(0.2)
+const loadingEffect = ref<LoadingEffect>('sweep-gradient')
 const chosen = ref<ImagePreviewAction[]>([...ACTIONS])
 const contextMenu = ref(true)
 
@@ -138,6 +143,11 @@ function show(at: number, event: MouseEvent): void {
         <TxFlatRadioItem v-for="(value, i) in BOUNCES" :key="value" :value="value" :label="copy.bounces[i]" />
       </TxFlatRadio>
 
+      <span>{{ copy.settings.loading }}</span>
+      <TxFlatRadio v-model="loadingEffect" size="sm" :aria-label="copy.settings.loading">
+        <TxFlatRadioItem v-for="option in LOADING_EFFECTS" :key="option" :value="option" :label="copy.loadingEffects[option]" />
+      </TxFlatRadio>
+
       <span>{{ copy.settings.actions }}</span>
       <TxFlatRadio :model-value="chosen" multiple size="sm" :aria-label="copy.settings.actions" @update:model-value="setActions">
         <TxFlatRadioItem v-for="action in ACTIONS" :key="action" :value="action" :label="copy.actionNames[action]" />
@@ -169,6 +179,7 @@ function show(at: number, event: MouseEvent): void {
       :mask-surface="maskSurface"
       :control-surface="controlSurface"
       :bounce="bounce"
+      :loading-effect="loadingEffect"
       :actions="actions"
       :context-menu="contextMenu"
       :label="copy.label"

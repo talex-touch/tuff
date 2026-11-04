@@ -144,6 +144,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 - 传 `origin` 与 `width` / `height`：图片从缩略图长出、缩回原处，加载前的占位就是图片的形状。
 - 有小图时传 `thumbnail`：底部条用它，否则每一格都加载原图。
 - 缩略图已经加载失败的地址传给 `failed`，预览直接显示失败占位，不再请求一次。
+- 预设效果依赖 three.js（可选 peer）：装了 three，三种预设对所有引入方式都生效。没装 three 时，直接引入 `image-preview` 的构建会出现 three 相关的 `is not exported` 警告（不失败），运行时降级为 `skeleton` 占位；从包入口引入时则整页无法运行，这是包入口本身的既有问题。
 - 打开前让触发元素获得焦点：WebKit 点击按钮不会聚焦它，关闭后焦点就回不到原处。
 - 非英文界面覆盖全部文案 prop 与五个 formatter：按钮只有图标，读屏读到的就是这些名称。
 
@@ -161,6 +162,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `transition` | `'zoom' \| 'fade'` | `'zoom'` | 开合方式；`zoom` 在没有 `origin`、缩略图不在视口内、图片来不及画出或减少动态效果时改为淡入淡出。 |
 | `maxScale` | `number` | `4` | 相对图片原始像素的最大缩放，`1` 即 100%；不会小于整张适配屏幕的比例。 |
 | `failed` | `ReadonlySet<string> \| string[]` | - | 宿主已知加载失败的地址，直接显示失败占位、不再请求。 |
+| `loadingEffect` | `'sweep-gradient' \| 'pixels-organic' \| 'pixels-mechanic' \| 'skeleton' \| 'none'` | `'sweep-gradient'` | 图片加载中在原位显示的效果：三种 [TxImageGeneration](/docs/dev/components/image-generation) 预设、`skeleton` 闪烁占位或 `none` 不显示；只有加载中的图片才播放。预设效果依赖 three.js，见下文。 |
 | `actions` | `ImagePreviewAction[]` | `['rotate', 'copy', 'share', 'download']` | 工具栏与菜单中的操作，按此顺序；浏览器不支持分享时不显示分享。 |
 | `contextMenu` | `boolean` | `true` | 长按图片、右键或按菜单键时打开操作菜单。 |
 | `indicator` | `'thumbnails' \| 'dots' \| 'none'` | `'thumbnails'` | 底部条显示缩略图、圆点或不显示；只有一张时不显示。 |
@@ -207,6 +209,12 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 | `close` | `()` | 用户关闭时触发：关闭按钮、Escape、点击背景或把图片拖走；宿主关闭时不触发。 |
 | `error` | `(url: string, index: number)` | 一张图片加载失败时触发，同一地址只触发一次；前后相邻的图片也会预加载。 |
 | `action` | `(event: ImagePreviewActionEvent)` | 选中操作后、预览执行前触发；调用 `preventDefault()` 后由宿主自己执行。 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|------|------|
+| `loading` | 替换默认的加载占位；参数 `{ item, index }`，渲染在图片原位，宽高与占位一致。 |
 
 ### 暴露方法
 
@@ -257,7 +265,7 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 
 ## 概述
 
-- 开合与加载：有 `origin` 时图片按缩略图的裁切与圆角放大飞出，越过终点轻弹后停住；关闭时转正、缩回原处，飞行途中再开或再关都会就地掉头。翻页途中关闭时，露出一半以上的那张飞回原处，另一张随遮罩淡出并退回原位，索引不再变化。加载前按 `width` / `height`（缺省时按上一张看过的图片）留出位置，150 ms 后仍未到达才显示闪烁占位；加载失败显示占位与 `failedText`，同一地址不再请求。
+- 开合与加载：有 `origin` 时图片按缩略图的裁切与圆角放大飞出，越过终点轻弹后停住；关闭时转正、缩回原处，飞行途中再开或再关都会就地掉头。翻页途中关闭时，露出一半以上的那张飞回原处，另一张随遮罩淡出并退回原位，索引不再变化。加载前按 `width` / `height`（缺省时按上一张看过的图片）留出位置，150 ms 后仍未到达才显示 `loadingEffect` 选定的加载效果；减少动态效果时预设效果静止在一帧上；加载失败显示占位与 `failedText`，同一地址不再请求。
 - 鼠标与触控板：滚轮以指针为中心缩放，捏合或 ⌘/Ctrl + 滚轮跟手缩放，Safari 的捏合手势同样生效；单击或双击图片都在指针处放大到细节，再单击或双击恢复，放大后拖动或双指滑动平移，松手滑行，越过边缘有橡皮筋阻力；未放大时横向拖动或一划翻页，上下拖走关闭。右键图片打开操作菜单，按住 Shift 右键仍是浏览器自己的菜单。
 - 触屏：双指捏合以两指中点缩放，抬起一指后接着单指拖动，画面不跳；双击放大或恢复，单击隐藏或显示控件；长按 480 ms 在手指上方弹出操作菜单，浏览器支持时轻震一下。
 - 键盘：`+` / `-` 缩放，`0` 恢复整张，← / → 翻页，放大后方向键平移；`R` / `Shift + R` 旋转，⌘/Ctrl + C 复制，菜单键或 Shift + F10 打开菜单，菜单中 ↑ / ↓ / Home / End 移动、Escape 或 Tab 关闭。Escape 先撤销进行中的手势，再关闭；Tab 在对话框内循环，关闭后焦点回到打开前的元素。
