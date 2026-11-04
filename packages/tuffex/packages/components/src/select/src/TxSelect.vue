@@ -1277,6 +1277,12 @@ onBeforeUnmount(() => {
     .tuff-select__multi-trigger:not(.is-disabled) {
       box-shadow: inset 0 0 0 1px var(--tx-color-warning, #e6a23c);
     }
+
+    &.is-open .tuff-select__multi-trigger:not(.is-disabled) {
+      box-shadow:
+        inset 0 0 0 1px var(--tx-color-warning, #e6a23c),
+        0 0 0 3px color-mix(in srgb, var(--tx-color-warning, #e6a23c) 15%, transparent);
+    }
   }
 
   &.is-disabled {

@@ -39,7 +39,7 @@
 
 html[data-tx-coloring='true'],
 html.coloring {
-  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare)::after,
+  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):not(.tx-input)::after,
   .tx-base-surface::after,
   .tx-card:not(.is-plain)::after,
   .tx-modal__content::after,
@@ -145,4 +145,35 @@ html.coloring {
   font-family: var(--tx-font-family-mono);
   font-size: 0.9em;
   vertical-align: baseline;
+}
+
+// Forced colours strip box-shadow, so the ring edge and the focus ring need an outline there.
+@media (forced-colors: active) {
+  .tx-input,
+  .tx-textarea,
+  .tx-number-input,
+  .tx-tag-input,
+  .tx-date-picker-field,
+  .tx-cascader,
+  .tx-tree-select,
+  .tx-sensitive-input__field,
+  .tx-flat-select__trigger,
+  .tuff-select__multi-trigger {
+    outline: 1px solid ButtonBorder !important;
+    outline-offset: -1px;
+  }
+
+  .tx-input:focus-within:not(.is-disabled),
+  .tx-textarea.is-focused:not(.is-disabled),
+  .tx-number-input.is-focused:not(.is-disabled),
+  .tx-tag-input:focus-within:not(.is-disabled),
+  .tx-date-picker-field:focus-within:not(.is-disabled),
+  .tx-cascader:focus-visible:not(.is-disabled),
+  .tx-tree-select:focus-visible:not(.is-disabled),
+  .tx-sensitive-input__field:focus-within,
+  .tx-flat-select__trigger:focus-visible:not(:disabled),
+  .tuff-select.is-open .tuff-select__multi-trigger:not(.is-disabled) {
+    outline: 2px solid Highlight !important;
+    outline-offset: -2px;
+  }
 }

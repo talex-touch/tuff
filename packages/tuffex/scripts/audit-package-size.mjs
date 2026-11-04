@@ -404,7 +404,9 @@ const pageStyleBudgets = [
     // select, number-input, flat-select, date-picker, sensitive-input) draws its edge, focus ring and
     // disabled state the way TxInput does, 96.3 -> 96.9 KiB. Actuals plus minimal headroom, growth
     // from here fails.
-    limit: 97 * 1024,
+    // 97 -> 97.2 on 2026-11-04 for the forced-colors outline block in style/index.scss, which every
+    // page carries: 96.9 -> 97.1 KiB measured. Actuals plus minimal headroom, growth from here fails.
+    limit: 97.2 * 1024,
   },
   {
     label: 'admin list',
@@ -415,7 +417,9 @@ const pageStyleBudgets = [
     // 136.5 -> 137.2 on 2026-11-04 for the TxInput paradigm sync: the input, select and button sheets
     // on this page now match TxInput's edge, focus ring and disabled state, 137.1 KiB measured
     // (136.3 KiB before the radius commit). Actuals plus minimal headroom, growth from here fails.
-    limit: 137.2 * 1024,
+    // 137.2 -> 137.5 on 2026-11-04 for the same forced-colors block in style/index.scss, which this
+    // page carries too: 137.1 -> 137.4 KiB measured. Actuals plus minimal headroom, growth from here fails.
+    limit: 137.5 * 1024,
   },
   {
     label: 'chat',
