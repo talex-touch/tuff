@@ -46,6 +46,15 @@ export interface ImagePreviewSlotProps {
   stage: PreviewSize
 }
 
+export type ImagePreviewLoadingEffect = 'sweep-gradient' | 'pixels-organic' | 'pixels-mechanic' | 'skeleton' | 'none'
+
+export type ImagePreviewLoadingPreset = Exclude<ImagePreviewLoadingEffect, 'skeleton' | 'none'>
+
+export interface ImagePreviewLoadingSlotProps {
+  item: ImagePreviewItem
+  index: number
+}
+
 export interface ImagePreviewThumbnailSlotProps {
   item: ImagePreviewItem
   index: number
@@ -97,6 +106,11 @@ export interface ImagePreviewProps {
   maxScale?: number
   /** URLs the host has already seen fail, a thumbnail's say: drawn as the placeholder, not requested again. */
   failed?: ReadonlySet<string> | readonly string[]
+  /**
+   * What a picture shows in its place while it loads: a TxImageGeneration preset, the plain
+   * skeleton, or nothing. The `loading` slot replaces it. @default 'sweep-gradient'
+   */
+  loadingEffect?: ImagePreviewLoadingEffect
   /**
    * Where picture `index` sits on the page, so the preview grows out of it and shrinks back into
    * it. Asked on opening, and again on closing for the picture shown then.

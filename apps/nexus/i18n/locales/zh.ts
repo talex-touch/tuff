@@ -559,6 +559,13 @@ export default {
       fade: '比例消失（边缘渐隐）',
       wrap: '不消失（首尾相接）',
     },
+    imagePreviewOptionsDemo: {
+      sweepGradient: '扫光',
+      pixelsOrganic: '像素有机',
+      pixelsMechanic: '像素机械',
+      skeleton: '骨架',
+      none: '无',
+    },
     verified: '已验证',
     loading: '正在获取文档…',
     notFoundTitle: '未找到文档',
