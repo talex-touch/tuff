@@ -225,7 +225,7 @@ defineExpose({
   height: 34px;
   overflow: hidden;
   border: 1px solid var(--tx-border-color, #dcdfe6);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--tx-bg-color, #ffffff);
   transition: box-shadow 0.2s ease;
 }

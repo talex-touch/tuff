@@ -357,7 +357,6 @@ defineExpose({
     --tx-si-height: 24px;
     --tx-si-pad: 8px;
     --tx-si-font: 12px;
-    --tx-si-radius: 8px;
     --tx-si-icon: 12px;
   }
 
@@ -365,7 +364,6 @@ defineExpose({
     --tx-si-height: 28px;
     --tx-si-pad: 10px;
     --tx-si-font: 13px;
-    --tx-si-radius: 10px;
     --tx-si-icon: 14px;
   }
 

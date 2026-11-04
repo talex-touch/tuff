@@ -909,7 +909,7 @@ function onCancel() {
   min-height: 38px;
   padding: 8px 12px;
   border: 1px solid var(--tx-border-color, #dcdfe6);
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--tx-text-color-primary, #303133);
   background: var(--tx-bg-color, #fff);
   cursor: pointer;

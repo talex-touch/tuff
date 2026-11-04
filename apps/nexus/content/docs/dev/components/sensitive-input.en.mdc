@@ -48,7 +48,7 @@ code: |
 | `modelValue` | `string` | `''` | The secret (controlled). |
 | `label` | `string` | `''` | Field label; also the masked container's accessible name. |
 | `placeholder` | `string` | `''` | Native placeholder, visible only while empty. |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, radius, and icon size; `md` matches `TxInput`. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, and icon size; the radius does not change with size and matches `TxInput` (12px). |
 | `status` | `'default' \| 'error'` | — | Explicit visual state; derived from `error` when unset. |
 | `description` | `string` | `''` | Helper text below the field; replaced by `error`. |
 | `error` | `string` | `''` | Validation message; when set, turns the field red and sets `aria-invalid`. |
