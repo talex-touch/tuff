@@ -60,9 +60,9 @@ export function useFormItem(options: FormItemOptions) {
   const messageId = computed(() => `${controlId.value}-message`)
   const label = computed(() => options.label() ?? '')
   const messages = computed<FormMessages>(() => form?.messages.value ?? FORM_DEFAULT_MESSAGES)
-  const hintId = computed(() => `${controlId.value}-hint`)
+  const hintId = computed(() => `${autoId}-hint`)
   const hasHint = computed(() => Boolean(options.hint?.()))
-  const hintName = computed(() => messages.value.hint(label.value || messages.value.field))
+  const hintName = computed(() => messages.value.hint(label.value || options.prop() || messages.value.field))
 
   /** One getter per control inside that may hold a secret. */
   const secrets = shallowRef<Array<() => boolean>>([])

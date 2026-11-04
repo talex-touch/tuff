@@ -13,6 +13,7 @@ const labels = computed(() => {
       name: '名称',
       nameHelp: '3 到 20 个字符',
       nameRequired: '请输入名称',
+      nameLength: '名称需要 3 到 20 个字符',
     }
   }
 
@@ -23,6 +24,7 @@ const labels = computed(() => {
     name: 'Name',
     nameHelp: '3 to 20 characters',
     nameRequired: 'Enter a name',
+    nameLength: 'Names need 3 to 20 characters',
   }
 })
 
@@ -30,7 +32,10 @@ const form = reactive({ batch: '20', name: '' })
 
 const rules = computed<FormRules>(() => ({
   batch: { required: true, message: labels.value.batchRequired },
-  name: { required: true, message: labels.value.nameRequired },
+  name: [
+    { required: true, message: labels.value.nameRequired },
+    { minLength: 3, maxLength: 20, message: labels.value.nameLength },
+  ],
 }))
 </script>
 
