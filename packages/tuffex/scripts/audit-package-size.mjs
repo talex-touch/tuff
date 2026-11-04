@@ -396,7 +396,11 @@ const pageStyleBudgets = [
     // 94 -> 95.5 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 21 that
     // moved (`glass-surface/style.css` 819 -> 2,353 B): 96,042 -> 97,576 B. Actuals plus minimal
     // headroom, growth from here fails.
-    limit: 95.5 * 1024,
+    // 95.5 -> 96.5 on 2026-11-03 for TxFormItem's `hint`: the label row, the `?` trigger and its
+    // popover text grow `form/style.css` 7,734 -> 8,838 B; the page went 95.3 -> 96.3 KiB in the
+    // same 21 sheets, origin/master measured with the same build. Actuals plus minimal headroom,
+    // growth from here fails.
+    limit: 96.5 * 1024,
   },
   {
     label: 'admin list',

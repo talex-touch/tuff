@@ -90,6 +90,24 @@ code: |
 ---
 :::
 
+### 字段提示
+标签旁的 `?` 悬停或聚焦时浮出详细说明；`help` 常显在控件下方，只放一句短约束。
+:::TuffDemoWrapper{demo="FormHintDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm :model="form" :rules="rules">
+      <TxFormItem label="单次条数" prop="batch" hint="每次请求最多返回的条数。超出部分留到下一次请求，不会丢弃。上限越大，单次请求越慢。">
+        <TuffInput v-model="form.batch" inputmode="numeric" />
+      </TxFormItem>
+      <TxFormItem label="名称" prop="name" help="3 到 20 个字符">
+        <TuffInput v-model="form.name" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
 ### 只读
 `readonly` 把表单当作记录来展示：控件可以聚焦、复制，但不能修改，也不标必填；提交照常可用。
 :::TuffDemoWrapper{demo="FormReadonlyDemo" code-lang="vue"}
@@ -540,6 +558,7 @@ usePluginAccount().onDidChange((session) => {
 - `model` 保持为同一个响应式对象；换成新对象即视为新记录：基线重置，消息清空。
 - 取回的数据交给 `setBaseline()`，不要直接写入 `model`，`dirty` 与 `reset()` 才会以它为准。
 - 通用规则放在表单级 `rules`；表单项的 `rules` 替换同一路径的表单级规则，而不是追加。
+- 说明超过一句话放进 `hint`（标签旁的 `?` 浮层）；`help` 只放输入时必须常显的短约束；错误与警告留在控件下方，控件下方不写说明段落。
 - 返回 Promise 的 validator 声明为 `async`，并把 `signal` 传给请求。
 - 记录加载完再开启 `persist`，草稿才会叠在已保存的值上，而不是空值上。
 
@@ -622,6 +641,7 @@ usePluginAccount().onDidChange((session) => {
 | `rules` | `FormRule \| FormRule[]` | - | 该字段的规则，替换表单级 `rules` 中同一路径的规则。 |
 | `required` | `boolean` | `false` | 显示必填标记，并补上 `required` 规则。 |
 | `help` | `string` | - | 控件下方的帮助文字；显示错误或警告时被替换。 |
+| `hint` | `string` | - | 标签旁 `?` 按钮的详细说明，悬停或聚焦时浮出。 |
 | `width` | `'xs' \| 'sm' \| 'md' \| 'lg' \| 'full'` | - | 控件宽度：80、160、240、360px 或整列。 |
 | `showMessage` | `boolean` | `true` | 在控件下方显示消息；关闭后控件仍标记为无效。 |
 | `inline` | `boolean` | `false` | label 与控件垂直居中；上下布局时改为并排。 |
@@ -669,7 +689,7 @@ usePluginAccount().onDidChange((session) => {
 | `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | 把控件接入外层表单项；`kind` 决定 label 如何命名控件。表单之外返回 `null`。 |
 | `id` | `string \| undefined` | 只读，label 指向的 id；同一表单项中只有第一个控件拿到。 |
 | `labelId` / `label` | `string \| undefined` / `string` | 只读，表单项 label 的 id 与文本。 |
-| `describedBy` | `string \| undefined` | 只读，消息或帮助文字的 id。 |
+| `describedBy` | `string \| undefined` | 只读，消息、帮助文字与提示的 id，空格分隔。 |
 | `invalid` / `required` | `boolean` | 只读，正在显示错误；必填。 |
 | `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | 只读，表单的 `disabled` 与 `size`。 |
 | `readonly` | `boolean` | 只读，表单的 `readonly`：控件可以聚焦，但不能修改值。 |
@@ -747,6 +767,7 @@ usePluginAccount().onDidChange((session) => {
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `required` / `invalid` / `pattern` | `(label: string) => string` | 必填、validator 失败、格式不符。 |
+| `hint` | `(label: string) => string` | 标签旁 `?` 按钮的可访问名称。 |
 | `type` | `(label: string, type: FormRuleType) => string` | `type` 不符。 |
 | `min` / `max` | `(label: string, limit: number) => string` | 超出数值范围。 |
 | `minLength` / `maxLength` | `(label: string, limit: number, unit: 'characters' \| 'items') => string` | 超出长度范围。 |
@@ -789,6 +810,7 @@ usePluginAccount().onDidChange((session) => {
 - `readonly` 时必填标记与 `required` 一并撤下，因为用户已经不能再填；值仍随提交送出。
 - 指向未挂载字段的错误会保留，字段挂载时显示，用于分步表单；`schema` 中没有对应字段的问题列在错误摘要中，并阻止提交。
 - 第一个控件拿到 id 与 label 的 `for`，其余控件用 `aria-labelledby` 指向 label；单选组、多选等无法用 `<label for>` 命名的控件拿到 id 后也改用 `aria-labelledby`。消息经 `aria-describedby` 关联，不设 `role="alert"`。表单的 `size`、`disabled` 与 `readonly` 也作用于表单项之外的控件。
+- 标签旁的 `?` 是普通的 `<button type="button">`：可访问名称来自 `messages.hint`，并经 `aria-describedby` 关联同一段隐藏文字；悬停或键盘聚焦时打开浮层，Esc 关闭，指针可移入浮层。浮层文字同时以视觉隐藏的形式留在 DOM 中，字段的每个控件都经 `aria-describedby` 关联它，排在消息或帮助文字之后。没有 `label` 时，`?` 单独占一行，给字段一个 label 才能让它贴着文字。侧栏布局里，只要有一个字段带 `hint`，标签列就加宽约 20px，同一表单的内容列整体右移。
 
 ## 技术实现
 

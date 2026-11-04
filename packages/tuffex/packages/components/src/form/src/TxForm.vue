@@ -32,6 +32,7 @@ provide(TX_FORM_FIELD_KEY, {
   controlId: undefined,
   labelId: undefined,
   messageId: undefined,
+  hintId: undefined,
   label: '',
   labelledBy: 'for',
   invalid: false,
