@@ -406,7 +406,10 @@ const pageStyleBudgets = [
     // from here fails.
     // 97 -> 97.2 on 2026-11-04 for the forced-colors outline block in style/index.scss, which every
     // page carries: 96.9 -> 97.1 KiB measured. Actuals plus minimal headroom, growth from here fails.
-    limit: 97.2 * 1024,
+    // 97.2 -> 97.4 on 2026-11-04 for the focus glow transitions and the disabled tokens on the input
+    // family, which this page carries: 97.1 -> 97.3 KiB measured. Actuals plus minimal headroom, growth
+    // from here fails.
+    limit: 97.4 * 1024,
   },
   {
     label: 'admin list',
@@ -419,7 +422,9 @@ const pageStyleBudgets = [
     // (136.3 KiB before the radius commit). Actuals plus minimal headroom, growth from here fails.
     // 137.2 -> 137.5 on 2026-11-04 for the same forced-colors block in style/index.scss, which this
     // page carries too: 137.1 -> 137.4 KiB measured. Actuals plus minimal headroom, growth from here fails.
-    limit: 137.5 * 1024,
+    // 137.5 -> 137.7 on 2026-11-04 for the same focus transitions and disabled tokens, which this page
+    // carries too: 137.4 -> 137.6 KiB measured. Actuals plus minimal headroom, growth from here fails.
+    limit: 137.7 * 1024,
   },
   {
     label: 'chat',
