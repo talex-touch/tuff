@@ -1005,24 +1005,28 @@ onBeforeUnmount(() => {
     width: 100%;
     min-height: 32px;
     min-width: 0;
-    padding: var(--tuff-select-tag-padding);
-    border: 1px solid var(--tx-border-color, #dcdfe6);
+    padding: var(--tuff-select-tag-padding) 12px;
+    border: 0;
     border-radius: 12px;
     background-color: var(--tx-bg-color, #fff);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
     // Matches the tag transition so a wrapping row and the box that has to make
     // space for it move together; height is only transitionable because the
     // script writes the measured value back as an explicit px.
-    transition: box-shadow 0.18s ease,
-      height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
     cursor: pointer;
 
-    &:hover:not(.is-disabled):not(.is-readonly) {
-      border-color: var(--tx-color-primary-light-3, #79bbff);
+    &:hover:not(.is-disabled) {
+      box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
     }
 
     &.is-disabled {
       background-color: var(--tx-disabled-bg-color, #f5f7fa);
       cursor: not-allowed;
+
+      .tuff-select__tag {
+        color: var(--tx-disabled-text-color, #c0c4cc);
+      }
     }
 
     &.is-readonly {
@@ -1032,8 +1036,7 @@ onBeforeUnmount(() => {
 
   &.is-morphing {
     .tuff-select__multi-trigger {
-      transition: border-color 0.18s ease, box-shadow 0.18s ease,
-        height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: box-shadow 0.25s ease, height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     // TxInput eases its own border only while focusing; open and status
@@ -1063,11 +1066,12 @@ onBeforeUnmount(() => {
   &__tag {
     display: inline-flex;
     align-items: center;
+    box-sizing: border-box;
     max-width: 100%;
     min-height: 24px;
     gap: 4px;
     padding: 2px 7px;
-    border-radius: 7px;
+    border-radius: 8px;
     border: 1px solid var(--tx-border-color-light, #e4e7ed);
     background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 72%, transparent);
     color: var(--tx-text-color-primary, #303133);
@@ -1247,23 +1251,37 @@ onBeforeUnmount(() => {
 
     /* The up/down chevron pair is vertically symmetric, so no open rotation. */
 
-    .tuff-select__multi-trigger {
-      border-color: var(--tx-color-primary, #409eff);
-      box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+    .tuff-select__multi-trigger:not(.is-disabled) {
+      transition: box-shadow 0.25s ease, height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow:
+        inset 0 0 0 1px var(--tx-color-primary, #409eff),
+        0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
     }
   }
 
   &.is-status-error {
-    :deep(.tx-input),
-    .tuff-select__multi-trigger {
+    :deep(.tx-input) {
       border-color: var(--tx-color-danger, #f56c6c);
+    }
+
+    .tuff-select__multi-trigger:not(.is-disabled) {
+      box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
+    }
+
+    &.is-open .tuff-select__multi-trigger:not(.is-disabled) {
+      box-shadow:
+        inset 0 0 0 1px var(--tx-color-danger, #f56c6c),
+        0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
     }
   }
 
   &.is-status-warning {
-    :deep(.tx-input),
-    .tuff-select__multi-trigger {
+    :deep(.tx-input) {
       border-color: var(--tx-color-warning, #e6a23c);
+    }
+
+    .tuff-select__multi-trigger:not(.is-disabled) {
+      box-shadow: inset 0 0 0 1px var(--tx-color-warning, #e6a23c);
     }
   }
 

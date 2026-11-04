@@ -400,7 +400,11 @@ const pageStyleBudgets = [
     // popover text grow `form/style.css` 7,734 -> 8,838 B; the page went 95.3 -> 96.3 KiB in the
     // same 21 sheets, origin/master measured with the same build. Actuals plus minimal headroom,
     // growth from here fails.
-    limit: 96.5 * 1024,
+    // 96.5 -> 97 on 2026-11-04 for the TxInput paradigm sync: the input family on this page (input,
+    // select, number-input, flat-select, date-picker, sensitive-input) draws its edge, focus ring and
+    // disabled state the way TxInput does, 96.3 -> 96.9 KiB. Actuals plus minimal headroom, growth
+    // from here fails.
+    limit: 97 * 1024,
   },
   {
     label: 'admin list',
@@ -408,7 +412,10 @@ const pageStyleBudgets = [
     // 135 -> 136.5 on 2026-10-29 for TxGlassSurface's lens engine, the only sheet of the 28 that
     // moved (`glass-surface/style.css` 819 -> 2,353 B): 138,106 -> 139,640 B. Actuals plus
     // minimal headroom, growth from here fails.
-    limit: 136.5 * 1024,
+    // 136.5 -> 137.2 on 2026-11-04 for the TxInput paradigm sync: the input, select and button sheets
+    // on this page now match TxInput's edge, focus ring and disabled state, 137.1 KiB measured
+    // (136.3 KiB before the radius commit). Actuals plus minimal headroom, growth from here fails.
+    limit: 137.2 * 1024,
   },
   {
     label: 'chat',

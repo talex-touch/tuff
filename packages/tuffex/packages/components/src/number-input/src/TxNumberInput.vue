@@ -216,40 +216,48 @@ defineExpose({
 </template>
 
 <style scoped>
+/* The edge is an inset ring, as the design rules require, so the box stays 32px through focus.
+   Its 1px padding keeps the steppers inside the ring, and their outer corners take the ring's
+   inner radius (12px - 1px) so they stay concentric with the box. */
 .tx-number-input {
   display: inline-flex;
   align-items: stretch;
   box-sizing: border-box;
   width: 100%;
   min-width: 120px;
-  height: 34px;
+  height: 32px;
+  padding: 1px;
   overflow: hidden;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
+  border: 0;
   border-radius: 12px;
   background: var(--tx-bg-color, #ffffff);
-  transition: box-shadow 0.2s ease;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
 }
 
 .tx-number-input.is-morphing {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.25s ease;
 }
 
 .tx-number-input:hover:not(.is-disabled) {
-  border-color: var(--tx-color-primary-light-3, #79bbff);
+  box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
 }
 
 .tx-number-input.is-focused:not(.is-disabled) {
-  border-color: var(--tx-color-primary, #409eff);
-  box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+  transition: box-shadow 0.25s ease;
+  box-shadow:
+    inset 0 0 0 1px var(--tx-color-primary, #409eff),
+    0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
 }
 
 /* Set by a TxFormItem while it shows an error for this field. */
 .tx-number-input.is-invalid:not(.is-disabled) {
-  border-color: var(--tx-color-danger, #f56c6c);
+  box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
 }
 
 .tx-number-input.is-invalid.is-focused:not(.is-disabled) {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--tx-color-danger, #f56c6c),
+    0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
 }
 
 .tx-number-input__field {
@@ -257,12 +265,13 @@ defineExpose({
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--tx-text-color-primary, #303133);
   font: inherit;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -300,9 +309,14 @@ defineExpose({
   }
 }
 
+.tx-number-input__control:first-child {
+  border-radius: 11px 0 0 11px;
+}
+
 .tx-number-input__control:last-child {
   border-right: 0;
   border-left: 1px solid var(--tx-border-color, #dcdfe6);
+  border-radius: 0 11px 11px 0;
 }
 
 .tx-number-input__control:hover:not(:disabled) {

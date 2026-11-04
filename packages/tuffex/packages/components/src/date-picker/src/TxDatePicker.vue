@@ -905,18 +905,20 @@ function onCancel() {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
   border-radius: 12px;
   color: var(--tx-text-color-primary, #303133);
   background: var(--tx-bg-color, #fff);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+  outline: none;
   cursor: pointer;
-  transition: box-shadow 0.2s;
 
   &.is-morphing {
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: box-shadow 0.25s;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
@@ -924,15 +926,22 @@ function onCancel() {
   }
 }
 
-.tx-date-picker-field:hover:not(.is-disabled),
-.tx-date-picker-field.is-open {
-  border-color: var(--tx-color-primary, #409eff);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+.tx-date-picker-field:hover:not(.is-disabled) {
+  box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
+}
+
+.tx-date-picker-field:focus-within:not(.is-disabled),
+.tx-date-picker-field.is-open:not(.is-disabled) {
+  transition: box-shadow 0.25s;
+  box-shadow:
+    inset 0 0 0 1px var(--tx-color-primary, #409eff),
+    0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
 }
 
 .tx-date-picker-field.is-disabled {
+  background: var(--tx-disabled-bg-color, #f5f7fa);
+  color: var(--tx-disabled-text-color, #c0c4cc);
   cursor: not-allowed;
-  opacity: 0.58;
 }
 
 .tx-date-picker-field__value {

@@ -371,7 +371,6 @@ defineExpose({
     --tx-si-height: 38px;
     --tx-si-pad: 14px;
     --tx-si-font: 14px;
-    --tx-si-radius: 14px;
     --tx-si-icon: 18px;
   }
 }
@@ -422,24 +421,30 @@ defineExpose({
   .tx-sensitive-input.is-disabled & {
     cursor: not-allowed;
     background: var(--tx-disabled-bg-color, #f5f7fa);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
   }
 
-  .tx-sensitive-input.is-error & {
+  &:hover {
+    box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
+  }
+
+  .tx-sensitive-input:not(.is-disabled).is-error & {
     box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
   }
 
   &:focus-visible,
   &:focus-within {
+    transition: box-shadow 0.25s;
     box-shadow:
-      inset 0 0 0 1.5px var(--tx-color-primary, #409eff),
+      inset 0 0 0 1px var(--tx-color-primary, #409eff),
       0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
   }
 
-  .tx-sensitive-input.is-error &:focus-visible,
-  .tx-sensitive-input.is-error &:focus-within {
+  .tx-sensitive-input:not(.is-disabled).is-error &:focus-visible,
+  .tx-sensitive-input:not(.is-disabled).is-error &:focus-within {
     box-shadow:
-      inset 0 0 0 1.5px var(--tx-color-danger, #f56c6c),
-      0 0 0 3px var(--tx-color-danger-light-9, #fef0f0);
+      inset 0 0 0 1px var(--tx-color-danger, #f56c6c),
+      0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
   }
 }
 
@@ -463,7 +468,7 @@ defineExpose({
 
   &:disabled {
     cursor: not-allowed;
-    color: var(--tx-text-color-disabled, #c0c4cc);
+    color: var(--tx-disabled-text-color, #c0c4cc);
   }
 
   // While masked the native dots are behind the overlay; keeping them
@@ -487,7 +492,7 @@ defineExpose({
   pointer-events: none;
 
   .tx-sensitive-input.is-disabled & {
-    color: var(--tx-text-color-disabled, #c0c4cc);
+    color: var(--tx-disabled-text-color, #c0c4cc);
   }
 }
 
