@@ -901,6 +901,7 @@ function handleEsc(e: KeyboardEvent) {
     return
   if (!open.value)
     return
+  e.preventDefault()
   close()
 }
 
@@ -1060,7 +1061,7 @@ watch(
 /* ─── lifecycle ─── */
 onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
-  document.addEventListener('keydown', handleEsc)
+  document.addEventListener('keydown', handleEsc, true)
   setupMotionPreference()
 
   await nextTick()
@@ -1080,7 +1081,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutside, true)
-  document.removeEventListener('keydown', handleEsc)
+  document.removeEventListener('keydown', handleEsc, true)
   if (props.delayNode)
     anchorDelayService.setFloatingEl(props.delayNode, null)
   cleanupAutoUpdate.value?.()

@@ -279,6 +279,7 @@ code: |
 - `drip` / `bead` work on vertical placements only; side placements fall back to `opacity`. They need a measurable height, so `unlimitedHeight` shows and hides instantly.
 - `drip` / `bead` paint their own surface: no `TxCard` and no arrow, so panel background, shadow, and variant do not apply. The trigger needs an opaque background.
 - Under reduced motion, every animation jumps to its end state.
+- Escape closes an open anchor in the capture phase and calls `preventDefault()`, so an enclosing modal or drawer ignores the same keypress and stays open.
 
 ## Technologies
 

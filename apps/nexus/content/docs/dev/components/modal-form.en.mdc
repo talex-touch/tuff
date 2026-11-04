@@ -130,6 +130,7 @@ Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`
 - Each open builds `model` from a copy of `initialValues` and makes it the baseline. Closing unmounts the form with the dialog, so edits never carry over to the next open.
 - When `initialValues` changes while the dialog is open, as when a record finishes loading, it becomes the saved state: untouched fields take the new values, and fields the user changed keep their edits.
 - Escape, the mask, the close button and Cancel all go through the form's `confirmLeave()`, which asks only about changes no draft holds. A running submit cannot be closed.
+- Escape pressed in a field does not reach this path (see the Modal field rule), so it asks nothing.
 - A submit that goes through emits `submit-success`, then closes.
 - The footer sits outside the `<form>`, and the submit button reaches it through `form`: Enter in a field and a click make the same submit with the same checks.
 

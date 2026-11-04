@@ -326,6 +326,7 @@ rows:
 - Opening focuses the drawer and Tab cycles inside it; closing or unmounting returns focus to the previously focused element without scrolling the page.
 - Tab stops only at controls that show and are in the tab order: it passes by hidden ones, ones under `inert` and ones with `tabindex="-1"`, and stops at an editable region (`contenteditable`) too.
 - The close button, the mask, and Escape ask `beforeClose`, then emit `update:visible(false)` and `close`; `closeOnClickMask` and `closeOnPressEscape` turn off the last two.
+- Escape with focus in a form field (inside a `TxForm`, or on an editable control) does not close the drawer. An open popover or menu inside the drawer closes first, and the drawer stays open.
 - Only the topmost modal dialog handles Tab and Escape, and keys another control already handled are ignored, so a confirmation on top owns them.
 - When closed, the root stays in the DOM with `inert` and `aria-hidden`.
 - The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer: `pure` by default, a solid fill of `--tx-drawer-panel-background`. Under `blur`, `acrylic`, `glass` or `refraction`, a sliding panel's filter samples where the panel was a frame earlier, so the material takes its motion fallback during the slide and recovers once it ends.
