@@ -664,8 +664,9 @@ onBeforeUnmount(() => {
       />
     </div>
 
+    <!-- Route-gated so a leaving page drops its copy at once; the tab strip shows it elsewhere. -->
     <div
-      v-if="error"
+      v-if="error && onRoute"
       role="alert"
       class="flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-5 py-3 text-sm"
     >

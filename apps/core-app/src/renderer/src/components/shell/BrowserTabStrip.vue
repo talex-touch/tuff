@@ -5,7 +5,7 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { TxIconButton } from '@talex-touch/tuffex/button'
+import { TxButton, TxIconButton } from '@talex-touch/tuffex/button'
 import {
   TxContextMenu,
   TxContextMenuDivider,
@@ -20,6 +20,7 @@ import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorks
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
 import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
 import type { BrowserTabMenuAction } from '~/views/base/browser/tab-actions'
+import { describeBrowserError } from '~/views/base/browser/browser-errors'
 import { runBrowserTabAction } from '~/views/base/browser/tab-actions'
 import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
@@ -27,8 +28,16 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const sdk = createBrowserSdk(useTuffTransport())
-const { state, connecting, command, tabMenuOpen, pluginToolbarOpen, accountOpen } =
-  useBrowserWorkspace()
+const {
+  state,
+  connecting,
+  error,
+  command,
+  retryWorkspace,
+  tabMenuOpen,
+  pluginToolbarOpen,
+  accountOpen
+} = useBrowserWorkspace()
 const tabMenu = ref<InstanceType<typeof TxContextMenu> | null>(null)
 const tabMenuTargetId = ref('')
 const draggedTabId = ref<string | null>(null)
@@ -294,6 +303,17 @@ watch(tabMenuOpen, (open) => {
         <ShellAccountAvatar @overlay-change="onAccountOverlay" />
       </template>
     </div>
+  </div>
+  <div
+    v-if="error && !onBrowserRoute"
+    role="alert"
+    class="flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-2 py-1.5 text-sm"
+    style="-webkit-app-region: no-drag"
+  >
+    <span class="min-w-0 flex-1 break-words">{{
+      t('browser.actionFailedWithReason', { reason: describeBrowserError(error, t) })
+    }}</span>
+    <TxButton size="sm" variant="ghost" @click="retryWorkspace">{{ t('browser.retry') }}</TxButton>
   </div>
   <TxContextMenu
     ref="tabMenu"
