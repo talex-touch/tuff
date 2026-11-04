@@ -345,6 +345,8 @@ onMounted(() => {
   })
   cycle = cyc
   setInstancePaused(inst, props.paused)
+  if (props.fragmentShader)
+    setSharedFragmentShader(props.fragmentShader)
   // The frame loop skips paused instances: paint one still frame at the clock's start.
   if (props.paused) {
     inst.accumulatedTime = 0
@@ -355,8 +357,6 @@ onMounted(() => {
   // imperative `triggerReveal()` works for manual user-driven reveals too.
   if (props.autoReveal)
     cyc.start()
-  if (props.fragmentShader)
-    setSharedFragmentShader(props.fragmentShader)
 
   root.style.setProperty('--image-gen-radius', `${initial.r}px`)
   root.style.borderRadius = `${initial.r}px`

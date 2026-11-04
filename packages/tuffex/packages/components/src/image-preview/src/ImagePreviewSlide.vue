@@ -50,7 +50,7 @@ const emit = defineEmits<{
         class="tx-image-preview__placeholder"
         :class="{ 'is-skeleton': loadingEffect === 'skeleton' && !$slots.loading }"
         :style="slide.placeholder"
-        aria-hidden="true"
+        :aria-hidden="$slots.loading ? undefined : 'true'"
       >
         <slot v-if="$slots.loading" name="loading" :item="slide.item" :index="slide.index" />
         <ImagePreviewEffect v-else-if="loadingEffect !== 'skeleton' && loadingEffect !== 'none'" :preset="loadingEffect" :reduced="reduced" />
