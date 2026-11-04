@@ -348,13 +348,6 @@ const LIMITS = {
     // 2026-08-18 and has failed tuffex CI on every commit since — which cost
     // every tuffex change its build signal, this file's own audits included.
     'border-beam/src/styles.js': 80 * 1024,
-    // 171.49 KiB measured 2026-11-02 (175,608 B) for `miko`, one 83 KB single-file component whose
-    // template runs to about 950 lines. Kept with an exception for now; tree-shaking adapts to it
-    // when a consumer uses Miko. Minimal headroom, growth from here fails.
-    'miko/src/TxMiko2.vue.js': 172 * 1024,
-    // 48.03 KiB measured 2026-11-02 (49,189 B; master 49,028 B). The barrel grows by Miko's export,
-    // 161 B. Minimal headroom, growth from here fails.
-    'components.js': 48.5 * 1024,
   },
   emptyStateAliasCssBytes: 128,
 }

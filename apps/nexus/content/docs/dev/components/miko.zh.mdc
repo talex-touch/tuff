@@ -52,10 +52,10 @@ code: |
 ### 最佳实践
 
 - **状态映射契约**：与 Agent 的生命周期钩子精确对应：`session_start` 对应 `idle`，`UserPromptSubmit` 对应 `thinking`，`tool_call` 对应 `running` 或 `working`，`Stop` 对应 `success`，`PermissionRequest` 对应 `alert`，长时静止对应 `sleeping` 或 `sleepy`。
-- **互动与恶魔突变**：传入 `interactive` 可开启点击反馈，支持快速连续点击触发眩晕彩蛋；自主探索或点击中有概率触发「闪光恶魔」变异形态（小恶魔犄角、蝙蝠羽翼、小叉尾与金色星火），也可通过 `demon` 属性直接开启。
+- **互动与恶魔突变**：传入 `interactive` 可开启点击反馈；自主探索或点击中有概率触发「闪光恶魔」变异形态（小恶魔犄角、蝙蝠羽翼、小叉尾与金色星火），也可通过 `demon` 属性直接开启。
 - **纯矢量性能**：无需加载额外图片资源或启动高开销 Canvas 循环，全部由纯 SVG `<rect>` 像素块和 CSS `@keyframes` 硬件加速驱动，开销极低。
 - **尺寸比例**：推荐使用 `'xs' | 'sm' | 'md' | 'lg'` 规格或数值；宽高比收敛至 36:20，平稳横向比例适合停靠在状态栏、CoreBox 边角或对话框底端。
-- **单色与可访问性**：默认为 Tuff 经典电光紫（`#810DC6`），恶魔变异下为深邃暗绯色（`#4C0519`），支持通过 `color` 自定义；已内置 `role="img"` 与可访问标签。
+- **单色与可访问性**：默认为小人紫（`#9726D9`，比 Tuff 品牌紫 `#810DC6` 略浅），恶魔变异下为深邃暗绯色（`#4C0519`），支持通过 `color` 自定义；已内置 `role="img"` 与可访问标签。
 
 ## API 参考
 
@@ -65,7 +65,7 @@ code: |
 |------|------|--------|------|
 | `state` | `MikoState` | `'idle'` | 当前动作状态，支持 38 种完整状态。 |
 | `size` | `MikoSize` | `'md'` | 尺寸大小，支持 `'xs'` (22px)、`'sm'` (30px)、`'md'` (50px)、`'lg'` (66px) 或自定义宽高数值。 |
-| `color` | `string` | `'#810DC6'` | 身体主色调。 |
+| `color` | `string` | `'#9726D9'` | 身体主色调。 |
 | `labels` | `Partial<MikoLabels>` | `{}` | 各状态的可访问文案标签覆盖。 |
 | `ariaLabel` | `string` | 自动生成 | 覆盖默认的无障碍文本公告。 |
 | `interactive` | `boolean` | `false` | 是否开启点击互动反馈与悬停发光动画。 |
