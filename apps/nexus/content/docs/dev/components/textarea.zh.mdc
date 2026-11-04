@@ -39,6 +39,20 @@ code: |
 - 普通表单保持 `resize="vertical"`；外层布局已控制高度时才用 `none`。
 - `status` 只做视觉提示；标签、帮助与校验文案放在外层表单项。
 
+### 边缘与状态
+
+文本域与输入框使用同一条内描边；错误与焦点只改变描边颜色和光晕，尺寸不变。
+
+:::TuffDemoWrapper{demo="TextareaEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTextarea v-model="text" :rows="2" />
+    <TxTextarea status="error" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

@@ -94,6 +94,20 @@ code: |
 - With `type="number"` the value is a number or `''`; normalize it in your schema before persisting.
 - Give each field's icons one path: the slot or the icon prop.
 
+### Edge and States
+
+The edge is a 1px inset ring that never changes the size or where the content sits. Focus adds a 3px glow, an error turns the ring red, and disabled uses the disabled background.
+
+:::TuffDemoWrapper{demo="InputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxInput v-model="value" />
+    <TxInput disabled />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

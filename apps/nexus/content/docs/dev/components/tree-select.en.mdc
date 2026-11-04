@@ -71,6 +71,20 @@ code: |
 - Keep default expansion shallow, such as root departments or product areas.
 - Use the `node` slot only for badges or subtitles, never for click targets that compete with row selection.
 
+### Edge and States
+
+The tree-select trigger uses the inset ring. Disabled uses the disabled background and text colour, not reduced opacity.
+
+:::TuffDemoWrapper{demo="TreeSelectEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTreeSelect v-model="key" :options="options" />
+    <TxTreeSelect disabled v-model="key" :options="options" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

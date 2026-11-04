@@ -35,6 +35,20 @@ code: |
 - Set `controls=false` in dense table filters, where typing is faster.
 - Treat `null` as unset in validation and API mapping.
 
+### Edge and States
+
+The steppers sit inside the same inset ring, and their outer corners stay concentric with the box. State colours match the input.
+
+:::TuffDemoWrapper{demo="NumberInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxNumberInput v-model="count" />
+    <TxNumberInput disabled />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

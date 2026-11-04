@@ -39,6 +39,20 @@ code: |
 - Pass `error` rather than `status="error"` so the state and the message can't drift apart.
 - Localize through `labels`: seven of its ten strings are only heard by screen readers.
 
+### Edge and States
+
+The sensitive input shares the input's edge and states. Size variants change only the height and font size; the radius is 12px at every size.
+
+:::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSensitiveInput v-model="secret" />
+    <TxSensitiveInput :error="message" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

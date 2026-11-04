@@ -94,6 +94,20 @@ code: |
 - `type="number"` 的值可能是 number 或 `''`，持久化前先在 schema 中归一化。
 - 同一字段的图标只用插槽或图标 prop 其中一种。
 
+### 边缘与状态
+
+边缘是 1px 内描边，不改变尺寸与内容位置；焦点时加 3px 光晕，错误时描边变红，禁用时用禁用底色。
+
+:::TuffDemoWrapper{demo="InputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxInput v-model="value" />
+    <TxInput disabled />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

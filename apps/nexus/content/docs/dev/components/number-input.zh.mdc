@@ -35,6 +35,20 @@ code: |
 - 表格筛选等高密度区域设置 `controls=false`，键盘输入更快。
 - 在校验与 API 映射中，把 `null` 当作未设置。
 
+### 边缘与状态
+
+步进按钮沿同一条内描边排列，外角与外框同心；状态颜色与输入框一致。
+
+:::TuffDemoWrapper{demo="NumberInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxNumberInput v-model="count" />
+    <TxNumberInput disabled />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

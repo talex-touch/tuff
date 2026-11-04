@@ -73,6 +73,20 @@ code: |
 - Persist full paths, not leaf ids, so labels can be rebuilt.
 - Keep a visible field label; don't rely on the placeholder.
 
+### Edge and States
+
+The cascader trigger uses the inset ring. Disabled uses the disabled background and text colour, not reduced opacity.
+
+:::TuffDemoWrapper{demo="CascaderEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCascader v-model="path" :options="options" />
+    <TxCascader disabled v-model="path" :options="options" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

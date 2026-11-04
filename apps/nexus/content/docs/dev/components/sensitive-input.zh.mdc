@@ -39,6 +39,20 @@ code: |
 - 传 `error` 而不是 `status="error"`，状态与文案不会走散。
 - 用 `labels` 本地化：十条文案中有七条只有屏幕阅读器听得到。
 
+### 边缘与状态
+
+敏感输入框的描边与状态与输入框一致；尺寸变体只改变高度与字号，圆角统一为 12px。
+
+:::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSensitiveInput v-model="secret" />
+    <TxSensitiveInput :error="message" />
+  </template>
+---
+:::
+
 ## API 参考
 
 ### 属性

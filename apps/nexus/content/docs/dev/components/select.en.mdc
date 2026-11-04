@@ -242,6 +242,20 @@ code: |
 - To show a created option again, add it to your own `options` in the `create` handler.
 - Match `modelValue` to `multiple`: a scalar for single, an array for multiple.
 
+### Edge and States
+
+Single and multiple triggers use the input's inset ring and states. Multiple-select tags sit inside the ring, and their text greys out when disabled.
+
+:::TuffDemoWrapper{demo="SelectEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSelect v-model="value" :options="options" />
+    <TxSelect v-model="values" multiple :options="options" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### TuffSelect
