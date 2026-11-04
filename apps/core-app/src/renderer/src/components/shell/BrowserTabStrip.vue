@@ -169,7 +169,7 @@ function tabKeydown(event: KeyboardEvent, index: number): void {
     if (tab) openTabMenu(tab.id, event)
     return
   }
-  let target = index
+  let target: number
   if (event.key === 'ArrowRight') target = (index + 1) % tabs.length
   else if (event.key === 'ArrowLeft') target = (index - 1 + tabs.length) % tabs.length
   else if (event.key === 'Home') target = 0
