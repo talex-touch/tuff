@@ -171,7 +171,14 @@ function onBlur(e: FocusEvent) {
   &.is-disabled {
     background: var(--tx-disabled-bg-color, #f5f7fa);
     cursor: not-allowed;
-    opacity: 0.8;
+
+    .tx-tag-input__input {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
+
+    .tx-tag-input__tags > * {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
   }
 }
 

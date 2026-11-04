@@ -314,7 +314,10 @@ defineExpose({
   &.is-disabled {
     background: var(--tx-disabled-bg-color, #f5f7fa);
     cursor: not-allowed;
-    opacity: 0.7;
+
+    .tx-tree-select__text {
+      color: var(--tx-disabled-text-color, #c0c4cc);
+    }
   }
 
   &__value {

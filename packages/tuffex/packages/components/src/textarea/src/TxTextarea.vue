@@ -160,9 +160,14 @@ defineExpose({
 }
 
 .tx-textarea.is-focused:not(.is-disabled) {
+  transition: box-shadow 0.2s ease;
   box-shadow:
     inset 0 0 0 1px var(--tx-color-primary, #409eff),
     0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .tx-textarea--success:not(.is-disabled) {

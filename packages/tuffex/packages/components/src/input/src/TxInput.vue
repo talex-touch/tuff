@@ -238,9 +238,14 @@ defineExpose({
 
   &:focus-within:not(.is-disabled),
   &.is-focused:not(.is-disabled) {
+    transition: box-shadow 0.25s;
     box-shadow:
       inset 0 0 0 1px var(--tx-color-primary, #409eff),
       0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   }
 
   // Set by a TxFormItem while it shows an error for this field.
