@@ -79,6 +79,8 @@ export interface HomeSubmitOptions {
   resetBlankConversation: (nextProjectId: string | null) => Promise<void>
   setConversationLoading: (id: string, loading: boolean) => void
   reportSubmitError: (error: unknown) => void
+  /** Called once a send is accepted past its guards, with the text in memory only. */
+  onSent?: (text: string) => void
 }
 
 /**
@@ -246,6 +248,7 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     options.launchSendKey()
 
     const text = voice?.text ?? draft.value
+    options.onSent?.(text)
     const attachments =
       !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
     // The lift carries the typed text off the composer as its own bubble. A send with attachments
