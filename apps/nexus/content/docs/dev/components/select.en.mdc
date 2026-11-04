@@ -171,8 +171,8 @@ code: |
 ---
 :::
 
-### Status Border
-`status` only draws the border; keep validation messages in the form item.
+### Status Edge
+`status` only changes the edge; keep validation messages in the form item.
 :::TuffDemoWrapper{demo="SelectSelectStatusDemo" code-lang="vue"}
 ---
 code: |

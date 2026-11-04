@@ -856,6 +856,7 @@ onBeforeUnmount(() => {
           <TuffInput
             v-else
             ref="triggerInputRef"
+            :class="{ 'is-invalid': resolvedStatus === 'error' }"
             v-model="triggerText"
             v-bind="triggerAttrs()"
             :placeholder="placeholder"
@@ -1042,7 +1043,7 @@ onBeforeUnmount(() => {
     // TxInput eases its own border only while focusing; open and status
     // changes here get its 0.25s too.
     :deep(.tx-input) {
-      transition: border-color 0.25s, box-shadow 0.25s;
+      transition: box-shadow 0.25s;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1245,9 +1246,6 @@ onBeforeUnmount(() => {
   }
 
   &.is-open {
-    .tuff-select__trigger {
-      border-color: var(--tx-color-primary, #409eff);
-    }
 
     /* The up/down chevron pair is vertically symmetric, so no open rotation. */
 
@@ -1260,10 +1258,6 @@ onBeforeUnmount(() => {
   }
 
   &.is-status-error {
-    :deep(.tx-input) {
-      border-color: var(--tx-color-danger, #f56c6c);
-    }
-
     .tuff-select__multi-trigger:not(.is-disabled) {
       box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
     }
@@ -1277,7 +1271,7 @@ onBeforeUnmount(() => {
 
   &.is-status-warning {
     :deep(.tx-input) {
-      border-color: var(--tx-color-warning, #e6a23c);
+      box-shadow: inset 0 0 0 1px var(--tx-color-warning, #e6a23c);
     }
 
     .tuff-select__multi-trigger:not(.is-disabled) {

@@ -77,7 +77,7 @@ code: |
 - Unparseable text left at blur falls back to the current value, or `null` if there is none.
 - `controls=false` hides the step buttons and keeps the native numeric field.
 - `readonly` and `disabled` both block stepping; `disabled` also disables the field.
-- Inside a `TxFormItem` it takes the id, `aria-describedby`, `aria-invalid` and `required`, and draws a red border while the item shows an error; the form's `disabled` applies too and blocks stepping.
+- Inside a `TxFormItem` it takes the id, `aria-describedby`, `aria-invalid` and `required`, and draws a red edge while the item shows an error; the form's `disabled` applies too and blocks stepping.
 
 ## Technologies
 

@@ -171,8 +171,8 @@ code: |
 ---
 :::
 
-### 状态边框
-`status` 只提供边框，校验文案放在表单项中。
+### 状态边缘
+`status` 只改变边缘，校验文案放在表单项中。
 :::TuffDemoWrapper{demo="SelectSelectStatusDemo" code-lang="vue"}
 ---
 code: |

@@ -89,7 +89,7 @@ code: |
 
 ### Best Practices
 
-- Show focus only through the subtle border and shadow shift; don't add a second focus ring around the wrapper unless the surrounding form requires one.
+- Show focus only through the subtle edge and shadow shift; don't add a second focus ring around the wrapper unless the surrounding form requires one.
 - Keep search states light for toolbars and list filters; use `TxSearchInput` when Enter search or debounced remote search is part of the contract.
 - With `type="number"` the value is a number or `''`; normalize it in your schema before persisting.
 - Give each field's icons one path: the slot or the icon prop.

@@ -291,7 +291,8 @@ defineExpose({
   justify-content: center;
   width: 34px;
   border: 0;
-  border-right: 1px solid var(--tx-border-color, #dcdfe6);
+  padding: 1px 6px;
+  box-shadow: inset -1px 0 0 0 var(--tx-border-color, #dcdfe6);
   background: var(--tx-fill-color-light, #f5f7fa);
   color: var(--tx-text-color-regular, #606266);
   font: inherit;
@@ -310,12 +311,13 @@ defineExpose({
 }
 
 .tx-number-input__control:first-child {
+  padding-right: 7px;
   border-radius: 11px 0 0 11px;
 }
 
 .tx-number-input__control:last-child {
-  border-right: 0;
-  border-left: 1px solid var(--tx-border-color, #dcdfe6);
+  padding-left: 7px;
+  box-shadow: inset 1px 0 0 0 var(--tx-border-color, #dcdfe6);
   border-radius: 0 11px 11px 0;
 }
 

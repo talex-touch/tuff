@@ -75,10 +75,8 @@ html.coloring {
   .tx-tag-input,
   .tx-date-picker-field,
   .tx-cascader,
-  .tx-tree-select,
-  .tx-select,
-  .tx-flat-select {
-    border-color: var(--tx-coloring-border-color);
+  .tx-tree-select {
+    box-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   }
 
   .tx-button:not(.borderless):not(.variant-bare):not(.variant-ghost):not(.tone-text) {
