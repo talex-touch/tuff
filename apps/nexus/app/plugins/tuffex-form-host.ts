@@ -31,6 +31,7 @@ function createFormMessages(i18n: NexusI18n): () => Partial<FormMessages> | unde
       maxLength: (label, max, unit) => t(`form.maxLength.${unit}`, { label, max }, max),
       pattern: label => t('form.pattern', { label }),
       invalid: label => t('form.invalid', { label }),
+      hint: label => t('form.hint', { label }),
       errorPrefix: t('form.errorPrefix'),
       warningPrefix: t('form.warningPrefix'),
       validating: t('form.validating'),

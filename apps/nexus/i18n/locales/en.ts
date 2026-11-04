@@ -76,6 +76,7 @@ export default {
     },
     pattern: '{label} is not in the expected format',
     invalid: '{label} is invalid',
+    hint: 'More about {label}',
     errorPrefix: 'Error: ',
     warningPrefix: 'Warning: ',
     validating: 'Validating…',

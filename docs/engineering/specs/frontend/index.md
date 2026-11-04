@@ -94,5 +94,6 @@ Also read shared thinking guides when the trigger applies:
 - A skeleton is the default loading state for any view that waits on data, and it must mirror the loaded layout so nothing shifts when content arrives. Reuse `TxRowSkeleton` / `TxSkeleton` / `SettingSkeleton` and `useDeferredLoading`; do not hand-roll placeholder markup or a local `@keyframes`.
 - Plugins must fail closed when permission SDKs, clipboard SDKs, secret SDKs, or host capabilities are unavailable.
 - New user-facing text must go through the owning message catalog or localized manifest path, not direct `window.$t` / `window.$i18n`.
+- A field explanation on a `TxFormItem` that runs past one short line goes in its `hint`, the `?` popover beside the label. `help` is a single constraint the user must see while typing; errors and warnings stay under the control, and no explanatory paragraph goes under a control.
 - Sensitive-data lifecycle changes must update `docs/engineering/sensitive-data-inventory.json` and pass `corepack pnpm privacy:inventory:verify`; credential values must never use ordinary renderer/app/plugin storage.
 - SQLite is the local business source of truth. JSON is only a local config/sync payload or a verifiable catalog/evidence artifact, not a replacement SoT.

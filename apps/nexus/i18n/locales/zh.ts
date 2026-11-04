@@ -76,6 +76,7 @@ export default {
     },
     pattern: '{label}格式不正确',
     invalid: '{label}无效',
+    hint: '{label}的说明',
     errorPrefix: '错误：',
     warningPrefix: '警告：',
     validating: '正在校验…',

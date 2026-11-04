@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FormItemEmits, FormItemProps } from './types'
 import { ref } from 'vue'
+import TxPopover from '../../popover/src/TxPopover.vue'
 import { useFormItem } from './use-form-item'
 
 defineOptions({ name: 'TxFormItem' })
@@ -20,6 +21,8 @@ const rootRef = ref<HTMLElement | null>(null)
 const {
   labelId,
   messageId,
+  hintId,
+  hintName,
   labelFor,
   messages,
   note,
@@ -38,6 +41,7 @@ const {
   rules: () => props.rules,
   required: () => props.required,
   help: () => props.help,
+  hint: () => props.hint,
   showMessage: () => props.showMessage,
   root: rootRef,
   labelledBy: 'for',
@@ -58,11 +62,43 @@ const {
     ]"
     @focusout="onFocusout"
   >
-    <label v-if="label" :id="labelId" class="tx-form-item__label" :for="labelFor">
-      <span class="tx-form-item__label-text">{{ label }}</span>
-      <span v-if="markRequired" class="tx-form-item__required" aria-hidden="true">*</span>
-      <span v-else-if="markOptional" class="tx-form-item__optional">{{ messages.optional }}</span>
-    </label>
+    <div v-if="label || hint" class="tx-form-item__label-row">
+      <label v-if="label" :id="labelId" class="tx-form-item__label" :for="labelFor">
+        <span class="tx-form-item__label-text">{{ label }}</span>
+        <span v-if="markRequired" class="tx-form-item__required" aria-hidden="true">*</span>
+        <span v-else-if="markOptional" class="tx-form-item__optional">{{ messages.optional }}</span>
+      </label>
+      <TxPopover
+        v-if="hint"
+        trigger="hover"
+        placement="top-start"
+        :match-reference-width="false"
+        :max-width="280"
+      >
+        <template #reference>
+          <button type="button" class="tx-form-item__hint" :aria-label="hintName" :aria-describedby="hintId">
+            <svg
+              class="tx-form-item__hint-icon"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.25"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="6.25" />
+              <path d="M6.2 6.45a1.85 1.85 0 1 1 2.55 1.7c-.5.22-.8.66-.8 1.2v.4" />
+              <path d="M8 11.6h.01" />
+            </svg>
+          </button>
+        </template>
+        <p class="tx-form-item__hint-text" aria-hidden="true">
+          {{ hint }}
+        </p>
+      </TxPopover>
+      <span v-if="hint" :id="hintId" class="tx-form-item__sr-only">{{ hint }}</span>
+    </div>
     <div class="tx-form-item__content">
       <div class="tx-form-item__control">
         <slot v-bind="slotProps" />
@@ -85,6 +121,16 @@ const {
   min-width: 0;
 }
 
+// The label and its `?` share one line. Top-aligned: in the side layout the row is stretched
+// to the control and the label sits at its padding, so centring would drift by half a note.
+.tx-form-item__label-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .tx-form-item__label {
   display: flex;
   align-items: baseline;
@@ -102,6 +148,44 @@ const {
 
 .tx-form-item__optional {
   color: var(--tx-text-color-secondary, #909399);
+}
+
+.tx-form-item__hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--tx-text-color-secondary, #909399);
+  cursor: help;
+}
+
+.tx-form-item__hint:hover {
+  color: var(--tx-text-color-regular, #606266);
+}
+
+.tx-form-item__hint:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 2px;
+}
+
+.tx-form-item__hint-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.tx-form-item__hint-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--tx-text-color-regular, #606266);
+  overflow-wrap: anywhere;
 }
 
 .tx-form-item__content {
@@ -171,8 +255,8 @@ const {
   flex-direction: column;
   gap: 6px;
 
-  // Only the text is the label; the empty line beside it is not.
-  .tx-form-item__label {
+  // Only the text and its `?` are the label; the empty line beside them is not.
+  .tx-form-item__label-row {
     align-self: flex-start;
     max-width: 100%;
   }
@@ -195,7 +279,7 @@ const {
   // `normal` takes the form's column gap through the subgrid.
   gap: normal;
 
-  .tx-form-item__label {
+  .tx-form-item__label-row {
     align-self: stretch;
     grid-column: label;
     // Centres the first line of the label on a single-row control.
@@ -209,7 +293,7 @@ const {
   &.is-inline {
     align-items: center;
 
-    .tx-form-item__label {
+    .tx-form-item__label-row {
       padding-block: 0;
     }
   }
@@ -218,6 +302,10 @@ const {
 // A right-aligned label keeps its text flush with the field; the asterisk
 // moves in front of it.
 @mixin label-end {
+  .tx-form-item__label-row {
+    justify-content: flex-end;
+  }
+
   .tx-form-item__label {
     justify-content: flex-end;
     text-align: end;
@@ -252,9 +340,12 @@ const {
   align-items: flex-start;
   gap: 8px;
 
-  .tx-form-item__label {
+  .tx-form-item__label-row {
     flex: none;
     padding-block: calc((var(--tx-form-control-height, 32px) - 20px) / 2);
+  }
+
+  .tx-form-item__label {
     white-space: nowrap;
   }
 

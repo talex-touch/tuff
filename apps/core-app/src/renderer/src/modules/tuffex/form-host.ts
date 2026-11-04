@@ -38,6 +38,7 @@ function createFormMessages(i18n: I18nInstance): () => FormMessages {
     warningPrefix: t('warningPrefix'),
     validating: t('validating'),
     optional: t('optional'),
+    hint: (label) => t('hint', { label }),
     summaryTitle: t('summaryTitle'),
     draftRestored: (savedAt) => t('draftRestored', { time: time(savedAt) }),
     draftPending: (savedAt) => t('draftPending', { time: time(savedAt) }),
