@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### ✨ 组件增强
+
+- `TxText` 新增 `scroll="loop"` 循环滚动：溢出的文字滚过左边缘后，新的一段无缝接上；只动 `transform`，速度约 40px/s；减少动效时停止。
+- `TxText` 新增 `loopEdge` 选择循环处的边缘效果：`gap`（默认）移出的文字完全消失后再进入，`clip` 间隔两个字宽、边缘硬切，`fade` 同 `clip` 并在两端渐隐，`wrap` 首尾相接、视口里始终有字。`scroll="auto"` 的来回摆动不变。
+
 ## [0.9.3] - 2026-11-03
 
 ### 📦 组件变动 (Components)
