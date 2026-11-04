@@ -553,6 +553,12 @@ export default {
     },
   },
   docs: {
+    textLoopDemo: {
+      gap: '完全消失再进入（默认）',
+      clip: '部分消失（边缘硬切）',
+      fade: '比例消失（边缘渐隐）',
+      wrap: '不消失（首尾相接）',
+    },
     verified: '已验证',
     loading: '正在获取文档…',
     notFoundTitle: '未找到文档',

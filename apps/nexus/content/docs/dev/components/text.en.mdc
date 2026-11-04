@@ -1,10 +1,10 @@
 ---
 title: Text
-description: Truncates overflowing text at any position, with auto and hover scrolling.
+description: Truncates overflowing text at any position, with auto, looping and hover scrolling.
 category: Basic
 status: beta
 since: 0.9.3
-tags: [text, ellipsis, overflow, scroll]
+tags: [text, ellipsis, overflow, scroll, loop]
 syncStatus: reviewed
 verified: true
 ---
@@ -41,12 +41,29 @@ code: |
 ---
 ::::
 
+### Looping scroll
+
+::::TuffDemoWrapper{demo="TextLoopDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="w-64">
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="loop" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="loop" loop-edge="clip" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="loop" loop-edge="fade" />
+      <TxText text="Quarterly-financial-report-final-version-v3.pdf" scroll="loop" loop-edge="wrap" />
+    </div>
+  </template>
+---
+::::
+
 ### Best Practices
 
 - Give `TxText` a definite width, or place it in a fixed-width container; it never widens its parent.
 - Put padding and borders on the outer container, not on `TxText` itself.
 - Use `overflow="middle"` for file names to keep the start and the extension; use `overflow="start"` for paths to keep the file name.
-- Do not set `scroll="auto"` on every row of a list; it competes for attention. Use `scroll="hover"` when readers need the full text.
+- Do not set `scroll="auto"` or `scroll="loop"` on every row of a list; it competes for attention. Use `scroll="hover"` when readers need the full text.
+- The default `loopEdge="gap"` clears the whole text before it returns; use `loopEdge="fade"` to keep the edges soft, or `loopEdge="wrap"` to keep text in view at all times.
 
 ## API Reference
 
@@ -55,16 +72,18 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `text` | `string` | - | The full text. It is shown whole when it fits. |
-| `overflow` | `'start' \| 'middle' \| 'end'` | `'end'` | Where the ellipsis goes when the text is cut. Ignored with `scroll="auto"`. |
-| `scroll` | `'none' \| 'auto' \| 'hover'` | `'none'` | `auto` loops overflowing text back and forth; `hover` slides the hidden part in while the pointer is over it, and on touch a tap toggles it. |
+| `overflow` | `'start' \| 'middle' \| 'end'` | `'end'` | Where the ellipsis goes when the text is cut. Ignored with `scroll="auto"` and `scroll="loop"`. |
+| `scroll` | `'none' \| 'auto' \| 'hover' \| 'loop'` | `'none'` | `auto` swings overflowing text back and forth; `loop` scrolls it round (edge effect set by `loopEdge`); `hover` slides the hidden part in while the pointer is over it, and on touch a tap toggles it. |
+| `loopEdge` | `'gap' \| 'clip' \| 'fade' \| 'wrap'` | `'gap'` | Only with `scroll="loop"`. `gap` clears the text fully before it re-enters; `clip` leaves a two-character gap and cuts at the edge; `fade` is `clip` with both edges fading; `wrap` joins the text end to end, so text stays in view. |
 
 ## Overview
 
 - The root is a `<span>` with `display: block`; its width comes from the parent.
 - End ellipsis uses CSS. Start and middle ellipses are measured on mount, on resize and once the font loads; `title` carries the full text when cut.
+- Looping starts only when the text overflows, runs at about 40px/s, and only animates `transform`.
 - On touch, `scroll="hover"` expands on a tap and collapses on another tap or a tap outside the component.
 - Screen readers read the full text, never the truncated form.
-- Reduced motion stops both scroll modes and falls back to a static cut.
+- Reduced motion stops every scroll mode and falls back to a static cut.
 
 ## Technologies
 

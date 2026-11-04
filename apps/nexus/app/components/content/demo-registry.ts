@@ -499,6 +499,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   TemplateWorkbenchDemo: () => import('./demos/TemplateWorkbenchDemo.vue'),
   TerminalLogsDemo: () => import('./demos/TerminalLogsDemo.vue'),
   TerminalTerminalDemo: () => import('./demos/TerminalTerminalDemo.vue'),
+  TextLoopDemo: () => import('./demos/TextLoopDemo.vue'),
   TextMorphNumberPlaceValueDemo: () => import('./demos/TextMorphNumberPlaceValueDemo.vue'),
   TextMorphSpringDemo: () => import('./demos/TextMorphSpringDemo.vue'),
   TextMorphTextMorphDemo: () => import('./demos/TextMorphTextMorphDemo.vue'),
