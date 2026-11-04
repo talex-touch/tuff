@@ -1,6 +1,7 @@
 <script lang="ts" name="AppShell" setup>
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import BrowserTabStrip from '~/components/shell/BrowserTabStrip.vue'
 import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
 import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
@@ -12,6 +13,8 @@ import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { appSetting } from '~/modules/storage/app-storage'
+import { isBetaFeatureEnabled } from '../../../../shared/beta-features'
 import {
   normalizeWindowPreference,
   themeStyle,
@@ -25,6 +28,7 @@ const windowPreference = computed<ThemeWindowPreference>(() =>
 const isRefractionWindow = computed(() => windowPreference.value === 'refraction')
 const isFilterWindow = computed(() => windowPreference.value === 'filter')
 const isPureWindow = computed(() => windowPreference.value === 'pure')
+const browserWorkspaceEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 const routeTransitionStyle = computed(() => themeStyle.value.theme.transition?.route ?? 'slide')
@@ -200,6 +204,7 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
     <ShellSidebar />
 
     <main class="AppShell-Main fake-background">
+      <BrowserTabStrip v-if="browserWorkspaceEnabled" />
       <div class="AppShell-View">
         <router-view v-slot="{ Component, route }">
           <!-- `out-in`, not the default overlap: overlapped route swaps leave
