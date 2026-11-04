@@ -174,6 +174,7 @@ code: |
 
 - With `modelValue` it is controlled; otherwise it keeps its own open state.
 - Hover and focus open and close on `openDelay` / `closeDelay`; with `click`, BaseAnchor handles toggling and outside clicks.
+- Escape closes the tooltip alone; an enclosing modal or drawer stays open.
 - With `interactive`, the hover zone is the whole floating layer: the panel box, padding included, plus the hover bridge to the reference. The close is scheduled only on leaving all of it.
 - Also only with `interactive`: once the pointer leaves the reference toward the panel, it stays open while the pointer keeps moving inside the safe triangle. Parents stay open and hover triggers on the way do not open. A 100ms stop or a step outside closes it on `closeDelay`, and a trigger stopped on takes over.
 - The panel body carries `role="tooltip"` and `data-side`.

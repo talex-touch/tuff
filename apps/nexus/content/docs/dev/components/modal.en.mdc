@@ -95,6 +95,7 @@ code: |
 - The overlay teleports to `body`, takes a fresh layer from the shared z-index manager on open, and is removed with `v-if` on close. For the 200 ms it fades out, it is `inert`: the pointer and focus reach the layer below, and it no longer counts as topmost, so a drawer underneath answers Escape by then.
 - The overlay is `role="dialog"` with `aria-modal="true"`; it takes focus on open and, on close or unmount, returns it to the previous element without scrolling the page.
 - Tab and Shift+Tab cycle inside the topmost modal; even with focus on `body`, a drawer underneath doesn't react to Escape.
+- Escape with focus inside a `TxForm`, including its fields, a field's `?`, and buttons in the form, does not close the dialog. A plain input outside any `TxForm` closes it as usual. An open popover or menu inside the dialog closes first, and the dialog stays open.
 - Tab stops only at controls that show and are in the tab order: it passes by hidden ones, ones under `inert` and ones with `tabindex="-1"`, and stops at an editable region (`contenteditable`) too.
 - A backdrop click, Escape, and the close button ask `beforeClose`, then emit `update:modelValue(false)` and `close`; setting `modelValue` asks nothing.
 - `fullscreen` changes only the layout, not the dialog semantics or focus handling; it leaves no backdrop to click, so keep a visible close control in the header or footer.
