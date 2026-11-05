@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { GridLayoutProps } from '../index'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxGridLayout',
@@ -16,31 +16,51 @@ const props = withDefaults(defineProps<GridLayoutProps>(), {
 
 const gridContainer = ref<HTMLElement | null>(null)
 
+// Pointer position in viewport coordinates, taken from the latest mousemove.
+let pointerX = 0
+let pointerY = 0
+let frameId: number | null = null
+
+function paintSpotlight() {
+  frameId = null
+  const container = gridContainer.value
+  if (!props.interactive || !container)
+    return
+
+  const items = Array.from(container.querySelectorAll<HTMLElement>('.tx-grid-layout__item'))
+  // Read every rect before the first write, so the frame pays for one layout pass.
+  const placed = items.map(item => ({ item, rect: item.getBoundingClientRect() }))
+  for (const { item, rect } of placed) {
+    item.style.setProperty('--tx-grid-op', '0.2')
+    item.style.setProperty('--tx-grid-x', `${pointerX - rect.left}px`)
+    item.style.setProperty('--tx-grid-y', `${pointerY - rect.top}px`)
+  }
+}
+
 function handleMove(event: MouseEvent) {
   if (!props.interactive)
     return
   if (!gridContainer.value)
     return
 
-  const { pageX: mouseX, pageY: mouseY } = event
-  const elements = gridContainer.value.querySelectorAll('.tx-grid-layout__item')
+  // pageX minus scrollX is the viewport coordinate that getBoundingClientRect uses.
+  pointerX = event.pageX - window.scrollX
+  pointerY = event.pageY - window.scrollY
+  // One write per frame, however many moves arrive within it.
+  if (frameId === null)
+    frameId = requestAnimationFrame(paintSpotlight)
+}
 
-  for (const element of elements) {
-    const htmlElement = element as HTMLElement
-    const { left, top } = htmlElement.getBoundingClientRect()
-    const elementX = left + window.scrollX
-    const elementY = top + window.scrollY
-
-    const distanceX = mouseX - elementX
-    const distanceY = mouseY - elementY
-
-    htmlElement.style.setProperty('--tx-grid-op', '0.2')
-    htmlElement.style.setProperty('--tx-grid-x', `${distanceX}px`)
-    htmlElement.style.setProperty('--tx-grid-y', `${distanceY}px`)
-  }
+function cancelFrame() {
+  if (frameId === null)
+    return
+  cancelAnimationFrame(frameId)
+  frameId = null
 }
 
 function cancelColor() {
+  // A queued frame would light the items again right after this reset.
+  cancelFrame()
   if (!gridContainer.value)
     return
 
@@ -48,6 +68,8 @@ function cancelColor() {
     ;(element as HTMLElement).style.setProperty('--tx-grid-op', '0')
   })
 }
+
+onBeforeUnmount(cancelFrame)
 
 // Turning interactivity off while the pointer is inside must clear any spotlight
 // vars already written, otherwise the items stay permanently lit.
@@ -93,7 +115,7 @@ const rootStyle = computed<CSSProperties>(() => {
   height: 100%;
   position: relative;
   border-radius: 16px;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease;
   cursor: pointer;
   overflow: hidden;
 

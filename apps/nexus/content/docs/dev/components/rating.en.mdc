@@ -30,7 +30,7 @@ code: |
 ::
 
 ### Custom Icons
-`icon` sets every state; `filledIcon` / `emptyIcon` / `halfIcon` override one each. Built-in icons, Iconify classes, and emoji all work.
+`icon` sets every state; `filledIcon`, `emptyIcon` and `halfIcon` override one each, and built-in icons, Iconify classes and emoji all work.
 
 ::TuffDemoWrapper{demo="RatingIconDemo" code-lang="vue"}
 ---

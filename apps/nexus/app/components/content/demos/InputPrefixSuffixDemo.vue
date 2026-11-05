@@ -20,12 +20,12 @@ const labels = computed(() => (locale.value === 'zh'
   <div style="display: grid; gap: 10px;">
     <TuffInput v-model="withPrefix" :placeholder="labels.search">
       <template #prefix>
-        <TxIcon name="i-carbon-search" />
+        <TxIcon icon="i-carbon-search" />
       </template>
     </TuffInput>
     <TuffInput v-model="withSuffix" :placeholder="labels.user">
       <template #suffix>
-        <TxIcon name="i-carbon-user" />
+        <TxIcon icon="i-carbon-user" />
       </template>
     </TuffInput>
   </div>

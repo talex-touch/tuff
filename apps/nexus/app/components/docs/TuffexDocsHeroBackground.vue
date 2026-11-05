@@ -130,8 +130,7 @@ function getShapeStyle(shape: ShapeConfig) {
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 999px;
   background: linear-gradient(90deg, var(--shape-gradient), transparent);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  /* No backdrop-filter: it resampled the page under every shape on every frame. */
   box-shadow: 0 18px 56px rgba(99, 102, 241, 0.1);
 }
 

@@ -115,8 +115,8 @@ code: |
 :::TuffPropsTable
 ---
 rows:
-  - name: modelValue / v-model
-    description: '输入值。'
+  - name: modelValue
+    description: '输入值，配合 `v-model` 使用。'
     type: 'string | number'
     default: "''"
   - name: placeholder
@@ -233,21 +233,6 @@ rows:
     default: '-'
 ---
 :::
-
-## 从 FlatInput 迁移
-
-`FlatInput` / `TxFlatInput` 已下线，由 `TxInput` 承接：
-
-| FlatInput | TxInput |
-|-----------|---------|
-| `area` | `type="textarea"` |
-| `password` | `type="password"` |
-| `icon="i-…"` | `prefix-icon="i-…"` |
-| 默认插槽（前缀内容） | `#prefix` 插槽 |
-| `disabled` / `readonly` | `disabled` / `readonly` |
-| `nonWin` | 移除，不再保留 Windows 下划线视觉 |
-
-`update:modelValue` 契约不变；`focus` / `blur` 改由原生输入元素派发。
 
 ## 概述
 

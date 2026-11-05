@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OfflineStateProps } from './types'
+import type { OfflineStateEmits, OfflineStateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<OfflineStateProps>()
+const emit = defineEmits<OfflineStateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="offline">
+  <TxEmptyState
+    v-bind="props"
+    variant="offline"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

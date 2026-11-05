@@ -40,7 +40,7 @@ code: |
 | `usedTokens` | `number` | — | 已用的 token 数，必填。 |
 | `maxTokens` | `number` | — | 上下文窗口上限，必填；≤ 0 时占比按 0 处理。 |
 | `label` | `string` | `'Context usage'` | 可访问名称，写入 `aria-label`。 |
-| `formatter` | `(used: number, max: number) => string` | — | 自定义环旁文字；缺省为紧凑记数（`12.3K`、`1.2M`）。 |
+| `formatter` | `(used: number, max: number) => string` | — | 自定义环旁文字；缺省为「已用 / 上限」的紧凑记数，如 `12.3K / 200.0K`。 |
 
 ### 插槽
 

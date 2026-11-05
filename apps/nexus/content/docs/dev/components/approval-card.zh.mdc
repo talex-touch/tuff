@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 多题走查
-一次显示一题。单选作答后经 `autoAdvanceDelay` 自动翻页，多选等用户按发送键。
+一次显示一题，单选作答后经 `autoAdvanceDelay` 自动翻页，多选则等用户按发送键。
 :::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue"}
 ---
 code: |

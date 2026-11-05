@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, shallowRef, type Component } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, type Component } from 'vue'
 import './DocsComponentsGallery.css'
 import type { FileUploaderFile } from '@tuffex-components/file-uploader'
 import type { ImageUploaderFile } from '@tuffex-components/image-uploader'
@@ -24,16 +24,20 @@ import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { toast } from '@talex-touch/tuffex/utils'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
-// Every `<ClientOnly>` below is this wrapper, not Nuxt's: each one sits directly
-// in a cell's stage, and the wrapper adds the reset button that remounts the
-// specimen so its entrance can be watched again.
-import ClientOnly from './DocsGallerySpecimen.vue'
+// Every `<ClientOnly>` below is this gate, not Nuxt's: each one sits directly
+// in a cell's stage. The gate mounts its specimen when this gallery's queue
+// admits it, and the specimen wrapper adds the reset button that remounts it so
+// its entrance can be watched again.
+import ClientOnly from './gallery/GallerySpecimenGate.vue'
 import { galleryText } from './gallery/gallery-text'
+import { createSpecimenQueue, SPECIMEN_QUEUE_KEY } from './gallery/specimen-queue'
 import { tileImage } from './gallery/tile-image'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
 const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates'> }>()
+// One queue per gallery, so this page's specimens mount in document order.
+provide(SPECIMEN_QUEUE_KEY, createSpecimenQueue())
 const galleryAmicroSpecimen = shallowRef<Component | null>(null)
 const GalleryChartLegend = defineAsyncComponent(() => import('./gallery/GalleryChartLegend.vue'))
 const GalleryChoiceCard = defineAsyncComponent(() => import('./gallery/GalleryChoiceCard.vue'))
@@ -360,6 +364,33 @@ const progressSegments = computed(() => [
 ])
 let progressTimer: ReturnType<typeof setInterval> | null = null
 
+function stopProgressTimer() {
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
+  }
+}
+
+// The bar moves only while the tab is on screen; a hidden page would otherwise wake once a second.
+function syncProgressTimer() {
+  if (document.hidden) {
+    stopProgressTimer()
+    return
+  }
+  if (progressTimer)
+    return
+  progressTimer = setInterval(() => {
+    const next = progressStep.value + 1
+    if (next >= PROGRESS_STEPS.length) {
+      progressStep.value = 0
+      progressCycle.value += 1
+    }
+    else {
+      progressStep.value = next
+    }
+  }, 1000)
+}
+
 onMounted(() => {
   if (props.suite === 'data' || props.suite === 'motion') {
     void import('./gallery/GalleryAmicroSpecimen.vue').then(({ default: component }) => {
@@ -373,21 +404,13 @@ onMounted(() => {
     return
   }
 
-  progressTimer = setInterval(() => {
-    const next = progressStep.value + 1
-    if (next >= PROGRESS_STEPS.length) {
-      progressStep.value = 0
-      progressCycle.value += 1
-    }
-    else {
-      progressStep.value = next
-    }
-  }, 1000)
+  syncProgressTimer()
+  document.addEventListener('visibilitychange', syncProgressTimer)
 })
 
 onBeforeUnmount(() => {
-  if (progressTimer)
-    clearInterval(progressTimer)
+  document.removeEventListener('visibilitychange', syncProgressTimer)
+  stopProgressTimer()
 })
 
 /* IconChip specimen: the full tone ramp in both variants, so the cell shows

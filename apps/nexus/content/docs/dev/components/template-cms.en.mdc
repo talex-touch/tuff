@@ -158,7 +158,7 @@ The content workbench behind the Tuff docs and blog: find posts by status, publi
 - Filters, search, sorting, and paging each simulate a fetch of about 350 ms: the table keeps the old rows and swaps to same-layout skeleton rows only after 120 ms, so nothing jumps.
 - Sorting covers every filtered post before the page is cut; changing page or filter clears the selection, since select-all covers one page.
 - Edit, publish, archive, and delete apply at once, and the toast offers Undo for about 5 seconds; the drawer validates only on save.
-- In the docs column a row click opens the drawer; expanded (≥ 960px) adds three columns and a details panel; below 640px only the title column stays.
+- In the docs column a row click opens the drawer; expanded (≥ 960px) adds three columns and a details panel; below 640px only the title and action columns stay.
 - Editorial board: drag within a column to reorder and across columns to change status; expanded, drop a card on a day to schedule it; every move can be undone.
 - Editorial board: each column is one tab stop where Space picks up, ↑ / ↓ move, ← / → change column, and Esc cancels; below 640px one column shows at a time.
 - Editorial board: once in view a collaborator comes online and moves a card; a click or key stops it, and reduced motion shows the end state.
@@ -183,7 +183,7 @@ The content workbench behind the Tuff docs and blog: find posts by status, publi
 | Footer | [TxPagination](/docs/dev/components/pagination), [TxButton](/docs/dev/components/button) | Paging and bulk actions |
 | Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Undoable feedback |
 | Details panel (expanded) | [TxCellLink](/docs/dev/components/cell-link), [TxDescriptions](/docs/dev/components/descriptions), [TxMarkdownView](/docs/dev/components/markdown-view), [TxNoSelection](/docs/dev/components/no-selection) | Summary, metadata, body preview |
-| Editor drawer | [TxDrawer](/docs/dev/components/drawer), [TxForm](/docs/dev/components/form), [TxInput](/docs/dev/components/input), [TxSelect](/docs/dev/components/select), [TxTagInput](/docs/dev/components/tag-input), [TxDatePicker](/docs/dev/components/date-picker), [TxFlatRadio](/docs/dev/components/flat-radio), [TuffSwitch](/docs/dev/components/switch), [TxTextarea](/docs/dev/components/textarea), [TxSplitButton](/docs/dev/components/button) | Validated edit form |
+| Editor drawer | [TxDrawer](/docs/dev/components/drawer), [TxForm](/docs/dev/components/form), [TxInput](/docs/dev/components/input), [TxSelect](/docs/dev/components/select), [TxTagInput](/docs/dev/components/tag-input), [TxDatePicker](/docs/dev/components/date-picker), [TxFlatRadio](/docs/dev/components/flat-radio), [TxSwitch](/docs/dev/components/switch), [TxTextarea](/docs/dev/components/textarea), [TxSplitButton](/docs/dev/components/button) | Validated edit form |
 | Header (Editorial board) | [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar) | Collaborators online |
 | Quick filters (Editorial board) | [TxFilterChips](/docs/dev/components/filter-chips), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | Dim cards that don't match |
 | Columns (Editorial board) | [TxSortableList](/docs/dev/components/sortable-list), [TxBadge](/docs/dev/components/badge), [TxTooltip](/docs/dev/components/tooltip) | In-column drag and WIP limits |

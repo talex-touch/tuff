@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { queueDemoActivation, shouldActivateDemo } from './demo-lazy'
+import { queueDemoActivation, queueDemoPrefetch, shouldActivateDemo } from './demo-lazy'
 import { loadDemoComponent } from './demo-component-loader'
 
 interface DemoWrapperProps {
@@ -129,6 +129,7 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
 }
 
 let cancelQueuedActivation: (() => void) | null = null
+let cancelQueuedPrefetch: (() => void) | null = null
 
 function activateDemo() {
   cancelQueuedActivation = null
@@ -142,12 +143,17 @@ onMounted(() => {
   if (!props.demo)
     return
 
-  // Fetch this demo in parallel with its renderer, without loading a global registry.
-  void loadDemoComponent(props.demo).catch(() => {})
+  // The loader download waits in the same idle order as activation, one at a time, so a page of
+  // demos does not start every download on mount. Activation then joins that download, or finds
+  // the module cached if it finished first.
+  const demo = props.demo
+  cancelQueuedPrefetch = queueDemoPrefetch(() => loadDemoComponent(demo))
   cancelQueuedActivation = queueDemoActivation(activateDemo)
 })
 
 onBeforeUnmount(() => {
+  cancelQueuedPrefetch?.()
+  cancelQueuedPrefetch = null
   cancelQueuedActivation?.()
   cancelQueuedActivation = null
 })

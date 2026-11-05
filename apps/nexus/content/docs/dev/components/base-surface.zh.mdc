@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 模式
-`mode` 选择材质：`refraction` 折射（默认）、`glass` 玻璃、`acrylic` 亚克力、`blur` 背景模糊、`mask` 半透明遮罩、`mica` 云母、`pure` 纯色（`flat` 是它的别名）、`plain` 不画材质。各材质的管线与开销见《[Surface 8 种材质物理选型与确认门禁](/docs/dev/concepts/surface-taxonomy)》。
+`mode` 选择材质：`refraction` 折射（默认）、`glass` 玻璃、`acrylic` 亚克力、`blur` 背景模糊、`mask` 半透明遮罩、`mica` 云母、`pure` 纯色（`flat` 是它的别名）、`plain` 不画材质，各材质的管线与开销见《[Surface 8 种材质物理选型与确认门禁](/docs/dev/concepts/surface-taxonomy)》。
 :::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
 ---
 code: |
@@ -30,7 +30,7 @@ code: |
 :::
 
 ### 参数实验
-`filter*` 调滤镜层，`refraction*` 调折射层，`preset="card"` 套用卡片调校。位移、扭曲与 RGB 偏移只在 `refractionRenderer="svg"` 下生效。
+`filter*` 调滤镜层，`refraction*` 调折射层，`preset="card"` 套用卡片调校；位移、扭曲与 RGB 偏移只在 `refractionRenderer="svg"` 下生效。
 :::TuffDemoWrapper{demo="BaseSurfaceAdvancedDemo" code-lang="vue"}
 ---
 code: |
@@ -55,7 +55,7 @@ code: |
 :::
 
 ### 伪元素模式
-`fake` 用伪元素绘制背景，与现有 `.fake-background` 层级一致，插槽内容自然位于其上。`pure`（`flat`）下这层底色不透明，`mask` 下跟随遮罩透明度；`blur`、`acrylic`、`glass`、`refraction` 下它垫在材质底下，不透明度取 `opacity`，后面的页面仍能透上来被模糊、折射；`mica` 自己画不透明底，`plain` 什么都不画，两者都不垫这层。
+`fake` 用伪元素绘制背景，插槽内容位于其上；`pure`（`flat`）下底色不透明，`mask` 下跟随遮罩透明度，`blur`、`acrylic`、`glass`、`refraction` 下垫在材质底下、取 `opacity`，`mica` 与 `plain` 不垫这层。
 :::TuffDemoWrapper{demo="BaseSurfaceFakeDemo" code-lang="vue"}
 ---
 code: |
@@ -71,7 +71,7 @@ code: |
 :::
 
 ### 运动降级
-材质随元素移动时，`backdrop-filter` 的取样跟不上元素的位置，滤镜层会拖着一块错位的背景走。设置 `moving` 后，`blur`、`glass`、`acrylic` 降级为 `fallbackMode`，停止后平滑恢复；`refraction` 不换模式，滤镜层分层淡出，停止后再淡回。
+设置 `moving` 后，`blur`、`glass`、`acrylic` 降级为 `fallbackMode` 并在停止后平滑恢复；`refraction` 不换模式，而是让滤镜层分层淡出再淡回，以免 `backdrop-filter` 的取样跟不上元素时拖着错位的背景走。
 :::TuffDemoWrapper{demo="BaseSurfaceFallbackDemo" code-lang="vue"}
 ---
 code: |
@@ -114,7 +114,7 @@ code: |
 :::
 
 ### 环境感知
-`autoDetect` 打开后，组件综合五类运行期信号：自身及祖先的 transform、按下拖动的指针速度（超过 1.2px/ms）、窗口移动与缩放、帧预算探针、省电状态。前三类触发运动降级，信号停下 140ms 后开始恢复；省电或帧预算为 `reduced` 时，`refraction`、`glass`、`acrylic` 换成 `blur`，`minimal` 时连同 `blur` 换成 `flat`，条件解除后回到声明的材质。各信号的判定细节见《[材质自动推断与 120Hz 运动降级](/docs/dev/concepts/surface-deduction)》。
+`autoDetect` 综合五类运行期信号（元素与祖先的 transform、按压拖动的指针速度、窗口移动与缩放、帧预算、省电）：前三类触发运动降级；省电或帧预算为 `reduced` 时，`refraction`、`glass`、`acrylic` 换成 `blur`，`minimal` 时 `blur` 也换成 `flat`，判定细节见《[材质自动推断与 120Hz 运动降级](/docs/dev/concepts/surface-deduction)》。
 
 页面收不到窗口移动的事件，要由宿主转发；宿主自己掌握电源状态时，可以覆盖电池 API 的判断：
 
@@ -129,7 +129,7 @@ setSurfacePowerSaving(true)
 ```
 
 ### 极致性能
-`setSurfacePerformanceMode('max')` 让页面上的所有表面换成实色（`flat`）：`refraction`、`glass`、`acrylic`、`blur` 不再采样背景，`mica` 不再随滚动重绘。开没开 `autoDetect` 都生效；铺在系统材质上的表面（`systemBackdrop`）保持原样。传 `'default'` 恢复。
+`setSurfacePerformanceMode('max')` 让页面上的表面换成实色（`flat`），开没开 `autoDetect` 都生效；铺在系统材质上的表面（`systemBackdrop`）保持原样，传 `'default'` 恢复。
 
 ```ts
 import { setSurfacePerformanceMode } from '@talex-touch/tuffex'
@@ -152,7 +152,7 @@ code: |
 :::
 
 ### 系统材质
-透明的 Electron 窗口靠窗口自身的系统材质（macOS 的 vibrancy、Windows 的 Mica）透出桌面，页面里的 `backdrop-filter` 采不到这层材质：滤镜只能把表面自己的底色再采一遍，并把采到的副本叠在原底色上，75% 的底色叠两层就接近不透明，桌面透不上来。`systemBackdrop` 让表面不跑任何 `backdrop-filter`：玻璃层不渲染，滤镜层只留着色，模糊交给系统；底色、遮罩、流光与描边照常绘制。表面不再采样页面，`moving` 与 `autoDetect` 也随之失效。
+页面里的 `backdrop-filter` 采不到透明窗口的系统材质（macOS 的 vibrancy、Windows 的 Mica），`systemBackdrop` 因此让表面不跑 `backdrop-filter`，模糊交给系统，底色、遮罩、流光与描边照常绘制。
 
 ```vue
 <!-- core-app 的 CoreBox：透明窗口，表面铺在系统材质上 -->
@@ -190,14 +190,18 @@ code: |
 | `borderWidth` | `number` | `0.07` | 玻璃层的边缘宽度系数。 |
 | `displace` | `number` | `0.5` | 折射位移强度。 |
 | `distortionScale` | `number` | `-180` | 折射扭曲缩放。 |
-| `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB 通道偏移，控制色散。 |
-| `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | 折射位移的取样通道。 |
+| `redOffset` | `number` | `0` | 红色通道偏移，控制色散。 |
+| `greenOffset` | `number` | `10` | 绿色通道偏移，控制色散。 |
+| `blueOffset` | `number` | `20` | 蓝色通道偏移，控制色散。 |
+| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | 折射位移在 X 方向取样的通道。 |
+| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | 折射位移在 Y 方向取样的通道。 |
 | `mixBlendMode` | `string` | `'difference'` | 折射混合模式。 |
 | `refractionStrength` | `number` | `62` | 折射强度（0–100）。 |
 | `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 折射风格预设。 |
 | `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | 折射色调：`vivid` 更通透，`mist` 更柔和。 |
 | `refractionAngle` | `number` | `-24` | 色散主方向（度）。 |
-| `refractionLightX` / `refractionLightY` | `number` | - | 光源锚点（0–1）。 |
+| `refractionLightX` | `number` | - | 光源 X 锚点（0–1）。 |
+| `refractionLightY` | `number` | - | 光源 Y 锚点（0–1）。 |
 | `refractionHaloOpacity` | `number` | - | 光晕透明度（0–1）；不传时按内置 filmic 模型。 |
 | `overlayOpacity` | `number` | `0` | 非 mask 模式额外叠加的遮罩透明度。 |
 | `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | 流光底的画法；不传或 `false` 即关闭，任何 `mode` 都能开。 |
@@ -265,14 +269,11 @@ code: |
 ## 概述
 
 - `pure`、`flat` 只渲染根背景；`mask` 渲染遮罩层，透明度限制在 `0..1`；`acrylic` 是三倍模糊的滤镜层，上面一层 alpha 带分形噪点的着色层；`mica` 在根上画不透明底与两道锚定视口（`background-attachment: fixed`）的色晕，不读背景，但容器每次滚动都要重绘，不要用在会滚动的底板上；`plain` 只保留圆角与溢出裁切。
-- `blur`、`glass`、`acrylic` 在 `moving` 或 `autoDetect` 感知到运动时降级：`fallbackMode="mask"` 优先用 `fallbackMaskOpacity`，`pure`、`flat` 不渲染遮罩层。
-- `refraction` 运动中不切换模式：失去采样的 glass / blur 层各自淡出，由半透明运动罩接住，停止后交叉淡回。
-- 玻璃层只出现在 `glass` 模式与 `refraction` 的 `svg` 渲染器下；`svg` 时它的不透明度取 `refractionGlassOpacity`。`css` 渲染器只画滤镜层、着色、光晕与描边。
-- 显式传入 `refractionStrength`、`refractionAngle`、`refractionProfile` 任一项即启用派生折射模型，未传的项按 `62` / `-24` / `'filmic'` 兜底。
-- `autoDetect` 在根节点及每个祖先上监听它们自身的 `transform` / `translate` 过渡（`transitionstart` / `transitionend` / `transitioncancel`），并用 `MutationObserver` 观察它们的内联 `style`；指针、窗口、帧探针与电池订阅是页面级的，所有打开 `autoDetect` 的表面共用一套，最后一个卸载时移除。
-- `systemBackdrop` 时玻璃层不渲染，滤镜层的 `backdrop-filter` 置为 `none`、保留着色，运动降级与环境感知都不启用；底色、遮罩、流光与描边不受影响。
-- 性能模式为 `max` 时，除 `systemBackdrop` 的表面外，`refraction`、`glass`、`acrylic`、`blur`、`mica` 一律按 `flat` 渲染。
-- 高对比度下（触发条件见《[主题定制](./theming.zh.mdc)》），除 `plain` 外的每种模式都像 `pure` 一样只画不透明的根背景：glass、blur、遮罩、运动罩与折射边缘层不渲染，`fake` 的底色满不透明度；`plain` 高对比度下也不加底色。
+- `blur`、`glass`、`acrylic` 在 `moving` 或 `autoDetect` 感知到运动时降级，`fallbackMode="mask"` 优先用 `fallbackMaskOpacity`，`pure`、`flat` 不渲染遮罩层；`refraction` 运动中不切换模式，失去采样的玻璃与模糊层各自淡出，由半透明运动罩接住，停止后交叉淡回。
+- 玻璃层只出现在 `glass` 模式与 `refraction` 的 `svg` 渲染器下，`svg` 时它的不透明度取 `refractionGlassOpacity`；显式传入 `refractionStrength`、`refractionAngle`、`refractionProfile` 任一项即启用派生折射模型，未传的项按 `62` / `-24` / `'filmic'` 兜底。
+- `autoDetect` 在根节点及每个祖先上监听它们自身的 `transform` / `translate` 过渡，并用 `MutationObserver` 观察内联 `style`；指针、窗口、帧探针与电池订阅是页面级的，所有打开 `autoDetect` 的表面共用一套。
+- `systemBackdrop` 与性能模式 `max` 都会改写材质：前者的玻璃层不渲染、滤镜层的 `backdrop-filter` 置为 `none`；后者让 `refraction`、`glass`、`acrylic`、`blur`、`mica` 按 `flat` 渲染，`systemBackdrop` 的表面除外。
+- 高对比度下（触发条件见《[主题定制](./theming.zh.mdc)》），除 `plain` 外的每种模式都像 `pure` 一样只画不透明的根背景，`fake` 的底色满不透明度；`plain` 高对比度下也不加底色。
 
 ## 技术实现
 

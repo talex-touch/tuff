@@ -117,7 +117,7 @@ const { selection, clear } = useSelectionAnchor({
 
 ### 暴露方法
 
-| 方法 | 说明 |
+| 名称 | 说明 |
 |------|------|
 | `updatePosition()` | 按当前 `selection.rects` 重新定位；流式宿主必须调用。 |
 | `focusInput()` | 聚焦自由指令输入框。 |

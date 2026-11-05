@@ -35,7 +35,7 @@ code: |
 :::
 
 ### 本地过滤
-未指定 `searchable` 时，已注册选项达到 8 项自动显示搜索框，包含分组与插槽选项。`searchThreshold` 调整阈值；显式 `searchable=false` 或非正阈值关闭自动搜索，显式 `true` 始终开启。
+未指定 `searchable` 时，已注册选项达到 8 项自动显示搜索框，分组与插槽选项也计入；`searchThreshold` 调整阈值；显式 `searchable=false` 或非正阈值关闭自动搜索，显式 `true` 始终开启。
 :::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
 ---
 code: |

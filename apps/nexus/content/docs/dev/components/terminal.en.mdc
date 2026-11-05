@@ -197,10 +197,8 @@ onBeforeUnmount(stop)
 
 ## Technologies
 
-- Built on `@xterm/xterm ^6.0.0`, `@xterm/addon-fit ^0.11.0`, and `@xterm/addon-webgl ^0.19.0` (all MIT); the engine stylesheet ships in `terminal/style.css`.
-- Draws with WebGL2 by default, and with xterm's DOM renderer when WebGL2 is unavailable or the renderer chunk fails to load. Chromium keeps about 16 WebGL contexts per renderer process and drops the oldest beyond that, so only a terminal on screen holds one: a hidden terminal releases its context and acquires a new one when shown again. A lost context switches to the DOM renderer at once, and WebGL is retried the next time the terminal is shown. WebGL rounds cell width to device pixels, so a container may fit a few more columns than with the DOM renderer.
-- Alt + arrow keys keep xterm 5's word-motion sequences: ⌥← / ⌥→ send Meta-b / Meta-f on macOS, and other platforms send Ctrl + arrow sequences; most shells leave xterm 6's default `ESC [1;3x` unbound.
-- Colors come from inherited TuffEx tokens and follow theme and contrast changes; a `ResizeObserver` coalesces fits into one frame. Rows and columns are fitted to the host's content box, so overriding the `padding` of `.tx-terminal` does not cut off the last row or the rightmost columns.
+- Built on `@xterm/xterm ^6.0.0`, `@xterm/addon-fit ^0.11.0`, and `@xterm/addon-webgl ^0.19.0` (all MIT), with the stylesheet in `terminal/style.css`. Draws with WebGL2 by default and falls back to xterm's DOM renderer when WebGL2 is unavailable or fails to load; Alt + arrow keys send xterm 5's word-motion sequences.
+- Only a terminal on screen holds a WebGL context (Chromium allows about 16 per renderer process), so a hidden terminal releases its context and acquires a new one when shown again. A `ResizeObserver` coalesces fits into one frame; rows and columns follow the content box, so overriding `.tx-terminal`'s `padding` does not cut off the last row. Colors come from inherited TuffEx tokens.
 - Source: `packages/tuffex/packages/components/src/terminal/`; process sessions live in `packages/utils/transport/sdk/domains/terminal.ts`.
 
 <TuffDocSourceLink />

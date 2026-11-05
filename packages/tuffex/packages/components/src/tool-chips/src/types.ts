@@ -36,7 +36,7 @@ export interface ToolChipsProps {
   diffs?: ToolChipDiff[]
   /** Header text. Falls back to `summaryFormatter(rows.length)`. */
   summary?: string
-  /** @default n => `${n} tool call(s)` */
+  /** @default n => `${n} tool call${n === 1 ? '' : 's'}` */
   summaryFormatter?: (rowCount: number) => string
   /** `v-model:open` — the whole run. Omit to let the component own it. */
   open?: boolean

@@ -1,6 +1,6 @@
 ---
 title: "Flowchart"
-description: "Workflow nodes on a dotted canvas: category chips, card slots, automatic bezier connectors, draggable and always controlled."
+description: "Workflow nodes on a dotted canvas with bezier connectors; draggable and controlled."
 category: Flow
 status: beta
 since: 0.6.0

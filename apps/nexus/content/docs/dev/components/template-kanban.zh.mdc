@@ -1,0 +1,135 @@
+---
+title: Kanban 任务看板
+description: 四列任务看板，拖拽换列，方向键也能移动卡片
+category: TemplateData
+status: beta
+since: 0.9.3
+tags: [template, kanban, board, drag, drawer]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 任务看板
+:::TuffDemoWrapper{demo="TemplateKanbanDemo" code-lang="vue" description="拖动卡片换列；或聚焦卡片后按 Space 拿起，方向键移动，Space 放下。进入视口后进度条依次填充。图中为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  type ColumnId = 'todo' | 'doing' | 'review' | 'done'
+
+  // 每一列是一组有序的卡片 id，卡片数据另放在表里
+  const board = reactive<Record<ColumnId, string[]>>({
+    todo: ['k1', 'k2', 'k3'],
+    doing: ['k4', 'k5', 'k6'],
+    review: ['k7', 'k8'],
+    done: ['k9', 'k10', 'k11'],
+  })
+  const picked = ref<string | null>(null)
+
+  // 键盘：Space 拿起，方向键移动，Space 或 Enter 放下，Esc 放回原位。
+  // 监听挂在模板根上，不挂在 window 上。
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && picked.value) {
+      event.preventDefault() // 留住 Esc，TemplateFrame 不收起浮层
+      cancelPick()
+    }
+    // 其余按键的分支见示例源码
+  }
+
+  // 拖拽：卡片是原生 draggable，落点按列内卡片的中点计算
+  function onColumnDragOver(event: DragEvent, column: ColumnId) {
+    event.preventDefault()
+    setDropSlot(column, event.clientY)
+  }
+  function onColumnDrop(event: DragEvent, column: ColumnId) {
+    event.preventDefault()
+    commitDrop(column)
+  }
+
+  // 播放从 @enter 开始，不在 onMounted 里启动；减少动态效果时直接显示终态
+  function play() {
+    fillProgress()
+  }
+  defineExpose({ resetDemo })
+  </script>
+
+  <template>
+    <TemplateFrame title="Kanban" :height="600" @enter="play">
+      <div class="kb" @keydown="onKeydown">
+        <TxFilterChips v-model="filter" :items="filterItems" aria-label="按条件筛选" />
+
+        <div class="kb-board">
+          <section
+            v-for="column in COLUMNS"
+            :key="column"
+            :data-column="column"
+            @dragover="onColumnDragOver($event, column)"
+            @drop="onColumnDrop($event, column)"
+          >
+            <TxBadge :value="board[column].length" />
+            <article
+              v-for="id in board[column]"
+              :key="id"
+              class="kb-card"
+              role="button"
+              tabindex="0"
+              draggable="true"
+              :data-card-id="id"
+              @click="openDetail(id)"
+              @dragstart="onDragStart($event, id)"
+              @dragend="onDragEnd"
+            >
+              <TxTag v-for="tag in tagsOf(id)" :key="tag" :label="tag" variant="soft" />
+              <TxProgressBar :percentage="shown[id]" />
+              <TxStatusBadge size="sm" :status="dueTone(id)" :text="dueText(id)" />
+              <TxAvatar :name="ownerOf(id)" :size="20" />
+            </article>
+          </section>
+        </div>
+
+        <!-- 抽屉里的「移到上一列 / 移到下一列」按钮，是不用拖拽的替代路径 -->
+        <TxDrawer v-model:visible="detailOpen" :title="detailTitle" size="min(480px, 94vw)">…</TxDrawer>
+
+        <TxToastPanel :open="toast.open" side="above" :stack="0">
+          {{ toast.text }}
+          <TxButton v-if="toast.undoable" size="sm" variant="secondary" @click="undo">撤销</TxButton>
+        </TxToastPanel>
+      </div>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+团队的任务流转板：待办、进行中、待审、已完成四列，卡片带负责人、优先级、进度与截止日期。拖拽与键盘两条路径得到相同的结果；最近一次移动可以撤销。
+
+- 拖拽：卡片可以在列内重排，也能拖到另一列；落点处用一条主色线标出。
+- 键盘：聚焦卡片后按 Space 拿起，方向键上下在列内移动、左右换列，Space 或 Enter 放下，Esc 放回拿起前的位置。拿起后焦点留在卡片上。
+- 详情：点击卡片或按 Enter 打开抽屉；抽屉里的按钮把卡片移到相邻一列，是不用拖拽的替代路径。
+- 筛选：顶部芯片按负责人、高优先级或已逾期筛选。不符合的卡片变淡但保持原位，键盘与拖拽照常可用。
+- 截止提示：未完成的卡片显示已逾期、今天截止、明天截止或几天后截止；已完成的卡片显示「已完成」。
+- 撤销：移动后，底部提示停留约 4 秒，点「撤销」即恢复移动前的状态。指针或焦点停在提示上时保持打开，离开后约 2 秒收起。
+- 播放：进入视口后，每张卡片的进度条依次填充；减少动态效果时直接显示终态，不启动计时器。
+- 布局：窄于 640px 时四列上下堆叠；640px 起两列；760px 起四列并排，每列各自滚动。
+
+## 自定义
+
+- 接真实数据时，把 `board` 换成服务端返回的列与顺序；每次移动提交一次请求，失败时用移动前的快照回滚。
+- 换成其他拖拽实现时，保留键盘路径：拿起、移动、放下与取消四个动作都要能脱离指针完成。
+- 需要在制上限时，在移动前检查目标列的数量；超限时保持原位，并用提示说明原因。
+- 截止提示以示例里固定的「现在」计算；接真实数据时换成当前时间，并按用户所在时区显示日期。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶部筛选 | [TxFilterChips](/docs/dev/components/filter-chips) | 按负责人、优先级与逾期筛选 |
+| 列头 | [TxBadge](/docs/dev/components/badge) | 每列的卡片数 |
+| 卡片 | [TxTag](/docs/dev/components/tag)、[TxAvatar](/docs/dev/components/avatar)、[TxProgressBar](/docs/dev/components/progress-bar)、[TxDotIndicator](/docs/dev/components/dot-indicator)、[TxStatusBadge](/docs/dev/components/status-badge) | 标签、负责人、进度、优先级与截止提示 |
+| 详情抽屉 | [TxDrawer](/docs/dev/components/drawer)、[TxButton](/docs/dev/components/button) | 查看详情，按钮换列 |
+| 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 移动后可撤销的结果提示 |

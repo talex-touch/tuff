@@ -1,6 +1,6 @@
 ---
 title: "SignalMeter 信号量表"
-description: "分段强度条，用几格填充表达置信度、相关度或信号强弱。"
+description: "分段强度条，用几格表达置信度、相关度或信号强弱"
 category: Visualization
 status: beta
 since: 0.3.9
@@ -65,18 +65,13 @@ code: |
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/signal-meter/src/TxSignalMeter.vue`。
-- Types: `packages/tuffex/packages/components/src/signal-meter/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/signal-meter/__tests__/signal-meter.test.ts`（6 项）验证格数与点亮数、受控 `value` 回路、越界夹紧、自定义 `max`、`label` 有无时的 `role` / `aria-hidden` 分支，以及 tone 与几何写进自定义属性。
+- 组件源码与类型：`packages/tuffex/packages/components/src/signal-meter/src/TxSignalMeter.vue`、`types.ts`。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-- **与既有徽标的分工:** `TxStatusBadge` 是五档语义 tone 的带框徽标，`TxProgressBar` 是连续进度。本组件是裸的离散格子，接受任意颜色，没有边框也没有图标——三者不要互相替代。
-- **上游差异:** 上游把量表写在建议卡内部，只有 3 格且颜色硬编码。这里抽成独立原语并把格数做成 `max`，因为同一形状在检索相关度上也用得到。
-
 ## 使用场景
 
 - 建议卡的置信度页脚与备选列表——`TxRecommendationCard` 内部就用它。
 - 检索结果的相关度：三格比一个百分比更容易横向扫读。
 - 任何「强 / 中 / 弱 / 无」的离散量。连续量请用 `TxProgressBar`。
+- 与 `TxStatusBadge` 的分工：后者是带框的五档语义徽标，本组件是没有边框与图标的裸格子，接受任意颜色；两者不要互相替代。

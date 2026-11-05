@@ -75,7 +75,7 @@ code: |
 
 ### Edge and States
 
-The cascader trigger uses the inset ring. Disabled uses the disabled background and text colour, not reduced opacity.
+The cascader trigger uses the inset ring; disabled uses the disabled background and text colour, not reduced opacity.
 
 :::TuffDemoWrapper{demo="CascaderEdgeDemo" code-lang="vue"}
 ---

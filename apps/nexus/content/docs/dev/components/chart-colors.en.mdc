@@ -1,6 +1,6 @@
 ---
 title: "Chart Colors"
-description: "Categorical, semantic, sequential and map palettes: CSS variables switch with the theme, ChartPalette provides literals."
+description: "Categorical, semantic, sequential and map palettes: CSS variables follow the theme; ChartPalette gives literals."
 category: Charts
 status: beta
 since: 0.1.0
@@ -32,8 +32,10 @@ verified: true
 | `--tx-chart-text-primary/-secondary` | Text colors. |
 | `--tx-chart-grid-line` | Grid lines (primary text at 20% opacity). |
 | `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | Map land fill and shading ramp. |
+| `--tx-skeleton-base-color` | Base color of loading placeholders, pointing at `--tx-chart-semantic-skeleton`. |
+| `--tx-chart-marker-label-bg` | Halo behind marker and threshold labels; it flips in dark mode. |
 
-Every variable ships a light-mode fallback, so charts render correctly without the host theme; hosts rebrand by overriding variables with zero component changes.
+Every variable ships a light-mode default, so charts render correctly without the host theme; hosts rebrand by overriding variables with zero component changes.
 
 ## Two Tracks
 

@@ -112,7 +112,7 @@ code: |
 | `defaultSelectedKeys` | `Array<string \| number>` | - | 非受控的初始选中态；绑定 `modelValue` 时忽略。 |
 | `expandedKeys` | `Array<string \| number>` | - | 受控展开 key；父级需在 `update:expandedKeys` 后回传。 |
 | `indent` | `number` | `16` | 每级缩进（px）。 |
-| `filterText` | `string` | `''` | 过滤文本；非空时匹配分支临时展开。 |
+| `filterText` | `string` | - | 过滤文本；非空时匹配分支临时展开。 |
 | `filterMethod` | `(node: TreeNode, query: string) => boolean` | - | 自定义匹配，收到 trim 后的原始查询；默认按小写 label 包含匹配。 |
 | `emptyText` | `string` | `'No results'` | 没有可显示的行时显示的文字；按页面语言传入。 |
 | `expandLabel` | `string` | `'Expand'` | 折叠节点展开箭头的可访问名称。 |

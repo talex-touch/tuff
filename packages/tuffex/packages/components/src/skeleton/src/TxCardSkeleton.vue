@@ -5,7 +5,7 @@ defineOptions({
 </script>
 
 <template>
-  <div class="tx-card-skeleton">
+  <div class="tx-card-skeleton" aria-hidden="true">
     <div class="tx-card-skeleton__icon" />
     <div class="tx-card-skeleton__content">
       <div class="tx-card-skeleton__header">

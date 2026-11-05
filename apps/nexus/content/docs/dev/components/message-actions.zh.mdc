@@ -74,3 +74,11 @@ code: |
 - 朗读按钮是开关：任何状态下点击都派发 `speak`（含 `loading`），由宿主开始或停止播放；`speaking` 时 `aria-pressed="true"`。
 - `role="toolbar"`：只占一个 Tab 落点，方向键在控件间循环移动，Home / End 跳到首尾。
 - 方向键顺序实时读取 DOM（`button:not([disabled])`、`[href]`、`tabindex` 非 -1），禁用按钮被排除。
+
+## 技术实现
+
+- 方向键顺序每次调用都由 `querySelectorAll` 从 DOM 查询，不做缓存；插槽里可聚焦的元素同样计入。
+- 复制经 `navigator.clipboard.writeText`；「已复制」态由 1200 毫秒的 `setTimeout` 收回，再次复制前先清除旧计时器。
+- 源码：`packages/tuffex/packages/components/src/message-actions/`。
+
+<TuffDocSourceLink />

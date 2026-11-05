@@ -49,6 +49,7 @@ code: |
 | `defaultOpen` | `boolean` | `true` | Open state while not streaming. |
 | `label` | `string` | `'Chain of thought'` | Header label; override it on non-English surfaces. |
 | `userOpen` | `boolean` | — | Host-held open state that overrides everything; feed `toggle` back in so it survives remounts. |
+| `collapseDelayMs` | `number` | `2000` | While streaming, milliseconds the trail stays open after the last active step settles; `0` folds at once. |
 | `bullets` | `boolean` | `steps.length > 1` | Whether to show step status bullet markers. Omitted for single-step thoughts by default. |
 ### Events
 
@@ -58,9 +59,17 @@ code: |
 
 ## Overview
 
-- Open state: `userOpen` wins, then a user click; otherwise it follows active steps while streaming and `defaultOpen` when not.
+- Open state: `userOpen` wins, then a user click; while streaming, the trail opens while a step is `active`, then stays open for `collapseDelayMs` (default 2000 ms) after the last active step settles before it folds away. When not streaming, it follows `defaultOpen`.
 - A thinking step's `body` is released at a steady pace while `streaming` and the step is `active` (the same clock as streamed text: a steady cadence, with a backlog cleared within about 0.6 s). A settled step, and users who prefer reduced motion, see it in full at once. What is shown is always a prefix of the text that has arrived, never rewritten; unfinished Markdown (such as `**bold`) is closed temporarily so no stray asterisks show.
 - The thinking body follows its end as text is released, stops following once the reader scrolls up, and resumes near the bottom. When a tool step's `body` grows, the active body scrolls to its end.
 - A `done` step with `durationMs` shows its duration after the title (`· 3.2s`; whole seconds from 10s).
 - The header count is `steps.length`, hidden for a single step.
 - The header is a native `<button>` with `aria-expanded` and `aria-controls`; steps are an `<ol>`.
+
+## Technologies
+
+- The thinking body is released by `use-paced-text.ts`, which wraps `useStreamPacer` on the same clock as `TxStreamText`; a settled step and reduced motion show it in full.
+- The open-state grace is a timer driven by a `watch`, cleared on unmount.
+- Source: `packages/tuffex/packages/components/src/chain-of-thought/`.
+
+<TuffDocSourceLink />

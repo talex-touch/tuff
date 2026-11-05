@@ -473,12 +473,14 @@ interface RunPlan {
 }
 
 let timers: Array<ReturnType<typeof setTimeout>> = []
+let toastTimer: ReturnType<typeof setTimeout> | undefined
 let activePlan: RunPlan | null = null
 
 function clearTimers(): void {
   for (const timer of timers)
     clearTimeout(timer)
   timers = []
+  clearTimeout(toastTimer)
 }
 
 /** Only ever asked from the client: runs start from `@enter`, a click or a reset. */
@@ -616,12 +618,43 @@ function finish(plan: RunPlan): void {
   if (!plan.toast)
     return
   toastOpen.value = true
-  // Reduced motion runs no timers at all: the panel stays until dismissed.
-  if (!prefersReducedMotion()) {
-    timers.push(setTimeout(() => {
-      toastOpen.value = false
-    }, 4000))
-  }
+  scheduleToastClose(4000)
+}
+
+// The completion toast closes itself after four seconds. A pointer or focus on
+// it holds it open: the timer checks again when it fires, and leaving re-arms it
+// for two seconds.
+const flowToastRef = ref<HTMLElement | null>(null)
+
+function toastHeld(): boolean {
+  const el = flowToastRef.value
+  return Boolean(el && (el.matches(':hover') || el.contains(document.activeElement)))
+}
+
+function scheduleToastClose(delay: number): void {
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    if (toastHeld())
+      return
+    toastOpen.value = false
+  }, delay)
+}
+
+function holdToast(): void {
+  clearTimeout(toastTimer)
+}
+
+function onToastLeave(): void {
+  if (toastOpen.value && !flowToastRef.value?.contains(document.activeElement))
+    scheduleToastClose(2000)
+}
+
+function onToastFocusOut(event: FocusEvent): void {
+  const next = event.relatedTarget
+  if (next instanceof Node && flowToastRef.value?.contains(next))
+    return
+  if (toastOpen.value)
+    scheduleToastClose(2000)
 }
 
 function startRun(toast: boolean): void {
@@ -674,8 +707,8 @@ function stopRun(): void {
 }
 
 function autoRun(): void {
-  // The auto-run's toast would need a timer to go away again; under reduced
-  // motion the finished canvas says enough without it.
+  // Under reduced motion the auto-run is playback alone: it lands on the finished
+  // canvas with no timers, so it shows no toast.
   startRun(!prefersReducedMotion())
 }
 
@@ -1327,7 +1360,16 @@ function selectTab(value: TxFlatSelectValue | TxFlatSelectValue[]): void {
           </aside>
         </div>
 
-        <div class="flow__toast" :class="{ 'is-open': toastOpen }">
+        <div
+          ref="flowToastRef"
+          class="flow__toast"
+          :class="{ 'is-open': toastOpen }"
+          :inert="toastOpen ? undefined : true"
+          @pointerenter="holdToast"
+          @pointerleave="onToastLeave"
+          @focusin="holdToast"
+          @focusout="onToastFocusOut"
+        >
           <TxToastPanel :open="toastOpen" :stack="1" :aria-label="copy.toastLabel">
             <!-- Hangs from the Run button, not from the panel's middle. -->
             <template #tether>

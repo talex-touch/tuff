@@ -33,6 +33,6 @@ Every cell is a live, interactive component; click the name in the top-left corn
 ## Overview
 
 - Charts import from `@talex-touch/tuffex/charts` and the visualization components live in the main package; both ship through the `@talex-touch/tuffex/pro` entry.
-- Everything except the ECharts charts renders with Vue (SVG, with Canvas for SparkChart and the dither layer) and never loads echarts; the ECharts charts load the optional `echarts` dependency when they mount.
+- Everything except the ECharts charts renders with Vue (SVG, Canvas or DOM/CSS) and never loads echarts; the ECharts charts load the optional `echarts` dependency when they mount.
 - The native charts share the `--tx-chart-*` theme variables and `ChartPalette`, and follow the host's light and dark themes.
 - The native charts animate on ECharts' default timings: 1000ms enter, 500ms data update, 300ms state switch; under `prefers-reduced-motion: reduce` they land on the final frame.

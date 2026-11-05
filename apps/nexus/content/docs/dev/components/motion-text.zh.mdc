@@ -1,6 +1,6 @@
 ---
 title: MotionText
-description: "45 个可追溯文字效果、4 个 registry 揭示，以及乱序揭示、调用方行内媒体和真实焦点模糊交互。"
+description: "45 种文字效果，含乱序揭示与行内媒体"
 category: MotionText
 status: beta
 since: 0.7.0
@@ -13,7 +13,7 @@ verified: false
 
 `TxMotionText` 保留 Amicro 的 45 个原始目录 ID 与 7 个独立的 registry / 源码扩展。各变体分别保留自己的方向、分段、错峰、缩放、模糊、遮罩、3D 变换或持续节奏。`MOTION_TEXT_VARIANTS` 提供真实类型化的名称、分组、分段方式和固定来源；`MOTION_TEXT_VARIANT_IDS` 是完整 ID 清单。
 
-入场与装饰播放和**值变化**分开处理。始终挂载的 `TxTextMorph` 负责所有文字值更新，没有第二套 diff 引擎，回放也不重新挂载它。屏幕阅读器只读取一次原文。同一时刻只有一个文字层可选中：一般播放时选中装饰原文，乱序揭示时选中未改动的原文，静止时选中 TextMorph 层。空白、换行、emoji ZWJ 序列及组合字符均保留。
+入场与装饰播放和**值变化**分开处理。文字值变化只由始终挂载的 `TxTextMorph` 负责；引擎的分段、差分与无障碍行为见 [TextMorph 文本形变](./text-morph.zh.mdc)，本页不再重复描述。装饰播放期间同一时刻只有一个文字层可选中：一般播放时为装饰原文，乱序揭示时为未改动的原文，静止时为 TextMorph 层。
 
 ## 用法
 
@@ -229,10 +229,8 @@ code: |
 
 ## 技术实现
 
-- 固定上游 [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) 提交 `43c29ce9cdd16459e3eab4992381b8d35b38776a`；MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
-- 45 个目录条目对应 `src/data/textAnimations.ts` 与 `src/components/text/AnimatedText.tsx` 的独立分支。4 个 registry 来源位于 `registry/ui/text/`。额外来源为 `ScrambleHover.tsx`、`MediaBetweenText.tsx` 和两份 `FocusBlur.tsx` 实现。准确范围由 `MOTION_TEXT_VARIANTS` 导出并在演示中显示。
-- 实现：`motion-text/src/TxMotionText.vue`；来源轨迹位于 `src/presets.ts`，类型 API 位于 `src/types.ts`。装饰 WAAPI 资源和唯一乱序超时通过 `useMotionActivity` 的幂等取消边界管理；值变化复用 `TxTextMorph`，词分段复用 `stream-text/src/segment.ts`，spring 曲线复用 `liquid/src/spring.ts`。
+- 固定上游 [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) 提交 `43c29ce9cdd16459e3eab4992381b8d35b38776a`；MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。45 个目录条目对应 `src/data/textAnimations.ts` 与 `src/components/text/AnimatedText.tsx` 的独立分支。4 个 registry 来源位于 `registry/ui/text/`。额外来源为 `ScrambleHover.tsx`、`MediaBetweenText.tsx` 和两份 `FocusBlur.tsx` 实现。准确范围由 `MOTION_TEXT_VARIANTS` 导出并在演示中显示。
+- 实现：`motion-text/src/TxMotionText.vue`；来源轨迹位于 `src/presets.ts`，类型 API 位于 `src/types.ts`。装饰 WAAPI 资源和唯一乱序超时通过 `useMotionActivity` 的幂等取消边界管理；值变化只经 `TxTextMorph`；词分段复用 `stream-text/src/segment.ts`，装饰字素分段直接调用 `Intl.Segmenter`（装饰播放不改变文字值，不复用 TextMorph 的值分段）；spring 曲线复用 `liquid/src/spring.ts`。
 - 打字按完整字素步进，不裁切半个字符。字距最终回到自然正文间距。两个共用上游 switch 分支的悬停目录 ID 仍可分别发现，但不虚构来源中不存在的不同轨迹。
-- 本页描述实现行为；集成、构建和真实浏览器验收由所属工作流统一执行，不在本页声称已通过。
 
 <TuffDocSourceLink />

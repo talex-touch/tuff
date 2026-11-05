@@ -79,7 +79,8 @@ code: |
 
 | Name | Description |
 |------|------|
-| `focus()` / `blur()` | Focuses or blurs the field. |
+| `focus()` | Focuses the field. |
+| `blur()` | Blurs the field. |
 | `clear()` | Empties the query and emits `clear`. |
 
 ### Types

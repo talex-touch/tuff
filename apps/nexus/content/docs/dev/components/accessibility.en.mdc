@@ -52,7 +52,7 @@ Token pairs that are easy to get wrong (a tinted badge on its own tint, a versio
 ---
 code: |
   <template>
-    <TxProgressBar :percentage="40" aria-label="Upload progress" />
+    <TxProgressBar :percentage="40" ariaLabel="Upload progress" />
   </template>
 ---
 :::

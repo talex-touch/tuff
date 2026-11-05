@@ -11,6 +11,8 @@ verified: true
 
 ## Usage
 
+The base bar, with indeterminate, loading, segmented, upload-detail, and tooltip modes; for a row-level percentage, use [Progress](/docs/dev/components/progress).
+
 ### States
 `status` sets the status color; `success` marks completion and `loading` marks work of unknown duration.
 :::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}

@@ -197,10 +197,8 @@ onBeforeUnmount(stop)
 
 ## 技术实现
 
-- 基于 `@xterm/xterm ^6.0.0`、`@xterm/addon-fit ^0.11.0` 与 `@xterm/addon-webgl ^0.19.0`（均为 MIT），样式已含在 `terminal/style.css`。
-- 默认用 WebGL2 绘制；不支持 WebGL2 或渲染模块加载失败时用 xterm 的 DOM 渲染器。Chromium 每个渲染进程只保留约 16 个 WebGL 上下文、超出时丢弃最早的，所以只有显示中的终端持有上下文：隐藏时释放，再次显示时重新申请；上下文丢失时立即改用 DOM 渲染，下次显示再试 WebGL。WebGL 按设备像素取整字宽，同宽容器可能比 DOM 渲染多出几列。
-- Alt + 方向键沿用 xterm 5 的按词移动序列：macOS 上 ⌥← / ⌥→ 发送 Meta-b / Meta-f，其他平台发送 Ctrl + 方向键序列；xterm 6 默认发送的 `ESC [1;3x` 多数 shell 没有绑定。
-- 颜色取自继承的 TuffEx 令牌并跟随主题与对比度变化；`ResizeObserver` 把适配合并到一帧。行列按宿主的内容区计算，覆盖 `.tx-terminal` 的 `padding` 不会让末行或最右几列被裁掉。
+- 基于 `@xterm/xterm ^6.0.0`、`@xterm/addon-fit ^0.11.0` 与 `@xterm/addon-webgl ^0.19.0`（均为 MIT），样式已含在 `terminal/style.css`；默认用 WebGL2 绘制，不支持或加载失败时回退到 xterm 的 DOM 渲染器。Alt + 方向键按 xterm 5 的按词序列发送。
+- 显示中的终端才持有 WebGL 上下文（Chromium 每进程约 16 个），隐藏时释放、再次显示时重新申请。`ResizeObserver` 把适配合并到一帧；颜色取自继承的 TuffEx 令牌，行列按内容区计算，覆盖 `.tx-terminal` 的 `padding` 不会裁掉末行。
 - 源码：`packages/tuffex/packages/components/src/terminal/`；进程会话见 `packages/utils/transport/sdk/domains/terminal.ts`。
 
 <TuffDocSourceLink />

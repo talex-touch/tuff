@@ -1,0 +1,142 @@
+---
+title: Search results
+description: A search results page with filters, paging, and an empty state.
+category: TemplateContent
+status: beta
+since: 0.9.3
+tags: [template, search, input, filter, pagination]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Search results
+:::TuffDemoWrapper{demo="TemplateSearchDemo" code-lang="vue" description="Debounced search, type and date filters, paging, and an empty state. Sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const PAGE_SIZE = 3
+  const query = ref('')
+  const applied = ref('')
+  const kind = ref('all')
+  const range = ref('any')
+  const page = ref(1)
+  const searchRef = ref<{ focus: () => void } | null>(null)
+
+  // The search field debounces its own search event, so the host keeps no timer.
+  const results = computed(() => filterHits(applied.value, kind.value, range.value))
+  const pageRows = computed(() => results.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+
+  // A new keyword, type or date range starts again from the first page.
+  watch([applied, kind, range], () => {
+    page.value = 1
+  })
+
+  // Shortcuts are bound on the template root, not window: app.vue owns ⌘K and / for the site.
+  function onRootKeydown(event: KeyboardEvent) {
+    const modifier = event.metaKey || event.ctrlKey
+    const focusKey = (modifier && event.key.toLowerCase() === 'k')
+      || (!modifier && event.key === '/' && !isTyping(event.target))
+    if (focusKey) {
+      event.preventDefault()
+      searchRef.value?.focus()
+    }
+  }
+
+  function resetFilters() {
+    query.value = ''
+    applied.value = ''
+    kind.value = 'all'
+    range.value = 'any'
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Search results" :height="580">
+      <div class="tpl-search" @keydown="onRootKeydown">
+        <TxSearchInput
+          ref="searchRef"
+          v-model="query"
+          remote
+          :search-debounce="220"
+          aria-label="Search Tuff docs and changelogs"
+          @search="applied = $event"
+        />
+
+        <div class="tpl-search__filters">
+          <TxFilterChips v-model="kind" :items="kindItems" aria-label="Filter by type" />
+          <TxFilterChips v-model="range" :items="rangeItems" aria-label="Filter by date" />
+        </div>
+
+        <TxSearchEmpty
+          v-if="!results.length"
+          size="small"
+          surface="card"
+          icon="i-carbon-search"
+          title="No matching results"
+          description="Try another keyword, or clear every filter."
+          :primary-action="{ label: 'Clear filters', icon: 'i-carbon-filter-remove' }"
+          @primary="resetFilters"
+        />
+
+        <ol v-else class="tpl-search__list">
+          <li v-for="hit in pageRows" :key="hit.id" class="tpl-search__item">
+            <div class="tpl-search__meta">
+              <span class="tpl-search__kind">{{ kinds[hit.kind] }}</span>
+              <span>{{ hit.source[lang] }}</span>
+              <time :datetime="hit.updatedAt">{{ formatDate(hit.updatedAt) }}</time>
+            </div>
+            <!-- Title and summary are split around the keyword; matches go in <mark> -->
+            <h3 class="tpl-search__title">{{ hit.title[lang] }}</h3>
+            <p class="tpl-search__summary">{{ hit.summary[lang] }}</p>
+          </li>
+        </ol>
+
+        <footer class="tpl-search__foot">
+          <span aria-live="polite">{{ results.length }} results</span>
+          <span><kbd>/</kbd> focus search</span>
+          <TxPagination
+            v-if="results.length"
+            v-model:current-page="page"
+            :page-size="PAGE_SIZE"
+            :total="results.length"
+            prev-icon="i-carbon-chevron-left"
+            next-icon="i-carbon-chevron-right"
+            aria-label="Result pages"
+          />
+        </footer>
+      </div>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+A results page for Tuff docs, plugins, and changelogs. One search field sits on top, type and date filters narrow the set, and paged results list the newest first with keywords highlighted.
+
+- Results update about 220 ms after typing, debounced by the search field itself. Enter searches at once, and clearing the field restores every result.
+- Counts on the type chips follow the keyword and the date range, not the chosen type, so the kinds can be compared.
+- Any change to the keyword, type, or date returns to page one. With no match, an empty state offers Clear filters to reset everything at once.
+- With focus inside the template, ⌘K and / focus this template's search field instead of opening the site search.
+- Expanded (≥ 960px), results form two columns. Below 640px, metadata wraps and summaries stay at two lines.
+
+## Customization
+
+- For a real index, replace the local array with API results. Send the keyword, type, and date together, and move paging to the server.
+- Tune `search-debounce` to the source. A local array can use a shorter delay. A remote API can use a longer one and cancel the previous request when a new one starts.
+- Derive chip counts from the results instead of hard-coding them. With many types, switch to a select so the chips do not wrap.
+- Highlighting splits plain text only. Do not build results into `v-html`. For rich summaries, sanitize first and render through TxMarkdownView.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Search field | [TxSearchInput](/docs/dev/components/search-input) | Debounced remote search, Enter to search, and clear |
+| Type and date filters | [TxFilterChips](/docs/dev/components/filter-chips) | Two single-select chip rows, with counts on types |
+| Empty state | [TxSearchEmpty](/docs/dev/components/search-empty) | No-result message and one-step filter reset |
+| Pagination | [TxPagination](/docs/dev/components/pagination) | Paging, kept in step with the total |

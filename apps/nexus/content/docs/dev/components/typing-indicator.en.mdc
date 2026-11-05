@@ -83,4 +83,4 @@ code: |
 - The `ai` variant draws through an SVG mask with a per-instance id, so several instances on a page don't collide.
 - Source: `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`.
 
-<TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/index.ts" />
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue" />

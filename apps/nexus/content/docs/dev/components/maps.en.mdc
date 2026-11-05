@@ -15,7 +15,7 @@ Both map components consume a GeoJSON `FeatureCollection` (the package ships no 
 
 ### Bubble map
 
-Click a bubble to select its original data row; a press that moves past 4 px pans the map instead. Drag the land to pan; ⌘/Ctrl + scroll or a pinch zooms around the pointer. Point labels render as text, not HTML.
+Clicking a bubble returns its data row, and point labels render as text, not HTML.
 
 :::TuffDemoWrapper{demo="MapsBubbleMapDemo" code-lang="vue" title="BubbleMap + pan and zoom" description="Bubble area is proportional to value; drag pans, ⌘/Ctrl + scroll zooms."}
 ---

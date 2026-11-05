@@ -109,7 +109,7 @@ code: |
 :::
 
 ### Read-Only
-`readonly` shows the form as a record: the controls take focus and can be copied but not changed, and no field is marked required. Submitting still works.
+`readonly` shows the form as a record: controls take focus and copy but cannot change, no field is marked required, and submitting still works.
 :::TuffDemoWrapper{demo="FormReadonlyDemo" code-lang="vue"}
 ---
 code: |
@@ -214,7 +214,7 @@ code: |
 :::
 
 ### Autosave
-`autosave` saves through `@submit` a second after editing pauses. Only the changed fields are checked: one with an error is saved once it is fixed, and the rest are saved without it.
+`autosave` saves through `@submit` a second after editing pauses, checking only the changed fields; one with an error saves once it is fixed.
 :::TuffDemoWrapper{demo="FormAutosaveDemo" code-lang="vue"}
 ---
 code: |
@@ -434,7 +434,7 @@ code: |
 :::
 
 ### Long Questionnaires
-`validate-on="submit"` lets people answer without interruption. On submit, `TxFormErrorSummary` lists every problem, each linking to its field.
+`validate-on="submit"` lets people answer uninterrupted, and on submit `TxFormErrorSummary` lists every problem, each linking to its field.
 :::TuffDemoWrapper{demo="FormSurveyDemo" code-lang="vue"}
 ---
 code: |
@@ -525,7 +525,7 @@ LifeCycle.onBeforeClose(flushTxForms)
 app.mount('#app')
 ```
 
-A plugin's drafts are its own; the host does not clear them. When a draft holds an account's data:
+A plugin's drafts are its own, and the host does not clear them; when a draft holds an account's data:
 
 - Use `user:<account id>` as the namespace, and `anon` when signed out; give `null` while the account is not known, and no draft is kept meanwhile.
 - When the account changes, remove every other account's drafts, then switch the namespace. Do it each time the plugin starts too: the account may have changed while it was not running.
@@ -572,7 +572,7 @@ usePluginAccount().onDidChange((session) => {
 | `id` | `string` | generated | The `<form>` element's id, and the prefix of every field id: `<id>-<prop>`. |
 | `model` | `Record<string, any>` | - | Reactive form data; items read their field by the `prop` path. |
 | `rules` | `FormRules` | - | Form-level rules keyed by field path. |
-| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator (Zod, Valibot, ArkType…) checked against the whole `model`. |
+| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator (Zod, Valibot, ArkType…) checked against the whole `model`. Issues with no matching field are listed in the error summary and block submit. |
 | `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | Field layout; `auto` is `side` once the form is 520px wide and `stacked` below that; `inline` suits filter bars. |
 | `labelPosition` | `'left' \| 'right' \| 'top'` | - | Older spelling of `layout`: `top` is `stacked`; `left` and `right` are `side` with that alignment. |
 | `labelAlign` | `'start' \| 'end'` | `'end'` | Label alignment in the side column; `start` by default with `labelPosition="left"`. |
@@ -587,12 +587,12 @@ usePluginAccount().onDidChange((session) => {
 | `persist` | `boolean \| FormPersistOptions` | `false` | Keeps what the user typed under `id`; `true` takes the defaults. |
 | `leaveConfirm` | `FormLeaveConfirm \| false` | host's, then `window.confirm` | Asked before leaving with changes no draft holds; `false` never asks, as for a filter. |
 | `autosave` | `boolean \| FormAutosaveOptions` | `false` | Saves through the `submit` handler once editing pauses, instead of on a submit button. Only the changed fields are checked; one with an error is saved once it is fixed. `true` waits a second. |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | Called once every check passes, with a copy of the values; a returned promise is awaited, and `submitting` is `true` meanwhile. `@submit` binds it. A successful submit makes the submitted values the baseline, unless the handler called `setBaseline()` itself. |
 
 #### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `submit` | `(values: FormValues, event?: Event)` | Called once every check passes, with a copy of the values; a returned promise is awaited, and `submitting` is `true` meanwhile. |
 | `submit-success` | `(values: FormValues)` | A submit or an autosave went through: every check passed, and the `submit` handler, when given, succeeded. |
 | `validate` | `(valid: boolean)` | Fires after `validate()` has checked every field. |
 | `persist-error` | `(error: unknown)` | A draft could not be read or written; fires once per run of failures. |
@@ -620,7 +620,7 @@ usePluginAccount().onDidChange((session) => {
 | `reset` | `() => void` | Restores `model` to the baseline and clears every message. |
 | `resetFields` | `() => void` | Older name of `reset()`. |
 | `setBaseline` | `(values?: FormValues) => void` | Makes fetched values the baseline; without them, the current `model` becomes the baseline. |
-| `setErrors` | `(errors: Record<string, string \| null \| undefined>, options?: { source?: 'server' \| 'client' }) => void` | Shows outside errors until the user edits the field; a `client` error also blocks submit. |
+| `setErrors` | `(errors: Record<string, string \| null \| undefined>, options?: { source?: 'server' \| 'client' }) => void` | Shows outside errors until the user edits the field; a `client` error also blocks submit. Errors for fields that are not mounted are kept and shown when the field mounts. |
 | `setRootError` | `(message?: string \| null) => void` | Sets or clears the form-level error. |
 | `clearValidate` | `(paths?: string \| string[]) => void` | Hides messages without changing `model`. |
 | `draft` | `FormDraftState` | Read-only; what the draft filled in or still offers, when it was written, whether writing fails. |
@@ -680,31 +680,6 @@ usePluginAccount().onDidChange((session) => {
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `messages.summaryTitle` | The summary's heading. |
-
-### useTxFormField
-
-| Name | Type | Description |
-|------|-----------|-------------|
-| `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | Connects a control to the item around it; `kind` decides how the label names the control. Returns `null` outside a form. |
-| `id` | `string \| undefined` | Read-only; the id the label points at. Only the first control in an item receives one. |
-| `labelId` / `label` | `string \| undefined` / `string` | Read-only; the id and text of the item's label. |
-| `describedBy` | `string \| undefined` | Read-only; the ids of the message or help text and of the hint, space-separated. |
-| `invalid` / `required` | `boolean` | Read-only; an error is showing; the field is required. |
-| `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | Read-only; the form's `disabled` and `size`. |
-| `readonly` | `boolean` | Read-only; the form's `readonly`: the control takes focus but keeps its value. |
-| `attrs` | `(host?: Record<string, unknown>) => Record<string, unknown>` | The control's merged attributes; those the control was given win, except `aria-describedby`, which keeps both. |
-
-### provideTxFormHost
-
-| Name | Type | Description |
-|------|-----------|-------------|
-| `provideTxFormHost` | `(host: TxFormHost, app?: App) => void` | Gives the forms below — or, with `app`, in the whole app — what the host decides. Call it in a component's `setup`. Also exported from `@talex-touch/tuffex/utils`, which does not load the form. |
-| `host.messages` | `MaybeRefOrGetter<Partial<FormMessages>>` | Text in the host's language; a ref or getter follows locale switches. |
-| `host.namespace` | `MaybeRefOrGetter<string \| null>` | Whose drafts these are, as `user:42`; `null` until that is known, and no draft is kept meanwhile. |
-| `host.storage` | `FormDraftStorage` | Where drafts go when `persist.storage` does not say. |
-| `host.leaveConfirm` | `FormLeaveConfirm` | Asks before leaving, for the forms without their own `leaveConfirm`. |
-| `flushTxForms` | `() => Promise<void>` | Writes every mounted form's pending draft, before the page goes without warning. |
-| `clearTxFormDrafts` | `(options?: { namespace?: string \| ((namespace: string) => boolean), storage?: FormDraftStorage }) => Promise<void>` | Removes the drafts, one namespace's, or those of every namespace the function accepts. |
 
 ### Types
 
@@ -789,27 +764,50 @@ usePluginAccount().onDidChange((session) => {
 | `--tx-form-control-height` | `32px` | Height of a one-line control, which labels line up with. |
 | `--tx-form-item-min` | `220px` | Narrowest an item in a `TxFormRow` gets before the row wraps; `110px` with `condensed`. |
 
+## Composables and host
+
+### useTxFormField
+
+| Name | Type | Description |
+|------|-----------|-------------|
+| `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | Connects a control to the item around it; `kind` decides how the label names the control. Returns `null` outside a form. |
+| `id` | `string \| undefined` | Read-only; the id the label points at. Only the first control in an item receives one. |
+| `labelId` / `label` | `string \| undefined` / `string` | Read-only; the id and text of the item's label. |
+| `describedBy` | `string \| undefined` | Read-only; the ids of the message or help text and of the hint, space-separated. |
+| `invalid` / `required` | `boolean` | Read-only; an error is showing; the field is required. |
+| `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | Read-only; the form's `disabled` and `size`. |
+| `readonly` | `boolean` | Read-only; the form's `readonly`: the control takes focus but keeps its value. |
+| `attrs` | `(host?: Record<string, unknown>) => Record<string, unknown>` | The control's merged attributes; those the control was given win, except `aria-describedby`, which keeps both. |
+
+### provideTxFormHost
+
+| Name | Type | Description |
+|------|-----------|-------------|
+| `provideTxFormHost` | `(host: TxFormHost, app?: App) => void` | Gives the forms below — or, with `app`, in the whole app — what the host decides. Call it in a component's `setup`. Also exported from `@talex-touch/tuffex/utils`, which does not load the form. |
+| `host.messages` | `MaybeRefOrGetter<Partial<FormMessages>>` | Text in the host's language; a ref or getter follows locale switches. |
+| `host.namespace` | `MaybeRefOrGetter<string \| null>` | Whose drafts these are, as `user:42`; `null` until that is known, and no draft is kept meanwhile. |
+| `host.storage` | `FormDraftStorage` | Where drafts go when `persist.storage` does not say. |
+| `host.leaveConfirm` | `FormLeaveConfirm` | Asks before leaving, for the forms without their own `leaveConfirm`. |
+| `flushTxForms` | `() => Promise<void>` | Writes every mounted form's pending draft, before the page goes without warning. |
+| `clearTxFormDrafts` | `(options?: { namespace?: string \| ((namespace: string) => boolean), storage?: FormDraftStorage }) => Promise<void>` | Removes the drafts, one namespace's, or those of every namespace the function accepts. |
+
 ## Drafts and Leaving
 
 - A draft fills in only the fields the user has not touched; a field saved again since waits in the notice, or goes to `reconcile` with `source: 'draft'`.
-- It is written 300ms after typing pauses, at least every 2 seconds while it goes on, and as the page hides; a successful submit or `reset()` deletes it.
+- It is written 300ms after typing pauses, at least every 2 seconds while typing goes on, and as the page hides; a successful submit or `reset()` deletes it.
 - Secrets stay out: password inputs, `TxSensitiveInput`, inputs whose `autocomplete` asks for a password, a one-time code or card details, items with `persist` off, and `exclude` paths. A field that once held one stays out.
 - Reloading or closing the page asks first only while a change is in no draft: without `persist`, in a secret field, or when a write has not landed.
-- A store that refuses a write leaves the draft in memory until one succeeds; a host namespace of `null`, or a form without `id`, keeps none.
-- When the namespace changes to another, as on sign-out, what the last person changed stays in the form but goes into no draft, and counts as unsaved until it is changed. `clearTxFormDrafts({ namespace })` removes that person's drafts.
-- A session can also end while the app is closed: once the current account is known, `clearTxFormDrafts({ namespace: ns => ns.startsWith('user:') && ns !== current })` removes every other account's drafts.
+- A store that refuses a write keeps the draft in memory until one succeeds; a host namespace of `null`, or a form without `id`, keeps no draft.
+- When the namespace changes to another, as on sign-out, edits left in the form go into no draft and count as unsaved until changed again; `clearTxFormDrafts({ namespace })` removes that person's drafts.
 
 ## Overview
 
-- Validity is computed as the values change; a message appears once the user changes a field and leaves it, and follows every edit after that. Switching to another window is not leaving. `validate()` and submit show every message.
-- Rules run in order and stop at the first error. The built-in checks pass an empty value, which only `required` rejects; empty means `undefined`, `null`, `''`, `false` or an empty array.
-- Async rules run after the synchronous ones pass, debounced 300ms while the user types; past one second the field shows `messages.validating`. The form's single polite live region announces their progress and result.
-- Submit validates, then calls the handler; the handler resolving `false`, throwing, or calling `setErrors()` / `setRootError()` counts as a failure. On success the submitted values become the baseline, unless the handler called `setBaseline()` itself. On failure focus moves to the error summary, or to the first field in error when there is none.
-- With `autosave`, a pause in editing checks only the changed fields: one that shows an error, or whose async check has not finished, keeps its saved value, and the rest are saved; the same polite live region announces the result. Submit and `confirmLeave()` save at once, and unmounting saves the changes that have passed their checks. A `disabled` or `readonly` form does not autosave.
-- With `readonly`, the required marks and `required` go too, since the user can no longer fill anything in; the values are still sent on submit.
-- An error for a field that is not mounted is kept and shows when the field mounts, as in a multi-step form; a `schema` issue no field shows is listed in the error summary and blocks submit.
-- The first control takes the id and the label's `for`; other controls point at the label with `aria-labelledby`, as do controls a `<label for>` cannot name, such as a radio group or a multiple select, once they hold the id. Messages are linked through `aria-describedby` and carry no `role="alert"`. The form's `size`, `disabled` and `readonly` also reach controls outside every item.
-- The `?` beside a label is a plain `<button type="button">`, named by `messages.hint` and described by the hidden hint text: hover or keyboard focus opens its popover, Escape closes it, and the pointer can move into the panel. The text is also kept in the DOM, visually hidden, and every control in the field lists it in `aria-describedby`, after the message or help text. Without a `label`, the `?` takes a line of its own; give the field a label to keep it beside text. In the side layout, one field with a `hint` widens the label column by about 20px, which moves the whole form's field column right.
+- Validity updates as values change; a message appears once the user changes a field and leaves it (switching windows is not leaving), then follows each edit. `validate()` and submit show every message.
+- Rules run in order and stop at the first error. Async rules run after the synchronous ones pass, debounce 300ms while typing, and show `messages.validating` past one second.
+- Submit validates, then calls the handler; a handler that returns `false`, throws, or calls `setErrors()` counts as a failure. On failure, focus moves to the error summary, or to the first field in error when there is none.
+- With `autosave`, a pause of about a second saves the changes, checking only the changed fields; a `disabled` or `readonly` form does not autosave. Submit and `confirmLeave()` save at once.
+- Controls are named by their label through `for` or `aria-labelledby`, and messages are linked through `aria-describedby`; no `role="alert"` is set.
+- The `?` beside a label is a plain button, named by `messages.hint`; hover or keyboard focus shows the `hint` text in a popover, Escape closes it, and the pointer can move into the panel.
 
 ## Technologies
 

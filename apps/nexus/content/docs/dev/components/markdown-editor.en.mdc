@@ -132,12 +132,9 @@ code: |
 
 ### Best Practices
 
-- Keep `sanitize=true` for content written by users or providers.
-- Use `https` or `data:` addresses for a custom emoji's `src`; with `sanitize` on (the default), addresses with other protocols, such as `tfile:` or `file:`, are stripped by the sanitizer and the image no longer shows.
-- Each emoji's `name` (its shortcode) is written into the document, so only add names and don't rename them: after a rename, the old `:name:` in documents turns back into text. A pack's `name` is only its tab label, so it can change freely.
-- Keep the `emojiPacks` reference stable: hold it in a `ref` or `const`, not as a literal array in the template. Each parent render that hands the editor a new array makes it rebuild the emoji index and re-render the whole document.
+- Keep `sanitize=true` for content written by users or providers; a custom emoji's `src` should use `https` or `data:`, since with `sanitize` on (the default), addresses with other protocols such as `tfile:` or `file:` are stripped.
+- Each emoji's `name` is written into the document, so add names but don't rename them: after a rename, the old `:name:` turns back into text. A pack's `name` is only its tab label. Keep the `emojiPacks` reference stable by holding it in a `ref` or `const`, since a new array on every parent render rebuilds the emoji index and re-renders the whole document.
 - Use a controlled `mode` or `v-model:comments-open` when the route or query stores it; to just reveal a thread, call `openComments(id)`.
-- In narrow editors such as comments or release notes, trim the toolbar with `toolbarActions` and turn off `slash` or `bubble` as needed.
 - Have `uploadImage` and `ai` honour `signal`: it aborts when the user deletes the placeholder, stops or discards.
 - If the host doesn't scan tuffex sources, add `MARKDOWN_EDITOR_ICON_CLASSES` from `src/toolbar-icons.ts` to the UnoCSS safelist.
 
@@ -147,7 +144,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `string` | `''` | The Markdown source. |
+| `modelValue` | `string` | `''` | The Markdown source, bound with `v-model`. |
 | `placeholder` | `string` | `''` | Placeholder in the editable modes. |
 | `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | Controlled mode. |
 | `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | Starting mode when uncontrolled. |
@@ -171,8 +168,8 @@ code: |
 | `bubble` | `boolean` | `true` | In WYSIWYG, selecting text floats a formatting bar. |
 | `ai` | `MarkdownEditorAi` | - | AI rewriting on the formatting bar; hidden without it. |
 | `uploadImage` | `MarkdownEditorUploadImage` | - | Uploads pasted, dropped or chosen images and returns their hosted address; without it, the image button asks for an address. |
-| `comments` / `v-model:comments` | `MarkdownEditorComment[]` | - | Comment threads; comments are hidden without it. |
-| `commentsOpen` / `v-model:comments-open` | `boolean` | - | Whether the comment sidebar is open; the editor keeps it when unbound. |
+| `comments` | `MarkdownEditorComment[]` | - | Comment threads, bound with `v-model:comments`; comments are hidden without it. |
+| `commentsOpen` | `boolean` | - | Whether the comment sidebar is open, bound with `v-model:comments-open`; the editor keeps it when unbound. |
 | `user` | `MarkdownEditorUser` | `{ id: 'local', name: labels.you }` | The local user: the author of comments, and who collaborators see. |
 | `collaboration` | `MarkdownEditorCollaboration` | - | Transport for real-time collaboration. |
 | `statusBar` | `boolean` | `true` | Word count, character count and collaborators at the bottom. |
@@ -294,15 +291,12 @@ The status bar counts with `markdownStats`, exported from `@talex-touch/tuffex/m
 
 ## Overview
 
-- Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds it. All three modes share one Markdown document; preview takes no typing and disables the formatting buttons, but its task boxes still toggle.
+- Passing `mode` makes the mode controlled; otherwise `defaultMode` seeds it. All three modes share one Markdown document. Preview takes no typing and disables the formatting buttons, but its task boxes still toggle.
 - WYSIWYG renders block by block; when the caret enters bold, a link, inline math or another format, its Markdown marks appear and can be edited in place. `/` at the start of a block (`、` with a Chinese input method) opens the block menu.
-- Type `:` to open completion, or press the toolbar's emoji button to open the picker. Its tabs run Recent, then each emoji pack with an accepted emoji, then the built-in categories; with nothing recent, the first pack opens. A custom emoji inserts `:name:`; a built-in one inserts its character.
-- A custom emoji's `name` takes lowercase letters, digits, `_`, `+` and `-`, 2 to 40 characters; an invalid entry is ignored. A name listed twice keeps its first entry, and a repeated pack `id` drops the later pack. A custom emoji with the same name as a built-in shortcode takes precedence, and the built-in one leaves the picker. `:name:` renders as an image (about 1.25em tall) in preview and WYSIWYG and as text in source mode; a name the set does not hold stays text, and when an image fails to load its alt text `:name:` shows.
-- Selecting text floats a bar with formats, highlight colours, link, comment and AI. The AI's answer streams in and can show its changes word by word; replace, insert it below, try again or discard. `Esc` discards and restores the selection.
-- An image goes in as a placeholder with progress, then becomes the address `uploadImage` returns; deleting the placeholder aborts the upload.
-- Every edit commits as a change set, which moves the undo history, comment ranges and collaborators' carets. The local caret is sent at most every 50 ms; a collaborator's name shows for 2.5 s after their caret moves.
-- Both editing modes share shortcuts: `Mod+B` bold, `Mod+I` italic, `Mod+E` inline code, `Mod+Shift+X` strikethrough, `Mod+Shift+H` highlight, `Mod+K` link, `Mod+Alt+1–6` headings (`Mod+Alt+0` back to a paragraph), `Mod+Alt+M` comment. The mode switcher is a `role="group"` of toggle buttons; `aria-pressed` marks the active mode.
-- `Esc` closes an open emoji or highlight-colour menu and claims the key (`preventDefault` in the document's capture phase), so a surrounding overlay that closes on an unclaimed `Esc` stays open. This holds while a highlight menu opened with the mouse leaves focus in the text.
+- Type `:` to open completion, or press the toolbar's emoji button for the picker. Its tabs run Recent, then each emoji pack with an accepted emoji, then the built-in categories. A custom emoji's `name` takes lowercase letters, digits, `_`, `+` and `-`, 2 to 40 characters, and an invalid entry is ignored; a custom emoji with a built-in shortcode's name takes precedence. `:name:` renders as an image in preview and WYSIWYG, and as text in source mode.
+- Selecting text floats a bar with formats, highlight colours, link, comment and AI. The AI answer streams in and can show its changes word by word; replace, insert below, try again or discard. `Esc` discards and restores the selection.
+- An image goes in as a placeholder with progress, then becomes the address `uploadImage` returns; deleting the placeholder aborts the upload. Every edit commits as a change set, which moves the undo history, comment ranges and collaborators' carets.
+- Both editing modes share shortcuts: `Mod+B` bold, `Mod+I` italic, `Mod+E` inline code, `Mod+Shift+X` strikethrough, `Mod+Shift+H` highlight, `Mod+K` link, `Mod+Alt+1–6` headings, `Mod+Alt+M` comment. The mode switcher is a `role="group"` of toggle buttons. `Esc` closes an open emoji or highlight menu and claims the key, so an enclosing overlay that closes on an unclaimed `Esc` stays open.
 
 ## Technologies
 

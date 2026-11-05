@@ -14,7 +14,7 @@ import type { TxSelectOption } from '@talex-touch/tuffex/select'
 import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { hasNavigator } from '@talex-touch/utils/env'
-import { computed, defineComponent, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, defineComponent, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TemplateFrame from './TemplateFrame.vue'
 
@@ -932,8 +932,26 @@ function rowClass(row: TableRow) {
 /* ─── Toast + undo ────────────────────────────────────────────────────── */
 
 const toast = reactive({ open: false, text: '', icon: 'i-carbon-checkmark-outline', undoable: false })
+const toastRef = ref<HTMLElement | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let undoSnapshot: Article[] | null = null
+
+// A pointer or focus on the toast holds it open, since it may carry Undo. The
+// timer checks again when it fires; leaving re-arms it for about two seconds.
+function toastHeld(): boolean {
+  const el = toastRef.value
+  return Boolean(el && (el.matches(':hover') || el.contains(document.activeElement)))
+}
+
+function scheduleToastClose(delay: number): void {
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    if (toastHeld())
+      return
+    toast.open = false
+    undoSnapshot = null
+  }, delay)
+}
 
 function notify(text: string, icon: string, snapshot: Article[] | null = null): void {
   undoSnapshot = snapshot
@@ -941,11 +959,25 @@ function notify(text: string, icon: string, snapshot: Article[] | null = null): 
   toast.icon = icon
   toast.undoable = Boolean(snapshot)
   toast.open = true
+  // Undo stays up for five seconds, a plain notice for four.
+  scheduleToastClose(snapshot ? 5000 : 4000)
+}
+
+function holdToast(): void {
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => {
-    toast.open = false
-    undoSnapshot = null
-  }, snapshot ? 5200 : 2600)
+}
+
+function onToastLeave(): void {
+  if (toast.open && !toastRef.value?.contains(document.activeElement))
+    scheduleToastClose(2000)
+}
+
+function onToastFocusOut(event: FocusEvent): void {
+  const next = event.relatedTarget
+  if (next instanceof Node && toastRef.value?.contains(next))
+    return
+  if (toast.open)
+    scheduleToastClose(2000)
 }
 
 function closeToast(): void {
@@ -1056,9 +1088,17 @@ function remove(ids: DataTableKey[]): Article[] {
   return snapshot
 }
 
+// Long enough for the row menu's leave transition to finish.
+const MENU_LEAVE_MS = 320
+const rootRef = ref<HTMLElement | null>(null)
+let menuRestoreFallback: string | null = null
+let menuRestoreTimer: ReturnType<typeof setTimeout> | undefined
+
 function onMenu(article: Article, action: 'edit' | 'duplicate' | 'publish' | 'archive' | 'remove'): void {
   if (action === 'edit')
     return openEditor(article)
+  // Read before the row changes: where focus goes if this row leaves the page.
+  menuRestoreFallback = adjacentRowId(article.id)
   if (action === 'duplicate')
     return duplicate(article)
   if (action === 'publish')
@@ -1232,6 +1272,43 @@ async function save(status?: Status): Promise<void> {
   notify(draft.isNew ? copy.value.created(title) : copy.value.saved(title), 'i-carbon-checkmark-outline', snapshot)
 }
 
+/* ─── Row menu focus ──────────────────────────────────────────────────── */
+
+// TxDropdownMenu does not hand focus back. After Esc or a chosen item, focus is
+// still in the leaving panel or has fallen to <body>. Stranded focus moves to
+// the row's trigger, else to the neighbouring row, else to the header checkbox.
+// Focus the reader put elsewhere, or a drawer that took it on purpose, stays put.
+function adjacentRowId(id: string): string | null {
+  const rows = pageRows.value
+  const index = rows.findIndex(row => row.id === id)
+  return rows[index + 1]?.id ?? rows[index - 1]?.id ?? null
+}
+
+function rowMenuTrigger(id: string | null): HTMLElement | null {
+  if (!id)
+    return null
+  return rootRef.value?.querySelector<HTMLElement>(`.cms-row-menu[data-row="${id}"] button`) ?? null
+}
+
+function giveRowFocusBack(id: string): void {
+  const active = document.activeElement
+  const stranded = !active || active === document.body || Boolean(active.closest('[role="menu"]'))
+  if (!stranded || drawerOpen.value)
+    return
+  const header = rootRef.value?.querySelector<HTMLElement>('.tx-data-table__th--select [role="checkbox"]')
+  const target = rowMenuTrigger(id) ?? rowMenuTrigger(menuRestoreFallback) ?? header
+  target?.focus({ preventScroll: true })
+}
+
+function onRowMenuClose(id: string): void {
+  void nextTick(() => giveRowFocusBack(id))
+  clearTimeout(menuRestoreTimer)
+  menuRestoreTimer = setTimeout(() => {
+    giveRowFocusBack(id)
+    menuRestoreFallback = null
+  }, MENU_LEAVE_MS)
+}
+
 /* ─── Reset ───────────────────────────────────────────────────────────── */
 
 function resetDemo(): void {
@@ -1251,6 +1328,7 @@ defineExpose({ resetDemo })
 onBeforeUnmount(() => {
   clearTimeout(fetchTimer)
   clearTimeout(toastTimer)
+  clearTimeout(menuRestoreTimer)
 })
 </script>
 
@@ -1258,7 +1336,7 @@ onBeforeUnmount(() => {
   <TemplateFrame :title="copy.frameTitle" :height="580">
     <template #default="{ width: stageW, height: stageH }">
       <StageSize :width="stageW" :height="stageH" @resize="onStageResize" />
-      <div class="cms" :class="`is-${mode}`">
+      <div ref="rootRef" class="cms" :class="`is-${mode}`">
         <header class="cms__head">
           <div class="cms__heading">
             <span class="cms__logo" aria-hidden="true"><span class="i-carbon-catalog" /></span>
@@ -1396,8 +1474,8 @@ onBeforeUnmount(() => {
               </template>
 
               <template #cell-actions="{ row }">
-                <span v-if="!row.skeleton" class="cms-row-menu" @click.stop>
-                  <TxDropdownMenu placement="bottom-end" :min-width="188">
+                <span v-if="!row.skeleton" class="cms-row-menu" :data-row="asArticle(row).id" @click.stop>
+                  <TxDropdownMenu placement="bottom-end" :min-width="188" @close="onRowMenuClose(asArticle(row).id)">
                     <template #trigger>
                       <TxIconButton
                         icon="i-carbon-overflow-menu-horizontal"
@@ -1443,7 +1521,16 @@ onBeforeUnmount(() => {
             </TxDataTable>
           </div>
 
-          <div class="cms__toast" :class="{ 'is-open': toast.open }">
+          <div
+            ref="toastRef"
+            class="cms__toast"
+            :class="{ 'is-open': toast.open }"
+            :inert="toast.open ? undefined : true"
+            @pointerenter="holdToast"
+            @pointerleave="onToastLeave"
+            @focusin="holdToast"
+            @focusout="onToastFocusOut"
+          >
             <TxToastPanel :open="toast.open" :stack="0" side="above" :tether-length="12" :aria-label="copy.toastLabel">
               <div class="cms-toast">
                 <span class="cms-toast__icon" :class="toast.icon" aria-hidden="true" />

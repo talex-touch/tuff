@@ -79,8 +79,8 @@ code: |
 ---
 code: |
   <template>
-    <TxTreeSelect v-model="key" :options="options" />
-    <TxTreeSelect disabled v-model="key" :options="options" />
+    <TxTreeSelect v-model="key" :nodes="nodes" />
+    <TxTreeSelect disabled v-model="key" :nodes="nodes" />
   </template>
 ---
 :::

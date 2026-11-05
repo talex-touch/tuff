@@ -43,7 +43,7 @@ Set `closable=false` when the message is page state and must not be dismissed.
 
 ```vue
 <template>
-  <TxAlert type="success" @close="dismissed = true">
+  <TxAlert type="success" close-label="Close" @close="dismissed = true">
     <template #title>
       Runtime evidence collected
     </template>
@@ -104,6 +104,7 @@ Set `closable=false` when the message is page state and must not be dismissed.
 |------|------|-------------|
 | `open` | `() => void` | Shows a dismissed alert again. |
 | `close` | `() => void` | Hides the alert and emits `close`. |
+| `visible` | `boolean` | Whether the alert is shown; the alert manages it itself, so use `open` and `close` from outside. |
 
 ## Overview
 
@@ -112,7 +113,7 @@ Set `closable=false` when the message is page state and must not be dismissed.
 - Clicking the close button hides the alert and emits `close`; a host can still drive it with `v-if`.
 - Only opacity and transform animate; height does not collapse. Wrap a stack in `<TransitionGroup>` to close the gap.
 - Under reduced motion, the alert only fades, without moving.
-- The close button is icon-only and carries `aria-label="Close"`.
+- The close button is icon-only; its `aria-label` is `closeLabel`, which defaults to `Close`.
 
 ## Technologies
 

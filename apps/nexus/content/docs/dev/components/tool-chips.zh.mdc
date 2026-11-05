@@ -85,7 +85,7 @@ const diffs = [
 | `rows` | `ToolChipRow[]` | — | 行数据，必填。 |
 | `diffs` | `ToolChipDiff[]` | `[]` | 差分数据；为空时差分区连同分隔线不渲染。 |
 | `summary` | `string` | — | 折叠头文案；不传时由 `summaryFormatter` 生成。 |
-| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call(s)` `` | 折叠头的默认文案，按数量处理单复数。 |
+| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call${n === 1 ? '' : 's'}` `` | 折叠头的默认文案，按数量处理单复数。 |
 | `open` | `boolean` | — | 整组展开状态，配合 `v-model:open`；不传则组件自持。 |
 | `defaultOpen` | `boolean` | `true` | 非受控时的初始展开状态。 |
 | `expandedRows` | `string[]` | — | 已展开行的 id，配合 `v-model:expandedRows`。 |

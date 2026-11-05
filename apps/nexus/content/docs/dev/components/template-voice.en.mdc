@@ -1,6 +1,6 @@
 ---
 title: Voice
-description: Voice notes that transcribe while recording and turn the recording into a summary and to-dos.
+description: Voice notes that transcribe while recording, then produce a summary and to-dos.
 category: TemplateAi
 status: beta
 since: 0.9.1
@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### Meeting notes
-:::TuffDemoWrapper{demo="TemplateVoiceDemo" code-lang="vue" description="Records a stand-up once in view, stops by itself after about 15 seconds, and writes a summary with to-dos; the record key or another recording hands it to you. No microphone; the audio is synthesized in the page. Sample data."}
+:::TuffDemoWrapper{demo="TemplateVoiceDemo" code-lang="vue" description="Records a stand-up once in view, stops by itself after about 15 seconds, and writes a summary with to-dos; the record key or another recording hands it to you."}
 ---
 code: |
   <script setup lang="ts">

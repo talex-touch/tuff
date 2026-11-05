@@ -1,6 +1,6 @@
 ---
 title: "SankeyChart"
-description: "Flow diagrams on the d3-sankey layout: gradient links, node value labels, drill affordances and slot tooltips."
+description: "Flow diagrams on the d3-sankey layout: gradient links and draggable nodes."
 category: Charts
 status: beta
 since: 0.1.0
@@ -78,7 +78,8 @@ code: |
 | `formatValue` | `(v: number) => string` | `toLocaleString` | Value formatter. |
 | `showTooltip` | `boolean` | `true` | Hover tooltip. |
 | `defaultNodeColor` | `string` | — | Fallback before the categorical palette. |
-| `left` / `right` | `number \| string` | `'5%'` | Layout insets (px or percent). |
+| `left` | `number \| string` | `'5%'` | Left layout inset (px or percent). |
+| `right` | `number \| string` | `'5%'` | Right layout inset (px or percent). |
 | `linkColor` | `'gradient' \| 'gray'` | `'gradient'` | Link fill mode. |
 | `linkOpacity` | `number` | `0.5` | Gradient link opacity. |
 | `labels` | `Partial<SankeyLabels>` | English | `{ instructions, value, items }`: `instructions` is read after each node's name; `value` names the tooltip's value row and `items` counts a drillable node's items. |

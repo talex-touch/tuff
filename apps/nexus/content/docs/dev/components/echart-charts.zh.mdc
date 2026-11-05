@@ -1,6 +1,6 @@
 ---
 title: "ECharts 图表家族"
-description: "Tuffex 的 ECharts 图表：主题化宿主 TxEChart，以及折线、柱状、饼图、漏斗、雷达、仪表盘、散点、热力图、矩形树图等类型化封装。"
+description: "ECharts 图表：主题化宿主与类型化封装"
 category: Charts
 status: beta
 since: 0.6.0
@@ -42,10 +42,8 @@ import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 | `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 跟随周围主题。 |
 | `ariaLabel` | `string` | — | 无障碍名称；同时在宿主上加 `role="img"`。 |
 | `loading` | `boolean` | `false` | 数据到达前的主题化 loading 遮罩。 |
-
-`update` 只存在于 `TxEChart`：`'replace'`（默认）整体替换series数组，被移除的series立即停止绘制；`'merge'` 保留 ECharts 自身的合并语义。
-
-`cooperativeWheel`（默认 `true`）存在于 `TxEChart` 以及会缩放的封装：折线、柱状、散点与矩形树图。见「指针输入」。
+| `update` | `'replace' \| 'merge'` | `'replace'` | 仅 `TxEChart`：`replace` 整体替换 series 数组，被移除的 series 停止绘制；`merge` 保留 ECharts 自身的合并语义。 |
+| `cooperativeWheel` | `boolean` | `true` | 普通滚轮滚动页面；`false` 把滚轮交还 ECharts。存在于 `TxEChart` 与可缩放的封装，见「指针输入」。 |
 
 ### Per-chart props
 
@@ -340,16 +338,14 @@ code: |
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/charts/src/echart/src/`。
-- option 构造器：`packages/tuffex/packages/components/src/charts/src/echart/src/options/`。
-- 主题与 token：`packages/tuffex/packages/components/src/charts/src/echart/src/core/theme.ts`。
-- 指针输入：`packages/tuffex/packages/components/src/charts/src/echart/src/core/interaction.ts`。
+- 组件源码与 option 构造器：`packages/tuffex/packages/components/src/charts/src/echart/src/`（构造器在 `options/`）。
+- 主题与指针输入：`core/theme.ts` 把 `--tx-chart-*` 解析成 canvas 可用的颜色，`core/interaction.ts` 处理滚轮与框选。
 - 改编自 Cloudflare kumo (https://github.com/cloudflare/kumo)，© Cloudflare, Inc.，MIT —— `EChart.tsx`。
 
-<TuffDocSourceLink />
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/charts/src/echart/index.ts" />
 
 ## 使用场景
 
-原生 SVG 家族（`TxChart`、`TxTimeseriesChart`、`TxSankeyChart`、`TxChoroplethMap`、`TxSparkChart`、`TxAllocationBar`）仍是默认选择：体积更小、走 CSS token 主题化、形状贴合产品真实要画的东西。当你需要原生家族没有的图表类型，或者想直接用 ECharts 自己的配置面——dataZoom、visualMap、自定义 series、逐点样式——就用 `TxEChart` 及其类型化封装。
+原生图表家族（`TxChart`、`TxTimeseriesChart`、`TxSankeyChart`、`TxChoroplethMap`、`TxSparkChart`、`TxAllocationBar`）仍是默认选择，其中 `TxSparkChart` 为 canvas，`TxAllocationBar` 为 DOM，其余为 SVG：体积更小、走 CSS token 主题化、形状贴合产品真实要画的东西。当你需要原生家族没有的图表类型，或者想直接用 ECharts 自己的配置面——dataZoom、visualMap、自定义 series、逐点样式——就用 `TxEChart` 及其类型化封装。
 
 两族读同一套颜色 token，所以把 ECharts 图放在原生图旁边，两种主题下都自动对齐，一个样式 prop 都不用传。

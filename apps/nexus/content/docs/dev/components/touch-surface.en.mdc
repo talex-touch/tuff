@@ -1,6 +1,6 @@
 ---
 title: TouchSurface
-description: Any surface that answers a hovering mouse or a finger like a drop of liquid glass.
+description: Any surface that flows like liquid glass under hover or touch.
 category: Effects
 status: beta
 since: 0.9.3

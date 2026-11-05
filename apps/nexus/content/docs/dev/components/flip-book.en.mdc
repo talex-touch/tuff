@@ -1,6 +1,6 @@
 ---
 title: "Flip book"
-description: "Caller-owned two-sided book pages that turn by dragging, DitherBook controls and the wider extracted-book preset with real paper settings."
+description: "Two-sided book pages that turn by dragging, with paper settings."
 category: MotionCarousels
 status: beta
 since: 0.7.0
@@ -114,7 +114,8 @@ The DitherBook editor ranges are padding 0–30, radius/crease 0–40 and shadow
 | --- | --- |
 | `#page` | `{ page, index, side }`; side is `left / right / front / back`. |
 | `#empty` | Content when there are no pages. |
-| `previous()` / `next()` | Turn a page using the source disabled/intro rules. |
+| `previous()` | Turn to the previous page using the source disabled/intro rules. |
+| `next()` | Turn to the next page using the source disabled/intro rules. |
 | `goTo(index)` | Request a page, respecting disabled/busy state and wrapping/clamping. |
 | `replayIntro()` | Replay the opening only when animated and not reduced; starts/resumes on visibility. |
 

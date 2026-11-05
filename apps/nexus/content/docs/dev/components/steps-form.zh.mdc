@@ -110,8 +110,6 @@ code: |
 
 #### 属性
 
-除 `autosave` 外，`TxForm` 的属性都可传入，如 `model`、`rules`、`layout`、`persist`、`leaveConfirm`、`readonly`。
-
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `active` | `number` | - | 显示的步骤，从 0 开始；用 `v-model:active` 绑定，或交给表单自己管理。 |
@@ -119,12 +117,36 @@ code: |
 | `nextText` | `string` | `'Next'` | 「下一步」按钮的文字。 |
 | `submitText` | `string` | `'Submit'` | 最后一步提交按钮的文字。 |
 
+#### 继承自 TxForm 的属性
+
+除 `autosave` 外，`TxForm` 的属性都可传入。
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | - | 表单 id，作为 `<form>` 与各字段 id 的前缀，也是草稿的键。 |
+| `model` | `FormValues` | - | 表单数据；`TxFormItem` 的 `prop` 指向其中的字段。 |
+| `rules` | `FormRules` | - | 按字段名给出的校验规则。 |
+| `schema` | `FormStandardSchema` | - | 对整个数据做校验的 Standard Schema v1 校验器，如 Zod、Valibot。 |
+| `layout` | `'stacked' \| 'side' \| 'auto' \| 'inline'` | `'auto'` | 标签布局；`auto` 在宽度不少于 520px 时用侧边标签。 |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | 旧写法的标签位置，`top` 等同 `stacked`，`left` 与 `right` 等同 `side`。 |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | 侧边标签列内的对齐；`labelPosition="left"` 时默认 `start`。 |
+| `labelWidth` | `string \| number` | - | 侧边标签列的最大宽度；所有标签更短时列更窄。 |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | - | 必填标记的显示方式。 |
+| `validateOn` | `'blur' \| 'submit'` | - | 字段首次显示消息的时机；显示后每次编辑都会重新校验。 |
+| `messages` | `Partial<FormMessages>` | - | 覆盖内置文案，如草稿提示与错误前缀。 |
+| `size` | `'small' \| 'medium' \| 'large'` | - | 传给表单内有尺寸的控件。 |
+| `disabled` | `boolean` | `false` | 禁用表单内读取表单状态的全部控件。 |
+| `readonly` | `boolean` | `false` | 只读展示：控件可聚焦、可复制但不可修改，且不标记必填；仍可提交。 |
+| `reconcile` | `FormReconcile` | - | 字段已被用户修改时，决定新到达的数据如何合并。 |
+| `persist` | `boolean \| FormPersistOptions` | - | 把输入保存为草稿，按 `id` 区分，刷新后恢复，包括当前步骤。 |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | - | 有未保存改动离开时是否询问；`false` 从不询问。 |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | 通过全部校验后调用的提交回调，等价于 `@submit`。 |
+
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
 | `update:active` | `(step: number)` | 前进、后退或因字段出错回到某一步时触发。 |
-| `submit` | `(values: FormValues, event?: Event)` | 最后一步提交、全部字段校验通过后调用。 |
 | `submit-success` | `(values: FormValues)` | 最后一步提交成功。 |
 | `validate` | `(valid: boolean)` | 同 `TxForm`。 |
 | `persist-error` | `(error: unknown)` | 同 `TxForm`。 |

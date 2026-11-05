@@ -48,6 +48,8 @@ export function detachFromFlow(container: HTMLElement, elements: HTMLElement[]) 
     HTMLElement,
     { left: number, top: number, width: number, height: number, opacity: number }
   >()
+  // Every read happens before any cancel. Cancelling dirties style, so a cancel between two
+  // reads makes each read pay for a fresh layout; batched, the reads share one.
   for (const child of elements) {
     if (child.tagName === 'BR')
       continue
@@ -57,9 +59,10 @@ export function detachFromFlow(container: HTMLElement, elements: HTMLElement[]) 
     const { tx, ty } = parseTranslate(child)
     const { width, height } = layoutSize(child)
     const opacity = Number(getComputedStyle(child).opacity) || 1
-    getAnimationsOf(child).forEach(a => a.cancel())
     snapshots.set(child, { left: x + tx, top: y + ty, width, height, opacity })
   }
+  for (const child of snapshots.keys())
+    getAnimationsOf(child).forEach(a => a.cancel())
 
   // BRs can't be animated, so they leave the flow before reconciliation.
   for (let i = elements.length - 1; i >= 0; i--) {

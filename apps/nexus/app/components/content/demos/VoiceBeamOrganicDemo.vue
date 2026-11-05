@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, type ComponentPublicInstance, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const { locale } = useI18n()
 const colorMode = useColorMode()
@@ -21,7 +21,9 @@ const copy = computed(() => (locale.value === 'zh'
 // A synthetic voice, so the demo does not ask for the microphone: syllables at
 // about 4.5 Hz, each at its own loudness, with a pause at the end of every phrase.
 const level = ref(0)
+const stage = ref<ComponentPublicInstance | null>(null)
 let raf = 0
+let observer: IntersectionObserver | null = null
 
 function tick(now: number) {
   const t = now / 1000
@@ -31,15 +33,43 @@ function tick(now: number) {
   raf = requestAnimationFrame(tick)
 }
 
-raf = requestAnimationFrame(tick)
+// The loop runs only while the demo is on screen; once its beams scroll away, nothing reads the level.
+function startLoop() {
+  if (!raf)
+    raf = requestAnimationFrame(tick)
+}
 
-onBeforeUnmount(() => cancelAnimationFrame(raf))
+function stopLoop() {
+  cancelAnimationFrame(raf)
+  raf = 0
+}
+
+onMounted(() => {
+  const el = stage.value?.$el as HTMLElement | undefined
+  if (!el || typeof IntersectionObserver === 'undefined') {
+    startLoop()
+    return
+  }
+  observer = new IntersectionObserver(([entry]) => {
+    if (entry?.isIntersecting)
+      startLoop()
+    else
+      stopLoop()
+  })
+  observer.observe(el)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+  stopLoop()
+})
 
 const getLevel = () => level.value
 </script>
 
 <template>
-  <TxFlex direction="column" gap="20px" class="voice-beam-organic-demo">
+  <TxFlex ref="stage" direction="column" gap="20px" class="voice-beam-organic-demo">
     <TxFlex direction="column" gap="8px">
       <span class="voice-beam-organic-demo__label">{{ copy.plain }}</span>
       <TxVoiceBeam :theme="beamTheme" :level="getLevel" :border-radius="16">

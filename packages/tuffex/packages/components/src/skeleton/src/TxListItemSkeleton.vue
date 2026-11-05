@@ -5,7 +5,7 @@ defineOptions({
 </script>
 
 <template>
-  <div class="tx-list-item-skeleton">
+  <div class="tx-list-item-skeleton" aria-hidden="true">
     <div class="tx-list-item-skeleton__icon" />
     <div class="tx-list-item-skeleton__content">
       <div class="tx-list-item-skeleton__name" />

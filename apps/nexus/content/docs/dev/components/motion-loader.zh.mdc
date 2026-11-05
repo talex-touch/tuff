@@ -1,6 +1,6 @@
 ---
 title: "动态加载器"
-description: "137 个源定义加载场景，支持独立播放、本地化和可见性控制。"
+description: "137 个源定义加载场景，支持独立播放与本地化"
 category: MotionLoaders
 status: beta
 since: 0.7.0

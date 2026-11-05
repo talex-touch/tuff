@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Basic
-A drawer keeps the page in view, which suits longer forms. Each open edits a copy of `initialValues`, and the drawer closes once the submit succeeds.
+A drawer keeps the page in view for longer forms; each open edits a copy of `initialValues`, and the drawer closes once the submit succeeds.
 ::::TuffDemoWrapper{demo="DrawerFormBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -70,7 +70,7 @@ code: |
 ::::
 
 ### Loading After Opening
-Open the drawer first, and hand the record to `initialValues` once it arrives. It becomes the saved state; fields the user has already changed keep their edits.
+Open the drawer first, and hand the record to `initialValues` once it arrives; it becomes the saved state, and fields the user has already changed keep their edits.
 
 ```vue
 <script setup lang="ts">
@@ -103,7 +103,7 @@ async function edit(id) {
 
 ### Props
 
-Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`, `messages`, `persist`, `leaveConfirm`, `readonly` and the rest.
+The `TxForm` props below apply too: the drawer builds `model` from `initialValues`, and `autosave` does not apply.
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
@@ -113,13 +113,29 @@ Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`
 | `submitText` | `string` | `'Save'` | Text of the submit button. |
 | `cancelText` | `string` | `'Cancel'` | Text of the cancel button. |
 | `drawerProps` | `Record<string, unknown>` | - | Any other `TxDrawer` prop, such as `size` or `direction`. Closing is asked of the form, not of `beforeClose`. |
+| `id` | `string` | generated | The form's id, and the prefix of every field id. |
+| `rules` | `FormRules` | - | Form-level rules keyed by field path. |
+| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator checked against the whole `model`; issues with no matching field are listed in the error summary. |
+| `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | Field layout. |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | Older spelling of `layout`. |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | Label alignment in the side column. |
+| `labelWidth` | `string \| number` | `16em` | Widest the side label column may grow; numbers are in pixels. |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | `'asterisk'` | Marks required fields with an asterisk, optional fields with `messages.optional`, or neither. |
+| `validateOn` | `'blur' \| 'submit'` | `'blur'` | When the first message appears: on leaving a changed field, or on the first submit. |
+| `messages` | `Partial<FormMessages>` | - | Overrides the built-in text. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size of the controls inside; the drawer width is `drawerProps.size`. |
+| `disabled` | `boolean` | `false` | Disables the controls inside that read the form, and blocks submit. |
+| `readonly` | `boolean` | `false` | Shows the values as a record: controls can be focused and copied, not changed; no field is marked required. |
+| `reconcile` | `FormReconcile` | - | Decides what `model` holds when fetched values reach fields the user changed. |
+| `persist` | `boolean \| FormPersistOptions` | `false` | Keeps what the user typed under `id`; `true` takes the defaults. |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | host's, then `window.confirm` | Asked before leaving with changes no draft holds; `false` never asks. |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | Called once every check passes; the drawer stays open until a returned promise settles. `@submit` binds it. |
 
 ### Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `update:visible` | `(value: boolean)` | The drawer opens or closes. |
-| `submit` | `(values: FormValues, event?: Event)` | Called once every check passes. The drawer stays open until a returned promise settles. |
 | `submit-success` | `(values: FormValues)` | The submit went through; the drawer closes next. |
 | `validate` | `(valid: boolean)` | As on `TxForm`. |
 | `persist-error` | `(error: unknown)` | As on `TxForm`. |

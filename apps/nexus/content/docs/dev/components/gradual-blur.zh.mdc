@@ -35,7 +35,7 @@ code: |
 ---
 :::
 
-### 方向
+### 位置
 `position` 选择边；左右两侧用 `width` 设置厚度。
 :::TuffDemoWrapper{demo="GradualBlurPositionsDemo" code-lang="vue"}
 ---
@@ -196,6 +196,7 @@ code: |
 - 覆盖层默认是 `pointer-events: none` 的装饰层；设置 `hoverIntensity` 后才接收指针。
 - `target="page"` 时，上下边默认占满视口宽度。
 - `animated="scroll"` 初始隐藏，用 `IntersectionObserver` 观察根节点，可见后淡入。
+- 每个实例各自绘制 `divCount` 层 `backdrop-filter`，同一页面上多个实例的成本会叠加。
 
 ## 技术实现
 

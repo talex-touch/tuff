@@ -48,7 +48,7 @@ code: |
 
 ### Per Suite
 
-The `base`, `pro`, and `ai` entries don't overlap; each component belongs to exactly one. Suite entries export named components only, and styles are imported per component.
+The `base`, `pro`, and `ai` entries don't overlap and export named components only, so Motion components come from `pro` and charts from `@talex-touch/tuffex/charts`.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -62,8 +62,6 @@ code: |
   app.use(TuffSwitch)
 ---
 :::
-
-Data and Motion suite components import from `pro`; the chart family also has its own `@talex-touch/tuffex/charts` entry.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -87,15 +85,13 @@ code: |
 
 ### Styles
 
-Styles are not injected by JavaScript.
+Styles are not injected by JavaScript, and [Theming](./theming.en.mdc) covers token overrides.
 
 | Stylesheet | Contents | Required |
 |----------|------|----------|
 | `@talex-touch/tuffex/base.css` | `--tx-*` variables, reset, theme selectors | Yes, once per app |
 | `@talex-touch/tuffex/<name>/style.css` | One component's styles | For each component you use |
 | `@talex-touch/tuffex/style.css` | All component styles | Root entry only |
-
-To override tokens, see [Theming](./theming.en.mdc).
 
 ### Utils
 

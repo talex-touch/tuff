@@ -1,6 +1,6 @@
 ---
 title: "三维轮播"
-description: "弧线、CoverFlow 和 Time Machine 独立轨迹，支持彩色、单色内容、受控当前项、拖动和时间轴。"
+description: "弧线、CoverFlow 与时间机器三维轨迹"
 category: MotionCarousels
 status: beta
 since: 0.7.0
@@ -110,7 +110,8 @@ code: |
 | `#item` | `{ item, index, active }`；替换卡片内容。 |
 | `#caption` | `{ item, index, active: true }`；替换当前标题。 |
 | `#empty` | 空数组内容。 |
-| `previous()` / `next()` | 与按钮共用边界、循环和禁用规则。 |
+| `previous()` | 与按钮共用边界、循环和禁用规则，移到上一项。 |
+| `next()` | 与按钮共用边界、循环和禁用规则，移到下一项。 |
 | `select(index)` | 对索引取整，再按边界或循环规则选择。 |
 
 方向键选择相邻项，Home 和 End 选择首尾项。原生按钮支持 Enter 和 Space。范围滑块保留原生键盘操作。当前标题以礼貌方式播报，选择不会意外移动焦点。拖动不增加也不改变键盘行为：拖动不会触发结束位置下卡片的点击，聚焦卡片上的 Enter 和 Space 仍会选择它。

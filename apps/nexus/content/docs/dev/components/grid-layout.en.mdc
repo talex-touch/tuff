@@ -94,7 +94,7 @@ code: |
 
 ## Technologies
 
-- On pointer move, each `.tx-grid-layout__item` gets the spotlight variables, which its `::before` radial gradient reads.
+- On pointer move, the next frame reads each item's position once, then writes the spotlight variables that each `.tx-grid-layout__item`'s `::before` radial gradient reads.
 - Source: `packages/tuffex/packages/components/src/grid-layout/`.
 
 <TuffDocSourceLink />

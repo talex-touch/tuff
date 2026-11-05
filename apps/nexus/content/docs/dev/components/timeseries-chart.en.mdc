@@ -1,6 +1,6 @@
 ---
 title: "TimeseriesChart"
-description: "Time-series lines and stacked bars: clustered markers, threshold lines, zoom and range brushing, full tooltips."
+description: "Time-series lines and stacked bars: markers, thresholds, zoom and brushing."
 category: Charts
 status: beta
 since: 0.1.0
@@ -74,9 +74,12 @@ code: |
 | `type` | `'line' \| 'bar'` | `'line'` | Bars stack automatically. |
 | `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`. |
 | `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`; the y domain extends to cover them. |
-| `xAxisName` / `yAxisName` | `string` | — | Axis names. |
-| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | Suggested tick counts. |
-| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | Tick formatters. Without `xAxisTickFormat`, time ticks use d3's default format, which is English. |
+| `xAxisName` | `string` | — | X-axis name. |
+| `yAxisName` | `string` | — | Y-axis name. |
+| `xAxisTickCount` | `number` | `5` | Suggested X-axis tick count. |
+| `yAxisTickCount` | `number` | `5` | Suggested Y-axis tick count. |
+| `xAxisTickFormat` | `(v: number) => string` | — | X-axis tick formatter. Without it, time ticks use d3's default format, which is English. |
+| `yAxisTickFormat` | `(v: number) => string` | — | Y-axis tick formatter. |
 | `yAxisMinInterval` | `number` | — | Minimum interval between y-axis ticks (ECharts `yAxis.minInterval`): closer ticks drop, the lowest and highest always stay, and integer ticks stop printing as `1.0` when set to `1`. |
 | `tooltipValueFormat` | `(v: number) => string` | raw value | Tooltip value formatter. |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` shows only the series closest to the cursor's y value. |
@@ -88,6 +91,7 @@ code: |
 | `gradient` | `boolean` | `false` | Gradient fill under lines. |
 | `loading` | `boolean` | `false` | Skeleton state. |
 | `highlightedSeries` | `string \| null` | — | Emphasized series; the rest dim to 10% opacity. |
+| `hiddenSeries` | `string[]` | `[]` | Names of hidden series: not drawn and left out of the tooltip. Bind with `v-model:hidden-series`. |
 | `height` | `number` | `350` | Pixel height. |
 | `width` | `number` | measured | Explicit width (SSR/tests). |
 | `ariaDescription` | `string` | — | Accessible name of the chart (svg `role="group"`, with the key instructions as its description); falls back to `labels.chart`. |
@@ -230,7 +234,7 @@ The chart reuses ECharts' default timings (kumo pins `echarts ^6.0.0`):
 - First render: lines/areas reveal left to right through a clip, 1000ms `easings.linear`; bars grow out of the base axis (y lerps from `baseY` to the target, height 0 → target) and scatter symbols scale 0 → radius while fading in, all 1000ms cubicInOut.
 - Data updates: geometry morphs over 500ms cubicInOut.
 - State switches (emphasis / blur): applied on the frame the pointer arrives, not over ECharts' 300ms cubicOut (TuffEx's hover rule).
-- `animationThreshold` 2000: a series with more points than that renders its final geometry with no animation.
+- `ANIMATION_THRESHOLD` 2000 (an exported constant, not a prop): a series with more points than that renders its final geometry with no animation.
 - Tooltip: closing waits 100ms, then fades out over 200ms and removes the DOM, so brief pointer excursions do not flicker; the position travels via `transform: translate3d()` and lets the browser interpolate the 400ms move (`cubic-bezier(0.23, 1, 0.32, 1)`); pointer tracking is throttled to 50ms, taking one leading and one trailing sample.
 - The plot outside the brush selection dims while dragging and restores on release — see the single `<mask>` above.
 - Zoom: a brush, a mouse wheel and the keys move to the new window on a critically damped spring (0.35s response); a trackpad pinch and a pan track the pointer 1:1, and a pan glides on release at the speed it was let go.

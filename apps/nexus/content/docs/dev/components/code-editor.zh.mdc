@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 语言
-`language` 选择语言。JSON 与 YAML 支持格式化与校验，其余语言只有高亮与基础编辑。
+`language` 选择语言；只有 JSON 与 YAML 支持格式化与校验，其余语言只有高亮与基础编辑。
 ::::TuffDemoWrapper{demo="CodeEditorCodeEditorDemo" code-lang="vue"}
 ---
 code: |

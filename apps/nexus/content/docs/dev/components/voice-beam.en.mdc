@@ -17,13 +17,14 @@ Wrap exactly one element that carries its own radius; feed it a microphone `stre
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
   const colorMode = useColorMode()
   const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
 
-  // Without a microphone, drive the beam with a per-frame level getter.
+  // Without a microphone, drive the beam with a per-frame level getter; it runs only while on screen.
   const level = ref(0.5)
+  const stage = ref<HTMLElement | null>(null)
   let raf = 0
   let t = 0
   function tick() {
@@ -31,18 +32,29 @@ code: |
     level.value = 0.35 + 0.32 * Math.abs(Math.sin(t * 1.7))
     raf = requestAnimationFrame(tick)
   }
-  raf = requestAnimationFrame(tick)
-  onBeforeUnmount(() => cancelAnimationFrame(raf))
+  // Start on entering the viewport, stop on leaving it
+  const observer = new IntersectionObserver(([entry]) => {
+    cancelAnimationFrame(raf)
+    if (entry?.isIntersecting)
+      raf = requestAnimationFrame(tick)
+  })
+  onMounted(() => observer.observe(stage.value!))
+  onBeforeUnmount(() => {
+    observer.disconnect()
+    cancelAnimationFrame(raf)
+  })
   </script>
 
   <template>
-    <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
-      <TxCard :radius="16" :padding="24" shadow="none">Ask anything…</TxCard>
-    </TxVoiceBeam>
+    <div ref="stage">
+      <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
+        <TxCard :radius="16" :padding="24" shadow="none">Ask anything…</TxCard>
+      </TxVoiceBeam>
 
-    <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
-      <TxCard :radius="16" :padding="24" shadow="none">Transcribing…</TxCard>
-    </TxVoiceBeam>
+      <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
+        <TxCard :radius="16" :padding="24" shadow="none">Transcribing…</TxCard>
+      </TxVoiceBeam>
+    </div>
   </template>
 ---
 :::

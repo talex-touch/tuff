@@ -20,9 +20,11 @@ code: |
   const code = ref('')
   const busy = ref(true)
 
-  for await (const delta of stream)
-    code.value += delta
-  busy.value = false
+  onMounted(async () => {
+    for await (const delta of stream)
+      code.value += delta
+    busy.value = false
+  })
   </script>
 
   <template>
@@ -66,7 +68,7 @@ code: |
 :::
 
 ### 渲染预览
-`html`、`svg`、`xml` 代码在停止输出后，头部出现「预览」开关，点击用沙箱 `iframe` 渲染成页面，再点回源码。流式输出中、diff 模式下不出现。`auto-preview` 让代码一结束就直接打开渲染结果，读者仍可切回源码。
+`html`、`svg`、`xml` 代码停止输出后，头部出现「预览」开关，在沙箱 `iframe` 中渲染，再点回源码；流式与 diff 模式下不出现，`auto-preview` 则在代码结束时直接显示渲染结果。
 :::TuffDemoWrapper{demo="CodeStreamPreviewDemo" code-lang="vue"}
 ---
 code: |
@@ -83,7 +85,7 @@ code: |
 :::
 
 ### 统一 Diff
-传 `diff` 渲染统一 diff。被删行与替换它的新增行共用行号，所以行号逐行给出。
+传 `diff` 渲染统一 diff；被删行与替换它的新增行共用行号，所以行号逐行给出。
 :::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
 ---
 code: |

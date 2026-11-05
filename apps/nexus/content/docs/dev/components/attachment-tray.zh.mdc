@@ -69,7 +69,8 @@ code: |
 | `previewTitle` | `string` | `'Preview'` | 预览对话框的可访问名称，后接图片的 `name`；未设 `openLabelFormatter` 时也是每个缩略图可访问名称的开头。 |
 | `previousLabel` | `string` | `'Previous image'` | 上一张按钮的可访问名称。 |
 | `nextLabel` | `string` | `'Next image'` | 下一张按钮的可访问名称。 |
-| `previousText` / `nextText` | `string` | — | 已弃用，不再显示：预览的翻页按钮只有图标，名称取 `previousLabel` / `nextLabel`。 |
+| `previousText` | `string` | — | 已弃用，不再显示：预览的上一张按钮只有图标，名称取 `previousLabel`。 |
+| `nextText` | `string` | — | 已弃用，不再显示：预览的下一张按钮只有图标，名称取 `nextLabel`。 |
 | `closeLabel` | `string` | `'Close'` | 预览关闭按钮的可访问名称。 |
 | `zoomInLabel` | `string` | `'Zoom in'` | 预览放大按钮的可访问名称。 |
 | `zoomOutLabel` | `string` | `'Zoom out'` | 预览缩小按钮的可访问名称。 |

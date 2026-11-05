@@ -103,7 +103,7 @@ code: |
 :::
 
 ### 背景材质
-`background` 选择表面材质，取值与 [BaseSurface](/docs/dev/components/base-surface) 的 `mode` 相同，默认且推荐 `refraction`。折射默认不跑 SVG 位移层；背景有内容、要看到折射时传 `refraction-renderer="svg"`，强弱用 `refraction-glass-opacity` 调。
+`background` 选择表面材质，取值与 [BaseSurface](/docs/dev/components/base-surface) 的 `mode` 相同，默认且推荐 `refraction`；折射默认不跑 SVG 位移层，需要时传 `refraction-renderer="svg"`，强弱用 `refraction-glass-opacity` 调。
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -119,7 +119,7 @@ code: |
 :::
 
 ### 动态反光
-`specular` 在暗色主题下给卡片加一团跟随指针的微光：表面上是一层 600px 的白色径向光（6%，到 40% 处淡尽），经过边框时，边框那一圈再闪过一道 240px 的窄光。光斑按指数平滑追上指针，移入时直接在指针处亮起，移出后 240ms 淡出；开启减弱动态效果时光斑直接跳到指针处。浅色主题与高对比度下不绘制，`dashed` 边框不画边缘那一圈。不传时跟随 `clickable`，禁用时关闭。各参数的由来见《[Alpha 噪点掩膜与光斑追踪](/docs/dev/concepts/noise-and-specular)》。
+`specular` 在暗色主题下让卡片表面的微光跟随指针，经过边框时闪过一道窄光；浅色主题与高对比度下不绘制，`dashed` 边框没有窄光，参数来源见《[Alpha 噪点掩膜与光斑追踪](/docs/dev/concepts/noise-and-specular)》。
 :::TuffDemoWrapper{demo="ConceptCardSpecularDemo" code-lang="vue"}
 ---
 code: |

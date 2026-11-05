@@ -1,6 +1,6 @@
 ---
 title: "Motion loader"
-description: "137 source-defined loading scenes with independent playback, localization and visibility-aware motion."
+description: "137 source-defined loading scenes with independent playback and localization."
 category: MotionLoaders
 status: beta
 since: 0.7.0

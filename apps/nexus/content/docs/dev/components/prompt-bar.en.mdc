@@ -59,7 +59,7 @@ code: |
 - Dictation is presentation only; recognize speech in the host and write the result back with `insert()` or the `v-model`.
 - Pass brand glyphs through the `#source-icon` slot; the component ships no third-party SVGs.
 - Menus are absolutely positioned against the bar, so an `overflow: hidden` ancestor clips them and they never flip; keep the bar out of clipping scroll containers.
-- When you want a block composer without menus, use `TxChatComposer`.
+- When you want a block composer without menus, use [ChatComposer](/docs/dev/components/chat-composer) (`TxChatComposer`).
 
 ## API Reference
 
@@ -86,8 +86,20 @@ code: |
 | `sendOnEnter` | `boolean` | `true` | Enter sends; Shift+Enter breaks the line. |
 | `allowEmptySend` | `boolean` | `false` | Allows sending with neither text nor attachments. |
 | `clearOnSend` | `boolean` | `true` | Empties the draft on send; off, the text stays until the host clears it. |
+| `sourcesHintText` | `string` | `'Type to search sources & files'` | Hint text in the `@` menu when there is no query. |
+| `commandsHintText` | `string` | `'Type to search commands'` | Hint text in the `/` menu when there is no query. |
+| `emptyTextFormatter` | `(query: string) => string` | `` `` (query) => `No matches for "${query}"` `` `` | Text shown when a menu has no match; receives the query. |
+| `connectText` | `string` | `'Connect'` | Label on an unconnected connectable row. |
+| `connectedText` | `string` | `'Connected'` | Label on a connected row. |
+| `sendLabel` | `string` | `'Send'` | Accessible name of the send key. |
+| `attachLabel` | `string` | `'Add attachments and sources'` | Accessible name of the attach button. |
+| `modelLabel` | `string` | `'Choose model'` | Accessible name of the model button. |
+| `startDictationLabel` | `string` | `'Start dictation'` | Accessible name of the dictation button while idle. |
+| `stopDictationLabel` | `string` | `'Stop dictation'` | Accessible name of the dictation button while listening. |
+| `attachmentFallbackLabel` | `string` | `'Attachment'` | Chip text for an attachment with no name. |
+| `removeAttachmentLabelFormatter` | `(name: string) => string` | `` `` (name) => `Remove ${name}` `` `` | Accessible name of an attachment's remove control; receives the name. |
 
-Every string is a prop with an English default, overridable one by one: `sourcesHintText`, `commandsHintText`, `emptyTextFormatter`, `connectText`, `connectedText`, `sendLabel`, `attachLabel`, `modelLabel`, `startDictationLabel`, `stopDictationLabel`, `attachmentFallbackLabel`, `removeAttachmentLabelFormatter`.
+Every string is a prop with an English default, overridable one by one; the table above lists them.
 
 `PromptBarSource` is `{ key, name, desc?, attach?, connectable?, connected? }`; `PromptBarCommand` is `{ key, name, desc? }`; `PromptBarModel` is `{ key, name, tag? }`.
 
@@ -106,7 +118,8 @@ Every string is a prop with an English default, overridable one by one: `sources
 | `commandSelect` | `(command: PromptBarCommand)` | Fires after a command is inserted. |
 | `connectToggle` | `(source: PromptBarSource)` | Fires when an unconnected connectable row is activated. |
 | `paste` | `(event: ClipboardEvent)` | The raw paste event; the default isn't prevented. |
-| `focus` / `blur` | `(event: FocusEvent)` | Fire on textarea focus changes. |
+| `focus` | `(event: FocusEvent)` | Fires when the textarea gains focus. |
+| `blur` | `(event: FocusEvent)` | Fires when the textarea loses focus. |
 
 ### Slots
 

@@ -1,6 +1,6 @@
 ---
 title: Workbench
-description: A plugin workbench with a file tree, a code editor, a terminal, and a hot-reload preview.
+description: A plugin workbench with a file tree, code editor, terminal, and hot-reload preview.
 category: TemplateApp
 status: beta
 since: 0.9.1

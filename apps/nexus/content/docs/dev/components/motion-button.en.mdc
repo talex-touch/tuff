@@ -225,22 +225,9 @@ Exports include `MotionButtonProps`, `MotionButtonEmits`, `MotionButtonInstance`
 | `expand-ring` | Glyph scales to 1.1; the separate outline expands 1 → 1.15 and fades out over 600 ms. |
 | `focus-blur` | Other real links/buttons blur and dim; the active item's dashed brackets use a 350/20 spring from 1.3 → 1.1 scale. |
 
-## Overview
+## Source mapping
 
-- Explicit `variant`, icons, colors and `holdDuration` override `sourceId`. Source metadata labels are attribution only and never become implicit application copy.
-- Hover, focus, pointer press and replay drive decoration. `selected` holds a target icon and enables `activeLabel`; it remains caller-owned. The original hover-based “Copied” business claim is intentionally not ported.
-- Decoration uses pointer-inert content/layers. Normal controls remain native buttons/anchors, and focus-blur items remain individual native controls with visible keyboard outlines. Disabled anchors have no `href`, no tab stop and no emitted activation.
-- Native form submission/reset and link navigation are not replaced by JavaScript keyboard emulation. Enter/Space pressed decoration follows the native element's supported keys.
-- One shared activity gate stops CSS loops, pending replay frames, retention/replay timers, magnetic RAF work and icon/text morph work when inactive. SSR touches no browser APIs. Reduced motion keeps readable content and static endpoint state.
-- Replay is a visual operation: it paints a rest pose before re-entering the same path. Magnetic replay samples the control's size once and uses the same pull/return spring; focus-blur replay emphasizes the first enabled item.
-
-## Technologies
-
-- Upstream: [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
-- Behavioral sources: `src/components/AnimatedButton.tsx:39–415`, `src/data/buttons.tsx:43–77`, `src/components/cards/FocusBlur.tsx:17–73`. Registry `hover/magnetic-button.tsx` and `hover/glow-button.tsx` were reviewed; their standalone registry variants belong to the Motion interaction family.
-- Original glyphs come from the upstream lockfile's pinned [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE). All 46 SVG icons retain their source nodes and geometry attributes; only React keys are omitted. The ISC and Feather-derived MIT notices are preserved in full in `icons.ts`'s `@license` header.
-- TuffEx implementation: `motion-button/src/TxMotionButton.vue`, `catalog.ts`, `icons.ts` and `MotionButtonGlyph.vue`. Stroke changes reuse IconMorph, value changes reuse TextMorph, and physics/lifecycle reuse the existing shared spring and `useMotionActivity`. An activity-boundary key destroys the old morph controller rather than merely changing its reduced-motion flag.
-- The table below preserves all 35 actual combinations; these IDs change glyphs, interaction parameters, fills and retention, not just labels. The fixed labels are source metadata; the caller supplies rendered copy.
+The table below preserves all 35 actual combinations; these IDs change glyphs, interaction parameters, fills and retention, not just labels. The fixed labels are source metadata; the caller supplies rendered copy.
 
 | Source ID | Source combination | Interaction | Glyphs | Source |
 | --- | --- | --- | --- | --- |
@@ -279,5 +266,20 @@ Exports include `MotionButtonProps`, `MotionButtonEmits`, `MotionButtonInstance`
 | `33` | Magnetic Field | magnetic | GitHub and pointer pull | `buttons.tsx:75` |
 | `34` | Expand Ring | expand-ring | Link and separate expanding outline | `buttons.tsx:76` |
 | `35` | Focus Blur Links | focus-blur | Caller-owned link/button group | `buttons.tsx:77` |
+
+## Overview
+
+- Explicit `variant`, icons, colors and `holdDuration` override `sourceId`. Source metadata labels are attribution only and never become implicit application copy.
+- Hover, focus, pointer press and replay drive decoration. `selected` holds a target icon and enables `activeLabel`; it remains caller-owned. The original hover-based “Copied” business claim is intentionally not ported.
+- Decoration uses pointer-inert content/layers. Normal controls remain native buttons/anchors, and focus-blur items remain individual native controls with visible keyboard outlines. Disabled anchors have no `href`, no tab stop and no emitted activation.
+- Native form submission/reset and link navigation are not replaced by JavaScript keyboard emulation. Enter/Space pressed decoration follows the native element's supported keys.
+- One shared activity gate stops CSS loops, pending replay frames, retention/replay timers, magnetic RAF work and icon/text morph work when inactive. SSR touches no browser APIs. Reduced motion keeps readable content and static endpoint state.
+- Replay is a visual operation: it paints a rest pose before re-entering the same path. Magnetic replay samples the control's size once and uses the same pull/return spring; focus-blur replay emphasizes the first enabled item.
+
+## Technologies
+
+- Upstream: [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.Original glyphs come from the upstream lockfile's pinned [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE). All 46 SVG icons retain their source nodes and geometry attributes; only React keys are omitted. The ISC and Feather-derived MIT notices are preserved in full in `icons.ts`'s `@license` header.
+- Behavioral sources: `src/components/AnimatedButton.tsx:39–415`, `src/data/buttons.tsx:43–77`, `src/components/cards/FocusBlur.tsx:17–73`. Registry `hover/magnetic-button.tsx` and `hover/glow-button.tsx` were reviewed; their standalone registry variants belong to the Motion interaction family.
+- TuffEx implementation: `motion-button/src/TxMotionButton.vue`, `catalog.ts`, `icons.ts` and `MotionButtonGlyph.vue`. Stroke changes reuse IconMorph, value changes reuse TextMorph, and physics/lifecycle reuse the existing shared spring and `useMotionActivity`. An activity-boundary key destroys the old morph controller rather than merely changing its reduced-motion flag.
 
 <TuffDocSourceLink />

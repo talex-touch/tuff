@@ -19,15 +19,15 @@ function onMutate(mutated: boolean) {
   <div class="miko-basic-demo">
     <div class="miko-basic-demo__row">
       <div class="miko-basic-demo__item">
-        <span class="miko-basic-demo__label">XS (24px)</span>
+        <span class="miko-basic-demo__label">XS (22px)</span>
         <TxMiko size="xs" :state="currentState" />
       </div>
       <div class="miko-basic-demo__item">
-        <span class="miko-basic-demo__label">SM (32px)</span>
+        <span class="miko-basic-demo__label">SM (30px)</span>
         <TxMiko size="sm" :state="currentState" />
       </div>
       <div class="miko-basic-demo__item">
-        <span class="miko-basic-demo__label">MD (48px)</span>
+        <span class="miko-basic-demo__label">MD (50px)</span>
         <TxMiko size="md" :state="currentState" />
       </div>
       <div class="miko-basic-demo__item">

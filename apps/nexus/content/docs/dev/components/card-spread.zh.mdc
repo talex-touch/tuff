@@ -1,6 +1,6 @@
 ---
 title: "卡片展开"
-description: "内容驱动的九种展开几何与聚焦模糊链接，支持选择、抽出卡片、邮票参数和键盘操作。"
+description: "九种展开布局，支持抽出选择与键盘操作"
 category: MotionCards
 status: beta
 since: 0.7.0

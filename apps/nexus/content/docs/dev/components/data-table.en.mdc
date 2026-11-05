@@ -276,15 +276,11 @@ code: |
 
 ### Best Practices
 
-- Pass a stable `rowKey` for business lists; to keep selection across pages, drive `selectedKeys` with business ids, not default indexes.
+- Pass a stable `rowKey` for business lists; to keep selection across pages, drive `selectedKeys` with business ids, not default indexes. For large data, page on the host and pass in the slice, since the table does not virtualize.
 - For server-loaded lists, use `loadingVariant="skeleton"` or `"shimmer"` with `skeletonRows` set to the page size; keep the default `overlay` for short local waits.
-- Let content size the columns: a nowrap column hugs its content with no declared width, and a long wrapping column takes a `minWidth` as the floor it wraps to.
-- Fixed-column offsets are measured from the rendered widths; give numeric `width`s only when several columns pin to one side, so the first frame and server render line up. Keep one horizontal scroller: `scrollX`, or an outer `overflow-x: auto`.
-- A pinned header or footer needs `maxHeight` or a scrolling ancestor; don't nest the table in `TxScroll`'s default mode, whose transform scrolling disables sticky.
-- Sort on comparable fields such as timestamps or ranks, never on formatted relative-time text.
-- Use `filterOnClient=false` for remote filtering and handle `filterChange` alongside pagination, passing tag-option row counts as `count` in `filterOptions`; controlled `filter` remains the parent's state.
-- The filter controls and selection checkboxes speak English by default: localize the filters through `labels`, whose keys `DATA_TABLE_DEFAULT_LABELS` lists, and name the checkboxes with `selectAllLabel` and `selectRowLabelFormatter`.
-- A `date` column interprets `YYYY-MM-DD` as a local calendar day. A `datetime` column preserves the instant of timezone-qualified values; `today` ends at the next local midnight, including daylight-saving transitions.
+- Let content size the columns: a nowrap column needs no declared width, a long wrapping column takes a `minWidth` floor, and when several columns pin to one side, give them numeric `width`s; keep one horizontal scroller (`scrollX` or an outer `overflow-x: auto`).
+- A pinned header or footer needs `maxHeight` or a scrolling ancestor, and must not sit in `TxScroll`'s default mode; sort on comparable fields such as timestamps, and a `date` column reads `YYYY-MM-DD` as a local calendar day.
+- Use `filterOnClient=false` for remote filtering and handle `filterChange`; the filter controls and selection checkboxes speak English by default, so localize them with `labels`, `selectAllLabel`, and `selectRowLabelFormatter`.
 
 ## API Reference
 
