@@ -498,8 +498,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.13.2)
       '@electron/asar':
-        specifier: ^3.4.1
-        version: 3.4.1
+        specifier: ^4.3.1
+        version: 4.3.1
       '@iconify-json/carbon':
         specifier: ^1.2.27
         version: 1.2.27
@@ -3213,6 +3213,11 @@ packages:
   '@electron/asar@3.4.1':
     resolution: {integrity: sha512-i4/rNPRS84t0vSRa2HorerGRXWyF4vThfHesw0dmcWHp+cspK743UanA0suA5Q5y8kzY2y6YKrvbIUn69BCAiA==}
     engines: {node: '>=10.12.0'}
+    hasBin: true
+
+  '@electron/asar@4.3.1':
+    resolution: {integrity: sha512-6pI64z/tMSBkUTZLQFYhs2YiB7fS9sKA6gy7/2nH1Ju7GGwT32UPsj4Mxsws5NMmtR6C0zYdXVxEU/rGqJRCJA==}
+    engines: {node: '>=22.12.0'}
     hasBin: true
 
   '@electron/fuses@1.8.0':
@@ -16748,6 +16753,11 @@ snapshots:
       commander: 5.1.0
       glob: 7.2.3
       minimatch: 3.1.5
+
+  '@electron/asar@4.3.1':
+    dependencies:
+      glob: 13.0.6
+      minimatch: 10.2.5
 
   '@electron/fuses@1.8.0':
     dependencies:
