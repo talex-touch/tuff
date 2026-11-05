@@ -181,6 +181,7 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     } finally {
       if (isCurrentSend()) sending.value = false
     }
+    options.onSent?.(text)
     // A typed send moves the thread on; the clip it may have come from goes with it.
     if (!voice) dictation.dismissClip()
     if (!ownsPage()) return
@@ -248,7 +249,6 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     options.launchSendKey()
 
     const text = voice?.text ?? draft.value
-    options.onSent?.(text)
     const attachments =
       !voice && pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
     // The lift carries the typed text off the composer as its own bubble. A send with attachments
@@ -359,6 +359,7 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     } finally {
       if (isCurrentSend()) sending.value = false
     }
+    options.onSent?.(text)
     // The thread is this id's now: from here on a change of id is a change of thread.
     if (minted) submitState.setOwnMintedId(null)
     // A typed send moves the thread on; the clip it may have come from goes with it.

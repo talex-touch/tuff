@@ -142,6 +142,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   }
   let field: PlayField | null = null
   let running = false
+  let suspended = false
   let spawned = false
   let raf = 0
   let last = 0
@@ -982,7 +983,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   }
 
   function start(): void {
-    if (running) return
+    if (running || suspended) return
     running = true
     last = performance.now()
     sessionStart = Date.now()
@@ -999,10 +1000,12 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   }
 
   function suspend(): void {
+    suspended = true
     stop()
   }
 
   function resume(): void {
+    suspended = false
     if (!disposed) start()
   }
 
