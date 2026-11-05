@@ -208,8 +208,8 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   let needs = { energy: 0.7, boredom: 0.2, curiosity: 0.4 }
   let lastSave = 0
   let lastActivity = Date.now()
-  let lastInput = 0
   let streakStart = 0
+  let lastTyping = 0
   let overworkDone = false
   let sessionStart = Date.now()
   const observers: ResizeObserver[] = []
@@ -1020,7 +1020,6 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
 
   function touchActivity(): void {
     lastActivity = Date.now()
-    lastInput = Date.now()
   }
 
   function onPointerMove(event: PointerEvent): void {
@@ -1212,7 +1211,8 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     touchActivity()
     if (game.value) finishGame('typing')
     const tNow = Date.now()
-    if (tNow - lastInput > TYPING_BREAK_MS) streakStart = tNow
+    if (tNow - lastTyping > TYPING_BREAK_MS) streakStart = tNow
+    lastTyping = tNow
     if (!overworkDone && streakStart && tNow - streakStart >= OVERWORK_MS) {
       overworkDone = true
       const day = new Date(tNow).toDateString()

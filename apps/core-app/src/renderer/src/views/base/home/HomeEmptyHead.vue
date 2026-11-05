@@ -44,7 +44,13 @@ defineExpose({ el })
 <template>
   <div ref="el" class="HomeEmptyHead">
     <div class="HomeEmptyHead-MarkHost" :class="{ 'is-pet-host': markHidden }">
-      <TxMiko class="HomeEmptyHead-Mark" :size="68" :state="computedMikoState" interactive random />
+      <TxMiko
+        class="HomeEmptyHead-Mark"
+        :size="68"
+        :state="computedMikoState"
+        :interactive="!markHidden"
+        :random="!markHidden"
+      />
     </div>
     <TxMotionText
       tag="h1"
