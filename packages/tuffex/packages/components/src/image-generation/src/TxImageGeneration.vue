@@ -537,6 +537,10 @@ watch(() => props.pixelScale, (pixelScale) => {
 // this instance drops it (or unmounts — see `teardown`).
 watch(() => props.fragmentShader, (src) => {
   setSharedFragmentShader(src ?? null)
+  const i = instance
+  // The frame loop skips paused instances, so repaint their still frame on the new shader.
+  if (i && props.paused)
+    renderInstanceOnce(i)
 })
 
 // Sync paused.
