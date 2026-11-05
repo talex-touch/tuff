@@ -78,5 +78,13 @@ code: |
 - `stack` draws at most the first three sources that have a usable favicon and falls back to the globe when none do; a favicon that fails drops out and the next source takes its place.
 - The ring around stacked favicons is `--tx-sources-stack-ring`, the page background by default; repoint it when the header sits on another surface.
 - An empty `title` shows the hostname without `www.`; an unparseable `url` shows verbatim.
-- A favicon that fails to load is recorded and never re-requested.
+- Within one instance, a favicon that fails to load is recorded and never re-requested.
 - The list is an `<ol>` numbered by render order; favicons carry `alt=""` and `aria-hidden`, and the title and domain carry the accessible name.
+
+## Technologies
+
+- The stack draws the first three sources that have a favicon and have not failed; failures are kept per instance, keyed by `id`.
+- An icon's `error` event records its source in that set, so the icon is not rendered again.
+- Source: `packages/tuffex/packages/components/src/sources/`.
+
+<TuffDocSourceLink />

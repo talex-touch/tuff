@@ -205,7 +205,7 @@ TuffEx 独立包初始基线。
 
 ## 全组件引入版本索引
 
-全部 183 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](./index.zh.mdc)。
+全部 192 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](./index.zh.mdc)。
 
 | 组件 | 安装 barrel | 引入版本 |
 |---|---|---|
@@ -256,6 +256,7 @@ TuffEx 独立包初始基线。
 | [`divider`](./divider.zh.mdc) | base | 0.3.7 |
 | [`dot-indicator`](./dot-indicator.zh.mdc) | base | 0.3.9 |
 | [`drawer`](./drawer.zh.mdc) | base | 0.3.4 |
+| [`drawer-form`](./drawer-form.zh.mdc) | base | 0.9.2 |
 | [`dropdown-menu`](./dropdown-menu.zh.mdc) | base | 0.3.4 |
 | [`edge-fade-mask`](./edge-fade-mask.zh.mdc) | pro | 0.3.4 |
 | [`empty`](./empty.zh.mdc) | base | 0.3.4 |
@@ -290,6 +291,7 @@ TuffEx 独立包初始基线。
 | [`icon-picker`](./icon-picker.zh.mdc) | base | 0.6.0 |
 | [`image-gallery`](./image-gallery.zh.mdc) | base | 0.3.4 |
 | [`image-generation`](./image-generation.zh.mdc) | pro | 0.6.2 |
+| [`image-preview`](./image-preview.zh.mdc) | base | 0.9.2 |
 | [`image-uploader`](./image-uploader.zh.mdc) | base | 0.3.4 |
 | [`inline-citation`](./inline-citation.zh.mdc) | ai | 0.3.9 |
 | [`input`](./input.zh.mdc) | base | 0.3.4 |
@@ -304,7 +306,9 @@ TuffEx 独立包初始基线。
 | [`markdown-view`](./markdown-view.zh.mdc) | base | 0.3.4 |
 | [`message-actions`](./message-actions.zh.mdc) | ai | 0.3.9 |
 | [`metal-fx`](./metal-fx.zh.mdc) | pro | 0.6.2 |
+| [`miko`](./miko.zh.mdc) | ai | 0.9.3 |
 | [`modal`](./modal.zh.mdc) | base | 0.3.4 |
+| [`modal-form`](./modal-form.zh.mdc) | base | 0.9.2 |
 | [`mode-chip`](./mode-chip.zh.mdc) | ai | 0.6.0 |
 | [`morph`](./morph.zh.mdc) | pro | 0.7.0 |
 | [`motion`](./motion.zh.mdc) | pro | 0.7.0 |
@@ -362,6 +366,7 @@ TuffEx 独立包初始基线。
 | [`status-badge`](./status-badge.zh.mdc) | base | 0.3.4 |
 | [`status-hint`](./status-hint.zh.mdc) | base | 0.6.1 |
 | [`steps`](./steps.zh.mdc) | base | 0.3.4 |
+| [`steps-form`](./steps-form.zh.mdc) | base | 0.9.2 |
 | [`stream-element`](./stream-element.zh.mdc) | ai | 0.6.3 |
 | [`stream-markdown`](./stream-markdown.zh.mdc) | ai | 0.3.9 |
 | [`stream-text`](./stream-text.zh.mdc) | ai | 0.6.3 |
@@ -373,6 +378,7 @@ TuffEx 独立包初始基线。
 | [`tag-input`](./tag-input.zh.mdc) | base | 0.3.4 |
 | [`task-rows`](./task-rows.zh.mdc) | ai | 0.3.9 |
 | [`terminal`](./terminal.zh.mdc) | pro | 0.7.0 |
+| [`text`](./text.zh.mdc) | base | 0.9.3 |
 | [`text-morph`](./text-morph.zh.mdc) | pro | 0.6.0 |
 | [`text-transformer`](./text-transformer.zh.mdc) | pro | 0.3.4 |
 | [`textarea`](./textarea.zh.mdc) | base | 0.3.7 |
@@ -384,6 +390,7 @@ TuffEx 独立包初始基线。
 | [`tool-chips`](./tool-chips.zh.mdc) | ai | 0.3.9 |
 | [`tool-confirmation`](./tool-confirmation.zh.mdc) | ai | 0.3.9 |
 | [`tooltip`](./tooltip.zh.mdc) | base | 0.3.4 |
+| [`touch-surface`](./touch-surface.zh.mdc) | pro | 0.9.3 |
 | [`transfer`](./transfer.zh.mdc) | base | 0.3.4 |
 | [`transition`](./transition.zh.mdc) | pro | 0.3.4 |
 | [`tree`](./tree.zh.mdc) | base | 0.3.4 |

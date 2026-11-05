@@ -196,6 +196,7 @@ code: |
 - The overlay is decorative and `pointer-events: none` by default; it takes pointer events only with `hoverIntensity`.
 - With `target="page"`, top and bottom overlays span the full viewport width by default.
 - `animated="scroll"` starts hidden, watches the root with `IntersectionObserver`, and fades in once visible.
+- Each instance draws its own `divCount` layers of `backdrop-filter`, so the cost adds up across instances on one page.
 
 ## Technologies
 

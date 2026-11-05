@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Languages
-`language` selects the language. JSON and YAML get formatting and linting; the others get highlighting and basic editing only.
+`language` selects the language; only JSON and YAML get formatting and linting, and the others get highlighting and basic editing.
 ::::TuffDemoWrapper{demo="CodeEditorCodeEditorDemo" code-lang="vue"}
 ---
 code: |

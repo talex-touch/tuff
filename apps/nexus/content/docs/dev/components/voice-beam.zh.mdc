@@ -17,13 +17,14 @@ verified: true
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
   const colorMode = useColorMode()
   const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
 
-  // 没有麦克风时，用逐帧 level getter 驱动。
+  // 没有麦克风时，用逐帧 level getter 驱动；只在进入视口时运行。
   const level = ref(0.5)
+  const stage = ref<HTMLElement | null>(null)
   let raf = 0
   let t = 0
   function tick() {
@@ -31,18 +32,29 @@ code: |
     level.value = 0.35 + 0.32 * Math.abs(Math.sin(t * 1.7))
     raf = requestAnimationFrame(tick)
   }
-  raf = requestAnimationFrame(tick)
-  onBeforeUnmount(() => cancelAnimationFrame(raf))
+  // 进入视口时开始，离开时停止
+  const observer = new IntersectionObserver(([entry]) => {
+    cancelAnimationFrame(raf)
+    if (entry?.isIntersecting)
+      raf = requestAnimationFrame(tick)
+  })
+  onMounted(() => observer.observe(stage.value!))
+  onBeforeUnmount(() => {
+    observer.disconnect()
+    cancelAnimationFrame(raf)
+  })
   </script>
 
   <template>
-    <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
-      <TxCard :radius="16" :padding="24" shadow="none">想问点什么…</TxCard>
-    </TxVoiceBeam>
+    <div ref="stage">
+      <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
+        <TxCard :radius="16" :padding="24" shadow="none">想问点什么…</TxCard>
+      </TxVoiceBeam>
 
-    <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
-      <TxCard :radius="16" :padding="24" shadow="none">转写中…</TxCard>
-    </TxVoiceBeam>
+      <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
+        <TxCard :radius="16" :padding="24" shadow="none">转写中…</TxCard>
+      </TxVoiceBeam>
+    </div>
   </template>
 ---
 :::

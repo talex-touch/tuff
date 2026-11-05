@@ -1,6 +1,6 @@
 ---
 title: DataTable 数据表格
-description: 支持语义单元格、列筛选、排序、选择与展开的数据表格
+description: 语义单元格、列筛选、排序、选择与展开的数据表格
 category: Data
 status: beta
 since: 0.3.4
@@ -276,15 +276,11 @@ code: |
 
 ### 最佳实践
 
-- 业务列表传稳定的 `rowKey`；跨页保留选择时用业务 id 驱动 `selectedKeys`，不依赖默认的 index。
+- 业务列表传稳定的 `rowKey`，跨页保留选择时用业务 id 驱动 `selectedKeys`；数据量大时由宿主分页后再传入，表格不虚拟化。
 - 服务端加载的列表用 `loadingVariant="skeleton"` 或 `"shimmer"`，并把 `skeletonRows` 设为每页条数；本地短暂等待用默认的 `overlay`。
-- 列宽交给内容：不换行的列不声明宽度即可贴合，会换行的长文本列给 `minWidth` 作为换行下限。
-- 固定列的偏移按实际列宽测量；同一侧固定多列时给数值 `width`，首帧与服务端渲染才能对齐。横向滚动只保留一层：开 `scrollX`，或外包 `overflow-x: auto`。
-- 吸顶、吸底需要 `maxHeight` 或已有滚动祖先；不要放进默认模式的 `TxScroll`，transform 滚动会让 sticky 失效。
-- 按时间戳、序号等可比较字段排序，不按格式化后的相对时间文本排序。
-- 远程筛选设置 `filterOnClient=false`，结合分页处理 `filterChange`，标签选项的行数通过 `filterOptions` 的 `count` 传入；受控 `filter` 的状态归父级所有。
-- 筛选控件与选择框默认使用英文：中文界面用 `labels` 改筛选文案（可用的键见 `DATA_TABLE_DEFAULT_LABELS`），用 `selectAllLabel` 与 `selectRowLabelFormatter` 为选择框命名。
-- `date` 列把 `YYYY-MM-DD` 作为本地日历日期；`datetime` 保留带时区值的真实时间点。`today` 的上界为下一个本地午夜，包含夏令时切换。
+- 列宽交给内容：不换行的列不声明宽度，长文本列给 `minWidth` 作下限；同一侧固定多列时给数值 `width`，横向滚动只保留一层（`scrollX` 或外包 `overflow-x: auto`）。
+- 吸顶、吸底需要 `maxHeight` 或滚动祖先，且不要放进默认模式的 `TxScroll`；排序用时间戳等可比较字段，`date` 列按本地日历日解析 `YYYY-MM-DD`。
+- 远程筛选设置 `filterOnClient=false` 并处理 `filterChange`；筛选与选择框的文案默认是英文，用 `labels`、`selectAllLabel` 与 `selectRowLabelFormatter` 本地化。
 
 ## API 参考
 

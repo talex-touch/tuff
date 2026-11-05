@@ -83,7 +83,7 @@ code: |
 
 ### Edge and States
 
-The flat select matches the input's height, and its edge, focus and disabled colours come from the input. Disabled does not lower opacity.
+The flat select matches the input's height, and takes its edge, focus and disabled colours from the input without lowering opacity when disabled.
 
 :::TuffDemoWrapper{demo="FlatSelectEdgeDemo" code-lang="vue"}
 ---
@@ -104,7 +104,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `string \| number` | `''` | The selected value, matching one item's `value`; shows the placeholder when nothing matches. |
+| `modelValue` | `string \| number` | `''` | The selected value, matching one item's `value`; shows the placeholder when nothing matches; bound with `v-model`. |
 | `placeholder` | `string` | `''` | Trigger text while nothing is selected. |
 | `disabled` | `boolean` | `false` | Disables the group: the trigger can't be clicked and the dropdown won't open. |
 | `ariaLabel` | `string` | - | Accessible name of the trigger and the panel; unset, the panel uses `placeholder`. |

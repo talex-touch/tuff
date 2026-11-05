@@ -120,6 +120,7 @@ code: |
 | `jumpLean` | `number` | `6` | 跳跃时的倾斜角度。 |
 | `jumpEvery` | `number` | `8` | 空闲跳跃间隔秒数（±40%）；`0` 关闭。 |
 | `jumpLand` | `number` | `0` | 落地压扁相对触地的开始时刻（秒）。 |
+| `ariaLabel` | `string` | `<Label> bot, <state>` | 画布的无障碍名称；默认由体型名与状态生成，如 `Clover bot, idle`。 |
 
 `BotAvatarType` 共 18 种：`clover`、`flower`、`triangle`、`square`、`blob`、`ghost`、`circle`、`drop`、`star`、`droid`、`mech`、`alien`、`hexagon`、`cat`、`cloud`、`pill`、`pebble`、`puddle`。`BotAvatarFace` 为 `'eyes' | 'mouth'`。`BotAvatarSquashEase` 为 `'sharp' | 'pulse' | 'soft' | 'bouncy'`。
 
@@ -131,7 +132,7 @@ code: |
 
 ## 概述
 
-- 画布为 `role="img"`，`aria-label` 随状态变化（如 "Clover bot, idle"）；传入 `aria-label` 可覆盖。
+- 画布为 `role="img"`，`aria-label` 随状态变化（如 "Clover bot, idle"）；传入 `ariaLabel` 可覆盖。
 - 其余属性与 DOM 事件直接透传到 `<canvas>`，`class`、`style`、`data-*` 照常可用。
 - 未知 `state` 回退到 `default`，未知 `type` 回退到 `clover`。
 - 全页共用一个 `requestAnimationFrame` 循环；实例离开视口或标签页隐藏时停止绘制。

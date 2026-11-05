@@ -79,6 +79,10 @@ The built-in renderer for every language without one of its own, also exported f
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
+| `lang` | `string` | `''` | Fence language; it sets highlighting and whether a preview is offered. Empty shows plain text. |
+| `code` | `string` | `''` | The source text. |
+| `closed` | `boolean` | `true` | `false` only for the still-growing tail fence of a live stream; no preview is offered while it is `false`. |
+| `theme` | `'light' \| 'dark'` | `'light'` | Color theme for highlighting. |
 | `previewable` | `boolean` | `true` | Offers a rendered view of a settled HTML, SVG, or XML fence. |
 | `inlinePreview` | `boolean` | `true` | Renders the preview below the code. Off, the preview button emits `preview` instead. |
 | `previewLabel` | `string` | `'Preview'` | Text of the button that shows the rendered view. |
@@ -93,6 +97,9 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
+| `code` | `string` | `''` | The diagram source. |
+| `closed` | `boolean` | `false` | `false` only for the still-growing tail fence of a live stream. |
+| `theme` | `'light' \| 'dark'` | `'light'` | Color theme of the diagram. |
 | `zoomLabel` | `string` | `'Zoom diagram'` | Accessible name of the rendered diagram, which opens the preview. |
 | `previewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen preview and of the diagram's scrolling area in it. |
 | `closeLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
@@ -101,6 +108,7 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 | `copiedLabel` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
 | `downloadLabel` | `string` | `'Download'` | Name of the Save action in the diagram preview. |
 | `copyFailedText` | `string` | `'Could not copy'` | Said by the diagram preview when copying the source fails. |
+| `maxHeight` | `number` | `480` | Tallest height the diagram draws, in px; taller diagrams scroll in their frame, and the zoom preview shows them whole. |
 
 ### Events
 
@@ -121,3 +129,11 @@ The payload is `{ lang, code, srcdoc }`. Put `srcdoc` in an iframe whose `sandbo
 - DOMPurify loads dynamically; with `sanitize` on, nothing renders until it loads, or at all if loading fails. Sanitizing is no substitute for a server-side trust boundary.
 - Image consent is module-level and shared by every instance; call the exported `resetRemoteImagePolicy()` when the conversation changes.
 - Each instance owns its own `Marked` (`gfm`, `breaks`); the GitHub Markdown sheet is scoped under `:where(.tx-md)`, leaving the host's `.markdown-body` alone.
+
+## Technologies
+
+- The content is split into blocks by `createBlockStream`; a settled block reuses its cached HTML.
+- `DOMPurify` loads on demand, and with `sanitize` on nothing renders until it loads; each instance builds its own `Marked`.
+- Source: `packages/tuffex/packages/components/src/stream-markdown/`.
+
+<TuffDocSourceLink />

@@ -12,7 +12,7 @@ verified: false
 ## 用法
 
 ### 带引用的研究报告
-:::TuffDemoWrapper{demo="TemplateResearchDemo" code-lang="vue" description="点结论里的编号引用，证据栏定位并高亮对应条目。数字为示例数据。"}
+:::TuffDemoWrapper{demo="TemplateResearchDemo" code-lang="vue" description="点结论里的编号引用，证据栏定位并高亮对应条目。"}
 ---
 code: |
   <script setup lang="ts">
@@ -91,7 +91,7 @@ code: |
 
 ## 概述
 
-结论可溯源的研究助手：研究过程、带编号引用的结论、对比表、洞察与推荐依次出现。
+结论可溯源的研究助手：研究过程、带编号引用的结论、对比表、洞察与推荐依次出现；数字为示例数据。
 
 - 进入视口后自动研究，约 10 秒走完，「重置」或「重新研究」可重播；减少动态效果时直接呈现完整答案。
 - 点编号引用，证据栏切到对应页签，只在栏内滚动定位：有命中片段的跳到片段，其余跳到来源。

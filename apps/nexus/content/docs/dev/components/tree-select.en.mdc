@@ -73,14 +73,14 @@ code: |
 
 ### Edge and States
 
-The tree-select trigger uses the inset ring. Disabled uses the disabled background and text colour, not reduced opacity.
+The tree-select trigger uses the inset ring; disabled uses the disabled background and text colour, not reduced opacity.
 
 :::TuffDemoWrapper{demo="TreeSelectEdgeDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTreeSelect v-model="key" :options="options" />
-    <TxTreeSelect disabled v-model="key" :options="options" />
+    <TxTreeSelect v-model="key" :nodes="nodes" />
+    <TxTreeSelect disabled v-model="key" :nodes="nodes" />
   </template>
 ---
 :::

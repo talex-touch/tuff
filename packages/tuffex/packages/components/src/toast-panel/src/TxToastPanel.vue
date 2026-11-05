@@ -85,7 +85,7 @@ function moveFocusTo(root: HTMLElement, target: HTMLElement | null): boolean {
 }
 
 /**
- * A closed panel is invisible, and hosts usually make it inert as well. Focus
+ * A closed panel is invisible, and its card goes inert with it. Focus
  * left inside then drops to `<body>` at the next rendering update, where the
  * host's key handlers no longer hear it, Escape included. Handing it back in
  * the same task wins that race: to where it came from, or else to the nearest
@@ -132,7 +132,7 @@ onBeforeUnmount(releaseFocus)
         :style="{ '--tx-toast-panel-depth': layer }"
         aria-hidden="true"
       />
-      <div class="tx-toast-panel__card">
+      <div class="tx-toast-panel__card" :inert="!open || undefined">
         <slot />
       </div>
     </div>

@@ -98,7 +98,9 @@ code: |
 | `xType` | `'linear' \| 'log'` | `'linear'` | Step axis scale; `log` leaves out step 0 and below. |
 | `zoom` | `boolean` | `true` | Zooms and pans the step axis on the chart; `false` keeps the view fixed. |
 | `highlightedRun` | `string \| null` | — | Emphasizes one run and dims the rest. |
-| `xAxisName` / `yAxisName` | `string` | — | Axis titles. |
+| `xAxisName` | `string` | — | Step-axis title. |
+| `yAxisName` | `string` | — | Value-axis title. |
+| `yAxisNameGap` | `number` | `56` | Gap between the value axis and its name, in pixels. |
 | `xAxisTickFormat` | `(step: number) => string` | SI prefixes | Step ticks; past a thousand steps they read `200k`, `1.5M`. |
 | `yAxisTickFormat` | `(value: number) => string` | — | Value ticks. |
 | `stepFormat` | `(step: number) => string` | Grouped digits | The step in the tooltip and spoken reading. |
@@ -114,6 +116,7 @@ code: |
 
 | Event | Payload | Description |
 |-------|---------|-------------|
+| `update:hiddenRuns` | `hiddenRuns: string[]` | `v-model:hidden-runs` write-back. |
 | `update:window` | `window: [number, number] \| null` | After a zoom, a pan, a reset or following new data. |
 
 ### Types

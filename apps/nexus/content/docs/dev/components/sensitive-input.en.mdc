@@ -41,7 +41,7 @@ code: |
 
 ### Edge and States
 
-The sensitive input shares the input's edge and states. Size variants change only the height and font size; the radius is 12px at every size.
+The sensitive input shares the input's edge and states; size variants change only the height and font size, and the radius is 12px at every size.
 
 :::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
 ---
@@ -99,7 +99,7 @@ code: |
 | State | Behavior |
 |------|------|
 | Masked | The default whenever there is a value. Shows the `mask` glyphs; the container becomes a `role="button"` that reveals on click, Enter, or Space. On hover or focus, the glyphs change to `Click to reveal`. |
-| Revealed | `type` flips to `text` and focus moves into the input. Blur or Escape re-masks, and Escape returns focus to the container; focusing the eye or copy button is not a blur. |
+| Revealed | `type` flips to `text` and focus moves into the input. Blur or Escape re-masks, and Escape returns focus to the container; focusing the eye button is not a blur, but moving focus to the copy button re-masks. |
 | Empty | A plain input with no mask, no copy tab, and no `role="button"`. The first typed character switches to revealed; a value arriving from outside lands masked. |
 
 ## Overview

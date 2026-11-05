@@ -90,7 +90,7 @@ code: |
 
 ### Side copilot
 A docked assistant for an existing page, such as a docs editor, CMS body, or ticket reply, that only suggests edits for you to apply.
-:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="Plays one Improve and stops at the suggestion; select any text to try it. Answers are pre-written."}
+:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="Plays one Improve and stops at the suggestion; select any text to try it."}
 ---
 code: |
   <script setup lang="ts">
@@ -161,7 +161,7 @@ code: |
 
 ## Overview
 
-A coding agent's full session on one request; a person answers its questions and approves each write.
+A coding agent's full session on one request; a person answers its questions and approves each write. Answers are pre-written.
 
 - It plays once in view and stops at the write gate; reduced motion shows everything up to the gate at once.
 - After 3 idle seconds the questionnaire takes the recommended picks; clicking any option makes it wait for you to send.

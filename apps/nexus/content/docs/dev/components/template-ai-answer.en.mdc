@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### Multi-turn Q&A
-:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" description="Plays once in view and asks one follow-up; a click or key hands it to you. Sample data."}
+:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" description="Plays once in view and asks one follow-up; a click or key hands it to you."}
 ---
 code: |
   <script setup lang="ts">
@@ -63,7 +63,7 @@ code: |
 
 ## Overview
 
-A multi-turn Q&A with traceable answers, each streamed by one TxStreamElement.
+A multi-turn Q&A with traceable answers, each streamed by one TxStreamElement. The answers are sample data.
 
 - It plays once in view and asks one follow-up about 1.6 seconds after the first answer; a click or key cancels the follow-up.
 - The action row, sources, and follow-ups appear only once an answer is done; a follow-up adds a turn below.

@@ -39,9 +39,11 @@ code: |
   const reply = ref('')
   const busy = ref(true)
 
-  for await (const delta of stream)
-    reply.value += delta
-  busy.value = false
+  onMounted(async () => {
+    for await (const delta of stream)
+      reply.value += delta
+    busy.value = false
+  })
   </script>
 
   <template>
@@ -53,7 +55,7 @@ code: |
 :::
 
 ### Reveal Presets
-`reveal` sets how a word enters. With complete content, `replay()` plays it again and `reserve` keeps the layout still.
+`reveal` sets how a word enters; with complete content, `replay()` plays it again and `reserve` keeps the layout still.
 :::TuffDemoWrapper{demo="StreamTextPresetsDemo" code-lang="vue"}
 ---
 code: |

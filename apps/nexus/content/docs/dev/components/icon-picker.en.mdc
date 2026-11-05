@@ -148,8 +148,7 @@ export default defineConfig({
 
 ## Overview
 
-- Search covers every section at once, the open tab first. It matches keywords, class names and category headings, tolerates a typo, and takes Chinese, full pinyin or initials (`火箭`, `huojian`, `hj`).
-- Focus stays in the search box: arrow keys move through the grid, Enter picks the highlighted cell (the top result while searching), and Esc clears the query before it closes the panel.
+- Search covers every section at once, the open tab first, matching keywords, class names and category headings; it tolerates a typo and takes Chinese, full pinyin or initials (`火箭`, `huojian`, `hj`). Focus stays in the search box: arrow keys move through the grid, Enter picks the highlighted cell (the top result while searching), and Esc clears the query before it closes the panel.
 - Browsing groups a section by category, with a row of shortcuts that jumps between them.
 - Custom emoji packs with a usable emoji form groups at the start of the emoji section, headed by the pack name; search matches an emoji's name, its keywords and the pack name.
 - The trigger morphs from one plate outline to the next; under reduced motion it switches at once.

@@ -86,7 +86,7 @@ code: |
 
 - 插槽内容自带背景，圆角与 `borderRadius` 一致。
 - `pulse-outside` 的周围要留出溢出空间（`overflow: visible`）。
-- 一个区块只放一个光束；同屏多个时调低 `strength` 或放慢 `duration`。
+- 一个区块只放一个光束；默认的色相动画会让光束的滤镜每帧重绘，同屏多个时控制数量，`staticColors` 可关闭这项动画。
 - 浅色页面用 `theme="light"` 或 `"auto"`；默认的深色参数在浅色背景上对比不足。
 
 ## API 参考

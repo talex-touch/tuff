@@ -33,7 +33,7 @@ code: |
 :::
 
 ### Page Size
-`page-sizes` adds a size selector after the page buttons. Changing the size leaves the page alone; the host decides whether to return to page 1.
+`page-sizes` adds a size selector after the page buttons; changing the size leaves the page alone, and the host decides whether to return to page 1.
 :::TuffDemoWrapper{demo="PaginationPageSizeDemo" code-lang="vue"}
 ---
 code: |

@@ -55,7 +55,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` / `v-model` | `number \| null` | `null` | 数字值；空输入为 `null`。 |
+| `modelValue` | `number \| null` | `null` | 数字值；空输入为 `null`，配合 `v-model` 使用。 |
 | `min` | `number` | - | 最小值。 |
 | `max` | `number` | - | 最大值。 |
 | `step` | `number` | `1` | 步进按钮与原生输入的步长。 |

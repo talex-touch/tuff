@@ -19,6 +19,11 @@ describe('txGridLayout', () => {
     target.dispatchEvent(event)
   }
 
+  // The spotlight is written on the next animation frame, so wait for it.
+  function nextFrame() {
+    return new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+  }
+
   it('renders default grid variables and slot content', () => {
     const wrapper = mountGrid()
     const grid = wrapper.find('.tx-grid-layout')
@@ -59,7 +64,7 @@ describe('txGridLayout', () => {
     })
 
     dispatchMouseMove(wrapper.find('.tx-grid-layout').element, 40, 65)
-    await wrapper.vm.$nextTick()
+    await nextFrame()
 
     expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-op')).toBe('0.2')
     expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-x')).toBe('30px')
@@ -88,7 +93,7 @@ describe('txGridLayout', () => {
 
     // Light the items up while interactive.
     dispatchMouseMove(wrapper.find('.tx-grid-layout').element, 40, 65)
-    await wrapper.vm.$nextTick()
+    await nextFrame()
     expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-op')).toBe('0.2')
 
     // Toggling interactivity off must reset the already-lit vars, not leave them stuck.

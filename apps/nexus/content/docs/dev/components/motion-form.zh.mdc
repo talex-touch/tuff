@@ -112,7 +112,8 @@ code: |
 | 插槽 | 作用域 | 用途 |
 | --- | --- | --- |
 | `label` | 无 | 可见标签，通过稳定 ID 关联控件。 |
-| `prefix`, `suffix` | 无 | 输入前后缀；`suffix` 会替换密码显示按钮。 |
+| `prefix` | 无 | 输入前缀。 |
+| `suffix` | 无 | 输入后缀；会替换密码显示按钮。 |
 | `option` | `{ option, selected }` | 单选与下拉的选项内容。 |
 | `chip` | `{ option }` | 标签文案；移除按钮保留。 |
 | `file` | `{ file, remove: () => void }` | 文件行内容；移除按钮保留。 |

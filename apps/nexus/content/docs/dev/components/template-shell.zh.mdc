@@ -12,7 +12,7 @@ verified: false
 ## 用法
 
 ### 侧栏工作台
-:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" description="⌘K 打开命令面板，侧栏切换分区，铃铛展开通知。图中为示例数据。"}
+:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" description="⌘K 打开命令面板，侧栏切换分区，铃铛展开通知。"}
 ---
 code: |
   <script setup lang="ts">
@@ -107,7 +107,7 @@ code: |
 
 ### 顶栏控制台
 导航收进顶部两行，宽度全部留给内容，适合分区少、常切换产品与工作区的控制台。
-:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" description="⌘K 打开命令面板；产品、工作区、通知与账户均为下拉菜单。图中为示例数据。"}
+:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" description="⌘K 打开命令面板；产品、工作区、通知与账户均为下拉菜单。"}
 ---
 code: |
   <script setup lang="ts">

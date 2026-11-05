@@ -7,9 +7,11 @@ const TOTAL_MB = 2.3
 const STEP_MS = 100
 
 const percentage = ref(0)
+const rootRef = ref<HTMLElement | null>(null)
 
 let tickTimer: ReturnType<typeof setInterval> | undefined
 let restartTimer: ReturnType<typeof setTimeout> | undefined
+let visibilityObserver: IntersectionObserver | undefined
 
 const copy = computed(() => {
   if (locale.value === 'zh') {
@@ -56,14 +58,36 @@ function start(): void {
   }, STEP_MS)
 }
 
-onMounted(start)
-onBeforeUnmount(stop)
+// Start on first sight, not on mount: a lazily mounted demo can sit below the fold, and a
+// loop that runs unseen is wasted work. Without IntersectionObserver it starts at once.
+onMounted(() => {
+  const root = rootRef.value
+  if (!root || typeof IntersectionObserver === 'undefined') {
+    start()
+    return
+  }
+
+  visibilityObserver = new IntersectionObserver((entries) => {
+    if (!entries.some(entry => entry.isIntersecting))
+      return
+    visibilityObserver?.disconnect()
+    visibilityObserver = undefined
+    start()
+  })
+  visibilityObserver.observe(root)
+})
+
+onBeforeUnmount(() => {
+  visibilityObserver?.disconnect()
+  visibilityObserver = undefined
+  stop()
+})
 
 defineExpose({ replayDemo: start })
 </script>
 
 <template>
-  <div class="progress-bar-upload-demo">
+  <div ref="rootRef" class="progress-bar-upload-demo">
     <TxProgressBar
       :percentage="percentage"
       :format="copy.format"

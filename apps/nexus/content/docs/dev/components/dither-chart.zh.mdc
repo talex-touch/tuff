@@ -1,6 +1,6 @@
 ---
 title: DitherChart
-description: "由真实数据驱动的像素图表、有序抖动和SVG纹理，支持周期、图例和日期游标。"
+description: "真实数据驱动的像素与抖动图表"
 category: MotionCharts
 status: beta
 since: 0.7.0
@@ -121,14 +121,28 @@ code: |
 
 | 事件 | 参数 |
 | --- | --- |
-| `update:period`、`period-change` | 周期ID。 |
+| `update:period` | 周期ID。 |
+| `period-change` | 周期ID。 |
 | `update:activeKeys` | 可见ID数组。 |
 | `update:selectedSeries` | 所选指标ID。 |
 | `update:hover` | `DitherHover \| null`。 |
 | `update:dateCursor` | 点索引或 `null`。 |
 | `select` | 指针点击或Enter/空格选中的数据项；拖动结束时不触发。 |
 
-插槽：`header({ total, period })`、`tooltip({ hover })`、`footer({ dataset })`。tooltip复用现有charts core上下文与 `TxChartTooltip` 定位。默认tooltip以悬停的数据点（日期或类目）为标题，数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）两者相同，只保留数据行。`dot`、`line`、`dashed` 保留不同标记结构。在绘图区按住拖动即可连续读数：时间类图形的日期游标逐点吸附指针、不做缓动，拖出绘图区时停在首尾数据点；其他图形读取指针下的数据项，与悬停相同。触屏横向拖动读数，纵向滑动仍滚动页面。绘图区还支持方向键（尚无读数时向左从最后一点开始）、Home/End、Enter/空格和Escape（取消拖动并清除读数），读数经礼貌型实时区域播报；图例与周期使用原生按钮。
+| 插槽 | 参数 | 说明 |
+| --- | --- | --- |
+| `header` | `{ total, period }` | 替换标题区，`total` 为当前总量，`period` 为当前周期。 |
+| `tooltip` | `{ hover }` | 替换悬停提示，默认复用 `TxChartTooltip` 定位。 |
+| `footer` | `{ dataset }` | 放在图表底部的调用方内容，接收归一化的数据快照。 |
+
+tooltip复用现有charts core上下文与 `TxChartTooltip` 定位。默认tooltip以悬停的数据点（日期或类目）为标题，数据行写所属系列名与数值；数据项本身就是系列时（环图、仪表、图例聚焦）两者相同，只保留数据行。`dot`、`line`、`dashed` 保留不同标记结构。在绘图区按住拖动即可连续读数：时间类图形的日期游标逐点吸附指针、不做缓动，拖出绘图区时停在首尾数据点；其他图形读取指针下的数据项，与悬停相同。触屏横向拖动读数，纵向滑动仍滚动页面。绘图区还支持方向键（尚无读数时向左从最后一点开始）、Home/End、Enter/空格和Escape（取消拖动并清除读数），读数经礼貌型实时区域播报；图例与周期使用原生按钮。
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+| --- | --- | --- |
+| `scene` | 只读计算值 | 当前图形场景：形状、标签、刻度与总量，随数据、周期和选择更新。 |
+| `dataset` | 只读计算值 | 归一化后的数据快照：系列、节点、单元格与周期。 |
 
 ### CSS 变量
 

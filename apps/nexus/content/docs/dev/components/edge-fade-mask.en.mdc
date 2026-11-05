@@ -68,6 +68,13 @@ code: |
 |------|-------|-------------|
 | `default` | - | Scrolling content inside the internal viewport. |
 
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|------|
+| `viewport` | `HTMLElement \| null` | The scrolling viewport element, for a host that drives or observes the scroll itself. |
+| `refresh` | `() => void` | Re-measures the fade edges now, for content the resize observer cannot see. |
+
 ## Overview
 
 - The root renders as `as` around one viewport, which is `overflow: auto` along `axis` and hides overflow on the other axis.

@@ -1,6 +1,6 @@
 ---
 title: "3D carousel"
-description: "Arc, CoverFlow and Time Machine paths with color/mono content, controlled current items, dragging and timeline scrubbing."
+description: "Arc, CoverFlow and Time Machine carousels with dragging and a timeline."
 category: MotionCarousels
 status: beta
 since: 0.7.0
@@ -108,7 +108,8 @@ Grabbing the deck while it is still moving continues from where it is drawn, not
 | `#item` | `{ item, index, active }`; replaces a card's content. |
 | `#caption` | `{ item, index, active: true }`; replaces the current caption. |
 | `#empty` | Content for an empty items array. |
-| `previous()` / `next()` | Use the same clamping/wrapping and disabled rules as controls. |
+| `previous()` | Use the same clamping/wrapping and disabled rules as controls, moving to the previous item. |
+| `next()` | Use the same clamping/wrapping and disabled rules as controls, moving to the next item. |
 | `select(index)` | Select an item, rounding and clamping/wrapping the requested index. |
 
 Arrow keys select adjacent items; Home and End select boundary items. Native buttons support Enter/Space. The range scrubber retains its native keyboard behavior. Current captions are announced politely, and selection does not move focus unexpectedly. Dragging adds no shortcut and changes none: a drag never fires the click of the card it ends over, while Enter and Space on a focused card still select it.

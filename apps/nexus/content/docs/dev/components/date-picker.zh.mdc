@@ -102,6 +102,17 @@ code: |
 |------|--------|------|
 | `--tx-date-picker-selected-shade` | `#111827` | 字段日历里选中的日、月、年格子渐变的暗端，以 28% 混入主色。 |
 
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type DateRangeValue = [string, string] // [start, end]，各为 YYYY-MM-DD
+---
+:::
+
+`range` 时的值；两端都选定后才派发。
+
 ## 概述
 
 - 值始终按 `YYYY-MM-DD` 输出；空值或非法值按本地今天初始化，再限制在 `min` / `max` 内。

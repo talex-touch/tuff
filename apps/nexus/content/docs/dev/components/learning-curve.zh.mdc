@@ -98,7 +98,9 @@ code: |
 | `xType` | `'linear' \| 'log'` | `'linear'` | 步数轴刻度；`log` 不画第 0 步及以下。 |
 | `zoom` | `boolean` | `true` | 在图上缩放、平移步数轴；`false` 固定视图。 |
 | `highlightedRun` | `string \| null` | — | 强调一次运行，其余变淡。 |
-| `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
+| `xAxisName` | `string` | — | 步数轴的轴名。 |
+| `yAxisName` | `string` | — | 数值轴的轴名。 |
+| `yAxisNameGap` | `number` | `56` | 数值轴与轴名之间的间距（像素）。 |
 | `xAxisTickFormat` | `(step: number) => string` | SI 前缀 | 步数刻度；步数过千时默认写作 `200k`、`1.5M`。 |
 | `yAxisTickFormat` | `(value: number) => string` | — | 数值刻度。 |
 | `stepFormat` | `(step: number) => string` | 千分位 | tooltip 与读屏中的步数。 |
@@ -114,6 +116,7 @@ code: |
 
 | 事件 | 参数 | 说明 |
 |------|------|------|
+| `update:hiddenRuns` | `hiddenRuns: string[]` | `v-model:hidden-runs` 写回。 |
 | `update:window` | `window: [number, number] \| null` | 缩放、平移、复位或跟随新数据后写回。 |
 
 ### 类型

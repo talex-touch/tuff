@@ -14,7 +14,7 @@ verified: true
 Wraps one element, paints a shader inside it, and dissolves into the image once it is ready. Requires the `three` peer dependency (`>=0.149.0`).
 
 ### Presets
-`preset` picks the effect; `images` is the pool to reveal from.
+`preset` picks the effect; `images` is the pool to reveal from, and the sample paths should be replaced with your own images.
 :::TuffDemoWrapper{demo="ImageGenerationShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -146,7 +146,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 ## Overview
 
 - One shared `THREE.WebGLRenderer` and WebGL context serve the whole page; each card copies its frame into its own 2D canvas.
-- Frame rate is capped at 10 fps, the GL canvas at a device pixel ratio of 1.25, and the visible canvas at 2.
+- Frame rate is capped at 10 fps, the GL canvas at a device pixel ratio of 1.25, and the visible canvas at a device pixel ratio of 2.
 - Cards pause offscreen (`IntersectionObserver`, 64 px margin), the loop stops when no card is active, and WebGL context loss is handled.
 - Decoded images are cached by URL across cards and drawn like `object-fit: cover`, center-cropped.
 - The corner radius comes from the child's computed `border-top-left-radius` and applies to all four corners.

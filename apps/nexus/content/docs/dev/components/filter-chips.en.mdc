@@ -20,9 +20,9 @@ code: |
   import { computed, ref } from 'vue'
 
   const rows = [
-    { task: 'Restock mango sorbet', status: 'todo' },
-    { task: 'Churn black sesame', status: 'progress' },
-    { task: 'Order waffle cones', status: 'done' },
+    { task: 'Restock mango sorbet', status: 'todo', dueAt: Date.UTC(2026, 11, 3) },
+    { task: 'Churn black sesame', status: 'progress', dueAt: Date.UTC(2026, 8, 22) },
+    { task: 'Order waffle cones', status: 'done', dueAt: Date.UTC(2026, 3, 14) },
   ]
 
   const filter = ref('all')
@@ -58,7 +58,14 @@ code: |
   const columns = [
     { key: 'task', title: 'Task name', minWidth: 180 },
     // Sorting reads the timestamp; the column only formats it for display.
-    { key: 'dueAt', title: 'Date', width: 110, sortable: true, sorter: (a, b) => a.dueAt - b.dueAt },
+    {
+      key: 'dueAt',
+      title: 'Date',
+      width: 110,
+      sortable: true,
+      sorter: (a, b) => a.dueAt - b.dueAt,
+      format: (value: number) => new Date(value).toISOString().slice(0, 10),
+    },
     { key: 'status', title: 'Status', width: 140 },
   ]
   </script>

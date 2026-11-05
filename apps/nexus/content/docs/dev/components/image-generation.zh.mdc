@@ -1,5 +1,5 @@
 ---
-title: "ImageGeneration"
+title: "ImageGeneration 图像生成"
 description: "生图或慢加载图片的 WebGL 像素马赛克占位"
 category: Effects
 status: beta
@@ -14,7 +14,7 @@ verified: true
 包裹一个元素并在其中绘制着色器，图片就绪后溶入；需要 peer 依赖 `three`（`>=0.149.0`）。
 
 ### 预设
-`preset` 选择效果，`images` 是揭示用的图片池。
+`preset` 选择效果，`images` 是揭示用的图片池，示例中的图片路径请换成自己的图片。
 :::TuffDemoWrapper{demo="ImageGenerationShowcaseDemo" code-lang="vue"}
 ---
 code: |
@@ -145,7 +145,7 @@ const variants = ['/a.jpg', '/b.jpg', '/c.jpg']
 ## 概述
 
 - 全页共用一个 `THREE.WebGLRenderer` 与一个 WebGL 上下文，每张卡片把帧复制到自己的 2D 画布。
-- 帧率上限 10 fps，GL 画布的设备像素比上限 1.25，可见画布上限 2。
+- 帧率上限 10 fps，GL 画布的设备像素比上限 1.25，可见画布的设备像素比上限 2。
 - 离屏（`IntersectionObserver`，64 px 边距）时暂停，没有活跃卡片时动画循环完全停止；WebGL 上下文丢失会被处理。
 - 已解码图片按 URL 在卡片间缓存，按 `object-fit: cover` 居中裁剪绘制。
 - 圆角取子元素计算后的 `border-top-left-radius`，应用到四个角。

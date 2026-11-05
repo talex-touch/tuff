@@ -526,7 +526,7 @@ LifeCycle.onBeforeClose(flushTxForms)
 app.mount('#app')
 ```
 
-插件的草稿归插件自己管，宿主不会替它清。草稿里有账号的数据时，按以下约定处理：
+插件的草稿归插件自己管，宿主不会替它清；草稿里有账号的数据时，按以下约定处理：
 
 - namespace 用 `user:<账号 id>`，未登录用 `anon`；还不知道是谁时给 `null`，期间不保存草稿。
 - 账号变化时，先删掉其他账号的草稿，再切换 namespace。插件每次启动也要删一次，因为账号可能在插件没运行时变了。
@@ -573,7 +573,7 @@ usePluginAccount().onDidChange((session) => {
 | `id` | `string` | 自动生成 | `<form>` 的 id，也是字段 id 的前缀：`<id>-<prop>`。 |
 | `model` | `Record<string, any>` | - | 响应式表单数据，表单项按 `prop` 路径读取。 |
 | `rules` | `FormRules` | - | 以字段路径为 key 的表单级规则。 |
-| `schema` | `FormStandardSchema` | - | Standard Schema v1 校验器（Zod、Valibot、ArkType 等），校验整个 `model`。 |
+| `schema` | `FormStandardSchema` | - | Standard Schema v1 校验器（Zod、Valibot、ArkType 等），校验整个 `model`。 没有对应字段的问题列在错误摘要中，并阻止提交。 |
 | `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | 字段布局；`auto` 在宽度达到 520px 时为 `side`，否则为 `stacked`；`inline` 用于筛选栏。 |
 | `labelPosition` | `'left' \| 'right' \| 'top'` | - | `layout` 的旧写法：`top` 即 `stacked`，`left`、`right` 即 `side` 加对应的对齐。 |
 | `labelAlign` | `'start' \| 'end'` | `'end'` | 侧边 label 的对齐；`labelPosition="left"` 时默认为 `start`。 |
@@ -588,12 +588,12 @@ usePluginAccount().onDidChange((session) => {
 | `persist` | `boolean \| FormPersistOptions` | `false` | 以 `id` 保存用户输入；`true` 采用默认设置。 |
 | `leaveConfirm` | `FormLeaveConfirm \| false` | 宿主的，其次 `window.confirm` | 带着草稿存不下的修改离开前询问；`false` 从不询问，适合筛选栏。 |
 | `autosave` | `boolean \| FormAutosaveOptions` | `false` | 停止编辑后经 `submit` 处理函数保存，不用提交按钮；只校验改过的字段，出错的字段改对后再存。`true` 等待 1 秒。 |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | 全部校验通过后调用，`values` 为副本；返回的 Promise 会被等待，期间 `submitting` 为 `true`。`@submit` 即绑定它。成功时提交的值成为新基线，除非处理函数自己调用了 `setBaseline()`。 |
 
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `submit` | `(values: FormValues, event?: Event)` | 全部校验通过后调用，`values` 为副本；返回的 Promise 会被等待，期间 `submitting` 为 `true`。 |
 | `submit-success` | `(values: FormValues)` | 提交或自动保存成功：全部校验通过，且 `submit` 处理函数（如有）成功。 |
 | `validate` | `(valid: boolean)` | `validate()` 校验完全部字段后触发。 |
 | `persist-error` | `(error: unknown)` | 草稿读写失败；连续失败只触发一次。 |
@@ -621,7 +621,7 @@ usePluginAccount().onDidChange((session) => {
 | `reset` | `() => void` | 把 `model` 恢复为基线，并清空消息。 |
 | `resetFields` | `() => void` | `reset()` 的旧名。 |
 | `setBaseline` | `(values?: FormValues) => void` | 把取回的数据设为基线；省略参数时，以当前 `model` 为基线。 |
-| `setErrors` | `(errors: Record<string, string \| null \| undefined>, options?: { source?: 'server' \| 'client' }) => void` | 显示外部错误，用户修改该字段后消失；`client` 错误还会阻止提交。 |
+| `setErrors` | `(errors: Record<string, string \| null \| undefined>, options?: { source?: 'server' \| 'client' }) => void` | 显示外部错误，用户修改该字段后消失；`client` 错误还会阻止提交。 指向未挂载字段的错误会保留，字段挂载时显示。 |
 | `setRootError` | `(message?: string \| null) => void` | 设置或清除表单级错误。 |
 | `clearValidate` | `(paths?: string \| string[]) => void` | 隐藏消息，不修改 `model`。 |
 | `draft` | `FormDraftState` | 只读，草稿填入了哪些字段、还有哪些待恢复、写入时间、是否写入失败。 |
@@ -681,31 +681,6 @@ usePluginAccount().onDidChange((session) => {
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `title` | `string` | `messages.summaryTitle` | 摘要标题。 |
-
-### useTxFormField
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | 把控件接入外层表单项；`kind` 决定 label 如何命名控件。表单之外返回 `null`。 |
-| `id` | `string \| undefined` | 只读，label 指向的 id；同一表单项中只有第一个控件拿到。 |
-| `labelId` / `label` | `string \| undefined` / `string` | 只读，表单项 label 的 id 与文本。 |
-| `describedBy` | `string \| undefined` | 只读，消息、帮助文字与提示的 id，空格分隔。 |
-| `invalid` / `required` | `boolean` | 只读，正在显示错误；必填。 |
-| `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | 只读，表单的 `disabled` 与 `size`。 |
-| `readonly` | `boolean` | 只读，表单的 `readonly`：控件可以聚焦，但不能修改值。 |
-| `attrs` | `(host?: Record<string, unknown>) => Record<string, unknown>` | 合并后的控件属性；控件自身收到的属性优先，`aria-describedby` 两者都保留。 |
-
-### provideTxFormHost
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `provideTxFormHost` | `(host: TxFormHost, app?: App) => void` | 在组件 `setup` 中，或传入 `app` 时在整个应用中，为下层表单提供宿主的设置。也从 `@talex-touch/tuffex/utils` 导出，从那里引入不会加载表单。 |
-| `host.messages` | `MaybeRefOrGetter<Partial<FormMessages>>` | 当前语言的文案；传 ref 或 getter 时随语言切换。 |
-| `host.namespace` | `MaybeRefOrGetter<string \| null>` | 草稿归属，如 `user:42`；尚不知道时传 `null`，期间不保存草稿。 |
-| `host.storage` | `FormDraftStorage` | `persist.storage` 未指定时草稿的存放处。 |
-| `host.leaveConfirm` | `FormLeaveConfirm` | 为没有自己 `leaveConfirm` 的表单询问是否离开。 |
-| `flushTxForms` | `() => Promise<void>` | 立即写入所有已挂载表单待写的草稿，用于页面会被直接关掉的场合。 |
-| `clearTxFormDrafts` | `(options?: { namespace?: string \| ((namespace: string) => boolean), storage?: FormDraftStorage }) => Promise<void>` | 删除全部草稿、某个 namespace 的草稿，或函数选中的每个 namespace 的草稿。 |
 
 ### 类型
 
@@ -790,27 +765,50 @@ usePluginAccount().onDidChange((session) => {
 | `--tx-form-control-height` | `32px` | 单行控件的高度，用于让 label 对齐控件的第一行。 |
 | `--tx-form-item-min` | `220px` | `TxFormRow` 中每项换行前的最小宽度；`condensed` 时为 `110px`。 |
 
+## 组合式函数与宿主
+
+### useTxFormField
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | 把控件接入外层表单项；`kind` 决定 label 如何命名控件。表单之外返回 `null`。 |
+| `id` | `string \| undefined` | 只读，label 指向的 id；同一表单项中只有第一个控件拿到。 |
+| `labelId` / `label` | `string \| undefined` / `string` | 只读，表单项 label 的 id 与文本。 |
+| `describedBy` | `string \| undefined` | 只读，消息、帮助文字与提示的 id，空格分隔。 |
+| `invalid` / `required` | `boolean` | 只读，正在显示错误；必填。 |
+| `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | 只读，表单的 `disabled` 与 `size`。 |
+| `readonly` | `boolean` | 只读，表单的 `readonly`：控件可以聚焦，但不能修改值。 |
+| `attrs` | `(host?: Record<string, unknown>) => Record<string, unknown>` | 合并后的控件属性；控件自身收到的属性优先，`aria-describedby` 两者都保留。 |
+
+### provideTxFormHost
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `provideTxFormHost` | `(host: TxFormHost, app?: App) => void` | 在组件 `setup` 中，或传入 `app` 时在整个应用中，为下层表单提供宿主的设置。也从 `@talex-touch/tuffex/utils` 导出，从那里引入不会加载表单。 |
+| `host.messages` | `MaybeRefOrGetter<Partial<FormMessages>>` | 当前语言的文案；传 ref 或 getter 时随语言切换。 |
+| `host.namespace` | `MaybeRefOrGetter<string \| null>` | 草稿归属，如 `user:42`；尚不知道时传 `null`，期间不保存草稿。 |
+| `host.storage` | `FormDraftStorage` | `persist.storage` 未指定时草稿的存放处。 |
+| `host.leaveConfirm` | `FormLeaveConfirm` | 为没有自己 `leaveConfirm` 的表单询问是否离开。 |
+| `flushTxForms` | `() => Promise<void>` | 立即写入所有已挂载表单待写的草稿，用于页面会被直接关掉的场合。 |
+| `clearTxFormDrafts` | `(options?: { namespace?: string \| ((namespace: string) => boolean), storage?: FormDraftStorage }) => Promise<void>` | 删除全部草稿、某个 namespace 的草稿，或函数选中的每个 namespace 的草稿。 |
+
 ## 草稿与离开
 
 - 草稿只填入用户没动过的字段；草稿写入后又被保存过的字段留在提示中，或以 `source: 'draft'` 交给 `reconcile`。
 - 停止输入 300ms 后写入，持续输入时至少每 2 秒写一次，页面隐藏时也会写；提交成功或 `reset()` 后删除。
-- 敏感内容不进草稿：密码输入框、`TxSensitiveInput`、`autocomplete` 要求密码、一次性验证码或银行卡信息的输入框、关闭 `persist` 的表单项与 `exclude` 路径。字段一旦装过这类内容，就一直不写入。
+- 敏感内容不进草稿：密码输入框、`TxSensitiveInput`、`autocomplete` 要求密码、一次性验证码或银行卡信息的输入框、关闭 `persist` 的表单项与 `exclude` 路径；字段一旦装过这类内容，就一直不写入。
 - 只有存在草稿存不下的修改时，刷新或关闭页面才会先询问：未开启 `persist`、改在敏感字段里，或写入还没落地。
 - 存储拒绝写入时草稿留在内存中，直到写入成功；宿主 namespace 为 `null`，或表单没有 `id`，都不保存草稿。
-- namespace 换成另一个时（如退出登录），上一个人改的内容仍留在表单里，但不写进任何草稿，再次修改前都算未保存。`clearTxFormDrafts({ namespace })` 删除那个人的草稿。
-- 会话也可能在应用关闭期间结束：确认当前账号后，`clearTxFormDrafts({ namespace: ns => ns.startsWith('user:') && ns !== current })` 删除其余账号的草稿。
+- namespace 换成另一个时（如退出登录），留在表单里的修改不写进任何草稿，再次修改前都算未保存；`clearTxFormDrafts({ namespace })` 删除那个人的草稿。
 
 ## 概述
 
-- 有效性随值实时计算；消息在用户改过字段并离开后出现，此后随每次编辑更新。切换到其他窗口不算离开。`validate()` 与提交显示全部消息。
-- 规则按顺序执行，遇到第一条错误即停止。内置检查对空值放行，只有 `required` 拒绝空值；空值指 `undefined`、`null`、`''`、`false` 与空数组。
-- 异步规则在同步规则通过后运行，输入时防抖 300ms，超过 1 秒显示 `messages.validating`；进度与结果由表单唯一的礼貌级 live region 播报。
-- 提交依次校验、调用处理函数；处理函数返回 `false`、抛出异常，或调用 `setErrors()` / `setRootError()` 均视为失败。成功时提交的值成为新基线，除非处理函数自己调用了 `setBaseline()`。失败时焦点移到错误摘要，没有摘要时移到第一个出错的字段。
-- 开启 `autosave` 后，停止编辑时只校验改过的字段：出错或异步校验未完成的字段沿用已保存的值，其余照常保存，结果由同一个礼貌级 live region 播报。提交与 `confirmLeave()` 立即保存，卸载时保存已通过校验的改动；`disabled` 或 `readonly` 的表单不自动保存。
-- `readonly` 时必填标记与 `required` 一并撤下，因为用户已经不能再填；值仍随提交送出。
-- 指向未挂载字段的错误会保留，字段挂载时显示，用于分步表单；`schema` 中没有对应字段的问题列在错误摘要中，并阻止提交。
-- 第一个控件拿到 id 与 label 的 `for`，其余控件用 `aria-labelledby` 指向 label；单选组、多选等无法用 `<label for>` 命名的控件拿到 id 后也改用 `aria-labelledby`。消息经 `aria-describedby` 关联，不设 `role="alert"`。表单的 `size`、`disabled` 与 `readonly` 也作用于表单项之外的控件。
-- 标签旁的 `?` 是普通的 `<button type="button">`：可访问名称来自 `messages.hint`，并经 `aria-describedby` 关联同一段隐藏文字；悬停或键盘聚焦时打开浮层，Esc 关闭，指针可移入浮层。浮层文字同时以视觉隐藏的形式留在 DOM 中，字段的每个控件都经 `aria-describedby` 关联它，排在消息或帮助文字之后。没有 `label` 时，`?` 单独占一行，给字段一个 label 才能让它贴着文字。侧栏布局里，只要有一个字段带 `hint`，标签列就加宽约 20px，同一表单的内容列整体右移。
+- 有效性随值实时计算；消息在用户改过的字段离开后出现（切换窗口不算离开），之后随每次编辑更新。`validate()` 与提交显示全部消息。
+- 规则按顺序执行，遇到第一条错误即停止。异步规则在同步规则通过后运行，输入时防抖 300ms，超过 1 秒显示 `messages.validating`。
+- 提交先校验，再调用处理函数；处理函数返回 `false`、抛出异常或调用 `setErrors()` 即视为失败。失败时焦点移到错误摘要，没有摘要时移到第一个出错的字段。
+- 开启 `autosave` 后，停止编辑约一秒即保存，只校验改过的字段；`disabled` 与 `readonly` 的表单不自动保存。提交与 `confirmLeave()` 立即保存。
+- 控件经 `for` 或 `aria-labelledby` 关联 label，消息经 `aria-describedby` 关联，不设 `role="alert"`。
+- 标签旁的 `?` 是普通按钮，可访问名称来自 `messages.hint`；悬停或键盘聚焦时浮出 `hint` 的说明，Esc 关闭，指针可移入浮层。
 
 ## 技术实现
 

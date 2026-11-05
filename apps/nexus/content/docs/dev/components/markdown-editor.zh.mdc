@@ -1,6 +1,6 @@
 ---
 title: MarkdownEditor
-description: 支持所见即所得、源码与预览模式的 Markdown 编辑器
+description: 所见即所得、源码与预览的 Markdown 编辑器
 category: Advanced
 status: beta
 since: 0.3.9
@@ -132,12 +132,9 @@ code: |
 
 ### 最佳实践
 
-- 用户或 provider 写的内容保持 `sanitize=true`。
-- 自定义表情的 `src` 用 https 或 `data:` 地址；`sanitize` 开启时（默认如此），`tfile:`、`file:` 等其他协议的地址会被消毒器去掉，图片不再显示。
-- 每个表情的 `name`（短代码）会写进文档内容，只增不改：改名后，旧文档里的 `:name:` 会变回文字。表情包的 `name` 只是标签页的名字，可以随时改。
-- `emojiPacks` 要保持引用稳定：放进 `ref` 或 `const`，不要在模板里写字面量数组。每次父组件渲染都给它一个新数组，编辑器就会重建表情索引并重绘整篇文档。
+- 用户或 provider 写的内容保持 `sanitize=true`；自定义表情的 `src` 用 https 或 `data:` 地址，`sanitize` 开启时（默认如此）其他协议的地址会被消毒器去掉。
+- 表情的 `name`（短代码）会写进文档，只增不改：改名后，旧文档里的 `:name:` 会变回文字；表情包的 `name` 只是标签页名字，可以随时改。`emojiPacks` 要保持引用稳定，放进 `ref` 或 `const`，不要在模板里写字面量数组。
 - 模式或评论侧栏需要写入路由或 query 时，使用受控的 `mode` 或 `v-model:comments-open`；只想展开某个评论线程时调用 `openComments(id)`。
-- 评论、发布说明等窄场景用 `toolbarActions` 精简工具栏，按需关闭 `slash`、`bubble`。
 - `uploadImage` 与 `ai` 响应 `signal`：用户删除占位、停止或放弃时中止请求。
 - 宿主不扫描 tuffex 源码时，把 `src/toolbar-icons.ts` 的 `MARKDOWN_EDITOR_ICON_CLASSES` 加入 UnoCSS safelist。
 
@@ -147,7 +144,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` / `v-model` | `string` | `''` | Markdown 源文本。 |
+| `modelValue` | `string` | `''` | Markdown 源文本，配合 `v-model` 使用。 |
 | `placeholder` | `string` | `''` | 可编辑模式下的占位文本。 |
 | `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | 受控模式。 |
 | `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | 非受控时的初始模式。 |
@@ -171,8 +168,8 @@ code: |
 | `bubble` | `boolean` | `true` | 所见即所得模式下，选中文字时浮出格式条。 |
 | `ai` | `MarkdownEditorAi` | - | 格式条上的 AI 改写；不传则不显示。 |
 | `uploadImage` | `MarkdownEditorUploadImage` | - | 上传粘贴、拖入或选择的图片，返回托管地址；不传时图片按钮改为填写地址。 |
-| `comments` / `v-model:comments` | `MarkdownEditorComment[]` | - | 评论线程；不传则隐藏评论。 |
-| `commentsOpen` / `v-model:comments-open` | `boolean` | - | 评论侧栏是否打开；不绑定时由编辑器自己维护。 |
+| `comments` | `MarkdownEditorComment[]` | - | 评论线程，配合 `v-model:comments` 使用；不传则隐藏评论。 |
+| `commentsOpen` | `boolean` | - | 评论侧栏是否打开，配合 `v-model:comments-open` 使用；不绑定时由编辑器自己维护。 |
 | `user` | `MarkdownEditorUser` | `{ id: 'local', name: labels.you }` | 本地用户：评论作者，也是协作者看到的身份。 |
 | `collaboration` | `MarkdownEditorCollaboration` | - | 实时协作的传输。 |
 | `statusBar` | `boolean` | `true` | 底部的字数、字符数与协作者。 |
@@ -294,15 +291,12 @@ code: |
 
 ## 概述
 
-- 传入 `mode` 为受控模式，否则由 `defaultMode` 初始化；三种模式共用同一份 Markdown；预览不能输入，格式按钮停用，任务列表的勾选框仍可点击切换。
+- 传入 `mode` 为受控模式，否则由 `defaultMode` 初始化；三种模式共用同一份 Markdown。预览不能输入，格式按钮停用，任务列表的勾选框仍可点击切换。
 - 所见即所得按块渲染；光标进入加粗、链接、行内公式等格式时露出 Markdown 标记，可直接编辑。段首输入 `/`（中文输入法下为 `、`）打开块菜单。
-- 输入 `:` 打开补全，或点工具栏的表情按钮打开选择器。选择器的标签页依次为「最近」、各个含合法表情的表情包、内置分类；没有最近使用时默认打开第一个包。选中自定义表情插入 `:name:`，选中内置表情插入字符本身。
-- 自定义表情的 `name` 只能是小写字母、数字、`_`、`+`、`-`，2 到 40 个字符，不合法的条目被忽略；同名出现两次保留第一个，包 `id` 重复时后面的被忽略。与内置短代码同名时，自定义表情生效，内置的那个从选择器里消失。`:name:` 在预览与所见即所得中显示为图片（高约 1.25em），源码模式显示文字；表里没有的名字保持文字，图片加载失败时显示 `:name:`。
-- 选中文字浮出格式条：格式、高亮颜色、链接、评论与 AI。AI 的答案流式显示，可切换查看逐词改动，再替换、插入到下方、重试或放弃；`Esc` 放弃并恢复选区。
-- 图片先以带进度的占位插入，上传完成后换成 `uploadImage` 返回的地址；删除占位即中止上传。
-- 每次编辑都以变更集提交，撤销历史、评论区间与协作者的光标随之移动。本地光标至多每 50 ms 发送一次，协作者移动光标后显示名字 2.5 秒。
-- 两种编辑模式共用快捷键：`Mod+B` 加粗、`Mod+I` 斜体、`Mod+E` 行内代码、`Mod+Shift+X` 删除线、`Mod+Shift+H` 高亮、`Mod+K` 链接、`Mod+Alt+1–6` 标题（`Mod+Alt+0` 恢复正文）、`Mod+Alt+M` 评论。模式切换是 `role="group"` 的切换按钮组，以 `aria-pressed` 标出当前模式。
-- `Esc` 关闭打开着的表情或高亮颜色菜单，并认领这个按键（在 document 捕获阶段 `preventDefault`），外层遇到未认领的 `Esc` 才关闭的浮层因此保持打开。用鼠标打开的高亮菜单让焦点留在正文里，这时同样如此。
+- 输入 `:` 打开补全，或点工具栏的表情按钮打开选择器；选择器的标签页依次为「最近」、各个含合法表情的表情包、内置分类。自定义表情的 `name` 只能是小写字母、数字、`_`、`+`、`-`，2 到 40 个字符，不合法的条目被忽略；与内置短代码同名时自定义表情生效。`:name:` 在预览与所见即所得中显示为图片，源码模式显示文字。
+- 选中文字浮出格式条：格式、高亮颜色、链接、评论与 AI。AI 的答案流式显示，可逐词查看改动，再替换、插入到下方、重试或放弃；`Esc` 放弃并恢复选区。
+- 图片先以带进度的占位插入，上传完成后换成 `uploadImage` 返回的地址，删除占位即中止上传。每次编辑都以变更集提交，撤销历史、评论区间与协作者的光标随之移动。
+- 两种编辑模式共用快捷键：`Mod+B` 加粗、`Mod+I` 斜体、`Mod+E` 行内代码、`Mod+Shift+X` 删除线、`Mod+Shift+H` 高亮、`Mod+K` 链接、`Mod+Alt+1–6` 标题、`Mod+Alt+M` 评论。模式切换是 `role="group"` 的切换按钮组；`Esc` 关闭打开着的表情或高亮颜色菜单并认领这个按键，外层浮层因此保持打开。
 
 ## 技术实现
 

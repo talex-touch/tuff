@@ -1,6 +1,6 @@
 ---
 title: "SparkChart"
-description: "A smooth canvas trend chart with optional axes, active crosshair and accessible hover values."
+description: "A smooth canvas trend chart with optional axes and hover readouts."
 category: Visualization
 status: beta
 since: 0.3.9
@@ -69,9 +69,12 @@ code: |
 | `gridLines` | `number` | `4` | Number of gridlines. |
 | `lineWidth` | `number` | `2.25` | Stroke width in CSS pixels. |
 | `curve` | `LineCurve` | `'monotone'` | `linear`, `monotone`, `natural`, or `step`. |
-| `xAxis` / `yAxis` | `boolean` | `false` | Draw compact x/y baselines and labels. |
-| `xTicks` / `yTicks` | `number` | `3` / `4` | Number of x/y labels. |
-| `xTickFormat` / `yTickFormat` | `(value: number) => string` | — | Override x/y label formatting. |
+| `xAxis` | `boolean` | `false` | Draw a compact x baseline and labels. |
+| `yAxis` | `boolean` | `false` | Draw a compact y baseline and labels. |
+| `xTicks` | `number` | `3` | Number of x labels. |
+| `yTicks` | `number` | `4` | Number of y labels. |
+| `xTickFormat` | `(value: number) => string` | — | Override x label formatting. |
+| `yTickFormat` | `(value: number) => string` | — | Override y label formatting. |
 | `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | Inner inset; axes reserve their own minimum edges. |
 | `domain` | `[number, number]` | — | Fixed value range; omit to fit the data. |
 | `activeIndex` | `number \| null` | — | Controlled highlighted sample. |
@@ -111,6 +114,18 @@ code: |
 | `leave` | — | Pointer left, lifted, or was cancelled. |
 | `update:activeIndex` | `(index: number \| null)` | Controlled write-back. |
 
+### Exposed Methods
+
+| Name | Description |
+|------|------|
+| `redraw()` | Repaints the canvas at the container's measured size with the current data. |
+
+### Slots
+
+| Slot | Description |
+|------|------|
+| `default` | The chart `TxChartScrubber` wraps, usually `TxSparkChart`; the scrubber maps the pointer through that chart's plot box. |
+
 ## Sizing and Theme
 
 The chart fills its container and measures that **container** rather than taking a width or height prop. Give the wrapper a definite height. A `ResizeObserver` repaints it on resize; the bitmap is scaled by `devicePixelRatio` (capped at 2) while draw maths stays in CSS pixels.
@@ -134,14 +149,8 @@ The default `curve="monotone"` uses the same d3 curve factory as the full `@tale
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`, `TxChartScrubber.vue`.
-- Projection and painting: `packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`, `draw.ts`.
-- Types: `packages/tuffex/packages/components/src/spark-chart/src/types.ts`.
-- **Tested coverage:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts` (33 cases) covers domains, projection, monotone canvas strokes, x/y axes and edge-label anchoring, hover dots, keyboard state, scrubber control and accessibility.
+- Component source and types: `packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue` and `TxChartScrubber.vue`; projection and painting in `geometry.ts` and `draw.ts`; types in `types.ts`.
+- Drawn on canvas and repainted by a `ResizeObserver`; the hover tooltip is a DOM layer owned by `TxChartScrubber`, while the canvas keeps the highlighted dots.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-- The chart is intentionally canvas-first: the draw-call surface is testable even where jsdom has no 2D context.
-- The full chart family now lives at `@talex-touch/tuffex/charts`; SparkChart stays a compact card primitive at the root TuffEx entry.
-- No area fill is offered: the user request is a legible trend readout, not an uncertain extrapolation between sparse points.

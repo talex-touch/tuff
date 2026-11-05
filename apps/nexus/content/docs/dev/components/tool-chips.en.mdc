@@ -85,7 +85,7 @@ const diffs = [
 | `rows` | `ToolChipRow[]` | — | Row data. Required. |
 | `diffs` | `ToolChipDiff[]` | `[]` | Diff data; when empty, the diff section and its divider don't render. |
 | `summary` | `string` | — | Header text; falls back to `summaryFormatter`. |
-| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call(s)` `` | Default header text, pluralized by count. |
+| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call${n === 1 ? '' : 's'}` `` | Default header text, pluralized by count. |
 | `open` | `boolean` | — | Open state of the whole run, for `v-model:open`; omit to let the component own it. |
 | `defaultOpen` | `boolean` | `true` | Initial open state when uncontrolled. |
 | `expandedRows` | `string[]` | — | Ids of the expanded rows, for `v-model:expandedRows`. |

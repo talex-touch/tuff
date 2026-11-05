@@ -104,3 +104,5 @@ code: |
 
 - 可视窗口从位置缓存（按 key 记录测得高度的前缀和）取 `{ start, end }`；未跨过行边界的滚动帧沿用上一窗口，不重新调用 `item` 插槽。
 - 源码：`packages/tuffex/packages/components/src/conversation-stream/`。
+
+<TuffDocSourceLink />

@@ -30,7 +30,7 @@ code: |
 ## Usage
 
 ### Basic
-Pass the recording's URL and its known length. The capsule widens with the length, and one clip plays at a time on a page.
+Pass the recording's URL and its known length; the capsule widens with the length, and one clip plays at a time on a page.
 :::TuffDemoWrapper{demo="VoiceClipBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -141,7 +141,7 @@ code: |
 - The play key, the waveform and the time form a 36px capsule; its width grows with the square root of the length, from 140px to 300px at 60 seconds and beyond, and the bar count follows the waveform's real width.
 - At rest the time is the length rounded to whole seconds (at least one); while playing, or paused part-way, it counts down from that number by the whole seconds played, so starting playback never changes it; at the end the clip returns to the start and shows the full length again.
 - One clip plays at a time on a page; starting one pauses whichever was playing.
-- The waveform is a `role="slider"`: click or drag to seek, ←/→ and ↑/↓ step one second, PageUp/PageDown step 10% of the length, Home/End jump to either end; seeking never starts playback.
+- The waveform is a `role="slider"`: click or drag to seek, ←/→ and ↑/↓ step one second, PageUp/PageDown step 10% of the length (at least one second), Home/End jump to either end; seeking never starts playback.
 - `peaks` are drawn as given; otherwise a local recording is decoded, with a flat track until it lands or if it fails. An empty or failing `src` disables the play key and replaces the waveform with `unavailableLabel`.
 - The press scale and the bar-height transition only run under `prefers-reduced-motion: no-preference`; progress always updates. The clip draws left to right on every page; right-to-left pages do not mirror it.
 

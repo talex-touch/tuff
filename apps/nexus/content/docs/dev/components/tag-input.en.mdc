@@ -64,7 +64,7 @@ code: |
 
 ### Edge and States
 
-The tag-input box uses the inset ring. When disabled, tag and input text use the disabled colour, not reduced opacity.
+The tag-input box uses the inset ring; when disabled, tag and input text use the disabled colour, not reduced opacity.
 
 :::TuffDemoWrapper{demo="TagInputEdgeDemo" code-lang="vue"}
 ---

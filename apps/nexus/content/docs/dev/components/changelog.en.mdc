@@ -205,7 +205,7 @@ Initial standalone package baseline.
 
 ## Component Since Index
 
-Introduction versions and installation barrels for all 183 component modules. Documentation suites are listed in the [component hub](./index.en.mdc).
+Introduction versions and installation barrels for all 192 component modules. Documentation suites are listed in the [component hub](./index.en.mdc).
 
 | Component | Installation barrel | Since |
 |---|---|---|
@@ -256,6 +256,7 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`divider`](./divider.en.mdc) | base | 0.3.7 |
 | [`dot-indicator`](./dot-indicator.en.mdc) | base | 0.3.9 |
 | [`drawer`](./drawer.en.mdc) | base | 0.3.4 |
+| [`drawer-form`](./drawer-form.en.mdc) | base | 0.9.2 |
 | [`dropdown-menu`](./dropdown-menu.en.mdc) | base | 0.3.4 |
 | [`edge-fade-mask`](./edge-fade-mask.en.mdc) | pro | 0.3.4 |
 | [`empty`](./empty.en.mdc) | base | 0.3.4 |
@@ -290,6 +291,7 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`icon-picker`](./icon-picker.en.mdc) | base | 0.6.0 |
 | [`image-gallery`](./image-gallery.en.mdc) | base | 0.3.4 |
 | [`image-generation`](./image-generation.en.mdc) | pro | 0.6.2 |
+| [`image-preview`](./image-preview.en.mdc) | base | 0.9.2 |
 | [`image-uploader`](./image-uploader.en.mdc) | base | 0.3.4 |
 | [`inline-citation`](./inline-citation.en.mdc) | ai | 0.3.9 |
 | [`input`](./input.en.mdc) | base | 0.3.4 |
@@ -304,7 +306,9 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`markdown-view`](./markdown-view.en.mdc) | base | 0.3.4 |
 | [`message-actions`](./message-actions.en.mdc) | ai | 0.3.9 |
 | [`metal-fx`](./metal-fx.en.mdc) | pro | 0.6.2 |
+| [`miko`](./miko.en.mdc) | ai | 0.9.3 |
 | [`modal`](./modal.en.mdc) | base | 0.3.4 |
+| [`modal-form`](./modal-form.en.mdc) | base | 0.9.2 |
 | [`mode-chip`](./mode-chip.en.mdc) | ai | 0.6.0 |
 | [`morph`](./morph.en.mdc) | pro | 0.7.0 |
 | [`motion`](./motion.en.mdc) | pro | 0.7.0 |
@@ -362,6 +366,7 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`status-badge`](./status-badge.en.mdc) | base | 0.3.4 |
 | [`status-hint`](./status-hint.en.mdc) | base | 0.6.1 |
 | [`steps`](./steps.en.mdc) | base | 0.3.4 |
+| [`steps-form`](./steps-form.en.mdc) | base | 0.9.2 |
 | [`stream-element`](./stream-element.en.mdc) | ai | 0.6.3 |
 | [`stream-markdown`](./stream-markdown.en.mdc) | ai | 0.3.9 |
 | [`stream-text`](./stream-text.en.mdc) | ai | 0.6.3 |
@@ -373,6 +378,7 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`tag-input`](./tag-input.en.mdc) | base | 0.3.4 |
 | [`task-rows`](./task-rows.en.mdc) | ai | 0.3.9 |
 | [`terminal`](./terminal.en.mdc) | pro | 0.7.0 |
+| [`text`](./text.en.mdc) | base | 0.9.3 |
 | [`text-morph`](./text-morph.en.mdc) | pro | 0.6.0 |
 | [`text-transformer`](./text-transformer.en.mdc) | pro | 0.3.4 |
 | [`textarea`](./textarea.en.mdc) | base | 0.3.7 |
@@ -384,6 +390,7 @@ Introduction versions and installation barrels for all 183 component modules. Do
 | [`tool-chips`](./tool-chips.en.mdc) | ai | 0.3.9 |
 | [`tool-confirmation`](./tool-confirmation.en.mdc) | ai | 0.3.9 |
 | [`tooltip`](./tooltip.en.mdc) | base | 0.3.4 |
+| [`touch-surface`](./touch-surface.en.mdc) | pro | 0.9.3 |
 | [`transfer`](./transfer.en.mdc) | base | 0.3.4 |
 | [`transition`](./transition.en.mdc) | pro | 0.3.4 |
 | [`tree`](./tree.en.mdc) | base | 0.3.4 |

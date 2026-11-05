@@ -89,7 +89,7 @@ code: |
 - A favicon that fails to load stops rendering, and the chip degrades to text.
 - The icon carries `alt=""` and `aria-hidden`; the accessible name comes from the chip text.
 - The chip sits in the text flow; line height belongs to the surrounding paragraph.
-- The entrance plays once, on mount; flipping `appear` later replays nothing.
+- The entrance plays once, on mount; flipping `appear` from `false` to `true` replays it.
 
 ## Technologies
 

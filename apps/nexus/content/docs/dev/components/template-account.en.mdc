@@ -1,0 +1,136 @@
+---
+title: Account
+description: Profile, security, sessions and notifications, with confirmed removal.
+category: TemplateApp
+status: beta
+since: 0.9.3
+tags: [template, account, profile, security, sessions]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Account center
+:::TuffDemoWrapper{demo="TemplateAccountDemo" code-lang="vue" description="Switch tabs; removing sessions and turning off two-factor both ask first. Sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Removing a session or turning off two-factor opens a modal; only the reader's click confirms it, never a timer
+  const tab = ref('profile')
+  const twoFactor = ref(true)
+  const sessions = ref(seedSessions())
+  const confirmOpen = ref(false)
+  const profile = reactive({ displayName: 'Lin Che', bio: '' })
+
+  // While turning off, the switch stays on until the reader confirms
+  let allowTwoFactorOff = false
+  watch(twoFactor, (next, previous) => {
+    if (allowTwoFactorOff) {
+      allowTwoFactorOff = false
+      return
+    }
+    if (next || !previous)
+      return
+    twoFactor.value = true
+    confirmOpen.value = true
+  })
+  </script>
+
+  <template>
+    <TemplateFrame title="Account" :height="620">
+      <template #default="{ width }">
+        <header class="account__head">
+          <TxAvatar name="Lin Che" :size="56" />
+          <strong>Lin Che</strong>
+          <TxStatusBadge size="sm" text="Email verified" status="success" icon="i-carbon-checkmark-filled" />
+        </header>
+
+        <TxTabs v-model="tab" :placement="width > 0 && width < 640 ? 'top' : 'left'" borderless>
+          <TxTabItemGroup name="Account">
+            <TxTabItem name="profile" icon-class="i-carbon-user">
+              <template #name>Profile</template>
+              <TuffInput v-model="profile.displayName" aria-label="Display name" />
+              <TuffInput model-value="lin_che" readonly aria-label="Username" />
+              <TuffInput model-value="lin.che@example.com" readonly aria-label="Email" />
+              <TxTextarea v-model="profile.bio" :rows="3" resize="none" />
+            </TxTabItem>
+
+            <TxTabItem name="security" icon-class="i-carbon-security">
+              <template #name>Security</template>
+              <TxGroupBlock name="Sign-in" :collapsible="false">
+                <TxBlockSlot title="Two-factor sign-in" description="Ask for a code from your authenticator on sign-in">
+                  <TuffSwitch v-model="twoFactor" aria-label="Two-factor sign-in" />
+                </TxBlockSlot>
+              </TxGroupBlock>
+            </TxTabItem>
+
+            <TxTabItem name="sessions" icon-class="i-carbon-devices">
+              <template #name>Sessions</template>
+              <TxDataTable :columns="tableColumns" :data="sessions" row-key="id" table-layout="fixed" sticky-header>
+                <template #cell-device="{ row }">
+                  {{ row.device }}
+                  <TxTag v-if="row.current" label="This device" variant="soft" />
+                </template>
+                <template #cell-actions="{ row }">
+                  <TxIconButton v-if="!row.current" icon="i-carbon-trash-can" size="xs" label="Remove session" @click="askRemove(row.id)" />
+                </template>
+              </TxDataTable>
+              <TxCard variant="dashed" :padding="16" :radius="14">
+                <TxButton variant="danger" size="sm" @click="askRemoveOthers">Remove other sessions</TxButton>
+              </TxCard>
+            </TxTabItem>
+
+            <TxTabItem name="notifications" icon-class="i-carbon-notification">
+              <template #name>Notifications</template>
+              <TuffSwitch v-model="notify.product" aria-label="Product updates" />
+              <TuffSwitch v-model="notify.security" disabled aria-label="Security alerts" />
+            </TxTabItem>
+          </TxTabItemGroup>
+        </TxTabs>
+
+        <TxModal v-model="confirmOpen" title="Confirm action">
+          <template #footer>
+            <TxButton size="sm" variant="ghost" @click="confirmOpen = false">Cancel</TxButton>
+            <TxButton size="sm" variant="danger" @click="confirmAction">Confirm</TxButton>
+          </template>
+        </TxModal>
+
+        <TxToastPanel :open="toastOpen" side="above" :stack="0">Saved</TxToastPanel>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+The Tuff account center: profile, security, sessions and notifications on one page, with the avatar and email verification always shown in the header.
+
+- Display name and bio are editable; username and email are read-only, and saving shows a short notice.
+- The two-factor switch asks before it turns off and stays on until the reader confirms.
+- Sessions lists signed-in devices and tags the current one as "This device"; removing one session or all others asks first.
+- The danger zone holds one action, Remove other sessions, and no timer runs it; the button is disabled when there are no other sessions.
+- Security alerts stay on in notifications. Wide (≥ 960px) adds an App column; narrow (< 640px) moves the tabs to the top and keeps only the device and action columns.
+
+## Customization
+
+- With a real account, replace the sample data with the account service's API; the avatar, email and verification come from the service, not a copy in the template.
+- Removing sessions and turning off two-factor should call the API only after the modal is confirmed; on failure, keep the modal open and offer a retry.
+- The "This device" tag comes from the current session the server returns, not from a guess in the front end.
+- Keep security alerts fixed on in any new notification row, and explain why in its description.
+
+## Related components
+
+| Region | Components | Role |
+| --- | --- | --- |
+| Profile header | [TxAvatar](/docs/dev/components/avatar), [TxStatusBadge](/docs/dev/components/status-badge) | Avatar, name and verification status |
+| Tabs | [TxTabs / TxTabItemGroup / TxTabItem](/docs/dev/components/tabs) | Profile, security, sessions and notifications sections |
+| Profile form | [TuffInput](/docs/dev/components/input), [TxTextarea](/docs/dev/components/textarea) | Display name, read-only email and bio |
+| Security | [TxGroupBlock / TxBlockSlot](/docs/dev/components/group-block), [TuffSwitch](/docs/dev/components/switch), [TxButton](/docs/dev/components/button) | Two-factor sign-in and password |
+| Sessions | [TxDataTable](/docs/dev/components/data-table), [TxTag](/docs/dev/components/tag), [TxIconButton](/docs/dev/components/button) | Signed-in devices, the "This device" tag and removal |
+| Danger zone | [TxCard](/docs/dev/components/card), [TxButton](/docs/dev/components/button) | Removing all other sessions |
+| Confirmation and feedback | [TxModal](/docs/dev/components/modal), [TxToastPanel](/docs/dev/components/toast-panel) | Confirm before removal, and the result notice |

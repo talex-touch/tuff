@@ -74,7 +74,7 @@ code: |
 :::
 
 ### Loading
-Set `loading` while a server confirms the change. The box becomes a ring, grey when unchecked and primary when checked or mixed, and toggling is blocked.
+Set `loading` while a server confirms the change: the box becomes a ring, grey when unchecked and primary when checked or mixed, and toggling is blocked.
 :::TuffDemoWrapper{demo="CheckboxCheckboxLoadingDemo" code-lang="vue"}
 ---
 code: |
@@ -129,7 +129,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |--------|------|--------|------|
-| `modelValue` / `v-model` | `boolean` | `false` | The checked state. |
+| `modelValue` | `boolean` | `false` | The checked state, bound with `v-model`. |
 | `disabled` | `boolean` | `false` | Blocks toggling and removes the box from the tab order. |
 | `loading` | `boolean` | `false` | Shows a spinning ring and blocks toggling, without the disabled palette. |
 | `label` | `string` | - | Text beside the box. |
@@ -156,8 +156,7 @@ code: |
 - The root is a native `<button role="checkbox">`; click, Enter, or Space toggles it.
 - It is controlled: a toggle only emits, and the box updates once the parent writes `modelValue` back.
 - `indeterminate` sets `aria-checked="mixed"`, which is what tells checked from mixed while loading, since both look the same.
-- `disabled` and `loading` both set the native `disabled` attribute; `loading` also sets `aria-busy="true"`.
-- With visible text, no `aria-label` is rendered.
+- `disabled` and `loading` both set the native `disabled` attribute; `loading` also sets `aria-busy="true"`, and with visible text no `aria-label` is rendered.
 - Inside a `TxFormItem`, the item's label names the checkbox through `for`; a checkbox with text of its own uses `aria-labelledby` to name both. The form's `disabled` applies too.
 - Under reduced motion, the loading ring stops spinning.
 

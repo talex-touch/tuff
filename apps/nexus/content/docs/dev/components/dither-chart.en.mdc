@@ -1,6 +1,6 @@
 ---
 title: DitherChart
-description: "Data-driven pixel charts, ordered dithering and SVG patterns with periods, legends and date cursors."
+description: "Data-driven pixel and dithered charts with SVG patterns."
 category: MotionCharts
 status: beta
 since: 0.7.0
@@ -121,14 +121,28 @@ Each period has `id`, `label` and optional `series`, `nodes`, `cells`. A supplie
 
 | Event | Payload |
 | --- | --- |
-| `update:period`, `period-change` | Period ID. |
+| `update:period` | Period ID. |
+| `period-change` | Period ID. |
 | `update:activeKeys` | Visible IDs. |
 | `update:selectedSeries` | Selected metric ID. |
 | `update:hover` | `DitherHover \| null`. |
 | `update:dateCursor` | Point index or `null`. |
 | `select` | Selected datum from pointer click or Enter/Space; ending a drag does not select. |
 
-Slots: `header({ total, period })`, `tooltip({ hover })`, `footer({ dataset })`. The tooltip reuses the existing charts-core context and `TxChartTooltip` placement. The default tooltip is titled with the hovered point (a date or category) and names its series in the row; where the datum is the series itself (donuts, gauges, legend focus) the two would match, so only the row is shown. `dot`, `line` and `dashed` indicators retain separate markup. Pressing and dragging across the stage reads it continuously: on time charts the date cursor snaps to the nearest point with no easing and holds the first or last point past the stage edge; other charts read the datum under the pointer, as hover does. On touch a sideways drag reads and a vertical swipe still scrolls the page. The stage also supports arrows (Left with nothing read starts from the last point), Home/End, Enter/Space and Escape (cancels a drag and clears the reading), and readings are announced through a polite live region; legends and period controls are native buttons.
+| Slot | Scope | Description |
+| --- | --- | --- |
+| `header` | `{ total, period }` | Replaces the heading area; `total` is the current total and `period` the active period. |
+| `tooltip` | `{ hover }` | Replaces the hover tooltip, positioned with the shared chart tooltip. |
+| `footer` | `{ dataset }` | Caller content below the chart, receiving the normalized data snapshot. |
+
+ The tooltip reuses the existing charts-core context and `TxChartTooltip` placement. The default tooltip is titled with the hovered point (a date or category) and names its series in the row; where the datum is the series itself (donuts, gauges, legend focus) the two would match, so only the row is shown. `dot`, `line` and `dashed` indicators retain separate markup. Pressing and dragging across the stage reads it continuously: on time charts the date cursor snaps to the nearest point with no easing and holds the first or last point past the stage edge; other charts read the datum under the pointer, as hover does. On touch a sideways drag reads and a vertical swipe still scrolls the page. The stage also supports arrows (Left with nothing read starts from the last point), Home/End, Enter/Space and Escape (cancels a drag and clears the reading), and readings are announced through a polite live region; legends and period controls are native buttons.
+
+### Exposed Methods
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `scene` | Readonly computed value | The current rendered scene: shapes, labels, ticks and total, updated by data, period and selection. |
+| `dataset` | Readonly computed value | The normalized data snapshot: series, nodes, cells and periods. |
 
 ### CSS variables
 

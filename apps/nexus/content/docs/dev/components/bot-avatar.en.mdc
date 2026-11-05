@@ -120,6 +120,7 @@ Each instance offsets its blink timing by default, so a row never blinks in unis
 | `jumpLean` | `number` | `6` | Degrees of lean into a jump. |
 | `jumpEvery` | `number` | `8` | Seconds between idle jumps, ±40%; `0` disables them. |
 | `jumpLand` | `number` | `0` | When the landing squash starts relative to touch-down, in seconds. |
+| `ariaLabel` | `string` | `<Label> bot, <state>` | Accessible name of the canvas; by default built from the body name and state, such as `Clover bot, idle`. |
 
 `BotAvatarType` has 18 shapes: `clover`, `flower`, `triangle`, `square`, `blob`, `ghost`, `circle`, `drop`, `star`, `droid`, `mech`, `alien`, `hexagon`, `cat`, `cloud`, `pill`, `pebble`, and `puddle`. `BotAvatarFace` is `'eyes' | 'mouth'`. `BotAvatarSquashEase` is `'sharp' | 'pulse' | 'soft' | 'bouncy'`.
 
@@ -131,7 +132,7 @@ Each instance offsets its blink timing by default, so a row never blinks in unis
 
 ## Overview
 
-- The canvas is a `role="img"` whose `aria-label` follows the state ("Clover bot, idle"); pass `aria-label` to replace it.
+- The canvas is a `role="img"` whose `aria-label` follows the state ("Clover bot, idle"); pass `ariaLabel` to replace it.
 - Other attributes and DOM listeners pass straight to the `<canvas>`, so `class`, `style`, and `data-*` work as usual.
 - An unknown `state` falls back to `default`; an unknown `type` falls back to `clover`.
 - One shared `requestAnimationFrame` loop serves every avatar; drawing stops offscreen and while the tab is hidden.

@@ -92,7 +92,7 @@ code: |
 :::
 
 ### 文案
-`label` 变化时交叉淡入，`labelPlacement` 决定文案在前或在后。默认插槽原样渲染，不带过渡。
+`label` 变化时交叉淡入，`labelPlacement` 决定文案在前或在后；默认插槽原样渲染，不带过渡。
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
 ---
 code: |
@@ -161,6 +161,8 @@ code: |
 | `size` | `'small' \| 'default' \| 'large'` | `'default'` | 尺寸，同时影响文案字号与间距。 |
 | `disabled` | `boolean` | `false` | 禁止切换，并移出 Tab 序列。 |
 | `loading` | `boolean` | `false` | 显示旋转环并禁止切换。 |
+| `ariaLabel` | `string` | `'Toggle'` | 无可见文案时的可访问名称；有 `label` 或默认插槽时不生效。 |
+| `ariaLabelledby` | `string` | - | 引用一个可见元素的 id 来命名开关。 |
 
 ### 事件
 

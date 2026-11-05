@@ -143,6 +143,14 @@
   color: var(--store-on-art);
   color-scheme: dark;
   isolation: isolate;
+
+  /* Tuffex derives these five tokens only at :root. This always-dark scope
+     derives them again so they follow the dark values here. */
+  --tx-disabled-bg-color: var(--tx-fill-color-light);
+  --tx-disabled-text-color: var(--tx-text-color-placeholder);
+  --tx-disabled-border-color: var(--tx-border-color-light);
+  --tx-chart-grid-line: color-mix(in srgb, var(--tx-chart-text-primary) 20%, transparent);
+  --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton);
 }
 
 .store-carousel__track {

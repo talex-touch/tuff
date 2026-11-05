@@ -5,8 +5,8 @@ category: Navigation
 status: beta
 since: 0.3.9
 tags: [dropdown, flat, navigation, floating, menu]
-syncStatus: migrated
-verified: false
+syncStatus: reviewed
+verified: true
 ---
 
 ## Usage
@@ -33,7 +33,7 @@ code: |
 
 - Use `trigger="click"` for destructive or state-changing menus; hover-opened panels are easy to trip on a trackpad.
 - The hover bridge and safe triangle handle diagonal travel into the panel, so don't raise `closeDelay` for it.
-- Set `teleport="false"` when the panel must inherit its container's stacking or clipping context; inline, it is clipped by ancestor `overflow: hidden`.
+- Set `:teleport="false"` when the panel must inherit its container's stacking or clipping context; inline, it is clipped by ancestor `overflow: hidden`.
 - When the panel flips to the other side of the trigger, use the `side` slot prop to flip your own decorations, such as arrows and shadows.
 - Placement is written back asynchronously after opening; measure absolute geometry in a `requestAnimationFrame`.
 

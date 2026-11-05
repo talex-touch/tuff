@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### First-run setup
-:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" description="Watch the flow plays the first three steps and stops at permissions, which only you grant. Sign-in and permissions are simulated."}
+:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" description="Watch the flow plays the first three steps and stops at permissions, which only you grant."}
 ---
 code: |
   <script setup lang="ts">
@@ -63,7 +63,7 @@ code: |
                     Sign in with Passkey
                   </TxButton>
                 </TxBorderBeam>
-                <TxForm :model="form" :rules="rules" label-position="top" @submit="sendMagicLink">
+                <TxForm :model="form" :rules="rules" label-position="top" @submit-success="submitEmail">
                   <TxFormItem label="Email" prop="email">
                     <template #default="{ id }">
                       <TxInput :id="id" v-model="form.email" type="email" />

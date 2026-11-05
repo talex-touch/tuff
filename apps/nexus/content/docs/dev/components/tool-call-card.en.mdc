@@ -50,12 +50,15 @@ code: |
 |------|------|---------|-------------|
 | `toolCall` | `AiToolCallPart` | — | The call to render. Required. |
 | `defaultExpanded` | `boolean` | `false` | Initial expanded state; read once, on mount. |
+| `userOpen` | `boolean` | — | Host-held expanded state; wins over the reader's click and auto-expansion. Omit it to let the card own the state. |
 | `retryLabel` | `string` | `'Retry'` | Label of the retry button. |
 | `pendingLabel` | `string` | `'Queued'` | Label for `pending`. |
 | `runningLabel` | `string` | `'Running'` | Label for `running`. |
 | `doneLabel` | `string` | `'Done'` | Label for `done` and any unmatched status. |
 | `errorLabel` | `string` | `'Failed'` | Label for `error`. |
 | `inputLabel` | `string` | `'Input'` | Accessible name of the input section; not drawn as a heading. |
+| `emptyResultLabel` | `string` | `'No output'` | Shown in the result area when a `done` call has no `output` and no `input`, and no `result` slot is given. |
+| `showRetry` | `boolean` | — | Shows the retry button; when unset, the button appears only if a `retry` listener is bound. |
 | `linesToggleFormatter` | `(hiddenCount: number, expanded: boolean) => string` | `'N more lines'` / `'Show less'` | Label of the toggle when the input runs past four lines. |
 
 `AiToolCallPart` is `{ type, id, name, status, summary?, input?, output?, error?, logs?, durationMs? }`, where `status` is `'pending' | 'running' | 'done' | 'error'`.
@@ -83,11 +86,11 @@ code: |
 
 ## Overview
 
-- The body follows `status`: `running` shows `logs`, `done` shows the `result` slot (falling back to `output`), and `error` shows `error` with a retry button; `input` shows whenever it is set.
+- The body follows `status`: `running` shows `logs`, `done` shows the `result` slot (falling back to `output`), and `error` shows `error`; `input` shows whenever it is set.
 - The header reads: elapsed time while in flight (`(1.0)`), the name (shimmering while in flight), the arguments (`summary`, else the first input line), then the duration once `durationMs` is set.
-- `pending` and `running` auto-expand; once settled the card collapses and keeps the last two lines of output as a preview. Logs, output and the preview stay pinned to their bottom.
+- `pending` and `running` auto-expand; once settled the card collapses and keeps the last two lines of output as a preview. Logs, output and the preview stay pinned to their bottom, and every change to `logs` scrolls the log region down.
 - Input longer than four lines shows its first four and a toggle built by `linesToggleFormatter`; the footer shows the status.
-- Every change to `logs` scrolls the log region to the bottom.
+- The retry button appears only in the `error` state: `showRetry` true shows it, false hides it, and when unset it shows only if a `retry` listener is bound.
 - `status` is mirrored onto the root's `data-status` for styling.
 
 ## Technologies

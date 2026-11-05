@@ -86,7 +86,7 @@ code: |
 
 - Give the slot content its own background and a corner radius that matches `borderRadius`.
 - Leave room around `pulse-outside` for the halo to spill (`overflow: visible`).
-- Use one beam per section; with several on screen, lower `strength` or slow `duration`.
+- Use one beam per section; the default hue animation repaints each beam's filter every frame, so limit how many show at once, and `staticColors` turns that animation off.
 - Use `theme="light"` or `"auto"` on light pages; the default dark tuning lacks contrast there.
 
 ## API Reference

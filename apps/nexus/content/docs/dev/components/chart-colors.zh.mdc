@@ -1,6 +1,6 @@
 ---
 title: "Chart Colors 图表色板"
-description: "分类、语义、顺序与地图色板：CSS 变量随主题自动切换，ChartPalette 提供字面值。"
+description: "分类、语义、顺序与地图色板，CSS 变量随主题切换"
 category: Charts
 status: beta
 since: 0.1.0
@@ -32,8 +32,10 @@ verified: true
 | `--tx-chart-text-primary/-secondary` | 文本色。 |
 | `--tx-chart-grid-line` | 网格线（主文本色 20% 透明度）。 |
 | `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | 地图陆地与分级色阶。 |
+| `--tx-skeleton-base-color` | 加载占位的底色，指向 `--tx-chart-semantic-skeleton`。 |
+| `--tx-chart-marker-label-bg` | 标记与阈值标签的底色光晕，暗色下换值。 |
 
-所有变量都带亮色 fallback，不接宿主主题也能正确渲染；宿主想换品牌色时覆盖变量即可，组件零改动。
+所有变量都有亮色默认值，不接宿主主题也能正确渲染；宿主想换品牌色时覆盖变量即可，组件零改动。
 
 ## 双轨取色
 

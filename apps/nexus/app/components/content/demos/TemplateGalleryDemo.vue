@@ -1098,6 +1098,8 @@ async function resetDemo(): Promise<void> {
   playEntrance()
 }
 
+watch(locale, resetDemo)
+
 defineExpose({ resetDemo })
 
 onBeforeUnmount(() => {

@@ -1,7 +1,7 @@
 <!-- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT. -->
 <script setup lang="ts">
 import type { WorkingIndicatorProps } from './types'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { formatElapsed, useElapsed } from './use-elapsed'
 
 defineOptions({ name: 'TxWorkingIndicator' })
@@ -16,10 +16,29 @@ defineSlots<{
   label?: () => any
 }>()
 
+// Off-screen indicators stop their 100 ms readout. The reading is wall-clock
+// based, so it is correct again as soon as the indicator scrolls back in.
+const rootRef = ref<HTMLElement | null>(null)
+const onScreen = ref(true)
+let observer: IntersectionObserver | null = null
+
 const elapsedMs = useElapsed({
   startedAt: () => props.startedAt,
-  active: () => props.showElapsed,
+  active: () => props.showElapsed && onScreen.value,
 })
+
+onMounted(() => {
+  if (typeof IntersectionObserver !== 'function' || !rootRef.value)
+    return
+  observer = new IntersectionObserver((entries) => {
+    const latest = entries[entries.length - 1]
+    if (latest)
+      onScreen.value = latest.isIntersecting
+  })
+  observer.observe(rootRef.value)
+})
+
+onBeforeUnmount(() => observer?.disconnect())
 
 const elapsedText = computed(() => (props.elapsedFormatter ?? formatElapsed)(elapsedMs.value))
 </script>
@@ -28,6 +47,7 @@ const elapsedText = computed(() => (props.elapsedFormatter ?? formatElapsed)(ela
   <span
     class="tx-bui-working-indicator"
     :class="`is-${variant}`"
+    ref="rootRef"
     role="status"
     :aria-label="ariaLabel"
   >

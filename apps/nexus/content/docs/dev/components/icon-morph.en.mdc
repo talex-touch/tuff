@@ -75,6 +75,12 @@ Pass `from`, `to`, and `progress` to drive the morph from a gesture, scroll posi
 | `progress` | `number` | Read-only current morph progress; `1` at rest. |
 | `getMorph` | `() => Morph \| null` | Returns the underlying `Morph` driver, or `null` before any icon shows up. |
 
+## Overview
+
+- `label` sets the accessible name: it renders `role="img"` and a `<title>`, and without it the icon is `aria-hidden="true"`.
+- With `reducedMotion="user"` the icon follows the system's reduced-motion setting; with `always` it jumps straight to the end.
+- With both `from` and `to` set, the icon is controlled and `icon` changes are ignored; removing either one hands the path back to `icon`.
+
 ## Technologies
 
 - The engine aligns both paths with 2D Procrustes to detect rotation, interpolates in polar space, and drives it with a damped spring.

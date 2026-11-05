@@ -151,11 +151,11 @@ rows:
     description: Text for an empty panel; a tuple gives each side its own.
   - name: maxHeight
     type: "string | number"
-    default: "'320px'"
+    default: "Unset (CSS default 320px)"
     description: Panel height cap, px for numbers; writes --tx-transfer-max-height.
   - name: minHeight
     type: "string | number"
-    default: "'240px'"
+    default: "Unset (CSS default 240px)"
     description: Panel height floor, px for numbers; writes --tx-transfer-min-height.
   - name: addAriaLabel
     type: string

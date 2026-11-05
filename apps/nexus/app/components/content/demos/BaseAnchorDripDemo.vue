@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
 const { locale } = useI18n()
 const open = ref(false)
@@ -26,10 +26,15 @@ const labels = computed(() => {
   }
 })
 
+let replayTimer: number | undefined
+
+onBeforeUnmount(() => window.clearTimeout(replayTimer))
+
 async function replayDemo() {
   open.value = false
   await nextTick()
-  window.setTimeout(() => {
+  window.clearTimeout(replayTimer)
+  replayTimer = window.setTimeout(() => {
     open.value = true
   }, 220)
 }

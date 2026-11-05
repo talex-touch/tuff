@@ -12,7 +12,7 @@ verified: false
 ## 用法
 
 ### 首启引导
-:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" description="「看一遍流程」自动走完前三步并停在权限页，授权只能由你点击。登录与权限均为模拟。"}
+:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" description="「看一遍流程」自动走完前三步并停在权限页，授权只能由你点击。"}
 ---
 code: |
   <script setup lang="ts">
@@ -63,7 +63,7 @@ code: |
                     Passkey 登录
                   </TxButton>
                 </TxBorderBeam>
-                <TxForm :model="form" :rules="rules" label-position="top" @submit="sendMagicLink">
+                <TxForm :model="form" :rules="rules" label-position="top" @submit-success="submitEmail">
                   <TxFormItem label="邮箱" prop="email">
                     <template #default="{ id }">
                       <TxInput :id="id" v-model="form.email" type="email" />
