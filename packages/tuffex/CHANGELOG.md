@@ -9,6 +9,10 @@
 - `TxText` 新增 `loopEdge` 选择循环处的边缘效果：`gap`（默认）移出的文字完全消失后再进入，`clip` 间隔两个字宽、边缘硬切，`fade` 同 `clip` 并在两端渐隐，`wrap` 首尾相接、视口里始终有字。`scroll="auto"` 的来回摆动不变。
 - `TxImagePreview` 新增 `loadingEffect`（默认 `sweep-gradient`）：图片加载中在原位显示 TxImageGeneration 的预设效果，也可选 `skeleton` 闪烁占位或 `none`；预设效果依赖 three.js。新增 `loading` 插槽替换默认占位。
 
+### 🐛 组件修复
+
+- `TxImageGeneration` 暂停时换 `fragmentShader`，画面立即按新 shader 重绘，不再留着旧帧。
+
 ## [0.9.3] - 2026-11-03
 
 ### 📦 组件变动 (Components)
