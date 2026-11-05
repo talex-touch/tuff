@@ -146,7 +146,7 @@
     "v-wave": "^3.1.1",
     "vue": "catalog:frontend",
     "vue-i18n": "^11.4.14",
-    "vue-router": "^4.6.4",
+    "vue-router": "^5.4.0",
     "yaml": "^2.9.0",
     "zod": "4.6.6"
   },

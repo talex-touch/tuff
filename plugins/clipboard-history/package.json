@@ -14,7 +14,7 @@
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
     "vue": "^3.5.39",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
     "@talex-touch/tuff-cli": "workspace:^",
