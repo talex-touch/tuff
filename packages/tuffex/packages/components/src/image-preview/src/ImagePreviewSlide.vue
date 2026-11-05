@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import type { ImagePreviewSlotProps } from './types'
+import type { ImagePreviewLoadingEffect, ImagePreviewLoadingSlotProps, ImagePreviewSlotProps } from './types'
 import type { DrawnSlide } from './use-preview-slides'
 import { BrokenImageIcon } from '../../../../utils/broken-image-icon'
 import ImagePreviewContent from './ImagePreviewContent.vue'
+import ImagePreviewEffect from './ImagePreviewEffect.vue'
 
 // Internal: one page of TxImagePreview, as use-preview-slides draws it. Its picture sits in a
 // frame, the window of it shown; a thumbnail's pixels stand in until the picture loads, and the
-// placeholder shimmers where neither has. Not exported.
+// placeholder, a loading effect, stands where neither has. Not exported.
 defineOptions({ name: 'TxImagePreviewSlide' })
 
 defineProps<{
@@ -17,10 +18,13 @@ defineProps<{
   failedText: string
   /** Hands the picture's element over as it comes and goes (see use-preview-pictures). */
   bind: (el: unknown) => void
+  loadingEffect: ImagePreviewLoadingEffect
+  reduced: boolean
 }>()
 
 defineSlots<{
   default?: (props: ImagePreviewSlotProps) => any
+  loading?: (props: ImagePreviewLoadingSlotProps) => any
 }>()
 
 const emit = defineEmits<{
@@ -41,7 +45,16 @@ const emit = defineEmits<{
       <span>{{ failedText }}</span>
     </div>
     <template v-else>
-      <span v-if="slide.placeholder" class="tx-image-preview__placeholder" :style="slide.placeholder" aria-hidden="true" />
+      <span
+        v-if="slide.placeholder && (loadingEffect !== 'none' || $slots.loading)"
+        class="tx-image-preview__placeholder"
+        :class="{ 'is-skeleton': loadingEffect === 'skeleton' && !$slots.loading }"
+        :style="slide.placeholder"
+        :aria-hidden="$slots.loading ? undefined : 'true'"
+      >
+        <slot v-if="$slots.loading" name="loading" :item="slide.item" :index="slide.index" />
+        <ImagePreviewEffect v-else-if="loadingEffect !== 'skeleton' && loadingEffect !== 'none'" :preset="loadingEffect" :reduced="reduced" />
+      </span>
       <div class="tx-image-preview__frame" :style="slide.frame">
         <img
           v-if="slide.standIn"
@@ -161,7 +174,10 @@ const emit = defineEmits<{
   top: 0;
   left: 0;
   border-radius: 6px;
+}
 
+.tx-image-preview__placeholder.is-skeleton,
+.tx-image-preview__shimmer {
   @include skeleton-surface;
 }
 

@@ -97,7 +97,7 @@ Rule of thumb: vertical ≈ 0.6–0.75 × horizontal for anything wrapping a sin
 
 ### Horizontal inset clears the corner radius
 
-`TxInput` sets `padding: 0 12px` against `border-radius: 12px`, with the reason in the source: the caret and placeholder must clear the corner's curve rather than start inside it. Any field whose radius grows must grow its inset with it.
+`TxInput` sets `padding: 1px 13px` against `border-radius: 12px`: the 1px is its inset ring, and the 12px clears the corner's curve, so the caret and placeholder start where a 1px border plus 12px padding put them. Any field whose radius grows must grow its inset with it.
 
 ---
 
@@ -113,7 +113,7 @@ box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
 &:focus-within { box-shadow: inset 0 0 0 1.5px var(--tx-color-primary), 0 0 0 3px var(--tx-color-primary-light-9); }
 ```
 
-`TxSensitiveInput` and `TxScrubField` (`box-shadow: 0 0 0 1px`, commented "Ring, not border: the field's box has to stay 26px tall next to its untinted neighbour") both do this. `TxInput` predates the rule and still uses a `1px solid` border; that is legacy, not a pattern to copy.
+`TxSensitiveInput` and `TxScrubField` (`box-shadow: 0 0 0 1px`, commented "Ring, not border: the field's box has to stay 26px tall next to its untinted neighbour") both do this. The input-type controls (`TxInput`, `TxTextarea`, `TxNumberInput`, the select and tree and cascader and tag triggers) all draw their edge this way now. A `fake-background` host paints its tint over its own inset shadow, so `TxInput` insets that `::before` by 1px to keep the ring visible.
 
 A drop shadow and a border on the same element are mutually exclusive: the border's hard edge and the shadow's soft one fight, and the corner reads doubled. Use the ring.
 

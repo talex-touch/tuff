@@ -208,16 +208,24 @@ defineExpose({
   width: 100%;
   min-width: 0;
   height: 32px;
-  /* Horizontal inset matches the corner radius so the caret and placeholder
-     clear the rounded corner's curve instead of starting inside it. */
-  padding: 0 12px;
+  /* The 13px inset is the old 1px border plus the 12px that clears the corner curve. */
+  padding: 1px 13px;
+  border: 0;
   border-radius: 12px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
   background-color: var(--tx-bg-color, #fff);
-  transition: box-shadow 0.25s;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+
+  /* The fake background sits inside the 1px ring so the ring is not covered. */
+  &::before {
+    top: 1px;
+    left: 1px;
+    width: calc(100% - 2px);
+    height: calc(100% - 2px);
+    border-radius: 11px;
+  }
 
   &.is-morphing {
-    transition: border-color 0.25s, box-shadow 0.25s;
+    transition: box-shadow 0.25s;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
@@ -225,22 +233,30 @@ defineExpose({
   }
 
   &:hover:not(.is-disabled) {
-    border-color: var(--tx-color-primary-light-3, #79bbff);
+    box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-3, #79bbff);
   }
 
   &:focus-within:not(.is-disabled),
   &.is-focused:not(.is-disabled) {
-    border-color: var(--tx-color-primary, #409eff);
-    box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+    transition: box-shadow 0.25s;
+    box-shadow:
+      inset 0 0 0 1px var(--tx-color-primary, #409eff),
+      0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   }
 
   // Set by a TxFormItem while it shows an error for this field.
   &.is-invalid:not(.is-disabled) {
-    border-color: var(--tx-color-danger, #f56c6c);
+    box-shadow: inset 0 0 0 1px var(--tx-color-danger, #f56c6c);
 
     &:focus-within,
     &.is-focused {
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
+      box-shadow:
+        inset 0 0 0 1px var(--tx-color-danger, #f56c6c),
+        0 0 0 3px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 15%, transparent);
     }
   }
 

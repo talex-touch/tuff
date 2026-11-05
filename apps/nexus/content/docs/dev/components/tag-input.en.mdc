@@ -62,6 +62,20 @@ code: |
 - Add every delimiter your help text mentions to `separators`.
 - Put labels, help text, and validation messages outside the component.
 
+### Edge and States
+
+The tag-input box uses the inset ring. When disabled, tag and input text use the disabled colour, not reduced opacity.
+
+:::TuffDemoWrapper{demo="TagInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTagInput v-model="tags" />
+    <TxTagInput disabled :model-value="['只读']" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

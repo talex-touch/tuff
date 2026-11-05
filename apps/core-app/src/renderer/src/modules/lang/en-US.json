@@ -7804,6 +7804,7 @@
     "warningPrefix": "Warning: ",
     "validating": "Validating…",
     "optional": "(optional)",
+    "hint": "More about {label}",
     "summaryTitle": "There is a problem",
     "draftRestored": "Restored unsaved changes from {time}.",
     "draftPending": "You have unsaved changes from {time}.",

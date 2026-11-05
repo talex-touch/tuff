@@ -39,6 +39,20 @@ code: |
 - Pass `error` rather than `status="error"` so the state and the message can't drift apart.
 - Localize through `labels`: seven of its ten strings are only heard by screen readers.
 
+### Edge and States
+
+The sensitive input shares the input's edge and states. Size variants change only the height and font size; the radius is 12px at every size.
+
+:::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSensitiveInput v-model="secret" />
+    <TxSensitiveInput :error="message" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props
@@ -48,7 +62,7 @@ code: |
 | `modelValue` | `string` | `''` | The secret (controlled). |
 | `label` | `string` | `''` | Field label; also the masked container's accessible name. |
 | `placeholder` | `string` | `''` | Native placeholder, visible only while empty. |
-| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, radius, and icon size; `md` matches `TxInput`. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, and icon size; the radius does not change with size and matches `TxInput` (12px). |
 | `status` | `'default' \| 'error'` | — | Explicit visual state; derived from `error` when unset. |
 | `description` | `string` | `''` | Helper text below the field; replaced by `error`. |
 | `error` | `string` | `''` | Validation message; when set, turns the field red and sets `aria-invalid`. |

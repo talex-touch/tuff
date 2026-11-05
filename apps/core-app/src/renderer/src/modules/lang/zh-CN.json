@@ -7804,6 +7804,7 @@
     "warningPrefix": "警告：",
     "validating": "正在校验…",
     "optional": "（选填）",
+    "hint": "{label}的说明",
     "summaryTitle": "请修改以下问题",
     "draftRestored": "已恢复 {time} 未保存的更改。",
     "draftPending": "有 {time} 未保存的更改。",

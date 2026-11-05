@@ -9,10 +9,13 @@ defineOptions({
 const props = withDefaults(defineProps<TxTextProps>(), {
   overflow: 'end',
   scroll: 'none',
+  loopEdge: 'gap',
 })
 
 const AUTO_SPEED = 40
 const HOVER_SPEED = 60
+const LOOP_SPEED = 40
+const LOOP_CLIP_EM = 2
 const ELLIPSIS = '…'
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -22,12 +25,16 @@ const trackRef = ref<HTMLElement | null>(null)
 const reducedMotion = ref(false)
 const overflowing = ref(false)
 const travel = ref(0)
+const loopDistance = ref(0)
+const loopGap = ref(0)
 const displayText = ref(props.text)
 const phase = ref<'idle' | 'entering' | 'revealed' | 'leaving'>('idle')
 
 const scrollMode = computed(() => (reducedMotion.value ? 'none' : props.scroll))
-const showTrack = computed(() => scrollMode.value === 'auto' || phase.value !== 'idle')
+const showTrack = computed(() => scrollMode.value === 'auto' || scrollMode.value === 'loop' || phase.value !== 'idle')
 const animated = computed(() => scrollMode.value === 'auto' && overflowing.value)
+const looping = computed(() => scrollMode.value === 'loop' && overflowing.value)
+const truncating = computed(() => scrollMode.value === 'none' || scrollMode.value === 'hover')
 
 const loopSeconds = computed(() => Math.max(travel.value / AUTO_SPEED / 0.38, 4))
 const slideSeconds = computed(() => Math.min(3, Math.max(0.35, travel.value / HOVER_SPEED)))
@@ -40,6 +47,9 @@ const cssVars = computed(() => {
     '--tx-text-target': atStart ? '0px' : `${-travel.value}px`,
     '--tx-text-loop': `${loopSeconds.value}s`,
     '--tx-text-slide': `${slideSeconds.value}s`,
+    '--tx-text-gap': `${loopGap.value}px`,
+    '--tx-text-loop-shift': `${-loopDistance.value}px`,
+    '--tx-text-loop-duration': `${Math.max(loopDistance.value / LOOP_SPEED, 0.1)}s`,
   }
 })
 
@@ -76,15 +86,27 @@ function fit(chars: string[], available: number): string {
   return best
 }
 
+function loopGapFor(available: number, fontPx: number): number {
+  if (props.loopEdge === 'gap')
+    return available
+  if (props.loopEdge === 'wrap')
+    return 0
+  return LOOP_CLIP_EM * fontPx
+}
+
 function layout() {
   const root = rootRef.value
   if (!root)
     return
   const available = root.clientWidth
-  const extra = measure(props.text) - available
+  const width = measure(props.text)
+  const extra = width - available
   overflowing.value = extra > 0.5
   travel.value = overflowing.value ? extra : 0
-  displayText.value = overflowing.value && props.overflow !== 'end' && scrollMode.value !== 'auto'
+  const fontPx = Number.parseFloat(getComputedStyle(root).fontSize) || 16
+  loopGap.value = loopGapFor(available, fontPx)
+  loopDistance.value = width + loopGap.value
+  displayText.value = overflowing.value && truncating.value && props.overflow !== 'end'
     ? fit(Array.from(props.text), available)
     : props.text
 }
@@ -158,7 +180,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   onLeave()
 }
 
-watch([() => props.text, () => props.overflow, scrollMode], () => {
+watch([() => props.text, () => props.overflow, () => props.loopEdge, scrollMode], () => {
   layout()
 }, { flush: 'post' })
 
@@ -198,7 +220,7 @@ onBeforeUnmount(() => {
   <span
     ref="rootRef"
     class="tx-text"
-    :class="[`tx-text--overflow-${overflow}`, `tx-text--scroll-${scrollMode}`, { 'is-overflowing': overflowing }]"
+    :class="[`tx-text--overflow-${overflow}`, `tx-text--scroll-${scrollMode}`, `tx-text--edge-${loopEdge}`, { 'is-overflowing': overflowing }]"
     :title="overflowing ? text : undefined"
     :style="cssVars"
     @pointerenter="onPointerEnter"
@@ -209,10 +231,13 @@ onBeforeUnmount(() => {
       v-if="showTrack"
       ref="trackRef"
       class="tx-text__track"
-      :class="{ 'is-animated': animated, 'is-revealed': phase === 'revealed' }"
+      :class="{ 'is-animated': animated, 'is-looping': looping, 'is-revealed': phase === 'revealed' }"
       aria-hidden="true"
       @transitionend="onTrackTransitionEnd"
-    >{{ text }}</span>
+    >
+      <template v-if="looping"><span class="tx-text__copy">{{ text }}</span><span class="tx-text__gap" /><span class="tx-text__copy">{{ text }}</span></template>
+      <template v-else>{{ text }}</template>
+    </span>
     <span v-else class="tx-text__value" aria-hidden="true">{{ displayText }}</span>
     <span class="tx-text__sr">{{ text }}</span>
     <span class="tx-text__measure-box" aria-hidden="true">
@@ -236,6 +261,10 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
+.tx-text--scroll-loop {
+  text-overflow: clip;
+}
+
 .tx-text__track {
   display: inline-block;
   vertical-align: top;
@@ -251,6 +280,24 @@ onBeforeUnmount(() => {
 
 .tx-text__track.is-animated {
   animation: tx-text-loop var(--tx-text-loop, 8s) ease-in-out infinite;
+}
+
+.tx-text__track.is-looping {
+  animation: tx-text-marquee var(--tx-text-loop-duration, 8s) linear infinite;
+}
+
+.tx-text__copy {
+  display: inline;
+}
+
+.tx-text__gap {
+  display: inline-block;
+  width: var(--tx-text-gap, 0px);
+}
+
+.tx-text--edge-fade.tx-text--scroll-loop.is-overflowing {
+  mask-image: linear-gradient(to right, transparent, black 1em, black calc(100% - 1em), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 1em, black calc(100% - 1em), transparent);
 }
 
 .tx-text__measure-box {
@@ -297,9 +344,20 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes tx-text-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(var(--tx-text-loop-shift, 0px), 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tx-text__track,
-  .tx-text__track.is-animated {
+  .tx-text__track.is-animated,
+  .tx-text__track.is-looping {
     animation: none;
     transition: none;
   }

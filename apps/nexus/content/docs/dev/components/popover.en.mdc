@@ -152,6 +152,7 @@ code: |
 
 - With `modelValue` it is controlled; otherwise it keeps its own open state.
 - With `trigger="click"`, a reference click toggles it and an outside click or Escape closes it; with `hover`, delays drive it and outside clicks are ignored.
+- Escape closes this popover and stops there: an enclosing modal or drawer stays open.
 - On the way to the panel, the hover bridge and safe triangle hold it open: crossing the `offset` gap, resting on the panel padding, or passing another hover trigger diagonally neither closes it nor hands it away.
 
 ## Technologies

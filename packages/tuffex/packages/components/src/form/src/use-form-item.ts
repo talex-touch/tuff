@@ -12,6 +12,8 @@ export interface FormItemOptions {
   rules: () => FormRule | FormRule[] | undefined
   required: () => boolean
   help: () => string | undefined
+  /** Detail behind the field's `?`. Only `TxFormItem` offers it. */
+  hint?: () => string | undefined
   showMessage: () => boolean
   root: Readonly<Ref<HTMLElement | null>>
   /**
@@ -58,6 +60,9 @@ export function useFormItem(options: FormItemOptions) {
   const messageId = computed(() => `${controlId.value}-message`)
   const label = computed(() => options.label() ?? '')
   const messages = computed<FormMessages>(() => form?.messages.value ?? FORM_DEFAULT_MESSAGES)
+  const hintId = computed(() => `${autoId}-hint`)
+  const hasHint = computed(() => Boolean(options.hint?.()))
+  const hintName = computed(() => messages.value.hint(label.value || options.prop() || messages.value.field))
 
   /** One getter per control inside that may hold a secret. */
   const secrets = shallowRef<Array<() => boolean>>([])
@@ -128,6 +133,9 @@ export function useFormItem(options: FormItemOptions) {
     get messageId() {
       return offersField() && note.value ? messageId.value : undefined
     },
+    get hintId() {
+      return offersField() && hasHint.value ? hintId.value : undefined
+    },
     get label() {
       return label.value
     },
@@ -193,7 +201,7 @@ export function useFormItem(options: FormItemOptions) {
     id: controlId.value,
     labelId: label.value ? labelId.value : undefined,
     ariaInvalid: invalid.value ? 'true' as const : undefined,
-    ariaDescribedby: note.value ? messageId.value : undefined,
+    ariaDescribedby: [note.value ? messageId.value : '', hasHint.value ? hintId.value : ''].filter(Boolean).join(' ') || undefined,
     invalid: invalid.value,
     required: required.value,
   }))
@@ -204,6 +212,8 @@ export function useFormItem(options: FormItemOptions) {
     controlId,
     labelId,
     messageId,
+    hintId,
+    hintName,
     label,
     labelFor,
     messages,

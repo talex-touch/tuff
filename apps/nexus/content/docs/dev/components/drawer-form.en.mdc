@@ -143,6 +143,7 @@ Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`
 - Each open builds `model` from a copy of `initialValues` and makes it the baseline, so edits left at closing never carry over to the next open.
 - When `initialValues` changes while the drawer is open, it becomes the saved state: untouched fields take the new values, and fields the user changed keep their edits.
 - Escape, the mask, the close button and Cancel all go through the form's `confirmLeave()`, which asks only about changes no draft holds. A running submit cannot be closed.
+- Escape with focus inside a `TxForm` does not reach this path (see the Drawer focus rule), so it asks nothing.
 - After its first open the drawer keeps its content, and the form with it. Closed, it has nothing left to lose, so reloading the page does not ask.
 - A submit that goes through emits `submit-success`, then closes.
 

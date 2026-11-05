@@ -39,6 +39,20 @@ code: |
 - Keep `resize="vertical"` in ordinary forms; use `none` only when the layout already controls height.
 - Treat `status` as a visual hint; keep labels, help text, and validation messages in the surrounding form item.
 
+### Edge and States
+
+The textarea uses the same inset ring as the input. Error and focus only change the ring colour and glow; the size stays the same.
+
+:::TuffDemoWrapper{demo="TextareaEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTextarea v-model="text" :rows="2" />
+    <TxTextarea status="error" />
+  </template>
+---
+:::
+
 ## API Reference
 
 ### Props

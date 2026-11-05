@@ -124,7 +124,7 @@ code: |
 ## Overview
 
 - The root is `TuffInput`'s rounded frame and carries the `tx-search-input` class. `class` and `style` land on the frame; `aria-label`, `id`, and other attributes land on the inner `<input>`.
-- Focus is drawn on the frame only. Regular themes keep `TuffInput`'s border and ring; high-contrast themes use a `--tx-focus-ring-color` outline with `--tx-focus-ring-shadow`, and the inner `<input>` draws no rectangular focus box.
+- Focus is drawn on the frame only. Regular themes keep `TuffInput`'s inset ring and glow; high-contrast themes use a `--tx-focus-ring-color` outline with `--tx-focus-ring-shadow`, and the inner `<input>` draws no rectangular focus box.
 - The high-contrast outline appears only while the inner input has focus; a focused clear button keeps its own focus ring.
 
 ## Technologies

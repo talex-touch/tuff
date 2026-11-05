@@ -76,6 +76,7 @@ export default {
     },
     pattern: '{label} is not in the expected format',
     invalid: '{label} is invalid',
+    hint: 'More about {label}',
     errorPrefix: 'Error: ',
     warningPrefix: 'Warning: ',
     validating: 'Validating…',
@@ -553,6 +554,19 @@ export default {
     },
   },
   docs: {
+    textLoopDemo: {
+      gap: 'Clears fully, then re-enters (default)',
+      clip: 'Partly clipped at the edge',
+      fade: 'Fades at the edges',
+      wrap: 'Never clears (wraps)',
+    },
+    imagePreviewOptionsDemo: {
+      sweepGradient: 'Sweep',
+      pixelsOrganic: 'Pixels organic',
+      pixelsMechanic: 'Pixels mechanic',
+      skeleton: 'Skeleton',
+      none: 'None',
+    },
     verified: 'Verified',
     loading: 'Fetching document…',
     notFoundTitle: 'Document not found',

@@ -5,6 +5,7 @@ import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
+import { isFormFieldTarget } from '../../../../utils/escape-key'
 import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useGuardedClose } from '../../../../utils/guarded-close'
 import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
@@ -171,7 +172,7 @@ function handleKeydown(event: KeyboardEvent): void {
       trapTab(event, drawerRef.value)
     return
   }
-  if (event.key === 'Escape' && props.closeOnPressEscape) {
+  if (event.key === 'Escape' && props.closeOnPressEscape && !isFormFieldTarget(event.target)) {
     requestClose('escape')
   }
 }

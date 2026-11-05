@@ -90,6 +90,24 @@ code: |
 ---
 :::
 
+### Field Hints
+The `?` beside a label shows the full explanation on hover or focus; `help` stays under the control as one short constraint.
+:::TuffDemoWrapper{demo="FormHintDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm :model="form" :rules="rules">
+      <TxFormItem label="Results per request" prop="batch" hint="The most results one request returns. Results past the limit wait for the next request; none are dropped. A larger limit makes each request slower.">
+        <TuffInput v-model="form.batch" inputmode="numeric" />
+      </TxFormItem>
+      <TxFormItem label="Name" prop="name" help="3 to 20 characters">
+        <TuffInput v-model="form.name" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
 ### Read-Only
 `readonly` shows the form as a record: the controls take focus and can be copied but not changed, and no field is marked required. Submitting still works.
 :::TuffDemoWrapper{demo="FormReadonlyDemo" code-lang="vue"}
@@ -539,6 +557,7 @@ usePluginAccount().onDidChange((session) => {
 - Keep `model` the same reactive object; a new object is a new record, which resets the baseline and clears every message.
 - Pass fetched data to `setBaseline()` instead of writing it into `model`, so `dirty` and `reset()` measure against it.
 - Put shared rules in form-level `rules`; an item's `rules` replace the form-level rules for the same path rather than adding to them.
+- Put an explanation longer than one sentence in `hint`, beside the label; `help` takes only a short constraint the user must see while typing. Errors and warnings stay under the control, and no explanatory paragraph goes under a control.
 - Declare a validator that returns a promise `async`, and pass `signal` to its request.
 - Turn `persist` on once the record has loaded, so the draft is laid over the saved values rather than empty ones.
 
@@ -621,6 +640,7 @@ usePluginAccount().onDidChange((session) => {
 | `rules` | `FormRule \| FormRule[]` | - | Rules for this field; they replace the form-level `rules` for the same path. |
 | `required` | `boolean` | `false` | Shows the required marker and adds a `required` rule. |
 | `help` | `string` | - | Helper text under the control; an error or warning takes its place while it shows. |
+| `hint` | `string` | - | A detailed explanation in a popover from a `?` beside the label, shown on hover or focus. |
 | `width` | `'xs' \| 'sm' \| 'md' \| 'lg' \| 'full'` | - | Control width: 80, 160, 240 or 360px, or the whole column. |
 | `showMessage` | `boolean` | `true` | Shows the message under the control; with it off, the control is still marked invalid. |
 | `inline` | `boolean` | `false` | Centres the label on the control; in a stacked layout, puts it beside the control. |
@@ -668,7 +688,7 @@ usePluginAccount().onDidChange((session) => {
 | `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | Connects a control to the item around it; `kind` decides how the label names the control. Returns `null` outside a form. |
 | `id` | `string \| undefined` | Read-only; the id the label points at. Only the first control in an item receives one. |
 | `labelId` / `label` | `string \| undefined` / `string` | Read-only; the id and text of the item's label. |
-| `describedBy` | `string \| undefined` | Read-only; the id of the message or help text. |
+| `describedBy` | `string \| undefined` | Read-only; the ids of the message or help text and of the hint, space-separated. |
 | `invalid` / `required` | `boolean` | Read-only; an error is showing; the field is required. |
 | `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | Read-only; the form's `disabled` and `size`. |
 | `readonly` | `boolean` | Read-only; the form's `readonly`: the control takes focus but keeps its value. |
@@ -746,6 +766,7 @@ usePluginAccount().onDidChange((session) => {
 | Field | Type | Description |
 |------|------|-------------|
 | `required` / `invalid` / `pattern` | `(label: string) => string` | Missing value, failed validator, mismatched pattern. |
+| `hint` | `(label: string) => string` | The accessible name of the `?` button beside a label. |
 | `type` | `(label: string, type: FormRuleType) => string` | Wrong `type`. |
 | `min` / `max` | `(label: string, limit: number) => string` | Out of the numeric range. |
 | `minLength` / `maxLength` | `(label: string, limit: number, unit: 'characters' \| 'items') => string` | Out of the length range. |
@@ -788,6 +809,7 @@ usePluginAccount().onDidChange((session) => {
 - With `readonly`, the required marks and `required` go too, since the user can no longer fill anything in; the values are still sent on submit.
 - An error for a field that is not mounted is kept and shows when the field mounts, as in a multi-step form; a `schema` issue no field shows is listed in the error summary and blocks submit.
 - The first control takes the id and the label's `for`; other controls point at the label with `aria-labelledby`, as do controls a `<label for>` cannot name, such as a radio group or a multiple select, once they hold the id. Messages are linked through `aria-describedby` and carry no `role="alert"`. The form's `size`, `disabled` and `readonly` also reach controls outside every item.
+- The `?` beside a label is a plain `<button type="button">`, named by `messages.hint` and described by the hidden hint text: hover or keyboard focus opens its popover, Escape closes it, and the pointer can move into the panel. The text is also kept in the DOM, visually hidden, and every control in the field lists it in `aria-describedby`, after the message or help text. Without a `label`, the `?` takes a line of its own; give the field a label to keep it beside text. In the side layout, one field with a `hint` widens the label column by about 20px, which moves the whole form's field column right.
 
 ## Technologies
 

@@ -76,6 +76,7 @@ export default {
     },
     pattern: '{label}格式不正确',
     invalid: '{label}无效',
+    hint: '{label}的说明',
     errorPrefix: '错误：',
     warningPrefix: '警告：',
     validating: '正在校验…',
@@ -552,6 +553,19 @@ export default {
     },
   },
   docs: {
+    textLoopDemo: {
+      gap: '完全消失再进入（默认）',
+      clip: '部分消失（边缘硬切）',
+      fade: '比例消失（边缘渐隐）',
+      wrap: '不消失（首尾相接）',
+    },
+    imagePreviewOptionsDemo: {
+      sweepGradient: '扫光',
+      pixelsOrganic: '像素有机',
+      pixelsMechanic: '像素机械',
+      skeleton: '骨架',
+      none: '无',
+    },
     verified: '已验证',
     loading: '正在获取文档…',
     notFoundTitle: '未找到文档',

@@ -730,7 +730,7 @@ export function useFormStore(props: FormProps, emit: FormEmit) {
     // takes no focus itself; its tab stop or first focusable element does.
     if (control && !control.matches(FOCUSABLE))
       control = control.querySelector<HTMLElement>('[tabindex="0"]') ?? control.querySelector<HTMLElement>(FOCUSABLE)
-    control ??= root.querySelector<HTMLElement>(FOCUSABLE)
+    control ??= [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].find(el => !el.classList.contains('tx-form-item__hint')) ?? null
     const labelId = entry.reg.labelId()
     const anchor = (labelId ? doc.getElementById(labelId) : null) ?? root
     // The label goes to the middle of the view, so the user reads the field's
