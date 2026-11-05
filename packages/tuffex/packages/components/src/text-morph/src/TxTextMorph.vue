@@ -99,29 +99,18 @@ defineExpose({
   display: inline-block;
   position: relative;
   vertical-align: top;
+  will-change: width, height;
   white-space: nowrap;
   text-align: inherit;
-}
-
-/*
-  will-change is held only for the length of a morph; the engine sets tx-morph-animating
-  for that window. Standing on every segment, it keeps each one on its own layer for as
-  long as the value is shown.
-*/
-[tx-morph-root][tx-morph-animating] {
-  will-change: width, height;
 }
 
 [tx-morph-item]:not(br) {
   display: inline-block;
   position: relative;
+  will-change: opacity, transform;
   white-space: pre;
   transform: none;
   opacity: 1;
-}
-
-[tx-morph-root][tx-morph-animating] > [tx-morph-item]:not(br) {
-  will-change: opacity, transform;
 }
 
 [tx-morph-exiting] {
@@ -165,9 +154,6 @@ defineExpose({
 
 [tx-morph-slot] > span {
   display: inline-block;
-}
-
-[tx-morph-root][tx-morph-animating] [tx-morph-slot] > span {
   will-change: opacity, transform;
 }
 

@@ -222,12 +222,8 @@ onBeforeUnmount(() => {
     opacity var(--tx-tt-duration) cubic-bezier(0.2, 0, 0, 1),
     filter var(--tx-tt-duration) cubic-bezier(0.2, 0, 0, 1),
     color var(--tx-tt-duration) cubic-bezier(0.2, 0, 0, 1);
-  white-space: nowrap;
-}
-
-/* Hinted only while two layers exist; a standing hint keeps every layer on its own compositor layer. */
-.tx-text-transformer.has-prev .tx-text-transformer__layer {
   will-change: opacity, filter;
+  white-space: nowrap;
 }
 
 .tx-text-transformer:not(.is-wrap) .tx-text-transformer__layer {
@@ -240,7 +236,6 @@ onBeforeUnmount(() => {
   white-space: pre-line;
 }
 
-/* Rest state is filter: none. A non-none filter, even blur(0), keeps the layer composited and breaks background-clip: text. */
 .tx-text-transformer__layer--current {
   opacity: 1;
   filter: none;

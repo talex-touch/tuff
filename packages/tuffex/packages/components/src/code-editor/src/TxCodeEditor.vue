@@ -140,12 +140,4 @@ defineExpose({
     min-height: 160px;
   }
 }
-
-// Holds the editor's min-height until the runtime chunk mounts, so the shell does not jump.
-.tx-code-editor-placeholder {
-  width: 100%;
-  min-height: 160px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-}
 </style>
