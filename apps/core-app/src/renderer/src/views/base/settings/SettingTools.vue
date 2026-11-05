@@ -27,6 +27,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { petEnabled, setPetEnabled } from '~/views/base/home/pet/pet-settings'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
 import { useBeginnerGuide } from '~/composables/useBeginnerGuide'
@@ -87,6 +88,11 @@ const homeRecommendationsEnabled = computed({
   set: (value: boolean) => {
     if (appSetting.tools) appSetting.tools.homeRecommendations = value
   }
+})
+/** The Miko pet on Home: on by default; the switch lives in the pet's own local state. */
+const petEnabledSetting = computed({
+  get: () => petEnabled.value,
+  set: (value: boolean) => setPetEnabled(value)
 })
 /** Home's model-written opening: a model call on every blank Home, so off unless turned on. */
 const homeAiOpeningEnabled = computed({
@@ -831,6 +837,11 @@ onBeforeUnmount(() => {
       v-model="homeAiOpeningEnabled"
       :title="t('settingTools.homeAiOpening')"
       :description="t('settingTools.homeAiOpeningDesc')"
+    />
+    <TuffBlockSwitch
+      v-model="petEnabledSetting"
+      :title="t('settingTools.petEnabled')"
+      :description="t('settingTools.petEnabledDesc')"
     />
   </TuffGroupBlock>
 
