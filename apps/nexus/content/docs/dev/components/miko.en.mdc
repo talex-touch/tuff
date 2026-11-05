@@ -52,10 +52,10 @@ code: |
 ### Best Practices
 
 - **Lifecycle Mapping**: Align precisely with Agent events: `session_start` to `idle`, `UserPromptSubmit` to `thinking`, `tool_call` to `running` or `working`, `Stop` to `success`, `PermissionRequest` to `alert`, and idle timeouts to `sleeping` or `sleepy`.
-- **Interaction & Devil Mutation**: Pass `interactive` to enable tactile click feedback and a rapid-click dizziness easter egg; autonomous exploration or clicking has a chance to mutate into the "Shiny Devil" form (horns, bat wings, arrow tail, golden glints), which can also be forced via the `demon` prop.
+- **Interaction & Devil Mutation**: Pass `interactive` to enable tactile click feedback; autonomous exploration or clicking has a chance to mutate into the "Shiny Devil" form (horns, bat wings, arrow tail, golden glints), which can also be forced via the `demon` prop.
 - **Pure Vector Performance**: No external sprite sheets or canvas animation loops required. All elements are clean SVG `<rect>` blocks accelerated by CSS `@keyframes` with sub-kilobyte footprint.
 - **Proportions**: Use standard `'xs' | 'sm' | 'md' | 'lg'` sizes or numerical values. The 36:20 aspect ratio with flat horizontal base docks neatly in status bars, CoreBox corners, or conversation headers.
-- **Monochrome & Accessibility**: Defaults to Tuff signature electric violet (`#810DC6`), shifts to deep obsidian crimson (`#4C0519`) in devil form, and is customizable via the `color` prop. Includes built-in `role="img"` and accessible ARIA announcements.
+- **Monochrome & Accessibility**: Defaults to a lighter companion violet (`#9726D9`, a softer step from the Tuff brand violet `#810DC6`), shifts to deep obsidian crimson (`#4C0519`) in devil form, and is customizable via the `color` prop. Includes built-in `role="img"` and accessible ARIA announcements.
 
 ## API Reference
 
@@ -65,7 +65,7 @@ code: |
 |------|------|---------|-------------|
 | `state` | `MikoState` | `'idle'` | Current action state, supporting 38 states in total. |
 | `size` | `MikoSize` | `'md'` | Size preset (`'xs'` 22px, `'sm'` 30px, `'md'` 50px, `'lg'` 66px) or custom dimension. |
-| `color` | `string` | `'#810DC6'` | Main body color. |
+| `color` | `string` | `'#9726D9'` | Main body color. |
 | `labels` | `Partial<MikoLabels>` | `{}` | Localized accessibility label overrides. |
 | `ariaLabel` | `string` | Generated | Overrides the default accessible announcement. |
 | `interactive` | `boolean` | `false` | Enables click feedback, hover glow, and click reactions. |

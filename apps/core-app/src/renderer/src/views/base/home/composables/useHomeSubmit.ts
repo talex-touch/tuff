@@ -79,6 +79,8 @@ export interface HomeSubmitOptions {
   resetBlankConversation: (nextProjectId: string | null) => Promise<void>
   setConversationLoading: (id: string, loading: boolean) => void
   reportSubmitError: (error: unknown) => void
+  /** Called once a send is accepted past its guards, with the text in memory only. */
+  onSent?: (text: string) => void
 }
 
 /**
@@ -179,6 +181,7 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     } finally {
       if (isCurrentSend()) sending.value = false
     }
+    options.onSent?.(text)
     // A typed send moves the thread on; the clip it may have come from goes with it.
     if (!voice) dictation.dismissClip()
     if (!ownsPage()) return
@@ -356,6 +359,7 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     } finally {
       if (isCurrentSend()) sending.value = false
     }
+    options.onSent?.(text)
     // The thread is this id's now: from here on a change of id is a change of thread.
     if (minted) submitState.setOwnMintedId(null)
     // A typed send moves the thread on; the clip it may have come from goes with it.

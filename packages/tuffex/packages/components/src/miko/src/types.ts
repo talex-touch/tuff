@@ -81,6 +81,8 @@ export interface MikoLabels {
   space: string
 }
 
+export const MIKO_DEFAULT_COLOR = '#9726D9'
+
 export const MIKO_DEFAULT_LABELS: MikoLabels = {
   idle: '待命',
   working: '执行中',
@@ -135,7 +137,7 @@ export interface MikoProps {
   size?: MikoSize
   /**
    * 主体颜色
-   * @default '#810DC6'
+   * @default '#9726D9'
    */
   color?: string
   /**
@@ -147,7 +149,7 @@ export interface MikoProps {
    */
   ariaLabel?: string
   /**
-   * 是否开启交互响应（悬停柔和发光、点击欢快互动动效、连续点击眩晕彩蛋）
+   * 是否开启交互响应（悬停柔和发光、点击欢快互动动效）
    * @default false
    */
   interactive?: boolean
