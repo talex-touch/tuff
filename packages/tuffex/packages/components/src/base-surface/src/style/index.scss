@@ -94,6 +94,7 @@ $grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width=
       saturate(var(--tx-surface-filter-saturation, 1.5))
       contrast(var(--tx-surface-filter-contrast, 1))
       brightness(var(--tx-surface-filter-brightness, 1));
+    will-change: backdrop-filter;
   }
 
   .tx-base-surface__layer--mask {
@@ -324,13 +325,6 @@ $grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width=
   &--settling {
     transition: backdrop-filter var(--tx-surface-transition, 299ms) ease-out,
                 background var(--tx-surface-transition, 299ms) ease-out;
-  }
-
-  // The hint is set only while a filter layer's backdrop-filter animates: refraction motion and
-  // settling. A permanent will-change would keep every filter layer on its own compositor layer at rest.
-  &--refraction-motion .tx-base-surface__layer--filter,
-  &--settling .tx-base-surface__layer--filter {
-    will-change: backdrop-filter;
   }
 
   // ---- High contrast ----

@@ -212,14 +212,7 @@ function handleClose(event: MouseEvent): void {
   letter-spacing: 0.05em;
   line-height: 1;
   white-space: nowrap;
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    opacity 0.2s ease,
-    outline-color 0.2s ease,
-    outline-width 0.2s ease,
-    outline-offset 0.2s ease;
+  transition: all 0.2s ease;
   cursor: default;
 
   &[role='button'] {

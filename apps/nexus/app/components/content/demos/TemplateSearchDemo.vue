@@ -271,7 +271,7 @@ const scoped = computed(() => HITS.filter(hit => inRange(hit) && matches(hit)))
 const counts = computed(() => {
   const tally: Record<string, number> = { all: scoped.value.length, doc: 0, plugin: 0, changelog: 0 }
   for (const hit of scoped.value)
-    tally[hit.kind] += 1
+    tally[hit.kind] = (tally[hit.kind] ?? 0) + 1
   return tally
 })
 
