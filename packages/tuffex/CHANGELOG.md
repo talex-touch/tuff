@@ -2,16 +2,38 @@
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-11-16
+
+### 📦 组件变动 (Components)
+
+- **更新组件**: `form`, `text`, `image-preview`, `image-generation`, `input`, `textarea`, `number-input`, `select`, `flat-select`, `date-picker`, `cascader`, `tag-input`, `tree-select`, `sensitive-input`, `base-anchor`, `dialog`, `modal`, `drawer`, `radio`, `miko`, `offline-state`, `working-indicator`, `tool-call-card`, `grid-layout`, `motion-control`, `skeleton`, `toast`, `toast-panel`, `text-morph`, `text-transformer`
+
 ### ✨ 组件增强
 
 - `TxFormItem` 新增 `hint`：字段说明放进标签旁的 `?`，悬停或键盘聚焦时浮出，不再占用控件下方；错误与警告仍显示在控件下方。
 - `TxText` 新增 `scroll="loop"` 循环滚动：溢出的文字滚过左边缘后，新的一段无缝接上；只动 `transform`，速度约 40px/s；减少动效时停止。
 - `TxText` 新增 `loopEdge` 选择循环处的边缘效果：`gap`（默认）移出的文字完全消失后再进入，`clip` 间隔两个字宽、边缘硬切，`fade` 同 `clip` 并在两端渐隐，`wrap` 首尾相接、视口里始终有字。`scroll="auto"` 的来回摆动不变。
 - `TxImagePreview` 新增 `loadingEffect`（默认 `sweep-gradient`）：图片加载中在原位显示 TxImageGeneration 的预设效果，也可选 `skeleton` 闪烁占位或 `none`；预设效果依赖 three.js。新增 `loading` 插槽替换默认占位。
+- `TxMiko` 的 38 个状态和兜底状态各自拆成懒加载组件，原先 175 KB 的单个文件拆开后每个产物都小于 12 KiB；每个状态的画面不变。默认身体颜色由 `#810DC6` 调亮为 `#9726D9`，连点四下的眩晕彩蛋移除。
+- `TxOfflineState` 转发内部 `TxEmptyState` 的 `primary` 与 `secondary` 事件，宿主可以直接处理离线页两个按钮的点击。
+- `TxWorkingIndicator` 与 `TxToolCallCard` 离开视口后停止刷新耗时；读数按真实时间计算，回到视口后立即正确。
+- `TxGridLayout` 的聚光跟随合并到 `requestAnimationFrame`：每帧先统一读取各项位置、再写入，快速移动指针时不再反复触发布局。
+- `TxMotionControl` 切换频率的过渡去掉 `blur` 滤镜，只保留透明度、缩放与位移。
 
 ### 🐛 组件修复
 
 - `TxImageGeneration` 暂停时换 `fragmentShader`，画面立即按新 shader 重绘，不再留着旧帧。
+- `TxImagePreview`：滚轮或触控板翻过一页后，在动量尾巴还没停下时再滑一次也会翻页（尾巴降到每次 4px 以内后，再升高 3px 以上即算新的一次）；斜向滑动不再吞掉同一段输入里随后的横向滑动。
+- 表单控件统一到 `TxInput` 的规格：`TxNumberInput`、日期字段、`TxFlatSelect` 与多选 `TxSelect` 的单行高度由 34/38/34/40px 统一为 32px；`TxNumberInput`、`TxFlatSelect`、`TxDatePicker` 字段与 `TxSensitiveInput` 的圆角统一为 12px（下拉与日历面板保持各自圆角）。悬停、聚焦、禁用与错误状态沿用 `TxInput` 的颜色令牌。
+- `TxInput`、`TxTextarea`、数字输入的步进按钮，以及 `TxSelect`、`TxTreeSelect`、`TxCascader`、`TxTagInput` 的触发器改用内描边（inset `box-shadow`）绘制 1px 边缘，各状态下盒子尺寸不变、内容不再挪动；聚焦光晕的过渡保留，悬停立即生效。强制颜色模式下边缘与焦点改用 `ButtonBorder` / `Highlight` 描边，仍然可见。`TxCascader`、`TxTreeSelect`、`TxTagInput` 的禁用态不再整体降低透明度，改用 `TxInput` 的禁用背景与文字色。
+- Escape 的归属：打开的浮层（`TxBaseAnchor`，以及基于它的 popover、tooltip 与下拉）在捕获阶段先处理 Escape 并阻止默认行为，外层的 `TxModal` / `TxDrawer` 保持打开；`TxModal` 与 `TxDrawer` 默认忽略来自表单字段（`TxForm` 内的目标或可编辑控件）的 Escape，在对话框其他位置按 Escape 仍会关闭。
+- `TxSensitiveInput` 的焦点从输入框移到复制按钮时保持显示明文，焦点离开整个控件后才重新遮罩。
+- `TxRadioGroup` 按钮类型的指示器在分组自身尺寸变化时重新测量（`ResizeObserver`），不再只跟随窗口尺寸：例如侧栏出现滚动条把分组收窄后，指示器不再停在旧位置、越出轨道边缘。
+- `TxBlowDialog` 未经 `close()` 直接卸载时，也会清除对 `#app` 施加的缩放与变暗；背景过渡只作用于 `transform` 与 `opacity`。
+- `TxCardSkeleton` 与 `TxListItemSkeleton` 标记为 `aria-hidden`，屏幕阅读器不再把占位读成内容。
+- `TxToastHost` 中不可交互的通知与收起的 `TxToastPanel` 卡片设为 `inert`，焦点与屏幕阅读器不会进入其中。
+- `TxTextMorph` 先统一读取各子元素的布局快照，再取消旧动画，不再在读写之间反复触发布局。
+- `TxTextTransformer` 静止时的 `filter` 由 `blur(0px)` 改为 `none`，文字不再常驻一个滤镜合成层。
 
 ## [0.9.3] - 2026-11-03
 
